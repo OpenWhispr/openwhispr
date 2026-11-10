@@ -17,12 +17,14 @@ import {
   SquareSparkle,
   Settings,
   Key,
+  FolderRounded,
 } from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage from "./SettingsPage";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { useAuth } from "../hooks/useAuth";
 import { workspaceCan } from "../lib/capabilities";
+import { settingsWorkspace } from "../lib/workspaceSwitcher";
 import {
   buildSettingsNav,
   resolveSettingsSection,
@@ -40,6 +42,7 @@ const SECTION_ICONS: Record<SettingsSectionType, React.ComponentType<{ className
   plansBilling: CreditCard,
   workspaceGeneral: Settings,
   workspacePeople: Users,
+  workspaceTeamspaces: FolderRounded,
   workspaceDeveloper: Key,
   speechToText: Mic,
   llms: Brain,
@@ -51,25 +54,28 @@ interface SettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialSection?: string;
+  /** Takes the user to a teamspace in Notes; the host closes Settings. */
+  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
 export default function SettingsModal({
   open,
   onOpenChange,
   initialSection,
+  onOpenTeamspace,
 }: SettingsModalProps): React.ReactElement {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const policyManaged = usePolicyStore((s) => s.managed);
-  const { workspaces, activeWorkspaceId, workspacesLoaded } = useWorkspaceStore(
+  const { workspaces, activeWorkspaceId, personalSelected, workspacesLoaded } = useWorkspaceStore(
     useShallow((s) => ({
       workspaces: s.workspaces,
       activeWorkspaceId: s.activeWorkspaceId,
+      personalSelected: s.personalSelected,
       workspacesLoaded: s.loaded,
     }))
   );
-  const activeWorkspace =
-    workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null;
+  const activeWorkspace = settingsWorkspace(workspaces, activeWorkspaceId, personalSelected);
   const hasWorkspace = activeWorkspace !== null;
   const canManageSettings = activeWorkspace
     ? workspaceCan(activeWorkspace, "manage_settings")
@@ -172,6 +178,7 @@ export default function SettingsModal({
         onNavigateToSection={handleSectionChange}
         initialSubTab={initialSubTab}
         onChooseWorkspace={() => setPickerOpen(true)}
+        onOpenTeamspace={onOpenTeamspace}
       />
     </SidebarModal>
   );

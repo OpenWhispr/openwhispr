@@ -19,7 +19,13 @@ const source = ts.createSourceFile(
 );
 let transcribe;
 let policyChanged;
+let activeModelLabel;
 function visit(node) {
+  if (ts.isVariableDeclaration(node) && node.name.getText(source) === "getActiveModelLabel") {
+    activeModelLabel = ts.transpileModule(`(${node.initializer.getText(source)})`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+  }
   if (ts.isVariableDeclaration(node) && node.name.getText(source) === "handleTranscribe") {
     transcribe = node.initializer.getText(source);
   }
@@ -51,6 +57,7 @@ for (const phase of ["title", "save"]) {
       batch: { isProcessing: false },
       usePolicyStore: { getState: () => ({ allowed: true }) },
       isAudioFeatureAllowed: (policy) => policy.allowed,
+      isAudioFeatureDenied: (policy) => !policy.allowed,
       uploadRestrictionKey,
       isManagedTranscriptionActive: () => false,
       isTranscriptionContextAllowed: () => true,
@@ -72,6 +79,7 @@ for (const phase of ["title", "save"]) {
       selectedFolderId: "",
       isOpenWhisprCloud: false,
       managedActive: false,
+      uploadInPieces: false,
       isLargeFile: false,
       progressRef: { current: null },
       progressCleanupRef: { current: null },
@@ -152,6 +160,7 @@ test("main policy refusals appear in Spanish upload errors", async (t) => {
       setDiarizationWarning: noop,
       isOpenWhisprCloud: false,
       managedActive: false,
+      uploadInPieces: false,
       progressRef: { current: null },
       progressCleanupRef: { current: null },
       setInterval: () => 1,
@@ -194,4 +203,74 @@ test("an upload refused before it starts names the reason the policy gives", asy
 
     assert.deepEqual(errors, [expected]);
   }
+});
+
+test("an upload refused for its local model shows the reason instead of nothing", async () => {
+  const { transcriptionChoiceRefusal } = await import("../../src/stores/policyRules.ts");
+  const managed = (allowedModes, allowedLocalModels) => ({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: {
+      transcription: { allowedModes, allowedLocalModels, allowedByokProviders: [] },
+      features: {},
+      minAppVersion: null,
+    },
+  });
+  const settings = {
+    uploadTranscriptionMode: "local",
+    localTranscriptionProvider: "whisper",
+    whisperModel: "small",
+    cloudTranscriptionProvider: "",
+  };
+  for (const [policy, expected] of [
+    [managed(["local"], ["base"]), "models.policy.modelBlocked"],
+    [managed(["openwhispr"], null), "models.policy.modeBlocked"],
+    [{ status: "loading", policy: null }, "common.managedByOrg"],
+  ]) {
+    const errors = [];
+    const states = [];
+    const context = {
+      file: { path: "/tmp/audio.wav" },
+      batch: { isProcessing: false },
+      usePolicyStore: { getState: () => policy },
+      isAudioFeatureAllowed: () => true,
+      isManagedTranscriptionActive: () => false,
+      isTranscriptionContextAllowed: () => false,
+      transcriptionChoiceRefusal,
+      getSettings: () => settings,
+      setError: (error) => errors.push(error),
+      setState: (state) => states.push(state),
+      t: (key) => key,
+    };
+
+    await vm.runInNewContext(callbacks, context).transcribe();
+
+    assert.deepEqual(errors, [expected]);
+    assert.deepEqual(states, ["error"], "the error view only renders in the error state");
+  }
+});
+
+test("the upload label never names a model the policy won't run", () => {
+  const label = (uploadChoiceRefusal, overrides = {}) =>
+    vm.runInNewContext(activeModelLabel, {
+      managed: { kind: "none" },
+      isOpenWhisprCloud: false,
+      useLocalWhisper: true,
+      localTranscriptionProvider: "whisper",
+      whisperModel: "",
+      parakeetModel: "",
+      cohereModel: "",
+      isSelfHosted: false,
+      uploadChoiceRefusal,
+      t: (key) => key,
+      ...overrides,
+    })();
+
+  assert.equal(label({ code: "POLICY_MODEL_BLOCKED" }), "models.policy.chooseModel");
+  assert.equal(
+    label({ code: "POLICY_MODEL_BLOCKED" }, { localTranscriptionProvider: "nvidia" }),
+    "models.policy.chooseModel"
+  );
+  assert.equal(label(null, { whisperModel: "small" }), "Whisper · small");
+  assert.equal(label(null), "Whisper · base", "a guest's blank still means the engine default");
 });

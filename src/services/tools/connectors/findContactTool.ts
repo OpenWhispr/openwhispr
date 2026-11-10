@@ -23,10 +23,6 @@ export const findContactTool: ToolDefinition = {
     args: Record<string, unknown>,
     context?: ToolExecutionContext
   ): Promise<ToolResult> {
-    // A lookup is almost always followed by a question for the user ("what
-    // should the email say?", "which Josh?"), and that must never be pasted
-    // into their document, so the answer stays in the panel whatever it finds.
-    context?.onHoldDelivery();
     const name = typeof args.name === "string" ? args.name.trim() : "";
     if (!name) return needsClarificationResult("Ask the user whose email address to look up.");
 
@@ -35,7 +31,7 @@ export const findContactTool: ToolDefinition = {
     const contacts = response?.contacts ?? [];
     const guidance =
       contacts.length === 0
-        ? "No match. Ask the user for the email address."
+        ? "No match in the user's calendars or contacts. Look for the person in the user's notes with search_notes before you ask the user for the email address."
         : response?.hasMore
           ? `More than ${contacts.length} people match and only the closest are listed. Unless one is clearly meant, ask the user for the last name or email address.`
           : contacts.length > 1

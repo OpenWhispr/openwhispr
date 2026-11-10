@@ -1,5 +1,6 @@
 import {
   cloudGet,
+  cloudGetForAuthGeneration,
   cloudPost,
   cloudPatchForAuthGeneration,
   cloudPostForAuthGeneration,
@@ -11,6 +12,9 @@ interface ConversationInput {
   title?: string;
   created_at?: string;
   updated_at?: string;
+  parent_client_conversation_id?: string | null;
+  fork_message_count?: number | null;
+  fork_context?: string | null;
   messages?: Array<{
     role: "user" | "assistant" | "system";
     content: string;
@@ -26,6 +30,10 @@ export interface CloudConversation {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  // Absent from an API that predates fork sync.
+  parent_client_conversation_id?: string | null;
+  fork_message_count?: number | null;
+  fork_context?: string | null;
 }
 
 interface CloudMessage {
@@ -91,19 +99,30 @@ async function addMessage(
   conversationId: string,
   role: "user" | "assistant" | "system",
   content: string,
-  metadata?: Record<string, unknown> | null
+  metadata: Record<string, unknown> | null,
+  authGeneration: number
 ): Promise<CloudMessage> {
-  return cloudPost<CloudMessage>("/api/conversations/messages", {
-    conversation_id: conversationId,
-    role,
-    content,
-    ...(metadata ? { metadata } : {}),
-  });
+  return cloudPostForAuthGeneration<CloudMessage>(
+    "/api/conversations/messages",
+    {
+      conversation_id: conversationId,
+      role,
+      content,
+      ...(metadata ? { metadata } : {}),
+    },
+    authGeneration
+  );
 }
 
-async function listMessages(conversationId: string): Promise<{ messages: CloudMessage[] }> {
+async function listMessages(
+  conversationId: string,
+  authGeneration: number
+): Promise<{ messages: CloudMessage[] }> {
   const params = new URLSearchParams({ conversation_id: conversationId });
-  return cloudGet<{ messages: CloudMessage[] }>(`/api/conversations/messages?${params}`);
+  return cloudGetForAuthGeneration<{ messages: CloudMessage[] }>(
+    `/api/conversations/messages?${params}`,
+    authGeneration
+  );
 }
 
 async function search(

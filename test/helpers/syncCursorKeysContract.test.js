@@ -46,3 +46,30 @@ test("every lastSyncedAt cursor SyncService reads or writes is saved per account
     assert.ok(declared.has(key), `${key} is missing from SYNC_CURSOR_KEYS`);
   }
 });
+
+// A replay counter says whether an account's note cursors were ever replayed
+// from the feed's start. Left device-wide, another account's first pull would
+// mark the replay done for everyone.
+test("the note feed's replay counters are saved per account with the cursors", () => {
+  const saved = syncServiceSource.match(/const ACCOUNT_SYNC_STATE_KEYS = \[([\s\S]*?)\];/);
+  assert.ok(saved, "ACCOUNT_SYNC_STATE_KEYS is declared");
+  assert.match(saved[1], /\.\.\.SYNC_CURSOR_KEYS\b/, "it carries every cursor");
+
+  const replayKeys = [
+    ...syncServiceSource.matchAll(/const (NOTE_FEED_REPLAY\w*_KEY) = "noteFeedReplay[^"]*";/g),
+  ].map((match) => match[1]);
+  assert.ok(replayKeys.length > 0, "the replay counters are named constants");
+  for (const name of replayKeys) {
+    assert.match(saved[1], new RegExp(`\\b${name}\\b`), `${name} is missing from it`);
+  }
+  assert.equal(
+    [...syncServiceSource.matchAll(/["`]noteFeedReplay[^"`]*["`]/g)].length,
+    replayKeys.length,
+    "no replay counter is built outside those constants"
+  );
+  assert.doesNotMatch(
+    syncServiceSource,
+    /for \(const key of SYNC_CURSOR_KEYS\)/,
+    "an account switch saves and restores the whole set, not the cursors alone"
+  );
+});

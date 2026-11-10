@@ -1,8 +1,9 @@
 // In-memory stand-in for the cloud API behind window.electronAPI.cloudApiRequest.
 // Notes and folders are modelled with the hardened server's real write rules,
-// conversations only on the read side, dictionary words and snippets on the
-// read side plus create, update and delete; the other entity types exist only
-// so a full syncAll() pass can complete.
+// conversations with their create, update, delete and message routes,
+// dictionary words and snippets on the read side plus create, update and
+// delete, transcriptions with an idempotent create; the other entity types
+// exist only so a full syncAll() pass can complete.
 //
 // Each hardening rule sits behind its own flag so a test can flip the server
 // back to the legacy behaviour and prove the client still does not lose data:
@@ -55,9 +56,18 @@ const NOTE_FIELDS = [
 
 const FOLDER_FIELDS = ["name", "is_default", "sort_order"];
 
-// Conversations are read-only here: only the pull is modelled, so `messages`
-// rides along as a plain stored field.
-const CONVERSATION_FIELDS = ["title", "archived_at", "messages"];
+// `messages` rides along as a stored field; of the routes returning a conversation,
+// only the list includes it, as api/conversations/list.ts does. A row stored
+// without a fork's origin lacks those keys, as every row from an API without
+// them does.
+const CONVERSATION_FIELDS = [
+  "title",
+  "archived_at",
+  "messages",
+  "parent_client_conversation_id",
+  "fork_message_count",
+  "fork_context",
+];
 
 const DICTIONARY_FIELDS = ["word", "source"];
 
@@ -112,7 +122,8 @@ function createFakeCloud(config = {}) {
   let seq = 0;
   let clock = () => new Date().toISOString();
 
-  // Real cloud ids are UUIDs; `idSpace` keeps two fake accounts' ids apart too.
+  // Real cloud ids are UUIDs; `idSpace` keeps two fake accounts' ids apart too
+  // (see createAccountCloud).
   const nextId = (prefix) => `${cfg.idSpace ?? ""}${prefix}-${String(++seq).padStart(4, "0")}`;
 
   // The server stores timestamps and serves them back as ISO, whatever format
@@ -199,6 +210,50 @@ function createFakeCloud(config = {}) {
     return applyWrite(collection, existing, input);
   }
 
+  // Dictionary and snippet creates, as lib/dictionary-service.ts and
+  // lib/snippet-service.ts upsert them: a word or trigger is unique per user
+  // whatever its case, tombstones included, so a create that matches one takes
+  // the row over (the new writer's client id), revives it and keeps a manual
+  // source; failing that, a known client id renames its row. updated_at is
+  // always the server's clock: a client's value could land behind another
+  // device's delta cursor.
+  function upsertKeyedRow(collection, keyField, input) {
+    const key = String(input[keyField] ?? "").toLowerCase();
+    const rows = [...collection.store.values()];
+    const byKey = rows.find((row) => String(row[keyField]).toLowerCase() === key);
+    const byClientId = findByClientId(collection, input[collection.clientKey]);
+    if (byKey && byClientId && byClientId !== byKey) {
+      throw new HttpError(409, `another ${collection.prefix} already uses that ${keyField}`);
+    }
+    const existing = byKey ?? byClientId;
+    if (!existing) {
+      const row = insertRow(collection, input);
+      row.updated_at = toIso(clock());
+      return row;
+    }
+    for (const field of collection.fields) {
+      if (input[field] === undefined || input[field] === null) continue;
+      existing[field] =
+        field === "source" && existing.source === "manual" ? "manual" : input[field];
+    }
+    if (input[collection.clientKey]) existing[collection.clientKey] = input[collection.clientKey];
+    existing.deleted_at = null;
+    existing.updated_at = toIso(clock());
+    return existing;
+  }
+
+  // As lib/transcriptions-service.ts: a create is an upsert on the client id,
+  // so a retried push returns the row it made the first time. A tombstone takes
+  // the write and stays one.
+  function upsertTranscription(input) {
+    const existing = findByClientId(transcriptionCollection, input.client_transcription_id);
+    if (!existing) return insertRow(transcriptionCollection, input);
+    for (const field of TRANSCRIPTION_FIELDS) {
+      if (input[field] !== undefined) existing[field] = input[field];
+    }
+    return existing;
+  }
+
   function requireLive(collection, id) {
     const row = collection.store.get(id);
     if (!row || row.deleted_at)
@@ -259,12 +314,28 @@ function createFakeCloud(config = {}) {
     prefix: "trans",
   };
 
-  function insertConversation(input) {
-    const row = insertRow(conversationCollection, input);
-    // The defaults object is spread, not cloned, so every row needs its own array.
-    row.messages = structuredClone(input.messages ?? []);
-    if (input.deleted_at) row.deleted_at = toIso(input.deleted_at);
-    return structuredClone(row);
+  function requireLiveConversation(id) {
+    const row = conversations.get(id);
+    if (!row || row.deleted_at) throw new HttpError(404, "Conversation not found");
+    return row;
+  }
+
+  function appendConversationMessage(row, { role, content, metadata }) {
+    const message = {
+      id: nextId("msg"),
+      conversation_id: row.id,
+      role,
+      content,
+      metadata: metadata ?? null,
+      created_at: toIso(clock()),
+    };
+    row.messages.push(message);
+    return message;
+  }
+
+  function conversationResponse(row) {
+    const { messages: _messages, ...conversation } = row;
+    return conversation;
   }
 
   // Snapshot paging walks created_at backwards from `before` and hides
@@ -422,23 +493,38 @@ function createFakeCloud(config = {}) {
         return { folders: rows.map((row) => structuredClone(row)) };
       }
 
-      // As the API: a client id it already holds takes the new title and time
-      // and appends the messages, even on a tombstone, which stays one.
+      // As api/conversations/create.ts: a client id already in the cloud keeps its
+      // row, tombstone included, and every message in the request is inserted again.
       case "POST /api/conversations/create": {
         const existing = findByClientId(conversationCollection, body?.client_conversation_id);
-        if (!existing) return insertConversation(body ?? {});
-        existing.title = body.title;
-        existing.updated_at = toIso(body.updated_at ?? clock());
-        existing.messages.push(...structuredClone(body.messages ?? []));
-        return structuredClone(existing);
+        const row = existing ?? insertRow(conversationCollection, { ...body, messages: undefined });
+        if (!existing) row.messages = [];
+        row.title = body?.title ?? row.title;
+        row.updated_at = toIso(body?.updated_at ?? clock());
+        for (const message of body?.messages ?? []) appendConversationMessage(row, message);
+        return conversationResponse(row);
       }
-      // Updates stay an echo-stub: nothing yet reads a chat's title back.
-      case "PATCH /api/conversations/update":
-        return { ...body };
-      // As the API: a chat that's gone, or was already deleted, answers 404.
-      case "DELETE /api/conversations/delete":
-        tombstone(conversationCollection, requireLive(conversationCollection, body?.id).id);
+      case "PATCH /api/conversations/update": {
+        const row = requireLiveConversation(body?.id);
+        if (body?.title !== undefined && body.title !== null) row.title = body.title;
+        row.updated_at = toIso(clock());
+        return conversationResponse(row);
+      }
+      case "DELETE /api/conversations/delete": {
+        const row = requireLiveConversation(body?.id);
+        row.deleted_at = toIso(clock());
+        row.updated_at = row.deleted_at;
         return {};
+      }
+      case "POST /api/conversations/messages": {
+        const row = requireLiveConversation(body?.conversation_id);
+        if (!body?.content) throw new HttpError(400, "content is required");
+        const message = appendConversationMessage(row, body);
+        row.updated_at = toIso(clock());
+        return message;
+      }
+      case "GET /api/conversations/messages":
+        return { messages: requireLiveConversation(query.get("conversation_id")).messages };
       case "GET /api/conversations/list": {
         const rows = page(conversationCollection, query, "created_at");
         // The client asks for include=messages; a page that stopped asking must
@@ -454,12 +540,10 @@ function createFakeCloud(config = {}) {
       }
       case "POST /api/transcriptions/batch-create":
         return {
-          created: (body?.transcriptions ?? []).map((t) =>
-            structuredClone(insertRow(transcriptionCollection, t))
-          ),
+          created: (body?.transcriptions ?? []).map((t) => structuredClone(upsertTranscription(t))),
         };
       case "POST /api/transcriptions/create":
-        return structuredClone(insertRow(transcriptionCollection, body ?? {}));
+        return structuredClone(upsertTranscription(body ?? {}));
       // As the API: only rows it just deleted come back, so a retry gets none.
       case "POST /api/transcriptions/batch-delete":
         return {
@@ -485,7 +569,9 @@ function createFakeCloud(config = {}) {
       }
       case "POST /api/dictionary/batch-create": {
         const inputs = Array.isArray(body?.entries) ? body.entries : [];
-        return { created: inputs.map((input) => upsertRow(dictionaryCollection, input)) };
+        return {
+          created: inputs.map((input) => upsertKeyedRow(dictionaryCollection, "word", input)),
+        };
       }
       case "GET /api/snippets/list":
         return dictionaryPage(query, snippetCollection);
@@ -498,7 +584,9 @@ function createFakeCloud(config = {}) {
         return {};
       case "POST /api/snippets/batch-create": {
         const inputs = Array.isArray(body?.entries) ? body.entries : [];
-        return { created: inputs.map((input) => upsertRow(snippetCollection, input)) };
+        return {
+          created: inputs.map((input) => upsertKeyedRow(snippetCollection, "trigger", input)),
+        };
       }
       default:
         throw new HttpError(404, `fake cloud has no route for ${route}`, "no_route");
@@ -563,8 +651,27 @@ function createFakeCloud(config = {}) {
       clock = fn;
     },
     seedNote: (input) => structuredClone(insertRow(noteCollection, input)),
+    // A row the public API stored without a client id, and the server backfill
+    // that later keys it by its own id without moving updated_at.
+    seedUnkeyedNote: (input) => {
+      const row = insertRow(noteCollection, input);
+      row.client_note_id = null;
+      return structuredClone(row);
+    },
+    backfillNoteKey: (id) => {
+      notes.get(id).client_note_id = id;
+    },
+    setNoteRevision: (id, revision) => {
+      notes.get(id).revision = revision;
+    },
     seedFolder: (input) => structuredClone(insertRow(folderCollection, input)),
-    seedConversation: (input = {}) => insertConversation(input),
+    seedConversation: (input = {}) => {
+      const row = insertRow(conversationCollection, input);
+      // The defaults object is spread, not cloned, so every row needs its own array.
+      row.messages = structuredClone(input.messages ?? []);
+      if (input.deleted_at) row.deleted_at = toIso(input.deleted_at);
+      return structuredClone(row);
+    },
     seedTranscription: (input) => structuredClone(insertRow(transcriptionCollection, input)),
     deleteTranscription: (id) => structuredClone(tombstone(transcriptionCollection, id)),
     deleteConversation: (id) => structuredClone(tombstone(conversationCollection, id)),
@@ -592,4 +699,11 @@ function createFakeCloud(config = {}) {
   };
 }
 
-module.exports = { createFakeCloud, normalizeTimestamp };
+// One cloud per account. Real cloud ids are UUIDs, so two accounts' clouds
+// never hold the same id; each of these mints its ids in a space of its own.
+let accountClouds = 0;
+function createAccountCloud(config = {}) {
+  return createFakeCloud({ idSpace: `cloud${++accountClouds}-`, ...config });
+}
+
+module.exports = { createFakeCloud, createAccountCloud, normalizeTimestamp };

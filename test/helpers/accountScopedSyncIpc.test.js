@@ -113,6 +113,7 @@ test.before(() => {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   target._broadcastAccountScopedSettings = Ctor.prototype._broadcastAccountScopedSettings;
+  target._broadcastDatabaseAccountScope = Ctor.prototype._broadcastDatabaseAccountScope;
   const fakeThis = new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
@@ -143,6 +144,8 @@ const invoke = (channel, ...args) => handlers.get(channel)({}, ...args);
 test("a queued transcription addition is broadcast only while its account can see it", async (t) => {
   const db = setup(t);
   if (!db) return;
+  // A second account has signed in here, so signing out hides A's history.
+  db.setActiveAccountId("account-b");
   db.setActiveAccountId("account-a");
   const current = await invoke("db-save-transcription", "A's current dictation");
   await new Promise(setImmediate);
@@ -163,10 +166,27 @@ test("a queued transcription addition is broadcast only while its account can se
   );
 });
 
-test("a push ack or pulled row from a replaced sign-in is refused", async (t) => {
+test("on a device only one account has used, its queued addition is still broadcast after sign-out", async (t) => {
   const db = setup(t);
   if (!db) return;
   db.setActiveAccountId("account-a");
+  const saved = await invoke("db-save-transcription", "A's delayed dictation");
+  tokenState = { token: null, generation: tokenState.generation + 1 };
+  handleAuthTokenChange(tokenState);
+  await new Promise(setImmediate);
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel === "transcription-added"),
+    [["transcription-added", saved.transcription]]
+  );
+});
+
+test("a push ack or pulled row from a replaced sign-in is refused", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  assert.equal(
+    (await invoke("set-active-account-scope", "account-a", tokenState.generation)).success,
+    true
+  );
   const stale = 2;
   const word = { id: "dict-1", word: "Kubernetes", client_dict_id: "a-dict" };
   const snippet = db.upsertSnippetFromCloud({
@@ -192,6 +212,12 @@ test("a push ack or pulled row from a replaced sign-in is refused", async (t) =>
       "db-upsert-conversation-from-cloud",
       { id: "c-1", client_conversation_id: "a-chat", title: "A's chat" },
       [],
+      null,
+      stale
+    ),
+    await invoke(
+      "db-claim-conversation-from-cloud",
+      { id: "c-1", client_conversation_id: "a-chat" },
       stale
     ),
     await invoke("db-mark-transcription-synced", 1, "t-1", stale),
@@ -202,8 +228,16 @@ test("a push ack or pulled row from a replaced sign-in is refused", async (t) =>
     await invoke("db-hard-delete-conversation", 1, stale),
     await invoke("db-hard-delete-transcription", 1, stale),
     await invoke("db-hard-delete-dictionary", 1, stale),
+    await invoke("db-clear-dictionary-cloud-id", 1, stale),
+    await invoke("db-clear-snippet-cloud-id", snippet.id, stale),
+    await invoke("db-clear-dictionary-cloud-id", 1),
+    await invoke("db-clear-snippet-cloud-id", snippet.id),
   ];
   for (const result of refused) assert.equal(result?.stale, true);
+  assert.equal(
+    db.db.prepare("SELECT cloud_id FROM snippets WHERE id = ?").get(snippet.id).cloud_id,
+    "a-snippet"
+  );
   assert.deepEqual(db.getDictionary(), []);
   assert.deepEqual(db.getSnippets(), [{ trigger: "addr", replacement: "A's address" }]);
   assert.deepEqual(db.getTranscriptions(), []);
@@ -211,6 +245,68 @@ test("a push ack or pulled row from a replaced sign-in is refused", async (t) =>
 
   await invoke("db-upsert-dictionary-from-cloud", word, tokenState.generation);
   assert.deepEqual(db.getDictionary(), ["Kubernetes"], "the current sign-in's row is written");
+  assert.deepEqual(await invoke("db-clear-snippet-cloud-id", snippet.id, tokenState.generation), {
+    success: true,
+  });
+});
+
+test("a sync write is refused once its sign-in's scope has dropped, token unchanged", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const signIn = tokenState.generation;
+  assert.equal((await invoke("set-active-account-scope", "account-a", signIn)).success, true);
+  const pending = db.saveTranscription("A's pending dictation");
+
+  // The session is revoked server-side: the same token now resolves to no
+  // user, and the renderer drops the scope while A's pull is still writing.
+  assert.equal((await invoke("set-active-account-scope", null, signIn)).success, true);
+  assert.equal(db.activeAccountId, null);
+
+  const late = [
+    await invoke(
+      "db-upsert-transcription-from-cloud",
+      { id: "t-1", client_transcription_id: "a-t", text: "A's dictation" },
+      signIn
+    ),
+    await invoke(
+      "db-upsert-dictionary-from-cloud",
+      { id: "w-1", word: "Kubernetes", client_dict_id: "a-w" },
+      signIn
+    ),
+    await invoke(
+      "db-upsert-snippet-from-cloud",
+      { id: "s-1", client_snippet_id: "a-s", trigger: "addr", replacement: "A's address" },
+      signIn
+    ),
+    await invoke(
+      "db-upsert-conversation-from-cloud",
+      { id: "c-1", client_conversation_id: "a-c", title: "A's chat" },
+      [{ role: "user", content: "A's message" }],
+      null,
+      signIn
+    ),
+    await invoke("db-mark-transcription-synced", pending.id, "t-2", signIn),
+  ];
+  for (const result of late) assert.equal(result?.stale, true);
+  const stored = (table) => db.db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count;
+  assert.deepEqual(
+    ["custom_dictionary", "snippets", "agent_conversations"].map(stored),
+    [0, 0, 0],
+    "nothing A's cloud returned is stored without an owner"
+  );
+  assert.deepEqual(
+    { ...db.db.prepare("SELECT text, cloud_id, sync_status FROM transcriptions").get() },
+    { text: "A's pending dictation", cloud_id: null, sync_status: "pending" }
+  );
+
+  // Scoped again under the same token, its writes are accepted.
+  assert.equal((await invoke("set-active-account-scope", "account-a", signIn)).success, true);
+  await invoke(
+    "db-upsert-dictionary-from-cloud",
+    { id: "w-1", word: "Kubernetes", client_dict_id: "a-w" },
+    signIn
+  );
+  assert.deepEqual(db.getDictionary(), ["Kubernetes"]);
 });
 
 test("a chat ack is recorded for the account its sign-in was scoped to, and no other", async (t) => {
@@ -233,11 +329,25 @@ test("a chat ack is recorded for the account its sign-in was scoped to, and no o
     invoke("db-acknowledge-conversation-create", chat.id, snapshot, "c-1", accountId, generation);
   assert.equal((await ack("account-c", signIn)).success, false, "not an account it never was");
   assert.equal((await ack("account-a", signIn - 1)).success, false, "not for another sign-in");
-  assert.equal(
-    (await invoke("db-mark-conversation-synced", chat.id, "c-1", "account-c", signIn)).success,
-    false
+  const markSynced = (accountId, generation) =>
+    invoke("db-mark-conversation-synced", chat.id, "c-1", null, null, accountId, generation);
+  const replaceClientId = (accountId, generation) =>
+    invoke(
+      "db-replace-conversation-client-id",
+      chat.id,
+      snapshot.client_conversation_id,
+      accountId,
+      generation
+    );
+  assert.equal((await markSynced("account-c", signIn)).success, false);
+  assert.equal((await replaceClientId("account-c", signIn)).success, false);
+  assert.equal((await replaceClientId("account-a", signIn - 1)).success, false);
+  assert.deepEqual(
+    {
+      ...db.db.prepare("SELECT account_id, client_conversation_id FROM agent_conversations").get(),
+    },
+    { account_id: null, client_conversation_id: snapshot.client_conversation_id }
   );
-  assert.equal(db.db.prepare("SELECT account_id FROM agent_conversations").get().account_id, null);
 
   assert.equal((await ack("account-a", signIn)).outcome, "synced");
   const row = db.db
@@ -245,6 +355,77 @@ test("a chat ack is recorded for the account its sign-in was scoped to, and no o
     .get(chat.id);
   assert.deepEqual({ ...row }, { account_id: "account-a", cloud_id: "c-1" });
   assert.deepEqual(db.getAgentConversations(), [], "the active account doesn't get A's chat");
+
+  // The follow-up that sends what the create lacked settles for A as well.
+  db.db.prepare("UPDATE agent_conversations SET sync_status = 'pending'").run();
+  const settled = await invoke(
+    "db-mark-conversation-synced",
+    chat.id,
+    "c-1",
+    snapshot,
+    "2026-10-20T12:00:00.000Z",
+    "account-a",
+    signIn
+  );
+  assert.equal(settled.success, true);
+  assert.deepEqual(
+    {
+      ...db.db
+        .prepare("SELECT sync_status, updated_at FROM agent_conversations WHERE id = ?")
+        .get(chat.id),
+    },
+    { sync_status: "synced", updated_at: "2026-10-20T12:00:00.000Z" }
+  );
+});
+
+test("a create answered with a tombstone re-keys the chat for its sender only", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const signIn = tokenState.generation;
+  assert.equal((await invoke("set-active-account-scope", "account-a", signIn)).success, true);
+  const chat = db.createAgentConversation("A's chat");
+  const clientId = chat.client_conversation_id;
+  db.markConversationCreateAttempted(chat.id);
+  // B signs in while A's create is in flight.
+  db.setActiveAccountId("account-b");
+
+  const replaced = await invoke(
+    "db-replace-conversation-client-id",
+    chat.id,
+    clientId,
+    "account-a",
+    signIn
+  );
+  assert.equal(replaced.success, true);
+  const row = db.db
+    .prepare(
+      "SELECT account_id, client_conversation_id, cloud_create_attempted FROM agent_conversations"
+    )
+    .get();
+  assert.equal(row.account_id, "account-a");
+  assert.notEqual(row.client_conversation_id, clientId);
+  assert.equal(row.cloud_create_attempted, 0);
+});
+
+test("a fork or a saved-message edit reaches only the active account's chats", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const chat = db.createAgentConversation("A's chat");
+  const message = db.addAgentMessage(chat.id, "user", "A's question");
+  db.setActiveAccountId("account-b");
+
+  assert.equal(await invoke("db-fork-agent-conversation", chat.id, message.id, null), null);
+  assert.equal(await invoke("db-update-agent-message", message.id, "B's text", null), null);
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS n FROM agent_conversations").get().n,
+    1,
+    "no copy of A's chat was made"
+  );
+  assert.equal(
+    db.db.prepare("SELECT content FROM agent_messages WHERE id = ?").get(message.id).content,
+    "A's question"
+  );
 });
 
 test("a recording is deleted only for a dictation the active account can see", async (t) => {
@@ -296,6 +477,8 @@ test("a sync write that names no sign-in is refused like a stale one", async (t)
 
   for (const [channel, ...args] of [
     ["db-upsert-dictionary-from-cloud", { id: "d", word: "Word", client_dict_id: "d" }],
+    ["db-upsert-conversation-from-cloud", { id: "c", client_conversation_id: "c" }, [], null],
+    ["db-claim-conversation-from-cloud", { id: "c", client_conversation_id: "c" }],
     ["db-mark-transcription-synced", id, "cloud"],
     ["db-mark-dictionary-synced", 1, "cloud"],
     ["db-hard-delete-transcription", id],
@@ -312,7 +495,7 @@ test("a sync write that names no sign-in is refused like a stale one", async (t)
 test("the shared dictionary's writes and a whole-list save are refused for a replaced sign-in", async (t) => {
   const db = setup(t);
   if (!db) return;
-  db.setActiveAccountId("account-a");
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
   db.applyDictionaryChanges({ add: ["Word"] });
   db.setSnippets([{ trigger: "addr", replacement: "home" }]);
   const stale = tokenState.generation - 1;
@@ -416,9 +599,13 @@ test("a scoped cloud hard-delete removes the row and its recording", async (t) =
   const bPath = audio.saveAudio(bId, Buffer.from("B's recording")).path;
 
   const signIn = tokenState.generation;
-  assert.equal((await invoke("db-hard-delete-transcription", aId, signIn)).success, false);
+  await invoke("set-active-account-scope", "account-b", signIn);
+  assert.deepEqual(await invoke("db-hard-delete-transcription", aId, signIn), {
+    success: false,
+    id: aId,
+  });
   assert.equal(fs.existsSync(aPath), true, "another account's deletion is refused");
-  db.setActiveAccountId("account-a");
+  await invoke("set-active-account-scope", "account-a", signIn);
   assert.equal((await invoke("db-hard-delete-transcription", aId, signIn)).success, true);
   assert.equal(db.getTranscriptionById(aId), null);
   assert.equal(fs.existsSync(aPath), false, "the remote deletion leaves no orphaned recording");
@@ -456,12 +643,94 @@ test("an account change sends every window the new account's dictionary and snip
   );
   broadcasts.length = 0;
 
+  // Nobody else has signed in on this device, so A's lists stay in use.
   tokenState = { token: null, generation: tokenState.generation + 1 };
   handleAuthTokenChange(tokenState);
   assert.deepEqual(scopedLists(), [
-    ["dictionary-updated", []],
-    ["snippets-updated", []],
+    ["dictionary-updated", ["Kubernetes"]],
+    ["snippets-updated", [{ trigger: "addr", replacement: "A's address" }]],
   ]);
+});
+
+test("signing out of a device two accounts have used sends every window empty lists", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-b");
+  db.setActiveAccountId("account-a");
+  db.applyDictionaryChanges({ add: ["Kubernetes"] });
+  db.setSnippets([{ trigger: "addr", replacement: "A's address" }]);
+
+  tokenState = { token: null, generation: tokenState.generation + 1 };
+  handleAuthTokenChange(tokenState);
+  assert.deepEqual(
+    broadcasts.filter(
+      ([channel]) => channel === "dictionary-updated" || channel === "snippets-updated"
+    ),
+    [
+      ["dictionary-updated", []],
+      ["snippets-updated", []],
+    ]
+  );
+});
+
+test("between a token rotation and the re-scope, the database scope keeps the account and its saves go through", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  assert.equal(
+    (await invoke("set-active-account-scope", "account-a", tokenState.generation)).success,
+    true
+  );
+  db.setSnippets([{ trigger: "addr", replacement: "A's address" }]);
+  broadcasts.length = 0;
+
+  // The bearer rotates for the same account; the renderer hasn't re-scoped yet.
+  tokenState = { token: "token-a-rotated", generation: tokenState.generation + 1 };
+  handleAuthTokenChange(tokenState);
+  assert.equal(await invoke("get-active-account-scope"), null, "the binding no longer matches");
+  const scope = await invoke("get-database-account-scope");
+  assert.deepEqual(scope, { accountId: "account-a", visibleAccountId: "account-a" });
+
+  const sig = { trigger: "sig", replacement: "Best, A" };
+  const saved = await invoke(
+    "db-set-snippets",
+    [{ trigger: "addr", replacement: "A's address" }, sig],
+    scope.accountId
+  );
+  assert.equal(saved.success, true);
+  assert.deepEqual(
+    db.getSnippets().map((row) => row.trigger),
+    ["addr", "sig"]
+  );
+
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel === "database-account-scope-changed"),
+    [["database-account-scope-changed", { accountId: "account-a", visibleAccountId: "account-a" }]]
+  );
+});
+
+test("signing out sends the database scope: a sole account stays in view, a shared device shows none", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const signIn = async (accountId) => {
+    tokenState = { token: `token-${accountId}`, generation: tokenState.generation + 1 };
+    await invoke("set-active-account-scope", accountId, tokenState.generation);
+  };
+  const signOut = () => {
+    tokenState = { token: null, generation: tokenState.generation + 1 };
+    handleAuthTokenChange(tokenState);
+  };
+  const lastScope = () =>
+    broadcasts.filter(([channel]) => channel === "database-account-scope-changed").at(-1)?.[1];
+
+  await signIn("account-a");
+  signOut();
+  assert.deepEqual(lastScope(), { accountId: null, visibleAccountId: "account-a" });
+  assert.deepEqual(await invoke("get-database-account-scope"), lastScope());
+
+  await signIn("account-b");
+  signOut();
+  assert.deepEqual(lastScope(), { accountId: null, visibleAccountId: null });
 });
 
 test("the seed IPCs write a cached list only into a database that has never held one", async (t) => {
@@ -566,6 +835,7 @@ test("a dictation spoken signed out stays unattributed if an account arrives fir
 
   assert.equal(saved.transcription.account_id, null);
   assert.equal(db.getTranscriptionById(saved.id).text, "guest dictation", "A can still see it");
+  await new Promise(setImmediate);
 });
 
 test("a dictation with no spoken time, or spoken after the switch, is the active account's", async (t) => {
@@ -583,6 +853,7 @@ test("a dictation with no spoken time, or spoken after the switch, is the active
 
   assert.equal(noTime.transcription.account_id, "account-b");
   assert.equal(after.transcription.account_id, "account-b");
+  await new Promise(setImmediate);
 });
 
 test("main reports whether the account changed since a recording started", async (t) => {
@@ -604,6 +875,23 @@ test("main reports whether the account changed since a recording started", async
   await tick();
   assert.equal(await invoke("db-account-changed-since", new Date().toISOString()), false);
   assert.equal(await invoke("db-account-changed-since", undefined), false);
+  db.setActiveAccountId(null);
+  assert.equal(
+    await invoke("db-account-changed-since", startedBeforeSwitch),
+    true,
+    "signing out left the account the recording was spoken under"
+  );
+});
+
+test("a guest who signs in mid-recording, or a scope restored late, changed no account", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await tick();
+  const startedSignedOut = new Date().toISOString();
+  await tick();
+  db.setActiveAccountId("account-a");
+
+  assert.equal(await invoke("db-account-changed-since", startedSignedOut), false);
 });
 
 test("signing in on a device nobody else used claims the rows from before attribution", async (t) => {

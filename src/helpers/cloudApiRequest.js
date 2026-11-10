@@ -8,12 +8,14 @@ class AuthContextError extends Error {
   }
 }
 
-function authFailure(error) {
+// `requestSent` false: the refusal came before anything left this device.
+function authFailure(error, requestSent) {
   return {
     success: false,
     error: error.message,
     code: error.code,
     status: 0,
+    requestSent,
   };
 }
 
@@ -73,6 +75,7 @@ function createCloudApiRequestHandler({
   logger,
 }) {
   return async function handleCloudApiRequest(opts) {
+    let requestSent = false;
     try {
       const apiUrl = getApiUrl();
       if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -110,6 +113,7 @@ function createCloudApiRequestHandler({
         fetchOptions.body = JSON.stringify(opts.body);
       }
 
+      requestSent = true;
       const response =
         fence && !isConversationCreate
           ? await fence.awaitBound(() => proxyFetch(requestUrl, fetchOptions))
@@ -119,8 +123,9 @@ function createCloudApiRequestHandler({
             });
 
       if (isConversationCreate) {
-        // Chat creates append messages: their successful result must reach the
-        // sender-bound acknowledgement even after the active sign-in changes.
+        // A successful create leaves a copy in the sender's cloud, so its result
+        // must reach the sender-bound acknowledgement even after the active
+        // sign-in changes: an unlinked chat would be created again elsewhere.
         if (response.ok) return { success: true, data: await response.json().catch(() => null) };
         fence?.assertCurrent();
       }
@@ -167,7 +172,7 @@ function createCloudApiRequestHandler({
       fence?.assertCurrent();
       return { success: true, data };
     } catch (error) {
-      if (error instanceof AuthContextError) return authFailure(error);
+      if (error instanceof AuthContextError) return authFailure(error, requestSent);
       logger?.error?.(
         `Cloud API request error (${opts?.path}): ${error?.message || error} ${error?.code || ""}`.trim(),
         error?.stack

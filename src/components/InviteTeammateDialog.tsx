@@ -10,10 +10,10 @@ import {
   type InviteFlowEvent,
   type InviteFlowState,
 } from "../lib/inviteFlow";
+import { useInviteSeatLines } from "../hooks/useInviteSeatLines";
+import { workspaceCan } from "../lib/capabilities";
 import { invitePeople } from "../services/invitePeople";
 import { useWorkspaceStore } from "../stores/workspaceStore";
-import { WorkspacesService, type SeatPreview } from "../services/WorkspacesService";
-import { formatAmount } from "../utils/formatAmount";
 
 interface Props {
   open: boolean;
@@ -22,12 +22,21 @@ interface Props {
   workspaceName: string;
   /** Called after each send that invited anyone, with the normalized addresses it invited. */
   onInvited?: (emails: string[]) => void;
+  /**
+   * Called once after a run that invited anyone or was answered already invited, which can be this
+   * run's own invitation from a request whose answer was lost. For callers that list invitations.
+   */
+  onInvitationsChanged?: () => void;
   cancelLabel?: string;
   /** Teams the invitee joins on accept (threaded into the invitation). */
   teamIds?: string[];
   /** Spaces the invitee is added to directly on accept. */
   spaceIds?: string[];
   initialEmail?: string;
+  /** Addresses that open as chips (the server's, e.g. guests). */
+  initialEmails?: string[];
+  /** Already-translated text that replaces the default title and description. */
+  heading?: { title: string; description: string };
   /** Addresses that can't be invited again; their chips are blocked before anything is sent. */
   knownEmails?: { members: string[]; invited: string[] };
 }
@@ -40,7 +49,6 @@ interface Roster {
 type Contact = { email: string; name: string | null };
 
 const SUGGESTION_DEBOUNCE_MS = 150;
-const SEAT_PREVIEW_DEBOUNCE_MS = 300;
 
 export default function InviteTeammateDialog({
   open,
@@ -48,32 +56,47 @@ export default function InviteTeammateDialog({
   workspaceId,
   workspaceName,
   onInvited,
+  onInvitationsChanged,
   cancelLabel,
   teamIds,
   spaceIds,
   initialEmail,
+  initialEmails,
+  heading,
   knownEmails,
 }: Props): ReactElement {
   const { t } = useTranslation();
-  const [state, setState] = useState<InviteFlowState>(() => createInviteFlow({ initialEmail }));
+  const attachInvited = Boolean(teamIds?.length || spaceIds?.length);
+  const [state, setState] = useState<InviteFlowState>(() =>
+    createInviteFlow({ initialEmail, initialEmails, attachInvited })
+  );
   const [wasOpen, setWasOpen] = useState(open);
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [seatsUsed, setSeatsUsed] = useState<number | null>(null);
-  const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
-  // Prices for adding more than one seat, by seat count.
-  const [batchPreviews, setBatchPreviews] = useState<ReadonlyMap<number, SeatPreview>>(
-    () => new Map()
-  );
   const running = useRef(false);
   const runController = useRef<AbortController | null>(null);
-  const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
-  const seats = workspace?.seats ?? null;
+  // An empty field still prices one, as the old single invite did.
+  const { workspace, purchasedLeft, seatLine, seatCostLine } = useInviteSeatLines(
+    workspaceId,
+    open,
+    state.phase === "editing" ? Math.max(1, inviteSummary(state).sendable.length) : null
+  );
+  const canManageBilling = workspaceCan(workspace, "manage_billing");
+  const billingManager = workspace?.billing_manager ?? null;
+
+  const workspaceSeatsUsed = workspace?.seats_used;
+  const ceilingLeft =
+    // Without the roster, only the server can exclude existing members and invitations.
+    knownEmails !== undefined &&
+    typeof workspace?.seat_limit === "number" &&
+    typeof workspaceSeatsUsed === "number"
+      ? workspace.seat_limit - workspaceSeatsUsed
+      : null;
 
   // A fresh flow on every open, set during render so the first frame never shows the last run.
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setState(createInviteFlow({ initialEmail }));
+      setState(createInviteFlow({ initialEmail, initialEmails, attachInvited }));
       setContacts([]);
     }
   }
@@ -94,32 +117,10 @@ export default function InviteTeammateDialog({
     if (open) dispatch({ type: "roster", ...roster });
   }, [open, roster, dispatch]);
 
+  // Re-sent on every open, since a fresh flow starts with nothing known.
   useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    WorkspacesService.previewSeats(workspaceId, 1)
-      .then((preview) => {
-        if (cancelled) return;
-        setSeatPreview(preview);
-        setSeatsUsed(preview.seats_used);
-      })
-      .catch(async () => {
-        // Free workspace — the preview needs a subscription. Fall back to the
-        // member count so the seat line still renders, with nothing to bill.
-        try {
-          const members = await WorkspacesService.listMembers(workspaceId);
-          if (!cancelled) setSeatsUsed(members.length);
-        } catch {
-          if (!cancelled) setSeatsUsed(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-      setSeatsUsed(null);
-      setSeatPreview(null);
-      setBatchPreviews(new Map());
-    };
-  }, [open, workspaceId]);
+    if (open) dispatch({ type: "seats", purchasedLeft, ceilingLeft });
+  }, [open, purchasedLeft, ceilingLeft, dispatch]);
 
   // A dialog unmounted mid-run (its workspace dropped out, or the page re-keyed) sends no more.
   useEffect(() => () => runController.current?.abort(), []);
@@ -128,8 +129,9 @@ export default function InviteTeammateDialog({
   const excludedKey = JSON.stringify([
     ...state.recipients.map((recipient) => recipient.email),
     ...state.sent.map((entry) => entry.email),
+    ...state.attached,
     ...roster.memberEmails,
-    ...roster.invitedEmails,
+    ...(attachInvited ? [] : roster.invitedEmails),
   ]);
   const excluded = useMemo((): string[] => JSON.parse(excludedKey) as string[], [excludedKey]);
 
@@ -159,54 +161,6 @@ export default function InviteTeammateDialog({
   // Filtered again here: an answer can land just after a chip or the roster changed.
   const suggestions = useMemo(() => inviteSuggestions(contacts, excluded), [contacts, excluded]);
 
-  // Seats this send would add if every invitation is accepted: those it needs beyond the
-  // subscription's free ones. An empty field still prices one, as the old single invite did.
-  const sendableCount = state.phase === "editing" ? inviteSummary(state).sendable.length : 0;
-  const billedSeats =
-    seatPreview === null || state.phase !== "editing"
-      ? 0
-      : Math.max(
-          0,
-          seatPreview.seats_used + Math.max(1, sendableCount) - seatPreview.current_quantity
-        );
-
-  useEffect(() => {
-    if (!open || billedSeats <= 1 || batchPreviews.has(billedSeats)) return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      WorkspacesService.previewSeats(workspaceId, billedSeats)
-        .then((preview) => {
-          if (!cancelled) setBatchPreviews((current) => new Map(current).set(billedSeats, preview));
-        })
-        // The line still says how many seats are added, just without a price.
-        .catch(() => undefined);
-    }, SEAT_PREVIEW_DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [open, workspaceId, billedSeats, batchPreviews]);
-
-  const seatLine =
-    seatsUsed !== null && seats !== null
-      ? t("workspaces.invite.seatUsage", { used: seatsUsed, seats })
-      : null;
-  // The opening preview prices one added seat; more come from their own preview.
-  const batchPreview = billedSeats > 1 ? batchPreviews.get(billedSeats) : undefined;
-  let seatCostLine: string | null = null;
-  if (billedSeats === 1 && seatPreview) {
-    seatCostLine = t("workspaces.invite.seatCost", {
-      amount: formatAmount(seatPreview.amount_due, seatPreview.currency),
-    });
-  } else if (billedSeats > 1) {
-    seatCostLine = batchPreview
-      ? t("workspaces.invite.seatCostMany", {
-          count: billedSeats,
-          amount: formatAmount(batchPreview.amount_due, batchPreview.currency),
-        })
-      : t("workspaces.invite.seatCostManyUnpriced", { count: billedSeats });
-  }
-
   const handleSend = async (): Promise<void> => {
     if (running.current) return;
     // The same transition the reducer makes, run here to learn which chips this send took.
@@ -221,6 +175,8 @@ export default function InviteTeammateDialog({
       .filter((recipient) => recipient.state.status === "sending")
       .map((recipient) => recipient.email);
     const invited: string[] = [];
+    let seatRefused = false;
+    let alreadyInvited = false;
     try {
       await invitePeople.sendInvitations({
         workspaceId,
@@ -232,6 +188,8 @@ export default function InviteTeammateDialog({
         onResult: (email, outcome) => {
           dispatch({ type: "result", email, outcome });
           if (outcome.ok === true) invited.push(email);
+          else if (outcome.kind === "seatLimit") seatRefused = true;
+          else if (outcome.kind === "alreadyInvited") alreadyInvited = true;
         },
       });
     } finally {
@@ -243,10 +201,28 @@ export default function InviteTeammateDialog({
         dispatch({ type: "roster", ...latestRoster.current });
       }
     }
-    if (!controller.signal.aborted && invited.length > 0) onInvited?.(invited);
+    if (controller.signal.aborted) return;
+    if (invited.length > 0) onInvited?.(invited);
+    if (alreadyInvited || invited.length > 0) onInvitationsChanged?.();
+    // The workspace list's seats_used is what the seats left and the room under the ceiling are
+    // worked out from: it is behind this run's invitations, and after a seat refusal behind
+    // whoever else invited people meanwhile. An already-invited answer can be this run's own
+    // invitation, created by a request whose answer was lost.
+    if (seatRefused || alreadyInvited || invited.length > 0) {
+      void useWorkspaceStore.getState().refresh({ fresh: true });
+    }
   };
 
   const close = (): void => onOpenChange(false);
+
+  // A named section remounts Settings, so this also works from inside Settings and takes any
+  // dialog in there with it.
+  const handleUpgrade = (): void => {
+    // Closing mid-send would unmount the dialog, which aborts the run and loses its report.
+    if (state.phase === "sending") return;
+    close();
+    void window.electronAPI?.openSettingsSection?.("plansBilling");
+  };
 
   // Invitations in flight can't be taken back, so the dialog stays until the run reports.
   const handleOpenChange = (nextOpen: boolean): void => {
@@ -258,11 +234,16 @@ export default function InviteTeammateDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <InvitePeopleView
         workspaceName={workspaceName}
+        heading={heading}
         state={state}
         dispatch={dispatch}
         suggestions={suggestions}
         seatLine={seatLine}
         seatCostLine={seatCostLine}
+        canManageBilling={canManageBilling}
+        billingManager={billingManager}
+        onUpgrade={handleUpgrade}
+        addsToContainer={attachInvited}
         cancelLabel={cancelLabel ?? t("common.cancel")}
         onCancel={close}
         onSend={() => void handleSend()}

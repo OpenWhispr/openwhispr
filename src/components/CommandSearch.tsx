@@ -27,8 +27,7 @@ import type { NoteItem, FolderItem, SpaceItem, TranscriptionItem } from "../type
 import { formatRelativeTime } from "../utils/dateFormatting";
 import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
 import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
-import { useWorkspace } from "../hooks/useWorkspace";
-import { spacesInWorkspaceScope } from "../lib/workspaceSelection";
+import { useSpacesInWorkspaceScope } from "../hooks/useWorkspace";
 
 interface ConversationResult {
   id: number;
@@ -93,7 +92,6 @@ export default function CommandSearch({
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [spaces, setSpaces] = useState<SpaceItem[]>([]);
   const [scopeSpaceId, setScopeSpaceId] = useState<number | null>(null);
-  const { workspaces, active: activeWorkspace } = useWorkspace();
   const [conversations, setConversations] = useState<ConversationResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -120,10 +118,7 @@ export default function CommandSearch({
   }, [open, isConversationsMode]);
 
   // Other workspaces' spaces and notes stay out of search, as in the tree.
-  const visibleSpaces = useMemo(
-    () => spacesInWorkspaceScope(spaces, activeWorkspace?.id ?? null, workspaces),
-    [spaces, activeWorkspace?.id, workspaces]
-  );
+  const visibleSpaces = useSpacesInWorkspaceScope(spaces);
   // null when nothing is hidden, so the queries stay unscoped.
   const visibleSpaceIds = useMemo(
     () => (visibleSpaces.length === spaces.length ? null : visibleSpaces.map((s) => s.id)),

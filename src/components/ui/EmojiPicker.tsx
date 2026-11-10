@@ -11,8 +11,6 @@ import {
   emojiAt,
   firstEmojiPosition,
   groupEmoji,
-  isArrowKey,
-  logicalArrowKey,
   moveEmojiPosition,
   pushRecentEmoji,
   searchEmoji,
@@ -21,6 +19,7 @@ import {
   type EmojiRow,
   type GridPosition,
 } from "../../lib/emojiPicker";
+import { isArrowKey, logicalArrowKey } from "../../lib/arrowKeys";
 import { getCachedPlatform } from "../../utils/platform";
 import { cn } from "../lib/utils";
 

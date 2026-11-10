@@ -16,7 +16,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-async function createDownloadRenderer(t, electronAPI) {
+async function createDownloadRenderer(t, electronAPI, extraMocks = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -34,7 +34,7 @@ async function createDownloadRenderer(t, electronAPI) {
         export function useTranslation() { return { t }; }
       `,
       "/components/ui/useToast": `
-        const context = { toast() {} };
+        const context = { toast: (toast) => globalThis.__modelDownloadToasts?.push(toast) };
         export function useToast() { return context; }
       `,
       "/stores/settingsStore": `
@@ -44,6 +44,7 @@ async function createDownloadRenderer(t, electronAPI) {
       `,
       "/ProviderSetupStep": `export const SETUP_CARD_CLASS = "";`,
       "/ui/ProviderIcon": `export function ProviderIcon() { return null; }`,
+      ...extraMocks,
     },
   });
   return {
@@ -128,7 +129,7 @@ test("remount restores concurrent LLM downloads and cancellation settles only it
   let activeDownloads = [
     {
       modelType: "llm",
-      modelId: "model-a",
+      modelId: "qwen3.5-4b-q4_k_m",
       phase: "downloading",
       progress: 20,
       downloadedBytes: 200,
@@ -137,7 +138,7 @@ test("remount restores concurrent LLM downloads and cancellation settles only it
     },
     {
       modelType: "llm",
-      modelId: "model-b",
+      modelId: "qwen3.5-2b-q4_k_m",
       phase: "downloading",
       progress: 30,
       downloadedBytes: 300,
@@ -172,7 +173,7 @@ test("remount restores concurrent LLM downloads and cancellation settles only it
   }
 
   await renderer.render(Harness);
-  assert.deepEqual(Object.keys(download.downloads), ["model-a", "model-b"]);
+  assert.deepEqual(Object.keys(download.downloads), ["qwen3.5-4b-q4_k_m", "qwen3.5-2b-q4_k_m"]);
   await renderer.unmount();
   assert.equal(listeners.size, 0);
 
@@ -181,32 +182,37 @@ test("remount restores concurrent LLM downloads and cancellation settles only it
     { ...activeDownloads[1], progress: 50, downloadedBytes: 500, sequence: 4 },
   ];
   await renderer.render(Harness);
-  assert.equal(download.downloads["model-a"].progress, 40);
-  assert.equal(download.downloads["model-b"].progress, 50);
+  assert.equal(download.downloads["qwen3.5-4b-q4_k_m"].progress, 40);
+  assert.equal(download.downloads["qwen3.5-2b-q4_k_m"].progress, 50);
 
-  await React.act(async () => download.cancelDownload("model-a"));
-  assert.deepEqual(cancellations, ["model-a"]);
-  assert.equal(download.isCancellingModel("model-a"), true);
-  assert.equal(download.isCancellingModel("model-b"), false);
+  await React.act(async () => download.cancelDownload("qwen3.5-4b-q4_k_m"));
+  assert.deepEqual(cancellations, ["qwen3.5-4b-q4_k_m"]);
+  assert.equal(download.isCancellingModel("qwen3.5-4b-q4_k_m"), true);
+  assert.equal(download.isCancellingModel("qwen3.5-2b-q4_k_m"), false);
 
   await React.act(async () => {
     for (const listener of listeners) {
       listener(null, {
         type: "error",
-        modelId: "model-a",
+        modelId: "qwen3.5-4b-q4_k_m",
         error: "Download cancelled by user",
         code: "DOWNLOAD_CANCELLED",
         sequence: 5,
       });
     }
   });
-  assert.deepEqual(Object.keys(download.downloads), ["model-b"]);
-  assert.equal(download.isCancellingModel("model-a"), false);
+  assert.deepEqual(Object.keys(download.downloads), ["qwen3.5-2b-q4_k_m"]);
+  assert.equal(download.isCancellingModel("qwen3.5-4b-q4_k_m"), false);
   assert.deepEqual(download.downloadErrors, {});
 
   await React.act(async () => {
     for (const listener of listeners) {
-      listener(null, { type: "complete", modelId: "model-b", progress: 100, sequence: 6 });
+      listener(null, {
+        type: "complete",
+        modelId: "qwen3.5-2b-q4_k_m",
+        progress: 100,
+        sequence: 6,
+      });
     }
   });
   assert.equal(download.isDownloading, false);
@@ -310,7 +316,7 @@ for (const outcome of ["error", "complete", "cancel"]) {
     await renderer.render(Harness);
     let request;
     await React.act(async () => {
-      request = download.downloadModel("model-a", () => {
+      request = download.downloadModel("qwen3.5-4b-q4_k_m", () => {
         selections += 1;
       });
     });
@@ -322,9 +328,9 @@ for (const outcome of ["error", "complete", "cancel"]) {
       progressListener(
         null,
         outcome === "complete"
-          ? { modelId: "model-a", type: "complete", progress: 100, sequence: 2 }
+          ? { modelId: "qwen3.5-4b-q4_k_m", type: "complete", progress: 100, sequence: 2 }
           : {
-              modelId: "model-a",
+              modelId: "qwen3.5-4b-q4_k_m",
               type: "error",
               error: outcome === "cancel" ? "Download cancelled by user" : "ENOTFOUND",
               code: outcome === "cancel" ? "DOWNLOAD_CANCELLED" : "ENOTFOUND",
@@ -376,9 +382,445 @@ for (const modelType of ["whisper", "parakeet", "llm"]) {
       return null;
     }
     await renderer.render(Harness);
-    await React.act(async () => download.downloadModel("requested-model"));
-    assert.equal(download.isDownloadingModel("requested-model"), false);
+    const requestedId =
+      modelType === "llm"
+        ? "qwen3.5-4b-q4_k_m"
+        : modelType === "parakeet"
+          ? "parakeet-tdt-0.6b-v3"
+          : "base";
+    await React.act(async () => download.downloadModel(requestedId));
+    assert.equal(download.isDownloadingModel(requestedId), false);
     assert.equal(download.downloadingModel, modelType === "llm" ? null : "active-model");
     if (modelType !== "llm") assert.equal(download.downloadProgress.percentage, 42);
+  });
+}
+
+// Records every toast the hook raises, so a test can prove none was shown.
+const RECORDING_DIALOGS = {
+  "/components/ui/useToast": `
+    const context = { toast: (options) => globalThis.__modelDownloadToasts.push(options) };
+    export function useToast() { return context; }
+  `,
+};
+
+async function renderParakeetDownload(t, electronAPI, options = {}) {
+  const toasts = [];
+  globalThis.__modelDownloadToasts = toasts;
+  t.after(() => {
+    delete globalThis.__modelDownloadToasts;
+  });
+  const renderer = await createDownloadRenderer(
+    t,
+    {
+      onParakeetDownloadProgress: () => () => {},
+      modelGetActiveDownloads: async () => [],
+      ...electronAPI,
+    },
+    RECORDING_DIALOGS
+  );
+  const { useModelDownload } = await renderer.vite.ssrLoadModule("/hooks/useModelDownload.ts");
+  const hook = {};
+  function Harness() {
+    hook.current = useModelDownload({ modelType: "parakeet", ...options });
+    return null;
+  }
+  await renderer.render(Harness);
+  const download = async (modelId) => {
+    let result;
+    await React.act(async () => {
+      result = await hook.current.downloadModel(modelId);
+    });
+    return result;
+  };
+  return { toasts, hook, download };
+}
+
+test("showErrorDialog false records the error without a dialog and resolves false", async (t) => {
+  const responses = [{ success: false, code: "ENOTFOUND", error: "ENOTFOUND" }, { success: true }];
+  let progressListener;
+  const { toasts, hook, download } = await renderParakeetDownload(
+    t,
+    {
+      downloadParakeetModel: async () => responses.shift(),
+      onParakeetDownloadProgress(listener) {
+        progressListener = listener;
+        return () => {};
+      },
+    },
+    { showErrorDialog: false }
+  );
+
+  assert.equal(await download("model-a"), false);
+  assert.deepEqual(hook.current.downloadErrors, {
+    "model-a": "hooks.modelDownload.errors.notFound",
+  });
+  assert.equal(toasts.length, 0);
+
+  assert.equal(await download("model-a"), true, "a success resolves true");
+  assert.deepEqual(hook.current.downloadErrors, {});
+
+  // A failure reported for a transfer this hook did not start stays silent too.
+  await React.act(async () => {
+    progressListener(null, {
+      model: "model-b",
+      type: "error",
+      error: "ENOTFOUND",
+      code: "ENOTFOUND",
+      sequence: 3,
+    });
+  });
+  assert.equal(hook.current.downloadErrors["model-b"], "hooks.modelDownload.errors.notFound");
+  assert.equal(toasts.length, 0);
+});
+
+test("downloadModel resolves false when the request throws or is cancelled", async (t) => {
+  const responses = [
+    () => Promise.reject(new Error("socket hang up")),
+    async () => ({ success: false, code: "DOWNLOAD_CANCELLED", error: "Download cancelled" }),
+  ];
+  const { toasts, hook, download } = await renderParakeetDownload(
+    t,
+    { downloadParakeetModel: () => responses.shift()() },
+    { showErrorDialog: false }
+  );
+  assert.equal(await download("model-a"), false);
+  assert.match(hook.current.downloadErrors["model-a"], /hooks\.modelDownload\.errors\./);
+  assert.equal(await download("model-a"), false);
+  assert.equal(toasts.length, 0);
+});
+
+test("the error toast still shows by default", async (t) => {
+  const { toasts, download } = await renderParakeetDownload(t, {
+    downloadParakeetModel: async () => ({ success: false, code: "ENOTFOUND", error: "ENOTFOUND" }),
+  });
+  assert.equal(await download("model-a"), false);
+  assert.deepEqual(toasts, [
+    {
+      title: "hooks.modelDownload.downloadFailed.title",
+      description: "hooks.modelDownload.errors.notFound",
+      variant: "destructive",
+    },
+  ]);
+});
+
+const ACTIVE_OTHER = {
+  modelType: "parakeet",
+  modelId: "model-b",
+  phase: "downloading",
+  progress: 30,
+  downloadedBytes: 0,
+  totalBytes: 0,
+  sequence: 1,
+};
+
+test("showErrorDialog false: refused for another transfer, no toast", async (t) => {
+  const { toasts, download } = await renderParakeetDownload(
+    t,
+    { modelGetActiveDownloads: async () => [ACTIVE_OTHER] },
+    { showErrorDialog: false }
+  );
+  // Another parakeet transfer is running, so this hook refuses before asking main.
+  assert.equal(await download("model-a"), false);
+  assert.equal(toasts.length, 0);
+});
+
+test("showErrorDialog false: main reports a transfer in progress, no toast", async (t) => {
+  const { toasts, download } = await renderParakeetDownload(
+    t,
+    { downloadParakeetModel: async () => ({ success: false, code: "DOWNLOAD_IN_PROGRESS" }) },
+    { showErrorDialog: false }
+  );
+  assert.equal(await download("model-a"), false);
+  assert.equal(toasts.length, 0);
+});
+
+test("the in-progress toast still shows by default", async (t) => {
+  const { toasts, download } = await renderParakeetDownload(t, {
+    modelGetActiveDownloads: async () => [ACTIVE_OTHER],
+  });
+  assert.equal(await download("model-a"), false);
+  assert.deepEqual(
+    toasts.map((toast) => toast.title),
+    ["hooks.modelDownload.downloadInProgress.title"]
+  );
+});
+
+test("a required model denied before dispatch records a terminal refusal without Retry", async (t) => {
+  const requests = [];
+  const renderer = await createDownloadRenderer(t, {
+    onWhisperDownloadProgress: () => () => {},
+    onParakeetDownloadProgress: () => () => {},
+    modelGetActiveDownloads: async () => [],
+    downloadWhisperModel: async (id) => {
+      requests.push(id);
+      return { success: true };
+    },
+  });
+  const { usePolicyStore } = await renderer.vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: {
+      transcription: { allowedModes: ["local"], allowedLocalModels: [] },
+      minAppVersion: null,
+    },
+  });
+  const { RequiredModelDownloadStep } = await renderer.vite.ssrLoadModule(
+    "/components/onboarding/RequiredModelDownloadStep.tsx"
+  );
+  let tree;
+  const required = ["base"];
+  const props = {
+    required,
+    missing: required,
+    loading: false,
+    refresh: async () => {},
+    onProceed() {},
+  };
+  function Harness() {
+    tree = RequiredModelDownloadStep(props);
+    return null;
+  }
+  await renderer.render(Harness);
+  assert.deepEqual(requests, []);
+  assert.equal(findRetryButtons(tree).length, 0);
+  const textContent = (node) => {
+    if (Array.isArray(node)) return node.map(textContent).join("");
+    if (node && typeof node === "object") return textContent(node.props?.children);
+    return typeof node === "string" ? node : "";
+  };
+  assert.match(textContent(tree), /models\.policy\.notApproved/);
+  assert.match(textContent(tree), /onboarding\.requiredModels\.failed\.notApproved/);
+  assert.doesNotMatch(textContent(tree), /models\.policy\.guidance/);
+});
+
+const textOf = (node) => {
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (node && typeof node === "object") return textOf(node.props?.children);
+  return typeof node === "string" ? node : "";
+};
+
+function requiredPolicy(allowedLocalModels) {
+  return {
+    status: "managed",
+    appVersion: "1.11.1",
+    accountId: "member",
+    authGeneration: 1,
+    policy: {
+      transcription: { allowedModes: ["local"], allowedLocalModels },
+      requiredLocalModels: ["base"],
+      minAppVersion: null,
+    },
+  };
+}
+
+// The step on the real required-models hook and real policy store, as OnboardingFlow runs it.
+async function renderRequiredStep(t, { policy, download }) {
+  const requests = [];
+  const installed = [];
+  const renderer = await createDownloadRenderer(t, {
+    onWhisperDownloadProgress: () => () => {},
+    onParakeetDownloadProgress: () => () => {},
+    modelGetActiveDownloads: async () => [],
+    listWhisperModels: async () => ({
+      models: installed.map((model) => ({ model, downloaded: true })),
+    }),
+    listParakeetModels: async () => ({ models: [] }),
+    downloadWhisperModel: async (id) => {
+      requests.push(id);
+      const result = await download(id, requests.length);
+      if (result.success) installed.push(id);
+      return result;
+    },
+  });
+  const { usePolicyStore } = await renderer.vite.ssrLoadModule("/stores/policyStore.ts");
+  usePolicyStore.setState(policy);
+  const { RequiredModelDownloadStep } = await renderer.vite.ssrLoadModule(
+    "/components/onboarding/RequiredModelDownloadStep.tsx"
+  );
+  const { useRequiredLocalModels } = await renderer.vite.ssrLoadModule(
+    "/hooks/useRequiredLocalModels.ts"
+  );
+  const { canLeaveRequiredModels } = await renderer.vite.ssrLoadModule(
+    "/components/onboarding/flow.ts"
+  );
+  let tree;
+  let requiredState;
+  let refused = [];
+  let proceeded = 0;
+  const onRefusedChange = (ids) => {
+    refused = ids;
+  };
+  const onProceed = () => {
+    proceeded += 1;
+  };
+  function Harness() {
+    requiredState = useRequiredLocalModels();
+    tree = RequiredModelDownloadStep({ ...requiredState, onProceed, onRefusedChange });
+    return null;
+  }
+  await renderer.render(Harness);
+  return {
+    requests,
+    tree: () => tree,
+    text: () => textOf(tree),
+    retries: () => findRetryButtons(tree),
+    required: () => requiredState.required,
+    proceeded: () => proceeded,
+    canLeave: () =>
+      canLeaveRequiredModels({
+        loading: requiredState.loading,
+        missing: requiredState.missing,
+        refused,
+      }),
+    setPolicy: (next) => React.act(async () => usePolicyStore.setState(next)),
+  };
+}
+
+test("a temporary policy failure keeps Retry and says what happened", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async (_id, attempt) =>
+      attempt === 1
+        ? { success: false, code: "POLICY_UNRESOLVABLE", error: "unresolved" }
+        : { success: true },
+  });
+  assert.equal(step.retries().length, 1);
+  assert.match(step.text(), /models\.policy\.unresolved/);
+  assert.doesNotMatch(step.text(), /models\.policy\.guidance/);
+  assert.equal(step.canLeave(), false, "a temporary failure still waits");
+
+  await React.act(async () => step.retries()[0].props.onClick());
+  assert.deepEqual(step.requests, ["base", "base"]);
+});
+
+for (const [code, message] of [
+  ["POLICY_MODEL_BLOCKED", /onboarding\.requiredModels\.failed\.notApproved/],
+  ["POLICY_LOCAL_MODE_BLOCKED", /models\.policy\.modeBlocked/],
+  ["POLICY_APP_VERSION_BLOCKED", /models\.policy\.versionBlocked/],
+  ["PARAKEET_UNSUPPORTED_OS", /transcription\.parakeet\.unavailable/],
+]) {
+  test(`${code} hides Retry and the member can still leave`, async (t) => {
+    const step = await renderRequiredStep(t, {
+      policy: requiredPolicy(["base"]),
+      download: async () => ({ success: false, code, error: "refused" }),
+    });
+    assert.equal(step.retries().length, 0);
+    assert.match(step.text(), message);
+    assert.doesNotMatch(step.text(), /models\.policy\.guidance/);
+    assert.doesNotMatch(step.text(), /requiredModels\.failed\.description/);
+    assert.equal(step.canLeave(), true);
+  });
+}
+
+test("an unapproved required model drops off the list without a download", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["small"]),
+    download: async () => ({ success: true }),
+  });
+  assert.deepEqual(step.required(), []);
+  assert.deepEqual(step.requests, []);
+  assert.equal(step.canLeave(), true);
+  assert.equal(step.proceeded(), 1);
+});
+
+test("revoking and re-approving a refused model downloads it again", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async (_id, attempt) =>
+      attempt === 1
+        ? { success: false, code: "POLICY_MODEL_BLOCKED", error: "refused" }
+        : new Promise(() => {}),
+  });
+  assert.equal(step.retries().length, 0);
+
+  await step.setPolicy(requiredPolicy([]));
+  assert.deepEqual(step.required(), []);
+  assert.equal(step.canLeave(), true);
+
+  await step.setPolicy(requiredPolicy(["base"]));
+  assert.deepEqual(step.required(), ["base"]);
+  assert.deepEqual(step.requests, ["base", "base"], "the refusal is gone with the old policy");
+  assert.doesNotMatch(step.text(), /notApproved/);
+});
+
+test("a policy refresh that changes nothing keeps a temporary failure waiting for Retry", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async () => ({ success: false, code: "POLICY_UNRESOLVABLE", error: "unresolved" }),
+  });
+  await step.setPolicy({ ...requiredPolicy(["base"]), revision: 9 });
+  assert.deepEqual(step.requests, ["base"]);
+  assert.equal(step.retries().length, 1);
+});
+
+test("a lifted requirement continues on its own once nothing is downloading", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async () => ({ success: false, code: "ENOTFOUND", error: "ENOTFOUND" }),
+  });
+  assert.equal(step.proceeded(), 0);
+  await step.setPolicy({ ...requiredPolicy(["base"]), status: "unmanaged", policy: null });
+  assert.equal(step.proceeded(), 1);
+});
+
+test("a token rotation's unresolved moment does not leave the step", async (t) => {
+  const step = await renderRequiredStep(t, {
+    policy: requiredPolicy(["base"]),
+    download: async () => ({ success: false, code: "ENOTFOUND", error: "ENOTFOUND" }),
+  });
+  await step.setPolicy({
+    status: "loading",
+    accountId: "member",
+    authGeneration: 2,
+    policy: null,
+    appVersion: null,
+  });
+  assert.equal(step.proceeded(), 0);
+});
+
+for (const [label, api, run, expected] of [
+  [
+    "a refusal main returns",
+    { downloadWhisperModel: async () => ({ success: false, code: "POLICY_MODEL_BLOCKED" }) },
+    (download) => download.downloadModel("base"),
+    "hooks.modelDownload.downloadFailed.title",
+  ],
+  [
+    "a failed delete",
+    {
+      deleteWhisperModel: async () => {
+        throw new Error("locked");
+      },
+    },
+    (download) => download.deleteModel("base", () => {}),
+    "hooks.modelDownload.deleteFailed.title",
+  ],
+]) {
+  test(`${label} tells the member`, async (t) => {
+    globalThis.__modelDownloadToasts = [];
+    t.after(() => delete globalThis.__modelDownloadToasts);
+    const subscribe = () => () => {};
+    const renderer = await createDownloadRenderer(t, {
+      onWhisperDownloadProgress: subscribe,
+      onParakeetDownloadProgress: subscribe,
+      onModelDownloadProgress: subscribe,
+      modelGetActiveDownloads: async () => [],
+      ...api,
+    });
+    const { useModelDownload } = await renderer.vite.ssrLoadModule("/hooks/useModelDownload.ts");
+    let download;
+    function Harness() {
+      download = useModelDownload({ modelType: "whisper" });
+      return null;
+    }
+    await renderer.render(Harness);
+
+    await React.act(async () => run(download));
+
+    assert.ok(
+      globalThis.__modelDownloadToasts.some((toast) => toast.title === expected),
+      JSON.stringify(globalThis.__modelDownloadToasts)
+    );
   });
 }

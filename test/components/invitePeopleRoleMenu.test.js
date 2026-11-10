@@ -46,7 +46,7 @@ test.after(async () => {
   await happyWindow.happyDOM.close();
 });
 
-async function mountView(t, dispatch = () => {}, draft = "") {
+async function mountView(t, dispatch = () => {}, draft = "", stateOverrides = {}) {
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-invite-role-menu-",
     noExternal: ["react-i18next"],
@@ -84,8 +84,12 @@ async function mountView(t, dispatch = () => {}, draft = "") {
           role: "member",
           phase: "editing",
           sent: [],
+          attached: [],
+          attachInvited: false,
           memberEmails: [],
           invitedEmails: [],
+          seats: { purchasedLeft: null, ceilingLeft: null },
+          ...stateOverrides,
         },
         dispatch,
         suggestions: [],
@@ -100,6 +104,17 @@ async function mountView(t, dispatch = () => {}, draft = "") {
   });
   return happyWindow.document;
 }
+
+test("Done says an invitation was added to, not that one was sent", async (t) => {
+  const document = await mountView(t, undefined, "", {
+    phase: "done",
+    attached: ["pat@acme.test"],
+  });
+
+  assert.equal(document.querySelector("h2")?.textContent, "workspaces.invite.attachedTitle");
+  assert.match(document.body.textContent, /workspaces\.invite\.attachedBody/);
+  assert.doesNotMatch(document.body.textContent, /workspaces\.invite\.sent/);
+});
 
 test("the role menu keeps Radix's trigger id so the open menu is named", async (t) => {
   const document = await mountView(t);
@@ -190,3 +205,15 @@ for (const [name, text, draft, start, end] of [
     assert.equal(inviteSummary(state).canSend, true);
   });
 }
+
+test("pressing Cancel leaves focus in the field", async (t) => {
+  const document = await mountView(t);
+  const cancel = [...document.querySelectorAll("button")].at(-1);
+  const press = new happyWindow.Event("mousedown", { bubbles: true, cancelable: true });
+
+  await React.act(async () => cancel.dispatchEvent(press));
+
+  // Its blur would chip a half-typed address, and the error bar that raises moves the button out
+  // from under the click.
+  assert.equal(press.defaultPrevented, true);
+});

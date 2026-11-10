@@ -1229,7 +1229,8 @@ test("a cloud pull keeps the note a chat came from", (t) => {
       title: "Onboarding decisions (renamed)",
       updated_at: "2099-01-01T00:00:00.000Z",
     },
-    [{ role: "user", content: "What did we decide?" }]
+    [{ role: "user", content: "What did we decide?" }],
+    db.getConversationByClientId(chat.client_conversation_id)
   );
   const pulled = db.db.prepare("SELECT * FROM agent_conversations WHERE id = ?").get(chat.id);
   assert.equal(pulled.title, "Onboarding decisions (renamed)");

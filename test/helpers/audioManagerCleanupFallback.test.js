@@ -320,3 +320,34 @@ test("a classified provider cleanup failure keeps the fields its toast needs", a
     },
   });
 });
+
+// A cleanup held up by another model's answer goes in raw on the same path, with
+// the wait bounded here, so dictation never sits on a long answer.
+test("dictation asks the local model for a bounded wait", async (t) => {
+  globalThis.__cleanupFallbackImmediateNotifications = [];
+  t.after(() => delete globalThis.__cleanupFallbackImmediateNotifications);
+  const received = [];
+  globalThis.__cleanupFallbackReceived = received;
+  t.after(() => delete globalThis.__cleanupFallbackReceived);
+
+  const { createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-audio-cleanup-busy-wait-",
+    settingsKey: "__audioCleanupBusyWaitSettings",
+    settings: { useCleanupModel: true, useDictationAgent: false, preferredLanguage: "en" },
+    mockModules: {
+      "/services/ReasoningService": `
+        export default {
+          processText: async (_text, _model, _agent, config) => {
+            globalThis.__cleanupFallbackReceived.push(config.busyWaitMs);
+            return "cleaned";
+          },
+        };
+      `,
+    },
+  });
+  const manager = createManager({});
+
+  assert.equal(await manager.processWithReasoningModel("text", "model", "Agent", {}), "cleaned");
+  assert.equal(received.length, 1);
+  assert.ok(received[0] > 0 && received[0] <= 3000, `waits ${received[0]} ms`);
+});

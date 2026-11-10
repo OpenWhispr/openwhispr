@@ -63,23 +63,23 @@ function ensureIpcListeners() {
     }
   }
 
-  if (window.electronAPI?.onActiveAccountScopeChanged) {
-    // Main announces every re-scope, and a token rotation keeps the account.
-    let accountId: string | null | undefined;
+  if (window.electronAPI?.onDatabaseAccountScopeChanged) {
+    // History holds whose rows main's database has in view: a token rotation
+    // keeps them, and so does signing out of a device only one account has used.
+    let visibleAccountId: string | null | undefined;
     let broadcastReceived = false;
     void window.electronAPI
-      .getActiveAccountScope?.()
+      .getDatabaseAccountScope?.()
       .then((scope) => {
-        if (!broadcastReceived) accountId = scope?.accountId ?? null;
+        if (!broadcastReceived) visibleAccountId = scope.visibleAccountId;
       })
       .catch((error) => {
         console.error("Failed to read the history's account scope:", error);
       });
-    const dispose = window.electronAPI.onActiveAccountScopeChanged((scope) => {
+    const dispose = window.electronAPI.onDatabaseAccountScopeChanged((scope) => {
       broadcastReceived = true;
-      const nextAccountId = scope?.accountId ?? null;
-      if (nextAccountId === accountId) return;
-      accountId = nextAccountId;
+      if (scope.visibleAccountId === visibleAccountId) return;
+      visibleAccountId = scope.visibleAccountId;
       clearTranscriptions();
       void initializeTranscriptions().catch((error) => {
         console.error("Failed to reload transcription history after an account change:", error);

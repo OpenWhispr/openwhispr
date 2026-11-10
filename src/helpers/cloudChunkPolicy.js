@@ -125,7 +125,12 @@ function summarizeChunkResults(results) {
 // omitted, and a known input duration clamps the final gap to its real end. The
 // marker is read by users and pasted by dictation, so it is localized like the
 // [Speaker N] labels in transcriptFormatter.
-function assembleChunkTranscript(results, segmentDurationSeconds, totalDurationSeconds) {
+function assembleChunkTranscript(
+  results,
+  segmentDurationSeconds,
+  totalDurationSeconds,
+  { preserveWhitespace = false } = {}
+) {
   const pieces = [];
   for (let i = 0; i < results.length; i++) {
     if (results[i] === SILENT_CHUNK) continue;
@@ -147,7 +152,8 @@ function assembleChunkTranscript(results, segmentDurationSeconds, totalDurationS
       })
     );
   }
-  return pieces.join(" ").replace(/\s+/g, " ").trim();
+  const transcript = pieces.join(" ");
+  return (preserveWhitespace ? transcript : transcript.replace(/\s+/g, " ")).trim();
 }
 
 function chunkRetryDelayMs(attempt, random = Math.random) {

@@ -53,6 +53,18 @@ const RESTORE_DELAYS = {
   linux_kde_wayland: 1200,
 };
 
+// VS Code can expose its class on Wayland without an X11 PID. In that case
+// the process-based Electron check cannot recognize its integrated terminal.
+// Match complete identities so unrelated apps containing "code" are unaffected.
+const LINUX_VSCODE_CLASSES = new Set([
+  "code",
+  "code-insiders",
+  "code - insiders",
+  "code-oss",
+  "code - oss",
+  "com.microsoft.vscode",
+]);
+
 // Window classes that identify terminal emulators, which expect
 // Ctrl+Shift+V/C instead of Ctrl+V/C. Mirrors terminal_classes in
 // resources/linux-fast-paste.c — keep the two lists in sync.
@@ -514,10 +526,10 @@ class ClipboardManager {
     return this._ydotoolLegacyChecked;
   }
 
-  _canAccessUinput() {
+  _canAccessUinput({ refresh = false } = {}) {
     if (process.platform !== "linux") return false;
     const now = Date.now();
-    if (this._uinputCache && now < this._uinputCache.expiresAt) {
+    if (!refresh && this._uinputCache && now < this._uinputCache.expiresAt) {
       return this._uinputCache.accessible;
     }
     let accessible = false;
@@ -1075,7 +1087,11 @@ class ClipboardManager {
           this.safeLog("⚠️ No accessibility permissions - text copied to clipboard only");
           if (allowClipboardFallback) {
             this.safeLog("✅ Clipboard fallback used (manual paste required)");
-            return { restoreComplete: Promise.resolve(), pasted: false };
+            return {
+              restoreComplete: Promise.resolve(),
+              pasted: false,
+              reason: "accessibility-missing",
+            };
           }
           const errorMsg =
             "Accessibility permissions required for automatic pasting. Text has been copied to clipboard - please paste manually with Cmd+V.";
@@ -1847,6 +1863,9 @@ class ClipboardManager {
       });
     }
     const windowSignals = [detectedWindowClass, detectedWindowComm].filter(Boolean);
+    const detectedIsVSCode = windowSignals.some((signal) =>
+      LINUX_VSCODE_CLASSES.has(signal.trim().toLowerCase())
+    );
     const signalsMatch = (needle) => windowSignals.some((signal) => signal.includes(needle));
     const detectedIsKonsole = signalsMatch("konsole");
     const isTerminalTarget = windowSignals.some((signal) =>
@@ -1866,6 +1885,7 @@ class ClipboardManager {
       windowSignals.some(isOmarchyTerminalSignature) ||
       detectedIsKonsole ||
       detectedIsElectron ||
+      detectedIsVSCode ||
       (isWayland && (windowSignals.length === 0 || (isCosmic && !isTerminalTarget)));
     const hyprlandShortcut = useShiftInsert
       ? { modifiers: "SHIFT", key: "Insert" }
@@ -1975,6 +1995,10 @@ class ClipboardManager {
           if (this.uinputTimedOut) {
             throw new Error("uinput timed out earlier this session, skipping");
           }
+          // Setup may have changed permissions since the cached diagnostics probe.
+          if (!this._canAccessUinput({ refresh: true })) {
+            throw new Error("/dev/uinput is not writable, skipping uinput");
+          }
           const args = ["--uinput", "--shift-insert"];
           try {
             await spawnFastPaste(args, "uinput");
@@ -1986,9 +2010,9 @@ class ClipboardManager {
             }
             throw error;
           }
-          this.safeLog("✅ Paste successful using native linux-fast-paste (uinput)");
+          this.safeLog("✅ Paste injection dispatched using native linux-fast-paste (uinput)");
           debugLogger.info(
-            "Paste successful",
+            "Paste injection dispatched",
             { tool: "linux-fast-paste", method: "uinput", detectedWindowClass },
             "clipboard"
           );

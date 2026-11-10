@@ -1,4 +1,4 @@
-import { Alert, type AlertButton } from 'react-native';
+import { Alert, Platform, type AlertButton } from 'react-native';
 import { safeHaptics } from './utils';
 
 type ConfirmCallback = () => void | Promise<void>;
@@ -30,12 +30,21 @@ export function confirmDestructive(
   else Alert.alert(title, message, buttons);
 }
 
+// The store keeps renewing a subscription after the account behind it is gone,
+// and the server cannot cancel it, so the user has to before deleting.
+function storeSubscriptionWarning(): string {
+  return Platform.OS === 'android'
+    ? 'Deleting your account does not cancel a subscription bought through Google Play. Cancel it first in Google Play → Payments & subscriptions → Subscriptions.'
+    : 'Deleting your account does not cancel a subscription bought through the App Store. Cancel it first in Settings → your name → Subscriptions.';
+}
+
 // Shared by the Account and Profile screens so both Delete Account entry
 // points keep identical copy and error handling (App Store 5.1.1(v)).
 export function confirmAccountDeletion(deleteAccount: () => Promise<void>): void {
   confirmDestructive(
     'Delete Account',
-    'This permanently deletes your OpenWhispr account and personal cloud data, and removes provider keys saved on this device. Notes in shared spaces stay with your team. Local notes on this device stay here unless you delete the app.',
+    'This permanently deletes your OpenWhispr account and personal cloud data, and removes provider keys saved on this device. Notes in shared spaces stay with your team. Local notes on this device stay here unless you delete the app.\n\n' +
+      storeSubscriptionWarning(),
     async () => {
       try {
         await deleteAccount();

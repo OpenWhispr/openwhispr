@@ -1,25 +1,24 @@
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
-import {
-  classifyInviteError,
-  type InviteErrorKind,
-  type InviteFailure,
-} from "../lib/workspaceErrors";
-import { CloudApiError } from "./cloudApi";
+import { classifyInviteError, type InviteFailure } from "../lib/workspaceErrors";
 import { InvitationsService } from "./InvitationsService";
+import type { InvitationBatchResult, InvitationBatchStatus } from "../types/electron";
 
-export type InviteOutcome = { ok: true; emailSent: boolean } | ({ ok: false } & InviteFailure);
+// `grantsAdded` comes with alreadyInvited: no new invitation went out, but the one already there now
+// carries the teams and teamspaces this request named. An older API attaches nothing to it.
+export type InviteOutcome =
+  { ok: true; emailSent: boolean } | ({ ok: false; grantsAdded?: boolean } & InviteFailure);
 
 export interface InvitePeopleDependencies {
-  send(
+  sendBatch(
     workspaceId: string,
     input: {
-      email: string;
+      emails: string[];
       role: "admin" | "member";
       team_ids?: string[];
       space_ids?: string[];
     },
     authGeneration: number | undefined
-  ): Promise<{ email_sent: boolean }>;
+  ): Promise<InvitationBatchResult>;
   authGeneration(): number | undefined;
 }
 
@@ -31,21 +30,33 @@ export interface InvitePeople {
     teamIds?: string[];
     spaceIds?: string[];
     onResult: (email: string, outcome: InviteOutcome) => void;
-    /** Stops the run before its next request; nothing is reported for the addresses left. */
+    /** Set once the dialog goes away; nothing is reported after it. */
     signal?: AbortSignal;
   }): Promise<void>;
 }
 
-// Outcomes that every remaining address would share, so asking again only adds noise. Every
-// per-address refusal is a 409, so a 400 is about the request itself (its teams or spaces).
-function endsTheBatch(kind: InviteErrorKind, error: unknown): boolean {
-  return (
-    kind === "notAllowed" ||
-    kind === "seatLimit" ||
-    kind === "ssoRequired" ||
-    kind === "sessionExpired" ||
-    (kind === "refused" && error instanceof CloudApiError && error.status === 400)
-  );
+const SKIPPED_OUTCOMES: Record<Exclude<InvitationBatchStatus, "invited">, InviteOutcome> = {
+  invalid_email: { ok: false, kind: "invalid" },
+  already_member: { ok: false, kind: "alreadyMember" },
+  already_invited: { ok: false, kind: "alreadyInvited" },
+  directory_required: { ok: false, kind: "directoryRequired" },
+};
+
+// An address the answer leaves out was not processed, so it can be sent again.
+const MISSING_OUTCOME: InviteOutcome = { ok: false, kind: "requestFailed" };
+
+function outcomeOf(result: InvitationBatchResult["results"][number]): InviteOutcome {
+  if (result.status === "invited") return { ok: true, emailSent: result.email_sent === true };
+  if (result.status === "already_invited" && result.grants_added === true) {
+    return { ok: false, kind: "alreadyInvited", grantsAdded: true };
+  }
+  return SKIPPED_OUTCOMES[result.status];
+}
+
+function outcomesByEmail(answer: InvitationBatchResult): Map<string, InviteOutcome> {
+  const outcomes = new Map<string, InviteOutcome>();
+  for (const result of answer.results) outcomes.set(result.email.toLowerCase(), outcomeOf(result));
+  return outcomes;
 }
 
 export function createInvitePeople(deps: InvitePeopleDependencies): InvitePeople {
@@ -53,43 +64,34 @@ export function createInvitePeople(deps: InvitePeopleDependencies): InvitePeople
     async sendInvitations({ workspaceId, emails, role, teamIds, spaceIds, onResult, signal }) {
       // Read once: a run that outlives a sign-in change must not continue as the new account.
       const authGeneration = deps.authGeneration();
-      let stopped: InviteOutcome | null = null;
+      if (signal?.aborted) return;
 
-      // One request at a time: seat counting and the server's one-pending-invite-per-email
-      // index must not race each other.
+      let outcomes: Map<string, InviteOutcome> | null = null;
+      let failure: InviteOutcome = MISSING_OUTCOME;
+      try {
+        const answer = await deps.sendBatch(
+          workspaceId,
+          {
+            emails,
+            role,
+            ...(teamIds?.length ? { team_ids: teamIds } : {}),
+            ...(spaceIds?.length ? { space_ids: spaceIds } : {}),
+          },
+          authGeneration
+        );
+        outcomes = outcomesByEmail(answer);
+      } catch (error) {
+        failure = { ok: false, ...classifyInviteError(error) };
+      }
+      if (signal?.aborted) return;
       for (const email of emails) {
-        if (signal?.aborted) return;
-        if (stopped) {
-          onResult(email, stopped);
-          continue;
-        }
-
-        let outcome: InviteOutcome;
-        try {
-          const result = await deps.send(
-            workspaceId,
-            {
-              email,
-              role,
-              ...(teamIds?.length ? { team_ids: teamIds } : {}),
-              ...(spaceIds?.length ? { space_ids: spaceIds } : {}),
-            },
-            authGeneration
-          );
-          outcome = { ok: true, emailSent: result.email_sent };
-        } catch (error) {
-          const failure = classifyInviteError(error);
-          outcome = { ok: false, ...failure };
-          if (endsTheBatch(failure.kind, error)) stopped = outcome;
-        }
-        if (signal?.aborted) return;
-        onResult(email, outcome);
+        onResult(email, outcomes?.get(email.toLowerCase()) ?? failure);
       }
     },
   };
 }
 
 export const invitePeople = createInvitePeople({
-  send: InvitationsService.send,
+  sendBatch: InvitationsService.sendBatch,
   authGeneration: () => getValidatedAuthGeneration() ?? undefined,
 });

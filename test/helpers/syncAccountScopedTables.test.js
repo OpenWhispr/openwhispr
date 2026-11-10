@@ -22,7 +22,7 @@ const {
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { createAccountCloud } = require("./harness/fakeCloud.js");
 const { createCloudApiRequestHandler } = require("../../src/helpers/cloudApiRequest.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 
@@ -47,11 +47,18 @@ function setup(t) {
   return db;
 }
 
+// Signed out, a device only one account has ever used keeps that account's rows
+// in view. A second account having signed in here is what hides them.
+function markDeviceShared(db) {
+  db.setActiveAccountId("account-b");
+  db.setActiveAccountId(null);
+}
+
 test("a dictionary word another account pulled is neither shown to nor re-created by the next account", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
-  const cloudB = createFakeCloud();
+  const cloudA = createAccountCloud();
+  const cloudB = createAccountCloud();
   const bWord = cloudB.seedDictionaryEntry({ word: "Kubernetes", client_dict_id: "b-dict" });
 
   const accountB = await signInAs(t, db, cloudB, "account-b");
@@ -88,8 +95,8 @@ test("a dictionary word another account pulled is neither shown to nor re-create
 test("two accounts on one device can each hold the same dictionary word", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudB = createFakeCloud();
-  cloudB.seedDictionaryEntry({ word: "Kubernetes", client_dict_id: "b-dict" });
+  const cloudB = createAccountCloud();
+  const bWord = cloudB.seedDictionaryEntry({ word: "Kubernetes", client_dict_id: "b-dict" });
 
   db.setActiveAccountId("account-a");
   db.applyDictionaryChanges({ add: ["Kubernetes"] });
@@ -97,7 +104,7 @@ test("two accounts on one device can each hold the same dictionary word", async 
   await accountB.syncAll(true);
 
   assert.deepEqual(db.getDictionary(), ["Kubernetes"]);
-  assert.equal(db.getDictionaryEntryByClientId("b-dict")?.cloud_id, "dict-0001");
+  assert.equal(db.getDictionaryEntryByClientId("b-dict")?.cloud_id, bWord.id);
   db.setActiveAccountId("account-a");
   const [aRow] = db.getPendingDictionary();
   assert.equal(aRow?.word, "Kubernetes", "A's own copy keeps its pending upload");
@@ -107,8 +114,8 @@ test("two accounts on one device can each hold the same dictionary word", async 
 test("a snippet another account pulled is neither shown to nor re-created by the next account", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
-  const cloudB = createFakeCloud();
+  const cloudA = createAccountCloud();
+  const cloudB = createAccountCloud();
   const bSnippet = cloudB.seedSnippet({
     trigger: "addr",
     replacement: "B's home address",
@@ -150,7 +157,7 @@ test("a snippet another account pulled is neither shown to nor re-created by the
 test("transcriptions another account dictated or pulled stay out of the next account's history and cloud", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
+  const cloudA = createAccountCloud();
 
   db.setActiveAccountId("account-b");
   db.upsertTranscriptionFromCloud({
@@ -186,8 +193,8 @@ test("transcriptions another account dictated or pulled stay out of the next acc
 test("chats another account pulled or started stay out of the next account's lists and cloud", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
-  const cloudB = createFakeCloud();
+  const cloudA = createAccountCloud();
+  const cloudB = createAccountCloud();
   cloudB.seedConversation({
     client_conversation_id: "b-conversation",
     title: "B's chat",
@@ -338,8 +345,8 @@ test("deleting an account erases its transcriptions, chats, words and snippets o
 test("an unattributed word whose cloud row 404s is never re-created, and its owner claims it", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
-  const cloudB = createFakeCloud();
+  const cloudA = createAccountCloud();
+  const cloudB = createAccountCloud();
   // Before attribution, B's pulled word looked like anyone's; A then recased it.
   const bWord = cloudB.seedDictionaryEntry({ word: "Kubernetes", client_dict_id: "b-dict" });
   db.db
@@ -461,10 +468,11 @@ test("reconstructed Insights counters stay with the account that dictated them",
 test("a word or snippet re-added while signed out stays hidden behind the account's own and never breaks its sync", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
+  const cloudA = createAccountCloud();
   cloudA.seedDictionaryEntry({ word: "OpenWhispr", client_dict_id: "a-dict" });
   cloudA.seedSnippet({ trigger: "addr", replacement: "A's address", client_snippet_id: "a-snip" });
 
+  markDeviceShared(db);
   const accountA = await signInAs(t, db, cloudA, "account-a");
   await accountA.syncAll(true);
 
@@ -505,7 +513,7 @@ test("another account's pull never takes over a word or snippet someone already 
        VALUES ('addr', 'A''s address', 'a-snip', 'a-snip-cloud', 'synced', 1)`
     )
     .run();
-  const cloudB = createFakeCloud();
+  const cloudB = createAccountCloud();
   cloudB.seedDictionaryEntry({ word: "Foo", client_dict_id: "b-dict" });
   cloudB.seedSnippet({ trigger: "addr", replacement: "B's address", client_snippet_id: "b-snip" });
 
@@ -526,7 +534,7 @@ test("pushing a row from before attribution doesn't hand it to the pushing accou
   db.saveTranscription("dictated before the upgrade", null, { clientTranscriptionId: "legacy" });
   db.db.prepare("UPDATE transcriptions SET legacy_unattributed = 1").run();
   db.saveTranscription("dictated signed out", null, { clientTranscriptionId: "signed-out" });
-  const cloudB = createFakeCloud();
+  const cloudB = createAccountCloud();
 
   const accountB = await signInAs(t, db, cloudB, "account-b");
   await accountB.syncAll(true);
@@ -548,7 +556,7 @@ test("pushing a row from before attribution doesn't hand it to the pushing accou
 test("an account switch while a push is in flight neither claims the row nor cleans up the cloud copy", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
+  const cloudA = createAccountCloud();
   db.setActiveAccountId("account-a");
   db.applyDictionaryChanges({ add: ["Kubernetes"] });
   db.setActiveAccountId(null);
@@ -579,7 +587,7 @@ for (const status of [200, 404]) {
   test(`a stale snippet delete completion after HTTP ${status} preserves the next account's restored edit`, async (t) => {
     const db = setup(t);
     if (!db) return;
-    const cloudA = createFakeCloud();
+    const cloudA = createAccountCloud();
     const remote = cloudA.seedSnippet({ trigger: "addr", replacement: "Shared address" });
     db.upsertSnippetFromCloud(remote);
     const accountA = await signInAs(t, db, cloudA, "account-a");
@@ -654,7 +662,7 @@ test("an older build can still open a database where two accounts share a trigge
 test("a word or snippet the account removes stays removed, with no signed-out copy left to resurface", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
+  const cloudA = createAccountCloud();
   cloudA.seedDictionaryEntry({ word: "OpenWhispr", client_dict_id: "a-dict" });
   cloudA.seedSnippet({ trigger: "addr", replacement: "A's address", client_snippet_id: "a-addr" });
   const signature = cloudA.seedSnippet({
@@ -663,6 +671,7 @@ test("a word or snippet the account removes stays removed, with no signed-out co
     client_snippet_id: "a-sig",
   });
 
+  markDeviceShared(db);
   const accountA = await signInAs(t, db, cloudA, "account-a");
   await accountA.syncAll(true);
   db.setActiveAccountId(null);
@@ -700,7 +709,7 @@ for (const switchDuring of ["fetch", "json"]) {
   test(`a chat created during an account switch in ${switchDuring} stays with its sender`, async (t) => {
     const db = setup(t);
     if (!db) return;
-    const cloudA = createFakeCloud();
+    const cloudA = createAccountCloud();
     const chat = db.createAgentConversation("Started signed out");
     db.addAgentMessage(chat.id, "user", "hello", null);
     db.addAgentMessage(chat.id, "assistant", "hello back", null);
@@ -766,7 +775,7 @@ for (const boundary of ["getSnippetForCloudMerge", "hardDeleteSnippet"]) {
   test(`a stale snippet tombstone stops at ${boundary} without advancing its cursor`, async (t) => {
     const db = setup(t);
     if (!db) return;
-    const cloudA = createFakeCloud();
+    const cloudA = createAccountCloud();
     const tombstone = cloudA.seedSnippet({
       trigger: "addr",
       replacement: "A's address",
@@ -813,7 +822,7 @@ for (const boundary of ["getSnippetForCloudMerge", "hardDeleteSnippet"]) {
 test("a snippet pull preserves the next account's cursor after its final lookup completes", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
+  const cloudA = createAccountCloud();
   const snippet = cloudA.seedSnippet({
     trigger: "addr",
     replacement: "A's address",
@@ -846,7 +855,13 @@ for (const kind of ["conversations", "transcriptions", "dictionary"]) {
       const db = setup(t);
       if (!db) return;
       let row;
-      if (kind === "conversations") row = db.createAgentConversation("Legacy chat");
+      if (kind === "conversations") {
+        row = db.createAgentConversation("Legacy chat");
+        // A chat's tombstone speaks only for the copy linked to it.
+        db.db
+          .prepare("UPDATE agent_conversations SET cloud_id = 'cloud-a' WHERE id = ?")
+          .run(row.id);
+      }
       if (kind === "transcriptions") row = db.saveTranscription("Legacy dictation").transcription;
       if (kind === "dictionary") {
         db.applyDictionaryChanges({ add: ["Legacy"] });
@@ -862,7 +877,7 @@ for (const kind of ["conversations", "transcriptions", "dictionary"]) {
         transcriptions: "client_transcription_id",
         dictionary: "client_dict_id",
       }[kind];
-      const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
+      const accountA = await signInAs(t, db, createAccountCloud(), "account-a");
       const since = "2026-10-01T00:00:00.000Z";
       localStorageStub.setItem(`lastSyncedAt.${kind}`, since);
       if (kind === "dictionary") localStorageStub.setItem("lastSyncedAt.dictionary.id", "before");
@@ -975,7 +990,7 @@ test("matching legacy pulls claim ownership without overwriting local edits or d
       messages: [{ role: "user", content: "old cloud message" }],
     },
   };
-  const accountA = await signInAs(t, db, createFakeCloud(), "account-a");
+  const accountA = await signInAs(t, db, createAccountCloud(), "account-a");
   windowStub.electronAPI.cloudApiRequest = async ({ path }) => {
     const kind = path.split("/")[2];
     return {
@@ -1010,13 +1025,14 @@ test("matching legacy pulls claim ownership without overwriting local edits or d
 test("a pull page that lands after the account changed is not written for the next account", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
+  const cloudA = createAccountCloud();
   cloudA.seedDictionaryEntry({ word: "Kubernetes", client_dict_id: "a-dict" });
   cloudA.seedConversation({
     client_conversation_id: "a-chat",
     title: "A's chat",
     messages: [{ role: "user", content: "hello from A" }],
   });
+  markDeviceShared(db);
   // A signs out while the first page of a pull is on its way back.
   let signOutDuring = null;
   cloudA.failWith((call) => {
@@ -1047,7 +1063,7 @@ test("a pull page that lands after the account changed is not written for the ne
 test("an unattributed row whose PATCH 404s waits for an edit, and the account's own is re-created", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
+  const cloudA = createAccountCloud();
   // An unattributed word and snippet carrying another account's cloud ids, and
   // A's own word whose cloud row was purged.
   db.db
@@ -1104,7 +1120,7 @@ function seedUploadedLegacyTranscription(db, cloudId) {
 test("Clear history deletes a legacy row's cloud copy from the account that holds it", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
+  const cloudA = createAccountCloud();
   const inA = cloudA.seedTranscription({ client_transcription_id: "a-copy", text: "legacy" });
   seedUploadedLegacyTranscription(db, inA.id);
   db.setActiveAccountId("account-b");
@@ -1130,8 +1146,8 @@ test("Clear history deletes a legacy row's cloud copy from the account that hold
 test("A's Clear history can't reach a legacy row's copy in B's cloud", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
-  const cloudB = createFakeCloud();
+  const cloudA = createAccountCloud();
+  const cloudB = createAccountCloud();
   const inB = cloudB.seedTranscription({ client_transcription_id: "b-copy", text: "legacy" });
   seedUploadedLegacyTranscription(db, inB.id);
   db.setActiveAccountId("account-b");
@@ -1159,7 +1175,7 @@ test("A's Clear history can't reach a legacy row's copy in B's cloud", async (t)
 test("retention tombstones an expired legacy row for the account that clears it", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = createFakeCloud();
+  const cloudA = createAccountCloud();
   const inA = cloudA.seedTranscription({ client_transcription_id: "a-old", text: "legacy" });
   seedUploadedLegacyTranscription(db, inA.id);
   db.db.prepare("UPDATE transcriptions SET created_at = datetime('now', '-90 days')").run();
@@ -1171,4 +1187,139 @@ test("retention tombstones an expired legacy row for the account that clears it"
   await accountA.syncAll(true);
 
   assert.equal(cloudA.transcriptions().find((row) => row.id === inA.id)?.deleted_at != null, true);
+});
+
+test("a pull claims an unattributed chat without replacing messages the cloud lacks", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createAccountCloud();
+  // From before chats carried an owner: uploaded to A's cloud, continued here since.
+  const seedLegacyChat = (title, syncStatus) => {
+    const chat = db.createAgentConversation(title);
+    db.addAgentMessage(chat.id, "user", "first");
+    db.addAgentMessage(chat.id, "assistant", "only on this device");
+    const copy = cloudA.seedConversation({
+      client_conversation_id: chat.client_conversation_id,
+      title,
+      updated_at: "2099-01-01T00:00:00.000Z",
+      messages: [{ role: "user", content: "first" }],
+    });
+    db.db
+      .prepare(
+        "UPDATE agent_conversations SET cloud_id = ?, sync_status = ?, legacy_unattributed = 1 WHERE id = ?"
+      )
+      .run(copy.id, syncStatus, chat.id);
+    return chat;
+  };
+  const chats = [seedLegacyChat("Longer here", "synced"), seedLegacyChat("Edited here", "pending")];
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+
+  await accountA.pullConversations();
+
+  for (const chat of chats) {
+    const row = db.getAgentConversation(chat.id);
+    assert.equal(row.account_id, "account-a", `${row.title}: A's cloud returned it`);
+    assert.deepEqual(
+      row.messages.map((message) => message.content),
+      ["first", "only on this device"],
+      `${row.title}: a newer, shorter cloud copy replaces nothing`
+    );
+  }
+  db.setActiveAccountId("account-b");
+  assert.deepEqual(db.getAgentConversations(), [], "and B no longer sees A's chats");
+});
+
+test("a linked chat's missing messages never go out under the next sign-in", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createAccountCloud();
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  const chat = db.createAgentConversation("A's chat");
+  db.addAgentMessage(chat.id, "user", "sent");
+  await accountA.syncAll(true);
+  db.addAgentMessage(chat.id, "assistant", "A's unsent reply");
+  db.db.prepare("UPDATE agent_conversations SET sync_status = 'pending'").run();
+  const cloudCopy = () =>
+    cloudA.conversation(chat.client_conversation_id).messages.map((message) => message.content);
+
+  // B signs in, and its session is validated, once the pass has read A's chat.
+  const api = windowStub.electronAPI;
+  const read = api.getAgentConversation;
+  api.getAgentConversation = async (id) => {
+    const row = await read(id);
+    db.setActiveAccountId("account-b");
+    api.authState.generation += 1;
+    await establishValidatedAuth("account-b");
+    return row;
+  };
+  await accountA.pushPendingConversations();
+
+  assert.equal(cloudA.logFor("/api/conversations/messages").length, 0, "nothing was sent");
+  assert.deepEqual(cloudCopy(), ["sent"]);
+  assert.equal(
+    db.db.prepare("SELECT sync_status FROM agent_conversations").get().sync_status,
+    "pending"
+  );
+
+  await (await signInAs(t, db, cloudA, "account-a")).syncAll(true);
+  assert.deepEqual(cloudCopy(), ["sent", "A's unsent reply"], "A's own pass delivers it");
+});
+
+test("a signed-out chat edited during its first create is linked and claimed for its sender", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const chat = db.createAgentConversation("Started signed out");
+  db.addAgentMessage(chat.id, "user", "first");
+  const cloudA = createAccountCloud();
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  const api = windowStub.electronAPI;
+  const request = api.cloudApiRequest;
+  api.cloudApiRequest = async (options) => {
+    const result = await request(options);
+    if (options.path === "/api/conversations/create") {
+      api.cloudApiRequest = request;
+      db.addAgentMessage(chat.id, "assistant", "added while the create was in flight");
+    }
+    return result;
+  };
+
+  await accountA.syncAll(true);
+
+  const row = db.getAgentConversation(chat.id);
+  assert.equal(row.account_id, "account-a");
+  assert.equal(row.sync_status, "synced");
+  assert.equal(cloudA.logFor("/api/conversations/delete").length, 0, "the copy is never deleted");
+  assert.deepEqual(
+    cloudA.conversation(row.client_conversation_id).messages.map((message) => message.content),
+    ["first", "added while the create was in flight"]
+  );
+  db.setActiveAccountId("account-b");
+  assert.equal(db.getAgentConversation(chat.id), null, "the next account never gets it");
+});
+
+test("a retry refused before it was sent keeps the earlier attempt on record", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createAccountCloud();
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  const chat = db.createAgentConversation("Sent once already");
+  db.addAgentMessage(chat.id, "user", "may be in the cloud");
+  // An earlier create left with these messages and its answer never arrived.
+  db.markConversationCreateAttempted(chat.id);
+  const api = windowStub.electronAPI;
+  const mark = api.markConversationCreateAttempted;
+  api.markConversationCreateAttempted = async (...args) => {
+    const result = await mark(...args);
+    api.authState.generation += 1;
+    return result;
+  };
+
+  await accountA.syncAll(true);
+
+  assert.equal(cloudA.logFor("/api/conversations/create").length, 0, "this retry never left");
+  assert.equal(
+    db.db.prepare("SELECT cloud_create_attempted AS a FROM agent_conversations").get().a,
+    1,
+    "so the next one still goes without the messages the first may have stored"
+  );
 });

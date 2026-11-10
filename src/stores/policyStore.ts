@@ -200,16 +200,20 @@ export const usePolicyStore = create<PolicyState>()((set, get) => {
       }
 
       const previous = get();
-      const sameIdentity =
-        previous.accountId === accountId && previous.authGeneration === authGeneration;
+      const sameAccount = previous.accountId === accountId;
+      const sameIdentity = sameAccount && previous.authGeneration === authGeneration;
       // Keep every settled state visible while refreshing the same account.
       // In particular, replacing `error` with `loading` makes AppRouter unmount
       // onboarding; the remounted useAuth then starts another refresh and can
       // create an error -> loading -> error loop while the service is offline.
+      // A rotated token keeps it too, as main does, so a running local stream
+      // isn't refused while the new credential's answer is on its way.
       const preserveSettledPolicy =
-        sameIdentity && previous.status !== "idle" && previous.status !== "loading";
+        sameAccount && previous.status !== "idle" && previous.status !== "loading";
       const sequence = ++fetchSequence;
-      if (!preserveSettledPolicy) {
+      if (preserveSettledPolicy) {
+        if (!sameIdentity) set({ authGeneration, revision: 0 });
+      } else {
         set({
           accountId,
           authGeneration,

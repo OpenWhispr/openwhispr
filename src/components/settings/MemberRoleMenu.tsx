@@ -1,16 +1,22 @@
-import type { ReactElement } from "react";
+import { useRef, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Loader2, Trash2 } from "../icons";
+import { ChevronDown, Loader2, Trash2, Users } from "../icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import type { WorkspaceMember } from "../../types/electron";
+import type { Workspace, WorkspaceMember } from "../../types/electron";
+import { AddToTeamList } from "../workspace/AddToTeamList";
+import type { PeopleTeamAdd } from "../workspace/PeopleAddMenu";
 
 const ASSIGNABLE_ROLES = ["member", "admin"] as const;
 type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
@@ -29,6 +35,12 @@ interface MemberRoleMenuProps {
   onRoleChange: (role: AssignableRole) => void;
   onTransfer: () => void;
   onRemove: () => void;
+  /**
+   * Adds this person to a team. Both are given to whoever may manage members; without them the
+   * menu has no Add to team.
+   */
+  workspace?: Workspace;
+  teamAdd?: PeopleTeamAdd;
 }
 
 export function MemberRoleMenu({
@@ -40,8 +52,11 @@ export function MemberRoleMenu({
   onRoleChange,
   onTransfer,
   onRemove,
+  workspace,
+  teamAdd,
 }: MemberRoleMenuProps): ReactElement {
   const { t } = useTranslation();
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const roleLabel = t(`settingsPage.workspace.role.${member.role}`);
 
   if (member.role === "owner" || isSelf || !canManage) {
@@ -49,8 +64,9 @@ export function MemberRoleMenu({
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => open && teamAdd?.menuOpened()}>
       <DropdownMenuTrigger
+        ref={triggerRef}
         disabled={pending}
         aria-label={t("settingsPage.workspace.people.roleMenuLabel", {
           name: member.name || member.email,
@@ -90,6 +106,31 @@ export function MemberRoleMenu({
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
+        {workspace && teamAdd ? (
+          <DropdownMenuSub onOpenChange={(open) => open && teamAdd.open()}>
+            <DropdownMenuSubTrigger className="gap-2 rounded-lg px-2.5 py-2 text-xs focus:bg-muted data-[state=open]:bg-muted">
+              <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              {t("settingsPage.workspace.people.selection.addToTeam")}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent
+                sideOffset={6}
+                className="w-64 max-w-[calc(100vw-32px)] rounded-xl p-1.5"
+              >
+                <AddToTeamList
+                  workspace={workspace}
+                  teams={teamAdd.teams}
+                  people={[member]}
+                  onChoose={(team) =>
+                    teamAdd.add(team, [member], {
+                      returnFocus: () => triggerRef.current?.focus(),
+                    })
+                  }
+                />
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
+        ) : null}
         {canTransfer && (
           <DropdownMenuItem className="text-xs" onSelect={onTransfer}>
             {t("settingsPage.workspace.members.transferOwnership")}

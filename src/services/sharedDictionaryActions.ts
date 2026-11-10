@@ -5,7 +5,10 @@ import {
   SharedDictionaryService,
 } from "./SharedDictionaryService";
 import { syncService } from "./SyncService";
-import { getValidatedAuthGeneration } from "../lib/authRequestContext";
+import {
+  getAuthRequestContextSnapshot,
+  getValidatedAuthGeneration,
+} from "../lib/authRequestContext";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useSharedDictionaryStore } from "../stores/sharedDictionaryStore";
 import { readActiveWorkspaceId, useWorkspaceStore } from "../stores/workspaceStore";
@@ -640,6 +643,7 @@ export async function sharePersonalWords(
   }
 
   const scope = captureActionScope();
+  const accountId = getAuthRequestContextSnapshot().sessionUserId;
   let failed: ActionFailure | null = null;
   let mirrorChanged = 0;
   for (const [index, batch] of chunks.entries()) {
@@ -655,9 +659,13 @@ export async function sharePersonalWords(
       // server's refusals map back to it.
       const sentById = new Map<string, string>();
       const sentByLower = new Map<string, string>();
+      // Words with a cloud id that went as plain words all the same: the row is
+      // unattributed, so the id may be another account's, and the server
+      // refuses the whole request over a personal id it can't find.
+      const unprovenWords = new Set<string>();
       for (const word of batch) {
         const row = byLower.get(word.toLowerCase());
-        if (row?.cloudId) {
+        if (row?.cloudId && accountId !== null && row.accountId === accountId) {
           // Sent as stored, since the server compares it with the cloud row; it
           // refuses an unshareable one per word (`rejected`), but a word over
           // the length cap fails the whole request.
@@ -677,6 +685,7 @@ export async function sharePersonalWords(
           }
           plain.push(sendable);
           sentByLower.set(sendable.toLowerCase(), word);
+          if (row?.cloudId) unprovenWords.add(word);
         }
         sent.push(word);
       }
@@ -701,9 +710,11 @@ export async function sharePersonalWords(
       );
       rejected.push(...refusedHere);
       const accepted = sent.filter((word) => !refusedHere.has(word));
-      const demotedWords = new Set(
-        [...demotedIds].flatMap((id) => (sentById.has(id) ? [sentById.get(id)!] : []))
-      );
+      // Either way the server marked no personal row for these.
+      const demotedWords = new Set([
+        ...[...demotedIds].flatMap((id) => (sentById.has(id) ? [sentById.get(id)!] : [])),
+        ...unprovenWords,
+      ]);
       const sharedAt = new Date().toISOString();
       if (accepted.length > 0) {
         await applyAccepted(scope, "share mark", async () => {

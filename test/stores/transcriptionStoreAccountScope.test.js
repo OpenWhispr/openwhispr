@@ -21,7 +21,7 @@ test("account changes clear cached history and older loads cannot restore it", a
     window: {
       electronAPI: {
         getTranscriptions: (...args) => readHistory(...args),
-        onActiveAccountScopeChanged: (callback) => {
+        onDatabaseAccountScopeChanged: (callback) => {
           onScopeChanged = callback;
           return () => {};
         },
@@ -48,9 +48,12 @@ test("account changes clear cached history and older loads cannot restore it", a
   readHistory = (limit, options) =>
     new Promise((resolve) => pending.push({ resolve, limit, options }));
   const olderLoad = store.initializeTranscriptions();
-  await React.act(async () => onScopeChanged(null));
+  // Signing out of a device another account has used shows unattributed rows only.
+  await React.act(async () => onScopeChanged({ accountId: null, visibleAccountId: null }));
   assert.deepEqual(visibleHistory, [], "sign-out immediately hides the departed history");
-  await React.act(async () => onScopeChanged({ accountId: "account-b", authGeneration: 2 }));
+  await React.act(async () =>
+    onScopeChanged({ accountId: "account-b", visibleAccountId: "account-b" })
+  );
   assert.deepEqual(visibleHistory, [], "the new account waits for its own history");
   assert.deepEqual(
     pending.map(({ limit, options }) => [limit, options]),
@@ -67,45 +70,62 @@ test("account changes clear cached history and older loads cannot restore it", a
   assert.deepEqual(visibleHistory, accountB, "superseded reads cannot expose the old account");
 });
 
-test("the same account's token rotation keeps the loaded history", async (t) => {
-  let root;
-  t.after(async () => {
-    if (root) await React.act(async () => root.unmount());
-  });
-  let onScopeChanged;
-  let reads = 0;
-  installBrowserGlobals(t, {
-    window: {
-      electronAPI: {
-        getActiveAccountScope: async () => ({ accountId: "account-a", authGeneration: 1 }),
-        getTranscriptions: async () => {
-          reads += 1;
-          return [{ id: 1, text: "A's history" }];
-        },
-        onActiveAccountScopeChanged: (callback) => {
-          onScopeChanged = callback;
-          return () => {};
+// main's database keeps the account between a token rotation and the
+// re-scope, while the credential binding reads signed out; a window that
+// starts in that gap must not take the re-scope for an account change.
+for (const [label, initial, broadcast] of [
+  [
+    "a window started between a token rotation and the re-scope keeps its history",
+    { accountId: "account-a", visibleAccountId: "account-a" },
+    { accountId: "account-a", visibleAccountId: "account-a" },
+  ],
+  [
+    "signing out of a device only one account has used keeps its history",
+    { accountId: "account-a", visibleAccountId: "account-a" },
+    { accountId: null, visibleAccountId: "account-a" },
+  ],
+]) {
+  test(label, async (t) => {
+    let root;
+    t.after(async () => {
+      if (root) await React.act(async () => root.unmount());
+    });
+    let onScopeChanged;
+    let reads = 0;
+    installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          getActiveAccountScope: async () => null,
+          getDatabaseAccountScope: async () => initial,
+          getTranscriptions: async () => {
+            reads += 1;
+            return [{ id: 1, text: "A's history" }];
+          },
+          onDatabaseAccountScopeChanged: (callback) => {
+            onScopeChanged = callback;
+            return () => {};
+          },
         },
       },
-    },
+    });
+    const container = installHookDom(t);
+    const vite = await createRendererServer(t, {
+      cachePrefix: "openwhispr-transcription-account-scope-gap-test-",
+    });
+    const store = await vite.ssrLoadModule("/stores/transcriptionStore.ts");
+    let visibleHistory;
+    function History() {
+      visibleHistory = store.useTranscriptions();
+      return null;
+    }
+    root = require("react-dom/client").createRoot(container);
+    await React.act(async () => {
+      root.render(React.createElement(History));
+      await store.initializeTranscriptions(100, true);
+    });
+    const readsBefore = reads;
+    await React.act(async () => onScopeChanged(broadcast));
+    assert.equal(visibleHistory.length, 1, "nothing flashes empty");
+    assert.equal(reads, readsBefore, "and nothing reloads");
   });
-  const container = installHookDom(t);
-  const vite = await createRendererServer(t, {
-    cachePrefix: "openwhispr-transcription-account-rotation-test-",
-  });
-  const store = await vite.ssrLoadModule("/stores/transcriptionStore.ts");
-  let visibleHistory;
-  function History() {
-    visibleHistory = store.useTranscriptions();
-    return null;
-  }
-  root = require("react-dom/client").createRoot(container);
-  await React.act(async () => {
-    root.render(React.createElement(History));
-    await store.initializeTranscriptions(100, true);
-  });
-  const readsBefore = reads;
-  await React.act(async () => onScopeChanged({ accountId: "account-a", authGeneration: 2 }));
-  assert.equal(visibleHistory.length, 1, "nothing flashes empty");
-  assert.equal(reads, readsBefore);
-});
+}

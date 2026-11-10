@@ -40,7 +40,10 @@ function snippetApi(db, authState) {
         : db.markSnippetSynced(id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement),
     hardDeleteSnippet: async (id, expectedAuthGeneration) =>
       authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteSnippet(id),
-    clearSnippetCloudId: async (id) => db.clearSnippetCloudId(id),
+    clearSnippetCloudId: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? { success: false, stale: true }
+        : db.clearSnippetCloudId(id),
     broadcastSnippetsUpdated: async () => ({ success: true }),
   };
 }
@@ -81,12 +84,30 @@ function createElectronApi(db, options = {}) {
   // UI signals SyncService rebroadcasts through the main process
   // (space-revoked, note-relocated, …), recorded for assertions.
   const syncEvents = [];
+  // The account each sign-in was scoped to (scopedAccountByGeneration in
+  // ipcHandlers.js, written by set-active-account-scope). A test scopes the
+  // database before it uses a sign-in, so the first use stands in for that call.
+  const scopedAccounts = new Map();
+  const scopedAccount = (generation) => {
+    if (!scopedAccounts.has(generation)) scopedAccounts.set(generation, db.activeAccountId);
+    return scopedAccounts.get(generation);
+  };
   // The main process's token generation. A test bumps it to stand in for an
   // account switch while a pass is in flight.
   const authState = {
     generation: AUTH_GENERATION,
-    isStale: (expected) => expected !== authState.generation,
+    isReplaced: (expected) => expected !== authState.generation,
+    // As isStaleSyncAck: the sign-in was replaced, or the account it was scoped
+    // to is no longer the active one (a session revoked under the same token).
+    isStale: (expected) =>
+      authState.isReplaced(expected) || scopedAccount(expected) !== db.activeAccountId,
   };
+  // As syncSenderAccount: a chat ack names the account it was sent as, accepted
+  // only when it is the one that sign-in was scoped to.
+  const syncSender = (accountId, generation) =>
+    typeof accountId === "string" && accountId && scopedAccount(generation) === accountId
+      ? accountId
+      : null;
 
   return {
     syncEvents,
@@ -96,18 +117,22 @@ function createElectronApi(db, options = {}) {
       if (!cloud) throw new Error("no fake cloud wired into this electronAPI");
       // Mirrors cloudApiRequest.js's fence: a request pinned to another
       // sign-in is refused before it reaches the cloud.
-      if (!opts?.public && authState.isStale(opts?.expectedAuthGeneration)) {
+      if (!opts?.public && authState.isReplaced(opts?.expectedAuthGeneration)) {
         return {
           success: false,
           error: "Authentication context changed",
           code: "AUTH_CONTEXT_CHANGED",
+          requestSent: false,
         };
       }
       return cloud.request(opts);
     },
 
     // Auth
-    authGetTokenState: async () => ({ token: AUTH_TOKEN, generation: authState.generation }),
+    authGetTokenState: async () => {
+      scopedAccount(authState.generation);
+      return { token: AUTH_TOKEN, generation: authState.generation };
+    },
 
     emitSyncEvent: async (name, payload) => {
       syncEvents.push({ name, payload });
@@ -120,6 +145,8 @@ function createElectronApi(db, options = {}) {
     getPendingNotes: async (spaceKind) => db.getPendingNotes(spaceKind),
     getPendingNoteDeletes: async () => db.getPendingNoteDeletes(),
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
+    getNoteForCloudRow: async (clientNoteId, cloudId) =>
+      db.getNoteForCloudRow(clientNoteId, cloudId),
     upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
       db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
     markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
@@ -209,19 +236,41 @@ function createElectronApi(db, options = {}) {
     getPendingConversations: async () => db.getPendingConversations(),
     getPendingConversationDeletes: async () => db.getPendingConversationDeletes(),
     getConversationByClientId: async (clientId) => db.getConversationByClientId(clientId),
-    upsertConversationFromCloud: async (cloudConv, messages, expectedAuthGeneration) =>
+    claimConversationFromCloud: async (cloudConv, expectedAuthGeneration) =>
       authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
-        : db.upsertConversationFromCloud(cloudConv, messages),
+        : db.claimConversationFromCloud(cloudConv),
+    upsertConversationFromCloud: async (cloudConv, messages, snapshot, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertConversationFromCloud(cloudConv, messages, snapshot),
     markConversationCreateAttempted: async (id, expectedAuthGeneration) =>
       authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
         : db.markConversationCreateAttempted(id),
     clearConversationCreateAttempted: async (id) => db.clearConversationCreateAttempted(id),
-    acknowledgeConversationCreate: async (id, snapshot, cloudId, accountId) =>
-      db.acknowledgeConversationCreate(id, snapshot, cloudId, accountId || undefined),
-    markConversationSynced: async (id, cloudId, accountId) =>
-      db.markConversationSynced(id, cloudId, accountId || undefined),
+    acknowledgeConversationCreate: async (id, snapshot, cloudId, accountId, authGeneration) => {
+      const sender = syncSender(accountId, authGeneration);
+      if (!sender) return { success: false, outcome: "unresolved", cloud_id: null };
+      return db.acknowledgeConversationCreate(id, snapshot, cloudId, sender);
+    },
+    markConversationSynced: async (
+      id,
+      cloudId,
+      snapshot,
+      cloudUpdatedAt,
+      accountId,
+      authGeneration
+    ) => {
+      const sender = syncSender(accountId, authGeneration);
+      if (!sender) return { success: false };
+      return db.markConversationSynced(id, cloudId, snapshot, cloudUpdatedAt, sender);
+    },
+    replaceConversationClientId: async (id, expectedClientId, accountId, authGeneration) => {
+      const sender = syncSender(accountId, authGeneration);
+      if (!sender) return { success: false };
+      return db.replaceConversationClientId(id, expectedClientId, sender);
+    },
     hardDeleteConversation: async (id, expectedAuthGeneration) =>
       authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteConversation(id),
 
@@ -272,7 +321,10 @@ function createElectronApi(db, options = {}) {
           ),
     hardDeleteDictionary: async (id, expectedAuthGeneration) =>
       authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteDictionaryEntry(id),
-    clearDictionaryCloudId: async (id) => db.clearDictionaryCloudId(id),
+    clearDictionaryCloudId: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? { success: false, stale: true }
+        : db.clearDictionaryCloudId(id),
     // The real handler re-reads the words to broadcast them; there are no windows here.
     broadcastDictionaryUpdated: async () => ({ success: true }),
 

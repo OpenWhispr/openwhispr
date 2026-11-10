@@ -11,6 +11,7 @@ interface CloudApiResponse<T = unknown> {
   error?: string;
   code?: string;
   status?: number;
+  requestSent?: boolean;
 }
 
 // Common `{ data: T }` envelope returned by the cloud API.
@@ -22,12 +23,21 @@ export class CloudApiError extends Error {
   status: number;
   code?: string;
   details?: unknown;
-  constructor(message: string, status: number, code?: string, details?: unknown) {
+  /** False when main refused the request before anything left this device. */
+  requestSent?: boolean;
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    details?: unknown,
+    requestSent?: boolean
+  ) {
     super(message);
     this.name = "CloudApiError";
     this.status = status;
     this.code = code;
     this.details = details;
+    this.requestSent = requestSent;
   }
 }
 
@@ -76,7 +86,8 @@ async function cloudRequest<T = unknown>(
         : (result?.error ?? "Cloud API request failed"),
       result?.status ?? 0,
       result?.code,
-      result?.details
+      result?.details,
+      result?.requestSent
     );
   }
 
@@ -145,6 +156,12 @@ export async function cloudDeleteForAuthGeneration<T = unknown>(
   authGeneration: number
 ): Promise<T> {
   return cloudRequest<T>("DELETE", path, body, false, authGeneration);
+}
+
+// An auth refusal raised after the request left says nothing about whether the
+// server acted on it.
+export function wasRefusedBeforeSending(error: unknown): boolean {
+  return error instanceof CloudApiError && isAuthContextError(error) && error.requestSent === false;
 }
 
 export function isAuthContextError(error: unknown): boolean {

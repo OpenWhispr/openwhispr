@@ -128,6 +128,7 @@ function createDatabaseManager() {
   manager.db = sqlite;
   manager.activeAccountId = null;
   manager._accountChanges = [];
+  manager._initDeviceAccounts();
   return { manager, sqlite };
 }
 

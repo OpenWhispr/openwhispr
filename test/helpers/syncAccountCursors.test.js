@@ -17,13 +17,11 @@ const {
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { createAccountCloud } = require("./harness/fakeCloud.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 const { cloudPostForAuthGeneration } = require("../../src/services/cloudApi.ts");
 const { getValidatedAuthGeneration } = require("../../src/lib/authRequestContext.ts");
 
-let cloudCount = 0;
-const accountCloud = () => createFakeCloud({ idSpace: `cloud${++cloudCount}-` });
 const daysAgo = (days) => new Date(Date.now() - days * 86400000).toISOString();
 
 function setup(t) {
@@ -137,8 +135,8 @@ function owners(db, rows) {
 test("an account's first pass reads its older rows, whatever the last account's cursors say", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = accountCloud();
-  const cloudB = accountCloud();
+  const cloudA = createAccountCloud();
+  const cloudB = createAccountCloud();
   seedHistory(cloudA, "a", daysAgo(1));
   seedHistory(cloudB, "b", daysAgo(30));
 
@@ -162,8 +160,8 @@ test("an account's first pass reads its older rows, whatever the last account's 
 test("an account returning after another one synced gets what changed meanwhile, deletes included", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = accountCloud();
-  const cloudB = accountCloud();
+  const cloudA = createAccountCloud();
+  const cloudB = createAccountCloud();
   const seeded = seedHistory(cloudA, "a", daysAgo(5));
 
   await (await signInAs(t, db, cloudA, "account-a")).syncAll(true);
@@ -186,7 +184,7 @@ test("an account returning after another one synced gets what changed meanwhile,
 test("signing back in as the same account keeps its cursors", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   seedHistory(cloudA, "a", daysAgo(5));
   await (await signInAs(t, db, cloudA, "account-a")).syncAll(true);
   const cursor = localStorageStub.getItem("lastSyncedAt.conversations");
@@ -206,7 +204,7 @@ test("signing back in as the same account keeps its cursors", async (t) => {
 test("after an upgrade the first pass claims what the account's cloud holds, and the next account sees none of it", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   const rows = seedUpgradedDevice(db, cloudA, daysAgo(5));
 
   const accountA = await signInAs(t, db, cloudA, "account-a");
@@ -220,7 +218,7 @@ test("after an upgrade the first pass claims what the account's cloud holds, and
   );
   assert.ok(localStorageStub.getItem("lastSyncedAt.conversations") >= cursorBefore);
 
-  await (await signInAs(t, db, accountCloud(), "account-b")).syncAll(true);
+  await (await signInAs(t, db, createAccountCloud(), "account-b")).syncAll(true);
   assert.deepEqual(visible(db), { words: [], snippets: [], chats: [], dictations: [] });
 
   await signInAs(t, db, cloudA, "account-a");
@@ -235,7 +233,7 @@ test("after an upgrade the first pass claims what the account's cloud holds, and
 test("the upgrade claim runs once, and again after a failure", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   const rows = seedUpgradedDevice(db, cloudA, daysAgo(5));
   const accountA = await signInAs(t, db, cloudA, "account-a");
   const snapshots = () =>
@@ -258,7 +256,7 @@ test("the upgrade claim runs once, and again after a failure", async (t) => {
 test("a device with nothing to claim downloads nothing extra", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   for (const key of ["conversations", "transcriptions", "dictionary", "snippets"]) {
     localStorageStub.setItem(`lastSyncedAt.${key}`, new Date().toISOString());
   }
@@ -288,7 +286,7 @@ test("on a shared device, a legacy row's own upload proves nothing about who own
   db.setActiveAccountId("account-c");
   db.saveTranscription("C used this device too", null, { clientTranscriptionId: "c-own" });
 
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   const accountA = await signInAs(t, db, cloudA, "account-a");
   await accountA.syncAll(true);
   await accountA.syncAll(true);
@@ -304,7 +302,7 @@ test("on a shared device, a legacy row's own upload proves nothing about who own
       `${table} stays unattributed`
     );
   }
-  await signInAs(t, db, accountCloud(), "account-b");
+  await signInAs(t, db, createAccountCloud(), "account-b");
   assert.deepEqual(visible(db), {
     words: ["Legacy"],
     snippets: ["leg"],
@@ -316,7 +314,7 @@ test("on a shared device, a legacy row's own upload proves nothing about who own
 test("a chat or dictation delete the cloud already applied doesn't retry forever", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   const seeded = seedHistory(cloudA, "a", daysAgo(5));
   const accountA = await signInAs(t, db, cloudA, "account-a");
   await accountA.syncAll(true);
@@ -488,7 +486,7 @@ test("the check for an account's own copy of a word uses the per-account key ind
 test("a request pinned to a replaced sign-in leaves the current one validated", async (t) => {
   const db = setup(t);
   if (!db) return;
-  await signInAs(t, db, accountCloud(), "account-b");
+  await signInAs(t, db, createAccountCloud(), "account-b");
   const current = getValidatedAuthGeneration();
   assert.notEqual(current, null);
 
@@ -527,7 +525,7 @@ test("a removed word stays removed beside a legacy copy another cloud may hold",
       "INSERT INTO snippets (trigger, replacement, client_snippet_id, cloud_id, sync_status, updated_at, legacy_unattributed) VALUES ('sig', 'x', 'other-snip', 'other-snip-cloud', 'synced', ?, 1)"
     )
     .run(at);
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   cloudA.seedDictionaryEntry({ word: "Shared", client_dict_id: "a-dict" });
   cloudA.seedSnippet({ trigger: "sig", replacement: "mine", client_snippet_id: "a-snip" });
   const accountA = await signInAs(t, db, cloudA, "account-a");
@@ -554,7 +552,7 @@ test("a removed word stays removed beside a legacy copy another cloud may hold",
 test("a word re-added while signed out survives the ack of the delete before it", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   cloudA.seedDictionaryEntry({ word: "Again", client_dict_id: "a-dict" });
   const accountA = await signInAs(t, db, cloudA, "account-a");
   await accountA.syncAll(true);
@@ -621,7 +619,7 @@ test("a chat's copy orphaned by an account switch is deleted when its sender ret
   db.setActiveAccountId(null);
   const chat = db.createAgentConversation("guest chat");
   db.addAgentMessage(chat.id, "user", "hello");
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   const accountA = await signInAs(t, db, cloudA, "account-a");
   const api = windowStub.electronAPI;
   const request = api.cloudApiRequest;
@@ -641,6 +639,89 @@ test("a chat's copy orphaned by an account switch is deleted when its sender ret
   await (await signInAs(t, db, cloudA, "account-a")).syncAll(true);
   assert.equal(cloudA.conversations().filter((row) => !row.deleted_at).length, 0);
   assert.equal(db.getAgentConversation(chat.id), null, "the row stays with B");
+});
+
+test("an orphaned chat copy whose delete fails is queued and deleted", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createAccountCloud();
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  const chat = db.createAgentConversation("deleted mid-flight");
+  db.addAgentMessage(chat.id, "user", "hello");
+  const api = windowStub.electronAPI;
+  const request = api.cloudApiRequest;
+  api.cloudApiRequest = async (options) => {
+    const result = await request(options);
+    if (options.path === "/api/conversations/create") {
+      // The chat leaves the device while its create is in flight, and the
+      // connection drops before the copy's delete gets through.
+      db.db.prepare("DELETE FROM agent_messages").run();
+      db.db.prepare("DELETE FROM agent_conversations").run();
+      cloudA.failNext("DELETE /api/conversations/delete", { status: 0, error: "offline" });
+    }
+    return result;
+  };
+
+  await accountA.syncAll(true);
+  // No local row is left to retry the delete, so the pass's delete stage
+  // takes it from the queue.
+  assert.equal(cloudA.logFor("/api/conversations/delete").length, 2);
+  assert.equal(cloudA.conversations().filter((row) => !row.deleted_at).length, 0);
+});
+
+test("a chat create ack main refuses is logged, and its retry sends no message twice", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createAccountCloud();
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  const chat = db.createAgentConversation("refused ack");
+  db.addAgentMessage(chat.id, "user", "hello");
+  db.addAgentMessage(chat.id, "assistant", "hello back");
+  const api = windowStub.electronAPI;
+  const acknowledge = api.acknowledgeConversationCreate;
+  api.acknowledgeConversationCreate = async () => {
+    api.acknowledgeConversationCreate = acknowledge;
+    return { success: false, outcome: "unresolved", cloud_id: null };
+  };
+  const warn = t.mock.method(console, "warn", () => {});
+
+  await accountA.syncAll(true);
+  assert.equal(db.getAgentConversation(chat.id).cloud_id, null, "the chat stays unlinked");
+  assert.equal(
+    warn.mock.calls.filter((call) => /create ack was refused/.test(call.arguments[0])).length,
+    1
+  );
+
+  await accountA.syncAll(true);
+  const [copy] = cloudA.conversations();
+  assert.equal(db.getAgentConversation(chat.id).cloud_id, copy.id);
+  assert.equal(copy.messages.length, 2);
+});
+
+test("forgetting an account leaves no cursor or claim keyed by it", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createAccountCloud();
+  seedUpgradedDevice(db, cloudA, daysAgo(5));
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  // Its upgrade claim is still owed when the account is deleted.
+  cloudA.failWith("GET /api/transcriptions/list", { status: 503, error: "offline" });
+  await accountA.syncAll(true);
+  assert.equal(localStorageStub.getItem("lastSyncedAt.accountId"), "account-a");
+  assert.equal(localStorageStub.getItem("syncCursors.unownedClaimedBy"), "account-a");
+
+  db.deleteAccountData("account-a");
+  accountA.forgetAccount("account-a");
+  const namesAccountA = () =>
+    Array.from({ length: localStorageStub.length }, (_, index) => localStorageStub.key(index))
+      .filter((key) => `${key}=${localStorageStub.getItem(key)}`.includes("account-a"))
+      .sort();
+  assert.deepEqual(namesAccountA(), []);
+  assert.equal(localStorageStub.getItem("syncCursors.unownedClaimProgress"), null);
+
+  const accountB = await signInAs(t, db, createAccountCloud(), "account-b");
+  await accountB.syncAll(true);
+  assert.deepEqual(namesAccountA(), [], "the next account's claim files nothing under it");
 });
 
 test("a dictionary rename onto a word the account owns merges instead of wedging the pull", (t) => {
@@ -671,7 +752,7 @@ test("a dictionary rename onto a word the account owns merges instead of wedging
 test("a chat create refused before it was sent isn't recorded as attempted", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   const accountA = await signInAs(t, db, cloudA, "account-a");
   const chat = db.createAgentConversation("about to switch");
   db.addAgentMessage(chat.id, "user", "hello");
@@ -700,7 +781,7 @@ test("a one-account user's legacy word whose cloud row is gone is re-created", a
       "INSERT INTO custom_dictionary (word, client_dict_id, cloud_id, sync_status, legacy_unattributed) VALUES ('Mine', 'mine-dict', 'gone', 'pending', 1)"
     )
     .run();
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   const accountA = await signInAs(t, db, cloudA, "account-a");
   await accountA.syncAll(true);
   await accountA.syncAll(true);
@@ -779,7 +860,7 @@ test("the only account on a device owns its pending legacy rows, so the next one
   if (!db) return;
   seedLegacyRows(db);
 
-  const cloudA = accountCloud();
+  const cloudA = createAccountCloud();
   db.setActiveAccountId("account-a");
   db.claimLegacyRowsOfOnlyAccount();
   for (const table of LEGACY_TABLES) assert.equal(rowOwner(db, table), "account-a", table);
@@ -864,7 +945,7 @@ test("signing out and back in with the only account doesn't reopen its legacy ro
 test("the only account's claim leaves a synced legacy row for its own cloud to prove", async (t) => {
   const db = setup(t);
   if (!db) return;
-  const cloudB = accountCloud();
+  const cloudB = createAccountCloud();
   const inB = cloudB.seedTranscription({
     client_transcription_id: "b-dictation",
     text: "B's dictation",
@@ -890,4 +971,28 @@ test("the only account's claim leaves a synced legacy row for its own cloud to p
     db.getTranscriptions().map((row) => row.text),
     ["B's dictation"]
   );
+});
+
+test("another account's first pull leaves this account's note feed replay to run", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const cloudA = createAccountCloud();
+  const replays = () =>
+    cloudA
+      .logFor("/api/notes/list")
+      .filter((call) => call.path.includes(encodeURIComponent("1970-01-01T00:00:00.000Z"))).length;
+
+  // A upgraded with cursors already in place, and its one replay of the feed
+  // has failed once so far.
+  await (await signInAs(t, db, cloudA, "account-a")).syncAll(true);
+  localStorageStub.setItem("noteFeedReplay.v1", "1");
+  const before = replays();
+
+  // B's cursor-less first pull covers B's whole feed, which counts as B's replay.
+  await (await signInAs(t, db, createAccountCloud(), "account-b")).syncAll(true);
+  assert.equal(localStorageStub.getItem("noteFeedReplay.v1"), "3");
+
+  await (await signInAs(t, db, cloudA, "account-a")).syncAll(true);
+  assert.equal(replays(), before + 1, "A's feed is still replayed once A is back");
+  assert.equal(localStorageStub.getItem("noteFeedReplay.v1"), "3");
 });

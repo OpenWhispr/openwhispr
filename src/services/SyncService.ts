@@ -22,7 +22,7 @@ import { syncPendingAnalytics } from "./AnalyticsService.js";
 import { DictionaryService, type CloudDictionaryEntry } from "./DictionaryService.js";
 import { SharedDictionaryService } from "./SharedDictionaryService";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
-import { CloudApiError, isAuthContextError } from "./cloudApi.js";
+import { CloudApiError, isAuthContextError, wasRefusedBeforeSending } from "./cloudApi.js";
 import { LeaderboardService } from "./LeaderboardService";
 import {
   assertAuthGenerationCurrent,
@@ -56,6 +56,7 @@ import {
 import {
   readActiveWorkspaceId,
   useWorkspaceStore,
+  PERSONAL_SELECTED_KEY,
   WORKSPACE_LIST_CACHE_KEY,
 } from "../stores/workspaceStore";
 import { EMPTY_SHARED_HINTS, selectSharedHintWords } from "../utils/sharedDictionaryHints";
@@ -191,6 +192,12 @@ const SYNC_CURSOR_SAVED_PREFIX = "lastSyncedAt.byAccount.";
 // The account that claimed cursors stamped before owners were recorded, until
 // backfillUnownedCursors() has checked them.
 const UNOWNED_CURSORS_ACCOUNT_KEY = "syncCursors.unownedClaimedBy";
+// How far that check has got: the snapshots already complete, so a retry walks
+// only the tables still outstanding, and when the next attempt is due once
+// passes have kept failing.
+const UNOWNED_CLAIM_PROGRESS_KEY = "syncCursors.unownedClaimProgress";
+const UNOWNED_CLAIM_RETRY_MS = 5 * 60 * 1000;
+const UNOWNED_CLAIM_MAX_RETRY_MS = 60 * 60 * 1000;
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
@@ -221,12 +228,32 @@ const PURGED_SPACE_GUARD_LOCK = "openwhispr-purged-spaces";
 // disambiguating it (see recordUpdate404), keyed by client id. Read-modify-
 // written only inside the SYNC_ALL_LOCK pass, so it needs no lock of its own.
 const NOTE_UPDATE_404_KEY = "noteUpdate404Counts";
+// Attempts at replaying each note feed from its start (see replayNoteFeed).
+const NOTE_FEED_REPLAY_KEY = "noteFeedReplay.v1";
+const NOTE_FEED_REPLAY_TEAM_KEY = "noteFeedReplay.v1.team";
+const NOTE_FEED_REPLAY_ATTEMPTS = 3;
+const NOTE_FEED_START = "1970-01-01T00:00:00.000Z";
+// What an account switch saves and restores: the cursors, and the replay
+// counters, which say whether that account's note cursors were ever replayed.
+// Another account's first pull would otherwise spend them.
+const ACCOUNT_SYNC_STATE_KEYS = [
+  ...SYNC_CURSOR_KEYS,
+  NOTE_FEED_REPLAY_KEY,
+  NOTE_FEED_REPLAY_TEAM_KEY,
+];
 const FOLDER_UPDATE_404_KEY = "folderUpdate404Counts";
 // Unattributed words and snippets whose PATCH 404'd for an account, keyed by
 // client id with the updated_at that failed. Such a row may be another
 // account's, so it is never re-created; it waits for its owner's pass or a new
 // local edit instead of repeating the dead PATCH every pass.
 const PARKED_UPDATE_404_PREFIX = "parkedUpdate404";
+// Unattributed tombstones whose delete an account's cloud did not confirm, keyed
+// by cloud id. On a device another account has used, the copy may be in that
+// account's cloud: dropping the tombstone would let its next pull bring the row
+// back. It waits for its owner's pass, and this account stops re-sending it.
+const PARKED_DELETE_PREFIX = "parkedDelete";
+const PARKED_DELETE_KINDS = ["conversations", "transcriptions", "dictionary", "snippets"] as const;
+type ParkedDeleteKind = (typeof PARKED_DELETE_KINDS)[number];
 
 const SHARED_DICTIONARY_PAGE_LIMIT = 200;
 // Writers on different lists can commit out of updated_at order, so every
@@ -405,24 +432,6 @@ function conversationCreateSnapshot(
   };
 }
 
-function conversationCreateInput(conversation: LocalConversation) {
-  return {
-    client_conversation_id: conversation.client_conversation_id ?? String(conversation.id),
-    title: conversation.title,
-    created_at: conversation.created_at,
-    updated_at: conversation.updated_at,
-    messages: conversation.messages.map((m) => ({
-      role: m.role,
-      content: m.content,
-      metadata: m.metadata
-        ? typeof m.metadata === "string"
-          ? JSON.parse(m.metadata)
-          : m.metadata
-        : null,
-    })),
-  };
-}
-
 interface ChatPushSender {
   authGeneration: number;
   accountId: string;
@@ -452,6 +461,86 @@ function parked404Key(kind: "dictionary" | "snippets", accountId: string | null)
   return `${PARKED_UPDATE_404_PREFIX}.${kind}.${accountId ?? ""}`;
 }
 
+function parkedDeleteKey(kind: ParkedDeleteKind, accountId: string | null): string {
+  return `${PARKED_DELETE_PREFIX}.${kind}.${accountId ?? ""}`;
+}
+
+interface QueuedDelete {
+  cloud_id?: string | null;
+  account_id?: string | null;
+}
+
+interface UnownedClaimProgress {
+  done: string[];
+  failures: number;
+  retryAt: number;
+}
+
+// A chat isn't sent while a reply is still running or waiting on the user:
+// another device would get a half turn and could answer its question again, and
+// messages carry no shared id, so the finished reply would go as another
+// message. A turn that old was cut off (the app quit) and goes as is. A fork
+// waits for its first turn like a new chat does, since until then it holds only
+// copies of its parent's messages.
+const TURN_IN_PROGRESS_MAX_AGE_MS = 60 * 60 * 1000;
+
+function hasTurnInProgress(conversation: {
+  has_active_turn?: boolean;
+  fork_message_count?: number | null;
+  messages: ReadonlyArray<{ metadata?: unknown }>;
+}) {
+  if (
+    conversation.has_active_turn ||
+    conversation.messages.length <= (conversation.fork_message_count ?? 0)
+  )
+    return true;
+  return conversation.messages.some((message) => {
+    let metadata = message.metadata;
+    if (typeof metadata === "string") {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        return false;
+      }
+    }
+    const turn = (metadata as { turn?: { status?: string; startedAt?: number } } | null)?.turn;
+    return (
+      (turn?.status === "waiting" || turn?.status === "running") &&
+      Date.now() - (turn.startedAt ?? 0) < TURN_IN_PROGRESS_MAX_AGE_MS
+    );
+  });
+}
+
+function conversationMessageMetadata(metadata: unknown): Record<string, unknown> | null {
+  if (!metadata) return null;
+  const parsed = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const { turn, ...rest } = parsed as Record<string, unknown>;
+  if (!turn || typeof turn !== "object" || Array.isArray(turn)) return parsed;
+  const { reasoning: _reasoning, ...savedTurn } = turn as Record<string, unknown>;
+  return { ...rest, turn: savedTurn };
+}
+
+// Messages carry no shared id. The cloud copy holds this device's messages in
+// the order they were stored, one at a time: those its create carried, empty
+// ones too, then those sent after it, never an empty one, which the messages
+// route refuses. So a local message counts as sent while the copy holds one of
+// its role in its place, whatever the text: a reply regenerated since keeps its
+// place, and the cloud can't change a message.
+function missingConversationMessages<Message extends { role: string; content: string }>(
+  local: readonly Message[],
+  cloud: ReadonlyArray<{ role: string; content: string }>
+): Message[] {
+  let held = 0;
+  return local.filter((message) => {
+    if (cloud[held]?.role === message.role) {
+      held += 1;
+      return false;
+    }
+    return message.content.length > 0;
+  });
+}
+
 function readPurgedSpaceIds(): Record<string, PurgedSpaceEntry> {
   try {
     const raw = localStorage.getItem(PURGED_SPACE_GUARD_KEY);
@@ -476,6 +565,17 @@ export async function markSpacePurged(
       PURGED_SPACE_GUARD_KEY,
       JSON.stringify({ ...readPurgedSpaceIds(), [cloudSpaceId]: { at: Date.now(), reason } })
     );
+  });
+}
+
+// For a space the caller has just been told they belong to (a join): leaving it guarded the id,
+// and the guard would keep the mirror from taking it back until the TTL or a full spaces pass.
+export async function releasePurgedSpace(cloudSpaceId: string): Promise<void> {
+  await navigator.locks.request(PURGED_SPACE_GUARD_LOCK, () => {
+    const kept = Object.fromEntries(
+      Object.entries(readPurgedSpaceIds()).filter(([id]) => id !== cloudSpaceId)
+    );
+    localStorage.setItem(PURGED_SPACE_GUARD_KEY, JSON.stringify(kept));
   });
 }
 
@@ -519,6 +619,10 @@ export class SyncService {
   private autoSyncStarted = false;
   private dictionaryDirty = false;
   private snippetsDirty = false;
+  // The sign-in the running pass claimed the cursors under. A pass that went on
+  // past an account switch would finish as the next account and stamp that
+  // account's values into the departed account's cursor slots.
+  private passGeneration: number | null = null;
   // One owner_user_id backfill probe per session (see backfillNoteOwners).
   private ownerBackfillChecked = false;
   // Whether the API keeps note revisions; null until a pulled row or the
@@ -529,6 +633,7 @@ export class SyncService {
   // Incomplete pulls retry on a later ordinary pass.
   private unrevisionedClearPullDone = false;
   private revisionBackfillChecked = false;
+  private noteFeedReplayTried = new Set<string>();
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private teamSpacesRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private teamSpacesRetryAttempt = 0;
@@ -563,6 +668,12 @@ export class SyncService {
 
   canSync(): boolean {
     return this.consent().backup;
+  }
+
+  // False once the sign-in a pass started under is no longer the validated
+  // one. Outside a pass there is nothing to outlive.
+  private passIsCurrent(): boolean {
+    return this.passGeneration === null || getValidatedAuthGeneration() === this.passGeneration;
   }
 
   private canSyncSharedNotes(): boolean {
@@ -688,6 +799,7 @@ export class SyncService {
     localStorage.removeItem("notesTree.expanded");
     // Sign-out can happen offline, before the auth reconcile that resets the workspace store.
     localStorage.removeItem(WORKSPACE_LIST_CACHE_KEY);
+    localStorage.removeItem(PERSONAL_SELECTED_KEY);
     // Shared lists and hides belong to the departing account. The arrival
     // toast's flags are keyed by account and stay, so it never repeats.
     removeLocalStorageKeysWithPrefix(SHARED_DICTIONARY_CURSOR_PREFIX);
@@ -705,9 +817,23 @@ export class SyncService {
   // A deleted account's sync bookkeeping; it holds ids and timestamps only.
   forgetAccount(accountId: string): void {
     localStorage.removeItem(`${SYNC_CURSOR_SAVED_PREFIX}${accountId}`);
+    // While it is the cursor owner its cursors are the live ones, and the next
+    // account's claim would file them back under its id.
+    if (localStorage.getItem(SYNC_CURSOR_ACCOUNT_KEY) === accountId) {
+      for (const key of ACCOUNT_SYNC_STATE_KEYS) localStorage.removeItem(key);
+      localStorage.removeItem(SYNC_CURSOR_ACCOUNT_KEY);
+      this.noteFeedReplayTried.clear();
+    }
+    if (localStorage.getItem(UNOWNED_CURSORS_ACCOUNT_KEY) === accountId) {
+      localStorage.removeItem(UNOWNED_CURSORS_ACCOUNT_KEY);
+      localStorage.removeItem(UNOWNED_CLAIM_PROGRESS_KEY);
+    }
     localStorage.removeItem(`${ORPHANED_CHAT_CREATES_PREFIX}${accountId}`);
     for (const kind of ["dictionary", "snippets"] as const) {
       localStorage.removeItem(parked404Key(kind, accountId));
+    }
+    for (const kind of PARKED_DELETE_KINDS) {
+      localStorage.removeItem(parkedDeleteKey(kind, accountId));
     }
   }
 
@@ -730,7 +856,7 @@ export class SyncService {
     if (owner === accountId) return true;
     if (owner !== null) {
       const ownerCursors: Record<string, string> = {};
-      for (const key of SYNC_CURSOR_KEYS) {
+      for (const key of ACCOUNT_SYNC_STATE_KEYS) {
         const value = localStorage.getItem(key);
         if (value !== null) ownerCursors[key] = value;
       }
@@ -742,12 +868,14 @@ export class SyncService {
       } catch {
         // A corrupt entry only costs this account a cursor-less pull.
       }
-      for (const key of SYNC_CURSOR_KEYS) {
+      for (const key of ACCOUNT_SYNC_STATE_KEYS) {
         const value = saved[key];
         if (typeof value === "string") localStorage.setItem(key, value);
         else localStorage.removeItem(key);
       }
       localStorage.removeItem(savedKey);
+      // The once-a-session replay guard was the previous account's.
+      this.noteFeedReplayTried.clear();
     } else if (SYNC_CURSOR_KEYS.some((key) => localStorage.getItem(key) !== null)) {
       localStorage.setItem(UNOWNED_CURSORS_ACCOUNT_KEY, accountId);
     }
@@ -755,26 +883,104 @@ export class SyncService {
     return true;
   }
 
+  private readUnownedClaimProgress(): UnownedClaimProgress {
+    const stored = this.readLocalRecord<unknown>(UNOWNED_CLAIM_PROGRESS_KEY);
+    return {
+      done: Array.isArray(stored.done)
+        ? stored.done.filter((table): table is string => typeof table === "string")
+        : [],
+      failures: Number(stored.failures) || 0,
+      retryAt: Number(stored.retryAt) || 0,
+    };
+  }
+
   // Unowned cursors may be another account's, and they're already past every
   // row an older build left unattributed, so a delta would never reach those
   // rows to claim them. One snapshot pull of the account's rows does both;
   // snapshots leave the cursors alone, so deletes keep arriving through them.
+  // Each table's snapshot counts once it completes. The marker stays until all
+  // have, and every pass that leaves one outstanding makes the next attempt
+  // wait longer: a table that fails every time must not walk the cloud again
+  // on every pass.
   private async backfillUnownedCursors(accountId: string): Promise<void> {
     if (localStorage.getItem(UNOWNED_CURSORS_ACCOUNT_KEY) !== accountId) return;
+    const progress = this.readUnownedClaimProgress();
+    if (Date.now() < progress.retryAt) return;
     const otherAccount = await window.electronAPI.hasOtherAccountRows?.();
+    const claimsRows = otherAccount || (await window.electronAPI.hasUnclaimedLegacyRows?.());
+    const snapshots: Array<[table: string, pull: () => Promise<boolean>]> = [];
     if (otherAccount) {
-      if (!(await this.pullFolders(false, true)) || !(await this.pullNotes(false, true))) return;
+      snapshots.push(["folders", () => this.pullFolders(false, true)]);
+      snapshots.push(["notes", () => this.pullNotes(false, true)]);
     }
-    if (otherAccount || (await window.electronAPI.hasUnclaimedLegacyRows?.())) {
-      const pulled = [
-        await this.pullConversations(true),
-        await this.pullTranscriptions(true),
-        await this.pullDictionary(true),
-        await this.pullSnippets(true),
-      ];
-      if (pulled.includes(false)) return;
+    if (claimsRows) {
+      snapshots.push(["conversations", () => this.pullConversations(true)]);
+      snapshots.push(["transcriptions", () => this.pullTranscriptions(true)]);
+      snapshots.push(["dictionary", () => this.pullDictionary(true)]);
+      snapshots.push(["snippets", () => this.pullSnippets(true)]);
     }
-    localStorage.removeItem(UNOWNED_CURSORS_ACCOUNT_KEY);
+
+    const done = new Set(progress.done);
+    let outstanding = false;
+    for (const [table, pull] of snapshots) {
+      if (done.has(table)) continue;
+      // A note files into a folder its snapshot must have brought first.
+      const ready = table !== "notes" || done.has("folders");
+      if (ready && (await pull())) {
+        done.add(table);
+        this.writeLocalRecord(UNOWNED_CLAIM_PROGRESS_KEY, { ...progress, done: [...done] });
+      } else {
+        outstanding = true;
+      }
+      // A pull the sign-in ended under says nothing about the table.
+      if (!this.passIsCurrent()) return;
+    }
+    if (!outstanding) {
+      localStorage.removeItem(UNOWNED_CURSORS_ACCOUNT_KEY);
+      localStorage.removeItem(UNOWNED_CLAIM_PROGRESS_KEY);
+      return;
+    }
+    // The first failed pass retries on the next one, as a dropped connection
+    // deserves; after that the wait doubles.
+    const failures = progress.failures + 1;
+    const wait =
+      failures > 1
+        ? Math.min(UNOWNED_CLAIM_RETRY_MS * 2 ** (failures - 2), UNOWNED_CLAIM_MAX_RETRY_MS)
+        : 0;
+    this.writeLocalRecord(UNOWNED_CLAIM_PROGRESS_KEY, {
+      done: [...done],
+      failures,
+      retryAt: wait ? Date.now() + wait : 0,
+    });
+  }
+
+  // One pass over an account's queued deletes of one kind. A delete the cloud
+  // did not confirm ends only when the copy can't be in another account's
+  // cloud: the row is the account's own, or unattributed on a device nobody
+  // else has used. Any other is parked (see PARKED_DELETE_PREFIX).
+  private openDeleteQueue(kind: ParkedDeleteKind, accountId: string | null) {
+    const key = parkedDeleteKey(kind, accountId);
+    const parked = this.readLocalRecord<true>(key);
+    const stillParked: Record<string, true> = {};
+    let sharedDevice: boolean | undefined;
+    return {
+      isParked: (row: QueuedDelete): boolean => {
+        if (!row.cloud_id || !parked[row.cloud_id]) return false;
+        stillParked[row.cloud_id] = true;
+        return true;
+      },
+      endsUnconfirmed: async (row: QueuedDelete): Promise<boolean> => {
+        if (row.account_id) return row.account_id === accountId;
+        sharedDevice ??= Boolean(await window.electronAPI.hasOtherAccountRows?.());
+        if (sharedDevice && row.cloud_id) stillParked[row.cloud_id] = true;
+        return !sharedDevice;
+      },
+      save: (): void => {
+        if (Object.keys(parked).length > 0 || Object.keys(stillParked).length > 0) {
+          this.writeLocalRecord(key, stillParked);
+        }
+      },
+    };
   }
 
   // lastSyncedAt is written only when a syncAll() pass completes, and
@@ -879,43 +1085,45 @@ export class SyncService {
       // Manual passes wait so a user action is never silently dropped.
       await navigator.locks.request(SYNC_ALL_LOCK, { ifAvailable: !waitForLock }, async (lock) => {
         if (!lock || !this.claimSyncCursors(accountId, authGeneration)) return;
+        this.passGeneration = authGeneration;
         teamSpacesReady = await this.syncSpaces(authGeneration);
-        if (!hasValidatedAuthContext()) return;
+        if (!this.passIsCurrent()) return;
         // Both branches below: shared lists follow membership, not cloud backup.
         const dictionaryGeneration = useSharedDictionaryStore.getState().generation;
         const sharedResult = await this.syncSharedDictionary(authGeneration);
         let personalSucceeded = true;
-        if (!hasValidatedAuthContext()) return;
+        if (!this.passIsCurrent()) return;
         if (full) {
           await this.backfillUnownedCursors(accountId);
-          if (!hasValidatedAuthContext()) return;
+          if (!this.passIsCurrent()) return;
           await this.syncFolders();
-          if (!hasValidatedAuthContext()) return;
+          if (!this.passIsCurrent()) return;
           await this.syncNotes();
-          if (!hasValidatedAuthContext()) return;
+          if (!this.passIsCurrent()) return;
           await this.syncConversations();
-          if (!hasValidatedAuthContext()) return;
+          if (!this.passIsCurrent()) return;
           await this.syncTranscriptions();
-          if (!hasValidatedAuthContext()) return;
+          if (!this.passIsCurrent()) return;
           // Edits during the awaits above set dictionaryDirty (syncing is already
           // true), so re-run until clean rather than stalling until the next trigger.
           do {
             this.dictionaryDirty = false;
             if (!(await this.syncDictionary())) personalSucceeded = false;
-          } while (this.dictionaryDirty);
+          } while (this.dictionaryDirty && this.passIsCurrent());
+          if (!this.passIsCurrent()) return;
           do {
             this.snippetsDirty = false;
             await this.syncSnippets();
-          } while (this.snippetsDirty);
+          } while (this.snippetsDirty && this.passIsCurrent());
         } else {
           // Backup is off: team-space content still syncs (membership is
           // consent, D7) and note deletes still propagate so revoked/deleted
           // shared notes stop being served (edits flow via debouncedPush).
           await this.syncFolders(true);
-          if (!hasValidatedAuthContext()) return;
+          if (!this.passIsCurrent()) return;
           await this.syncNotes(true);
         }
-        if (!hasValidatedAuthContext()) return;
+        if (!this.passIsCurrent()) return;
         if (personalSucceeded && sharedResult !== "failed" && (full || sharedResult === "synced")) {
           useSharedDictionaryStore.getState().markSynced(dictionaryGeneration);
         }
@@ -928,7 +1136,7 @@ export class SyncService {
         // it, which only makes the next pass due immediately -- the right answer
         // after an interruption.
         if (!full) this.recordTeamOnlyPass();
-        if (!hasValidatedAuthContext()) return;
+        if (!this.passIsCurrent()) return;
         if (teamSpacesReady) {
           if (this.teamSpacesRetryTimer) {
             clearTimeout(this.teamSpacesRetryTimer);
@@ -952,6 +1160,7 @@ export class SyncService {
       if (!teamSpacesReady && this.canSyncTeamSpaces()) this.scheduleTeamSpacesRetry();
     } finally {
       this.syncing = false;
+      this.passGeneration = null;
     }
     if (this.syncAllPending) {
       this.syncAllPending = false;
@@ -1018,17 +1227,19 @@ export class SyncService {
     try {
       result = await navigator.locks.request(SYNC_ALL_LOCK, async () => {
         if (!this.claimSyncCursors(accountId, authGeneration)) return "skipped";
+        this.passGeneration = authGeneration;
         let succeeded = true;
         do {
           this.dictionaryDirty = false;
           if (!(await this.syncDictionary())) succeeded = false;
-        } while (this.dictionaryDirty);
+        } while (this.dictionaryDirty && this.passIsCurrent());
         return succeeded ? "synced" : "failed";
       });
     } catch (err) {
       console.error("Dictionary sync failed:", err);
     } finally {
       this.syncing = false;
+      this.passGeneration = null;
     }
     await this.runDeferredSyncAll();
     return result;
@@ -1075,15 +1286,17 @@ export class SyncService {
     try {
       await navigator.locks.request(SYNC_ALL_LOCK, async () => {
         if (!this.claimSyncCursors(accountId, authGeneration)) return;
+        this.passGeneration = authGeneration;
         do {
           this.snippetsDirty = false;
           await this.syncSnippets();
-        } while (this.snippetsDirty);
+        } while (this.snippetsDirty && this.passIsCurrent());
       });
     } catch (err) {
       console.error("Snippets sync failed:", err);
     } finally {
       this.syncing = false;
+      this.passGeneration = null;
     }
     await this.runDeferredSyncAll();
   }
@@ -1389,19 +1602,27 @@ export class SyncService {
       sender.accountId,
       sender.authGeneration
     );
-    if (!result?.success) return;
+    if (!result?.success) {
+      // The chat stays unlinked, and its next pass finds this copy again.
+      console.warn(`Chat ${localId} create ack was refused; the cloud copy is ${cloudId}`);
+      return;
+    }
+
+    if (result.outcome === "changed") {
+      await this.sendMissingConversationContent(localId, cloudId, sender);
+      return;
+    }
 
     const shouldDeleteCreate =
-      result.outcome === "changed" ||
       result.outcome === "orphaned" ||
       (result.outcome === "already-linked" && result.cloud_id !== cloudId);
     if (!shouldDeleteCreate) return;
     try {
       await ConversationsService.delete(cloudId, sender.authGeneration);
     } catch (err) {
-      // Only the sender's token can delete its copy, and it's gone. A changed
-      // chat retries under this cloud id, so only an orphan can wait for it.
-      if (result.outcome !== "orphaned" || !isAuthContextError(err)) throw err;
+      // No local row is left to retry an orphan's delete, and only the sender's
+      // token can make it, so the copy is queued for a pass under that sign-in.
+      if (result.outcome !== "orphaned") throw err;
       const key = `${ORPHANED_CHAT_CREATES_PREFIX}${sender.accountId}`;
       const queued = this.readLocalRecord<true>(key);
       queued[cloudId] = true;
@@ -1426,6 +1647,48 @@ export class SyncService {
     this.writeLocalRecord(key, queued);
   }
 
+  // A create can't carry what's missing, since it inserts its messages again on a
+  // chat already in the cloud. Each attempt reads the copy first, so a retry after a
+  // failure part way through sends nothing twice. The chat stays pending until
+  // the cloud holds what this pass read, so a later edit gets its own attempt.
+  // Every request is pinned to the sender's sign-in, as the create was: after an
+  // account switch the messages are refused, not sent with the next account's token.
+  private async sendMissingConversationContent(
+    localId: number,
+    cloudId: string,
+    sender: ChatPushSender
+  ): Promise<void> {
+    const local = await window.electronAPI.getAgentConversation?.(localId);
+    if (!local || hasTurnInProgress(local)) return;
+    const snapshot = conversationCreateSnapshot(local);
+    const { messages: cloudMessages } = await ConversationsService.listMessages(
+      cloudId,
+      sender.authGeneration
+    );
+    for (const message of missingConversationMessages(local.messages, cloudMessages)) {
+      await ConversationsService.addMessage(
+        cloudId,
+        message.role,
+        message.content,
+        conversationMessageMetadata(message.metadata),
+        sender.authGeneration
+      );
+    }
+    const cloud = await ConversationsService.update(
+      cloudId,
+      { title: local.title },
+      sender.authGeneration
+    );
+    await window.electronAPI.markConversationSynced?.(
+      localId,
+      cloudId,
+      snapshot,
+      cloud.updated_at,
+      sender.accountId,
+      sender.authGeneration
+    );
+  }
+
   // Recorded before the request is sent, so a chat deleted while it is in
   // flight stays a tombstone its late receipt can link. A chat deleted since it
   // was read is not sent.
@@ -1438,20 +1701,55 @@ export class SyncService {
       sender.authGeneration
     );
     if (!recorded?.success) return;
-    const snapshot = conversationCreateSnapshot(full);
+    // An earlier request may have reached the cloud, and a second one would insert
+    // its messages again. This one only finds the copy; the messages follow it.
+    const messages = full.cloud_create_attempted ? [] : full.messages;
+    const snapshot = conversationCreateSnapshot({ ...full, messages });
     let cloud: CloudConversation;
     try {
       cloud = await ConversationsService.create(
-        conversationCreateInput(full),
+        {
+          client_conversation_id: full.client_conversation_id ?? String(full.id),
+          title: full.title,
+          created_at: full.created_at,
+          updated_at: full.updated_at,
+          parent_client_conversation_id: full.parent_client_conversation_id,
+          // A retry's messages follow it without the empty ones, which the messages
+          // route refuses, so the copied count names only those the cloud will hold.
+          fork_message_count:
+            full.cloud_create_attempted && full.fork_message_count
+              ? full.messages.slice(0, full.fork_message_count).filter((m) => m.content).length ||
+                null
+              : full.fork_message_count,
+          fork_context: full.fork_context,
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+            metadata: conversationMessageMetadata(m.metadata),
+          })),
+        },
         sender.authGeneration
       );
     } catch (err) {
-      // Main refuses before sending, so a later delete needn't wait for a cloud
-      // copy that can't exist.
-      if (isAuthContextError(err)) {
+      // This request never left and none went before it, so no cloud copy can
+      // exist: the next create carries the messages, and a later delete needn't
+      // wait for a receipt.
+      if (!full.cloud_create_attempted && wasRefusedBeforeSending(err)) {
         await window.electronAPI.clearConversationCreateAttempted?.(full.id);
       }
       throw err;
+    }
+    // Create keeps an existing row's tombstone, and that row takes no further
+    // writes. Linking it would let the next pull delete this chat, so the chat
+    // gets a new identity and the next pass creates a live copy.
+    if (cloud.deleted_at) {
+      await window.electronAPI.replaceConversationClientId?.(
+        full.id,
+        snapshot.client_conversation_id,
+        sender.accountId,
+        sender.authGeneration
+      );
+      return;
     }
     await this.acknowledgeConversationCreate(full.id, snapshot, cloud.id, sender);
   }
@@ -1468,7 +1766,7 @@ export class SyncService {
         { title: full.title },
         sender.authGeneration
       );
-    } else {
+    } else if (!hasTurnInProgress(full)) {
       await this.createCloudConversation(full, sender);
     }
   }
@@ -1874,10 +2172,14 @@ export class SyncService {
 
   private async syncFolders(teamOnly = false): Promise<void> {
     if (!teamOnly) await this.adoptDefaultFolders();
+    if (!this.passIsCurrent()) return;
     await this.pushPendingFolders(teamOnly);
+    if (!this.passIsCurrent()) return;
     await this.pushFolderDeletes(teamOnly);
+    if (!this.passIsCurrent()) return;
     if (!teamOnly && this.teamCursorLagging("folders")) {
       await this.pullFolders(true);
+      if (!this.passIsCurrent()) return;
     }
     await this.pullFolders(teamOnly);
   }
@@ -2223,6 +2525,7 @@ export class SyncService {
         teamCapable,
         hasTeamSpaces: [...ctx.byId.values()].some((s) => s.kind === "team"),
       });
+      if (!this.passIsCurrent()) return false;
       if (advanceCursor) localStorage.setItem(cursorKey, syncStartedAt);
       if (advanceTeamCursor) localStorage.setItem("lastSyncedAt.folders.team", syncStartedAt);
       return parkedRows === 0;
@@ -2244,14 +2547,38 @@ export class SyncService {
 
   private async syncNotes(teamOnly = false): Promise<void> {
     await this.pushPendingNotes(teamOnly);
+    if (!this.passIsCurrent()) return;
     await this.pushNoteDeletes();
+    if (!this.passIsCurrent()) return;
     await this.backfillNoteOwners(teamOnly);
+    if (!this.passIsCurrent()) return;
     if (!teamOnly && this.teamCursorLagging("notes")) {
       await this.pullNotes(true);
+      if (!this.passIsCurrent()) return;
     }
+    const replayKey = teamOnly ? NOTE_FEED_REPLAY_TEAM_KEY : NOTE_FEED_REPLAY_KEY;
+    const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
+    const fromStart = !localStorage.getItem(cursorKey);
+    // A missing cursor can follow a partial legacy pull. Read tombstones too,
+    // so its saved copies are repaired without a second full traversal.
     // A parked pull left its cursors in place, so the next pass re-sees the
     // parked rows — typically after syncSpaces has mirrored the missing team.
-    await this.pullNotes(teamOnly);
+    if (await this.pullNotes(teamOnly, false, fromStart)) {
+      const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
+      const uncoveredTeams =
+        !teamCapable &&
+        ((await window.electronAPI.getSpaces?.()) ?? []).some((space) => space.kind === "team");
+      // Personal deltas still run during an outage, but cannot complete a
+      // repair of existing team copies or spend its bounded retry attempts.
+      if (!uncoveredTeams) {
+        if (fromStart) {
+          localStorage.setItem(replayKey, String(NOTE_FEED_REPLAY_ATTEMPTS));
+        } else {
+          await this.replayNoteFeed(teamOnly, replayKey);
+        }
+      }
+    }
+    if (!this.passIsCurrent()) return;
     // After the delta pull, which usually shows whether the server keeps
     // revisions without a probe.
     await this.backfillNoteRevisions(teamOnly);
@@ -2272,6 +2599,23 @@ export class SyncService {
       if (missing > 0) await this.pullNotes(teamOnly, true);
     } catch (err) {
       console.error("Note owner backfill failed:", err);
+    }
+  }
+
+  // Pulls used to match a cloud row only by client id, so a delete never found a
+  // copy stored under another key, and the cursor has since moved past it. One
+  // read of the whole feed brings those deletes back, for the normal path to
+  // apply. A note the feed no longer returns stays: the API purges deletes after
+  // 30 days, but absence can also mean the row exists and this account can't read
+  // it. A row that stays parked must not make every session a full read, so this
+  // runs once a session and stops after a few attempts.
+  private async replayNoteFeed(teamOnly: boolean, replayKey: string): Promise<void> {
+    const attempts = Number(localStorage.getItem(replayKey)) || 0;
+    if (attempts >= NOTE_FEED_REPLAY_ATTEMPTS || this.noteFeedReplayTried.has(replayKey)) return;
+    this.noteFeedReplayTried.add(replayKey);
+    localStorage.setItem(replayKey, String(attempts + 1));
+    if (await this.pullNotes(teamOnly, false, true)) {
+      localStorage.setItem(replayKey, String(NOTE_FEED_REPLAY_ATTEMPTS));
     }
   }
 
@@ -2484,10 +2828,18 @@ export class SyncService {
     if (denied) await this.restoreDeniedRows("note");
   }
 
-  private async pullNotes(teamOnly = false, snapshot = false): Promise<boolean> {
+  private async pullNotes(
+    teamOnly = false,
+    snapshot = false,
+    replayFeed = false
+  ): Promise<boolean> {
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
-      const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
+      const since = snapshot
+        ? undefined
+        : replayFeed
+          ? NOTE_FEED_START
+          : (localStorage.getItem(cursorKey) ?? undefined);
       const syncStartedAt = new Date().toISOString();
       const ctx = await this.buildSpaceContext();
       const { cloudToLocal, defaultFolderId } = await this.buildCloudToLocalFolderMap(
@@ -2510,203 +2862,222 @@ export class SyncService {
         this.teamPassMovedWork = true;
 
         for (const cloudNote of cloudNotes) {
-          const local = await window.electronAPI.getNoteByClientId?.(
-            cloudNote.client_note_id ?? ""
-          );
+          try {
+            const local = await window.electronAPI.getNoteForCloudRow?.(
+              cloudNote.client_note_id,
+              cloudNote.id
+            );
 
-          // A parent folder DELETE owns this note until its server result is
-          // known. Do not turn a newer live row into a conflict or apply a
-          // per-note tombstone; denial restores the journaled row in place,
-          // while confirmation removes it with the folder cascade.
-          if (local?.folder_delete_pending) continue;
-          if (!cloudNote.access_removed) {
-            this.noteRevisionsKnown = hasNoteRevision(cloudNote.revision);
-          }
-
-          // Copy the cloud owner before any last-write-wins decision: an
-          // unchanged note skips the upsert but must still gain its owner
-          // (the owner_user_id backfill relies on this).
-          if (local && shouldSetOwnerFromCloud(cloudNote, local)) {
-            await window.electronAPI.setNoteOwnerFromCloud?.(local.id, cloudNote.user_id!);
-          }
-
-          // Redacted stub: the note moved out of one of our teams. Clean local
-          // copies are no longer ours to keep; dirty ones ('pending' or
-          // 'error') move to the private space so unpushed work survives
-          // (plan §7.2).
-          if (cloudNote.access_removed) {
-            if (!local) continue;
-            if (local.sync_status !== "synced" && !local.deleted_at && ctx.privateSpace) {
-              await this.forkNoteToPrivate(
-                local,
-                ctx.privateSpace,
-                "pull",
-                ctx.byCloudSpaceId.get(cloudNote.previous_space_id ?? "")?.name
-              );
-            } else {
-              await window.electronAPI.hardDeleteNote?.(local.id);
+            // An old delete must not take text this device hasn't pushed. Its
+            // push gets a 404 and forks it into a note of its own.
+            if (replayFeed && cloudNote.deleted_at && local?.sync_status !== "synced") {
+              continue;
             }
-            // The pull disambiguated a 404'd push as a revocation and resolved
-            // it, so the fallback fork must stand down. Any unresolved
-            // conflict is moot too — its cloud copy is no longer ours to
-            // resolve — and settling drops the full snapshot the durable
-            // registry keeps in localStorage.
-            this.clear404(NOTE_UPDATE_404_KEY, local.client_note_id);
-            await this.settleNoteConflict(local.client_note_id);
-            continue;
-          }
 
-          // Rejected create retries must be resolved against the actual row,
-          // even when its timestamp predates the local offline snapshot.
-          if (local?.cloud_create_rejected && !cloudNote.deleted_at) {
-            await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-            continue;
-          }
+            // A parent folder DELETE owns this note until its server result is
+            // known. Do not turn a newer live row into a conflict or apply a
+            // per-note tombstone; denial restores the journaled row in place,
+            // while confirmation removes it with the folder cascade.
+            if (local?.folder_delete_pending) continue;
+            if (!cloudNote.access_removed) {
+              this.noteRevisionsKnown = hasNoteRevision(cloudNote.revision);
+            }
 
-          if (teamOnly && !cloudNote.space_id && !local?.cloud_create_pending) {
-            // A personal row whose local copy still sits in a team space
-            // announces a team→personal transition — apply it, or a later
-            // edit's push would re-team the privatized note.
-            if (local && !local.deleted_at && ctx.byId.get(local.space_id)?.kind === "team") {
-              if (cloudNote.deleted_at) {
+            // Copy the cloud owner before any last-write-wins decision: an
+            // unchanged note skips the upsert but must still gain its owner
+            // (the owner_user_id backfill relies on this).
+            if (local && shouldSetOwnerFromCloud(cloudNote, local)) {
+              await window.electronAPI.setNoteOwnerFromCloud?.(local.id, cloudNote.user_id!);
+            }
+
+            // Redacted stub: the note moved out of one of our teams. Clean local
+            // copies are no longer ours to keep; dirty ones ('pending' or
+            // 'error') move to the private space so unpushed work survives
+            // (plan §7.2).
+            if (cloudNote.access_removed) {
+              if (!local) continue;
+              if (local.sync_status !== "synced" && !local.deleted_at && ctx.privateSpace) {
+                await this.forkNoteToPrivate(
+                  local,
+                  ctx.privateSpace,
+                  "pull",
+                  ctx.byCloudSpaceId.get(cloudNote.previous_space_id ?? "")?.name
+                );
+              } else {
                 await window.electronAPI.hardDeleteNote?.(local.id);
+              }
+              // The pull disambiguated a 404'd push as a revocation and resolved
+              // it, so the fallback fork must stand down. Any unresolved
+              // conflict is moot too — its cloud copy is no longer ours to
+              // resolve — and settling drops the full snapshot the durable
+              // registry keeps in localStorage.
+              this.clear404(NOTE_UPDATE_404_KEY, local.client_note_id);
+              await this.settleNoteConflict(local.client_note_id);
+              continue;
+            }
+
+            // Rejected create retries must be resolved against the actual row,
+            // even when its timestamp predates the local offline snapshot.
+            if (local?.cloud_create_rejected && !cloudNote.deleted_at) {
+              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+              continue;
+            }
+
+            if (teamOnly && !cloudNote.space_id && !local?.cloud_create_pending) {
+              // A personal row whose local copy still sits in a team space
+              // announces a team→personal transition — apply it, or a later
+              // edit's push would re-team the privatized note.
+              if (local && !local.deleted_at && ctx.byId.get(local.space_id)?.kind === "team") {
+                if (cloudNote.deleted_at) {
+                  await window.electronAPI.hardDeleteNote?.(local.id);
+                  await this.settleNoteConflict(local.client_note_id);
+                } else if (isCloudNoteNewer(cloudNote, local)) {
+                  // 'error' rows carry unpushed work just like 'pending' ones.
+                  if (local.sync_status !== "synced") {
+                    await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                  } else if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
+                    // Filing to the fallback would stick (the advanced cursor
+                    // never re-pulls this row) — park until the folder arrives.
+                    parkedRows++;
+                    console.warn(
+                      `Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`
+                    );
+                  } else if (ctx.privateSpace) {
+                    await window.electronAPI.upsertNoteFromCloud?.(
+                      cloudNote as unknown as Record<string, unknown>,
+                      resolvePulledNoteFolderId(
+                        cloudNote,
+                        ctx.privateSpace.id,
+                        cloudToLocal,
+                        defaultFolderId
+                      ),
+                      ctx.privateSpace.id
+                    );
+                  }
+                }
+              }
+              continue;
+            }
+
+            if (cloudNote.deleted_at) {
+              if (local) {
+                await window.electronAPI.hardDeleteNote?.(local.id);
+                // A tombstone disambiguates a 404'd push as a genuine delete;
+                // drop any streak so it can't resurrect the note in Personal,
+                // and settle any conflict so the registry doesn't keep the
+                // deleted note's full cloud snapshot forever.
+                this.clear404(NOTE_UPDATE_404_KEY, local.client_note_id);
                 await this.settleNoteConflict(local.client_note_id);
-              } else if (isCloudNoteNewer(cloudNote, local)) {
-                // 'error' rows carry unpushed work just like 'pending' ones.
-                if (local.sync_status !== "synced") {
-                  await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-                } else if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
-                  // Filing to the fallback would stick (the advanced cursor
-                  // never re-pulls this row) — park until the folder arrives.
-                  parkedRows++;
-                  console.warn(
-                    `Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`
-                  );
-                } else if (ctx.privateSpace) {
-                  await window.electronAPI.upsertNoteFromCloud?.(
-                    cloudNote as unknown as Record<string, unknown>,
-                    resolvePulledNoteFolderId(
-                      cloudNote,
-                      ctx.privateSpace.id,
-                      cloudToLocal,
-                      defaultFolderId
-                    ),
-                    ctx.privateSpace.id
-                  );
+              }
+              continue;
+            }
+
+            const space = await this.resolveSpaceForCloudRow(cloudNote.space_id, ctx);
+            if (!space) {
+              parkedRows++;
+              console.warn(`Parking note ${cloudNote.id}: unknown space ${cloudNote.space_id}`);
+              continue;
+            }
+
+            if (local?.deleted_at) continue;
+            if (local?.cloud_create_pending) {
+              if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
+                parkedRows++;
+                continue;
+              }
+              const result = await window.electronAPI.acknowledgeNoteCreate?.(
+                local.id,
+                local,
+                cloudNote.id,
+                cloudNote.updated_at,
+                cloudNote.user_id ?? null,
+                {
+                  reconcilePending: true,
+                  cloudNote,
+                  cloudRevision: cloudNote.revision ?? null,
+                  localFolderId: resolvePulledNoteFolderId(
+                    cloudNote,
+                    space.id,
+                    cloudToLocal,
+                    defaultFolderId
+                  ),
+                  localSpaceId: space.id,
+                }
+              );
+              if (result?.outcome === "conflict") {
+                await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+              } else if (result?.outcome === "synced" || result?.outcome === "pending") {
+                await this.settleNoteConflict(local.client_note_id);
+              } else {
+                parkedRows++;
+              }
+              continue;
+            }
+            const preRevision =
+              local &&
+              !hasNoteRevision(local.cloud_revision) &&
+              hasNoteRevision(cloudNote.revision) &&
+              local.cloud_id === cloudNote.id;
+            if (preRevision && local.sync_status !== "synced") {
+              // Adopt the revision when this device's base is the server's
+              // current row. An unpushed edit on a row acked before timestamp
+              // bases existed pushed last-write-wins until now; it still does.
+              const sameBase =
+                normalizeTimestamp(local.cloud_updated_at) ===
+                normalizeTimestamp(cloudNote.updated_at);
+              if (!sameBase && local.cloud_updated_at) {
+                await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                continue;
+              }
+              await window.electronAPI.setNoteCloudBase?.(
+                local.id,
+                cloudNote.updated_at,
+                cloudNote.revision
+              );
+              local.cloud_revision = cloudNote.revision;
+            }
+            // A clean row synced before revisions takes the cloud copy whole:
+            // adopting only the revision would mark the copies equal from now
+            // on, so a clear made elsewhere while this device ran a release that
+            // kept the text would never arrive.
+            const cleanPreRevision = preRevision && local.sync_status === "synced";
+            if (!local || cleanPreRevision || isCloudNoteNewer(cloudNote, local)) {
+              if (local && local.sync_status !== "synced") {
+                // A newer cloud copy over unpushed local edits ('pending' or
+                // 'error'): surface the conflict to the editor banner instead
+                // of silently dropping the local edit (plan §7.3).
+                await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                continue;
+              }
+              if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
+                // The note's folder isn't known locally yet (created moments
+                // ago, or its pull failed). Filing it to the fallback would
+                // stick — the advanced cursor never re-pulls the row — so park
+                // it like an unknown space until the folder arrives.
+                parkedRows++;
+                console.warn(`Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`);
+                continue;
+              }
+              const applied = await window.electronAPI.upsertNoteFromCloud?.(
+                cloudNote as unknown as Record<string, unknown>,
+                resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId),
+                space.id
+              );
+              if (local) {
+                // Applying cloud over a clean row settles any stale conflict,
+                // including one left under the key this row just adopted. A
+                // skipped upsert adopted nothing, and that key is another row's.
+                await this.settleNoteConflict(local.client_note_id);
+                if (applied && applied.client_note_id !== local.client_note_id) {
+                  await this.settleNoteConflict(applied.client_note_id);
                 }
               }
             }
-            continue;
-          }
-
-          if (cloudNote.deleted_at) {
-            if (local) {
-              await window.electronAPI.hardDeleteNote?.(local.id);
-              // A tombstone disambiguates a 404'd push as a genuine delete;
-              // drop any streak so it can't resurrect the note in Personal,
-              // and settle any conflict so the registry doesn't keep the
-              // deleted note's full cloud snapshot forever.
-              this.clear404(NOTE_UPDATE_404_KEY, local.client_note_id);
-              await this.settleNoteConflict(local.client_note_id);
-            }
-            continue;
-          }
-
-          const space = await this.resolveSpaceForCloudRow(cloudNote.space_id, ctx);
-          if (!space) {
+          } catch (err) {
+            // Parked like a row waiting on its folder: the cursor holds so the
+            // next pass retries it, and the rest of the delta still applies.
             parkedRows++;
-            console.warn(`Parking note ${cloudNote.id}: unknown space ${cloudNote.space_id}`);
-            continue;
-          }
-
-          if (local?.deleted_at) continue;
-          if (local?.cloud_create_pending) {
-            if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
-              parkedRows++;
-              continue;
-            }
-            const result = await window.electronAPI.acknowledgeNoteCreate?.(
-              local.id,
-              local,
-              cloudNote.id,
-              cloudNote.updated_at,
-              cloudNote.user_id ?? null,
-              {
-                reconcilePending: true,
-                cloudNote,
-                cloudRevision: cloudNote.revision ?? null,
-                localFolderId: resolvePulledNoteFolderId(
-                  cloudNote,
-                  space.id,
-                  cloudToLocal,
-                  defaultFolderId
-                ),
-                localSpaceId: space.id,
-              }
-            );
-            if (result?.outcome === "conflict") {
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-            } else if (result?.outcome === "synced" || result?.outcome === "pending") {
-              await this.settleNoteConflict(local.client_note_id);
-            } else {
-              parkedRows++;
-            }
-            continue;
-          }
-          const preRevision =
-            local &&
-            !hasNoteRevision(local.cloud_revision) &&
-            hasNoteRevision(cloudNote.revision) &&
-            local.cloud_id === cloudNote.id;
-          if (preRevision && local.sync_status !== "synced") {
-            // Adopt the revision when this device's base is the server's
-            // current row. An unpushed edit on a row acked before timestamp
-            // bases existed pushed last-write-wins until now; it still does.
-            const sameBase =
-              normalizeTimestamp(local.cloud_updated_at) ===
-              normalizeTimestamp(cloudNote.updated_at);
-            if (!sameBase && local.cloud_updated_at) {
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-              continue;
-            }
-            await window.electronAPI.setNoteCloudBase?.(
-              local.id,
-              cloudNote.updated_at,
-              cloudNote.revision
-            );
-            local.cloud_revision = cloudNote.revision;
-          }
-          // A clean row synced before revisions takes the cloud copy whole:
-          // adopting only the revision would mark the copies equal from now
-          // on, so a clear made elsewhere while this device ran a release that
-          // kept the text would never arrive.
-          const cleanPreRevision = preRevision && local.sync_status === "synced";
-          if (!local || cleanPreRevision || isCloudNoteNewer(cloudNote, local)) {
-            if (local && local.sync_status !== "synced") {
-              // A newer cloud copy over unpushed local edits ('pending' or
-              // 'error'): surface the conflict to the editor banner instead
-              // of silently dropping the local edit (plan §7.3).
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-              continue;
-            }
-            if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
-              // The note's folder isn't known locally yet (created moments
-              // ago, or its pull failed). Filing it to the fallback would
-              // stick — the advanced cursor never re-pulls the row — so park
-              // it like an unknown space until the folder arrives.
-              parkedRows++;
-              console.warn(`Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`);
-              continue;
-            }
-            await window.electronAPI.upsertNoteFromCloud?.(
-              cloudNote as unknown as Record<string, unknown>,
-              resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId),
-              space.id
-            );
-            if (local) {
-              // Applying cloud over a clean row settles any stale conflict.
-              await this.settleNoteConflict(local.client_note_id);
-            }
+            console.error(`Note pull failed for cloud note ${cloudNote.id}:`, err);
           }
         }
 
@@ -2728,6 +3099,7 @@ export class SyncService {
         teamCapable,
         hasTeamSpaces: [...ctx.byId.values()].some((s) => s.kind === "team"),
       });
+      if (!this.passIsCurrent()) return false;
       if (advanceCursor) localStorage.setItem(cursorKey, syncStartedAt);
       if (advanceTeamCursor) localStorage.setItem("lastSyncedAt.notes.team", syncStartedAt);
       return parkedRows === 0;
@@ -2739,7 +3111,9 @@ export class SyncService {
 
   private async syncConversations(): Promise<void> {
     await this.pushPendingConversations();
+    if (!this.passIsCurrent()) return;
     await this.pushConversationDeletes();
+    if (!this.passIsCurrent()) return;
     await this.pullConversations();
   }
 
@@ -2749,31 +3123,21 @@ export class SyncService {
     const pending = (await window.electronAPI.getPendingConversations?.()) ?? [];
     if (pending.length === 0) return;
 
-    const migration = pending.filter((c) => c.cloud_id);
+    const linked = pending.filter((c) => c.cloud_id);
     const fresh = pending.filter((c) => !c.cloud_id);
 
-    for (const conv of migration) {
+    for (const conv of linked) {
       try {
-        await ConversationsService.update(
-          conv.cloud_id!,
-          { title: conv.title },
-          sender.authGeneration
-        );
-        await window.electronAPI.markConversationSynced?.(
-          conv.id,
-          conv.cloud_id!,
-          sender.accountId,
-          sender.authGeneration
-        );
+        await this.sendMissingConversationContent(conv.id, conv.cloud_id!, sender);
       } catch (err) {
-        if (!isAuthContextError(err)) console.error("Conversation migration sync failed:", err);
+        if (!isAuthContextError(err)) console.error("Linked conversation sync failed:", err);
       }
     }
 
     for (const conv of fresh) {
       try {
         const full = await window.electronAPI.getAgentConversation?.(conv.id);
-        if (!full) continue;
+        if (!full || hasTurnInProgress(full)) continue;
         await this.createCloudConversation(full, sender);
       } catch (err) {
         if (!isAuthContextError(err)) console.error("Conversation sync failed:", err);
@@ -2786,21 +3150,25 @@ export class SyncService {
     if (authGeneration == null) return;
     const sender = chatPushSender();
     if (sender) await this.deleteOrphanedChatCreates(sender);
+    const queue = this.openDeleteQueue("conversations", sender?.accountId ?? null);
     const deletes = (await window.electronAPI.getPendingConversationDeletes?.()) ?? [];
     for (const conv of deletes) {
-      if (!conv.cloud_id) continue;
+      if (!conv.cloud_id || queue.isParked(conv)) continue;
       try {
         await ConversationsService.delete(conv.cloud_id, authGeneration);
         await window.electronAPI.hardDeleteConversation?.(conv.id, authGeneration);
       } catch (err) {
-        // 404 means the row is already gone server-side — treat as success.
+        // 404: this account's cloud holds no live copy.
         if (isHttpStatus(err, 404)) {
-          await window.electronAPI.hardDeleteConversation?.(conv.id, authGeneration);
+          if (await queue.endsUnconfirmed(conv)) {
+            await window.electronAPI.hardDeleteConversation?.(conv.id, authGeneration);
+          }
         } else {
           if (!isAuthContextError(err)) console.error("Conversation delete sync failed:", err);
         }
       }
     }
+    queue.save();
   }
 
   private async pullConversations(snapshot = false): Promise<boolean> {
@@ -2829,8 +3197,13 @@ export class SyncService {
           // snapshot mode, so authoritative remote changes are not lost.
           if (local?.folder_delete_pending) continue;
 
+          // A tombstone speaks only for the copy this row is linked to. A live row
+          // that isn't linked to it still has the only copy of its chat. A row
+          // deleted here before its create receipt arrived has nothing else to
+          // clear it, since the delete queue needs a cloud id.
           if (cloudConv.deleted_at) {
-            if (local) {
+            const isLinkedCopy = local?.cloud_id === cloudConv.id;
+            if (local && (isLinkedCopy || (local.deleted_at && !local.cloud_id))) {
               stopIfPullStale(
                 await window.electronAPI.hardDeleteConversation?.(local.id, authGeneration)
               );
@@ -2838,20 +3211,39 @@ export class SyncService {
             continue;
           }
 
+          // The account's own cloud returning an unattributed chat proves whose
+          // it is. Claimed apart from applying the copy, which the rules below
+          // may hold back: a claim never touches the chat's messages.
+          if (local && !local.account_id) {
+            stopIfPullStale(
+              await window.electronAPI.claimConversationFromCloud?.(
+                cloudConv as unknown as Record<string, unknown>,
+                authGeneration
+              )
+            );
+          }
+
           // A live cloud row cannot override a local pending delete. The
           // tombstone stays queued for push; only the cloud tombstone branch
           // above is authoritative enough to hard-delete it locally.
-          if (local?.deleted_at && local.account_id) continue;
+          if (local?.deleted_at) continue;
 
+          // The next push sends what this row is still missing from the cloud.
+          if (local?.cloud_id && local.sync_status === "pending") continue;
+
+          // Applying a cloud copy replaces every local message, and messages added
+          // after a chat's first create exist only on this device.
+          const holdsLocalHistory =
+            (cloudConv.messages?.length ?? 0) >= (local?.message_count ?? 0);
           if (
             !local ||
-            !local.account_id ||
-            isCloudEntryNewer(cloudConv.updated_at, local.updated_at)
+            (holdsLocalHistory && isCloudEntryNewer(cloudConv.updated_at, local.updated_at))
           ) {
             stopIfPullStale(
               await window.electronAPI.upsertConversationFromCloud?.(
                 cloudConv as unknown as Record<string, unknown>,
                 (cloudConv.messages ?? []) as unknown as Array<Record<string, unknown>>,
+                local ?? null,
                 authGeneration
               )
             );
@@ -2947,33 +3339,42 @@ export class SyncService {
 
   private async syncTranscriptions(): Promise<void> {
     await this.pushPendingTranscriptions();
+    if (!this.passIsCurrent()) return;
     await this.pushTranscriptionDeletes();
+    if (!this.passIsCurrent()) return;
     await this.pullTranscriptions();
   }
 
   private async pushTranscriptionDeletes(): Promise<void> {
     const authGeneration = getValidatedAuthGeneration();
     if (authGeneration == null) return;
+    const queue = this.openDeleteQueue(
+      "transcriptions",
+      getAuthRequestContextSnapshot().sessionUserId
+    );
     const deletes = (await window.electronAPI.getPendingTranscriptionDeletes?.()) ?? [];
-    const withCloudId = deletes.filter((t) => t.cloud_id);
-    if (withCloudId.length === 0) return;
+    const withCloudId = deletes.filter((t) => t.cloud_id && !queue.isParked(t));
 
     for (let i = 0; i < withCloudId.length; i += TRANSCRIPTION_BATCH_SIZE) {
       const chunk = withCloudId.slice(i, i + TRANSCRIPTION_BATCH_SIZE);
       try {
-        await TranscriptionsService.batchDelete(
+        const { deleted } = await TranscriptionsService.batchDelete(
           chunk.map((t) => t.cloud_id!),
           authGeneration
         );
         // The response lists only rows this request deleted. One it leaves out
-        // is already gone from this account's cloud, so its retry would never end.
+        // is not live in this account's cloud, so its retry would never end.
+        const confirmed = new Set(deleted);
         for (const local of chunk) {
-          await window.electronAPI.hardDeleteTranscription?.(local.id, authGeneration);
+          if (confirmed.has(local.cloud_id!) || (await queue.endsUnconfirmed(local))) {
+            await window.electronAPI.hardDeleteTranscription?.(local.id, authGeneration);
+          }
         }
       } catch (err) {
         if (!isAuthContextError(err)) console.error("Transcription batch delete failed:", err);
       }
     }
+    queue.save();
   }
 
   private async pushPendingTranscriptions(): Promise<void> {
@@ -3092,7 +3493,9 @@ export class SyncService {
     }
 
     const pushed = await this.pushPendingDictionary();
+    if (!this.passIsCurrent()) return false;
     const deleted = await this.pushDictionaryDeletes();
+    if (!this.passIsCurrent()) return false;
     const pulled = await this.pullDictionary();
     return pushed && deleted && pulled;
   }
@@ -3112,7 +3515,9 @@ export class SyncService {
     const parked = this.readLocalRecord<string>(parkedKey);
     const stillParked: Record<string, string> = {};
     for (const entry of updates) {
-      if (parked[entry.client_dict_id] === entry.updated_at) {
+      // The account's own row is re-created, so it is never parked.
+      const own = accountId !== null && entry.account_id === accountId;
+      if (!own && parked[entry.client_dict_id] === entry.updated_at) {
         stillParked[entry.client_dict_id] = entry.updated_at;
         continue;
       }
@@ -3142,10 +3547,16 @@ export class SyncService {
         succeeded = false;
         // 404: the cloud row is gone. The account's own row loses its stale
         // cloud_id, so the next push re-creates it; an unattributed one is
-        // parked instead (see PARKED_UPDATE_404_PREFIX).
+        // parked instead (see PARKED_UPDATE_404_PREFIX). A clear refused for a
+        // replaced sign-in decides nothing, and the row stays for the next pass.
         if (isHttpStatus(err, 404)) {
-          const cleared = await window.electronAPI.clearDictionaryCloudId?.(entry.id);
-          if (!cleared?.success) stillParked[entry.client_dict_id] = entry.updated_at;
+          const cleared = await window.electronAPI.clearDictionaryCloudId?.(
+            entry.id,
+            authGeneration
+          );
+          if (!own && !cleared?.success && !cleared?.stale) {
+            stillParked[entry.client_dict_id] = entry.updated_at;
+          }
         } else {
           if (!isAuthContextError(err)) console.error("Dictionary update sync failed:", err);
         }
@@ -3220,22 +3631,26 @@ export class SyncService {
     const authGeneration = getValidatedAuthGeneration();
     if (authGeneration == null) return false;
     let succeeded = true;
+    const queue = this.openDeleteQueue("dictionary", getAuthRequestContextSnapshot().sessionUserId);
     const deletes = (await window.electronAPI.getPendingDictionaryDeletes?.()) ?? [];
     for (const entry of deletes) {
-      if (!entry.cloud_id) continue;
+      if (!entry.cloud_id || queue.isParked(entry)) continue;
       try {
         await DictionaryService.delete(entry.cloud_id, authGeneration);
         await window.electronAPI.hardDeleteDictionary?.(entry.id, authGeneration);
       } catch (err) {
-        // 404 means the row is already gone server-side — treat as success.
+        // 404: this account's cloud holds no live copy.
         if (isHttpStatus(err, 404)) {
-          await window.electronAPI.hardDeleteDictionary?.(entry.id, authGeneration);
+          if (await queue.endsUnconfirmed(entry)) {
+            await window.electronAPI.hardDeleteDictionary?.(entry.id, authGeneration);
+          }
         } else {
           succeeded = false;
           if (!isAuthContextError(err)) console.error("Dictionary delete sync failed:", err);
         }
       }
     }
+    queue.save();
     return succeeded;
   }
 
@@ -3711,7 +4126,9 @@ export class SyncService {
     }
 
     await this.pushPendingSnippets();
+    if (!this.passIsCurrent()) return;
     await this.pushSnippetDeletes();
+    if (!this.passIsCurrent()) return;
     await this.pullSnippets();
   }
 
@@ -3729,7 +4146,8 @@ export class SyncService {
     const parked = this.readLocalRecord<string>(parkedKey);
     const stillParked: Record<string, string> = {};
     for (const entry of updates) {
-      if (parked[entry.client_snippet_id] === entry.updated_at) {
+      const own = accountId !== null && entry.account_id === accountId;
+      if (!own && parked[entry.client_snippet_id] === entry.updated_at) {
         stillParked[entry.client_snippet_id] = entry.updated_at;
         continue;
       }
@@ -3751,8 +4169,10 @@ export class SyncService {
         if (isHttpStatus(err, 404)) {
           // As with dictionary words: the account's own row is re-created, an
           // unattributed one is parked.
-          const cleared = await window.electronAPI.clearSnippetCloudId?.(entry.id);
-          if (!cleared?.success) stillParked[entry.client_snippet_id] = entry.updated_at;
+          const cleared = await window.electronAPI.clearSnippetCloudId?.(entry.id, authGeneration);
+          if (!own && !cleared?.success && !cleared?.stale) {
+            stillParked[entry.client_snippet_id] = entry.updated_at;
+          }
         } else if (isHttpStatus(err, 409)) {
           // Another snippet already holds this trigger, so the server keeps
           // rejecting the rename. Mark synced to stop re-pushing the doomed PATCH.
@@ -3823,20 +4243,25 @@ export class SyncService {
   private async pushSnippetDeletes(): Promise<void> {
     const authGeneration = getValidatedAuthGeneration();
     if (authGeneration == null) return;
+    const queue = this.openDeleteQueue("snippets", getAuthRequestContextSnapshot().sessionUserId);
     const deletes = (await window.electronAPI.getPendingSnippetDeletes?.()) ?? [];
     for (const entry of deletes) {
-      if (!entry.cloud_id) continue;
+      if (!entry.cloud_id || queue.isParked(entry)) continue;
       try {
         await SnippetService.delete(entry.cloud_id, authGeneration);
         await window.electronAPI.hardDeleteSnippet?.(entry.id, authGeneration);
       } catch (err) {
+        // As with dictionary words.
         if (isHttpStatus(err, 404)) {
-          await window.electronAPI.hardDeleteSnippet?.(entry.id, authGeneration);
+          if (await queue.endsUnconfirmed(entry)) {
+            await window.electronAPI.hardDeleteSnippet?.(entry.id, authGeneration);
+          }
         } else {
           if (!isAuthContextError(err)) console.error("Snippet delete sync failed:", err);
         }
       }
     }
+    queue.save();
   }
 
   // As pullDictionary.

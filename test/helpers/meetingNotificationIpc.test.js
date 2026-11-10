@@ -9,7 +9,7 @@ const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 
 // Registers the real handler closures against a fake `this` (the scaffolding
-// from agentDictationPillIpc.test.js), with userData in a temporary directory.
+// from windowIpcSenders.test.js), with userData in a temporary directory.
 const handlers = new Map();
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
 
@@ -210,4 +210,27 @@ test("folder errors preserve request and destination; context lookup failure is 
     ctx.service.getMeetingNotificationDestination(ctx.owner).code,
     "FOLDERS_UNAVAILABLE"
   );
+});
+
+test("only the current control panel can change the meeting note lifecycle", () => {
+  const sender = {};
+  const calls = [];
+  fakeThis.windowManager = { controlPanelWindow: { webContents: sender } };
+  fakeThis.meetingDetectionEngine = {
+    markMeetingNoteOnly: (id) => calls.push(["open", id]),
+    closeMeetingNote: (id) => calls.push(["close", id]),
+  };
+  for (const channel of ["meeting-note-opened-without-recording", "meeting-note-closed"]) {
+    const handle = handlers.get(channel);
+    handle({ sender: {} }, "session");
+    handle({ sender }, null);
+    handle({ sender }, { id: "session" });
+    assert.deepEqual(calls, []);
+  }
+  handlers.get("meeting-note-opened-without-recording")({ sender }, "session");
+  handlers.get("meeting-note-closed")({ sender }, "session");
+  assert.deepEqual(calls, [
+    ["open", "session"],
+    ["close", "session"],
+  ]);
 });
