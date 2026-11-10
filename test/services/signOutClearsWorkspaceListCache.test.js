@@ -22,7 +22,6 @@ test("sign-out cleanup removes the cached workspace list and the active workspac
     JSON.stringify({ accountId: "acct-1", fetchedAt: Date.now(), workspaces: [{ id: "ws-1" }] })
   );
   browserLocalStorage.setItem("activeWorkspaceId", "ws-1");
-  browserLocalStorage.setItem("workspacePersonalSelected", "true");
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
 
@@ -30,5 +29,4 @@ test("sign-out cleanup removes the cached workspace list and the active workspac
 
   assert.equal(browserLocalStorage.getItem(WORKSPACE_LIST_CACHE_KEY), null);
   assert.equal(browserLocalStorage.getItem("activeWorkspaceId"), null);
-  assert.equal(browserLocalStorage.getItem("workspacePersonalSelected"), null);
 });

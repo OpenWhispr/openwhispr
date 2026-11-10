@@ -1,6 +1,6 @@
 import { WorkspacesService } from "./WorkspacesService";
 import { syncService } from "./SyncService";
-import { useWorkspaceStore } from "../stores/workspaceStore";
+import { relocateLostWorkspaces, useWorkspaceStore } from "../stores/workspaceStore";
 import { createWorkspaceActions } from "./workspaceActionsCore";
 import { rosterFor } from "../lib/peopleRoster";
 
@@ -21,6 +21,9 @@ const actions = createWorkspaceActions({
     memberRole: (workspaceId, userId) =>
       rosterFor(useWorkspaceStore.getState(), workspaceId).find((m) => m.user_id === userId)
         ?.role ?? null,
+  },
+  privateNotes: {
+    relocateLostWorkspace: (workspaceId) => relocateLostWorkspaces([workspaceId]),
   },
   sync: syncService,
   notifyUsageChanged: () => window.dispatchEvent(new Event("usage-changed")),

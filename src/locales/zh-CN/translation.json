@@ -5875,6 +5875,8 @@
     "missingAudio": "[音频缺失 {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "{{name}}的工作区",
+    "defaultNameFallback": "我的工作区",
     "switcher": {
       "workspaces": "工作区",
       "add": "添加工作区",

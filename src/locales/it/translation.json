@@ -5896,6 +5896,8 @@
     "missingAudio": "[audio mancante {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "Area di lavoro di {{name}}",
+    "defaultNameFallback": "La mia area di lavoro",
     "switcher": {
       "workspaces": "Aree di lavoro",
       "add": "Aggiungi area di lavoro",

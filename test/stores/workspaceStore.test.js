@@ -65,9 +65,10 @@ for (const { name, saved, expected } of [
       { activeWorkspaceId: expected, persistedWorkspaceId: expected },
     ]);
 
+    // The Enterprise workspace is the default of an account that has none of its own.
     assert.deepEqual(
       useWorkspaceStore.getState().workspaces.map((workspace) => workspace.id),
-      ["business", "enterprise"]
+      ["enterprise", "business"]
     );
     assert.equal(useWorkspaceStore.getState().activeWorkspaceId, expected);
     assert.equal(storage.getItem(ACTIVE_WORKSPACE_KEY), expected);
@@ -208,21 +209,61 @@ test("an overtaken read shares the newer read's failure", async (t) => {
   await assert.rejects(second, /offline/);
 });
 
-async function loadStoreForPersonal(t, { list, storage: initialStorage = {} }) {
-  const { storage } = installBrowserGlobals(t, { initialStorage });
-  globalThis.__personalList = list;
+// A store whose service, account and main-process calls each test steers through globalThis.__ws.
+async function loadPrivateNotesStore(
+  t,
+  { list, ensureDefault = async () => null, accountId = "acct-1", storage: initialStorage = {} }
+) {
+  const calls = [];
+  const accountScopeListeners = [];
+  const api = {
+    setActiveWorkspaceScope: async (scope) => {
+      calls.push(["scope", scope]);
+      return { success: true };
+    },
+    bindDefaultPrivateSpace: async (workspaceId, account) => {
+      calls.push(["bind", workspaceId, account]);
+      return { success: true };
+    },
+    relocatePrivateSpace: async (from, to, account) => {
+      calls.push(["relocate", from, to, account]);
+      return { success: true, notes: 0, folders: 0 };
+    },
+    claimSignedOutPrivateNotes: async () => {
+      calls.push(["claim"]);
+      return { notes: 0, folders: 0 };
+    },
+    onDatabaseAccountScopeChanged: (listener) => {
+      accountScopeListeners.push(listener);
+      return () => accountScopeListeners.splice(accountScopeListeners.indexOf(listener), 1);
+    },
+  };
+  const { storage } = installBrowserGlobals(t, {
+    initialStorage,
+    window: { electronAPI: api },
+  });
+  globalThis.__ws = { list, ensureDefault, accountId, ensureCalls: [], listCalls: 0 };
   t.after(() => {
-    delete globalThis.__personalList;
+    delete globalThis.__ws;
   });
   const vite = await createRendererServer(t, {
-    cachePrefix: "openwhispr-workspace-store-personal-",
+    cachePrefix: "openwhispr-workspace-store-default-",
     mockModules: {
       "/services/WorkspacesService": `
-        export const WorkspacesService = { list: async () => globalThis.__personalList };
+        export const WorkspacesService = {
+          list: () => {
+            globalThis.__ws.listCalls += 1;
+            return globalThis.__ws.list();
+          },
+          ensureDefault: (name) => {
+            globalThis.__ws.ensureCalls.push(name);
+            return globalThis.__ws.ensureDefault(name);
+          },
+        };
       `,
       "/policyStore": `
         export const usePolicyStore = {
-          getState: () => ({ accountId: null, authGeneration: null }),
+          getState: () => ({ accountId: globalThis.__ws.accountId, authGeneration: null }),
         };
       `,
       "/enterpriseIdentityStore": `
@@ -230,139 +271,360 @@ async function loadStoreForPersonal(t, { list, storage: initialStorage = {} }) {
       `,
     },
   });
-  const module = await vite.ssrLoadModule("/stores/workspaceStore.ts");
-  return { ...module, storage };
+  const store = await vite.ssrLoadModule("/stores/workspaceStore.ts");
+  return {
+    ...store,
+    storage,
+    calls,
+    vite,
+    changeDatabaseAccount: (scope) => accountScopeListeners.forEach((listener) => listener(scope)),
+  };
 }
 
-const businessOnly = [{ id: "business", plan: "business", status: "active" }];
-const withEnterprise = [
-  ...businessOnly,
-  { id: "enterprise", plan: "enterprise", status: "active" },
-];
+const flush = async () => {
+  for (let i = 0; i < 5; i++) await new Promise((resolve) => setImmediate(resolve));
+};
+const names = (calls) => calls.map(([name]) => name);
+const LIST_CACHE_KEY = "workspaceListCache";
+const cacheFor = (accountId, workspaces) =>
+  JSON.stringify({ accountId, fetchedAt: Date.now(), workspaces });
 
-test("selectPersonal leaves no active workspace and survives a refresh", async (t) => {
-  const { useWorkspaceStore, storage, ACTIVE_WORKSPACE_KEY } = await loadStoreForPersonal(t, {
-    list: businessOnly,
-    storage: { activeWorkspaceId: "business" },
+const OWN = { id: "own", plan: "free", status: "active", is_default: true };
+const TEAM = { id: "team", plan: "business", status: "active", is_default: false };
+const LOST = { id: "lost", plan: "business", status: "active", is_default: false };
+const ENTERPRISE = { id: "corp", plan: "enterprise", status: "active", is_default: false };
+
+test("a saved Personal choice becomes the default workspace", async (t) => {
+  const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, OWN],
+    storage: { workspacePersonalSelected: "true" },
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  const state = useWorkspaceStore.getState();
+  assert.equal(state.defaultWorkspaceId, "own");
+  assert.equal(state.activeWorkspaceId, "own");
+  assert.equal(storage.getItem("activeWorkspaceId"), "own");
+  assert.equal(storage.getItem("workspacePersonalSelected"), null);
+  assert.equal("personalSelected" in state, false);
+  assert.equal("selectPersonal" in state, false);
+});
+
+test("a workspace chosen before the first refresh wins over a saved Personal choice", async (t) => {
+  const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, OWN],
+    storage: { workspacePersonalSelected: "true" },
+  });
+
+  useWorkspaceStore.getState().setActiveWorkspaceId("team");
+  await useWorkspaceStore.getState().refresh();
+
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+  assert.equal(storage.getItem("workspacePersonalSelected"), null);
+});
+
+test("the default workspace is listed first and chosen when nothing is saved", async (t) => {
+  const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, OWN],
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  const state = useWorkspaceStore.getState();
+  assert.deepEqual(
+    state.workspaces.map((w) => w.id),
+    ["own", "team"]
+  );
+  assert.equal(state.defaultWorkspaceId, "own");
+  assert.equal(state.activeWorkspaceId, "own");
+  assert.equal(storage.getItem("activeWorkspaceId"), "own");
+});
+
+test("ensureDefaultWorkspace posts the localized name once and refreshes", async (t) => {
+  const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM],
+    ensureDefault: async () => {
+      globalThis.__ws.list = async () => [TEAM, OWN];
+      return OWN;
+    },
+  });
+  const { defaultWorkspaceName } = await import("../../src/lib/workspaceSwitcher.ts");
+  const i18n = require("i18next").createInstance();
+  await i18n.init({
+    lng: "en",
+    resources: { en: { translation: require("../../src/locales/en/translation.json") } },
+    interpolation: { escapeValue: false },
+  });
+  const t9n = i18n.t.bind(i18n);
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, null);
+
+  await Promise.all([
+    ensureDefaultWorkspace(defaultWorkspaceName("Ada", t9n)),
+    ensureDefaultWorkspace(defaultWorkspaceName("Ada", t9n)),
+  ]);
+  await ensureDefaultWorkspace(defaultWorkspaceName("Ada", t9n));
+
+  assert.deepEqual(globalThis.__ws.ensureCalls, ["Ada's workspace"]);
+  assert.equal(globalThis.__ws.listCalls, 2);
+  assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "own");
+  assert.equal(useWorkspaceStore.getState().workspaces[0].id, "own");
+
+  // Each account session asks once.
+  useWorkspaceStore.getState().resetForAccountChange();
+  await ensureDefaultWorkspace(defaultWorkspaceName("", t9n));
+  assert.deepEqual(globalThis.__ws.ensureCalls, ["Ada's workspace", "My workspace"]);
+});
+
+test("a failed ensureDefaultWorkspace is asked again", async (t) => {
+  const { ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM],
+    ensureDefault: async () => {
+      throw new Error("offline");
+    },
+  });
+
+  await ensureDefaultWorkspace("Ada's workspace");
+  globalThis.__ws.ensureDefault = async () => OWN;
+  await ensureDefaultWorkspace("Ada's workspace");
+
+  assert.equal(globalThis.__ws.ensureCalls.length, 2);
+});
+
+test("an enterprise_managed answer leaves the Enterprise workspace as default", async (t) => {
+  const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, ENTERPRISE],
+    // POST /api/workspaces/default answers { data: null, reason: "enterprise_managed" }.
+    ensureDefault: async () => null,
   });
   await useWorkspaceStore.getState().refresh();
 
-  useWorkspaceStore.getState().selectPersonal();
+  await ensureDefaultWorkspace("Ada's workspace");
+
+  const state = useWorkspaceStore.getState();
+  assert.equal(state.defaultWorkspaceId, "corp");
+  assert.equal(state.activeWorkspaceId, "corp");
+  assert.equal(globalThis.__ws.listCalls, 1);
+});
+
+test("a failed refresh relocates nothing", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => {
+      throw new Error("offline");
+    },
+    storage: { [LIST_CACHE_KEY]: cacheFor("acct-1", [OWN, TEAM, LOST]) },
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  assert.equal(useWorkspaceStore.getState().error, true);
+  assert.deepEqual(
+    useWorkspaceStore.getState().workspaces.map((w) => w.id),
+    ["own", "team", "lost"]
+  );
+  assert.equal(names(calls).includes("relocate"), false);
+});
+
+test("an empty list after a load error relocates nothing", async (t) => {
+  const { useWorkspaceStore, calls, storage } = await loadPrivateNotesStore(t, {
+    list: async () => {
+      throw new Error("offline");
+    },
+    storage: { [LIST_CACHE_KEY]: cacheFor("acct-1", [OWN, TEAM, LOST]) },
+  });
+  await useWorkspaceStore.getState().refresh();
+
+  globalThis.__ws.list = async () => [];
   await useWorkspaceStore.getState().refresh({ fresh: true });
 
-  const state = useWorkspaceStore.getState();
-  assert.equal(state.personalSelected, true);
-  assert.equal(state.activeWorkspaceId, null);
-  assert.equal(storage.getItem(ACTIVE_WORKSPACE_KEY), null);
+  assert.equal(names(calls).includes("relocate"), false);
+  // Every account has a default workspace, so an empty answer never replaces the list it
+  // would be compared against.
+  assert.deepEqual(
+    JSON.parse(storage.getItem(LIST_CACHE_KEY)).workspaces.map((w) => w.id),
+    ["own", "team", "lost"]
+  );
 });
 
-test("a saved Personal choice is restored on launch", async (t) => {
-  const { useWorkspaceStore } = await loadStoreForPersonal(t, {
-    list: businessOnly,
-    storage: { workspacePersonalSelected: "true" },
+test("a list cached for another account relocates nothing", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+    storage: { [LIST_CACHE_KEY]: cacheFor("acct-2", [OWN, TEAM, LOST]) },
   });
 
   await useWorkspaceStore.getState().refresh();
 
-  assert.equal(useWorkspaceStore.getState().personalSelected, true);
-  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, null);
+  assert.equal(names(calls).includes("relocate"), false);
 });
 
-test("choosing a workspace ends the Personal choice", async (t) => {
-  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
-    list: businessOnly,
-    storage: { workspacePersonalSelected: "true" },
-  });
-  await useWorkspaceStore.getState().refresh();
-
-  useWorkspaceStore.getState().setActiveWorkspaceId("business");
-
-  assert.equal(useWorkspaceStore.getState().personalSelected, false);
-  assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
-});
-
-test("an entitled Enterprise workspace replaces a saved Personal choice", async (t) => {
-  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
-    list: withEnterprise,
-    storage: { workspacePersonalSelected: "true" },
+test("a successful list missing a workspace relocates its Private to the default", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, OWN],
+    storage: {
+      activeWorkspaceId: "lost",
+      // Older than the 30 days the cache is shown for: a workspace lost is lost at any age.
+      [LIST_CACHE_KEY]: JSON.stringify({
+        accountId: "acct-1",
+        fetchedAt: Date.now() - 60 * 24 * 60 * 60 * 1000,
+        workspaces: [OWN, TEAM, LOST],
+      }),
+    },
   });
 
   await useWorkspaceStore.getState().refresh();
 
-  const state = useWorkspaceStore.getState();
-  assert.equal(state.personalSelected, false);
-  assert.equal(state.activeWorkspaceId, "enterprise");
-  assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
+  const relocations = calls.filter(([name]) => name === "relocate");
+  assert.deepEqual(relocations, [["relocate", "lost", null, "acct-1"]]);
+  // The lost workspace was active: main hears the default as active before its Private moves,
+  // or the next read of the spaces would make the lost workspace a new Private.
+  const relocateAt = calls.findIndex(([name]) => name === "relocate");
+  const scopesBefore = calls.slice(0, relocateAt).filter(([name]) => name === "scope");
+  assert.deepEqual(scopesBefore.at(-1), [
+    "scope",
+    { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" },
+  ]);
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "own");
 });
 
-test("selectPersonal does nothing beside an entitled Enterprise workspace", async (t) => {
-  const { useWorkspaceStore } = await loadStoreForPersonal(t, { list: withEnterprise });
+test("losing the active workspace sends the default's scope before its Private moves", async (t) => {
+  const { useWorkspaceStore, relocateLostWorkspaces, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+    storage: { activeWorkspaceId: "team" },
+  });
+  await useWorkspaceStore.getState().refresh();
+  calls.length = 0;
+
+  useWorkspaceStore.getState().forgetWorkspace("team");
+  await relocateLostWorkspaces(["team"]);
+
+  assert.deepEqual(calls, [
+    ["scope", { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" }],
+    ["relocate", "team", null, "acct-1"],
+  ]);
+});
+
+test("nothing moves when main refuses the scope for another account", async (t) => {
+  const { useWorkspaceStore, relocateLostWorkspaces, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+  });
+  await useWorkspaceStore.getState().refresh();
+  // Another account signed in after this list loaded.
+  globalThis.window.electronAPI.setActiveWorkspaceScope = async (scope) => {
+    calls.push(["scope", scope]);
+    return { success: false, code: "ACCOUNT_CHANGED" };
+  };
+
+  await relocateLostWorkspaces(["team"]);
+
+  assert.equal(names(calls).includes("relocate"), false);
+});
+
+test("the default workspace's own Private is never relocated", async (t) => {
+  const { useWorkspaceStore, relocateLostWorkspaces, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+  });
   await useWorkspaceStore.getState().refresh();
 
-  useWorkspaceStore.getState().selectPersonal();
+  await relocateLostWorkspaces(["own"]);
 
-  assert.equal(useWorkspaceStore.getState().personalSelected, false);
-  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "enterprise");
+  assert.equal(names(calls).includes("relocate"), false);
 });
 
-test("losing the last workspace drops a saved Personal choice", async (t) => {
-  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
-    list: [],
-    storage: { workspacePersonalSelected: "true" },
+test("nothing is relocated before the store knows whose list it holds", async (t) => {
+  const { relocateLostWorkspaces, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
   });
 
-  await useWorkspaceStore.getState().refresh();
+  await relocateLostWorkspaces(["team"]);
 
-  assert.equal(useWorkspaceStore.getState().personalSelected, false);
-  assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
+  assert.deepEqual(calls, []);
 });
 
-test("a window follows another window's Personal choice", async (t) => {
-  const { useWorkspaceStore, handleActiveWorkspaceStorage, storage, PERSONAL_SELECTED_KEY } =
-    await loadStoreForPersonal(t, {
-      list: businessOnly,
-      storage: { activeWorkspaceId: "business" },
-    });
-  await useWorkspaceStore.getState().refresh();
-
-  storage.setItem(PERSONAL_SELECTED_KEY, "true");
-  handleActiveWorkspaceStorage({ key: PERSONAL_SELECTED_KEY, newValue: "true" });
-  storage.removeItem("activeWorkspaceId");
-  handleActiveWorkspaceStorage({ key: "activeWorkspaceId", newValue: null });
-
-  assert.equal(useWorkspaceStore.getState().personalSelected, true);
-  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, null);
-});
-
-test("an account change drops the Personal choice", async (t) => {
-  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY } = await loadStoreForPersonal(t, {
-    list: businessOnly,
-    storage: { workspacePersonalSelected: "true" },
+test("the bridge sends the scope on startup and on every switch", async (t) => {
+  const { useWorkspaceStore, vite, calls, changeDatabaseAccount } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, OWN],
   });
+  const { startWorkspaceScopeBridge } = await vite.ssrLoadModule("/stores/workspaceScopeBridge.ts");
+  const stop = startWorkspaceScopeBridge();
+  t.after(stop);
+  await flush();
+  // Before the list loads the store names no account, so main refuses whatever it holds.
+  assert.deepEqual(calls, [
+    ["scope", { activeWorkspaceId: null, defaultWorkspaceId: null, accountId: null }],
+  ]);
 
+  calls.length = 0;
+  await useWorkspaceStore.getState().refresh();
+  await flush();
+  assert.deepEqual(calls, [
+    ["scope", { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" }],
+    ["bind", "own", "acct-1"],
+  ]);
+
+  calls.length = 0;
+  useWorkspaceStore.getState().setActiveWorkspaceId("team");
+  await flush();
+  assert.deepEqual(calls, [
+    ["scope", { activeWorkspaceId: "team", defaultWorkspaceId: "own", accountId: "acct-1" }],
+  ]);
+
+  // Main forgets the workspace scope and the default's bind on every account change.
+  calls.length = 0;
+  changeDatabaseAccount({ accountId: "acct-1", visibleAccountId: "acct-1" });
+  await flush();
+  assert.deepEqual(calls, [
+    ["scope", { activeWorkspaceId: "team", defaultWorkspaceId: "own", accountId: "acct-1" }],
+    ["bind", "own", "acct-1"],
+  ]);
+
+  // Signed out (or another account): the store empties and says so.
+  calls.length = 0;
   useWorkspaceStore.getState().resetForAccountChange();
+  await flush();
+  assert.deepEqual(calls, [
+    ["scope", { activeWorkspaceId: null, defaultWorkspaceId: null, accountId: null }],
+  ]);
+});
 
-  assert.equal(useWorkspaceStore.getState().personalSelected, false);
-  assert.equal(storage.getItem(PERSONAL_SELECTED_KEY), null);
+test("the bridge leaves the sign-in claim to main", async (t) => {
+  const { useWorkspaceStore, vite, calls, changeDatabaseAccount } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN],
+  });
+  const { startWorkspaceScopeBridge } = await vite.ssrLoadModule("/stores/workspaceScopeBridge.ts");
+  t.after(startWorkspaceScopeBridge());
+  await useWorkspaceStore.getState().refresh();
+  changeDatabaseAccount({ accountId: "acct-1", visibleAccountId: "acct-1" });
+  await flush();
+
+  assert.equal(names(calls).includes("claim"), false);
+});
+
+test("a window follows another window's workspace switch", async (t) => {
+  const { useWorkspaceStore, handleActiveWorkspaceStorage, storage } = await loadPrivateNotesStore(
+    t,
+    {
+      list: async () => [OWN, TEAM],
+      storage: { activeWorkspaceId: "own" },
+    }
+  );
+  await useWorkspaceStore.getState().refresh();
+
+  storage.setItem("activeWorkspaceId", "team");
+  handleActiveWorkspaceStorage({ key: "activeWorkspaceId", newValue: "team" });
+
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
 });
 
 test("a refresh follows another window's workspace choice it hasn't heard of yet", async (t) => {
-  const { useWorkspaceStore, storage, PERSONAL_SELECTED_KEY, ACTIVE_WORKSPACE_KEY } =
-    await loadStoreForPersonal(t, {
-      list: [
-        { id: "a", plan: "business", status: "active" },
-        { id: "b", plan: "business", status: "active" },
-      ],
-      storage: { workspacePersonalSelected: "true" },
-    });
+  const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+  });
   await useWorkspaceStore.getState().refresh();
 
-  // Another window left Personal for "b"; its storage events haven't arrived here yet.
-  storage.removeItem(PERSONAL_SELECTED_KEY);
-  storage.setItem(ACTIVE_WORKSPACE_KEY, "b");
+  // Another window switched to "team"; its storage events haven't arrived here yet.
+  storage.setItem("activeWorkspaceId", "team");
   await useWorkspaceStore.getState().refresh({ fresh: true });
 
-  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "b");
-  assert.equal(useWorkspaceStore.getState().personalSelected, false);
-  assert.equal(storage.getItem(ACTIVE_WORKSPACE_KEY), "b");
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
 });

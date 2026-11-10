@@ -13,7 +13,7 @@ function textOf(node) {
   return [...node.childNodes].map(textOf).join("");
 }
 
-test("Add existing never offers a note from a workspace Personal hides", async (t) => {
+test("Add existing never offers a note from a workspace the switcher hides", async (t) => {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -63,14 +63,16 @@ test("Add existing never offers a note from a workspace Personal hides", async (
       "/useAuth": `export const useAuth = () => ({ isSignedIn: true });`,
       "/stores/workspaceStore": `
         const state = {
-          workspaces: [{ id: "acme", name: "Acme", role: "member" }],
-          activeWorkspaceId: null,
-          personalSelected: true,
+          workspaces: [
+            { id: "acme", name: "Acme", role: "member" },
+            { id: "other", name: "Other", role: "member" },
+          ],
+          activeWorkspaceId: "other",
+          defaultWorkspaceId: "other",
           loaded: true,
           error: false,
           refresh: async () => {},
           setActiveWorkspaceId() {},
-          selectPersonal() {},
         };
         export const useWorkspaceStore = (selector) => selector(state);
       `,
@@ -94,5 +96,5 @@ test("Add existing never offers a note from a workspace Personal hides", async (
 
   const text = textOf(container);
   assert.match(text, /Personal plan/);
-  assert.doesNotMatch(text, /Acme roadmap/, "moving it here would pull it into Personal");
+  assert.doesNotMatch(text, /Acme roadmap/, "moving it here would pull it out of Acme");
 });

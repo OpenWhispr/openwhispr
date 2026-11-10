@@ -1631,6 +1631,8 @@
     "unconfirmedSession": "تعذّر تأكيد تسجيل دخولك، لذلك لم يتم تغيير أي شيء. حاول مرة أخرى عندما يتمكن OpenWhispr من الوصول إلى خوادمه."
   },
   "workspaces": {
+    "defaultName": "مساحة عمل {{name}}",
+    "defaultNameFallback": "مساحة عملي",
     "switcher": {
       "workspaces": "مساحات العمل",
       "add": "إضافة مساحة عمل",

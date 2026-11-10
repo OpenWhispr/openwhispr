@@ -866,6 +866,10 @@ export interface Workspace {
   // Absent on API responses that predate capabilities; read through workspaceCan().
   capabilities?: WorkspaceCapabilities;
   has_subscription?: boolean;
+  // The caller's own default workspace (only the account it was made for sees true).
+  is_default: boolean;
+  // Some account's default workspace, the caller's or another member's.
+  is_account_default: boolean;
 }
 
 export interface OwnedMemberContent {

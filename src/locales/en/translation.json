@@ -3612,6 +3612,8 @@
     }
   },
   "workspaces": {
+    "defaultName": "{{name}}'s workspace",
+    "defaultNameFallback": "My workspace",
     "switcher": {
       "workspaces": "Workspaces",
       "add": "Add workspace",

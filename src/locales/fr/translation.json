@@ -3619,6 +3619,8 @@
     "expand": "Développer la barre latérale"
   },
   "workspaces": {
+    "defaultName": "Espace de travail de {{name}}",
+    "defaultNameFallback": "Mon espace de travail",
     "switcher": {
       "workspaces": "Espaces de travail",
       "add": "Ajouter un espace de travail",

@@ -43,6 +43,8 @@ import {
 import { useChatNeedsAttention } from "./chat/useChatNeedsAttention";
 import { usePolicyStore } from "../stores/policyStore";
 import { useWorkspaceStore } from "../stores/workspaceStore";
+import { startWorkspaceScopeBridge } from "../stores/workspaceScopeBridge";
+import { useEnsureDefaultWorkspace } from "../hooks/useWorkspace";
 import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
 import { usePolicySnapshot, useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
 import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
@@ -281,6 +283,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
   useEffect(subscribeChatPolicy, []);
   useEffect(subscribeChatAccountScope, []);
+  // Main resolves where new private notes go from the workspace this window has active.
+  useEffect(startWorkspaceScopeBridge, []);
+  useEnsureDefaultWorkspace();
   const { createNote } = useCreateNote(canAutoStartMeeting);
   // The note is created before the view switches so Notes mounts with it already open.
   const handleNewNote = useCallback(async () => {

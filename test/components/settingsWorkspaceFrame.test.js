@@ -49,7 +49,7 @@ test("in Personal the frame asks to choose a workspace instead of creating one",
   assert.ok(!markup.includes("page"));
 });
 
-test("useSettingsWorkspace reports Personal and no workspace while it's chosen", async (t) => {
+test("useSettingsWorkspace shows a workspace even with none active, never Personal", async (t) => {
   const vite = await loadServer(t);
   const { useSettingsWorkspace } = await vite.ssrLoadModule(
     "/components/settings/useSettingsWorkspace.ts"
@@ -57,7 +57,6 @@ test("useSettingsWorkspace reports Personal and no workspace while it's chosen",
   globalThis.__workspaceState = {
     workspaces: [WORKSPACE],
     activeWorkspaceId: null,
-    personalSelected: true,
     loaded: true,
     loading: false,
     error: false,
@@ -71,6 +70,6 @@ test("useSettingsWorkspace reports Personal and no workspace while it's chosen",
 
   renderToStaticMarkup(createElement(Probe));
 
-  assert.equal(state.status, "personal");
-  assert.equal(state.workspace, null);
+  assert.equal(state.status, "ready");
+  assert.equal(state.workspace, WORKSPACE);
 });

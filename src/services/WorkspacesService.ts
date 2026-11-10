@@ -38,6 +38,18 @@ async function create(name: string): Promise<Workspace> {
   return res.data;
 }
 
+/**
+ * The account's default workspace, made with `name` the first time and returned as it is after
+ * that. Null for an Enterprise member (`reason: "enterprise_managed"`), who gets none.
+ */
+async function ensureDefault(name: string): Promise<Workspace | null> {
+  const res = await cloudPost<{ data: Workspace | null; reason?: "enterprise_managed" }>(
+    "/api/workspaces/default",
+    { name }
+  );
+  return res.data ?? null;
+}
+
 async function update(workspaceId: string, patch: { name?: string }): Promise<Workspace> {
   const res = await cloudPatch<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}`, patch);
   return res.data;
@@ -188,6 +200,7 @@ export const WorkspacesService = {
   decideJoinRequest,
   list,
   create,
+  ensureDefault,
   update,
   remove,
   listMembers,

@@ -176,7 +176,7 @@ interface DictionaryViewProps {
 export default function DictionaryView({ onUpgrade }: DictionaryViewProps): ReactElement {
   const { t, i18n } = useTranslation();
   const { customDictionary, updateCustomDictionary, snippets } = useSettings();
-  const { active: workspace, personalSelected } = useWorkspace();
+  const { active: workspace } = useWorkspace();
   const { isSignedIn, user } = useAuth();
   const workspaceId = workspace?.id ?? null;
   const workspaceName = workspace?.name ?? "";
@@ -289,7 +289,8 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
     status,
     signedIn: isSignedIn,
     workspace,
-    personalSelected,
+    // No Personal choice is left to hide the workspace's shared lists.
+    personalSelected: false,
     serverPaused: snapshot?.meta?.paused ?? null,
     hasWords:
       (snapshot?.entries.length ?? 0) > 0 ||

@@ -9,7 +9,7 @@ export type SettingsWorkspaceStatus = "loading" | "error" | "empty" | "personal"
 
 export interface SettingsWorkspaceState {
   status: SettingsWorkspaceStatus;
-  /** The active workspace, or the first one when the active id is gone. None while in Personal. */
+  /** The active workspace, or the first one when the active id is gone. */
   workspace: Workspace | null;
   workspaces: Workspace[];
   retry: () => void;
@@ -22,18 +22,16 @@ export interface SettingsWorkspaceState {
 
 export function useSettingsWorkspace(): SettingsWorkspaceState {
   const { isSignedIn } = useAuth();
-  const { workspaces, activeWorkspaceId, personalSelected, loaded, loading, error, refresh } =
-    useWorkspaceStore(
-      useShallow((s) => ({
-        workspaces: s.workspaces,
-        activeWorkspaceId: s.activeWorkspaceId,
-        personalSelected: s.personalSelected,
-        loaded: s.loaded,
-        loading: s.loading,
-        error: s.error,
-        refresh: s.refresh,
-      }))
-    );
+  const { workspaces, activeWorkspaceId, loaded, loading, error, refresh } = useWorkspaceStore(
+    useShallow((s) => ({
+      workspaces: s.workspaces,
+      activeWorkspaceId: s.activeWorkspaceId,
+      loaded: s.loaded,
+      loading: s.loading,
+      error: s.error,
+      refresh: s.refresh,
+    }))
+  );
 
   useEffect(() => {
     if (isSignedIn && !loaded) void refresh();
@@ -43,16 +41,14 @@ export function useSettingsWorkspace(): SettingsWorkspaceState {
     void refresh();
   }, [refresh]);
 
-  const workspace = settingsWorkspace(workspaces, activeWorkspaceId, personalSelected);
+  const workspace = settingsWorkspace(workspaces, activeWorkspaceId);
   const status: SettingsWorkspaceStatus = !loaded
     ? "loading"
     : workspaces.length === 0
       ? error
         ? "error"
         : "empty"
-      : personalSelected
-        ? "personal"
-        : "ready";
+      : "ready";
 
   return {
     status,

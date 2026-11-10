@@ -5875,6 +5875,8 @@
     "missingAudio": "[音声欠落 {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "{{name}}のワークスペース",
+    "defaultNameFallback": "マイワークスペース",
     "switcher": {
       "workspaces": "ワークスペース",
       "add": "ワークスペースを追加",

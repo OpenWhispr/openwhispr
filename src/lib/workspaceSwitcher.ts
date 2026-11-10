@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import type { Workspace } from "../types/electron";
 import { workspaceCan } from "./capabilities.ts";
 import { isEnterpriseWorkspaceEntitled } from "../components/onboarding/flow.ts";
@@ -6,7 +7,6 @@ export type WorkspaceSwitcherState =
   | { kind: "hidden" }
   | { kind: "loading" }
   | { kind: "error" }
-  | { kind: "personal" }
   | { kind: "workspace"; current: Workspace; canInvite: boolean };
 
 interface WorkspaceSwitcherInput {
@@ -15,34 +15,58 @@ interface WorkspaceSwitcherInput {
   error: boolean;
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
-  personalSelected: boolean;
+}
+
+type DefaultCandidate = Pick<Workspace, "id" | "plan" | "status"> & { is_default?: boolean };
+
+// Lists cached by builds from before the default workspace have no is_default.
+function isOwnDefault(workspace: DefaultCandidate): boolean {
+  return workspace.is_default === true;
 }
 
 /**
- * The workspace to make active when none is chosen. An Enterprise workspace comes first, since its
- * managed providers apply only while it is active (onboarding picks it the same way).
+ * The account's default workspace: its own, else its entitled Enterprise workspace (the server
+ * makes no default for an Enterprise member). Existing private notes live there. Null until the
+ * list holds either.
  */
-export function defaultActiveWorkspaceId(
-  workspaces: Array<Pick<Workspace, "id" | "plan" | "status">>
-): string | null {
-  return (workspaces.find(isEnterpriseWorkspaceEntitled) ?? workspaces[0])?.id ?? null;
+export function resolveDefaultWorkspaceId(workspaces: DefaultCandidate[]): string | null {
+  return (
+    (workspaces.find(isOwnDefault) ?? workspaces.find(isEnterpriseWorkspaceEntitled))?.id ?? null
+  );
 }
 
 /**
- * Whether Personal can be picked over a workspace. Beside an entitled Enterprise workspace it can't:
- * leaving that workspace would take dictation off its managed providers without saying so.
+ * The workspace to make active when none is chosen: the account's default before the first
+ * listed. An entitled Enterprise workspace still comes first, since its managed providers apply
+ * only while it is active (onboarding picks it the same way).
  */
-export function canChoosePersonal(workspaces: Array<Pick<Workspace, "plan" | "status">>): boolean {
-  return workspaces.length > 0 && !workspaces.some(isEnterpriseWorkspaceEntitled);
+export function defaultActiveWorkspaceId(workspaces: DefaultCandidate[]): string | null {
+  return (
+    (
+      workspaces.find(isEnterpriseWorkspaceEntitled) ??
+      workspaces.find(isOwnDefault) ??
+      workspaces[0]
+    )?.id ?? null
+  );
 }
 
-/** The workspace Settings manages. Personal is none, so its pages never show another workspace. */
+// The API's limit for a workspace name.
+const MAX_WORKSPACE_NAME_LENGTH = 80;
+
+/** The name the default workspace is created with: the user's, or a generic one. */
+export function defaultWorkspaceName(userName: string | null | undefined, t: TFunction): string {
+  const name = userName?.trim();
+  const named = name ? t("workspaces.defaultName", { name }) : null;
+  return named && named.length <= MAX_WORKSPACE_NAME_LENGTH
+    ? named
+    : t("workspaces.defaultNameFallback");
+}
+
+/** The workspace Settings manages: the active one, or the first when the active id is gone. */
 export function settingsWorkspace(
   workspaces: Workspace[],
-  activeWorkspaceId: string | null,
-  personalSelected: boolean
+  activeWorkspaceId: string | null
 ): Workspace | null {
-  if (personalSelected) return null;
   return workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null;
 }
 
@@ -52,18 +76,12 @@ export function resolveWorkspaceSwitcher({
   error,
   workspaces,
   activeWorkspaceId,
-  personalSelected,
 }: WorkspaceSwitcherInput): WorkspaceSwitcherState {
   if (!isSignedIn) return { kind: "hidden" };
   if (!loaded) return { kind: "loading" };
-  if (workspaces.length === 0) {
-    // Anyone in a workspace has one saved as active or chose Personal, so a failed load without
-    // either is a user who had none last time: they stay Personal rather than seeing an error.
-    return error && (activeWorkspaceId || personalSelected)
-      ? { kind: "error" }
-      : { kind: "personal" };
-  }
-  if (personalSelected) return { kind: "personal" };
+  // Every account has a default workspace, so an empty list is either a failed load or one
+  // answered before the default was made, which a refresh follows.
+  if (workspaces.length === 0) return error ? { kind: "error" } : { kind: "loading" };
   const current = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
   return { kind: "workspace", current, canInvite: workspaceCan(current, "manage_members") };
 }

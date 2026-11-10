@@ -1133,12 +1133,7 @@ export default function SpacesTree({
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
   const canCreateTeamSpace = useCanCreateTeamSpace();
-  const {
-    workspaces,
-    active: activeWorkspace,
-    loaded: workspacesLoaded,
-    personalSelected,
-  } = useWorkspace();
+  const { workspaces, active: activeWorkspace, loaded: workspacesLoaded } = useWorkspace();
   // Other workspaces' teamspaces stay out of the tree until the user switches.
   const spaces = useSpacesInWorkspaceScope(allSpaces);
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
@@ -2046,7 +2041,7 @@ export default function SpacesTree({
             </TreeChildren>
           )}
         </div>
-        {teamCapability && !(personalSelected && teamSpaces.length === 0) && (
+        {teamCapability && (
           <div role="none" className="group/section">
             <SectionHeader
               label={t("notes.spaces.teamSpaces")}

@@ -4,7 +4,7 @@ import { WorkspacesService } from "../services/WorkspacesService";
 import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
-import { canChoosePersonal, defaultActiveWorkspaceId } from "../lib/workspaceSwitcher";
+import { defaultActiveWorkspaceId, resolveDefaultWorkspaceId } from "../lib/workspaceSwitcher";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -12,8 +12,13 @@ interface WorkspaceState {
   loading: boolean;
   error: boolean;
   activeWorkspaceId: string | null;
-  /** The user picked Personal over their workspaces, so no workspace is active on purpose. */
-  personalSelected: boolean;
+  /** The account's default workspace (see resolveDefaultWorkspaceId), from the list shown. */
+  defaultWorkspaceId: string | null;
+  /**
+   * The account the list shown belongs to: null until a list (or this account's cache) lands.
+   * Calls to main carry it, so one made for an account that has since signed out is refused.
+   */
+  listAccountId: string | null;
   members: WorkspaceMember[];
   /**
    * The workspace `members` belongs to. A reader that shows one workspace reads the roster through
@@ -22,7 +27,6 @@ interface WorkspaceState {
   membersWorkspaceId: string | null;
 
   setActiveWorkspaceId: (id: string | null) => void;
-  selectPersonal: () => void;
   /**
    * Drops a workspace the user just left or deleted, so a failed refresh can't show it again, and
    * moves the active workspace off it.
@@ -49,19 +53,18 @@ export function readActiveWorkspaceId(): string | null {
   return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
 }
 
-// Separate from the active id, which every reader takes as a workspace id or none: a marker stored
-// there would reach the API as one. Without this key, no active id means none has been chosen yet.
-export const PERSONAL_SELECTED_KEY = "workspacePersonalSelected";
+// Where builds with a Personal switcher entry saved that choice. The default workspace replaced
+// Personal, so the next list read turns a saved Personal into the default workspace.
+const LEGACY_PERSONAL_SELECTED_KEY = "workspacePersonalSelected";
 
-function readPersonalSelected(): boolean {
+function readLegacyPersonalChoice(): boolean {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem(PERSONAL_SELECTED_KEY) === "true";
+  return localStorage.getItem(LEGACY_PERSONAL_SELECTED_KEY) === "true";
 }
 
-function writePersonalSelected(selected: boolean): void {
+function dropLegacyPersonalChoice(): void {
   if (typeof window === "undefined") return;
-  if (selected) localStorage.setItem(PERSONAL_SELECTED_KEY, "true");
-  else localStorage.removeItem(PERSONAL_SELECTED_KEY);
+  localStorage.removeItem(LEGACY_PERSONAL_SELECTED_KEY);
 }
 
 function writeActiveWorkspaceId(id: string | null): void {
@@ -88,7 +91,12 @@ function writeWorkspaceListCache(accountId: string | null, workspaces: Workspace
   }
 }
 
-function readWorkspaceListCache(accountId: string | null): Workspace[] | null {
+// `anyAge` is for finding lost workspaces: one listed then and missing now is lost however long ago
+// that was, while a list this old is too stale to show.
+function readWorkspaceListCache(
+  accountId: string | null,
+  { anyAge = false }: { anyAge?: boolean } = {}
+): Workspace[] | null {
   if (typeof window === "undefined" || !accountId) return null;
   try {
     const raw = localStorage.getItem(WORKSPACE_LIST_CACHE_KEY);
@@ -105,7 +113,10 @@ function readWorkspaceListCache(accountId: string | null): Workspace[] | null {
       workspaces?: unknown;
     };
     if (cachedAccountId !== accountId || !Array.isArray(workspaces)) return null;
-    if (typeof fetchedAt !== "number" || Date.now() - fetchedAt > WORKSPACE_LIST_CACHE_MAX_AGE_MS) {
+    if (
+      !anyAge &&
+      (typeof fetchedAt !== "number" || Date.now() - fetchedAt > WORKSPACE_LIST_CACHE_MAX_AGE_MS)
+    ) {
       return null;
     }
     // A malformed entry would throw in later `.find(w => w.id …)` calls.
@@ -146,6 +157,13 @@ function clearWorkspaceListCache(): void {
   } catch {
     // Nothing to clear if storage is unreachable.
   }
+}
+
+// The default first, the rest in the server's order.
+function withDefaultFirst(workspaces: Workspace[], defaultWorkspaceId: string | null): Workspace[] {
+  const index = workspaces.findIndex((w) => w.id === defaultWorkspaceId);
+  if (index <= 0) return workspaces;
+  return [workspaces[index], ...workspaces.slice(0, index), ...workspaces.slice(index + 1)];
 }
 
 let refreshPromise: Promise<void> | null = null;
@@ -196,36 +214,30 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   loading: false,
   error: false,
   activeWorkspaceId: readActiveWorkspaceId(),
-  personalSelected: readPersonalSelected(),
+  defaultWorkspaceId: null,
+  listAccountId: null,
   members: [],
   membersWorkspaceId: null,
 
   setActiveWorkspaceId: (id) => {
-    writePersonalSelected(false);
+    // A choice made before the first list read outranks a Personal choice it hasn't turned
+    // into the default yet.
+    dropLegacyPersonalChoice();
     writeActiveWorkspaceId(id);
     // Invalidate in-flight member fetches so the old workspace's roster can't
     // land under the new one.
     membersRequestSeq++;
-    set({ activeWorkspaceId: id, personalSelected: false, members: [], membersWorkspaceId: null });
+    set({ activeWorkspaceId: id, members: [], membersWorkspaceId: null });
     refreshForWorkspace(id);
-  },
-
-  selectPersonal: () => {
-    if (!canChoosePersonal(get().workspaces)) return;
-    // The flag goes first: a window that hears the active id cleared must not pick a default.
-    writePersonalSelected(true);
-    writeActiveWorkspaceId(null);
-    membersRequestSeq++;
-    set({ activeWorkspaceId: null, personalSelected: true, members: [], membersWorkspaceId: null });
-    refreshForWorkspace(null);
   },
 
   forgetWorkspace: (id) => {
     const workspaces = get().workspaces.filter((w) => w.id !== id);
+    const defaultWorkspaceId = resolveDefaultWorkspaceId(workspaces);
     set(
       get().membersWorkspaceId === id
-        ? { workspaces, members: [], membersWorkspaceId: null }
-        : { workspaces }
+        ? { workspaces, defaultWorkspaceId, members: [], membersWorkspaceId: null }
+        : { workspaces, defaultWorkspaceId }
     );
     pruneWorkspaceListCache(usePolicyStore.getState().accountId, id);
     // Chosen now, not by the refresh that follows: a failed refresh keeps the old active id.
@@ -240,7 +252,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // Let the next account start its own request. The identity check in the
     // old request prevents its result/finally block from touching new state.
     refreshPromise = null;
-    writePersonalSelected(false);
+    dropLegacyPersonalChoice();
     writeActiveWorkspaceId(null);
     clearWorkspaceListCache();
     useEnterpriseIdentityStore.getState().clear();
@@ -250,7 +262,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       loading: false,
       error: false,
       activeWorkspaceId: null,
-      personalSelected: false,
+      defaultWorkspaceId: null,
+      listAccountId: null,
       members: [],
       membersWorkspaceId: null,
     });
@@ -265,22 +278,31 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ loading: true });
     let request!: Promise<void>;
     request = (async () => {
+      let lost: string[] = [];
       try {
-        const workspaces = await WorkspacesService.list();
+        const answer = await WorkspacesService.list();
         if (superseded()) return;
+        const accountId = usePolicyStore.getState().accountId;
+        const defaultWorkspaceId = resolveDefaultWorkspaceId(answer);
+        const workspaces = withDefaultFirst(answer, defaultWorkspaceId);
+        // Workspaces this account had and no longer has. Only a successful answer counts, and
+        // never an empty one: every account has a default workspace, so an empty list is a fault,
+        // not the loss of everything.
+        const previous =
+          workspaces.length > 0 ? readWorkspaceListCache(accountId, { anyAge: true }) : null;
+        lost = (previous ?? [])
+          .map((w) => w.id)
+          .filter((id) => !workspaces.some((w) => w.id === id));
         // Both choices come from storage: another window may have changed them a task before
         // this answer, ahead of its storage events. Memory only says what this window showed.
         const activeId = get().activeWorkspaceId;
         const savedActiveId = readActiveWorkspaceId();
-        const savedPersonal = readPersonalSelected();
-        const personalSelected = savedPersonal && canChoosePersonal(workspaces);
-        if (savedPersonal && !personalSelected) writePersonalSelected(false);
-        const stillValid = savedActiveId && workspaces.some((w) => w.id === savedActiveId);
-        const resolvedActiveId = personalSelected
-          ? null
-          : stillValid
-            ? savedActiveId
-            : defaultActiveWorkspaceId(workspaces);
+        // A saved Personal choice ends with the first answer: it becomes the default workspace.
+        const savedPersonal = readLegacyPersonalChoice();
+        if (savedPersonal) dropLegacyPersonalChoice();
+        const stillValid =
+          !savedPersonal && savedActiveId && workspaces.some((w) => w.id === savedActiveId);
+        const resolvedActiveId = stillValid ? savedActiveId : defaultActiveWorkspaceId(workspaces);
         const activeChanged = resolvedActiveId !== activeId;
         if (activeChanged) membersRequestSeq++;
         // Written before the state changes, as setActiveWorkspaceId does: the
@@ -292,10 +314,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           loading: false,
           error: false,
           activeWorkspaceId: resolvedActiveId,
-          personalSelected,
+          defaultWorkspaceId,
+          listAccountId: accountId,
           ...(activeChanged ? { members: [], membersWorkspaceId: null } : {}),
         });
-        writeWorkspaceListCache(usePolicyStore.getState().accountId, workspaces);
+        if (workspaces.length > 0) writeWorkspaceListCache(accountId, workspaces);
         refreshForWorkspace(resolvedActiveId);
       } catch (error) {
         if (superseded()) return;
@@ -306,12 +329,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         );
         // Nothing in memory: show the last list this account saw. `error` stays true so the
         // reconnect retry replaces it with the server's answer and the UI marks it out of date.
-        const cached =
-          get().workspaces.length === 0
-            ? readWorkspaceListCache(usePolicyStore.getState().accountId)
-            : null;
+        const accountId = usePolicyStore.getState().accountId;
+        const cached = get().workspaces.length === 0 ? readWorkspaceListCache(accountId) : null;
+        const cachedDefaultId = cached ? resolveDefaultWorkspaceId(cached) : null;
         set({
-          ...(cached ? { workspaces: cached } : {}),
+          ...(cached
+            ? {
+                workspaces: withDefaultFirst(cached, cachedDefaultId),
+                defaultWorkspaceId: cachedDefaultId,
+                listAccountId: accountId,
+              }
+            : {}),
           loading: false,
           loaded: true,
           error: true,
@@ -319,6 +347,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       } finally {
         if (refreshPromise === request) refreshPromise = null;
       }
+      // After the new list is in place, so main is told its active workspace first. Not skipped
+      // for a newer request: the cache already holds this list, so no later answer would find
+      // these missing. Main refuses the move if another account has signed in since.
+      if (lost.length > 0) await relocateLostWorkspaces(lost);
     })();
     refreshPromise = request;
     refreshPromiseEpoch = epoch;
@@ -365,16 +397,118 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 }));
 
+/**
+ * Tells main the active and default workspace, so new private notes go to the active workspace's
+ * Private and existing ones to the default's. Named for the account whose list chose them: main
+ * refuses a scope that arrives after another account signed in. True once main took it.
+ */
+export async function publishWorkspaceScope(): Promise<boolean> {
+  const api = typeof window !== "undefined" ? window.electronAPI : undefined;
+  if (!api?.setActiveWorkspaceScope) return false;
+  const { activeWorkspaceId, defaultWorkspaceId, listAccountId } = useWorkspaceStore.getState();
+  try {
+    const result = await api.setActiveWorkspaceScope({
+      activeWorkspaceId,
+      defaultWorkspaceId,
+      accountId: listAccountId,
+    });
+    return result?.success === true;
+  } catch (error) {
+    logger.warn(
+      "Failed to send the workspace scope",
+      { error: (error as Error).message },
+      "workspaces"
+    );
+    return false;
+  }
+}
+
+/**
+ * Moves the Private of workspaces the account lost (left, deleted, or missing from a successful
+ * list) into the default workspace's, on this device. Main must hear the new active workspace
+ * first: while it still names a lost one, the next read of the spaces makes that workspace a new,
+ * empty Private.
+ */
+export async function relocateLostWorkspaces(workspaceIds: string[]): Promise<void> {
+  const api = typeof window !== "undefined" ? window.electronAPI : undefined;
+  if (!api?.relocatePrivateSpace) return;
+  const store = useWorkspaceStore.getState();
+  const accountId = store.listAccountId;
+  // With no list of its own, the store can't say whose workspaces these are.
+  if (!accountId) return;
+  // Everything lost lands in the default's Private, which never moves itself.
+  const lost = workspaceIds.filter((id) => id !== store.defaultWorkspaceId);
+  if (lost.length === 0) return;
+  if (store.activeWorkspaceId && lost.includes(store.activeWorkspaceId)) {
+    const remaining = store.workspaces.filter((w) => !lost.includes(w.id));
+    store.setActiveWorkspaceId(defaultActiveWorkspaceId(remaining));
+  }
+  // A scope main refused (another account signed in) or never got means nothing moves.
+  if (!(await publishWorkspaceScope())) return;
+  for (const workspaceId of lost) {
+    try {
+      const result = await api.relocatePrivateSpace(workspaceId, null, accountId);
+      if (result?.success) continue;
+      logger.warn(
+        "Main did not relocate a lost workspace's private notes",
+        { workspaceId, code: result?.code },
+        "workspaces"
+      );
+      if (result?.code === "ACCOUNT_CHANGED" || result?.code === "SIGNED_OUT") return;
+    } catch (error) {
+      logger.error(
+        "Failed to relocate a lost workspace's private notes",
+        { workspaceId, error: (error as Error).message },
+        "workspaces"
+      );
+    }
+  }
+}
+
+let defaultEnsuredGeneration: number | null = null;
+let defaultEnsureRequest: { generation: number; promise: Promise<void> } | null = null;
+
+/**
+ * Has the server make the account's default workspace (`name` is used the first time only),
+ * then reads the list again so it shows. Asked once per account session; a failure is asked
+ * again on the next call.
+ */
+export function ensureDefaultWorkspace(name: string): Promise<void> {
+  const generation = accountGeneration;
+  if (defaultEnsuredGeneration === generation) return Promise.resolve();
+  if (defaultEnsureRequest?.generation === generation) return defaultEnsureRequest.promise;
+  let request!: Promise<void>;
+  request = (async () => {
+    try {
+      const workspace = await WorkspacesService.ensureDefault(name);
+      if (generation !== accountGeneration) return;
+      defaultEnsuredGeneration = generation;
+      // An Enterprise member gets none: their Enterprise workspace stays the default.
+      if (!workspace) return;
+      const listed = useWorkspaceStore
+        .getState()
+        .workspaces.some((w) => w.id === workspace.id && w.is_default === true);
+      if (!listed) await useWorkspaceStore.getState().refresh({ fresh: true });
+    } catch (error) {
+      logger.warn(
+        "Failed to ensure the default workspace",
+        { error: (error as Error).message },
+        "workspaces"
+      );
+    } finally {
+      if (defaultEnsureRequest?.promise === request) defaultEnsureRequest = null;
+    }
+  })();
+  defaultEnsureRequest = { generation, promise: request };
+  return request;
+}
+
 // Another window switched, auto-selected or cleared the workspace: follow it,
 // or this window keeps dictating, syncing and publishing shared words for the
 // old one. Nothing is written back, and the managed enterprise identity is
 // left to the window's own refresh (the dictation window re-resolves it in
 // accountScopeMirror on this same event).
 export function handleActiveWorkspaceStorage(event: StorageEvent): void {
-  if (event.key === PERSONAL_SELECTED_KEY) {
-    useWorkspaceStore.setState({ personalSelected: event.newValue === "true" });
-    return;
-  }
   if (event.key !== ACTIVE_WORKSPACE_KEY) return;
   const id = event.newValue;
   if (id === useWorkspaceStore.getState().activeWorkspaceId) return;

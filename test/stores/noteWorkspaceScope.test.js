@@ -70,7 +70,6 @@ async function fixture(t) {
     settle,
     activeWorkspaceId: () => useWorkspaceStore.getState().activeWorkspaceId,
     switchTo: (id) => useWorkspaceStore.getState().setActiveWorkspaceId(id),
-    choosePersonal: () => useWorkspaceStore.getState().selectPersonal(),
     putSpace: (space) => {
       const index = liveSpaces.findIndex((s) => s.id === space.id);
       if (index === -1) liveSpaces.push(space);
@@ -209,32 +208,4 @@ test("a workspace switch cancels a pending open, so its load closes it instead",
   await f.store.loadContainerNotes(f.store.folderContainerKey(30));
   assert.equal(f.activeWorkspaceId(), "a");
   assert.deepEqual(f.context(), { folderId: 10, noteId: null });
-});
-
-test("choosing Personal closes a team note and keeps a Personal note open", async (t) => {
-  const f = await fixture(t);
-  f.switchTo("b");
-  f.store.setActiveFolderId(30);
-  await f.settle();
-  f.store.setActiveNoteId(300);
-
-  f.choosePersonal();
-  assert.deepEqual(f.context(), { folderId: 10, noteId: null });
-  assert.equal(f.activeWorkspaceId(), null);
-
-  await f.settle();
-  f.store.setActiveNoteId(100);
-  f.switchTo("a");
-  f.choosePersonal();
-  assert.deepEqual(f.context(), { folderId: 10, noteId: 100 });
-});
-
-test("opening a team note from Personal returns to its workspace", async (t) => {
-  const f = await fixture(t);
-  f.choosePersonal();
-  await f.settle();
-
-  f.store.setActiveFolderId(30);
-
-  assert.equal(f.activeWorkspaceId(), "b");
 });

@@ -67,15 +67,14 @@ export default function SettingsModal({
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const policyManaged = usePolicyStore((s) => s.managed);
-  const { workspaces, activeWorkspaceId, personalSelected, workspacesLoaded } = useWorkspaceStore(
+  const { workspaces, activeWorkspaceId, workspacesLoaded } = useWorkspaceStore(
     useShallow((s) => ({
       workspaces: s.workspaces,
       activeWorkspaceId: s.activeWorkspaceId,
-      personalSelected: s.personalSelected,
       workspacesLoaded: s.loaded,
     }))
   );
-  const activeWorkspace = settingsWorkspace(workspaces, activeWorkspaceId, personalSelected);
+  const activeWorkspace = settingsWorkspace(workspaces, activeWorkspaceId);
   const hasWorkspace = activeWorkspace !== null;
   const canManageSettings = activeWorkspace
     ? workspaceCan(activeWorkspace, "manage_settings")
