@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const DeepgramStreaming = require("../../src/helpers/deepgramStreaming.js");
 const OpenAIRealtimeStreaming = require("../../src/helpers/openaiRealtimeStreaming");
 const {
   createRendererServer,
@@ -98,6 +99,7 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
   };
   const noSuppression = { suppress: false, reason: null };
   const context = {
+    DeepgramStreaming,
     _meetingMicStreaming: streams.mic,
     _meetingSystemStreaming: streams.system,
     windowManager: { controlPanelWindow: win },

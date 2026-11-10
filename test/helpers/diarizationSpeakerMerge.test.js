@@ -20,6 +20,10 @@ require.cache[require.resolve("electron")] = {
 
 const DiarizationManager = require("../../src/helpers/diarization.js");
 const DeepgramStreaming = require("../../src/helpers/deepgramStreaming.js");
+const {
+  fragmentFilterLanguages,
+  isWrongScriptFragment,
+} = require("../../src/helpers/meetingFragmentFilter");
 
 const systemSegment = (timestamp, text) => ({ source: "system", timestamp, text });
 const micSegment = (timestamp, text) => ({ source: "mic", timestamp, text });
@@ -268,6 +272,9 @@ function meetingRowsHarness({ holdMic = false } = {}) {
     meetingLocalProvider: "nvidia",
     meetingLocalModel: "parakeet",
     meetingLocalLanguage: "en",
+    meetingConnectionOptions: { language: "en" },
+    fragmentFilterLanguages,
+    isWrongScriptFragment,
     LOCAL_MEETING_CHUNK_INTERVAL_MS: 5000,
     LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS: 6000,
     STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS: 3000,
