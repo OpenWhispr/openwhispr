@@ -33,7 +33,7 @@ export async function getAIModel(
   model: string,
   apiKey: string,
   baseURL?: string,
-  opts?: { disableThinking?: boolean; reasoningEffort?: string }
+  opts?: { disableThinking?: boolean; reasoningEffort?: string; fetch?: typeof fetch }
 ): Promise<LanguageModel> {
   switch (provider) {
     case "openai":
@@ -77,7 +77,11 @@ export async function getAIModel(
       }).chat(model);
     }
     case "local":
-      return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
+      return createOpenAI({
+        apiKey: apiKey || "no-key",
+        baseURL,
+        ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+      }).chat(model);
     default:
       throw new Error(`Unsupported AI SDK provider for renderer: ${provider}`);
   }

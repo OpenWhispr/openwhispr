@@ -573,6 +573,54 @@ test("only Apple Silicon is treated as memory the GPU already shares", async (t)
   assert.ok(discrete.ceiling < unified.ceiling);
 });
 
+test("a server too busy to swap stays a busy error, and says how long to wait", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  manager.currentServerModelId = "another-model";
+  const asked = [];
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    asked.push(options.busyWaitMs);
+    throw Object.assign(new Error("busy"), { code: "LOCAL_MODEL_BUSY" });
+  };
+
+  await assert.rejects(
+    manager.runInference(modelId, SHORT_PROMPT, { busyWaitMs: 1234 }),
+    (error) => error.code === "LOCAL_MODEL_BUSY"
+  );
+  assert.deepEqual(asked, [1234]);
+});
+
+test("a start the caller cancelled stays cancelled and reaches the server with its signal", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  manager.currentServerModelId = "another-model";
+  const caller = new AbortController();
+  let received;
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    received = options.signal;
+    throw Object.assign(new Error("cancelled"), { code: "LOCAL_MODEL_CANCELLED" });
+  };
+
+  await assert.rejects(
+    manager.runInference(modelId, SHORT_PROMPT, { signal: caller.signal }),
+    (error) => error.code === "LOCAL_MODEL_CANCELLED"
+  );
+  assert.equal(received, caller.signal);
+  assert.equal(manager.currentServerModelId, "another-model");
+});
+
+test("a pre-warm never waits on another model's answer", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  const asked = [];
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    asked.push(options.busyWaitMs);
+  };
+
+  await manager.prewarmServer(modelId);
+  assert.deepEqual(asked, [0]);
+});
+
 test("a reply cut off at the token cap keeps its code through the bridge", async (t) => {
   // The bridge rewraps failures; the renderer maps this code to the cleanup toast (#2091).
   const { modelManager, modelId } = await setup(t, { tokenCount: 40, finishReason: "length" });
@@ -616,6 +664,7 @@ test("a larger request overlapping pre-warm reports busy and can retry at its fu
   await spawned.promise;
   const inference = modelManager.runInference(modelId, LONG_PROMPT, {
     systemPrompt: "Write notes.",
+    busyWaitMs: 0,
   });
   const rejected = assert.rejects(inference, { code: "LOCAL_MODEL_BUSY" });
   await joined.promise;

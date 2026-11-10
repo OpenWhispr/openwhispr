@@ -459,6 +459,9 @@ const isValidApiKey = (key, provider = "openai") => {
   return key !== placeholder;
 };
 
+// Dictation won't wait out another model's answer: past this it goes in as spoken.
+const DICTATION_MODEL_BUSY_WAIT_MS = 2000;
+
 // Realtime providers expose no finalize handshake (unlike Deepgram/AssemblyAI/
 // Corti), so the transcript tail lands whenever it lands — wait, don't sleep.
 const STREAMING_FINAL_QUIET_MS = 250;
@@ -2975,7 +2978,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const startTime = Date.now();
 
     try {
-      const result = await ReasoningService.processText(text, model, agentName, config);
+      const result = await ReasoningService.processText(text, model, agentName, {
+        ...config,
+        busyWaitMs: DICTATION_MODEL_BUSY_WAIT_MS,
+      });
 
       const processingTime = Date.now() - startTime;
 
@@ -3013,6 +3019,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         } = config;
         const result = await ReasoningService.processText(text, model, agentName, {
           ...textOnlyConfig,
+          busyWaitMs: DICTATION_MODEL_BUSY_WAIT_MS,
           systemPrompt: textOnlySystemPrompt ?? dictationAgentPrompt(getSettings(), agentName),
         });
         this._notifyScreenContextSkipped();

@@ -782,7 +782,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   llamaCppUninstall: () => ipcRenderer.invoke("llama-cpp-uninstall"),
 
   // llama-server
-  llamaServerStart: (modelId) => ipcRenderer.invoke("llama-server-start", modelId),
+  llamaServerStart: (modelId, requestId) =>
+    ipcRenderer.invoke("llama-server-start", modelId, requestId),
+  llamaServerCancelStart: (requestId) => ipcRenderer.invoke("llama-server-cancel-start", requestId),
   llamaServerStatus: () => ipcRenderer.invoke("llama-server-status"),
   llamaGpuReset: () => ipcRenderer.invoke("llama-gpu-reset"),
 
