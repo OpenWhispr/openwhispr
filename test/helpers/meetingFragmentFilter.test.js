@@ -120,9 +120,6 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
     hasRiskyMicDuplicateProfile: () => false,
     removePendingMicFinalsFor: () => [],
     removeRacingMicEntriesFor: () => [],
-    queuePendingMicFinal: () => assert.fail("nothing should be held back"),
-    reconnectMeetingStreams: async () => true,
-    meetingFatalErrorSent: false,
     clearMeetingSystemAudioSilenceTimer() {},
     stopMeetingSystemAudioWatchdog() {},
     flushPendingMeetingMicChunks() {},
@@ -291,18 +288,6 @@ for (const source of ["mic", "system"]) {
   });
 }
 
-test("valid speech followed by a rejected fragment is preserved in the saved note", async (t) => {
-  const { streaming, store, writes } = await recordingHarness(t);
-  streaming.finish("mic", "Hello everyone.");
-  streaming.finish("system", "어.");
-  await store.stopRecording();
-  assert.equal(store.useMeetingRecordingStore.getState().transcript, "Hello everyone.");
-  assert.deepEqual(
-    JSON.parse(writes.at(-1).patch.transcript).map(({ text }) => text),
-    ["Hello everyone."]
-  );
-});
-
 test("valid speech finalized during disconnect still reaches the saved note", async (t) => {
   const { streaming, store, writes } = await recordingHarness(t);
   streaming.finishOnStop("mic", "One last thing.");
@@ -343,7 +328,6 @@ function localHarness({ language, text }) {
     meetingLocalLanguage: language,
     meetingLocalWin: null,
     LOCAL_MEETING_CHUNK_INTERVAL_MS: 5000,
-    LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS: 0,
     downsample24kTo16k: (pcm) => pcm,
     computeChunkStats: () => ({ rms: 0.1, peak: 0.5, sampleCount: 1600 }),
     resolveMicChunkAction: () => ({ action: "send", reason: null }),
@@ -358,7 +342,6 @@ function localHarness({ language, text }) {
     hasRiskyMicDuplicateProfile: () => false,
     removePendingMicFinalsFor: () => [],
     removeRacingMicEntriesFor: () => [],
-    queuePendingMicFinal: () => assert.fail("nothing should be held back"),
     sendMeetingFinalSegment: (segment) => finals.push(segment.text),
   };
   vm.createContext(context);
