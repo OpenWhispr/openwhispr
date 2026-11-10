@@ -1592,7 +1592,7 @@ export default function TranscriptionModelPicker({
           )}
 
           {providerAllowed(displayedCloudProvider) && (
-            <div>
+            <div className="space-y-2">
               {displayedCloudProvider === "custom" ? (
                 <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
                   <div className="space-y-1.5">
@@ -1731,18 +1731,6 @@ export default function TranscriptionModelPicker({
                       onModelSelect={handleCloudModelSelect}
                       colorScheme="purple"
                     />
-                    {browsedProviderName && (
-                      <p className="text-xs text-muted-foreground">
-                        {selectedProviderName
-                          ? t("transcription.browsedProviderHint", {
-                              current: selectedProviderName,
-                              provider: browsedProviderName,
-                            })
-                          : t("transcription.browsedProviderHintNoCurrent", {
-                              provider: browsedProviderName,
-                            })}
-                      </p>
-                    )}
                     {displayedCloudProvider === "tinfoil" && (
                       <p className="text-xs text-muted-foreground/70">
                         {t("transcription.tinfoil.transportNote")}{" "}
@@ -1757,6 +1745,18 @@ export default function TranscriptionModelPicker({
                     )}
                   </div>
                 </div>
+              )}
+              {browsedProviderName && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedProviderName
+                    ? t("transcription.browsedProviderHint", {
+                        current: selectedProviderName,
+                        provider: browsedProviderName,
+                      })
+                    : t("transcription.browsedProviderHintNoCurrent", {
+                        provider: browsedProviderName,
+                      })}
+                </p>
               )}
             </div>
           )}

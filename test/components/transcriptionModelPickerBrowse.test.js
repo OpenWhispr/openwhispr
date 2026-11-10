@@ -63,3 +63,12 @@ test("a saved provider this picker doesn't offer is not named", async (t) => {
   await panel.selectTab("deepgram");
   assert.equal(hint(panel), 'transcription.browsedProviderHintNoCurrent {"provider":"Deepgram"}');
 });
+
+test("a browsed Custom tab says the saved provider stays in use", async (t) => {
+  const panel = await mount(t, { transcriptionContext: "dictation", streamingOnly: false });
+  await panel.selectTab("custom");
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"OpenAI","provider":"transcription.customProvider"}'
+  );
+});
