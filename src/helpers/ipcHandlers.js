@@ -2512,6 +2512,11 @@ class IPCHandlers {
       return this.databaseManager.clearDictionaryCloudId(id);
     });
 
+    ipcMain.handle("db-keep-newer-dictionary-edit", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+      return this.databaseManager.keepNewerDictionaryEdit(id);
+    });
+
     ipcMain.handle("db-get-dictionary-entries-by-words", async (_event, words) => {
       if (!Array.isArray(words)) throw new Error("words must be an array");
       return this.databaseManager.getDictionaryEntriesByWords(words);
@@ -2690,6 +2695,11 @@ class IPCHandlers {
     ipcMain.handle("db-clear-snippet-cloud-id", async (_event, id, expectedAuthGeneration) => {
       if (isStaleSyncAck(expectedAuthGeneration)) return { success: false, stale: true };
       return this.databaseManager.clearSnippetCloudId(id);
+    });
+
+    ipcMain.handle("db-keep-newer-snippet-edit", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+      return this.databaseManager.keepNewerSnippetEdit(id);
     });
 
     ipcMain.handle("db-broadcast-snippets-updated", async () => {

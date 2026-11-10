@@ -4247,6 +4247,11 @@ declare global {
         id: number,
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** Claims a pending word whose edit outlives its cloud tombstone, for re-creation. */
+      keepNewerDictionaryEdit?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
       /**
        * Live personal words matching `words` case-insensitively, in their stored
@@ -4330,6 +4335,11 @@ declare global {
         id: number,
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** As keepNewerDictionaryEdit, for a snippet. */
+      keepNewerSnippetEdit?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
     };
 

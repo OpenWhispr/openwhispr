@@ -67,6 +67,26 @@ const ACCOUNT_OWNED_TABLES = [
   "analytics_events",
   "space_accounts",
 ];
+// A word or trigger's case-insensitive key. SQLite's lower() folds only ASCII,
+// so SQL compares keys through fold_key (registered per connection by
+// _registerKeyFolding) and JS through this, and both agree on "École".
+function foldKey(value) {
+  return typeof value === "string" ? value.toLowerCase() : value;
+}
+
+// One row per folded key from rows that may hold several casings of it: the
+// account's own row over an unattributed one, a live row over a tombstone.
+function rowsByFoldedKey(rows, key) {
+  const rank = (row) => (row.account_id ? 2 : 0) + (row.deleted_at ? 0 : 1);
+  const byKey = new Map();
+  for (const row of rows) {
+    const folded = foldKey(row[key]);
+    const current = byKey.get(folded);
+    if (!current || rank(row) > rank(current)) byKey.set(folded, row);
+  }
+  return byKey;
+}
+
 // legacy_unattributed: 0 is a row written since attribution; the others are from
 // before it, so nobody knows whose they are. A row this device uploaded for
 // whichever account synced first has a cloud id that says nothing about that.
@@ -406,9 +426,18 @@ class DatabaseManager {
     return this._ownedRowScope(tableName, alias, this.activeAccountId);
   }
 
+  // Uncorrelated, so SQLite folds the account's keys once per statement rather
+  // than once per row it checks.
   _ownedDuplicateSql(tableName) {
     const key = PERSONAL_ROW_KEYS[tableName];
-    return `EXISTS (SELECT 1 FROM ${tableName} owned WHERE owned.account_id = ? AND lower(owned.${key}) = lower(${tableName}.${key}))`;
+    return `fold_key(${tableName}.${key}) IN (SELECT fold_key(owned.${key}) FROM ${tableName} owned WHERE owned.account_id = ?)`;
+  }
+
+  // Deterministic, so SQLite may call it anywhere a built-in could go. The
+  // indexes keep lower(): an index on an app-defined function would stop an
+  // older build, which never registers it, from opening the database.
+  _registerKeyFolding() {
+    this.db.function("fold_key", { deterministic: true }, foldKey);
   }
 
   // Removing or renaming the account's word or snippet takes the hidden
@@ -422,7 +451,7 @@ class DatabaseManager {
     this.db
       .prepare(
         `DELETE FROM ${tableName}
-         WHERE account_id IS NULL AND cloud_id IS NULL AND lower(${key}) = lower(?)
+         WHERE account_id IS NULL AND cloud_id IS NULL AND fold_key(${key}) = fold_key(?)
            AND ${this._ownedDuplicateSql(tableName)}`
       )
       .run(keyValue, accountId);
@@ -439,7 +468,7 @@ class DatabaseManager {
       row.account_id &&
       this.db
         .prepare(
-          `SELECT 1 FROM ${tableName} WHERE account_id IS NULL AND cloud_id IS NOT NULL AND lower(${key}) = lower(?) LIMIT 1`
+          `SELECT 1 FROM ${tableName} WHERE account_id IS NULL AND cloud_id IS NOT NULL AND fold_key(${key}) = fold_key(?) LIMIT 1`
         )
         .get(row[key]);
     if (hiddenCopy) {
@@ -554,10 +583,9 @@ class DatabaseManager {
         const key = PERSONAL_ROW_KEYS[table];
         const noTwin = key
           ? `AND NOT ${this._ownedDuplicateSql(table)}
-               AND NOT EXISTS (
-                 SELECT 1 FROM ${table} synced
+               AND fold_key(${table}.${key}) NOT IN (
+                 SELECT fold_key(synced.${key}) FROM ${table} synced
                  WHERE synced.account_id IS NULL AND synced.cloud_id IS NOT NULL
-                   AND lower(synced.${key}) = lower(${table}.${key})
                )`
           : "";
         this.db
@@ -747,6 +775,7 @@ class DatabaseManager {
       const dbPath = path.join(app.getPath("userData"), dbFileName);
 
       this.db = new Database(dbPath);
+      this._registerKeyFolding();
       this.db.pragma("journal_mode = WAL");
 
       this.db.exec(`
@@ -3191,7 +3220,7 @@ class DatabaseManager {
     };
   }
 
-  // Dedupe by lower(word), keeping the first occurrence's casing, so no caller
+  // Dedupe by folded key, keeping the first occurrence's casing, so no caller
   // can present two spellings of the same word to a write loop.
   _normalizeDictionaryWords(words) {
     const byLower = new Map();
@@ -3199,7 +3228,7 @@ class DatabaseManager {
       if (typeof raw !== "string") continue;
       const trimmed = raw.trim();
       if (!trimmed) continue;
-      const lower = trimmed.toLowerCase();
+      const lower = foldKey(trimmed);
       if (!byLower.has(lower)) byLower.set(lower, trimmed);
     }
     return byLower;
@@ -3212,7 +3241,7 @@ class DatabaseManager {
         `SELECT id, word, source, deleted_at, shared_at, cloud_id, account_id FROM custom_dictionary WHERE ${scope.sql}`
       )
       .all(...scope.params);
-    return { rows, byLower: new Map(rows.map((r) => [r.word.toLowerCase(), r])) };
+    return { rows, byLower: rowsByFoldedKey(rows, "word") };
   }
 
   // Returns true when the word became present, so callers can report how many
@@ -3308,7 +3337,7 @@ class DatabaseManager {
 
       this.db.transaction(() => {
         for (const existing of rows) {
-          if (incomingByLower.has(existing.word.toLowerCase())) continue;
+          if (incomingByLower.has(foldKey(existing.word))) continue;
           this._deleteDictionaryRow(stmts, existing);
         }
         for (const [lower, word] of incomingByLower) {
@@ -3470,7 +3499,7 @@ class DatabaseManager {
         this.db
           .prepare(
             `SELECT * FROM custom_dictionary
-             WHERE lower(word) = lower(?) AND ${scope.sql}
+             WHERE fold_key(word) = fold_key(?) AND ${scope.sql}
                AND ${this._mergeableByKeySql("custom_dictionary")}
              ORDER BY account_id IS NULL LIMIT 1`
           )
@@ -3513,7 +3542,7 @@ class DatabaseManager {
             .run(cloudEntry.id, mergedSource, ...claim.params, existing.id);
           return this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(existing.id);
         }
-        if (existing.word.toLowerCase() !== word.toLowerCase()) {
+        if (foldKey(existing.word) !== foldKey(word)) {
           this._dropHiddenDuplicates("custom_dictionary", existing.word);
         }
         // Renamed onto a word the same account already has: they merge, as the
@@ -3657,6 +3686,35 @@ class DatabaseManager {
       : `${tableName}.account_id = ?`;
   }
 
+  // A tombstone from the signed-in account's cloud for a row whose local edit
+  // is newer: the edit wins. The tombstone matched the row by its client or
+  // cloud id, which proves the row is this account's, so it is claimed and
+  // loses the dead cloud id, and the next push re-creates it.
+  _keepNewerEditOverCloudDelete(tableName, id) {
+    if (!this.activeAccountId) return 0;
+    return this.db
+      .prepare(
+        `UPDATE ${tableName} SET account_id = ?, cloud_id = NULL
+         WHERE id = ? AND deleted_at IS NULL AND sync_status = 'pending'
+           AND (account_id IS NULL OR account_id = ?)`
+      )
+      .run(this.activeAccountId, id, this.activeAccountId).changes;
+  }
+
+  keepNewerDictionaryEdit(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return { success: this._keepNewerEditOverCloudDelete("custom_dictionary", id) > 0 };
+    } catch (error) {
+      debugLogger.error(
+        "Error keeping a dictionary edit over its cloud deletion",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
   clearDictionaryCloudId(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -3667,8 +3725,7 @@ class DatabaseManager {
     }
   }
 
-  // Live personal rows keyed by JS lowercase, the same folding the write
-  // paths dedupe with (SQLite's lower() only folds ASCII).
+  // Live personal rows keyed by the folding the write paths dedupe with.
   _livePersonalRowsByLower() {
     const scope = this._ownedRowScope("custom_dictionary");
     const rows = this.db
@@ -3676,7 +3733,7 @@ class DatabaseManager {
         `SELECT id, word, cloud_id, account_id FROM custom_dictionary WHERE deleted_at IS NULL AND ${scope.sql}`
       )
       .all(...scope.params);
-    return new Map(rows.map((row) => [row.word.toLowerCase(), row]));
+    return rowsByFoldedKey(rows, "word");
   }
 
   getDictionaryEntriesByWords(words) {
@@ -4191,7 +4248,7 @@ class DatabaseManager {
         const replacement = typeof raw.replacement === "string" ? raw.replacement.trim() : "";
         if (!trigger || !replacement) continue;
         if (trigger.length > MAX_SNIPPET_TRIGGER_LENGTH) continue;
-        const lower = trigger.toLowerCase();
+        const lower = foldKey(trigger);
         if (!incomingByLower.has(lower)) incomingByLower.set(lower, { trigger, replacement });
       }
       const cleaned = Array.from(incomingByLower.values());
@@ -4201,12 +4258,7 @@ class DatabaseManager {
       const existingRows = this.db
         .prepare(`SELECT * FROM snippets WHERE ${scope.sql}`)
         .all(...scope.params);
-      const existingByLower = new Map();
-      for (const row of existingRows) {
-        const lower = row.trigger.toLowerCase();
-        const current = existingByLower.get(lower);
-        if (!current || (current.deleted_at && !row.deleted_at)) existingByLower.set(lower, row);
-      }
+      const existingByLower = rowsByFoldedKey(existingRows, "trigger");
 
       // As with dictionary words, the deleter pushes an unattributed tombstone.
       const tombstone = this.db.prepare(
@@ -4224,7 +4276,7 @@ class DatabaseManager {
 
       this.db.transaction(() => {
         for (const existing of existingRows) {
-          if (incomingLower.has(existing.trigger.toLowerCase())) continue;
+          if (incomingLower.has(foldKey(existing.trigger))) continue;
           if (existing.deleted_at) continue;
           if (existing.cloud_id) {
             this._dropHiddenDuplicates("snippets", existing.trigger);
@@ -4235,7 +4287,7 @@ class DatabaseManager {
         }
 
         for (const snippet of cleaned) {
-          const existing = existingByLower.get(snippet.trigger.toLowerCase());
+          const existing = existingByLower.get(foldKey(snippet.trigger));
           if (existing) {
             if (existing.deleted_at) {
               restore.run(snippet.trigger, snippet.replacement, existing.id);
@@ -4355,7 +4407,7 @@ class DatabaseManager {
         this.db
           .prepare(
             `SELECT * FROM snippets
-             WHERE lower(trigger) = lower(?) AND deleted_at IS ${deleted ? "NOT " : ""}NULL
+             WHERE fold_key(trigger) = fold_key(?) AND deleted_at IS ${deleted ? "NOT " : ""}NULL
                AND ${scope.sql} AND ${this._mergeableByKeySql("snippets")}
              ORDER BY account_id IS NULL LIMIT 1`
           )
@@ -4437,7 +4489,7 @@ class DatabaseManager {
         const collidingActive = this.db
           .prepare(
             `SELECT * FROM snippets
-             WHERE lower(trigger) = lower(?) AND deleted_at IS NULL AND id != ?
+             WHERE fold_key(trigger) = fold_key(?) AND deleted_at IS NULL AND id != ?
                AND ${scope.sql} AND ${this._mergeableByKeySql("snippets")}
              LIMIT 1`
           )
@@ -4449,7 +4501,7 @@ class DatabaseManager {
         if (orphanId) {
           this.db.prepare("DELETE FROM snippets WHERE id = ?").run(orphanId);
         }
-        if (target.trigger.toLowerCase() !== trigger.toLowerCase()) {
+        if (foldKey(target.trigger) !== foldKey(trigger)) {
           this._dropHiddenDuplicates("snippets", target.trigger);
         }
         const claim = this._claimUnattributedSql("snippets", {
@@ -4548,6 +4600,20 @@ class DatabaseManager {
       return { success: this._clearCloudIdOfOwnRow("snippets", id) > 0 };
     } catch (error) {
       debugLogger.error("Error clearing snippet cloud_id", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  keepNewerSnippetEdit(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return { success: this._keepNewerEditOverCloudDelete("snippets", id) > 0 };
+    } catch (error) {
+      debugLogger.error(
+        "Error keeping a snippet edit over its cloud deletion",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }

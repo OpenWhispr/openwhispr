@@ -1636,8 +1636,8 @@ export class SyncService {
 
   private async deleteOrphanedChatCreates(sender: ChatPushSender): Promise<void> {
     const key = `${ORPHANED_CHAT_CREATES_PREFIX}${sender.accountId}`;
-    const queued = this.readLocalRecord<true>(key);
-    for (const cloudId of Object.keys(queued)) {
+    const gone: string[] = [];
+    for (const cloudId of Object.keys(this.readLocalRecord<true>(key))) {
       try {
         await ConversationsService.delete(cloudId, sender.authGeneration);
       } catch (err) {
@@ -1646,8 +1646,14 @@ export class SyncService {
           continue;
         }
       }
-      delete queued[cloudId];
+      gone.push(cloudId);
     }
+    if (gone.length === 0) return;
+    // A create ack may have queued another copy while these deletes were out (a
+    // chat push runs outside the pass lock, and windows share localStorage), so
+    // only the copies settled here leave the queue as it is now.
+    const queued = this.readLocalRecord<true>(key);
+    for (const cloudId of gone) delete queued[cloudId];
     this.writeLocalRecord(key, queued);
   }
 
@@ -3698,8 +3704,16 @@ export class SyncService {
 
           if (cloudEntry.deleted_at) {
             // A pull from the epoch sees old tombstones too; a newer local
-            // edit still waiting to be pushed outlives them.
-            if (local && !(local.sync_status === "pending" && localTs > cloudTs)) {
+            // edit still waiting to be pushed outlives them. A live one is
+            // re-created: its cloud id is dead, and on a device another
+            // account has used its 404 would otherwise park it for good.
+            if (local?.sync_status === "pending" && localTs > cloudTs) {
+              if (!local.deleted_at) {
+                stopIfPullStale(
+                  await window.electronAPI.keepNewerDictionaryEdit?.(local.id, authGeneration)
+                );
+              }
+            } else if (local) {
               stopIfPullStale(
                 await window.electronAPI.hardDeleteDictionary?.(local.id, authGeneration)
               );
@@ -4311,7 +4325,23 @@ export class SyncService {
           }
 
           if (cloudEntry.deleted_at) {
-            if (local && !(local.sync_status === "pending" && !local.cloud_id)) {
+            // As with dictionary words, a newer edit outlives the tombstone. Only
+            // a row the tombstone matched by id is the deleted one; a pending
+            // row with no cloud id that matched by trigger was never uploaded.
+            const sameRow =
+              local?.client_snippet_id === cloudEntry.client_snippet_id ||
+              (local?.cloud_id != null && local.cloud_id === cloudEntry.id);
+            if (
+              local &&
+              sameRow &&
+              local.sync_status === "pending" &&
+              !local.deleted_at &&
+              normalizeTimestamp(local.updated_at) > cloudTs
+            ) {
+              stopIfPullStale(
+                await window.electronAPI.keepNewerSnippetEdit?.(local.id, authGeneration)
+              );
+            } else if (local && !(local.sync_status === "pending" && !local.cloud_id)) {
               stopIfPullStale(
                 await window.electronAPI.hardDeleteSnippet?.(local.id, authGeneration)
               );

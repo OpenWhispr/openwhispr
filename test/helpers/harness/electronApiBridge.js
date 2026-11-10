@@ -44,6 +44,8 @@ function snippetApi(db, authState) {
       authState.isStale(expectedAuthGeneration)
         ? { success: false, stale: true }
         : db.clearSnippetCloudId(id),
+    keepNewerSnippetEdit: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.keepNewerSnippetEdit(id),
     broadcastSnippetsUpdated: async () => ({ success: true }),
   };
 }
@@ -57,6 +59,7 @@ function inertSnippetApi() {
     markSnippetSynced: async () => ({ success: true, changes: 1 }),
     hardDeleteSnippet: async () => ({ success: true }),
     clearSnippetCloudId: async () => ({ success: true }),
+    keepNewerSnippetEdit: async () => ({ success: true }),
     broadcastSnippetsUpdated: async () => undefined,
   };
 }
@@ -325,6 +328,8 @@ function createElectronApi(db, options = {}) {
       authState.isStale(expectedAuthGeneration)
         ? { success: false, stale: true }
         : db.clearDictionaryCloudId(id),
+    keepNewerDictionaryEdit: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.keepNewerDictionaryEdit(id),
     // The real handler re-reads the words to broadcast them; there are no windows here.
     broadcastDictionaryUpdated: async () => ({ success: true }),
 
