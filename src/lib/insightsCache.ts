@@ -83,7 +83,11 @@ export function cachedLeaderboardWeekStarts(accountId: string) {
   return forAccount(accountId).weekStarts;
 }
 
-/** Joining or leaving changes every roster, and a refused board says the access answer moved. */
+/**
+ * For Refresh, a refused board, and anything that can move a roster or the
+ * boards the account sees: joining or leaving the leaderboard, creating,
+ * joining, leaving or deleting a workspace, and a join request.
+ */
 export function clearCachedLeaderboards(): void {
   if (!current) return;
   current.access = null;
