@@ -180,6 +180,7 @@ class LiveSpeakerIdentifier {
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentForced = false;
     this.lastLiveIdentificationSample = 0;
     this._diarizationManager = null;
     this.maxSpeakers = MAX_SPEAKER_COUNT;
@@ -456,6 +457,7 @@ class LiveSpeakerIdentifier {
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentForced = false;
     this.lastLiveIdentificationSample = 0;
     this._resetVadRuntimeState();
   }
@@ -536,6 +538,7 @@ class LiveSpeakerIdentifier {
     this.silenceWindows = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentForced = false;
     this.lastLiveIdentificationSample = 0;
   }
 
@@ -640,6 +643,7 @@ class LiveSpeakerIdentifier {
 
     this.currentSegmentSpeakerId = resolved.speakerId;
     this.currentSegmentSpeakerName = resolved.displayName || null;
+    this.currentSegmentForced = resolved.forced;
     this.lastLiveIdentificationSample = this.segmentEndSample;
 
     if (!this.enabled) return;
@@ -692,6 +696,7 @@ class LiveSpeakerIdentifier {
 
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentForced = false;
     this.lastLiveIdentificationSample = 0;
   }
 
@@ -764,22 +769,27 @@ class LiveSpeakerIdentifier {
 
     let speakerId = this.currentSegmentSpeakerId || this._findTransientMatch(embedding);
     let displayName = this.currentSegmentSpeakerName || null;
+    // Set only while the segment's label came from an at-cap fold.
+    let forced = this.currentSegmentForced;
 
     if (speakerId) {
-      if (updateCentroid) {
+      // A folded segment keeps its label to its end, but its voice joins the
+      // centroid only if the whole segment turns out to match the cluster (see
+      // _assignOrForceCluster).
+      if (updateCentroid && (!forced || this._findTransientMatch(embedding) === speakerId)) {
         this._updateCentroid(speakerId, embedding);
       }
 
       return {
         speakerId,
         displayName: displayName || this.transientDisplayNames.get(speakerId) || null,
+        forced,
       };
     }
 
     const matchedProfile = this._findStoredProfileMatch(embedding);
     if (matchedProfile) {
       speakerId = this._findTransientSpeakerForProfile(matchedProfile.id);
-      let forced = false;
       if (!speakerId) {
         ({ speakerId, forced } = this._assignOrForceCluster(embedding));
       } else if (updateCentroid) {
@@ -794,6 +804,7 @@ class LiveSpeakerIdentifier {
         return {
           speakerId,
           displayName: this.transientDisplayNames.get(speakerId) || null,
+          forced,
         };
       }
 
@@ -802,21 +813,16 @@ class LiveSpeakerIdentifier {
       return {
         speakerId,
         displayName: matchedProfile.display_name,
+        forced,
       };
     }
 
-    speakerId = this.currentSegmentSpeakerId;
-    if (speakerId) {
-      if (updateCentroid) {
-        this._updateCentroid(speakerId, embedding);
-      }
-    } else {
-      ({ speakerId } = this._assignOrForceCluster(embedding));
-    }
+    ({ speakerId, forced } = this._assignOrForceCluster(embedding));
 
     return {
       speakerId,
       displayName: this.transientDisplayNames.get(speakerId) || null,
+      forced,
     };
   }
 

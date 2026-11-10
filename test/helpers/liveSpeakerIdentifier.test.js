@@ -445,6 +445,111 @@ test("distinct voices are folded into one cluster when the session cap is 1", ()
   );
 });
 
+// Runs utterances through the real VAD loop: speech windows identify the voice
+// while it speaks (interimVoice), then silence finalizes the segment
+// (finalVoice), the only pass that may update a centroid.
+function loadIdentifierHearingVoices() {
+  let voice = null;
+  let probability = 0;
+  let cursor = 0;
+  const { LiveSpeakerIdentifier } = loadIdentifier({
+    extractEmbeddingFromSamples: async () => voice,
+  });
+  const identifier = new LiveSpeakerIdentifier();
+  identifier._getVadProbability = async () => probability;
+
+  const feed = async (windows, vadProbability) => {
+    probability = vadProbability;
+    for (let i = 0; i < windows; i++) {
+      await identifier._processWindow(new Float32Array(512), cursor, cursor + 512);
+      cursor += 512;
+    }
+  };
+  const speak = async (interimVoice, finalVoice = interimVoice) => {
+    voice = interimVoice;
+    await feed(Math.ceil((16000 * 3) / 512), 1);
+    voice = finalVoice;
+    await feed(24, 0);
+  };
+  return { identifier, speak };
+}
+
+test("a voice folded at the cap stays out of the cluster's centroid", async () => {
+  const { identifier, speak } = loadIdentifierHearingVoices();
+  identifier.setMaxSpeakers(1);
+
+  await speak(voiceA);
+  for (let i = 0; i < 4; i++) await speak(voiceB);
+
+  assert.deepEqual([...identifier.transientEmbeddings.keys()], ["speaker_0"]);
+  assert.equal(
+    cosineSimilarity(identifier.getSpeakerEmbedding("speaker_0"), voiceA),
+    1,
+    "the folded voice must not be averaged into the first speaker's voice"
+  );
+
+  identifier.setMaxSpeakers(3);
+  await speak(voiceB);
+  assert.equal(
+    identifier.transientEmbeddings.size,
+    2,
+    "once the cap rises the folded voice gets its own cluster"
+  );
+});
+
+test("a folded segment whose whole audio matches the cluster still updates it", async () => {
+  const { identifier, speak } = loadIdentifierHearingVoices();
+  identifier.setMaxSpeakers(1);
+  const sameVoiceLater = unit([1, 0.4, 0]);
+
+  await speak(voiceA);
+  // The first seconds sound like nobody known, so the segment is folded; the
+  // whole segment is the first speaker after all.
+  await speak(voiceB, sameVoiceLater);
+
+  assert.ok(
+    cosineSimilarity(identifier.getSpeakerEmbedding("speaker_0"), sameVoiceLater) >
+      cosineSimilarity(voiceA, sameVoiceLater)
+  );
+});
+
+// Pins the calibrated values: a segment joins a voice from 0.60, two voices
+// merge only from 0.70.
+const similarToVoiceA = (similarity) =>
+  unit([similarity, Math.sqrt(1 - similarity * similarity), 0]);
+
+test("a segment joins an existing voice at 0.65 and starts a new one at 0.55", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+  identifier.setMaxSpeakers(3);
+
+  const first = identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: false });
+  const close = identifier._resolveSpeakerForEmbedding(similarToVoiceA(0.65), {
+    updateCentroid: false,
+  });
+  const far = identifier._resolveSpeakerForEmbedding(similarToVoiceA(0.55), {
+    updateCentroid: false,
+  });
+
+  assert.equal(close.speakerId, first.speakerId);
+  assert.notEqual(far.speakerId, first.speakerId);
+});
+
+test("two voices merge at 0.75 and stay apart at 0.65", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const apart = new LiveSpeakerIdentifier();
+  apart.setMaxSpeakers(3);
+  apart._assignSpeakerId(voiceA);
+  apart._assignSpeakerId(similarToVoiceA(0.65));
+  assert.deepEqual(apart._performRecluster(), []);
+
+  const merged = new LiveSpeakerIdentifier();
+  merged.setMaxSpeakers(3);
+  merged._assignSpeakerId(voiceA);
+  merged._assignSpeakerId(similarToVoiceA(0.75));
+  assert.equal(merged._performRecluster().length, 1);
+});
+
 // Every 16 kHz sample the identifier produced, in order: the VAD windows it
 // processed plus what is still buffered.
 async function collect16kStream(identifier, chunks) {
