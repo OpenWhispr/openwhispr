@@ -290,7 +290,7 @@ function SelectionToolbar({
 }: {
   target: SelectionTarget;
   busy: boolean;
-  onFollowUp: () => void;
+  onFollowUp?: () => void;
   /** Absent for a reply that isn't saved yet: there is nothing to fork from. */
   onForkFrom?: () => void;
 }) {
@@ -316,13 +316,15 @@ function SelectionToolbar({
       className="fixed z-30 flex h-10 items-center overflow-hidden rounded-full border border-border bg-popover shadow-[var(--shadow-card)]"
       style={position ?? { top: 0, left: 0, visibility: "hidden" }}
     >
-      <button type="button" onClick={onFollowUp} className={item}>
-        <CornerDownLeft size={15} className="rtl:scale-x-[-1]" />
-        {t("agentWindow.followUp")}
-      </button>
+      {onFollowUp && (
+        <button type="button" onClick={onFollowUp} className={item}>
+          <CornerDownLeft size={15} className="rtl:scale-x-[-1]" />
+          {t("agentWindow.followUp")}
+        </button>
+      )}
       {onForkFrom && (
         <>
-          <span className="h-4 w-px bg-border" aria-hidden="true" />
+          {onFollowUp && <span className="h-4 w-px bg-border" aria-hidden="true" />}
           <button type="button" onClick={onForkFrom} disabled={busy} className={item}>
             <GitFork size={15} />
             {t("agentWindow.forkFromHere")}
@@ -341,10 +343,16 @@ interface AgentMessageListProps {
   readAloud: ReadAloud;
   onRegenerate: (message: Message) => void;
   onFork: (messageId: string, selectedText?: string) => void;
-  onFollowUp: (selection: { messageId: string; text: string }) => void;
+  /** Absent in a voice call: its pill has no chip to show a follow-up with. */
+  onFollowUp?: (selection: { messageId: string; text: string }) => void;
   onContinue: () => void;
   emptyState: ReactNode;
+  /** Offer a way back to the newest line once the reader scrolls up (a call's transcript). */
+  backToLatest?: boolean;
 }
+
+// Further than this from the bottom, the reader has left the latest messages.
+const AWAY_FROM_BOTTOM_PX = 80;
 
 /** The chat, oldest first, scrolling inside the modal and following a reply while at the bottom. */
 export function AgentMessageList({
@@ -358,8 +366,12 @@ export function AgentMessageList({
   onFollowUp,
   onContinue,
   emptyState,
+  backToLatest = false,
 }: AgentMessageListProps) {
-  const { scrollRef, handleScroll, handleWheel } = useStickToBottom<HTMLDivElement>(messages);
+  const { t } = useTranslation();
+  const { scrollRef, handleScroll, handleWheel, scrollToBottom } =
+    useStickToBottom<HTMLDivElement>(messages);
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
   // The list's height as of its last resize: a scroll event that sees another
   // height was queued before the resize (the bottom pin), not the reader's.
   const viewportHeightRef = useRef(0);
@@ -408,7 +420,11 @@ export function AgentMessageList({
         // The scroll that pins the bottom arrives a frame late; when the list
         // shrank meanwhile (the selected context opening above the composer)
         // it would read as the reader leaving the bottom.
-        if (event.currentTarget.clientHeight === viewportHeightRef.current) handleScroll();
+        const node = event.currentTarget;
+        if (node.clientHeight === viewportHeightRef.current) handleScroll();
+        setAwayFromBottom(
+          node.scrollHeight - node.scrollTop - node.clientHeight > AWAY_FROM_BOTTOM_PX
+        );
         setSelection(null);
       }}
       onWheel={handleWheel}
@@ -448,14 +464,29 @@ export function AgentMessageList({
           </div>
         )}
       </div>
-      {selection && (
+      {backToLatest && awayFromBottom && (
+        <button
+          type="button"
+          onClick={() => {
+            scrollToBottom();
+            setAwayFromBottom(false);
+          }}
+          className="sticky bottom-1 z-10 mx-auto mt-2 flex h-8 w-fit items-center rounded-full border border-border bg-surface-1 px-3.5 text-[13px] text-foreground shadow-[var(--shadow-card)] transition-colors hover:bg-surface-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40"
+        >
+          {t("agentWindow.backToLatest")}
+        </button>
+      )}
+      {selection && (onFollowUp || selectionSaved) && (
         <SelectionToolbar
           target={selection}
           busy={busy}
-          onFollowUp={() => {
-            onFollowUp(selection);
-            finishSelection();
-          }}
+          onFollowUp={
+            onFollowUp &&
+            (() => {
+              onFollowUp(selection);
+              finishSelection();
+            })
+          }
           onForkFrom={
             selectionSaved
               ? () => {

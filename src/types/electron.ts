@@ -28,6 +28,7 @@ import type {
   ConnectorCommitResult,
   ConnectorConnectProgress,
   ConnectorConnectResult,
+  ConnectorDestinationsResult,
   ConnectorDirectResult,
   ConnectorDisconnectResult,
   ConnectorEdits,
@@ -61,6 +62,7 @@ import type {
   SharedDictionarySnapshot,
 } from "./sharedDictionary";
 import type { SharedHintWords } from "../utils/sharedDictionaryHints";
+import type { VoiceCallLanguage, VoiceSpeechProfile } from "../services/voice/types";
 
 export type { SharedDictionarySnapshot } from "./sharedDictionary";
 
@@ -1640,6 +1642,8 @@ declare global {
         contentHeight?: number;
         /** pill only: the wider pill that reads "Waiting for answer". */
         wide?: boolean;
+        /** A voice call's pill and the cards above it; its transcript is the typed modal. */
+        call?: boolean;
       }) => Promise<boolean>;
       agentWindowHide?: () => Promise<boolean>;
       agentWindowSetDragging?: (dragging: boolean) => void;
@@ -2400,6 +2404,83 @@ declare global {
       // One-time "GPU pack needs re-downloading" notice, taken by the window that shows it
       takeGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
       onGpuPackMigrationNoticeReady: (callback: () => void) => () => void;
+
+      // Voice calls on the agent window (see voiceConversationIpc.js)
+      voiceConversation?: {
+        start: (options: {
+          language: VoiceCallLanguage;
+          preferredParakeet?: string;
+          preferredWhisper?: string;
+          /** The model that answers, for the harness report. */
+          brainModel?: string;
+        }) => Promise<{
+          sessionId: number;
+          sampleRate: number;
+          loadMs: number;
+          smartTurn: boolean;
+        }>;
+        sendMic: (samples: Float32Array) => void;
+        /** Microphone off, or a card asking for a secret: nothing heard becomes a turn. */
+        pauseInput: (sessionId: number, paused: boolean) => Promise<boolean>;
+        /** A reply waits on the user's speech: a word or two ends the turn at its first pause. */
+        holdReply: (sessionId: number, held: boolean) => void;
+        /** The call's language changed: false when no downloaded model hears it. */
+        setLanguage: (
+          sessionId: number,
+          request: {
+            language: VoiceCallLanguage;
+            preferredParakeet?: string;
+            preferredWhisper?: string;
+          }
+        ) => Promise<boolean>;
+        keepModelWarm: (modelId: string) => Promise<{ warmed: boolean; reason?: string }>;
+        speak: (request: {
+          utteranceId: string;
+          text: string;
+          profile: VoiceSpeechProfile;
+        }) => Promise<{
+          queueWaitMs?: number;
+          firstAudioMs?: number | null;
+          cancelled?: boolean;
+        }>;
+        /** Synthesizes short lines ahead of time so they play without a wait. */
+        prepareSpeech: (request: {
+          texts: readonly string[];
+          profile: VoiceSpeechProfile;
+        }) => Promise<{ queued: number }>;
+        cancelSpeech: (utteranceId: string) => Promise<{ cancelled: boolean }>;
+        /** Ends the named session; null ends whichever is running (e.g. one still starting). */
+        stop: (sessionId: number | null) => Promise<{ stopped: boolean }>;
+        getReadiness: (request: {
+          language: VoiceCallLanguage;
+          preferredParakeet?: string;
+          preferredWhisper?: string;
+          brain: { mode: string; model: string; provider: string; signedIn: boolean };
+        }) => Promise<import("../services/voice/types").VoiceConversationReadiness>;
+        /** The speech engine that hears each call language now, or null without one. */
+        languages: (request: {
+          preferredParakeet?: string;
+          preferredWhisper?: string;
+        }) => Promise<
+          Array<{ language: VoiceCallLanguage; engine: "parakeet" | "whisper" | null }>
+        >;
+        downloadModels: () => Promise<{ ready: boolean; missing: string[]; missingBytes: number }>;
+        cancelModelDownload: () => Promise<{ cancelled: boolean }>;
+        onDownloadProgress: (
+          callback: (progress: {
+            model: string;
+            downloadedBytes: number;
+            totalBytes: number;
+          }) => void
+        ) => () => void;
+        isHarness: () => Promise<boolean>;
+        reportTurn: (report: import("../services/voice/types").VoiceTurnReport) => void;
+        reportTurnEvent: (turnEvent: { type: "first-audio" | "flushed"; at: number }) => void;
+        onHarnessDone: (callback: () => void) => () => void;
+        onEvent: (
+          callback: (event: import("../services/voice/types").VoiceConversationEvent) => void
+        ) => () => void;
+      };
 
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
@@ -3587,6 +3668,8 @@ declare global {
         args: Record<string, unknown>
       ) => Promise<ConnectorQueryResult>;
       connectorCommit?: (actionId: string, edits: ConnectorEdits) => Promise<ConnectorCommitResult>;
+      /** Where a pending card may send instead: its bound Slack login's channels. */
+      connectorDestinations?: (actionId: string) => Promise<ConnectorDestinationsResult>;
       /** Cancels a pending approval, or a direct run (by its runId) still waiting on policy. */
       connectorCancel?: (
         actionId: string,

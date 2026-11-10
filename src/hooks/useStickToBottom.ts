@@ -27,6 +27,8 @@ interface StickToBottomResult<T extends HTMLElement> {
   handleTouchStart: (event: TouchEvent<T>) => void;
   handleTouchMove: (event: TouchEvent<T>) => void;
   handleTouchEnd: () => void;
+  /** Back to the newest content, following it again. */
+  scrollToBottom: () => void;
 }
 
 function pinToBottom(node: HTMLElement): void {
@@ -156,6 +158,12 @@ export function useStickToBottom<T extends HTMLElement>(
     touchYRef.current = null;
   }, []);
 
+  const scrollToBottom = useCallback(() => {
+    const node = scrollRef.current;
+    followerRef.current?.follow();
+    if (node) pinToBottom(node);
+  }, []);
+
   return {
     scrollRef,
     handleScroll,
@@ -163,5 +171,6 @@ export function useStickToBottom<T extends HTMLElement>(
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
+    scrollToBottom,
   };
 }

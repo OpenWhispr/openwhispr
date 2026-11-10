@@ -127,7 +127,7 @@ export function getDownloadErrorMessage(t: TFunction, error: string, code?: stri
   return t("hooks.modelDownload.errors.generic", { error });
 }
 
-function isCancellation(error?: string, code?: string) {
+export function isCancellation(error?: string, code?: string) {
   return (
     code === "DOWNLOAD_CANCELLED" ||
     error?.includes("interrupted by user") ||

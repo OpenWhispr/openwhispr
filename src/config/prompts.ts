@@ -8,6 +8,7 @@ import {
   type UnavailableCapability,
 } from "./agentCapabilities";
 import { NOTE_TAKER_LABEL } from "../utils/transcriptEvidence";
+import type { SpokenLanguage } from "../services/voice/types";
 
 export {
   resolvePrompt,
@@ -294,6 +295,25 @@ export function getAgentSystemPrompt(
   }
 
   return prompt;
+}
+
+const SPOKEN_LANGUAGE_NAMES: Record<SpokenLanguage, string> = {
+  en: "English",
+  // Without the script, a Hindi reply sometimes came back in Urdu script.
+  hi: "Hindi, written in Devanagari script",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+};
+// The tool line comes first: brevity alone made a local model answer from
+// memory instead of using its tools (2/10 tool use in #2349's harness, 9/10 with it).
+const SPOKEN_REPLY_RULE =
+  "This request was spoken in a live voice call, and your reply will be read aloud. When a tool could help, call it in this same response; never just say you will check. Answer in one or two short sentences unless the user asks for more. When asked to do something, say first what you did, or that you couldn't and why. Never write out an email, message or other draft in your reply unless the user asks to hear it. Never use Markdown, lists, tables, headings, code, links or emoji, and write numbers, times and dates the way a person would say them.";
+
+/** How a reply read aloud in a voice call is written, and in which language (null: the one spoken). */
+export function getSpokenReplyRule(language: SpokenLanguage | null): string {
+  const name = language ? SPOKEN_LANGUAGE_NAMES[language] : undefined;
+  return `${SPOKEN_REPLY_RULE} ${name ? `Reply in ${name}.` : "Reply in the language the user spoke."}`;
 }
 
 /**

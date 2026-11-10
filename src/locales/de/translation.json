@@ -5174,7 +5174,82 @@
       "steps_one": "{{count}} Schritt",
       "steps_other": "{{count}} Schritte"
     },
-    "waitingForAnswer": "Warte auf Antwort"
+    "waitingForAnswer": "Warte auf Antwort",
+    "call": {
+      "status": {
+        "starting": "Anruf wird gestartet…",
+        "listening": "Hört zu",
+        "working": "Arbeitet…",
+        "speaking": "Spricht",
+        "micOff": "Mikrofon aus",
+        "waiting": "Wartet auf Aktion",
+        "sendingEmail": "E-Mail wird gesendet",
+        "sendingMessage": "Nachricht wird gesendet",
+        "stopped": "Beendet"
+      },
+      "actions": {
+        "start": "Voice Agent starten",
+        "settings": "Einstellungen",
+        "transcript": "Chat anzeigen",
+        "hideTranscript": "Chat ausblenden",
+        "micOff": "Mikrofon ausschalten",
+        "micOn": "Mikrofon einschalten",
+        "end": "Anruf beenden",
+        "stopReply": "Sprechen stoppen",
+        "backToText": "Zurück zur Eingabe",
+        "showCard": "Ausstehendes anzeigen"
+      },
+      "settings": {
+        "title": "Einstellungen",
+        "close": "Einstellungen schließen",
+        "voice": "Stimme",
+        "speed": "Tempo",
+        "language": "Sprache",
+        "voices": {
+          "helios": "Helios",
+          "aurora": "Aurora"
+        },
+        "male": "Männlich",
+        "female": "Weiblich",
+        "slower": "Langsamer",
+        "faster": "Schneller",
+        "speedValue": "{{value}}x",
+        "autoDetect": "Automatisch erkennen",
+        "searchLanguages": "Sprachen suchen",
+        "noLanguages": "Keine Sprachen gefunden",
+        "languageUnavailable": "Kein Sprachmodell auf diesem Computer versteht {{language}}",
+        "needsSpeechModel": "Benötigt ein Sprachmodell"
+      },
+      "setup": {
+        "download": "Herunterladen",
+        "openSettings": "Einstellungen öffnen",
+        "changeLanguage": "Sprache ändern",
+        "retry": "Erneut versuchen",
+        "cancel": "Abbrechen",
+        "downloading": "Wird heruntergeladen… {{percent}} %",
+        "downloadFailed": "Die Sprachmodelle konnten nicht heruntergeladen werden. Prüfe deine Verbindung und versuche es erneut.",
+        "reasons": {
+          "voice-models-missing": "Sprachanrufe brauchen {{size}} MB Sprachmodelle auf diesem Computer.",
+          "speech-model-missing": "Sprachanrufe brauchen ein lokales Sprachmodell, um dich zu hören. Lade eins in den Einstellungen herunter.",
+          "language-model-missing": "Kein Sprachmodell auf diesem Computer versteht {{language}}. Lade eins in den Einstellungen herunter oder wähle eine andere Sprache.",
+          "language-unsupported": "Anrufe sind in dieser Sprache noch nicht verfügbar.",
+          "brain-not-downloaded": "Das Modell des Sprachassistenten ist noch nicht heruntergeladen.",
+          "brain-sign-in-required": "Melde dich an, um Anrufe mit OpenWhispr Cloud zu beantworten, oder wähle ein anderes Modell.",
+          "brain-key-missing": "Füge einen API-Schlüssel für das Modell des Sprachassistenten hinzu.",
+          "meeting-recording": "Ein Meeting wird aufgenommen. Anrufe können starten, sobald es endet.",
+          "mic-busy": "Das Diktat verwendet das Mikrofon.",
+          "mic-denied": "OpenWhispr kann das Mikrofon nicht verwenden. Erlaube es in den Einstellungen.",
+          "start-failed": "Der Anruf konnte nicht gestartet werden."
+        }
+      },
+      "notices": {
+        "endedForMeeting": "Beendet: Meeting",
+        "workerStopped": "Stimme ausgefallen",
+        "endedIdle": "Nach Stille beendet",
+        "micLost": "Mikrofon getrennt"
+      }
+    },
+    "backToLatest": "Zum Neuesten"
   },
   "integrations": {
     "title": "Integrationen",
@@ -5406,7 +5481,13 @@
         "subjectTooLong": "Der Betreff darf höchstens {{max}} Zeichen lang sein.",
         "bodyTooLong": "Die Nachricht ist zu lang für Gmail. Kürze sie, um sie zu senden.",
         "unknown": "Konnte nicht bestätigt werden. Bitte den Ordner „Gesendet“ prüfen.",
-        "fromLabel": "Von"
+        "fromLabel": "Von",
+        "title": "E-Mail",
+        "copyAll": "Alles kopieren",
+        "copyRecipients": "Empfänger kopieren",
+        "copyCc": "Cc kopieren",
+        "copySubject": "Betreff kopieren",
+        "copyBody": "Nachricht kopieren"
       },
       "github": {
         "notes": {
@@ -5453,9 +5534,13 @@
       },
       "sentEarlier": "Du hast dies schon in diesem Chat versucht. Prüfe vor dem erneuten Senden, ob es geklappt hat.",
       "slack": {
+        "workspaceLabel": "Workspace",
         "channelLabel": "Kanal",
         "asLabel": "Als",
         "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "Kanal suchen",
+        "noChannels": "Keine Kanäle gefunden",
+        "channelsUnavailable": "Deine Kanäle konnten nicht geladen werden.",
         "notes": {
           "replyInThread": "Antwort im Thread vom {{started, datetime(dateStyle: medium; timeStyle: short)}}"
         },

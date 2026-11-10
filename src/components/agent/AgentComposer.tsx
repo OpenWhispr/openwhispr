@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { CornerDownLeft, Mic, Square, X } from "../icons";
+import { CornerDownLeft, Mic, Phone, Square, X } from "../icons";
 import { cn } from "../lib/utils";
 import { ICON_BUTTON } from "../chat/interactions/cardStyles";
 
@@ -18,6 +18,8 @@ interface AgentComposerProps {
   /** In the modal the composer carries Close and Mic; above the pill they are the pill's. */
   onClose?: () => void;
   onMic?: () => void;
+  /** Starts a voice call in this chat; the draft waits here for the call to end. */
+  onCall?: () => void;
   /** A take is still transcribing, or a reply is running. */
   micDisabled: boolean;
   /** Voice input is unavailable with this transcription provider. */
@@ -40,6 +42,7 @@ export function AgentComposer({
   onStop,
   onClose,
   onMic,
+  onCall,
   micDisabled,
   micUnavailableHint,
   focused,
@@ -107,6 +110,18 @@ export function AgentComposer({
           </button>
         )}
         <div className="ms-auto flex items-center gap-2">
+          {onCall && (
+            <button
+              type="button"
+              onClick={onCall}
+              disabled={micDisabled}
+              aria-label={t("agentWindow.call.actions.start")}
+              title={t("agentWindow.call.actions.start")}
+              className={ICON_BUTTON}
+            >
+              <Phone size={16} />
+            </button>
+          )}
           {onMic && (
             <button
               type="button"

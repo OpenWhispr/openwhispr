@@ -105,6 +105,8 @@ export {
   ListOrdered,
   Maximize,
   MessageCircleQuestion,
+  Messages,
+  MicOff,
   Minimize,
   Quote,
   SkillStack,
@@ -114,6 +116,7 @@ export {
   Strikethrough,
   Table,
   TextSelect,
+  Phone,
   Volume,
 } from "./primitives";
 

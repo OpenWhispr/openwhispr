@@ -83,6 +83,12 @@
     "!**/node_modules/cross-env/**",
     "!**/node_modules/@electron/notarize/**",
 
+    "!**/node_modules/onnxruntime-web/{lib,docs}/**",
+    "!**/node_modules/onnxruntime-web/dist/*.{jsep,asyncify,jspi}.*",
+    "!**/node_modules/onnxruntime-web/dist/ort.{all,bundle,jspi,min,wasm,webgl,webgpu}.*",
+    "!**/node_modules/onnxruntime-web/dist/ort.{js,mjs}",
+    "!**/node_modules/onnxruntime-web/dist/ort.node.min.mjs",
+
     "!**/node_modules/**/test/**",
     "!**/node_modules/**/tests/**",
     "!**/node_modules/**/*.ts",
@@ -95,6 +101,8 @@
     "**/node_modules/ps-list/**/*",
     "**/node_modules/better-sqlite3/**/*",
     "**/node_modules/onnxruntime-node/**/*",
+    "**/node_modules/sherpa-onnx-*/**/*",
+    "**/node_modules/onnxruntime-web/**/*",
     "**/node_modules/@napi-rs/keyring/**/*",
     "src/workers/**/*"
   ],

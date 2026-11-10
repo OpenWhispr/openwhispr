@@ -1766,6 +1766,14 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    this.voiceConversation = require("./voiceConversationIpc").registerVoiceConversationIpc({
+      parakeetManager: this.parakeetManager,
+      whisperManager: this.whisperManager,
+      isFromCallWindow: (event) => isFromWindow(event, this.windowManager.agentWindow?.window),
+      warmSemanticSearch: () => this.getSemanticSearch?.()?.warmUp(),
+      isMeetingRecording: () => Boolean(this.meetingDetectionEngine?.isRecordingMeeting()),
+    });
+
     // Each handler takes at most one renderer argument, so the job's signal
     // always lands after it and can't be supplied by the renderer.
     const handleAudioFeature = (channel, purpose, handler) =>
@@ -4766,6 +4774,11 @@ class IPCHandlers {
       } catch (e) {
         errors.push(`Embedding worker stop: ${e.message}`);
       }
+      try {
+        await require("./voiceWorkerClient").stop();
+      } catch (e) {
+        errors.push(`Voice worker stop: ${e.message}`);
+      }
 
       // Revoke Google OAuth tokens before DB is closed
       try {
@@ -4828,6 +4841,12 @@ class IPCHandlers {
         await this.diarizationManager?.deleteModels();
       } catch (e) {
         errors.push(`Diarization models: ${e.message}`);
+      }
+      try {
+        const { getVoiceModelsDir } = require("./voiceModels");
+        fs.rmSync(getVoiceModelsDir(), { recursive: true, force: true });
+      } catch (e) {
+        errors.push(`Voice models: ${e.message}`);
       }
       try {
         const modelManager = require("./modelManagerBridge").default;
@@ -10373,6 +10392,7 @@ class IPCHandlers {
       meetingReconnectCount = 0;
       meetingFatalErrorSent = false;
       this.meetingDetectionEngine?.endRecordingSession();
+      this.voiceConversation?.endSessionForMeeting();
       this.meetingDetectionEngine?.setUserRecording(true);
 
       const completeStart = async (result) => {

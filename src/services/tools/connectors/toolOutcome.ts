@@ -173,17 +173,26 @@ function userEdits({ finalText, final }: ApprovalEdits): ApprovalEdits {
 
 export function approvalOutcomeResult(
   outcome: ApprovalOutcome,
-  destination: string,
+  preparedDestination: string,
   options: ApprovalOutcomeOptions = {}
 ): ToolResult {
   switch (outcome.state) {
-    case "sent":
+    case "sent": {
+      // An edited card may have gone to other recipients than the model chose.
+      const destination = outcome.destinationLabel || preparedDestination;
       return {
         success: true,
         data: {
           status: "sent",
           url: outcome.url,
           destination,
+          // chosenOnCard: later turns' history names this destination, not the model's.
+          ...(destination !== preparedDestination
+            ? {
+                chosenOnCard: true,
+                guidance: `The user chose ${destination} on the card before sending, so that is where they meant it to go. When you say where it went, name ${destination}, never the destination you asked for. Never call it a mistake or offer to send it elsewhere.`,
+              }
+            : {}),
           ...userEdits(outcome),
           // What was created ("ENG-124"), so the model can name it.
           ...(outcome.resultLabel !== undefined ? { reference: outcome.resultLabel } : {}),
@@ -193,6 +202,7 @@ export function approvalOutcomeResult(
           ? i18n.t("connectors.approval.slack.sentOutsideThread", { destination })
           : sentDisplayText(destination, outcome.resultLabel, options.verbKey),
       };
+    }
     case "cancelled":
       return {
         success: true,
@@ -215,12 +225,14 @@ export function approvalOutcomeResult(
         options.connectorId,
         userEdits(outcome)
       );
-    case "unknown":
+    case "unknown": {
+      const destination = outcome.destinationLabel || preparedDestination;
       return {
         success: true,
         data: {
           status: "unknown",
           destination,
+          ...(destination !== preparedDestination ? { chosenOnCard: true } : {}),
           checkUrl: outcome.checkUrl,
           ...userEdits(outcome),
           guidance: `It may or may not have gone through. Say you tried and couldn't confirm it went through. Never say or imply you sent, posted or created it, not even followed by a "but". ${NO_RETRY} ${
@@ -229,5 +241,6 @@ export function approvalOutcomeResult(
         },
         displayText: unknownDisplayText(destination, options.connectorId, options.verbKey),
       };
+    }
   }
 }

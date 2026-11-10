@@ -467,6 +467,24 @@ for (const status of ["sent", "unknown"]) {
   });
 }
 
+test("a channel the user chose on the card is the one later turns see the message went to", async () => {
+  const { toolTrace, toHistoryMessages } = await load();
+  const url = "https://example.slack.com/archives/C0GENERAL1/p1234567890000000";
+  const sent = call(
+    "slack_send_message",
+    { destination: "#design", text: "Ship it" },
+    { metadata: { status: "sent", url, destination: "#general", chosenOnCard: true } }
+  );
+  assert.equal(toolTrace([sent]), `[Tools used: slack_send_message ("#general") (sent: ${url})]`);
+  const history = toHistoryMessages([user("Post it"), assistant("", [sent])], {
+    toolHistory: "parts",
+  });
+  assert.deepEqual(
+    history.slice(1),
+    pair(sent.id, sent.name, { destination: "#general" }, { status: "sent", link: url })
+  );
+});
+
 test("a saved API key is traced as saved", async () => {
   const { toHistoryMessages } = await load();
   const saved = call(

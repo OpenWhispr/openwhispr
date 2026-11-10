@@ -7,7 +7,11 @@ import { mirrorActiveAccountScope } from "../../lib/accountScopeMirror";
 import { subscribeAuthBoundary } from "../../lib/authRequestContext";
 import { usePolicyStore } from "../../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../../stores/policyRules";
-import { getSettings, isCloudDictationAgentMode } from "../../stores/settingsStore";
+import {
+  getSettings,
+  isCloudDictationAgentMode,
+  useSettingsStore,
+} from "../../stores/settingsStore";
 import { resolveAgentAccessRefusal } from "../../helpers/agentAccessPolicy";
 import { resolveDictationAgentInference } from "../../helpers/dictationAgentInference";
 import {
@@ -40,10 +44,15 @@ import {
   type AgentPillStatus,
   type AgentWindowAction,
   type AgentWindowState,
+  type PendingCard,
 } from "./agentWindowState";
 import { useAgentSurface } from "./useAgentSurface";
 import { useAgentVoice, type AgentVoiceIntent } from "./useAgentVoice";
 import { useAgentChat } from "./useAgentChat";
+import { useVoiceCall, type VoiceCallEndReason, type VoiceCallTurn } from "./useVoiceCall";
+import { VoicePill, type VoiceCallStatus } from "./VoicePill";
+import { VoiceCallSettings } from "./VoiceCallSettings";
+import { VoiceCallSetupCard } from "./VoiceCallSetupCard";
 import { useReadAloud } from "./useReadAloud";
 import { useAnswerNudge } from "./useAnswerNudge";
 import { AgentPill } from "./AgentPill";
@@ -51,6 +60,7 @@ import { AgentComposer } from "./AgentComposer";
 import { AgentModal, type AgentModalGlow } from "./AgentModal";
 import { AgentMessageList } from "./AgentMessages";
 import { ToolCallCard } from "../chat/ChatMessage";
+import { CallCardContext } from "../chat/callCardContext";
 import { SkillChip } from "../chat/SkillChip";
 import { SelectedContextBlock } from "./AgentContext";
 
@@ -59,6 +69,13 @@ const PRESS_CAPTURE_WAIT_MS = 3000;
 // How long a new step may take to show the card it asks with.
 const STEP_SETTLE_MS = 300;
 const NOTICE_MS = 5000;
+// What the agent pill says once a call ends on its own.
+const CALL_END_NOTICES: Record<VoiceCallEndReason, string> = {
+  meeting: "agentWindow.call.notices.endedForMeeting",
+  worker: "agentWindow.call.notices.workerStopped",
+  idle: "agentWindow.call.notices.endedIdle",
+  "mic-lost": "agentWindow.call.notices.micLost",
+};
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -146,6 +163,10 @@ export default function AgentWindow() {
     policyStatus === "idle" || policyStatus === "managed" || policyStatus === "unmanaged";
   // An i18n key explaining why the assistant can't run, shown in the modal.
   const [refusal, setRefusal] = useState<string | null>(null);
+  // Allowed again (an organization turned it back on): the chat shows once more.
+  useEffect(() => {
+    if (agentAllowed) setRefusal(null);
+  }, [agentAllowed]);
 
   // The sandboxed window can't resolve a session; policy follows main's account.
   useEffect(() => mirrorActiveAccountScope(), []);
@@ -164,6 +185,7 @@ export default function AgentWindow() {
     messages,
     newChat: startNewChat,
     regenerate: regenerateReply,
+    settled: chatSettled,
     switchChat: openChat,
   } = chat;
   const [editingSelection, setEditingSelection] = useState(false);
@@ -183,6 +205,8 @@ export default function AgentWindow() {
   // A new function every render; read through a ref so callbacks stay stable.
   const sendRef = useRef(chat.send);
   sendRef.current = chat.send;
+  const sendJoinedRef = useRef(chat.sendJoined);
+  sendJoinedRef.current = chat.sendJoined;
   const readAloud = useReadAloud(i18n.language);
   const { stop: stopReading } = readAloud;
 
@@ -205,21 +229,24 @@ export default function AgentWindow() {
   // A card waiting on the user or sending carries the turn: the pill reads as
   // at rest. Stop stays only beside a card with no dismiss control of its own
   // (a question, key or settings card); any other card ends the wait itself.
-  const cardSending = useMemo(
-    () =>
-      shown.some(
-        (message) =>
-          message.isStreaming &&
-          message.toolCalls?.some(
-            (call) =>
-              (message.turn?.startedAt == null ||
-                call.startedAt == null ||
-                call.startedAt >= message.turn.startedAt) &&
-              approvals[approvalKey(message.id, call.id)]?.state === "committing"
-          )
-      ),
-    [approvals, shown]
-  );
+  const sendingCard = useMemo(() => {
+    for (const message of shown) {
+      if (!message.isStreaming) continue;
+      for (const call of message.toolCalls ?? []) {
+        const entry = approvals[approvalKey(message.id, call.id)];
+        if (
+          entry?.state === "committing" &&
+          (message.turn?.startedAt == null ||
+            call.startedAt == null ||
+            call.startedAt >= message.turn.startedAt)
+        ) {
+          return entry;
+        }
+      }
+    }
+    return null;
+  }, [approvals, shown]);
+  const cardSending = sendingCard !== null;
   const cardHolds = pendingCard !== null || cardSending;
   const offersStop =
     !cardSending &&
@@ -308,7 +335,7 @@ export default function AgentWindow() {
     else dispatch({ type: "showCard", asks });
   }, [dispatch, moveOnItsOwn, pendingCard, standalone]);
 
-  // A reply opens the modal once it has something to show: text, an error, or
+  // Outside a call, a reply opens the modal once it has something to show: text, an error, or
   // a step that is doing more than asking the user (D2). A spoken request that
   // asks first keeps its card above the pill, a connector's step that asks to
   // connect included; such a step reports its card just after it starts, so a
@@ -328,6 +355,11 @@ export default function AgentWindow() {
   useEffect(() => {
     if (replyId === null || expandedRepliesRef.current.has(replyId)) return;
     if (!replyShows && !replyWorks) return;
+    // A call speaks its replies: its transcript opens only when the user asks.
+    if (stateRef.current.call) {
+      expandedRepliesRef.current.add(replyId);
+      return;
+    }
     const expand = () => {
       expandedRepliesRef.current.add(replyId);
       if (stateRef.current.layout !== "modal") dispatch({ type: "expand" });
@@ -573,17 +605,238 @@ export default function AgentWindow() {
   const listening = voice.status === "recording" || voice.opening;
   const transcribing = voice.status === "transcribing";
 
+  // A spoken turn of a call: sent into the chat on screen with what the next
+  // request carries, and answered for speech. A turn still running (talked
+  // over, or left from typing) stops first: one stream runs per window.
+  const sendSpokenTurn = useCallback(
+    async ({
+      text,
+      speech,
+      replyLanguage,
+      dryRunWrites,
+      joinedRequest,
+      isCurrent,
+    }: VoiceCallTurn) => {
+      if (refuseIfRestricted()) {
+        speech.onEnd("refused");
+        return;
+      }
+      const interrupts = chatBusyRef.current;
+      if (interrupts) cancelTurn();
+      await chatSettled();
+      const current = stateRef.current;
+      // Dropped while the old turn stopped (a stop word, another request, New chat): never sent.
+      if (!isCurrent() || !current.call || current.call.stopped) {
+        speech.onEnd("stopped");
+        return;
+      }
+      dispatch({
+        type: "submitted",
+        typed: false,
+        draft: current.draft,
+        selectedContext: current.selectedContext,
+        attachment: current.attachment,
+      });
+      try {
+        const options = {
+          ...(current.selectedContext ? { selectedContext: current.selectedContext } : {}),
+          ...(current.attachment ? { attachment: current.attachment } : {}),
+          voice: { replyLanguage, speech, dryRunWrites, interrupts: interrupts && !joinedRequest },
+        };
+        // A request a pause cut short is answered whole, in place of its first half.
+        const sent = await (joinedRequest
+          ? sendJoinedRef.current(joinedRequest, options)
+          : sendRef.current(text, options));
+        // Never sent: the engine never heard of it, so it never ends it.
+        if (!sent) speech.onEnd("refused");
+      } catch {
+        speech.onEnd("error");
+      }
+    },
+    [cancelTurn, chatSettled, dispatch, refuseIfRestricted]
+  );
+
+  const voiceCall = useVoiceCall({
+    // Said while a question waits, the words answer it as the composer's do,
+    // added to what is already picked or typed on the card.
+    answersCard: (text) => {
+      const card = pendingCardRef.current;
+      if (card?.interaction !== "questions") return false;
+      answerWithText(card.key, text, { append: true });
+      return true;
+    },
+    onUserTurn: (turn) => void sendSpokenTurn(turn),
+    onReplyDropped: cancelTurn,
+    onEnded: (reason) => {
+      dispatch({ type: "endCall" });
+      dispatch({ type: "notice", notice: CALL_END_NOTICES[reason] });
+    },
+    onTranscriptionFailed: () =>
+      dispatch({ type: "notice", notice: "agentWindow.notices.transcriptionFailed" }),
+    isBusy: () => busyRef.current || pendingCardRef.current !== null,
+  });
+  const voiceCallRef = useRef(voiceCall);
+  voiceCallRef.current = voiceCall;
+  const {
+    session: callSession,
+    end: endVoiceCall,
+    stopReply: stopCallReply,
+    setInputHeld: holdCallInput,
+  } = voiceCall;
+  const callActive = state.call !== null && !state.call.stopped;
+
+  // A card asking for a key: nothing said meanwhile is transcribed.
   useEffect(() => {
-    if (!state.notice || listening || transcribing || busy) return;
+    holdCallInput(pendingCard?.interaction === "apiKey");
+  }, [holdCallInput, pendingCard]);
+
+  // A call says what the card its reply waits on asks: each question of a
+  // stack aloud, as it comes up, and of any other card that it is on screen
+  // (an answer card, to review and send there).
+  const pendingEntry = pendingCard ? interactions[pendingCard.key] : undefined;
+  const pendingQuestion =
+    pendingEntry?.payload.kind === "questions"
+      ? pendingEntry.payload.questions[pendingEntry.step]
+      : undefined;
+  const cardAnnouncement = pendingCard ? `${pendingCard.id}:${pendingQuestion?.id ?? ""}` : null;
+  const cardAwaitsSend = pendingCard?.interaction === null && pendingCard.key in approvals;
+  const announcedCardRef = useRef<string | null>(null);
+  const { announce: announceCard } = voiceCall;
+  useEffect(() => {
+    if (!callActive || !cardAnnouncement || announcedCardRef.current === cardAnnouncement) return;
+    announcedCardRef.current = cardAnnouncement;
+    announceCard({ question: pendingQuestion, awaitsSend: cardAwaitsSend });
+  }, [announceCard, callActive, cardAnnouncement, cardAwaitsSend, pendingQuestion]);
+
+  // An answer card sent from the compact call stays above its pill through
+  // Sending… and what came of it, as in the transcript, until the next turn
+  // or card takes its place, or the call ends.
+  const [sentCard, setSentCard] = useState<PendingCard | null>(null);
+  useEffect(() => {
+    if (!callActive) setSentCard(null);
+    else if (pendingCard) setSentCard(pendingCard.interaction === null ? pendingCard : null);
+  }, [callActive, pendingCard]);
+  const sent =
+    sentCard && messages.at(-1)?.id === sentCard.messageId ? approvals[sentCard.key] : undefined;
+  // A failed send that offers Retry still waits on the user.
+  const sendSettled =
+    !sent?.awaitingRetry &&
+    (sent?.state === "sent" || sent?.state === "failed" || sent?.state === "unknown");
+  const callCard = pendingCard ?? (sent?.state === "committing" || sendSettled ? sentCard : null);
+  // A card the user minimized the call's transcript over waits behind the
+  // pill, which reads Waiting For Action until its cap brings the card back.
+  const [hiddenCallCard, setHiddenCallCard] = useState<string | null>(null);
+  const callCardHidden = callCard !== null && callCard.id === hiddenCallCard;
+
+  // The compact call shows what is above its pill (its settings, why it
+  // couldn't start, a card), sized before paint so the pill never jumps.
+  const callFailed = voiceCall.failure !== null;
+  useLayoutEffect(() => {
+    const call = state.call;
+    if (!call || call.stopped || state.layout === "modal") return;
+    const standaloneWanted = call.settings || callFailed || (callCard !== null && !callCardHidden);
+    if (standaloneWanted !== (state.layout === "standalone")) {
+      dispatch({ type: "callCompact", standalone: standaloneWanted });
+    }
+  }, [callCard, callCardHidden, callFailed, dispatch, state.call, state.layout]);
+
+  const startCall = useCallback(async () => {
+    if (refuseIfRestricted()) return;
+    if (callSession !== "off" || listening || transcribing) return;
+    stopReading();
+    dispatch({ type: "startCall" });
+    await voiceCall.start();
+  }, [callSession, dispatch, listening, refuseIfRestricted, stopReading, transcribing, voiceCall]);
+
+  // Sent from a card saying no model hears the call's language, the user picked
+  // another: the call starts again in it. Its settings close, so no later pick
+  // lands while it starts, before its session can hear of it.
+  useEffect(
+    () =>
+      useSettingsStore.subscribe((settings, previous) => {
+        const reason = voiceCallRef.current.failure?.reason;
+        if (settings.voiceCallLanguage === previous.voiceCallLanguage) return;
+        if (reason !== "language-model-missing" && reason !== "language-unsupported") return;
+        voiceCallRef.current.clearFailure();
+        dispatch({ type: "callSettings", open: false });
+        void voiceCallRef.current.start();
+      }),
+    [dispatch]
+  );
+
+  // End stops the call, what it is saying, and the turn it is running; the chat stays.
+  const endCall = useCallback(() => {
+    if (chatBusyRef.current) cancelTurn();
+    voiceCallRef.current.clearFailure();
+    void endVoiceCall();
+    dispatch({ type: "endCall" });
+  }, [cancelTurn, dispatch, endVoiceCall]);
+
+  // The organization turned the assistant off mid-call: the call ends and says
+  // why. A policy still loading (a refetch) leaves it running.
+  useEffect(() => {
+    if (callActive && policyResolved && !agentAllowed) {
+      endCall();
+      refuseIfRestricted();
+    }
+  }, [agentAllowed, callActive, endCall, policyResolved, refuseIfRestricted]);
+
+  // A call Stopped in the transcript goes back to typing at the first key
+  // typed, as at a click on its pill; the key starts on the draft.
+  const callStopped = state.layout === "modal" && Boolean(state.call?.stopped);
+  useEffect(() => {
+    if (!callStopped) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        event.key.length !== 1 ||
+        event.metaKey ||
+        (event.ctrlKey && !event.getModifierState("AltGraph")) ||
+        event.defaultPrevented ||
+        // A card's field keeps its keys, and Space still presses a focused button.
+        target?.closest("input, textarea, [contenteditable]") ||
+        (event.key === " " && target?.closest("button"))
+      )
+        return;
+      event.preventDefault();
+      dispatch({ type: "setDraft", draft: stateRef.current.draft + event.key });
+      dispatch({ type: "leaveCall" });
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [callStopped, dispatch]);
+
+  // The voice harness (OPENWHISPR_VOICE_HARNESS=1): a call with no mic, once the app settles.
+  const { harnessAvailable } = voiceCall;
+  const startHarnessRef = useRef(() => {});
+  startHarnessRef.current = () => {
+    dispatch({ type: "show", layout: "pill", input: "voice" });
+    dispatch({ type: "startCall" });
+    void voiceCall.start({ harness: true });
+  };
+  useEffect(() => {
+    if (!harnessAvailable) return undefined;
+    const timer = setTimeout(() => startHarnessRef.current(), 4000);
+    const done = window.electronAPI?.voiceConversation?.onHarnessDone(() => endCall());
+    return () => {
+      clearTimeout(timer);
+      done?.();
+    };
+  }, [endCall, harnessAvailable]);
+
+  // A notice in a call's cap gives way to its status after a while, busy or not.
+  useEffect(() => {
+    if (!state.notice || (!callActive && (listening || transcribing || busy))) return;
     const timer = setTimeout(() => dispatch({ type: "notice", notice: null }), NOTICE_MS);
     return () => clearTimeout(timer);
-  }, [busy, dispatch, listening, state.notice, transcribing]);
+  }, [busy, callActive, dispatch, listening, state.notice, transcribing]);
 
+  // A call shows its cards above its pill already.
   const nudge = useAnswerNudge({
     pendingKey: pendingCard?.id ?? null,
     compact: state.layout !== "modal",
     visible: state.visible,
-    paused: listening || transcribing,
+    paused: listening || transcribing || state.call !== null,
     onOpen: () => moveOnItsOwn({ type: "expand" }),
   });
 
@@ -592,6 +845,8 @@ export default function AgentWindow() {
     layout: state.layout,
     focus: surfaceFocus,
     ...(standalone ? { contentHeight: cardHeight } : {}),
+    // The call's transcript is the typed modal, so only its compact layouts are sized as a call.
+    call: state.call !== null && state.layout !== "modal",
     // Only the pill that reads "Waiting for answer", or a notice, needs the wider window.
     wide:
       state.layout === "pill" &&
@@ -704,44 +959,59 @@ export default function AgentWindow() {
       subscribeAuthBoundary(() => {
         dropTake();
         stopReading();
+        void endVoiceCall();
+        dispatch({ type: "endCall" });
         dispatch({ type: "setDraft", draft: "" });
       }),
-    [dispatch, dropTake, stopReading]
+    [dispatch, dropTake, endVoiceCall, stopReading]
   );
   // Bumped when the user opens another chat, so the list starts again at the
   // newest message instead of wherever the previous chat was scrolled.
   const [openedChat, setOpenedChat] = useState(0);
 
+  // A call goes on in the chat opened next; what it was saying belonged to this one.
   const newChat = useCallback(() => {
     stopReading();
     dropTake();
+    stopCallReply();
     setOpenedChat((count) => count + 1);
     startNewChat();
-  }, [dropTake, startNewChat, stopReading]);
+  }, [dropTake, startNewChat, stopCallReply, stopReading]);
 
   const { hide: hideSurface } = surface;
   // A close starts a new chat (the old one stays in the list); Minimize keeps
   // the chat. It starts before the hide, so a command that reaches the window
   // meanwhile goes to the new chat, though the window still ends hidden.
   const close = useCallback(async () => {
+    void endVoiceCall();
     newChat();
     pressRef.current += 1;
     openedByTakeRef.current = false;
     setRefusal(null);
     await hideSurface();
     dispatch({ type: "hide" });
-  }, [dispatch, hideSurface, newChat]);
+  }, [dispatch, endVoiceCall, hideSurface, newChat]);
+
+  // A call already listens: a press or Ask assistant only brings it back into view.
+  // A call Stopped in the transcript is left first, so the take or typing shows.
+  const showActiveCall = useCallback(() => {
+    const current = stateRef.current;
+    if (current.call?.stopped) dispatch({ type: "leaveCall" });
+    if (!current.call || current.call.stopped) return false;
+    return true;
+  }, [dispatch]);
 
   const handleHotkey = useCallback(
     ({ external }: { external: boolean }) => {
       if (refuseIfRestricted()) return;
       setRefusal(null);
+      if (showActiveCall()) return;
+      const current = stateRef.current;
       // The second press sends what was said.
       if (listening) {
         voice.stop("submit");
         return;
       }
-      const current = stateRef.current;
       // A reply is running: show it, but don't listen over it.
       if (busy && (editingSelection || external || !selectedApprovalField())) {
         if (!current.visible) dispatch({ type: "show", layout: "modal", input: "voice" });
@@ -758,10 +1028,35 @@ export default function AgentWindow() {
       }
       void startListening({ external });
     },
-    [busy, dispatch, editingSelection, listening, refuseIfRestricted, startListening, voice]
+    [
+      busy,
+      dispatch,
+      editingSelection,
+      listening,
+      refuseIfRestricted,
+      showActiveCall,
+      startListening,
+      voice,
+    ]
   );
 
   const handleEscape = useCallback(() => {
+    const call = stateRef.current.call;
+    if (call && !call.stopped) {
+      if (call.settings) {
+        dispatch({ type: "callSettings", open: false });
+      } else if (cardSending) {
+        // As the white Stop does: only what is being said; the send and its outcome go on.
+        voiceCallRef.current.stopSpeech();
+      } else if (voiceCallRef.current.speaking || busy) {
+        // Esc stops the reply first, spoken or still being worked on; the next one ends the call.
+        stopCallReply();
+        if (chatBusyRef.current) cancelTurn();
+      } else {
+        endCall();
+      }
+      return;
+    }
     if (selectionEditRef.current) {
       dropTake();
       return;
@@ -782,7 +1077,19 @@ export default function AgentWindow() {
       return;
     }
     void close();
-  }, [busy, close, dropTake, listening, stopRequest, transcribing]);
+  }, [
+    busy,
+    cancelTurn,
+    cardSending,
+    close,
+    dispatch,
+    dropTake,
+    endCall,
+    listening,
+    stopCallReply,
+    stopRequest,
+    transcribing,
+  ]);
 
   // Main's messages, read through a ref so each listener is registered once.
   const handlersRef = useRef({
@@ -798,6 +1105,7 @@ export default function AgentWindow() {
     open: (layout) => {
       if (refuseIfRestricted()) return;
       setRefusal(null);
+      if (showActiveCall()) return;
       // Typing shows no take: what was said so far starts the draft, as Keyboard does.
       if (listening) voice.stop("draft");
       openedByTakeRef.current = false;
@@ -806,6 +1114,7 @@ export default function AgentWindow() {
     command: (command) => {
       if (refuseIfRestricted()) return;
       setRefusal(null);
+      if (stateRef.current.call?.stopped) dispatch({ type: "leaveCall" });
       if (!stateRef.current.visible) dispatch({ type: "show", layout: "pill", input: "voice" });
       submit(command.text, false, {
         selectedContext: command.selectedContext
@@ -815,6 +1124,7 @@ export default function AgentWindow() {
       });
     },
     dismiss: () => {
+      void endVoiceCall();
       newChat();
       pressRef.current += 1;
       setRefusal(null);
@@ -892,6 +1202,7 @@ export default function AgentWindow() {
       const forkId = await fork(message, selectedText, () => {
         stopReading();
         dropTake();
+        stopCallReply();
       });
       if (forkId === null) {
         dispatch({ type: "notice", notice: "chat.forkFailed" });
@@ -900,7 +1211,7 @@ export default function AgentWindow() {
       if (forkId === false) return;
       setOpenedChat((count) => count + 1);
     },
-    [dispatch, dropTake, fork, stopReading]
+    [dispatch, dropTake, fork, stopCallReply, stopReading]
   );
 
   const regenerate = useCallback(
@@ -929,22 +1240,24 @@ export default function AgentWindow() {
       void openChat(id, () => {
         stopReading();
         dropTake();
+        stopCallReply();
       }).then((opened) => {
         // False: another switch overtook this one and owns the list.
         if (opened === true) setOpenedChat((count) => count + 1);
         else if (opened === null) dispatch({ type: "notice", notice: "chat.openFailed" });
       });
     },
-    [conversationId, dispatch, dropTake, openChat, stopReading]
+    [conversationId, dispatch, dropTake, openChat, stopCallReply, stopReading]
   );
 
+  // A call speaks its own replies: Read aloud would talk over it.
   const readAloudState = useMemo(
     () => ({
-      available: readAloud.available,
+      available: readAloud.available && !callActive,
       speakingId: readAloud.speakingId,
       toggle: readAloud.toggle,
     }),
-    [readAloud.available, readAloud.speakingId, readAloud.toggle]
+    [callActive, readAloud.available, readAloud.speakingId, readAloud.toggle]
   );
 
   const handlePillAction = (button: AgentPillButton) => {
@@ -953,6 +1266,9 @@ export default function AgentWindow() {
         openedByTakeRef.current = false;
         nudge.cancel();
         dispatch({ type: "expand" });
+        return;
+      case "call":
+        void startCall();
         return;
       case "mic":
         void startListening();
@@ -1088,6 +1404,7 @@ export default function AgentWindow() {
         onStop={editingSelection || offersStop ? stopRequest : undefined}
         onClose={inModal ? () => void close() : undefined}
         onMic={inModal ? () => void startListening() : undefined}
+        onCall={inModal ? () => void startCall() : undefined}
         micDisabled={busy || transcribing}
         micUnavailableHint={micHint}
         focused={
@@ -1105,6 +1422,10 @@ export default function AgentWindow() {
             {!inModal && state.selectedContext ? (
               <div className="pb-2">{pendingContext(true)}</div>
             ) : null}
+            {/* The typing pill shows no notices: why a call ended shows here. */}
+            {!inModal && notice ? (
+              <p className="px-1 pb-1 text-xs text-muted-foreground">{notice}</p>
+            ) : null}
           </>
         }
         className={inModal ? "min-h-21" : "agent-panel h-[145px] w-[510px]"}
@@ -1117,13 +1438,87 @@ export default function AgentWindow() {
       <BrandMarkIcon size={22} className="text-primary" />
       <p dir="auto">{t(refusal)}</p>
     </div>
-  ) : state.input === "keyboard" && !forkOrigin?.parentTitle ? (
+  ) : state.input === "keyboard" && !state.call && !forkOrigin?.parentTitle ? (
     // A fork with nothing of its own yet shows just its chip.
     <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
       <BrandMarkIcon size={22} className="text-primary" />
       <p className="text-lg font-medium text-foreground">{t("agentWindow.empty.title")}</p>
       <p className="text-sm text-muted-foreground">{t("agentWindow.empty.description")}</p>
     </div>
+  ) : null;
+
+  // The call's cap says what is actually happening, the most pressing first.
+  const callStatus: VoiceCallStatus =
+    !state.call || state.call.stopped || voiceCall.failure
+      ? "stopped"
+      : callSession !== "active"
+        ? "starting"
+        : sendingCard?.preview.verbKey === "email"
+          ? "sendingEmail"
+          : sendingCard?.preview.verbKey === "slackPost"
+            ? "sendingMessage"
+            : pendingCard
+              ? "waiting"
+              : voiceCall.speaking
+                ? "speaking"
+                : busy || cardSending
+                  ? "working"
+                  : voiceCall.micMuted
+                    ? "micOff"
+                    : "listening";
+  const leaveCall = () => {
+    voiceCall.clearFailure();
+    dispatch({ type: "leaveCall" });
+  };
+  const retryCall = () => {
+    // A download that finished after the call was left or ended starts nothing.
+    const call = stateRef.current.call;
+    if (!call || call.stopped) return;
+    voiceCall.clearFailure();
+    void voiceCall.start();
+  };
+  // Minimized over a waiting card, a call keeps that card behind its pill.
+  const collapse = () => {
+    if (state.call && pendingCard) setHiddenCallCard(pendingCard.id);
+    dispatch({ type: "collapse", pending: Boolean(pendingCard) });
+  };
+  const voicePill = (inModal: boolean) => (
+    <VoicePill
+      status={callStatus}
+      notice={(callActive && callSession === "active") || state.call?.stopped ? notice : null}
+      readLevel={voiceCall.readLevel}
+      waveformActive={callSession === "active" && (!voiceCall.micMuted || voiceCall.speaking)}
+      micMuted={voiceCall.micMuted}
+      sessionControl={voiceCall.speaking ? "stopReply" : "end"}
+      settingsOpen={Boolean(state.call?.settings)}
+      inModal={inModal}
+      onSettings={() => dispatch({ type: "callSettings", open: !state.call?.settings })}
+      onTranscript={() => (state.layout === "modal" ? collapse() : dispatch({ type: "expand" }))}
+      onMic={() => void voiceCall.setMicMuted(!voiceCall.micMuted)}
+      onEnd={endCall}
+      // Over a waiting or sending card, Stop silences only its read-out: the card and its turn stay.
+      onStopReply={pendingCard || cardSending ? voiceCall.stopSpeech : stopCallReply}
+      onLeave={leaveCall}
+      onShowCard={!inModal && callCardHidden ? () => setHiddenCallCard(null) : undefined}
+    />
+  );
+  // A question stack's questions still to come show behind it, three at most.
+  const questionsBehind =
+    pendingEntry?.payload.kind === "questions"
+      ? Math.min(3, pendingEntry.payload.questions.length - 1 - pendingEntry.step)
+      : 0;
+  const wideCallCard = callCard?.interaction === null || callCard?.interaction === "connection";
+  // Above the call's pill, the most recent ask first: its settings, why it
+  // couldn't start, then the card its turn waits on.
+  const callAbovePill = !state.call ? null : state.call.settings ? (
+    <VoiceCallSettings onClose={() => dispatch({ type: "callSettings", open: false })} />
+  ) : voiceCall.failure ? (
+    <VoiceCallSetupCard
+      failure={voiceCall.failure}
+      onRetry={retryCall}
+      onChangeLanguage={() => dispatch({ type: "callSettings", open: true })}
+      onClose={leaveCall}
+    />
   ) : null;
 
   return (
@@ -1144,38 +1539,52 @@ export default function AgentWindow() {
         {state.layout === "modal" ? (
           <AgentModal
             bare={messages.length === 0 && state.input === "voice" && !refusal}
-            glow={glow}
+            glow={state.call ? "none" : glow}
             conversationId={conversationId}
             onNewChat={newChat}
             onSelectChat={switchChat}
-            onCollapse={() => dispatch({ type: "collapse", pending: Boolean(pendingCard) })}
+            onCollapse={collapse}
             footer={
-              <div className="flex flex-col items-center gap-2">
-                {state.input === "keyboard" && notice && (
-                  <p className="self-start px-1 text-xs text-muted-foreground">{notice}</p>
-                )}
-                {state.selectedContext && <div className="w-full">{pendingContext(false)}</div>}
-                {state.input === "keyboard" ? (
-                  <div className="w-full">{composer(true)}</div>
-                ) : (
-                  pill("modal")
-                )}
-              </div>
+              state.call ? (
+                <div className="relative flex flex-col items-center">
+                  {callAbovePill && (
+                    <div className="absolute inset-x-0 bottom-full z-20 mb-3 flex justify-center">
+                      {callAbovePill}
+                    </div>
+                  )}
+                  {voicePill(true)}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  {state.input === "keyboard" && notice && (
+                    <p className="self-start px-1 text-xs text-muted-foreground">{notice}</p>
+                  )}
+                  {state.selectedContext && <div className="w-full">{pendingContext(false)}</div>}
+                  {state.input === "keyboard" ? (
+                    <div className="w-full">{composer(true)}</div>
+                  ) : (
+                    pill("modal")
+                  )}
+                </div>
+              )
             }
           >
-            <AgentMessageList
-              key={openedChat}
-              messages={refusal ? [] : shown}
-              forkOrigin={forkOrigin}
-              onOpenParent={switchChat}
-              busy={busy}
-              readAloud={readAloudState}
-              onRegenerate={regenerate}
-              onFork={forkMessage}
-              onFollowUp={followUp}
-              onContinue={continueTurn}
-              emptyState={emptyState}
-            />
+            <CallCardContext.Provider value={state.call ? "transcript" : null}>
+              <AgentMessageList
+                key={openedChat}
+                messages={refusal ? [] : shown}
+                forkOrigin={forkOrigin}
+                onOpenParent={switchChat}
+                busy={busy}
+                readAloud={readAloudState}
+                onRegenerate={regenerate}
+                onFork={forkMessage}
+                onFollowUp={state.call ? undefined : followUp}
+                onContinue={continueTurn}
+                emptyState={emptyState}
+                backToLatest={state.call !== null}
+              />
+            </CallCardContext.Provider>
           </AgentModal>
         ) : state.layout === "typing" ? (
           <>
@@ -1183,6 +1592,40 @@ export default function AgentWindow() {
                 stops the timed opening. */}
             <div onKeyDown={nudge.cancel}>{composer(false)}</div>
             {pill("typing")}
+          </>
+        ) : state.call ? (
+          <>
+            {standalone && (
+              <div ref={cardFrameRef} className="flex max-w-full shrink-0 flex-col items-center">
+                {!callAbovePill &&
+                  Array.from({ length: questionsBehind }, (_, depth) => (
+                    <div
+                      key={depth}
+                      aria-hidden="true"
+                      className="-mb-4 h-6.5 self-stretch rounded-t-2xl border-x border-t border-border/50 bg-surface-1"
+                      style={{ marginInline: (questionsBehind - depth) * 8 }}
+                    />
+                  ))}
+                <div
+                  className={cn(
+                    "flex max-h-[520px] max-w-full shrink-0 flex-col",
+                    callAbovePill
+                      ? "w-[420px] items-center"
+                      : "agent-chat-scroll overflow-y-auto rounded-2xl border border-border/50 shadow-[var(--shadow-card)] [&>*>*]:my-0",
+                    // An answer or connect card is the call's wide card; a question the narrower one.
+                    !callAbovePill && (wideCallCard ? "w-[450px]" : "w-[420px]")
+                  )}
+                >
+                  {callAbovePill ??
+                    (callCard && (
+                      <CallCardContext.Provider value="compact">
+                        <ToolCallCard messageId={callCard.messageId} toolCall={callCard.toolCall} />
+                      </CallCardContext.Provider>
+                    ))}
+                </div>
+              </div>
+            )}
+            {voicePill(false)}
           </>
         ) : standalone && pendingCard ? (
           <>

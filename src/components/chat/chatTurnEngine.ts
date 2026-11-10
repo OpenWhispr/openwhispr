@@ -44,6 +44,7 @@ import {
   appendScreenContextSuffix,
   buildMessageContext,
   getAgentSystemPrompt,
+  getSpokenReplyRule,
 } from "../../config/prompts";
 import {
   CONNECTOR_NAMES,
@@ -69,6 +70,8 @@ import { getLlmDictionaryWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
+import { adaptToolsForVoice } from "../../services/voice/voiceToolPolicy";
+import type { SpokenLanguage } from "../../services/voice/types";
 import {
   createLookAtScreenTool,
   LOOK_AT_SCREEN_PROMPT,
@@ -312,6 +315,33 @@ export type TurnHandler = (
   details: TurnDetails
 ) => void | Promise<void>;
 
+/** How a spoken request's turn ended, for the voice call that hears it. */
+export type TurnSpeechOutcome = "complete" | "refused" | "error" | "stopped";
+
+/**
+ * Hears one spoken request's reply as it streams, so a voice call can speak it.
+ * Called only for the send it was given to, and onEnd exactly once.
+ */
+export interface TurnSpeechObserver {
+  /**
+   * New reply text. `isUnbacked` is the claim check the reply will face: text
+   * it flags may be withdrawn, so it isn't spoken until the turn shows it stands.
+   */
+  onText: (delta: string, isUnbacked?: (text: string) => boolean) => void;
+  /**
+   * Text was withdrawn (an unbacked claim asked again, or a failure replacing
+   * the reply): the reply now keeps only its first `keptLength` characters.
+   */
+  onTextWithdrawn: (keptLength: number) => void;
+  /** The model called these tools. */
+  onToolCalls: (toolNames: string[]) => void;
+  /** The tools this turn offers, once (the voice harness scores against them). */
+  onToolsOffered?: (toolNames: string[]) => void;
+  /** A write tool ran (a repeat the write-once guard blocked never does): whether it succeeded. */
+  onWriteRun?: (toolName: string, ok: boolean) => void;
+  onEnd: (outcome: TurnSpeechOutcome) => void;
+}
+
 export interface SendToAIOptions {
   /** The conversation this turn is saved into. */
   conversationId?: number;
@@ -349,6 +379,28 @@ export interface SendToAIOptions {
   replaceMessage?: Message;
   /** A regenerate that failed before anything new: its old reply is back, and the caller can say so. */
   onReplaceFailed?: () => void;
+  /**
+   * A request spoken in a voice call: the reply is written to be read aloud in
+   * `replyLanguage` (null: the language spoken), and `speech` hears it stream.
+   * `dryRunWrites` (the voice harness) runs no write tool. `interrupts`: it was
+   * said over a turn still running, so that turn's request may be its start.
+   */
+  voice?: {
+    replyLanguage: SpokenLanguage | null;
+    speech: TurnSpeechObserver;
+    dryRunWrites?: boolean;
+    interrupts?: boolean;
+  };
+}
+
+// A reply stopped before it said or did anything.
+function stoppedBeforeReply(message: Message | undefined): boolean {
+  return (
+    message?.role === "assistant" &&
+    message.turn?.status === "stopped" &&
+    !message.content.trim() &&
+    !message.toolCalls?.length
+  );
 }
 
 // Walks backward to the newest user message; a null transform keeps walking.
@@ -414,6 +466,8 @@ export function createChatTurnEngine(
     options?: SendToAIOptions
   ): Promise<void> => {
     cancel({ explicit: true });
+    const speech = options?.voice?.speech;
+    let speechOutcome: TurnSpeechOutcome = "stopped";
     const sendNumber = ++latestSend;
     const stopsAtStart = stops;
     const { claimConversation } = getOptions();
@@ -423,11 +477,13 @@ export function createChatTurnEngine(
         : undefined;
     if (claim === false) {
       options?.onReplaceFailed?.();
+      speech?.onEnd("refused");
       return;
     }
     if (sendNumber !== latestSend || stops !== stopsAtStart) {
       // A newer send holds the same claim now, and gives it back when it ends.
       if (sendNumber === latestSend) await claim?.release();
+      speech?.onEnd("stopped");
       return;
     }
     // A claim this window didn't hold brings the conversation as it is saved now.
@@ -436,6 +492,7 @@ export function createChatTurnEngine(
         const latest = claim.messages.at(-1);
         if (latest?.dbId !== options.replaceMessage.dbId || latest?.role !== "assistant") {
           options.onReplaceFailed?.();
+          speech?.onEnd("refused");
           await claim.release();
           return;
         }
@@ -529,6 +586,7 @@ export function createChatTurnEngine(
     try {
       if (!cancelled()) await runSend();
     } finally {
+      speech?.onEnd(speechOutcome);
       toolScope.abort();
       flushPendingContent();
       setAgentState("idle");
@@ -538,6 +596,10 @@ export function createChatTurnEngine(
     async function runSend(): Promise<void> {
       // Answers the already-appended user message with one line instead of a dead end.
       const answerWithLine = (content: string, error?: Message["error"]): void => {
+        if (!cancelled()) {
+          speech?.onText(content);
+          speechOutcome = "refused";
+        }
         setMessages((prev) => [
           ...prev,
           {
@@ -717,6 +779,7 @@ export function createChatTurnEngine(
           },
           connectors,
           keepNotesUnchanged,
+          keepSnippetsUnchanged: Boolean(options?.voice),
           interactions,
           skills: skillsEnabled
             ? {
@@ -731,6 +794,12 @@ export function createChatTurnEngine(
               }
             : undefined,
         });
+        if (options?.voice) {
+          adaptToolsForVoice(registry, {
+            dryRunWrites: options.voice.dryRunWrites,
+            onWriteRun: options.voice.speech.onWriteRun,
+          });
+        }
       }
 
       // Named in the prompt so the model says how to turn a capability on
@@ -890,6 +959,7 @@ export function createChatTurnEngine(
       const offeredTools = registry
         ? [...registry.getAll(), ...(lookAtScreen ? [lookAtScreen] : [])]
         : undefined;
+      speech?.onToolsOffered?.(offeredTools?.map((tool) => tool.name) ?? []);
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
@@ -908,18 +978,35 @@ export function createChatTurnEngine(
         getLlmDictionaryWords(settings, { includeTriggers: true }),
         settings.uiLanguage
       );
+      if (options?.voice) {
+        systemPrompt += `\n\n${getSpokenReplyRule(options.voice.replyLanguage)}`;
+      }
 
       // A whole-note action asks with its own text in place of the saved
       // request; swapped before the history is built, so a note the history
       // opens the request with (sends it left out) stays.
       const requestText = options?.requestText;
-      const requestIndex = allMessages.map((message) => message.role).lastIndexOf("user");
+      // A spoken request leaves out those the user stopped before any reply (End,
+      // Stop, a stop word): read beside it, one was answered as if asked again.
+      // The one it talked over stays, as it may be this request's start; typed
+      // chat keeps them all, noted.
+      const roles = allMessages.map((message) => message.role);
+      const talkedOver = options?.voice?.interrupts
+        ? roles.lastIndexOf("user", roles.length - 2)
+        : -1;
+      const asked = options?.voice
+        ? allMessages.filter(
+            (message, i) =>
+              message.role !== "user" || i === talkedOver || !stoppedBeforeReply(allMessages[i + 1])
+          )
+        : allMessages;
+      const requestIndex = asked.map((message) => message.role).lastIndexOf("user");
       const history: HistoryMessage[] = toHistoryMessages(
         requestText
-          ? allMessages.map((message, i) =>
+          ? asked.map((message, i) =>
               i === requestIndex ? { ...message, content: requestText } : message
             )
-          : allMessages,
+          : asked,
         {
           toolHistory,
           isOffered: (name) => offeredTools?.some((tool) => tool.name === name) ?? false,
@@ -1200,12 +1287,24 @@ export function createChatTurnEngine(
       // Where a reply the claim check asked about starts. It stays on screen
       // until the second answer replaces it: a stop or failure must not lose it.
       let askedAgainFrom: number | null = null;
+      // How much of the reply a voice call has heard: it grows with the
+      // visible text, and shrinks only when a claim's answer is withdrawn.
+      let heardLength = 0;
+      const tellSpeech = (): void => {
+        if (!speech || fullContent.length <= heardLength) return;
+        speech.onText(fullContent.slice(heardLength), isUnbacked);
+        heardLength = fullContent.length;
+      };
       const replaceAskedReply = (): void => {
         if (askedAgainFrom === null) return;
         rawContent = rawContent.slice(0, askedAgainFrom);
         fullContent = withoutEchoedToolTrace(rawContent);
         afterToolCall = true;
         askedAgainFrom = null;
+        if (speech && heardLength > fullContent.length) {
+          heardLength = fullContent.length;
+          speech.onTextWithdrawn(heardLength);
+        }
       };
       const keepAskedReply = (): void => {
         if (askedAgainFrom === null) return;
@@ -1358,6 +1457,7 @@ export function createChatTurnEngine(
             afterToolCall = false;
             rawContent += chunk.text;
             fullContent = withoutEchoedToolTrace(rawContent);
+            tellSpeech();
             scheduleContentFlush();
           } else if (chunk.type === "reasoning") {
             if (reasoningAfterToolCall && reasoning && !/\s$/.test(reasoning)) reasoning += "\n\n";
@@ -1376,6 +1476,7 @@ export function createChatTurnEngine(
             afterToolCall = true;
             reasoningAfterToolCall = true;
             stepTextStart = rawContent.length;
+            speech?.onToolCalls(chunk.calls.map((call) => call.name));
             // Text that arrived before a tool step must be on screen before the
             // step appears, not an interval after it.
             flushContentNow();
@@ -1457,6 +1558,8 @@ export function createChatTurnEngine(
           // terminal outcome.
           fullContent = t("agentMode.chat.emptyResponse");
         }
+        tellSpeech();
+        speechOutcome = "complete";
 
         turn = {
           ...turn,
@@ -1492,7 +1595,9 @@ export function createChatTurnEngine(
             "reasoning"
           );
         }
-        if (restoresReplaced()) {
+        // A spoken request (a joined one) says why it failed; only a stop brings
+        // back the reply it replaced.
+        if (restoresReplaced() && (cancelled() || !speech)) {
           restoreReplaced();
           if (!cancelled()) options?.onReplaceFailed?.();
         } else if (cancelled()) {
@@ -1501,6 +1606,7 @@ export function createChatTurnEngine(
         } else if (askedAgainFrom !== null) {
           // The second ask failed: the first answer stands, noted.
           keepAskedReply();
+          speechOutcome = "complete";
           turn = { ...turn, finishedAt: Date.now(), status: "complete" };
           flushContentNow();
           setMessages((prev) =>
@@ -1536,6 +1642,11 @@ export function createChatTurnEngine(
           };
           settleStoppedTurn(true);
           turn = { ...turn, status: "error" };
+          if (speech) {
+            speech.onTextWithdrawn(0);
+            speech.onText(failure.description);
+            speechOutcome = "error";
+          }
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId

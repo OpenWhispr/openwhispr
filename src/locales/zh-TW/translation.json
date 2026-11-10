@@ -4821,7 +4821,82 @@
       "steps_one": "{{count}} 個步驟",
       "steps_other": "{{count}} 個步驟"
     },
-    "waitingForAnswer": "等待回答"
+    "waitingForAnswer": "等待回答",
+    "call": {
+      "status": {
+        "starting": "正在啟動語音…",
+        "listening": "正在聆聽",
+        "working": "處理中…",
+        "speaking": "正在說話",
+        "micOff": "麥克風已關閉",
+        "waiting": "等待操作",
+        "sendingEmail": "正在傳送郵件",
+        "sendingMessage": "正在傳送訊息",
+        "stopped": "已停止"
+      },
+      "actions": {
+        "start": "開始 Voice Agent",
+        "settings": "設定",
+        "transcript": "顯示聊天",
+        "hideTranscript": "隱藏聊天",
+        "micOff": "關閉麥克風",
+        "micOn": "開啟麥克風",
+        "end": "結束通話",
+        "stopReply": "停止說話",
+        "backToText": "返回輸入",
+        "showCard": "顯示待處理內容"
+      },
+      "settings": {
+        "title": "設定",
+        "close": "關閉設定",
+        "voice": "聲音",
+        "speed": "語速",
+        "language": "語言",
+        "voices": {
+          "helios": "Helios",
+          "aurora": "Aurora"
+        },
+        "male": "男聲",
+        "female": "女聲",
+        "slower": "更慢",
+        "faster": "更快",
+        "speedValue": "{{value}}x",
+        "autoDetect": "自動偵測",
+        "searchLanguages": "搜尋語言",
+        "noLanguages": "找不到語言",
+        "languageUnavailable": "這台電腦上沒有能辨識{{language}}的語音模型",
+        "needsSpeechModel": "需要語音模型"
+      },
+      "setup": {
+        "download": "下載",
+        "openSettings": "開啟設定",
+        "changeLanguage": "變更語言",
+        "retry": "重試",
+        "cancel": "取消",
+        "downloading": "正在下載… {{percent}}%",
+        "downloadFailed": "無法下載語音模型。請檢查網路連線後再試一次。",
+        "reasons": {
+          "voice-models-missing": "語音通話需要在這台電腦上下載 {{size}} MB 的語音模型。",
+          "speech-model-missing": "語音通話需要本機語音模型才能聽到你說話。請在設定中下載一個。",
+          "language-model-missing": "這台電腦上沒有能辨識通話語言（{{language}}）的語音模型。請在設定中下載，或選擇其他語言。",
+          "language-unsupported": "此語言尚不支援通話。",
+          "brain-not-downloaded": "語音助理的模型尚未下載。",
+          "brain-sign-in-required": "請登入以使用 OpenWhispr Cloud 接聽通話，或選擇其他模型。",
+          "brain-key-missing": "請為語音助理的模型新增 API 金鑰。",
+          "meeting-recording": "正在錄製會議。會議結束後即可開始通話。",
+          "mic-busy": "聽寫正在使用麥克風。",
+          "mic-denied": "OpenWhispr 無法使用麥克風。請在設定中允許。",
+          "start-failed": "無法開始通話。"
+        }
+      },
+      "notices": {
+        "endedForMeeting": "因會議已結束",
+        "workerStopped": "語音已停止運作",
+        "endedIdle": "因無人說話已結束",
+        "micLost": "麥克風已斷線"
+      }
+    },
+    "backToLatest": "回到最新"
   },
   "integrations": {
     "title": "整合",
@@ -5053,7 +5128,13 @@
         "subjectTooLong": "主旨不能超過 {{max}} 個字元。",
         "bodyTooLong": "郵件內文過長，無法透過 Gmail 傳送。請縮短後再傳送。",
         "unknown": "無法確認是否已傳送，請檢查「寄件備份」資料夾。",
-        "fromLabel": "寄件者"
+        "fromLabel": "寄件者",
+        "title": "郵件",
+        "copyAll": "全部複製",
+        "copyRecipients": "複製收件者",
+        "copyCc": "複製副本",
+        "copySubject": "複製主旨",
+        "copyBody": "複製內文"
       },
       "github": {
         "notes": {
@@ -5100,9 +5181,13 @@
       },
       "sentEarlier": "你之前已在此對話中嘗試過。再次傳送前，請先確認是否已完成。",
       "slack": {
+        "workspaceLabel": "工作區",
         "channelLabel": "頻道",
         "asLabel": "身分",
         "destination": "{{workspace}} · {{destination}}",
+        "findChannel": "尋找頻道",
+        "noChannels": "找不到頻道",
+        "channelsUnavailable": "無法載入你的頻道。",
         "notes": {
           "replyInThread": "在 {{started, datetime(dateStyle: medium; timeStyle: short)}} 開始的討論串中回覆"
         },

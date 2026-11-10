@@ -48,6 +48,8 @@ interface ToolRegistrySettings {
   connectors?: ConnectorToolSettings;
   /** Leaves out update_note, for a turn that must not change any note. */
   keepNotesUnchanged?: boolean;
+  /** Leaves out update_snippets: a misheard spoken request once edited and deleted snippets. */
+  keepSnippetsUnchanged?: boolean;
   /** Present only on surfaces that can show interactions (questions, connect cards). */
   interactions?: InteractionToolOptions;
   /** The user's skills; load_skill is offered once one is usable. */
@@ -71,7 +73,9 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     const snippets = settings.vocabulary.getSnippets();
     if (snippets.length > 0) registry.register(createSnippetTool(snippets));
     registry.register(createUpdateDictionaryTool(settings.vocabulary));
-    registry.register(createUpdateSnippetsTool(settings.vocabulary));
+    if (!settings.keepSnippetsUnchanged) {
+      registry.register(createUpdateSnippetsTool(settings.vocabulary));
+    }
   }
 
   if (settings.isSignedIn && settings.webSearchEnabled) {
