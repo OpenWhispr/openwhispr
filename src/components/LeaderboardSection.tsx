@@ -789,7 +789,7 @@ export default function LeaderboardSection({
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
         message={t("insights.leaderboard.activationError")}
-        onRetry={onRefreshParticipation}
+        onRetry={() => onRefreshParticipation()}
       />
     );
   }
