@@ -678,6 +678,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
+  proxyAssemblyAiTranscription: (data) =>
+    ipcRenderer.invoke("proxy-assemblyai-transcription", data),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
   proxyGeminiTranscription: (data) => ipcRenderer.invoke("proxy-gemini-transcription", data),
 

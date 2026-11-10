@@ -5,7 +5,7 @@
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
 import { isOrukeetStreaming } from "./selfHostedTranscription.js";
-import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
+import { isStreamingOnlySelection } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
 import bundledRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 
@@ -213,7 +213,7 @@ export function resolveStreamingProviderName({ settings, context, sttConfig, lan
   // hijack the provider, matching the tinfoil/corti precedent above.
   if (
     settings.cloudTranscriptionMode === "byok" &&
-    STREAMING_ONLY_PROVIDERS.has(settings.cloudTranscriptionProvider)
+    isStreamingOnlySelection(settings.cloudTranscriptionProvider, settings.cloudTranscriptionModel)
   ) {
     return settings.cloudTranscriptionProvider;
   }

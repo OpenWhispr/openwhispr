@@ -105,6 +105,16 @@ export function batchTranscriptionHttpError(
 // upload picker and selector) derives from this set.
 export const STREAMING_ONLY_PROVIDERS = new Set(["deepgram", "assemblyai"]);
 
+// AssemblyAI's Dictation API is the one batch model on a realtime-only provider:
+// it transcribes and cleans up a finished recording in one request, through the
+// main-process proxy. Uploads still treat AssemblyAI as realtime-only.
+export const ASSEMBLYAI_DICTATION_MODEL = "dictation";
+
+export function isStreamingOnlySelection(provider: string, model?: string | null): boolean {
+  if (provider === "assemblyai" && model === ASSEMBLYAI_DICTATION_MODEL) return false;
+  return STREAMING_ONLY_PROVIDERS.has(provider);
+}
+
 export interface TranscriptionRouteSettings {
   transcriptionMode?: string;
   useLocalWhisper?: boolean;
@@ -161,7 +171,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "assemblyai";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -217,6 +227,42 @@ export const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
+// Languages the Dictation API accepts in language_codes; it rejects any other code.
+export const ASSEMBLYAI_DICTATION_LANGUAGES = new Set([
+  "af",
+  "ar",
+  "ca",
+  "da",
+  "de",
+  "en",
+  "es",
+  "et",
+  "fa",
+  "fi",
+  "fr",
+  "gl",
+  "he",
+  "hi",
+  "it",
+  "ja",
+  "ko",
+  "mr",
+  "nl",
+  "nn",
+  "no",
+  "pt",
+  "ro",
+  "ru",
+  "sv",
+  "tr",
+  "ur",
+  "vi",
+  "xh",
+  "yue",
+  "zh",
+  "zu",
+]);
+
 // The live catalog decides first: an offered model is sent as is, and a retired one
 // moves to its replacement. The prefix rules then keep a model the catalog does not know
 // yet (a remote addition before its catalog loads) instead of resetting it;
@@ -244,7 +290,9 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
       (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
       (provider === "assemblyai" &&
-        (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));
+        (trimmed.startsWith("universal-") ||
+          trimmed.startsWith("slam-") ||
+          trimmed === ASSEMBLYAI_DICTATION_MODEL));
     if (matchesProvider) return trimmed;
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
@@ -450,6 +498,15 @@ export function resolveTranscriptionRoute({
     };
   }
 
+  if (provider === "assemblyai" && model === ASSEMBLYAI_DICTATION_MODEL) {
+    return {
+      transport: "proxied",
+      provider,
+      model,
+      language: language && ASSEMBLYAI_DICTATION_LANGUAGES.has(language) ? language : undefined,
+      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
+    };
+  }
   if (STREAMING_ONLY_PROVIDERS.has(provider)) {
     if (hasProviderKey === false) {
       return error(

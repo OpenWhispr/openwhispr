@@ -3215,6 +3215,7 @@
         "deepgram_nova_3": "Il modello in tempo reale più accurato di Deepgram",
         "assemblyai_universal_streaming_english": "Trascrizioni in tempo reale immutabili, inglese",
         "assemblyai_universal_streaming_multilingual": "Trascrizioni in tempo reale immutabili, multilingue",
+        "assemblyai_dictation": "Trascrizione e pulizia in una sola chiamata, 32 lingue",
         "assemblyai_universal_3_5_pro": "Massima precisione in tempo reale, 18 lingue",
         "assemblyai_universal_3_6_pro": "Massima precisione in tempo reale, 32 lingue",
         "mistral_voxtral_mini_transcribe_3_0": "Trascrizione veloce in oltre 50 lingue (anteprima)",

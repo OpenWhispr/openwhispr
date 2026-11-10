@@ -3309,6 +3309,7 @@
         "deepgram_nova_3": "Самая точная модель Deepgram для реального времени",
         "assemblyai_universal_streaming_english": "Неизменяемые расшифровки в реальном времени, английский",
         "assemblyai_universal_streaming_multilingual": "Неизменяемые расшифровки в реальном времени, многоязычные",
+        "assemblyai_dictation": "Транскрипция и очистка за один запрос, 32 языка",
         "assemblyai_universal_3_5_pro": "Максимальная точность в реальном времени, 18 языков",
         "assemblyai_universal_3_6_pro": "Максимальная точность в реальном времени, 32 языка",
         "mistral_voxtral_mini_transcribe_3_0": "Быстрая транскрипция на 50+ языках (предварительная версия)",

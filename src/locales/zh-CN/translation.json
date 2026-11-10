@@ -3215,6 +3215,7 @@
         "deepgram_nova_3": "Deepgram 最精准的实时模型",
         "assemblyai_universal_streaming_english": "不会变动的实时转录（英语）",
         "assemblyai_universal_streaming_multilingual": "不会变动的实时转录（多语言）",
+        "assemblyai_dictation": "一次调用完成转录和整理，支持 32 种语言",
         "assemblyai_universal_3_5_pro": "最高精度实时转录，支持 18 种语言",
         "assemblyai_universal_3_6_pro": "最高精度实时转录，支持 32 种语言",
         "mistral_voxtral_mini_transcribe_3_0": "支持 50 多种语言的快速转录（预览版）",
