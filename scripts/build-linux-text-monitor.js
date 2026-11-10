@@ -17,6 +17,7 @@ const { spawnSync } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { linuxBaselineFlags } = require("./lib/linux-baseline-flags");
 
 const projectRoot = path.resolve(__dirname, "..");
 const cSource = path.join(projectRoot, "resources", "linux-text-monitor.c");
@@ -155,7 +156,7 @@ function tryCompile(pkgFlags) {
 
   log("Attempting local compilation...");
 
-  const compileArgs = ["-O2", cSource, "-o", outputBinary, ...pkgFlags];
+  const compileArgs = ["-O2", ...linuxBaselineFlags(), cSource, "-o", outputBinary, ...pkgFlags];
 
   let result = attemptCompile("gcc", compileArgs);
   if (result.status !== 0) {
