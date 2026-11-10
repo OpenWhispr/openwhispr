@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Workspace, WorkspaceMember } from "../types/electron";
+import type { SpaceItem, Workspace, WorkspaceMember } from "../types/electron";
 import { WorkspacesService } from "../services/WorkspacesService";
 import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
@@ -279,6 +279,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     let request!: Promise<void>;
     request = (async () => {
       let lost: string[] = [];
+      // Set by a successful, non-empty answer once the default is known: main's private rows are
+      // checked against it too.
+      let rowCheck: { listed: Workspace[]; accountId: string; defaultWorkspaceId: string } | null =
+        null;
       try {
         const answer = await WorkspacesService.list();
         if (superseded()) return;
@@ -319,6 +323,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           ...(activeChanged ? { members: [], membersWorkspaceId: null } : {}),
         });
         if (workspaces.length > 0) writeWorkspaceListCache(accountId, workspaces);
+        if (workspaces.length > 0 && accountId && defaultWorkspaceId) {
+          rowCheck = { listed: workspaces, accountId, defaultWorkspaceId };
+        }
         refreshForWorkspace(resolvedActiveId);
       } catch (error) {
         if (superseded()) return;
@@ -349,8 +356,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }
       // After the new list is in place, so main is told its active workspace first. Not skipped
       // for a newer request: the cache already holds this list, so no later answer would find
-      // these missing. Main refuses the move if another account has signed in since.
-      if (lost.length > 0) await relocateLostWorkspaces(lost);
+      // these missing (main's rows would, on the next list). Main refuses the move if another
+      // account has signed in since.
+      const orphaned = rowCheck ? await orphanedPrivateWorkspaces(rowCheck) : [];
+      const toRelocate = [...new Set([...lost, ...orphaned])];
+      if (toRelocate.length > 0) await relocateLostWorkspaces(toRelocate);
     })();
     refreshPromise = request;
     refreshPromiseEpoch = epoch;
@@ -421,6 +431,46 @@ export async function publishWorkspaceScope(): Promise<boolean> {
     );
     return false;
   }
+}
+
+/**
+ * Workspaces this account keeps a Private for in main that the list no longer has. The cached
+ * list can't find them all: signing out or another account's sign-in clears it, and a move that
+ * failed is gone from it by the next answer. The default's own row never counts.
+ */
+async function orphanedPrivateWorkspaces({
+  listed,
+  accountId,
+  defaultWorkspaceId,
+}: {
+  listed: Workspace[];
+  accountId: string;
+  defaultWorkspaceId: string;
+}): Promise<string[]> {
+  const api = typeof window !== "undefined" ? window.electronAPI : undefined;
+  if (!api?.getSpaces) return [];
+  // Reading the spaces makes the active workspace's Private when it has none, so main has to
+  // hear which workspace is active first. A refused scope means another account signed in.
+  if (!(await publishWorkspaceScope())) return [];
+  let spaces: SpaceItem[];
+  try {
+    spaces = await api.getSpaces();
+  } catch (error) {
+    logger.warn(
+      "Failed to read private spaces for lost workspaces",
+      { error: (error as Error).message },
+      "workspaces"
+    );
+    return [];
+  }
+  const orphaned = new Set<string>();
+  for (const space of spaces) {
+    const workspaceId = space.workspace_id;
+    if (space.kind !== "private" || space.account_id !== accountId || !workspaceId) continue;
+    if (workspaceId === defaultWorkspaceId || space.is_default_private) continue;
+    if (!listed.some((w) => w.id === workspaceId)) orphaned.add(workspaceId);
+  }
+  return [...orphaned];
 }
 
 /**

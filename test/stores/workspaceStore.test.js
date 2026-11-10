@@ -212,7 +212,13 @@ test("an overtaken read shares the newer read's failure", async (t) => {
 // A store whose service, account and main-process calls each test steers through globalThis.__ws.
 async function loadPrivateNotesStore(
   t,
-  { list, ensureDefault = async () => null, accountId = "acct-1", storage: initialStorage = {} }
+  {
+    list,
+    ensureDefault = async () => null,
+    accountId = "acct-1",
+    storage: initialStorage = {},
+    spaces = [],
+  }
 ) {
   const calls = [];
   const accountScopeListeners = [];
@@ -227,8 +233,13 @@ async function loadPrivateNotesStore(
     },
     relocatePrivateSpace: async (from, to, account) => {
       calls.push(["relocate", from, to, account]);
+      if (globalThis.__ws.relocateThrows) {
+        globalThis.__ws.relocateThrows -= 1;
+        throw new Error("database is locked");
+      }
       return { success: true, notes: 0, folders: 0 };
     },
+    getSpaces: async () => globalThis.__ws.spaces,
     claimSignedOutPrivateNotes: async () => {
       calls.push(["claim"]);
       return { notes: 0, folders: 0 };
@@ -242,7 +253,15 @@ async function loadPrivateNotesStore(
     initialStorage,
     window: { electronAPI: api },
   });
-  globalThis.__ws = { list, ensureDefault, accountId, ensureCalls: [], listCalls: 0 };
+  globalThis.__ws = {
+    list,
+    ensureDefault,
+    accountId,
+    spaces,
+    relocateThrows: 0,
+    ensureCalls: [],
+    listCalls: 0,
+  };
   t.after(() => {
     delete globalThis.__ws;
   });
@@ -541,6 +560,124 @@ test("nothing is relocated before the store knows whose list it holds", async (t
   assert.deepEqual(calls, []);
 });
 
+// Main's private rows: the default's (marked), one per other workspace, the signed-out stand-in.
+const privateRow = (id, workspaceId, extra = {}) => ({
+  id,
+  kind: "private",
+  workspace_id: workspaceId,
+  account_id: "acct-1",
+  is_default_private: 0,
+  ...extra,
+});
+const relocationsOf = (calls) => calls.filter(([name]) => name === "relocate");
+
+test("a workspace lost while signed out is relocated on the first list after signing in", async (t) => {
+  // Signing out cleared the cached list, so only main's rows remember the workspace.
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+    storage: { activeWorkspaceId: "team" },
+    spaces: [
+      privateRow(1, null, { account_id: null }),
+      privateRow(2, "own", { is_default_private: 1 }),
+      privateRow(3, "team"),
+      privateRow(4, "lost"),
+      // Main lists the signed-in account's rows; one of another account's never counts.
+      privateRow(5, "elsewhere", { account_id: "acct-2" }),
+      { id: 6, kind: "team", workspace_id: "gone", account_id: null },
+    ],
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  assert.deepEqual(relocationsOf(calls), [["relocate", "lost", null, "acct-1"]]);
+  // Main reads its rows with the new scope in place, and moves them after it.
+  const relocateAt = calls.findIndex(([name]) => name === "relocate");
+  assert.deepEqual(
+    calls
+      .slice(0, relocateAt)
+      .filter(([name]) => name === "scope")
+      .at(-1),
+    ["scope", { activeWorkspaceId: "team", defaultWorkspaceId: "own", accountId: "acct-1" }]
+  );
+});
+
+test("a workspace both the cached list and main's rows miss is relocated once", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+    storage: { [LIST_CACHE_KEY]: cacheFor("acct-1", [OWN, TEAM, LOST]) },
+    spaces: [privateRow(2, "own", { is_default_private: 1 }), privateRow(4, "lost")],
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  assert.deepEqual(relocationsOf(calls), [["relocate", "lost", null, "acct-1"]]);
+});
+
+test("a relocation that threw is retried on the next successful list", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+    storage: { [LIST_CACHE_KEY]: cacheFor("acct-1", [OWN, TEAM, LOST]) },
+    spaces: [privateRow(2, "own", { is_default_private: 1 }), privateRow(4, "lost")],
+  });
+  globalThis.__ws.relocateThrows = 1;
+
+  await useWorkspaceStore.getState().refresh();
+  // The cached list no longer has the workspace; main's row still does.
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+
+  assert.deepEqual(relocationsOf(calls), [
+    ["relocate", "lost", null, "acct-1"],
+    ["relocate", "lost", null, "acct-1"],
+  ]);
+});
+
+test("a failed or empty load relocates nothing, whatever rows main holds", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => {
+      throw new Error("offline");
+    },
+    storage: { [LIST_CACHE_KEY]: cacheFor("acct-1", [OWN, TEAM]) },
+    spaces: [privateRow(2, "own", { is_default_private: 1 }), privateRow(4, "lost")],
+  });
+
+  await useWorkspaceStore.getState().refresh();
+  globalThis.__ws.list = async () => [];
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+
+  assert.deepEqual(relocationsOf(calls), []);
+});
+
+test("the default's own Private is never relocated by the row check", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+    spaces: [
+      // The default's row, marked or not yet bound.
+      privateRow(2, "own"),
+      // A marked default whose workspace this list doesn't have (an older default): main
+      // refuses to move it, and the next bind moves the mark first.
+      privateRow(7, "previous-default", { is_default_private: 1 }),
+      privateRow(3, "team"),
+    ],
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  assert.deepEqual(relocationsOf(calls), []);
+});
+
+test("the row check waits until the default workspace is known", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    // No is_default and no Enterprise workspace yet: the default isn't made.
+    list: async () => [TEAM],
+    spaces: [privateRow(3, "team"), privateRow(4, "lost")],
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, null);
+  assert.deepEqual(relocationsOf(calls), []);
+});
+
 test("the bridge sends the scope on startup and on every switch", async (t) => {
   const { useWorkspaceStore, vite, calls, changeDatabaseAccount } = await loadPrivateNotesStore(t, {
     list: async () => [TEAM, OWN],
@@ -557,10 +694,15 @@ test("the bridge sends the scope on startup and on every switch", async (t) => {
   calls.length = 0;
   await useWorkspaceStore.getState().refresh();
   await flush();
-  assert.deepEqual(calls, [
-    ["scope", { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" }],
-    ["bind", "own", "acct-1"],
+  // The refresh's own check of main's private rows sends the scope too.
+  assert.deepEqual(calls.filter(([name]) => name === "scope").at(-1), [
+    "scope",
+    { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" },
   ]);
+  assert.deepEqual(
+    calls.filter(([name]) => name === "bind"),
+    [["bind", "own", "acct-1"]]
+  );
 
   calls.length = 0;
   useWorkspaceStore.getState().setActiveWorkspaceId("team");
