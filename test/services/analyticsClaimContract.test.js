@@ -45,7 +45,11 @@ test("Insights Sync and leaderboard participation have separate owners", () => {
 
   assert.ok(settings.includes("if (enabled) void enableInsightsSync()"));
   assert.ok(settings.includes("disableInsightsSync()"));
-  assert.ok(settings.includes("useLeaderboardParticipation()"));
+  assert.ok(
+    settings.includes(
+      'useLeaderboardParticipation({ autoRefresh: activeSection === "privacyData" })'
+    )
+  );
   assert.ok(settings.includes("join: joinLeaderboard"));
   assert.ok(settings.includes("leave: leaveLeaderboard"));
   assert.ok(settings.includes("updateLeaderboardParticipation"));

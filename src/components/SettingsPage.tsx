@@ -1851,7 +1851,7 @@ export default function SettingsPage({
     leavePending: leaderboardLeavePending,
     ready: leaderboardParticipationReady,
     updating: leaderboardParticipationUpdating,
-  } = useLeaderboardParticipation();
+  } = useLeaderboardParticipation({ autoRefresh: activeSection === "privacyData" });
   const [leaderboardPreferencePending, setLeaderboardPreferencePending] = useState(false);
   const updateLeaderboardParticipation = useCallback(
     async (enabled: boolean) => {

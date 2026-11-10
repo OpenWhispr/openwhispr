@@ -33,14 +33,18 @@ export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS = 250;
 const requestedHistoryBackfillAccounts = new Set<string>();
 
+/** `refresh` is told whether local data changed, or whether it is only checking for remote changes. */
 export function subscribeToAnalyticsRefresh(
-  refresh: () => void | Promise<void>,
+  refresh: (dataChanged: boolean) => void | Promise<void>,
   cloudInsightsActive: boolean
 ): () => void {
   let disposed = false;
   let refreshRunning = false;
   let trailingLocalRefreshRequested = false;
   let trailingRemoteRefreshRequested = false;
+  // A view hidden in the tray would otherwise read the account summary after
+  // every dictation. The change waits for the window to show instead.
+  let changedWhileHidden = false;
   const runRefresh = async (remoteOnly = false): Promise<void> => {
     if (disposed || (remoteOnly && window.document.visibilityState !== "visible")) {
       return;
@@ -53,7 +57,7 @@ export function subscribeToAnalyticsRefresh(
 
     refreshRunning = true;
     try {
-      await refresh();
+      await refresh(!remoteOnly);
     } catch (error) {
       console.error("Refreshing analytics failed:", error);
     } finally {
@@ -70,6 +74,10 @@ export function subscribeToAnalyticsRefresh(
     }
   };
   const requestLocalRefresh = (): void => {
+    if (cloudInsightsActive && window.document.visibilityState !== "visible") {
+      changedWhileHidden = true;
+      return;
+    }
     void runRefresh();
   };
   const requestRemoteRefresh = (): void => {
@@ -98,7 +106,12 @@ export function subscribeToAnalyticsRefresh(
     if (remoteRefreshTimeoutId !== null) window.clearTimeout(remoteRefreshTimeoutId);
     remoteRefreshTimeoutId = window.setTimeout(() => {
       remoteRefreshTimeoutId = null;
-      requestRemoteRefresh();
+      if (changedWhileHidden) {
+        changedWhileHidden = false;
+        void runRefresh();
+      } else {
+        requestRemoteRefresh();
+      }
     }, ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS);
   };
 

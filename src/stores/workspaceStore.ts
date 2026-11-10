@@ -5,6 +5,7 @@ import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
 import { canChoosePersonal, defaultActiveWorkspaceId } from "../lib/workspaceSwitcher";
+import { clearCachedLeaderboards } from "../lib/insightsCache";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -328,6 +329,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   createWorkspace: async (name) => {
     const generation = accountGeneration;
     const workspace = await WorkspacesService.create(name);
+    // A new workspace is a new leaderboard scope.
+    clearCachedLeaderboards();
     if (generation === accountGeneration) {
       set((s) => ({ workspaces: [...s.workspaces, workspace] }));
       // A list request sent before the create would answer without it and drop it again.

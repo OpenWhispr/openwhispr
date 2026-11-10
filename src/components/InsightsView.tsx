@@ -7,6 +7,11 @@ import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
 import { hasValidatedAuthContext } from "../lib/authRequestContext";
 import {
+  cacheInsightsSummary,
+  isInsightFresh,
+  readCachedInsightsSummary,
+} from "../lib/insightsCache";
+import {
   getAccountAnalyticsSummary,
   subscribeToAnalyticsRefresh,
 } from "../services/AnalyticsService";
@@ -371,7 +376,12 @@ function YourUsage({
   syncActive: boolean;
 }) {
   const { t } = useTranslation();
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  // Reopening Insights shows this session's last account summary while the next one loads.
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(() =>
+    isLoaded && syncActive && accountId
+      ? (readCachedInsightsSummary(accountId)?.value ?? null)
+      : null
+  );
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -410,6 +420,7 @@ function YourUsage({
         }
         const account = await getAccountAnalyticsSummary(accountId);
         if (requestId !== requestIdRef.current) return;
+        if (accountId) cacheInsightsSummary(accountId, account);
         setSummary(account);
       } else {
         setSummary(local);
@@ -424,7 +435,16 @@ function YourUsage({
     }
   }, [accountId, isLoaded, syncActive]);
 
-  useEffect(() => subscribeToAnalyticsRefresh(load, syncActive), [load, syncActive]);
+  useEffect(
+    () =>
+      subscribeToAnalyticsRefresh((dataChanged) => {
+        // A check for other devices' changes can wait out a summary this fresh.
+        if (!dataChanged && accountId && isInsightFresh(readCachedInsightsSummary(accountId)))
+          return;
+        return load();
+      }, syncActive),
+    [accountId, load, syncActive]
+  );
 
   useEffect(() => {
     onSyncErrorChange(syncError);

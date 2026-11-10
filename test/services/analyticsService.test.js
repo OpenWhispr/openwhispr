@@ -711,6 +711,72 @@ test("analytics drops remote-only trailing work when the view becomes hidden", a
   dispose();
 });
 
+// Insights hidden in the tray still hears every dictation. Reading the account
+// summary for each one is cloud work nobody sees, so the change waits for the
+// window, and only a check for other devices' changes is told nothing changed.
+test("analytics refresh holds a hidden view's local change until the window shows", async (t) => {
+  const documentListeners = new Map();
+  const timeouts = new Map();
+  let nextTimeoutId = 1;
+  let localChangeListener;
+  const fakeDocument = {
+    visibilityState: "visible",
+    addEventListener: (name, listener) => documentListeners.set(name, listener),
+    removeEventListener: () => {},
+  };
+  installBrowserGlobals(t, {
+    window: {
+      document: fakeDocument,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      setInterval: () => 1,
+      clearInterval: () => {},
+      setTimeout: (callback) => {
+        const id = nextTimeoutId++;
+        timeouts.set(id, callback);
+        return id;
+      },
+      clearTimeout: (id) => timeouts.delete(id),
+      electronAPI: {
+        onAnalyticsChanged: (listener) => {
+          localChangeListener = listener;
+          return () => {};
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { subscribeToAnalyticsRefresh } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+  const refreshes = [];
+  const dispose = subscribeToAnalyticsRefresh((dataChanged) => {
+    refreshes.push(dataChanged);
+  }, true);
+  const runDebounced = () => {
+    const [[id, callback]] = timeouts.entries();
+    timeouts.delete(id);
+    callback();
+  };
+
+  assert.deepEqual(refreshes, [true], "the mounted view loads everything");
+  await Promise.resolve();
+
+  fakeDocument.visibilityState = "hidden";
+  localChangeListener();
+  localChangeListener();
+  assert.deepEqual(refreshes, [true], "a hidden view reads nothing for a dictation");
+
+  fakeDocument.visibilityState = "visible";
+  documentListeners.get("visibilitychange")();
+  runDebounced();
+  assert.deepEqual(refreshes, [true, true], "showing the window loads the held change once");
+  await Promise.resolve();
+
+  documentListeners.get("visibilitychange")();
+  runDebounced();
+  assert.deepEqual(refreshes, [true, true, false], "a plain focus only checks for remote changes");
+  dispose();
+});
+
 test("overlapping passes are serialized rather than posting the same batch twice", async (t) => {
   // InsightsView flushes on focus, on every analytics-changed broadcast and on
   // a timer, while SyncService runs passes under its own lock. The two share

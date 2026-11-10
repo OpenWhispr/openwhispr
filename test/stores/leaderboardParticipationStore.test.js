@@ -61,6 +61,8 @@ async function loadStore(t, { initialStorage = {}, cloudApiRequest }) {
     ready: false,
     error: null,
     updating: false,
+    answeredUserId: null,
+    answeredAt: 0,
   });
   const context = await validateAuthContext();
   return { context, requests, storage, store: useLeaderboardParticipationStore };
@@ -383,6 +385,72 @@ test("simultaneous participation reads for one account share one request", async
   releaseRead();
   await Promise.all([first, second]);
   assert.equal(store.getState().enabled, true);
+});
+
+// Settings and Insights re-read on mount. Dropping to "loading" for the same
+// account would flash a skeleton over an answer that is almost certainly
+// still right; a different account must never be shown the old one. Any other
+// read still drops to loading: the board's 403 recovery reloads on that.
+test("a mount's same-account re-read keeps its answer on screen until the new one lands", async (t) => {
+  let releaseRead;
+  const { context, store } = await loadStore(t, {
+    cloudApiRequest: async () => {
+      if (store.getState().answeredUserId) {
+        await new Promise((resolve) => {
+          releaseRead = resolve;
+        });
+        return participation(false);
+      }
+      return participation(true);
+    },
+  });
+
+  await store.getState().refresh(context);
+  assert.equal(store.getState().answeredUserId, "user_1");
+  const answeredAt = store.getState().answeredAt;
+
+  const reread = store.getState().refresh(context, { keepAnswer: true });
+  await waitFor(() => typeof releaseRead === "function");
+  assert.equal(store.getState().ready, true);
+  assert.equal(store.getState().enabled, true);
+
+  releaseRead();
+  await reread;
+  assert.equal(store.getState().enabled, false);
+  assert.ok(store.getState().answeredAt >= answeredAt);
+
+  releaseRead = undefined;
+  const recovery = store.getState().refresh(context);
+  await waitFor(() => typeof releaseRead === "function");
+  assert.equal(store.getState().ready, false, "a read that isn't a mount's drops to loading");
+  releaseRead();
+  await recovery;
+});
+
+test("a successful read clears an earlier write error", async (t) => {
+  const { context, store } = await loadStore(t, {
+    cloudApiRequest: async () => participation(true),
+  });
+  store.setState({ answeredUserId: "user_1", answeredAt: Date.now(), error: "write", ready: true });
+
+  await store.getState().refresh(context, { keepAnswer: true });
+  assert.equal(store.getState().error, null);
+  assert.equal(store.getState().enabled, true);
+});
+
+test("joining or leaving drops the leaderboards this session kept", async (t) => {
+  const cache = require("../../src/lib/insightsCache.ts");
+  const { context, store } = await loadStore(t, {
+    cloudApiRequest: async () => participation(true),
+  });
+
+  cache.cacheLeaderboard("user_1", "board", { scope: { key: "workspace:1" } });
+  await store.getState().join(context);
+  assert.equal(cache.readCachedLeaderboard("user_1", "board"), undefined);
+
+  cache.cacheLeaderboard("user_1", "board", { scope: { key: "workspace:1" } });
+  await store.getState().leave(context);
+  assert.equal(cache.readCachedLeaderboard("user_1", "board"), undefined);
 });
 
 test("signing out drops the previous account's answer", async (t) => {
