@@ -22,6 +22,8 @@ import { syncPendingAnalytics } from "./AnalyticsService.js";
 import { DictionaryService, type CloudDictionaryEntry } from "./DictionaryService.js";
 import { SharedDictionaryService } from "./SharedDictionaryService";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
+import { PrivateNotesService } from "./PrivateNotesService";
+import { importCloudPrivateNotesOnce, type PrivateNotesImportResult } from "./privateNotesImport";
 import { CloudApiError, isAuthContextError, wasRefusedBeforeSending } from "./cloudApi.js";
 import { LeaderboardService } from "./LeaderboardService";
 import {
@@ -173,6 +175,9 @@ type PushScopeFields = { workspace_id?: string | null; space_id?: string | null 
 // cloud private notes; otherwise just a legacy shared note's (D10).
 interface PullOptions {
   includePersonal?: boolean;
+  // The import's auth generation: it lists the account's personal rows alone,
+  // and its writes are refused once that sign-in is replaced (#2924's fence).
+  importUnder?: number;
 }
 
 // Per-pull-pass mapping of cloud spaces to local spaces.
@@ -497,14 +502,24 @@ function chatPushSender(): ChatPushSender | null {
   return authGeneration == null || !accountId ? null : { authGeneration, accountId };
 }
 
+function pullStaleError(): Error {
+  return Object.assign(new Error("Authentication context changed during pull"), {
+    code: "AUTH_CONTEXT_CHANGED",
+  });
+}
+
 // A pull writes rows under the sign-in that fetched them. Once main refuses a
 // write as stale, the rest of the page belongs to the departed account, so the
 // pull stops before its cursor moves.
 function stopIfPullStale<T>(result: T): asserts result is Exclude<T, StaleSyncWrite> {
-  if ((result as StaleSyncWrite | null | undefined)?.stale) {
-    throw Object.assign(new Error("Authentication context changed during pull"), {
-      code: "AUTH_CONTEXT_CHANGED",
-    });
+  if ((result as StaleSyncWrite | null | undefined)?.stale) throw pullStaleError();
+}
+
+// A pull pinned to a sign-in (the import's) looks at no further row once it is
+// replaced. Main's refusal (stopIfPullStale) covers a switch mid-row.
+function stopIfSignInReplaced(authGeneration: number | undefined): void {
+  if (authGeneration !== undefined && getValidatedAuthGeneration() !== authGeneration) {
+    throw pullStaleError();
   }
 }
 
@@ -692,6 +707,8 @@ export class SyncService {
   // Set by any pass that actually moves team or shared content; drives the
   // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
   private teamPassMovedWork = false;
+  // The cloud private notes import running for each account.
+  private privateNotesImports = new Map<string, Promise<PrivateNotesImportResult>>();
   // Set when the current shared dictionary pass changed the mirror or hides.
   private sharedDictionaryPassChanged = false;
   // The auth generation a plain 404 answered the shared dictionary routes
@@ -1177,6 +1194,10 @@ export class SyncService {
           if (!this.passIsCurrent()) return;
           await this.syncNotes(true);
         }
+        if (!this.passIsCurrent()) return;
+        // Once per account, Backup or not: the cloud's private notes come to
+        // this device, which keeps them from then on (D2).
+        await this.importCloudPrivateNotes(accountId);
         if (!this.passIsCurrent()) return;
         if (personalSucceeded && sharedResult !== "failed" && (full || sharedResult === "synced")) {
           useSharedDictionaryStore.getState().markSynced(dictionaryGeneration);
@@ -2500,14 +2521,15 @@ export class SyncService {
   private async pullFolders(
     teamOnly = false,
     snapshot = false,
-    { includePersonal = false }: PullOptions = {}
+    { includePersonal = false, importUnder }: PullOptions = {}
   ): Promise<boolean> {
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.folders.team" : "lastSyncedAt.folders";
       const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
       const syncStartedAt = new Date().toISOString();
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
-      const scope = teamCapable ? "all" : undefined;
+      // Without a scope the list holds the account's personal rows alone.
+      const scope = teamCapable && importUnder === undefined ? "all" : undefined;
       const { folders: cloudFolders } = await FoldersService.list(since, scope);
       if (cloudFolders.length > 0) this.teamPassMovedWork = true;
       const ctx = await this.buildSpaceContext();
@@ -2517,6 +2539,7 @@ export class SyncService {
 
       for (const cloudFolder of cloudFolders) {
         try {
+          stopIfSignInReplaced(importUnder);
           const local = await window.electronAPI.getFolderByClientId?.(
             cloudFolder.client_folder_id ?? ""
           );
@@ -2624,13 +2647,16 @@ export class SyncService {
                   f.name.toLowerCase() === cloudFolder.name.toLowerCase()
               );
             if (nameMatch) {
-              await window.electronAPI.acknowledgeFolderCreate?.(
-                nameMatch.id,
-                nameMatch,
-                nameMatch.cloud_id,
-                cloudFolder.client_folder_id ?? nameMatch.client_folder_id,
-                cloudFolder.id,
-                cloudFolder.updated_at
+              stopIfPullStale(
+                await window.electronAPI.acknowledgeFolderCreate?.(
+                  nameMatch.id,
+                  nameMatch,
+                  nameMatch.cloud_id,
+                  cloudFolder.client_folder_id ?? nameMatch.client_folder_id,
+                  cloudFolder.id,
+                  cloudFolder.updated_at,
+                  importUnder
+                )
               );
               continue;
             }
@@ -2645,12 +2671,17 @@ export class SyncService {
             (local.sync_status !== "pending" &&
               isCloudEntryNewer(cloudFolder.updated_at, local.updated_at))
           ) {
-            await window.electronAPI.upsertFolderFromCloud?.(
-              cloudFolder as unknown as Record<string, unknown>,
-              space.id
+            stopIfPullStale(
+              await window.electronAPI.upsertFolderFromCloud?.(
+                cloudFolder as unknown as Record<string, unknown>,
+                space.id,
+                importUnder
+              )
             );
           }
         } catch (err) {
+          // The sign-in changed: the rest of the list is the departed account's.
+          if (isAuthContextError(err)) throw err;
           parkedRows++;
           console.error(`Folder pull failed for cloud folder ${cloudFolder.id}:`, err);
         }
@@ -2668,7 +2699,7 @@ export class SyncService {
       if (advanceTeamCursor) localStorage.setItem("lastSyncedAt.folders.team", syncStartedAt);
       return parkedRows === 0;
     } catch (err) {
-      console.error("Folder pull failed:", err);
+      if (!isAuthContextError(err)) console.error("Folder pull failed:", err);
       return false;
     }
   }
@@ -2987,7 +3018,7 @@ export class SyncService {
     teamOnly = false,
     snapshot = false,
     replayFeed = false,
-    { includePersonal = false }: PullOptions = {}
+    { includePersonal = false, importUnder }: PullOptions = {}
   ): Promise<boolean> {
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
@@ -3000,7 +3031,8 @@ export class SyncService {
       const ctx = await this.buildSpaceContext();
       const { cloudToLocal, personalFolderIn } = await this.buildCloudToLocalFolderMap();
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
-      const scope = teamCapable ? "all" : undefined;
+      // Without a scope the list holds the account's personal rows alone.
+      const scope = teamCapable && importUnder === undefined ? "all" : undefined;
 
       let cursor: string | undefined = since;
       let cursorId: string | undefined;
@@ -3017,6 +3049,7 @@ export class SyncService {
 
         for (const cloudNote of cloudNotes) {
           try {
+            stopIfSignInReplaced(importUnder);
             const local = await window.electronAPI.getNoteForCloudRow?.(
               cloudNote.client_note_id,
               cloudNote.id
@@ -3252,8 +3285,10 @@ export class SyncService {
               const applied = await window.electronAPI.upsertNoteFromCloud?.(
                 cloudNote as unknown as Record<string, unknown>,
                 localFolderId,
-                space.id
+                space.id,
+                importUnder
               );
+              stopIfPullStale(applied);
               if (local) {
                 // Applying cloud over a clean row settles any stale conflict,
                 // including one left under the key this row just adopted. A
@@ -3265,6 +3300,8 @@ export class SyncService {
               }
             }
           } catch (err) {
+            // The sign-in changed: the rest of the feed is the departed account's.
+            if (isAuthContextError(err)) throw err;
             // Parked like a row waiting on its folder: the cursor holds so the
             // next pass retries it, and the rest of the delta still applies.
             parkedRows++;
@@ -3295,9 +3332,55 @@ export class SyncService {
       if (advanceTeamCursor) localStorage.setItem("lastSyncedAt.notes.team", syncStartedAt);
       return parkedRows === 0;
     } catch (err) {
-      console.error("Note pull failed:", err);
+      if (!isAuthContextError(err)) console.error("Note pull failed:", err);
       return false;
     }
+  }
+
+  // Brings the account's cloud private notes into its default Private once,
+  // then switches the account to device-only (privateNotesImport.ts). One run
+  // per account at a time: a call while one runs gets that run's result.
+  // syncAll calls it under its lock, once spaces have synced.
+  importCloudPrivateNotes(accountId: string): Promise<PrivateNotesImportResult> {
+    const running = this.privateNotesImports.get(accountId);
+    if (running) return running;
+    const run = this.runPrivateNotesImport(accountId).finally(() => {
+      this.privateNotesImports.delete(accountId);
+    });
+    this.privateNotesImports.set(accountId, run);
+    return run;
+  }
+
+  // Pinned to the sign-in that starts it: once that sign-in is replaced, main
+  // refuses its requests and its writes. Backup plays no part, a sign-in does.
+  private async runPrivateNotesImport(accountId: string): Promise<PrivateNotesImportResult> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return "failed";
+    const isCurrent = (): boolean =>
+      getValidatedAuthGeneration() === authGeneration &&
+      getAuthRequestContextSnapshot().sessionUserId === accountId &&
+      this.consent().shared;
+    // Snapshots: no cursor is read or moved, so the regular passes' deltas go
+    // on from where they were.
+    const pullOptions: PullOptions = { includePersonal: true, importUnder: authGeneration };
+    return importCloudPrivateNotesOnce(accountId, {
+      isCurrent,
+      pushDeletes: async () => {
+        await this.pushFolderDeletes();
+        await this.pushNoteDeletes();
+      },
+      getState: () => PrivateNotesService.getState(authGeneration),
+      pull: async () =>
+        (await this.pullFolders(false, true, pullOptions)) &&
+        (await this.pullNotes(false, true, false, pullOptions)),
+      switchOnDevice: (pulledThrough) =>
+        PrivateNotesService.switchOnDevice(pulledThrough, authGeneration),
+      onSwitched: (state) => {
+        if (isCurrent()) {
+          this.emitSyncUiEvent("private-notes-on-device", { purgeAfter: state.purge_after });
+        }
+      },
+    });
   }
 
   private async syncConversations(): Promise<void> {

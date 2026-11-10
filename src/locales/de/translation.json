@@ -4615,6 +4615,9 @@
       "loading": "Notizen werden geladen…",
       "retry": "Notizen konnten nicht geladen werden. Erneut versuchen",
       "results": "{{count}} von {{total}} Notizen"
+    },
+    "privateOnDevice": {
+      "switched": "Private Notizen bleiben jetzt auf diesem Gerät. Ihre Cloud-Kopien werden am {{date}} gelöscht."
     }
   },
   "dictionary": {

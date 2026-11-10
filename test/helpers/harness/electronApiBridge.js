@@ -150,8 +150,10 @@ function createElectronApi(db, options = {}) {
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
     getNoteForCloudRow: async (clientNoteId, cloudId) =>
       db.getNoteForCloudRow(clientNoteId, cloudId),
-    upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
-      db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
+    upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId, expectedAuthGeneration) =>
+      expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
     markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
     acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
       db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
@@ -187,24 +189,29 @@ function createElectronApi(db, options = {}) {
     getPendingFolders: async (scope) => (scope === "team" ? db.getPendingFolders(scope) : []),
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
-    upsertFolderFromCloud: async (cloudFolder, localSpaceId) =>
-      db.upsertFolderFromCloud(cloudFolder, localSpaceId),
+    upsertFolderFromCloud: async (cloudFolder, localSpaceId, expectedAuthGeneration) =>
+      expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertFolderFromCloud(cloudFolder, localSpaceId),
     acknowledgeFolderCreate: async (
       id,
       snapshot,
       expectedCloudId,
       responseClientFolderId,
       cloudId,
-      cloudUpdatedAt
+      cloudUpdatedAt,
+      expectedAuthGeneration
     ) =>
-      db.acknowledgeFolderCreate(
-        id,
-        snapshot,
-        expectedCloudId,
-        responseClientFolderId,
-        cloudId,
-        cloudUpdatedAt
-      ),
+      expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.acknowledgeFolderCreate(
+            id,
+            snapshot,
+            expectedCloudId,
+            responseClientFolderId,
+            cloudId,
+            cloudUpdatedAt
+          ),
     markFolderSyncedIfUnchanged: async (id, snapshot, expectedCloudId) =>
       db.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId),
     restoreFolderAfterDeniedDelete: async (id) => db.restoreFolderAfterDeniedDelete(id),

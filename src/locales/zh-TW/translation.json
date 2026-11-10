@@ -4061,6 +4061,9 @@
       "loading": "正在載入筆記…",
       "retry": "無法載入筆記。重試",
       "results": "{{count}} / {{total}} 篇筆記"
+    },
+    "privateOnDevice": {
+      "switched": "私人筆記現在只會保存在這部裝置上。其雲端副本將於 {{date}} 刪除。"
     }
   },
   "dictionary": {

@@ -4061,6 +4061,9 @@
       "loading": "正在加载笔记…",
       "retry": "无法加载笔记。重试",
       "results": "{{count}} / {{total}} 篇笔记"
+    },
+    "privateOnDevice": {
+      "switched": "私人笔记现在仅保存在此设备上。其云端副本将于 {{date}} 删除。"
     }
   },
   "dictionary": {

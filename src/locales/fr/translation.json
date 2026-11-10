@@ -4622,6 +4622,9 @@
       "loading": "Chargement des notes…",
       "retry": "Impossible de charger les notes. Réessayer",
       "results": "{{count}} sur {{total}} notes"
+    },
+    "privateOnDevice": {
+      "switched": "Les notes privées restent désormais sur cet appareil. Leurs copies dans le cloud seront supprimées le {{date}}."
     }
   },
   "dictionary": {

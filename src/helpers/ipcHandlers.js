@@ -3482,14 +3482,26 @@ class IPCHandlers {
     ipcMain.handle("db-get-note-for-cloud-row", (_, clientNoteId, cloudId) =>
       this.databaseManager.getNoteForCloudRow(clientNoteId, cloudId)
     );
-    ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
-      const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
-      if (note) {
-        setImmediate(() => broadcastToWindows("note-synced", note));
-        this.notifyVectorChanges();
+    // A pull pinned to a sign-in (the cloud private notes import) passes its
+    // generation, and its writes are refused once that sign-in is replaced.
+    ipcMain.handle(
+      "db-upsert-note-from-cloud",
+      (_, cloudNote, localFolderId, localSpaceId, expectedAuthGeneration) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) {
+          return STALE_SYNC_ACK;
+        }
+        const note = this.databaseManager.upsertNoteFromCloud(
+          cloudNote,
+          localFolderId,
+          localSpaceId
+        );
+        if (note) {
+          setImmediate(() => broadcastToWindows("note-synced", note));
+          this.notifyVectorChanges();
+        }
+        return note;
       }
-      return note;
-    });
+    );
     ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds) =>
       this.databaseManager.markNoteCreatesAttempted(clientNoteIds)
     );
@@ -3566,22 +3578,42 @@ class IPCHandlers {
     ipcMain.handle("db-get-folder-by-client-id", (_, clientFolderId) =>
       this.databaseManager.getFolderByClientId(clientFolderId)
     );
-    ipcMain.handle("db-upsert-folder-from-cloud", (_, cloudFolder, localSpaceId) => {
-      const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId);
-      if (folder) setImmediate(() => broadcastToWindows("folder-synced", folder));
-      return folder;
-    });
+    // Pinned like db-upsert-note-from-cloud when given a generation.
+    ipcMain.handle(
+      "db-upsert-folder-from-cloud",
+      (_, cloudFolder, localSpaceId, expectedAuthGeneration) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) {
+          return STALE_SYNC_ACK;
+        }
+        const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId);
+        if (folder) setImmediate(() => broadcastToWindows("folder-synced", folder));
+        return folder;
+      }
+    );
     ipcMain.handle(
       "db-acknowledge-folder-create",
-      (_, id, snapshot, expectedCloudId, responseClientFolderId, cloudId, cloudUpdatedAt) =>
-        this.databaseManager.acknowledgeFolderCreate(
+      (
+        _,
+        id,
+        snapshot,
+        expectedCloudId,
+        responseClientFolderId,
+        cloudId,
+        cloudUpdatedAt,
+        expectedAuthGeneration
+      ) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) {
+          return STALE_SYNC_ACK;
+        }
+        return this.databaseManager.acknowledgeFolderCreate(
           id,
           snapshot,
           expectedCloudId,
           responseClientFolderId,
           cloudId,
           cloudUpdatedAt
-        )
+        );
+      }
     );
     ipcMain.handle("db-mark-folder-synced-if-unchanged", (_, id, snapshot, expectedCloudId) =>
       this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId)

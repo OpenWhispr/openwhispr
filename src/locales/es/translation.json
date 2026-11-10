@@ -4113,6 +4113,9 @@
       "loading": "Cargando notas…",
       "retry": "No se pudieron cargar las notas. Reintentar",
       "results": "{{count}} de {{total}} notas"
+    },
+    "privateOnDevice": {
+      "switched": "Las notas privadas ahora se quedan en este dispositivo. Sus copias en la nube se eliminarán el {{date}}."
     }
   },
   "dictionary": {

@@ -9408,10 +9408,11 @@ class DatabaseManager {
         spaceId = existing.space_id;
         const folderSpaceId =
           localFolderId == null
-            ? spaceId
+            ? null
             : this.db.prepare("SELECT space_id FROM folders WHERE id = ?").get(localFolderId)
                 ?.space_id;
-        // A folder in another Private section can't hold it: it stays filed where it is.
+        // Only a folder in its own Private section can take it. Otherwise, the
+        // cloud's root included, it stays filed where it is.
         if (folderSpaceId !== spaceId) localFolderId = existing.folder_id;
       }
       const accountId = this._accountIdForSpace(spaceId);

@@ -4615,6 +4615,9 @@
       "loading": "Loading notes…",
       "retry": "Couldn’t load notes. Try again",
       "results": "{{count}} of {{total}} notes"
+    },
+    "privateOnDevice": {
+      "switched": "Private notes now stay on this device. Their cloud copies will be deleted on {{date}}."
     }
   },
   "dictionary": {

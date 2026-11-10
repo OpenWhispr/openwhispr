@@ -20,6 +20,10 @@
 // puts the account on device-only (lib/private-notes-on-device.ts): personal
 // note and folder writes answer 409 personal_notes_on_device, and batch
 // creates list them in `refused`, except writes to a note shareNote marked.
+// With privateNotesRoutes set, GET /api/me/private-notes and POST
+// /api/me/private-notes/on-device answer as the API does (the switch refuses
+// a pulled_through that personal rows changed after); without it they answer
+// 404, as an API before them does.
 
 // The server compares timestamps itself; it must not borrow the client's guard,
 // or a client-side regression would be invisible here.
@@ -115,6 +119,8 @@ const SCOPE_FIELDS = ["workspace_id", "space_id"];
 
 const PERSONAL_NOTES_ON_DEVICE = "personal_notes_on_device";
 
+const PRIVATE_NOTES_PURGE_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+
 function createFakeCloud(config = {}) {
   const cfg = {
     materialPatchGate: true,
@@ -140,7 +146,9 @@ function createFakeCloud(config = {}) {
   // Where a note or folder no write scoped lands, and whose it is.
   let homeSpace = null;
   let ownerId = null;
-  let onDevice = false;
+  // { on_device_since, purge_after } once the account keeps private notes on
+  // its devices.
+  let onDeviceState = null;
 
   // Real cloud ids are UUIDs; `idSpace` keeps two fake accounts' ids apart too
   // (see createAccountCloud).
@@ -244,7 +252,7 @@ function createFakeCloud(config = {}) {
   // folder personal is refused unless it lands on a note someone else can
   // reach. A payload without space_id keeps an existing row's scope.
   function refusesPersonalWrite(collection, existing, input) {
-    if (!onDevice || !collection.scoped) return false;
+    if (!onDeviceState || !collection.scoped) return false;
     const target = "space_id" in input ? (input.space_id ?? null) : (existing?.space_id ?? null);
     if (target) return false;
     if (!existing) return true;
@@ -257,6 +265,47 @@ function createFakeCloud(config = {}) {
       "Private notes stay on your devices. Move a note to a teamspace to sync it.",
       PERSONAL_NOTES_ON_DEVICE
     );
+  }
+
+  function onDeviceStateAt(now) {
+    return {
+      on_device_since: now,
+      purge_after: new Date(Date.parse(now) + PRIVATE_NOTES_PURGE_GRACE_MS).toISOString(),
+    };
+  }
+
+  // As switchToOnDevice: idempotent, and refused while a personal note or
+  // folder (tombstones included) changed after pulled_through, which the
+  // client then never pulled.
+  function switchToOnDevice(pulledThrough) {
+    const at = typeof pulledThrough === "string" ? Date.parse(pulledThrough) : NaN;
+    if (Number.isNaN(at)) throw new HttpError(400, "pulled_through must be a date-time");
+    const now = toIso(clock());
+    const pulled = new Date(at).toISOString();
+    if (pulled > now) {
+      throw new HttpError(400, "pulled_through is in the future", "invalid_pulled_through");
+    }
+    if (onDeviceState) return onDeviceState;
+    const changed = [...notes.values(), ...folders.values()].some((row) => {
+      if (row.space_id || row.workspace_id) return false;
+      const updatedAt = toIso(row.updated_at);
+      return updatedAt > pulled && updatedAt <= now;
+    });
+    if (changed) {
+      throw new HttpError(
+        409,
+        "Private notes changed since they were pulled",
+        "personal_notes_changed"
+      );
+    }
+    onDeviceState = onDeviceStateAt(now);
+    return onDeviceState;
+  }
+
+  function requirePrivateNotesRoutes() {
+    if (!cfg.privateNotesRoutes) {
+      throw new HttpError(404, "fake cloud has no private notes route", "no_route");
+    }
   }
 
   function findByClientId(collection, clientId) {
@@ -572,6 +621,12 @@ function createFakeCloud(config = {}) {
         if (refusesPersonalWrite(folderCollection, row, updates)) throw personalWriteError();
         return applyWrite(folderCollection, row, updates);
       }
+      case "GET /api/me/private-notes":
+        requirePrivateNotesRoutes();
+        return { data: onDeviceState, server_time: toIso(clock()) };
+      case "POST /api/me/private-notes/on-device":
+        requirePrivateNotesRoutes();
+        return { data: switchToOnDevice(body?.pulled_through) };
       case "GET /api/me/spaces":
         if (spaces.size === 0)
           throw new HttpError(404, "fake cloud has no spaces route", "no_route");
@@ -762,8 +817,9 @@ function createFakeCloud(config = {}) {
     },
     removeSpace: (id) => spaces.delete(id),
     switchOnDevice: () => {
-      onDevice = true;
+      onDeviceState ??= onDeviceStateAt(toIso(clock()));
     },
+    privateNotesState: () => structuredClone(onDeviceState),
     shareNote: (id) => {
       sharedNoteIds.add(notes.get(id)?.id ?? findByClientId(noteCollection, id)?.id ?? id);
     },

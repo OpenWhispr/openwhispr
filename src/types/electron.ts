@@ -4135,11 +4135,20 @@ declare global {
         clientNoteId: string | null | undefined,
         cloudId: string
       ) => Promise<NoteItem | null>;
-      upsertNoteFromCloud?: (
-        cloudNote: Record<string, unknown>,
-        localFolderId: number | null,
-        localSpaceId?: number | null
-      ) => Promise<NoteItem | null>;
+      upsertNoteFromCloud?: {
+        (
+          cloudNote: Record<string, unknown>,
+          localFolderId: number | null,
+          localSpaceId?: number | null
+        ): Promise<NoteItem | null>;
+        // A pull pinned to a sign-in: refused once that sign-in is replaced.
+        (
+          cloudNote: Record<string, unknown>,
+          localFolderId: number | null,
+          localSpaceId: number | null | undefined,
+          expectedAuthGeneration: number | undefined
+        ): Promise<NoteItem | StaleSyncWrite | null>;
+      };
       markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
       acknowledgeNoteCreate?: (
         id: number,
@@ -4174,18 +4183,22 @@ declare global {
       // Team folders only: private folders never reach the cloud.
       getPendingFolders?: (scope: "team") => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
+      // Given an auth generation (a pull pinned to a sign-in), refused once
+      // that sign-in is replaced.
       upsertFolderFromCloud?: (
         cloudFolder: Record<string, unknown>,
-        localSpaceId?: number | null
-      ) => Promise<FolderItem>;
+        localSpaceId?: number | null,
+        expectedAuthGeneration?: number
+      ) => Promise<FolderItem | StaleSyncWrite>;
       acknowledgeFolderCreate?: (
         id: number,
         snapshot: FolderPushSnapshot,
         expectedCloudId: string | null,
         responseClientFolderId: string,
         cloudId: string,
-        cloudUpdatedAt?: string | null
-      ) => Promise<FolderAckResult>;
+        cloudUpdatedAt?: string | null,
+        expectedAuthGeneration?: number
+      ) => Promise<FolderAckResult | StaleSyncWrite>;
       markFolderSyncedIfUnchanged?: (
         id: number,
         snapshot: FolderPushSnapshot,

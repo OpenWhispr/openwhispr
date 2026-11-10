@@ -82,10 +82,10 @@ for (const collision of collisions) {
 function cloudUpsertHandler(db, broadcast, notifyVectorChanges) {
   const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
   const registration = source.match(
-    /ipcMain\.handle\("db-upsert-note-from-cloud", ([\s\S]*?)\n {4}\}\);/
+    /ipcMain\.handle\(\s*"db-upsert-note-from-cloud",\s*(\([\s\S]*?\n {6}\})\n {4}\);/
   );
   assert.ok(registration, "the cloud-note IPC callback must be present");
-  return new Function("broadcastToWindows", "setImmediate", `return (${registration[1]}\n});`).call(
+  return new Function("broadcastToWindows", "setImmediate", `return (${registration[1]});`).call(
     { databaseManager: db, notifyVectorChanges },
     broadcast,
     setImmediate
