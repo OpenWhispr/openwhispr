@@ -195,7 +195,6 @@ const {
   applyConfirmedSpeaker,
   applySuggestedSpeaker,
   canAutoRelabelSpeaker,
-  isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const {
@@ -209,6 +208,7 @@ const screenContextCapture = require("./screenContextCapture");
 const { classifyToneAppCategory } = require("./toneAppCategories");
 const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
+  EMBEDDING_VERSION,
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
 const { UPLOAD_AUDIO_EXTENSIONS } = require("../constants/uploadAudioFormats.json");
@@ -4611,9 +4611,8 @@ class IPCHandlers {
               });
               segments = [];
             }
-            // The meeting path caps clusters via its expectation resolver; this
-            // path fed raw sherpa output to the merge, which is how a 2-person
-            // voice memo surfaced 46 speakers.
+            // Raw sherpa output reaching the merge is how a 2-person voice memo
+            // surfaced 46 speakers.
             segments = dropNegligibleClusters(segments);
             if (new Set(segments.map((s) => s.speaker)).size > maxSpeakers) {
               const speakerEmbeddings = require("./speakerEmbeddings");
@@ -14261,7 +14260,12 @@ class IPCHandlers {
       async (_event, noteId, speakerId, displayName, email, profileId) => {
         const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
         const noteSpeakerEmbedding = embeddings.find((e) => e.speaker_id === speakerId);
-        const liveSpeakerEmbedding = liveSpeakerIdentifier.getSpeakerEmbedding(speakerId);
+        // Live speaker ids restart with every meeting, so only the note being
+        // recorded may borrow the live voice or name the live speaker.
+        const isRecordingNote = noteId === this._activeMeetingNoteId;
+        const liveSpeakerEmbedding = isRecordingNote
+          ? liveSpeakerIdentifier.getSpeakerEmbedding(speakerId)
+          : null;
         const speakerEmbeddingBuffer =
           noteSpeakerEmbedding?.embedding ||
           (liveSpeakerEmbedding ? Buffer.from(liveSpeakerEmbedding.buffer) : null);
@@ -14276,10 +14280,19 @@ class IPCHandlers {
           );
           resolvedProfileId = profile.id;
           this._retroactiveMapping(profile);
+        } else {
+          const profile = this.databaseManager.linkSpeakerProfile(
+            displayName,
+            email || null,
+            resolvedProfileId
+          );
+          if (profile) resolvedProfileId = profile.id;
         }
 
         this.databaseManager.setSpeakerMapping(noteId, speakerId, resolvedProfileId, displayName);
-        liveSpeakerIdentifier.mapSpeaker(speakerId, resolvedProfileId, displayName, noteId);
+        if (isRecordingNote) {
+          liveSpeakerIdentifier.mapSpeaker(speakerId, resolvedProfileId, displayName, noteId);
+        }
         return { success: true, profileId: resolvedProfileId };
       }
     );
@@ -14328,16 +14341,16 @@ class IPCHandlers {
   }
 
   _retroactiveMapping(profile) {
+    // A profile whose embedding predates the current model/feature version can't be
+    // compared with note embeddings; it re-enrolls the next time the speaker is labeled.
+    if (profile?.embedding_version !== EMBEDDING_VERSION) return;
     setImmediate(async () => {
       try {
         const speakerEmbeddings = require("./speakerEmbeddings");
+        const { matchVoiceToProfile } = require("./diarizationPolicy");
+        const similarity = (a, b) => speakerEmbeddings.cosineSimilarity(a, b);
+        const profileVoices = this._speakerProfileVoices();
         const noteIds = this.databaseManager.getNotesWithUnmappedSpeakers();
-
-        const profileEmb = new Float32Array(
-          profile.embedding.buffer,
-          profile.embedding.byteOffset,
-          profile.embedding.byteLength / 4
-        );
 
         for (const noteId of noteIds) {
           const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
@@ -14351,9 +14364,11 @@ class IPCHandlers {
               emb.embedding.byteOffset,
               emb.embedding.byteLength / 4
             );
-            const similarity = speakerEmbeddings.cosineSimilarity(profileEmb, speakerEmb);
+            // The speaker is this profile's person only if no other profile is
+            // as close a match.
+            const match = matchVoiceToProfile(speakerEmb, profileVoices, similarity);
 
-            if (similarity > 0.6) {
+            if (match?.confirmed && match.profile.id === profile.id) {
               this.databaseManager.setSpeakerMapping(
                 noteId,
                 emb.speaker_id,
@@ -14396,6 +14411,18 @@ class IPCHandlers {
     });
   }
 
+  // Stored profiles in the current embedding version, each with its voice.
+  _speakerProfileVoices() {
+    return this.databaseManager.getSpeakerProfiles(true).map((profile) => ({
+      profile,
+      voice: new Float32Array(
+        profile.embedding.buffer,
+        profile.embedding.byteOffset,
+        profile.embedding.byteLength / 4
+      ),
+    }));
+  }
+
   _tryAutoLabelOneOnOne(noteId) {
     setImmediate(async () => {
       try {
@@ -14429,7 +14456,6 @@ class IPCHandlers {
             profile?.id ?? null
           );
           this.databaseManager.setSpeakerMapping(noteId, emb.speaker_id, profile.id, displayName);
-          liveSpeakerIdentifier.mapSpeaker(emb.speaker_id, profile.id, displayName, noteId);
         }
 
         const unmappedSystemSpeakers = new Set(unmapped.map((e) => e.speaker_id));
@@ -14484,12 +14510,15 @@ class IPCHandlers {
     }
   }
 
+  // Returns, per named live speaker, the voice its name went to.
   _reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments) {
+    const namedVoices = new Map();
     if (!liveSpeakerState || !speakerEmbeddingsMap) {
-      return new Set();
+      return namedVoices;
     }
 
     const speakerEmbeddings = require("./speakerEmbeddings");
+    const { VOICE_MATCH_SIMILARITY } = require("./diarizationPolicy");
     const reconciledSpeakers = new Set();
     const usedLiveSpeakers = new Set();
     const noteMappings = new Map();
@@ -14511,26 +14540,23 @@ class IPCHandlers {
       return noteMappings.get(noteId);
     };
 
+    // Closest pairs first: with no count, one live speaker stands for every
+    // remote voice, and its name belongs to the voice it sounds most like, not
+    // to the first one that clears the bar.
+    const pairs = [];
     for (const [mappedId, embeddingArray] of Object.entries(speakerEmbeddingsMap)) {
-      let bestEntry = null;
-      let bestSimilarity = 0;
-
+      const embedding = new Float32Array(embeddingArray);
       for (const entry of liveEntries) {
-        if (usedLiveSpeakers.has(entry.speakerId)) {
-          continue;
-        }
-
-        const similarity = speakerEmbeddings.cosineSimilarity(
-          new Float32Array(embeddingArray),
-          entry.embedding
-        );
-        if (similarity > bestSimilarity) {
-          bestSimilarity = similarity;
-          bestEntry = entry;
+        const similarity = speakerEmbeddings.cosineSimilarity(embedding, entry.embedding);
+        if (similarity > VOICE_MATCH_SIMILARITY) {
+          pairs.push({ mappedId, bestEntry: entry, similarity });
         }
       }
+    }
+    pairs.sort((a, b) => b.similarity - a.similarity);
 
-      if (!bestEntry || bestSimilarity <= 0.6) {
+    for (const { mappedId, bestEntry } of pairs) {
+      if (reconciledSpeakers.has(mappedId) || usedLiveSpeakers.has(bestEntry.speakerId)) {
         continue;
       }
 
@@ -14569,9 +14595,11 @@ class IPCHandlers {
       }
 
       this._applySpeakerName(enrichedSegments, mappedId, displayName);
+      if (displayName) {
+        namedVoices.set(bestEntry.speakerId, { speaker: mappedId, name: displayName });
+      }
     }
-
-    return reconciledSpeakers;
+    return namedVoices;
   }
 
   // The renderer's base covers the transcript it resumes; mappings and embeddings
@@ -14602,7 +14630,9 @@ class IPCHandlers {
     }
   }
 
-  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds, diarizedSource }) {
+  // The most speakers post-call diarization may keep, from the count the user or
+  // the note gives; clustering finds how many actually spoke.
+  _resolveSpeakerCap({ sessionConfig, noteId, diarizedSource }) {
     // Only a count the user set explicitly outranks the note: participants added
     // mid-meeting postdate the config snapshot taken at recording start.
     let expectedTotal = sessionConfig?.explicit ? sessionConfig.expectedCount : null;
@@ -14622,22 +14652,18 @@ class IPCHandlers {
 
     if (expectedTotal) {
       const total = Math.min(expectedTotal, MAX_SPEAKER_COUNT);
-      const numSpeakers = micMode ? total : Math.max(1, total - 1);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
-    if (observedSpeakerIds.size >= 2) {
-      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
+      return micMode ? total : Math.max(1, total - 1);
     }
 
     if (micMode) {
-      return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
+      return DEFAULT_EXPECTED_SPEAKER_COUNT;
     }
 
-    // Only system audio reaches the diarizer (the mic track is "you"), so the cap
-    // counts other speakers — same total - 1 basis as the branches above.
-    return { numSpeakers: -1, cap: Math.max(1, DEFAULT_EXPECTED_SPEAKER_COUNT - 1) };
+    // Only system audio reaches the diarizer (the mic track is "you"), so a cap
+    // would count other speakers. With no count there's none: live
+    // identification folds every remote voice into one then, so its speaker ids
+    // can't tell how many people spoke (#2641).
+    return null;
   }
 
   _startOrSkipDiarization(
@@ -14712,33 +14738,14 @@ class IPCHandlers {
 
     const fs = require("fs");
 
-    const observedSpeakerIds = new Set(
-      transcriptSegments
-        .filter((segment) => segment.source === "system" && segment.speaker)
-        .map((segment) => segment.speaker)
-    );
-    for (const speakerId of Object.keys(liveSpeakerState || {})) {
-      observedSpeakerIds.add(speakerId);
-    }
-
-    if (observedSpeakerIds.size > 10) {
-      debugLogger.warn("Excessive speaker count from live identification", {
-        observedSpeakers: observedSpeakerIds.size,
-      });
-    }
-
-    const { numSpeakers, cap } = this._resolveSpeakerExpectation({
-      sessionConfig,
-      noteId,
-      observedSpeakerIds,
-      diarizedSource,
-    });
+    const speakerCap = this._resolveSpeakerCap({ sessionConfig, noteId, diarizedSource });
     // Reserved before the async work so a "record more" started while this runs
-    // numbers its speakers past every cluster the result can name.
+    // numbers its speakers past every cluster the result can name. With no count
+    // the cap is settled after clustering, and it never exceeds MAX_SPEAKER_COUNT - 1.
     if (noteId != null) {
       this._diarizationSpeakerReservations.set(sessionId, {
         noteId,
-        ceiling: speakerIndexBase + cap,
+        ceiling: speakerIndexBase + (speakerCap ?? MAX_SPEAKER_COUNT - 1),
       });
     }
 
@@ -14746,16 +14753,80 @@ class IPCHandlers {
       let tmpWav = null;
       try {
         tmpWav = await this.diarizationManager.convertRawPcmToWav(rawPcmPath, 24000);
-        let diarizationSegments = await this.diarizationManager.diarize(
-          tmpWav,
-          numSpeakers > 0 ? { numSpeakers } : {}
-        );
-        if (cap != null) {
-          diarizationSegments = this.diarizationManager.capSpeakerClusters(
+        const {
+          resolveClusterThreshold,
+          mergeClustersByVoice,
+          dropNegligibleClusters,
+          isCollapsedDiarization,
+          matchVoiceToProfile,
+          dropVoicelessClustersOverCap,
+          capSpeakerClustersByVoice,
+        } = require("./diarizationPolicy");
+        const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
+        const speakerEmb = require("./speakerEmbeddings");
+        const similarity = (a, b) => speakerEmb.cosineSimilarity(a, b);
+
+        // Always auto-cluster, as uploads do: a forced cluster count splits short
+        // utterances from long ones instead of one voice from another (#2021).
+        const durationSeconds = fs.statSync(tmpWav).size / PCM16_MONO_16K_BYTES_PER_SECOND;
+        let diarizationSegments = await this.diarizationManager.diarize(tmpWav, {
+          threshold: resolveClusterThreshold(durationSeconds),
+        });
+        let centroids = new Map();
+        try {
+          centroids = await speakerEmb.extractClusterCentroids(tmpWav, diarizationSegments);
+        } catch (error) {
+          debugLogger.warn("Speaker voices unavailable; clusters are not merged by voice", {
+            error: error.message,
+          });
+        }
+        // Voices were only measured on the remote side (#2641). On the mic track a
+        // merge could fold the other person into the user, and one cluster there
+        // labels every line "you".
+        if (diarizedSource === "system") {
+          // A count the user set says how many people spoke. One read off the
+          // note's invitees only bounds them, since invitees don't all turn up.
+          const countedVoices =
+            sessionConfig?.explicit && sessionConfig.expectedCount ? speakerCap : 0;
+          diarizationSegments = mergeClustersByVoice(
             diarizationSegments,
-            cap
+            centroids,
+            similarity,
+            countedVoices
           );
         }
+        // The count is what tells a quiet participant from a phantom. With none,
+        // a one-on-one is the likeliest call, so only the largest cluster is
+        // safe from the phantom rule: a sliver split off the one remote voice
+        // doesn't become a second speaker.
+        diarizationSegments = dropNegligibleClusters(
+          diarizationSegments,
+          speakerCap == null ? { protectedCount: 1 } : { voiced: centroids }
+        );
+        // With no count, one remote voice holding nearly all the speech beside
+        // short slivers is a one-on-one call: the slivers are the same voice. (An
+        // upload that collapses like this loses its labels instead, since it
+        // expects several voices.) A cluster without a voice can't be told from
+        // sherpa's split of one voice, so it's dropped and its lines go to the
+        // speaker nearest in time. With no voice at all, the cap stays at one.
+        let cap = speakerCap;
+        if (cap == null) {
+          const voiced = diarizationSegments.filter((s) => centroids.has(s.speaker));
+          if (voiced.length === 0 || isCollapsedDiarization(diarizationSegments)) {
+            cap = 1;
+          } else {
+            diarizationSegments = voiced;
+            cap = MAX_SPEAKER_COUNT - 1;
+          }
+        } else if (diarizedSource === "system") {
+          diarizationSegments = dropVoicelessClustersOverCap(diarizationSegments, cap, centroids);
+        }
+        diarizationSegments = capSpeakerClustersByVoice(
+          diarizationSegments,
+          cap,
+          centroids,
+          similarity
+        );
 
         const enrichedSegments = this.diarizationManager.mergeWithTranscript(
           kept,
@@ -14780,91 +14851,84 @@ class IPCHandlers {
         const micSingleClusterSoftened = diarizedSource === "mic" && speakerSet.size === 1;
 
         let speakerEmbeddingsMap = null;
-        const speakerEmb = require("./speakerEmbeddings");
         try {
           if (!micSingleClusterSoftened && speakerEmb.isAvailable() && tmpWav) {
-            const speakerIds = [...new Set(diarizationSegments.map((s) => s.speaker))];
+            const voices = await speakerEmb.extractClusterCentroids(tmpWav, diarizationSegments);
             speakerEmbeddingsMap = {};
-
-            for (const spk of speakerIds) {
-              const segs = diarizationSegments.filter((s) => s.speaker === spk);
-              const sorted = segs.sort((a, b) => b.end - b.start - (a.end - a.start)).slice(0, 3);
-              const embeddings = [];
-              for (const seg of sorted) {
-                if (seg.end - seg.start < 1.5) continue;
-                const emb = await speakerEmb.extractEmbedding(tmpWav, seg.start, seg.end);
-                if (emb) embeddings.push(emb);
-              }
-              if (embeddings.length > 0) {
-                const centroid = speakerEmb.computeCentroid(embeddings);
-                const mappedId = speakerRenumber.get(spk) || spk;
-                speakerEmbeddingsMap[mappedId] = Array.from(centroid);
-              }
+            for (const [spk, centroid] of voices) {
+              speakerEmbeddingsMap[speakerRenumber.get(spk) || spk] = Array.from(centroid);
             }
           }
         } catch (err) {
           debugLogger.debug("Speaker embedding extraction skipped", { error: err.message });
         }
 
-        const reconciledSpeakers = this._reconcileLiveSpeakerState(
+        // Live identification names its speaker on every line it labels (here
+        // and in the renderer), and with no count its one speaker covers every
+        // remote voice. When the call holds more than one voice and more voices
+        // than live speakers, every line's name is cleared, and reconciliation
+        // and profile matching below name each voice. Without voices to match,
+        // the names stay. null, not undefined: the renderer keeps a line's old
+        // value for an undefined field.
+        const liveSpeakersSplit =
+          Object.keys(speakerEmbeddingsMap || {}).length > 0 &&
+          speakerSet.size > Math.max(1, Object.keys(liveSpeakerState || {}).length);
+        if (liveSpeakersSplit) {
+          for (const segment of enrichedSegments) {
+            if (segment.source === diarizedSource) {
+              applyConfirmedSpeaker(segment, { speakerName: null });
+            }
+          }
+        }
+
+        const namedVoices = this._reconcileLiveSpeakerState(
           liveSpeakerState,
           speakerEmbeddingsMap,
           enrichedSegments
         );
+        // A name the user gave a live speaker is locked, in the renderer, onto
+        // every line that speaker labelled. After a split the renderer keeps
+        // that lock only on the voice the name went to; a name that matched no
+        // voice isn't listed, and stays on all of its lines.
+        const splitLiveSpeakers = liveSpeakersSplit ? Object.fromEntries(namedVoices) : undefined;
 
         if (speakerEmbeddingsMap) {
           try {
-            const profiles = this.databaseManager.getSpeakerProfiles(true);
+            const profileVoices = this._speakerProfileVoices();
 
-            if (profiles.length > 0) {
-              for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
-                const alreadyMapped = enrichedSegments.some(
-                  (segment) => segment.speaker === mappedId && segment.speakerName
-                );
-                if (reconciledSpeakers.has(mappedId) || alreadyMapped) {
+            for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
+              const alreadyMapped = enrichedSegments.some(
+                (segment) => segment.speaker === mappedId && segment.speakerName
+              );
+              if (alreadyMapped) {
+                continue;
+              }
+
+              const match = matchVoiceToProfile(
+                new Float32Array(embArr),
+                profileVoices,
+                similarity
+              );
+              if (!match) {
+                continue;
+              }
+
+              for (const seg of enrichedSegments) {
+                if (seg.speaker !== mappedId) {
                   continue;
                 }
-
-                const emb = new Float32Array(embArr);
-                let bestProfile = null;
-                let bestSim = 0;
-
-                for (const profile of profiles) {
-                  const profileEmb = new Float32Array(
-                    profile.embedding.buffer,
-                    profile.embedding.byteOffset,
-                    profile.embedding.byteLength / 4
-                  );
-                  const sim = speakerEmb.cosineSimilarity(emb, profileEmb);
-                  if (sim > bestSim) {
-                    bestSim = sim;
-                    bestProfile = profile;
-                  }
-                }
-
-                if (bestProfile && bestSim > 0.6) {
-                  for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId) {
-                      applyConfirmedSpeaker(seg, {
-                        speakerName: bestProfile.display_name,
-                        speakerIsPlaceholder: false,
-                        suggestedName: undefined,
-                        suggestedProfileId: undefined,
-                      });
-                    }
-                  }
-                } else if (bestProfile && bestSim > 0.5) {
-                  for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId) {
-                      if (isSpeakerLocked(seg)) {
-                        continue;
-                      }
-                      applySuggestedSpeaker(seg, {
-                        suggestedName: bestProfile.display_name,
-                        suggestedProfileId: bestProfile.id,
-                      });
-                    }
-                  }
+                if (match.confirmed) {
+                  applyConfirmedSpeaker(seg, {
+                    speakerName: match.profile.display_name,
+                    speakerIsPlaceholder: false,
+                    suggestedName: undefined,
+                    suggestedProfileId: undefined,
+                  });
+                } else {
+                  applySuggestedSpeaker(seg, {
+                    suggestedName: match.profile.display_name,
+                    suggestedProfileId: match.profile.id,
+                  });
                 }
               }
             }
@@ -14873,7 +14937,11 @@ class IPCHandlers {
           }
         }
 
-        send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        send({
+          segments: enrichedSegments,
+          speakerEmbeddings: speakerEmbeddingsMap,
+          splitLiveSpeakers,
+        });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
         this._diarizationSpeakerReservations.delete(sessionId);

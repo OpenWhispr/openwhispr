@@ -214,3 +214,70 @@ test("diarization preserves the recorder while still numbering in-person voices"
     "Speaker 1: hello"
   );
 });
+
+// With no speaker count, every remote line is the one live speaker, and naming
+// it locks that name onto all of them. Diarization then finds several voices.
+async function mergeIntoLockedRows(lockedName, splitLiveSpeakers) {
+  const { mergeSessionDiarization } = await import("../../src/utils/diarizationCompletion.ts");
+  const { lockTranscriptSpeaker } = await import("../../src/utils/transcriptSpeakerState.ts");
+  const row = (id, timestamp, speaker, speakerName) => ({
+    id,
+    source: "system",
+    text: id,
+    timestamp,
+    speaker,
+    speakerName,
+  });
+  const existing = ["a", "b", "c"].map((id, i) =>
+    lockTranscriptSpeaker(row(id, i, "speaker_0"), { speakerName: lockedName })
+  );
+  const segments = [
+    row("a", 0, "speaker_1", "Alice"),
+    row("b", 1, "speaker_0", null),
+    row("c", 2, "speaker_2", "Bob"),
+  ].map((segment) => ({ ...segment, speakerStatus: "confirmed" }));
+
+  return mergeSessionDiarization({
+    existing,
+    seedLength: 0,
+    segments,
+    splitLiveSpeakers,
+  }).segments.map((segment) => [segment.speaker, segment.speakerName, segment.speakerLocked]);
+}
+
+test("a name locked onto a live speaker stays only with the voice it went to", async () => {
+  const merged = await mergeIntoLockedRows("Alice", {
+    speaker_0: { speaker: "speaker_1", name: "Alice" },
+  });
+
+  assert.deepEqual(merged, [
+    ["speaker_1", "Alice", true],
+    ["speaker_0", null, false],
+    ["speaker_2", "Bob", false],
+  ]);
+});
+
+test("a locked name that matched no voice stays on every line it was given to", async () => {
+  const merged = await mergeIntoLockedRows("Alice", undefined);
+
+  assert.deepEqual(merged, [
+    ["speaker_1", "Alice", true],
+    ["speaker_0", "Alice", true],
+    ["speaker_2", "Alice", true],
+  ]);
+});
+
+test("lines the user gave another name keep it when their live speaker is split", async () => {
+  const merged = await mergeIntoLockedRows("Carol", {
+    speaker_0: { speaker: "speaker_1", name: "Alice" },
+  });
+
+  assert.deepEqual(
+    merged.map(([, name, locked]) => [name, locked]),
+    [
+      ["Carol", true],
+      ["Carol", true],
+      ["Carol", true],
+    ]
+  );
+});
