@@ -218,3 +218,79 @@ test("a synthetic scope row is never manageable", async () => {
     assert.equal(canManageAccessGrant(access(), grant({ id })), false);
   }
 });
+
+const PRIVATE_SPACE = { kind: "private" };
+const TEAM_SPACE = { kind: "team" };
+
+test("an unshared private note shares by moving to a teamspace", async () => {
+  const { privateShareState } = await load();
+
+  assert.equal(privateShareState({ is_shared: 0, cloud_id: null }, PRIVATE_SPACE), "moveToShare");
+});
+
+// Cloud Backup gave private notes cloud ids before Private stayed on the device.
+// Sharing from that copy would start syncing the note again.
+test("a cloud id left by Backup doesn't make an unshared private note shareable", async () => {
+  const { privateShareState } = await load();
+
+  assert.equal(
+    privateShareState({ is_shared: 0, cloud_id: "cloud-1" }, PRIVATE_SPACE),
+    "moveToShare"
+  );
+  // A fork dropped the cloud copy: nothing is shared from this device any more.
+  assert.equal(privateShareState({ is_shared: 1, cloud_id: null }, PRIVATE_SPACE), "moveToShare");
+});
+
+test("a private note shared by an older build keeps its share", async () => {
+  const { privateShareState } = await load();
+
+  assert.equal(
+    privateShareState({ is_shared: 1, cloud_id: "cloud-1" }, PRIVATE_SPACE),
+    "legacyShared"
+  );
+});
+
+test("a team note shares in place whatever its share flag", async () => {
+  const { privateShareState } = await load();
+
+  for (const note of [
+    { is_shared: 0, cloud_id: null },
+    { is_shared: 0, cloud_id: "cloud-1" },
+    { is_shared: 1, cloud_id: "cloud-1" },
+  ]) {
+    assert.equal(privateShareState(note, TEAM_SPACE), "team");
+  }
+});
+
+test("an invite-only share reaches someone only while it names someone", async () => {
+  const { shareReachesAnyone } = await load();
+  const invited = { visibility: "invited", token_prefix: PREFIX };
+
+  assert.equal(shareReachesAnyone({ share: invited, invitations: [] }), false);
+  assert.equal(shareReachesAnyone({ share: invited, invitations: [], access: access() }), false);
+  assert.equal(shareReachesAnyone({ share: invited, invitations: [{ id: "inv-1" }] }), true);
+  assert.equal(
+    shareReachesAnyone({ share: invited, invitations: [], access: access({ grants: [grant()] }) }),
+    true
+  );
+});
+
+// Private visibility is the API's kill switch for every invitation and grant.
+test("a private share reaches nobody and a link share reaches whoever has the link", async () => {
+  const { shareReachesAnyone } = await load();
+
+  assert.equal(
+    shareReachesAnyone({
+      share: { visibility: "private", token_prefix: null },
+      invitations: [{ id: "inv-1" }],
+      access: access({ grants: [grant()] }),
+    }),
+    false
+  );
+  for (const visibility of ["link", "domain"]) {
+    assert.equal(
+      shareReachesAnyone({ share: { visibility, token_prefix: PREFIX }, invitations: [] }),
+      true
+    );
+  }
+});

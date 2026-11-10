@@ -1,4 +1,11 @@
-import type { NoteAccessGrant, NoteAccessState, ShareSettings } from "../../types/electron";
+import { isLegacySharedPrivateNote } from "../../services/syncPassPolicy";
+import type {
+  NoteAccessGrant,
+  NoteAccessState,
+  NoteItem,
+  ShareSettings,
+  SpaceItem,
+} from "../../types/electron";
 
 const SHARE_VIEWER_BASE_URL = "https://notes.openwhispr.com";
 
@@ -73,4 +80,35 @@ export function canManageAccessGrant(
     !grant.id.startsWith("scope:") &&
     (!grant.inherited || access.can_manage_inherited_access)
   );
+}
+
+/**
+ * How the share dialog shares a note. A team note shares in place. A private note stays on this
+ * device, so it shares by moving to a teamspace, unless an older build shared it: that one keeps
+ * its share and syncs while it lasts. A cloud id the old Cloud Backup left on a private note
+ * doesn't make it shared.
+ */
+export type PrivateShareState = "moveToShare" | "legacyShared" | "team";
+
+export function privateShareState(
+  note: Pick<NoteItem, "is_shared" | "cloud_id">,
+  space: Pick<SpaceItem, "kind"> | null | undefined
+): PrivateShareState {
+  if (space?.kind === "team") return "team";
+  return isLegacySharedPrivateNote(note) ? "legacyShared" : "moveToShare";
+}
+
+/**
+ * Whether anyone but the owner can open a note shared this way. Private visibility shuts out
+ * every invitation and grant (the API's kill switch), a link or domain share is open to whoever
+ * has the link, and an invite-only share reaches only the people it still names.
+ */
+export function shareReachesAnyone(state: {
+  share: Pick<ShareSettings, "visibility">;
+  invitations: ReadonlyArray<unknown>;
+  access?: Pick<NoteAccessState, "grants"> | null;
+}): boolean {
+  if (state.share.visibility === "private") return false;
+  if (state.share.visibility !== "invited") return true;
+  return state.invitations.length > 0 || (state.access?.grants.length ?? 0) > 0;
 }

@@ -22,6 +22,17 @@ const ROTATED_AWAY_TOKEN = `ow_share_zzz9999${"y".repeat(25)}`;
 const NEW_PREFIX = "ow_share_new0000";
 const NEW_TOKEN = `${NEW_PREFIX}${"n".repeat(25)}`;
 
+const WORKSPACE_ID = "ws-1";
+function space(id, kind, name, workspaceId) {
+  return { id, kind, name, emoji: null, workspace_id: workspaceId, account_id: null, teams: [] };
+}
+const TEAM_SPACE = space(1, "team", "Design", WORKSPACE_ID);
+const PRIVATE_SPACE = space(2, "private", "Personal", WORKSPACE_ID);
+// Notes move into neither: one is linked to no workspace, the other is another workspace's.
+const LEGACY_TEAM_SPACE = space(3, "team", "Old team", null);
+const OTHER_WORKSPACE_TEAM_SPACE = space(4, "team", "Elsewhere", "ws-2");
+const ALL_SPACES = [TEAM_SPACE, PRIVATE_SPACE, LEGACY_TEAM_SPACE, OTHER_WORKSPACE_TEAM_SPACE];
+
 function shareSettings(visibility, tokenPrefix) {
   return {
     visibility,
@@ -65,7 +76,18 @@ const MOCK_MODULES = {
         (visibility === "private" || globalThis.__shareTest.linkDenied)
       );
   `,
-  "/services/SyncService.js": `export const syncService = { ensureNoteSynced: async () => null };`,
+  "/services/SyncService.js": `
+    export const syncService = {
+      async ensureNoteSynced(noteId) {
+        globalThis.__shareTest.calls.push({ name: "ensureNoteSynced", args: [noteId] });
+        return globalThis.__shareTest.ensureResult;
+      },
+    };
+  `,
+  "/hooks/useWorkspace": `
+    export const useWorkspace = () => ({ workspaces: [], defaultWorkspaceId: "${WORKSPACE_ID}" });
+    export const useSpacesInWorkspaceScope = (spaces) => spaces;
+  `,
   "/services/NoteSharingService.js": `
     const record = (name, ...args) => globalThis.__shareTest.calls.push({ name, args });
     const cached = (id) => globalThis.__shareTest.cache.get(id);
@@ -93,6 +115,16 @@ const MOCK_MODULES = {
       },
       async removeAccessGrant(id, grantId) {
         record("removeAccessGrant", id, grantId);
+        const server = globalThis.__shareTest.server;
+        if (server?.access) {
+          server.access = {
+            ...server.access,
+            grants: server.access.grants.filter((grant) => grant.id !== grantId),
+          };
+        }
+      },
+      async revokeInvite(id, invitationId) {
+        record("revokeInvite", id, invitationId);
       },
       async searchAccessPrincipals() {
         return { suggestions: [] };
@@ -109,7 +141,7 @@ const MOCK_MODULES = {
     export const persistNoteShareState = async (noteId, updates) => {
       globalThis.__shareTest.persisted.push({ noteId, updates });
     };
-    export const useSpaces = () => [];
+    export const useSpaces = () => globalThis.__shareTest.spaces;
     export const useShareCacheEntry = (id) => (id ? (cache().get(id) ?? null) : null);
   `,
   "/ui/useToast": `
@@ -160,7 +192,18 @@ function textOf(node) {
   return textOf(node.props?.children);
 }
 
-async function setupDialog(t, { entry, server, updateResult = null, rotateResult = null }) {
+async function setupDialog(
+  t,
+  {
+    entry,
+    server,
+    updateResult = null,
+    rotateResult = null,
+    spaces = ALL_SPACES,
+    ensureResult = null,
+    moveResult = { success: true },
+  }
+) {
   const clipboardWrites = [];
   installBrowserGlobals(t, {
     window: { setTimeout: () => 1, clearTimeout: () => {}, electronAPI: {} },
@@ -180,6 +223,10 @@ async function setupDialog(t, { entry, server, updateResult = null, rotateResult
     server,
     updateResult,
     rotateResult,
+    spaces,
+    ensureResult,
+    moveResult,
+    closed: 0,
   };
   globalThis.__shareTest = state;
   t.after(() => {
@@ -199,33 +246,64 @@ async function setupDialog(t, { entry, server, updateResult = null, rotateResult
   return { state, clipboardWrites, callsTo, ShareNoteDialog };
 }
 
+// A team note unless a test says otherwise: the note the link tests share.
 function dialogProps(note, extra = {}) {
+  const state = globalThis.__shareTest;
   return {
     open: true,
-    onOpenChange: () => {},
-    note: { id: 7, cloud_id: CLOUD_ID, is_shared: 1, share_token: null, ...note },
+    onOpenChange: (open) => {
+      if (!open) state.closed += 1;
+    },
+    note: {
+      id: 7,
+      cloud_id: CLOUD_ID,
+      is_shared: 1,
+      share_token: null,
+      space_id: TEAM_SPACE.id,
+      ...note,
+    },
+    canMoveNote: true,
+    onMoveNote: async (noteId, target) => {
+      state.calls.push({ name: "moveNote", args: [noteId, target] });
+      return state.moveResult;
+    },
+    onOpenTeamspaces: () => state.calls.push({ name: "openTeamspaces", args: [] }),
     ...extra,
   };
 }
 
-async function renderDialog(t, { note, ...options }) {
+async function renderDialog(t, { note, props = {}, ...options }) {
   const { state, clipboardWrites, callsTo, ShareNoteDialog } = await setupDialog(t, options);
-  renderToStaticMarkup(createElement(ShareNoteDialog, dialogProps(note)));
+  const markup = renderToStaticMarkup(createElement(ShareNoteDialog, dialogProps(note, props)));
 
-  return { state, linkButton: latestLinkButton(state), clipboardWrites, callsTo };
+  return {
+    state,
+    markup,
+    linkButton: findLinkButton(state),
+    clipboardWrites,
+    callsTo,
+  };
+}
+
+function findLinkButton(state) {
+  return (
+    state.buttons.findLast((props) =>
+      /noteEditor\.share\.dialog\.(copyLink|createLink)/.test(textOf(props.children))
+    ) ?? null
+  );
 }
 
 function latestLinkButton(state) {
-  const linkButton = state.buttons.findLast((props) =>
-    /noteEditor\.share\.dialog\.(copyLink|createLink)/.test(textOf(props.children))
-  );
+  const linkButton = findLinkButton(state);
   assert.ok(linkButton, "expected the link button to render");
   return linkButton;
 }
 
+const buttonLabels = (state) => state.buttons.map((props) => textOf(props.children));
+
 // Mounts the dialog so its effects run. `setOpen` re-renders it open or closed,
 // as NoteEditor does; `copyLinkOnOpen` is the Share button's link segment.
-async function mountDialog(t, { note, copyLinkOnOpen = false, ...options }) {
+async function mountDialog(t, { note, copyLinkOnOpen = false, props = {}, ...options }) {
   let root = null;
   // Registered first: after-hooks run in order, and unmounting needs the globals.
   t.after(() => act(() => root?.unmount()));
@@ -234,7 +312,7 @@ async function mountDialog(t, { note, copyLinkOnOpen = false, ...options }) {
   const setOpen = async (open) => {
     await act(async () => {
       root.render(
-        createElement(dialog.ShareNoteDialog, dialogProps(note, { open, copyLinkOnOpen }))
+        createElement(dialog.ShareNoteDialog, dialogProps(note, { ...props, open, copyLinkOnOpen }))
       );
     });
     await act(settle);
@@ -541,4 +619,268 @@ test("synthetic scope rows offer no permission or remove controls", async (t) =>
   );
   assert.ok(targeted.includes(direct.id), "the direct grant keeps its controls");
   assert.ok(!targeted.includes(scope.id), `scope row was offered controls: ${targeted}`);
+});
+
+const PRIVATE_NOTE = { space_id: PRIVATE_SPACE.id, cloud_id: null, is_shared: 0 };
+const sharingCalls = (state) =>
+  state.calls.filter((call) => !["moveNote", "openTeamspaces"].includes(call.name));
+
+function moveConfirm(state) {
+  return state.confirmDialogs.findLast(
+    (props) => props.title === "noteEditor.share.dialog.moveConfirmTitle"
+  );
+}
+
+test("an unshared private note offers moving to a teamspace and no link", async (t) => {
+  const { state, markup, linkButton } = await renderDialog(t, { note: PRIVATE_NOTE });
+
+  assert.match(markup, /noteEditor\.share\.dialog\.moveToShare/);
+  const labels = buttonLabels(state);
+  assert.ok(labels.includes(TEAM_SPACE.name), `teamspaces offered: ${labels}`);
+  for (const unreachable of [LEGACY_TEAM_SPACE, OTHER_WORKSPACE_TEAM_SPACE]) {
+    assert.ok(!labels.includes(unreachable.name), `${unreachable.name} must not be offered`);
+  }
+  assert.equal(linkButton, null, "a private note has no link to copy");
+  assert.doesNotMatch(markup, /noteEditor\.share\.dialog\.(syncAndShare|legacySharedBanner)/);
+  assert.deepEqual(sharingCalls(state), []);
+});
+
+// The old Cloud Backup left cloud ids on private notes. Sharing from that copy
+// would mark the note shared, and it would start syncing again.
+test("a private note with a leftover cloud id and no share moves to share and makes no sharing request", async (t) => {
+  const { state, clipboardWrites } = await mountDialog(t, {
+    copyLinkOnOpen: true,
+    note: { ...PRIVATE_NOTE, cloud_id: CLOUD_ID },
+    entry: { share: shareSettings("link", PREFIX), invitations: [], rawToken: TOKEN },
+  });
+
+  assert.ok(buttonLabels(state).includes(TEAM_SPACE.name));
+  assert.equal(findLinkButton(state), null);
+  assert.deepEqual(sharingCalls(state), []);
+  assert.deepEqual(clipboardWrites, []);
+  assert.deepEqual(state.persisted, []);
+});
+
+test("moving a private note to a teamspace asks first, then shares it from there", async (t) => {
+  const NEW_CLOUD_ID = "cloud-note-new";
+  const { state } = await mountDialog(t, {
+    note: PRIVATE_NOTE,
+    ensureResult: NEW_CLOUD_ID,
+    server: { share: shareSettings("private", null), invitations: [] },
+  });
+
+  const row = state.buttons.findLast((props) => textOf(props.children) === TEAM_SPACE.name);
+  await act(async () => row.onClick());
+  assert.deepEqual(state.calls, [], "picking a teamspace alone moves nothing");
+  assert.equal(moveConfirm(state).open, true);
+  assert.equal(moveConfirm(state).description, "notes.spaces.confirmMoveIn");
+
+  await act(async () => moveConfirm(state).onConfirm());
+  await act(settle);
+
+  assert.deepEqual(
+    state.calls.map((call) => call.name),
+    ["moveNote", "ensureNoteSynced", "getShareSettings"]
+  );
+  assert.deepEqual(state.calls[0].args, [7, { spaceId: TEAM_SPACE.id, folderId: null }]);
+  assert.deepEqual(state.calls[1].args, [7]);
+  assert.deepEqual(state.calls[2].args, [NEW_CLOUD_ID]);
+  assert.ok(findLinkButton(state), "the team share view opens");
+});
+
+test("a refused move leaves the note private and says so", async (t) => {
+  const { state } = await mountDialog(t, {
+    note: PRIVATE_NOTE,
+    moveResult: { success: false, error: "Space not found" },
+  });
+
+  const row = state.buttons.findLast((props) => textOf(props.children) === TEAM_SPACE.name);
+  await act(async () => row.onClick());
+  await act(async () => moveConfirm(state).onConfirm());
+  await act(settle);
+
+  assert.deepEqual(
+    state.calls.map((call) => call.name),
+    ["moveNote"]
+  );
+  assert.deepEqual(
+    state.toasts.map((toast) => toast.title),
+    ["notes.spaces.couldNotMoveNote"]
+  );
+  assert.ok(buttonLabels(state).includes(TEAM_SPACE.name), "the teamspaces stay offered");
+});
+
+test("a private note with no teamspace to move to links to Teamspaces", async (t) => {
+  const { state, markup } = await renderDialog(t, {
+    note: PRIVATE_NOTE,
+    spaces: [PRIVATE_SPACE, LEGACY_TEAM_SPACE, OTHER_WORKSPACE_TEAM_SPACE],
+  });
+
+  assert.match(markup, /noteEditor\.share\.dialog\.noTeamspaces/);
+  const link = state.buttons.find(
+    (props) => textOf(props.children) === "noteEditor.share.dialog.openTeamspaces"
+  );
+  assert.ok(link, "expected a link to Teamspaces");
+  link.onClick();
+
+  assert.deepEqual(
+    state.calls.map((call) => call.name),
+    ["openTeamspaces"]
+  );
+  assert.equal(state.closed, 1, "the share dialog closes for Settings");
+});
+
+test("someone who can't move the note is told they can't share it", async (t) => {
+  const { state, markup } = await renderDialog(t, {
+    note: PRIVATE_NOTE,
+    props: { canMoveNote: false },
+  });
+
+  assert.match(markup, /noteEditor\.share\.dialog\.cantMoveToShare/);
+  assert.ok(!buttonLabels(state).includes(TEAM_SPACE.name));
+});
+
+test("a shared private note shows the banner and keeps its audience controls", async (t) => {
+  const guest = accessGrant("grant-guest");
+  const { state, markup, linkButton } = await renderDialog(t, {
+    note: { space_id: PRIVATE_SPACE.id, cloud_id: CLOUD_ID, is_shared: 1 },
+    entry: {
+      share: shareSettings("invited", PREFIX),
+      invitations: [],
+      rawToken: null,
+      access: {
+        owner: { type: "user", id: "owner", email: "owner@acme.com", name: null, image: null },
+        grants: [guest],
+        my_permission: "owner",
+        can_manage_access: true,
+        can_manage_inherited_access: true,
+      },
+    },
+  });
+
+  assert.match(markup, /noteEditor\.share\.dialog\.legacySharedBanner/);
+  assert.doesNotMatch(markup, /noteEditor\.share\.dialog\.moveToShare/);
+  assert.ok(linkButton, "the link stays");
+  assert.ok(
+    state.menuItems.some(
+      (props) => textOf(props.children) === "noteEditor.share.dialog.revoke" && !props.disabled
+    ),
+    "the guest can still be removed"
+  );
+  assert.ok(!buttonLabels(state).includes(TEAM_SPACE.name), "no move list");
+});
+
+function audience(grants) {
+  return {
+    owner: { type: "user", id: "owner", email: "owner@acme.com", name: null, image: null },
+    grants,
+    my_permission: "owner",
+    can_manage_access: true,
+    can_manage_inherited_access: true,
+  };
+}
+
+async function removeOnlyGuest(t, note) {
+  const guest = accessGrant("grant-guest");
+  const server = {
+    share: shareSettings("invited", PREFIX),
+    invitations: [],
+    access: audience([guest]),
+  };
+  const ui = await mountDialog(t, {
+    note,
+    entry: { ...server, rawToken: null },
+    server,
+  });
+  const remove = ui.state.menuItems.findLast(
+    (props) => textOf(props.children) === "noteEditor.share.dialog.revoke"
+  );
+  await act(async () => remove.onClick());
+  await act(settle);
+  return ui;
+}
+
+// Only a shared private note syncs. With nobody left it ends its share, so
+// the note stays on this device again.
+test("stopping sharing on a legacy shared note clears its local share flag", async (t) => {
+  const { state, callsTo } = await removeOnlyGuest(t, {
+    space_id: PRIVATE_SPACE.id,
+    cloud_id: CLOUD_ID,
+    is_shared: 1,
+  });
+
+  assert.equal(callsTo("removeAccessGrant").length, 1);
+  assert.equal(callsTo("clearShare").length, 1);
+  assert.deepEqual(state.persisted.at(-1), {
+    noteId: 7,
+    updates: { is_shared: 0, share_token: null },
+  });
+});
+
+test("a legacy shared note the server no longer shares stays on this device again", async (t) => {
+  const { state } = await mountDialog(t, {
+    note: { space_id: PRIVATE_SPACE.id, cloud_id: CLOUD_ID, is_shared: 1, share_token: TOKEN },
+    entry: { share: shareSettings("invited", PREFIX), invitations: [], rawToken: null },
+    server: { share: shareSettings("private", null), invitations: [] },
+  });
+
+  assert.deepEqual(state.persisted, [{ noteId: 7, updates: { is_shared: 0, share_token: null } }]);
+});
+
+test("a team note is unchanged", async (t) => {
+  const { state, markup, linkButton, clipboardWrites } = await renderDialog(t, {
+    note: { share_token: TOKEN },
+    entry: { share: shareSettings("link", PREFIX), invitations: [], rawToken: null },
+  });
+
+  assert.doesNotMatch(
+    markup,
+    /noteEditor\.share\.dialog\.(moveToShare|legacySharedBanner|noTeamspaces)/
+  );
+  assert.ok(!buttonLabels(state).includes(TEAM_SPACE.name), "no move list");
+  linkButton.onClick();
+  await settle();
+  assert.deepEqual(clipboardWrites, [`https://notes.openwhispr.com/n/${TOKEN}`]);
+});
+
+test("removing a team note's last guest leaves its share as it is", async (t) => {
+  const { state, callsTo } = await removeOnlyGuest(t, { space_id: TEAM_SPACE.id });
+
+  assert.equal(callsTo("removeAccessGrant").length, 1);
+  assert.equal(callsTo("clearShare").length, 0);
+  assert.deepEqual(state.persisted, []);
+});
+
+// "Sync note" is gone: a team note uploads anyway, so the dialog does it.
+test("a team note that hasn't uploaded yet uploads when the dialog opens", async (t) => {
+  const NEW_CLOUD_ID = "cloud-note-new";
+  const { state, callsTo } = await mountDialog(t, {
+    note: { cloud_id: null, is_shared: 0 },
+    ensureResult: NEW_CLOUD_ID,
+    server: { share: shareSettings("private", null), invitations: [] },
+  });
+
+  assert.deepEqual(
+    state.calls.map((call) => call.name),
+    ["ensureNoteSynced", "getShareSettings"]
+  );
+  assert.deepEqual(callsTo("getShareSettings")[0].args, [NEW_CLOUD_ID]);
+  assert.ok(findLinkButton(state));
+});
+
+test("a team note whose upload fails offers a retry", async (t) => {
+  t.mock.method(console, "error", () => {});
+  const { state, callsTo } = await mountDialog(t, {
+    note: { cloud_id: null, is_shared: 0 },
+    ensureResult: null,
+  });
+
+  assert.equal(findLinkButton(state), null);
+  const retry = state.buttons.findLast(
+    (props) => textOf(props.children) === "noteEditor.share.dialog.error.retry"
+  );
+  assert.ok(retry, "expected the load error's retry");
+  await act(async () => retry.onClick());
+  await act(settle);
+  assert.equal(callsTo("ensureNoteSynced").length, 2);
 });

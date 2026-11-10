@@ -5748,8 +5748,12 @@
         "invitationActions": "邀请操作",
         "resendSent": "邀请已发送",
         "resendThrottled": "邀请刚刚发送过，请一分钟后再试。",
-        "syncPrompt": "分享会在你的 OpenWhispr 云端保留此笔记的副本。在你选择分享对象之前，只有你能看到它。",
-        "syncAndShare": "同步笔记",
+        "moveToShare": "移到 Teamspace 即可分享",
+        "moveConfirmTitle": "移动到 {{space}}，与其成员分享？",
+        "noTeamspaces": "暂无可移入的 Teamspace。",
+        "openTeamspaces": "打开 Teamspace",
+        "cantMoveToShare": "只有笔记所有者才能将其移到 Teamspace 进行分享。",
+        "legacySharedBanner": "这条私人笔记已被分享，因此仍会同步。将其移到 Teamspace 或停止分享，即可只保存在此设备上。",
         "visibility": {
           "label": "可见性",
           "private": "私密",
@@ -5766,8 +5770,6 @@
           "copyFailed": "无法复制链接。请重试。",
           "revokeFailed": "无法移除邀请。请重试。",
           "resendFailed": "无法重新发送邀请。请重试。",
-          "syncFailed": "无法同步此笔记。请重试。",
-          "privateNotSyncable": "私人笔记仅保存在此设备上。将此笔记移到 Teamspace 即可分享。",
           "loadFailed": "无法加载分享设置",
           "retry": "重试"
         }

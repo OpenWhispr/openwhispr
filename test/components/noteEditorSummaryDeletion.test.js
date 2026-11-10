@@ -1482,3 +1482,32 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
   assert.equal(links.length, 1);
   await unmount();
 });
+
+test("the copy-link segment shows only when the note can be shared in place", async (t) => {
+  const { render, latest, unmount, vite } = await loadNoteEditor(t);
+  const { loadSpaces } = await vite.ssrLoadModule("/stores/noteStore.ts");
+  globalThis.window.electronAPI.getSpaces = async () => [
+    { id: 1, kind: "team", cloud_space_id: "team", workspace_id: "ws-1", teams: [] },
+    { id: 2, kind: "private", cloud_space_id: null, workspace_id: "ws-1", teams: [] },
+  ];
+  await loadSpaces();
+  const linkSegment = () => {
+    let found = null;
+    walk(latest(), (node) => {
+      if (node.props["aria-label"] === "noteEditor.share.dialog.copyLink") found = node;
+    });
+    return found;
+  };
+
+  for (const [note, shown] of [
+    [{ space_id: 2, cloud_id: null, is_shared: 0 }, false],
+    // A cloud id the old Backup left doesn't make a private note shareable.
+    [{ space_id: 2, cloud_id: "backup-copy", is_shared: 0 }, false],
+    [{ space_id: 2, cloud_id: "shared-note", is_shared: 1 }, true],
+    [{ space_id: 1, cloud_id: null, is_shared: 0 }, true],
+  ]) {
+    await render(undefined, { note: { ...NOTE, ...note } });
+    assert.equal(Boolean(linkSegment()), shown, JSON.stringify(note));
+  }
+  await unmount();
+});

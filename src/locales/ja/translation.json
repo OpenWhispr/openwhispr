@@ -5748,8 +5748,12 @@
         "invitationActions": "招待の操作",
         "resendSent": "招待を送信しました",
         "resendThrottled": "招待を送信したばかりです。1分ほど待ってからお試しください。",
-        "syncPrompt": "共有すると、このノートのコピーが OpenWhispr クラウドに保存されます。共有相手を選ぶまでは、あなた以外は閲覧できません。",
-        "syncAndShare": "ノートを同期",
+        "moveToShare": "共有するには Teamspace に移動してください",
+        "moveConfirmTitle": "{{space}}に移動して、メンバーと共有しますか？",
+        "noTeamspaces": "移動できる Teamspace がまだありません。",
+        "openTeamspaces": "Teamspace を開く",
+        "cantMoveToShare": "共有のために Teamspace へ移動できるのは、ノートの所有者のみです。",
+        "legacySharedBanner": "このプライベートノートは共有されているため、同期が続いています。このデバイスだけに保存するには、Teamspace に移動するか共有を停止してください。",
         "visibility": {
           "label": "公開範囲",
           "private": "非公開",
@@ -5766,8 +5770,6 @@
           "copyFailed": "リンクをコピーできませんでした。もう一度お試しください。",
           "revokeFailed": "招待を削除できませんでした。もう一度お試しください。",
           "resendFailed": "招待を再送信できませんでした。もう一度お試しください。",
-          "syncFailed": "このノートを同期できませんでした。もう一度お試しください。",
-          "privateNotSyncable": "プライベートノートはこのデバイスにのみ保存されます。共有するには、このノートを Teamspace に移動してください。",
           "loadFailed": "共有設定を読み込めませんでした",
           "retry": "再試行"
         }

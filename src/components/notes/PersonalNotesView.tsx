@@ -998,6 +998,10 @@ export default function PersonalNotesView({
               folders={editorFolders}
               onMoveToFolder={handleMoveToFolder}
               onCreateFolderAndMove={handleCreateFolderAndMove}
+              onMoveNote={handleMoveNote}
+              onOpenTeamspaces={
+                onOpenSettings ? () => onOpenSettings("workspaceTeamspaces") : undefined
+              }
               onCancelPendingSaves={cancelPendingSaves}
               onFlushPendingSaves={savePendingNow}
               actionProcessingState={actionProcessingState}

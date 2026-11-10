@@ -5821,8 +5821,12 @@
         "invitationActions": "Acciones de la invitación",
         "resendSent": "Invitación enviada",
         "resendThrottled": "Invitación enviada hace poco. Inténtalo de nuevo en un minuto.",
-        "syncPrompt": "Al compartir se guarda una copia de esta nota en tu nube de OpenWhispr. Solo tú puedes verla hasta que elijas con quién compartirla.",
-        "syncAndShare": "Sincronizar nota",
+        "moveToShare": "Mueve la nota a un teamspace para compartirla",
+        "moveConfirmTitle": "¿Mover a {{space}} para compartirla con sus miembros?",
+        "noTeamspaces": "Todavía no hay ningún teamspace al que moverla.",
+        "openTeamspaces": "Abrir Teamspaces",
+        "cantMoveToShare": "Solo el propietario de la nota puede moverla a un teamspace para compartirla.",
+        "legacySharedBanner": "Esta nota privada está compartida, así que sigue sincronizándose. Muévela a un teamspace o deja de compartirla para que se quede en este dispositivo.",
         "visibility": {
           "label": "Visibilidad",
           "private": "Privada",
@@ -5839,8 +5843,6 @@
           "copyFailed": "No se pudo copiar el enlace. Inténtalo de nuevo.",
           "revokeFailed": "No se pudo quitar la invitación. Inténtalo de nuevo.",
           "resendFailed": "No se pudo reenviar la invitación. Inténtalo de nuevo.",
-          "syncFailed": "No se pudo sincronizar esta nota. Inténtalo de nuevo.",
-          "privateNotSyncable": "Las notas privadas se quedan en este dispositivo. Mueve esta nota a un teamspace para compartirla.",
           "loadFailed": "No se pudo cargar la configuración de uso compartido",
           "retry": "Reintentar"
         }
