@@ -45,13 +45,9 @@ const MAX_GLIBC = "2.34";
 const GLIBC_SYMBOL = /\(?GLIBC_([0-9][0-9.]*)\)?\s+(\S+)$/gm;
 
 function findNewerGlibcSymbols(dynamicSymbols) {
-  return [
-    ...new Set(
-      Array.from(dynamicSymbols.matchAll(GLIBC_SYMBOL))
-        .filter(([, version]) => compareVersions(version, MAX_GLIBC) > 0)
-        .map(([, version, symbol]) => `${symbol}@GLIBC_${version}`)
-    ),
-  ];
+  return Array.from(dynamicSymbols.matchAll(GLIBC_SYMBOL))
+    .filter(([, version]) => compareVersions(version, MAX_GLIBC) > 0)
+    .map(([, version, symbol]) => `${symbol}@GLIBC_${version}`);
 }
 
 function assertNoNewerGlibcSymbols(addonPath) {

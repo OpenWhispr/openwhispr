@@ -352,6 +352,7 @@ Offline semantic search that finds notes by meaning, not just keywords. Used by 
 - **build-macos-mic-listener.js**: Compiles macOS mic listener from Swift source
 - **build-macos-window-bounds.js**: Compiles the System Settings window reporter from Swift source
 - **build-windows-key-listener.js**: Compiles the Windows key listener (MSVC, MinGW or clang) whenever `compile:native` runs on a Windows host, downloading the prebuilt binary when no compiler works; skips a binary newer than its source
+- **verify-linux-sqlite.js**: Run by `afterPack.js` on Linux x64: fails the package when the SQLite addon needs a glibc newer than 2.34 or contains AVX/AVX2/BMI instructions, then runs a SQLite + FTS5 probe under `qemu-x86_64` on pre-AVX2 CPU models. CI must set `OPENWHISPR_VERIFY_SQLITE_BASELINE` (`1` checks, `0` skips) or the build fails; elsewhere the check is skipped unless it is `1`
 - **run-electron.js**: Development script to launch Electron with proper environment
 - **lib/download-utils.js**: Shared utilities for downloading and extracting files
   - `fetchLatestRelease(repo, options)`: Fetches latest release from GitHub API

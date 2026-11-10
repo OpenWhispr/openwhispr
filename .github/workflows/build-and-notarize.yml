@@ -76,8 +76,8 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       # SQLite is loaded before windows open, including on CPUs without AVX2 (#3038).
-      CFLAGS: "-march=x86-64 -mtune=generic -mno-avx -mno-avx2"
-      CXXFLAGS: "-march=x86-64 -mtune=generic -mno-avx -mno-avx2"
+      CFLAGS: "-march=x86-64 -mtune=generic"
+      CXXFLAGS: "-march=x86-64 -mtune=generic"
       # gcc 11 and 12 on this runner reject Electron 43's V8 headers; clang 15 ships with it.
       CC: clang-15
       CXX: clang++-15

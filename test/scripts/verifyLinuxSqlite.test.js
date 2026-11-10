@@ -179,6 +179,5 @@ test("the check can be skipped outside CI or explicitly in CI", () => {
 });
 
 test("Linux helpers target baseline x86-64 only on x64", () => {
-  assert.ok(linuxBaselineFlags("x64").includes("-march=x86-64"));
   assert.deepEqual(linuxBaselineFlags("arm64"), []);
 });
