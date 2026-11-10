@@ -108,6 +108,19 @@ function assertAnalyticsSyncContext(context) {
   }
   return context.accountId;
 }
+const STALE_SYNC_ACK = { success: false, changes: 0, stale: true };
+// The account each sign-in (token generation) was scoped to. A chat ack names
+// the account it was sent as, and main accepts that only when it is the one
+// the push's sign-in was scoped to, so a window left over from another sign-in
+// can't move a row. A renderer can only name an account it has scoped to.
+const scopedAccountByGeneration = new Map();
+function syncSenderAccount(accountId, authGeneration) {
+  return typeof accountId === "string" &&
+    accountId &&
+    scopedAccountByGeneration.get(authGeneration) === accountId
+    ? accountId
+    : null;
+}
 // Local engines resolve a failed decode instead of throwing. Retry turns that
 // into a coded error so the toast says what went wrong rather than blaming a
 // missing engine.
@@ -172,6 +185,7 @@ const {
   selectRacingMicEntryIndices,
   partitionOverlappingPendingMicFinals,
 } = require("./meetingMicHoldback");
+const { fragmentFilterLanguages, isWrongScriptFragment } = require("./meetingFragmentFilter");
 const {
   computeChunkStats,
   resolveMicChunkAction,
@@ -195,7 +209,6 @@ const {
   applyConfirmedSpeaker,
   applySuggestedSpeaker,
   canAutoRelabelSpeaker,
-  isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const {
@@ -209,6 +222,7 @@ const screenContextCapture = require("./screenContextCapture");
 const { classifyToneAppCategory } = require("./toneAppCategories");
 const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
+  EMBEDDING_VERSION,
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
 const { UPLOAD_AUDIO_EXTENSIONS } = require("../constants/uploadAudioFormats.json");
@@ -921,6 +935,31 @@ class IPCHandlers {
     }
   }
 
+  // Every window caches the dictionary and snippets in its store and in
+  // localStorage, and a whole-list save writes that cache back. After an
+  // account switch the cache must hold the new account's lists, or the next
+  // save would copy the previous account's words into this one.
+  // The account the database scopes rows by, and whose rows are in view. The
+  // credential scope broadcast says neither: it stays quiet on a token rotation,
+  // and it is null on any sign-out, even when the device's only account stays
+  // in view.
+  _broadcastDatabaseAccountScope() {
+    broadcastToWindows("database-account-scope-changed", this.databaseManager.getAccountScope());
+  }
+
+  _broadcastAccountScopedSettings() {
+    try {
+      broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
+      broadcastToWindows("snippets-updated", this.databaseManager.getSnippets());
+    } catch (error) {
+      debugLogger.error(
+        "Failed to broadcast account-scoped dictionary and snippets",
+        { error: error.message },
+        "database"
+      );
+    }
+  }
+
   _initLocalModelPolicy(localLlmManager) {
     this._authTokenHeld = Boolean(tokenStore.get());
     const { createLocalModelPolicyGate } = require("./localModelPolicyGate");
@@ -1048,10 +1087,13 @@ class IPCHandlers {
     this._enterpriseAudioScopeRevision = (this._enterpriseAudioScopeRevision ?? 0) + 1;
     this.enterpriseIdentityManager?.clear();
     if (!token) {
+      const scopeChanged = this.databaseManager.activeAccountId !== null;
       this.databaseManager.setActiveAccountId(null);
       this._clearDictionaryHotwordHints();
       accountScopeBinding.clear();
       broadcastToWindows("active-account-scope-changed", null);
+      this._broadcastDatabaseAccountScope();
+      if (scopeChanged) this._broadcastAccountScopedSettings();
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
     }
@@ -1785,6 +1827,17 @@ class IPCHandlers {
   }
 
   setupHandlers() {
+    // A push is acked only under the sign-in that sent it. After an account switch
+    // the ack would hand an unattributed row to the new account although the cloud
+    // copy is the old one's, so it is dropped and the row stays pending. A pulled
+    // row is written only under the sign-in that fetched it, for the same reason.
+    // The account counts as well as the token: a session revoked under the same
+    // token drops the scope to signed out, and a row still arriving from that
+    // sign-in's pull would be stored with no owner.
+    const isStaleSyncAck = (expectedAuthGeneration) =>
+      tokenStore.getState().generation !== expectedAuthGeneration ||
+      scopedAccountByGeneration.get(expectedAuthGeneration) !==
+        this.databaseManager.activeAccountId;
     // Each handler takes at most one renderer argument, so the job's signal
     // always lands after it and can't be supplied by the renderer.
     const handleAudioFeature = (channel, purpose, handler) =>
@@ -1841,7 +1894,12 @@ class IPCHandlers {
     });
     ipcMain.handle("agent-window-submit-command", (event, command) => {
       if (!isFromWindow(event, this.windowManager.mainWindow)) return false;
-      return this.windowManager.agentWindow?.deliverCommand(command) ?? false;
+      // The renderer checked the account before sending, but it can change
+      // between that check and this delivery, or while the command waits for
+      // the agent window to load.
+      const isCurrent = () => !this.databaseManager.accountChangedSince(command?.spokenAt);
+      if (!isCurrent()) return false;
+      return this.windowManager.agentWindow?.deliverCommand(command, { isCurrent }) ?? false;
     });
 
     // WindowManager owns every teardown path for a demo (id-matched end,
@@ -2096,11 +2154,16 @@ class IPCHandlers {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
       if (result?.success && result?.transcription) {
         setImmediate(() => {
-          broadcastToWindows("transcription-added", result.transcription);
+          const transcription = this.databaseManager.getTranscriptionById(result.transcription.id);
+          if (transcription) broadcastToWindows("transcription-added", transcription);
         });
       }
       return result;
     });
+
+    ipcMain.handle("db-account-changed-since", (_event, occurredAt) =>
+      this.databaseManager.accountChangedSince(occurredAt)
+    );
 
     ipcMain.handle("db-get-transcriptions", async (event, limit = 50, options = {}) => {
       return this.databaseManager.getTranscriptions(limit, options);
@@ -2189,9 +2252,10 @@ class IPCHandlers {
     );
 
     ipcMain.handle("db-clear-transcriptions", async (event) => {
-      this.audioStorageManager.deleteAllAudio();
       const result = this.databaseManager.clearTranscriptions();
       if (result?.success) {
+        // Only the cleared history's recordings: another account's stay.
+        this.audioStorageManager.deleteAudioForTranscriptions(result.ids);
         setImmediate(() => {
           broadcastToWindows("transcriptions-cleared", {
             cleared: result.cleared,
@@ -2199,7 +2263,7 @@ class IPCHandlers {
           broadcastToWindows("analytics-changed");
         });
       }
-      return result;
+      return { success: result.success, cleared: result.cleared };
     });
 
     ipcMain.handle("db-delete-transcription", async (event, id) => {
@@ -2251,10 +2315,12 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-audio-path", async (event, id) => {
+      if (!this.databaseManager.getTranscriptionById(id)) return null;
       return this.audioStorageManager.getAudioPath(id);
     });
 
     ipcMain.handle("show-audio-in-folder", async (event, id) => {
+      if (!this.databaseManager.getTranscriptionById(id)) return { success: false };
       const filePath = this.audioStorageManager.getAudioPath(id);
       if (!filePath) return { success: false };
       shell.showItemInFolder(filePath);
@@ -2262,11 +2328,14 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-audio-buffer", async (event, id) => {
+      if (!this.databaseManager.getTranscriptionById(id)) return null;
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       return buffer ? buffer.buffer : null;
     });
 
     ipcMain.handle("delete-transcription-audio", async (event, id) => {
+      // Only a recording of a dictation the active account can see.
+      if (!this.databaseManager.getTranscriptionById(id)) return { success: false };
       const result = this.audioStorageManager.deleteAudio(id);
       if (result.success) {
         this.databaseManager.updateTranscriptionAudio(id, {
@@ -2280,7 +2349,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-audio-storage-usage", async () => {
-      return this.audioStorageManager.getStorageUsage();
+      return this.audioStorageManager.getStorageUsage({
+        exceptTranscriptionIds: this.databaseManager.getOtherAccountTranscriptionIds(),
+      });
     });
 
     ipcMain.on(
@@ -2302,14 +2373,12 @@ class IPCHandlers {
     );
 
     ipcMain.handle("delete-all-audio", async () => {
-      const result = this.audioStorageManager.deleteAllAudio();
+      // Another account's recordings stay, as with Clear history.
+      const result = this.audioStorageManager.deleteAllAudio({
+        exceptTranscriptionIds: this.databaseManager.getOtherAccountTranscriptionIds(),
+      });
       try {
-        const rows = this.databaseManager.db
-          .prepare("SELECT id FROM transcriptions WHERE has_audio = 1")
-          .all();
-        if (rows.length > 0) {
-          this.databaseManager.clearAudioFlags(rows.map((r) => r.id));
-        }
+        this.databaseManager.clearAudioFlags(this.databaseManager.getTranscriptionIdsWithAudio());
       } catch (error) {
         debugLogger.error(
           "Failed to clear audio flags after delete-all",
@@ -2373,22 +2442,38 @@ class IPCHandlers {
       return this.databaseManager.getDictionary();
     });
 
-    ipcMain.handle("db-set-dictionary", async (event, words) => {
+    // `listsAccountId`: whose list the sending window shows. Until the account
+    // change reaches it, saving would copy the last account's list into this one.
+    const isListFromOtherAccount = (listsAccountId) =>
+      listsAccountId !== undefined && listsAccountId !== this.databaseManager.activeAccountId;
+
+    ipcMain.handle("db-set-dictionary", async (event, words, listsAccountId) => {
       if (!Array.isArray(words)) {
         throw new Error("words must be an array");
       }
+      if (isListFromOtherAccount(listsAccountId)) return { success: false, stale: true };
       const result = this.databaseManager.setDictionary(words);
       this.parakeetManager.refreshHotwordsSoon();
       return result;
     });
 
-    ipcMain.handle("db-apply-dictionary-changes", async (_event, changes) => {
+    ipcMain.handle("db-seed-dictionary", async (_event, words) => {
+      if (!Array.isArray(words)) {
+        throw new Error("words must be an array");
+      }
+      return this.databaseManager.seedDictionary(words);
+    });
+
+    ipcMain.handle("db-apply-dictionary-changes", async (_event, changes, listsAccountId) => {
       const { add, remove } = changes ?? {};
       if (add !== undefined && !Array.isArray(add)) {
         throw new Error("add must be an array");
       }
       if (remove !== undefined && !Array.isArray(remove)) {
         throw new Error("remove must be an array");
+      }
+      if (isListFromOtherAccount(listsAccountId)) {
+        return { success: false, added: 0, removed: 0, stale: true };
       }
       const result = this.databaseManager.applyDictionaryChanges({ add, remove });
       this.parakeetManager.refreshHotwordsSoon();
@@ -2407,9 +2492,13 @@ class IPCHandlers {
       return this.databaseManager.getDictionaryEntryByClientId(clientDictId);
     });
 
-    ipcMain.handle("db-upsert-dictionary-from-cloud", async (_event, cloudEntry) => {
-      return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
-    });
+    ipcMain.handle(
+      "db-upsert-dictionary-from-cloud",
+      async (_event, cloudEntry, expectedAuthGeneration) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+        return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
+      }
+    );
 
     ipcMain.handle(
       "db-mark-dictionary-synced",
@@ -2421,8 +2510,10 @@ class IPCHandlers {
         expectedWord,
         expectedSource,
         serverSource,
-        pushed
+        pushed,
+        expectedAuthGeneration
       ) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
         return this.databaseManager.markDictionaryEntrySynced(
           id,
           cloudId,
@@ -2435,12 +2526,19 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("db-hard-delete-dictionary", async (_event, id) => {
+    ipcMain.handle("db-hard-delete-dictionary", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       return this.databaseManager.hardDeleteDictionaryEntry(id);
     });
 
-    ipcMain.handle("db-clear-dictionary-cloud-id", async (_event, id) => {
+    ipcMain.handle("db-clear-dictionary-cloud-id", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return { success: false, stale: true };
       return this.databaseManager.clearDictionaryCloudId(id);
+    });
+
+    ipcMain.handle("db-keep-newer-dictionary-edit", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+      return this.databaseManager.keepNewerDictionaryEdit(id);
     });
 
     ipcMain.handle("db-get-dictionary-entries-by-words", async (_event, words) => {
@@ -2452,18 +2550,21 @@ class IPCHandlers {
       if (!Array.isArray(words)) throw new Error("words must be an array");
       const pendingWords = options?.pendingWords ?? [];
       if (!Array.isArray(pendingWords)) throw new Error("pendingWords must be an array");
+      if (isStaleSyncAck(options?.expectedAuthGeneration)) return { marked: [], stale: true };
       return this.databaseManager.markDictionaryWordsShared(words, sharedAt, { pendingWords });
     });
 
     ipcMain.handle("db-retire-moved-dictionary-words", async (_event, words, options) => {
       if (!Array.isArray(words)) throw new Error("words must be an array");
+      if (isStaleSyncAck(options?.expectedAuthGeneration)) return { retired: [], stale: true };
       return this.databaseManager.retireMovedDictionaryWords(words, {
         includeSynced: options?.includeSynced !== false,
       });
     });
 
-    ipcMain.handle("db-revive-retired-dictionary-words", async (_event, words) => {
+    ipcMain.handle("db-revive-retired-dictionary-words", async (_event, words, options) => {
       if (!Array.isArray(words)) throw new Error("words must be an array");
+      if (isStaleSyncAck(options?.expectedAuthGeneration)) return { revived: [], stale: true };
       return this.databaseManager.reviveRetiredDictionaryWords(words);
     });
 
@@ -2576,11 +2677,19 @@ class IPCHandlers {
       return this.databaseManager.getSnippets();
     });
 
-    ipcMain.handle("db-set-snippets", async (_event, snippets) => {
+    ipcMain.handle("db-set-snippets", async (_event, snippets, listsAccountId) => {
       if (!Array.isArray(snippets)) {
         throw new Error("snippets must be an array");
       }
+      if (isListFromOtherAccount(listsAccountId)) return { success: false, stale: true };
       return this.databaseManager.setSnippets(snippets);
+    });
+
+    ipcMain.handle("db-seed-snippets", async (_event, snippets) => {
+      if (!Array.isArray(snippets)) {
+        throw new Error("snippets must be an array");
+      }
+      return this.databaseManager.seedSnippets(snippets);
     });
 
     ipcMain.handle("db-get-pending-snippets", async () => {
@@ -2591,17 +2700,34 @@ class IPCHandlers {
       return this.databaseManager.getPendingSnippetDeletes();
     });
 
-    ipcMain.handle("db-get-snippet-for-cloud-merge", async (_event, cloudEntry) => {
-      return this.databaseManager.getSnippetForCloudMerge(cloudEntry);
-    });
+    ipcMain.handle(
+      "db-get-snippet-for-cloud-merge",
+      async (_event, cloudEntry, expectedAuthGeneration) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+        return this.databaseManager.getSnippetForCloudMerge(cloudEntry);
+      }
+    );
 
-    ipcMain.handle("db-upsert-snippet-from-cloud", async (_event, cloudEntry) => {
-      return this.databaseManager.upsertSnippetFromCloud(cloudEntry);
-    });
+    ipcMain.handle(
+      "db-upsert-snippet-from-cloud",
+      async (_event, cloudEntry, expectedAuthGeneration) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+        return this.databaseManager.upsertSnippetFromCloud(cloudEntry);
+      }
+    );
 
     ipcMain.handle(
       "db-mark-snippet-synced",
-      async (_event, id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement) => {
+      async (
+        _event,
+        id,
+        cloudId,
+        serverUpdatedAt,
+        expectedTrigger,
+        expectedReplacement,
+        expectedAuthGeneration
+      ) => {
+        if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
         return this.databaseManager.markSnippetSynced(
           id,
           cloudId,
@@ -2612,12 +2738,19 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("db-hard-delete-snippet", async (_event, id) => {
+    ipcMain.handle("db-hard-delete-snippet", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       return this.databaseManager.hardDeleteSnippet(id);
     });
 
-    ipcMain.handle("db-clear-snippet-cloud-id", async (_event, id) => {
+    ipcMain.handle("db-clear-snippet-cloud-id", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return { success: false, stale: true };
       return this.databaseManager.clearSnippetCloudId(id);
+    });
+
+    ipcMain.handle("db-keep-newer-snippet-edit", async (_event, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
+      return this.databaseManager.keepNewerSnippetEdit(id);
     });
 
     ipcMain.handle("db-broadcast-snippets-updated", async () => {
@@ -2871,6 +3004,11 @@ class IPCHandlers {
       return this.databaseManager.getSpaces();
     });
 
+    ipcMain.handle("db-has-other-account-rows", () => this.databaseManager.hasOtherAccountRows());
+    ipcMain.handle("db-has-unclaimed-legacy-rows", () =>
+      this.databaseManager.hasUnclaimedLegacyRows()
+    );
+
     ipcMain.handle("set-active-account-scope", async (_event, accountId, expectedGeneration) => {
       const state = tokenStore.getState();
       const verdict = accountScopeBinding.evaluateScopeRequest({
@@ -2922,6 +3060,8 @@ class IPCHandlers {
         this._audioFeaturePolicy?.update(guestPolicy);
       }
       this.databaseManager.setActiveAccountId(accountId);
+      this.databaseManager.claimSignedOutLocalRows();
+      this.databaseManager.claimLegacyRowsOfOnlyAccount();
       if (accountChanged) {
         if (this._dictionaryHotwordHints?.accountId === accountId) {
           this.parakeetManager.refreshHotwordsSoon();
@@ -2929,8 +3069,10 @@ class IPCHandlers {
           this._clearDictionaryHotwordHints();
         }
       }
-      if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
-      else accountScopeBinding.clear();
+      if (accountId !== null) {
+        accountScopeBinding.persist(accountId, state.token);
+        scopedAccountByGeneration.set(state.generation, accountId);
+      } else accountScopeBinding.clear();
       // After the scope moved: the verdict this fetches is stamped with the
       // account and cached under the binding, so neither may still be the old one.
       if (scopeChanged) this._localModelPolicy?.invalidate(guestPolicy);
@@ -2939,6 +3081,8 @@ class IPCHandlers {
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
       );
+      this._broadcastDatabaseAccountScope();
+      if (accountChanged) this._broadcastAccountScopedSettings();
       this.connectorManager?.accountChanged();
       void this.connectorManager?.notifyStatusChanged();
       void this.metaActivation?.flush();
@@ -2951,6 +3095,11 @@ class IPCHandlers {
         binding: accountScopeBinding.read(),
       })
     );
+
+    // The binding above stops matching as soon as the token rotates, while the
+    // database keeps the account until the renderer re-scopes it, so a window
+    // taking its baseline from the binding reads that re-scope as a change.
+    ipcMain.handle("get-database-account-scope", () => this.databaseManager.getAccountScope());
 
     ipcMain.handle(
       "delete-account-data",
@@ -2977,6 +3126,7 @@ class IPCHandlers {
             erasingDevice: options?.erasingDevice === true,
           });
           const result = this.databaseManager.deleteAccountData(accountId);
+          this.audioStorageManager.deleteAudioForTranscriptions(result.deletedTranscriptionIds);
           this.metaActivation?.purge(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
@@ -3474,22 +3624,63 @@ class IPCHandlers {
     ipcMain.handle("db-get-conversation-by-client-id", (_, clientId) =>
       this.databaseManager.getConversationByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-conversation-from-cloud", (_, cloudConv, messages, snapshot) =>
-      this.databaseManager.upsertConversationFromCloud(cloudConv, messages, snapshot)
+    ipcMain.handle("db-claim-conversation-from-cloud", (_, cloudConv, expectedAuthGeneration) =>
+      isStaleSyncAck(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : this.databaseManager.claimConversationFromCloud(cloudConv)
     );
-    ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
-      this.databaseManager.markConversationCreateAttempted(id)
+    ipcMain.handle(
+      "db-upsert-conversation-from-cloud",
+      (_, cloudConv, messages, snapshot, expectedAuthGeneration) =>
+        isStaleSyncAck(expectedAuthGeneration)
+          ? STALE_SYNC_ACK
+          : this.databaseManager.upsertConversationFromCloud(cloudConv, messages, snapshot)
     );
-    ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
-      this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
+    ipcMain.handle("db-mark-conversation-create-attempted", (_, id, expectedAuthGeneration) =>
+      isStaleSyncAck(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : this.databaseManager.markConversationCreateAttempted(id)
     );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId, snapshot, cloudUpdatedAt) =>
-      this.databaseManager.markConversationSynced(id, cloudId, snapshot, cloudUpdatedAt)
+    ipcMain.handle("db-clear-conversation-create-attempted", (_, id) =>
+      this.databaseManager.clearConversationCreateAttempted(id)
     );
-    ipcMain.handle("db-replace-conversation-client-id", (_, id, expectedClientId) =>
-      this.databaseManager.replaceConversationClientId(id, expectedClientId)
+    // Unlike the other tables' acks, a chat's is never dropped: its copy now
+    // exists in the sender's cloud, and an unattributed chat left unlinked would
+    // go up again under whichever account syncs next. It is recorded for the
+    // account that sent it, which may no longer be the active one.
+    ipcMain.handle(
+      "db-acknowledge-conversation-create",
+      (_, id, snapshot, cloudId, accountId, authGeneration) => {
+        const sender = syncSenderAccount(accountId, authGeneration);
+        if (!sender) return { success: false, outcome: "unresolved", cloud_id: null };
+        return this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId, sender);
+      }
     );
-    ipcMain.handle("db-hard-delete-conversation", (_, id) => {
+    ipcMain.handle(
+      "db-mark-conversation-synced",
+      (_, id, cloudId, snapshot, cloudUpdatedAt, accountId, authGeneration) => {
+        const sender = syncSenderAccount(accountId, authGeneration);
+        if (!sender) return { success: false };
+        return this.databaseManager.markConversationSynced(
+          id,
+          cloudId,
+          snapshot,
+          cloudUpdatedAt,
+          sender
+        );
+      }
+    );
+    // As the create ack: the tombstone it answers is in the sender's cloud.
+    ipcMain.handle(
+      "db-replace-conversation-client-id",
+      (_, id, expectedClientId, accountId, authGeneration) => {
+        const sender = syncSenderAccount(accountId, authGeneration);
+        if (!sender) return { success: false };
+        return this.databaseManager.replaceConversationClientId(id, expectedClientId, sender);
+      }
+    );
+    ipcMain.handle("db-hard-delete-conversation", (_, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       const result = this.databaseManager.hardDeleteConversation(id);
       if (result?.success) {
         setImmediate(() => broadcastToWindows("conversation-deleted", { id }));
@@ -3504,18 +3695,26 @@ class IPCHandlers {
     ipcMain.handle("db-get-transcription-by-client-id", (_, clientId) =>
       this.databaseManager.getTranscriptionByClientId(clientId)
     );
-    ipcMain.handle("db-upsert-transcription-from-cloud", (_, cloudTranscription) => {
-      return this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription);
-    });
-    ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId) =>
-      this.databaseManager.markTranscriptionSynced(id, cloudId)
+    ipcMain.handle(
+      "db-upsert-transcription-from-cloud",
+      (_, cloudTranscription, expectedAuthGeneration) =>
+        isStaleSyncAck(expectedAuthGeneration)
+          ? STALE_SYNC_ACK
+          : this.databaseManager.upsertTranscriptionFromCloud(cloudTranscription)
+    );
+    ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId, expectedAuthGeneration) =>
+      isStaleSyncAck(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : this.databaseManager.markTranscriptionSynced(id, cloudId)
     );
     ipcMain.handle("db-get-pending-transcription-deletes", () =>
       this.databaseManager.getPendingTranscriptionDeletes()
     );
-    ipcMain.handle("db-hard-delete-transcription", (_, id) => {
+    ipcMain.handle("db-hard-delete-transcription", (_, id, expectedAuthGeneration) => {
+      if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
       const result = this.databaseManager.hardDeleteTranscription(id);
       if (result?.success) {
+        this.audioStorageManager.deleteAudio(id);
         setImmediate(() => broadcastToWindows("transcription-deleted", { id }));
       }
       return result;
@@ -4668,9 +4867,8 @@ class IPCHandlers {
               });
               segments = [];
             }
-            // The meeting path caps clusters via its expectation resolver; this
-            // path fed raw sherpa output to the merge, which is how a 2-person
-            // voice memo surfaced 46 speakers.
+            // Raw sherpa output reaching the merge is how a 2-person voice memo
+            // surfaced 46 speakers.
             segments = dropNegligibleClusters(segments);
             if (new Set(segments.map((s) => s.speaker)).size > maxSpeakers) {
               const speakerEmbeddings = require("./speakerEmbeddings");
@@ -7814,6 +8012,22 @@ class IPCHandlers {
     });
 
     ipcMain.handle("retry-transcription", async (event, id, settings) => {
+      // The account, not its token: a rotated token is the same owner, and a
+      // local retry needs no sign-in at all.
+      const accountId = this.databaseManager.activeAccountId;
+      const assertRetryCurrent = () => {
+        if (this.databaseManager.activeAccountId !== accountId) {
+          throw Object.assign(
+            new Error("Authentication context changed during transcription retry"),
+            {
+              code: "AUTH_CONTEXT_CHANGED",
+            }
+          );
+        }
+      };
+      if (!this.databaseManager.getTranscriptionById(id)) {
+        return { success: false, error: "Audio file not found" };
+      }
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       if (!buffer) return { success: false, error: "Audio file not found" };
       let providerErrorContext = null;
@@ -7826,6 +8040,7 @@ class IPCHandlers {
             : undefined;
         const { resolveTranscriptionRoute, batchTranscriptionHttpError } =
           await import("./transcriptionRoute.ts");
+        assertRetryCurrent();
         const { convertBufferToWav, isWavFormat } = require("./ffmpegUtils");
         // Renderer pre-flight owns policy; retry re-routes stored audio through
         // whatever is selected NOW.
@@ -7933,6 +8148,7 @@ class IPCHandlers {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
             const authHeader = await getAuthHeaderFromWindow(win);
+            assertRetryCurrent();
             if (Object.keys(authHeader).length) {
               const apiUrl = getApiUrl();
               if (apiUrl) {
@@ -8078,6 +8294,7 @@ class IPCHandlers {
             }
           }
 
+          assertRetryCurrent();
           const formData = new FormData();
           formData.append("file", new Blob([uploadBuffer], { type: uploadType }), uploadName);
           if (provider === "xai") {
@@ -8123,6 +8340,7 @@ class IPCHandlers {
           result = { text: data?.text, source: provider, model: route.model };
         }
 
+        assertRetryCurrent();
         if (result?.success === false) {
           throw localTranscriptionFailure(result);
         }
@@ -8150,7 +8368,10 @@ class IPCHandlers {
         const updated = this.databaseManager.getTranscriptionById(id);
         if (updated) {
           setImmediate(() => {
-            broadcastToWindows("transcription-updated", updated);
+            if (this.databaseManager.activeAccountId !== accountId) return;
+            const transcription = this.databaseManager.getTranscriptionById(id);
+            if (!transcription) return;
+            broadcastToWindows("transcription-updated", transcription);
             // A row that just reached "completed" is newly eligible.
             void this._ensureAnalyticsHistoryBackfilled();
           });
@@ -8277,11 +8498,18 @@ class IPCHandlers {
         .join(" ")
         .trim();
 
-    const storeMeetingDiarizationSegment = (text, source, timestamp, micSuppression = null) => {
+    const storeMeetingDiarizationSegment = (
+      text,
+      source,
+      timestamp,
+      micSuppression = null,
+      timestampIsSpeechStart = true
+    ) => {
       meetingDiarizationSegments.push({
         text,
         source,
         timestamp,
+        ...(timestampIsSpeechStart === false ? { timestampIsSpeechStart: false } : {}),
         committedAt: Date.now(),
         suppressionReason: source === "mic" ? micSuppression?.reason || null : null,
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
@@ -8293,6 +8521,7 @@ class IPCHandlers {
       text,
       source,
       timestamp,
+      timestampIsSpeechStart = true,
       micSuppression = null,
       send = null,
       includeInLocalTranscript = false,
@@ -8301,7 +8530,13 @@ class IPCHandlers {
         appendMeetingLocalTranscript(text);
       }
 
-      storeMeetingDiarizationSegment(text, source, timestamp, micSuppression);
+      storeMeetingDiarizationSegment(
+        text,
+        source,
+        timestamp,
+        micSuppression,
+        timestampIsSpeechStart
+      );
 
       if (send) {
         send("meeting-transcription-segment", {
@@ -8455,6 +8690,8 @@ class IPCHandlers {
     };
 
     const attachMeetingStreamingHandlers = (streaming, win, source) => {
+      // Deepgram's audio range can begin before its first spoken word.
+      const timestampIsSpeechStart = !(streaming instanceof DeepgramStreaming);
       const send = (channel, data) => {
         if (!win || win.isDestroyed()) {
           debugLogger.error("Meeting segment send failed: window unavailable", {
@@ -8478,6 +8715,13 @@ class IPCHandlers {
       streaming.onFinalTranscript = (text, timestamp) => {
         const segments = streaming.completedSegments;
         const latestSegment = segments.length > 0 ? segments[segments.length - 1] : text;
+        if (
+          isWrongScriptFragment(latestSegment, fragmentFilterLanguages(meetingConnectionOptions))
+        ) {
+          debugLogger.debug("Dropping wrong-script meeting fragment", { source });
+          send("meeting-transcription-segment", { text: "", source, type: "partial" });
+          return;
+        }
         let micSuppression = null;
         if (source === "mic") {
           micSuppression = shouldSuppressMicTranscriptSegment(timestamp, Date.now());
@@ -8551,6 +8795,7 @@ class IPCHandlers {
                 text: latestSegment,
                 source,
                 timestamp,
+                timestampIsSpeechStart,
                 micSuppression,
                 send,
               }),
@@ -8562,6 +8807,7 @@ class IPCHandlers {
           text: latestSegment,
           source,
           timestamp,
+          timestampIsSpeechStart,
           micSuppression,
           send,
         });
@@ -9627,6 +9873,10 @@ class IPCHandlers {
 
         if (result?.success && result.text?.trim()) {
           const text = result.text.trim();
+          if (isWrongScriptFragment(text, fragmentFilterLanguages(meetingConnectionOptions))) {
+            debugLogger.debug("Dropping wrong-script local meeting fragment", { source });
+            return;
+          }
           const segTimestamp = Date.now();
           let micSuppression = null;
           if (source === "mic") {
@@ -9722,6 +9972,7 @@ class IPCHandlers {
                   text,
                   source,
                   timestamp: segTimestamp,
+                  timestampIsSpeechStart: false,
                   micSuppression,
                   send: sendLocalSegment,
                   includeInLocalTranscript: true,
@@ -9734,6 +9985,7 @@ class IPCHandlers {
             text,
             source,
             timestamp: segTimestamp,
+            timestampIsSpeechStart: false,
             micSuppression,
             send: sendLocalSegment,
             includeInLocalTranscript: true,
@@ -10004,13 +10256,9 @@ class IPCHandlers {
     };
 
     const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
-      const results = await Promise.all([
-        this._meetingMicStreaming
-          ? this._meetingMicStreaming.disconnect().catch(() => ({ text: "" }))
-          : Promise.resolve({ text: "" }),
-        this._meetingSystemStreaming
-          ? this._meetingSystemStreaming.disconnect().catch(() => ({ text: "" }))
-          : Promise.resolve({ text: "" }),
+      await Promise.all([
+        this._meetingMicStreaming?.disconnect().catch(() => {}),
+        this._meetingSystemStreaming?.disconnect().catch(() => {}),
       ]);
 
       if (flushPending) {
@@ -10018,7 +10266,6 @@ class IPCHandlers {
       }
 
       resetMeetingStreamingState();
-      return results;
     };
 
     const clearMeetingSystemAudioSilenceTimer = () => {
@@ -10957,7 +11204,7 @@ class IPCHandlers {
           return { success: true, transcript, diarizationSessionId };
         }
 
-        const results = await disconnectMeetingStreaming({ flushPending: true });
+        await disconnectMeetingStreaming({ flushPending: true });
         const {
           diarizationPcmPath,
           diarizationSegments,
@@ -10965,9 +11212,9 @@ class IPCHandlers {
           diarizationStartedAt,
           diarizedSource,
         } = await captureMeetingDiarizationState();
-        const transcript =
-          buildOrderedTranscriptText(diarizationSegments) ||
-          [results[0]?.text, results[1]?.text].filter(Boolean).join(" ");
+        // An empty accepted transcript is intentional when every final was filtered.
+        // Provider accumulators still contain those rejected rows.
+        const transcript = buildOrderedTranscriptText(diarizationSegments);
 
         const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
         const noteIdSnapshot = meetingNoteId;
@@ -11364,6 +11611,9 @@ class IPCHandlers {
 
     ipcMain.handle("update-transcription-text", async (_event, id, text, rawText) => {
       try {
+        if (!this.databaseManager.getTranscriptionById(id)) {
+          return { success: false, error: "Transcription not found" };
+        }
         this.databaseManager.updateTranscriptionText(id, text, rawText);
         const updated = this.databaseManager.getTranscriptionById(id);
         return { success: true, transcription: updated };
@@ -14292,7 +14542,12 @@ class IPCHandlers {
       async (_event, noteId, speakerId, displayName, email, profileId) => {
         const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
         const noteSpeakerEmbedding = embeddings.find((e) => e.speaker_id === speakerId);
-        const liveSpeakerEmbedding = liveSpeakerIdentifier.getSpeakerEmbedding(speakerId);
+        // Live speaker ids restart with every meeting, so only the note being
+        // recorded may borrow the live voice or name the live speaker.
+        const isRecordingNote = noteId === this._activeMeetingNoteId;
+        const liveSpeakerEmbedding = isRecordingNote
+          ? liveSpeakerIdentifier.getSpeakerEmbedding(speakerId)
+          : null;
         const speakerEmbeddingBuffer =
           noteSpeakerEmbedding?.embedding ||
           (liveSpeakerEmbedding ? Buffer.from(liveSpeakerEmbedding.buffer) : null);
@@ -14307,10 +14562,19 @@ class IPCHandlers {
           );
           resolvedProfileId = profile.id;
           this._retroactiveMapping(profile);
+        } else {
+          const profile = this.databaseManager.linkSpeakerProfile(
+            displayName,
+            email || null,
+            resolvedProfileId
+          );
+          if (profile) resolvedProfileId = profile.id;
         }
 
         this.databaseManager.setSpeakerMapping(noteId, speakerId, resolvedProfileId, displayName);
-        liveSpeakerIdentifier.mapSpeaker(speakerId, resolvedProfileId, displayName, noteId);
+        if (isRecordingNote) {
+          liveSpeakerIdentifier.mapSpeaker(speakerId, resolvedProfileId, displayName, noteId);
+        }
         return { success: true, profileId: resolvedProfileId };
       }
     );
@@ -14359,16 +14623,16 @@ class IPCHandlers {
   }
 
   _retroactiveMapping(profile) {
+    // A profile whose embedding predates the current model/feature version can't be
+    // compared with note embeddings; it re-enrolls the next time the speaker is labeled.
+    if (profile?.embedding_version !== EMBEDDING_VERSION) return;
     setImmediate(async () => {
       try {
         const speakerEmbeddings = require("./speakerEmbeddings");
+        const { matchVoiceToProfile } = require("./diarizationPolicy");
+        const similarity = (a, b) => speakerEmbeddings.cosineSimilarity(a, b);
+        const profileVoices = this._speakerProfileVoices();
         const noteIds = this.databaseManager.getNotesWithUnmappedSpeakers();
-
-        const profileEmb = new Float32Array(
-          profile.embedding.buffer,
-          profile.embedding.byteOffset,
-          profile.embedding.byteLength / 4
-        );
 
         for (const noteId of noteIds) {
           const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
@@ -14382,9 +14646,11 @@ class IPCHandlers {
               emb.embedding.byteOffset,
               emb.embedding.byteLength / 4
             );
-            const similarity = speakerEmbeddings.cosineSimilarity(profileEmb, speakerEmb);
+            // The speaker is this profile's person only if no other profile is
+            // as close a match.
+            const match = matchVoiceToProfile(speakerEmb, profileVoices, similarity);
 
-            if (similarity > 0.6) {
+            if (match?.confirmed && match.profile.id === profile.id) {
               this.databaseManager.setSpeakerMapping(
                 noteId,
                 emb.speaker_id,
@@ -14427,6 +14693,18 @@ class IPCHandlers {
     });
   }
 
+  // Stored profiles in the current embedding version, each with its voice.
+  _speakerProfileVoices() {
+    return this.databaseManager.getSpeakerProfiles(true).map((profile) => ({
+      profile,
+      voice: new Float32Array(
+        profile.embedding.buffer,
+        profile.embedding.byteOffset,
+        profile.embedding.byteLength / 4
+      ),
+    }));
+  }
+
   _tryAutoLabelOneOnOne(noteId) {
     setImmediate(async () => {
       try {
@@ -14460,7 +14738,6 @@ class IPCHandlers {
             profile?.id ?? null
           );
           this.databaseManager.setSpeakerMapping(noteId, emb.speaker_id, profile.id, displayName);
-          liveSpeakerIdentifier.mapSpeaker(emb.speaker_id, profile.id, displayName, noteId);
         }
 
         const unmappedSystemSpeakers = new Set(unmapped.map((e) => e.speaker_id));
@@ -14515,12 +14792,15 @@ class IPCHandlers {
     }
   }
 
+  // Returns, per named live speaker, the voice its name went to.
   _reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments) {
+    const namedVoices = new Map();
     if (!liveSpeakerState || !speakerEmbeddingsMap) {
-      return new Set();
+      return namedVoices;
     }
 
     const speakerEmbeddings = require("./speakerEmbeddings");
+    const { VOICE_MATCH_SIMILARITY } = require("./diarizationPolicy");
     const reconciledSpeakers = new Set();
     const usedLiveSpeakers = new Set();
     const noteMappings = new Map();
@@ -14542,26 +14822,23 @@ class IPCHandlers {
       return noteMappings.get(noteId);
     };
 
+    // Closest pairs first: with no count, one live speaker stands for every
+    // remote voice, and its name belongs to the voice it sounds most like, not
+    // to the first one that clears the bar.
+    const pairs = [];
     for (const [mappedId, embeddingArray] of Object.entries(speakerEmbeddingsMap)) {
-      let bestEntry = null;
-      let bestSimilarity = 0;
-
+      const embedding = new Float32Array(embeddingArray);
       for (const entry of liveEntries) {
-        if (usedLiveSpeakers.has(entry.speakerId)) {
-          continue;
-        }
-
-        const similarity = speakerEmbeddings.cosineSimilarity(
-          new Float32Array(embeddingArray),
-          entry.embedding
-        );
-        if (similarity > bestSimilarity) {
-          bestSimilarity = similarity;
-          bestEntry = entry;
+        const similarity = speakerEmbeddings.cosineSimilarity(embedding, entry.embedding);
+        if (similarity > VOICE_MATCH_SIMILARITY) {
+          pairs.push({ mappedId, bestEntry: entry, similarity });
         }
       }
+    }
+    pairs.sort((a, b) => b.similarity - a.similarity);
 
-      if (!bestEntry || bestSimilarity <= 0.6) {
+    for (const { mappedId, bestEntry } of pairs) {
+      if (reconciledSpeakers.has(mappedId) || usedLiveSpeakers.has(bestEntry.speakerId)) {
         continue;
       }
 
@@ -14600,9 +14877,11 @@ class IPCHandlers {
       }
 
       this._applySpeakerName(enrichedSegments, mappedId, displayName);
+      if (displayName) {
+        namedVoices.set(bestEntry.speakerId, { speaker: mappedId, name: displayName });
+      }
     }
-
-    return reconciledSpeakers;
+    return namedVoices;
   }
 
   // The renderer's base covers the transcript it resumes; mappings and embeddings
@@ -14633,7 +14912,9 @@ class IPCHandlers {
     }
   }
 
-  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds, diarizedSource }) {
+  // The most speakers post-call diarization may keep, from the count the user or
+  // the note gives; clustering finds how many actually spoke.
+  _resolveSpeakerCap({ sessionConfig, noteId, diarizedSource }) {
     // Only a count the user set explicitly outranks the note: participants added
     // mid-meeting postdate the config snapshot taken at recording start.
     let expectedTotal = sessionConfig?.explicit ? sessionConfig.expectedCount : null;
@@ -14653,22 +14934,18 @@ class IPCHandlers {
 
     if (expectedTotal) {
       const total = Math.min(expectedTotal, MAX_SPEAKER_COUNT);
-      const numSpeakers = micMode ? total : Math.max(1, total - 1);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
-    if (observedSpeakerIds.size >= 2) {
-      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
+      return micMode ? total : Math.max(1, total - 1);
     }
 
     if (micMode) {
-      return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
+      return DEFAULT_EXPECTED_SPEAKER_COUNT;
     }
 
-    // Only system audio reaches the diarizer (the mic track is "you"), so the cap
-    // counts other speakers — same total - 1 basis as the branches above.
-    return { numSpeakers: -1, cap: Math.max(1, DEFAULT_EXPECTED_SPEAKER_COUNT - 1) };
+    // Only system audio reaches the diarizer (the mic track is "you"), so a cap
+    // would count other speakers. With no count there's none: live
+    // identification folds every remote voice into one then, so its speaker ids
+    // can't tell how many people spoke (#2641).
+    return null;
   }
 
   _startOrSkipDiarization(
@@ -14719,6 +14996,9 @@ class IPCHandlers {
           sessionId,
           noteId,
           ...payload,
+          segments: payload.segments.map(
+            ({ timestampIsSpeechStart: _timestampIsSpeechStart, ...segment }) => segment
+          ),
           removedSegments,
         });
       }
@@ -14740,33 +15020,14 @@ class IPCHandlers {
 
     const fs = require("fs");
 
-    const observedSpeakerIds = new Set(
-      transcriptSegments
-        .filter((segment) => segment.source === "system" && segment.speaker)
-        .map((segment) => segment.speaker)
-    );
-    for (const speakerId of Object.keys(liveSpeakerState || {})) {
-      observedSpeakerIds.add(speakerId);
-    }
-
-    if (observedSpeakerIds.size > 10) {
-      debugLogger.warn("Excessive speaker count from live identification", {
-        observedSpeakers: observedSpeakerIds.size,
-      });
-    }
-
-    const { numSpeakers, cap } = this._resolveSpeakerExpectation({
-      sessionConfig,
-      noteId,
-      observedSpeakerIds,
-      diarizedSource,
-    });
+    const speakerCap = this._resolveSpeakerCap({ sessionConfig, noteId, diarizedSource });
     // Reserved before the async work so a "record more" started while this runs
-    // numbers its speakers past every cluster the result can name.
+    // numbers its speakers past every cluster the result can name. With no count
+    // the cap is settled after clustering, and it never exceeds MAX_SPEAKER_COUNT - 1.
     if (noteId != null) {
       this._diarizationSpeakerReservations.set(sessionId, {
         noteId,
-        ceiling: speakerIndexBase + cap,
+        ceiling: speakerIndexBase + (speakerCap ?? MAX_SPEAKER_COUNT - 1),
       });
     }
 
@@ -14774,16 +15035,80 @@ class IPCHandlers {
       let tmpWav = null;
       try {
         tmpWav = await this.diarizationManager.convertRawPcmToWav(rawPcmPath, 24000);
-        let diarizationSegments = await this.diarizationManager.diarize(
-          tmpWav,
-          numSpeakers > 0 ? { numSpeakers } : {}
-        );
-        if (cap != null) {
-          diarizationSegments = this.diarizationManager.capSpeakerClusters(
+        const {
+          resolveClusterThreshold,
+          mergeClustersByVoice,
+          dropNegligibleClusters,
+          isCollapsedDiarization,
+          matchVoiceToProfile,
+          dropVoicelessClustersOverCap,
+          capSpeakerClustersByVoice,
+        } = require("./diarizationPolicy");
+        const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
+        const speakerEmb = require("./speakerEmbeddings");
+        const similarity = (a, b) => speakerEmb.cosineSimilarity(a, b);
+
+        // Always auto-cluster, as uploads do: a forced cluster count splits short
+        // utterances from long ones instead of one voice from another (#2021).
+        const durationSeconds = fs.statSync(tmpWav).size / PCM16_MONO_16K_BYTES_PER_SECOND;
+        let diarizationSegments = await this.diarizationManager.diarize(tmpWav, {
+          threshold: resolveClusterThreshold(durationSeconds),
+        });
+        let centroids = new Map();
+        try {
+          centroids = await speakerEmb.extractClusterCentroids(tmpWav, diarizationSegments);
+        } catch (error) {
+          debugLogger.warn("Speaker voices unavailable; clusters are not merged by voice", {
+            error: error.message,
+          });
+        }
+        // Voices were only measured on the remote side (#2641). On the mic track a
+        // merge could fold the other person into the user, and one cluster there
+        // labels every line "you".
+        if (diarizedSource === "system") {
+          // A count the user set says how many people spoke. One read off the
+          // note's invitees only bounds them, since invitees don't all turn up.
+          const countedVoices =
+            sessionConfig?.explicit && sessionConfig.expectedCount ? speakerCap : 0;
+          diarizationSegments = mergeClustersByVoice(
             diarizationSegments,
-            cap
+            centroids,
+            similarity,
+            countedVoices
           );
         }
+        // The count is what tells a quiet participant from a phantom. With none,
+        // a one-on-one is the likeliest call, so only the largest cluster is
+        // safe from the phantom rule: a sliver split off the one remote voice
+        // doesn't become a second speaker.
+        diarizationSegments = dropNegligibleClusters(
+          diarizationSegments,
+          speakerCap == null ? { protectedCount: 1 } : { voiced: centroids }
+        );
+        // With no count, one remote voice holding nearly all the speech beside
+        // short slivers is a one-on-one call: the slivers are the same voice. (An
+        // upload that collapses like this loses its labels instead, since it
+        // expects several voices.) A cluster without a voice can't be told from
+        // sherpa's split of one voice, so it's dropped and its lines go to the
+        // speaker nearest in time. With no voice at all, the cap stays at one.
+        let cap = speakerCap;
+        if (cap == null) {
+          const voiced = diarizationSegments.filter((s) => centroids.has(s.speaker));
+          if (voiced.length === 0 || isCollapsedDiarization(diarizationSegments)) {
+            cap = 1;
+          } else {
+            diarizationSegments = voiced;
+            cap = MAX_SPEAKER_COUNT - 1;
+          }
+        } else if (diarizedSource === "system") {
+          diarizationSegments = dropVoicelessClustersOverCap(diarizationSegments, cap, centroids);
+        }
+        diarizationSegments = capSpeakerClustersByVoice(
+          diarizationSegments,
+          cap,
+          centroids,
+          similarity
+        );
 
         const enrichedSegments = this.diarizationManager.mergeWithTranscript(
           kept,
@@ -14808,91 +15133,84 @@ class IPCHandlers {
         const micSingleClusterSoftened = diarizedSource === "mic" && speakerSet.size === 1;
 
         let speakerEmbeddingsMap = null;
-        const speakerEmb = require("./speakerEmbeddings");
         try {
           if (!micSingleClusterSoftened && speakerEmb.isAvailable() && tmpWav) {
-            const speakerIds = [...new Set(diarizationSegments.map((s) => s.speaker))];
+            const voices = await speakerEmb.extractClusterCentroids(tmpWav, diarizationSegments);
             speakerEmbeddingsMap = {};
-
-            for (const spk of speakerIds) {
-              const segs = diarizationSegments.filter((s) => s.speaker === spk);
-              const sorted = segs.sort((a, b) => b.end - b.start - (a.end - a.start)).slice(0, 3);
-              const embeddings = [];
-              for (const seg of sorted) {
-                if (seg.end - seg.start < 1.5) continue;
-                const emb = await speakerEmb.extractEmbedding(tmpWav, seg.start, seg.end);
-                if (emb) embeddings.push(emb);
-              }
-              if (embeddings.length > 0) {
-                const centroid = speakerEmb.computeCentroid(embeddings);
-                const mappedId = speakerRenumber.get(spk) || spk;
-                speakerEmbeddingsMap[mappedId] = Array.from(centroid);
-              }
+            for (const [spk, centroid] of voices) {
+              speakerEmbeddingsMap[speakerRenumber.get(spk) || spk] = Array.from(centroid);
             }
           }
         } catch (err) {
           debugLogger.debug("Speaker embedding extraction skipped", { error: err.message });
         }
 
-        const reconciledSpeakers = this._reconcileLiveSpeakerState(
+        // Live identification names its speaker on every line it labels (here
+        // and in the renderer), and with no count its one speaker covers every
+        // remote voice. When the call holds more than one voice and more voices
+        // than live speakers, every line's name is cleared, and reconciliation
+        // and profile matching below name each voice. Without voices to match,
+        // the names stay. null, not undefined: the renderer keeps a line's old
+        // value for an undefined field.
+        const liveSpeakersSplit =
+          Object.keys(speakerEmbeddingsMap || {}).length > 0 &&
+          speakerSet.size > Math.max(1, Object.keys(liveSpeakerState || {}).length);
+        if (liveSpeakersSplit) {
+          for (const segment of enrichedSegments) {
+            if (segment.source === diarizedSource) {
+              applyConfirmedSpeaker(segment, { speakerName: null });
+            }
+          }
+        }
+
+        const namedVoices = this._reconcileLiveSpeakerState(
           liveSpeakerState,
           speakerEmbeddingsMap,
           enrichedSegments
         );
+        // A name the user gave a live speaker is locked, in the renderer, onto
+        // every line that speaker labelled. After a split the renderer keeps
+        // that lock only on the voice the name went to; a name that matched no
+        // voice isn't listed, and stays on all of its lines.
+        const splitLiveSpeakers = liveSpeakersSplit ? Object.fromEntries(namedVoices) : undefined;
 
         if (speakerEmbeddingsMap) {
           try {
-            const profiles = this.databaseManager.getSpeakerProfiles(true);
+            const profileVoices = this._speakerProfileVoices();
 
-            if (profiles.length > 0) {
-              for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
-                const alreadyMapped = enrichedSegments.some(
-                  (segment) => segment.speaker === mappedId && segment.speakerName
-                );
-                if (reconciledSpeakers.has(mappedId) || alreadyMapped) {
+            for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
+              const alreadyMapped = enrichedSegments.some(
+                (segment) => segment.speaker === mappedId && segment.speakerName
+              );
+              if (alreadyMapped) {
+                continue;
+              }
+
+              const match = matchVoiceToProfile(
+                new Float32Array(embArr),
+                profileVoices,
+                similarity
+              );
+              if (!match) {
+                continue;
+              }
+
+              for (const seg of enrichedSegments) {
+                if (seg.speaker !== mappedId) {
                   continue;
                 }
-
-                const emb = new Float32Array(embArr);
-                let bestProfile = null;
-                let bestSim = 0;
-
-                for (const profile of profiles) {
-                  const profileEmb = new Float32Array(
-                    profile.embedding.buffer,
-                    profile.embedding.byteOffset,
-                    profile.embedding.byteLength / 4
-                  );
-                  const sim = speakerEmb.cosineSimilarity(emb, profileEmb);
-                  if (sim > bestSim) {
-                    bestSim = sim;
-                    bestProfile = profile;
-                  }
-                }
-
-                if (bestProfile && bestSim > 0.6) {
-                  for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId) {
-                      applyConfirmedSpeaker(seg, {
-                        speakerName: bestProfile.display_name,
-                        speakerIsPlaceholder: false,
-                        suggestedName: undefined,
-                        suggestedProfileId: undefined,
-                      });
-                    }
-                  }
-                } else if (bestProfile && bestSim > 0.5) {
-                  for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId) {
-                      if (isSpeakerLocked(seg)) {
-                        continue;
-                      }
-                      applySuggestedSpeaker(seg, {
-                        suggestedName: bestProfile.display_name,
-                        suggestedProfileId: bestProfile.id,
-                      });
-                    }
-                  }
+                if (match.confirmed) {
+                  applyConfirmedSpeaker(seg, {
+                    speakerName: match.profile.display_name,
+                    speakerIsPlaceholder: false,
+                    suggestedName: undefined,
+                    suggestedProfileId: undefined,
+                  });
+                } else {
+                  applySuggestedSpeaker(seg, {
+                    suggestedName: match.profile.display_name,
+                    suggestedProfileId: match.profile.id,
+                  });
                 }
               }
             }
@@ -14901,7 +15219,11 @@ class IPCHandlers {
           }
         }
 
-        send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        send({
+          segments: enrichedSegments,
+          speakerEmbeddings: speakerEmbeddingsMap,
+          splitLiveSpeakers,
+        });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
         this._diarizationSpeakerReservations.delete(sessionId);
@@ -14922,9 +15244,10 @@ class IPCHandlers {
   }
 
   deleteTranscriptionInternal(id) {
-    this.audioStorageManager.deleteAudio(id);
     const result = this.databaseManager.deleteTranscription(id);
     if (result?.success) {
+      // After the scoped delete, so another account's recording is never touched.
+      this.audioStorageManager.deleteAudio(id);
       setImmediate(() => {
         broadcastToWindows("transcription-deleted", { id });
       });

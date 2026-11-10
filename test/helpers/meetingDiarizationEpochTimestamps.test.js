@@ -1,7 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const fs = require("node:fs");
 const os = require("node:os");
+const path = require("node:path");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -39,7 +41,11 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     };
   }
   if (parent?.filename === handlersModulePath && request === "./speakerEmbeddings") {
-    return { isAvailable: () => false };
+    return {
+      isAvailable: () => false,
+      extractClusterCentroids: async () => new Map(),
+      cosineSimilarity: () => 0,
+    };
   }
   return originalLoad.call(this, request, parent, isMain);
 };
@@ -63,22 +69,35 @@ const START_MS = 1792414000000;
 
 // Runs main's real _startOrSkipDiarization and resolves with the payload it
 // sends. `outcome` picks the diarized, skipped or failed path.
-const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized" } = {}) =>
+const runMainDiarization = (
+  mainSegments,
+  {
+    retracted = [],
+    outcome = "diarized",
+    diarizedSource = "system",
+    diarizationSegments = [{ start: 0, end: 120, speaker: "speaker_00" }],
+  } = {}
+) =>
   new Promise((resolve) => {
     const diarizationManager = new DiarizationManager();
     diarizationManager.isAvailable = () => outcome !== "skipped";
     diarizationManager.convertRawPcmToWav = async () => {
       if (outcome === "failed") throw new Error("Raw PCM file is empty");
-      return "/nonexistent/diarization.wav";
+      // The diarized path reads the WAV's size for its duration.
+      const wavPath = path.join(os.tmpdir(), `ow-epoch-test-${process.pid}-${Date.now()}.wav`);
+      fs.writeFileSync(wavPath, Buffer.alloc(32000 * 120));
+      return wavPath;
     };
-    diarizationManager.diarize = async () => [{ start: 0, end: 120, speaker: "speaker_00" }];
+    diarizationManager.diarize = async () => diarizationSegments;
 
     const handlers = Object.create(IPCHandlers.prototype);
     Object.assign(handlers, {
       diarizationManager,
       speakerDiarizationEnabled: true,
       _diarizationSpeakerReservations: new Map(),
-      _resolveSpeakerExpectation: () => ({ numSpeakers: 0, cap: null }),
+      // A count, as a note with attendees gives: these recordings have no
+      // readable voices, and with no count that leaves one speaker.
+      _resolveSpeakerCap: () => 2,
       _reconcileLiveSpeakerState: () => new Map(),
     });
     const win = {
@@ -95,7 +114,7 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
       null,
       null,
       1,
-      "system",
+      diarizedSource,
       0,
       retracted
     );
@@ -223,3 +242,90 @@ test("post-session mic dedupe only looks at system text within 6 seconds", () =>
   assert.deepEqual(removed, [nearEcho]);
   assert.deepEqual(kept, [system, later]);
 });
+
+for (const source of ["system", "mic"]) {
+  test(`a completion-timed ${source} row keeps its speaker after epoch normalization and persistence`, async () => {
+    const live = [
+      { source, text: "yes", timestamp: START_MS + 10000 },
+      { source, text: "let's continue", timestamp: START_MS + 15000 },
+    ];
+    const diarizationSegments = [
+      { start: 8, end: 10.8, speaker: "speaker_00" },
+      { start: 12, end: 18, speaker: "speaker_01" },
+    ];
+    // A final-delivery stamp is not a speech start: preserve its previous
+    // 10–15 s matching window instead of clipping it to the word estimate.
+    const payload = await runMainDiarization(
+      live.map((segment) => ({ ...segment, timestampIsSpeechStart: false })),
+      { diarizedSource: source, diarizationSegments }
+    );
+    assert.deepEqual(
+      payload.segments.map((segment) => [segment.timestamp, segment.speaker]),
+      [
+        [10, "speaker_1"],
+        [15, "speaker_1"],
+      ]
+    );
+
+    const speechStartPayload = await runMainDiarization(live, {
+      diarizedSource: source,
+      diarizationSegments,
+    });
+    assert.equal(speechStartPayload.segments[0].speaker, "speaker_0");
+
+    const seed = [{ source, text: "earlier session", timestamp: 2, speaker: "speaker_4" }];
+    const merged = runRendererCompletion(live, payload, seed);
+    const saved = serializeTranscriptSegments(merged);
+    const reloaded = parseTranscriptSegments(saved);
+    assert.deepEqual(
+      reloaded.map((segment) => [segment.text, segment.timestamp, segment.speaker]),
+      [
+        ["earlier session", 2, "speaker_4"],
+        ["yes", 10, "speaker_1"],
+        ["let's continue", 15, "speaker_1"],
+      ]
+    );
+    assert.ok(merged.every((segment) => !("timestampIsSpeechStart" in segment)));
+    assert.ok(reloaded.every((segment) => !("timestampIsSpeechStart" in segment)));
+    assert.equal(saved.includes("timestampIsSpeechStart"), false);
+  });
+}
+
+for (const outcome of ["diarized", "skipped", "failed"]) {
+  test(`${outcome} diarization keeps timing metadata out of completion payloads`, async () => {
+    const segments = [
+      {
+        source: "system",
+        text: "a delivery-timed row",
+        timestamp: START_MS + 1000,
+        timestampIsSpeechStart: false,
+      },
+      {
+        source: "system",
+        text: "a speech-start row",
+        timestamp: START_MS + 5000,
+        timestampIsSpeechStart: true,
+      },
+    ];
+    const retracted = [
+      {
+        source: "mic",
+        text: "retracted echo",
+        timestamp: START_MS + 1000,
+        timestampIsSpeechStart: false,
+      },
+    ];
+    const payload = await runMainDiarization(segments, { outcome, retracted });
+
+    assert.equal(payload.segments.length, 2);
+    assert.equal(payload.removedSegments.length, 1);
+    for (const segment of [...payload.segments, ...payload.removedSegments]) {
+      assert.equal("timestampIsSpeechStart" in segment, false);
+    }
+    assert.deepEqual(
+      segments.map((segment) => segment.timestampIsSpeechStart),
+      [false, true],
+      "building the public payload must not mutate the captured timing metadata"
+    );
+  });
+}

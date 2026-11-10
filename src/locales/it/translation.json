@@ -718,8 +718,8 @@
       "failedOffline": "Offline",
       "clearAll": "Cancella tutto",
       "clearAllTitle": "Cancella tutte le trascrizioni",
-      "clearAllDescription": "Tutte le trascrizioni, i file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo e dal tuo account.",
-      "clearAllDescriptionDevice": "Tutte le trascrizioni, i file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo. I conteggi già sincronizzati con un account non saranno interessati.",
+      "clearAllDescription": "Tutte le trascrizioni della tua cronologia, i relativi file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo e dal tuo account.",
+      "clearAllDescriptionDevice": "Tutte le trascrizioni di questa cronologia, i relativi file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo. Quelle già sincronizzate con un account verranno eliminate anche da quell'account al prossimo accesso su questo dispositivo.",
       "clearAllSuccess": "Cronologia cancellata",
       "clearAllErrorTitle": "Impossibile cancellare la cronologia",
       "clearAllErrorDescription": "Qualcosa è andato storto. Riprova.",
@@ -990,6 +990,11 @@
       "noAudio": {
         "title": "Non abbiamo capito",
         "description": "Controlla il microfono e riprova."
+      },
+      "commandAccountChanged": {
+        "title": "Comando senza risposta",
+        "description": "L'account è cambiato prima che finisse. La trascrizione si trova nella cronologia dell'account con cui l'hai pronunciato.",
+        "descriptionNotSaved": "L'account è cambiato prima che finisse. Ripetilo per chiedere ora."
       },
       "micDisconnected": {
         "title": "Microfono disconnesso",
@@ -2319,15 +2324,15 @@
       "lastSynced": "Ultima sincronizzazione {{time}}",
       "minutesAgo": "{{count}}m fa",
       "audioRetention": "Conservazione audio",
-      "audioRetentionDescription": "Salva l'audio di dettatura localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione. L'audio delle riunioni non viene mai salvato.",
+      "audioRetentionDescription": "Salva l'audio di dettatura localmente per la ritrascrizione e il download. I file audio su questo dispositivo vengono eliminati automaticamente al termine del periodo di conservazione, qualunque sia l'account che li ha registrati. L'audio delle riunioni non viene mai salvato.",
       "audioRetentionDisabled": "Disattivato",
       "retentionDays_one": "{{count}} giorno",
       "retentionDays_other": "{{count}} giorni",
       "audioStorageUsage": "Spazio utilizzato",
       "audioStorageUsageDescription": "File audio salvati su questo dispositivo",
-      "audioStorageFiles": "{{count}} file, {{size}}",
-      "audioStorageEmpty": "Nessun file audio salvato",
-      "clearAllAudio": "Elimina tutti i file audio",
+      "audioStorageHistoryFiles": "{{count}} file in questa cronologia, {{size}}",
+      "audioStorageHistoryEmpty": "Nessun file audio in questa cronologia",
+      "clearHistoryAudio": "Elimina audio",
       "clearAllAudioConfirm": "Eliminare tutti i file audio salvati? Questa azione è irreversibile.",
       "saveDiscarded": "Salva le dettature scartate",
       "saveDiscardedDescription": "Quando annulli una dettatura con Escape, conserva l'audio nella cronologia per poterla recuperare. Richiede la conservazione di dati e audio attiva."

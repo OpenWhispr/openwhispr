@@ -104,7 +104,10 @@ async function mountDictionary(t) {
   function Harness() {
     const [, setTick] = React.useState(0);
     rerender = () => setTick((tick) => tick + 1);
-    tree = DictionaryView({ onUpgrade() {} });
+    // DictionaryView wraps the page in a keyed element for the lists' owner;
+    // the page's own tree is the one with the notices.
+    const page = DictionaryView({ onUpgrade() {} });
+    tree = page.type(page.props);
     return null;
   }
   const root = createRoot(container);

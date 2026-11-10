@@ -170,6 +170,37 @@ function createTimestampedStream(provider, connectedAt) {
   };
 }
 
+test("Deepgram anchors native system and AEC mic transcripts to audio after slow setup", async (t) => {
+  const run = harness({ native: false });
+  await run.start();
+  const mic = createTimestampedStream("deepgram", 1000);
+  const system = createTimestampedStream("deepgram", 1000);
+  run.context._meetingMicStreaming = mic.streaming;
+  run.context._meetingSystemStreaming = system.streaming;
+  let now = 14000;
+  run.at(now);
+  t.mock.method(Date, "now", () => now);
+
+  // Windows/Linux native capture and AEC mic output carry no capture-time override.
+  run.chunk();
+  run.context.dispatchMicAudio(Buffer.alloc(4800, 1));
+  mic.finalizeSpeech();
+  system.finalizeSpeech();
+  assert.deepEqual(mic.timestamps, [14000]);
+  assert.deepEqual(system.timestamps, [14000]);
+  assert.equal(run.context.meetingDiarizationStartedAt, 14000);
+  assert.equal(run.context.meetingLiveSpeakerStartedAt, 14000);
+
+  now = 15000;
+  run.at(now);
+  run.chunk();
+  run.context.dispatchMicAudio(Buffer.alloc(4800, 1));
+  mic.finalizeSpeech(1);
+  system.finalizeSpeech(1);
+  assert.deepEqual(mic.timestamps, [14000, 14100]);
+  assert.deepEqual(system.timestamps, [14000, 14100]);
+});
+
 for (const provider of ["deepgram", "corti"]) {
   test(`${provider} preserves an established socket's origin across capture recovery`, async () => {
     const run = harness();

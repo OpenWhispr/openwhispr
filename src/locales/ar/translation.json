@@ -23,6 +23,11 @@
         "title": "لم نتمكن من التقاط الصوت",
         "description": "تحقق من الميكروفون وحاول مرة أخرى."
       },
+      "commandAccountChanged": {
+        "title": "لم تتم الإجابة عن الأمر",
+        "description": "تغيّر الحساب قبل اكتمال الأمر. نصه المفرَّغ موجود في سجل الحساب الذي نطقته به.",
+        "descriptionNotSaved": "تغيّر الحساب قبل اكتمال الأمر. قله مرة أخرى لتسأل الآن."
+      },
       "micDisconnected": {
         "title": "تم فصل الميكروفون",
         "description": "التسجيل لا يزال نشطًا وسيتم استئنافه عند توفر ميكروفون.",
@@ -673,7 +678,7 @@
       "rawTranscript": "النص المفرَّغ الخام",
       "clearAll": "مسح الكل",
       "clearAllTitle": "مسح جميع النصوص المفرَّغة",
-      "clearAllDescription": "ستتم إزالة جميع النصوص المفرَّغة والملفات الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز ومن حسابك.",
+      "clearAllDescription": "ستتم إزالة جميع النصوص المفرَّغة في سجلك وملفاتها الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز ومن حسابك.",
       "clearAllSuccess": "تم مسح السجل",
       "clearAllErrorTitle": "تعذر مسح السجل",
       "clearAllErrorDescription": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
@@ -687,7 +692,7 @@
         "recovered": "تمت الاستعادة"
       },
       "retryTranslationMode": "وضع الترجمة",
-      "clearAllDescriptionDevice": "ستتم إزالة جميع النصوص المفرَّغة والملفات الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز. أما العدادات التي تمت مزامنتها مع حسابك فلا تتأثر."
+      "clearAllDescriptionDevice": "ستتم إزالة جميع النصوص المفرَّغة في هذا السجل وملفاتها الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز. وأي نص منها سبقت مزامنته مع حساب سيُحذف أيضًا من ذلك الحساب في المرة القادمة التي يُسجَّل فيها الدخول إليه على هذا الجهاز."
     },
     "aiCta": {
       "title": "قم بتحسين نصوصك المفرَّغة باستخدام الذكاء الاصطناعي",
@@ -5546,7 +5551,7 @@
       "modelListUpdates": "تحديثات قائمة النماذج",
       "modelListUpdatesDescription": "يتحقق كل 15 دقيقة من قائمة نماذج OpenWhispr العامة على GitHub بحثًا عن النماذج الجديدة والمتوقفة. تسري التغييرات بالكامل بعد إعادة التشغيل.",
       "audioRetention": "الاحتفاظ بالصوت",
-      "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة التفريغ والتنزيل. يتم حذف الملفات تلقائيًا بعد فترة الاحتفاظ. لا يتم تخزين صوت الاجتماعات أبدًا.",
+      "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة التفريغ والتنزيل. تُحذف الملفات الصوتية على هذا الجهاز تلقائيًا بعد فترة الاحتفاظ، أيًّا كان الحساب الذي سجّلها. لا يتم تخزين صوت الاجتماعات أبدًا.",
       "audioRetentionDisabled": "معطل",
       "retentionDays_zero": "{{count}} أيام",
       "retentionDays_one": "{{count}} يوم",
@@ -5556,15 +5561,15 @@
       "retentionDays_other": "{{count}} يوم",
       "audioStorageUsage": "استخدام التخزين",
       "audioStorageUsageDescription": "الملفات الصوتية المخزنة على هذا الجهاز",
-      "audioStorageFiles": "{{count}} ملفات، {{size}}",
-      "audioStorageFiles_zero": "{{count}} ملفات، {{size}}",
-      "audioStorageFiles_one": "{{count}} ملف، {{size}}",
-      "audioStorageFiles_two": "{{count}} ملفان، {{size}}",
-      "audioStorageFiles_few": "{{count}} ملفات، {{size}}",
-      "audioStorageFiles_many": "{{count}} ملفًا، {{size}}",
-      "audioStorageFiles_other": "{{count}} ملف، {{size}}",
-      "audioStorageEmpty": "لا توجد ملفات صوتية مخزنة",
-      "clearAllAudio": "مسح كل الصوت",
+      "audioStorageHistoryFiles": "{{count}} ملفات في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_zero": "{{count}} ملفات في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_one": "{{count}} ملف في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_two": "{{count}} ملفان في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_few": "{{count}} ملفات في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_many": "{{count}} ملفًا في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_other": "{{count}} ملف في هذا السجل، {{size}}",
+      "audioStorageHistoryEmpty": "لا توجد ملفات صوتية في هذا السجل",
+      "clearHistoryAudio": "مسح الصوت",
       "clearAllAudioConfirm": "هل تريد حذف جميع الملفات الصوتية المخزنة؟ لا يمكن التراجع عن هذا.",
       "dataRetention": "الاحتفاظ بالبيانات",
       "dataRetentionDescription": "تخزين النصوص المفرَّغة والصوت محليًا في سجلك. عند التعطيل، يتم لصق النصوص المفرَّغة ولكن لا يتم حفظها.",

@@ -171,11 +171,17 @@ function setupOrukeet(t, accountId = "first-account") {
   const DatabaseManager = require("../../src/helpers/database");
   const ParakeetManager = require("../../src/helpers/parakeet");
   const databaseManager = Object.create(DatabaseManager.prototype);
-  databaseManager.setActiveAccountId(accountId);
   databaseManager.db = new DatabaseSync(":memory:");
   databaseManager.db.exec(
-    "CREATE TABLE custom_dictionary (id INTEGER PRIMARY KEY, word TEXT NOT NULL, deleted_at TEXT, shared_at TEXT)"
+    "CREATE TABLE custom_dictionary (id INTEGER PRIMARY KEY, word TEXT NOT NULL, deleted_at TEXT, shared_at TEXT, account_id TEXT); CREATE TABLE device_accounts (account_id TEXT PRIMARY KEY)"
   );
+  databaseManager.activeAccountId = null;
+  databaseManager._accountChanges = [];
+  databaseManager._registerKeyFolding();
+  databaseManager.setActiveAccountId(accountId);
+  // Account switches claim rows across every table; these tests only hold the dictionary.
+  t.mock.method(databaseManager, "claimSignedOutLocalRows", () => {});
+  t.mock.method(databaseManager, "claimLegacyRowsOfOnlyAccount", () => {});
   const parakeetManager = new ParakeetManager();
   t.after(() => {
     clearTimeout(parakeetManager.serverManager.hotwordsRefreshTimer);

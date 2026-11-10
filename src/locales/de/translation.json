@@ -736,8 +736,8 @@
       "rawTranscript": "Rohtranskript",
       "clearAll": "Alle löschen",
       "clearAllTitle": "Alle Transkriptionen löschen",
-      "clearAllDescription": "Alle Transkriptionen, Audiodateien und Insights-Zähler werden dauerhaft von diesem Gerät und aus Ihrem Konto entfernt.",
-      "clearAllDescriptionDevice": "Alle Transkriptionen, Audiodateien und Insights-Zähler werden dauerhaft von diesem Gerät entfernt. Bereits mit einem Konto synchronisierte Zähler bleiben davon unberührt.",
+      "clearAllDescription": "Alle Transkriptionen in Ihrem Verlauf, ihre Audiodateien und Insights-Zähler werden dauerhaft von diesem Gerät und aus Ihrem Konto entfernt.",
+      "clearAllDescriptionDevice": "Alle Transkriptionen in diesem Verlauf, ihre Audiodateien und Insights-Zähler werden dauerhaft von diesem Gerät entfernt. Transkriptionen davon, die bereits mit einem Konto synchronisiert wurden, werden bei der nächsten Anmeldung dieses Kontos auf diesem Gerät auch dort gelöscht.",
       "clearAllSuccess": "Verlauf gelöscht",
       "clearAllErrorTitle": "Verlauf konnte nicht gelöscht werden",
       "clearAllErrorDescription": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
@@ -990,6 +990,11 @@
       "noAudio": {
         "title": "Das haben wir nicht verstanden",
         "description": "Überprüfe dein Mikrofon und versuche es erneut."
+      },
+      "commandAccountChanged": {
+        "title": "Befehl nicht beantwortet",
+        "description": "Das Konto hat gewechselt, bevor er fertig war. Seine Transkription steht im Verlauf des Kontos, unter dem du ihn gesprochen hast.",
+        "descriptionNotSaved": "Das Konto hat gewechselt, bevor er fertig war. Sprich ihn erneut, um jetzt zu fragen."
       },
       "micDisconnected": {
         "title": "Mikrofon getrennt",
@@ -3060,15 +3065,15 @@
       "modelListUpdates": "Aktualisierungen der Modellliste",
       "modelListUpdatesDescription": "Prüft alle 15 Minuten die öffentliche Modellliste von OpenWhispr auf GitHub auf neue und eingestellte Modelle. Änderungen werden nach einem Neustart vollständig wirksam.",
       "audioRetention": "Audio-Aufbewahrung",
-      "audioRetentionDescription": "Diktat-Audio lokal für erneute Transkription und Download speichern. Dateien werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht. Meeting-Audio wird niemals gespeichert.",
+      "audioRetentionDescription": "Diktat-Audio lokal für erneute Transkription und Download speichern. Audiodateien auf diesem Gerät werden nach Ablauf der Aufbewahrungsfrist automatisch gelöscht, unabhängig davon, welches Konto sie aufgenommen hat. Meeting-Audio wird niemals gespeichert.",
       "audioRetentionDisabled": "Deaktiviert",
       "retentionDays_one": "{{count}} Tag",
       "retentionDays_other": "{{count}} Tage",
       "audioStorageUsage": "Speicherverbrauch",
       "audioStorageUsageDescription": "Auf diesem Gerät gespeicherte Audiodateien",
-      "audioStorageFiles": "{{count}} Dateien, {{size}}",
-      "audioStorageEmpty": "Keine Audiodateien gespeichert",
-      "clearAllAudio": "Alle Audiodateien löschen",
+      "audioStorageHistoryFiles": "{{count}} Dateien in diesem Verlauf, {{size}}",
+      "audioStorageHistoryEmpty": "Keine Audiodateien in diesem Verlauf",
+      "clearHistoryAudio": "Audio löschen",
       "clearAllAudioConfirm": "Alle gespeicherten Audiodateien löschen? Dies kann nicht rückgängig gemacht werden.",
       "dataRetention": "Datenaufbewahrung",
       "dataRetentionDescription": "Transkriptionen und Audio lokal im Verlauf speichern. Wenn deaktiviert, werden Transkriptionen eingefügt, aber nicht gespeichert.",

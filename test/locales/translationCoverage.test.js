@@ -39,7 +39,7 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.unifiedBilling.seatUpdated",
   "settingsPage.unifiedBilling.confirmSeats.description",
   "settingsPage.privacy.retentionDays",
-  "settingsPage.privacy.audioStorageFiles",
+  "settingsPage.privacy.audioStorageHistoryFiles",
   "settingsPage.privacy.hoursAgo",
   "settingsPage.privacy.minutesAgo",
   "settingsPage.enterpriseCheckout.seatsHint",
