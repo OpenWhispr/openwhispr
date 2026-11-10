@@ -87,7 +87,9 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
       diarizationManager,
       speakerDiarizationEnabled: true,
       _diarizationSpeakerReservations: new Map(),
-      _resolveSpeakerCap: () => null,
+      // A count, as a note with attendees gives: these recordings have no
+      // readable voices, and with no count that leaves one speaker.
+      _resolveSpeakerCap: () => 2,
       _reconcileLiveSpeakerState: () => new Map(),
     });
     const win = {
