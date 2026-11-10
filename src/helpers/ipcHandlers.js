@@ -9958,13 +9958,9 @@ class IPCHandlers {
     };
 
     const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
-      const results = await Promise.all([
-        this._meetingMicStreaming
-          ? this._meetingMicStreaming.disconnect().catch(() => ({ text: "" }))
-          : Promise.resolve({ text: "" }),
-        this._meetingSystemStreaming
-          ? this._meetingSystemStreaming.disconnect().catch(() => ({ text: "" }))
-          : Promise.resolve({ text: "" }),
+      await Promise.all([
+        this._meetingMicStreaming?.disconnect().catch(() => {}),
+        this._meetingSystemStreaming?.disconnect().catch(() => {}),
       ]);
 
       if (flushPending) {
@@ -9972,7 +9968,6 @@ class IPCHandlers {
       }
 
       resetMeetingStreamingState();
-      return results;
     };
 
     const clearMeetingSystemAudioSilenceTimer = () => {

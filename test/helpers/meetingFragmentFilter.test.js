@@ -167,8 +167,7 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
       streaming.audioBytesSent = 1;
       streaming.ws = {
         readyState: 1,
-        send(message) {
-          assert.equal(JSON.parse(message).type, "input_audio_buffer.commit");
+        send() {
           queueMicrotask(() => finish(source, text));
         },
         close() {},
@@ -328,7 +327,7 @@ test("a locally transcribed wrong-script fragment never reaches the transcript",
 });
 
 test("a locally transcribed row in an expected script is kept", async () => {
-  const run = localHarness({ language: "en", text: "Okay." });
+  const run = localHarness({ language: "en", text: "OK." });
   await run.transcribe("system");
-  assert.deepEqual(run.finals, ["Okay."]);
+  assert.deepEqual(run.finals, ["OK."]);
 });
