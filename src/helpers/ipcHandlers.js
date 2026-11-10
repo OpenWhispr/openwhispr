@@ -171,6 +171,7 @@ const {
   selectRacingMicEntryIndices,
   partitionOverlappingPendingMicFinals,
 } = require("./meetingMicHoldback");
+const { fragmentFilterLanguages, isWrongScriptFragment } = require("./meetingFragmentFilter");
 const {
   computeChunkStats,
   resolveMicChunkAction,
@@ -8420,6 +8421,13 @@ class IPCHandlers {
       streaming.onFinalTranscript = (text, timestamp) => {
         const segments = streaming.completedSegments;
         const latestSegment = segments.length > 0 ? segments[segments.length - 1] : text;
+        if (
+          isWrongScriptFragment(latestSegment, fragmentFilterLanguages(meetingConnectionOptions))
+        ) {
+          debugLogger.debug("Dropping wrong-script meeting fragment", { source });
+          send("meeting-transcription-segment", { text: "", source, type: "partial" });
+          return;
+        }
         let micSuppression = null;
         if (source === "mic") {
           micSuppression = shouldSuppressMicTranscriptSegment(timestamp, Date.now());
@@ -9569,6 +9577,10 @@ class IPCHandlers {
 
         if (result?.success && result.text?.trim()) {
           const text = result.text.trim();
+          if (isWrongScriptFragment(text, fragmentFilterLanguages(meetingConnectionOptions))) {
+            debugLogger.debug("Dropping wrong-script local meeting fragment", { source });
+            return;
+          }
           const segTimestamp = Date.now();
           let micSuppression = null;
           if (source === "mic") {
