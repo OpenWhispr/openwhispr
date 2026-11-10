@@ -5780,6 +5780,7 @@
           "revokeFailed": "Não foi possível remover o convite. Tente novamente.",
           "resendFailed": "Não foi possível reenviar o convite. Tente novamente.",
           "syncFailed": "Não foi possível sincronizar esta nota. Tente novamente.",
+          "privateNotSyncable": "As notas privadas ficam neste dispositivo. Mova esta nota para um teamspace para compartilhá-la.",
           "loadFailed": "Não foi possível carregar as configurações de compartilhamento",
           "retry": "Tentar novamente"
         }

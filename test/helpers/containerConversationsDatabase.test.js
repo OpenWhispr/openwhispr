@@ -143,12 +143,15 @@ test("getPendingConversations excludes scopes the cloud contract cannot preserve
   if (!db) return;
   const space = createTestTeamSpace(db, { name: "Eng" }).space;
   const folder = db.createFolder("Docs", space.id).folder;
-  const note = db.saveNote("Note", "body").note;
+  const note = db.saveNote("Note", "body", "personal", null, null, null, space.id).note;
+  const privateNote = db.saveNote("Private", "body").note;
 
   const global = db.createAgentConversation("Global");
   const noteScoped = db.createAgentConversation("Note chat", note.id);
   db.createAgentConversation("Space chat", null, space.id);
   db.createAgentConversation("Folder chat", null, space.id, folder.id);
+  // A private note's chat stays where the note does (D11).
+  db.createAgentConversation("Private note chat", privateNote.id);
 
   assert.deepEqual(
     db.getPendingConversations().map((conversation) => conversation.id),

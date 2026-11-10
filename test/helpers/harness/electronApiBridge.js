@@ -207,11 +207,18 @@ function createElectronApi(db, options = {}) {
     restoreFolderAfterDeniedDelete: async (id) => db.restoreFolderAfterDeniedDelete(id),
     relocateRevokedFolder: async (id, privateSpaceId, preserveFolder) =>
       db.relocateRevokedFolder(id, privateSpaceId, preserveFolder),
+    forkFolderIdentity: async (id) => db.forkFolderIdentity(id),
     getFolderIdMap: async () => db.getFolderIdMap(),
     hardDeleteFolder: async (id) => db.hardDeleteFolder(id),
 
     // Spaces
     getSpaces: async () => db.getSpaces(),
+    // As get-private-space-id: null for anything but a workspace id or null.
+    getPrivateSpaceId: async (workspaceId = null) =>
+      workspaceId === null || (typeof workspaceId === "string" && workspaceId.trim())
+        ? db.getPrivateSpaceId(workspaceId)
+        : null,
+    getDefaultPrivateSpaceId: async () => db.getDefaultPrivateSpaceId(),
     hasOtherAccountRows: async () => db.hasOtherAccountRows(),
     hasUnclaimedLegacyRows: async () => db.hasUnclaimedLegacyRows(),
     upsertSpaceFromCloud: async (cloudSpace) => db.upsertSpaceFromCloud(cloudSpace),

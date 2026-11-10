@@ -11,6 +11,7 @@ const {
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
+const { TEAM_SPACE, joinTeamSpace } = require("./harness/teamSpace.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 const { readNoteConflicts } = require("../../src/lib/noteConflictRegistry.ts");
 
@@ -26,7 +27,8 @@ const INITIAL = {
   transcript: "Original transcript",
   note_type: "meeting",
   folder_id: null,
-  space_id: null,
+  workspace_id: TEAM_SPACE.workspace_id,
+  space_id: TEAM_SPACE.id,
   user_id: "user-harness",
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
@@ -36,6 +38,10 @@ const INITIAL = {
 };
 const OTHER = { ...INITIAL, id: "cloud-other", client_note_id: "client-other" };
 const copy = (value) => JSON.parse(JSON.stringify(value));
+
+// Private notes stay on the device (D2), so recovery runs on a teamspace's
+// notes: the device joins it on first use, and INITIAL and OTHER are its.
+const teamIn = (db) => joinTeamSpace(db, null).id;
 
 // HTTP alone is simulated. Every delta is quiet, so unchanged pre-revision
 // rows can recover only through a full snapshot. Writes require explicit,
@@ -103,7 +109,7 @@ function listCalls(cloud, kind) {
 const updateCalls = (cloud) => cloud.calls.filter((call) => call.path === "/api/notes/update");
 
 function preRevisionNote(db, cloudNote = INITIAL) {
-  const note = db.upsertNoteFromCloud(cloudNote, null);
+  const note = db.upsertNoteFromCloud(cloudNote, null, teamIn(db));
   db.db.prepare("UPDATE notes SET cloud_revision = NULL WHERE id = ?").run(note.id);
   return db.getNote(note.id);
 }
@@ -114,6 +120,8 @@ async function client(t, db, cloud) {
   enableSync();
   windowStub.electronAPI = createElectronApi(db, { cloud });
   await establishValidatedAuth();
+  // A device that has seen its teamspace, so a push carries its scope.
+  localStorageStub.setItem("teamSpacesCapability", "true");
   localStorageStub.setItem("lastSyncedAt.notes", "2026-06-01T00:00:00.000Z");
   // These tests count list requests; the one-time feed read isn't one they mean.
   localStorageStub.setItem("noteFeedReplay.v1", "3");
@@ -150,7 +158,7 @@ for (const field of ["content", "enhanced_content"]) {
     const secondDb = createDb(t);
     if (!db || !secondDb) return;
     const note = preRevisionNote(db);
-    const secondNote = secondDb.upsertNoteFromCloud(INITIAL, null);
+    const secondNote = secondDb.upsertNoteFromCloud(INITIAL, null, teamIn(secondDb));
     db.updateNote(note.id, { clear_fields: [field] });
     const cloud = recoveryCloud({ failedSnapshots: 1 });
     const service = await client(t, db, cloud);
@@ -301,7 +309,7 @@ test("a parked revision snapshot retries after the missing folder arrives", asyn
       created_at: INITIAL.created_at,
       updated_at: INITIAL.updated_at,
     },
-    db.getPrivateSpaceId()
+    teamIn(db)
   );
 
   await service.syncNotes();

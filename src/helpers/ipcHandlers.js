@@ -3000,6 +3000,12 @@ class IPCHandlers {
       return this.databaseManager.getPrivateSpaceId(workspaceId);
     });
 
+    // Where sync files a personal cloud row it applies (D14): the account's
+    // default Private, never the active workspace's.
+    ipcMain.handle("get-default-private-space-id", () =>
+      this.databaseManager.getDefaultPrivateSpaceId()
+    );
+
     ipcMain.handle("bind-default-private-space", (_event, defaultWorkspaceId, accountId) => {
       if (typeof defaultWorkspaceId !== "string" || !defaultWorkspaceId.trim()) {
         return { success: false, error: "Invalid workspace" };
@@ -3611,6 +3617,11 @@ class IPCHandlers {
       }
       return result;
     });
+    // A private folder that left a team keeps the team's cloud identity until
+    // sync detaches it, so the team's row stays the team's (D8).
+    ipcMain.handle("db-fork-folder-identity", (_, id) =>
+      this.databaseManager.forkFolderIdentity(id)
+    );
     ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
       if (result?.success) {

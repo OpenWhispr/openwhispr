@@ -2164,6 +2164,9 @@ declare global {
       // The active workspace's private space, or the named workspace's. Null
       // for an invalid id.
       getPrivateSpaceId?: (workspaceId?: string | null) => Promise<number | null>;
+      // The account's default workspace's private space (its pending row
+      // while that workspace isn't known yet); the stand-in signed out.
+      getDefaultPrivateSpaceId?: () => Promise<number>;
       bindDefaultPrivateSpace?: (
         defaultWorkspaceId: string,
         accountId?: string | null
@@ -4123,7 +4126,9 @@ declare global {
       sendDictationPreviewAudio?: (data: ArrayBuffer) => void;
 
       // Sync operations
-      getPendingNotes?: (spaceKind?: "private" | "team") => Promise<NoteItem[]>;
+      // A sync pass's upload queue: team rows (and rows that left a team), plus
+      // legacy shared private notes for "syncable". No other private note.
+      getPendingNotes?: (scope: "team" | "syncable") => Promise<NoteItem[]>;
       getPendingNoteDeletes?: () => Promise<NoteItem[]>;
       getNoteByClientId?: (clientNoteId: string) => Promise<NoteItem | null>;
       getNoteForCloudRow?: (
@@ -4161,12 +4166,13 @@ declare global {
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       setNoteOwnerFromCloud?: (id: number, ownerUserId: string) => Promise<void>;
       countTeamNotesMissingOwner?: () => Promise<number>;
-      countNotesMissingRevision?: (spaceKind?: "private" | "team") => Promise<number>;
+      countNotesMissingRevision?: (scope: "team" | "syncable") => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;
       restoreNoteAfterDeniedDelete?: (id: number) => Promise<{ success: boolean; id: number }>;
       hardDeleteNote?: (id: number) => Promise<void>;
 
-      getPendingFolders?: (spaceKind?: "private" | "team") => Promise<FolderItem[]>;
+      // Team folders only: private folders never reach the cloud.
+      getPendingFolders?: (scope: "team") => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
       upsertFolderFromCloud?: (
         cloudFolder: Record<string, unknown>,
@@ -4197,6 +4203,9 @@ declare global {
         error?: string;
       }>;
       hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
+      // A new client identity and no cloud link: the folder's cloud row is
+      // left to whoever still has it.
+      forkFolderIdentity?: (id: number) => Promise<{ success: boolean }>;
       relocateRevokedFolder?: (
         id: number,
         privateSpaceId: number,

@@ -5773,6 +5773,7 @@
           "revokeFailed": "Impossibile rimuovere l'invito. Riprova.",
           "resendFailed": "Impossibile reinviare l'invito. Riprova.",
           "syncFailed": "Impossibile sincronizzare questa nota. Riprova.",
+          "privateNotSyncable": "Le note private restano su questo dispositivo. Sposta questa nota in un teamspace per condividerla.",
           "loadFailed": "Impossibile caricare le impostazioni di condivisione",
           "retry": "Riprova"
         }

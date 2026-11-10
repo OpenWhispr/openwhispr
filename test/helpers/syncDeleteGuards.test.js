@@ -1,6 +1,7 @@
 // A local tombstone must outlive a pull, a note or chat no create request has
 // carried leaves the device when it is deleted, and delete pushes must never
-// reach the cloud for rows that were never synced.
+// reach the cloud for rows that were never synced. Private notes never upload
+// (D2), so the create races below run on a teamspace's notes.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -17,6 +18,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 
 const LOCAL_EARLY = "2026-07-20 10:00:00";
@@ -238,8 +240,9 @@ test("an upgrade counts a note whose last create failed as a create attempt", (t
 test("every note and chat create is recorded as attempted before its request is sent", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
-  const { db, api, service } = ctx;
+  const { db, cloud, api, service } = ctx;
   silenceConsoleErrors(t);
+  const team = joinTeamSpace(db, cloud);
   const flagAtSend = new Map();
   const send = api.cloudApiRequest;
   api.cloudApiRequest = async (opts) => {
@@ -255,13 +258,13 @@ test("every note and chat create is recorded as attempted before its request is 
     return send(opts);
   };
 
-  const batched = db.saveNote("Batched", "body").note;
+  const batched = saveNoteIn(db, team.id, "Batched", "body").note;
   const chat = db.createAgentConversation("Chat");
   db.addAgentMessage(chat.id, "user", "hello");
   await service.syncAll(true);
-  const single = db.saveNote("Single", "body").note;
+  const single = saveNoteIn(db, team.id, "Single", "body").note;
   await service.pushNote(single.id);
-  const migrated = db.saveNote("Migrated", "body").note;
+  const migrated = saveNoteIn(db, team.id, "Migrated", "body").note;
   api.getNotes = async () => [db.getNote(migrated.id)];
   await require("../../src/stores/noteStore.ts").startMigration();
 
@@ -278,7 +281,8 @@ test("a note given a new identity after a sync pass read it is not sent under th
   if (!ctx) return;
   const { db, cloud, api, service } = ctx;
   silenceConsoleErrors(t);
-  const note = db.saveNote("Forked mid-pass", "body").note;
+  const team = joinTeamSpace(db, cloud);
+  const note = saveNoteIn(db, team.id, "Forked mid-pass", "body").note;
   const oldClientId = note.client_note_id;
   afterPendingRead(api, note.id, () =>
     db.updateNote(note.id, { client_note_id: randomUUID(), cloud_id: null })
@@ -371,14 +375,20 @@ for (const path of ["/api/notes/batch-create", "/api/notes/create"]) {
     if (!ctx) return;
     const { db, cloud, api, service } = ctx;
     silenceConsoleErrors(t);
-    const note = db.saveNote("In flight", "secret zebracorn").note;
+    const team = joinTeamSpace(db, cloud);
+    const note = saveNoteIn(db, team.id, "In flight", "secret zebracorn").note;
     afterCloudAnswers(
       api,
       (opts) => opts.path === path,
       () => db.deleteNote(note.id)
     );
 
-    if (path === "/api/notes/create") await service.pushNote(note.id);
+    if (path === "/api/notes/create") {
+      await service.pushNote(note.id);
+      // A teamspace push asks for a pass to reach teammates; let it finish, or
+      // the passes below would only queue behind it.
+      while (service.syncing) await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     await service.syncAll(true);
     await service.syncAll(true);
 
@@ -392,7 +402,8 @@ test("a note deleted after a sync pass read it is never uploaded", async (t) => 
   if (!ctx) return;
   const { db, cloud, api, service } = ctx;
   silenceConsoleErrors(t);
-  const note = db.saveNote("Read, then deleted", "body").note;
+  const team = joinTeamSpace(db, cloud);
+  const note = saveNoteIn(db, team.id, "Read, then deleted", "body").note;
   afterPendingRead(api, note.id, () => db.deleteNote(note.id));
 
   await service.syncAll(true);
@@ -408,7 +419,8 @@ test("a note deleted before the legacy upload sends it is never uploaded", async
   if (!ctx) return;
   const { db, cloud, api } = ctx;
   silenceConsoleErrors(t);
-  const note = db.saveNote("Listed, then deleted", "body").note;
+  const team = joinTeamSpace(db, cloud);
+  const note = saveNoteIn(db, team.id, "Listed, then deleted", "body").note;
   const listed = db.getNote(note.id);
   db.deleteNote(note.id);
   api.getNotes = async () => [listed];
@@ -520,4 +532,81 @@ test("the cleanup of earlier deletes runs only with the update", (t) => {
   db.initDatabase();
 
   assert.equal(rowCount(db, "notes", note.id), 1);
+});
+
+// --- Private notes stay on the device (D2, D11) ------------------------------
+
+function sentConversationIds(cloud) {
+  return cloud.logFor("/api/conversations/create").map((call) => call.body.client_conversation_id);
+}
+
+test("a chat on a private note is not uploaded; a root chat is", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const note = db.saveNote("Private", "body").note;
+  const noteChat = db.createAgentConversation("About my note", note.id);
+  db.addAgentMessage(noteChat.id, "user", "private question");
+  // A legacy shared note keeps syncing for its guests, who never see its chats.
+  const shared = db.saveNote("Shared earlier", "body").note;
+  updateNote(db, shared.id, { cloud_id: "cloud-shared", is_shared: 1, sync_status: "synced" });
+  const sharedChat = db.createAgentConversation("About the shared note", shared.id);
+  db.addAgentMessage(sharedChat.id, "user", "still private");
+  const rootChat = db.createAgentConversation("Root");
+  db.addAgentMessage(rootChat.id, "user", "backed up");
+
+  await service.syncAll(true);
+  await service.pushEntity("conversation", noteChat.id);
+  await service.pushEntity("conversation", sharedChat.id);
+
+  assert.deepEqual(sentConversationIds(cloud), [rootChat.client_conversation_id]);
+  assert.equal(cloud.conversations().length, 1);
+  assert.ok(db.getAgentConversation(rootChat.id).cloud_id);
+  for (const chat of [noteChat, sharedChat]) {
+    assert.equal(db.getAgentConversation(chat.id).cloud_id, null);
+    assert.equal(attempted(db, "agent_conversations", chat.id), 0);
+  }
+  assert.deepEqual(
+    db.getPendingConversations().map((chat) => chat.id),
+    [],
+    "no sync pass reads a private note's chat for upload"
+  );
+});
+
+test("ensureNoteSynced refuses an unshared private note", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const { PRIVATE_NOTE_NOT_SYNCABLE } = require("../../src/services/SyncService.ts");
+  const fresh = db.saveNote("Never synced", "body").note;
+  // A copy Backup made before Private stayed on the device is no share.
+  const backedUp = db.saveNote("Backed up", "body").note;
+  updateNote(db, backedUp.id, { cloud_id: "cloud-backed-up", sync_status: "synced" });
+  const shared = db.saveNote("Shared earlier", "body").note;
+  updateNote(db, shared.id, { cloud_id: "cloud-shared", is_shared: 1, sync_status: "synced" });
+
+  for (const note of [fresh, backedUp]) {
+    await assert.rejects(service.ensureNoteSynced(note.id), (err) => {
+      assert.equal(err.code, PRIVATE_NOTE_NOT_SYNCABLE);
+      return true;
+    });
+  }
+  assert.equal(await service.ensureNoteSynced(shared.id), "cloud-shared");
+  assert.deepEqual(cloud.log, [], "nothing was sent");
+  assert.equal(db.getNote(fresh.id).cloud_id, null);
+  assert.equal(attempted(db, "notes", fresh.id), 0);
+});
+
+test("the legacy upload Backup starts never sends a private note", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api } = ctx;
+  const note = db.saveNote("Private", "body").note;
+  api.getNotes = async () => [db.getNote(note.id)];
+
+  await require("../../src/stores/noteStore.ts").startMigration();
+
+  assert.deepEqual(cloud.log, []);
+  assert.equal(db.getNote(note.id).cloud_id, null);
+  assert.equal(attempted(db, "notes", note.id), 0);
 });

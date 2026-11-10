@@ -4,14 +4,18 @@ const { createDb } = require("./harness/db.js");
 const globals = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { TEAM_SPACE, joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 const { resolveCloudNoteCreate } = require("../../src/services/noteCreateAck.ts");
 const { readNoteConflictIds } = require("../../src/lib/noteConflictRegistry.ts");
 
+// A teamspace note whose create response was lost: private notes never upload
+// (D2), so only a teamspace's notes reach this reconciliation.
 function setup(t) {
   const db = createDb(t);
   assert.ok(db);
-  const id = db.saveNote("Lost response", "Original notes").note.id;
+  const team = joinTeamSpace(db, null);
+  const id = saveNoteIn(db, team.id, "Lost response", "Original notes").note.id;
   db.updateNote(id, {
     enhanced_content: "Original summary",
     enhancement_prompt: "Prompt",
@@ -25,7 +29,8 @@ function setup(t) {
     id: "cloud-note",
     user_id: "user-harness",
     folder_id: null,
-    space_id: null,
+    workspace_id: TEAM_SPACE.workspace_id,
+    space_id: TEAM_SPACE.id,
     revision: 2,
     content_state: null,
     enhanced_content_state: null,
@@ -43,7 +48,7 @@ function setup(t) {
       },
       options
     );
-  return { db, id, snapshot, cloud, acknowledge };
+  return { db, id, snapshot, cloud, acknowledge, team };
 }
 
 function reopen(db) {
@@ -56,7 +61,10 @@ async function sync(t, db, cloud, { fail = false, missing = false } = {}) {
   globals.resetBrowserGlobals();
   globals.installBrowserGlobals();
   globals.enableSync();
+  // A device that has seen its teamspace, so a push carries its scope.
+  globals.localStorage.setItem("teamSpacesCapability", "true");
   const fallback = createFakeCloud();
+  fallback.seedSpace(TEAM_SPACE);
   const wire = {
     calls: [],
     async request(opts) {
@@ -186,10 +194,10 @@ test("a later server revision during deferred acknowledgement requires Keep/Refr
 });
 
 test("Refresh clears deferred create recovery and takes the authoritative row", async (t) => {
-  const { db, id, cloud, acknowledge } = setup(t);
+  const { db, id, cloud, acknowledge, team } = setup(t);
   await acknowledge(lean(cloud));
   clear(cloud, "content");
-  db.upsertNoteFromCloud(cloud, null);
+  db.upsertNoteFromCloud(cloud, null, team.id);
   assert.equal(db.getNote(id).cloud_create_pending, null);
   assert.equal(db.getNote(id).content, "");
   assert.equal(db.getNote(id).sync_status, "synced");

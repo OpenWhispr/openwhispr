@@ -6093,6 +6093,7 @@
           "revokeFailed": "Impossible de retirer l'invitation. Réessayez.",
           "resendFailed": "Impossible de renvoyer l'invitation. Réessayez.",
           "syncFailed": "Impossible de synchroniser cette note. Réessayez.",
+          "privateNotSyncable": "Les notes privées restent sur cet appareil. Déplacez cette note dans un teamspace pour la partager.",
           "loadFailed": "Impossible de charger les paramètres de partage",
           "retry": "Réessayer"
         }

@@ -27,6 +27,7 @@ import {
   type ShareStateResponse,
 } from "../../services/NoteSharingService.js";
 import { syncService } from "../../services/SyncService.js";
+import { PRIVATE_NOTE_NOT_SYNCABLE } from "../../services/syncPassPolicy";
 import {
   getShareCacheEntry,
   persistNoteShareState,
@@ -713,7 +714,15 @@ export default function ShareNoteDialog({
       setSyncedFor({ noteId: note.id, cloudId: assignedCloudId });
     } catch (err) {
       console.error("Note sync for sharing failed:", err);
-      toast({ title: t("noteEditor.share.dialog.error.syncFailed"), variant: "destructive" });
+      const privateNote = (err as { code?: string } | null)?.code === PRIVATE_NOTE_NOT_SYNCABLE;
+      toast({
+        title: t(
+          privateNote
+            ? "noteEditor.share.dialog.error.privateNotSyncable"
+            : "noteEditor.share.dialog.error.syncFailed"
+        ),
+        variant: "destructive",
+      });
     } finally {
       setSyncing(false);
     }

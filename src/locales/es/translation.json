@@ -5825,6 +5825,7 @@
           "revokeFailed": "No se pudo quitar la invitación. Inténtalo de nuevo.",
           "resendFailed": "No se pudo reenviar la invitación. Inténtalo de nuevo.",
           "syncFailed": "No se pudo sincronizar esta nota. Inténtalo de nuevo.",
+          "privateNotSyncable": "Las notas privadas se quedan en este dispositivo. Mueve esta nota a un teamspace para compartirla.",
           "loadFailed": "No se pudo cargar la configuración de uso compartido",
           "retry": "Reintentar"
         }

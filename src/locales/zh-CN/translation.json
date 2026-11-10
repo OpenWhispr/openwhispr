@@ -5752,6 +5752,7 @@
           "revokeFailed": "无法移除邀请。请重试。",
           "resendFailed": "无法重新发送邀请。请重试。",
           "syncFailed": "无法同步此笔记。请重试。",
+          "privateNotSyncable": "私人笔记仅保存在此设备上。将此笔记移到 Teamspace 即可分享。",
           "loadFailed": "无法加载分享设置",
           "retry": "重试"
         }

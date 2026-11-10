@@ -6065,6 +6065,7 @@
           "revokeFailed": "Die Einladung konnte nicht entfernt werden. Versuche es erneut.",
           "resendFailed": "Die Einladung konnte nicht erneut gesendet werden. Versuche es erneut.",
           "syncFailed": "Die Notiz konnte nicht synchronisiert werden. Versuche es erneut.",
+          "privateNotSyncable": "Private Notizen bleiben auf diesem Gerät. Verschiebe die Notiz in einen Teamspace, um sie zu teilen.",
           "loadFailed": "Freigabeeinstellungen konnten nicht geladen werden",
           "retry": "Erneut versuchen"
         }

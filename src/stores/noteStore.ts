@@ -1263,8 +1263,12 @@ export async function startMigration(): Promise<void> {
   const gen = ++migrationGeneration;
   const accountGen = accountGeneration;
   const allNotes = (await window.electronAPI.getNotes(null, 9999, null)) ?? [];
+  const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
   if (gen !== migrationGeneration) return;
-  const unsynced = allNotes.filter((n) => !n.cloud_id);
+  // Private notes stay on the device (D2), whatever Backup says: only a team
+  // note still waiting for its first upload is left for this to send.
+  const teamSpaceIds = new Set(spaces.filter((s) => s.kind === "team").map((s) => s.id));
+  const unsynced = allNotes.filter((n) => !n.cloud_id && teamSpaceIds.has(n.space_id));
   if (unsynced.length === 0) return;
 
   useNoteStore.setState({ migration: { total: unsynced.length, done: 0 } });

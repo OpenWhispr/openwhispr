@@ -302,6 +302,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   hasUnclaimedLegacyRows: () => ipcRenderer.invoke("db-has-unclaimed-legacy-rows"),
   setActiveWorkspaceScope: (scope) => ipcRenderer.invoke("set-active-workspace-scope", scope),
   getPrivateSpaceId: (workspaceId) => ipcRenderer.invoke("get-private-space-id", workspaceId),
+  getDefaultPrivateSpaceId: () => ipcRenderer.invoke("get-default-private-space-id"),
   bindDefaultPrivateSpace: (defaultWorkspaceId, accountId) =>
     ipcRenderer.invoke("bind-default-private-space", defaultWorkspaceId, accountId),
   claimSignedOutPrivateNotes: () => ipcRenderer.invoke("claim-signed-out-private-notes"),
@@ -1345,6 +1346,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   hardDeleteFolder: (id) => ipcRenderer.invoke("db-hard-delete-folder", id),
   relocateRevokedFolder: (id, privateSpaceId, preserveFolder) =>
     ipcRenderer.invoke("db-relocate-revoked-folder", id, privateSpaceId, preserveFolder),
+  forkFolderIdentity: (id) => ipcRenderer.invoke("db-fork-folder-identity", id),
 
   getPendingConversations: () => ipcRenderer.invoke("db-get-pending-conversations"),
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),

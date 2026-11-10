@@ -5752,6 +5752,7 @@
           "revokeFailed": "無法移除邀請。請再試一次。",
           "resendFailed": "無法重新傳送邀請。請再試一次。",
           "syncFailed": "無法同步此筆記。請再試一次。",
+          "privateNotSyncable": "私人筆記只會保存在這部裝置上。將此筆記移到 Teamspace 即可分享。",
           "loadFailed": "無法載入分享設定",
           "retry": "重試"
         }

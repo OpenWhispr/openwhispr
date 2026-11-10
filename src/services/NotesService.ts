@@ -81,8 +81,17 @@ async function create(note: NoteInput): Promise<CloudNote> {
   return cloudPost<CloudNote>("/api/notes/create", note);
 }
 
+// Notes the server left out of a batch, with why: personal notes of an account
+// that keeps private notes on its devices (personal_notes_on_device). Absent
+// from APIs that predate it.
+export interface RefusedNote {
+  client_note_id: string | null;
+  code: string;
+}
+
 interface NoteBatchCreateResult {
   created: CloudNoteCreateResult[];
+  refused?: RefusedNote[];
 }
 
 async function batchCreate(notes: NoteInput[]): Promise<NoteBatchCreateResult> {

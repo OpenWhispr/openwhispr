@@ -6065,6 +6065,7 @@
           "revokeFailed": "Couldn't remove the invitation. Try again.",
           "resendFailed": "Couldn't resend the invitation. Try again.",
           "syncFailed": "Couldn't sync this note. Try again.",
+          "privateNotSyncable": "Private notes stay on this device. Move this note to a teamspace to share it.",
           "loadFailed": "Couldn't load share settings",
           "retry": "Retry"
         }

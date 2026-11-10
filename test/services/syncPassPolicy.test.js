@@ -488,3 +488,28 @@ test("owner fill: never fires on stubs or tombstones", async () => {
     false
   );
 });
+
+// --- private rows (D2, D10) ---------------------------------------------------
+// Nothing private uploads, except edits to a note shared before Private stayed
+// on the device; its cloud copy is what makes it one.
+
+test("private rows: only a shared note with a cloud copy pushes", async () => {
+  const { isLegacySharedPrivateNote, privateNoteSync } = await load();
+  assert.equal(isLegacySharedPrivateNote({ is_shared: 1, cloud_id: "c" }), true);
+  assert.equal(isLegacySharedPrivateNote({ is_shared: 1, cloud_id: null }), false);
+  assert.equal(isLegacySharedPrivateNote({ is_shared: 0, cloud_id: "c" }), false);
+  assert.equal(privateNoteSync({ is_shared: 1, cloud_id: "c" }), "push");
+  assert.equal(privateNoteSync({ is_shared: 0, cloud_id: "c" }), "keep");
+  assert.equal(privateNoteSync({ is_shared: 1, cloud_id: null }), "keep", "a fork is local");
+  assert.equal(privateNoteSync({ is_shared: 0, cloud_id: null }), "keep");
+});
+
+test("private rows: one that left a team is cut loose instead of retracted", async () => {
+  const { privateNoteSync, privateFolderSync } = await load();
+  assert.equal(privateNoteSync({ left_team: 1, cloud_id: "c" }), "detach");
+  assert.equal(privateNoteSync({ left_team: 1, cloud_id: "c", is_shared: 1 }), "detach");
+  assert.equal(privateNoteSync({ left_team: 1, cloud_id: null }), "keep");
+  assert.equal(privateFolderSync({ left_team: 1, cloud_id: "c" }), "detach");
+  assert.equal(privateFolderSync({ left_team: 0, cloud_id: "c" }), "keep");
+  assert.equal(privateFolderSync({ left_team: 1, cloud_id: null }), "keep");
+});

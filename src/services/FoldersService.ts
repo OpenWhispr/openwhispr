@@ -30,8 +30,21 @@ async function create(folder: FolderInput): Promise<CloudFolder> {
   return cloudPost<CloudFolder>("/api/folders/create", folder);
 }
 
-async function batchCreate(folders: FolderInput[]): Promise<{ created: CloudFolder[] }> {
-  return cloudPost<{ created: CloudFolder[] }>("/api/folders/batch-create", { folders });
+// Folders the server left out of a batch, with why: personal folders of an
+// account that keeps private notes on its devices (personal_notes_on_device).
+// Absent from APIs that predate it.
+export interface RefusedFolder {
+  client_folder_id: string | null;
+  code: string;
+}
+
+async function batchCreate(
+  folders: FolderInput[]
+): Promise<{ created: CloudFolder[]; refused?: RefusedFolder[] }> {
+  return cloudPost<{ created: CloudFolder[]; refused?: RefusedFolder[] }>(
+    "/api/folders/batch-create",
+    { folders }
+  );
 }
 
 async function update(id: string, updates: Partial<FolderInput>): Promise<CloudFolder> {

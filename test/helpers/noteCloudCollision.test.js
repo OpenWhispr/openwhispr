@@ -182,7 +182,9 @@ for (const collision of collisions) {
     const expectedProtectedId = collision.accountId === "account-a" ? protectedRow.id : null;
     assert.equal(store.getNoteFromStore(protectedRow.id)?.id ?? null, expectedProtectedId);
 
-    const complete = await service.pullNotes();
+    // Personal rows apply only through the one-time import of cloud private
+    // notes (includePersonal), the pull these collisions can reach.
+    const complete = await service.pullNotes(false, false, false, { includePersonal: true });
     await new Promise(setImmediate);
     const accepted = db.getNoteByClientId(validCloudNote.client_note_id);
     assert.ok(accepted, "the valid row after the collision must persist");

@@ -234,6 +234,13 @@ const FOLDER_NAME_TAKEN_FILTER = `(deleted_at IS NULL OR EXISTS (
 const SPACE_CONTAINER_CONVERSATION_FILTER = `((space_id = ? AND folder_id IS NULL)
   OR folder_id IN (SELECT id FROM folders WHERE space_id = ?))`;
 
+// Private notes stay on the device (D2). The one exception is a note shared
+// before that (D10): its guests keep access, so it keeps syncing. Its cloud
+// copy is what makes it one; a fork that dropped the copy is local again.
+// Mirrors isLegacySharedPrivateNote in syncPassPolicy.ts; n is notes, s spaces.
+const LEGACY_SHARED_PRIVATE_NOTE_SQL =
+  "(s.kind = 'private' AND n.is_shared = 1 AND n.cloud_id IS NOT NULL)";
+
 // The default folders a private space gets the first time a note needs one.
 const PRIVATE_DEFAULT_FOLDERS = [
   { name: "Personal", sortOrder: 0 },
@@ -9097,22 +9104,26 @@ class DatabaseManager {
     }
   }
 
+  // The queue a sync pass reads. 'team': team rows, plus cloud-backed rows that
+  // just LEFT a team (D6), which SyncService now detaches rather than retracts,
+  // since they sit in Private. 'syncable': the same, plus the only private
+  // notes that still reach the cloud (LEGACY_SHARED_PRIVATE_NOTE_SQL). Sync
+  // passes read only these two; 'private' and no argument read the queue whole.
   getPendingNotes(spaceKind = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const accountScope = this._accountScopeCondition("n");
       if (spaceKind != null) {
-        // 'team' also returns cloud-backed rows that just LEFT a team: their
-        // scope retraction must push even when cloud backup is off (D6).
-        const leftTeam =
-          spaceKind === "team" ? " OR (n.left_team = 1 AND n.cloud_id IS NOT NULL)" : "";
+        const syncScope = spaceKind === "team" || spaceKind === "syncable";
+        const leftTeam = syncScope ? " OR (n.left_team = 1 AND n.cloud_id IS NOT NULL)" : "";
+        const shared = spaceKind === "syncable" ? ` OR ${LEGACY_SHARED_PRIVATE_NOTE_SQL}` : "";
         return this.db
           .prepare(
             `SELECT n.* FROM notes n JOIN spaces s ON s.id = n.space_id
              WHERE n.sync_status IN ('pending', 'error') AND n.deleted_at IS NULL
-               AND ${accountScope.sql} AND (s.kind = ?${leftTeam})`
+               AND ${accountScope.sql} AND (s.kind = ?${leftTeam}${shared})`
           )
-          .all(...accountScope.params, spaceKind);
+          .all(...accountScope.params, syncScope ? "team" : spaceKind);
       }
       // 'error' rows retry too: a transient failure (e.g. one offline pass)
       // must not strand a note until its next local edit.
@@ -10009,21 +10020,24 @@ class DatabaseManager {
 
   // Clean cloud-backed notes synced before the server kept revisions. Their
   // server rows may never re-enter a delta pull, so a snapshot pull applies
-  // them while any remain. spaceKind narrows like getPendingNotes.
+  // them while any remain. spaceKind narrows like getPendingNotes: a pull
+  // leaves other private notes alone, so only 'syncable' ones count for it.
   countNotesMissingRevision(spaceKind = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const accountScope = this._accountScopeCondition("n");
+      const kind = spaceKind === "syncable" ? "team" : spaceKind;
+      const shared = spaceKind === "syncable" ? ` OR ${LEGACY_SHARED_PRIVATE_NOTE_SQL}` : "";
       const row = this.db
         .prepare(
           `SELECT COUNT(*) AS count FROM notes n
              JOIN spaces s ON s.id = n.space_id
             WHERE n.sync_status = 'synced' AND n.deleted_at IS NULL
               AND n.cloud_id IS NOT NULL AND n.cloud_revision IS NULL
-              AND (? IS NULL OR s.kind = ?)
+              AND (? IS NULL OR s.kind = ?${shared})
               AND ${accountScope.sql}`
         )
-        .get(spaceKind, spaceKind, ...accountScope.params);
+        .get(kind, kind, ...accountScope.params);
       return row?.count ?? 0;
     } catch (error) {
       debugLogger.error(
@@ -10217,8 +10231,9 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const accountScope = this._accountScopeCondition("f");
       if (spaceKind != null) {
-        // 'team' also returns cloud-backed rows that just LEFT a team: their
-        // scope retraction must push even when cloud backup is off (D6).
+        // The queue a sync pass reads is 'team': private folders never reach
+        // the cloud (D2). It also returns cloud-backed rows that just LEFT a
+        // team (D6), which SyncService detaches since they sit in Private.
         const leftTeam =
           spaceKind === "team" ? " OR (f.left_team = 1 AND f.cloud_id IS NOT NULL)" : "";
         return this.db
@@ -10863,10 +10878,22 @@ class DatabaseManager {
       // global chats. Cloud-backed tombstones still use the delete queue.
       // Another account's pending chats wait for that account: pushing them
       // now would upload them with this account's token.
+      // A note's chat goes only where its note does: a chat on a private note
+      // stays on the device (D11), even when that note is a legacy shared one,
+      // since guests never see the owner's chats. Root chats still sync.
       const scope = this._syncRowScope("agent_conversations");
       return this.db
         .prepare(
-          `SELECT * FROM agent_conversations WHERE sync_status = 'pending' AND deleted_at IS NULL AND space_id IS NULL AND folder_id IS NULL AND ${scope.sql}`
+          `SELECT * FROM agent_conversations
+           WHERE sync_status = 'pending' AND deleted_at IS NULL
+             AND space_id IS NULL AND folder_id IS NULL
+             AND (note_id IS NULL OR EXISTS (
+               SELECT 1 FROM notes chat_note
+               JOIN spaces chat_note_space ON chat_note_space.id = chat_note.space_id
+               WHERE chat_note.id = agent_conversations.note_id
+                 AND chat_note_space.kind = 'team'
+             ))
+             AND ${scope.sql}`
         )
         .all(...scope.params);
     } catch (error) {
