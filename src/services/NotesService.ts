@@ -1,4 +1,10 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudGetForAuthGeneration,
+  cloudPost,
+  cloudPatch,
+  cloudDelete,
+} from "./cloudApi.js";
 import { buildNotesListPath } from "./noteListQuery";
 import type { CloudNoteCreateResult } from "./noteCreateAck";
 
@@ -106,16 +112,20 @@ async function deleteNote(id: string): Promise<void> {
   await cloudDelete("/api/notes/delete", { id });
 }
 
+// Given an auth generation, the request is pinned to that sign-in: refused
+// once it is replaced, never sent with the next one's token.
 async function list(
   limit?: number,
   before?: string,
   since?: string,
   scope?: "all",
-  cursorId?: string
+  cursorId?: string,
+  authGeneration?: number
 ): Promise<{ notes: CloudNote[] }> {
-  return cloudGet<{ notes: CloudNote[] }>(
-    buildNotesListPath({ limit, before, since, scope, cursorId })
-  );
+  const path = buildNotesListPath({ limit, before, since, scope, cursorId });
+  return authGeneration === undefined
+    ? cloudGet<{ notes: CloudNote[] }>(path)
+    : cloudGetForAuthGeneration<{ notes: CloudNote[] }>(path, authGeneration);
 }
 
 async function deleteAll(): Promise<{ deleted: number; errors: number }> {

@@ -3484,16 +3484,18 @@ class IPCHandlers {
     );
     // A pull pinned to a sign-in (the cloud private notes import) passes its
     // generation, and its writes are refused once that sign-in is replaced.
+    // The import also asks for a key of its own where the cloud row's is taken.
     ipcMain.handle(
       "db-upsert-note-from-cloud",
-      (_, cloudNote, localFolderId, localSpaceId, expectedAuthGeneration) => {
+      (_, cloudNote, localFolderId, localSpaceId, expectedAuthGeneration, options) => {
         if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) {
           return STALE_SYNC_ACK;
         }
         const note = this.databaseManager.upsertNoteFromCloud(
           cloudNote,
           localFolderId,
-          localSpaceId
+          localSpaceId,
+          { newKeyIfTaken: options?.newKeyIfTaken === true }
         );
         if (note) {
           setImmediate(() => broadcastToWindows("note-synced", note));
@@ -3578,14 +3580,16 @@ class IPCHandlers {
     ipcMain.handle("db-get-folder-by-client-id", (_, clientFolderId) =>
       this.databaseManager.getFolderByClientId(clientFolderId)
     );
-    // Pinned like db-upsert-note-from-cloud when given a generation.
+    // Pinned, and keyed afresh on request, like db-upsert-note-from-cloud.
     ipcMain.handle(
       "db-upsert-folder-from-cloud",
-      (_, cloudFolder, localSpaceId, expectedAuthGeneration) => {
+      (_, cloudFolder, localSpaceId, expectedAuthGeneration, options) => {
         if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) {
           return STALE_SYNC_ACK;
         }
-        const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId);
+        const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId, {
+          newKeyIfTaken: options?.newKeyIfTaken === true,
+        });
         if (folder) setImmediate(() => broadcastToWindows("folder-synced", folder));
         return folder;
       }

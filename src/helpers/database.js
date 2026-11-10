@@ -9393,9 +9393,18 @@ class DatabaseManager {
     return removedIds;
   }
 
-  upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId = null) {
+  // newKeyIfTaken (the import of cloud private notes, D28): a cloud row whose
+  // client key another account's note, or a note bound to another cloud row,
+  // holds here is stored under a key of its own instead of being skipped.
+  upsertNoteFromCloud(
+    cloudNote,
+    localFolderId,
+    localSpaceId = null,
+    { newKeyIfTaken = false } = {}
+  ) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const requestedFolderId = localFolderId;
       // A cloud row with no space is a personal note: the default's Private.
       let spaceId = localSpaceId ?? this.getDefaultPrivateSpaceId();
       const existing =
@@ -9422,6 +9431,16 @@ class DatabaseManager {
       // abort the whole pull and stall its cursor.
       const otherAccount = existing?.account_id && accountId && existing.account_id !== accountId;
       const otherCloudRow = existing?.cloud_id && existing.cloud_id !== cloudNote.id;
+      if ((otherAccount || otherCloudRow) && newKeyIfTaken) {
+        // The row holding the key is left as it is. This account's own copy of
+        // the cloud row keeps its key; otherwise the note gets a new one.
+        const own = this._getNoteByCloudId(cloudNote.id);
+        return this.upsertNoteFromCloud(
+          { ...cloudNote, client_note_id: own?.client_note_id ?? randomUUID() },
+          requestedFolderId,
+          localSpaceId
+        );
+      }
       if (otherAccount || otherCloudRow) {
         debugLogger.warn(
           "Skipping cloud note that belongs to another local row",
@@ -10594,16 +10613,33 @@ class DatabaseManager {
     }
   }
 
-  upsertFolderFromCloud(cloudFolder, localSpaceId = null) {
+  // newKeyIfTaken (the import of cloud private notes, D28): a cloud folder
+  // whose client key another account's folder holds here is stored under a
+  // key of its own, where the upsert would otherwise take that folder over.
+  upsertFolderFromCloud(cloudFolder, localSpaceId = null, { newKeyIfTaken = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       // A cloud row with no space is a personal folder: the default's Private.
       let spaceId = localSpaceId ?? this.getDefaultPrivateSpaceId();
       const current = this.db
-        .prepare("SELECT space_id FROM folders WHERE client_folder_id = ?")
+        .prepare("SELECT space_id, account_id FROM folders WHERE client_folder_id = ?")
         .get(cloudFolder.client_folder_id);
       if (this._keepsPrivatePlacement(current?.space_id, spaceId)) spaceId = current.space_id;
       const accountId = this._accountIdForSpace(spaceId);
+      if (newKeyIfTaken && current?.account_id && accountId && current.account_id !== accountId) {
+        // That folder is left as it is. This account's own copy of the cloud
+        // folder keeps its key; otherwise the folder gets a new one.
+        const accountScope = this._accountScopeCondition("folders");
+        const own = this.db
+          .prepare(
+            `SELECT client_folder_id FROM folders WHERE cloud_id = ? AND ${accountScope.sql}`
+          )
+          .get(cloudFolder.id, ...accountScope.params);
+        return this.upsertFolderFromCloud(
+          { ...cloudFolder, client_folder_id: own?.client_folder_id ?? randomUUID() },
+          localSpaceId
+        );
+      }
       const updatedAt = cloudFolder.updated_at || cloudFolder.created_at;
       const stmt = this.db.prepare(`
         INSERT INTO folders (client_folder_id, cloud_id, name, is_default, sort_order, space_id, account_id, sync_status, created_at, updated_at)

@@ -1,4 +1,10 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudGetForAuthGeneration,
+  cloudPost,
+  cloudPatch,
+  cloudDelete,
+} from "./cloudApi.js";
 
 interface FolderInput {
   name: string;
@@ -55,12 +61,21 @@ async function deleteFolder(id: string): Promise<void> {
   await cloudDelete("/api/folders/delete", { id });
 }
 
-async function list(since?: string, scope?: "all"): Promise<{ folders: CloudFolder[] }> {
+// Given an auth generation, the request is pinned to that sign-in: refused
+// once it is replaced, never sent with the next one's token.
+async function list(
+  since?: string,
+  scope?: "all",
+  authGeneration?: number
+): Promise<{ folders: CloudFolder[] }> {
   const params = new URLSearchParams();
   if (since !== undefined) params.set("since", since);
   if (scope !== undefined) params.set("scope", scope);
   const query = params.toString();
-  return cloudGet<{ folders: CloudFolder[] }>(`/api/folders/list${query ? `?${query}` : ""}`);
+  const path = `/api/folders/list${query ? `?${query}` : ""}`;
+  return authGeneration === undefined
+    ? cloudGet<{ folders: CloudFolder[] }>(path)
+    : cloudGetForAuthGeneration<{ folders: CloudFolder[] }>(path, authGeneration);
 }
 
 export { create, batchCreate, update, deleteFolder, list };

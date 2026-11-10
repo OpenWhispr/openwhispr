@@ -150,10 +150,18 @@ function createElectronApi(db, options = {}) {
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
     getNoteForCloudRow: async (clientNoteId, cloudId) =>
       db.getNoteForCloudRow(clientNoteId, cloudId),
-    upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId, expectedAuthGeneration) =>
+    upsertNoteFromCloud: async (
+      cloudNote,
+      localFolderId,
+      localSpaceId,
+      expectedAuthGeneration,
+      options
+    ) =>
       expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
-        : db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
+        : db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId, {
+            newKeyIfTaken: options?.newKeyIfTaken === true,
+          }),
     markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
     acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
       db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
@@ -189,10 +197,12 @@ function createElectronApi(db, options = {}) {
     getPendingFolders: async (scope) => (scope === "team" ? db.getPendingFolders(scope) : []),
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
-    upsertFolderFromCloud: async (cloudFolder, localSpaceId, expectedAuthGeneration) =>
+    upsertFolderFromCloud: async (cloudFolder, localSpaceId, expectedAuthGeneration, options) =>
       expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK
-        : db.upsertFolderFromCloud(cloudFolder, localSpaceId),
+        : db.upsertFolderFromCloud(cloudFolder, localSpaceId, {
+            newKeyIfTaken: options?.newKeyIfTaken === true,
+          }),
     acknowledgeFolderCreate: async (
       id,
       snapshot,

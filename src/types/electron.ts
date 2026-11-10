@@ -1593,6 +1593,10 @@ export interface ConversationCreateAckResult {
   cloud_id?: string | null;
 }
 
+export interface CloudRowWriteOptions {
+  newKeyIfTaken?: boolean;
+}
+
 // Main refused a sync write because the sign-in that read or fetched it was
 // replaced.
 export interface StaleSyncWrite {
@@ -4142,11 +4146,14 @@ declare global {
           localSpaceId?: number | null
         ): Promise<NoteItem | null>;
         // A pull pinned to a sign-in: refused once that sign-in is replaced.
+        // newKeyIfTaken stores a cloud row whose key is taken under a key of
+        // its own (the cloud private notes import).
         (
           cloudNote: Record<string, unknown>,
           localFolderId: number | null,
           localSpaceId: number | null | undefined,
-          expectedAuthGeneration: number | undefined
+          expectedAuthGeneration: number | undefined,
+          options?: CloudRowWriteOptions
         ): Promise<NoteItem | StaleSyncWrite | null>;
       };
       markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
@@ -4184,11 +4191,12 @@ declare global {
       getPendingFolders?: (scope: "team") => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
       // Given an auth generation (a pull pinned to a sign-in), refused once
-      // that sign-in is replaced.
+      // that sign-in is replaced. Options as for upsertNoteFromCloud.
       upsertFolderFromCloud?: (
         cloudFolder: Record<string, unknown>,
         localSpaceId?: number | null,
-        expectedAuthGeneration?: number
+        expectedAuthGeneration?: number,
+        options?: CloudRowWriteOptions
       ) => Promise<FolderItem | StaleSyncWrite>;
       acknowledgeFolderCreate?: (
         id: number,

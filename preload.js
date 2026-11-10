@@ -1270,13 +1270,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
   getNoteForCloudRow: (clientNoteId, cloudId) =>
     ipcRenderer.invoke("db-get-note-for-cloud-row", clientNoteId, cloudId),
-  upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId, expectedAuthGeneration) =>
+  upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId, expectedAuthGeneration, options) =>
     ipcRenderer.invoke(
       "db-upsert-note-from-cloud",
       cloudNote,
       localFolderId,
       localSpaceId,
-      expectedAuthGeneration
+      expectedAuthGeneration,
+      options
     ),
   markNoteCreatesAttempted: (clientNoteIds) =>
     ipcRenderer.invoke("db-mark-note-creates-attempted", clientNoteIds),
@@ -1324,12 +1325,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingFolders: (spaceKind) => ipcRenderer.invoke("db-get-pending-folders", spaceKind),
   getFolderByClientId: (clientFolderId) =>
     ipcRenderer.invoke("db-get-folder-by-client-id", clientFolderId),
-  upsertFolderFromCloud: (cloudFolder, localSpaceId, expectedAuthGeneration) =>
+  upsertFolderFromCloud: (cloudFolder, localSpaceId, expectedAuthGeneration, options) =>
     ipcRenderer.invoke(
       "db-upsert-folder-from-cloud",
       cloudFolder,
       localSpaceId,
-      expectedAuthGeneration
+      expectedAuthGeneration,
+      options
     ),
   acknowledgeFolderCreate: (
     id,

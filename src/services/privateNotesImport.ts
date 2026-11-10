@@ -7,9 +7,50 @@ import {
 
 export type PrivateNotesImportResult = "switched" | "already" | "failed";
 
+// A run's outcome. "unsupported": the API has no private notes routes yet
+// (404), which the next pass asks about again, with no wait.
+export type PrivateNotesImportOutcome = PrivateNotesImportResult | "unsupported";
+
 // How often a switch the server refused because notes changed meanwhile is
 // tried again, each time after a fresh pull.
 const PRIVATE_NOTES_SWITCH_RETRIES = 3;
+
+const RETRY_FIRST_WAIT_MS = 5 * 60 * 1000;
+const RETRY_LONGEST_WAIT_MS = 60 * 60 * 1000;
+
+// After a failed run, an account's next waits (D29), so a run that keeps
+// failing doesn't read the cloud's private notes on every pass. A new sign-in
+// starts afresh.
+export interface PrivateNotesImportWait {
+  authGeneration: number;
+  failures: number;
+  retryAt: number;
+}
+
+// 5 minutes, twice as long after each further failure, an hour at most.
+export function privateNotesImportRetryWait(failures: number): number {
+  return Math.min(RETRY_FIRST_WAIT_MS * 2 ** (failures - 1), RETRY_LONGEST_WAIT_MS);
+}
+
+export function isWaitingToImport(
+  wait: PrivateNotesImportWait | undefined,
+  authGeneration: number,
+  now: number
+): boolean {
+  return wait?.authGeneration === authGeneration && now < wait.retryAt;
+}
+
+// The wait a run's outcome leaves: none unless it failed.
+export function nextImportWait(
+  wait: PrivateNotesImportWait | undefined,
+  authGeneration: number,
+  outcome: PrivateNotesImportOutcome,
+  now: number
+): PrivateNotesImportWait | undefined {
+  if (outcome !== "failed") return undefined;
+  const failures = (wait?.authGeneration === authGeneration ? wait.failures : 0) + 1;
+  return { authGeneration, failures, retryAt: now + privateNotesImportRetryWait(failures) };
+}
 
 const MARKER_PREFIX = "privateNotesOnDevice:";
 
@@ -58,7 +99,7 @@ export interface PrivateNotesImportSteps {
 export async function importCloudPrivateNotesOnce(
   accountId: string,
   steps: PrivateNotesImportSteps
-): Promise<PrivateNotesImportResult> {
+): Promise<PrivateNotesImportOutcome> {
   if (readPrivateNotesOnDevice(accountId)) return "already";
   try {
     for (let retries = 0; ; retries++) {
@@ -84,10 +125,9 @@ export async function importCloudPrivateNotesOnce(
       }
     }
   } catch (err) {
-    // An API without the routes yet (404) and an account switch fail quietly:
-    // a later pass simply tries again.
-    const quiet = isAuthContextError(err) || (err instanceof CloudApiError && err.status === 404);
-    if (!quiet) console.error("Private notes import failed:", err);
+    // An API without the routes yet and an account switch fail quietly.
+    if (err instanceof CloudApiError && err.status === 404) return "unsupported";
+    if (!isAuthContextError(err)) console.error("Private notes import failed:", err);
     return "failed";
   }
 }

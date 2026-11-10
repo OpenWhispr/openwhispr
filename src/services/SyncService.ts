@@ -23,7 +23,13 @@ import { DictionaryService, type CloudDictionaryEntry } from "./DictionaryServic
 import { SharedDictionaryService } from "./SharedDictionaryService";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { PrivateNotesService } from "./PrivateNotesService";
-import { importCloudPrivateNotesOnce, type PrivateNotesImportResult } from "./privateNotesImport";
+import {
+  importCloudPrivateNotesOnce,
+  isWaitingToImport,
+  nextImportWait,
+  type PrivateNotesImportResult,
+  type PrivateNotesImportWait,
+} from "./privateNotesImport";
 import { CloudApiError, isAuthContextError, wasRefusedBeforeSending } from "./cloudApi.js";
 import { LeaderboardService } from "./LeaderboardService";
 import {
@@ -707,8 +713,10 @@ export class SyncService {
   // Set by any pass that actually moves team or shared content; drives the
   // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
   private teamPassMovedWork = false;
-  // The cloud private notes import running for each account.
+  // The cloud private notes import running for each account, and the wait a
+  // failed one left (D29).
   private privateNotesImports = new Map<string, Promise<PrivateNotesImportResult>>();
+  private privateNotesImportWaits = new Map<string, PrivateNotesImportWait>();
   // Set when the current shared dictionary pass changed the mirror or hides.
   private sharedDictionaryPassChanged = false;
   // The auth generation a plain 404 answered the shared dictionary routes
@@ -2530,8 +2538,10 @@ export class SyncService {
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
       // Without a scope the list holds the account's personal rows alone.
       const scope = teamCapable && importUnder === undefined ? "all" : undefined;
-      const { folders: cloudFolders } = await FoldersService.list(since, scope);
-      if (cloudFolders.length > 0) this.teamPassMovedWork = true;
+      const { folders: cloudFolders } = await FoldersService.list(since, scope, importUnder);
+      // The import's rows are no team work (they'd keep team-only passes from backing off).
+      if (cloudFolders.length > 0 && importUnder === undefined) this.teamPassMovedWork = true;
+      const importWrite = importUnder !== undefined ? { newKeyIfTaken: true } : undefined;
       const ctx = await this.buildSpaceContext();
       // Parked or failed rows must retry: they hold the cursor back (and fail
       // a backfill) so one bad row never drops the rest of the delta.
@@ -2647,17 +2657,32 @@ export class SyncService {
                   f.name.toLowerCase() === cloudFolder.name.toLowerCase()
               );
             if (nameMatch) {
-              stopIfPullStale(
-                await window.electronAPI.acknowledgeFolderCreate?.(
+              const adopt = async (clientFolderId: string) => {
+                const result = await window.electronAPI.acknowledgeFolderCreate?.(
                   nameMatch.id,
                   nameMatch,
                   nameMatch.cloud_id,
-                  cloudFolder.client_folder_id ?? nameMatch.client_folder_id,
+                  clientFolderId,
                   cloudFolder.id,
                   cloudFolder.updated_at,
                   importUnder
-                )
+                );
+                stopIfPullStale(result);
+                return result?.outcome === "synced" || result?.outcome === "pending";
+              };
+              const adopted = await adopt(
+                cloudFolder.client_folder_id ?? nameMatch.client_folder_id
               );
+              // The import leaves no folder behind (D28). Another folder here
+              // may hold the cloud's key, so it keeps the folder's own.
+              if (
+                importUnder !== undefined &&
+                !adopted &&
+                !(await adopt(nameMatch.client_folder_id))
+              ) {
+                parkedRows++;
+                console.warn(`Parking folder ${cloudFolder.id}: no local folder took it`);
+              }
               continue;
             }
           }
@@ -2671,13 +2696,17 @@ export class SyncService {
             (local.sync_status !== "pending" &&
               isCloudEntryNewer(cloudFolder.updated_at, local.updated_at))
           ) {
-            stopIfPullStale(
-              await window.electronAPI.upsertFolderFromCloud?.(
-                cloudFolder as unknown as Record<string, unknown>,
-                space.id,
-                importUnder
-              )
+            const stored = await window.electronAPI.upsertFolderFromCloud?.(
+              cloudFolder as unknown as Record<string, unknown>,
+              space.id,
+              importUnder,
+              importWrite
             );
+            stopIfPullStale(stored);
+            if (importUnder !== undefined && !stored) {
+              parkedRows++;
+              console.warn(`Parking folder ${cloudFolder.id}: it wasn't stored`);
+            }
           }
         } catch (err) {
           // The sign-in changed: the rest of the list is the departed account's.
@@ -3040,12 +3069,14 @@ export class SyncService {
       // Conflicts are durable in the local registry and resolve directly from
       // their stored cloud copy, so they must not re-pull the whole delta.
       let parkedRows = 0;
+      const importWrite = importUnder !== undefined ? { newKeyIfTaken: true } : undefined;
       while (true) {
         const { notes: cloudNotes } = since
-          ? await NotesService.list(BATCH_SIZE, undefined, cursor, scope, cursorId)
-          : await NotesService.list(BATCH_SIZE, cursor, undefined, scope, cursorId);
+          ? await NotesService.list(BATCH_SIZE, undefined, cursor, scope, cursorId, importUnder)
+          : await NotesService.list(BATCH_SIZE, cursor, undefined, scope, cursorId, importUnder);
         if (cloudNotes.length === 0) break;
-        this.teamPassMovedWork = true;
+        // The import's rows are no team work (they'd keep team-only passes from backing off).
+        if (importUnder === undefined) this.teamPassMovedWork = true;
 
         for (const cloudNote of cloudNotes) {
           try {
@@ -3286,9 +3317,17 @@ export class SyncService {
                 cloudNote as unknown as Record<string, unknown>,
                 localFolderId,
                 space.id,
-                importUnder
+                importUnder,
+                importWrite
               );
               stopIfPullStale(applied);
+              // The import leaves no note behind (D28): one main didn't store
+              // holds the switch back.
+              if (importUnder !== undefined && !applied) {
+                parkedRows++;
+                console.warn(`Parking note ${cloudNote.id}: it wasn't stored`);
+                continue;
+              }
               if (local) {
                 // Applying cloud over a clean row settles any stale conflict,
                 // including one left under the key this row just adopted. A
@@ -3356,6 +3395,8 @@ export class SyncService {
   private async runPrivateNotesImport(accountId: string): Promise<PrivateNotesImportResult> {
     const authGeneration = getValidatedAuthGeneration();
     if (authGeneration == null) return "failed";
+    const wait = this.privateNotesImportWaits.get(accountId);
+    if (isWaitingToImport(wait, authGeneration, Date.now())) return "failed";
     const isCurrent = (): boolean =>
       getValidatedAuthGeneration() === authGeneration &&
       getAuthRequestContextSnapshot().sessionUserId === accountId &&
@@ -3363,7 +3404,7 @@ export class SyncService {
     // Snapshots: no cursor is read or moved, so the regular passes' deltas go
     // on from where they were.
     const pullOptions: PullOptions = { includePersonal: true, importUnder: authGeneration };
-    return importCloudPrivateNotesOnce(accountId, {
+    const outcome = await importCloudPrivateNotesOnce(accountId, {
       isCurrent,
       pushDeletes: async () => {
         await this.pushFolderDeletes();
@@ -3381,6 +3422,10 @@ export class SyncService {
         }
       },
     });
+    const nextWait = nextImportWait(wait, authGeneration, outcome, Date.now());
+    if (nextWait) this.privateNotesImportWaits.set(accountId, nextWait);
+    else this.privateNotesImportWaits.delete(accountId);
+    return outcome === "unsupported" ? "failed" : outcome;
   }
 
   private async syncConversations(): Promise<void> {

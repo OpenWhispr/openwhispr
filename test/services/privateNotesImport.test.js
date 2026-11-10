@@ -18,7 +18,8 @@ const ACCOUNT_B = "account-b";
 const STATE_ROUTE = "/api/me/private-notes";
 const SWITCH_ROUTE = "/api/me/private-notes/on-device";
 const NOTES_LIST = "/api/notes/list";
-const DAY_MS = 24 * 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
 
 const markerOf = (accountId) => storage.getItem(`privateNotesOnDevice:${accountId}`);
 
@@ -65,6 +66,34 @@ function seedPersonalNotes(cloud, count, { prefix = "cloud-note", ...fields } = 
 
 function liveNotes(db) {
   return db.db.prepare("SELECT * FROM notes WHERE deleted_at IS NULL ORDER BY id").all();
+}
+
+const rowOf = (db, table, id) => db.db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+
+// Another account's Private on this device.
+function privateSpaceOf(db, accountId) {
+  return Number(
+    db.db
+      .prepare(
+        `INSERT INTO spaces (client_space_id, kind, name, sort_order, sync_status, account_id, workspace_id)
+         VALUES (?, 'private', 'Personal', 0, 'synced', ?, NULL)`
+      )
+      .run(`private-${accountId}`, accountId).lastInsertRowid
+  );
+}
+
+// Runs `change` once, right after the nth call of the device's `method`
+// returns (or before it starts, with { before: true }).
+function onCall(device, method, nth, change, { before = false } = {}) {
+  const original = device.api[method];
+  let calls = 0;
+  device.api[method] = async (...args) => {
+    calls += 1;
+    if (before && calls === nth) await change();
+    const result = await original(...args);
+    if (!before && calls === nth) await change();
+    return result;
+  };
 }
 
 // A device signed in as account A against an API that has the routes.
@@ -189,6 +218,7 @@ test("a network failure mid-import switches nothing and runs again next time", a
   });
   // The pull logs the failed page.
   t.mock.method(console, "error", () => {});
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
 
   assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
   assert.equal(liveNotes(device.db).length, BATCH_SIZE, "the first page arrived");
@@ -196,6 +226,8 @@ test("a network failure mid-import switches nothing and runs again next time", a
   assert.equal(markerOf(ACCOUNT_A), null);
   assert.equal(cloud.privateNotesState(), null);
 
+  // The next pass after the wait a failure starts.
+  t.mock.timers.tick(5 * MINUTE_MS);
   await device.service.syncAll(true);
 
   assert.deepEqual(
@@ -284,38 +316,84 @@ test("runs with Backup off", async (t) => {
 });
 
 test("an account switch mid-import writes nothing more and switches nothing", async (t) => {
-  const setup = await signedInDevice(t);
-  if (!setup) return;
-  const { device, cloud: cloudA } = setup;
-  const cloudB = createAccountCloud({ privateNotesRoutes: true });
-  const seeded = seedPersonalNotes(cloudA, BATCH_SIZE + 1);
-  // Snapshot pages walk created_at backwards: the oldest note is page 2.
-  const pageTwo = seeded[0];
-  // Page 1 is written; page 2 arrived, and the user switches to B as its first
-  // row is looked up, before anything of it is written.
-  const lookUp = device.api.getNoteForCloudRow;
-  let rows = 0;
-  device.api.getNoteForCloudRow = async (...args) => {
-    rows += 1;
-    if (rows === BATCH_SIZE + 1) {
-      device.signOut();
-      await device.signIn(ACCOUNT_B, cloudB);
-    }
-    return lookUp(...args);
-  };
+  // Page 1 is written, then the user switches to B: before page 2 is asked
+  // for, or once it arrived, as its first row is looked up.
+  for (const [when, method] of [
+    ["between the pages", "upsertNoteFromCloud"],
+    ["while page 2 is written", "getNoteForCloudRow"],
+  ]) {
+    await t.test(when, async (st) => {
+      const setup = await signedInDevice(st);
+      if (!setup) return;
+      const { device, cloud: cloudA } = setup;
+      const cloudB = createAccountCloud({ privateNotesRoutes: true });
+      seedPersonalNotes(cloudB, 1, { prefix: "b-note" });
+      const seeded = seedPersonalNotes(cloudA, BATCH_SIZE + 1);
+      // Snapshot pages walk created_at backwards: the oldest note is page 2.
+      const pageTwo = seeded[0];
+      let requestsBefore = null;
+      const switchToB = async () => {
+        device.signOut();
+        await device.signIn(ACCOUNT_B, cloudB);
+        requestsBefore = cloudA.log.length;
+      };
+      if (method === "upsertNoteFromCloud") onCall(device, method, BATCH_SIZE, switchToB);
+      else onCall(device, method, BATCH_SIZE + 1, switchToB, { before: true });
 
-  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
+      assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
 
-  const written = device.db.db.prepare("SELECT client_note_id, account_id FROM notes").all();
-  assert.equal(written.length, BATCH_SIZE, "page 1 only");
-  assert.ok(written.every((row) => row.account_id === ACCOUNT_A));
-  assert.ok(!written.some((row) => row.client_note_id === pageTwo.client_note_id));
-  assert.deepEqual(cloudA.logFor(SWITCH_ROUTE), []);
-  assert.deepEqual(cloudB.log, [], "nothing was asked of B's cloud");
-  assert.equal(cloudA.privateNotesState(), null);
-  assert.equal(markerOf(ACCOUNT_A), null);
-  assert.equal(markerOf(ACCOUNT_B), null);
-  assert.deepEqual(device.api.syncEvents, []);
+      const written = device.db.db.prepare("SELECT client_note_id, account_id FROM notes").all();
+      assert.equal(written.length, BATCH_SIZE, "page 1 only");
+      assert.ok(written.every((row) => row.account_id === ACCOUNT_A));
+      assert.ok(!written.some((row) => row.client_note_id === pageTwo.client_note_id));
+      assert.deepEqual(cloudB.log, [], "no request went out under B's sign-in");
+      assert.equal(cloudA.log.length, requestsBefore, "nor any more under A's");
+      assert.deepEqual(cloudA.logFor(SWITCH_ROUTE), []);
+      assert.equal(cloudA.privateNotesState(), null);
+      assert.equal(markerOf(ACCOUNT_A), null);
+      assert.equal(markerOf(ACCOUNT_B), null);
+      assert.deepEqual(device.api.syncEvents, []);
+    });
+  }
+});
+
+test("a sign-in change after the last page switches nothing", async (t) => {
+  // After the last row is written, or as the switch request goes out.
+  for (const [when, method] of [
+    ["after the last row is written", "upsertNoteFromCloud"],
+    ["as the switch goes out", "cloudApiRequest"],
+  ]) {
+    await t.test(when, async (st) => {
+      const setup = await signedInDevice(st);
+      if (!setup) return;
+      const { device, cloud: cloudA } = setup;
+      const cloudB = createAccountCloud({ privateNotesRoutes: true });
+      seedPersonalNotes(cloudA, 1);
+      const switchToB = async () => {
+        device.signOut();
+        await device.signIn(ACCOUNT_B, cloudB);
+      };
+      if (method === "upsertNoteFromCloud") {
+        onCall(device, method, 1, switchToB);
+      } else {
+        const request = device.api.cloudApiRequest;
+        device.api.cloudApiRequest = async (opts) => {
+          if (routeOf(opts) === SWITCH_ROUTE) await switchToB();
+          return request(opts);
+        };
+      }
+
+      assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
+
+      assert.deepEqual(cloudA.logFor(SWITCH_ROUTE), []);
+      assert.deepEqual(cloudB.log, []);
+      assert.equal(cloudA.privateNotesState(), null);
+      assert.equal(cloudB.privateNotesState(), null);
+      assert.equal(markerOf(ACCOUNT_A), null);
+      assert.equal(markerOf(ACCOUNT_B), null);
+      assert.deepEqual(device.api.syncEvents, []);
+    });
+  }
 });
 
 test("a note deleted locally while its DELETE is still pending is not re-imported", async (t) => {
@@ -470,4 +548,261 @@ test("an API without the routes fails quietly", async (t) => {
   assert.equal(markerOf(ACCOUNT_A), null);
   assert.deepEqual(device.api.syncEvents, []);
   assert.equal(errors.mock.callCount(), 0);
+  // No wait follows: the next pass asks again.
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
+  assert.equal(cloud.logFor(STATE_ROUTE).length, 2);
+});
+
+test("a cloud note whose key a note it can't use holds here comes in under a key of its own", async (t) => {
+  await t.test("another account's note holds the key", async (st) => {
+    const setup = await signedInDevice(st);
+    if (!setup) return;
+    const { device, cloud } = setup;
+    const [note] = seedPersonalNotes(cloud, 1);
+    // B's note on this device, under the same key, bound to B's own cloud row.
+    const bNote = device.db.upsertNoteFromCloud(
+      { ...note, id: "b-cloud-row", content: "B's copy" },
+      null
+    );
+    device.db.db
+      .prepare("UPDATE notes SET account_id = ?, space_id = ?, folder_id = NULL WHERE id = ?")
+      .run(ACCOUNT_B, privateSpaceOf(device.db, ACCOUNT_B), bNote.id);
+    const bBefore = rowOf(device.db, "notes", bNote.id);
+
+    assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+
+    const aNotes = device.db.db.prepare("SELECT * FROM notes WHERE account_id = ?").all(ACCOUNT_A);
+    assert.equal(aNotes.length, 1);
+    assert.notEqual(aNotes[0].client_note_id, note.client_note_id, "a key of its own");
+    assert.equal(aNotes[0].cloud_id, note.id, "bound to its cloud row");
+    assert.equal(aNotes[0].content, note.content);
+    assert.equal(aNotes[0].space_id, device.db.getDefaultPrivateSpaceId());
+    assert.deepEqual(rowOf(device.db, "notes", bNote.id), bBefore, "B's note is untouched");
+  });
+
+  await t.test("its own note bound to another cloud row holds the key", async (st) => {
+    const setup = await signedInDevice(st);
+    if (!setup) return;
+    const { device, cloud } = setup;
+    const [note] = seedPersonalNotes(cloud, 1);
+    const other = device.db.upsertNoteFromCloud(
+      { ...note, id: "another-cloud-row", content: "Another copy" },
+      null
+    );
+    const otherBefore = rowOf(device.db, "notes", other.id);
+
+    assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+
+    const imported = device.db.db.prepare("SELECT * FROM notes WHERE cloud_id = ?").all(note.id);
+    assert.equal(imported.length, 1);
+    assert.notEqual(imported[0].client_note_id, note.client_note_id);
+    assert.equal(imported[0].content, note.content);
+    assert.equal(imported[0].space_id, device.db.getDefaultPrivateSpaceId());
+    assert.deepEqual(rowOf(device.db, "notes", other.id), otherBefore);
+  });
+});
+
+test("a cloud note main stores nothing for fails the import", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  const [refused] = seedPersonalNotes(cloud, 2);
+  const upsert = device.api.upsertNoteFromCloud;
+  device.api.upsertNoteFromCloud = async (cloudNote, ...rest) =>
+    cloudNote.id === refused.id ? null : upsert(cloudNote, ...rest);
+  t.mock.method(console, "warn", () => {});
+
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
+
+  assert.deepEqual(cloud.logFor(SWITCH_ROUTE), []);
+  assert.equal(cloud.privateNotesState(), null);
+  assert.equal(markerOf(ACCOUNT_A), null);
+  assert.deepEqual(device.api.syncEvents, []);
+});
+
+test("a cloud folder whose key another account's folder holds here never takes it over", async (t) => {
+  for (const [when, sameNamed] of [
+    ["with no folder of that name here", false],
+    ["with a folder of that name to merge into", true],
+  ]) {
+    await t.test(when, async (st) => {
+      const setup = await signedInDevice(st);
+      if (!setup) return;
+      const { device, cloud } = setup;
+      const defaultPrivate = device.db.getDefaultPrivateSpaceId();
+      const bFolderId = Number(
+        device.db.db
+          .prepare(
+            `INSERT INTO folders (name, sort_order, client_folder_id, cloud_id, sync_status, space_id, account_id)
+             VALUES ('Projects', 1, 'shared-folder-key', 'b-cloud-folder', 'synced', ?, ?)`
+          )
+          .run(privateSpaceOf(device.db, ACCOUNT_B), ACCOUNT_B).lastInsertRowid
+      );
+      const bBefore = rowOf(device.db, "folders", bFolderId);
+      const mine = sameNamed ? device.db.createFolder("Projects", defaultPrivate).folder : null;
+      const cloudFolder = cloud.seedFolder({
+        name: "Projects",
+        client_folder_id: "shared-folder-key",
+      });
+      const [note] = seedPersonalNotes(cloud, 1, { folder_id: cloudFolder.id });
+
+      assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+
+      assert.deepEqual(rowOf(device.db, "folders", bFolderId), bBefore, "B's folder is untouched");
+      const aFolders = device.db.getFolders(defaultPrivate);
+      assert.equal(aFolders.length, 1);
+      assert.equal(aFolders[0].name, "Projects");
+      assert.equal(aFolders[0].cloud_id, cloudFolder.id);
+      assert.notEqual(aFolders[0].client_folder_id, "shared-folder-key");
+      if (mine) assert.equal(aFolders[0].id, mine.id, "merged into the folder already here");
+      assert.equal(device.db.getNoteByClientId(note.client_note_id).folder_id, aFolders[0].id);
+    });
+  }
+});
+
+test("a custom cloud folder merges into the default Private's folder of that name", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  const defaultPrivate = device.db.getDefaultPrivateSpaceId();
+  const mine = device.db.createFolder("Projects", defaultPrivate).folder;
+  const cloudFolder = cloud.seedFolder({ name: "Projects", client_folder_id: "cloud-projects" });
+  const [note] = seedPersonalNotes(cloud, 1, { folder_id: cloudFolder.id });
+
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+
+  const folders = device.db.getFolders(defaultPrivate);
+  assert.deepEqual(
+    folders.map((folder) => [folder.id, folder.name, folder.cloud_id]),
+    [[mine.id, "Projects", cloudFolder.id]]
+  );
+  assert.equal(device.db.getNoteByClientId(note.client_note_id).folder_id, mine.id);
+});
+
+test("a private folder deleted locally while its DELETE is still pending is not re-imported", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  const cloudFolder = cloud.seedFolder({ name: "Old project", client_folder_id: "cloud-old" });
+  const [inFolder] = seedPersonalNotes(cloud, 1, {
+    prefix: "in-folder",
+    folder_id: cloudFolder.id,
+  });
+  const [kept] = seedPersonalNotes(cloud, 1, { prefix: "kept" });
+  // Backed up here earlier, then deleted with its note; the cloud refuses the DELETE for now.
+  const folder = device.db.upsertFolderFromCloud(cloudFolder);
+  device.db.upsertNoteFromCloud(inFolder, folder.id);
+  assert.equal(device.db.deleteFolder(folder.id).success, true);
+  cloud.failWith("DELETE /api/folders/delete", { status: 503 });
+  t.mock.method(console, "error", () => {});
+
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+
+  assert.ok(rowOf(device.db, "folders", folder.id)?.deleted_at, "the folder stays a tombstone");
+  assert.deepEqual(device.db.getFolders(device.db.getDefaultPrivateSpaceId()), []);
+  assert.deepEqual(
+    liveNotes(device.db).map((note) => note.client_note_id),
+    [kept.client_note_id]
+  );
+});
+
+test("a refused pulled_through fails once, logged, and stores nothing", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  seedPersonalNotes(cloud, 1);
+  cloud.failWith((call) => routeOf(call) === SWITCH_ROUTE, {
+    status: 400,
+    code: "invalid_pulled_through",
+    error: "pulled_through is in the future",
+  });
+  const errors = t.mock.method(console, "error", () => {});
+
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
+
+  assert.equal(cloud.logFor(SWITCH_ROUTE).length, 1, "no retry");
+  assert.equal(cloud.logFor(STATE_ROUTE).length, 1);
+  assert.equal(markerOf(ACCOUNT_A), null);
+  assert.deepEqual(device.api.syncEvents, []);
+  assert.ok(
+    errors.mock.calls.some((call) => call.arguments[0] === "Private notes import failed:"),
+    "the failure is logged"
+  );
+});
+
+test("a failed import waits before it runs again", async (t) => {
+  await t.test("5 minutes, twice as long after each failure, an hour at most", () => {
+    const { privateNotesImportRetryWait } = require("../../src/services/privateNotesImport.ts");
+    assert.deepEqual(
+      [1, 2, 3, 4, 5, 6, 12].map((failures) => privateNotesImportRetryWait(failures) / MINUTE_MS),
+      [5, 10, 20, 40, 60, 60, 60]
+    );
+  });
+
+  await t.test("a pass inside the wait doesn't try", async (st) => {
+    const setup = await signedInDevice(st);
+    if (!setup) return;
+    const { device, cloud } = setup;
+    seedPersonalNotes(cloud, 1);
+    st.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+    st.mock.method(console, "error", () => {});
+    const stateCalls = () => cloud.logFor(STATE_ROUTE).length;
+
+    cloud.failNext((call) => routeOf(call) === STATE_ROUTE, { status: 503 });
+    assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
+    st.mock.timers.tick(5 * MINUTE_MS - 1);
+    await device.service.syncAll(true);
+    assert.equal(stateCalls(), 1, "5 minutes not yet up");
+
+    st.mock.timers.tick(1);
+    cloud.failNext((call) => routeOf(call) === STATE_ROUTE, { status: 503 });
+    await device.service.syncAll(true);
+    assert.equal(stateCalls(), 2, "tried again, and failed again");
+
+    st.mock.timers.tick(10 * MINUTE_MS - 1);
+    await device.service.syncAll(true);
+    assert.equal(stateCalls(), 2, "the second wait is twice as long");
+
+    st.mock.timers.tick(1);
+    await device.service.syncAll(true);
+    assert.equal(stateCalls(), 3);
+    assert.deepEqual(JSON.parse(markerOf(ACCOUNT_A)), cloud.privateNotesState());
+  });
+
+  await t.test("a new sign-in starts afresh", async (st) => {
+    const setup = await signedInDevice(st);
+    if (!setup) return;
+    const { device, cloud } = setup;
+    seedPersonalNotes(cloud, 1);
+    st.mock.method(console, "error", () => {});
+
+    cloud.failNext((call) => routeOf(call) === STATE_ROUTE, { status: 503 });
+    assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
+    device.signOut();
+    await device.signIn(ACCOUNT_A, cloud);
+
+    assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+  });
+});
+
+test("an import that changes nothing lets team-only passes back off", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  seedPersonalNotes(cloud, 1);
+  storage.setItem("cloudBackupEnabled", "false");
+  cloud.failWith((call) => routeOf(call) === SWITCH_ROUTE, { status: 500 });
+  t.mock.method(console, "error", () => {});
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+
+  await device.service.syncAll(true);
+  t.mock.timers.tick(5 * MINUTE_MS);
+  await device.service.syncAll(true);
+
+  assert.equal(cloud.logFor(SWITCH_ROUTE).length, 2, "the import ran in both passes");
+  assert.equal(
+    storage.getItem("teamOnlyPass.emptyStreak"),
+    "1",
+    "the second pass moved nothing but the import's snapshot, and counts as empty"
+  );
 });
