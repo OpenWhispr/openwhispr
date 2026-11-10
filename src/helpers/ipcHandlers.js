@@ -8219,11 +8219,18 @@ class IPCHandlers {
         .join(" ")
         .trim();
 
-    const storeMeetingDiarizationSegment = (text, source, timestamp, micSuppression = null) => {
+    const storeMeetingDiarizationSegment = (
+      text,
+      source,
+      timestamp,
+      micSuppression = null,
+      timestampIsSpeechStart = true
+    ) => {
       meetingDiarizationSegments.push({
         text,
         source,
         timestamp,
+        ...(timestampIsSpeechStart === false ? { timestampIsSpeechStart: false } : {}),
         committedAt: Date.now(),
         suppressionReason: source === "mic" ? micSuppression?.reason || null : null,
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
@@ -8235,6 +8242,7 @@ class IPCHandlers {
       text,
       source,
       timestamp,
+      timestampIsSpeechStart = true,
       micSuppression = null,
       send = null,
       includeInLocalTranscript = false,
@@ -8243,7 +8251,13 @@ class IPCHandlers {
         appendMeetingLocalTranscript(text);
       }
 
-      storeMeetingDiarizationSegment(text, source, timestamp, micSuppression);
+      storeMeetingDiarizationSegment(
+        text,
+        source,
+        timestamp,
+        micSuppression,
+        timestampIsSpeechStart
+      );
 
       if (send) {
         send("meeting-transcription-segment", {
@@ -8397,6 +8411,8 @@ class IPCHandlers {
     };
 
     const attachMeetingStreamingHandlers = (streaming, win, source) => {
+      // Deepgram's audio range can begin before its first spoken word.
+      const timestampIsSpeechStart = !(streaming instanceof DeepgramStreaming);
       const send = (channel, data) => {
         if (!win || win.isDestroyed()) {
           debugLogger.error("Meeting segment send failed: window unavailable", {
@@ -8493,6 +8509,7 @@ class IPCHandlers {
                 text: latestSegment,
                 source,
                 timestamp,
+                timestampIsSpeechStart,
                 micSuppression,
                 send,
               }),
@@ -8504,6 +8521,7 @@ class IPCHandlers {
           text: latestSegment,
           source,
           timestamp,
+          timestampIsSpeechStart,
           micSuppression,
           send,
         });
@@ -9664,6 +9682,7 @@ class IPCHandlers {
                   text,
                   source,
                   timestamp: segTimestamp,
+                  timestampIsSpeechStart: false,
                   micSuppression,
                   send: sendLocalSegment,
                   includeInLocalTranscript: true,
@@ -9676,6 +9695,7 @@ class IPCHandlers {
             text,
             source,
             timestamp: segTimestamp,
+            timestampIsSpeechStart: false,
             micSuppression,
             send: sendLocalSegment,
             includeInLocalTranscript: true,
@@ -14661,6 +14681,9 @@ class IPCHandlers {
           sessionId,
           noteId,
           ...payload,
+          segments: payload.segments.map(
+            ({ timestampIsSpeechStart: _timestampIsSpeechStart, ...segment }) => segment
+          ),
           removedSegments,
         });
       }
