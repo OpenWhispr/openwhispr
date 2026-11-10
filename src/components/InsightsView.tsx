@@ -390,6 +390,7 @@ function YourUsage({
   // A superseded load also bails before syncing, so two passes cannot share a
   // batch and leave the winner reading a summary the other has not finished.
   const requestIdRef = useRef(0);
+  const accountReadFailedRef = useRef(false);
 
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -421,6 +422,7 @@ function YourUsage({
         const account = await getAccountAnalyticsSummary(accountId);
         if (requestId !== requestIdRef.current) return;
         if (accountId) cacheInsightsSummary(accountId, account);
+        accountReadFailedRef.current = false;
         setSummary(account);
       } else {
         setSummary(local);
@@ -428,6 +430,7 @@ function YourUsage({
     } catch {
       if (requestId !== requestIdRef.current) return;
       // Real device data, and the pill says the cloud is the part that failed.
+      accountReadFailedRef.current = true;
       setSummary(local);
       setSyncError(true);
     } finally {
@@ -438,8 +441,14 @@ function YourUsage({
   useEffect(
     () =>
       subscribeToAnalyticsRefresh((dataChanged) => {
-        // A check for other devices' changes can wait out a summary this fresh.
-        if (!dataChanged && accountId && isInsightFresh(readCachedInsightsSummary(accountId)))
+        // A check for other devices' changes can wait out a summary this fresh,
+        // unless the last account read failed.
+        if (
+          !dataChanged &&
+          !accountReadFailedRef.current &&
+          accountId &&
+          isInsightFresh(readCachedInsightsSummary(accountId))
+        )
           return;
         return load();
       }, syncActive),

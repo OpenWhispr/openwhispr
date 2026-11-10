@@ -60,9 +60,9 @@ test("Your usage skips only a check for remote changes while its summary is fres
 
   assert.ok(
     view.includes(
-      "if (!dataChanged && accountId && isInsightFresh(readCachedInsightsSummary(accountId)))"
+      "!dataChanged &&\n          !accountReadFailedRef.current &&\n          accountId &&\n          isInsightFresh(readCachedInsightsSummary(accountId))"
     ),
-    "a dictation always reloads; focus and the interval wait out a fresh summary"
+    "a dictation always reloads; focus and the interval wait out a fresh summary, not a failure"
   );
   assert.ok(view.includes("if (accountId) cacheInsightsSummary(accountId, account);"));
 });
