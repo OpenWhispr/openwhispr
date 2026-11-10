@@ -16,7 +16,8 @@ const skip = process.platform === "win32" ? "fake tools are shell scripts" : fal
 const CLEAN_DISASSEMBLY = "   e000:\tendbr64\n   e004:\tcall   1040 <vsnprintf@plt>\n";
 const CLEAN_SYMBOLS = [
   "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.2.5) fmod",
-  "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.34) pthread_create\n",
+  "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.34) pthread_create",
+  "0000000000000000      DF *UND*\t0000000000000000 (GLIBCXX_3.4.29) _ZSt28__throw_bad_array_new_lengthv\n",
 ].join("\n");
 
 // Replaces PATH with fake objdump and qemu-x86_64, so a test controls what the
@@ -73,7 +74,7 @@ test("checks every CPU profile and removes each scratch directory", { skip }, (t
 });
 
 test(
-  "rejects an addon that needs a glibc newer than RHEL 9's 2.34 before starting qemu",
+  "rejects an addon that needs a newer glibc than RHEL 9's before starting qemu",
   { skip },
   (t) => {
     const tools = fakeTools(t, {
@@ -81,7 +82,7 @@ test(
     });
     assert.throws(
       () => verifyLinuxSqliteBaseline("/app"),
-      /better_sqlite3\.node needs a glibc newer than 2\.34.*: fmod@GLIBC_2\.38$/
+      /better_sqlite3\.node needs a newer glibc or libstdc\+\+ than RHEL 9's \(GLIBC_2\.34, GLIBCXX_3\.4\.29\).*: fmod@GLIBC_2\.38$/
     );
     assert.deepEqual(tools.calls(), []);
   }
@@ -117,7 +118,7 @@ test("fails when qemu is not installed", { skip }, (t) => {
   assert.throws(() => verifyLinuxSqliteBaseline("/app"), /failed on Nehalem \(ENOENT\)/);
 });
 
-test("compares glibc symbol versions numerically", () => {
+test("compares glibc and libstdc++ symbol versions numerically", () => {
   const symbols = [
     "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.2.5) fmod",
     "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.4) __stack_chk_fail",
@@ -125,11 +126,14 @@ test("compares glibc symbol versions numerically", () => {
     "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.38) fmod",
     "0000000000000000      DF *UND*\t0000000000000000  GLIBC_2.39  pidfd_spawn",
     "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_PRIVATE) _dl_find_object",
+    "0000000000000000      DF *UND*\t0000000000000000 (GLIBCXX_3.4.9) _ZSt20__throw_length_errorPKc",
+    "0000000000000000      DF *UND*\t0000000000000000 (GLIBCXX_3.4.30) _ZSt21ios_base_library_initv",
   ].join("\n");
   assert.deepEqual(findNewerGlibcSymbols(symbols), [
     "__rseq_size@GLIBC_2.35",
     "fmod@GLIBC_2.38",
     "pidfd_spawn@GLIBC_2.39",
+    "_ZSt21ios_base_library_initv@GLIBCXX_3.4.30",
   ]);
   assert.deepEqual(findNewerGlibcSymbols(CLEAN_SYMBOLS), []);
 });

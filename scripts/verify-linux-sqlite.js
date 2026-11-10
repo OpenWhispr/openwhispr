@@ -38,16 +38,16 @@ reopened.close();
 console.log("Packaged SQLite database, WAL, FTS5, JSON and persistence passed");
 `;
 
-// The addon links the build host's glibc, and the probe runs on that same glibc,
-// so only its symbol versions show it would fail to load on glibc 2.34 systems
-// such as RHEL 9, which 1.10.4's addon ran on (#3114).
-const MAX_GLIBC = "2.34";
-const GLIBC_SYMBOL = /\(?GLIBC_([0-9][0-9.]*)\)?\s+(\S+)$/gm;
+// The addon links the build host's glibc and libstdc++, and the probe runs on those
+// same libraries, so only its symbol versions show it would fail to load on older
+// systems (#3114). These are RHEL 9's; 1.10.4's addon also needed glibc 2.34.
+const MAX_VERSIONS = { GLIBC: "2.34", GLIBCXX: "3.4.29" };
+const VERSIONED_SYMBOL = /\(?(GLIBC|GLIBCXX)_([0-9][0-9.]*)\)?\s+(\S+)$/gm;
 
 function findNewerGlibcSymbols(dynamicSymbols) {
-  return Array.from(dynamicSymbols.matchAll(GLIBC_SYMBOL))
-    .filter(([, version]) => compareVersions(version, MAX_GLIBC) > 0)
-    .map(([, version, symbol]) => `${symbol}@GLIBC_${version}`);
+  return Array.from(dynamicSymbols.matchAll(VERSIONED_SYMBOL))
+    .filter(([, library, version]) => compareVersions(version, MAX_VERSIONS[library]) > 0)
+    .map(([, library, version, symbol]) => `${symbol}@${library}_${version}`);
 }
 
 function assertNoNewerGlibcSymbols(addonPath) {
@@ -55,7 +55,7 @@ function assertNoNewerGlibcSymbols(addonPath) {
   const found = findNewerGlibcSymbols(dynamicSymbols);
   if (found.length > 0) {
     throw new Error(
-      `afterPack: ${addonPath} needs a glibc newer than ${MAX_GLIBC}, so the app would not start on glibc ${MAX_GLIBC} systems such as RHEL 9: ${found.slice(0, 10).join(", ")}`
+      `afterPack: ${addonPath} needs a newer glibc or libstdc++ than RHEL 9's (GLIBC_${MAX_VERSIONS.GLIBC}, GLIBCXX_${MAX_VERSIONS.GLIBCXX}), so the app would not start there: ${found.slice(0, 10).join(", ")}`
     );
   }
 }
