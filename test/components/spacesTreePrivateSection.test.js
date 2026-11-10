@@ -113,7 +113,7 @@ async function renderTree(t) {
       "/lib/spacePermissions": `
         export const canChangeSpaceNoteScope = () => true;
         export const canDeleteSpaceNote = () => true;
-        export const canMoveBetweenSpaces = () => true;
+        export const spaceTransferAction = () => "move";
         export const canMoveOrDeleteSpaceFolder = () => true;
       `,
       "/lib/capabilities": `

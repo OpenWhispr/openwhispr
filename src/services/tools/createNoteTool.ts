@@ -41,18 +41,18 @@ export const createNoteTool: ToolDefinition = {
 
     try {
       let spaceId: number | null = null;
-      const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
       if (spaceName) {
+        const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
         const resolved = resolveSpace(spaces, spaceName);
         if (resolved.error) {
           return { success: false, data: null, displayText: resolved.error };
         }
         spaceId = resolved.space.id;
       } else {
-        // No space argument means the user's private space: folder resolution
-        // must never match a team folder, or the note would silently inherit
-        // the team audience (D2 derives space from folder).
-        spaceId = spaces.find((s) => s.kind === "private")?.id ?? null;
+        // No space argument means the active workspace's Private: folder
+        // resolution must never match a team folder, or the note would silently
+        // inherit the team audience (D2 derives space from folder).
+        spaceId = (await window.electronAPI.getPrivateSpaceId?.()) ?? null;
       }
 
       let folderId: number | null = null;

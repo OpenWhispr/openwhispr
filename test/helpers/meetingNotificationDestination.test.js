@@ -66,3 +66,40 @@ test("context failure is an error rather than an empty folder list", () => {
     /offline db/
   );
 });
+
+test("meeting destinations show only the active workspace's Private and the teamspaces in scope", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-1");
+  // B is active; A is the default. Each has a Private and a teamspace; one teamspace is legacy.
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "b", defaultWorkspaceId: "a" });
+  const privateA = db.getPrivateSpaceId("a");
+  const privateB = db.getPrivateSpaceId("b");
+  const teamA = db.upsertSpaceFromCloud({ id: "team-a", name: "Alpha", workspace_id: "a" });
+  const teamB = db.upsertSpaceFromCloud({ id: "team-b", name: "Beta", workspace_id: "b" });
+  const legacy = db.upsertSpaceFromCloud({ id: "team-legacy", name: "Legacy" });
+  const inA = db.createFolder("A plans", privateA).folder;
+  const inB = db.createFolder("B plans", privateB).folder;
+  const inTeamA = db.createFolder("Alpha docs", teamA.id).folder;
+  const inTeamB = db.createFolder("Beta docs", teamB.id).folder;
+
+  const ctx = destination.listMeetingDestinations(db);
+  const listed = new Set([privateB, teamB.id, legacy.id]);
+  assert.deepEqual(new Set(ctx.spaces.map((space) => space.id)), listed);
+  assert.ok(ctx.folders.every((folder) => listed.has(folder.space_id)));
+  assert.ok(ctx.folders.some((folder) => folder.id === inB.id));
+  assert.ok(ctx.folders.some((folder) => folder.id === inTeamB.id));
+  assert.ok(!ctx.folders.some((folder) => folder.id === inA.id || folder.id === inTeamA.id));
+  // New folders and meetings default to the active workspace's Private.
+  assert.equal(ctx.privateSpaceId, privateB);
+  assert.equal(ctx.defaultDestination.spaceId, privateB);
+
+  // The default workspace's own Private once it's the active one.
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "a", defaultWorkspaceId: "a" });
+  const inDefault = destination.listMeetingDestinations(db);
+  assert.deepEqual(
+    new Set(inDefault.spaces.map((space) => space.id)),
+    new Set([privateA, teamA.id, legacy.id])
+  );
+  assert.equal(inDefault.privateSpaceId, privateA);
+});

@@ -8,8 +8,26 @@ function isMeetingFolderRef(ref) {
   );
 }
 
+// The spaces a meeting can go to: the active workspace's, as its notes tree shows them. That's its
+// own Private (getSpaces lists the account's Private of every workspace) and its teamspaces. Main
+// knows the active workspace but not the list, so a teamspace shows when it's that workspace's or
+// no workspace's (legacy rows), or when no workspace is active yet.
+function spacesInActiveWorkspace(db, spaces, privateSpaceId) {
+  const activeWorkspaceId = db.activeWorkspaceId ?? null;
+  return spaces.filter((space) =>
+    space.kind === "private"
+      ? space.id === privateSpaceId
+      : activeWorkspaceId == null ||
+        space.workspace_id == null ||
+        space.workspace_id === activeWorkspaceId
+  );
+}
+
 function listMeetingDestinations(db) {
-  const spaces = db.getSpaces();
+  const allSpaces = db.getSpaces();
+  // Where new meetings and new folders go unless the user picks another space.
+  const privateSpaceId = db.getPrivateSpaceId();
+  const spaces = spacesInActiveWorkspace(db, allSpaces, privateSpaceId);
   const spaceIds = new Set(spaces.map((space) => space.id));
   // First: a private space gets its Meetings folder the first time it's asked
   // for, and the list below must include it.
@@ -21,6 +39,7 @@ function listMeetingDestinations(db) {
   return {
     folders,
     spaces,
+    privateSpaceId: spaceIds.has(privateSpaceId) ? privateSpaceId : null,
     defaultDestination: eligibleDefault
       ? { folderId: eligibleDefault.id, spaceId: eligibleDefault.space_id }
       : null,

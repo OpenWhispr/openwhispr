@@ -222,7 +222,10 @@ export interface MeetingExistingNote {
 }
 export interface MeetingDestinationContext {
   folders: FolderItem[];
+  // The active workspace's Private and its teamspaces.
   spaces: SpaceItem[];
+  // The active workspace's Private, where a new folder goes unless the user picks another space.
+  privateSpaceId: number | null;
   defaultDestination: MeetingFolderRef | null;
   selectedDestination: MeetingFolderRef | null;
   recentDestinations: MeetingFolderRef[];

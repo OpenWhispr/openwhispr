@@ -62,7 +62,10 @@ import {
   revealContainer,
   createFolder,
   getNoteFromStore,
+  getSpacesValue,
 } from "../../stores/noteStore";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { isSpaceInWorkspaceScope } from "../../lib/workspaceSelection";
 import {
   useMeetingRecordingStore,
   useIsMeetingMode,
@@ -622,11 +625,6 @@ export default function PersonalNotesView({
 
   const { createNote, createNoteIn } = useCreateNote(canAutoStartMeeting);
 
-  const privateSpaceId = useMemo(
-    () => spaces.find((s) => s.kind === "private")?.id ?? null,
-    [spaces]
-  );
-
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
       await initializeNotes(null, 50, activeFolderId);
@@ -646,13 +644,24 @@ export default function PersonalNotesView({
 
   const handleMoveNote = useCallback(
     async (noteId: number, target: NoteMoveTarget) => {
-      await window.electronAPI.updateNote(noteId, {
+      const result = await window.electronAPI.updateNote(noteId, {
         folder_id: target.folderId,
         space_id: target.spaceId,
       });
-      if (noteId === activeNoteId) {
+      // A refused move leaves the open note where it is.
+      if (noteId !== activeNoteId || result?.success === false) return;
+      // The view follows the open note within the workspace. Moved to another workspace's
+      // Private, the note closes: following it there would switch workspace.
+      const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
+      const space = getSpacesValue().find((s) => s.id === target.spaceId);
+      if (
+        space &&
+        isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces, defaultWorkspaceId)
+      ) {
         setActiveContext(target.spaceId, target.folderId);
         revealContainer(target.spaceId, target.folderId);
+      } else {
+        setActiveNoteId(null);
       }
     },
     [activeNoteId]
@@ -669,7 +678,10 @@ export default function PersonalNotesView({
 
   const handleCreateFolderAndMove = useCallback(
     async (noteId: number, folderName: string) => {
-      const spaceId = getNoteFromStore(noteId)?.space_id ?? privateSpaceId;
+      const spaceId =
+        getNoteFromStore(noteId)?.space_id ??
+        (await window.electronAPI.getPrivateSpaceId?.()) ??
+        null;
       if (spaceId == null) return;
       const result = await createFolder(folderName, spaceId);
       if (result.success && result.folder) {
@@ -682,7 +694,7 @@ export default function PersonalNotesView({
         });
       }
     },
-    [privateSpaceId, handleMoveToFolder, toast, t]
+    [handleMoveToFolder, toast, t]
   );
 
   const {

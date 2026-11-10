@@ -12,18 +12,35 @@ export function teamsUserCanLeave(space: Pick<SpaceItem, "teams">): SpaceTeamRef
   return space.teams.filter((team) => team.my_role != null);
 }
 
+export type SpaceTransfer = "move" | "copy";
+
+type TransferSpace = Pick<SpaceItem, "id" | "kind" | "workspace_id" | "account_id">;
+
 /**
- * Whether a note or folder may move between two spaces: anything may leave a
- * private space, while team-space content stays within its workspace — never
- * to another workspace and never back to private. Team spaces not linked to a
- * workspace (legacy mirrors) never match, so nothing moves out of them.
+ * What taking a note from one space to another does (spec D8):
+ * - Private → a teamspace of its workspace: a move; the note uploads into the teamspace.
+ * - Private → another of the account's Privates, in any workspace: a move, on this device.
+ * - Teamspace → a Private: a copy. The team keeps its note, so no move ever makes a team note
+ *   private while it keeps its cloud identity.
+ * - Teamspace → a teamspace of the same workspace: a move.
+ *
+ * Anything else is null: a space to itself (a folder move inside it), a teamspace of another
+ * workspace, and teamspaces linked to no workspace (legacy mirrors). The pending Private (no
+ * workspace yet) is the default workspace's; while that isn't known, it moves into no teamspace.
  */
-export function canMoveBetweenSpaces(
-  from: Pick<SpaceItem, "kind" | "workspace_id">,
-  to: Pick<SpaceItem, "kind" | "workspace_id">
-): boolean {
-  if (from.kind === "private") return true;
-  return to.kind === "team" && from.workspace_id != null && from.workspace_id === to.workspace_id;
+export function spaceTransferAction(
+  from: TransferSpace,
+  to: TransferSpace,
+  { defaultWorkspaceId = null }: { defaultWorkspaceId?: string | null } = {}
+): SpaceTransfer | null {
+  if (from.id === to.id) return null;
+  if (to.kind === "private") {
+    if (from.kind === "team") return "copy";
+    return (from.account_id ?? null) === (to.account_id ?? null) ? "move" : null;
+  }
+  const fromWorkspaceId =
+    from.kind === "private" ? (from.workspace_id ?? defaultWorkspaceId) : from.workspace_id;
+  return fromWorkspaceId != null && fromWorkspaceId === to.workspace_id ? "move" : null;
 }
 
 type NoteOwnership = Pick<NoteItem, "cloud_id" | "owner_user_id">;

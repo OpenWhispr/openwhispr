@@ -1173,6 +1173,16 @@ export function navigateToContainer(spaceId: number, folderId: number | null): v
   revealContainer(spaceId, null);
 }
 
+/**
+ * Opens a note the user asked for by name (a toast's Open): its container, then the note. A note
+ * of another workspace takes the user to that workspace, since they asked for it.
+ */
+export function openNote(note: Pick<NoteItem, "id" | "space_id" | "folder_id">): void {
+  navigateToContainer(note.space_id, note.folder_id);
+  setActiveNoteId(note.id);
+  void ensureNoteLoaded(note.id);
+}
+
 export function setActiveFolderId(id: number | null): void {
   const folder = id != null ? useNoteStore.getState().folders.find((f) => f.id === id) : undefined;
   if (folder) {

@@ -274,6 +274,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   }, []);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
+  // The active workspace's Private, whose folders the list shows and new folders go to.
+  const [privateSpaceId, setPrivateSpaceId] = useState<number | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
   // Batch destination folder, deliberately separate from the single-flow one:
   // handleFolderChange moves the already-saved note when noteId is set.
@@ -434,15 +436,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   useEffect(() => {
     // Uploads and URL downloads are a personal flow: scope the folder list
-    // (and the by-name "Videos" destination lookup) to the private space so a
-    // same-named team folder can never capture them.
+    // (and the by-name "Videos" destination lookup) to the active workspace's
+    // Private so a same-named team folder can never capture them.
     let cancelled = false;
     const loadFolders = async () => {
       try {
-        const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
-        const privateSpace = spaces.find((space) => space.kind === "private");
-        const items = (await window.electronAPI.getFolders?.(privateSpace?.id ?? null)) ?? [];
+        const spaceId = (await window.electronAPI.getPrivateSpaceId?.()) ?? null;
+        const items = (await window.electronAPI.getFolders?.(spaceId)) ?? [];
         if (cancelled) return;
+        setPrivateSpaceId(spaceId);
         setFolders(items);
         const personal = findDefaultFolder(items);
         if (personal) {
@@ -1033,7 +1035,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const handleCreateFolder = async () => {
     const trimmed = newFolderName.trim();
     if (!trimmed) return;
-    const res = await window.electronAPI.createFolder(trimmed);
+    const res = await window.electronAPI.createFolder(trimmed, privateSpaceId);
     if (res.success && res.folder) {
       setFolders((prev) => [...prev, res.folder!]);
       const newId = String(res.folder.id);

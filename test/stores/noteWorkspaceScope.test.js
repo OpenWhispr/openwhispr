@@ -475,3 +475,35 @@ test("a workspace switch cancels a pending open, so its load closes it instead",
   assert.equal(f.activeWorkspaceId(), "a");
   assert.deepEqual(f.context(), { folderId: 10, noteId: null });
 });
+
+// What Copy to Private's toast opens: the copy main made, which the store may not hold yet.
+async function copyFixture(t, copy) {
+  const all = [...notes, copy];
+  const f = await fixture(t, { notes: all });
+  globalThis.window.electronAPI.getNote = async (id) => all.find((note) => note.id === id) ?? null;
+  await f.settle();
+  // The user was in A's teamspace, on the note they copied.
+  f.store.setActiveContext(2, null);
+  await f.settle();
+  return f;
+}
+
+test("the copy toast's Open doesn't switch workspace for a same-workspace copy", async (t) => {
+  const copy = { id: 150, space_id: 1, folder_id: 10, title: "Alpha note (copy)" };
+  const f = await copyFixture(t, copy);
+
+  f.store.openNote(copy);
+  await f.settle();
+  assert.equal(f.activeWorkspaceId(), "a");
+  assert.deepEqual(f.context(), { folderId: 10, noteId: 150 });
+});
+
+test("the copy toast's Open enters the workspace whose Private holds the copy", async (t) => {
+  const copy = { id: 450, space_id: 4, folder_id: 40, title: "Alpha note (copy)" };
+  const f = await copyFixture(t, copy);
+
+  f.store.openNote(copy);
+  await f.settle();
+  assert.equal(f.activeWorkspaceId(), "b");
+  assert.deepEqual(f.context(), { folderId: 40, noteId: 450 });
+});

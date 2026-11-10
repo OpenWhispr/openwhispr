@@ -3,9 +3,9 @@ const assert = require("node:assert/strict");
 const {
   canChangeSpaceNoteScope,
   canDeleteSpaceNote,
-  canMoveBetweenSpaces,
   canMoveOrDeleteSpaceFolder,
   ownsNote,
+  spaceTransferAction,
 } = require("../../src/lib/spacePermissions.ts");
 
 const WORKSPACE_CAPABILITIES = [
@@ -26,24 +26,75 @@ const ws = (role, capabilities) => ({ role, capabilities });
 const granting = (...names) =>
   Object.fromEntries(WORKSPACE_CAPABILITIES.map((name) => [name, names.includes(name)]));
 
-const privateSpace = { kind: "private", workspace_id: null };
-const teamSpace = (workspaceId) => ({ kind: "team", workspace_id: workspaceId });
+// The account's Privates: workspace A's (A is the default), B's, and the pending one (no workspace
+// yet), which is A's until main binds it. Teamspaces of A and B, and a legacy one with no workspace.
+const ACCOUNT = "account-1";
+const privateOf = (id, workspaceId, accountId = ACCOUNT) => ({
+  id,
+  kind: "private",
+  workspace_id: workspaceId,
+  account_id: accountId,
+});
+const teamOf = (id, workspaceId) => ({
+  id,
+  kind: "team",
+  workspace_id: workspaceId,
+  account_id: null,
+});
+const privateA = privateOf(1, "a");
+const privateB = privateOf(4, "b");
+const pendingPrivate = privateOf(9, null);
+const teamA = teamOf(2, "a");
+const otherTeamA = teamOf(5, "a");
+const teamB = teamOf(3, "b");
+const legacyTeam = teamOf(6, null);
+const scope = { defaultWorkspaceId: "a" };
 
-test("canMoveBetweenSpaces: private content may go anywhere", () => {
-  assert.equal(canMoveBetweenSpaces(privateSpace, teamSpace("a")), true);
-  assert.equal(canMoveBetweenSpaces(privateSpace, { kind: "private", workspace_id: null }), true);
+test("spaceTransferAction covers the move and copy matrix", () => {
+  // Private → teamspace in the same workspace: move. The pending Private is the default's.
+  assert.equal(spaceTransferAction(privateA, teamA, scope), "move");
+  assert.equal(spaceTransferAction(pendingPrivate, teamA, scope), "move");
+  // Private → Private of the same account: move, in any workspace.
+  assert.equal(spaceTransferAction(privateA, privateB, scope), "move");
+  assert.equal(spaceTransferAction(pendingPrivate, privateA, scope), "move");
+  assert.equal(spaceTransferAction(privateB, pendingPrivate, scope), "move");
+  // Teamspace → Private: copy, into the active workspace's Private or another workspace's.
+  assert.equal(spaceTransferAction(teamA, privateA, scope), "copy");
+  assert.equal(spaceTransferAction(teamA, privateB, scope), "copy");
+  assert.equal(spaceTransferAction(teamA, pendingPrivate, scope), "copy");
+  // Teamspace → teamspace in the same workspace: move.
+  assert.equal(spaceTransferAction(teamA, otherTeamA, scope), "move");
+
+  // Anything else: nothing.
+  assert.equal(spaceTransferAction(teamA, teamB, scope), null, "team → team across workspaces");
+  assert.equal(
+    spaceTransferAction(privateA, teamB, scope),
+    null,
+    "private → another workspace's team"
+  );
+  assert.equal(spaceTransferAction(pendingPrivate, teamB, scope), null);
+  assert.equal(
+    spaceTransferAction(privateA, privateOf(7, "a", "account-2"), scope),
+    null,
+    "another account's Private"
+  );
+  assert.equal(spaceTransferAction(teamA, teamA, scope), null, "a space to itself");
+  assert.equal(spaceTransferAction(privateA, privateA, scope), null);
 });
 
-test("canMoveBetweenSpaces: team content stays within its workspace", () => {
-  assert.equal(canMoveBetweenSpaces(teamSpace("a"), teamSpace("a")), true);
-  assert.equal(canMoveBetweenSpaces(teamSpace("a"), teamSpace("b")), false);
-  assert.equal(canMoveBetweenSpaces(teamSpace("a"), privateSpace), false);
+test("spaceTransferAction: teamspaces without a workspace never take part in a move", () => {
+  assert.equal(spaceTransferAction(privateA, legacyTeam, scope), null);
+  assert.equal(spaceTransferAction(legacyTeam, teamOf(8, null), scope), null);
+  assert.equal(spaceTransferAction(legacyTeam, teamA, scope), null);
+  assert.equal(spaceTransferAction(teamA, legacyTeam, scope), null);
+  // A copy leaves the teamspace as it was.
+  assert.equal(spaceTransferAction(legacyTeam, privateA, scope), "copy");
 });
 
-test("canMoveBetweenSpaces: legacy team spaces without a workspace never match", () => {
-  assert.equal(canMoveBetweenSpaces(teamSpace(null), teamSpace(null)), false);
-  assert.equal(canMoveBetweenSpaces(teamSpace(null), teamSpace("a")), false);
-  assert.equal(canMoveBetweenSpaces(teamSpace("a"), teamSpace(null)), false);
+test("spaceTransferAction: the pending Private moves into no teamspace while the default is unknown", () => {
+  assert.equal(spaceTransferAction(pendingPrivate, teamA), null);
+  assert.equal(spaceTransferAction(pendingPrivate, teamA, { defaultWorkspaceId: null }), null);
+  assert.equal(spaceTransferAction(pendingPrivate, privateA), "move");
 });
 
 // --- Note/folder destructive-action permissions (server rule mirror) ---

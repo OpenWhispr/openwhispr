@@ -89,3 +89,33 @@ test("an empty cloud search tries the local library, preserving its container sc
   assert.equal(result.data[0].id, 3);
   assert.deepEqual(queries, [["pricing", 5, 1, null]]);
 });
+
+test("create_note without a space goes to the active workspace's Private", async (t) => {
+  const { createRendererServer } = require("../lib/rendererTestHarness");
+  const saved = [];
+  Object.assign(global.window.electronAPI, {
+    // Another workspace's Private is listed first; main names the active one.
+    getSpaces: async () => [
+      { id: 4, name: "Personal", kind: "private", workspace_id: "b" },
+      { id: 1, name: "Personal", kind: "private", workspace_id: "a" },
+    ],
+    getPrivateSpaceId: async (workspaceId) => (workspaceId == null ? 1 : null),
+    saveNote: async (...args) => {
+      saved.push(args);
+      return { success: true, note: { id: 7, title: args[0] } };
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-create-note-tool-",
+    mockModules: {
+      "/SyncService.js": "export const syncService = { debouncedPush() {} };",
+    },
+  });
+  const { createNoteTool } = await vite.ssrLoadModule("/services/tools/createNoteTool.ts");
+
+  const result = await createNoteTool.execute({ title: "Plan", content: "Ship it" });
+  assert.equal(result.success, true);
+  // saveNote(title, content, type, sourceFile, duration, folderId, spaceId)
+  assert.equal(saved[0][5], null);
+  assert.equal(saved[0][6], 1);
+});
