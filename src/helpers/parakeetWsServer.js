@@ -128,7 +128,6 @@ class ParakeetWsServer {
     this.stoppingPromise = null;
     this.stopController = new AbortController();
     this.activeTranscriptions = new Set();
-    this.activeDecodes = 0;
     this.healthCheckInterval = null;
     this.cachedBinaryPaths = {};
   }
@@ -225,7 +224,7 @@ class ParakeetWsServer {
       // A transcription may still be converting audio or awaiting startup.
       // A sole request can reload before it uses the server.
       const ownReservation = this.activeTranscriptions.has(transcription) ? 1 : 0;
-      if (this.activeDecodes > 0 || this.activeTranscriptions.size > ownReservation) return false;
+      if (this.activeTranscriptions.size > ownReservation) return false;
     }
 
     this.starting = { modelName, modelDir, runtime, language, hotwordsKey, stopSignal };
@@ -511,20 +510,16 @@ class ParakeetWsServer {
     );
   }
 
-  async _policyAllowedTranscribe(samplesBuffer, sampleRate, { signal } = {}) {
+  _policyAllowedTranscribe(samplesBuffer, sampleRate, { signal } = {}) {
     if (!this.ready || !this.process) {
       throw new Error("parakeet-ws server is not running");
     }
 
-    // Counted so a dictionary change waits for the decodes in flight.
-    this.activeDecodes++;
-    try {
-      return this.modelRuntime === "online"
-        ? await this._transcribeOnline(samplesBuffer, signal)
-        : await this._transcribeOffline(samplesBuffer, sampleRate, signal);
-    } finally {
-      this.activeDecodes--;
+    if (this.modelRuntime === "online") {
+      return this._transcribeOnline(samplesBuffer, signal);
     }
+
+    return this._transcribeOffline(samplesBuffer, sampleRate, signal);
   }
 
   _transcribeOffline(samplesBuffer, sampleRate, signal) {

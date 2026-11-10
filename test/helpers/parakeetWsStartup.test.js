@@ -278,6 +278,7 @@ test("a changed dictionary never cuts off a decode in flight", async (t) => {
   await start(ORUKEET_HOTWORDS);
   let release;
   server._transcribeOffline = () => new Promise((resolve) => (release = resolve));
+  const releaseTranscription = server.reserveTranscription();
   const decode = server.transcribe(Buffer.alloc(4), 16000);
 
   await start({ score: 2, words: ["Quillfeather"] });
@@ -285,6 +286,7 @@ test("a changed dictionary never cuts off a decode in flight", async (t) => {
 
   release({ text: "ok", elapsed: 1 });
   assert.deepEqual(await decode, { text: "ok", elapsed: 1 });
+  releaseTranscription();
   await start({ score: 2, words: ["Quillfeather"] });
   assert.equal(spawns.length, 2);
 });

@@ -439,17 +439,18 @@ test("a dictionary change waits for a busy server instead of giving up", async (
     modelDir: "/models/orukeet-v0.1.0",
     modelRuntime: "offline",
     language: null,
-    activeDecodes: 1,
   });
   const manager = managerWith(fake);
   manager.setDictionaryProvider(() => ["Schellhas"]);
+  const releaseTranscription = () => {};
+  fake.activeTranscriptions.add(releaseTranscription);
 
   manager.refreshHotwordsSoon();
   t.mock.timers.tick(5000);
   await new Promise(setImmediate);
   assert.equal(startArgs.length, 0);
 
-  fake.activeDecodes = 0;
+  fake.activeTranscriptions.delete(releaseTranscription);
   t.mock.timers.tick(5000);
   await new Promise(setImmediate);
   assert.equal(startArgs.length, 1);

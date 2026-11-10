@@ -84,11 +84,7 @@ class ParakeetServerManager {
       this.hotwordsRefreshTimer = null;
       // Busy servers keep their words until idle; trying again later spares the
       // next dictation the reload.
-      if (
-        this.wsServer.startupPromise ||
-        this.wsServer.activeDecodes > 0 ||
-        this.wsServer.activeTranscriptions.size > 0
-      ) {
+      if (this.wsServer.startupPromise || this.wsServer.activeTranscriptions.size > 0) {
         this.refreshHotwordsSoon();
         return;
       }
