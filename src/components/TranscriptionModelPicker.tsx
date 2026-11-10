@@ -1261,7 +1261,7 @@ export default function TranscriptionModelPicker({
     browsedCloudProvider && selectedCloudProvider !== displayedCloudProvider
       ? cloudProviderTabs.find((tab) => tab.id === displayedCloudProvider)?.name
       : undefined;
-  const currentProviderName = cloudProviderTabs.find(
+  const selectedProviderName = cloudProviderTabs.find(
     (tab) => tab.id === selectedCloudProvider
   )?.name;
   const isCustom = displayedCloudProvider === "custom";
@@ -1733,9 +1733,9 @@ export default function TranscriptionModelPicker({
                     />
                     {browsedProviderName && (
                       <p className="text-xs text-muted-foreground">
-                        {currentProviderName
+                        {selectedProviderName
                           ? t("transcription.browsedProviderHint", {
-                              current: currentProviderName,
+                              current: selectedProviderName,
                               provider: browsedProviderName,
                             })
                           : t("transcription.browsedProviderHintNoCurrent", {
