@@ -21,7 +21,7 @@
 ## Decisions (made with the user; do not re-litigate)
 
 - **One downloadable model:** Qwen3.5-2B Q4_K_M, the same file as desktop's `qwen3.5-2b-q4_k_m` entry: `bartowski/Qwen_Qwen3.5-2B-GGUF` / `Qwen_Qwen3.5-2B-Q4_K_M.gguf`, ~1.3 GB, Apache 2.0. There is no 4B option.
-  - **Revisited 2026-11-03:** the spike also benchmarks **MiniCPM5-2B** (OpenBMB, Apache 2.0, Sep 2026; ~1.6 GB), the highest-scoring open model under 4B on Artificial Analysis's index. Qwen3.5-2B stays the default unless MiniCPM5-2B wins on the device runs. **LFM3-1.7B** (Liquid AI, Oct 2026; ~1 GB) is held back: its LFM Open License is free only under $10M annual revenue, and it likely needs llama.rn 0.13, which is still a release candidate. It goes into the spike only once the user confirms the license works.
+  - **Revisited 2026-11-03:** the spike also benchmarks **MiniCPM5-2B** (OpenBMB, Apache 2.0, Sep 2026; ~1.6 GB), the highest-scoring open model under 4B on Artificial Analysis's index. Qwen3.5-2B stays the default unless MiniCPM5-2B wins on the device runs. **LFM3-1.7B** (Liquid AI, Oct 2026; ~1.1 GB) is tested on its own branch, `spike/mobile-local-llm-lfm3`. Its LFM Open License is free only under $10M annual revenue, and the user confirmed OpenWhispr is well below that (2026-11-10). Its `lfm3` architecture exists only in llama.rn 0.13.0-rc.9 and later, so that branch runs 0.13.0-rc.10 with all three models, while the main spike stays on stable 0.12.9. Shipping LFM3 would mean waiting for 0.13 to go stable, and checking the license again if revenue ever nears $10M.
 - **Eligibility by RAM, not by model list:** total RAM ≥ 5 GiB.
   - On iPhone that means all 6 GB+ models: 12 Pro, 13 Pro, the 14 line and everything since.
   - The 4 GB phones (11, 12, 13, SE 2/3, XS/XR) see why it isn't available, with the phone's name and RAM.
@@ -277,6 +277,8 @@ Throwaway branch off this one. Results are written into "Spike results" at the b
 The meeting-notes run uses the longest meeting note on the phone when there is one, which makes quality judgments meaningful. Otherwise it uses a built-in sample, which is repeated to fill 16K tokens and is only good for speed and memory.
 
 ### Findings so far (from the build, not from a device)
+
+- **LFM3 build (`spike/mobile-local-llm-lfm3`):** run it the same way, with LFM3 1.7B picked under Settings → Model. Run Qwen3.5-2B on it once too, so a difference between llama.rn 0.12.9 and 0.13 isn't mistaken for a difference between models. 0.13 ships llama.rn as a dynamic framework that hides its ggml symbols, so it shouldn't collide with whisper.rn; confirm dictation still works on that build. Its prebuilt framework download is 1.1 GB.
 
 - **No llama.rn config plugin is needed.** Its podspec sets `-std=c++20` itself, and the repo's `withIosCxxStandard` plugin already covers the other pods. The plugin's entitlements apply only to the production profile, and its other changes are Android-only. Entitlements stay explicit in `app.config.js`. A prebuild confirmed they land on the main app only, and that llama.rn autolinks as the `llama-rn` pod. This supersedes the `app.base.json` step in 1.6.
 - **Install size:** llama.rn's postinstall fetches a 682 MB xcframework with iOS, tvOS and simulator slices. The iOS device slice is 114 MB including dSYMs. Measure the actual IPA growth on the first device build.
