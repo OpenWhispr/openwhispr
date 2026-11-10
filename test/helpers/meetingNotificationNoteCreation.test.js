@@ -2,7 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createDb } = require("./harness/db");
 function input(db) {
-  const folder = db.getFolders().find((f) => f.id === db.getMeetingsFolder().id);
+  // First: a private space gets its Meetings folder the first time it's asked for.
+  const meetingsId = db.getMeetingsFolder().id;
+  const folder = db.getFolders().find((f) => f.id === meetingsId);
   return {
     title: "Test meeting",
     folderId: folder.id,

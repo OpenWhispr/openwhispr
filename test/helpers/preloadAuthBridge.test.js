@@ -288,3 +288,22 @@ test("dictionary deltas forward their account owner, including the signed-out sc
     ["db-apply-dictionary-changes", { remove: ["Word"] }, null],
   ]);
 });
+
+test("private-space workspace calls reach their channels", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const scope = { activeWorkspaceId: "w2", defaultWorkspaceId: "w1", accountId: "account-a" };
+
+  await api.setActiveWorkspaceScope(scope);
+  await api.getPrivateSpaceId("w2");
+  await api.getPrivateSpaceId();
+  await api.bindDefaultPrivateSpace("w1", "account-a");
+  await api.claimSignedOutPrivateNotes();
+
+  assert.deepEqual(invocations, [
+    ["set-active-workspace-scope", scope],
+    ["get-private-space-id", "w2"],
+    ["get-private-space-id", undefined],
+    ["bind-default-private-space", "w1", "account-a"],
+    ["claim-signed-out-private-notes"],
+  ]);
+});

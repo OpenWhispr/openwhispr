@@ -114,6 +114,7 @@ test.before(() => {
   const Ctor = IPCHandlers.default || IPCHandlers;
   target._broadcastAccountScopedSettings = Ctor.prototype._broadcastAccountScopedSettings;
   target._broadcastDatabaseAccountScope = Ctor.prototype._broadcastDatabaseAccountScope;
+  target._claimSignedOutPrivateNotes = Ctor.prototype._claimSignedOutPrivateNotes;
   const fakeThis = new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
@@ -949,4 +950,98 @@ test("dictionary deltas remain editable signed out and across a same-account tok
     true
   );
   assert.deepEqual(db.getDictionary(), ["Rotated"]);
+});
+
+test("signing in gives the account its signed-out notes, after the chats the sign-in claims", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const note = db.saveNote("Written signed out", "").note;
+  const chat = db.createAgentConversation("Signed-out chat", null, standInId);
+  assert.equal(chat.account_id, null);
+
+  assert.equal(
+    (await invoke("set-active-account-scope", "account-a", tokenState.generation)).success,
+    true
+  );
+
+  const home = db.getDefaultPrivateSpaceId();
+  assert.notEqual(home, standInId);
+  assert.deepEqual(
+    { ...db.db.prepare("SELECT space_id, account_id FROM notes WHERE id = ?").get(note.id) },
+    { space_id: home, account_id: "account-a" }
+  );
+  assert.deepEqual(
+    {
+      ...db.db
+        .prepare("SELECT space_id, folder_id, account_id FROM agent_conversations WHERE id = ?")
+        .get(chat.id),
+    },
+    { space_id: home, folder_id: null, account_id: "account-a" },
+    "the chat #2924 attributed at sign-in left the stand-in with the notes"
+  );
+  assert.deepEqual(await invoke("claim-signed-out-private-notes"), { notes: 0, folders: 0 });
+});
+
+test("the private-space IPCs check their arguments and the account they were sent for", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+
+  for (const scope of [null, "w1", ["w1"], { activeWorkspaceId: 3 }, { defaultWorkspaceId: "" }]) {
+    assert.equal((await invoke("set-active-workspace-scope", scope)).success, false);
+  }
+  assert.equal(
+    (
+      await invoke("set-active-workspace-scope", {
+        activeWorkspaceId: "w2",
+        defaultWorkspaceId: "w1",
+        accountId: "account-b",
+      })
+    ).code,
+    "ACCOUNT_CHANGED"
+  );
+  assert.equal(db.activeWorkspaceId, null, "a refused scope changes nothing");
+  assert.deepEqual(
+    await invoke("set-active-workspace-scope", {
+      activeWorkspaceId: "w2",
+      defaultWorkspaceId: "w1",
+      accountId: "account-a",
+    }),
+    { success: true }
+  );
+
+  const w2 = await invoke("get-private-space-id");
+  assert.deepEqual(
+    { ...db.db.prepare("SELECT account_id, workspace_id FROM spaces WHERE id = ?").get(w2) },
+    { account_id: "account-a", workspace_id: "w2" }
+  );
+  assert.equal(await invoke("get-private-space-id", "w2"), w2);
+  assert.equal(await invoke("get-private-space-id", 7), null);
+  assert.equal(await invoke("get-private-space-id", ""), null);
+
+  const pending = db.getDefaultPrivateSpaceId();
+  for (const id of [undefined, null, "", 42]) {
+    assert.equal((await invoke("bind-default-private-space", id)).success, false);
+  }
+  assert.equal(
+    (await invoke("bind-default-private-space", "w1", "account-b")).code,
+    "ACCOUNT_CHANGED"
+  );
+  assert.equal(
+    db.db.prepare("SELECT workspace_id FROM spaces WHERE id = ?").get(pending).workspace_id,
+    null
+  );
+  assert.deepEqual(await invoke("bind-default-private-space", "w1", "account-a"), {
+    success: true,
+  });
+  assert.equal(
+    db.db.prepare("SELECT workspace_id FROM spaces WHERE id = ?").get(pending).workspace_id,
+    "w1"
+  );
+
+  await invoke("set-active-account-scope", null, tokenState.generation);
+  assert.equal((await invoke("bind-default-private-space", "w1")).code, "SIGNED_OUT");
+  assert.equal(await invoke("get-private-space-id", "w2"), db._standInPrivateSpaceId());
+  assert.deepEqual(await invoke("claim-signed-out-private-notes"), { notes: 0, folders: 0 });
 });

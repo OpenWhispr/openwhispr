@@ -584,14 +584,14 @@ test("safe assistant edits and atomic Undo", async (t) => {
   });
 
   await t.test(
-    "recovery remains bound to the originating account even for a shared local note",
+    "recovery remains bound to the originating account even for a signed-out note",
     async () => {
       database.setActiveAccountId(null);
       const note = fresh();
       await edit(note, { title: "Signed-out edit" });
       const token = tokenFor(note.id);
       database.setActiveAccountId("another-account");
-      assert.ok(database.getNote(note.id), "legacy local note remains readable by design");
+      assert.equal(database.getNote(note.id), null, "a signed-out note is seen only signed out");
       assert.equal(tokenFor(note.id), undefined);
       assert.equal(database.undoNoteUpdate(token).success, false);
       database.setActiveAccountId(null);

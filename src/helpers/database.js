@@ -234,6 +234,16 @@ const FOLDER_NAME_TAKEN_FILTER = `(deleted_at IS NULL OR EXISTS (
 const SPACE_CONTAINER_CONVERSATION_FILTER = `((space_id = ? AND folder_id IS NULL)
   OR folder_id IN (SELECT id FROM folders WHERE space_id = ?))`;
 
+// The default folders a private space gets the first time a note needs one.
+const PRIVATE_DEFAULT_FOLDERS = [
+  { name: "Personal", sortOrder: 0 },
+  { name: "Meetings", sortOrder: 1 },
+];
+
+function workspaceIdOrNull(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
 // A meeting synced by both a REST provider (Google/Microsoft) and Apple
 // (Calendar.app mirrors the same accounts) would double-fire reminders and
 // duplicate UI rows; suppress the Apple copy when a REST row occupies the same
@@ -308,6 +318,10 @@ class DatabaseManager {
   constructor() {
     this.db = null;
     this.activeAccountId = null;
+    // The active account's active and default workspace, as the renderer last
+    // said; null until it does, and again after every account change.
+    this.activeWorkspaceId = null;
+    this.defaultWorkspaceId = null;
     this._accountTrackedSince = Date.now();
     this._accountChanges = [];
     this.mergedNoteIds = [];
@@ -322,8 +336,17 @@ class DatabaseManager {
       if (next) {
         this.db.prepare("INSERT OR IGNORE INTO device_accounts (account_id) VALUES (?)").run(next);
       }
+      // Those were the last account's workspaces. Until the renderer names this
+      // account's, its notes go to its default private space.
+      this.activeWorkspaceId = null;
+      this.defaultWorkspaceId = null;
     }
     this.activeAccountId = next;
+  }
+
+  setActiveWorkspaceScope({ activeWorkspaceId = null, defaultWorkspaceId = null } = {}) {
+    this.activeWorkspaceId = workspaceIdOrNull(activeWorkspaceId);
+    this.defaultWorkspaceId = workspaceIdOrNull(defaultWorkspaceId);
   }
 
   // Whose personal rows are in view. Signed out, the only account this device
@@ -357,12 +380,19 @@ class DatabaseManager {
     return spokenUnder !== null && spokenUnder !== this.activeAccountId;
   }
 
+  // A private note or folder with no account (written signed out, or from
+  // before attribution) is seen where it sits: in the stand-in while signed
+  // out, in the account's own private spaces while signed in. Never in
+  // another account's, and never in the stand-in once someone signs in.
   _accountScopeCondition(tableName) {
     return {
       sql: `((${tableName}.account_id IS NULL AND EXISTS (
         SELECT 1 FROM spaces account_scope_space
         WHERE account_scope_space.id = ${tableName}.space_id
           AND account_scope_space.kind = 'private'
+          AND ((? IS NULL AND account_scope_space.account_id IS NULL
+                AND account_scope_space.workspace_id IS NULL)
+            OR account_scope_space.account_id = ?)
       )) OR ${tableName}.account_id = ? OR EXISTS (
         SELECT 1
         FROM spaces account_scope_space
@@ -372,13 +402,49 @@ class DatabaseManager {
           AND account_scope_space.kind = 'team'
           AND account_scope_membership.account_id = ?
       ))`,
-      params: [this.activeAccountId, this.activeAccountId],
+      params: [
+        this.activeAccountId,
+        this.activeAccountId,
+        this.activeAccountId,
+        this.activeAccountId,
+      ],
     };
   }
 
+  // A folder whose cloud delete is still waiting holds its rows where they
+  // were. One the private-space split left in the stand-in, because several
+  // accounts used it, stays within reach of each account that has a note or
+  // chat in it, so that account's delete can still finish or roll back. Only
+  // the delete paths ask for it.
+  _folderScopeCondition(tableName, { pendingDelete = false } = {}) {
+    const accountScope = this._accountScopeCondition(tableName);
+    if (!pendingDelete) return accountScope;
+    return {
+      sql: `(${accountScope.sql} OR (${tableName}.account_id IS NULL
+        AND ${tableName}.deleted_at IS NOT NULL AND EXISTS (
+          SELECT 1 FROM spaces pending_delete_space
+          WHERE pending_delete_space.id = ${tableName}.space_id
+            AND pending_delete_space.kind = 'private'
+            AND pending_delete_space.account_id IS NULL
+        ) AND (EXISTS (
+          SELECT 1 FROM notes pending_delete_note
+          WHERE pending_delete_note.folder_id = ${tableName}.id
+            AND pending_delete_note.account_id = ?
+        ) OR EXISTS (
+          SELECT 1 FROM agent_conversations pending_delete_chat
+          WHERE pending_delete_chat.folder_id = ${tableName}.id
+            AND pending_delete_chat.account_id = ?
+        ))))`,
+      params: [...accountScope.params, this.activeAccountId, this.activeAccountId],
+    };
+  }
+
+  // A private space belongs to its account. The stand-in has none, so what
+  // is written there belongs to whoever is signed in: nobody, normally.
   _accountIdForSpace(spaceId) {
-    const space = this.db.prepare("SELECT kind FROM spaces WHERE id = ?").get(spaceId);
-    return space?.kind === "team" ? null : this.activeAccountId;
+    const space = this.db.prepare("SELECT kind, account_id FROM spaces WHERE id = ?").get(spaceId);
+    if (space?.kind === "team") return null;
+    return space?.account_id ?? this.activeAccountId;
   }
 
   // Transcriptions, chats, dictionary words and snippets are personal in every
@@ -684,12 +750,12 @@ class DatabaseManager {
     })();
   }
 
-  _getFolderInAccountScope(id) {
-    const accountScope = this._accountScopeCondition("folders");
+  _getFolderInAccountScope(id, { pendingDelete = false } = {}) {
+    const folderScope = this._folderScopeCondition("folders", { pendingDelete });
     return (
       this.db
-        .prepare(`SELECT * FROM folders WHERE id = ? AND ${accountScope.sql}`)
-        .get(id, ...accountScope.params) || null
+        .prepare(`SELECT * FROM folders WHERE id = ? AND ${folderScope.sql}`)
+        .get(id, ...folderScope.params) || null
     );
   }
 
@@ -4709,16 +4775,22 @@ class DatabaseManager {
         spaceId = folder.space_id;
       } else {
         if (spaceId == null) spaceId = this.getPrivateSpaceId();
-        if (!this.getSpace(spaceId)) throw new Error("Space not found in the active account scope");
+        const space = this.getSpace(spaceId);
+        if (!space) throw new Error("Space not found in the active account scope");
         const defaultFolderName = noteType === "meeting" ? "Meetings" : "Personal";
-        const folderScope = this._accountScopeCondition("folders");
-        const defaultFolder = this.db
-          .prepare(
-            `SELECT id FROM folders
-             WHERE name = ? AND is_default = 1 AND space_id = ? AND ${folderScope.sql}`
-          )
-          .get(defaultFolderName, spaceId, ...folderScope.params);
-        folderId = defaultFolder?.id || null;
+        if (space.kind === "private") {
+          this.ensureDefaultFolders(spaceId);
+          folderId = this._privateFolderNamed(spaceId, space.account_id, defaultFolderName);
+        } else {
+          const folderScope = this._accountScopeCondition("folders");
+          const defaultFolder = this.db
+            .prepare(
+              `SELECT id FROM folders
+               WHERE name = ? AND is_default = 1 AND space_id = ? AND ${folderScope.sql}`
+            )
+            .get(defaultFolderName, spaceId, ...folderScope.params);
+          folderId = defaultFolder?.id || null;
+        }
       }
       const clientNoteId = randomUUID();
       const accountId = this._accountIdForSpace(spaceId);
@@ -5241,25 +5313,31 @@ class DatabaseManager {
       throw new Error("Account deletion must match the active account scope");
     }
 
+    // The account's private spaces go with everything in them, and so does
+    // anything of the account's left in the stand-in.
+    const deletedSpaceIds = this.db
+      .prepare("SELECT id FROM spaces WHERE kind = 'private' AND account_id = ? ORDER BY id")
+      .all(accountId)
+      .map((row) => row.id);
     const deletedNoteIds = this.db
       .prepare(
         `SELECT notes.id
          FROM notes
          JOIN spaces ON spaces.id = notes.space_id
-         WHERE notes.account_id = ? AND spaces.kind = 'private'
+         WHERE spaces.kind = 'private' AND (notes.account_id = ? OR spaces.account_id = ?)
          ORDER BY notes.id`
       )
-      .all(accountId)
+      .all(accountId, accountId)
       .map((row) => row.id);
     const deletedFolderIds = this.db
       .prepare(
         `SELECT folders.id
          FROM folders
          JOIN spaces ON spaces.id = folders.space_id
-         WHERE folders.account_id = ? AND spaces.kind = 'private'
+         WHERE spaces.kind = 'private' AND (folders.account_id = ? OR spaces.account_id = ?)
          ORDER BY folders.id`
       )
-      .all(accountId)
+      .all(accountId, accountId)
       .map((row) => row.id);
 
     // The account's own history, chats, words and snippets, in every space. Rows
@@ -5277,9 +5355,14 @@ class DatabaseManager {
 
     const notePlaceholders = deletedNoteIds.map(() => "?").join(", ");
     const folderPlaceholders = deletedFolderIds.map(() => "?").join(", ");
+    const spacePlaceholders = deletedSpaceIds.map(() => "?").join(", ");
     const deleteRows = () => {
       const conversationConditions = [owned("agent_conversations")];
       const conversationParams = [accountId];
+      if (deletedSpaceIds.length > 0) {
+        conversationConditions.push(`space_id IN (${spacePlaceholders})`);
+        conversationParams.push(...deletedSpaceIds);
+      }
       if (deletedNoteIds.length > 0) {
         conversationConditions.push(`note_id IN (${notePlaceholders})`);
         conversationParams.push(...deletedNoteIds);
@@ -5331,6 +5414,11 @@ class DatabaseManager {
         this.db
           .prepare(`DELETE FROM folders WHERE id IN (${folderPlaceholders})`)
           .run(...deletedFolderIds);
+      }
+      if (deletedSpaceIds.length > 0) {
+        this.db
+          .prepare(`DELETE FROM spaces WHERE id IN (${spacePlaceholders})`)
+          .run(...deletedSpaceIds);
       }
       for (const table of ["transcriptions", "custom_dictionary", "snippets"]) {
         this.db.prepare(`DELETE FROM ${table} WHERE ${owned(table)}`).run(accountId);
@@ -5587,14 +5675,350 @@ class DatabaseManager {
     }
   }
 
-  getPrivateSpaceId() {
+  // The private space a note goes to when its creator names none. Signed
+  // out, the stand-in. Signed in, the account's own row for the workspace
+  // (the active one unless another is named); for the default workspace, or
+  // one not known yet, the account's default row. Made the first time.
+  getPrivateSpaceId(workspaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT id FROM spaces WHERE kind = 'private'").get()?.id ?? null;
+      const accountId = this.activeAccountId;
+      if (!accountId) {
+        return this._standInPrivateSpaceId() ?? this._insertPrivateSpace(null, null);
+      }
+      const target = workspaceIdOrNull(workspaceId) ?? this.activeWorkspaceId ?? null;
+      if (target == null || target === this.defaultWorkspaceId) {
+        return this.getDefaultPrivateSpaceId();
+      }
+      return (
+        this._findPrivateSpace(accountId, target) ?? this._insertPrivateSpace(accountId, target)
+      );
     } catch (error) {
       debugLogger.error("Error getting private space id", { error: error.message }, "spaces");
       throw error;
     }
+  }
+
+  // The account's default private space: the one bound to its default
+  // workspace, else its pending one (no workspace yet), which
+  // bindDefaultPrivateSpace binds. Signed out, the stand-in.
+  getDefaultPrivateSpaceId() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const accountId = this.activeAccountId;
+      if (!accountId) return this.getPrivateSpaceId();
+      const defaultWorkspaceId = this.defaultWorkspaceId ?? null;
+      return (
+        (defaultWorkspaceId && this._findPrivateSpace(accountId, defaultWorkspaceId)) ||
+        this._findPrivateSpace(accountId, null) ||
+        this._insertPrivateSpace(accountId, null)
+      );
+    } catch (error) {
+      debugLogger.error(
+        "Error getting default private space id",
+        { error: error.message },
+        "spaces"
+      );
+      throw error;
+    }
+  }
+
+  _findPrivateSpace(accountId, workspaceId) {
+    return (
+      this.db
+        .prepare(
+          `SELECT id FROM spaces
+           WHERE kind = 'private' AND account_id IS ? AND workspace_id IS ? AND deleted_at IS NULL
+           ORDER BY id LIMIT 1`
+        )
+        .get(accountId, workspaceId)?.id ?? null
+    );
+  }
+
+  _insertPrivateSpace(accountId, workspaceId) {
+    return Number(
+      this.db
+        .prepare(
+          `INSERT INTO spaces (client_space_id, kind, name, sort_order, sync_status, account_id, workspace_id)
+           VALUES (?, 'private', 'Personal', 0, 'synced', ?, ?)`
+        )
+        .run(randomUUID(), accountId, workspaceId).lastInsertRowid
+    );
+  }
+
+  // Which private spaces the active scope sees: the account's own, one per
+  // workspace, or, signed out, the stand-in alone.
+  _visiblePrivateSpaceCondition(tableName) {
+    return this.activeAccountId
+      ? { sql: `${tableName}.account_id = ?`, params: [this.activeAccountId] }
+      : {
+          sql: `(${tableName}.account_id IS NULL AND ${tableName}.workspace_id IS NULL)`,
+          params: [],
+        };
+  }
+
+  // The live folder of that name in a private space, its default first: a
+  // folder the user made with a default's name still takes that default's
+  // notes rather than leaving them at the root.
+  _privateFolderNamed(spaceId, accountId, name) {
+    return (
+      this.db
+        .prepare(
+          `SELECT id FROM folders
+           WHERE space_id = ? AND name = ? AND deleted_at IS NULL
+             AND (account_id IS NULL OR account_id IS ?)
+           ORDER BY is_default DESC, id LIMIT 1`
+        )
+        .get(spaceId, name, accountId)?.id ?? null
+    );
+  }
+
+  // Gives a private space its own Personal and Meetings folders, the first
+  // time a note needs one. A folder already holding the name (a default the
+  // split moved or copied there, or one the user made) is kept as it is.
+  // Never synced: private folders stay on the device.
+  ensureDefaultFolders(spaceId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const space = this.db
+        .prepare("SELECT kind, account_id FROM spaces WHERE id = ? AND deleted_at IS NULL")
+        .get(spaceId);
+      if (space?.kind !== "private") return;
+      const insert = this.db.prepare(
+        `INSERT INTO folders (name, is_default, sort_order, client_folder_id, sync_status, space_id, account_id)
+         VALUES (?, 1, ?, ?, 'synced', ?, ?)`
+      );
+      for (const { name, sortOrder } of PRIVATE_DEFAULT_FOLDERS) {
+        if (this._privateFolderNamed(spaceId, space.account_id, name) != null) continue;
+        insert.run(name, sortOrder, randomUUID(), spaceId, space.account_id);
+      }
+    } catch (error) {
+      debugLogger.error("Error ensuring default folders", { error: error.message }, "spaces");
+      throw error;
+    }
+  }
+
+  // "Name", or "Name (2)", "Name (3)"... while a folder in that space holds
+  // it, as a preserved revoked folder is renamed.
+  _uniqueFolderName(spaceId, accountId, name, exceptId = null) {
+    const taken = this.db.prepare(
+      `SELECT 1 FROM folders
+       WHERE space_id = ? AND name = ? AND id IS NOT ?
+         AND (account_id IS NULL OR account_id IS ?) AND ${FOLDER_NAME_TAKEN_FILTER}`
+    );
+    let candidate = name;
+    for (let n = 2; taken.get(spaceId, candidate, exceptId, accountId); n++) {
+      candidate = `${name} (${n})`;
+    }
+    return candidate;
+  }
+
+  // The default workspace's id is known: the account's pending row becomes
+  // that workspace's. A row made for it meanwhile (the active workspace was
+  // known first) takes in the pending row's notes, folders and chats instead.
+  bindDefaultPrivateSpace(defaultWorkspaceId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const workspaceId = workspaceIdOrNull(defaultWorkspaceId);
+      const accountId = this.activeAccountId;
+      if (!workspaceId || !accountId) return;
+      // Defaults resolve to the bound row even before the renderer's next scope.
+      this.defaultWorkspaceId = workspaceId;
+      this.db.transaction(() => {
+        const pendingId = this._findPrivateSpace(accountId, null);
+        if (pendingId == null) return;
+        const boundId = this._findPrivateSpace(accountId, workspaceId);
+        if (boundId == null) {
+          this.db
+            .prepare("UPDATE spaces SET workspace_id = ? WHERE id = ?")
+            .run(workspaceId, pendingId);
+          return;
+        }
+        this._mergePrivateSpace(pendingId, boundId, accountId);
+      })();
+    } catch (error) {
+      debugLogger.error(
+        "Error binding the default private space",
+        { error: error.message },
+        "spaces"
+      );
+      throw error;
+    }
+  }
+
+  // Moves everything in one of the account's private spaces into another and
+  // retires the emptied row. A local move: sync state, updated_at and cloud
+  // ids stay. A folder whose name the target holds becomes "Name (2)" and
+  // stops being a default, since the target keeps its own.
+  _mergePrivateSpace(fromId, toId, accountId) {
+    const moveFolder = this.db.prepare(
+      "UPDATE folders SET space_id = ?, name = ?, is_default = ?, account_id = COALESCE(account_id, ?) WHERE id = ?"
+    );
+    const folders = this.db
+      .prepare(
+        "SELECT id, name, is_default, deleted_at FROM folders WHERE space_id = ? ORDER BY id"
+      )
+      .all(fromId);
+    for (const folder of folders) {
+      // A deleted folder holds no name, and keeps its own for a rollback.
+      const name = folder.deleted_at
+        ? folder.name
+        : this._uniqueFolderName(toId, accountId, folder.name, folder.id);
+      moveFolder.run(
+        toId,
+        name,
+        name === folder.name ? folder.is_default : 0,
+        accountId,
+        folder.id
+      );
+    }
+    this.db
+      .prepare(
+        "UPDATE notes SET space_id = ?, account_id = COALESCE(account_id, ?) WHERE space_id = ?"
+      )
+      .run(toId, accountId, fromId);
+    this.db
+      .prepare(
+        `UPDATE agent_conversations SET space_id = ?
+         WHERE space_id = ? OR folder_id IN (SELECT id FROM folders WHERE space_id = ?)`
+      )
+      .run(toId, fromId, toId);
+    this.db.prepare("UPDATE spaces SET deleted_at = datetime('now') WHERE id = ?").run(fromId);
+  }
+
+  // At sign-in, what was written signed out goes to the account that signs
+  // in, the rule #2924 uses for history and chats: only on a device no other
+  // account has used. Anywhere else it stays in the stand-in, seen only signed
+  // out. A folder holding such notes goes with them, ids and cloud ids kept,
+  // as "Name (2)" when the account has one of that name; the stand-in's own
+  // defaults stay, and their notes join the account's folder of that name.
+  // The sign-in claims that run first give the account signed-out chats;
+  // those leave the stand-in on any device, following their folder, or to the
+  // root when it stays. Running it again finds nothing left.
+  claimSignedOutPrivateNotes() {
+    const claimed = { notes: 0, folders: 0 };
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const accountId = this.activeAccountId;
+      const standInId = accountId ? this._standInPrivateSpaceId() : null;
+      if (standInId == null) return claimed;
+      const claimsNotes = !this.hasOtherAccountRows();
+      this.db.transaction(() => {
+        const notesToClaim =
+          claimsNotes &&
+          this.db
+            .prepare("SELECT 1 FROM notes WHERE space_id = ? AND account_id IS NULL LIMIT 1")
+            .get(standInId);
+        const strayChats = this.db
+          .prepare(
+            `SELECT 1 FROM agent_conversations
+             WHERE account_id = ? AND ((space_id = ? AND folder_id IS NULL)
+               OR folder_id IN (SELECT id FROM folders WHERE space_id = ? AND deleted_at IS NULL))
+             LIMIT 1`
+          )
+          .get(accountId, standInId, standInId);
+        if (!notesToClaim && !strayChats) return;
+        const homeId = this.getDefaultPrivateSpaceId();
+        // Stand-in folders that stay, and the account's folder their rows joined.
+        const joined = new Map();
+        if (notesToClaim) {
+          const moved = this._claimStandInNotes(standInId, homeId, accountId, joined);
+          claimed.notes = moved.notes;
+          claimed.folders = moved.folders;
+        }
+        const moveFolderChats = this.db.prepare(
+          "UPDATE agent_conversations SET space_id = ?, folder_id = ? WHERE account_id = ? AND folder_id = ?"
+        );
+        for (const [standInFolderId, homeFolderId] of joined) {
+          moveFolderChats.run(homeId, homeFolderId, accountId, standInFolderId);
+        }
+        this.db
+          .prepare(
+            `UPDATE agent_conversations SET space_id = ?, folder_id = NULL
+             WHERE account_id = ? AND ((space_id = ? AND folder_id IS NULL)
+               OR folder_id IN (SELECT id FROM folders WHERE space_id = ? AND deleted_at IS NULL))`
+          )
+          .run(homeId, accountId, standInId, standInId);
+      })();
+      return claimed;
+    } catch (error) {
+      debugLogger.error(
+        "Error claiming signed-out private notes",
+        { error: error.message },
+        "spaces"
+      );
+      throw error;
+    }
+  }
+
+  // The notes half of claimSignedOutPrivateNotes. Moves are local: sync
+  // state, updated_at and cloud ids stay.
+  _claimStandInNotes(standInId, homeId, accountId, joined) {
+    let notes = 0;
+    let folders = 0;
+    const claimNotesIn = this.db.prepare(
+      `UPDATE notes SET space_id = ?, folder_id = ?, account_id = ?
+       WHERE folder_id = ? AND space_id = ? AND account_id IS NULL`
+    );
+    const moveFolder = this.db.prepare(
+      "UPDATE folders SET space_id = ?, account_id = ?, name = ? WHERE id = ?"
+    );
+    // A folder's deleted rows of the account's own (a held delete) go with it.
+    const followFolder = this.db.prepare(
+      "UPDATE notes SET space_id = ? WHERE folder_id = ? AND space_id = ? AND account_id = ?"
+    );
+    const followFolderChats = this.db.prepare(
+      "UPDATE agent_conversations SET space_id = ? WHERE folder_id = ?"
+    );
+    const insertFolder = this.db.prepare(
+      `INSERT INTO folders (name, is_default, sort_order, client_folder_id, sync_status, space_id, account_id)
+       VALUES (?, ?, ?, ?, 'synced', ?, ?)`
+    );
+    const standInFolders = this.db
+      .prepare(
+        `SELECT * FROM folders f
+         WHERE f.space_id = ? AND f.account_id IS NULL AND EXISTS (
+           SELECT 1 FROM notes n
+           WHERE n.folder_id = f.id AND n.space_id = ? AND n.account_id IS NULL
+         )
+         ORDER BY f.id`
+      )
+      .all(standInId, standInId);
+    for (const folder of standInFolders) {
+      if (folder.is_default) {
+        const target =
+          this._privateFolderNamed(homeId, accountId, folder.name) ??
+          Number(
+            insertFolder.run(
+              folder.name,
+              folder.is_default,
+              folder.sort_order,
+              randomUUID(),
+              homeId,
+              accountId
+            ).lastInsertRowid
+          );
+        joined.set(folder.id, target);
+        notes += claimNotesIn.run(homeId, target, accountId, folder.id, standInId).changes;
+        continue;
+      }
+      // A deleted folder holds no name, and keeps its own for a rollback.
+      const name = folder.deleted_at
+        ? folder.name
+        : this._uniqueFolderName(homeId, accountId, folder.name, folder.id);
+      moveFolder.run(homeId, accountId, name, folder.id);
+      notes += claimNotesIn.run(homeId, folder.id, accountId, folder.id, standInId).changes;
+      followFolder.run(homeId, folder.id, standInId, accountId);
+      followFolderChats.run(homeId, folder.id);
+      folders += 1;
+    }
+    notes += this.db
+      .prepare(
+        `UPDATE notes SET space_id = ?, account_id = ?
+         WHERE space_id = ? AND account_id IS NULL AND folder_id IS NULL`
+      )
+      .run(homeId, accountId, standInId).changes;
+    return { notes, folders };
   }
 
   // The private row with no account and no workspace: what a signed-out user
@@ -5786,18 +6210,23 @@ class DatabaseManager {
   getSpaces() {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // The active workspace's Private always exists and comes first, so a
+      // caller taking the first private space gets that one.
+      const activePrivateId = this.getPrivateSpaceId();
+      const privateScope = this._visiblePrivateSpaceCondition("spaces");
       return this.db
         .prepare(
           `SELECT * FROM spaces
            WHERE deleted_at IS NULL
-             AND (kind = 'private' OR EXISTS (
+             AND ((kind = 'private' AND ${privateScope.sql}) OR (kind != 'private' AND EXISTS (
                SELECT 1 FROM space_accounts
                WHERE space_accounts.space_id = spaces.id
                  AND space_accounts.account_id = ?
-             ))
-           ORDER BY CASE WHEN kind = 'private' THEN 0 ELSE 1 END, sort_order ASC, name ASC`
+             )))
+           ORDER BY CASE WHEN id = ? THEN 0 WHEN kind = 'private' THEN 1 ELSE 2 END,
+             sort_order ASC, name ASC, id ASC`
         )
-        .all(this.activeAccountId)
+        .all(...privateScope.params, this.activeAccountId, activePrivateId)
         .map((row) => this._spaceRow(row));
     } catch (error) {
       debugLogger.error("Error getting spaces", { error: error.message }, "spaces");
@@ -5808,17 +6237,18 @@ class DatabaseManager {
   getSpace(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const privateScope = this._visiblePrivateSpaceCondition("spaces");
       const row = this.db
         .prepare(
           `SELECT * FROM spaces
            WHERE id = ? AND deleted_at IS NULL
-             AND (kind = 'private' OR EXISTS (
+             AND ((kind = 'private' AND ${privateScope.sql}) OR (kind != 'private' AND EXISTS (
                SELECT 1 FROM space_accounts
                WHERE space_accounts.space_id = spaces.id
                  AND space_accounts.account_id = ?
-             ))`
+             )))`
         )
-        .get(id, this.activeAccountId);
+        .get(id, ...privateScope.params, this.activeAccountId);
       return row ? this._spaceRow(row) : null;
     } catch (error) {
       debugLogger.error("Error getting space", { error: error.message }, "spaces");
@@ -7904,6 +8334,14 @@ class DatabaseManager {
   getMeetingsFolder(spaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const targetId = spaceId ?? this.getPrivateSpaceId();
+      const space = this.getSpace(targetId);
+      if (!space) return null;
+      if (space.kind === "private") {
+        this.ensureDefaultFolders(targetId);
+        const id = this._privateFolderNamed(targetId, space.account_id, "Meetings");
+        return id == null ? null : { id };
+      }
       const accountScope = this._accountScopeCondition("folders");
       return (
         this.db
@@ -7912,7 +8350,7 @@ class DatabaseManager {
              WHERE name = 'Meetings' AND is_default = 1 AND space_id = ?
                AND ${accountScope.sql}`
           )
-          .get(spaceId ?? this.getPrivateSpaceId(), ...accountScope.params) || null
+          .get(targetId, ...accountScope.params) || null
       );
     } catch (error) {
       debugLogger.error("Error getting meetings folder", { error: error.message }, "gcal");
@@ -9470,7 +9908,7 @@ class DatabaseManager {
   getPendingFolderDeletes() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const accountScope = this._accountScopeCondition("f");
+      const accountScope = this._folderScopeCondition("f", { pendingDelete: true });
       return this.db
         .prepare(
           `SELECT * FROM folders f
@@ -9498,7 +9936,7 @@ class DatabaseManager {
   restoreFolderAfterDeniedDelete(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      if (!this._getFolderInAccountScope(id)) {
+      if (!this._getFolderInAccountScope(id, { pendingDelete: true })) {
         return { success: false, id, error: "Folder not found" };
       }
       return this.db.transaction(() => {
@@ -9608,7 +10046,7 @@ class DatabaseManager {
   hardDeleteFolder(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const folder = this._getFolderInAccountScope(id);
+      const folder = this._getFolderInAccountScope(id, { pendingDelete: true });
       if (!folder) return { success: false, id, error: "Folder not found" };
       const childNotes = "SELECT id FROM notes WHERE folder_id = ?";
       const heldNotes =

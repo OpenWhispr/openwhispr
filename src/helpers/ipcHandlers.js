@@ -120,6 +120,20 @@ function syncSenderAccount(accountId, authGeneration) {
     ? accountId
     : null;
 }
+// A workspace id from the renderer: a non-empty string, or null for none.
+function isWorkspaceIdArgument(value) {
+  return value === null || (typeof value === "string" && value.trim().length > 0);
+}
+// Workspace calls may name the account they were made for. One that arrives
+// after another account signed in is refused rather than applied to it.
+function isForOtherAccount(accountId, activeAccountId) {
+  return accountId !== undefined && accountId !== activeAccountId;
+}
+const ACCOUNT_CHANGED_RESULT = {
+  success: false,
+  code: "ACCOUNT_CHANGED",
+  error: "The account changed before the workspace call arrived",
+};
 // Local engines resolve a failed decode instead of throwing. Retry turns that
 // into a coded error so the toast says what went wrong rather than blaming a
 // missing engine.
@@ -1100,6 +1114,21 @@ class IPCHandlers {
     });
     // A sign-out or another account changes whose login shows.
     void this.connectorManager?.notifyStatusChanged();
+  }
+
+  // A failed claim leaves the notes where they were, visible signed out, and
+  // must not stop the sign-in that runs it.
+  _claimSignedOutPrivateNotes() {
+    try {
+      const claimed = this.databaseManager.claimSignedOutPrivateNotes();
+      if (claimed.notes > 0 || claimed.folders > 0) this.notifyVectorChanges();
+    } catch (error) {
+      debugLogger.error(
+        "Claiming signed-out private notes at sign-in failed",
+        { error: error.message },
+        "database"
+      );
+    }
   }
 
   _cancelCalendarAuthorizations() {
@@ -2947,6 +2976,48 @@ class IPCHandlers {
       this.databaseManager.hasUnclaimedLegacyRows()
     );
 
+    ipcMain.handle("set-active-workspace-scope", (_event, scope) => {
+      if (!scope || typeof scope !== "object" || Array.isArray(scope)) {
+        return { success: false, error: "Invalid workspace scope" };
+      }
+      const { activeWorkspaceId = null, defaultWorkspaceId = null, accountId } = scope;
+      if (!isWorkspaceIdArgument(activeWorkspaceId) || !isWorkspaceIdArgument(defaultWorkspaceId)) {
+        return { success: false, error: "Invalid workspace scope" };
+      }
+      if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+        return ACCOUNT_CHANGED_RESULT;
+      }
+      this.databaseManager.setActiveWorkspaceScope({ activeWorkspaceId, defaultWorkspaceId });
+      return { success: true };
+    });
+
+    ipcMain.handle("get-private-space-id", (_event, workspaceId = null) => {
+      if (!isWorkspaceIdArgument(workspaceId)) return null;
+      return this.databaseManager.getPrivateSpaceId(workspaceId);
+    });
+
+    ipcMain.handle("bind-default-private-space", (_event, defaultWorkspaceId, accountId) => {
+      if (typeof defaultWorkspaceId !== "string" || !defaultWorkspaceId.trim()) {
+        return { success: false, error: "Invalid workspace" };
+      }
+      if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+        return ACCOUNT_CHANGED_RESULT;
+      }
+      if (!this.databaseManager.activeAccountId) {
+        return { success: false, code: "SIGNED_OUT", error: "No account is signed in" };
+      }
+      this.databaseManager.bindDefaultPrivateSpace(defaultWorkspaceId);
+      // Moved notes carry their space in Qdrant payloads; the triggers journaled them.
+      this.notifyVectorChanges();
+      return { success: true };
+    });
+
+    ipcMain.handle("claim-signed-out-private-notes", () => {
+      const claimed = this.databaseManager.claimSignedOutPrivateNotes();
+      if (claimed.notes > 0 || claimed.folders > 0) this.notifyVectorChanges();
+      return claimed;
+    });
+
     ipcMain.handle("set-active-account-scope", async (_event, accountId, expectedGeneration) => {
       const state = tokenStore.getState();
       const verdict = accountScopeBinding.evaluateScopeRequest({
@@ -3000,6 +3071,9 @@ class IPCHandlers {
       this.databaseManager.setActiveAccountId(accountId);
       this.databaseManager.claimSignedOutLocalRows();
       this.databaseManager.claimLegacyRowsOfOnlyAccount();
+      // After those two: they give the account the signed-out chats this moves
+      // out of the stand-in along with the notes.
+      this._claimSignedOutPrivateNotes();
       if (accountId !== null) {
         accountScopeBinding.persist(accountId, state.token);
         scopedAccountByGeneration.set(state.generation, accountId);

@@ -712,6 +712,9 @@ export interface SpaceItem {
   // Retained only for unambiguous adoption of pre-spaces team rows.
   cloud_team_id?: string | null;
   workspace_id: string | null;
+  // A private space's account: one per account and workspace. Null on team
+  // spaces and on the signed-out stand-in.
+  account_id?: string | null;
   kind: "private" | "team";
   name: string;
   emoji: string | null;
@@ -732,6 +735,12 @@ export interface SpaceItem {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface WorkspaceScope {
+  activeWorkspaceId: string | null;
+  defaultWorkspaceId: string | null;
+  accountId?: string | null;
 }
 
 export interface DictionaryEntryItem {
@@ -2140,6 +2149,19 @@ declare global {
       hasOtherAccountRows?: () => Promise<boolean>;
       accountChangedSince?: (occurredAt?: string) => Promise<boolean>;
       hasUnclaimedLegacyRows?: () => Promise<boolean>;
+      // Main resolves where new private notes go from this. A call naming an
+      // account is refused (ACCOUNT_CHANGED) once another one has signed in.
+      setActiveWorkspaceScope?: (
+        scope: WorkspaceScope
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      // The active workspace's private space, or the named workspace's. Null
+      // for an invalid id.
+      getPrivateSpaceId?: (workspaceId?: string | null) => Promise<number | null>;
+      bindDefaultPrivateSpace?: (
+        defaultWorkspaceId: string,
+        accountId?: string | null
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      claimSignedOutPrivateNotes?: () => Promise<{ notes: number; folders: number }>;
       setActiveAccountScope?: (
         accountId: string | null,
         expectedAuthGeneration?: number

@@ -300,6 +300,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   hasOtherAccountRows: () => ipcRenderer.invoke("db-has-other-account-rows"),
   accountChangedSince: (occurredAt) => ipcRenderer.invoke("db-account-changed-since", occurredAt),
   hasUnclaimedLegacyRows: () => ipcRenderer.invoke("db-has-unclaimed-legacy-rows"),
+  setActiveWorkspaceScope: (scope) => ipcRenderer.invoke("set-active-workspace-scope", scope),
+  getPrivateSpaceId: (workspaceId) => ipcRenderer.invoke("get-private-space-id", workspaceId),
+  bindDefaultPrivateSpace: (defaultWorkspaceId, accountId) =>
+    ipcRenderer.invoke("bind-default-private-space", defaultWorkspaceId, accountId),
+  claimSignedOutPrivateNotes: () => ipcRenderer.invoke("claim-signed-out-private-notes"),
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
   getActiveAccountScope: () => ipcRenderer.invoke("get-active-account-scope"),

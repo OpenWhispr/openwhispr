@@ -11,10 +11,12 @@ function isMeetingFolderRef(ref) {
 function listMeetingDestinations(db) {
   const spaces = db.getSpaces();
   const spaceIds = new Set(spaces.map((space) => space.id));
+  // First: a private space gets its Meetings folder the first time it's asked
+  // for, and the list below must include it.
+  const defaultFolder = db.getMeetingsFolder();
   const folders = db
     .getFolders()
     .filter((folder) => !folder.left_team && spaceIds.has(folder.space_id));
-  const defaultFolder = db.getMeetingsFolder();
   const eligibleDefault = folders.find((folder) => folder.id === defaultFolder?.id);
   return {
     folders,

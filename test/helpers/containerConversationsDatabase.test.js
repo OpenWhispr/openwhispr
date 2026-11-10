@@ -195,32 +195,38 @@ test("getConversationsForContainer excludes deleted conversations", (t) => {
 test("private-space root chats are owned by the account that created them", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const privateSpaceId = db.getPrivateSpaceId();
-  // A row from before root chats carried an owner stays visible to everyone,
-  // like a legacy personal note.
-  const legacy = db.createAgentConversation("Legacy root chat", null, privateSpaceId);
-  db.db.prepare("UPDATE agent_conversations SET account_id = NULL WHERE id = ?").run(legacy.id);
+  // Each account has its own private space; a device-owned chat (a guest's)
+  // sits in the signed-out stand-in.
+  db.setActiveAccountId(null);
+  const standInId = db.getPrivateSpaceId();
+  const legacy = db.createAgentConversation("Legacy root chat", null, standInId);
+  assert.equal(legacy.account_id, null);
 
   db.setActiveAccountId("account-a");
-  const chatA = db.createAgentConversation("A root chat", null, privateSpaceId);
+  const aSpaceId = db.getPrivateSpaceId();
+  const chatA = db.createAgentConversation("A root chat", null, aSpaceId);
   db.addAgentMessage(chatA.id, "user", "private to A");
   db.setActiveAccountId("account-b");
-  const chatB = db.createAgentConversation("B root chat", null, privateSpaceId);
+  const bSpaceId = db.getPrivateSpaceId();
+  const chatB = db.createAgentConversation("B root chat", null, bSpaceId);
+  const listed = (spaceId) =>
+    db.getConversationsForContainer(spaceId, null).map((conversation) => conversation.id);
 
+  assert.deepEqual(listed(bSpaceId), [chatB.id]);
   assert.deepEqual(
-    db
-      .getConversationsForContainer(privateSpaceId, null)
-      .map((conversation) => conversation.id)
-      .sort((a, b) => a - b),
-    [legacy.id, chatB.id],
+    listed(aSpaceId),
+    [],
     "another account on the device must not list A's root chats"
   );
+  assert.deepEqual(listed(standInId), [], "nor the signed-out ones");
+  assert.equal(db.createAgentConversation("Into A's space", null, aSpaceId), null);
   db.setActiveAccountId(null);
   assert.deepEqual(
-    db.getConversationsForContainer(privateSpaceId, null).map((conversation) => conversation.id),
+    listed(standInId),
     [legacy.id],
     "signed out, only device-owned root chats are listed"
   );
+  assert.deepEqual(listed(aSpaceId), []);
 
   db.setActiveAccountId("account-a");
   db.deleteAccountData("account-a");
