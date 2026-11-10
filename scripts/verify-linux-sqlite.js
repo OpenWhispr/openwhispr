@@ -103,7 +103,8 @@ function runProbe(binary, sqlite, cpu, timeoutMs) {
   } catch (error) {
     const reason = error.code || error.signal || `exit ${error.status}`;
     throw new Error(
-      `afterPack: packaged SQLite failed on ${cpu} (${reason}). SIGILL or ETIMEDOUT means it uses instructions this CPU lacks: qemu can hang after the fault, so do not rerun or raise the timeout.`
+      `afterPack: packaged SQLite failed on ${cpu} (${reason}). SIGILL or ETIMEDOUT means it uses instructions this CPU lacks: qemu can hang after the fault, so do not rerun or raise the timeout.`,
+      { cause: error }
     );
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
