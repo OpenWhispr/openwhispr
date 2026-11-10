@@ -435,8 +435,10 @@ test("every dictionary write reloads Orukeet's hotwords in the background", asyn
   const refresh = t.mock.method(ipc.parakeetManager, "refreshHotwordsSoon", () => {});
   t.mock.method(databaseManager, "setDictionary", () => ({ success: true }));
   t.mock.method(databaseManager, "applyDictionaryChanges", () => ({ success: true }));
+  t.mock.method(databaseManager, "seedDictionary", () => ({ success: true, seeded: true }));
   const writes = {
     set: () => handlers.get("db-set-dictionary")({}, ["Qdrant"]),
+    seed: () => handlers.get("db-seed-dictionary")({}, ["Qdrant"]),
     apply: () => handlers.get("db-apply-dictionary-changes")({}, { add: ["Qdrant"] }),
     undo: () => handlers.get("undo-learned-corrections")({}, ["Qdrant"]),
     sync: () => handlers.get("db-broadcast-dictionary-updated")(),

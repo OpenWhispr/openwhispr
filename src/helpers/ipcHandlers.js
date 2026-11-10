@@ -2461,7 +2461,9 @@ class IPCHandlers {
       if (!Array.isArray(words)) {
         throw new Error("words must be an array");
       }
-      return this.databaseManager.seedDictionary(words);
+      const result = this.databaseManager.seedDictionary(words);
+      if (result.seeded) this.parakeetManager.refreshHotwordsSoon();
+      return result;
     });
 
     ipcMain.handle("db-apply-dictionary-changes", async (_event, changes, listsAccountId) => {
