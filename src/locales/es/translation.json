@@ -727,8 +727,8 @@
       "failedOffline": "Sin conexión",
       "clearAll": "Borrar todo",
       "clearAllTitle": "Borrar todas las transcripciones",
-      "clearAllDescription": "Todas las transcripciones, los archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo y de tu cuenta.",
-      "clearAllDescriptionDevice": "Todas las transcripciones, los archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo. Los recuentos ya sincronizados con una cuenta no se verán afectados.",
+      "clearAllDescription": "Todas las transcripciones de tu historial, sus archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo y de tu cuenta.",
+      "clearAllDescriptionDevice": "Todas las transcripciones de este historial, sus archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo. Las que ya se hayan sincronizado con una cuenta también se eliminarán de esa cuenta la próxima vez que inicie sesión en este dispositivo.",
       "clearAllSuccess": "Historial borrado",
       "clearAllErrorTitle": "No se pudo borrar el historial",
       "clearAllErrorDescription": "Algo salió mal. Inténtalo de nuevo.",
@@ -990,6 +990,11 @@
       "noAudio": {
         "title": "No hemos entendido eso",
         "description": "Comprueba el micrófono e inténtalo de nuevo."
+      },
+      "commandAccountChanged": {
+        "title": "Comando sin responder",
+        "description": "La cuenta cambió antes de que terminara. Su transcripción está en el historial de la cuenta con la que lo dijiste.",
+        "descriptionNotSaved": "La cuenta cambió antes de que terminara. Dilo de nuevo para preguntar ahora."
       },
       "micDisconnected": {
         "title": "Micrófono desconectado",
@@ -2371,7 +2376,7 @@
       "lastSynced": "Última sincronización {{time}}",
       "minutesAgo": "hace {{count}}m",
       "audioRetention": "Retención de audio",
-      "audioRetentionDescription": "Almacena el audio de dictado localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención. El audio de las reuniones nunca se almacena.",
+      "audioRetentionDescription": "Almacena el audio de dictado localmente para volver a transcribir y descargar. Los archivos de audio de este dispositivo se eliminan automáticamente tras el periodo de retención, sea cual sea la cuenta que los grabó. El audio de las reuniones nunca se almacena.",
       "saveDiscarded": "Guardar dictados descartados",
       "saveDiscardedDescription": "Cuando cancelas un dictado con Escape, conserva su audio en el historial para poder recuperarlo. Requiere tener activadas la retención de datos y de audio.",
       "audioRetentionDisabled": "Desactivado",
@@ -2379,9 +2384,9 @@
       "retentionDays_other": "{{count}} días",
       "audioStorageUsage": "Uso de almacenamiento",
       "audioStorageUsageDescription": "Archivos de audio almacenados en este dispositivo",
-      "audioStorageFiles": "{{count}} archivos, {{size}}",
-      "audioStorageEmpty": "No hay archivos de audio almacenados",
-      "clearAllAudio": "Eliminar todo el audio",
+      "audioStorageHistoryFiles": "{{count}} archivos en este historial, {{size}}",
+      "audioStorageHistoryEmpty": "No hay archivos de audio en este historial",
+      "clearHistoryAudio": "Eliminar audio",
       "clearAllAudioConfirm": "¿Eliminar todos los archivos de audio almacenados? Esta acción no se puede deshacer."
     },
     "prompts": {

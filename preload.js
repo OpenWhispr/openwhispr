@@ -205,15 +205,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Dictionary functions
   getDictionary: () => ipcRenderer.invoke("db-get-dictionary"),
-  setDictionary: (words) => ipcRenderer.invoke("db-set-dictionary", words),
-  applyDictionaryChanges: (changes) => ipcRenderer.invoke("db-apply-dictionary-changes", changes),
+  setDictionary: (words, listsAccountId) =>
+    ipcRenderer.invoke("db-set-dictionary", words, listsAccountId),
+  seedDictionary: (words) => ipcRenderer.invoke("db-seed-dictionary", words),
+  applyDictionaryChanges: (changes, listsAccountId) =>
+    ipcRenderer.invoke("db-apply-dictionary-changes", changes, listsAccountId),
   onDictionaryUpdated: (callback) => {
     const listener = (_event, words) => callback?.(words);
     ipcRenderer.on("dictionary-updated", listener);
     return () => ipcRenderer.removeListener("dictionary-updated", listener);
   },
   getSnippets: () => ipcRenderer.invoke("db-get-snippets"),
-  setSnippets: (snippets) => ipcRenderer.invoke("db-set-snippets", snippets),
+  setSnippets: (snippets, listsAccountId) =>
+    ipcRenderer.invoke("db-set-snippets", snippets, listsAccountId),
+  seedSnippets: (snippets) => ipcRenderer.invoke("db-seed-snippets", snippets),
   onSnippetsUpdated: (callback) => {
     const listener = (_event, snippets) => callback?.(snippets);
     ipcRenderer.on("snippets-updated", listener);
@@ -292,9 +297,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Space functions
   getSpaces: () => ipcRenderer.invoke("db-get-spaces"),
+  hasOtherAccountRows: () => ipcRenderer.invoke("db-has-other-account-rows"),
+  accountChangedSince: (occurredAt) => ipcRenderer.invoke("db-account-changed-since", occurredAt),
+  hasUnclaimedLegacyRows: () => ipcRenderer.invoke("db-has-unclaimed-legacy-rows"),
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
   getActiveAccountScope: () => ipcRenderer.invoke("get-active-account-scope"),
+  getDatabaseAccountScope: () => ipcRenderer.invoke("get-database-account-scope"),
+  onDatabaseAccountScopeChanged: registerListener(
+    "database-account-scope-changed",
+    (callback) => (_event, scope) => callback(scope)
+  ),
   onActiveAccountScopeChanged: registerListener(
     "active-account-scope-changed",
     (callback) => (_event, scope) => callback(scope)
@@ -1328,34 +1341,71 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),
   getConversationByClientId: (clientId) =>
     ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
-  upsertConversationFromCloud: (cloudConv, messages, snapshot) =>
-    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages, snapshot),
-  markConversationCreateAttempted: (id) =>
-    ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
-  acknowledgeConversationCreate: (id, snapshot, cloudId) =>
-    ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
-  markConversationSynced: (id, cloudId, snapshot, cloudUpdatedAt) =>
-    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId, snapshot, cloudUpdatedAt),
-  replaceConversationClientId: (id, expectedClientId) =>
-    ipcRenderer.invoke("db-replace-conversation-client-id", id, expectedClientId),
-  hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),
+  claimConversationFromCloud: (cloudConv, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-claim-conversation-from-cloud", cloudConv, expectedAuthGeneration),
+  upsertConversationFromCloud: (cloudConv, messages, snapshot, expectedAuthGeneration) =>
+    ipcRenderer.invoke(
+      "db-upsert-conversation-from-cloud",
+      cloudConv,
+      messages,
+      snapshot,
+      expectedAuthGeneration
+    ),
+  markConversationCreateAttempted: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-mark-conversation-create-attempted", id, expectedAuthGeneration),
+  clearConversationCreateAttempted: (id) =>
+    ipcRenderer.invoke("db-clear-conversation-create-attempted", id),
+  acknowledgeConversationCreate: (id, snapshot, cloudId, accountId, authGeneration) =>
+    ipcRenderer.invoke(
+      "db-acknowledge-conversation-create",
+      id,
+      snapshot,
+      cloudId,
+      accountId,
+      authGeneration
+    ),
+  markConversationSynced: (id, cloudId, snapshot, cloudUpdatedAt, accountId, authGeneration) =>
+    ipcRenderer.invoke(
+      "db-mark-conversation-synced",
+      id,
+      cloudId,
+      snapshot,
+      cloudUpdatedAt,
+      accountId,
+      authGeneration
+    ),
+  replaceConversationClientId: (id, expectedClientId, accountId, authGeneration) =>
+    ipcRenderer.invoke(
+      "db-replace-conversation-client-id",
+      id,
+      expectedClientId,
+      accountId,
+      authGeneration
+    ),
+  hardDeleteConversation: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-hard-delete-conversation", id, expectedAuthGeneration),
 
   getPendingTranscriptions: () => ipcRenderer.invoke("db-get-pending-transcriptions"),
   getTranscriptionByClientId: (clientId) =>
     ipcRenderer.invoke("db-get-transcription-by-client-id", clientId),
-  upsertTranscriptionFromCloud: (cloudTranscription) =>
-    ipcRenderer.invoke("db-upsert-transcription-from-cloud", cloudTranscription),
-  markTranscriptionSynced: (id, cloudId) =>
-    ipcRenderer.invoke("db-mark-transcription-synced", id, cloudId),
+  upsertTranscriptionFromCloud: (cloudTranscription, expectedAuthGeneration) =>
+    ipcRenderer.invoke(
+      "db-upsert-transcription-from-cloud",
+      cloudTranscription,
+      expectedAuthGeneration
+    ),
+  markTranscriptionSynced: (id, cloudId, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-mark-transcription-synced", id, cloudId, expectedAuthGeneration),
   getPendingTranscriptionDeletes: () => ipcRenderer.invoke("db-get-pending-transcription-deletes"),
-  hardDeleteTranscription: (id) => ipcRenderer.invoke("db-hard-delete-transcription", id),
+  hardDeleteTranscription: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-hard-delete-transcription", id, expectedAuthGeneration),
 
   getPendingDictionary: () => ipcRenderer.invoke("db-get-pending-dictionary"),
   getPendingDictionaryDeletes: () => ipcRenderer.invoke("db-get-pending-dictionary-deletes"),
   getDictionaryByClientId: (clientDictId) =>
     ipcRenderer.invoke("db-get-dictionary-by-client-id", clientDictId),
-  upsertDictionaryFromCloud: (cloudEntry) =>
-    ipcRenderer.invoke("db-upsert-dictionary-from-cloud", cloudEntry),
+  upsertDictionaryFromCloud: (cloudEntry, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-upsert-dictionary-from-cloud", cloudEntry, expectedAuthGeneration),
   markDictionarySynced: (
     id,
     cloudId,
@@ -1363,7 +1413,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     expectedWord,
     expectedSource,
     serverSource,
-    pushed
+    pushed,
+    expectedAuthGeneration
   ) =>
     ipcRenderer.invoke(
       "db-mark-dictionary-synced",
@@ -1373,10 +1424,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
       expectedWord,
       expectedSource,
       serverSource,
-      pushed
+      pushed,
+      expectedAuthGeneration
     ),
-  hardDeleteDictionary: (id) => ipcRenderer.invoke("db-hard-delete-dictionary", id),
-  clearDictionaryCloudId: (id) => ipcRenderer.invoke("db-clear-dictionary-cloud-id", id),
+  hardDeleteDictionary: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-hard-delete-dictionary", id, expectedAuthGeneration),
+  clearDictionaryCloudId: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-clear-dictionary-cloud-id", id, expectedAuthGeneration),
+  keepNewerDictionaryEdit: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-keep-newer-dictionary-edit", id, expectedAuthGeneration),
   broadcastDictionaryUpdated: () => ipcRenderer.invoke("db-broadcast-dictionary-updated"),
   getDictionaryEntriesByWords: (words) =>
     ipcRenderer.invoke("db-get-dictionary-entries-by-words", words),
@@ -1385,8 +1441,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getMovedDictionaryWords: () => ipcRenderer.invoke("db-get-moved-dictionary-words"),
   retireMovedDictionaryWords: (words, options) =>
     ipcRenderer.invoke("db-retire-moved-dictionary-words", words, options),
-  reviveRetiredDictionaryWords: (words) =>
-    ipcRenderer.invoke("db-revive-retired-dictionary-words", words),
+  reviveRetiredDictionaryWords: (words, options) =>
+    ipcRenderer.invoke("db-revive-retired-dictionary-words", words, options),
 
   getSharedDictionary: (workspaceId) => ipcRenderer.invoke("db-shared-dictionary-get", workspaceId),
   applySharedDictionaryPull: (workspaceId, change) =>
@@ -1405,21 +1461,33 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   getPendingSnippets: () => ipcRenderer.invoke("db-get-pending-snippets"),
   getPendingSnippetDeletes: () => ipcRenderer.invoke("db-get-pending-snippet-deletes"),
-  getSnippetForCloudMerge: (cloudEntry) =>
-    ipcRenderer.invoke("db-get-snippet-for-cloud-merge", cloudEntry),
-  upsertSnippetFromCloud: (cloudEntry) =>
-    ipcRenderer.invoke("db-upsert-snippet-from-cloud", cloudEntry),
-  markSnippetSynced: (id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement) =>
+  getSnippetForCloudMerge: (cloudEntry, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-get-snippet-for-cloud-merge", cloudEntry, expectedAuthGeneration),
+  upsertSnippetFromCloud: (cloudEntry, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-upsert-snippet-from-cloud", cloudEntry, expectedAuthGeneration),
+  markSnippetSynced: (
+    id,
+    cloudId,
+    serverUpdatedAt,
+    expectedTrigger,
+    expectedReplacement,
+    expectedAuthGeneration
+  ) =>
     ipcRenderer.invoke(
       "db-mark-snippet-synced",
       id,
       cloudId,
       serverUpdatedAt,
       expectedTrigger,
-      expectedReplacement
+      expectedReplacement,
+      expectedAuthGeneration
     ),
-  hardDeleteSnippet: (id) => ipcRenderer.invoke("db-hard-delete-snippet", id),
-  clearSnippetCloudId: (id) => ipcRenderer.invoke("db-clear-snippet-cloud-id", id),
+  hardDeleteSnippet: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-hard-delete-snippet", id, expectedAuthGeneration),
+  clearSnippetCloudId: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-clear-snippet-cloud-id", id, expectedAuthGeneration),
+  keepNewerSnippetEdit: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-keep-newer-snippet-edit", id, expectedAuthGeneration),
   broadcastSnippetsUpdated: () => ipcRenderer.invoke("db-broadcast-snippets-updated"),
 
   // Google Calendar

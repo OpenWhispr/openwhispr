@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, GitFork, Minimize, Plus } from "../icons";
 import { cn } from "../lib/utils";
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import type { ConversationPreview } from "../../types/electron";
+import { subscribeAuthBoundary } from "../../lib/authRequestContext";
 import { useAgentWindowDrag } from "./useAgentWindowDrag";
 
 const CHAT_LIST_LIMIT = 50;
@@ -31,16 +32,36 @@ function ChatSwitcher({
   onSelect: (conversationId: number) => void;
 }) {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
   const [chats, setChats] = useState<ConversationPreview[] | null>(null);
+  const requestRef = useRef(0);
+
+  // The window outlives a sign-out, and the list the menu: the next account
+  // sees neither the last list nor one still being read for the account before.
+  useEffect(
+    () =>
+      subscribeAuthBoundary(() => {
+        requestRef.current += 1;
+        setChats(null);
+        setOpen(false);
+      }),
+    []
+  );
 
   return (
     <DropdownMenu
-      onOpenChange={(open) => {
-        if (!open) return;
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) return;
+        const request = ++requestRef.current;
+        const show = (list: ConversationPreview[]): void => {
+          if (request === requestRef.current) setChats(list);
+        };
         void window.electronAPI
           ?.getAgentConversationsWithPreview?.(CHAT_LIST_LIMIT, 0, false)
-          .then((list) => setChats(list ?? []))
-          .catch(() => setChats([]));
+          .then((list) => show(list ?? []))
+          .catch(() => show([]));
       }}
     >
       <DropdownMenuTrigger
