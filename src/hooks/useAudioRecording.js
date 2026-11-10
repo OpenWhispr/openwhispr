@@ -759,20 +759,28 @@ export const useAudioRecording = (toast, options = {}) => {
             return;
           }
 
+          // Spoken under an account that has since been replaced. Its row is saved
+          // as that account's, so the snippets now loaded (the next account's)
+          // must not expand into it, and neither the agent window nor the
+          // onboarding demo may answer it for the next account.
+          const outlivedAccount =
+            (result.assistantConversation || getSettings().snippets?.length > 0) &&
+            (await window.electronAPI?.accountChangedSince?.(result.analyticsOccurredAt));
+
           // A selection edit must replace the model's exact result. Snippet
           // expansion is a dictation convenience and can otherwise mutate a
           // legitimate replacement that happens to contain a snippet trigger.
-          if (!result.selectionEdit?.sessionId) {
+          if (!result.selectionEdit?.sessionId && !outlivedAccount) {
             result.text = expandSnippets(result.text, getSettings().snippets);
           }
 
           setTranscript(result.text);
-          // Spoken under an account that has since left, so neither the agent
-          // window nor the onboarding demo may answer it for the next one.
-          const commandOutlivedAccount =
-            result.assistantConversation &&
-            (await window.electronAPI?.accountChangedSince?.(result.analyticsOccurredAt));
-          if (commandOutlivedAccount) {
+          if (result.assistantConversation && outlivedAccount) {
+            onDemoEventRef.current?.({
+              kind: demoKindRef.current,
+              status: "error",
+              message: t("hooks.audioRecording.commandAccountChanged.title"),
+            });
             window.electronAPI?.hideDictationPreview?.();
             // The save below files it under the account it was spoken under, so
             // the pill points there and never shows it to the account now signed in.
@@ -809,8 +817,10 @@ export const useAudioRecording = (toast, options = {}) => {
               onOnboardingAssistantCommandRef.current?.(command);
             } else {
               // A conversational wake-word command is answered in the agent window.
+              // Main checks the account again when it delivers the command.
               void window.electronAPI?.submitAgentCommand?.({
                 ...command,
+                spokenAt: result.analyticsOccurredAt,
                 selectedContext: selectedContext
                   ? { text: selectedContext.text, source: "external" }
                   : null,

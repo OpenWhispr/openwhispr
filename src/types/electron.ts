@@ -1621,6 +1621,8 @@ export interface AgentWindowCommand {
   attachment: { image: string; mediaType: string } | null;
   /** Text selected in another app when the command was spoken. */
   selectedContext: { text: string; source: "external" } | null;
+  /** When the command was spoken (ISO), so main can refuse it after an account change. */
+  spokenAt?: string;
 }
 
 export interface ReferralItem {

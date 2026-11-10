@@ -380,17 +380,21 @@ let lastSentSharedHints: string | null = null;
 let listsAccountId: string | null | undefined;
 
 // A whole-list save main refused as another account's: the window shows an
-// edit SQLite never stored, so it takes what SQLite holds.
+// edit SQLite never stored, so it takes what SQLite holds. A read that
+// outlives another account change is dropped: that change's broadcast already
+// brought the lists, and adopting this one would put them under the wrong owner.
 async function adoptStoredDictionary(): Promise<void> {
+  const owner = listsAccountId;
   const stored = await window.electronAPI?.getDictionary?.();
-  if (!stored) return;
+  if (!stored || listsAccountId !== owner) return;
   if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(stored));
   useSettingsStore.setState({ customDictionary: stored });
 }
 
 async function adoptStoredSnippets(): Promise<void> {
+  const owner = listsAccountId;
   const stored = await window.electronAPI?.getSnippets?.();
-  if (!stored) return;
+  if (!stored || listsAccountId !== owner) return;
   if (isBrowser) localStorage.setItem("snippets", JSON.stringify(stored));
   useSettingsStore.setState({ snippets: stored });
 }

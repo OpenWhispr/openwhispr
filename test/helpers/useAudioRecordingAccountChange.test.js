@@ -35,7 +35,11 @@ export default class FakeAudioManager {
 
 // A command goes to the agent window through main, or during onboarding to
 // the headless responder; both sit behind the account check.
-async function renderHook(t, accountChanged, { onboarded = true, keepHistory = true } = {}) {
+async function renderHook(
+  t,
+  accountChanged,
+  { onboarded = true, keepHistory = true, snippets = null } = {}
+) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -44,6 +48,7 @@ async function renderHook(t, accountChanged, { onboarded = true, keepHistory = t
   const checkedTimes = [];
   const commands = [];
   const toasts = [];
+  const demoEvents = [];
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
@@ -65,6 +70,7 @@ async function renderHook(t, accountChanged, { onboarded = true, keepHistory = t
   });
   if (onboarded) localStorage.setItem("onboardingCompleted", "true");
   if (!keepHistory) localStorage.setItem("dataRetentionEnabled", "false");
+  if (snippets) localStorage.setItem("snippets", JSON.stringify(snippets));
   const container = installHookDom(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-audio-recording-account-change-",
@@ -75,7 +81,7 @@ async function renderHook(t, accountChanged, { onboarded = true, keepHistory = t
 
   function Harness() {
     useAudioRecording((toast) => toasts.push(toast), {
-      onDemoEvent: () => {},
+      onDemoEvent: (event) => demoEvents.push(event),
       onOnboardingAssistantCommand: (command) => commands.push(command),
     });
     return null;
@@ -84,7 +90,8 @@ async function renderHook(t, accountChanged, { onboarded = true, keepHistory = t
   await React.act(async () => {
     root.render(React.createElement(Harness));
   });
-  return { manager: managers.at(-1), commands, checkedTimes, toasts };
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  return { manager: managers.at(-1), commands, checkedTimes, toasts, demoEvents, useSettingsStore };
 }
 
 const voiceCommandResult = {
@@ -151,6 +158,56 @@ for (const [surface, onboarded] of [
 
     assert.equal(commands.length, 1);
     assert.equal(commands[0].text, "what's on my calendar");
+  });
+}
+
+test("the agent window command carries when it was spoken, so main can check the account again", async (t) => {
+  const { manager, commands } = await renderHook(t, false);
+
+  await React.act(async () => {
+    await manager.callbacks.onTranscriptionComplete({ ...voiceCommandResult });
+  });
+
+  assert.equal(commands[0].spokenAt, voiceCommandResult.analyticsOccurredAt);
+});
+
+test("a dropped onboarding command ends the demo's processing state", async (t) => {
+  const { manager, demoEvents } = await renderHook(t, true, { onboarded: false });
+
+  await React.act(async () => {
+    await manager.callbacks.onTranscriptionComplete({ ...voiceCommandResult });
+  });
+
+  assert.equal(demoEvents.at(-1).status, "error");
+});
+
+for (const [label, accountChanged, expected] of [
+  ["the next account's snippets never expand into", true, "send my addr"],
+  ["the account's own snippets still expand in", false, "send my 1 Main St"],
+]) {
+  test(`${label} a dictation spoken before an account switch`, async (t) => {
+    const { manager, useSettingsStore } = await renderHook(t, accountChanged, {
+      snippets: [{ trigger: "addr", replacement: "1 Main St" }],
+    });
+    assert.equal(useSettingsStore.getState().snippets.length, 1, "the fixture loaded");
+    const saved = [];
+    manager.saveTranscription = async (text) => {
+      saved.push(text);
+      return true;
+    };
+    manager.safePaste = async () => ({ success: true });
+
+    await React.act(async () => {
+      await manager.callbacks.onTranscriptionComplete({
+        success: true,
+        text: "send my addr",
+        rawText: "send my addr",
+        source: "local",
+        analyticsOccurredAt: voiceCommandResult.analyticsOccurredAt,
+      });
+    });
+
+    assert.equal(saved[0] ?? null, expected);
   });
 }
 

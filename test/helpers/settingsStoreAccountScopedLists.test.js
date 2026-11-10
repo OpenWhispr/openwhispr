@@ -199,6 +199,43 @@ test("a window started between a token rotation and the re-scope saves its lists
   assert.deepEqual(store.useSettingsStore.getState().snippets, [sig]);
 });
 
+test("a refused save's read that outlives another account change is not adopted", async (t) => {
+  let onDatabaseScope;
+  let release;
+  const { store } = await loadSettingsWindow(t, {
+    cachePrefix: "openwhispr-settings-late-adopt-",
+    electronAPI: {
+      getDatabaseAccountScope: async () => ({
+        accountId: "account-b",
+        visibleAccountId: "account-b",
+      }),
+      onDatabaseAccountScopeChanged: (callback) => {
+        onDatabaseScope = callback;
+        return () => {};
+      },
+      getDictionary: async () => ["B's word"],
+      getSnippets: async () => [],
+      setDictionary: async () => {
+        // The reconciliation read starts only after this refusal; hold it.
+        globalThis.window.electronAPI.getDictionary = () =>
+          new Promise((resolve) => (release = () => resolve(["B's word"])));
+        return { success: false, stale: true };
+      },
+    },
+  });
+  const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+  store.useSettingsStore.getState().setCustomDictionary(["edit"]);
+  await settle();
+  // Account C arrives, with its own list, before B's read answers.
+  onDatabaseScope({ accountId: "account-c", visibleAccountId: "account-c" });
+  store.useSettingsStore.setState({ customDictionary: ["C's word"] });
+  release();
+  await settle();
+
+  assert.deepEqual(store.useSettingsStore.getState().customDictionary, ["C's word"]);
+});
+
 test("a whole-list save main refuses as another account's takes what SQLite holds", async (t) => {
   const stored = {
     dictionary: ["Kubernetes"],

@@ -1874,7 +1874,12 @@ class IPCHandlers {
     });
     ipcMain.handle("agent-window-submit-command", (event, command) => {
       if (!isFromWindow(event, this.windowManager.mainWindow)) return false;
-      return this.windowManager.agentWindow?.deliverCommand(command) ?? false;
+      // The renderer checked the account before sending, but it can change
+      // between that check and this delivery, or while the command waits for
+      // the agent window to load.
+      const isCurrent = () => !this.databaseManager.accountChangedSince(command?.spokenAt);
+      if (!isCurrent()) return false;
+      return this.windowManager.agentWindow?.deliverCommand(command, { isCurrent }) ?? false;
     });
 
     // WindowManager owns every teardown path for a demo (id-matched end,
