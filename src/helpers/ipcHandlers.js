@@ -758,6 +758,8 @@ class IPCHandlers {
     // The active workspace's applying shared words, as the renderer last sent
     // them (dictionary-set-shared-hints). Empty until the first send.
     this._sharedDictionaryHints = { space: [], workspace: [] };
+    // Local sherpa models read the same dictionary as hotwords (#3117).
+    this.parakeetManager.setDictionaryProvider(() => this._getDictionarySafe());
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
@@ -1598,6 +1600,7 @@ class IPCHandlers {
         // Broadcast the post-save normalized list, not the raw input (which
         // still has case-variant dupes), so renderers don't flash ghost rows.
         broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
+        this.parakeetManager.refreshHotwordsSoon();
 
         // Show the overlay so the toast is visible (it may have been hidden after dictation)
         this.windowManager.showDictationPanel();
@@ -2358,7 +2361,9 @@ class IPCHandlers {
       if (!Array.isArray(words)) {
         throw new Error("words must be an array");
       }
-      return this.databaseManager.setDictionary(words);
+      const result = this.databaseManager.setDictionary(words);
+      this.parakeetManager.refreshHotwordsSoon();
+      return result;
     });
 
     ipcMain.handle("db-apply-dictionary-changes", async (_event, changes) => {
@@ -2369,7 +2374,9 @@ class IPCHandlers {
       if (remove !== undefined && !Array.isArray(remove)) {
         throw new Error("remove must be an array");
       }
-      return this.databaseManager.applyDictionaryChanges({ add, remove });
+      const result = this.databaseManager.applyDictionaryChanges({ add, remove });
+      this.parakeetManager.refreshHotwordsSoon();
+      return result;
     });
 
     ipcMain.handle("db-get-pending-dictionary", async () => {
@@ -2512,6 +2519,7 @@ class IPCHandlers {
         Array.isArray(value) && value.every((word) => typeof word === "string");
       if (!isWordList(hints?.space) || !isWordList(hints?.workspace)) return;
       this._sharedDictionaryHints = { space: [...hints.space], workspace: [...hints.workspace] };
+      this.parakeetManager.refreshHotwordsSoon();
     });
 
     ipcMain.handle("db-broadcast-dictionary-updated", async () => {
@@ -2593,6 +2601,7 @@ class IPCHandlers {
           return { success: false };
         }
         broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
+        this.parakeetManager.refreshHotwordsSoon();
         debugLogger.debug("[AutoLearn] Undo: removed words", { words: validWords });
         return { success: true };
       } catch (err) {

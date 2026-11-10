@@ -2,6 +2,7 @@ const {
   runLocalModelOperation,
   assertLocalModelOperation,
   localModelOperationSignal,
+  isLocalModelPolicyRefusal,
 } = require("./localModelPolicyGate");
 const { spawn } = require("child_process");
 const fs = require("fs");
@@ -61,9 +62,14 @@ class ParakeetWsServer {
     // Only set for models started for a single language (Cohere Transcribe);
     // part of the server identity, so a language change restarts the server.
     this.language = null;
+    // The dictionary hotwords the server was asked for (see sherpaHotwords),
+    // also part of the identity.
+    this.hotwordsKey = null;
     this.startupPromise = null;
     this.startingModelName = null;
     this.startingLanguage = null;
+    this.startingHotwordsKey = null;
+    this.activeDecodes = 0;
     this.healthCheckInterval = null;
     this.cachedBinaryPaths = {};
   }
@@ -89,43 +95,73 @@ class ParakeetWsServer {
     return this.isAvailable("offline") || this.isAvailable("online");
   }
 
-  async start(modelName, modelDir, runtime = "offline", language = null) {
+  // hotwords: { score, words } from sherpaHotwords, or null to decode without the dictionary.
+  async start(modelName, modelDir, runtime = "offline", language = null, hotwords = null) {
     return runLocalModelOperation(
       this,
       "transcription",
       this.localModelIdForPath ? this.localModelIdForPath(modelDir, modelName) : modelName,
-      () => this._policyAllowedStart(modelName, modelDir, runtime, language),
+      () => this._policyAllowedStart(modelName, modelDir, runtime, language, hotwords),
       { onAbort: () => this.stop() }
     );
   }
 
-  async _policyAllowedStart(modelName, modelDir, runtime = "offline", language = null) {
-    // Serialize with any in-flight startup; join it only when it's for the same model.
+  async _policyAllowedStart(
+    modelName,
+    modelDir,
+    runtime = "offline",
+    language = null,
+    hotwords = null
+  ) {
+    const hotwordsKey = hotwords ? JSON.stringify(hotwords) : null;
+    // Serialize with any in-flight startup; join it only when it's for the same server.
     while (this.startupPromise) {
-      if (this.startingModelName === modelName && this.startingLanguage === language) {
+      if (
+        this.startingModelName === modelName &&
+        this.startingLanguage === language &&
+        this.startingHotwordsKey === hotwordsKey
+      ) {
         return this.startupPromise;
       }
       await this.startupPromise.catch(() => {});
     }
-    if (this.ready && this.modelName === modelName && this.language === language) return;
+    if (this.ready && this.modelName === modelName && this.language === language) {
+      if (this.hotwordsKey === hotwordsKey) return;
+      // A dictionary edit never cuts off a decode; the next start once idle applies it.
+      if (this.activeDecodes > 0) return;
+    }
 
     this.startingModelName = modelName;
     this.startingLanguage = language;
+    this.startingHotwordsKey = hotwordsKey;
     // Assigned before any await so concurrent callers can never double-spawn.
     this.startupPromise = (async () => {
       try {
         if (this.process) await this.stop();
-        await this._doStart(modelName, modelDir, runtime, language);
+        try {
+          await this._doStart(modelName, modelDir, runtime, language, hotwords);
+        } catch (error) {
+          if (!hotwords || isLocalModelPolicyRefusal(error)) throw error;
+          // A dictionary sherpa cannot read must not cost local transcription.
+          debugLogger.warn("parakeet-ws failed to start with hotwords, starting without them", {
+            error: error.message,
+          });
+          await this.stop();
+          await this._doStart(modelName, modelDir, runtime, language, null);
+        }
+        // The requested words, even after the fallback, so they are not retried every decode.
+        this.hotwordsKey = hotwordsKey;
       } finally {
         this.startupPromise = null;
         this.startingModelName = null;
         this.startingLanguage = null;
+        this.startingHotwordsKey = null;
       }
     })();
     return this.startupPromise;
   }
 
-  async _doStart(modelName, modelDir, runtime, language) {
+  async _doStart(modelName, modelDir, runtime, language, hotwords) {
     const wsBinary = this.getWsBinaryPath(runtime);
     if (!wsBinary) throw new Error(`sherpa-onnx ${runtime} WS server binary not found`);
     if (!fs.existsSync(modelDir)) throw new Error(`Model directory not found: ${modelDir}`);
@@ -149,6 +185,14 @@ class ParakeetWsServer {
             `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
           ];
     const sherpaModelType = getSherpaModelType(modelName);
+    // sherpa encodes hotwords with the model's sentencepiece vocabulary.
+    const bpeVocab = path.join(modelDir, "bpe.vocab");
+    const useHotwords = Boolean(hotwords) && fs.existsSync(bpeVocab);
+    if (hotwords && !useHotwords) {
+      debugLogger.warn("parakeet-ws model has no bpe.vocab; starting without hotwords", {
+        modelName,
+      });
+    }
     const args = [
       `--tokens=${path.join(modelDir, "tokens.txt")}`,
       ...modelArgs,
@@ -170,9 +214,35 @@ class ParakeetWsServer {
         : [`--num-threads=${INTRA_OP_THREADS}`, `--num-work-threads=${OFFLINE_WORK_THREADS}`]),
     ];
 
-    debugLogger.debug("Starting parakeet WS server", { port: this.port, modelName, runtime, args });
-
     assertLocalModelOperation(this);
+    // The words go in a folder only this user can open, written without
+    // following a link, since the temp directory may be shared.
+    const hotwordsDir = useHotwords
+      ? fs.mkdtempSync(path.join(getSafeTempDir(), "openwhispr-hotwords-"))
+      : null;
+    if (hotwordsDir) {
+      const hotwordsFile = path.join(hotwordsDir, "hotwords.txt");
+      fs.writeFileSync(hotwordsFile, hotwords.words.map((word) => `${word}\n`).join(""), {
+        flag: "wx",
+        mode: 0o600,
+      });
+      args.push(
+        "--decoding-method=modified_beam_search",
+        `--hotwords-file=${hotwordsFile}`,
+        `--hotwords-score=${hotwords.score}`,
+        "--modeling-unit=bpe",
+        `--bpe-vocab=${bpeVocab}`
+      );
+    }
+
+    debugLogger.debug("Starting parakeet WS server", {
+      port: this.port,
+      modelName,
+      runtime,
+      args,
+      hotwordCount: hotwordsDir ? hotwords.words.length : 0,
+    });
+
     const child = spawn(wsBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -220,7 +290,12 @@ class ParakeetWsServer {
       readyResolve(false);
     });
 
-    await this._waitForReady(readyFromStderr, () => ({ stderr: stderrBuffer, exitCode }));
+    try {
+      await this._waitForReady(readyFromStderr, () => ({ stderr: stderrBuffer, exitCode }));
+    } finally {
+      // sherpa reads the words once while loading; they need not stay on disk.
+      if (hotwordsDir) fs.rmSync(hotwordsDir, { recursive: true, force: true });
+    }
     this._startHealthCheck();
 
     debugLogger.info("parakeet-ws server started successfully", {
@@ -325,16 +400,20 @@ class ParakeetWsServer {
     );
   }
 
-  _policyAllowedTranscribe(samplesBuffer, sampleRate, { signal } = {}) {
+  async _policyAllowedTranscribe(samplesBuffer, sampleRate, { signal } = {}) {
     if (!this.ready || !this.process) {
       throw new Error("parakeet-ws server is not running");
     }
 
-    if (this.modelRuntime === "online") {
-      return this._transcribeOnline(samplesBuffer, signal);
+    // Counted so a dictionary change waits for the decodes in flight.
+    this.activeDecodes++;
+    try {
+      return this.modelRuntime === "online"
+        ? await this._transcribeOnline(samplesBuffer, signal)
+        : await this._transcribeOffline(samplesBuffer, sampleRate, signal);
+    } finally {
+      this.activeDecodes--;
     }
-
-    return this._transcribeOffline(samplesBuffer, sampleRate, signal);
   }
 
   _transcribeOffline(samplesBuffer, sampleRate, signal) {
@@ -670,6 +749,7 @@ class ParakeetWsServer {
     this.modelDir = null;
     this.modelRuntime = "offline";
     this.language = null;
+    this.hotwordsKey = null;
   }
 
   getStatus() {

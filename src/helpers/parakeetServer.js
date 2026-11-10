@@ -22,6 +22,7 @@ const {
   getRequiredModelFiles,
   resolveModelLanguage,
 } = require("./parakeetModelInfo");
+const { getSherpaHotwordsScore, buildSherpaHotwords } = require("../utils/sherpaHotwords.js");
 
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 4; // float32
@@ -33,6 +34,9 @@ const COHERE_MAX_SEGMENT_SECONDS = 30;
 // bound only caps memory when transcribing very long files.
 const ONLINE_MAX_SEGMENT_SECONDS = 600;
 const SILENCE_RMS_THRESHOLD = 0.001;
+// Dictionary edits arrive in bursts (imports, auto-learn), and each reload
+// costs a model load, so a running server waits for them to settle.
+const HOTWORDS_REFRESH_DELAY_MS = 2000;
 
 // Runs fn over items with at most `limit` in flight; results keep item order.
 // Once one item rejects, no further items are started.
@@ -56,6 +60,44 @@ async function mapWithConcurrency(items, limit, fn) {
 class ParakeetServerManager {
   constructor() {
     this.wsServer = new ParakeetWsServer();
+    this.dictionaryProvider = () => [];
+    this.hotwordsRefreshTimer = null;
+  }
+
+  // provider returns the dictionary, highest priority first.
+  setDictionaryProvider(provider) {
+    this.dictionaryProvider = provider;
+  }
+
+  _hotwordsFor(modelName) {
+    const score = getSherpaHotwordsScore(modelName);
+    if (score === null) return null;
+    const words = buildSherpaHotwords(this.dictionaryProvider());
+    return words.length > 0 ? { score, words } : null;
+  }
+
+  // Reloads a running server with the current dictionary in the background, so
+  // the next dictation does not wait for the model to load.
+  refreshHotwordsSoon() {
+    clearTimeout(this.hotwordsRefreshTimer);
+    this.hotwordsRefreshTimer = setTimeout(() => {
+      this.hotwordsRefreshTimer = null;
+      // Busy servers keep their words until idle; trying again later spares the
+      // next dictation the reload.
+      if (this.wsServer.startupPromise || this.wsServer.activeDecodes > 0) {
+        this.refreshHotwordsSoon();
+        return;
+      }
+      const { ready, modelName, modelDir, modelRuntime, language } = this.wsServer;
+      if (!ready || getSherpaHotwordsScore(modelName) === null) return;
+      this.wsServer
+        .start(modelName, modelDir, modelRuntime, language, this._hotwordsFor(modelName))
+        .catch((error) => {
+          debugLogger.warn("Failed to reload parakeet-ws with the new dictionary", {
+            error: error.message,
+          });
+        });
+    }, HOTWORDS_REFRESH_DELAY_MS);
   }
 
   getBinaryPath(runtime) {
@@ -156,7 +198,8 @@ class ParakeetServerManager {
         modelName,
         modelDir,
         runtime,
-        resolveModelLanguage(modelName, language)
+        resolveModelLanguage(modelName, language),
+        this._hotwordsFor(modelName)
       );
 
       const samples = wavToFloat32Samples(wavBuffer);
@@ -274,7 +317,8 @@ class ParakeetServerManager {
         modelName,
         modelDir,
         runtime,
-        resolveModelLanguage(modelName, language)
+        resolveModelLanguage(modelName, language),
+        this._hotwordsFor(modelName)
       );
       return { success: true, port: this.wsServer.port };
     } catch (error) {
