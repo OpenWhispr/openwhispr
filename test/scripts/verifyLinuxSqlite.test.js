@@ -6,6 +6,7 @@ const path = require("path");
 
 const {
   findAvxInstructions,
+  findNewerGlibcSymbols,
   shouldVerifyLinuxSqliteBaseline,
   verifyLinuxSqliteBaseline,
 } = require("../../scripts/verify-linux-sqlite");
@@ -13,17 +14,28 @@ const { linuxBaselineFlags } = require("../../scripts/lib/linux-baseline-flags")
 
 const skip = process.platform === "win32" ? "fake tools are shell scripts" : false;
 const CLEAN_DISASSEMBLY = "   e000:\tendbr64\n   e004:\tcall   1040 <vsnprintf@plt>\n";
+const CLEAN_SYMBOLS = [
+  "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.2.5) fmod",
+  "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.34) pthread_create\n",
+].join("\n");
 
 // Replaces PATH with fake objdump and qemu-x86_64, so a test controls what the
-// disassembly contains and how the emulated process ends.
-function fakeTools(t, { disassembly = CLEAN_DISASSEMBLY, qemu = "exit 0" } = {}) {
+// dynamic symbols and disassembly contain and how the emulated process ends.
+function fakeTools(
+  t,
+  { symbols = CLEAN_SYMBOLS, disassembly = CLEAN_DISASSEMBLY, qemu = "exit 0" } = {}
+) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "verify-linux-sqlite-"));
   const log = path.join(dir, "qemu.log");
   const write = (name, body) =>
     fs.writeFileSync(path.join(dir, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
 
+  fs.writeFileSync(path.join(dir, "symbols.txt"), symbols);
   fs.writeFileSync(path.join(dir, "disassembly.txt"), disassembly);
-  write("objdump", `while read -r line; do echo "$line"; done < "${dir}/disassembly.txt"`);
+  write(
+    "objdump",
+    `[ "$1" = "-T" ] && file=symbols.txt || file=disassembly.txt\nwhile read -r line; do echo "$line"; done < "${dir}/$file"`
+  );
   if (qemu) write("qemu-x86_64", `echo "$2|$7" >> "${log}"\n${qemu}`);
 
   const originalPath = process.env.PATH;
@@ -60,6 +72,21 @@ test("checks every CPU profile and removes each scratch directory", { skip }, (t
   }
 });
 
+test(
+  "rejects an addon that needs a glibc newer than Ubuntu 22.04's before starting qemu",
+  { skip },
+  (t) => {
+    const tools = fakeTools(t, {
+      symbols: `${CLEAN_SYMBOLS}0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.38) fmod\n`,
+    });
+    assert.throws(
+      () => verifyLinuxSqliteBaseline("/app"),
+      /better_sqlite3\.node needs a glibc newer than 2\.35.*: fmod@GLIBC_2\.38$/
+    );
+    assert.deepEqual(tools.calls(), []);
+  }
+);
+
 test("rejects AVX2 in the addon before starting qemu", { skip }, (t) => {
   const tools = fakeTools(t, { disassembly: "   e000:\tvpaddd %ymm1,%ymm2,%ymm3\n" });
   assert.throws(() => verifyLinuxSqliteBaseline("/app"), /better_sqlite3\.node.*vpaddd/);
@@ -88,6 +115,19 @@ test("reports a failed assertion in the probe by exit status", { skip }, (t) => 
 test("fails when qemu is not installed", { skip }, (t) => {
   fakeTools(t, { qemu: null });
   assert.throws(() => verifyLinuxSqliteBaseline("/app"), /failed on Nehalem \(ENOENT\)/);
+});
+
+test("compares glibc symbol versions numerically", () => {
+  const symbols = [
+    "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.2.5) fmod",
+    "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.4) __stack_chk_fail",
+    "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.35) __rseq_size",
+    "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_2.38) fmod",
+    "0000000000000000      DF *UND*\t0000000000000000  GLIBC_2.39  pidfd_spawn",
+    "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_PRIVATE) _dl_find_object",
+  ].join("\n");
+  assert.deepEqual(findNewerGlibcSymbols(symbols), ["fmod@GLIBC_2.38", "pidfd_spawn@GLIBC_2.39"]);
+  assert.deepEqual(findNewerGlibcSymbols(CLEAN_SYMBOLS), []);
 });
 
 test("finds AVX and BMI instructions in GNU and LLVM disassembly only", () => {

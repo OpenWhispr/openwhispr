@@ -3,6 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { execFileSync } = require("child_process");
+const { compareVersions } = require("../src/helpers/parakeetCapability");
 
 // Use the packaged Electron ABI and SQLite, including the FTS5 initialization
 // that raised SIGILL before the first window on CPUs without AVX2 (#3038). The
@@ -36,6 +37,31 @@ assert.equal(reopened.prepare("SELECT content FROM notes").get().content, text);
 reopened.close();
 console.log("Packaged SQLite database, WAL, FTS5, JSON and persistence passed");
 `;
+
+// The addon links the build host's glibc, and the probe runs on that same glibc,
+// so only its symbol versions show it would fail to load on Ubuntu 22.04 (#3114).
+const MAX_GLIBC = "2.35";
+const GLIBC_SYMBOL = /\(?GLIBC_([0-9][0-9.]*)\)?\s+(\S+)$/gm;
+
+function findNewerGlibcSymbols(dynamicSymbols) {
+  return [
+    ...new Set(
+      Array.from(dynamicSymbols.matchAll(GLIBC_SYMBOL))
+        .filter(([, version]) => compareVersions(version, MAX_GLIBC) > 0)
+        .map(([, version, symbol]) => `${symbol}@GLIBC_${version}`)
+    ),
+  ];
+}
+
+function assertNoNewerGlibcSymbols(addonPath) {
+  const dynamicSymbols = execFileSync("objdump", ["-T", addonPath], { encoding: "utf8" });
+  const found = findNewerGlibcSymbols(dynamicSymbols);
+  if (found.length > 0) {
+    throw new Error(
+      `afterPack: ${addonPath} needs a glibc newer than ${MAX_GLIBC}, so the app would not start on Ubuntu 22.04: ${found.slice(0, 10).join(", ")}`
+    );
+  }
+}
 
 // Covers paths the probe never runs. AVX and AVX2 mnemonics start with "v"; the
 // rest are the VEX-encoded BMI instructions that x86-64-v3 compilers also emit.
@@ -91,18 +117,18 @@ function verifyLinuxSqliteBaseline(
 ) {
   const binary = path.resolve(appDir, executableName);
   const sqlite = path.resolve(appDir, "resources", "app.asar", "node_modules", "better-sqlite3");
-  assertNoAvxInstructions(
-    path.resolve(
-      appDir,
-      "resources",
-      "app.asar.unpacked",
-      "node_modules",
-      "better-sqlite3",
-      "build",
-      "Release",
-      "better_sqlite3.node"
-    )
+  const addon = path.resolve(
+    appDir,
+    "resources",
+    "app.asar.unpacked",
+    "node_modules",
+    "better-sqlite3",
+    "build",
+    "Release",
+    "better_sqlite3.node"
   );
+  assertNoNewerGlibcSymbols(addon);
+  assertNoAvxInstructions(addon);
   for (const cpu of ["Nehalem", "IvyBridge", "Haswell,-avx2"]) {
     runProbe(binary, sqlite, cpu, timeoutMs);
   }
@@ -138,5 +164,6 @@ if (require.main === module) {
 }
 
 exports.findAvxInstructions = findAvxInstructions;
+exports.findNewerGlibcSymbols = findNewerGlibcSymbols;
 exports.shouldVerifyLinuxSqliteBaseline = shouldVerifyLinuxSqliteBaseline;
 exports.verifyLinuxSqliteBaseline = verifyLinuxSqliteBaseline;
