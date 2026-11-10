@@ -715,6 +715,8 @@ export interface SpaceItem {
   // A private space's account: one per account and workspace. Null on team
   // spaces and on the signed-out stand-in.
   account_id?: string | null;
+  // 1 on the account's default private space once its default workspace is bound.
+  is_default?: number;
   kind: "private" | "team";
   name: string;
   emoji: string | null;

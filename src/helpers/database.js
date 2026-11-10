@@ -2080,6 +2080,17 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_private_identity ON spaces(COALESCE(account_id, ''), COALESCE(workspace_id, '')) WHERE kind = 'private' AND deleted_at IS NULL"
       );
+      try {
+        // Marks the account's default private space once its default workspace
+        // is bound, so it is found again after the account changes, before the
+        // renderer names the workspace.
+        this.db.exec("ALTER TABLE spaces ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_private_default ON spaces(account_id) WHERE kind = 'private' AND is_default = 1 AND deleted_at IS NULL"
+      );
 
       if (this._standInPrivateSpaceId() == null) {
         this.db
@@ -5699,9 +5710,11 @@ class DatabaseManager {
     }
   }
 
-  // The account's default private space: the one bound to its default
-  // workspace, else its pending one (no workspace yet), which
-  // bindDefaultPrivateSpace binds. Signed out, the stand-in.
+  // The account's default private space: the default workspace's, else the
+  // one the account last bound as its default (main forgets the workspaces
+  // on every account change), else its pending one (no workspace yet), which
+  // bindDefaultPrivateSpace binds. A pending row is made only for an account
+  // that has never bound. Signed out, the stand-in.
   getDefaultPrivateSpaceId() {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -5710,6 +5723,7 @@ class DatabaseManager {
       const defaultWorkspaceId = this.defaultWorkspaceId ?? null;
       return (
         (defaultWorkspaceId && this._findPrivateSpace(accountId, defaultWorkspaceId)) ||
+        this._boundDefaultPrivateSpace(accountId) ||
         this._findPrivateSpace(accountId, null) ||
         this._insertPrivateSpace(accountId, null)
       );
@@ -5732,6 +5746,18 @@ class DatabaseManager {
            ORDER BY id LIMIT 1`
         )
         .get(accountId, workspaceId)?.id ?? null
+    );
+  }
+
+  _boundDefaultPrivateSpace(accountId) {
+    return (
+      this.db
+        .prepare(
+          `SELECT id FROM spaces
+           WHERE kind = 'private' AND account_id = ? AND is_default = 1 AND deleted_at IS NULL
+           ORDER BY id LIMIT 1`
+        )
+        .get(accountId)?.id ?? null
     );
   }
 
@@ -5816,6 +5842,10 @@ class DatabaseManager {
   // The default workspace's id is known: the account's pending row becomes
   // that workspace's. A row made for it meanwhile (the active workspace was
   // known first) takes in the pending row's notes, folders and chats instead.
+  // The row is marked as the account's default, which it stays across
+  // launches and sign-ins. A different default later (the old one's
+  // ownership moved on, and the server made a new one) takes the mark; the
+  // old row stays as its workspace's Private, notes and all.
   bindDefaultPrivateSpace(defaultWorkspaceId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -5825,16 +5855,24 @@ class DatabaseManager {
       // Defaults resolve to the bound row even before the renderer's next scope.
       this.defaultWorkspaceId = workspaceId;
       this.db.transaction(() => {
+        let boundId = this._findPrivateSpace(accountId, workspaceId);
         const pendingId = this._findPrivateSpace(accountId, null);
-        if (pendingId == null) return;
-        const boundId = this._findPrivateSpace(accountId, workspaceId);
-        if (boundId == null) {
+        if (pendingId != null && boundId == null) {
           this.db
             .prepare("UPDATE spaces SET workspace_id = ? WHERE id = ?")
             .run(workspaceId, pendingId);
-          return;
+          boundId = pendingId;
+        } else if (pendingId != null) {
+          this._mergePrivateSpace(pendingId, boundId, accountId);
         }
-        this._mergePrivateSpace(pendingId, boundId, accountId);
+        boundId ??= this._insertPrivateSpace(accountId, workspaceId);
+        this.db
+          .prepare(
+            `UPDATE spaces SET is_default = 0
+             WHERE kind = 'private' AND account_id = ? AND is_default = 1 AND id != ?`
+          )
+          .run(accountId, boundId);
+        this.db.prepare("UPDATE spaces SET is_default = 1 WHERE id = ?").run(boundId);
       })();
     } catch (error) {
       debugLogger.error(
@@ -5848,18 +5886,49 @@ class DatabaseManager {
 
   // Moves everything in one of the account's private spaces into another and
   // retires the emptied row. A local move: sync state, updated_at and cloud
-  // ids stay. A folder whose name the target holds becomes "Name (2)" and
-  // stops being a default, since the target keeps its own.
+  // ids stay. A default folder the target has its own of (Personal,
+  // Meetings) folds into it, notes and chats; the emptied folder goes unless
+  // a cloud holds it or a held delete still needs it. Any other folder whose
+  // name the target holds becomes "Name (2)" and stops being a default,
+  // since the target keeps its own.
   _mergePrivateSpace(fromId, toId, accountId) {
     const moveFolder = this.db.prepare(
       "UPDATE folders SET space_id = ?, name = ?, is_default = ?, account_id = COALESCE(account_id, ?) WHERE id = ?"
     );
+    const targetDefault = this.db.prepare(
+      `SELECT id FROM folders
+       WHERE space_id = ? AND name = ? AND is_default = 1 AND deleted_at IS NULL
+         AND (account_id IS NULL OR account_id IS ?)
+       ORDER BY id LIMIT 1`
+    );
+    const foldNotes = this.db.prepare(
+      "UPDATE notes SET space_id = ?, folder_id = ?, account_id = COALESCE(account_id, ?) WHERE folder_id = ?"
+    );
+    const foldChats = this.db.prepare(
+      "UPDATE agent_conversations SET space_id = ?, folder_id = ? WHERE folder_id = ?"
+    );
+    const heldDelete = this.db.prepare(
+      "SELECT 1 FROM optimistic_folder_delete_rows WHERE folder_id = ? LIMIT 1"
+    );
+    const retireFolder = this.db.prepare("DELETE FROM folders WHERE id = ?");
     const folders = this.db
       .prepare(
-        "SELECT id, name, is_default, deleted_at FROM folders WHERE space_id = ? ORDER BY id"
+        "SELECT id, name, is_default, cloud_id, deleted_at FROM folders WHERE space_id = ? ORDER BY id"
       )
       .all(fromId);
     for (const folder of folders) {
+      const foldInto =
+        folder.is_default && !folder.deleted_at
+          ? targetDefault.get(toId, folder.name, accountId)?.id
+          : null;
+      if (foldInto != null) {
+        foldNotes.run(toId, foldInto, accountId, folder.id);
+        foldChats.run(toId, foldInto, folder.id);
+        if (folder.cloud_id == null && !heldDelete.get(folder.id)) {
+          retireFolder.run(folder.id);
+          continue;
+        }
+      }
       // A deleted folder holds no name, and keeps its own for a rollback.
       const name = folder.deleted_at
         ? folder.name

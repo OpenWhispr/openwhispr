@@ -24,6 +24,7 @@ function createDatabaseManager() {
       sync_status TEXT NOT NULL DEFAULT 'synced',
       account_id TEXT,
       workspace_id TEXT,
+      is_default INTEGER NOT NULL DEFAULT 0,
       deleted_at TEXT
     );
     CREATE TABLE space_accounts (

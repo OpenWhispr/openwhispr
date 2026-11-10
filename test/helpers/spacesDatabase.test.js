@@ -250,8 +250,11 @@ function seededFolderId(sqlite, name) {
 function relaunchFromVersion5(t, db) {
   const sqlite = db.db;
   sqlite.exec("DROP INDEX IF EXISTS idx_spaces_private_identity");
-  if (sqlite.pragma("table_info('spaces')").some((column) => column.name === "account_id")) {
-    sqlite.exec("ALTER TABLE spaces DROP COLUMN account_id");
+  sqlite.exec("DROP INDEX IF EXISTS idx_spaces_private_default");
+  for (const column of ["account_id", "is_default"]) {
+    if (sqlite.pragma("table_info('spaces')").some((existing) => existing.name === column)) {
+      sqlite.exec(`ALTER TABLE spaces DROP COLUMN ${column}`);
+    }
   }
   sqlite.pragma("user_version = 5");
   sqlite.close();
@@ -2734,7 +2737,18 @@ test("bindDefaultPrivateSpace merges into an existing row for that workspace", (
   signIn(db, "a", { activeWorkspaceId: null, defaultWorkspaceId: null });
   const pending = db.getPrivateSpaceId();
   const pendingMeeting = db.saveNote("Before the list loaded", "", "meeting").note;
+  const pendingIdea = db.saveNote("An idea", "").note;
+  // A default folder some cloud holds can't just disappear: it stays, renamed.
+  db.db
+    .prepare("UPDATE folders SET cloud_id = 'cloud-personal' WHERE id = ?")
+    .run(pendingIdea.folder_id);
   const pendingProjects = db.createFolder("Projects").folder;
+  const meetingsChat = seedChat(db.db, {
+    title: "Meetings chat",
+    accountId: "a",
+    spaceId: pending,
+    folderId: pendingMeeting.folder_id,
+  });
   const pendingChat = seedChat(db.db, { title: "Root chat", accountId: "a", spaceId: pending });
   const folderChat = seedChat(db.db, {
     title: "Projects chat",
@@ -2748,26 +2762,49 @@ test("bindDefaultPrivateSpace merges into an existing row for that workspace", (
   const w1 = db.getPrivateSpaceId();
   assert.notEqual(w1, pending);
   const w1Meeting = db.saveNote("After", "", "meeting").note;
+  const w1Projects = db.createFolder("Projects").folder;
   const before = noteRow(db.db, pendingMeeting.id);
 
   db.bindDefaultPrivateSpace("w1");
 
   assert.ok(spaceIdentity(db.db, pending).deleted_at, "the pending row is retired");
   assert.equal(db.getDefaultPrivateSpaceId(), w1);
-  assert.deepEqual(noteRow(db.db, pendingMeeting.id), { ...before, space_id: w1 });
-  const moved = folderRow(db.db, pendingMeeting.folder_id);
-  assert.deepEqual(
-    { name: moved.name, is_default: moved.is_default, space_id: moved.space_id },
-    { name: "Meetings (2)", is_default: 0, space_id: w1 }
-  );
+  // Default folders fold into the target's own: one Meetings, one Personal.
+  assert.deepEqual(noteRow(db.db, pendingMeeting.id), {
+    ...before,
+    space_id: w1,
+    folder_id: w1Meeting.folder_id,
+  });
+  assert.equal(folderRow(db.db, pendingMeeting.folder_id), undefined, "the emptied default goes");
+  assert.deepEqual(chatRow(db.db, meetingsChat), {
+    space_id: w1,
+    folder_id: w1Meeting.folder_id,
+    account_id: "a",
+  });
   const kept = folderRow(db.db, w1Meeting.folder_id);
   assert.deepEqual(
     { name: kept.name, is_default: kept.is_default, space_id: kept.space_id },
     { name: "Meetings", is_default: 1, space_id: w1 }
   );
   assert.equal(db.getMeetingsFolder().id, w1Meeting.folder_id);
-  assert.equal(folderRow(db.db, pendingProjects.id).name, "Projects");
+  const w1Personal = db.db
+    .prepare("SELECT id FROM folders WHERE space_id = ? AND name = 'Personal' AND is_default = 1")
+    .get(w1).id;
+  assert.equal(noteRow(db.db, pendingIdea.id).folder_id, w1Personal);
+  const cloudPersonal = folderRow(db.db, pendingIdea.folder_id);
+  assert.deepEqual(
+    {
+      name: cloudPersonal.name,
+      is_default: cloudPersonal.is_default,
+      space_id: cloudPersonal.space_id,
+      cloud_id: cloudPersonal.cloud_id,
+    },
+    { name: "Personal (2)", is_default: 0, space_id: w1, cloud_id: "cloud-personal" }
+  );
+  // Other folders keep the " (2)" rename.
+  assert.equal(folderRow(db.db, pendingProjects.id).name, "Projects (2)");
   assert.equal(folderRow(db.db, pendingProjects.id).space_id, w1);
+  assert.equal(folderRow(db.db, w1Projects.id).name, "Projects");
   assert.deepEqual(chatRow(db.db, pendingChat), { space_id: w1, folder_id: null, account_id: "a" });
   assert.equal(chatRow(db.db, folderChat).space_id, w1);
   assert.deepEqual(privateSpaceIds(db), [w1]);
@@ -3070,4 +3107,118 @@ test("a folder delete the split left in the stand-in still finishes or rolls bac
   // A live stand-in folder stays out of the signed-in account's reach.
   assert.equal(db.deleteFolder(live).success, false);
   assert.equal(db.hardDeleteFolder(live).success, false);
+});
+
+// Every account folder and private row in the account's own spaces, by name.
+function accountFolderNames(sqlite, accountId) {
+  return sqlite
+    .prepare(
+      `SELECT f.name FROM folders f JOIN spaces s ON s.id = f.space_id
+       WHERE s.kind = 'private' AND s.account_id = ? AND f.deleted_at IS NULL
+       ORDER BY f.name`
+    )
+    .all(accountId)
+    .map((row) => row.name);
+}
+
+function retiredPrivateRows(sqlite) {
+  return sqlite
+    .prepare(
+      "SELECT COUNT(*) AS count FROM spaces WHERE kind = 'private' AND deleted_at IS NOT NULL"
+    )
+    .get().count;
+}
+
+// What main does at sign-in, the spaces the window loads, then what the
+// renderer sends once its workspace list is known.
+function signInAsRendererDoes(db, accountId, defaultWorkspaceId) {
+  db.setActiveAccountId(accountId);
+  db.claimSignedOutLocalRows();
+  db.claimLegacyRowsOfOnlyAccount();
+  db.claimSignedOutPrivateNotes();
+  db.getSpaces();
+  db.setActiveWorkspaceScope({ activeWorkspaceId: defaultWorkspaceId, defaultWorkspaceId });
+  db.bindDefaultPrivateSpace(defaultWorkspaceId);
+}
+
+test("an account that bound its default before finds that row again at the next sign-in", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signInAsRendererDoes(db, "a", "w1");
+  const home = db.getDefaultPrivateSpaceId();
+  const ownMeeting = db.saveNote("A's meeting", "", "meeting").note;
+  signIn(db, null);
+  const signedOutMeeting = db.saveNote("Recorded signed out", "", "meeting").note;
+
+  signInAsRendererDoes(db, "a", "w1");
+
+  assert.equal(db.getDefaultPrivateSpaceId(), home);
+  assert.deepEqual(
+    {
+      space_id: noteRow(db.db, signedOutMeeting.id).space_id,
+      folder_id: noteRow(db.db, signedOutMeeting.id).folder_id,
+      account_id: noteRow(db.db, signedOutMeeting.id).account_id,
+    },
+    { space_id: home, folder_id: ownMeeting.folder_id, account_id: "a" },
+    "the signed-out meeting joins the account's own Meetings"
+  );
+  assert.deepEqual(accountFolderNames(db.db, "a"), ["Meetings", "Personal"]);
+  assert.equal(pendingRowId(db.db, "a"), undefined, "no pending row is made again");
+  assert.equal(retiredPrivateRows(db.db), 0, "and none is left behind");
+});
+
+test("a relaunch that asks for the Meetings folder before the bind makes no second set", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signInAsRendererDoes(db, "a", "w1");
+  const home = db.getDefaultPrivateSpaceId();
+  const meetings = db.saveNote("A's meeting", "", "meeting").note.folder_id;
+  db.db.close();
+
+  const relaunched = relaunch(t);
+  relaunched.setActiveAccountId("a");
+  assert.equal(relaunched.getMeetingsFolder().id, meetings);
+  assert.equal(relaunched.getDefaultPrivateSpaceId(), home);
+  relaunched.setActiveWorkspaceScope(W1_ACTIVE);
+  relaunched.bindDefaultPrivateSpace("w1");
+
+  assert.deepEqual(accountFolderNames(relaunched.db, "a"), ["Meetings", "Personal"]);
+  assert.equal(pendingRowId(relaunched.db, "a"), undefined);
+  assert.equal(retiredPrivateRows(relaunched.db), 0);
+});
+
+test("a new default workspace takes the default; the old one keeps its Private", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signInAsRendererDoes(db, "a", "w1");
+  const w1 = db.getDefaultPrivateSpaceId();
+  const w1Note = db.saveNote("Kept in w1", "").note;
+
+  // Ownership of w1 was transferred; the server made w2 the new default.
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w2", defaultWorkspaceId: "w2" });
+  db.bindDefaultPrivateSpace("w2");
+  const w2 = db.getDefaultPrivateSpaceId();
+
+  assert.notEqual(w2, w1);
+  assert.deepEqual(spaceIdentity(db.db, w2), {
+    kind: "private",
+    account_id: "a",
+    workspace_id: "w2",
+    deleted_at: null,
+  });
+  assert.deepEqual(spaceIdentity(db.db, w1), {
+    kind: "private",
+    account_id: "a",
+    workspace_id: "w1",
+    deleted_at: null,
+  });
+  assert.equal(noteRow(db.db, w1Note.id).space_id, w1, "w1's Private stays where it was");
+  assert.equal(db.getPrivateSpaceId("w1"), w1);
+
+  // After an account change the default is found without the renderer's scope.
+  signIn(db, "b");
+  signIn(db, "a");
+  assert.equal(db.getDefaultPrivateSpaceId(), w2);
+  assert.equal(db.getPrivateSpaceId(), w2);
+  assert.equal(pendingRowId(db.db, "a"), undefined);
 });
