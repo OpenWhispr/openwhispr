@@ -6,6 +6,7 @@ import { cn } from "../lib/utils";
 import { blurBehindOverlays } from "./overlayBlur";
 import { InfoBox } from "./InfoBox";
 import { SettingsLayoutProvider } from "./useSettingsLayout";
+import { escapeClearsTarget } from "./escapeClears";
 import { useDismissGuard } from "./useDismissGuard";
 
 export interface SidebarItem<T extends string> {
@@ -138,7 +139,9 @@ export default function SidebarModal<T extends string>({
             (e.currentTarget as HTMLElement).focus();
           }}
           onEscapeKeyDown={(e) => {
-            if (document.querySelector("[data-capturing]")) e.preventDefault();
+            if (document.querySelector("[data-capturing]") || escapeClearsTarget(e)) {
+              e.preventDefault();
+            }
           }}
           onInteractOutside={(e) => {
             // A dropdown open over this panel makes the panel inert, so the
@@ -149,7 +152,7 @@ export default function SidebarModal<T extends string>({
           className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-4xl translate-x-[-50%] translate-y-[-50%] rounded-xl p-0 overflow-hidden outline-none bg-background border border-border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] dark:bg-surface-1 dark:border-border-subtle dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98"
         >
           <div className="relative h-full max-h-[85vh] overflow-hidden">
-            <div className="absolute end-4 top-4 z-10 flex items-center gap-2">
+            <div className="absolute end-4 top-4 z-20 flex items-center gap-2">
               {notice && isCompact && (
                 <InfoBox title={notice.description} className="rounded-md p-1.25 text-primary">
                   {notice.icon}

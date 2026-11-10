@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
+const fs = require("node:fs");
 
 const fakeClipboard = {
   text: "",
@@ -80,6 +81,7 @@ function loadClipboardManager({
   cosmicAppId,
   accessibility = true,
   realModifierWait = false,
+  realUinputAccess = false,
 } = {}) {
   delete require.cache[clipboardModulePath];
 
@@ -103,6 +105,10 @@ function loadClipboardManager({
 
   try {
     const LoadedClipboardManager = require("../../src/helpers/clipboard");
+    if (!realUinputAccess) {
+      // Dispatch tests mock the helper, so host permissions must not choose the path.
+      LoadedClipboardManager.prototype._canAccessUinput = () => true;
+    }
     if (!realModifierWait) {
       LoadedClipboardManager.prototype._awaitModifierRelease = async () => ({
         state: "released",
@@ -166,16 +172,22 @@ async function withWaylandEnvironment(desktop, callback) {
   const previous = {
     XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE,
     XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP,
+    XDG_SESSION_DESKTOP: process.env.XDG_SESSION_DESKTOP,
+    DESKTOP_SESSION: process.env.DESKTOP_SESSION,
     WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY,
     HYPRLAND_INSTANCE_SIGNATURE: process.env.HYPRLAND_INSTANCE_SIGNATURE,
+    SWAYSOCK: process.env.SWAYSOCK,
     DISPLAY: process.env.DISPLAY,
   };
   process.env.XDG_SESSION_TYPE = "wayland";
   process.env.XDG_CURRENT_DESKTOP = desktop;
+  process.env.XDG_SESSION_DESKTOP = desktop;
+  process.env.DESKTOP_SESSION = desktop;
   process.env.WAYLAND_DISPLAY = "wayland-1";
   delete process.env.DISPLAY;
   if (desktop === "Hyprland") process.env.HYPRLAND_INSTANCE_SIGNATURE = "test";
   else delete process.env.HYPRLAND_INSTANCE_SIGNATURE;
+  delete process.env.SWAYSOCK;
   try {
     return await callback();
   } finally {
@@ -201,6 +213,41 @@ function resetClipboard({
   fakeClipboard.buffers = {};
   fakeClipboard.writes = [];
 }
+
+test("Wayland test environments isolate desktop metadata and restore it after a failure", async (t) => {
+  const previous = {
+    XDG_SESSION_DESKTOP: process.env.XDG_SESSION_DESKTOP,
+    DESKTOP_SESSION: process.env.DESKTOP_SESSION,
+    SWAYSOCK: process.env.SWAYSOCK,
+  };
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  process.env.XDG_SESSION_DESKTOP = "Hyprland";
+  process.env.DESKTOP_SESSION = "sway";
+  process.env.SWAYSOCK = "/tmp/stale-sway.sock";
+  const { getLinuxSessionInfo } = require("../../src/helpers/linuxSession");
+
+  await assert.rejects(
+    withWaylandEnvironment("COSMIC", async () => {
+      const session = getLinuxSessionInfo();
+      assert.equal(session.isCosmic, true);
+      assert.equal(session.isWlroots, false);
+      assert.equal(process.env.XDG_SESSION_DESKTOP, "COSMIC");
+      assert.equal(process.env.DESKTOP_SESSION, "COSMIC");
+      assert.equal(process.env.SWAYSOCK, undefined);
+      throw new Error("test callback failed");
+    }),
+    { message: "test callback failed" }
+  );
+
+  assert.equal(process.env.XDG_SESSION_DESKTOP, "Hyprland");
+  assert.equal(process.env.DESKTOP_SESSION, "sway");
+  assert.equal(process.env.SWAYSOCK, "/tmp/stale-sway.sock");
+});
 
 test("restore preserves rich clipboard formats atomically", () => {
   resetClipboard({
@@ -792,6 +839,88 @@ test("GNOME tries uinput before a tokenless portal", async () => {
   ]);
 });
 
+test("GNOME skips inaccessible uinput and falls back to the portal", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+  manager._canAccessUinput = () => false;
+
+  const result = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "portal");
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
+});
+
+test("uinput dispatch rechecks permissions instead of trusting cached access", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "linux" });
+  t.after(() => Object.defineProperty(process, "platform", platform));
+  let writable = false;
+  const access = t.mock.method(fs, "accessSync", (file, mode) => {
+    assert.equal(file, "/dev/uinput");
+    assert.equal(mode, fs.constants.W_OK);
+    if (!writable) throw new Error("EACCES");
+  });
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+    realUinputAccess: true,
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+
+  assert.equal(manager._canAccessUinput(), false);
+  writable = true;
+  const granted = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+  assert.equal(granted.method, "uinput");
+  assert.equal(manager._canAccessUinput(), true);
+
+  writable = false;
+  const revoked = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+  assert.equal(revoked.method, "portal");
+  assert.equal(manager._canAccessUinput(), false);
+  assert.equal(access.mock.callCount(), 3);
+  assert.deepEqual(spawnCalls, [
+    { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+    { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+  ]);
+});
+
+test("uinput logs dispatch without claiming the target received the paste", async (t) => {
+  const debugLogger = require("../../src/helpers/debugLogger");
+  const info = t.mock.method(debugLogger, "info", () => {});
+  const TestClipboardManager = loadClipboardManager({ spawn: createSuccessfulSpawn([]) });
+  const manager = new TestClipboardManager();
+  const log = t.mock.method(manager, "safeLog", () => {});
+  // Unrelated diagnostics must not make this wording check fail.
+  debugLogger.info("Unrelated diagnostic", { method: "other" }, "clipboard");
+  manager.safeLog("✅ Paste successful using another tool");
+  manager.commandExists = () => false;
+  manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+  manager._readPortalToken = () => null;
+
+  const result = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
+
+  assert.equal(result.method, "uinput");
+  const uinputEvents = info.mock.calls.filter((call) => call.arguments[1]?.method === "uinput");
+  assert.ok(uinputEvents.some((call) => call.arguments[0] === "Paste injection dispatched"));
+  assert.ok(uinputEvents.every((call) => !call.arguments[0].includes("Paste successful")));
+  const uinputMessages = log.mock.calls
+    .map((call) => call.arguments[0])
+    .filter((message) => message.includes("linux-fast-paste (uinput)"));
+  assert.ok(uinputMessages.some((message) => message.includes("injection dispatched")));
+  assert.ok(uinputMessages.every((message) => !message.includes("Paste successful")));
+});
+
 test("GNOME falls back to a tokenless portal after uinput fails", async () => {
   const spawnCalls = [];
   const TestClipboardManager = loadClipboardManager({
@@ -869,6 +998,7 @@ test("GNOME pastes through a running ydotoold before the ephemeral uinput device
   manager._readPortalToken = () => null;
   manager._isYdotoolDaemonRunning = () => true;
   manager._isYdotoolLegacy = () => false;
+  manager._canAccessUinput = () => false;
 
   const result = await withWaylandEnvironment("GNOME", () => manager.pasteLinux(null));
 
@@ -1051,6 +1181,179 @@ test("KDE does not retry a failed ydotool after the native paths fail", async ()
     "/tmp/linux-fast-paste",
   ]);
 });
+
+for (const [windowClass, expectedFlag] of [
+  ["code", "--shift-insert"],
+  [" Code ", "--shift-insert"],
+  ["code-insiders", "--shift-insert"],
+  [" Code - Insiders ", "--shift-insert"],
+  ["code-oss", "--shift-insert"],
+  ["Code - OSS", "--shift-insert"],
+  ["com.microsoft.vscode", "--shift-insert"],
+  [" Com.Microsoft.VSCode ", "--shift-insert"],
+  ["konsole", "--shift-insert"],
+  [null, "--shift-insert"],
+  ["kitty", "--terminal"],
+  ["firefox", null],
+  ["my-code-editor", null],
+  ["com.microsoft.vscode-other", null],
+  ["code - oss-other", null],
+  ["decode", null],
+]) {
+  for (const desktop of ["KDE", "Hyprland"]) {
+    test(`${desktop} chooses the paste shortcut for ${JSON.stringify(windowClass)} without an X11 PID`, async () => {
+      const calls = [];
+      const TestClipboardManager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+      const manager = new TestClipboardManager();
+      manager.commandExists = (command) => desktop === "Hyprland" && command === "wtype";
+      manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+      manager._readPortalToken = () => null;
+      manager._detectKdeWindowClass = () => windowClass;
+      manager._detectHyprlandWindowClass = () => windowClass;
+
+      await withWaylandEnvironment(desktop, () => manager.pasteLinux(null));
+
+      // KDE's portal uses Shift+Insert for every non-Warp window (#2055).
+      // Hyprland still distinguishes VS Code from unrelated window identities.
+      const wtypeArgs =
+        expectedFlag === "--shift-insert"
+          ? ["-M", "shift", "-k", "Insert", "-m", "shift"]
+          : expectedFlag === "--terminal"
+            ? ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"]
+            : ["-M", "ctrl", "-k", "v", "-m", "ctrl"];
+      assert.deepEqual(calls, [
+        desktop === "KDE"
+          ? { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] }
+          : { command: "wtype", args: wtypeArgs },
+      ]);
+      // VS Code's editor is not a terminal; do not change copy classification.
+      if (
+        windowClass?.trim().toLowerCase().startsWith("code") ||
+        windowClass?.trim().toLowerCase() === "com.microsoft.vscode"
+      ) {
+        assert.equal(manager.isLinuxTerminalWindowClass(windowClass), false);
+      }
+    });
+  }
+}
+
+test("Hyprland keeps VS Code's text paste shortcut when wtype fails", async () => {
+  const calls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSpawn(calls, [1, 0], { stdout: ["", "ok\n"] }),
+    spawnSync: (command, args) => {
+      assert.equal(command, "hyprctl");
+      assert.deepEqual(args, ["activewindow", "-j"]);
+      return { status: 0, stdout: Buffer.from(JSON.stringify({ class: "com.microsoft.vscode" })) };
+    },
+  });
+  const manager = new TestClipboardManager();
+  manager.commandExists = (command) => command === "wtype" || command === "hyprctl";
+  manager.resolveLinuxFastPasteBinary = () => null;
+
+  const result = await withWaylandEnvironment("Hyprland", () => {
+    assert.equal(manager._detectHyprlandWindowClass(), "com.microsoft.vscode");
+    return manager.pasteLinux(null);
+  });
+
+  assert.equal(result.method, "hyprland-sendshortcut");
+  assert.deepEqual(calls, [
+    {
+      command: "wtype",
+      args: ["-M", "shift", "-k", "Insert", "-m", "shift"],
+    },
+    {
+      command: "hyprctl",
+      args: [
+        "dispatch",
+        'hl.dsp.send_shortcut({ mods = "SHIFT", key = "Insert", window = "activewindow" })',
+      ],
+    },
+  ]);
+});
+
+for (const [windowClass, modeFlags] of [
+  ["com.microsoft.vscode", ["--shift-insert"]],
+  ["firefox", []],
+]) {
+  test(`KDE preserves the target and paste shortcut for ${windowClass} when portal and uinput fail`, async () => {
+    const calls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSpawn(calls, [1, 1, 0]),
+      spawnSync: (command, args) => {
+        assert.equal(command, "xdotool");
+        const values = {
+          getactivewindow: "123",
+          getwindowclassname: windowClass,
+          getwindowpid: "",
+        };
+        assert.ok(Object.hasOwn(values, args[0]));
+        return { status: 0, stdout: Buffer.from(values[args[0]]) };
+      },
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "xdotool";
+    manager.resolveLinuxFastPasteBinary = () => "/tmp/linux-fast-paste";
+    manager._readPortalToken = () => null;
+
+    const result = await withWaylandEnvironment("KDE", () => {
+      process.env.DISPLAY = ":99";
+      return manager.pasteLinux(null);
+    });
+
+    assert.equal(result.method, "xtest-xwayland");
+    assert.deepEqual(calls, [
+      { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] },
+      { command: "/tmp/linux-fast-paste", args: ["--uinput", "--shift-insert"] },
+      { command: "/tmp/linux-fast-paste", args: ["--window", "123", ...modeFlags] },
+    ]);
+  });
+}
+
+for (const usePortal of [true, false]) {
+  test(`VS Code uses Shift+Insert via ${usePortal ? "portal" : "xdotool"} when /proc metadata is unreadable`, async (t) => {
+    const fs = require("node:fs");
+    const readFileSync = fs.readFileSync;
+    const readlinkSync = fs.readlinkSync;
+    t.mock.method(fs, "readFileSync", function (file, ...args) {
+      if (file === "/proc/424242/comm") throw new Error("permission denied");
+      return readFileSync.call(this, file, ...args);
+    });
+    t.mock.method(fs, "readlinkSync", function (file, ...args) {
+      if (file === "/proc/424242/exe") throw new Error("permission denied");
+      return readlinkSync.call(this, file, ...args);
+    });
+    const calls = [];
+    const TestClipboardManager = loadClipboardManager({
+      spawn: createSuccessfulSpawn(calls),
+      spawnSync: (command, args) => {
+        assert.equal(command, "xdotool");
+        const values = {
+          getactivewindow: "123",
+          getwindowclassname: "Code",
+          getwindowpid: "424242",
+        };
+        assert.ok(Object.hasOwn(values, args[0]));
+        return { status: 0, stdout: Buffer.from(values[args[0]]) };
+      },
+    });
+    const manager = new TestClipboardManager();
+    manager.commandExists = (command) => command === "xdotool";
+    manager.resolveLinuxFastPasteBinary = () => (usePortal ? "/tmp/linux-fast-paste" : null);
+    manager._readPortalToken = () => null;
+
+    await withWaylandEnvironment("KDE", () => {
+      process.env.DISPLAY = ":99";
+      return manager.pasteLinux(null);
+    });
+
+    assert.deepEqual(calls, [
+      usePortal
+        ? { command: "/tmp/linux-fast-paste", args: ["--portal", "--shift-insert"] }
+        : { command: "xdotool", args: ["windowactivate", "--sync", "123", "key", "shift+Insert"] },
+    ]);
+  });
+}
 
 // On a non-Latin layout KWin can't map XK_v, so the Ctrl+V (or Ctrl+Shift+V) a
 // detected window would get reaches it as Ctrl alone (#2055).
@@ -2219,6 +2522,7 @@ test("intentional macOS clipboard fallback stays silent and does not throw", asy
   resetClipboard();
   const result = await manager._pasteText("manual text", { allowClipboardFallback: true });
   assert.equal(result.pasted, false);
+  assert.equal(result.reason, "accessibility-missing");
   assert.equal(fakeClipboard.text, "manual text");
 });
 

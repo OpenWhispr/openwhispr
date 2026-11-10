@@ -14,6 +14,8 @@ const MOCKS = {
   "/hooks/useWorkspace": `
     export const useWorkspace = () => ({
       workspaces: globalThis.__switcherState.workspaces,
+      personalSelected: Boolean(globalThis.__switcherState.personalSelected),
+      selectPersonal() {},
       setActive() {},
       refresh: async () => {},
     });
@@ -187,4 +189,34 @@ test("finishing marks the workspace the intro was shown for, not the active one"
   assert.equal(localStorage.getItem("workspaceIntroVersion:user-1:acme"), null);
   render({ introAllowed: true });
   assert.equal(globalThis.__intro.open, true, "Acme's intro still shows");
+});
+
+test("the menu lists Personal beside the workspaces", async (t) => {
+  const render = await loadSwitcher(t);
+
+  const html = render({});
+
+  assert.match(html, /notes\.spaces\.personal/);
+  assert.match(html, /Acme Studio/);
+});
+
+test("with Personal chosen the trigger names it and the workspaces stay listed", async (t) => {
+  const render = await loadSwitcher(t);
+  globalThis.__switcherState.personalSelected = true;
+  globalThis.__switcherState.activeWorkspaceId = null;
+
+  const html = render({});
+
+  assert.match(html, /notes\.spaces\.personal/);
+  assert.match(html, /Acme Studio/);
+  assert.doesNotMatch(html, /workspaces\.switcher\.invitePeople/);
+});
+
+test("an entitled Enterprise member isn't offered Personal", async (t) => {
+  const render = await loadSwitcher(t);
+  globalThis.__switcherState.workspaces = [
+    { id: "acme", name: "Acme Studio", role: "owner", plan: "enterprise", status: "active" },
+  ];
+
+  assert.doesNotMatch(render({}), /notes\.spaces\.personal/);
 });

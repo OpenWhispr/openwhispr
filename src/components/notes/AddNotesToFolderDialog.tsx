@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import { formatDateGroup } from "../../utils/dateFormatting";
+import { useSpaces } from "../../stores/noteStore";
+import { useSpacesInWorkspaceScope } from "../../hooks/useWorkspace";
 import type { NoteItem } from "../../types/electron";
 
 interface AddNotesToFolderDialogProps {
@@ -42,13 +44,26 @@ export default function AddNotesToFolderDialog({
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
+  // The tree's scope: adding a note moves it into this folder's space, so one the tree hides
+  // must never be offered.
+  const spaces = useSpaces();
+  const visibleSpaces = useSpacesInWorkspaceScope(spaces);
+  // null when nothing is hidden, so the query stays unscoped.
+  const visibleSpaceIds = useMemo(
+    () => (visibleSpaces.length === spaces.length ? null : visibleSpaces.map((s) => s.id)),
+    [visibleSpaces, spaces.length]
+  );
 
   useEffect(() => {
     if (!open) return;
     setSearch("");
     setSelected(new Set());
-    window.electronAPI.getNotes(null, 500, null).then(setAllNotes);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    window.electronAPI.getNotes(null, 500, null, null, visibleSpaceIds).then(setAllNotes);
+  }, [open, visibleSpaceIds]);
 
   const availableNotes = useMemo(
     () => allNotes.filter((n) => n.folder_id !== targetFolderId),

@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const modelRegistry = require("../../src/models/modelRegistryData.json");
+const { bundledRegistryData: modelRegistry } = require("../../src/models/registryData.js");
 
 const SRC = path.join(__dirname, "../../src");
 const LOCALES = path.join(SRC, "locales");
@@ -17,10 +17,25 @@ const INTERPOLATION = /\{\{\s*([\w.]+)/g;
 const ARABIC_PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
 const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.members.description",
-  "settingsPage.workspace.teams.memberCount",
-  "settingsPage.workspace.teams.grantsAccessToSpaces",
-  "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
-  "settingsPage.workspace.invites.expiresIn",
+  "settingsPage.workspace.teamspaces.adminCount",
+  "settingsPage.workspace.teamspaces.form.createdInviteFailed",
+  "settingsPage.workspace.teams.form.createdInvitedMany",
+  "settingsPage.workspace.teams.form.createdCounts",
+  "settingsPage.workspace.teamspaces.picker.teamPeople",
+  "settingsPage.workspace.teamspaces.picker.teamChip",
+  "settingsPage.workspace.teamspaces.picker.teamHasAccess",
+  "settingsPage.workspace.teamspaces.addPeople.addingTitle",
+  "settingsPage.workspace.teamspaces.addPeople.failedTitle",
+  "settingsPage.workspace.teamspaces.addPeople.done",
+  "settingsPage.workspace.people.invitations.pending",
+  "settingsPage.workspace.people.selection.count",
+  "settingsPage.workspace.people.invitations.resentMany",
+  "settingsPage.workspace.people.invitations.resentPartial",
+  "settingsPage.workspace.people.invitations.resendFailedSome",
+  "settingsPage.workspace.people.invitations.resendFailedAll",
+  "workspaces.cancelInvitations.title",
+  "workspaces.cancelInvitations.done",
+  "workspaces.cancelInvitations.partial",
   "settingsPage.unifiedBilling.seatUpdated",
   "settingsPage.unifiedBilling.confirmSeats.description",
   "settingsPage.privacy.retentionDays",
@@ -29,12 +44,31 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.privacy.minutesAgo",
   "settingsPage.enterpriseCheckout.seatsHint",
   "workspaces.join.memberCount",
+  "workspaces.invite.submit",
+  "workspaces.invite.submitting",
+  "workspaces.invite.sentTitle",
+  "workspaces.invite.sentMany",
+  "workspaces.invite.noEmail",
+  "workspaces.invite.someFailed",
+  "workspaces.invite.seatsLeft",
+  "workspaces.invite.seatsLeftAskOwner",
+  "workspaces.invite.ceilingLeft",
+  "workspaces.invite.skippedMany",
+  "workspaces.invite.skippedNotAdded",
+  "workspaces.invite.removeLast",
+  "workspaces.invite.createdTitle",
+  "workspaces.invite.rateLimitedLeft",
+  "workspaces.invite.seatCostMany",
+  "workspaces.invite.seatCostManyUnpriced",
   "notes.spaces.noteCount",
   "notes.spaces.invitedTo",
   "notes.addToFolder.addCount",
   "notes.overview.meta.folders",
   "notes.overview.meta.members",
   "dictionary.wordsReady",
+  "dictionary.dragonImport.found",
+  "dictionary.dragonImport.confirm",
+  "dictionary.dragonImport.done",
   "dictionary.shared.memberCount",
   "dictionary.shared.deleteManyTitle",
   "dictionary.shared.deletedManyForEveryone",
@@ -59,7 +93,6 @@ const ARABIC_PLURAL_BASES = [
 ];
 const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
   "workspaces.invite.seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
-  "notes.spaces.members.addFailed": "عدد الأشخاص الذين تعذرت إضافتهم: {{failed}} من أصل {{total}}",
   "notes.upload.partialWarningCount":
     "عدد الأجزاء الصوتية التي تعذر تفريغها: {{failed}} من أصل {{total}}.",
   "settingsPage.account.planDescriptions.trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
@@ -105,6 +138,9 @@ function registryDescriptionKeys(node, out = []) {
   if (Array.isArray(node)) {
     for (const child of node) registryDescriptionKeys(child, out);
   } else if (node && typeof node === "object") {
+    // Retired models never reach a picker (registryData strips them), so their
+    // descriptions never render.
+    if (node.retired) return out;
     if (typeof node.descriptionKey === "string") out.push(node.descriptionKey);
     for (const child of Object.values(node)) registryDescriptionKeys(child, out);
   }
@@ -169,28 +205,82 @@ test("every en key is present in every other language", () => {
   }
 });
 
-test("interpolation variables match en in every language", () => {
-  // Compares names, not repeat counts — word order can make a translation
-  // reference the same variable a different number of times.
-  const variables = (value) =>
-    typeof value === "string"
-      ? [...new Set([...value.matchAll(INTERPOLATION)].map((m) => m[1]))].sort()
-      : [];
+// Compares names, not repeat counts — word order can make a translation reference the same
+// variable a different number of times.
+const variables = (value) =>
+  typeof value === "string"
+    ? [...new Set([...value.matchAll(INTERPOLATION)].map((m) => m[1]))].sort()
+    : [];
 
+// A plural form may use any variable from any of en's forms of the same message, since a
+// language's `one` can cover more than 1 (Russian 21, 31, …) where en's `one` drops the number;
+// it may also leave one out (Arabic's `two` spells the number). Every other key matches en
+// exactly.
+function interpolationMismatches(en, translated) {
+  const pluralVariables = new Map();
+  for (const [key, value] of en) {
+    if (!PLURAL_SUFFIX.test(key)) continue;
+    const base = stripPlural(key);
+    const names = pluralVariables.get(base) ?? new Set();
+    for (const name of variables(value)) names.add(name);
+    pluralVariables.set(base, names);
+  }
+
+  const mismatches = [];
+  for (const [key, value] of translated) {
+    const allowed = PLURAL_SUFFIX.test(key) ? pluralVariables.get(stripPlural(key)) : undefined;
+    if (allowed) {
+      const unknown = variables(value).filter((name) => !allowed.has(name));
+      if (unknown.length > 0) mismatches.push(`${key} uses {{${unknown.join("}}, {{")}}}`);
+    } else if (en.has(key) && variables(value).join() !== variables(en.get(key)).join()) {
+      mismatches.push(`${key} has different {{variables}} than en`);
+    }
+  }
+  return mismatches;
+}
+
+test("interpolation variables match en in every language", () => {
   for (const namespace of NAMESPACES) {
     const en = flatten(load("en", namespace));
     for (const lang of languages) {
       if (lang === "en") continue;
-      for (const [key, value] of flatten(load(lang, namespace))) {
-        if (!en.has(key)) continue;
-        assert.deepEqual(
-          variables(value),
-          variables(en.get(key)),
-          `${lang}/${namespace} ${key} has different {{variables}} than en`
-        );
-      }
+      assert.deepEqual(
+        interpolationMismatches(en, flatten(load(lang, namespace))),
+        [],
+        `${lang}/${namespace}`
+      );
     }
   }
+});
+
+test("a plural form may use a variable from another of en's forms, but not a new one", () => {
+  const en = new Map([
+    ["invite.submit_one", "Send invite"],
+    ["invite.submit_other", "Send {{count}} invites"],
+    ["invite.title", "Invite {{name}}"],
+  ]);
+
+  assert.deepEqual(
+    interpolationMismatches(
+      en,
+      new Map([
+        ["invite.submit_one", "Отправить {{count}} приглашение"],
+        ["invite.submit_two", "إرسال دعوتين"],
+        ["invite.title", "Пригласить {{name}}"],
+      ])
+    ),
+    []
+  );
+  assert.deepEqual(
+    interpolationMismatches(
+      en,
+      new Map([
+        ["invite.submit_one", "Отправить {{total}} приглашение"],
+        ["invite.title", "Пригласить"],
+      ])
+    ),
+    ["invite.submit_one uses {{total}}", "invite.title has different {{variables}} than en"]
+  );
 });
 
 test("every messageKey literal resolves in en", () => {
@@ -277,4 +367,40 @@ test("Arabic plural counts resolve the exact CLDR form without English fallback"
       );
     }
   }
+});
+
+// Teams used to be called groups. The paywall and the workspaces intro use the
+// verb ("group people into teams"), so they sit outside the check.
+const OLD_TEAM_NOUN = {
+  en: /\bgroups?\b/i,
+  es: /grupos?/i,
+  fr: /groupes?/i,
+  de: /gruppen?/i,
+  pt: /grupos?/i,
+  it: /grupp[oi]/i,
+  ru: /групп/i,
+  "zh-CN": /群组|组/,
+  "zh-TW": /群組/,
+  ja: /グループ/,
+  ar: /مجموع/,
+};
+const GROUP_FREE_PREFIXES = ["settingsPage.workspace.", "notes.spaces."];
+const GROUP_FREE_KEYS = [
+  "notes.structureIntro.teamSpace.description",
+  "workspaces.invite.roleDescription.admin",
+];
+const GROUP_VERB_PREFIXES = ["settingsPage.workspace.teams.paywall"];
+
+test("no workspace copy says group", () => {
+  const found = [];
+  for (const locale of Object.keys(OLD_TEAM_NOUN)) {
+    for (const [key, value] of flatten(load(locale, "translation"))) {
+      const inScope =
+        GROUP_FREE_KEYS.includes(key) ||
+        GROUP_FREE_PREFIXES.some((prefix) => key.startsWith(prefix));
+      if (!inScope || GROUP_VERB_PREFIXES.some((prefix) => key.startsWith(prefix))) continue;
+      if (OLD_TEAM_NOUN[locale].test(String(value))) found.push(`${locale}: ${key}`);
+    }
+  }
+  assert.deepEqual(found, []);
 });

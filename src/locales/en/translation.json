@@ -168,7 +168,6 @@
   },
   "common": {
     "continue": "Continue",
-    "add": "Add",
     "retry": "Retry",
     "back": "Back",
     "logout": "Log out",
@@ -210,6 +209,7 @@
     "skip": "Skip",
     "policyAiProcessingRestricted": "AI processing is restricted by your organization.",
     "policyAgentRestricted": "AI assistant use is restricted by your organization.",
+    "policyAccountChanged": "Your account changed, so this answer was stopped.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
@@ -355,34 +355,10 @@
           "features": {
             "device": "Runs on your device",
             "offline": "Works offline after setup",
-            "models": "Choose models for dictation and assistant",
+            "setup": "Set up for this computer",
             "free": "Forever free to use"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Your provider handles your data",
-            "description": "You’ll add credentials for separate dictation and Assistant providers. Provider pricing and retention policies apply.",
-            "continue": "Set up API provider",
-            "steps": {
-              "1": "Choose providers for dictation and Assistant",
-              "2": "Add credentials using secure storage",
-              "3": "Test each connection before activation"
-            }
-          },
-          "local": {
-            "title": "Local setup takes a few extra steps",
-            "description": "Local processing keeps your speech on this device, but requires a one-time setup and at least {{minimumSpace}} GB of free space.",
-            "continue": "Setup Locally",
-            "steps": {
-              "1": "Choose a transcription engine",
-              "2": "Configure or download a model, about {{modelSize}}",
-              "3": "Wait for installation and activation"
-            }
-          }
-        },
-        "useCloud": "Use Cloud instead",
-        "continueSetup": "Continue setup",
         "showMore": "Show More Options",
         "moreOptions": {
           "title": "Choose your API setup",
@@ -437,20 +413,80 @@
         }
       },
       "local": {
-        "title": "Set up local models",
-        "description": "Choose the models you want to run on your device.",
-        "descriptionLineOne": "Choose the models you want",
-        "descriptionLineTwo": "to run on your device.",
-        "providerLabel": "Provider",
-        "download": "Download",
         "downloadingShort": "Downloading",
-        "selected": "Selected",
-        "use": "Use",
         "downloadInProgress": "Download in progress",
         "cancelDownload": "Cancel download of {{model}}",
         "downloads": "Model downloads",
         "downloading": "Downloading… {{progress}}%",
+        "verifying": "Verifying",
         "installing": "Installing"
+      },
+      "localSetup": {
+        "title": "We recommend these settings",
+        "subtitle": "Picked for your {{computer}} and {{language}}. These models run on this device.",
+        "subtitleOrganizationText": "Picked for your {{computer}} and {{language}}. Dictation runs on this device; chat and AI notes use the service your organization chose.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Processor",
+          "memory": "Memory",
+          "graphics": "Graphics",
+          "builtIn": "Built into chip",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Windows laptop",
+          "windowsDesktop": "Windows desktop",
+          "linuxLaptop": "Linux laptop",
+          "linuxDesktop": "Linux desktop"
+        },
+        "rows": {
+          "dictation": "Dictation",
+          "cleanup": "Cleanup",
+          "assistant": "Assistant"
+        },
+        "description": {
+          "dictation": "Turns your voice into text in any app",
+          "cleanup": "Removes filler words and fixes grammar",
+          "assistant": "Answers questions and acts on your requests"
+        },
+        "badge": {
+          "optional": "Optional",
+          "cloud": "Cloud recommended"
+        },
+        "line": {
+          "requiredByOrganization": "Required by your organization",
+          "organizationModelsUnrunnable": "None of the models your organization approved runs on this computer",
+          "offToFit": "Off to fit the free space on this computer",
+          "failed": "Couldn't download. Check your connection and retry"
+        },
+        "unavailable": {
+          "notEnoughMemory": "Not enough memory",
+          "exceedsMemory": "Exceeds the memory limits of this computer",
+          "memoryUnread": "Couldn't check memory",
+          "organization": "Not available on this computer",
+          "memoryMac": "{{model}} needs {{needed}} GB of memory, this Mac has {{have}} GB",
+          "memoryComputer": "{{model}} needs {{needed}} GB of memory, this computer has {{have}} GB",
+          "memoryUnreadLine": "{{model}} needs {{needed}} GB of memory. If this computer has that much, turn it on later in Settings"
+        },
+        "button": {
+          "download": "Download models",
+          "downloading": "Downloading",
+          "proceed": "Proceed",
+          "noSpace": "Not enough free space"
+        },
+        "retry": "Retry",
+        "retryRow": "Retry {{row}}",
+        "downloaded": "Downloaded",
+        "foot": {
+          "default": "You can change any of these later in Settings.",
+          "dictationFailed": "Dictation has to download before you can continue. Retry it above, or go back and choose another setup.",
+          "dictationUnavailable": "Dictation can't run on this computer with the models your organization approved. Go back and choose another setup.",
+          "finishesInBackground": "The rest keeps downloading after you proceed and turns on when it's ready.",
+          "failedStaysOff": "What didn't download stays off. You can add it later in Settings.",
+          "needsMac": "This needs {{needed}} GB, and this Mac has {{free}} GB free.",
+          "needsComputer": "This needs {{needed}} GB, and this computer has {{free}} GB free.",
+          "noSpaceMac": "Dictation needs {{needed}} GB free and this Mac has {{free}} GB. Free up some space to continue.",
+          "noSpaceComputer": "Dictation needs {{needed}} GB free and this computer has {{free}} GB. Free up some space to continue."
+        }
       }
     },
     "steps": {
@@ -584,7 +620,8 @@
       "queued": "Queued",
       "failed": {
         "title": "A download didn't finish",
-        "description": "Check your connection and free disk space, then retry. If it keeps failing, contact your administrator."
+        "description": "Check your connection and free disk space, then retry. If it keeps failing, contact your administrator.",
+        "notApproved": "Your organization doesn't approve this model. You can continue without it."
       }
     },
     "permissionGuide": {
@@ -877,6 +914,11 @@
       }
     },
     "modelRetiredTitle": "Model no longer available",
+    "modelRetiredByProvider": "{{provider}} retired {{from}}. Switched to {{to}}.",
+    "modelUnavailableSwitched": "{{from}} isn't available from {{provider}} anymore. Switched to {{to}}.",
+    "localModelRetired": "{{from}} is no longer available, so we switched you to {{to}}. If it isn't downloaded yet, download it in Settings.",
+    "localModelRetiredChooseAnother": "{{from}} is no longer available. Choose another local model in Settings.",
+    "localModelRetiredKept": "{{from}} has been retired. It keeps working because it's already downloaded, but it can't be downloaded again. Choose another local model in Settings.",
     "groq": {
       "modelRetired": "Groq retired {{from}}. Switched to {{to}}."
     },
@@ -935,7 +977,8 @@
         "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
         "cloudLimitReached": "Weekly Cloud Limit Reached",
-        "providerRateLimited": "Provider Rate Limited"
+        "providerRateLimited": "Provider Rate Limited",
+        "outOfCredits": "Out of Credits"
       },
       "fallback": {
         "title": "Fallback Mode",
@@ -966,6 +1009,7 @@
         "offline": "You're offline. Cloud transcription requires an internet connection.",
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
         "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
+        "openRouterOutOfCredits": "Your OpenRouter account is out of credits. Top up at openrouter.ai, then try again.",
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
         "agentReasoningFailed": "Your voice assistant couldn't process the command — the raw transcript was inserted instead.",
         "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",
@@ -984,9 +1028,9 @@
       },
       "translationFallback": {
         "unreachableTitle": "Translation unavailable",
-        "unreachableDescription": "Your dictation was pasted untranslated. Check the translation settings.",
+        "unreachableDescription": "Your dictation stayed in its original language. Check the translation settings.",
         "failedTitle": "Translation failed",
-        "failedDescription": "The original text was pasted. You can retry it from History."
+        "failedDescription": "Your dictation stayed in its original language. You can retry it from History."
       },
       "pushForceStopped": {
         "title": "Transcription not pasted",
@@ -1021,7 +1065,10 @@
         "manualPaste": "Copy your text below, then press {{shortcut}} to paste it.",
         "openSettings": "Open Settings",
         "copyToClipboard": "Copy to clipboard",
-        "copyFailed": "Copy failed"
+        "copyFailed": "Copy failed",
+        "copiedTitle": "Copied, not pasted",
+        "copiedDescription": "Your text is on the clipboard. Automatic pasting needs Accessibility permission. Press {{shortcut}} to paste manually.",
+        "dontShowAgain": "Don't show again"
       },
       "pasteFailed": {
         "title": "Couldn't paste automatically"
@@ -1068,6 +1115,7 @@
         "tlsError": "Certificate error — your network may use SSL inspection that blocks downloads. Try downloading from a different network.",
         "unknown": "Unknown error"
       },
+      "verifying": "Verifying {{model}}",
       "downloadFailed": {
         "title": "Download Failed"
       },
@@ -1655,6 +1703,10 @@
         "label": "People",
         "description": "Members and teams"
       },
+      "workspaceTeamspaces": {
+        "label": "Teamspaces",
+        "description": "Shared notes"
+      },
       "workspaceDeveloper": {
         "label": "Developer",
         "description": "Workspace API keys"
@@ -1699,6 +1751,10 @@
         "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
       },
+      "personal": {
+        "title": "You're in Personal",
+        "description": "Choose a workspace to manage its settings."
+      },
       "loadError": {
         "title": "Couldn't load workspaces",
         "description": "Check your connection and try again.",
@@ -1708,11 +1764,279 @@
       "tab": {
         "general": "General",
         "members": "Members",
-        "teams": "Groups"
+        "invitations": "Invitations",
+        "guests": "Guests",
+        "teams": "Teams"
       },
       "people": {
         "title": "People",
-        "description": "Manage people in your workspace and their roles."
+        "description": "Manage people in your workspace and their roles.",
+        "subtitleView": "People in your workspace and their roles.",
+        "add": "Add",
+        "addLabel": "Invite people",
+        "columns": {
+          "name": "Name",
+          "team": "Team",
+          "role": "Workspace role",
+          "email": "Email",
+          "status": "Status",
+          "actions": "Actions"
+        },
+        "you": "You",
+        "teamsNone": "None",
+        "loading": {
+          "title": "Loading members…",
+          "body": "Your workspace members will appear here."
+        },
+        "failed": {
+          "title": "Couldn't load members",
+          "body": "Check your connection and try again."
+        },
+        "search": {
+          "placeholder": "Search members",
+          "clear": "Clear search",
+          "noResultsTitle": "No members match “{{query}}”",
+          "noResultsBody": "Check the spelling or search by email."
+        },
+        "roleMenuLabel": "Change {{name}}'s role",
+        "roleDescription": {
+          "member": "Can view and edit notes.",
+          "admin": "Manages members, invites, teams, and settings."
+        },
+        "roleFailed": "Couldn't change {{name}}'s role. Check your connection and try again.",
+        "roleNotAllowed": "You no longer have permission to change roles in {{workspace}}.",
+        "invitations": {
+          "loading": "Loading invitations…",
+          "failedTitle": "Couldn't load invitations",
+          "emptyTitle": "No invitations",
+          "emptyBody": "New invitations appear here until they're accepted.",
+          "pending_one": "Pending · Expires in {{count}} day",
+          "pending_other": "Pending · Expires in {{count}} days",
+          "expired": "Expired",
+          "resend": "Resend invite",
+          "cancel": "Cancel invite",
+          "resendFailed": "Couldn't resend the invitation to {{email}}. Cancel it and invite them again.",
+          "resendNotAllowed": "You no longer have permission to resend invitations in {{workspace}}.",
+          "noLongerPending": "The invitation for {{email}} is no longer pending",
+          "noLongerPendingMany_one": "{{count}} invitation is no longer pending.",
+          "noLongerPendingMany_other": "{{count}} invitations are no longer pending.",
+          "refreshFailed": "Couldn't refresh invitations. This list may be out of date.",
+          "cancelSelected": "Cancel invites",
+          "resendSelected": "Resend invites",
+          "resendingSelected": "Resending…",
+          "resentMany_one": "Resent {{count}} invitation.",
+          "resentMany_other": "Resent {{count}} invitations.",
+          "resentPartial_one": "{{count}} invite resent.",
+          "resentPartial_other": "{{count}} invites resent.",
+          "resendFailedOne": "{{email}}'s invite failed. Retry from Actions.",
+          "resendFailedSome_one": "{{count}} invite failed. Retry from Actions.",
+          "resendFailedSome_other": "{{count}} invites failed. Retry from Actions.",
+          "resendFailedAll_one": "Couldn't resend {{count}} invitation. Check your connection and try again.",
+          "resendFailedAll_other": "Couldn't resend {{count}} invitations. Check your connection and try again.",
+          "resentNoEmailOne": "{{email}}'s invitation was updated, but the email couldn't be delivered and the old link no longer works. Resend it to try again.",
+          "resentNoEmailMany_one": "{{count}} invitation was updated, but its email couldn't be delivered and the old link no longer works. It's still selected, so you can resend it.",
+          "resentNoEmailMany_other": "{{count}} invitations were updated, but the emails couldn't be delivered and the old links no longer work. They're still selected, so you can resend them.",
+          "resendUnrenewable_one": "Couldn't renew {{count}} expired invitation. Cancel it and invite that person again.",
+          "resendUnrenewable_other": "Couldn't renew {{count}} expired invitations. Cancel them and invite those people again."
+        },
+        "selection": {
+          "count_one": "{{count}} selected",
+          "count_other": "{{count}} selected",
+          "clear": "Clear",
+          "label": "Selected people",
+          "selectAllMembers": "Select all members",
+          "selectAllInvitations": "Select all invitations",
+          "selectRow": "Select {{name}}",
+          "remove": "Remove",
+          "addToTeamspace": "Add to teamspace",
+          "addToTeam": "Add to team",
+          "createTeam": "Create team with selected"
+        },
+        "teamsCount_one": "{{count}} Team",
+        "teamsCount_other": "{{count}} Teams",
+        "addMenu": {
+          "invite": "Invite people",
+          "createTeam": "Create team",
+          "label": "More ways to add"
+        }
+      },
+      "teamspaces": {
+        "title": "Teamspaces",
+        "subtitleManage": "Manage teamspaces in this workspace.",
+        "subtitleView": "Teamspaces in this workspace.",
+        "create": "Create teamspace",
+        "columns": {
+          "name": "Name",
+          "admins": "Admins",
+          "actions": "Actions",
+          "members": "Members"
+        },
+        "loadingTitle": "Loading teamspaces…",
+        "loadingBody": "Your workspace teamspaces will appear here.",
+        "failedTitle": "Couldn't load teamspaces",
+        "failedBody": "Check your connection and try again.",
+        "retry": "Try again",
+        "emptyTitle": "No teamspaces yet",
+        "emptyBody": "A teamspace is a shared area for a team's notes. Add people or teams, and everyone in it can read and edit.",
+        "emptyBodyMember": "Your workspace admins haven't created one yet.",
+        "adminCount_one": "{{count}} admin",
+        "adminCount_other": "{{count}} admins",
+        "noAdmins": "Workspace admins",
+        "you": "You",
+        "join": "Join",
+        "joining": "Joining…",
+        "joined": "Joined {{space}}",
+        "joinFailed": "Couldn't join {{space}}. Try again.",
+        "joinClosed": "{{space}} no longer takes new members. Ask an admin to add you.",
+        "openTeamspace": "Open teamspace",
+        "rowMenu": {
+          "label": "Actions for {{name}}",
+          "settings": "Settings",
+          "delete": "Delete teamspace"
+        },
+        "form": {
+          "title": "Create teamspace",
+          "description": "A shared area for a team's notes. Everyone you add can read and edit.",
+          "nameAndIcon": "Name & icon",
+          "descriptionLabel": "Description",
+          "people": "People",
+          "descriptionPlaceholder": "Recordings and summaries from sales and support calls, one note per call.",
+          "peoplePlaceholder": "Names, emails, or teams",
+          "defaultTitle": "Default teamspace",
+          "defaultBody": "Add new workspace members automatically.",
+          "openTitle": "Open teamspace",
+          "openBody": "Let workspace members join.",
+          "invalidEmail": "Invalid email",
+          "nameTaken": "A teamspace called {{name}} already exists",
+          "failed": "Couldn't create teamspace. Your details are saved. Try again.",
+          "creating": "Creating",
+          "created": "Created {{space}}",
+          "createdInviteFailed_one": "Created {{space}}. Couldn't invite {{count}} person. Invite them from Members.",
+          "createdInviteFailed_other": "Created {{space}}. Couldn't invite {{count}} people. Invite them from Members.",
+          "inviteFailedWho": "Not invited: {{names}}.",
+          "copyAddresses": "Copy addresses",
+          "teamsGone": "{{names}} is no longer available, so it wasn't added."
+        },
+        "picker": {
+          "teamPeople_one": "{{count}} person",
+          "teamPeople_other": "{{count}} people",
+          "teamChip_one": "{{name}} · {{count}} person",
+          "teamChip_other": "{{name}} · {{count}} people",
+          "emailChip": "{{email}} · {{role}}",
+          "noMember": "No member found",
+          "inviteToWorkspace": "Invite to workspace",
+          "newToWorkspace": "New to workspace",
+          "select": "Select",
+          "noResultsTitle": "No people or teams found",
+          "noResultsBody": "Try another name or enter a full email address.",
+          "noResultsBodyNoInvite": "Try another name.",
+          "hasAccess": "Already has access",
+          "teamHasAccess_one": "Already has access · {{count}} person",
+          "teamHasAccess_other": "Already has access · {{count}} people"
+        },
+        "members": {
+          "columnRole": "Teamspace role",
+          "add": "Add members",
+          "adding": "Adding…",
+          "retry": "Try again",
+          "invitationPending": "Invitation pending",
+          "via": "Member · via {{team}}",
+          "viaAdmin": "Admin · via {{team}}",
+          "roleMember": "Teamspace Member",
+          "roleMemberBody": "Can view and edit notes",
+          "roleAdmin": "Teamspace Admin",
+          "roleAdminBody": "Manages this teamspace and its assigned teams.",
+          "removeItem": "Remove from teamspace",
+          "removeTitle": "Remove {{name}} from {{space}}?",
+          "removeBody": "This removes {{name}}'s direct membership. Access through a team will remain. They'll stay in the workspace.",
+          "removeConfirm": "Remove member",
+          "removeFailedTitle": "Couldn't remove {{name}}",
+          "removeFailedBody": "{{name}}'s membership in {{space}} is unchanged. Check your connection and try again.",
+          "removed": "{{name}}'s direct membership in {{space}} was removed.",
+          "removeTeamTitle": "Remove {{team}} from {{space}}?",
+          "removeTeamBody_one": "Its {{count}} person loses access through this team. The team stays in the workspace.",
+          "removeTeamBody_other": "Its {{count}} people lose access through this team. The team stays in the workspace.",
+          "removeTeamBodyNoCount": "Its people lose access through this team. The team stays in the workspace.",
+          "stagedNew": "New people are invited when you add them. Teamspace access starts after they accept.",
+          "stagedTeam": "Everyone in {{team}} will inherit Member access to {{space}}.",
+          "stagedTeams": "Everyone in these teams will inherit Member access to {{space}}.",
+          "invalid": "Enter a valid email address. Your selected people are kept.",
+          "progressPeople": "Adding {{names}}…",
+          "progressBoth_one": "Adding {{names}} and sending {{count}} invitation…",
+          "progressBoth_other": "Adding {{names}} and sending {{count}} invitations…",
+          "progressInvites_one": "Sending {{count}} invitation…",
+          "progressInvites_other": "Sending {{count}} invitations…",
+          "resultAdded": "Added {{names}}.",
+          "resultInvited": "Sent {{names}} a workspace invitation.",
+          "resultTeam": "Added {{team}}. Its members now have Member access.",
+          "resultTeams": "Added {{names}}. Their members now have Member access.",
+          "failed": "Couldn't add members. Your selections are kept. Try again.",
+          "partialAdded": "{{names}} was added.",
+          "partialAddedMany": "{{names}} were added.",
+          "partialInviteFailed": "{{names}}'s invitation didn't send. Try again.",
+          "partialInviteFailedMany": "Invitations to {{names}} didn't send. Try again.",
+          "partialAddFailed": "Couldn't add {{names}}. Try again.",
+          "partialLeft": "{{names}} left the workspace, so they weren't added.",
+          "notAllowed": "You no longer have permission to manage members of {{space}}.",
+          "notInvited": "{{names}} wasn't invited.",
+          "notInvitedMany": "{{names}} weren't invited.",
+          "skippedInvited": "{{names}} already has a workspace invitation, so they weren't added to this teamspace.",
+          "skippedInvitedMany": "{{names}} already have workspace invitations, so they weren't added to this teamspace.",
+          "removeBodyPlain": "{{name}} will lose access to this teamspace and its notes. They'll stay in the workspace.",
+          "invitationPendingAdmin": "Invitation pending · Workspace Admin",
+          "resultInvitedNoEmail": "Created invitations for {{names}}, but the email couldn't be delivered. Resend it from Invitations.",
+          "resultInvitedPending": "{{names}} already had a workspace invitation, so this teamspace was added to it. No new email was sent, and the workspace role on that invitation stays as it was.",
+          "stepDownTitle": "Step down as admin of {{space}}?",
+          "stepDownBody": "You won't be able to manage this teamspace or its members. Only another admin can make you an admin again.",
+          "stepDownConfirm": "Step down"
+        },
+        "settings": {
+          "leaveTitle": "Leave teamspace",
+          "leaveBody": "Leave this teamspace.",
+          "leaveAction": "Leave teamspace",
+          "deleteTitle": "Delete teamspace",
+          "deleteBody": "Remove this teamspace for everyone.",
+          "deleteAction": "Delete teamspace",
+          "flagsFailed": "Couldn't load these settings.",
+          "flagSaveFailed": "Couldn't save that. Try again.",
+          "deleteDefaultAdminOnly": "Only workspace admins can delete a Default teamspace.",
+          "defaultAdminOnly": "Only workspace admins can change this."
+        },
+        "exit": {
+          "blockedTitle": "Add another admin first",
+          "blockedBody": "You're the only admin of {{space}}. Make another member an admin before you leave.",
+          "blockedAction": "Manage members",
+          "leaveTitle": "Leave {{space}}?",
+          "leaveFailedTitle": "Couldn't leave {{space}}",
+          "leaveFailedBody": "Your membership is unchanged. Check your connection and try again.",
+          "left": "You left {{space}}.",
+          "deleteTitle": "Delete {{space}}?",
+          "deleteBody": "This removes {{space}} from the workspace for everyone.",
+          "deleteFailedTitle": "Couldn't delete {{space}}",
+          "deleteFailedBody": "The teamspace is still available. Check your connection and try again.",
+          "deleted": "{{space}} was deleted.",
+          "restored": "{{space}} restored",
+          "leaveBodyKeeps": "Your direct membership will end. You'll keep access through {{teams}}.",
+          "leaveBodyLoses": "You'll lose access to {{space}} and its notes.",
+          "leaveBodyAdmins": "Another admin will continue managing this teamspace.",
+          "deleteNotAllowed": "You don't have permission to delete {{space}}.",
+          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to your Personal space.",
+          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to your Personal space."
+        },
+        "addPeople": {
+          "loading": "Loading teamspaces…",
+          "failed": "Couldn't load teamspaces",
+          "none": "No teamspaces yet",
+          "addingTitle_one": "Adding {{count}} person…",
+          "addingTitle_other": "Adding {{count}} people…",
+          "addingBody": "Keep this window open while they're added to {{space}}.",
+          "addingAction": "Adding…",
+          "failedTitle_one": "Couldn't add {{count}} person",
+          "failedTitle_other": "Couldn't add {{count}} people",
+          "failedBody": "They haven't been added to {{space}}. Your selection is kept. Check your connection and try again.",
+          "done_one": "Added {{count}} person to {{space}}",
+          "done_other": "Added {{count}} people to {{space}}"
+        }
       },
       "role": {
         "owner": "Owner",
@@ -1741,21 +2065,12 @@
         "leaving": "Leaving…"
       },
       "members": {
-        "title": "Members",
         "description": "{{count}} of {{seats}} seats used.",
-        "invite": "Invite",
-        "empty": "No members yet.",
         "loadError": "Couldn't load members.",
         "roleUpdated": "Role updated",
         "removed": "Removed {{name}}",
-        "promote": "Make admin",
-        "demote": "Make member",
         "transferOwnership": "Transfer ownership",
-        "remove": "Remove from workspace",
-        "removeConfirm": {
-          "title": "Remove this member?",
-          "description": "{{name}} will lose access to {{workspace}} immediately."
-        }
+        "remove": "Remove from workspace"
       },
       "joinRequests": {
         "title": "Requests to join",
@@ -1766,52 +2081,191 @@
         "errorTitle": "Could not update the request"
       },
       "teams": {
-        "title": "Groups",
-        "description": "Groups of workspace members that can be given access to team spaces together.",
-        "new": "New group",
-        "empty": "No groups yet.",
-        "createFirst": "Create your first group",
-        "addMembersLabel": "Add members",
-        "createTitle": "Create group",
-        "nameLabel": "Group name",
-        "memberCount_one": "{{count}} member",
-        "memberCount_other": "{{count}} members",
-        "membersButton": "Members",
-        "grantsAccessToSpaces_one": "Grants access to {{count}} space",
-        "grantsAccessToSpaces_other": "Grants access to {{count}} spaces",
-        "couldNotCreate": "Couldn't create group",
-        "created": "Created {{team}}",
-        "deleted": "Deleted {{team}}",
-        "deleteConfirmTitle": "Delete {{team}}?",
-        "deleteConfirmDescription": "This archives the group. Its members lose any access it granted.",
-        "deleteConfirmSpaceAccess_one": "This group grants access to {{count}} space. Its members will lose that access.",
-        "deleteConfirmSpaceAccess_other": "This group grants access to {{count}} spaces. Its members will lose that access.",
         "members": {
           "title": "Members of {{team}}",
-          "removeConfirm": "Remove {{name}} from {{team}}?",
-          "leave": "Leave group",
-          "leftTeam": "You left {{team}}",
-          "leaveConfirm": "Leave {{team}}?",
-          "leaveConfirmDescription": "You'll lose access to the spaces this group is assigned to unless you were added directly or another group includes you."
+          "gone": "{{team}} no longer exists.",
+          "columnName": "Name",
+          "columnRole": "Team role",
+          "placeholder": "Names or emails",
+          "add": "Add members",
+          "adding": "Adding…",
+          "inviteNote": "New people get a workspace invitation when you add them.",
+          "roleMember": "Team Member",
+          "roleMemberBody": "Gets access wherever the team is added.",
+          "roleAdmin": "Team Admin",
+          "roleAdminBody": "Manages this team's roster.",
+          "remove": "Remove from team",
+          "addingStatus_one": "Adding {{names}} and sending {{count}} invitation…",
+          "addingStatus_other": "Adding {{names}} and sending {{count}} invitations…",
+          "addingOnly": "Adding {{names}}…",
+          "invitingOnly_one": "Sending {{count}} invitation…",
+          "invitingOnly_other": "Sending {{count}} invitations…",
+          "addFailed": "Couldn't finish adding members. Try again.",
+          "added": "Added {{names}}.",
+          "addedAndInvited": "Added {{names}} and invited {{invited}}.",
+          "invited": "Invited {{invited}}.",
+          "pending": "Pending invitation",
+          "pendingBody": "Joins team after accepting · {{role}}",
+          "invitedPill": "Invited",
+          "resend": "Resend",
+          "resent": "Resent the invitation to {{email}}.",
+          "resendFailed": "Couldn't resend the invitation to {{email}}.",
+          "removeTitle": "Remove {{name}} from {{team}}?",
+          "removeBody": "{{name}} will lose access granted through this team. They'll remain in the workspace and keep any access granted directly or through other teams.",
+          "removeAction": "Remove member",
+          "removeFailedTitle": "Couldn't remove {{name}}",
+          "removeFailedBody": "{{name}} is still a member of {{team}}. Check your connection and try again.",
+          "removed": "{{name}} was removed from {{team}}.",
+          "roleFailed": "Couldn't change {{name}}'s role. Try again.",
+          "memberGone": "{{name}} is no longer on {{team}}.",
+          "notAllowed": "You can no longer manage {{team}}.",
+          "invitedNoEmail": "Invited {{invited}}, but the email didn't send. Use Resend below.",
+          "skippedInvited": "Not added to {{team}}: {{names}}. They already have a workspace invitation."
+        },
+        "columns": {
+          "name": "Name",
+          "members": "Members",
+          "teamspaces": "Teamspaces"
+        },
+        "loadingTitle": "Loading teams…",
+        "loadingBody": "Your workspace teams will appear here.",
+        "failedTitle": "Couldn't load teams",
+        "failedBody": "Check your connection and try again.",
+        "retry": "Try again",
+        "emptyTitle": "No teams yet",
+        "emptyBody": "A team is a shortcut for adding several people at once. Add a team to a teamspace and everyone in it gets access.",
+        "emptyBodyMember": "Your workspace admins haven't created one yet.",
+        "create": "Create team",
+        "spacesNone": "None",
+        "people_one": "{{count}} person",
+        "people_other": "{{count}} people",
+        "spaces_one": "{{count}} teamspace",
+        "spaces_other": "{{count}} teamspaces",
+        "refreshFailed": "Couldn't refresh teams. This list may be out of date.",
+        "cellMenuLabel": "{{team}}: {{value}}",
+        "paywall": {
+          "title": "Teams are on the Business plan",
+          "body": "Teamspaces are free. Upgrade to group people into teams.",
+          "bodyAskOwner": "Teamspaces are free. Ask {{owner}} to upgrade to group people into teams.",
+          "bodyAskOwnerUnknown": "Teamspaces are free. Ask your workspace owner to upgrade to group people into teams.",
+          "upgrade": "Upgrade to Business",
+          "notNow": "Not now",
+          "lapsedTitle": "This workspace's plan isn't active",
+          "lapsedBody": "Update billing to create teams. Your existing teams keep working.",
+          "lapsedBodyAskOwner": "Ask {{owner}} to update billing to create teams. Your existing teams keep working.",
+          "lapsedBodyAskOwnerUnknown": "Ask your workspace owner to update billing to create teams. Your existing teams keep working.",
+          "updateBilling": "Update billing"
+        },
+        "form": {
+          "title": "Create team",
+          "subtitle": "A shortcut for adding several people at once.",
+          "name": "Name",
+          "namePlaceholder": "Team name",
+          "nameRequired": "Enter a team name.",
+          "nameTaken": "A team called {{name}} already exists.",
+          "people": "People",
+          "peoplePlaceholder": "Names or emails",
+          "adminNote": "You're added as the team's admin. Invitations send when you create the team.",
+          "adminNoteShort": "You're added as the team's admin.",
+          "invalidEmail": "Enter a valid email address.",
+          "cancel": "Cancel",
+          "submit": "Create team",
+          "creating": "Creating…",
+          "retry": "Try again",
+          "creatingStatus_one": "Creating {{team}} and sending {{count}} invitation…",
+          "creatingStatus_other": "Creating {{team}} and sending {{count}} invitations…",
+          "failed": "Couldn't create the team. Your entries are kept.",
+          "created": "Created {{team}}",
+          "createdAdded": "Created {{team}}. Added {{names}}.",
+          "createdInvited": "Created {{team}}. Invited {{invited}}.",
+          "createdAddedInvited": "Created {{team}}. Added {{names}} and invited {{invited}}.",
+          "createdWithMembers_one": "Created {{team}} with {{count}} member",
+          "createdWithMembers_other": "Created {{team}} with {{count}} members",
+          "createdInvitedMany_one": "Created {{team}} and invited {{count}} person",
+          "createdInvitedMany_other": "Created {{team}} and invited {{count}} people",
+          "createdCounts_one": "Created {{team}}. Added {{added}}, invited {{count}}.",
+          "createdCounts_other": "Created {{team}}. Added {{added}}, invited {{count}}.",
+          "notAllowed": "You don't have permission to create teams in {{workspace}}.",
+          "ssoRequired": "Sign in with your company's single sign-on to create teams in {{workspace}}.",
+          "createdSomeNotInvited_one": "Created {{team}}. Couldn't invite {{count}} person.",
+          "createdSomeNotInvited_other": "Created {{team}}. Couldn't invite {{count}} people."
+        },
+        "dialog": {
+          "tabGeneral": "General",
+          "tabMembers": "Members",
+          "tabSpaces": "Teamspaces",
+          "nameLabel": "Team name",
+          "renameFailed": "Couldn't rename {{team}}. Try again."
+        },
+        "spacesTab": {
+          "emptyTitle": "Not in any teamspace yet",
+          "emptyBody": "Add this team to a teamspace to give everyone in it access.",
+          "emptyAction": "Add to teamspace",
+          "noSpacesTitle": "No teamspaces yet",
+          "noSpacesBody": "A teamspace is a shared area for a team's notes. Add people or teams, and everyone in it can read and edit.",
+          "placeholder": "Find teamspaces to add",
+          "searchPlaceholder": "Find teamspaces",
+          "add": "Add teamspaces",
+          "adding": "Adding…",
+          "selectedTitle_one": "{{count}} teamspace selected",
+          "selectedTitle_other": "{{count}} teamspaces selected",
+          "selectedBody": "Add {{team}} to {{names}}.",
+          "noMatches": "No matching teamspaces",
+          "createNew": "Create new teamspace",
+          "failed": "Couldn't add {{team}}. Your selections are kept. Try again.",
+          "added_one": "Added {{team}} to {{count}} teamspace.",
+          "added_other": "Added {{team}} to {{count}} teamspaces.",
+          "addedPartly": "Added {{team}} to {{added}}. Couldn't add it to {{failed}}. Try again.",
+          "gone": "Couldn't add {{team}}. {{names}} can no longer be found.",
+          "notAllowed": "You can no longer manage {{names}}."
+        },
+        "exit": {
+          "leaveTitle": "Leave team",
+          "leaveBody": "Leave this team.",
+          "leaveAction": "Leave team",
+          "deleteTitle": "Delete team",
+          "deleteBody": "Remove this team for everyone.",
+          "deleteAction": "Delete team",
+          "blockedTitle": "Add another admin first",
+          "blockedBody": "You're the only admin of {{team}}. Make another member an admin before you leave.",
+          "manageMembers": "Manage members",
+          "leaveConfirmTitle": "Leave {{team}}?",
+          "leaveConfirmBody": "You'll be removed from this team and lose access granted through it. Another admin will continue managing the team.",
+          "leaveConfirmBodyNoOtherAdmin": "You'll be removed from this team and lose access granted through it.",
+          "leaveFailedTitle": "Couldn't leave {{team}}",
+          "leaveFailedBody": "You're still a member of this team. Check your connection and try again.",
+          "left": "You left {{team}}.",
+          "deleteConfirmTitle": "Delete {{team}}?",
+          "deleteConfirmBody": "The team will be removed for everyone. Access granted through {{team}} will end. People, teamspaces, and notes won't be deleted.",
+          "deleted": "{{team}} was deleted. Its people and teamspaces are still available.",
+          "deleteFailedTitle": "Couldn't delete {{team}}",
+          "deleteFailedBody": "The team and its access settings are unchanged. Check your connection and try again.",
+          "deleteNotAllowed": "You don't have permission to delete {{team}}."
+        },
+        "managedByDirectory": "Managed by your directory",
+        "addPeople": {
+          "someAdded": "{{team}} · {{covered}} of {{total}} already added",
+          "none": "No teams yet",
+          "noneAddable": "No teams you can add to",
+          "addingTitle_one": "Adding {{count}} person…",
+          "addingTitle_other": "Adding {{count}} people…",
+          "addingBody": "Keep this window open while they're added to {{team}}.",
+          "addingAction": "Adding…",
+          "failedTitle_one": "Couldn't add {{count}} person",
+          "failedTitle_other": "Couldn't add {{count}} people",
+          "failedBody": "They haven't been added to {{team}}. Your selection is kept.",
+          "done_one": "Added {{count}} member to {{team}}",
+          "done_other": "Added {{count}} members to {{team}}",
+          "someDone": "Added {{added}} to {{team}}. {{already}} was already a member.",
+          "someDonePlural": "Added {{added}} to {{team}}. {{already}} were already members.",
+          "left": "{{names}} left the workspace, so nobody was added.",
+          "allAlready": "They're already on {{team}}."
         }
       },
       "invites": {
-        "title": "Pending invitations",
-        "expiresIn_one": "Expires in {{count}} day",
-        "expiresIn_other": "Expires in {{count}} days",
-        "expired": "Expired",
-        "loadError": "Couldn't load invitations.",
-        "resend": "Resend",
         "resending": "Resending…",
-        "revoke": "Revoke",
         "resent": "Invitation resent",
-        "resentNoEmail": "Invitation updated, but the email couldn't be delivered.",
-        "revoked": "Invitation revoked",
-        "revokeFailed": "Could not revoke invitation",
-        "revokeConfirm": {
-          "title": "Revoke this invitation?",
-          "description": "The invitation link for {{email}} will stop working."
-        }
+        "resentNoEmail": "Invitation updated, but the email couldn't be delivered."
       },
       "billing": {
         "plan": "Plan",
@@ -1890,6 +2344,59 @@
         "title": "Enterprise console",
         "description": "Manage SSO, policies, and members on the web",
         "open": "Open console"
+      },
+      "guests": {
+        "columns": {
+          "name": "Name",
+          "access": "Access",
+          "actions": "Actions"
+        },
+        "emptyTitle": "No guests yet",
+        "emptyBody": "People outside this workspace who can view your shared notes will show up here.",
+        "loadingTitle": "Loading guests…",
+        "loadingBody": "Your workspace guests will appear here.",
+        "failedTitle": "Couldn't load guests",
+        "failedBody": "Check your connection and try again.",
+        "noteCount_one": "{{count}} note",
+        "noteCount_other": "{{count}} notes",
+        "notesTriggerLabel_one": "{{count}} note shared with {{name}}",
+        "notesTriggerLabel_other": "{{count}} notes shared with {{name}}",
+        "removeFromNote": "Remove from {{note}}",
+        "removedFromNote": "Removed {{name}} from {{note}}",
+        "removeFromNoteFailed": "Couldn't remove {{name}} from {{note}}. Check your connection and try again.",
+        "menu": {
+          "label": "Actions for {{name}}",
+          "invite": "Invite to workspace",
+          "copyEmail": "Copy email",
+          "remove": "Remove as guest"
+        },
+        "invite": {
+          "title_one": "Invite {{count}} guest to {{workspace}}",
+          "title_other": "Invite {{count}} guests to {{workspace}}",
+          "description": "They'll get an email link to join {{workspace}}.",
+          "sent_one": "Sent {{count}} invite to join {{workspace}}",
+          "sent_other": "Sent {{count}} invites to join {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "Remove {{name}} from {{workspace}}?",
+          "confirmOne": "Remove guest",
+          "title_one": "Remove {{count}} guest from {{workspace}}?",
+          "title_other": "Remove {{count}} guests from {{workspace}}?",
+          "body": "They'll lose access to every note shared with them. You can share notes with them again anytime.",
+          "linkShared": "Guests may still have access through link or domain sharing.",
+          "confirm_one": "Remove {{count}} guest",
+          "confirm_other": "Remove {{count}} guests",
+          "removing": "Removing…",
+          "limit": "Select up to {{count}} guests to remove at once.",
+          "failed": "Couldn't remove guests. Nobody was removed. Check your connection and try again.",
+          "done_one": "Removed {{count}} guest",
+          "done_other": "Removed {{count}} guests"
+        },
+        "selection": {
+          "selectAll": "Select all guests",
+          "invite": "Invite to workspace",
+          "remove": "Remove as guest"
+        }
       }
     },
     "unifiedBilling": {
@@ -2159,7 +2666,7 @@
       },
       "examplesTitle": "Examples",
       "helper": "Pick something short and natural to say aloud",
-      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. With auto-paste enabled, an answer pastes at a focused writable cursor; otherwise it opens in the floating assistant panel.",
+      "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, highlighted text is safely replaced with the result. Other requests open in the assistant window.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
@@ -2234,6 +2741,14 @@
       "dataManagementTitle": "Data Management",
       "modelCache": "Model cache",
       "open": "Open",
+      "retiredModels": {
+        "label": "Retired models",
+        "description": "These models are no longer offered but are still on disk: {{models}}.",
+        "remove": "Remove",
+        "confirmTitle": "Remove retired models?",
+        "confirmDescription": "This deletes the files of models the catalog no longer offers. Other downloaded models stay.",
+        "failedDescription": "Some files couldn't be removed. A model may still be in use; restart the app and try again."
+      },
       "removeModels": {
         "confirmText": "Delete Models",
         "description": "This deletes all locally cached Whisper models ({{path}}) and frees disk space. You can download them again from the model picker.",
@@ -2306,10 +2821,10 @@
         "resetToDefault": "Reset to {{hotkey}}",
         "title": "Dictation Hotkey",
         "linuxPttPermissionTitle": "Hold to Speak needs extra setup",
-        "linuxPttPermissionDescription": "Run this command and log out/in: sudo usermod -aG input $USER",
+        "linuxPttPermissionDescription": "Run this command, then log out of your Linux user account and log back in: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Hold to Speak needs setup",
         "linuxPttSetupDescription": "Your user needs access to keyboard input devices.",
-        "linuxPttSetupNote": "After running the command, log out and log back in.",
+        "linuxPttSetupNote": "After running the command, log out of your Linux user account, then log back in.",
         "hyprlandConfigWriteWarningTitle": "Hyprland keybinds will not persist",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr cannot write to {{path}}, so keybinds will not survive a Hyprland config reload. Make sure the file exists and is writable.",
         "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut."
@@ -2323,7 +2838,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Voice Assistant Hotkey",
-        "description": "Speak a command and the assistant uses your notes, calendar, and web tools. Its answer pastes at a focused writable cursor, replaces selected text, or opens in the floating panel."
+        "description": "Speak a request and the assistant answers in its own window, using your notes, calendar, and web tools. Text you highlight first goes with it as context."
       },
       "microphone": {
         "description": "Select which input device to use for dictation",
@@ -2528,13 +3043,15 @@
     "privacy": {
       "cloudBackup": "Cloud backup",
       "cloudBackupDescription": "Back up your transcriptions and notes to the cloud for seamless access across devices.",
-      "cloudBackupTeamCaveat": "Notes in team spaces and notes you've shared always sync, regardless of this setting.",
+      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting.",
       "cloudNotesMigration": "Backing up notes… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "All notes backed up",
       "description": "Control what data leaves your device. Everything is off by default.",
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
+      "modelListUpdates": "Model list updates",
+      "modelListUpdatesDescription": "Check OpenWhispr's public model list on GitHub every 15 minutes for new and retired models. Changes take full effect after restart.",
       "insightsSync": "Sync personal Insights",
       "insightsSyncDescription": "Sync word counts, the date and exact time of each dictation, durations, and model types across your devices. Transcript content is never included. When you're signed in, clearing history also removes these counters from this device and your account.",
       "insightsSyncRequiresAccount": "Sign in to sync content-free Insights data across your devices.",
@@ -2794,7 +3311,15 @@
         "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages",
         "assemblyai_universal_3_6_pro": "Highest accuracy realtime, 32 languages",
         "mistral_voxtral_mini_transcribe_3_0": "Fast transcription in 50+ languages (preview)",
-        "mistral_voxtral_small_transcribe_3_0": "Most accurate Voxtral, 50+ languages (preview)"
+        "mistral_voxtral_small_transcribe_3_0": "Most accurate Voxtral, 50+ languages (preview)",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Mistral's fast, accurate multilingual transcription",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "NVIDIA's low-cost transcription in 40 languages",
+        "openrouter_deepgram_nova_3": "Deepgram's fast multilingual transcription",
+        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI's most accurate transcription",
+        "openrouter_elevenlabs_scribe_v2": "ElevenLabs' accurate transcription in 90+ languages",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Mistral's larger multilingual transcription model",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "NVIDIA's low-cost transcription for European languages",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "NVIDIA's lowest-cost multilingual transcription"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -2913,6 +3438,21 @@
       "contextTooLargeGeneric": "This is too long for {{model}} to read on this computer. Try a cloud model, or run the action on a shorter selection.",
       "localServerUnavailable": "{{model}} couldn't be started on this computer. Try again, or switch to a cloud model.",
       "localModelBusy": "The local model is still working on another request. Wait for it to finish, then try again."
+    },
+    "policy": {
+      "guidance": "Your organization approved these models. Pick one that suits your computer.",
+      "notApproved": "Not approved by your organization",
+      "noneSupported": "Your organization hasn't approved any on-device models this app version supports. Update OpenWhispr or contact your administrator.",
+      "emptyIntersection": "Your workspaces have no approved local model in common. Contact your administrator.",
+      "modelBlocked": "Choose a local model your organization has approved.",
+      "modeBlocked": "Your organization has disabled local processing.",
+      "unresolved": "Workspace policy could not be resolved. Connect and try again.",
+      "versionBlocked": "Update OpenWhispr to use your organization’s approved models.",
+      "updateRequired": "Update required",
+      "unavailable": "Unavailable right now",
+      "installedTitle": "Installed local models",
+      "installedHint": "Your organization has disabled local processing, so these can't run. They stay on your computer until you delete them.",
+      "chooseModel": "Choose a local model"
     }
   },
   "sidebar": {
@@ -3074,7 +3614,7 @@
     },
     "create": {
       "title": "Create workspace",
-      "description": "A workspace brings your organization's members and billing together. Create team spaces inside it for shared notes.",
+      "description": "A workspace brings your organization's members and billing together. Create teamspaces inside it for shared notes.",
       "nameLabel": "Workspace name",
       "namePlaceholder": "Acme Corp",
       "submit": "Create workspace",
@@ -3086,27 +3626,82 @@
       "description": "You're now the owner of {{name}}."
     },
     "invite": {
-      "title": "Invite to {{workspace}}",
-      "description": "Add teammates by email. They'll get a link to join.",
-      "emailLabel": "Email",
-      "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "Role",
+      "title": "Invite people",
+      "description": "They'll get an email link to join {{workspace}}.",
+      "emailLabel": "Email addresses",
+      "emailHint": "Separate emails with commas. Everyone gets the same role.",
+      "emailPlaceholder": "Search email",
+      "addMore": "Add more…",
+      "removeRecipient": "Remove {{email}}",
+      "suggestions": "Suggestions",
+      "roleLabel": "Workspace role",
       "seatUsage": "Using {{used}} of {{seats}} seats",
       "seatCost": "If accepted, adds a seat to your plan · estimated prorated charge {{amount}}.",
-      "submit": "Send invite",
-      "submitting": "Sending…",
-      "sentTitle": "Invite sent",
-      "sentDescription": "We sent an invitation to {{email}}.",
-      "sentNoEmailTitle": "Invite created, but not emailed",
-      "sentNoEmailDescription": "{{email}} was invited, but the email couldn't be delivered. Resend it later or share the invite link another way.",
-      "errorTitle": "Couldn't send invitation",
+      "seatCostMany_one": "If all are accepted, adds {{count}} seat to your plan · estimated prorated charge {{amount}}.",
+      "seatCostMany_other": "If all are accepted, adds {{count}} seats to your plan · estimated prorated charge {{amount}}.",
+      "seatCostManyUnpriced_one": "If all are accepted, adds {{count}} seat to your plan.",
+      "seatCostManyUnpriced_other": "If all are accepted, adds {{count}} seats to your plan.",
+      "submitOne": "Send invite",
+      "submit_one": "Send {{count}} invite",
+      "submit_other": "Send {{count}} invites",
+      "submitting_one": "Inviting {{count}}…",
+      "submitting_other": "Inviting {{count}}…",
+      "sentTitle_one": "{{count}} invitation sent",
+      "sentTitle_other": "{{count}} invitations sent",
+      "attachedTitle_one": "{{count}} invitation updated",
+      "attachedTitle_other": "{{count}} invitations updated",
+      "attachedBody_one": "{{count}} address already had a workspace invitation, so this was added to it. No new email was sent.",
+      "attachedBody_other": "{{count}} addresses already had workspace invitations, so this was added to them. No new email was sent.",
+      "createdTitle_one": "{{count}} invitation created",
+      "createdTitle_other": "{{count}} invitations created",
+      "sentOne": "Invited {{email}} to {{workspace}}",
+      "sentMany_one": "Invited {{count}} person to {{workspace}}",
+      "sentMany_other": "Invited {{count}} people to {{workspace}}",
+      "noEmail_one": "{{count}} invitation was created, but its email couldn't be delivered. Resend it from Invitations.",
+      "noEmail_other": "{{count}} invitations were created, but their emails couldn't be delivered. Resend them from Invitations.",
+      "someFailed_one": "{{count}} invite didn't send",
+      "someFailed_other": "{{count}} invites didn't send",
+      "tryResending": "Try resending",
+      "tooMany": "You can invite up to {{count}} people at a time.",
+      "removeLast_one": "Remove the last {{count}}",
+      "removeLast_other": "Remove the last {{count}}",
+      "seatsLeft_one": "Only {{count}} seat left. Remove {{excess}} or upgrade.",
+      "seatsLeft_other": "Only {{count}} seats left. Remove {{excess}} or upgrade.",
+      "seatsLeftAskOwner_one": "Only {{count}} seat left. Remove {{excess}} or ask {{owner}} to add seats.",
+      "seatsLeftAskOwner_other": "Only {{count}} seats left. Remove {{excess}} or ask {{owner}} to add seats.",
+      "seatsNone": "No seats left. Upgrade to add more.",
+      "seatsNoneAskOwner": "No seats left. Ask {{owner}} to add seats.",
+      "upgrade": "Upgrade",
+      "ceilingLeft_one": "You can invite {{count}} more person. Remove {{excess}} to continue.",
+      "ceilingLeft_other": "You can invite {{count}} more people. Remove {{excess}} to continue.",
+      "rateLimitedLeft_one": "Only {{count}} more invitation can go out right now. Remove {{excess}} to send it, or try again later.",
+      "rateLimitedLeft_other": "Only {{count}} more invitations can go out right now. Remove {{excess}} to send them, or try again later.",
+      "rateLimitedDaily": "This workspace can send up to {{limit}} invitations a day. Remove {{excess}} to send the rest now.",
+      "skippedMany_one": "{{count}} address was skipped: already a member or already invited.",
+      "skippedMany_other": "{{count}} addresses were skipped: already members or already invited.",
+      "skippedNotAdded_one": "{{count}} address was skipped and not added here: already a member or already invited. Add existing members from the members list instead.",
+      "skippedNotAdded_other": "{{count}} addresses were skipped and not added here: already members or already invited. Add existing members from the members list instead.",
+      "done": "Done",
       "role": {
-        "admin": "Admin",
-        "member": "Member"
+        "admin": "Workspace Admin",
+        "member": "Workspace Member"
       },
       "roleDescription": {
-        "admin": "Manages members and billing",
-        "member": "Uses the workspace"
+        "admin": "Manages members, invites, teams, and settings.",
+        "member": "Can view and edit notes."
+      },
+      "errors": {
+        "invalid": "{{email}} isn't a valid email",
+        "alreadyMember": "{{email}} is already a member, skipped",
+        "alreadyInvited": "{{email}} was already invited, skipped. Resend it from Invitations.",
+        "seatLimit": "This workspace has reached its seat limit.",
+        "directoryRequired": "Assign {{email}} in your identity provider first.",
+        "notAllowed": "You can no longer invite people to {{workspace}}.",
+        "ssoRequired": "Sign in with your company's single sign-on to invite people to {{workspace}}.",
+        "sessionExpired": "Couldn't invite {{email}}: your sign-in expired or changed. Sign in again, then try again.",
+        "rateLimited": "Too many invitations right now. Try again later.",
+        "requestFailed": "Couldn't invite {{email}}. Check your connection and try again.",
+        "refused": "Couldn't invite {{email}}: {{reason}}"
       }
     },
     "join": {
@@ -3170,6 +3765,73 @@
       },
       "tryAgain": "Try again"
     },
+    "removeMember": {
+      "title": "Remove {{name}} from {{workspace}}?",
+      "body": "They'll lose access to every teamspace and team in this workspace. You can invite them again anytime.",
+      "confirm": "Remove",
+      "removing": "Removing…",
+      "failed": "Couldn't confirm that {{name}} was removed. Check your connection and try again.",
+      "notAllowed": "You no longer have permission to remove people from {{workspace}}.",
+      "alreadyRemoved": "{{name}} was already removed"
+    },
+    "removeMembers": {
+      "title_one": "Remove {{count}} member from {{workspace}}?",
+      "title_other": "Remove {{count}} members from {{workspace}}?",
+      "confirm_one": "Remove {{count}} member",
+      "confirm_other": "Remove {{count}} members",
+      "checking": "Checking…",
+      "failed_one": "Couldn't confirm that {{count}} member was removed. Check your connection and try again.",
+      "failed_other": "Couldn't confirm that {{count}} members were removed. Check your connection and try again.",
+      "body": "These people will lose access to every teamspace and team in this workspace. You can invite them again anytime.",
+      "ownerOne": "{{name}} owns notes or teamspaces in this workspace.",
+      "owners_one": "{{count}} of them owns notes or teamspaces.",
+      "owners_other": "{{count}} of them own notes or teamspaces.",
+      "directoryManagedOne": "{{name}} is assigned by your identity provider. Remove them there instead.",
+      "directoryManaged_one": "{{count}} of them is assigned by your identity provider. Remove them there instead.",
+      "directoryManaged_other": "{{count}} of them are assigned by your identity provider. Remove them there instead.",
+      "directoryManagedOneOthers": "{{name}} is assigned by your identity provider. Remove them there, or untick them to remove the others.",
+      "directoryManagedOthers_one": "{{count}} of them is assigned by your identity provider. Remove them there, or untick them to remove the others.",
+      "directoryManagedOthers_other": "{{count}} of them are assigned by your identity provider. Remove them there, or untick them to remove the others.",
+      "transferLabel": "Transfer to",
+      "transferBody": "Their notes and teamspaces will move to the new owner. They'll lose access to this workspace.",
+      "transferBodyLimited": "Their notes and teamspaces will move to {{name}}, except notes in teamspaces {{name}} can't access, which stay in those teamspaces. They'll lose access to this workspace.",
+      "you": "{{name}} (you)",
+      "transferConfirm": "Transfer and remove",
+      "transferring": "Transferring…",
+      "transferFailed": "Couldn't confirm the transfer and removal. Check your connection and try again.",
+      "invalidTarget": "{{name}} can't receive ownership anymore. Choose someone else.",
+      "cannotRemoveOwner": "The workspace owner can't be removed.",
+      "cannotRemoveSelf": "You can't remove yourself. Leave the workspace from General.",
+      "done_one": "Removed {{count}} member",
+      "done_other": "Removed {{count}} members",
+      "transferDone_one": "Moved their notes and teamspaces to {{name}} and removed {{count}} member.",
+      "transferDone_other": "Moved their notes and teamspaces to {{name}} and removed {{count}} members.",
+      "transferPartial_one": "{{count}} note stayed in a teamspace {{name}} can't access. Everything else moved to them.",
+      "transferPartial_other": "{{count}} notes stayed in teamspaces {{name}} can't access. Everything else moved to them.",
+      "alreadyRemoved_one": "{{count}} member was already removed",
+      "alreadyRemoved_other": "{{count}} members were already removed"
+    },
+    "cancelInvitation": {
+      "title": "Cancel the invitation for {{email}}?",
+      "body": "They won't be able to join with this invitation. Current members keep their access.",
+      "keep": "Keep invitation",
+      "canceling": "Canceling…",
+      "done": "Invitation canceled",
+      "failed": "Couldn't cancel the invitation. Check your connection and try again.",
+      "notAllowed": "You no longer have permission to cancel invitations in {{workspace}}."
+    },
+    "cancelInvitations": {
+      "title_one": "Cancel {{count}} invitation?",
+      "title_other": "Cancel {{count}} invitations?",
+      "body": "They won't be able to join with these invitations. Current members keep their access.",
+      "keep": "Keep invitations",
+      "confirm": "Cancel invites",
+      "done_one": "Canceled {{count}} invitation.",
+      "done_other": "Canceled {{count}} invitations.",
+      "partial_one": "{{count}} invitation couldn't be canceled. Check your connection and try again.",
+      "partial_other": "{{count}} invitations couldn't be canceled. Check your connection and try again."
+    },
+    "ssoRequired": "Sign in with your company's single sign-on to manage people in {{workspace}}.",
     "transfer": {
       "title": "Choose a new Owner",
       "body": "Choose an existing workspace member. You'll become an Admin after the transfer.",
@@ -3204,6 +3866,10 @@
     }
   },
   "chat": {
+    "answering": "Answering…",
+    "conversationCreateFailed": "Couldn’t start the conversation. Your question is back in New chat.",
+    "messageSaveFailed": "Couldn’t save this message. Please try again.",
+    "conversationLoadFailed": "Couldn’t load this conversation. Please try again.",
     "newChat": "New chat",
     "search": "Search conversations...",
     "archived": "Archived",
@@ -3237,7 +3903,15 @@
       "todos": "List my recent to-dos",
       "meeting": "Prepare me for my next meeting",
       "sharedNotes": "Highlight my shared notes"
-    }
+    },
+    "fork": "Fork",
+    "forked": "Forked chat",
+    "forkedFrom": "Forked from \"{{title}}\"",
+    "forkFailed": "Couldn't fork this chat",
+    "sendNotStarted": "This chat is busy. Your message wasn't sent. Try again when the current request finishes.",
+    "openFailed": "This chat is no longer available.",
+    "localModelDownloading": "Your assistant model is still downloading. Chat turns on when it's ready.",
+    "localModelMissing": "Choose a model for Chat in Settings to chat on this device."
   },
   "referral": {
     "title": "Refer and earn rewards",
@@ -3332,34 +4006,18 @@
       "teamSpaces": "Teamspaces",
       "personal": "Personal",
       "privateTooltip": "Only you can see your Personal space",
-      "newSpace": "New team space",
-      "createTitle": "Create team space",
-      "createDescription": "A shared area inside a workspace for the people and groups you add.",
+      "newSpace": "New teamspace",
       "nameAndIconLabel": "Name and icon",
-      "create": "Create",
-      "couldNotCreate": "Couldn't create space",
-      "created": "Created {{space}}",
       "changeEmoji": "Change emoji",
       "settings": "Settings",
-      "settingsTitle": "Space settings",
       "couldNotRename": "Couldn't rename space",
       "couldNotChangeEmoji": "Couldn't change emoji",
       "deleteSpace": "Delete space",
-      "deleteHintTeam": "Removes this space for everyone. Its groups remain.",
       "deleteHintLocal": "Permanently deletes this space with its folders and notes on this device.",
-      "leaveTitle": "Leave space",
-      "leaveDescription": "Your notes stay available to the other members.",
-      "leave": "Leave space",
-      "leaveConfirmTitle": "Leave {{space}}?",
-      "leaveConfirmDescription": "You'll be removed from {{teams}} and lose access to any other spaces those groups can open.",
-      "leaveDirectDescription": "You'll lose access to this space.",
-      "leaveKeepsGroupAccess": "You'll keep access through {{groups}}.",
-      "left": "Left {{space}}",
-      "stillViaGroups": "You still have access to {{space}} through {{groups}}.",
-      "couldNotLeave": "Couldn't leave space",
+      "leaveConfirmDescription": "You'll be removed from {{teams}} and lose access to any other spaces those teams can open.",
+      "stillViaTeams": "You still have access to {{space}} through {{teams}}.",
       "deleteConfirmTitle": "Delete space?",
       "deleteConfirmDescription": "This permanently deletes {{space}} with all of its folders and notes on this device.",
-      "deleteConfirmTeamDescription": "This deletes {{space}} for everyone. Its groups remain, but members lose access to all of its folders and notes.",
       "deleteTypeName": "Type {{space}} to confirm",
       "couldNotDelete": "Couldn't delete space",
       "deleted": "Deleted {{space}}",
@@ -3370,9 +4028,9 @@
       "spaceRoot": "Space root",
       "moveConfirm": "Move",
       "confirmMoveInTitle": "Move to {{space}}?",
-      "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a team space later.",
-      "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a team space later.",
-      "cantMoveOut": "Notes can't be moved out of a team space.",
+      "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a teamspace later.",
+      "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a teamspace later.",
+      "cantMoveOut": "Notes can't be moved out of a teamspace.",
       "cantMoveTeammate": "Only the note's owner or a workspace admin can move it to another space.",
       "moved": "Moved “{{title}}” to {{target}}",
       "couldNotMove": "Couldn't move folder",
@@ -3396,56 +4054,23 @@
       "conflictKeep": "Keep editing",
       "editedBy": "Edited by {{name}} · {{time}}",
       "members": {
-        "addPeople": "Add people",
-        "addedToTeam": "{{name}} added to {{team}}",
-        "removedFromTeam": "{{name}} removed from {{team}}",
-        "stillViaGroups": "{{name}} still has access through {{groups}}",
+        "stillViaTeams": "{{name}} still has access through {{teams}}",
         "roleUpdated": "Role updated",
-        "you": "You",
-        "addFailed": "{{failed}} of {{total}} people couldn't be added",
-        "searchPlaceholder": "Search people…",
-        "noResults": "No people found",
         "roleAdmin": "Admin",
         "roleMember": "Member",
-        "roleAdminDescription": "Manages people and settings.",
-        "roleMemberDescription": "Can view and edit notes.",
-        "remove": "Remove",
-        "removeConfirm": "Remove {{name}} from {{space}}?",
-        "removeConfirmDescription": "They'll lose access to all notes in this space.",
-        "removeKeepsGroupAccess": "They'll keep access through {{groups}}.",
-        "inviteFooter": "Invite {{email}} to workspace…",
         "empty": "No one has been added yet",
-        "viaGroup": "via {{group}}",
-        "managedByGroup": "Added through {{group}}. Remove them there.",
-        "roleFromGroup": "Admin through {{group}}. Change it there.",
-        "invited": "Invitation sent to {{email}}"
+        "roleFromTeam": "Admin through {{team}}. Change it there."
       },
-      "invitedTo_one": "You'll join {{count}} team space",
-      "invitedTo_other": "You'll join {{count}} team spaces",
+      "invitedTo_one": "You'll join {{count}} teamspace",
+      "invitedTo_other": "You'll join {{count}} teamspaces",
       "invitedToSpaces": "You'll join {{spaces}}",
       "teamsMembers": {
         "title": "Members of {{space}}",
-        "noTeams": "No groups have access to this space yet.",
-        "addTeamLabel": "Add a group to this space",
-        "chooseTeam": "Choose group…",
-        "teamAdded": "{{team}} added to {{space}}",
         "teamRemoved": "{{team}} removed from {{space}}",
-        "removeTeamFromSpace": "Remove from space",
-        "removeTeamConfirm": "Remove {{team}} from {{space}}?",
-        "removeTeamConfirmDescription": "Its members will lose access to this space unless they were added directly or another group includes them.",
-        "accessLabel": "Space access",
-        "accessAdmin": "Admin",
-        "accessMember": "Member",
-        "accessChanged": "Access for {{team}} updated",
-        "accessHint": "Admins of {{team}} manage this space only when its access is set to Admin."
+        "accessChanged": "Access for {{team}} updated"
       },
       "teams": {
-        "newTeam": "New group",
-        "loadError": "Couldn't load groups."
-      },
-      "groups": {
-        "title": "Groups with access",
-        "optional": "Groups (optional)"
+        "loadError": "Couldn't load teams."
       }
     },
     "structureIntro": {
@@ -3457,11 +4082,11 @@
       },
       "workspace": {
         "title": "Workspace",
-        "description": "The home for your workspace's members, roles, and team spaces."
+        "description": "The home for your workspace's members, roles, and teamspaces."
       },
       "teamSpace": {
-        "title": "Team space",
-        "description": "A shared area inside a workspace. Add people or groups to give them access."
+        "title": "Teamspace",
+        "description": "A shared area inside a workspace. Add people or teams to give them access."
       },
       "contents": "Each space can contain folders and notes.",
       "done": "Got it",
@@ -3947,7 +4572,7 @@
       },
       "banner": {
         "title": {
-          "team": "Your team space",
+          "team": "Your teamspace",
           "private": "Your private space"
         },
         "body": {
@@ -3997,6 +4622,7 @@
     "wordsReady_one": "{{count}} word ready",
     "wordsReady_other": "{{count}} words ready",
     "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models read only the last few hundred characters of it, so a shorter list works better there. Other models get the full list.",
+    "openRouterIgnoredNotice": "OpenRouter doesn't pass your dictionary to its speech models, so these words won't guide transcription while it's selected for dictation.",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
     "editWord": "Edit {{word}}",
@@ -4030,6 +4656,31 @@
     "emptyTitle": "Add words to your dictionary",
     "emptyDescription": "Add words for {{agentName}} to always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
+    "importList": "Import a list",
+    "importMenu": "Import",
+    "importFromDragon": "Import from Dragon",
+    "dragonImport": {
+      "title": "Import from Dragon",
+      "found_one": "Found {{count}} word in {{fileName}}.",
+      "found_other": "Found {{count}} words in {{fileName}}.",
+      "alreadyPresent": "Already in your dictionary, so skipped: {{count}}.",
+      "nothingNew": "Every word in this file is already in your dictionary.",
+      "unreadable": "Lines that could not be read, so skipped: {{count}}.",
+      "tooLong": "Words over {{max}} characters, so skipped: {{count}}.",
+      "overLimit": "Your dictionary holds up to {{max}} words, so these were not imported: {{count}}.",
+      "propertiesIgnored": "Dragon's formatting properties are not imported.",
+      "confirm_one": "Import {{count}} word",
+      "confirm_other": "Import {{count}} words",
+      "done_one": "Imported {{count}} word from Dragon",
+      "done_other": "Imported {{count}} words from Dragon",
+      "failedTitle": "Import failed",
+      "error": {
+        "emptyFile": "No words were found in that file.",
+        "unsupportedXml": "This doesn't look like a Dragon for Windows export. In Dragon, choose Vocabulary → Export custom word and phrase list and save as TXT.",
+        "fileTooLarge": "That file is too large to be a Dragon word list.",
+        "generic": "Couldn't read that file."
+      }
+    },
     "agentDefault": "Added by default",
     "shared": {
       "allWords": "All words",
@@ -4131,6 +4782,7 @@
       },
       "locked": {
         "noWorkspace": "Shared dictionaries are included with Business. Share your team's jargon, product names and acronyms with everyone.",
+        "chooseWorkspace": "You're in Personal. Switch to a workspace to use its shared words.",
         "upgradeAdmin": "Shared dictionaries are included with Business. Upgrade {{workspace}} so everyone gets the same words.",
         "upgradeMember": "Shared dictionaries are included with Business. Ask an admin to upgrade {{workspace}}.",
         "paused_one": "{{workspace}}'s {{count}} shared word is paused. Upgrade to Business to use it in dictation again.",
@@ -4261,7 +4913,6 @@
       "hotkeyToSpeak": "{{hotkey}} to talk",
       "recording": "Recording...",
       "processing": "Processing...",
-      "clickToSpeak": "Click to speak",
       "waitingForMicrophone": "Waiting for microphone…"
     },
     "buttons": {
@@ -4273,7 +4924,6 @@
       "startListening": "Start listening",
       "hideForNow": "Hide for now",
       "askAssistant": "Ask assistant",
-      "busyRecording": "Finish the current dictation first",
       "startMeetingRecording": "Start meeting recording"
     }
   },
@@ -4376,30 +5026,155 @@
       "update_skillName": "Update skill",
       "search_openwhispr_helpStatus": "Searching OpenWhispr help...",
       "read_openwhispr_helpStatus": "Reading OpenWhispr help...",
-      "get_openwhispr_contextStatus": "Reading OpenWhispr settings..."
+      "get_openwhispr_contextStatus": "Reading OpenWhispr settings...",
+      "ask_userName": "Question",
+      "ask_userStatus": "Asking you...",
+      "request_connectionName": "Connection",
+      "request_connectionStatus": "Asking to connect...",
+      "request_accessName": "Access",
+      "request_accessStatus": "Asking for access...",
+      "look_at_screenName": "Look at screen",
+      "look_at_screenStatus": "Looking at your screen...",
+      "look_at_screenSuccess": "Read the screen.",
+      "look_at_screenFailed": "The screen couldn't be read.",
+      "request_api_keyName": "API key",
+      "request_api_keyStatus": "Asking for an API key...",
+      "open_settingsName": "Settings",
+      "open_settingsStatus": "Pointing you to Settings..."
+    },
+    "turn": {
+      "reasoning": "Reasoning",
+      "stopped": "Stopped",
+      "stepLimit": "Paused after the maximum number of steps.",
+      "continue": "Continue",
+      "continueMessage": "Continue",
+      "failed": "This reply failed.",
+      "unbackedClaim": "Not actually done: nothing ran for what this reply says it did."
+    },
+    "interactions": {
+      "notNow": "Not now",
+      "cancel": "Cancel",
+      "questions": {
+        "recommended": "{{label}} (Recommended)",
+        "submit": "Submit",
+        "placeholder": "Type your answer…",
+        "previous": "Previous question",
+        "next": "Next question",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continue",
+        "typedAnswer": "Your answer: {{answer}}"
+      },
+      "connection": {
+        "title": "Connect {{name}}",
+        "connect": "Connect {{name}}",
+        "connecting": "Finish connecting in your browser…",
+        "failed": "Couldn't connect. Try again.",
+        "permissionDenied": "Calendar access was denied. Allow it in System Settings, then try again.",
+        "calendarTitle": "Connect a calendar",
+        "yes": "Yes",
+        "reasons": {
+          "gmail": "I can send the email from your Gmail.",
+          "slack": "I can post the message to Slack for you.",
+          "linear": "I can find and file Linear issues for you.",
+          "github": "I can find and file GitHub issues for you.",
+          "calendar": "I can check your availability and suggest times."
+        }
+      },
+      "access": {
+        "screen": "Allow access to your screen?",
+        "allow": "Allow",
+        "capturing": "Capturing…"
+      },
+      "apiKey": {
+        "title": "Add your {{provider}} API key",
+        "placeholder": "Paste or write here",
+        "save": "Save",
+        "label": "{{provider}} API key",
+        "saved": "{{provider}} key saved"
+      },
+      "settings": {
+        "done": "I'm done",
+        "technicalDetails": "Technical details",
+        "checking": "Checking…"
+      },
+      "status": {
+        "answered": "Answered",
+        "connected": "Connected {{name}}",
+        "granted": "Screen shared",
+        "declined": "Not allowed",
+        "saved": "API key saved",
+        "done": "Back from Settings",
+        "cancelled": "Dismissed",
+        "notAnswered": "Not answered",
+        "invalid": "Couldn't show that question"
+      },
+      "followUp": {
+        "connected": "I connected {{name}}.",
+        "granted": "I allowed access to my screen.",
+        "saved": "I saved my {{provider}} API key.",
+        "done": "I'm done in Settings."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Select text to edit with",
-      "selectedContext": "Selected text added",
-      "removeSelectedContext": "Remove selected text",
-      "newConversation": "New conversation",
-      "copyToClipboard": "Copy to clipboard",
-      "suggestions": {
-        "summarizeNotes": "Summarize my recent notes",
-        "calendar": "What is on my calendar?",
-        "draft": "Help me draft something"
-      }
+  "agentWindow": {
+    "title": "Assistant",
+    "actions": {
+      "expand": "Expand",
+      "collapse": "Minimize",
+      "speak": "Speak",
+      "type": "Type",
+      "stop": "Stop",
+      "close": "Close",
+      "regenerate": "Regenerate",
+      "readAloud": "Read aloud",
+      "stopReading": "Stop reading"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invoking",
-        "calling": "Calling",
-        "using": "Using"
-      },
-      "toolFallback": "Tool"
-    }
+    "notices": {
+      "nothingHeard": "Didn't catch that",
+      "transcriptionFailed": "Couldn't transcribe that",
+      "micUnavailable": "Couldn't open the mic",
+      "regenerateFailed": "Couldn't regenerate that answer",
+      "dictationActive": "Dictation is using the mic"
+    },
+    "composer": {
+      "placeholder": "Dictate or type your question…",
+      "followUpPlaceholder": "Ask a follow-up…",
+      "answerPlaceholder": "Answer here…",
+      "cardPlaceholder": "Answer on the card above…"
+    },
+    "empty": {
+      "title": "What can I help with?",
+      "description": "Type your request below."
+    },
+    "selectedContext": {
+      "title": "Selected context",
+      "remove": "Remove selected context",
+      "fromAnswer": "From the answer: “{{text}}”",
+      "fromOtherApp": "From another app: “{{text}}”"
+    },
+    "selectionHint": "Select text to follow up or fork",
+    "selectionToolbar": "Selected text",
+    "followUp": "Follow up",
+    "forkFromHere": "Fork from here",
+    "chats": {
+      "title": "Chats",
+      "switch": "Switch chat",
+      "new": "New chat",
+      "empty": "No chats yet",
+      "untitled": "Untitled chat",
+      "fork": "Fork"
+    },
+    "progress": {
+      "callingTools_one": "Calling {{count}} tool…",
+      "callingTools_other": "Calling {{count}} tools…",
+      "checkingAnswers": "Checking answers…",
+      "reasoning": "Reasoning…",
+      "reasonedFor": "Reasoned for {{duration}}",
+      "workedFor": "Worked for {{duration}}",
+      "steps_one": "{{count}} step",
+      "steps_other": "{{count}} steps"
+    },
+    "waitingForAnswer": "Waiting for answer"
   },
   "integrations": {
     "title": "Integrations",
@@ -4522,7 +5297,6 @@
     "approval": {
       "headers": {
         "default": "Send to {{destination}}",
-        "slackPost": "Post to {{destination}}",
         "email": "Email to {{destination}}",
         "issue": "Create issue in {{destination}}",
         "comment": "Comment on {{destination}}"
@@ -4530,8 +5304,6 @@
       "identity": "As {{account}}",
       "identityWithWorkspace": "As {{account}} in {{workspace}}",
       "send": "Send",
-      "edit": "Edit",
-      "doneEditing": "Done editing",
       "cancel": "Cancel",
       "titleLabel": "Title",
       "bodyLabel": "Message",
@@ -4557,6 +5329,10 @@
         "credential_save_failed": "The Slack login couldn't be saved on this computer. Nothing was sent. Try again.",
         "dm_failed": "The direct message to {{destination}} couldn't be opened. Nothing was sent.",
         "restricted": "{{destination}} is read-only or restricted for you.",
+        "thread_mismatch": "That thread is in a different conversation from {{destination}}. Nothing was sent.",
+        "invalid_thread": "That isn't a link to a Slack message. Nothing was sent.",
+        "thread_closed": "Slack doesn't allow replies in that thread. Nothing was sent.",
+        "thread_only": "{{destination}} only takes replies in threads. Nothing was sent.",
         "generic": "Something went wrong. Nothing was sent.",
         "github": {
           "reconnect_needed": "GitHub needs to be reconnected in Settings.",
@@ -4617,7 +5393,6 @@
         }
       },
       "email": {
-        "from": "From {{account}}",
         "toLabel": "To",
         "ccLabel": "Cc",
         "subjectLabel": "Subject",
@@ -4630,7 +5405,8 @@
         "tooManyRecipients": "An email can go to at most {{max}} addresses, To and Cc together.",
         "subjectTooLong": "Keep the subject to {{max}} characters or fewer.",
         "bodyTooLong": "The message is too long for Gmail. Shorten it to send.",
-        "unknown": "Couldn't confirm it was sent. Check your Sent folder."
+        "unknown": "Couldn't confirm it was sent. Check your Sent folder.",
+        "fromLabel": "From"
       },
       "github": {
         "notes": {
@@ -4674,7 +5450,22 @@
         "notes": {
           "targetTitle": "On \"{{title}}\""
         }
-      }
+      },
+      "sentEarlier": "You tried this earlier in this chat. Check whether it went through before sending again.",
+      "slack": {
+        "channelLabel": "Channel",
+        "asLabel": "As",
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Reply in thread started {{started, datetime(dateStyle: medium; timeStyle: short)}}"
+        },
+        "sentOutsideThread": "Sent to {{destination}} as a new message, not in the thread."
+      },
+      "sentLabel": "Sent",
+      "identityChanged": "Now sending as {{account}}. Press Send to send it.",
+      "connectToSend": "Connect {{name}} to send this",
+      "edit": "Edit",
+      "doneEditing": "Done editing"
     },
     "policyOff": "Connectors are turned off by your organization.",
     "email": {
@@ -4723,7 +5514,8 @@
         "connectedBody": "You can close this tab and return to OpenWhispr.",
         "failedTitle": "Slack wasn't connected",
         "failedBody": "Return to OpenWhispr to try again."
-      }
+      },
+      "pickDestination": "Which “{{destination}}” did you mean?"
     },
     "github": {
       "title": "GitHub",
@@ -4899,6 +5691,10 @@
         "credential_save_failed": "Couldn't save the Slack login on this computer. Nothing was sent.",
         "dm_failed": "Couldn't open the direct message. Nothing was sent.",
         "restricted": "That channel is read-only or restricted.",
+        "thread_mismatch": "That thread is in a different conversation. Nothing was sent.",
+        "invalid_thread": "Not a link to a Slack message.",
+        "thread_closed": "Slack doesn't allow replies in that thread.",
+        "thread_only": "That channel only takes replies in threads.",
         "generic": "That didn't work.",
         "github": {
           "reconnect_needed": "GitHub needs to be reconnected.",
@@ -4963,7 +5759,8 @@
       },
       "gmailDraftLimit": "Only {{max}} emails can be prepared per request.",
       "queryResults": "Results found: {{total}}",
-      "cardLimit": "Only {{max}} cards can be prepared per request."
+      "cardLimit": "Only {{max}} cards can be prepared per request.",
+      "alreadySent": "Already done for this request"
     },
     "beta": "Beta",
     "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",
@@ -5234,7 +6031,7 @@
         "owner": "Owner",
         "editor": "Can edit",
         "viewer": "Can view",
-        "teamAudience": "Everyone in this team space",
+        "teamAudience": "Everyone in this teamspace",
         "pending": "Pending",
         "accepted": "Has access",
         "resend": "Resend invite",

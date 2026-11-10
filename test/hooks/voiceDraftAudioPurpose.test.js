@@ -45,6 +45,7 @@ test("chat mic takes carry dictation purpose through local, cloud and BYOK file 
     }
   };
   const settings = {
+    isSignedIn: true,
     useLocalWhisper: true,
     whisperModel: "base",
     localTranscriptionProvider: "whisper",

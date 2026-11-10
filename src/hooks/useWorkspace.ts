@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "../stores/workspaceStore";
+import { spacesInWorkspaceScope } from "../lib/workspaceSelection";
 import { useAuth } from "./useAuth";
-import type { Workspace, WorkspaceRole } from "../types/electron";
+import type { SpaceItem, Workspace, WorkspaceRole } from "../types/electron";
 
 // Focus fires on every switch back to the app, so a server that keeps failing would otherwise get
 // a request each time. Shared by every mounted caller, which all listen.
@@ -13,6 +14,8 @@ interface UseWorkspaceResult {
   active: Workspace | null;
   role: WorkspaceRole | null;
   loaded: boolean;
+  personalSelected: boolean;
+  selectPersonal: () => void;
   setActive: (id: string | null) => void;
   refresh: () => Promise<void>;
 }
@@ -25,6 +28,8 @@ export function useWorkspace(): UseWorkspaceResult {
   const error = useWorkspaceStore((s) => s.error);
   const refresh = useWorkspaceStore((s) => s.refresh);
   const setActive = useWorkspaceStore((s) => s.setActiveWorkspaceId);
+  const personalSelected = useWorkspaceStore((s) => s.personalSelected);
+  const selectPersonal = useWorkspaceStore((s) => s.selectPersonal);
 
   useEffect(() => {
     if (isSignedIn && !loaded) {
@@ -60,7 +65,17 @@ export function useWorkspace(): UseWorkspaceResult {
     active,
     role: active?.role ?? null,
     loaded,
+    personalSelected,
+    selectPersonal,
     setActive,
     refresh,
   };
+}
+
+export function useSpacesInWorkspaceScope(spaces: SpaceItem[]): SpaceItem[] {
+  const { workspaces, active, personalSelected } = useWorkspace();
+  return useMemo(
+    () => spacesInWorkspaceScope(spaces, active?.id ?? null, workspaces, personalSelected),
+    [spaces, active?.id, workspaces, personalSelected]
+  );
 }

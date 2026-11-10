@@ -37,15 +37,34 @@ function readWorkspacePolicyCache(cachePath, identity) {
   return entry?.data && typeof entry.data === "object" ? entry.data : null;
 }
 
+// Writes append, so the last match is the account's latest verdict. Only entries
+// written while the account's binding vouched for the credential can match.
+function readAccountPolicyCache(cachePath, { apiOrigin, accountId }) {
+  const entry = readEnvelope(cachePath).entries.findLast(
+    (candidate) =>
+      isIdentity(candidate?.identity) &&
+      candidate.identity.accountValidated === true &&
+      candidate.identity.apiOrigin === apiOrigin &&
+      candidate.identity.accountId === accountId
+  );
+  return entry?.data && typeof entry.data === "object" ? entry.data : null;
+}
+
 function writeWorkspacePolicyCache(cachePath, identity, data) {
   if (!isIdentity(identity)) throw new Error("Complete policy cache identity is required");
   if (!data || typeof data !== "object") throw new Error("Policy cache data is required");
   const envelope = readEnvelope(cachePath);
+  const previous = envelope.entries.find(
+    (entry) => isIdentity(entry?.identity) && sameIdentity(entry.identity, identity)
+  )?.identity;
   const entries = envelope.entries.filter(
     (entry) => !isIdentity(entry?.identity) || !sameIdentity(entry.identity, identity)
   );
-  entries.push({ identity, data });
+  // Not every caller names the account, and the credential is the same one, so
+  // what the binding vouched for still stands.
+  const keepsBinding = previous?.accountValidated === true && !identity.accountValidated;
+  entries.push({ identity: keepsBinding ? previous : identity, data });
   fs.writeFileSync(cachePath, JSON.stringify({ version: CACHE_VERSION, entries }), { mode: 0o600 });
 }
 
-module.exports = { readWorkspacePolicyCache, writeWorkspacePolicyCache };
+module.exports = { readWorkspacePolicyCache, readAccountPolicyCache, writeWorkspacePolicyCache };
