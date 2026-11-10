@@ -407,6 +407,27 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 }));
 
+export interface PublishedWorkspaceScope {
+  activeWorkspaceId: string | null;
+  defaultWorkspaceId: string | null;
+  accountId: string | null;
+}
+
+const scopePublishedListeners = new Set<(scope: PublishedWorkspaceScope) => void>();
+
+/**
+ * Called each time main takes a scope this window sent. Main makes the active workspace's Private
+ * when it next reads the spaces, so a reader of them reads again to see it.
+ */
+export function onWorkspaceScopePublished(
+  listener: (scope: PublishedWorkspaceScope) => void
+): () => void {
+  scopePublishedListeners.add(listener);
+  return () => {
+    scopePublishedListeners.delete(listener);
+  };
+}
+
 /**
  * Tells main the active and default workspace, so new private notes go to the active workspace's
  * Private and existing ones to the default's. Named for the account whose list chose them: main
@@ -416,13 +437,22 @@ export async function publishWorkspaceScope(): Promise<boolean> {
   const api = typeof window !== "undefined" ? window.electronAPI : undefined;
   if (!api?.setActiveWorkspaceScope) return false;
   const { activeWorkspaceId, defaultWorkspaceId, listAccountId } = useWorkspaceStore.getState();
+  const scope = { activeWorkspaceId, defaultWorkspaceId, accountId: listAccountId };
   try {
-    const result = await api.setActiveWorkspaceScope({
-      activeWorkspaceId,
-      defaultWorkspaceId,
-      accountId: listAccountId,
-    });
-    return result?.success === true;
+    const result = await api.setActiveWorkspaceScope(scope);
+    if (result?.success !== true) return false;
+    for (const listener of scopePublishedListeners) {
+      try {
+        listener(scope);
+      } catch (error) {
+        logger.warn(
+          "A workspace scope listener failed",
+          { error: (error as Error).message },
+          "workspaces"
+        );
+      }
+    }
+    return true;
   } catch (error) {
     logger.warn(
       "Failed to send the workspace scope",

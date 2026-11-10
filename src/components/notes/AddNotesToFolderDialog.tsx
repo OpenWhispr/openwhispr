@@ -45,14 +45,12 @@ export default function AddNotesToFolderDialog({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [isAdding, setIsAdding] = useState(false);
   // The tree's scope: adding a note moves it into this folder's space, so one the tree hides
-  // must never be offered.
+  // (another workspace's teamspace or Private) must never be offered. The query always names the
+  // spaces in scope, so a space the store hasn't read (a Private made since) can't let its notes
+  // through.
   const spaces = useSpaces();
   const visibleSpaces = useSpacesInWorkspaceScope(spaces);
-  // null when nothing is hidden, so the query stays unscoped.
-  const visibleSpaceIds = useMemo(
-    () => (visibleSpaces.length === spaces.length ? null : visibleSpaces.map((s) => s.id)),
-    [visibleSpaces, spaces.length]
-  );
+  const visibleSpaceIds = useMemo(() => visibleSpaces.map((s) => s.id), [visibleSpaces]);
 
   useEffect(() => {
     if (!open) return;

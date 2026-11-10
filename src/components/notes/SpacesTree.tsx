@@ -43,6 +43,7 @@ import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useCanCreateTeamSpace } from "../../hooks/useCanCreateTeamSpace";
 import { useAuth } from "../../hooks/useAuth";
 import { useSpacesInWorkspaceScope, useWorkspace } from "../../hooks/useWorkspace";
+import { activePrivateSpace } from "../../lib/workspaceSelection";
 import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   canChangeSpaceNoteScope,
@@ -1156,7 +1157,10 @@ export default function SpacesTree({
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
 
   const privateSpaces = useMemo(() => spaces.filter((s) => s.kind === "private"), [spaces]);
-  const privateSpace = privateSpaces[0];
+  const privateSpace = useMemo(
+    () => activePrivateSpace(privateSpaces) ?? undefined,
+    [privateSpaces]
+  );
   const privateSectionExpanded = privateSpace
     ? expanded.has(spaceContainerKey(privateSpace.id))
     : false;

@@ -73,11 +73,13 @@ export function useWorkspace(): UseWorkspaceResult {
 }
 
 export function useSpacesInWorkspaceScope(spaces: SpaceItem[]): SpaceItem[] {
-  const { workspaces, active } = useWorkspace();
-  // No Personal choice is left to put in place of the workspaces.
+  const { workspaces, defaultWorkspaceId } = useWorkspace();
+  // The saved id, not the listed workspace: before the list answers, the active workspace's own
+  // Private still shows.
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   return useMemo(
-    () => spacesInWorkspaceScope(spaces, active?.id ?? null, workspaces, false),
-    [spaces, active?.id, workspaces]
+    () => spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces, defaultWorkspaceId),
+    [spaces, activeWorkspaceId, workspaces, defaultWorkspaceId]
   );
 }
 

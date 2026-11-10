@@ -20,11 +20,12 @@ import {
 } from "../lib/noteConflictRegistry";
 import { findDefaultFolder } from "../components/notes/shared";
 import {
+  activePrivateSpace,
   decideNoteWorkspaceScope,
   spacesInWorkspaceScope,
   type NoteWorkspaceScopeReason,
 } from "../lib/workspaceSelection";
-import { useWorkspaceStore } from "./workspaceStore";
+import { onWorkspaceScopePublished, useWorkspaceStore } from "./workspaceStore";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
   FolderItem,
@@ -125,10 +126,15 @@ let applyingWorkspaceScope = false;
 // switch cancels that.
 let awaitingOpenedNoteId: number | null = null;
 let awaitingOpenedContext: ActiveContext | null = null;
+// Set when the view left a container for the active workspace's Private before
+// that Private was in the store (a workspace this device hasn't opened yet: main
+// makes it once it hears the workspace). The view lands there when it arrives,
+// unless the user opened a container first.
+let landOnActivePrivate = false;
 function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
   if (applyingWorkspaceScope) return;
   const state = useNoteStore.getState();
-  const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState();
+  const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
   const spaceById = (id: number): SpaceItem | null =>
     state.spaces.find((space) => space.id === id) ?? null;
   const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
@@ -147,8 +153,7 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
     reason,
     activeWorkspaceId,
     workspaces,
-    // No Personal choice is left to put in place of the workspaces.
-    personalSelected: false,
+    defaultWorkspaceId,
     contextSpace,
     noteSpace,
   });
@@ -161,16 +166,39 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
   applyingWorkspaceScope = true;
   try {
     if (decision.clearNote) setActiveNoteId(null);
-    const context =
-      decision.context === "note" && activeNote
-        ? { spaceId: activeNote.space_id, folderId: activeNote.folder_id ?? null }
-        : decision.context === "default"
-          ? defaultContext(state.spaces, state.folders)
-          : null;
-    if (context) {
-      setActiveContext(context.spaceId, context.folderId);
-      revealContainer(context.spaceId, context.folderId);
+    if (decision.context === "note" && activeNote) {
+      const folderId = activeNote.folder_id ?? null;
+      setActiveContext(activeNote.space_id, folderId);
+      revealContainer(activeNote.space_id, folderId);
+    } else if (decision.context === "default") {
+      const context = defaultContext(state.spaces, state.folders);
+      if (context) {
+        setActiveContext(context.spaceId, context.folderId);
+        revealContainer(context.spaceId, context.folderId);
+      } else {
+        // Never left on a container the workspace hides while its Private is on its way.
+        useNoteStore.setState({ activeContext: null, notes: [] });
+      }
     }
+  } finally {
+    applyingWorkspaceScope = false;
+  }
+}
+
+/** Lands the view on the active workspace's Private once it's in the store, if it's still waiting. */
+function landOnArrivedPrivate(): void {
+  if (!landOnActivePrivate) return;
+  const state = useNoteStore.getState();
+  if (state.activeContext != null) {
+    landOnActivePrivate = false;
+    return;
+  }
+  const context = defaultContext(state.spaces, state.folders);
+  if (!context) return;
+  applyingWorkspaceScope = true;
+  try {
+    setActiveContext(context.spaceId, context.folderId);
+    revealContainer(context.spaceId, context.folderId);
   } finally {
     applyingWorkspaceScope = false;
   }
@@ -200,12 +228,36 @@ useWorkspaceStore.subscribe((state, previous) => {
   if (state.activeWorkspaceId !== previous.activeWorkspaceId) {
     awaitingOpenedNoteId = null;
     awaitingOpenedContext = null;
+    landOnActivePrivate = false;
     reconcileWorkspaceScope("workspaceSwitched");
   } else if (state.workspaces !== previous.workspaces) {
     // A workspace that just arrived (an accepted invitation) can claim the
     // space the user already opened.
     reconcileWorkspaceScope("navigated");
+  } else if (state.defaultWorkspaceId !== previous.defaultWorkspaceId) {
+    // The pending Private shows in the default workspace alone once that's known.
+    reconcileWorkspaceScope("dataChanged");
   }
+});
+
+// Main makes the active workspace's Private when it next reads the spaces after
+// hearing the workspace, so a workspace this device hasn't opened yet has none
+// in the store until they're read again. Once per scope; a tree that hasn't
+// loaded yet reads them itself.
+let publishedScopeKey: string | null = null;
+onWorkspaceScopePublished(({ accountId, activeWorkspaceId, defaultWorkspaceId }) => {
+  const key = JSON.stringify([accountId, activeWorkspaceId, defaultWorkspaceId]);
+  if (key === publishedScopeKey) return;
+  publishedScopeKey = key;
+  if (!hasBoundIpcListeners) return;
+  const gen = accountGeneration;
+  void Promise.all([loadSpaces(), loadFolders()])
+    .then(() => {
+      if (gen === accountGeneration) landOnArrivedPrivate();
+    })
+    .catch(() => {
+      // The next read (any sync event, the next scope) brings the Private in.
+    });
 });
 
 let hasBoundIpcListeners = false;
@@ -500,6 +552,10 @@ export function resetForAccountChange(): void {
   accountGeneration += 1;
   pendingFolderPreset = null;
   purgeDisplacedNote = null;
+  landOnActivePrivate = false;
+  // The next account's first scope reads the spaces again, even one that names
+  // the same workspaces (the same account signing back in).
+  publishedScopeKey = null;
   hiddenSpaces.clear();
   forgetHeldSpaces();
   forgetHeldTeams();
@@ -635,16 +691,24 @@ export function setActiveContext(spaceId: number, folderId: number | null): void
   void ensureContainerLoaded(key);
 }
 
-// Where the notes view lands with nothing else to show: Personal's default
-// folder, which every workspace shows.
-function defaultContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
-  const { activeWorkspaceId, workspaces } = useWorkspaceStore.getState();
-  const visible = spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces, false);
-  const privateSpace = visible.find((s) => s.kind === "private") ?? visible[0];
+// The active workspace's Private, on its default folder.
+function activePrivateContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
+  const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
+  const privateSpace = activePrivateSpace(
+    spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces, defaultWorkspaceId)
+  );
   if (!privateSpace) return null;
   const privateFolders = folders.filter((f) => f.space_id === privateSpace.id);
   const initialFolder = findDefaultFolder(privateFolders) ?? privateFolders[0];
   return { spaceId: privateSpace.id, folderId: initialFolder?.id ?? null };
+}
+
+// Where the notes view lands with nothing else to show: the active workspace's
+// Private. Not in the store yet, the view waits for it (see landOnActivePrivate).
+function defaultContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
+  const context = activePrivateContext(spaces, folders);
+  landOnActivePrivate = context == null;
+  return context;
 }
 
 /**
@@ -875,23 +939,20 @@ function handleSpacePurged(spaceId: number, { holding = false } = {}): void {
 
   let fallbackContext: ActiveContext | null = null;
   if (state.activeContext?.spaceId === spaceId) {
-    const privateSpace = extra.spaces?.find((s) => s.kind === "private");
-    if (privateSpace) {
-      const privateFolders = state.folders.filter((f) => f.space_id === privateSpace.id);
-      const fallbackFolder = findDefaultFolder(privateFolders) ?? privateFolders[0];
-      fallbackContext = { spaceId: privateSpace.id, folderId: fallbackFolder?.id ?? null };
-      extra.activeContext = fallbackContext;
-      extra.notes = teardown.notesByContainer[contextContainerKey(fallbackContext)] ?? [];
-    }
+    fallbackContext = defaultContext(extra.spaces ?? [], state.folders);
+    extra.activeContext = fallbackContext;
+    extra.notes = fallbackContext
+      ? (teardown.notesByContainer[contextContainerKey(fallbackContext)] ?? [])
+      : [];
   }
   useNoteStore.setState({ notesByContainer: teardown.notesByContainer, ...extra });
   if (fallbackContext) void ensureContainerLoaded(contextContainerKey(fallbackContext));
-  // The purge relocates never-synced notes to the private space root —
-  // refresh counts, and the root container when it's already cached.
+  // The purge relocates never-synced notes to a Private's root (the space's
+  // workspace's or the default's) — refresh counts, and those roots already cached.
   void loadFolders();
-  const privateSpace = state.spaces.find((s) => s.kind === "private" && s.id !== spaceId);
-  if (privateSpace) {
-    const privateRootKey = spaceContainerKey(privateSpace.id);
+  for (const space of state.spaces) {
+    if (space.kind !== "private" || space.id === spaceId) continue;
+    const privateRootKey = spaceContainerKey(space.id);
     if (useNoteStore.getState().notesByContainer[privateRootKey]) {
       void loadContainerNotes(privateRootKey);
     }

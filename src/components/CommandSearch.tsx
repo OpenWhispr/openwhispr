@@ -61,6 +61,8 @@ type FlatItem =
   | { kind: "transcript"; transcript: TranscriptionItem }
   | { kind: "conversation"; conversation: ConversationResult };
 
+const NO_SPACES: SpaceItem[] = [];
+
 function stripMarkdownPreview(text: string): string {
   return (
     text
@@ -90,7 +92,8 @@ export default function CommandSearch({
   const [query, setQuery] = useState("");
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [folders, setFolders] = useState<FolderItem[]>([]);
-  const [spaces, setSpaces] = useState<SpaceItem[]>([]);
+  // null until read: the note queries wait for the spaces they're scoped to.
+  const [spaces, setSpaces] = useState<SpaceItem[] | null>(null);
   const [scopeSpaceId, setScopeSpaceId] = useState<number | null>(null);
   const [conversations, setConversations] = useState<ConversationResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -117,12 +120,13 @@ export default function CommandSearch({
       .catch(() => {});
   }, [open, isConversationsMode]);
 
-  // Other workspaces' spaces and notes stay out of search, as in the tree.
-  const visibleSpaces = useSpacesInWorkspaceScope(spaces);
-  // null when nothing is hidden, so the queries stay unscoped.
+  // Other workspaces' spaces and notes (their teamspaces and their Private) stay out of search,
+  // as in the tree. The queries always name the spaces in scope, so a space the list read on open
+  // doesn't hold (a Private made since) can't let its notes through.
+  const visibleSpaces = useSpacesInWorkspaceScope(spaces ?? NO_SPACES);
   const visibleSpaceIds = useMemo(
-    () => (visibleSpaces.length === spaces.length ? null : visibleSpaces.map((s) => s.id)),
-    [visibleSpaces, spaces.length]
+    () => (spaces ? visibleSpaces.map((s) => s.id) : null),
+    [spaces, visibleSpaces]
   );
 
   if (open && !prevOpen) {
@@ -148,7 +152,7 @@ export default function CommandSearch({
             }))
           );
       });
-    } else {
+    } else if (visibleSpaceIds) {
       window.electronAPI
         .getNotes(null, undefined, null, null, visibleSpaceIds)
         .then(setNotes)
@@ -193,7 +197,7 @@ export default function CommandSearch({
           /* keep current */
         }
       }, 200);
-    } else {
+    } else if (visibleSpaceIds) {
       if (!query.trim()) {
         window.electronAPI
           .getNotes(null, undefined, null, null, visibleSpaceIds)
@@ -229,7 +233,7 @@ export default function CommandSearch({
   }
 
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
-  const spaceMap = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
+  const spaceMap = useMemo(() => new Map((spaces ?? NO_SPACES).map((s) => [s.id, s])), [spaces]);
   const scopeSpace = scopeSpaceId != null ? spaceMap.get(scopeSpaceId) : undefined;
 
   // Scoping re-filters the visible list immediately, so the keyboard
@@ -243,7 +247,7 @@ export default function CommandSearch({
   // results and stale in-flight results after a scope or workspace switch.
   const scopedNotes = useMemo(() => {
     if (scopeSpaceId != null) return notes.filter((n) => n.space_id === scopeSpaceId);
-    if (!visibleSpaceIds) return notes;
+    if (!visibleSpaceIds) return [];
     const visible = new Set(visibleSpaceIds);
     return notes.filter((n) => visible.has(n.space_id));
   }, [notes, scopeSpaceId, visibleSpaceIds]);
