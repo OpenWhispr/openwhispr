@@ -4624,7 +4624,7 @@
     "promptLimitNotice": "Dein Wörterbuch umfasst {{chars}} Zeichen. Groq- und Whisper-Modelle lesen davon nur die letzten paar hundert Zeichen – eine kürzere Liste funktioniert dort besser. Andere Modelle erhalten die vollständige Liste.",
     "openRouterIgnoredNotice": "OpenRouter gibt dein Wörterbuch nicht an seine Sprachmodelle weiter. Solange es für das Diktat ausgewählt ist, beeinflussen diese Wörter die Transkription daher nicht.",
     "localModelIgnoredNotice": "{{model}} kann dein Wörterbuch nicht nutzen. Solange es für das Diktat ausgewählt ist, beeinflussen diese Wörter die Transkription daher nicht. Die KI-Bereinigung berücksichtigt sie weiterhin, wenn sie aktiviert ist.",
-    "localModelHotwordsLimitNotice": "{{model}} nutzt bis zu {{limit}} Wörter aus deinem Wörterbuch als Hinweise für die Transkription, persönliche Wörter zuerst.",
+    "localModelHotwordsLimitNotice": "{{model}} nutzt bis zu {{limit}} Wörterbucheinträge als Hinweise für die Transkription. Persönliche Einträge haben Vorrang, gefolgt von Einträgen aus deinen Teamspaces und dann aus deinem Arbeitsbereich.",
     "exportDictionary": "Wörterbuch exportieren",
     "exportFailed": "Export fehlgeschlagen",
     "editWord": "{{word}} bearbeiten",

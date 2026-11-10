@@ -4071,7 +4071,7 @@
     "promptLimitNotice": "词典当前共 {{chars}} 个字符。Groq 和 Whisper 模型只会读取其中最后几百个字符，因此列表越短效果越好；其他模型会收到完整列表。",
     "openRouterIgnoredNotice": "OpenRouter 不会将你的词典传给其语音模型，因此在听写选用 OpenRouter 期间，这些词不会影响转录结果。",
     "localModelIgnoredNotice": "{{model}} 无法使用你的词典，因此在听写选用该模型期间，这些词不会影响转录结果。开启 AI 清理时，这些词仍会生效。",
-    "localModelHotwordsLimitNotice": "{{model}} 最多使用 {{limit}} 个词典词语作为转录提示，个人词语优先。",
+    "localModelHotwordsLimitNotice": "{{model}} 最多使用 {{limit}} 条词典条目作为转录提示。个人条目优先，其次是团队空间条目，最后是工作区条目。",
     "exportDictionary": "导出词典",
     "exportFailed": "导出失败",
     "editWord": "编辑 {{word}}",

@@ -259,12 +259,11 @@ test("Orukeet keeps eligible shared words after the Whisper prompt fills", async
   };
   store.getState().setSharedDictionaryHints(selectSharedHintWords(snapshot), WORKSPACE);
   assert.deepEqual(ipc._getDictionarySafe(), personal);
-  // Newest personal words first, so the hotword cap drops the oldest.
-  assert.deepEqual(hotwords(), [...personal.toReversed(), "AsterSpace", "AmberWorkspace"]);
+  assert.deepEqual(hotwords(), [...personal, "AsterSpace", "AmberWorkspace"]);
 
   snapshot.meta.paused = true;
   store.getState().setSharedDictionaryHints(selectSharedHintWords(snapshot), WORKSPACE);
-  assert.deepEqual(hotwords(), personal.toReversed());
+  assert.deepEqual(hotwords(), personal);
 });
 
 test("Orukeet removes a hidden moved fallback even when prompt hints are unchanged", async (t) => {
@@ -274,7 +273,7 @@ test("Orukeet removes a hidden moved fallback even when prompt hints are unchang
     "INSERT INTO custom_dictionary (word, shared_at) VALUES ('Qdrant', '2026-10-01'), ('SQLiteOnly', NULL)"
   );
   store.setState({ customDictionary: ["Qdrant"] });
-  assert.deepEqual(hotwords(), ["SQLiteOnly", "Qdrant"]);
+  assert.deepEqual(hotwords(), ["Qdrant", "SQLiteOnly"]);
 
   const snapshot = {
     meta: { paused: false, scopes: [{ space_id: null }] },
@@ -293,7 +292,7 @@ test("Orukeet removes a hidden moved fallback even when prompt hints are unchang
       selectSharedHintWords(snapshot, databaseManager.getMovedDictionaryWords()),
       WORKSPACE
     );
-  assert.deepEqual(hotwords(), ["SQLiteOnly", "Qdrant"]);
+  assert.deepEqual(hotwords(), ["Qdrant", "SQLiteOnly"]);
 });
 
 test("legacy prompt hints do not retain a previous Orukeet payload", async (t) => {

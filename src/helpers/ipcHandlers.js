@@ -1471,8 +1471,7 @@ class IPCHandlers {
   }
 
   _getDictionaryHotwords() {
-    // Newest personal words first, so the hotword cap drops the oldest.
-    const personal = this._getPersonalDictionarySafe().reverse();
+    const personal = this._getPersonalDictionarySafe();
     const hints = this._dictionaryHotwordHints;
     if (!hints || hints.accountId !== this.databaseManager.activeAccountId) return personal;
     const { space, workspace, suppressedPersonal } = hints;

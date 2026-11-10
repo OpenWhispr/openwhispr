@@ -4073,7 +4073,7 @@
     "promptLimitNotice": "Il tuo dizionario contiene {{chars}} caratteri. I modelli Groq e Whisper ne leggono solo le ultime centinaia di caratteri, quindi lì conviene un elenco più corto. Gli altri modelli ricevono l'elenco completo.",
     "openRouterIgnoredNotice": "OpenRouter non passa il tuo dizionario ai suoi modelli vocali, quindi queste parole non guideranno la trascrizione finché è selezionato per la dettatura.",
     "localModelIgnoredNotice": "{{model}} non può usare il tuo dizionario, quindi queste parole non guideranno la trascrizione finché è selezionato per la dettatura. La pulizia IA le applica comunque quando è attiva.",
-    "localModelHotwordsLimitNotice": "{{model}} usa fino a {{limit}} parole del dizionario per guidare la trascrizione, a partire da quelle personali.",
+    "localModelHotwordsLimitNotice": "{{model}} usa fino a {{limit}} voci del dizionario per guidare la trascrizione. Hanno la precedenza le voci personali, poi quelle dei tuoi teamspace e infine quelle del tuo spazio di lavoro.",
     "exportDictionary": "Esporta dizionario",
     "exportFailed": "Esportazione non riuscita",
     "editWord": "Modifica {{word}}",
