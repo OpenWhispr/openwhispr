@@ -73,7 +73,7 @@ test("checks every CPU profile and removes each scratch directory", { skip }, (t
 });
 
 test(
-  "rejects an addon that needs a glibc newer than Ubuntu 22.04's before starting qemu",
+  "rejects an addon that needs a glibc newer than RHEL 9's 2.34 before starting qemu",
   { skip },
   (t) => {
     const tools = fakeTools(t, {
@@ -81,7 +81,7 @@ test(
     });
     assert.throws(
       () => verifyLinuxSqliteBaseline("/app"),
-      /better_sqlite3\.node needs a glibc newer than 2\.35.*: fmod@GLIBC_2\.38$/
+      /better_sqlite3\.node needs a glibc newer than 2\.34.*: fmod@GLIBC_2\.38$/
     );
     assert.deepEqual(tools.calls(), []);
   }
@@ -126,7 +126,11 @@ test("compares glibc symbol versions numerically", () => {
     "0000000000000000      DF *UND*\t0000000000000000  GLIBC_2.39  pidfd_spawn",
     "0000000000000000      DF *UND*\t0000000000000000 (GLIBC_PRIVATE) _dl_find_object",
   ].join("\n");
-  assert.deepEqual(findNewerGlibcSymbols(symbols), ["fmod@GLIBC_2.38", "pidfd_spawn@GLIBC_2.39"]);
+  assert.deepEqual(findNewerGlibcSymbols(symbols), [
+    "__rseq_size@GLIBC_2.35",
+    "fmod@GLIBC_2.38",
+    "pidfd_spawn@GLIBC_2.39",
+  ]);
   assert.deepEqual(findNewerGlibcSymbols(CLEAN_SYMBOLS), []);
 });
 

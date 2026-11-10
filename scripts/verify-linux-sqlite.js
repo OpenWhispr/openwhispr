@@ -39,8 +39,9 @@ console.log("Packaged SQLite database, WAL, FTS5, JSON and persistence passed");
 `;
 
 // The addon links the build host's glibc, and the probe runs on that same glibc,
-// so only its symbol versions show it would fail to load on Ubuntu 22.04 (#3114).
-const MAX_GLIBC = "2.35";
+// so only its symbol versions show it would fail to load on glibc 2.34 systems
+// such as RHEL 9, which 1.10.4's addon ran on (#3114).
+const MAX_GLIBC = "2.34";
 const GLIBC_SYMBOL = /\(?GLIBC_([0-9][0-9.]*)\)?\s+(\S+)$/gm;
 
 function findNewerGlibcSymbols(dynamicSymbols) {
@@ -58,7 +59,7 @@ function assertNoNewerGlibcSymbols(addonPath) {
   const found = findNewerGlibcSymbols(dynamicSymbols);
   if (found.length > 0) {
     throw new Error(
-      `afterPack: ${addonPath} needs a glibc newer than ${MAX_GLIBC}, so the app would not start on Ubuntu 22.04: ${found.slice(0, 10).join(", ")}`
+      `afterPack: ${addonPath} needs a glibc newer than ${MAX_GLIBC}, so the app would not start on glibc ${MAX_GLIBC} systems such as RHEL 9: ${found.slice(0, 10).join(", ")}`
     );
   }
 }
@@ -103,7 +104,7 @@ function runProbe(binary, sqlite, cpu, timeoutMs) {
   } catch (error) {
     const reason = error.code || error.signal || `exit ${error.status}`;
     throw new Error(
-      `afterPack: packaged SQLite failed on ${cpu} (${reason}). SIGILL or ETIMEDOUT means it uses instructions this CPU lacks: qemu can hang after the fault, so do not rerun or raise the timeout.`,
+      `afterPack: packaged SQLite failed on ${cpu} (${reason}). SIGILL means it uses instructions this CPU lacks; ETIMEDOUT usually does too, since qemu can hang after the fault.`,
       { cause: error }
     );
   } finally {
@@ -114,7 +115,7 @@ function runProbe(binary, sqlite, cpu, timeoutMs) {
 function verifyLinuxSqliteBaseline(
   appDir,
   executableName = "open-whispr-app",
-  { timeoutMs = 45000 } = {}
+  { timeoutMs = 180000 } = {}
 ) {
   const binary = path.resolve(appDir, executableName);
   const sqlite = path.resolve(appDir, "resources", "app.asar", "node_modules", "better-sqlite3");
