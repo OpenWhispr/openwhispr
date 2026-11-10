@@ -1943,6 +1943,11 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_snippets_pending_sync ON snippets(sync_status) WHERE sync_status = 'pending'"
       );
 
+      // A team space mirrors a cloud space. A private space never leaves the
+      // device: there is one per account and workspace (account_id and
+      // workspace_id, added below). The private row with neither is the
+      // signed-out stand-in; an account's row with no workspace holds its
+      // notes until its default workspace is known.
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS spaces (
           id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2001,11 +2006,16 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_space_id ON spaces(cloud_space_id) WHERE cloud_space_id IS NOT NULL"
       );
+      try {
+        this.db.exec("ALTER TABLE spaces ADD COLUMN account_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_private_identity ON spaces(COALESCE(account_id, ''), COALESCE(workspace_id, '')) WHERE kind = 'private' AND deleted_at IS NULL"
+      );
 
-      const privateSpaceCount = this.db
-        .prepare("SELECT COUNT(*) as count FROM spaces WHERE kind = 'private'")
-        .get();
-      if (privateSpaceCount.count === 0) {
+      if (this._standInPrivateSpaceId() == null) {
         this.db
           .prepare(
             "INSERT INTO spaces (client_space_id, kind, name, sort_order, sync_status) VALUES (?, 'private', 'Personal', 0, 'synced')"
@@ -2070,11 +2080,9 @@ class DatabaseManager {
           if (foreignKeysWereOn) this.db.pragma("foreign_keys = ON");
         }
       }
-      const privateSpace = this.db.prepare("SELECT id FROM spaces WHERE kind = 'private'").get();
-      this.db
-        .prepare("UPDATE folders SET space_id = ? WHERE space_id IS NULL")
-        .run(privateSpace.id);
-      this.db.prepare("UPDATE notes SET space_id = ? WHERE space_id IS NULL").run(privateSpace.id);
+      const standInId = this._standInPrivateSpaceId();
+      this.db.prepare("UPDATE folders SET space_id = ? WHERE space_id IS NULL").run(standInId);
+      this.db.prepare("UPDATE notes SET space_id = ? WHERE space_id IS NULL").run(standInId);
 
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_folder_id ON notes(folder_id)");
       this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at)");
@@ -2111,6 +2119,22 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_account_name ON folders(space_id, account_id, name) WHERE deleted_at IS NULL AND account_id IS NOT NULL"
       );
+
+      // One-time split (user_version 6): each account's private notes leave
+      // the shared private row for the account's own. A failure leaves the
+      // database as it was and the next launch tries again; it must never keep
+      // the notes database from opening.
+      if (this.db.pragma("user_version", { simple: true }) < 6) {
+        try {
+          this._splitPrivateSpaceByAccount();
+        } catch (error) {
+          debugLogger.error(
+            "Splitting the private space by account failed",
+            { error: error.message },
+            "database"
+          );
+        }
+      }
 
       // A cloud space is workspace-owned, while visibility is account-specific.
       // Keep the many-to-many membership separate so signing out one local
@@ -5570,6 +5594,162 @@ class DatabaseManager {
     } catch (error) {
       debugLogger.error("Error getting private space id", { error: error.message }, "spaces");
       throw error;
+    }
+  }
+
+  // The private row with no account and no workspace: what a signed-out user
+  // sees, and the row every account's notes shared before user_version 6.
+  _standInPrivateSpaceId() {
+    return (
+      this.db
+        .prepare(
+          `SELECT id FROM spaces
+           WHERE kind = 'private' AND account_id IS NULL AND workspace_id IS NULL
+             AND deleted_at IS NULL
+           ORDER BY id LIMIT 1`
+        )
+        .get()?.id ?? null
+    );
+  }
+
+  // Gives each account with rows in the stand-in its own pending private row
+  // (no workspace yet) and moves its notes, folders and root chats there; the
+  // stand-in keeps the rows with no account. One transaction, the version
+  // included: a launch cut short leaves the old shape and the next one starts
+  // over.
+  _splitPrivateSpaceByAccount() {
+    this.db.transaction(() => {
+      const standInId = this._standInPrivateSpaceId();
+      const accounts =
+        standInId == null
+          ? []
+          : this.db
+              .prepare(
+                `SELECT account_id FROM notes WHERE space_id = ? AND account_id IS NOT NULL
+                 UNION SELECT account_id FROM folders WHERE space_id = ? AND account_id IS NOT NULL
+                 UNION SELECT account_id FROM agent_conversations
+                   WHERE account_id IS NOT NULL AND ${SPACE_CONTAINER_CONVERSATION_FILTER}
+                 ORDER BY account_id`
+              )
+              .all(standInId, standInId, standInId, standInId)
+              .map((row) => row.account_id);
+      if (accounts.length > 0) this._moveAccountsOutOfStandIn(standInId, accounts);
+      this.db.pragma("user_version = 6");
+    })();
+  }
+
+  // A move, not an edit: sync state, updated_at and cloud ids stay as they
+  // are, so nothing is pushed or retracted. A folder goes whole, ids and all,
+  // to the account that owns it, or that has every note and chat in it. A
+  // folder several owners use stays, and every other owner of rows in it gets
+  // a folder of the same name in its own row, so a note's folder is always in
+  // the note's space. Empty folders (the seeded defaults among them) stay.
+  _moveAccountsOutOfStandIn(standInId, accounts) {
+    const findHome = this.db.prepare(
+      "SELECT id FROM spaces WHERE kind = 'private' AND account_id = ? AND workspace_id IS NULL AND deleted_at IS NULL"
+    );
+    const insertHome = this.db.prepare(
+      "INSERT INTO spaces (client_space_id, kind, name, sort_order, sync_status, account_id) VALUES (?, 'private', 'Personal', 0, 'synced', ?)"
+    );
+    const homes = new Map();
+    for (const accountId of accounts) {
+      const existing = findHome.get(accountId)?.id;
+      homes.set(
+        accountId,
+        existing ?? Number(insertHome.run(randomUUID(), accountId).lastInsertRowid)
+      );
+    }
+    const homeOf = (accountId) => (accountId == null ? standInId : homes.get(accountId));
+
+    const rowOwners = this.db.prepare(
+      `SELECT account_id FROM notes WHERE folder_id = ? AND space_id = ?
+       UNION SELECT account_id FROM agent_conversations WHERE folder_id = ?`
+    );
+    const plans = this.db
+      .prepare("SELECT * FROM folders WHERE space_id = ? ORDER BY id")
+      .all(standInId)
+      .map((folder) => {
+        const owners = rowOwners.all(folder.id, standInId, folder.id).map((row) => row.account_id);
+        const soleOwner = owners.length === 1 ? owners[0] : null;
+        return { folder, owners, ownerId: folder.account_id ?? soleOwner };
+      });
+
+    const liveFolderNamed = this.db.prepare(
+      "SELECT id FROM folders WHERE space_id = ? AND account_id IS ? AND name = ? AND deleted_at IS NULL"
+    );
+    const moveFolder = this.db.prepare(
+      "UPDATE folders SET space_id = ?, account_id = ? WHERE id = ?"
+    );
+    const moveWhole = (plan) => {
+      const home = homeOf(plan.ownerId);
+      // The account already has a live folder of that name there: rather than
+      // break the name index, its rows join that folder below.
+      if (!plan.folder.deleted_at && liveFolderNamed.get(home, plan.ownerId, plan.folder.name)) {
+        plan.ownerId = null;
+        return;
+      }
+      moveFolder.run(home, plan.ownerId, plan.folder.id);
+    };
+    // A deleted folder waits for its server delete with every row it holds,
+    // so one that others still use is left as it is.
+    const wholeMoves = plans.filter(
+      (plan) =>
+        plan.ownerId != null &&
+        (!plan.folder.deleted_at || plan.owners.every((owner) => owner === plan.ownerId))
+    );
+    // Owned folders first, so adopting a folder never takes a name one holds.
+    for (const plan of wholeMoves) if (plan.folder.account_id != null) moveWhole(plan);
+    for (const plan of wholeMoves) if (plan.folder.account_id == null) moveWhole(plan);
+
+    const insertFolder = this.db.prepare(
+      "INSERT INTO folders (name, is_default, sort_order, client_folder_id, sync_status, space_id, account_id) VALUES (?, ?, ?, ?, 'synced', ?, ?)"
+    );
+    const repointNotes = this.db.prepare(
+      "UPDATE notes SET folder_id = ? WHERE folder_id = ? AND space_id = ? AND account_id IS ?"
+    );
+    const repointChats = this.db.prepare(
+      "UPDATE agent_conversations SET folder_id = ?, space_id = ? WHERE folder_id = ? AND account_id IS ?"
+    );
+    for (const { folder, owners, ownerId } of plans) {
+      if (folder.deleted_at) continue;
+      for (const owner of owners) {
+        if (owner === ownerId) continue;
+        const home = homeOf(owner);
+        const target =
+          liveFolderNamed.get(home, owner, folder.name)?.id ??
+          Number(
+            insertFolder.run(
+              folder.name,
+              folder.is_default,
+              folder.sort_order,
+              randomUUID(),
+              home,
+              owner
+            ).lastInsertRowid
+          );
+        repointNotes.run(target, folder.id, standInId, owner);
+        repointChats.run(target, home, folder.id, owner);
+      }
+    }
+
+    const moveNotes = this.db.prepare(
+      `UPDATE notes SET space_id = ?
+       WHERE space_id = ? AND account_id = ?
+         AND (folder_id IS NULL OR folder_id IN (SELECT id FROM folders WHERE space_id = ?))`
+    );
+    const moveRootChats = this.db.prepare(
+      "UPDATE agent_conversations SET space_id = ? WHERE space_id = ? AND folder_id IS NULL AND account_id = ?"
+    );
+    // A folder's chats follow it, as in moveFolderToSpace.
+    const followFolders = this.db.prepare(
+      `UPDATE agent_conversations
+       SET space_id = (SELECT space_id FROM folders WHERE folders.id = agent_conversations.folder_id)
+       WHERE folder_id IN (SELECT id FROM folders WHERE space_id = ?)`
+    );
+    for (const [accountId, homeId] of homes) {
+      moveNotes.run(homeId, standInId, accountId, homeId);
+      moveRootChats.run(homeId, standInId, accountId);
+      followFolders.run(homeId);
     }
   }
 

@@ -25,6 +25,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
 process.env.NODE_ENV = "test";
 
 const DatabaseManager = require("../../src/helpers/database.js");
+const debugLogger = require("../../src/helpers/debugLogger");
 
 function isNativeBindingUnavailable(error) {
   const message = String(error?.message || error);
@@ -188,6 +189,521 @@ test("an old database with globally unique folder names migrates to per-account 
     /UNIQUE constraint failed/,
     "legacy folder names stay unique per space"
   );
+});
+
+// Private spaces per account (user_version 6). The v5 shape is one private row
+// that every account's notes share; these helpers build it on a fresh database.
+const SEEDED_AT = "2026-01-02 03:04:05";
+
+function seedFolder(
+  sqlite,
+  spaceId,
+  { name, accountId = null, isDefault = 0, sortOrder = 0, cloudId = null, deletedAt = null }
+) {
+  return Number(
+    sqlite
+      .prepare(
+        `INSERT INTO folders (name, is_default, sort_order, client_folder_id, cloud_id, sync_status, deleted_at, space_id, account_id)
+         VALUES (?, ?, ?, ?, ?, 'synced', ?, ?, ?)`
+      )
+      .run(name, isDefault, sortOrder, randomUUID(), cloudId, deletedAt, spaceId, accountId)
+      .lastInsertRowid
+  );
+}
+
+function seedNote(
+  sqlite,
+  spaceId,
+  { title, accountId = null, folderId = null, cloudId = null, deletedAt = null }
+) {
+  return Number(
+    sqlite
+      .prepare(
+        `INSERT INTO notes (title, content, client_note_id, cloud_id, sync_status, deleted_at, folder_id, space_id, account_id, updated_at)
+         VALUES (?, '', ?, ?, 'synced', ?, ?, ?, ?, ?)`
+      )
+      .run(title, randomUUID(), cloudId, deletedAt, folderId, spaceId, accountId, SEEDED_AT)
+      .lastInsertRowid
+  );
+}
+
+function seedChat(sqlite, { title, accountId, spaceId = null, folderId = null }) {
+  return Number(
+    sqlite
+      .prepare(
+        "INSERT INTO agent_conversations (title, space_id, folder_id, client_conversation_id, account_id) VALUES (?, ?, ?, ?, ?)"
+      )
+      .run(title, spaceId, folderId, randomUUID(), accountId).lastInsertRowid
+  );
+}
+
+function seededFolderId(sqlite, name) {
+  return sqlite
+    .prepare("SELECT id FROM folders WHERE name = ? AND is_default = 1 AND account_id IS NULL")
+    .get(name).id;
+}
+
+// Closes the database as a v5 build left it and opens it again with this build.
+function relaunchFromVersion5(t, db) {
+  const sqlite = db.db;
+  sqlite.exec("DROP INDEX IF EXISTS idx_spaces_private_identity");
+  if (sqlite.pragma("table_info('spaces')").some((column) => column.name === "account_id")) {
+    sqlite.exec("ALTER TABLE spaces DROP COLUMN account_id");
+  }
+  sqlite.pragma("user_version = 5");
+  sqlite.close();
+  return relaunch(t);
+}
+
+function relaunch(t) {
+  const next = new DatabaseManager();
+  t.after(() => {
+    if (next.db.open) next.db.close();
+  });
+  return next;
+}
+
+function privateRows(sqlite) {
+  return sqlite
+    .prepare("SELECT id, account_id, workspace_id FROM spaces WHERE kind = 'private' ORDER BY id")
+    .all();
+}
+
+function pendingRowId(sqlite, accountId) {
+  return sqlite
+    .prepare(
+      "SELECT id FROM spaces WHERE kind = 'private' AND account_id = ? AND workspace_id IS NULL"
+    )
+    .get(accountId)?.id;
+}
+
+function noteRow(sqlite, id) {
+  return sqlite
+    .prepare(
+      "SELECT id, space_id, folder_id, account_id, sync_status, updated_at, cloud_id, left_team, deleted_at FROM notes WHERE id = ?"
+    )
+    .get(id);
+}
+
+function folderRow(sqlite, id) {
+  return sqlite.prepare("SELECT * FROM folders WHERE id = ?").get(id);
+}
+
+function assertEveryRowInItsFolderSpace(sqlite) {
+  assert.deepEqual(
+    sqlite
+      .prepare(
+        "SELECT n.id FROM notes n JOIN folders f ON f.id = n.folder_id WHERE n.space_id IS NOT f.space_id"
+      )
+      .all(),
+    [],
+    "every note's folder is in the note's own space"
+  );
+  assert.deepEqual(
+    sqlite
+      .prepare(
+        "SELECT c.id FROM agent_conversations c JOIN folders f ON f.id = c.folder_id WHERE c.space_id IS NOT f.space_id"
+      )
+      .all(),
+    [],
+    "every folder chat is in its folder's space"
+  );
+}
+
+test("migration 6 gives each account its own pending private space", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const sqlite = db.db;
+  const aWork = seedFolder(sqlite, standInId, { name: "Work", accountId: "a" });
+  const bWork = seedFolder(sqlite, standInId, { name: "Work", accountId: "b" });
+  const legacyFolder = seedFolder(sqlite, standInId, { name: "Legacy" });
+  const aNotes = [
+    seedNote(sqlite, standInId, { title: "a root", accountId: "a" }),
+    seedNote(sqlite, standInId, { title: "a work", accountId: "a", folderId: aWork }),
+  ];
+  const bNotes = [
+    seedNote(sqlite, standInId, { title: "b root", accountId: "b" }),
+    seedNote(sqlite, standInId, { title: "b work", accountId: "b", folderId: bWork }),
+  ];
+  const nullNotes = [
+    seedNote(sqlite, standInId, { title: "signed out" }),
+    seedNote(sqlite, standInId, { title: "legacy", folderId: legacyFolder }),
+  ];
+  const before = new Map(
+    [...aNotes, ...bNotes, ...nullNotes].map((id) => [id, noteRow(sqlite, id)])
+  );
+
+  const migrated = relaunchFromVersion5(t, db);
+  const after = migrated.db;
+  assert.equal(after.pragma("user_version", { simple: true }), 6);
+
+  const rows = privateRows(after);
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows[0], { id: standInId, account_id: null, workspace_id: null });
+  const aRow = pendingRowId(after, "a");
+  const bRow = pendingRowId(after, "b");
+  assert.ok(aRow && bRow && aRow !== bRow && aRow !== standInId && bRow !== standInId);
+
+  for (const id of aNotes) {
+    assert.deepEqual(noteRow(after, id), { ...before.get(id), space_id: aRow });
+  }
+  for (const id of bNotes) {
+    assert.deepEqual(noteRow(after, id), { ...before.get(id), space_id: bRow });
+  }
+  for (const id of nullNotes) {
+    assert.deepEqual(noteRow(after, id), before.get(id));
+  }
+  assert.equal(folderRow(after, aWork).space_id, aRow);
+  assert.equal(folderRow(after, aWork).account_id, "a");
+  assert.equal(folderRow(after, bWork).space_id, bRow);
+  assert.equal(folderRow(after, legacyFolder).space_id, standInId);
+  assert.deepEqual(
+    after
+      .prepare(
+        "SELECT DISTINCT account_id FROM notes WHERE space_id = ? UNION SELECT DISTINCT account_id FROM folders WHERE space_id = ?"
+      )
+      .all(standInId, standInId),
+    [{ account_id: null }],
+    "the stand-in keeps only rows with no account"
+  );
+  assertEveryRowInItsFolderSpace(after);
+});
+
+test("migration 6 is idempotent across launches", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const meetings = seededFolderId(db.db, "Meetings");
+  seedNote(db.db, standInId, { title: "a", accountId: "a", folderId: meetings });
+  seedNote(db.db, standInId, { title: "b", accountId: "b", folderId: meetings });
+  seedNote(db.db, standInId, { title: "signed out", folderId: meetings });
+
+  const first = relaunchFromVersion5(t, db);
+  const spaces = privateRows(first.db);
+  const notes = first.db.prepare("SELECT * FROM notes ORDER BY id").all();
+  const folders = first.db.prepare("SELECT * FROM folders ORDER BY id").all();
+  assert.equal(spaces.length, 3);
+  first.db.close();
+
+  const second = relaunch(t);
+  assert.deepEqual(privateRows(second.db), spaces);
+  assert.deepEqual(second.db.prepare("SELECT * FROM notes ORDER BY id").all(), notes);
+  assert.deepEqual(second.db.prepare("SELECT * FROM folders ORDER BY id").all(), folders);
+});
+
+test("the identity index refuses a second private row for the same account and workspace", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const insert = db.db.prepare(
+    "INSERT INTO spaces (client_space_id, kind, name, account_id, workspace_id, deleted_at) VALUES (?, 'private', 'Personal', ?, ?, ?)"
+  );
+  const unique = /UNIQUE constraint failed/;
+
+  assert.throws(() => insert.run(randomUUID(), null, null, null), unique, "a second stand-in");
+  insert.run(randomUUID(), "a", null, null);
+  assert.throws(() => insert.run(randomUUID(), "a", null, null), unique, "a second pending row");
+  insert.run(randomUUID(), "a", "w1", null);
+  assert.throws(() => insert.run(randomUUID(), "a", "w1", null), unique);
+  insert.run(randomUUID(), "a", "w2", null);
+  insert.run(randomUUID(), "b", "w1", null);
+  insert.run(randomUUID(), "a", "w1", "2026-01-01T00:00:00Z");
+  db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, kind, name, account_id, workspace_id) VALUES (?, 'team', 'Team', 'a', 'w1')"
+    )
+    .run(randomUUID());
+});
+
+test("migration 6 keeps a single-account device's folder ids and cloud ids", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const sqlite = db.db;
+  const personal = seededFolderId(sqlite, "Personal");
+  const meetings = seededFolderId(sqlite, "Meetings");
+  const videos = seededFolderId(sqlite, "Videos");
+  sqlite
+    .prepare(
+      "UPDATE folders SET cloud_id = 'cloud-' || id, sync_status = 'synced' WHERE id IN (?, ?)"
+    )
+    .run(personal, meetings);
+  const notes = [
+    seedNote(sqlite, standInId, { title: "one", accountId: "a", folderId: personal }),
+    seedNote(sqlite, standInId, { title: "two", accountId: "a", folderId: personal }),
+    seedNote(sqlite, standInId, {
+      title: "meeting",
+      accountId: "a",
+      folderId: meetings,
+      cloudId: "cloud-note",
+    }),
+  ];
+  const foldersBefore = new Map([personal, meetings].map((id) => [id, folderRow(sqlite, id)]));
+  const notesBefore = new Map(notes.map((id) => [id, noteRow(sqlite, id)]));
+
+  const migrated = relaunchFromVersion5(t, db);
+  const after = migrated.db;
+  const aRow = pendingRowId(after, "a");
+  assert.equal(privateRows(after).length, 2);
+
+  for (const id of [personal, meetings]) {
+    assert.deepEqual(folderRow(after, id), {
+      ...foldersBefore.get(id),
+      space_id: aRow,
+      account_id: "a",
+    });
+  }
+  for (const id of notes) {
+    assert.deepEqual(noteRow(after, id), { ...notesBefore.get(id), space_id: aRow });
+  }
+  const emptyVideos = folderRow(after, videos);
+  assert.equal(emptyVideos.space_id, standInId, "an empty seeded folder stays in the stand-in");
+  assert.equal(emptyVideos.account_id, null);
+  assert.equal(
+    after.prepare("SELECT COUNT(*) AS count FROM folders WHERE space_id = ?").get(aRow).count,
+    2,
+    "no folder is copied"
+  );
+  assertEveryRowInItsFolderSpace(after);
+});
+
+test("migration 6 gives each account its own copy of a folder they share", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const sqlite = db.db;
+  const meetings = seededFolderId(sqlite, "Meetings");
+  sqlite.prepare("UPDATE folders SET cloud_id = 'cloud-meetings' WHERE id = ?").run(meetings);
+  const meetingsBefore = folderRow(sqlite, meetings);
+  const aNote = seedNote(sqlite, standInId, { title: "a", accountId: "a", folderId: meetings });
+  const bNote = seedNote(sqlite, standInId, { title: "b", accountId: "b", folderId: meetings });
+  const nullNote = seedNote(sqlite, standInId, { title: "signed out", folderId: meetings });
+  const notesBefore = new Map([aNote, bNote, nullNote].map((id) => [id, noteRow(sqlite, id)]));
+
+  const migrated = relaunchFromVersion5(t, db);
+  const after = migrated.db;
+  assert.deepEqual(folderRow(after, meetings), meetingsBefore, "the shared folder stays put");
+  assert.deepEqual(after.prepare("SELECT id FROM notes WHERE folder_id = ?").all(meetings), [
+    { id: nullNote },
+  ]);
+  assert.deepEqual(noteRow(after, nullNote), notesBefore.get(nullNote));
+
+  for (const [accountId, noteId] of [
+    ["a", aNote],
+    ["b", bNote],
+  ]) {
+    const home = pendingRowId(after, accountId);
+    const copy = after
+      .prepare("SELECT * FROM folders WHERE space_id = ? AND name = 'Meetings'")
+      .get(home);
+    assert.ok(copy, `${accountId} gets its own Meetings`);
+    assert.equal(copy.account_id, accountId);
+    assert.equal(copy.is_default, meetingsBefore.is_default);
+    assert.equal(copy.sort_order, meetingsBefore.sort_order);
+    assert.equal(copy.cloud_id, null);
+    assert.equal(copy.sync_status, "synced");
+    assert.equal(copy.deleted_at, null);
+    assert.notEqual(copy.client_folder_id, meetingsBefore.client_folder_id);
+    assert.deepEqual(noteRow(after, noteId), {
+      ...notesBefore.get(noteId),
+      space_id: home,
+      folder_id: copy.id,
+    });
+  }
+  assertEveryRowInItsFolderSpace(after);
+});
+
+test("migration 6 moves soft-deleted rows and private root chats with their account", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const sqlite = db.db;
+  const personal = seededFolderId(sqlite, "Personal");
+  seedNote(sqlite, standInId, { title: "signed out", folderId: personal });
+  const deletedAt = "2026-01-03T00:00:00Z";
+  const goneFolder = seedFolder(sqlite, standInId, {
+    name: "Gone",
+    accountId: "a",
+    cloudId: "cloud-gone",
+    deletedAt,
+  });
+  const goneChild = seedNote(sqlite, standInId, {
+    title: "gone child",
+    accountId: "a",
+    folderId: goneFolder,
+    cloudId: "cloud-gone-child",
+    deletedAt,
+  });
+  const tombstone = seedNote(sqlite, standInId, {
+    title: "tombstone",
+    accountId: "a",
+    folderId: personal,
+    cloudId: "cloud-tombstone",
+    deletedAt,
+  });
+  const aRootChat = seedChat(sqlite, { title: "a root", accountId: "a", spaceId: standInId });
+  const aFolderChat = seedChat(sqlite, {
+    title: "a in Personal",
+    accountId: "a",
+    spaceId: standInId,
+    folderId: personal,
+  });
+  const nullRootChat = seedChat(sqlite, {
+    title: "signed out",
+    accountId: null,
+    spaceId: standInId,
+  });
+  const noteChat = seedChat(sqlite, { title: "on a note", accountId: "a" });
+  const notesBefore = new Map([goneChild, tombstone].map((id) => [id, noteRow(sqlite, id)]));
+
+  const migrated = relaunchFromVersion5(t, db);
+  const after = migrated.db;
+  const aRow = pendingRowId(after, "a");
+  const aPersonal = after
+    .prepare("SELECT id FROM folders WHERE space_id = ? AND account_id = 'a' AND name = 'Personal'")
+    .get(aRow).id;
+
+  assert.equal(folderRow(after, goneFolder).space_id, aRow);
+  assert.equal(folderRow(after, goneFolder).deleted_at, deletedAt);
+  assert.equal(folderRow(after, goneFolder).cloud_id, "cloud-gone");
+  assert.deepEqual(noteRow(after, goneChild), { ...notesBefore.get(goneChild), space_id: aRow });
+  assert.deepEqual(noteRow(after, tombstone), {
+    ...notesBefore.get(tombstone),
+    space_id: aRow,
+    folder_id: aPersonal,
+  });
+
+  const chat = (id) =>
+    after.prepare("SELECT space_id, folder_id FROM agent_conversations WHERE id = ?").get(id);
+  assert.deepEqual(chat(aRootChat), { space_id: aRow, folder_id: null });
+  assert.deepEqual(chat(aFolderChat), { space_id: aRow, folder_id: aPersonal });
+  assert.deepEqual(chat(nullRootChat), { space_id: standInId, folder_id: null });
+  assert.deepEqual(chat(noteChat), { space_id: null, folder_id: null });
+  assertEveryRowInItsFolderSpace(after);
+});
+
+test("migration 6 leaves other owners' rows beside the folders it moves", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const sqlite = db.db;
+  // a's own folder holding a note written signed out.
+  const aWork = seedFolder(sqlite, standInId, { name: "Work", accountId: "a" });
+  const strayNote = seedNote(sqlite, standInId, { title: "signed out", folderId: aWork });
+  // The seeded Personal used only by a, while a already has its own Personal.
+  const personal = seededFolderId(sqlite, "Personal");
+  const aPersonal = seedFolder(sqlite, standInId, { name: "Personal", accountId: "a" });
+  const aInSeeded = seedNote(sqlite, standInId, { title: "a", accountId: "a", folderId: personal });
+  // A folder deleted on the server's say-so, still holding a's and a signed-out note.
+  const deletedAt = "2026-01-03T00:00:00Z";
+  const gone = seedFolder(sqlite, standInId, { name: "Gone", cloudId: "cloud-gone", deletedAt });
+  const aGone = seedNote(sqlite, standInId, {
+    title: "a gone",
+    accountId: "a",
+    folderId: gone,
+    deletedAt,
+  });
+  seedNote(sqlite, standInId, { title: "signed out gone", folderId: gone, deletedAt });
+
+  const migrated = relaunchFromVersion5(t, db);
+  const after = migrated.db;
+  const aRow = pendingRowId(after, "a");
+
+  assert.equal(folderRow(after, aWork).space_id, aRow);
+  const nullWork = after
+    .prepare("SELECT * FROM folders WHERE space_id = ? AND account_id IS NULL AND name = 'Work'")
+    .get(standInId);
+  assert.ok(nullWork, "the signed-out note gets a Work of its own in the stand-in");
+  assert.equal(noteRow(after, strayNote).folder_id, nullWork.id);
+  assert.equal(noteRow(after, strayNote).space_id, standInId);
+
+  assert.equal(folderRow(after, aPersonal).space_id, aRow);
+  assert.equal(folderRow(after, personal).space_id, standInId);
+  assert.equal(noteRow(after, aInSeeded).folder_id, aPersonal);
+  assert.equal(noteRow(after, aInSeeded).space_id, aRow);
+
+  assert.equal(folderRow(after, gone).space_id, standInId);
+  assert.equal(noteRow(after, aGone).folder_id, gone);
+  assert.equal(noteRow(after, aGone).space_id, standInId);
+  assertEveryRowInItsFolderSpace(after);
+});
+
+test("migration 6 cut short completes on the next launch", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const sqlite = db.db;
+  const meetings = seededFolderId(sqlite, "Meetings");
+  const aNote = seedNote(sqlite, standInId, { title: "a", accountId: "a", folderId: meetings });
+  const bNote = seedNote(sqlite, standInId, { title: "b", accountId: "b", folderId: meetings });
+  seedNote(sqlite, standInId, { title: "signed out", folderId: meetings });
+  // Stops the run after account a's rows have moved, partway through b's.
+  sqlite.exec(`
+    CREATE TRIGGER cut_migration_short BEFORE UPDATE OF space_id ON notes
+    WHEN NEW.account_id = 'b' BEGIN SELECT RAISE(ABORT, 'cut short'); END
+  `);
+  const notesBefore = sqlite.prepare("SELECT * FROM notes ORDER BY id").all();
+  const foldersBefore = sqlite.prepare("SELECT * FROM folders ORDER BY id").all();
+  const logged = t.mock.method(debugLogger, "error", () => {});
+
+  const interrupted = relaunchFromVersion5(t, db);
+  assert.deepEqual(
+    logged.mock.calls.map((call) => call.arguments.slice(0, 2)),
+    [["Splitting the private space by account failed", { error: "cut short" }]],
+    "the launch opens the database and logs the failure"
+  );
+  logged.mock.restore();
+  assert.equal(interrupted.db.pragma("user_version", { simple: true }), 5);
+  assert.equal(privateRows(interrupted.db).length, 1, "nothing of the cut-short run is kept");
+  assert.deepEqual(interrupted.db.prepare("SELECT * FROM notes ORDER BY id").all(), notesBefore);
+  assert.deepEqual(
+    interrupted.db.prepare("SELECT * FROM folders ORDER BY id").all(),
+    foldersBefore
+  );
+  interrupted.db.exec("DROP TRIGGER cut_migration_short");
+  interrupted.db.close();
+
+  const completed = relaunch(t);
+  assert.equal(completed.db.pragma("user_version", { simple: true }), 6);
+  assert.equal(privateRows(completed.db).length, 3);
+  assert.equal(noteRow(completed.db, aNote).space_id, pendingRowId(completed.db, "a"));
+  assert.equal(noteRow(completed.db, bNote).space_id, pendingRowId(completed.db, "b"));
+  assertEveryRowInItsFolderSpace(completed.db);
+});
+
+test("migration 6 reuses an account's pending row a stopped run already made", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const sqlite = db.db;
+  try {
+    sqlite.exec("ALTER TABLE spaces ADD COLUMN account_id TEXT");
+  } catch (err) {
+    if (!err.message.includes("duplicate column")) throw err;
+  }
+  const aRow = Number(
+    sqlite
+      .prepare(
+        "INSERT INTO spaces (client_space_id, kind, name, sort_order, sync_status, account_id) VALUES (?, 'private', 'Personal', 0, 'synced', 'a')"
+      )
+      .run(randomUUID()).lastInsertRowid
+  );
+  const aWork = seedFolder(sqlite, aRow, { name: "Work", accountId: "a" });
+  const aMoved = seedNote(sqlite, aRow, { title: "a moved", accountId: "a", folderId: aWork });
+  const aLeft = seedNote(sqlite, standInId, { title: "a left", accountId: "a" });
+  const bNote = seedNote(sqlite, standInId, { title: "b", accountId: "b" });
+  sqlite.pragma("user_version = 5");
+  sqlite.close();
+
+  const completed = relaunch(t);
+  const after = completed.db;
+  assert.equal(after.pragma("user_version", { simple: true }), 6);
+  assert.equal(privateRows(after).length, 3);
+  assert.equal(pendingRowId(after, "a"), aRow);
+  assert.equal(noteRow(after, aMoved).space_id, aRow);
+  assert.equal(noteRow(after, aMoved).folder_id, aWork);
+  assert.equal(noteRow(after, aLeft).space_id, aRow);
+  assert.equal(noteRow(after, bNote).space_id, pendingRowId(after, "b"));
 });
 
 test("pre-migration rows are backfilled into the private space", (t) => {
