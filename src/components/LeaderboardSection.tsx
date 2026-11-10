@@ -384,7 +384,6 @@ export default function LeaderboardSection({
   useEffect(() => {
     if (cloudAccessAllowed) return;
     requestIdRef.current += 1;
-    clearCachedLeaderboards();
     setLeaderboard(null);
     setLoadedRequestKey(null);
   }, [cloudAccessAllowed]);
