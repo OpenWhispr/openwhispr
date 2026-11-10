@@ -5661,9 +5661,13 @@ class DatabaseManager {
     }
     const homeOf = (accountId) => (accountId == null ? standInId : homes.get(accountId));
 
+    // A chat from before attribution names no owner yet: it reads as
+    // unattributed until the sign-in claim, which runs after this launch's
+    // migration. It follows its folder rather than splitting it.
     const rowOwners = this.db.prepare(
       `SELECT account_id FROM notes WHERE folder_id = ? AND space_id = ?
-       UNION SELECT account_id FROM agent_conversations WHERE folder_id = ?`
+       UNION SELECT account_id FROM agent_conversations
+         WHERE folder_id = ? AND NOT (account_id IS NULL AND legacy_unattributed != 0)`
     );
     const plans = this.db
       .prepare("SELECT * FROM folders WHERE space_id = ? ORDER BY id")

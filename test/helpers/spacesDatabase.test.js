@@ -227,13 +227,16 @@ function seedNote(
   );
 }
 
-function seedChat(sqlite, { title, accountId, spaceId = null, folderId = null }) {
+function seedChat(
+  sqlite,
+  { title, accountId, spaceId = null, folderId = null, legacyUnattributed = 0 }
+) {
   return Number(
     sqlite
       .prepare(
-        "INSERT INTO agent_conversations (title, space_id, folder_id, client_conversation_id, account_id) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO agent_conversations (title, space_id, folder_id, client_conversation_id, account_id, legacy_unattributed) VALUES (?, ?, ?, ?, ?, ?)"
       )
-      .run(title, spaceId, folderId, randomUUID(), accountId).lastInsertRowid
+      .run(title, spaceId, folderId, randomUUID(), accountId, legacyUnattributed).lastInsertRowid
   );
 }
 
@@ -579,6 +582,79 @@ test("migration 6 moves soft-deleted rows and private root chats with their acco
   assert.deepEqual(chat(aFolderChat), { space_id: aRow, folder_id: aPersonal });
   assert.deepEqual(chat(nullRootChat), { space_id: standInId, folder_id: null });
   assert.deepEqual(chat(noteChat), { space_id: null, folder_id: null });
+  assertEveryRowInItsFolderSpace(after);
+});
+
+test("migration 6 moves a folder whole when its only other rows are chats from before attribution", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const sqlite = db.db;
+  const meetings = seededFolderId(sqlite, "Meetings");
+  sqlite.prepare("UPDATE folders SET cloud_id = 'cloud-meetings' WHERE id = ?").run(meetings);
+  const meetingsBefore = folderRow(sqlite, meetings);
+  const aNote = seedNote(sqlite, standInId, { title: "a", accountId: "a", folderId: meetings });
+  // Every container chat from before #2924 reads as unattributed until the
+  // account's sign-in claims it, which comes after this launch's migration.
+  const legacyChat = seedChat(sqlite, {
+    title: "before attribution",
+    accountId: null,
+    spaceId: standInId,
+    folderId: meetings,
+    legacyUnattributed: 1,
+  });
+
+  const migrated = relaunchFromVersion5(t, db);
+  const after = migrated.db;
+  const aRow = pendingRowId(after, "a");
+  assert.deepEqual(folderRow(after, meetings), {
+    ...meetingsBefore,
+    space_id: aRow,
+    account_id: "a",
+  });
+  assert.equal(noteRow(after, aNote).folder_id, meetings);
+  assert.equal(noteRow(after, aNote).space_id, aRow);
+  assert.deepEqual(
+    after
+      .prepare(
+        "SELECT space_id, folder_id, account_id, legacy_unattributed FROM agent_conversations WHERE id = ?"
+      )
+      .get(legacyChat),
+    { space_id: aRow, folder_id: meetings, account_id: null, legacy_unattributed: 1 },
+    "the chat follows its folder and waits for the sign-in claim"
+  );
+  assertEveryRowInItsFolderSpace(after);
+});
+
+test("migration 6 still splits a folder holding a chat written signed out", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const standInId = db.getPrivateSpaceId();
+  const sqlite = db.db;
+  const meetings = seededFolderId(sqlite, "Meetings");
+  const aNote = seedNote(sqlite, standInId, { title: "a", accountId: "a", folderId: meetings });
+  const signedOutChat = seedChat(sqlite, {
+    title: "signed out",
+    accountId: null,
+    spaceId: standInId,
+    folderId: meetings,
+  });
+
+  const migrated = relaunchFromVersion5(t, db);
+  const after = migrated.db;
+  const aRow = pendingRowId(after, "a");
+  assert.equal(folderRow(after, meetings).space_id, standInId);
+  const aMeetings = after
+    .prepare("SELECT id FROM folders WHERE space_id = ? AND account_id = 'a' AND name = 'Meetings'")
+    .get(aRow).id;
+  assert.notEqual(aMeetings, meetings);
+  assert.equal(noteRow(after, aNote).folder_id, aMeetings);
+  assert.deepEqual(
+    after
+      .prepare("SELECT space_id, folder_id FROM agent_conversations WHERE id = ?")
+      .get(signedOutChat),
+    { space_id: standInId, folder_id: meetings }
+  );
   assertEveryRowInItsFolderSpace(after);
 });
 
