@@ -103,17 +103,15 @@ function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
   };
   const noSuppression = { suppress: false, reason: null };
   const context = {
-    win,
     _meetingMicStreaming: streams.mic,
     _meetingSystemStreaming: streams.system,
     windowManager: { controlPanelWindow: win },
-    activeMeetingSpeakerConfig: null,
     _startOrSkipDiarization() {},
     meetingDiarizationSegments: accepted,
     meetingConnectionOptions: { language, spokenLanguages },
     fragmentFilterLanguages,
     isWrongScriptFragment,
-    debugLogger: { debug() {}, error() {}, warn() {}, info() {} },
+    debugLogger: { debug() {}, error() {} },
     meetingEchoLeakDetector: { isMicProbablyRenderBleed: () => false },
     shouldSuppressMicTranscriptSegment: () => noSuppression,
     shouldSkipDuplicateMicSegment: () => false,
@@ -311,9 +309,7 @@ test("a wrong-script final arriving during disconnect is not saved", async (t) =
 function localHarness({ language, text }) {
   const finals = [];
   const context = {
-    finals,
     self: {
-      _activeLocalMeetingLease: null,
       _audioFeaturePolicy: { activeFailure: () => null },
       _resolveWhisperVadOptions: () => ({}),
       whisperManager: { transcribeLocalWhisper: async () => ({ success: true, text }) },
@@ -326,17 +322,13 @@ function localHarness({ language, text }) {
     meetingLocalProvider: "whisper",
     meetingLocalModel: "base",
     meetingLocalLanguage: language,
-    meetingLocalWin: null,
-    LOCAL_MEETING_CHUNK_INTERVAL_MS: 5000,
     downsample24kTo16k: (pcm) => pcm,
     computeChunkStats: () => ({ rms: 0.1, peak: 0.5, sampleCount: 1600 }),
     resolveMicChunkAction: () => ({ action: "send", reason: null }),
-    meetingEchoLeakDetector: { isSystemSpeaking: () => false },
     pcm16ToWav: (pcm) => pcm,
     isSherpaLocalProvider: () => false,
     assertMeetingAllowed: () => {},
-    isLocalModelPolicyRefusal: () => false,
-    debugLogger: { debug() {}, error() {}, warn() {}, info() {} },
+    debugLogger: { debug() {}, error() {} },
     shouldSuppressMicTranscriptSegment: () => ({ suppress: false, reason: null }),
     shouldSkipDuplicateMicSegment: () => false,
     hasRiskyMicDuplicateProfile: () => false,
