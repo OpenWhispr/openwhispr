@@ -37,7 +37,7 @@ const OTHER_SCRIPTS = {
 
 const LETTER = /\p{L}/gu;
 const scriptPattern = (scripts) =>
-  new RegExp(`[${scripts.map((s) => `\\p{Script=${s}}`).join("")}]`, "u");
+  new RegExp(`[${scripts.map((s) => `\\p{Script_Extensions=${s}}`).join("")}]`, "u");
 
 // Null when any language's scripts are unknown, since then nothing can be called wrong.
 function expectedScripts(languages) {

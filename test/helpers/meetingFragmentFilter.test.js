@@ -3,6 +3,12 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const OpenAIRealtimeStreaming = require("../../src/helpers/openaiRealtimeStreaming");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installMicCaptureGlobals,
+} = require("../lib/rendererTestHarness");
 
 const {
   fragmentFilterLanguages,
@@ -20,6 +26,13 @@ test("a fragment in the meeting language's own script is kept", () => {
   assert.equal(isWrongScriptFragment("うん。", ["ja"]), false);
   assert.equal(isWrongScriptFragment("是啊。", ["zh"]), false);
   assert.equal(isWrongScriptFragment("네.", ["ko"]), false);
+});
+
+test("Japanese responses with a shared-script vowel mark are kept only in an expected script", () => {
+  for (const text of ["えー。", "はーい", "ノー。", "オーケー"]) {
+    assert.equal(isWrongScriptFragment(text, ["ja"]), false, text);
+    assert.equal(isWrongScriptFragment(text, ["en"]), true, text);
+  }
 });
 
 test("Latin text is never treated as a wrong script", () => {
@@ -75,18 +88,29 @@ const sliceBetween = (startMarker, endMarker) => {
 // Objects made inside the vm context have another realm's prototype.
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-function streamingHarness({ language }) {
+function streamingHarness({ language, spokenLanguages, onSegment = () => {} }) {
   const sent = [];
-  const finals = [];
+  const accepted = [];
+  const streams = { mic: new OpenAIRealtimeStreaming(), system: new OpenAIRealtimeStreaming() };
   const win = {
     isDestroyed: () => false,
-    webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
+    webContents: {
+      send: (channel, payload) => {
+        sent.push({ channel, payload });
+        if (channel === "meeting-transcription-segment") onSegment(payload);
+      },
+    },
   };
   const noSuppression = { suppress: false, reason: null };
   const context = {
     win,
-    finals,
-    meetingConnectionOptions: { language },
+    _meetingMicStreaming: streams.mic,
+    _meetingSystemStreaming: streams.system,
+    windowManager: { controlPanelWindow: win },
+    activeMeetingSpeakerConfig: null,
+    _startOrSkipDiarization() {},
+    meetingDiarizationSegments: accepted,
+    meetingConnectionOptions: { language, spokenLanguages },
     fragmentFilterLanguages,
     isWrongScriptFragment,
     debugLogger: { debug() {}, error() {}, warn() {}, info() {} },
@@ -97,27 +121,74 @@ function streamingHarness({ language }) {
     removePendingMicFinalsFor: () => [],
     removeRacingMicEntriesFor: () => [],
     queuePendingMicFinal: () => assert.fail("nothing should be held back"),
-    sendMeetingFinalSegment: (segment) => finals.push(segment.text),
     reconnectMeetingStreams: async () => true,
     meetingFatalErrorSent: false,
+    clearMeetingSystemAudioSilenceTimer() {},
+    stopMeetingSystemAudioWatchdog() {},
+    flushPendingMeetingMicChunks() {},
+    stopMeetingAec: async () => {},
+    stopLiveSpeakerIdentification: async () => null,
+    meetingLocalWin: null,
+    meetingLocalMode: false,
+    meetingNoteId: 11,
+    meetingSpeakerIndexBase: 0,
+    flushPendingMicFinals() {},
+    resetMeetingStreamingState() {},
+    captureMeetingDiarizationState: async () => ({
+      diarizationSegments: accepted,
+      retractedSegments: [],
+    }),
   };
   vm.createContext(context);
   vm.runInContext(
-    `${sliceBetween(
+    `${sliceBetween("const appendMeetingLocalTranscript = ", "function flushPendingMicFinals(")}
+    ${sliceBetween(
       "const attachMeetingStreamingHandlers = ",
       "const resetMeetingReconnectAudio = "
     )}
-    this.attach = attachMeetingStreamingHandlers;`,
+    ${sliceBetween("const disconnectMeetingStreaming = ", "const clearMeetingSystemAudioSilenceTimer = ")}
+    ${sliceBetween("const stopMeetingTranscription = ", "const meetingTranscriptionLifecycle = ")}
+    this.attach = attachMeetingStreamingHandlers;
+    this.stop = stopMeetingTranscription;`,
     context
   );
+  for (const [source, streaming] of Object.entries(streams)) context.attach(streaming, win, source);
+  let turn = 0;
+  const finish = (source, text) => {
+    const streaming = streams[source];
+    streaming.handleMessage(
+      JSON.stringify({
+        type: "conversation.item.input_audio_transcription.delta",
+        delta: text,
+      })
+    );
+    streaming.handleMessage(
+      JSON.stringify({
+        type: "conversation.item.input_audio_transcription.completed",
+        item_id: `turn-${turn++}`,
+        transcript: text,
+      })
+    );
+  };
   return {
     sent,
-    finals,
-    finish(source, text) {
-      const streaming = { completedSegments: [text] };
-      context.attach(streaming, win, source);
-      streaming.onFinalTranscript(text, 1000);
+    get finals() {
+      return accepted.map((segment) => segment.text);
     },
+    finish,
+    finishOnStop(source, text) {
+      const streaming = streams[source];
+      streaming.audioBytesSent = 1;
+      streaming.ws = {
+        readyState: 1,
+        send(message) {
+          assert.equal(JSON.parse(message).type, "input_audio_buffer.commit");
+          queueMicrotask(() => finish(source, text));
+        },
+        close() {},
+      };
+    },
+    stop: () => context.stop(),
   };
 }
 
@@ -128,7 +199,10 @@ test("a streamed wrong-script fragment never reaches the transcript and clears i
     assert.deepEqual(run.finals, [], source);
     assert.deepEqual(
       run.sent.map((s) => plain(s.payload)),
-      [{ text: "", source, type: "partial" }],
+      [
+        { text: "어.", source, type: "partial" },
+        { text: "", source, type: "partial" },
+      ],
       source
     );
   }
@@ -138,6 +212,125 @@ test("a streamed fragment in the meeting's own script is kept", () => {
   const run = streamingHarness({ language: "ko" });
   run.finish("system", "네.");
   assert.deepEqual(run.finals, ["네."]);
+});
+
+async function recordingHarness(t, { language = "en", spokenLanguages } = {}) {
+  const writes = [];
+  let segmentListener;
+  let store;
+  t.after(() => store?.stopRecording());
+  const streaming = streamingHarness({
+    language,
+    spokenLanguages,
+    onSegment: (segment) => segmentListener?.(segment),
+  });
+  const noopListener = () => () => {};
+  installMicCaptureGlobals(t);
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        checkSystemAudioAccess: async () => ({
+          granted: true,
+          status: "granted",
+          mode: "native",
+          strategy: "native",
+        }),
+        meetingTranscriptionStart: async () => ({
+          success: true,
+          systemAudioMode: "native",
+          systemAudioStrategy: "native",
+        }),
+        meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
+        meetingTranscriptionStop: streaming.stop,
+        meetingTranscriptionSend() {},
+        getNote: async () => ({ id: 11, transcript: "", deleted_at: null }),
+        updateNote: async (id, patch) => {
+          writes.push({ id, patch });
+          return { success: true };
+        },
+        onMeetingTranscriptionSegment: (callback) => {
+          segmentListener = callback;
+          return () => {
+            segmentListener = null;
+          };
+        },
+        onMeetingSpeakerIdentified: noopListener,
+        onMeetingSpeakersMerged: noopListener,
+        onMeetingSessionSpeakerConfigUpdated: noopListener,
+        onMeetingTranscriptionError: noopListener,
+        onMeetingTranscriptionFatalError: noopListener,
+        onMeetingSystemAudioSilent: noopListener,
+        onMeetingDiarizationComplete: noopListener,
+      },
+    },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-meeting-fragment-stop-test-",
+  });
+  store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  assert.equal(
+    await store.startRecording({ noteId: 11, noteTitle: "Meeting", folderId: null }),
+    true
+  );
+  return { streaming, store, writes };
+}
+
+for (const source of ["mic", "system"]) {
+  test(`rejected-only ${source} fragments stay absent after stop and never reach note persistence`, async (t) => {
+    const { streaming, store, writes } = await recordingHarness(t);
+    streaming.finish(source, "어.");
+    streaming.finish(source, "Да.");
+    assert.equal(store.useMeetingRecordingStore.getState().transcript, "");
+    assert.equal(store.useMeetingRecordingStore.getState()[`${source}Partial`], "");
+
+    await store.stopRecording();
+
+    assert.equal(store.useMeetingRecordingStore.getState().transcript, "");
+    assert.deepEqual(store.useMeetingRecordingStore.getState().segments, []);
+    assert.deepEqual(writes, []);
+  });
+}
+
+test("valid speech followed by a rejected fragment is preserved in the saved note", async (t) => {
+  const { streaming, store, writes } = await recordingHarness(t);
+  streaming.finish("mic", "Hello everyone.");
+  streaming.finish("system", "어.");
+  await store.stopRecording();
+  assert.equal(store.useMeetingRecordingStore.getState().transcript, "Hello everyone.");
+  assert.deepEqual(
+    JSON.parse(writes.at(-1).patch.transcript).map(({ text }) => text),
+    ["Hello everyone."]
+  );
+});
+
+test("valid speech finalized during disconnect still reaches the saved note", async (t) => {
+  const { streaming, store, writes } = await recordingHarness(t);
+  streaming.finishOnStop("mic", "One last thing.");
+  await store.stopRecording();
+  assert.equal(store.useMeetingRecordingStore.getState().transcript, "One last thing.");
+  assert.equal(writes.at(-1).patch.transcript, "One last thing.");
+});
+
+test("a wrong-script final arriving during disconnect is not saved", async (t) => {
+  const { streaming, store, writes } = await recordingHarness(t, {
+    language: "auto",
+    spokenLanguages: ["en"],
+  });
+  streaming.finishOnStop("system", "어.");
+  await store.stopRecording();
+  assert.equal(store.useMeetingRecordingStore.getState().transcript, "");
+  assert.deepEqual(writes, []);
+});
+
+test("a Japanese response with a shared-script vowel mark reaches the saved note", async (t) => {
+  const { streaming, store, writes } = await recordingHarness(t, { language: "ja" });
+  streaming.finish("mic", "はーい");
+  assert.equal(store.useMeetingRecordingStore.getState().transcript, "はーい");
+  await store.stopRecording();
+  assert.deepEqual(
+    JSON.parse(writes.at(-1).patch.transcript).map(({ text }) => text),
+    ["はーい"]
+  );
 });
 
 // Runs the real local chunk transcriber with a stubbed engine returning `text`.
@@ -202,4 +395,12 @@ test("a locally transcribed row in an expected script is kept", async () => {
   const run = localHarness({ language: "en", text: "Okay." });
   await run.transcribe("system");
   assert.deepEqual(run.finals, ["Okay."]);
+});
+
+test("local Japanese responses with a shared-script vowel mark are kept on both channels", async () => {
+  for (const source of ["mic", "system"]) {
+    const run = localHarness({ language: "ja", text: "オーケー" });
+    await run.transcribe(source);
+    assert.deepEqual(run.finals, ["オーケー"], source);
+  }
 });
