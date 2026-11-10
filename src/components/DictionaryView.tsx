@@ -83,7 +83,7 @@ import {
   WHISPER_DECODER_PROMPT_CHARS,
   dictionaryReachesTranscriptionModel,
 } from "../utils/dictionaryPromptCap";
-import { getSherpaHotwordsScore } from "../utils/sherpaHotwords";
+import { getSherpaHotwordsScore, MAX_SHERPA_HOTWORDS } from "../utils/sherpaHotwords";
 import { getParakeetModelInfo } from "../models/ModelRegistry";
 import { workspaceCan } from "../lib/capabilities";
 import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
@@ -326,10 +326,14 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
     if (s.localTranscriptionProvider === "cohere") return s.cohereModel || null;
     return null;
   });
-  const dictionaryIgnoringLocalModel =
-    personalDictation && localSherpaModel && getSherpaHotwordsScore(localSherpaModel) === null
-      ? (getParakeetModelInfo(localSherpaModel)?.name ?? localSherpaModel)
-      : null;
+  let localSherpaNotice: string | null = null;
+  if (personalDictation && localSherpaModel) {
+    const model = getParakeetModelInfo(localSherpaModel)?.name ?? localSherpaModel;
+    localSherpaNotice =
+      getSherpaHotwordsScore(localSherpaModel) === null
+        ? t("dictionary.localModelIgnoredNotice", { model })
+        : t("dictionary.localModelHotwordsLimitNotice", { model, limit: MAX_SHERPA_HOTWORDS });
+  }
 
   // Same membership rule as agentNameDictionaryChanges: a stored spelling that
   // differs only by case is still the agent name's entry, so keep it hidden.
@@ -1075,10 +1079,8 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
               <p className="text-xs text-foreground/45 leading-relaxed">
                 {t("dictionary.openRouterIgnoredNotice")}
               </p>
-            ) : dictionaryIgnoringLocalModel ? (
-              <p className="text-xs text-foreground/45 leading-relaxed">
-                {t("dictionary.localModelIgnoredNotice", { model: dictionaryIgnoringLocalModel })}
-              </p>
+            ) : localSherpaNotice ? (
+              <p className="text-xs text-foreground/45 leading-relaxed">{localSherpaNotice}</p>
             ) : (
               promptChars > WHISPER_DECODER_PROMPT_CHARS && (
                 <p className="text-xs text-foreground/45 leading-relaxed">

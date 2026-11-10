@@ -12,6 +12,12 @@ const {
 const IGNORED_NOTICE = "dictionary.openRouterIgnoredNotice";
 const LOCAL_NOTICE = "dictionary.localModelIgnoredNotice";
 const LIMIT_NOTICE = "dictionary.promptLimitNotice";
+const HOTWORDS_NOTICE = "dictionary.localModelHotwordsLimitNotice";
+const ORUKEET = {
+  useLocalWhisper: true,
+  localTranscriptionProvider: "nvidia",
+  parakeetModel: "orukeet-v0.1.0",
+};
 const LONG_DICTIONARY = Array.from({ length: 60 }, (_, i) => `SpecializedTerm${i}`);
 
 function textsOf(node, found = []) {
@@ -40,7 +46,8 @@ async function mountDictionary(t) {
     noExternal: ["react-i18next"],
     mockModules: {
       "react-i18next": `
-        const t = (key) => key;
+        const t = (key, options) =>
+          key === "${HOTWORDS_NOTICE}" ? [key, options?.model, options?.limit].join("|") : key;
         export function useTranslation() {
           return { t, i18n: { language: "en", dir: () => "ltr" } };
         }
@@ -121,8 +128,10 @@ async function mountDictionary(t) {
       });
       rerender();
     });
-    return textsOf(tree).filter((text) =>
-      [IGNORED_NOTICE, LOCAL_NOTICE, LIMIT_NOTICE].includes(text)
+    return textsOf(tree).filter(
+      (text) =>
+        [IGNORED_NOTICE, LOCAL_NOTICE, LIMIT_NOTICE].includes(text) ||
+        text.startsWith(HOTWORDS_NOTICE)
     );
   };
   const setEnterprise = (state) =>
@@ -184,6 +193,7 @@ test("the Dictionary says when OpenRouter won't pass its words on", async (t) =>
   });
   t.after(() => setEnterprise({ status: "idle", config: null }));
   assert.deepEqual(await notices(OPENROUTER_TAB), [], "managed workspace");
+  assert.deepEqual(await notices(ORUKEET), [], "managed workspace with Orukeet selected locally");
 });
 
 test("the Dictionary says when the local model can't use its words", async (t) => {
@@ -209,11 +219,24 @@ test("the Dictionary says when the local model can't use its words", async (t) =
     [LOCAL_NOTICE],
     "Nemotron"
   );
-  assert.deepEqual(await notices(parakeet("orukeet-v0.1.0")), [], "Orukeet takes hotwords");
   assert.deepEqual(await notices({ useLocalWhisper: true }), [], "local Whisper takes a prompt");
   assert.deepEqual(
     await notices({ ...parakeet("parakeet-tdt-0.6b-v3"), useLocalWhisper: false, ...OPENAI }),
     [],
     "cloud dictation"
+  );
+});
+
+test("the Dictionary shows Orukeet's hotword limit for local dictation", async (t) => {
+  const { notices } = await mountDictionary(t);
+  const expectedNotice = [`${HOTWORDS_NOTICE}|Orukeet|100`];
+  const overLimitDictionary = Array.from({ length: 101 }, (_, i) => `Term${i}`);
+
+  assert.deepEqual(await notices(ORUKEET), expectedNotice, "short dictionary");
+  assert.deepEqual(await notices(ORUKEET, overLimitDictionary), expectedNotice, "over the limit");
+  assert.deepEqual(
+    await notices({ ...ORUKEET, useLocalWhisper: false, ...OPENAI }, overLimitDictionary),
+    [LIMIT_NOTICE],
+    "cloud dictation with Orukeet selected locally"
   );
 });

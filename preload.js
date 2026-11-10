@@ -1401,7 +1401,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-shared-dictionary-clear", workspaceId),
   pruneSharedDictionary: (keepWorkspaceIds) =>
     ipcRenderer.invoke("db-shared-dictionary-prune", keepWorkspaceIds),
-  setSharedDictionaryHints: (hints) => ipcRenderer.invoke("dictionary-set-shared-hints", hints),
+  setSharedDictionaryHints: (promptHints, hotwordHints) =>
+    ipcRenderer.invoke("dictionary-set-shared-hints", promptHints, hotwordHints),
 
   getPendingSnippets: () => ipcRenderer.invoke("db-get-pending-snippets"),
   getPendingSnippetDeletes: () => ipcRenderer.invoke("db-get-pending-snippet-deletes"),

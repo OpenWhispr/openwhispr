@@ -59,7 +59,11 @@ function isAbortError(err) {
 function managerWith(fake) {
   const manager = new ParakeetServerManager();
   manager.isModelDownloaded = () => true;
-  manager.wsServer = fake;
+  manager.wsServer = Object.assign(fake, {
+    activeTranscriptions: new Set(),
+    stopSignal: new AbortController().signal,
+    reserveTranscription: () => () => {},
+  });
   return manager;
 }
 
@@ -450,4 +454,21 @@ test("a dictionary change waits for a busy server instead of giving up", async (
   await new Promise(setImmediate);
   assert.equal(startArgs.length, 1);
   assert.deepEqual(startArgs[0][4], { score: 2, words: ["Schellhas"] });
+});
+
+test("stopping during audio conversion cancels the pending transcription before startup", async () => {
+  const manager = new ParakeetServerManager();
+  manager.isModelDownloaded = () => true;
+  let finishConversion;
+  manager._ensureWav = () => new Promise((resolve) => (finishConversion = resolve));
+  let starts = 0;
+  manager.wsServer.start = async () => starts++;
+
+  const transcription = manager.transcribe(Buffer.alloc(4));
+  const cancelled = assert.rejects(transcription, isAbortError);
+  await manager.stopServer();
+  finishConversion({ wavBuffer: wavFromSeconds([{ seconds: 1 }]), filesToCleanup: [] });
+
+  await cancelled;
+  assert.equal(starts, 0);
 });

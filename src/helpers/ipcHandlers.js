@@ -31,6 +31,7 @@ const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
 const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
+const { dictionaryWordKey } = require("../utils/dictionaryWordKey");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
@@ -755,11 +756,9 @@ class IPCHandlers {
     this._autoLearnEnabled = true; // Default on, synced from renderer
     this._autoLearnDebounceTimer = null;
     this._autoLearnLatestData = null;
-    // The active workspace's applying shared words, as the renderer last sent
-    // them (dictionary-set-shared-hints). Empty until the first send.
     this._sharedDictionaryHints = { space: [], workspace: [] };
-    // Local sherpa models read the same dictionary as hotwords (#3117).
-    this.parakeetManager.setDictionaryProvider(() => this._getDictionarySafe());
+    this._dictionaryHotwordHints = null;
+    this.parakeetManager.setDictionaryProvider(() => this._getDictionaryHotwords());
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
@@ -1050,6 +1049,7 @@ class IPCHandlers {
     this.enterpriseIdentityManager?.clear();
     if (!token) {
       this.databaseManager.setActiveAccountId(null);
+      this._clearDictionaryHotwordHints();
       accountScopeBinding.clear();
       broadcastToWindows("active-account-scope-changed", null);
       // As set-active-account-scope does: a connect can't outlive its account.
@@ -1455,20 +1455,36 @@ class IPCHandlers {
     return folder?.name || "Personal";
   }
 
-  // Every word that already reaches the transcription prompt: personal plus the
-  // active workspace's shared words that fit beside them. The renderer sends
-  // only those (sharedWordsReachingPrompt in settingsStore), so a team word cut
-  // from the prompt, or a hidden, paused or other workspace's word, can still
-  // be learned into Personal.
-  _getDictionarySafe() {
-    let personal;
+  _getPersonalDictionarySafe() {
     try {
-      personal = this.databaseManager.getDictionary();
+      return this.databaseManager.getDictionary();
     } catch {
-      personal = [];
+      return [];
     }
+  }
+
+  // Auto-learn excludes the personal dictionary and shared words that already
+  // reach the prompt. A shared word cut by the prompt budget can still be learned.
+  _getDictionarySafe() {
     const { space, workspace } = this._sharedDictionaryHints;
-    return [...personal, ...space, ...workspace];
+    return [...this._getPersonalDictionarySafe(), ...space, ...workspace];
+  }
+
+  _getDictionaryHotwords() {
+    const personal = this._getPersonalDictionarySafe();
+    const hints = this._dictionaryHotwordHints;
+    if (!hints || hints.accountId !== this.databaseManager.activeAccountId) return personal;
+    const { space, workspace, suppressedPersonal } = hints;
+    return [
+      ...personal.filter((word) => !suppressedPersonal.has(dictionaryWordKey(word))),
+      ...space,
+      ...workspace,
+    ];
+  }
+
+  _clearDictionaryHotwordHints() {
+    this._dictionaryHotwordHints = null;
+    this.parakeetManager.refreshHotwordsSoon();
   }
 
   _cleanupTextEditMonitor() {
@@ -2514,11 +2530,36 @@ class IPCHandlers {
       return this.databaseManager.pruneSharedDictionary(keepWorkspaceIds);
     });
 
-    ipcMain.handle("dictionary-set-shared-hints", async (_event, hints) => {
+    ipcMain.handle("dictionary-set-shared-hints", async (_event, promptHints, hotwordHints) => {
       const isWordList = (value) =>
         Array.isArray(value) && value.every((word) => typeof word === "string");
-      if (!isWordList(hints?.space) || !isWordList(hints?.workspace)) return;
-      this._sharedDictionaryHints = { space: [...hints.space], workspace: [...hints.workspace] };
+      const isHints = (value) => isWordList(value?.space) && isWordList(value?.workspace);
+      if (!isHints(promptHints)) return;
+      this._sharedDictionaryHints = {
+        space: [...promptHints.space],
+        workspace: [...promptHints.workspace],
+      };
+
+      const suppressed = hotwordHints?.suppressedPersonal;
+      const accountId = hotwordHints?.accountId ?? null;
+      if (
+        !isHints(hotwordHints) ||
+        (suppressed !== undefined && !isWordList(suppressed)) ||
+        (accountId !== null && (typeof accountId !== "string" || !accountId))
+      ) {
+        this._clearDictionaryHotwordHints();
+        return;
+      }
+      const activeAccountId = this.databaseManager.activeAccountId;
+      // A saved snapshot can arrive before startup validates its owner. Once
+      // bound, ignore late snapshots from another account.
+      if (!accountId || (activeAccountId !== null && accountId !== activeAccountId)) return;
+      this._dictionaryHotwordHints = {
+        accountId,
+        space: [...hotwordHints.space],
+        workspace: [...hotwordHints.workspace],
+        suppressedPersonal: new Set((suppressed ?? []).map(dictionaryWordKey)),
+      };
       this.parakeetManager.refreshHotwordsSoon();
     });
 
@@ -2880,6 +2921,13 @@ class IPCHandlers {
         this._audioFeaturePolicy?.update(guestPolicy);
       }
       this.databaseManager.setActiveAccountId(accountId);
+      if (accountChanged) {
+        if (this._dictionaryHotwordHints?.accountId === accountId) {
+          this.parakeetManager.refreshHotwordsSoon();
+        } else {
+          this._clearDictionaryHotwordHints();
+        }
+      }
       if (accountId !== null) accountScopeBinding.persist(accountId, state.token);
       else accountScopeBinding.clear();
       // After the scope moved: the verdict this fetches is stamped with the

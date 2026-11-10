@@ -84,15 +84,25 @@ class ParakeetServerManager {
       this.hotwordsRefreshTimer = null;
       // Busy servers keep their words until idle; trying again later spares the
       // next dictation the reload.
-      if (this.wsServer.startupPromise || this.wsServer.activeDecodes > 0) {
+      if (
+        this.wsServer.startupPromise ||
+        this.wsServer.activeDecodes > 0 ||
+        this.wsServer.activeTranscriptions.size > 0
+      ) {
         this.refreshHotwordsSoon();
         return;
       }
       const { ready, modelName, modelDir, modelRuntime, language } = this.wsServer;
       if (!ready || getSherpaHotwordsScore(modelName) === null) return;
+      const stopSignal = this.wsServer.stopSignal;
       this.wsServer
         .start(modelName, modelDir, modelRuntime, language, this._hotwordsFor(modelName))
+        .then((reloaded) => {
+          // A dictation may have arrived while the reload waited for policy.
+          if (reloaded === false && !stopSignal.aborted) this.refreshHotwordsSoon();
+        })
         .catch((error) => {
+          if (stopSignal.aborted) return;
           debugLogger.warn("Failed to reload parakeet-ws with the new dictionary", {
             error: error.message,
           });
@@ -154,6 +164,8 @@ class ParakeetServerManager {
   }
 
   async transcribe(audioBuffer, options = {}) {
+    const stopSignal = this.wsServer.stopSignal;
+    const signal = options.signal ? AbortSignal.any([options.signal, stopSignal]) : stopSignal;
     return runLocalModelOperation(
       this,
       "transcription",
@@ -161,9 +173,9 @@ class ParakeetServerManager {
       () =>
         this._policyAllowedTranscribe(audioBuffer, {
           ...options,
-          signal: localModelOperationSignal(this, options.signal),
+          signal: localModelOperationSignal(this, signal),
         }),
-      { onAbort: () => this.stopServer() }
+      { onAbort: () => !stopSignal.aborted && this.stopServer() }
     );
   }
 
@@ -189,8 +201,12 @@ class ParakeetServerManager {
     // An already-cancelled upload skips the ffmpeg conversion entirely.
     throwIfAborted();
 
-    const { wavBuffer, filesToCleanup } = await this._ensureWav(audioBuffer);
+    const releaseTranscription = this.wsServer.reserveTranscription();
+    let filesToCleanup = [];
     try {
+      const wav = await this._ensureWav(audioBuffer);
+      const { wavBuffer } = wav;
+      filesToCleanup = wav.filesToCleanup;
       throwIfAborted();
       const runtime = getModelRuntime(modelName);
       // Awaiting unconditionally also covers a startup's warm-up completion.
@@ -199,8 +215,10 @@ class ParakeetServerManager {
         modelDir,
         runtime,
         resolveModelLanguage(modelName, language),
-        this._hotwordsFor(modelName)
+        this._hotwordsFor(modelName),
+        { transcription: releaseTranscription }
       );
+      throwIfAborted();
 
       const samples = wavToFloat32Samples(wavBuffer);
       const durationSeconds = samples.length / BYTES_PER_SAMPLE / SAMPLE_RATE;
@@ -282,6 +300,7 @@ class ParakeetServerManager {
         ? { text, elapsed, truncated: true }
         : { text, elapsed };
     } finally {
+      releaseTranscription();
       this._cleanupFiles(filesToCleanup);
     }
   }
@@ -328,6 +347,8 @@ class ParakeetServerManager {
   }
 
   async stopServer() {
+    clearTimeout(this.hotwordsRefreshTimer);
+    this.hotwordsRefreshTimer = null;
     await this.wsServer.stop();
   }
 

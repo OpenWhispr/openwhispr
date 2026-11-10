@@ -76,7 +76,7 @@ function notify(): void {
   subscribers.forEach((subscriber) => subscriber());
 }
 
-function readPreviousUserId(): string | null {
+export function readStoredAccountScopeUserId(): string | null {
   return storage()?.getItem(ACCOUNT_SCOPE_USER_KEY) ?? null;
 }
 
@@ -95,7 +95,7 @@ export function getAccountScopeAction(userId: string | null): AccountScopeAction
   const target = storage();
   return decideAccountScopeAction({
     userId,
-    previousUserId: readPreviousUserId(),
+    previousUserId: readStoredAccountScopeUserId(),
     wasSignedIn: target?.getItem("isSignedIn") === "true",
     hasTeamSpaces: target?.getItem("teamSpacesCapability") === "true",
     scopeValidated: target?.getItem(ACCOUNT_SCOPE_VALIDATED_KEY) === "true",

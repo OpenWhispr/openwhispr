@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
+import { readStoredAccountScopeUserId } from "../lib/authAccountScope";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
 import logger from "../utils/logger";
@@ -96,6 +97,7 @@ import {
 import {
   EMPTY_SHARED_HINTS,
   isTermLikeSharedWord,
+  type ScopedSharedHintWords,
   type SharedHintWords,
 } from "../utils/sharedDictionaryHints";
 import {
@@ -307,33 +309,44 @@ function readStoredActiveWorkspaceId(): string | null {
 // workspace (or account) never apply, and a stale or hand-edited value never
 // breaks the dictionary prompt. Words are checked again, since a build with
 // looser rules may have written them.
-function parseSharedHints(raw: string | null, activeWorkspaceId: string | null): SharedHintWords {
-  if (raw === null) return EMPTY_SHARED_HINTS;
+function parseSharedHints(
+  raw: string | null,
+  activeWorkspaceId: string | null
+): ScopedSharedHintWords {
+  const currentAccountId = readStoredAccountScopeUserId();
+  const empty = currentAccountId
+    ? { ...EMPTY_SHARED_HINTS, accountId: currentAccountId }
+    : EMPTY_SHARED_HINTS;
+  if (raw === null) return empty;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return EMPTY_SHARED_HINTS;
-    const { workspaceId, space, workspace, suppressedPersonal } = parsed as Record<string, unknown>;
-    if (workspaceId !== null && typeof workspaceId !== "string") return EMPTY_SHARED_HINTS;
-    if (workspaceId !== activeWorkspaceId) return EMPTY_SHARED_HINTS;
-    if (!Array.isArray(space) || !Array.isArray(workspace)) return EMPTY_SHARED_HINTS;
+    if (typeof parsed !== "object" || parsed === null) return empty;
+    const { accountId, workspaceId, space, workspace, suppressedPersonal } = parsed as Record<
+      string,
+      unknown
+    >;
+    if (workspaceId !== activeWorkspaceId) return empty;
+    if (!Array.isArray(space) || !Array.isArray(workspace)) return empty;
     const words = (value: unknown[]): string[] =>
       value.filter((w): w is string => typeof w === "string");
     const sharedWords = (value: unknown[]): string[] => words(value).filter(isTermLikeSharedWord);
     // Moved personal words, not teammates': they only ever remove words.
     const suppressed = Array.isArray(suppressedPersonal) ? words(suppressedPersonal) : [];
-    return suppressed.length > 0
-      ? {
-          space: sharedWords(space),
-          workspace: sharedWords(workspace),
-          suppressedPersonal: suppressed,
-        }
-      : { space: sharedWords(space), workspace: sharedWords(workspace) };
+    // Older caches predate the owner field and share the reconciled account's
+    // lifetime. Explicit null records that no owner was known when we wrote it.
+    const owner = accountId === undefined ? currentAccountId : accountId;
+    return {
+      space: sharedWords(space),
+      workspace: sharedWords(workspace),
+      ...(suppressed.length > 0 ? { suppressedPersonal: suppressed } : {}),
+      ...(typeof owner === "string" && owner ? { accountId: owner } : {}),
+    };
   } catch {
-    return EMPTY_SHARED_HINTS;
+    return empty;
   }
 }
 
-function readPersistedSharedHints(): SharedHintWords {
+function readPersistedSharedHints(): ScopedSharedHintWords {
   if (!isBrowser) return EMPTY_SHARED_HINTS;
   return parseSharedHints(localStorage.getItem(SHARED_HINTS_KEY), readStoredActiveWorkspaceId());
 }
@@ -341,7 +354,7 @@ function readPersistedSharedHints(): SharedHintWords {
 interface PromptDictionarySettings {
   customDictionary: string[];
   snippets: Snippet[];
-  sharedDictionaryHints: SharedHintWords;
+  sharedDictionaryHints: ScopedSharedHintWords;
   preferredLanguage: string;
   chineseScriptPreference: string;
 }
@@ -375,21 +388,24 @@ function sharedWordsReachingPrompt(settings: PromptDictionarySettings): SharedHi
 // most change nothing in it.
 let lastSentSharedHints: string | null = null;
 
-// Main keeps the hints in memory only, for auto-learn; a failed send just
-// leaves its previous copy in place.
+// Auto-learn uses the prompt budget. Sherpa applies its own cap to the eligible
+// shared words and needs the hidden fallback keys to filter its SQLite words.
 function sendSharedHintsToMain(settings: PromptDictionarySettings): void {
-  const hints = sharedWordsReachingPrompt(settings);
-  const serialized = JSON.stringify(hints);
+  const promptHints = sharedWordsReachingPrompt(settings);
+  const hotwordHints = settings.sharedDictionaryHints;
+  const serialized = JSON.stringify([promptHints, hotwordHints]);
   if (serialized === lastSentSharedHints) return;
   lastSentSharedHints = serialized;
-  window.electronAPI?.setSharedDictionaryHints?.(hints)?.catch((err: unknown) => {
-    lastSentSharedHints = null;
-    logger.warn(
-      "Failed to send shared dictionary hints to main",
-      { error: (err as Error)?.message },
-      "settings"
-    );
-  });
+  window.electronAPI
+    ?.setSharedDictionaryHints?.(promptHints, hotwordHints)
+    ?.catch((err: unknown) => {
+      lastSentSharedHints = null;
+      logger.warn(
+        "Failed to send shared dictionary hints to main",
+        { error: (err as Error)?.message },
+        "settings"
+      );
+    });
 }
 
 function readStringArray(key: string, fallback: string[]): string[] {
@@ -2309,9 +2325,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),
 
-  // A derived cache of the shared dictionary for the prompt path; main owns the
-  // data, so nothing is written back. Main gets a copy (see the subscription
-  // below) so auto-learn never adds a word the workspace already applies.
+  // Derived from the active workspace's shared dictionary. The subscription
+  // sends main separate copies for auto-learn and local hotwords.
   // Cleared hints are EMPTY with no workspace.
   setSharedDictionaryHints: (hints: SharedHintWords, workspaceId: string | null) => {
     if (!isBrowser) {
@@ -2326,9 +2341,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       set({ sharedDictionaryHints: readPersistedSharedHints() });
       return;
     }
-    set({ sharedDictionaryHints: hints });
+    // Attach the source account once so a later prompt-only update cannot
+    // relabel these words after another account has reconciled.
+    const accountId = readStoredAccountScopeUserId();
+    const scopedHints = accountId ? { ...hints, accountId } : hints;
+    set({ sharedDictionaryHints: scopedHints });
     try {
-      localStorage.setItem(SHARED_HINTS_KEY, JSON.stringify({ workspaceId, ...hints }));
+      localStorage.setItem(SHARED_HINTS_KEY, JSON.stringify({ workspaceId, ...hints, accountId }));
     } catch (err) {
       // Quota: this window and main have the hints. Drop the stored copy so
       // other windows and the next launch don't apply outdated words.

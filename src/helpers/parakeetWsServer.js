@@ -4,7 +4,7 @@ const {
   localModelOperationSignal,
   isLocalModelPolicyRefusal,
 } = require("./localModelPolicyGate");
-const { spawn } = require("child_process");
+const { execFile, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
@@ -51,6 +51,64 @@ const OFFLINE_DECODE_CONCURRENCY = Math.max(
   Math.min(OFFLINE_WORK_THREADS, Math.floor(AVAILABLE_CPUS / INTRA_OP_THREADS))
 );
 
+// Windows ignores POSIX file modes. Protect both the directory and the file
+// before writing any words, even when the native-compatible temp root is shared.
+const WINDOWS_HOTWORDS_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+$file = $env:OW_HOTWORDS_FILE
+$dir = [System.IO.DirectoryInfo]::new([System.IO.Path]::GetDirectoryName($file))
+$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$user = $identity.User
+if ($dir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) { exit 1 }
+$owner = $dir.GetAccessControl().GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+if ($owner -ne $user.Value) {
+  # An elevated token can create directories owned by the built-in Administrators group.
+  $principal = [System.Security.Principal.WindowsPrincipal]::new($identity)
+  if ($owner -ne 'S-1-5-32-544' -or
+      !$principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 1 }
+}
+$rule = [System.Security.AccessControl.FileSystemAccessRule]::new($user, 'FullControl', 'Allow')
+$dirAcl = [System.Security.AccessControl.DirectorySecurity]::new()
+$dirAcl.SetAccessRuleProtection($true, $false)
+$dirAcl.AddAccessRule($rule)
+$dir.SetAccessControl($dirAcl)
+$fileAcl = [System.Security.AccessControl.FileSecurity]::new()
+$fileAcl.SetAccessRuleProtection($true, $false)
+$fileAcl.AddAccessRule($rule)
+$stream = [System.IO.FileStream]::new($file, 'CreateNew', 'Write', 'None', 4096, 'None', $fileAcl)
+try { [Console]::OpenStandardInput().CopyTo($stream) } finally { $stream.Dispose() }
+`;
+
+function writeWindowsHotwordsFile(file, content) {
+  if (!/^[\x21-\x7E]+$/.test(file)) {
+    throw new Error("No native-compatible path for the private hotwords file");
+  }
+  const powershell = path.win32.join(
+    process.env.SystemRoot || "C:\\Windows",
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe"
+  );
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      powershell,
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-EncodedCommand",
+        Buffer.from(WINDOWS_HOTWORDS_SCRIPT, "utf16le").toString("base64"),
+      ],
+      { windowsHide: true, timeout: 10000, env: { ...process.env, OW_HOTWORDS_FILE: file } },
+      (error) =>
+        error ? reject(new Error("Could not create private Windows hotwords file")) : resolve()
+    );
+    // The raw UTF-8 bytes stay off the command line and bypass the console encoding.
+    child.stdin.on("error", () => {}); // Early script failure is reported by execFile.
+    child.stdin.end(content, "utf8");
+  });
+}
+
 class ParakeetWsServer {
   constructor() {
     this.process = null;
@@ -66,9 +124,10 @@ class ParakeetWsServer {
     // also part of the identity.
     this.hotwordsKey = null;
     this.startupPromise = null;
-    this.startingModelName = null;
-    this.startingLanguage = null;
-    this.startingHotwordsKey = null;
+    this.starting = null;
+    this.stoppingPromise = null;
+    this.stopController = new AbortController();
+    this.activeTranscriptions = new Set();
     this.activeDecodes = 0;
     this.healthCheckInterval = null;
     this.cachedBinaryPaths = {};
@@ -95,78 +154,118 @@ class ParakeetWsServer {
     return this.isAvailable("offline") || this.isAvailable("online");
   }
 
+  get stopSignal() {
+    return this.stopController.signal;
+  }
+
+  reserveTranscription() {
+    const release = () => this.activeTranscriptions.delete(release);
+    this.activeTranscriptions.add(release);
+    return release;
+  }
+
   // hotwords: { score, words } from sherpaHotwords, or null to decode without the dictionary.
-  async start(modelName, modelDir, runtime = "offline", language = null, hotwords = null) {
+  async start(
+    modelName,
+    modelDir,
+    runtime = "offline",
+    language = null,
+    hotwords = null,
+    { transcription } = {}
+  ) {
+    const stopSignal = this.stopSignal;
     return runLocalModelOperation(
       this,
       "transcription",
       this.localModelIdForPath ? this.localModelIdForPath(modelDir, modelName) : modelName,
-      () => this._policyAllowedStart(modelName, modelDir, runtime, language, hotwords),
-      { onAbort: () => this.stop() }
+      () =>
+        this._policyAllowedStart(modelName, modelDir, runtime, language, hotwords, {
+          stopSignal,
+          transcription,
+        }),
+      { onAbort: () => !stopSignal.aborted && this.stop() }
     );
   }
 
   async _policyAllowedStart(
     modelName,
     modelDir,
-    runtime = "offline",
-    language = null,
-    hotwords = null
+    runtime,
+    language,
+    hotwords,
+    { stopSignal, transcription }
   ) {
+    stopSignal.throwIfAborted();
     const hotwordsKey = hotwords ? JSON.stringify(hotwords) : null;
     // Serialize with any in-flight startup; join it only when it's for the same server.
-    while (this.startupPromise) {
+    while (this.startupPromise || this.stoppingPromise) {
       if (
-        this.startingModelName === modelName &&
-        this.startingLanguage === language &&
-        this.startingHotwordsKey === hotwordsKey
+        this.starting?.stopSignal === stopSignal &&
+        this.starting.modelName === modelName &&
+        this.starting.modelDir === modelDir &&
+        this.starting.runtime === runtime &&
+        this.starting.language === language &&
+        this.starting.hotwordsKey === hotwordsKey
       ) {
-        return this.startupPromise;
+        await this.startupPromise;
+        stopSignal.throwIfAborted();
+        return;
       }
-      await this.startupPromise.catch(() => {});
+      await (this.startupPromise ?? this.stoppingPromise).catch(() => {});
+      stopSignal.throwIfAborted();
     }
-    if (this.ready && this.modelName === modelName && this.language === language) {
+    if (
+      this.ready &&
+      this.modelName === modelName &&
+      this.modelDir === modelDir &&
+      this.modelRuntime === runtime &&
+      this.language === language
+    ) {
       if (this.hotwordsKey === hotwordsKey) return;
-      // A dictionary edit never cuts off a decode; the next start once idle applies it.
-      if (this.activeDecodes > 0) return;
+      // A transcription may still be converting audio or awaiting startup.
+      // A sole request can reload before it uses the server.
+      const ownReservation = this.activeTranscriptions.has(transcription) ? 1 : 0;
+      if (this.activeDecodes > 0 || this.activeTranscriptions.size > ownReservation) return false;
     }
 
-    this.startingModelName = modelName;
-    this.startingLanguage = language;
-    this.startingHotwordsKey = hotwordsKey;
+    this.starting = { modelName, modelDir, runtime, language, hotwordsKey, stopSignal };
     // Assigned before any await so concurrent callers can never double-spawn.
     this.startupPromise = (async () => {
       try {
-        if (this.process) await this.stop();
+        if (this.process) await this._stopProcess();
+        stopSignal.throwIfAborted();
         try {
-          await this._doStart(modelName, modelDir, runtime, language, hotwords);
+          await this._doStart(modelName, modelDir, runtime, language, hotwords, stopSignal);
         } catch (error) {
+          stopSignal.throwIfAborted();
           if (!hotwords || isLocalModelPolicyRefusal(error)) throw error;
           // A dictionary sherpa cannot read must not cost local transcription.
           debugLogger.warn("parakeet-ws failed to start with hotwords, starting without them", {
             error: error.message,
           });
-          await this.stop();
-          await this._doStart(modelName, modelDir, runtime, language, null);
+          await this._stopProcess();
+          stopSignal.throwIfAborted();
+          await this._doStart(modelName, modelDir, runtime, language, null, stopSignal);
         }
+        stopSignal.throwIfAborted();
         // The requested words, even after the fallback, so they are not retried every decode.
         this.hotwordsKey = hotwordsKey;
       } finally {
         this.startupPromise = null;
-        this.startingModelName = null;
-        this.startingLanguage = null;
-        this.startingHotwordsKey = null;
+        this.starting = null;
       }
     })();
     return this.startupPromise;
   }
 
-  async _doStart(modelName, modelDir, runtime, language, hotwords) {
+  async _doStart(modelName, modelDir, runtime, language, hotwords, stopSignal) {
     const wsBinary = this.getWsBinaryPath(runtime);
     if (!wsBinary) throw new Error(`sherpa-onnx ${runtime} WS server binary not found`);
     if (!fs.existsSync(modelDir)) throw new Error(`Model directory not found: ${modelDir}`);
 
-    this.port = await findAvailablePort(PORT_RANGE_START, PORT_RANGE_END);
+    const port = await findAvailablePort(PORT_RANGE_START, PORT_RANGE_END);
+    stopSignal.throwIfAborted();
+    this.port = port;
     this.modelName = modelName;
     this.modelDir = modelDir;
     this.modelRuntime = runtime;
@@ -214,87 +313,93 @@ class ParakeetWsServer {
         : [`--num-threads=${INTRA_OP_THREADS}`, `--num-work-threads=${OFFLINE_WORK_THREADS}`]),
     ];
 
-    assertLocalModelOperation(this);
-    // The words go in a folder only this user can open, written without
-    // following a link, since the temp directory may be shared.
-    const hotwordsDir = useHotwords
-      ? fs.mkdtempSync(path.join(getSafeTempDir(), "openwhispr-hotwords-"))
-      : null;
-    if (hotwordsDir) {
-      const hotwordsFile = path.join(hotwordsDir, "hotwords.txt");
-      fs.writeFileSync(hotwordsFile, hotwords.words.map((word) => `${word}\n`).join(""), {
-        flag: "wx",
-        mode: 0o600,
-      });
-      args.push(
-        "--decoding-method=modified_beam_search",
-        `--hotwords-file=${hotwordsFile}`,
-        `--hotwords-score=${hotwords.score}`,
-        "--modeling-unit=bpe",
-        `--bpe-vocab=${bpeVocab}`
-      );
-    }
-
-    debugLogger.debug("Starting parakeet WS server", {
-      port: this.port,
-      modelName,
-      runtime,
-      args,
-      hotwordCount: hotwordsDir ? hotwords.words.length : 0,
-    });
-
-    const child = spawn(wsBinary, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-      cwd: getSafeTempDir(),
-      detached: process.platform !== "win32",
-    });
-    this.process = child;
-    sidecarPidFile.write("parakeet", child.pid);
-
-    let stderrBuffer = "";
-    let exitCode = null;
-    let readyResolve = null;
-    const readyFromStderr = new Promise((resolve) => {
-      readyResolve = resolve;
-    });
-
-    child.stdout.on("data", (data) => {
-      debugLogger.debug("parakeet-ws stdout", { data: data.toString().trim() });
-    });
-
-    child.stderr.on("data", (data) => {
-      stderrBuffer += data.toString();
-      debugLogger.debug("parakeet-ws stderr", { data: data.toString().trim() });
-      if (data.toString().includes("Listening on:")) {
-        readyResolve(true);
-      }
-    });
-
-    child.on("error", (error) => {
-      debugLogger.error("parakeet-ws process error", { error: error.message });
-      if (this.process === child) this.ready = false;
-      readyResolve(false);
-    });
-
-    child.on("close", (code) => {
-      exitCode = code;
-      debugLogger.debug("parakeet-ws process exited", { code });
-      // A superseded child must not clobber the state of its replacement.
-      if (this.process === child) {
-        this.ready = false;
-        this.process = null;
-        this.stopHealthCheck();
-        sidecarPidFile.clear("parakeet");
-      }
-      readyResolve(false);
-    });
-
+    let hotwordsDir = null;
     try {
-      await this._waitForReady(readyFromStderr, () => ({ stderr: stderrBuffer, exitCode }));
+      assertLocalModelOperation(this);
+      if (useHotwords) {
+        hotwordsDir = fs.mkdtempSync(path.join(getSafeTempDir(), "openwhispr-hotwords-"));
+        const hotwordsFile = path.join(hotwordsDir, "hotwords.txt");
+        const content = hotwords.words.map((word) => `${word}\n`).join("");
+        if (process.platform === "win32") {
+          await writeWindowsHotwordsFile(hotwordsFile, content);
+          stopSignal.throwIfAborted();
+          assertLocalModelOperation(this);
+        } else {
+          fs.writeFileSync(hotwordsFile, content, { flag: "wx", mode: 0o600 });
+        }
+        args.push(
+          "--decoding-method=modified_beam_search",
+          `--hotwords-file=${hotwordsFile}`,
+          `--hotwords-score=${hotwords.score}`,
+          "--modeling-unit=bpe",
+          `--bpe-vocab=${bpeVocab}`
+        );
+      }
+
+      debugLogger.debug("Starting parakeet WS server", {
+        port: this.port,
+        modelName,
+        runtime,
+        args,
+        hotwordCount: hotwordsDir ? hotwords.words.length : 0,
+      });
+
+      const child = spawn(wsBinary, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+        cwd: getSafeTempDir(),
+        detached: process.platform !== "win32",
+      });
+      this.process = child;
+      sidecarPidFile.write("parakeet", child.pid);
+
+      let stderrBuffer = "";
+      let exitCode = null;
+      let readyResolve = null;
+      const readyFromStderr = new Promise((resolve) => {
+        readyResolve = resolve;
+      });
+
+      child.stdout.on("data", (data) => {
+        debugLogger.debug("parakeet-ws stdout", { data: data.toString().trim() });
+      });
+
+      child.stderr.on("data", (data) => {
+        stderrBuffer += data.toString();
+        debugLogger.debug("parakeet-ws stderr", { data: data.toString().trim() });
+        if (data.toString().includes("Listening on:")) {
+          readyResolve(true);
+        }
+      });
+
+      child.on("error", (error) => {
+        debugLogger.error("parakeet-ws process error", { error: error.message });
+        if (this.process === child) this.ready = false;
+        readyResolve(false);
+      });
+
+      child.on("close", (code) => {
+        exitCode = code;
+        debugLogger.debug("parakeet-ws process exited", { code });
+        // A superseded child must not clobber the state of its replacement.
+        if (this.process === child) {
+          this.ready = false;
+          this.process = null;
+          this.stopHealthCheck();
+          sidecarPidFile.clear("parakeet");
+        }
+        readyResolve(false);
+      });
+
+      await this._waitForReady(
+        readyFromStderr,
+        () => ({ stderr: stderrBuffer, exitCode }),
+        stopSignal
+      );
+      stopSignal.throwIfAborted();
     } finally {
-      // sherpa reads the words once while loading; they need not stay on disk.
-      if (hotwordsDir) fs.rmSync(hotwordsDir, { recursive: true, force: true });
+      // sherpa loads the words once. Remove the directory even if writing or spawning failed.
+      if (hotwordsDir) fs.rmSync(hotwordsDir, { recursive: true, force: true, maxRetries: 2 });
     }
     this._startHealthCheck();
 
@@ -304,15 +409,15 @@ class ParakeetWsServer {
       runtime,
     });
 
-    await this._warmUp();
+    await this._warmUp(stopSignal);
   }
 
-  async _warmUp() {
+  async _warmUp(signal) {
     try {
       const sampleRate = 16000;
       const numSamples = sampleRate;
       const silentSamples = Buffer.alloc(numSamples * 4);
-      await this.transcribe(silentSamples, sampleRate);
+      await this.transcribe(silentSamples, sampleRate, { signal });
       debugLogger.debug("parakeet-ws warm-up inference complete");
     } catch (err) {
       debugLogger.warn("parakeet-ws warm-up failed (non-fatal)", {
@@ -321,17 +426,23 @@ class ParakeetWsServer {
     }
   }
 
-  async _waitForReady(readySignal, getProcessInfo) {
+  async _waitForReady(readySignal, getProcessInfo, stopSignal) {
     const startTime = Date.now();
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(
+    let timeout;
+    let onStop;
+    const startupDeadline = new Promise((_, reject) => {
+      timeout = setTimeout(
         () => reject(new Error(`parakeet-ws failed to start within ${STARTUP_TIMEOUT_MS}ms`)),
         STARTUP_TIMEOUT_MS
       );
+      onStop = () => reject(stopSignal.reason);
+      stopSignal.addEventListener("abort", onStop, { once: true });
     });
-
-    const ready = await Promise.race([readySignal, timeoutPromise]);
+    const ready = await Promise.race([readySignal, startupDeadline]).finally(() => {
+      clearTimeout(timeout);
+      stopSignal.removeEventListener("abort", onStop);
+    });
+    stopSignal.throwIfAborted();
 
     if (!ready) {
       const info = getProcessInfo ? getProcessInfo() : {};
@@ -382,7 +493,7 @@ class ParakeetWsServer {
     return this.modelRuntime === "online" ? 1 : OFFLINE_DECODE_CONCURRENCY;
   }
 
-  // signal is optional; dictation and warm-up flows never pass one.
+  // The optional signal cancels pending transcription when its caller stops.
   async transcribe(samplesBuffer, sampleRate, { signal } = {}) {
     // Nothing to authorize once stopped, which clears the model: that's the
     // ordinary not-running error, not a refusal of a model nobody named.
@@ -727,29 +838,39 @@ class ParakeetWsServer {
   }
 
   async stop() {
+    const startup = this.startupPromise;
+    this.stopController.abort(createAbortError("parakeet-ws server stopped"));
+    this.stopController = new AbortController();
+    this.activeTranscriptions.clear();
+    await this._stopProcess();
+    await startup?.catch(() => {});
+  }
+
+  _stopProcess() {
     this.stopHealthCheck();
-
-    if (!this.process) {
-      this.ready = false;
-      return;
-    }
-
-    debugLogger.debug("Stopping parakeet-ws server");
-
-    try {
-      await gracefulStopProcess(this.process);
-    } catch (error) {
-      debugLogger.error("Error stopping parakeet-ws server", { error: error.message });
-    }
-
-    this.process = null;
     this.ready = false;
+    if (this.stoppingPromise) return this.stoppingPromise;
+
+    const child = this.process;
+    this.process = null;
     this.port = null;
     this.modelName = null;
     this.modelDir = null;
     this.modelRuntime = "offline";
     this.language = null;
     this.hotwordsKey = null;
+    if (!child) return;
+
+    debugLogger.debug("Stopping parakeet-ws server");
+    this.stoppingPromise = gracefulStopProcess(child)
+      .catch((error) => {
+        debugLogger.error("Error stopping parakeet-ws server", { error: error.message });
+      })
+      .finally(() => {
+        sidecarPidFile.clear("parakeet");
+        this.stoppingPromise = null;
+      });
+    return this.stoppingPromise;
   }
 
   getStatus() {
@@ -758,7 +879,7 @@ class ParakeetWsServer {
       running: this.ready && this.process !== null,
       starting: this.startupPromise !== null,
       port: this.port,
-      modelName: this.modelName || this.startingModelName,
+      modelName: this.modelName || this.starting?.modelName || null,
     };
   }
 }

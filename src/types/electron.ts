@@ -60,7 +60,7 @@ import type {
   SharedDictionaryMeta,
   SharedDictionarySnapshot,
 } from "./sharedDictionary";
-import type { SharedHintWords } from "../utils/sharedDictionaryHints";
+import type { ScopedSharedHintWords, SharedHintWords } from "../utils/sharedDictionaryHints";
 
 export type { SharedDictionarySnapshot } from "./sharedDictionary";
 
@@ -4222,8 +4222,11 @@ declare global {
       clearSharedDictionary?: (workspaceId?: string) => Promise<{ changed: number }>;
       /** Clears every workspace's shared words except these workspaces'. */
       pruneSharedDictionary?: (keepWorkspaceIds: string[]) => Promise<{ changed: number }>;
-      /** Tells main which shared words apply, so auto-learn skips them. */
-      setSharedDictionaryHints?: (hints: SharedHintWords) => Promise<void>;
+      /** Sends capped prompt hints for auto-learn and eligible shared hints for local hotwords. */
+      setSharedDictionaryHints?: (
+        promptHints: SharedHintWords,
+        hotwordHints?: ScopedSharedHintWords
+      ) => Promise<void>;
 
       getPendingSnippets?: () => Promise<SnippetEntryItem[]>;
       getPendingSnippetDeletes?: () => Promise<SnippetEntryItem[]>;
