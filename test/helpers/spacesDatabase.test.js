@@ -3772,9 +3772,10 @@ test("relocateRevokedFolder files what it keeps under the account", (t) => {
   assert.equal(folderRow(db.db, other.id).space_id, team);
 });
 
-test("merging detaches a team note's other edit into its account's Private", (t) => {
+test("merging at launch detaches a team note's other edit into its workspace's Private", (t) => {
   const db = createFreshDeviceDb(t);
   if (!db) return;
+  // The account has a Private for w2 already, and none for w9.
   const { home, w2 } = defaultAndW2(db);
   const insertCopy = (spaceId, cloudId, fields) =>
     Number(
@@ -3792,24 +3793,37 @@ test("merging detaches a team note's other edit into its account's Private", (t)
           spaceId
         ).lastInsertRowid
     );
+  // Two copies of one team note: the current one, and an edit never pushed.
   const copiesIn = (workspaceId, cloudId) => {
     const team = teamSpaceIn(db, workspaceId);
     insertCopy(team, cloudId, { content: "current", revision: 5 });
     return insertCopy(team, cloudId, { content: "unpushed", revision: 3, status: "pending" });
   };
-  const placed = (id) => pick(noteRow(db.db, id), ["space_id", "folder_id", "account_id"]);
-
-  // At launch nobody is signed in yet: the one account in the teamspace owns it.
-  const atLaunch = copiesIn("w2", "cloud-1");
+  const inW2 = copiesIn("w2", "cloud-1");
+  const inW9 = copiesIn("w9", "cloud-2");
   signIn(db, null);
-  db.mergeDuplicateCloudNotes();
-  assert.deepEqual(placed(atLaunch), { space_id: home, folder_id: null, account_id: "a" });
+  db.db.close();
 
-  // Signed in, a workspace main knows keeps the note in its own Private.
-  signIn(db, "a", { activeWorkspaceId: "w2", defaultWorkspaceId: "w1" });
-  const signedIn = copiesIn("w2", "cloud-2");
-  db.mergeDuplicateCloudNotes();
-  assert.deepEqual(placed(signedIn), { space_id: w2, folder_id: null, account_id: "a" });
+  // Copies merge when the database opens, before anyone signs in.
+  const relaunched = relaunch(t);
+  assert.equal(relaunched.activeAccountId, null);
+  const placed = (id) => pick(noteRow(relaunched.db, id), ["space_id", "folder_id", "account_id"]);
+
+  assert.deepEqual(placed(inW2), { space_id: w2, folder_id: null, account_id: "a" });
+  assert.deepEqual(
+    placed(inW9),
+    { space_id: home, folder_id: null, account_id: "a" },
+    "a workspace without a Private here goes to the default's"
+  );
+  assert.equal(
+    relaunched.db
+      .prepare(
+        "SELECT COUNT(*) AS count FROM spaces WHERE kind = 'private' AND workspace_id = 'w9'"
+      )
+      .get().count,
+    0,
+    "no Private is made for a workspace the account may have lost"
+  );
 });
 
 test("a cloud personal row lands in the default private space", (t) => {

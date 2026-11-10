@@ -5798,6 +5798,19 @@ class DatabaseManager {
     return known ? this.getPrivateSpaceId(workspace) : this.getDefaultPrivateSpaceId();
   }
 
+  // Where merging puts a team note's other edit. Merging runs as the database
+  // opens, before anyone signs in, when main knows no workspace: the owner's
+  // Private for the note's workspace is used when this device already has
+  // one. None is made here, since the workspace may be one the owner lost; a
+  // lost workspace's row moves to the default with the rest of its Private.
+  // Otherwise, as any fork.
+  _detachedPrivateSpaceId(workspaceId, ownerId) {
+    const workspace = workspaceIdOrNull(workspaceId);
+    const existing =
+      ownerId != null && workspace != null ? this._findPrivateSpace(ownerId, workspace) : null;
+    return existing ?? this._forkPrivateSpaceId(workspace, ownerId);
+  }
+
   // Every one of these is a live private space of the signed-in account.
   _ownPrivateSpaces(...spaceIds) {
     if (!this.activeAccountId) return false;
@@ -9311,7 +9324,7 @@ class DatabaseManager {
           // A team note's other edit becomes its owner's own note, in that
           // owner's Private for the teamspace's workspace.
           detachNote.run(
-            inTeam ? this._forkPrivateSpaceId(space.workspace_id, owner) : note.space_id,
+            inTeam ? this._detachedPrivateSpaceId(space.workspace_id, owner) : note.space_id,
             inTeam ? null : note.folder_id,
             randomUUID(),
             owner,
