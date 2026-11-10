@@ -38,6 +38,7 @@ import {
 } from "../lib/teamSpacesCapability";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
 import { readNoteConflictIds, readNoteConflicts } from "../lib/noteConflictRegistry";
+import { serverClockOffsetMs, serverTimeIso } from "../lib/serverClock";
 import { pendingLeaderboardLeaveDeservesPriority } from "../lib/pendingLeaderboardLeave";
 import { hasSharedDictionaryPlan } from "../lib/workspaceBilling";
 import {
@@ -176,6 +177,21 @@ const SYNC_ALL_LOCK = "openwhispr-sync-all";
 // once from the same base revision, and the server refuses whichever lands
 // second (409).
 const NOTE_PUSH_LOCK_PREFIX = "openwhispr-note-push:";
+// Pull cursors this device stamped on the server's clock (see serverClock).
+// Without this marker they came from the device's own clock.
+const SERVER_CLOCK_CURSORS_KEY = "syncCursors.serverClock";
+// How far a stored cursor may run ahead of the server, or the device's clock
+// ahead of it, before the cursors are taken to have come from a fast clock.
+const FAST_CLOCK_TOLERANCE_MS = 2 * 60 * 1000;
+// Delta-pull cursors stamped with the time a pull started.
+const PULL_CURSOR_KEYS = [
+  "lastSyncedAt.notes",
+  "lastSyncedAt.notes.team",
+  "lastSyncedAt.folders",
+  "lastSyncedAt.folders.team",
+  "lastSyncedAt.conversations",
+  "lastSyncedAt.transcriptions",
+];
 // localStorage keys gating what a pass may sync; a change in another window
 // means sync may have just become possible (sign-in, subscription, backup
 // enabled, Insights opt-in).
@@ -825,6 +841,7 @@ export class SyncService {
         const sharedResult = await this.syncSharedDictionary(authGeneration);
         let personalSucceeded = true;
         if (!hasValidatedAuthContext()) return;
+        this.dropFastClockCursors();
         if (full) {
           await this.syncFolders();
           if (!hasValidatedAuthContext()) return;
@@ -2004,7 +2021,9 @@ export class SyncService {
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.folders.team" : "lastSyncedAt.folders";
       const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
-      const syncStartedAt = new Date().toISOString();
+      // The cursor is this start on the server's clock, read from the answers
+      // this pull gets; the server compares it against its own updated_at.
+      const startedAtMs = Date.now();
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
       const scope = teamCapable ? "all" : undefined;
       const { folders: cloudFolders } = await FoldersService.list(since, scope);
@@ -2160,13 +2179,33 @@ export class SyncService {
         teamCapable,
         hasTeamSpaces: [...ctx.byId.values()].some((s) => s.kind === "team"),
       });
-      if (advanceCursor) localStorage.setItem(cursorKey, syncStartedAt);
-      if (advanceTeamCursor) localStorage.setItem("lastSyncedAt.folders.team", syncStartedAt);
+      const cursorAt = serverTimeIso(startedAtMs);
+      if (advanceCursor) localStorage.setItem(cursorKey, cursorAt);
+      if (advanceTeamCursor) localStorage.setItem("lastSyncedAt.folders.team", cursorAt);
       return parkedRows === 0;
     } catch (err) {
       console.error("Folder pull failed:", err);
       return false;
     }
+  }
+
+  // Cursors from before they were stamped on the server's clock came from this
+  // device's own. If that clock runs fast, they sit ahead of rows the server
+  // stamped since, and every delta pull has skipped those rows. Such cursors
+  // are dropped once, so the next pull reads from the start; so is any cursor
+  // ahead of the server now, which only a fast clock could have written.
+  private dropFastClockCursors(): void {
+    const offsetMs = serverClockOffsetMs();
+    if (offsetMs === null) return;
+    const serverNowMs = Date.now() + offsetMs;
+    const oldStamps =
+      localStorage.getItem(SERVER_CLOCK_CURSORS_KEY) !== "1" && -offsetMs > FAST_CLOCK_TOLERANCE_MS;
+    for (const key of PULL_CURSOR_KEYS) {
+      const stamp = Date.parse(localStorage.getItem(key) ?? "");
+      if (!Number.isFinite(stamp)) continue;
+      if (oldStamps || stamp - serverNowMs > FAST_CLOCK_TOLERANCE_MS) localStorage.removeItem(key);
+    }
+    localStorage.setItem(SERVER_CLOCK_CURSORS_KEY, "1");
   }
 
   // The team cursor lags the personal one only when degraded passes advanced
@@ -2522,7 +2561,9 @@ export class SyncService {
         : replayFeed
           ? NOTE_FEED_START
           : (localStorage.getItem(cursorKey) ?? undefined);
-      const syncStartedAt = new Date().toISOString();
+      // The cursor is this start on the server's clock, read from the answers
+      // this pull gets; the server compares it against its own updated_at.
+      const startedAtMs = Date.now();
       const ctx = await this.buildSpaceContext();
       const { cloudToLocal, defaultFolderId } = await this.buildCloudToLocalFolderMap(
         ctx.privateSpace?.id ?? null
@@ -2781,8 +2822,9 @@ export class SyncService {
         teamCapable,
         hasTeamSpaces: [...ctx.byId.values()].some((s) => s.kind === "team"),
       });
-      if (advanceCursor) localStorage.setItem(cursorKey, syncStartedAt);
-      if (advanceTeamCursor) localStorage.setItem("lastSyncedAt.notes.team", syncStartedAt);
+      const cursorAt = serverTimeIso(startedAtMs);
+      if (advanceCursor) localStorage.setItem(cursorKey, cursorAt);
+      if (advanceTeamCursor) localStorage.setItem("lastSyncedAt.notes.team", cursorAt);
       return parkedRows === 0;
     } catch (err) {
       console.error("Note pull failed:", err);
@@ -2840,7 +2882,9 @@ export class SyncService {
       const since = snapshot
         ? undefined
         : (localStorage.getItem("lastSyncedAt.conversations") ?? undefined);
-      const syncStartedAt = new Date().toISOString();
+      // The cursor is this start on the server's clock, read from the answers
+      // this pull gets; the server compares it against its own updated_at.
+      const startedAtMs = Date.now();
 
       let cursor: string | undefined = since;
       while (true) {
@@ -2902,7 +2946,7 @@ export class SyncService {
         cursor = next;
       }
 
-      if (!snapshot) localStorage.setItem("lastSyncedAt.conversations", syncStartedAt);
+      if (!snapshot) localStorage.setItem("lastSyncedAt.conversations", serverTimeIso(startedAtMs));
     } catch (err) {
       console.error("Conversation pull failed:", err);
     }
@@ -3040,7 +3084,9 @@ export class SyncService {
   private async pullTranscriptions(): Promise<void> {
     try {
       const since = localStorage.getItem("lastSyncedAt.transcriptions") ?? undefined;
-      const syncStartedAt = new Date().toISOString();
+      // The cursor is this start on the server's clock, read from the answers
+      // this pull gets; the server compares it against its own updated_at.
+      const startedAtMs = Date.now();
 
       let cursor: string | undefined = since;
       while (true) {
@@ -3075,7 +3121,7 @@ export class SyncService {
         cursor = next;
       }
 
-      localStorage.setItem("lastSyncedAt.transcriptions", syncStartedAt);
+      localStorage.setItem("lastSyncedAt.transcriptions", serverTimeIso(startedAtMs));
     } catch (err) {
       console.error("Transcription pull failed:", err);
     }

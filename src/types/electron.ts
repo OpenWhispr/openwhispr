@@ -3166,6 +3166,8 @@ declare global {
         {
           success: boolean;
           data?: unknown;
+          // The answer's HTTP Date header, when it had one.
+          serverDate?: string;
         } & PolicyFailureMetadata
       >;
 
