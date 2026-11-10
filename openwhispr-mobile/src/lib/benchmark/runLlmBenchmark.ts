@@ -22,7 +22,7 @@ import {
 // output parses, and whether a run survives the app being backgrounded. Never shipped to users;
 // reached only by route.
 
-export type SpikeModelId = 'qwen3.5-2b' | 'minicpm5-2b';
+export type SpikeModelId = 'qwen3.5-2b' | 'minicpm5-2b' | 'lfm3-1.7b';
 
 export interface SpikeModel {
   id: SpikeModelId;
@@ -47,6 +47,15 @@ export const SPIKE_MODELS: readonly SpikeModel[] = [
     repo: 'bartowski/MiniCPM5-2B-GGUF',
     filePattern: /Q4_K_M\.gguf$/i,
     approxSize: '1.6 GB',
+  },
+  // LFM Open License: free for companies under $10M annual revenue. Its lfm3 architecture needs
+  // llama.rn 0.13.0-rc.9 or later, which is why only this branch carries it.
+  {
+    id: 'lfm3-1.7b',
+    label: 'LFM3 1.7B',
+    repo: 'bartowski/LFM3-1.7B-GGUF',
+    filePattern: /Q4_K_M\.gguf$/i,
+    approxSize: '1.1 GB',
   },
 ];
 
