@@ -211,8 +211,6 @@ async function recordingHarness(t, { language = "en", spokenLanguages } = {}) {
         }),
         meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
         meetingTranscriptionStop: streaming.stop,
-        meetingTranscriptionSend() {},
-        getNote: async () => ({ id: 11, transcript: "", deleted_at: null }),
         updateNote: async (id, patch) => {
           writes.push({ id, patch });
           return { success: true };
@@ -273,7 +271,7 @@ test("a wrong-script final arriving during disconnect is not saved", async (t) =
     language: "auto",
     spokenLanguages: ["en"],
   });
-  streaming.finishOnStop("system", "어.");
+  streaming.finishOnStop("mic", "어.");
   await store.stopRecording();
   assert.equal(store.useMeetingRecordingStore.getState().transcript, "");
   assert.deepEqual(writes, []);

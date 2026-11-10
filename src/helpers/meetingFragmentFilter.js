@@ -4,7 +4,6 @@
  */
 const MAX_FRAGMENT_CHARS = 4;
 
-// Latin and script-neutral letters (µ) are always allowed: brand names, "OK" and "5µs" go anywhere.
 const LATIN_LANGUAGES = new Set(
   "af az bs ca cs cy da de en es et fi fr gl hr hu id is it lt lv mi ms mt nl no pl pt ro sk sl sv sw tl tr vi".split(
     " "
@@ -39,6 +38,7 @@ const LETTER = /\p{L}/gu;
 
 // Null when any language's scripts are unknown, since then nothing can be called wrong.
 function expectedScriptPattern(languages) {
+  // Latin and script-neutral letters (µ) are always allowed: brand names, "OK" and "5µs" go anywhere.
   const scripts = ["Latin", "Common"];
   for (const language of languages) {
     const base = String(language).toLowerCase().split("-")[0];
