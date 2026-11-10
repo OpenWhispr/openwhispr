@@ -1045,3 +1045,89 @@ test("the private-space IPCs check their arguments and the account they were sen
   assert.equal(await invoke("get-private-space-id", "w2"), db._standInPrivateSpaceId());
   assert.deepEqual(await invoke("claim-signed-out-private-notes"), { notes: 0, folders: 0 });
 });
+
+test("copy-note-to-space copies a note into the account's Private and announces it", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  await invoke("set-active-workspace-scope", {
+    activeWorkspaceId: "w1",
+    defaultWorkspaceId: "w1",
+    accountId: "account-a",
+  });
+  const home = db.getDefaultPrivateSpaceId();
+  const team = db.db
+    .prepare("INSERT INTO spaces (client_space_id, kind, name) VALUES ('ipc-team', 'team', 'Team')")
+    .run().lastInsertRowid;
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, 'account-a')")
+    .run(team);
+  const source = db.saveNote("Team note", "body", "personal", null, null, null, team).note;
+  db.markNoteSynced(source.id, "cloud-team-note");
+
+  for (const args of [
+    [],
+    ["7", home],
+    [source.id, "home"],
+    [source.id, home, "folder"],
+    [-1, home],
+    [source.id, 1.5],
+  ]) {
+    assert.equal(await invoke("copy-note-to-space", ...args), null);
+  }
+  assert.equal(await invoke("copy-note-to-space", source.id, team), null);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count, 1);
+
+  broadcasts.length = 0;
+  const copy = await invoke("copy-note-to-space", source.id, home, null);
+  await new Promise(setImmediate);
+
+  assert.equal(copy.space_id, home);
+  assert.equal(copy.account_id, "account-a");
+  assert.equal(copy.cloud_id, null);
+  assert.equal(db.getNote(source.id).cloud_id, "cloud-team-note");
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel === "note-added"),
+    [["note-added", copy]]
+  );
+});
+
+test("relocate-private-space checks its arguments and the account it was sent for", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  await invoke("set-active-workspace-scope", {
+    activeWorkspaceId: "w2",
+    defaultWorkspaceId: "w1",
+    accountId: "account-a",
+  });
+  await invoke("bind-default-private-space", "w1", "account-a");
+  const home = db.getDefaultPrivateSpaceId();
+  const note = db.saveNote("In w2", "").note;
+  const w2 = note.space_id;
+  assert.notEqual(w2, home);
+
+  for (const args of [[], [null], [""], [42], ["w2", ""], ["w2", 7]]) {
+    assert.equal((await invoke("relocate-private-space", ...args)).success, false);
+  }
+  assert.equal(
+    (await invoke("relocate-private-space", "w2", null, "account-b")).code,
+    "ACCOUNT_CHANGED"
+  );
+  assert.equal(db.getNote(note.id).space_id, w2, "a refused call moves nothing");
+
+  assert.deepEqual(await invoke("relocate-private-space", "w2", null, "account-a"), {
+    success: true,
+    notes: 1,
+    folders: 2,
+  });
+  assert.equal(db.getNote(note.id).space_id, home);
+  assert.deepEqual(await invoke("relocate-private-space", "w2", null), {
+    success: true,
+    notes: 0,
+    folders: 0,
+  });
+
+  await invoke("set-active-account-scope", null, tokenState.generation);
+  assert.equal((await invoke("relocate-private-space", "w1", null)).code, "SIGNED_OUT");
+});

@@ -2165,6 +2165,28 @@ declare global {
         accountId?: string | null
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
       claimSignedOutPrivateNotes?: () => Promise<{ notes: number; folders: number }>;
+      // Copy to Private: a new local note in one of the account's private
+      // spaces (in the folder given, else where a new note of its type goes).
+      // The source keeps its cloud identity and sharing; the copy has neither.
+      // Null when the note, space or folder isn't the account's to use.
+      copyNoteToSpace?: (
+        noteId: number,
+        targetSpaceId: number,
+        folderId?: number | null
+      ) => Promise<NoteItem | null>;
+      // Moves a lost workspace's Private into the default's (null) or the named
+      // workspace's, locally. The default's own Private never moves.
+      relocatePrivateSpace?: (
+        fromWorkspaceId: string,
+        toWorkspaceId: string | null,
+        accountId?: string | null
+      ) => Promise<{
+        success: boolean;
+        notes?: number;
+        folders?: number;
+        code?: string;
+        error?: string;
+      }>;
       setActiveAccountScope?: (
         accountId: string | null,
         expectedAuthGeneration?: number

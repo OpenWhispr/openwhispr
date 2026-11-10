@@ -305,6 +305,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   bindDefaultPrivateSpace: (defaultWorkspaceId, accountId) =>
     ipcRenderer.invoke("bind-default-private-space", defaultWorkspaceId, accountId),
   claimSignedOutPrivateNotes: () => ipcRenderer.invoke("claim-signed-out-private-notes"),
+  copyNoteToSpace: (noteId, targetSpaceId, folderId) =>
+    ipcRenderer.invoke("copy-note-to-space", noteId, targetSpaceId, folderId),
+  relocatePrivateSpace: (fromWorkspaceId, toWorkspaceId, accountId) =>
+    ipcRenderer.invoke("relocate-private-space", fromWorkspaceId, toWorkspaceId, accountId),
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
   getActiveAccountScope: () => ipcRenderer.invoke("get-active-account-scope"),

@@ -124,6 +124,10 @@ function syncSenderAccount(accountId, authGeneration) {
 function isWorkspaceIdArgument(value) {
   return value === null || (typeof value === "string" && value.trim().length > 0);
 }
+// A local row id from the renderer.
+function isRowIdArgument(value) {
+  return Number.isInteger(value) && value > 0;
+}
 // Workspace calls may name the account they were made for. One that arrives
 // after another account signed in is refused rather than applied to it.
 function isForOtherAccount(accountId, activeAccountId) {
@@ -3017,6 +3021,46 @@ class IPCHandlers {
       if (claimed.notes > 0 || claimed.folders > 0) this.notifyVectorChanges();
       return claimed;
     });
+
+    ipcMain.handle("copy-note-to-space", (_event, noteId, targetSpaceId, folderId = null) => {
+      if (
+        !isRowIdArgument(noteId) ||
+        !isRowIdArgument(targetSpaceId) ||
+        (folderId !== null && !isRowIdArgument(folderId))
+      ) {
+        return null;
+      }
+      const note = this.databaseManager.copyNoteToSpace(noteId, targetSpaceId, folderId);
+      if (note) {
+        setImmediate(() => broadcastToWindows("note-added", note));
+        this.notifyVectorChanges();
+        this._asyncMirrorWrite(note);
+      }
+      return note;
+    });
+
+    ipcMain.handle(
+      "relocate-private-space",
+      (_event, fromWorkspaceId, toWorkspaceId = null, accountId) => {
+        if (
+          typeof fromWorkspaceId !== "string" ||
+          !fromWorkspaceId.trim() ||
+          !isWorkspaceIdArgument(toWorkspaceId)
+        ) {
+          return { success: false, error: "Invalid workspace" };
+        }
+        if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+          return ACCOUNT_CHANGED_RESULT;
+        }
+        if (!this.databaseManager.activeAccountId) {
+          return { success: false, code: "SIGNED_OUT", error: "No account is signed in" };
+        }
+        const moved = this.databaseManager.relocatePrivateSpace(fromWorkspaceId, toWorkspaceId);
+        // Moved notes carry their space in Qdrant payloads; the triggers journaled them.
+        if (moved.notes > 0) this.notifyVectorChanges();
+        return { success: true, ...moved };
+      }
+    );
 
     ipcMain.handle("set-active-account-scope", async (_event, accountId, expectedGeneration) => {
       const state = tokenStore.getState();

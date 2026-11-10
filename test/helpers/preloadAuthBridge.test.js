@@ -298,6 +298,9 @@ test("private-space workspace calls reach their channels", async () => {
   await api.getPrivateSpaceId();
   await api.bindDefaultPrivateSpace("w1", "account-a");
   await api.claimSignedOutPrivateNotes();
+  await api.copyNoteToSpace(7, 3, 12);
+  await api.copyNoteToSpace(7, 3);
+  await api.relocatePrivateSpace("w2", null, "account-a");
 
   assert.deepEqual(invocations, [
     ["set-active-workspace-scope", scope],
@@ -305,5 +308,8 @@ test("private-space workspace calls reach their channels", async () => {
     ["get-private-space-id", undefined],
     ["bind-default-private-space", "w1", "account-a"],
     ["claim-signed-out-private-notes"],
+    ["copy-note-to-space", 7, 3, 12],
+    ["copy-note-to-space", 7, 3, undefined],
+    ["relocate-private-space", "w2", null, "account-a"],
   ]);
 });
