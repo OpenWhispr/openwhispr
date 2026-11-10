@@ -2956,31 +2956,45 @@ test("a folder batch the server partly refuses links the rest by position", asyn
   assert.equal(left.sync_status, "pending");
 });
 
-test("a shared note's update the server refuses as personal stays pending and quiet", async (t) => {
-  const ctx = await setupSignedIn(t);
-  if (!ctx) return;
-  const { db, cloud, service, activePrivateId } = ctx;
-  const errors = silenceConsoleErrors(t);
-  const { row, local } = linkPrivateNote(db, cloud, activePrivateId);
-  db.updateNoteShareState(local.id, { is_shared: 1 });
-  // Unshared elsewhere, so the server no longer counts it as shared.
-  cloud.switchOnDevice();
-  db.updateNote(local.id, { content: "edit" });
+test("a share ended on another device stops the note's pushes after one refusal", async (t) => {
+  for (const first of ["full pass", "debounced push"]) {
+    await t.test(`found by a ${first}`, async (st) => {
+      const ctx = await setupSignedIn(st);
+      if (!ctx) return;
+      const { db, cloud, service, activePrivateId } = ctx;
+      const errors = silenceConsoleErrors(st);
+      const { row, local } = linkPrivateNote(db, cloud, activePrivateId);
+      db.updateNoteShareState(local.id, { is_shared: 1, share_token: "ow_share_stale" });
+      // Unshared or revoked elsewhere: the server no longer counts it as shared,
+      // and nothing this device pulls says so.
+      cloud.switchOnDevice();
+      db.updateNote(local.id, { content: "edit" });
 
-  await service.syncAll(true);
-  await service.pushEntity("note", local.id);
+      if (first === "full pass") await service.syncAll(true);
+      else await service.pushEntity("note", local.id);
 
-  const after = db.getNote(local.id);
-  assert.equal(after.sync_status, "pending", "not marked error");
-  assert.equal(after.cloud_id, row.id, "not forked");
-  assert.equal(after.client_note_id, local.client_note_id);
-  assert.equal(cloud.logFor("/api/notes/update").length, 2, "one attempt per pass or push");
-  assert.equal(cloud.note(row.id).content, "cloud body");
-  assert.deepEqual(
-    errorMessages(errors).filter((message) => /note/i.test(message)),
-    [],
-    "nothing about it is logged as a failure"
-  );
+      assert.equal(cloud.logFor("/api/notes/update").length, 1, "one refused attempt");
+      const after = db.getNote(local.id);
+      assert.equal(after.is_shared, 0, "the refusal ends this device's share");
+      assert.equal(after.share_token, null);
+      assert.equal(after.sync_status, "pending", "not marked error");
+      assert.equal(after.cloud_id, row.id, "not forked");
+      assert.equal(after.client_note_id, local.client_note_id);
+
+      // Now an ordinary private note: no edit or pass sends it again.
+      db.updateNote(local.id, { content: "a later edit" });
+      await service.pushEntity("note", local.id);
+      await service.syncAll(true);
+      assert.equal(cloud.logFor("/api/notes/update").length, 1);
+      assert.equal(cloud.note(row.id).content, "cloud body");
+      assert.equal(db.getNote(local.id).content, "a later edit");
+      assert.deepEqual(
+        errorMessages(errors).filter((message) => /note/i.test(message)),
+        [],
+        "nothing about it is logged as a failure"
+      );
+    });
+  }
 });
 
 test("a note that left a team before this change is cut loose, not retracted", async (t) => {

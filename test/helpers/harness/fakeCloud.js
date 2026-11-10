@@ -15,7 +15,8 @@
 // Notes and folders keep their scope (space_id, workspace_id) once a write or a
 // seed names it; a row nobody scoped carries neither key, as before teamspaces.
 // seedSpace lists a teamspace under /api/me/spaces (a 404 until one is seeded,
-// the pre-teamspace API) and can file unscoped rows into it. switchOnDevice
+// the pre-teamspace API) and can file the rows a test seeds without a scope
+// into it; a client's write without one stays personal, as on the server. switchOnDevice
 // puts the account on device-only (lib/private-notes-on-device.ts): personal
 // note and folder writes answer 409 personal_notes_on_device, and batch
 // creates list them in `refused`, except writes to a note shareNote marked.
@@ -207,7 +208,9 @@ function createFakeCloud(config = {}) {
     return row;
   }
 
-  function insertRow(collection, input) {
+  // A seeded row (seeded: true) with no scope may land in the home teamspace;
+  // a client's create without one is a personal row, as on the server.
+  function insertRow(collection, input, { seeded = false } = {}) {
     const clientId = input[collection.clientKey] ?? nextId(`${collection.prefix}-client`);
     const createdAt = toIso(input.created_at ?? clock());
     const row = {
@@ -227,7 +230,7 @@ function createFakeCloud(config = {}) {
         row.workspace_id =
           input.workspace_id ??
           (row.space_id ? (spaces.get(row.space_id)?.workspace_id ?? null) : null);
-      } else if (homeSpace) {
+      } else if (seeded && homeSpace) {
         row.space_id = homeSpace.id;
         row.workspace_id = homeSpace.workspace_id;
       }
@@ -746,10 +749,11 @@ function createFakeCloud(config = {}) {
     setClock: (fn) => {
       clock = fn;
     },
-    seedNote: (input) => structuredClone(insertRow(noteCollection, input)),
-    // A teamspace the caller belongs to. With fileRowsHere, notes and folders
-    // that no write or seed scoped land in it; ownerId stamps user_id on
-    // notes, as the server does.
+    seedNote: (input) => structuredClone(insertRow(noteCollection, input, { seeded: true })),
+    // A teamspace the caller belongs to. With fileRowsHere, the notes and
+    // folders a test seeds without a scope land in it (a client's unscoped
+    // write stays personal); ownerId stamps user_id on notes, as the server
+    // does.
     seedSpace: (space, options = {}) => {
       spaces.set(space.id, structuredClone(space));
       if (options.fileRowsHere) homeSpace = { id: space.id, workspace_id: space.workspace_id };
@@ -766,7 +770,7 @@ function createFakeCloud(config = {}) {
     // A row the public API stored without a client id, and the server backfill
     // that later keys it by its own id without moving updated_at.
     seedUnkeyedNote: (input) => {
-      const row = insertRow(noteCollection, input);
+      const row = insertRow(noteCollection, input, { seeded: true });
       row.client_note_id = null;
       return structuredClone(row);
     },
@@ -776,7 +780,7 @@ function createFakeCloud(config = {}) {
     setNoteRevision: (id, revision) => {
       notes.get(id).revision = revision;
     },
-    seedFolder: (input) => structuredClone(insertRow(folderCollection, input)),
+    seedFolder: (input) => structuredClone(insertRow(folderCollection, input, { seeded: true })),
     seedConversation: (input = {}) => {
       const row = insertRow(conversationCollection, input);
       // The defaults object is spread, not cloned, so every row needs its own array.

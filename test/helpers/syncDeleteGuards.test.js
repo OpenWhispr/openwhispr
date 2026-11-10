@@ -18,7 +18,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
-const { joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
+const { TEAM_SPACE, joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 
 const LOCAL_EARLY = "2026-07-20 10:00:00";
@@ -387,7 +387,11 @@ for (const path of ["/api/notes/batch-create", "/api/notes/create"]) {
       await service.pushNote(note.id);
       // A teamspace push asks for a pass to reach teammates; let it finish, or
       // the passes below would only queue behind it.
-      while (service.syncing) await new Promise((resolve) => setTimeout(resolve, 5));
+      const deadline = Date.now() + 5000;
+      while (service.syncing) {
+        assert.ok(Date.now() < deadline, "the pass a teamspace push asked for never finished");
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
     }
     await service.syncAll(true);
     await service.syncAll(true);
@@ -595,6 +599,22 @@ test("ensureNoteSynced refuses an unshared private note", async (t) => {
   assert.deepEqual(cloud.log, [], "nothing was sent");
   assert.equal(db.getNote(fresh.id).cloud_id, null);
   assert.equal(attempted(db, "notes", fresh.id), 0);
+});
+
+test("the legacy upload sends a teamspace note with its scope, so it never lands as personal", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api } = ctx;
+  const team = joinTeamSpace(db, cloud);
+  const note = saveNoteIn(db, team.id, "Team draft", "body").note;
+  api.getNotes = async () => [db.getNote(note.id)];
+
+  await require("../../src/stores/noteStore.ts").startMigration();
+
+  const [batch] = cloud.logFor("/api/notes/batch-create");
+  assert.equal(batch.body.notes[0].space_id, TEAM_SPACE.id);
+  assert.equal(batch.body.notes[0].workspace_id, TEAM_SPACE.workspace_id);
+  assert.equal(cloud.note(note.client_note_id).space_id, TEAM_SPACE.id);
 });
 
 test("the legacy upload Backup starts never sends a private note", async (t) => {

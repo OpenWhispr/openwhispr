@@ -121,6 +121,9 @@ function syncSenderAccount(accountId, authGeneration) {
     : null;
 }
 // A workspace id from the renderer: a non-empty string, or null for none.
+// The note queues a sync pass reads (DatabaseManager.getPendingNotes).
+const SYNC_NOTE_QUEUES = new Set(["team", "syncable"]);
+
 function isWorkspaceIdArgument(value) {
   return value === null || (typeof value === "string" && value.trim().length > 0);
 }
@@ -3465,8 +3468,10 @@ class IPCHandlers {
     });
 
     // Notes sync
-    ipcMain.handle("db-get-pending-notes", (_, spaceKind) =>
-      this.databaseManager.getPendingNotes(spaceKind)
+    // Only the upload queues sync reads: the renderer never gets a queue with
+    // private rows in it (D2). The whole queue stays a main-process read.
+    ipcMain.handle("db-get-pending-notes", (_, scope) =>
+      SYNC_NOTE_QUEUES.has(scope) ? this.databaseManager.getPendingNotes(scope) : []
     );
     ipcMain.handle("db-get-pending-note-deletes", () =>
       this.databaseManager.getPendingNoteDeletes()
@@ -3555,8 +3560,8 @@ class IPCHandlers {
     });
 
     // Folders sync
-    ipcMain.handle("db-get-pending-folders", (_, spaceKind) =>
-      this.databaseManager.getPendingFolders(spaceKind)
+    ipcMain.handle("db-get-pending-folders", (_, scope) =>
+      scope === "team" ? this.databaseManager.getPendingFolders(scope) : []
     );
     ipcMain.handle("db-get-folder-by-client-id", (_, clientFolderId) =>
       this.databaseManager.getFolderByClientId(clientFolderId)

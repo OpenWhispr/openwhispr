@@ -142,7 +142,10 @@ function createElectronApi(db, options = {}) {
     // Notes
     getNote: async (id) => db.getNote(id),
     updateNote: async (id, updates) => db.updateNote(id, updates),
-    getPendingNotes: async (spaceKind) => db.getPendingNotes(spaceKind),
+    updateNoteShareState: async (id, state) => db.updateNoteShareState(id, state),
+    // As db-get-pending-notes: only the upload queues a sync pass reads.
+    getPendingNotes: async (scope) =>
+      scope === "team" || scope === "syncable" ? db.getPendingNotes(scope) : [],
     getPendingNoteDeletes: async () => db.getPendingNoteDeletes(),
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
     getNoteForCloudRow: async (clientNoteId, cloudId) =>
@@ -181,7 +184,7 @@ function createElectronApi(db, options = {}) {
 
     // Folders
     getFolders: async (spaceId) => db.getFolders(spaceId),
-    getPendingFolders: async (spaceKind) => db.getPendingFolders(spaceKind),
+    getPendingFolders: async (scope) => (scope === "team" ? db.getPendingFolders(scope) : []),
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
     upsertFolderFromCloud: async (cloudFolder, localSpaceId) =>

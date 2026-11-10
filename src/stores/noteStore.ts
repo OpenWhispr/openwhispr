@@ -27,6 +27,7 @@ import {
   type NoteWorkspaceScopeReason,
 } from "../lib/workspaceSelection";
 import { onWorkspaceScopePublished, useWorkspaceStore } from "./workspaceStore";
+import { readTeamSpacesCapability } from "../lib/teamSpacesCapability";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
   FolderItem,
@@ -1266,9 +1267,18 @@ export async function startMigration(): Promise<void> {
   const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
   if (gen !== migrationGeneration) return;
   // Private notes stay on the device (D2), whatever Backup says: only a team
-  // note still waiting for its first upload is left for this to send.
-  const teamSpaceIds = new Set(spaces.filter((s) => s.kind === "team").map((s) => s.id));
-  const unsynced = allNotes.filter((n) => !n.cloud_id && teamSpaceIds.has(n.space_id));
+  // note still waiting for its first upload is left for this to send, with the
+  // scope the team passes send (SyncService's pushScopeFields). Without it the
+  // server files the note as a personal one. A teamspace with no cloud id, or
+  // before a pass has confirmed the API takes teamspaces, waits for that pass.
+  const teamScopes = new Map(
+    readTeamSpacesCapability()
+      ? spaces
+          .filter((s) => s.kind === "team" && s.cloud_space_id)
+          .map((s) => [s.id, { workspace_id: s.workspace_id, space_id: s.cloud_space_id }])
+      : []
+  );
+  const unsynced = allNotes.filter((n) => !n.cloud_id && teamScopes.has(n.space_id));
   if (unsynced.length === 0) return;
 
   useNoteStore.setState({ migration: { total: unsynced.length, done: 0 } });
@@ -1297,6 +1307,7 @@ export async function startMigration(): Promise<void> {
           audio_duration_seconds: n.audio_duration_seconds,
           created_at: n.created_at,
           updated_at: n.updated_at,
+          ...teamScopes.get(n.space_id),
         }))
       );
       // A reset may invalidate the UI migration while the POST is in flight.
@@ -1306,9 +1317,9 @@ export async function startMigration(): Promise<void> {
         sendable,
         created,
         (cloudId) => NotesService.delete(cloudId),
-        // Migration POSTs intentionally omit transcript/diarization fields,
-        // folder mapping, and space scope. Adopt the id/base but leave the row
-        // pending so SyncService follows with the complete PATCH.
+        // Migration POSTs intentionally omit transcript/diarization fields
+        // and folder mapping. Adopt the id/base but leave the row pending so
+        // SyncService follows with the complete PATCH.
         {
           settleIfUnchanged: false,
           // Starting a newer migration supersedes only this run's progress.

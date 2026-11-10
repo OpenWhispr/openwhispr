@@ -6832,8 +6832,8 @@ class DatabaseManager {
         // Dirty or never-synced notes are the only surviving content (plan
         // §7.2, matching relocateRevokedFolder): they move to the root of the
         // account's Private for the teamspace's workspace with forked
-        // identities — the server row (if any) stays the team's, so the next
-        // push re-creates them as personal notes.
+        // identities — the server row (if any) stays the team's, and the forks
+        // stay on this device, as every private note does (D2).
         let relocated = [];
         if (!destructive) {
           const preservedIds = this.db
@@ -10475,11 +10475,11 @@ class DatabaseManager {
   // (access_removed stub or a team_access_revoked push rejection). Clean
   // server-owned child notes are no longer ours to keep — the server retains
   // them; dirty or never-synced children are the only surviving content
-  // (plan §7.2): they relocate to the private space with forked identities so
-  // the next push re-creates them as personal rows. The folder row itself
-  // survives in the private space only when it carries unpushed changes
-  // (preserveFolder), renamed "name (2)" on a collision; otherwise it is
-  // deleted. What survives belongs to the private space's account, and only
+  // (plan §7.2): they relocate to the private space with forked identities,
+  // where they stay on this device as every private row does (D2). The folder
+  // row itself survives in the private space only when it carries unpushed
+  // changes (preserveFolder), renamed "name (2)" on a collision; otherwise it
+  // is deleted. What survives belongs to the private space's account, and only
   // one of the active account's own private spaces takes it.
   relocateRevokedFolder(id, privateSpaceId, preserveFolder = false) {
     try {
@@ -10838,9 +10838,10 @@ class DatabaseManager {
     }
   }
 
-  // A folder whose server row moved into a scope this user can no longer
-  // write gets a fresh identity, so the next push creates it as a new
-  // personal folder instead of PATCHing the inaccessible row forever.
+  // A folder cut loose from a cloud row it may no longer write (a private
+  // folder that left a team) gets a fresh identity and no cloud link, so
+  // nothing ever PATCHes that row again. It stays pending and local: private
+  // folders never upload (D2).
   forkFolderIdentity(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -10880,7 +10881,9 @@ class DatabaseManager {
       // now would upload them with this account's token.
       // A note's chat goes only where its note does: a chat on a private note
       // stays on the device (D11), even when that note is a legacy shared one,
-      // since guests never see the owner's chats. Root chats still sync.
+      // since guests never see the owner's chats. Root chats still sync. The
+      // note's teamspace must be one the account is in, as getSpaces lists
+      // them (SyncService's isTeamRow); any other note's chat stays too.
       const scope = this._syncRowScope("agent_conversations");
       return this.db
         .prepare(
@@ -10890,12 +10893,16 @@ class DatabaseManager {
              AND (note_id IS NULL OR EXISTS (
                SELECT 1 FROM notes chat_note
                JOIN spaces chat_note_space ON chat_note_space.id = chat_note.space_id
+               JOIN space_accounts chat_note_member
+                 ON chat_note_member.space_id = chat_note_space.id
                WHERE chat_note.id = agent_conversations.note_id
                  AND chat_note_space.kind = 'team'
+                 AND chat_note_space.deleted_at IS NULL
+                 AND chat_note_member.account_id = ?
              ))
              AND ${scope.sql}`
         )
-        .all(...scope.params);
+        .all(this.activeAccountId, ...scope.params);
     } catch (error) {
       debugLogger.error(
         "Error getting pending conversations",

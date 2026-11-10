@@ -145,8 +145,9 @@ function conflictCloudNote(err: unknown): CloudNote | null {
 }
 
 // Typed 409 for a personal note or folder write once the account keeps private
-// notes on its devices. Only a downgraded or racing build queues such a write,
-// so the row stays pending as it is: no error mark, no fork, no retry this pass.
+// notes on its devices. The row stays pending as it is: no error mark, no fork,
+// no retry this pass. For a note the refusal is also authoritative about its
+// share (see endStaleShare).
 function isPersonalNotesOnDeviceError(err: unknown): boolean {
   return err instanceof CloudApiError && err.code === PERSONAL_NOTES_ON_DEVICE;
 }
@@ -1519,7 +1520,7 @@ export class SyncService {
     const ctx = await this.buildSpaceContext();
     const teamRow = isTeamRow(note, ctx);
     // Private notes stay on the device (D2); only a legacy shared one pushes.
-    if (!teamRow && !(await this.privateNotePushes(note))) return;
+    if (!teamRow && !(await this.settlePrivateNote(note))) return;
     if (readNoteConflictIds().has(note.client_note_id)) {
       // An unresolved conflict: the editor's debounced push would auto-resolve
       // it as local-wins (or 409-spam) before the user chose Keep or Refresh.
@@ -1568,7 +1569,10 @@ export class SyncService {
         await this.createCloudNote(note, cloudFolderId, scope);
       }
     } catch (err) {
-      if (isPersonalNotesOnDeviceError(err)) return;
+      if (isPersonalNotesOnDeviceError(err)) {
+        await this.endStaleShare(note, ctx);
+        return;
+      }
       if (isNoteVersionConflictError(err)) {
         // Another device wrote first. The row stays pending and the banner
         // asks the user to Refresh or Keep; no requestSyncAll echo.
@@ -1630,7 +1634,8 @@ export class SyncService {
   }
 
   // Batch-create fallback row push: recognized terminal rejections settle the
-  // row by forking it to Personal; anything else re-queues as 'error'.
+  // row by forking it into Private, where it stays on this device; anything
+  // else re-queues as 'error'.
   private async pushFreshNote(
     note: NoteItem,
     scope: PushScopeFields,
@@ -1641,7 +1646,10 @@ export class SyncService {
       await this.createCloudNote(note, cloudFolderId, scope);
     } catch (err) {
       if (isAuthContextError(err)) throw err;
-      if (isPersonalNotesOnDeviceError(err)) return;
+      if (isPersonalNotesOnDeviceError(err)) {
+        await this.endStaleShare(note, ctx);
+        return;
+      }
       if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
         await this.handleRevokedNotePush(note, ctx);
         this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
@@ -2067,8 +2075,9 @@ export class SyncService {
   // A push was rejected because the note's team is gone or access was revoked
   // (plan §7.2). The server row (if any) stays the team's, but this pending
   // row carries unpushed work — it is here because a push was attempted — so
-  // it survives as a personal note with a forked identity, exactly like the
-  // pull-side access_removed stub; never destroy the edits.
+  // it survives as a private note with a forked identity, exactly like the
+  // pull-side access_removed stub; never destroy the edits. Private notes
+  // never upload (D2), so the fork stays on this device.
   private async handleRevokedNotePush(note: NoteItem, ctx: SpaceSyncContext): Promise<void> {
     const spaceName = ctx.byId.get(note.space_id)?.name ?? null;
     const privateSpaceId = await this.forkPrivateSpaceId(note.space_id, ctx);
@@ -2093,13 +2102,31 @@ export class SyncService {
     return id ?? (await this.defaultPrivateSpace(ctx))?.id ?? null;
   }
 
-  // Whether a private note pushes: only a legacy shared one (D10). One that left
-  // a team before this change is cut loose from the team's row in place, so
-  // neither its pending retraction nor its later edits upload (D8).
-  private async privateNotePushes(note: NoteItem): Promise<boolean> {
+  // Settles a private note a push read, and answers whether it pushes: only a
+  // legacy shared one does (D10). One that left a team before this change is
+  // first cut loose from the team's row (detachFromTeam); nothing else changes.
+  private async settlePrivateNote(note: NoteItem): Promise<boolean> {
     const action = privateNoteSync(note);
-    if (action === "detach") await this.forkNoteToPrivate(note, note.space_id, "push", null);
+    if (action === "detach") await this.detachFromTeam(note);
     return action === "push";
+  }
+
+  // A private note that left a team before this change still holds the team's
+  // cloud identity and owes it a scope retraction, which would upload the note.
+  // It takes a new identity in place instead, so neither the retraction nor its
+  // later edits upload and the team keeps its copy, as Copy to Private does (D8).
+  private async detachFromTeam(note: NoteItem): Promise<void> {
+    await this.forkNoteToPrivate(note, note.space_id, "push", null);
+  }
+
+  // The server refuses a write to a personal note only when nobody else can
+  // reach it, so a refused private note's share has ended (unshared or revoked
+  // on another device). This device's flag is stale: dropping it takes the note
+  // out of the syncable queue and the push gate, or every edit and pass would
+  // resend the whole note to be refused again. The row stays pending, unmarked.
+  private async endStaleShare(note: NoteItem, ctx: SpaceSyncContext): Promise<void> {
+    if (isTeamRow(note, ctx) || !note.is_shared) return;
+    await window.electronAPI.updateNoteShareState?.(note.id, { is_shared: 0, share_token: null });
   }
 
   private readLocalRecord<T = number>(key: string): Record<string, T> {
@@ -2181,8 +2208,8 @@ export class SyncService {
 
   // A folder PATCH was rejected because its team is gone or access was
   // revoked: the server row moved to a scope we can't write, so retrying
-  // would fail forever. Preserve the dirty folder in Personal with a forked
-  // identity so the next push re-creates it as personal (plan §7.2).
+  // would fail forever. Preserve the dirty folder in Private with a forked
+  // identity (plan §7.2); private folders never upload, so it stays here.
   private async handleRevokedFolderPush(folder: FolderItem, ctx: SpaceSyncContext): Promise<void> {
     const privateSpaceId = await this.forkPrivateSpaceId(folder.space_id, ctx);
     if (privateSpaceId == null) return;
@@ -2447,8 +2474,8 @@ export class SyncService {
   }
 
   // Batch-create fallback row push: recognized terminal rejections settle the
-  // row by forking it to Personal; anything else stays 'pending' for the next
-  // pass.
+  // row by forking it into Private, where it stays on this device; anything
+  // else stays 'pending' for the next pass.
   private async pushFreshFolder(
     folder: FolderItem,
     scope: PushScopeFields,
@@ -2801,7 +2828,7 @@ export class SyncService {
     }> = [];
     for (const note of pending) {
       const teamRow = isTeamRow(note, ctx);
-      if (!teamRow && !(await this.privateNotePushes(note))) continue;
+      if (!teamRow && !(await this.settlePrivateNote(note))) continue;
       if (
         conflicted.has(note.client_note_id) ||
         noteAwaitsCloudResolution(note, this.noteRevisionsKnown !== false)
@@ -2853,7 +2880,7 @@ export class SyncService {
       } catch (err) {
         if (isAuthContextError(err)) throw err;
         if (isPersonalNotesOnDeviceError(err)) {
-          // Stays pending as it is; the next pass looks at it again.
+          await this.endStaleShare(note, ctx);
         } else if (isNoteVersionConflictError(err)) {
           // Stays pending (not error): unpushed local work awaiting the
           // user's Keep/Refresh choice; the registry gate above skips the
@@ -2885,7 +2912,7 @@ export class SyncService {
       try {
         // A refused row isn't in created, so nothing acknowledges it: it stays
         // pending as it is (isPersonalNotesOnDeviceError).
-        const { created } = await NotesService.batchCreate(
+        const { created, refused = [] } = await NotesService.batchCreate(
           chunk.map(({ note: n, scope, cloudFolderId }) => ({
             client_note_id: n.client_note_id,
             ...buildNoteCreatePayload(n, cloudFolderId),
@@ -2897,9 +2924,16 @@ export class SyncService {
           const local = chunk.find(({ note }) => note.client_note_id === cloud.client_note_id);
           if (local) await this.acknowledgeCloudNoteCreate(local.note, cloud);
         }
+        for (const row of refused) {
+          const local = chunk.find(({ note }) => note.client_note_id === row.client_note_id);
+          if (local) await this.endStaleShare(local.note, ctx);
+        }
       } catch (err) {
         if (isAuthContextError(err)) throw err;
-        if (isPersonalNotesOnDeviceError(err)) continue;
+        if (isPersonalNotesOnDeviceError(err)) {
+          for (const { note } of chunk) await this.endStaleShare(note, ctx);
+          continue;
+        }
         if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
           // A typed rejection can't be attributed to a row from the batch
           // response; create individually so one rejected note settles

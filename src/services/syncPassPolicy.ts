@@ -223,8 +223,9 @@ export interface RevokedNoteFork {
 // Update applied to a team note whose access was revoked (plan §7.2): move it
 // to the private space (unless it already sits there, e.g. a left_team row or
 // one just relocated by its folder's stub — those keep their folder link),
-// drop the cloud link, and fork the client identity so the next push
-// re-creates it as a new personal note. Push-side rejections fork the
+// drop the cloud link, and fork the client identity so it never writes to the
+// team's row again; as a private note it stays on this device (D2). Push-side
+// rejections fork the
 // identity only when a server row exists (cloud_id) and clear the pending
 // left_team retraction the server will never accept. Every new identity also
 // drops the old server revision/owner/editor metadata; the pull-side
