@@ -35,6 +35,52 @@ test("a segment between clusters takes the nearest cluster, not the first", () =
   assert.equal(merged[0].speaker, "speaker_1");
 });
 
+test("a row followed by a pause keeps its own speaker, not the busier one after it", () => {
+  const manager = new DiarizationManager();
+
+  // Five words take about 2 s; the next row only arrives at 30 s.
+  const merged = manager.mergeWithTranscript(
+    [systemSegment(10, "yes I agree with that"), systemSegment(30, "so as I was saying")],
+    [
+      { start: 10, end: 12.5, speaker: "speaker_0" },
+      { start: 12.5, end: 34, speaker: "speaker_1" },
+    ]
+  );
+
+  assert.equal(merged[0].speaker, "speaker_0");
+  assert.equal(merged[1].speaker, "speaker_1");
+});
+
+test("a row written without spaces is measured by its words", () => {
+  const manager = new DiarizationManager();
+
+  // About 11 words, so about 4 s of speech, not a single space-separated word.
+  const merged = manager.mergeWithTranscript(
+    [systemSegment(10, "我们下周三下午再来讨论这个预算问题吧"), systemSegment(30, "好的")],
+    [
+      { start: 8, end: 10.8, speaker: "speaker_0" },
+      { start: 10.8, end: 14.5, speaker: "speaker_1" },
+      { start: 14.5, end: 30, speaker: "speaker_2" },
+    ]
+  );
+
+  assert.equal(merged[0].speaker, "speaker_1");
+});
+
+test("a last row stamped just before the recording starts still covers its words", () => {
+  const manager = new DiarizationManager();
+
+  const merged = manager.mergeWithTranscript(
+    [systemSegment(-0.5, "hello there everyone how are you")],
+    [
+      { start: -2, end: -0.4, speaker: "speaker_0" },
+      { start: 0.2, end: 3, speaker: "speaker_1" },
+    ]
+  );
+
+  assert.equal(merged[0].speaker, "speaker_1");
+});
+
 test("a segment past the last cluster belongs to that cluster", () => {
   const manager = new DiarizationManager();
 

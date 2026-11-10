@@ -28,6 +28,17 @@ const DIARIZATION_TIMEOUT_MS = 3600000; // 60 minutes
 // buildMergedCandidates calls it windowMs.
 const ECHO_DUPLICATE_WINDOW_S = 6;
 const ECHO_DUPLICATE_MERGE_LIMIT = 3;
+// A transcript row lasts about as long as its words take to say (meeting
+// speech runs near 2.5 words a second).
+const SECONDS_PER_SPOKEN_WORD = 0.4;
+const MIN_ROW_SECONDS = 1;
+const wordSegmenter = new Intl.Segmenter("und", { granularity: "word" });
+
+function spokenSeconds(text) {
+  let words = 0;
+  for (const part of wordSegmenter.segment(text ?? "")) if (part.isWordLike) words += 1;
+  return Math.max(MIN_ROW_SECONDS, words * SECONDS_PER_SPOKEN_WORD);
+}
 
 const SEGMENTATION_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2";
@@ -498,7 +509,12 @@ class DiarizationManager {
 
       if (seg.source === diarizedSource && seg.timestamp != null) {
         const segStart = seg.timestamp;
-        const segEnd = nextTimestampAt(index, diarizedSource) ?? segStart + 2.5;
+        const spokenEnd = segStart + spokenSeconds(seg.text);
+        const nextStart = nextTimestampAt(index, diarizedSource);
+        // Stretching a row to the next one would hand the pause after it, and
+        // whoever filled it, to the row; the busiest speaker won most rows that way.
+        const segEnd =
+          nextStart != null && nextStart > segStart ? Math.min(nextStart, spokenEnd) : spokenEnd;
         const midpoint = segStart + (segEnd - segStart) / 2;
         let overlapSpeaker = null;
         let nearestSpeaker = null;
