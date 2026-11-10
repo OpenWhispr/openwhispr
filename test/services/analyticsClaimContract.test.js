@@ -190,7 +190,7 @@ test("an unknown participation answer offers retry instead of Join", () => {
     section.indexOf('if (surface === "join")'),
     section.indexOf("const number =")
   );
-  assert.ok(retrySurface.includes("onRetry={onRefreshParticipation}"));
+  assert.ok(retrySurface.includes("onRetry={() => onRefreshParticipation()}"));
   assert.equal(retrySurface.includes("onJoin"), false);
   assert.ok(joinSurface.includes("onJoin={onJoin}"));
 });
