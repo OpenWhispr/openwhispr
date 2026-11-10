@@ -130,6 +130,7 @@
         "linux-key-listener*",
         "meeting-aec-helper-*",
         "windows-key-listener*",
+        "windows-dictation-audio-guard.exe",
         "windows-mic-listener*",
         "windows-system-audio-helper*",
         "windows-text-monitor*",

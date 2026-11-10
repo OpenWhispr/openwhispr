@@ -28,6 +28,9 @@ const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { isFromWindow } = require("./ipcSender");
 const { openExternalUrl } = require("./externalUrlOpener");
+const { getDictationAudioGuard } = require("./dictationAudioGuard");
+// webContents already ending the dictation audio guard when they go away.
+const audioGuardWatchedSenders = new WeakSet();
 const { resolveFailedGpuBackends } = require("./whisper");
 const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
@@ -6736,6 +6739,28 @@ class IPCHandlers {
       const mediaPlayer = require("./mediaPlayer");
       return mediaPlayer.resumeMedia();
     });
+
+    ipcMain.handle("dictation-audio-guard-configure", (_event, config) =>
+      getDictationAudioGuard().configure(config)
+    );
+    ipcMain.handle("dictation-audio-guard-status", () => getDictationAudioGuard().getStatus());
+    ipcMain.handle("dictation-audio-guard-list-devices", () =>
+      getDictationAudioGuard().listDevices()
+    );
+    ipcMain.handle("dictation-audio-guard-begin", (event) => {
+      // A dictation window that crashes, reloads or closes mid-recording never
+      // sends the end, so its going away ends the dictation's audio effects.
+      const sender = event.sender;
+      if (!audioGuardWatchedSenders.has(sender)) {
+        audioGuardWatchedSenders.add(sender);
+        const end = () => void getDictationAudioGuard().endDictation();
+        sender.on("render-process-gone", end);
+        sender.on("did-start-loading", end);
+        sender.once("destroyed", end);
+      }
+      return getDictationAudioGuard().beginDictation();
+    });
+    ipcMain.handle("dictation-audio-guard-end", () => getDictationAudioGuard().endDictation());
 
     ipcMain.handle("request-microphone-access", async () => {
       if (process.platform !== "darwin") {

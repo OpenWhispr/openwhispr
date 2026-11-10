@@ -836,6 +836,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
   pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
+  configureDictationAudioGuard: (config) =>
+    ipcRenderer.invoke("dictation-audio-guard-configure", config),
+  getDictationAudioGuardStatus: () => ipcRenderer.invoke("dictation-audio-guard-status"),
+  listDictationAudioDevices: () => ipcRenderer.invoke("dictation-audio-guard-list-devices"),
+  beginDictationAudioGuard: () => ipcRenderer.invoke("dictation-audio-guard-begin"),
+  endDictationAudioGuard: () => ipcRenderer.invoke("dictation-audio-guard-end"),
   getModelCacheRoot: () => ipcRenderer.invoke("get-model-cache-root"),
   openWhisperModelsFolder: () => ipcRenderer.invoke("open-whisper-models-folder"),
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),

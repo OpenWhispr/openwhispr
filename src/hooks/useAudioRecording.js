@@ -49,6 +49,24 @@ const WAYLAND_CLIPBOARD_REASON_KEYS = {
 };
 const DEMO_AUDIO_LEVEL_INTERVAL_MS = 80;
 
+// What other apps do while a dictation records: optionally pause media, and on
+// Windows lower their playback and silence the call microphone (main decides
+// from the synced settings). Both start with the recording and end the moment
+// it ends, not after transcription.
+function beginDictationAudioEffects() {
+  if (getSettings().pauseMediaOnDictation) {
+    window.electronAPI?.pauseMediaPlayback?.();
+  }
+  window.electronAPI?.beginDictationAudioGuard?.();
+}
+
+function endDictationAudioEffects() {
+  if (getSettings().pauseMediaOnDictation) {
+    window.electronAPI?.resumeMediaPlayback?.();
+  }
+  window.electronAPI?.endDictationAudioGuard?.();
+}
+
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
@@ -349,9 +367,7 @@ export const useAudioRecording = (toast, options = {}) => {
           didStart &&
           audioManagerRef.current.getState().isRecording
         ) {
-          if (getSettings().pauseMediaOnDictation) {
-            window.electronAPI?.pauseMediaPlayback?.();
-          }
+          beginDictationAudioEffects();
           window.electronAPI?.registerCancelHotkey?.("Escape");
           void playStartCue();
         }
@@ -610,9 +626,7 @@ export const useAudioRecording = (toast, options = {}) => {
           startEffectsOnReportRef.current &&
           !stopRequestedDuringStartRef.current
         ) {
-          if (getSettings().pauseMediaOnDictation) {
-            window.electronAPI?.pauseMediaPlayback?.();
-          }
+          beginDictationAudioEffects();
           window.electronAPI?.registerCancelHotkey?.("Escape");
           if (startCuePendingRef.current) {
             startCuePendingRef.current = false;
@@ -627,8 +641,8 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!isRecording) {
           window.electronAPI?.unregisterCancelHotkey?.();
           // Resume media the instant recording ends, not after transcription.
-          if (wasRecordingRef.current && getSettings().pauseMediaOnDictation) {
-            window.electronAPI?.resumeMediaPlayback?.();
+          if (wasRecordingRef.current) {
+            endDictationAudioEffects();
           }
         }
         wasRecordingRef.current = isRecording;
@@ -698,9 +712,7 @@ export const useAudioRecording = (toast, options = {}) => {
             technicalDetails: error?.technicalDetails,
           });
         }
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.resumeMediaPlayback?.();
-        }
+        endDictationAudioEffects();
       },
       onNoAudio: () => {
         setIsPreparing(false);
@@ -711,9 +723,7 @@ export const useAudioRecording = (toast, options = {}) => {
           message: t("hooks.audioRecording.noAudio.title"),
         });
         window.electronAPI?.hideDictationPreview?.();
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.resumeMediaPlayback?.();
-        }
+        endDictationAudioEffects();
         showDictationError({
           title: t("hooks.audioRecording.noAudio.title"),
           description: t("hooks.audioRecording.noAudio.description"),
@@ -1258,9 +1268,7 @@ export const useAudioRecording = (toast, options = {}) => {
       if (wasRecordingRef.current) {
         wasRecordingRef.current = false;
         window.electronAPI?.unregisterCancelHotkey?.();
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.resumeMediaPlayback?.();
-        }
+        endDictationAudioEffects();
       }
     };
   }, [
@@ -1285,9 +1293,7 @@ export const useAudioRecording = (toast, options = {}) => {
       audioManagerRef.current.cancelPreparedMicCapture?.();
       window.electronAPI?.unregisterCancelHotkey?.();
       const state = audioManagerRef.current.getState();
-      if (getSettings().pauseMediaOnDictation) {
-        window.electronAPI?.resumeMediaPlayback?.();
-      }
+      endDictationAudioEffects();
       // A streaming start in its mic-open phase is not yet `isStreaming`;
       // only the streaming cancel knows how to abandon it.
       if (state.isStreaming || state.isStreamingStartInProgress) {

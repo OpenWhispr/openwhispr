@@ -460,6 +460,8 @@ const BOOLEAN_SETTINGS = new Set([
   "telemetryEnabled",
   "audioCuesEnabled",
   "pauseMediaOnDictation",
+  "duckAudioOnDictation",
+  "callMicGateEnabled",
   "floatingIconAutoHide",
   "startMinimized",
   "meetingProcessDetection",
@@ -501,6 +503,7 @@ const ARRAY_SETTINGS = new Set([
 
 const NUMERIC_SETTINGS = new Set([
   "micWarmHoldSeconds",
+  "duckAudioPercent",
   "audioRetentionDays",
   "transcriptRetentionDays",
   "whisperVadThreshold",
@@ -1080,6 +1083,16 @@ export interface SettingsState
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
+  /** Windows: lower other apps' playback while a dictation records. */
+  duckAudioOnDictation: boolean;
+  /** Their volume during dictation, as a percent of what it was (0-99). */
+  duckAudioPercent: number;
+  /** Windows: forward the mic to a virtual device for calls, silenced during dictation. */
+  callMicGateEnabled: boolean;
+  /** Capture endpoint id forwarded to calls, or "default". */
+  callMicGateSourceId: string;
+  /** Virtual render endpoint id; "" picks a known virtual cable. */
+  callMicGateTargetId: string;
   floatingIconAutoHide: boolean;
   startMinimized: boolean;
   gcalAccounts: CalendarAccount[];
@@ -1414,6 +1427,11 @@ export interface SettingsState
   setSaveDiscardedTranscriptions: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
+  setDuckAudioOnDictation: (value: boolean) => void;
+  setDuckAudioPercent: (value: number) => void;
+  setCallMicGateEnabled: (value: boolean) => void;
+  setCallMicGateSourceId: (value: string) => void;
+  setCallMicGateTargetId: (value: string) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
   setGcalAccounts: (accounts: CalendarAccount[]) => void;
@@ -1834,6 +1852,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   saveDiscardedTranscriptions: readBoolean("saveDiscardedTranscriptions", false),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
+  duckAudioOnDictation: readBoolean("duckAudioOnDictation", false),
+  duckAudioPercent: readNumber("duckAudioPercent", 10),
+  callMicGateEnabled: readBoolean("callMicGateEnabled", false),
+  callMicGateSourceId: readString("callMicGateSourceId", "default"),
+  callMicGateTargetId: readString("callMicGateTargetId", ""),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   startMinimized: readBoolean("startMinimized", false),
   notificationsEnabled: readBoolean("notificationsEnabled", true),
@@ -2661,6 +2684,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setSaveDiscardedTranscriptions: createBooleanSetter("saveDiscardedTranscriptions"),
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
   setPauseMediaOnDictation: createBooleanSetter("pauseMediaOnDictation"),
+  setDuckAudioOnDictation: createBooleanSetter("duckAudioOnDictation"),
+  setDuckAudioPercent: createNumberSetter("duckAudioPercent"),
+  setCallMicGateEnabled: createBooleanSetter("callMicGateEnabled"),
+  setCallMicGateSourceId: createStringSetter("callMicGateSourceId"),
+  setCallMicGateTargetId: createStringSetter("callMicGateTargetId"),
 
   setFloatingIconAutoHide: (enabled: boolean) => {
     if (get().floatingIconAutoHide === enabled) return;
