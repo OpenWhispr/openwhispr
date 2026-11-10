@@ -53,6 +53,21 @@ const COLLAPSED_MAX_MEAN_SEGMENT_SECONDS = 2.2;
 // 0.5 gave the right count on 12 of 15 recordings of 1-4 voices (0.55: 10,
 // 0.6: 7).
 const VOICE_MERGE_SIMILARITY = 0.5;
+// Once no more voices are left than the user counted, two of them are merged
+// only when they are near certain to be one person: under 1 % of voices had a
+// different speaker at 0.7 or more (the live recluster bar).
+const CERTAIN_VOICE_MERGE_SIMILARITY = 0.7;
+
+// From this similarity up, a post-call voice (the centroid of a cluster's
+// longest segments) is a stored profile's person, provided that profile also
+// leads the next closest by PROFILE_MATCH_LEAD. Measured with the zh-en CAM++
+// on labelled meetings: 90 % of voices named, none wrongly. Matching a voice to
+// a live speaker reuses the similarity; that pairing wasn't measured.
+const VOICE_MATCH_SIMILARITY = 0.6;
+const PROFILE_MATCH_LEAD = 0.03;
+// A closest profile short of a match is only offered for the user to confirm.
+// Carried over from the previous embedding model, not measured for this one.
+const PROFILE_SUGGESTION_SIMILARITY = 0.5;
 
 function clusterThresholdForDuration(durationSeconds) {
   if (!Number.isFinite(durationSeconds) || durationSeconds <= THRESHOLD_RAMP_START_SECONDS) {
@@ -89,16 +104,23 @@ function summarizeClusters(segments) {
   return { clusters, totalSpeech };
 }
 
-function dropNegligibleClusters(segments) {
+// `voiced` holds the clusters with a readable voice. Callers that cap the
+// result at a known speaker count pass it: a voice of its own is what tells a
+// quiet participant from a phantom, and the cap bounds how many are kept.
+function dropNegligibleClusters(
+  segments,
+  { protectedCount = PROTECTED_CLUSTER_COUNT, voiced = null } = {}
+) {
   if (!segments?.length) return segments;
   const { clusters, totalSpeech } = summarizeClusters(segments);
   const keep = new Set(
     [...clusters]
       .sort((a, b) => b[1].total - a[1].total)
-      .filter(([, { total, count }], rank) => {
+      .filter(([speaker, { total, count }], rank) => {
         if (total < MIN_CLUSTER_TOTAL_SECONDS) return false;
         return (
-          rank < PROTECTED_CLUSTER_COUNT ||
+          rank < protectedCount ||
+          voiced?.has(speaker) ||
           total / totalSpeech >= PHANTOM_MAX_SHARE ||
           total / count >= PHANTOM_MAX_MEAN_SEGMENT_SECONDS
         );
@@ -124,8 +146,10 @@ function isCollapsedDiarization(segments) {
 // Merges clusters that share a voice, closest pair first, until no two voices
 // reach VOICE_MERGE_SIMILARITY. A merged voice is the speech-weighted mean, and
 // the larger cluster keeps its label. Clusters without a centroid stay as they
-// are.
-function mergeClustersByVoice(segments, centroids, similarity) {
+// are. `countedVoices` is how many voices the user said there are: down to that
+// many, only pairs at CERTAIN_VOICE_MERGE_SIMILARITY still merge, so two of
+// the people counted aren't folded into one for sounding alike.
+function mergeClustersByVoice(segments, centroids, similarity, countedVoices = 0) {
   const { clusters } = summarizeClusters(segments);
   const groups = [...clusters]
     .filter(([speaker]) => centroids.has(speaker))
@@ -137,11 +161,13 @@ function mergeClustersByVoice(segments, centroids, similarity) {
     }));
 
   for (;;) {
+    const mergeSimilarity =
+      groups.length > countedVoices ? VOICE_MERGE_SIMILARITY : CERTAIN_VOICE_MERGE_SIMILARITY;
     let closest = null;
     for (let i = 0; i < groups.length; i += 1) {
       for (let j = i + 1; j < groups.length; j += 1) {
         const score = similarity(groups[i].voice, groups[j].voice);
-        if (score >= VOICE_MERGE_SIMILARITY && (!closest || score > closest.score)) {
+        if (score >= mergeSimilarity && (!closest || score > closest.score)) {
           closest = { i, j, score };
         }
       }
@@ -171,6 +197,48 @@ function mergeClustersByVoice(segments, centroids, similarity) {
   return segments.map((s) =>
     relabel.has(s.speaker) ? { ...s, speaker: relabel.get(s.speaker) } : s
   );
+}
+
+// The stored profile closest to a voice, as { profile, confirmed }: confirmed
+// when it is a match, otherwise a suggestion. null when none is close enough.
+// `profileVoices` pairs each profile with its voice.
+function matchVoiceToProfile(voice, profileVoices, similarity) {
+  let best = null;
+  let bestScore = 0;
+  let runnerUpScore = 0;
+  for (const { profile, voice: profileVoice } of profileVoices) {
+    const score = similarity(voice, profileVoice);
+    if (score > bestScore) {
+      runnerUpScore = bestScore;
+      bestScore = score;
+      best = profile;
+    } else if (score > runnerUpScore) {
+      runnerUpScore = score;
+    }
+  }
+  if (!best || bestScore <= PROFILE_SUGGESTION_SIMILARITY) return null;
+  const confirmed =
+    bestScore > VOICE_MATCH_SIMILARITY && bestScore - runnerUpScore >= PROFILE_MATCH_LEAD;
+  return { profile: best, confirmed };
+}
+
+// A cluster without a readable voice can't be told from clustering's split of
+// someone else's, so voiced clusters take the `cap` slots first. Voiceless ones
+// keep the slots left over, largest first; the rest are dropped, and their
+// lines go to the speaker nearest in time. With no voice at all, nothing is
+// dropped.
+function dropVoicelessClustersOverCap(segments, cap, centroids) {
+  const { clusters } = summarizeClusters(segments);
+  const voiceless = [...clusters]
+    .filter(([speaker]) => !centroids.has(speaker))
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([speaker]) => speaker);
+  const voicedCount = clusters.size - voiceless.length;
+  if (voicedCount === 0) return segments;
+
+  const dropped = new Set(voiceless.slice(Math.max(0, cap - voicedCount)));
+  if (dropped.size === 0) return segments;
+  return segments.filter((s) => !dropped.has(s.speaker));
 }
 
 // Keeps the `cap` largest clusters and relabels each extra one to the kept
@@ -213,10 +281,13 @@ module.exports = {
   THRESHOLD_RAMP_START_SECONDS,
   THRESHOLD_RAMP_END_SECONDS,
   MIN_CLUSTER_TOTAL_SECONDS,
+  VOICE_MATCH_SIMILARITY,
   clusterThresholdForDuration,
   resolveClusterThreshold,
   dropNegligibleClusters,
   isCollapsedDiarization,
   mergeClustersByVoice,
+  matchVoiceToProfile,
+  dropVoicelessClustersOverCap,
   capSpeakerClustersByVoice,
 };

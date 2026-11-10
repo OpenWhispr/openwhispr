@@ -160,7 +160,11 @@ test("labeling another note during a recording leaves the live speaker unnamed",
   liveSpeakerIdentifier._assignSpeakerId(new Float32Array(embedding));
   const target = {
     _activeMeetingNoteId: NOTE_ID,
-    databaseManager: { getNoteSpeakerEmbeddings: () => [], setSpeakerMapping: () => {} },
+    databaseManager: {
+      getNoteSpeakerEmbeddings: () => [],
+      linkSpeakerProfile: () => null,
+      setSpeakerMapping: () => {},
+    },
   };
   IPCHandlers.prototype.setupHandlers.call(
     new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) })
@@ -170,6 +174,71 @@ test("labeling another note during a recording leaves the live speaker unnamed",
 
   const { displayName, noteId } = liveSpeakerIdentifier.getTransientState().speaker_0;
   assert.deepEqual({ displayName, noteId }, { displayName: null, noteId: null });
+});
+
+// A finished one-on-one's diarization can land while the next meeting records.
+test("auto-labeling a finished one-on-one leaves the live speaker unnamed", async () => {
+  const { IPCHandlers, liveSpeakerIdentifier } = loadHandlers();
+  liveSpeakerIdentifier._assignSpeakerId(new Float32Array(embedding));
+  const note = {
+    participants: JSON.stringify([{ displayName: "Ann", email: "ann@example.com" }]),
+    transcript: JSON.stringify([{ source: "system", speaker: "speaker_0", text: "hi" }]),
+  };
+  const mappings = [];
+  const fakeThis = Object.assign(Object.create(IPCHandlers.prototype), {
+    _activeMeetingNoteId: NOTE_ID,
+    databaseManager: {
+      getNote: () => note,
+      getGoogleAccounts: () => [],
+      getNoteSpeakerEmbeddings: () => [
+        { speaker_id: "speaker_0", embedding: Buffer.from(new Float32Array(embedding).buffer) },
+      ],
+      getSpeakerMappings: () => [],
+      upsertSpeakerProfile: (name) => ({ id: 7, display_name: name }),
+      setSpeakerMapping: (...args) => mappings.push(args),
+      updateNote: () => {},
+    },
+  });
+
+  fakeThis._tryAutoLabelOneOnOne(NOTE_ID + 1);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(mappings, [[NOTE_ID + 1, "speaker_0", 7, "Ann"]]);
+  const { displayName, noteId } = liveSpeakerIdentifier.getTransientState().speaker_0;
+  assert.deepEqual({ displayName, noteId }, { displayName: null, noteId: null });
+});
+
+// A note recorded before the current embeddings has no voice to enroll, but the
+// label still belongs to the profile the person already has.
+test("labeling a speaker without a usable voice links the person's profile", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const calls = { link: [], set: [] };
+  const target = {
+    _activeMeetingNoteId: null,
+    databaseManager: {
+      getNoteSpeakerEmbeddings: () => [],
+      linkSpeakerProfile: (...args) => {
+        calls.link.push(args);
+        return { id: 9 };
+      },
+      setSpeakerMapping: (...args) => calls.set.push(args),
+    },
+  };
+  IPCHandlers.prototype.setupHandlers.call(
+    new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) })
+  );
+
+  const result = await handlers.get("set-speaker-mapping")(
+    {},
+    NOTE_ID,
+    "speaker_1",
+    "Ann",
+    "ann@example.com"
+  );
+
+  assert.deepEqual(calls.link, [["Ann", "ann@example.com", null]]);
+  assert.deepEqual(calls.set, [[NOTE_ID, "speaker_1", 9, "Ann"]]);
+  assert.deepEqual(result, { success: true, profileId: 9 });
 });
 
 const THREE_ATTENDEES = [
@@ -428,4 +497,39 @@ test("a stopped session's diarization reserves its speaker ids until its result 
   assert.deepEqual(Object.keys(payload.speakerEmbeddings).sort(), ["speaker_2", "speaker_3"]);
   // Landed: narrowed to the two ids the result actually names.
   assert.equal(handlers._resolveMeetingSpeakerIndexBase(NOTE_ID, 0), 4);
+});
+
+// A label spreads to other notes' unnamed speakers by voice. A speaker that
+// another profile matches as closely isn't this profile's to name.
+test("retroactive labeling names only the speakers its profile matches best", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const { EMBEDDING_VERSION } = require("../../src/constants/speakerDetection.json");
+  const voice = (values) => Buffer.from(new Float32Array(values).buffer);
+  const profile = (id, name, values) => ({
+    id,
+    display_name: name,
+    embedding_version: EMBEDDING_VERSION,
+    embedding: voice(values),
+  });
+  const alice = profile(1, "Alice", [1, 0]);
+  const noteSpeakers = {
+    10: [{ speaker_id: "speaker_0", embedding: voice([0.95, 0.31]) }],
+    11: [{ speaker_id: "speaker_0", embedding: voice([0.9, -0.44]) }],
+  };
+  const mappings = [];
+  const fakeThis = Object.assign(Object.create(IPCHandlers.prototype), {
+    databaseManager: {
+      getSpeakerProfiles: () => [alice, profile(2, "Bob", [0.8, 0.6])],
+      getNotesWithUnmappedSpeakers: () => [10, 11],
+      getNoteSpeakerEmbeddings: (noteId) => noteSpeakers[noteId],
+      getSpeakerMappings: () => [],
+      setSpeakerMapping: (...args) => mappings.push(args),
+      getNote: () => null,
+    },
+  });
+
+  fakeThis._retroactiveMapping(alice);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(mappings, [[11, "speaker_0", 1, "Alice"]]);
 });

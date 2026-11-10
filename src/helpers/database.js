@@ -7083,21 +7083,43 @@ class DatabaseManager {
     return this.db.prepare("SELECT * FROM speaker_profiles WHERE lower(email) = ?").get(normalized);
   }
 
+  _findSpeakerProfile(name, email, profileId) {
+    return (
+      (profileId &&
+        this.db.prepare("SELECT * FROM speaker_profiles WHERE id = ?").get(profileId)) ||
+      this._findProfileByEmail(email) ||
+      this.db.prepare("SELECT * FROM speaker_profiles WHERE display_name = ?").get(name) ||
+      null
+    );
+  }
+
+  // A label with no voice to learn from (the note predates the current
+  // embeddings, or was never diarized) can't create a profile, which needs an
+  // embedding. It still links the one the person has and gives it the email.
+  linkSpeakerProfile(name, email, profileId = null) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const existing = this._findSpeakerProfile(name, email, profileId);
+      const normalizedEmail = this._normalizeEmail(email);
+      if (
+        !existing ||
+        !normalizedEmail ||
+        normalizedEmail === this._normalizeEmail(existing.email)
+      ) {
+        return existing;
+      }
+      return this.attachEmailToProfile(existing.id, normalizedEmail);
+    } catch (error) {
+      debugLogger.error("Error linking speaker profile", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
   upsertSpeakerProfile(name, email, embeddingBuffer, profileId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const normalizedEmail = this._normalizeEmail(email);
-      let existing = profileId
-        ? this.db.prepare("SELECT * FROM speaker_profiles WHERE id = ?").get(profileId)
-        : null;
-      if (!existing && normalizedEmail) {
-        existing = this._findProfileByEmail(normalizedEmail);
-      }
-      if (!existing) {
-        existing = this.db
-          .prepare("SELECT * FROM speaker_profiles WHERE display_name = ?")
-          .get(name);
-      }
+      const existing = this._findSpeakerProfile(name, normalizedEmail, profileId);
       if (existing) {
         const incoming = new Float32Array(
           embeddingBuffer.buffer,

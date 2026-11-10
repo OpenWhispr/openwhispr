@@ -12,6 +12,8 @@ const {
   dropNegligibleClusters,
   isCollapsedDiarization,
   mergeClustersByVoice,
+  matchVoiceToProfile,
+  dropVoicelessClustersOverCap,
   capSpeakerClustersByVoice,
 } = require("../../src/helpers/diarizationPolicy");
 
@@ -234,16 +236,45 @@ test("a small cluster is kept from a 3 s mean segment up and dropped below it", 
   assert.equal(speakersOf(dropNegligibleClusters(withMean(2.5, 20))).length, 2);
 });
 
-// Documented cost of the phantom rule: by duration alone, a real third
-// participant with under 10 % of the speech in short turns looks like a
-// phantom. Flip this deliberately if the rule learns to use voices.
+// Documented cost of the phantom rule when it isn't given voices: by duration
+// alone, a real third participant with under 10 % of the speech in short turns
+// looks like a phantom.
+const QUIET_THIRD_PARTICIPANT = [
+  ...cluster("speaker_0", 60, 7.5),
+  ...cluster("speaker_1", 60, 7.5),
+  ...cluster("speaker_2", 34, 2.8),
+];
+
 test("characterization: a quiet third participant in short turns is dropped", () => {
-  const segments = [
-    ...cluster("speaker_0", 60, 7.5),
-    ...cluster("speaker_1", 60, 7.5),
-    ...cluster("speaker_2", 34, 2.8),
-  ];
-  assert.deepEqual(speakersOf(dropNegligibleClusters(segments)), ["speaker_0", "speaker_1"]);
+  assert.deepEqual(speakersOf(dropNegligibleClusters(QUIET_THIRD_PARTICIPANT)), [
+    "speaker_0",
+    "speaker_1",
+  ]);
+});
+
+test("a quiet third participant with a voice of their own is kept", () => {
+  const voiced = new Set(["speaker_0", "speaker_1", "speaker_2"]);
+  assert.equal(
+    dropNegligibleClusters(QUIET_THIRD_PARTICIPANT, { voiced }),
+    QUIET_THIRD_PARTICIPANT
+  );
+});
+
+test("a cluster under the 1 s floor is dropped even with a voice", () => {
+  const segments = [...cluster("speaker_0", 10, 10), { start: 500, end: 500.5, speaker: "blip" }];
+  const kept = dropNegligibleClusters(segments, { voiced: new Set(["speaker_0", "blip"]) });
+  assert.deepEqual(speakersOf(kept), ["speaker_0"]);
+});
+
+test("with one protected cluster, a sliver beside the main voice is dropped", () => {
+  const sliver = [...cluster("speaker_0", 24, 12), ...cluster("speaker_1", 6, 2.5)];
+  assert.deepEqual(speakersOf(dropNegligibleClusters(sliver)), ["speaker_0", "speaker_1"]);
+  assert.deepEqual(speakersOf(dropNegligibleClusters(sliver, { protectedCount: 1 })), [
+    "speaker_0",
+  ]);
+
+  const realSecondVoice = [...cluster("speaker_0", 24, 12), ...cluster("speaker_1", 6, 6)];
+  assert.equal(dropNegligibleClusters(realSecondVoice, { protectedCount: 1 }), realSecondVoice);
 });
 
 test("a collapsed run is found whatever order sherpa lists its clusters in", () => {
@@ -408,4 +439,81 @@ test("voice merging leaves distinct voices and clusters without a voice alone", 
   assert.equal(mergeClustersByVoice(segments, distinct, dot), segments);
   assert.equal(mergeClustersByVoice(segments, new Map([["speaker_0", [1, 0]]]), dot), segments);
   assert.deepEqual(mergeClustersByVoice([], distinct, dot), []);
+});
+
+test("two of the voices the user counted stay apart unless they are near identical", () => {
+  const segments = [...cluster("speaker_0", 10, 10), ...cluster("speaker_1", 8, 10)];
+  const alike = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0.55, 0.835]],
+  ]);
+  assert.deepEqual(speakersOf(mergeClustersByVoice(segments, alike, dot)), ["speaker_0"]);
+  assert.equal(mergeClustersByVoice(segments, alike, dot, 2), segments);
+
+  const sameVoice = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0.8, 0.6]],
+  ]);
+  assert.deepEqual(speakersOf(mergeClustersByVoice(segments, sameVoice, dot, 2)), ["speaker_0"]);
+});
+
+test("voices beyond the user's count still merge with the one they sound like", () => {
+  const segments = [
+    ...cluster("speaker_0", 10, 10),
+    ...cluster("speaker_1", 8, 10),
+    ...cluster("speaker_2", 3, 10),
+  ];
+  const centroids = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0, 1]],
+    ["speaker_2", [0.55, 0.835]],
+  ]);
+  const merged = mergeClustersByVoice(segments, centroids, dot, 2);
+  assert.deepEqual(speakersOf(merged), ["speaker_0", "speaker_1"]);
+  assert.equal(merged.filter((s) => s.speaker === "speaker_1").length, 11);
+});
+
+test("voiced clusters take the capped slots before voiceless ones", () => {
+  const segments = [
+    ...cluster("speaker_0", 25, 12),
+    ...cluster("slivers", 60, 1.2),
+    ...cluster("speaker_1", 5, 10),
+  ];
+  const centroids = new Map([
+    ["speaker_0", [1, 0]],
+    ["speaker_1", [0, 1]],
+  ]);
+  assert.deepEqual(speakersOf(dropVoicelessClustersOverCap(segments, 2, centroids)), [
+    "speaker_0",
+    "speaker_1",
+  ]);
+  assert.equal(dropVoicelessClustersOverCap(segments, 3, centroids), segments);
+  assert.equal(dropVoicelessClustersOverCap(segments, 2, new Map()), segments);
+});
+
+// Pins the measured rule: the closest profile from above 0.6, leading the next
+// by 0.03, names a voice; anything else above 0.5 is only suggested.
+const profileVoice = (id, similarity) => ({
+  profile: { id },
+  voice: [similarity, Math.sqrt(1 - similarity * similarity)],
+});
+const matchOf = (...profileVoices) => {
+  const match = matchVoiceToProfile([1, 0], profileVoices, dot);
+  return match && [match.profile.id, match.confirmed];
+};
+
+test("a voice takes the name of the one profile it clearly matches", () => {
+  assert.deepEqual(matchOf(profileVoice(1, 0.65), profileVoice(2, 0.2)), [1, true]);
+  assert.deepEqual(matchOf(profileVoice(1, 0.2), profileVoice(2, 0.65)), [2, true]);
+});
+
+test("a profile at 0.55 is suggested, and one at 0.45 is not", () => {
+  assert.deepEqual(matchOf(profileVoice(1, 0.55)), [1, false]);
+  assert.equal(matchOf(profileVoice(1, 0.45)), null);
+  assert.equal(matchOf(), null);
+});
+
+test("two profiles within 0.03 of each other only suggest the closer one", () => {
+  assert.deepEqual(matchOf(profileVoice(1, 0.8), profileVoice(2, 0.78)), [1, false]);
+  assert.deepEqual(matchOf(profileVoice(1, 0.8), profileVoice(2, 0.76)), [1, true]);
 });

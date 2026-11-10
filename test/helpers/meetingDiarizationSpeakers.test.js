@@ -128,7 +128,10 @@ function diarizeMeeting(
       null,
       source
     );
-  }).then((payload) => ({ lines: payload.segments }));
+  }).then((payload) => ({
+    lines: payload.segments,
+    splitLiveSpeakers: payload.splitLiveSpeakers,
+  }));
 }
 
 const speakersOf = (lines) => [...new Set(lines.map((line) => line.speaker))].sort();
@@ -423,4 +426,108 @@ test("a voice matched to an unnamed live speaker still takes its profile's name"
     ...new Set(lines.filter((line) => line.speaker === speaker).map((line) => line.speakerName)),
   ];
   assert.deepEqual(namesOf("speaker_0"), ["Alice"]);
+});
+
+const startingAt = (seconds, turnList) =>
+  turnList.map((turn) => ({ ...turn, start: turn.start + seconds, end: turn.end + seconds }));
+const speakerAt = (lines, seconds) => lines.find((line) => line.timestamp === seconds).speaker;
+
+// A count is a ceiling, but it also says how many people to expect: the rules
+// that tidy up a call with no count mustn't take one of them away.
+test("a count set by hand keeps a quiet third remote voice", async () => {
+  voices = new Map([
+    ["speaker_00", [1, 0, 0]],
+    ["speaker_01", [0, 1, 0]],
+    ["speaker_02", [0, 0, 1]],
+  ]);
+  const output = [
+    ...turns(["speaker_00"], 20, 12),
+    ...startingAt(13, turns(["speaker_01"], 20, 6)),
+    ...startingAt(600, turns(["speaker_02"], 6, 2.5)),
+  ];
+
+  const { lines } = await diarizeMeeting(output, {
+    sessionConfig: { enabled: true, expectedCount: 4, explicit: true },
+  });
+
+  assert.equal(speakersOf(lines).length, 3);
+  assert.notEqual(speakerAt(lines, 600), speakerAt(lines, 0));
+  assert.notEqual(speakerAt(lines, 600), speakerAt(lines, 13));
+});
+
+test("a count set by hand keeps two remote voices apart when they only sound alike", async () => {
+  voices = new Map([
+    ["speaker_00", [1, 0]],
+    ["speaker_01", [0.55, 0.835]],
+  ]);
+  const output = turns(["speaker_00", "speaker_01"], 30, 8);
+
+  const counted = await diarizeMeeting(output, {
+    sessionConfig: { enabled: true, expectedCount: 3, explicit: true },
+  });
+  assert.equal(speakersOf(counted.lines).length, 2);
+
+  const uncounted = await diarizeMeeting(output);
+  assert.equal(speakersOf(uncounted.lines).length, 1);
+});
+
+test("with a count, a cluster without a readable voice doesn't take a voice's place", async () => {
+  voices = new Map([
+    ["speaker_00", [1, 0]],
+    ["speaker_01", [0, 1]],
+  ]);
+  const output = [
+    ...turns(["speaker_00"], 25, 12),
+    ...startingAt(13, turns(["speaker_02"], 30, 3)),
+    ...startingAt(600, turns(["speaker_01"], 5, 10)),
+  ];
+
+  const { lines } = await diarizeMeeting(output, {
+    sessionConfig: { enabled: true, expectedCount: 3, explicit: true },
+  });
+
+  assert.equal(speakersOf(lines).length, 2);
+  assert.notEqual(speakerAt(lines, 600), speakerAt(lines, 0));
+});
+
+// With no count a one-on-one is the likeliest call. A sliver clustering splits
+// off the one remote voice can sound unlike the rest of it.
+test("a sliver split off a one-on-one's voice doesn't become a second speaker", async () => {
+  voices = new Map([
+    ["speaker_00", [1, 0]],
+    ["speaker_01", [0.4, 0.917]],
+  ]);
+  const output = [
+    ...turns(["speaker_00"], 24, 12),
+    ...startingAt(13, turns(["speaker_01"], 6, 2.5)),
+  ];
+
+  const { lines } = await diarizeMeeting(output);
+
+  assert.deepEqual(speakersOf(lines), ["speaker_0"]);
+});
+
+// The renderer locks a name the user gave a live speaker onto every line that
+// speaker labelled, and main can't see the lock. It tells the renderer which
+// voice the name went to, so the lock comes off the other voices.
+test("a split tells the renderer which voice each live speaker's name went to", async () => {
+  embeddingModelAvailable = true;
+  voices = new Map([
+    ["speaker_00", [0, 1]],
+    ["speaker_01", [1, 0]],
+  ]);
+  const liveSpeakerState = { speaker_0: { displayName: "Bob", embedding: [1, 0] } };
+  const liveLabel = { speaker: "speaker_0", speakerName: "Bob" };
+
+  const split = await diarizeMeeting(turns(["speaker_00", "speaker_01"], 30, 8), {
+    liveSpeakerState,
+    liveLabel,
+  });
+  assert.deepEqual(split.splitLiveSpeakers, { speaker_0: { speaker: "speaker_1", name: "Bob" } });
+
+  const oneVoice = await diarizeMeeting(turns(["speaker_01"], 30, 8), {
+    liveSpeakerState,
+    liveLabel,
+  });
+  assert.equal(oneVoice.splitLiveSpeakers, undefined);
 });

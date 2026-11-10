@@ -183,7 +183,6 @@ const {
   applyConfirmedSpeaker,
   applySuggestedSpeaker,
   canAutoRelabelSpeaker,
-  isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const {
@@ -13708,6 +13707,13 @@ class IPCHandlers {
           );
           resolvedProfileId = profile.id;
           this._retroactiveMapping(profile);
+        } else {
+          const profile = this.databaseManager.linkSpeakerProfile(
+            displayName,
+            email || null,
+            resolvedProfileId
+          );
+          if (profile) resolvedProfileId = profile.id;
         }
 
         this.databaseManager.setSpeakerMapping(noteId, speakerId, resolvedProfileId, displayName);
@@ -13768,13 +13774,10 @@ class IPCHandlers {
     setImmediate(async () => {
       try {
         const speakerEmbeddings = require("./speakerEmbeddings");
+        const { matchVoiceToProfile } = require("./diarizationPolicy");
+        const similarity = (a, b) => speakerEmbeddings.cosineSimilarity(a, b);
+        const profileVoices = this._speakerProfileVoices();
         const noteIds = this.databaseManager.getNotesWithUnmappedSpeakers();
-
-        const profileEmb = new Float32Array(
-          profile.embedding.buffer,
-          profile.embedding.byteOffset,
-          profile.embedding.byteLength / 4
-        );
 
         for (const noteId of noteIds) {
           const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
@@ -13788,9 +13791,11 @@ class IPCHandlers {
               emb.embedding.byteOffset,
               emb.embedding.byteLength / 4
             );
-            const similarity = speakerEmbeddings.cosineSimilarity(profileEmb, speakerEmb);
+            // The speaker is this profile's person only if no other profile is
+            // as close a match.
+            const match = matchVoiceToProfile(speakerEmb, profileVoices, similarity);
 
-            if (similarity > 0.6) {
+            if (match?.confirmed && match.profile.id === profile.id) {
               this.databaseManager.setSpeakerMapping(
                 noteId,
                 emb.speaker_id,
@@ -13833,6 +13838,18 @@ class IPCHandlers {
     });
   }
 
+  // Stored profiles in the current embedding version, each with its voice.
+  _speakerProfileVoices() {
+    return this.databaseManager.getSpeakerProfiles(true).map((profile) => ({
+      profile,
+      voice: new Float32Array(
+        profile.embedding.buffer,
+        profile.embedding.byteOffset,
+        profile.embedding.byteLength / 4
+      ),
+    }));
+  }
+
   _tryAutoLabelOneOnOne(noteId) {
     setImmediate(async () => {
       try {
@@ -13866,7 +13883,6 @@ class IPCHandlers {
             profile?.id ?? null
           );
           this.databaseManager.setSpeakerMapping(noteId, emb.speaker_id, profile.id, displayName);
-          liveSpeakerIdentifier.mapSpeaker(emb.speaker_id, profile.id, displayName, noteId);
         }
 
         const unmappedSystemSpeakers = new Set(unmapped.map((e) => e.speaker_id));
@@ -13921,12 +13937,15 @@ class IPCHandlers {
     }
   }
 
+  // Returns, per named live speaker, the voice its name went to.
   _reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments) {
+    const namedVoices = new Map();
     if (!liveSpeakerState || !speakerEmbeddingsMap) {
-      return;
+      return namedVoices;
     }
 
     const speakerEmbeddings = require("./speakerEmbeddings");
+    const { VOICE_MATCH_SIMILARITY } = require("./diarizationPolicy");
     const reconciledSpeakers = new Set();
     const usedLiveSpeakers = new Set();
     const noteMappings = new Map();
@@ -13956,7 +13975,9 @@ class IPCHandlers {
       const embedding = new Float32Array(embeddingArray);
       for (const entry of liveEntries) {
         const similarity = speakerEmbeddings.cosineSimilarity(embedding, entry.embedding);
-        if (similarity > 0.6) pairs.push({ mappedId, bestEntry: entry, similarity });
+        if (similarity > VOICE_MATCH_SIMILARITY) {
+          pairs.push({ mappedId, bestEntry: entry, similarity });
+        }
       }
     }
     pairs.sort((a, b) => b.similarity - a.similarity);
@@ -14001,7 +14022,11 @@ class IPCHandlers {
       }
 
       this._applySpeakerName(enrichedSegments, mappedId, displayName);
+      if (displayName) {
+        namedVoices.set(bestEntry.speakerId, { speaker: mappedId, name: displayName });
+      }
     }
+    return namedVoices;
   }
 
   // The renderer's base covers the transcript it resumes; mappings and embeddings
@@ -14157,6 +14182,8 @@ class IPCHandlers {
           mergeClustersByVoice,
           dropNegligibleClusters,
           isCollapsedDiarization,
+          matchVoiceToProfile,
+          dropVoicelessClustersOverCap,
           capSpeakerClustersByVoice,
         } = require("./diarizationPolicy");
         const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
@@ -14181,9 +14208,25 @@ class IPCHandlers {
         // merge could fold the other person into the user, and one cluster there
         // labels every line "you".
         if (diarizedSource === "system") {
-          diarizationSegments = mergeClustersByVoice(diarizationSegments, centroids, similarity);
+          // A count the user set says how many people spoke. One read off the
+          // note's invitees only bounds them, since invitees don't all turn up.
+          const countedVoices =
+            sessionConfig?.explicit && sessionConfig.expectedCount ? speakerCap : 0;
+          diarizationSegments = mergeClustersByVoice(
+            diarizationSegments,
+            centroids,
+            similarity,
+            countedVoices
+          );
         }
-        diarizationSegments = dropNegligibleClusters(diarizationSegments);
+        // The count is what tells a quiet participant from a phantom. With none,
+        // a one-on-one is the likeliest call, so only the largest cluster is
+        // safe from the phantom rule: a sliver split off the one remote voice
+        // doesn't become a second speaker.
+        diarizationSegments = dropNegligibleClusters(
+          diarizationSegments,
+          speakerCap == null ? { protectedCount: 1 } : { voiced: centroids }
+        );
         // With no count, one remote voice holding nearly all the speech beside
         // short slivers is a one-on-one call: the slivers are the same voice. (An
         // upload that collapses like this loses its labels instead, since it
@@ -14199,6 +14242,8 @@ class IPCHandlers {
             diarizationSegments = voiced;
             cap = MAX_SPEAKER_COUNT - 1;
           }
+        } else if (diarizedSource === "system") {
+          diarizationSegments = dropVoicelessClustersOverCap(diarizationSegments, cap, centroids);
         }
         diarizationSegments = capSpeakerClustersByVoice(
           diarizationSegments,
@@ -14246,14 +14291,13 @@ class IPCHandlers {
         // and in the renderer), and with no count its one speaker covers every
         // remote voice. When the call holds more than one voice and more voices
         // than live speakers, every line's name is cleared, and reconciliation
-        // and profile matching below name each voice; the renderer keeps the
-        // names of lines the user locked. Without voices to match, the names
-        // stay. null, not undefined: the renderer keeps a line's old value for
-        // an undefined field.
-        if (
+        // and profile matching below name each voice. Without voices to match,
+        // the names stay. null, not undefined: the renderer keeps a line's old
+        // value for an undefined field.
+        const liveSpeakersSplit =
           Object.keys(speakerEmbeddingsMap || {}).length > 0 &&
-          speakerSet.size > Math.max(1, Object.keys(liveSpeakerState || {}).length)
-        ) {
+          speakerSet.size > Math.max(1, Object.keys(liveSpeakerState || {}).length);
+        if (liveSpeakersSplit) {
           for (const segment of enrichedSegments) {
             if (segment.source === diarizedSource) {
               applyConfirmedSpeaker(segment, { speakerName: null });
@@ -14261,61 +14305,54 @@ class IPCHandlers {
           }
         }
 
-        this._reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments);
+        const namedVoices = this._reconcileLiveSpeakerState(
+          liveSpeakerState,
+          speakerEmbeddingsMap,
+          enrichedSegments
+        );
+        // A name the user gave a live speaker is locked, in the renderer, onto
+        // every line that speaker labelled. After a split the renderer keeps
+        // that lock only on the voice the name went to; a name that matched no
+        // voice isn't listed, and stays on all of its lines.
+        const splitLiveSpeakers = liveSpeakersSplit ? Object.fromEntries(namedVoices) : undefined;
 
         if (speakerEmbeddingsMap) {
           try {
-            const profiles = this.databaseManager.getSpeakerProfiles(true);
+            const profileVoices = this._speakerProfileVoices();
 
-            if (profiles.length > 0) {
-              for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
-                const alreadyMapped = enrichedSegments.some(
-                  (segment) => segment.speaker === mappedId && segment.speakerName
-                );
-                if (alreadyMapped) {
+            for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
+              const alreadyMapped = enrichedSegments.some(
+                (segment) => segment.speaker === mappedId && segment.speakerName
+              );
+              if (alreadyMapped) {
+                continue;
+              }
+
+              const match = matchVoiceToProfile(
+                new Float32Array(embArr),
+                profileVoices,
+                similarity
+              );
+              if (!match) {
+                continue;
+              }
+
+              for (const seg of enrichedSegments) {
+                if (seg.speaker !== mappedId) {
                   continue;
                 }
-
-                const emb = new Float32Array(embArr);
-                let bestProfile = null;
-                let bestSim = 0;
-
-                for (const profile of profiles) {
-                  const profileEmb = new Float32Array(
-                    profile.embedding.buffer,
-                    profile.embedding.byteOffset,
-                    profile.embedding.byteLength / 4
-                  );
-                  const sim = speakerEmb.cosineSimilarity(emb, profileEmb);
-                  if (sim > bestSim) {
-                    bestSim = sim;
-                    bestProfile = profile;
-                  }
-                }
-
-                if (bestProfile && bestSim > 0.6) {
-                  for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId) {
-                      applyConfirmedSpeaker(seg, {
-                        speakerName: bestProfile.display_name,
-                        speakerIsPlaceholder: false,
-                        suggestedName: undefined,
-                        suggestedProfileId: undefined,
-                      });
-                    }
-                  }
-                } else if (bestProfile && bestSim > 0.5) {
-                  for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId) {
-                      if (isSpeakerLocked(seg)) {
-                        continue;
-                      }
-                      applySuggestedSpeaker(seg, {
-                        suggestedName: bestProfile.display_name,
-                        suggestedProfileId: bestProfile.id,
-                      });
-                    }
-                  }
+                if (match.confirmed) {
+                  applyConfirmedSpeaker(seg, {
+                    speakerName: match.profile.display_name,
+                    speakerIsPlaceholder: false,
+                    suggestedName: undefined,
+                    suggestedProfileId: undefined,
+                  });
+                } else {
+                  applySuggestedSpeaker(seg, {
+                    suggestedName: match.profile.display_name,
+                    suggestedProfileId: match.profile.id,
+                  });
                 }
               }
             }
@@ -14324,7 +14361,11 @@ class IPCHandlers {
           }
         }
 
-        send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        send({
+          segments: enrichedSegments,
+          speakerEmbeddings: speakerEmbeddingsMap,
+          splitLiveSpeakers,
+        });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
         this._diarizationSpeakerReservations.delete(sessionId);

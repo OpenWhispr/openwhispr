@@ -2055,6 +2055,7 @@ if (typeof window !== "undefined") {
         fallbackTranscript: seed?.fallbackTranscript,
         segments: recordedSegments,
         removedSegments: data.removedSegments,
+        splitLiveSpeakers: data.splitLiveSpeakers,
       });
 
       // A later session seeded this session's rows, so move its boundary when
@@ -2093,6 +2094,7 @@ if (typeof window !== "undefined") {
           fallbackTranscript: seed.fallbackTranscript,
           segments: recordedSegments,
           removedSegments: data.removedSegments,
+          splitLiveSpeakers: data.splitLiveSpeakers,
         });
         sessionSeedLength -= merged.removedCount;
         segmentsRefValue = merged.segments;

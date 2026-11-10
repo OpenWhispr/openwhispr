@@ -657,14 +657,18 @@ export default function NoteEditor({
     }
   }, [note.id, note.title, defaultViewMode, scheduleUiUpdate]);
 
-  useEffect(() => {
+  const refreshSpeakerMappings = useCallback(() => {
     window.electronAPI?.getSpeakerMappings?.(note.id).then((mappings) => {
       const map: Record<string, string> = {};
       for (const m of mappings || []) map[m.speaker_id] = m.display_name;
       setSpeakerMappings(map);
     });
+  }, [note.id]);
+
+  useEffect(() => {
+    refreshSpeakerMappings();
     refreshSpeakerProfiles();
-  }, [note.id, refreshSpeakerProfiles]);
+  }, [refreshSpeakerMappings, refreshSpeakerProfiles]);
 
   useEffect(() => {
     if (titleRef.current && titleRef.current.textContent !== note.title) {
@@ -695,7 +699,10 @@ export default function NoteEditor({
     const enriched = completedDiarization.segments;
     if (enriched.length === 0) return;
     setDiarizedSegments(enriched);
-  }, [completedDiarization, note.id]);
+    // Diarization moves a live speaker's name to the voice it matched, whose id
+    // can differ from the one the name was given to.
+    refreshSpeakerMappings();
+  }, [completedDiarization, note.id, refreshSpeakerMappings]);
 
   const persistDisplaySegments = useCallback(
     async (nextSegments: TranscriptSegment[], updateOverlay = true) => {

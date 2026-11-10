@@ -5,6 +5,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
+import type { SplitLiveSpeakers } from "../utils/transcriptSpeakerState";
 import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
@@ -3612,6 +3613,7 @@ declare global {
           }>;
           speakerEmbeddings?: Record<string, number[]> | null;
           removedSegments?: RemovedTranscriptSegment[];
+          splitLiveSpeakers?: SplitLiveSpeakers;
         }) => void
       ) => () => void;
 
