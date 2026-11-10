@@ -640,6 +640,7 @@ class DeepgramStreaming {
     };
     this.accumulatedText = "";
     this.finalSegments = [];
+    this.sessionStartedAt = null;
     this.audioBytesSent = 0;
     this.resultsReceived = 0;
     this.connectionLossNotified = false;
@@ -699,7 +700,6 @@ class DeepgramStreaming {
         // Deepgram may send nothing until audio arrives, while meeting capture
         // waits for connect(). Start keep-alive now to cover slow capture setup.
         this.isConnected = true;
-        this.sessionStartedAt = Date.now();
         clearTimeout(this.connectionTimeout);
         this.connectionTimeout = null;
         this.startKeepAlive(this.ws);
@@ -854,6 +854,11 @@ class DeepgramStreaming {
 
     if (this.keepAliveInterval) {
       this.stopKeepAlive();
+    }
+
+    // Deepgram offsets start with PCM audio, not the earlier socket handshake.
+    if (this.audioBytesSent === 0) {
+      this.sessionStartedAt = Date.now();
     }
 
     // Flush any audio buffered during cold start

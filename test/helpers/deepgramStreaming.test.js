@@ -122,11 +122,18 @@ test("a cold socket connects without server messages and survives slow capture s
     assert.ok(keepAliveCount >= 3, "keep-alive must repeat before any audio is sent");
 
     const transcript = new Promise((resolve, reject) => {
-      streaming.onFinalTranscript = resolve;
+      streaming.onFinalTranscript = (text, startedAt) => resolve({ text, startedAt });
       transcriptTimeout = setTimeout(() => reject(new Error("No transcript received")), 2000);
     });
+    const beforeAudio = Date.now();
     assert.equal(streaming.sendAudio(Buffer.alloc(4800)), true);
-    assert.equal(await transcript, "Meeting started.");
+    const afterAudio = Date.now();
+    const result = await transcript;
+    assert.equal(result.text, "Meeting started.");
+    assert.ok(
+      result.startedAt >= beforeAudio && result.startedAt <= afterAudio,
+      "transcript time must start with audio, not the socket opening thirteen seconds earlier"
+    );
     assert.equal(streaming.sessionId, "cold-session");
   } finally {
     clearTimeout(connectTimeout);
