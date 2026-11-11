@@ -765,7 +765,65 @@ test("candidates are not in the stop state, recluster or mapSpeaker", () => {
   hear(id, voiceB, 10, 2);
   assert.deepEqual(Object.keys(id.getTransientState()), ["speaker_0"]);
   assert.deepEqual(id._performRecluster(), []);
+  assert.equal(id.getSpeakerEmbedding("speaker_1"), null, "no speaker exists for the candidate");
   assert.equal(id.mapSpeaker("speaker_1", 3, "Bea", 9), false);
+
+  // speaker_1 is exactly the id a promotion gives this candidate.
+  assert.equal(hear(id, voiceB, 20, 12).speakerId, "speaker_1");
+  assert.equal(id.mapSpeaker("speaker_1", 3, "Bea", 9), true);
+});
+
+test("a ready candidate held at the cap is promoted with all its windows once the cap rises", () => {
+  const { id } = gatedIdentifier();
+  id.setSpeakerLimit({ maxSpeakers: 1, gated: true });
+  hear(id, voiceA, 0, 2);
+  hear(id, voiceB, 10, 4);
+  hear(id, voiceB, 20, 4);
+  assert.equal(hear(id, voiceB, 30, 4).speakerId, null);
+
+  id.setSpeakerLimit({ maxSpeakers: 7, gated: true });
+  assert.deepEqual(pick(hear(id, voiceB, 40, 4)), {
+    speakerId: "speaker_1",
+    backfill: [
+      { startTime: 10, endTime: 14 },
+      { startTime: 20, endTime: 24 },
+      { startTime: 30, endTime: 34 },
+    ],
+  });
+});
+
+// Feeds 5 s of a new voice's live windows beside one confirmed speaker and
+// counts the embeddings extracted.
+async function countLiveExtractions({ gated }) {
+  let extractions = 0;
+  const { LiveSpeakerIdentifier } = loadIdentifier({
+    extractEmbeddingFromSamples: async () => {
+      extractions += 1;
+      return voiceB;
+    },
+  });
+  const identifier = new LiveSpeakerIdentifier();
+  identifier.setSpeakerLimit({ maxSpeakers: 7, gated });
+  identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: true });
+  identifier._getVadProbability = async () => 1;
+  const emitted = [];
+  identifier.onSpeakerIdentified = (event) => emitted.push(event);
+
+  for (let cursor = 0; cursor < 16000 * 5; cursor += 512) {
+    await identifier._processWindow(new Float32Array(512), cursor, cursor + 512);
+  }
+  return { extractions, emitted, identifier };
+}
+
+test("a held voice's live windows are throttled like any other voice's", async () => {
+  const ungated = await countLiveExtractions({ gated: false });
+  const gated = await countLiveExtractions({ gated: true });
+
+  assert.equal(ungated.extractions, 4, "about one extraction per second of speech");
+  assert.equal(gated.extractions, ungated.extractions);
+  assert.deepEqual(gated.emitted, [], "a held voice is never identified live");
+  assert.equal(gated.identifier.currentSegmentSpeakerId, null);
+  assert.equal(gated.identifier.currentSegmentSpeakerName, null);
 });
 
 test("at most 8 candidates are kept, the weakest dropped first", () => {

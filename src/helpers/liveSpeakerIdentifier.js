@@ -680,6 +680,9 @@ class LiveSpeakerIdentifier {
     }
 
     const resolved = this._resolveSpeakerForEmbedding(embedding, { updateCentroid: false });
+    // A voice held as a candidate gets no live label, but its windows still
+    // count toward the throttle, or every VAD window re-extracts an embedding.
+    this.lastLiveIdentificationSample = this.segmentEndSample;
     if (!resolved?.speakerId) {
       return;
     }
@@ -687,7 +690,6 @@ class LiveSpeakerIdentifier {
     this.currentSegmentSpeakerId = resolved.speakerId;
     this.currentSegmentSpeakerName = resolved.displayName || null;
     this.currentSegmentForced = resolved.forced;
-    this.lastLiveIdentificationSample = this.segmentEndSample;
 
     if (!this.enabled) return;
 
