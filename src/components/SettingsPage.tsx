@@ -73,6 +73,7 @@ import { useSignOut } from "../hooks/useSignOut";
 import { useAccountPlan } from "../hooks/useAccountPlan";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
+import { clearInsightsCache } from "../lib/insightsCache";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
@@ -4521,7 +4522,11 @@ EOF`,
                     <select
                       value={transcriptRetentionDays}
                       disabled={!effectiveDataRetentionEnabled}
-                      onChange={(e) => setTranscriptRetentionDays(parseInt(e.target.value, 10))}
+                      onChange={(e) => {
+                        setTranscriptRetentionDays(parseInt(e.target.value, 10));
+                        // A shorter period deletes Insights counters while Insights is unmounted.
+                        clearInsightsCache();
+                      }}
                       className={RETENTION_SELECT_CLASS}
                     >
                       <option value={0}>
