@@ -2333,7 +2333,10 @@ class DatabaseManager {
       // One-time split (user_version 6): each account's private notes leave
       // the shared private row for the account's own. A failure leaves the
       // database as it was and the next launch tries again; it must never keep
-      // the notes database from opening.
+      // the notes database from opening. So every later user_version step must
+      // also require version 6 (`>= 6 && < N`), never a bare `< N`: on a device
+      // whose split failed it would set N and the split would never run again
+      // (test/helpers/databaseUserVersionSteps.test.js).
       if (this.db.pragma("user_version", { simple: true }) < 6) {
         try {
           this._splitPrivateSpaceByAccount();
