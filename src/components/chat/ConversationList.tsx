@@ -154,6 +154,9 @@ export default function ConversationList({
       window.electronAPI?.onNoteDeleted?.(refresh),
       window.electronAPI?.onSpacePurged?.(refresh),
       window.electronAPI?.onFolderDeleted?.(refresh),
+      // The rows main returns follow its account scope, which can be set with no
+      // account generation change: the first scope of a launch that restored none.
+      window.electronAPI?.onActiveAccountScopeChanged?.(refresh),
     ];
     return () => disposers.forEach((dispose) => dispose?.());
   }, [loadConversations]);

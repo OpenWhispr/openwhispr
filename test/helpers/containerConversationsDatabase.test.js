@@ -237,7 +237,7 @@ test("private-space root chats are owned by the account that created them", (t) 
   );
 });
 
-test("team-space root chats stay unowned and outlive a member's account deletion", (t) => {
+test("team-space root chats stay with their author and go with the author's account", (t) => {
   const db = createDb(t);
   if (!db) return;
   const { space } = createTestTeamSpace(db, { name: "Shared" });
@@ -247,17 +247,21 @@ test("team-space root chats stay unowned and outlive a member's account deletion
 
   db.setActiveAccountId("account-a");
   const chat = db.createAgentConversation("Team root chat", null, space.id);
-  db.addAgentMessage(chat.id, "user", "for the whole team");
-  assert.equal(chat.account_id, null, "team root chats are owned by the team, not the creator");
+  db.addAgentMessage(chat.id, "user", "a question of mine");
+  assert.equal(chat.account_id, "account-a", "a chat in a team space is still personal");
 
-  db.deleteAccountData("account-a");
   db.setActiveAccountId("test-account");
   assert.deepEqual(
-    db.getConversationsForContainer(space.id, null).map((conversation) => conversation.id),
-    [chat.id],
-    "another member still lists the team's root chat"
+    db.getConversationsForContainer(space.id, null),
+    [],
+    "another member on this device doesn't list it"
   );
-  assert.equal(db.getAgentMessages(chat.id).length, 1);
+  assert.equal(db.getAgentConversation(chat.id), null, "or open it by id");
+
+  db.setActiveAccountId("account-a");
+  db.deleteAccountData("account-a");
+  assert.equal(db.getAgentConversation(chat.id), null, "account deletion takes the chat with it");
+  assert.equal(db.getAgentMessages(chat.id).length, 0);
 });
 
 test("global conversation lists and search exclude space and folder chats", (t) => {
@@ -1234,11 +1238,13 @@ test("a cloud pull keeps the note a chat came from", (t) => {
   assert.equal(db.getConversationsForNote(note.id).length, 1);
 });
 
-test("a chat's source note shows only to the account that can open it", (t) => {
+test("a legacy chat's source note shows only to the account that can open it", (t) => {
   const db = createDb(t);
   if (!db) return;
   const note = db.saveNote("Board-only plan", "body").note;
   const chat = db.createAgentConversation("Question", note.id);
+  // From before chats carried an owner, so every account still lists it.
+  db.db.prepare("UPDATE agent_conversations SET account_id = NULL WHERE id = ?").run(chat.id);
 
   db.setActiveAccountId("other-account");
   assert.equal(db.getNote(note.id), null);

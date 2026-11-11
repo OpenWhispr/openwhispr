@@ -192,6 +192,7 @@ test("only the dictation window opens the agent window or hands it a wake-word c
   const stranger = frameOf(makeContents());
   const subframe = { sender: mainContents, senderFrame: {} };
   const command = { text: "what's next", attachment: null, selectedContext: null };
+  target.databaseManager = { accountChangedSince: () => false };
 
   assert.equal(await handlers.get("open-agent-window")(stranger), false);
   assert.equal(await handlers.get("open-agent-window")(subframe), false);
@@ -204,6 +205,26 @@ test("only the dictation window opens the agent window or hands it a wake-word c
     true
   );
   assert.deepEqual(calls, [["open"], ["command", command]]);
+});
+
+test("a wake-word command spoken under a replaced account never reaches the agent window", async () => {
+  const { stub, calls: allCalls, mainContents } = makeWindowManagerStub();
+  installWindowManager(stub);
+  const checked = [];
+  target.databaseManager = {
+    accountChangedSince: (spokenAt) => {
+      checked.push(spokenAt);
+      return true;
+    },
+  };
+  const command = { text: "what's next", spokenAt: "2026-11-10T10:00:00.000Z" };
+
+  assert.equal(
+    await handlers.get("agent-window-submit-command")(frameOf(mainContents), command),
+    false
+  );
+  assert.deepEqual(checked, [command.spokenAt]);
+  assert.deepEqual(allCalls.agent, []);
 });
 
 test("Esc reaches the window that registered it, and only that window takes it back", async () => {

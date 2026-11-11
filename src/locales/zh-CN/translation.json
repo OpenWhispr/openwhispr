@@ -718,8 +718,8 @@
       "failedOffline": "离线",
       "clearAll": "全部清除",
       "clearAllTitle": "清除所有转录",
-      "clearAllDescription": "所有转录、音频文件和 Insights 统计数据都将从此设备和你的账户中永久删除。",
-      "clearAllDescriptionDevice": "所有转录、音频文件和 Insights 统计数据都将从此设备中永久删除。已同步到账户的统计数据不受影响。",
+      "clearAllDescription": "你的历史记录中的所有转录、其音频文件和 Insights 统计数据都将从此设备和你的账户中永久删除。",
+      "clearAllDescriptionDevice": "此历史记录中的所有转录、其音频文件和 Insights 统计数据都将从此设备中永久删除。其中已同步到某个账户的转录，也会在该账户下次在此设备上登录时从该账户中删除。",
       "clearAllSuccess": "历史记录已清除",
       "clearAllErrorTitle": "无法清除历史记录",
       "clearAllErrorDescription": "出了点问题，请重试。",
@@ -990,6 +990,11 @@
       "noAudio": {
         "title": "我们没听清",
         "description": "请检查麦克风后重试。"
+      },
+      "commandAccountChanged": {
+        "title": "指令未获回答",
+        "description": "处理完成前账户已切换。其转录内容保存在你说出它时所用账户的历史记录中。",
+        "descriptionNotSaved": "处理完成前账户已切换。请再说一遍，以便现在提问。"
       },
       "micDisconnected": {
         "title": "麦克风已断开",
@@ -2319,15 +2324,15 @@
       "lastSynced": "上次同步 {{time}}",
       "minutesAgo": "{{count}}分钟前",
       "audioRetention": "音频保留",
-      "audioRetentionDescription": "在本地存储听写音频以便重新转录和下载。文件会在保留期过后自动删除。会议音频绝不会被存储。",
+      "audioRetentionDescription": "在本地存储听写音频以便重新转录和下载。此设备上的音频文件会在保留期过后自动删除，无论由哪个账户录制。会议音频绝不会被存储。",
       "audioRetentionDisabled": "已禁用",
       "retentionDays_one": "{{count}} 天",
       "retentionDays_other": "{{count}} 天",
       "audioStorageUsage": "存储用量",
       "audioStorageUsageDescription": "存储在此设备上的音频文件",
-      "audioStorageFiles": "{{count}} 个文件，{{size}}",
-      "audioStorageEmpty": "没有存储的音频文件",
-      "clearAllAudio": "清除所有音频",
+      "audioStorageHistoryFiles": "此历史记录中有 {{count}} 个文件，{{size}}",
+      "audioStorageHistoryEmpty": "此历史记录中没有音频文件",
+      "clearHistoryAudio": "清除音频",
       "clearAllAudioConfirm": "删除所有已存储的音频文件？此操作无法撤销。",
       "saveDiscarded": "保存已放弃的听写",
       "saveDiscardedDescription": "用 Escape 取消听写时，将其音频保留在历史记录中以便恢复。需开启数据和音频保留。"

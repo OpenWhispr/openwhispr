@@ -736,8 +736,8 @@
       "rawTranscript": "Raw Transcript",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear All Transcriptions",
-      "clearAllDescription": "All transcriptions, audio files, and Insights counters will be permanently removed from this device and your account.",
-      "clearAllDescriptionDevice": "All transcriptions, audio files, and Insights counters will be permanently removed from this device. Counters already synced to an account are not affected.",
+      "clearAllDescription": "All transcriptions in your history, their audio files, and Insights counters will be permanently removed from this device and your account.",
+      "clearAllDescriptionDevice": "All transcriptions in this history, their audio files, and Insights counters will be permanently removed from this device. Any of these transcriptions already synced to an account are also deleted from that account the next time it signs in here.",
       "clearAllSuccess": "History cleared",
       "clearAllErrorTitle": "Couldn't clear history",
       "clearAllErrorDescription": "Something went wrong. Please try again.",
@@ -990,6 +990,11 @@
       "noAudio": {
         "title": "We didn’t catch that",
         "description": "Check your microphone and try again."
+      },
+      "commandAccountChanged": {
+        "title": "Command not answered",
+        "description": "The account changed before it finished. Its transcript is in the history of the account you spoke it under.",
+        "descriptionNotSaved": "The account changed before it finished. Say it again to ask now."
       },
       "micDisconnected": {
         "title": "Microphone disconnected",
@@ -3060,15 +3065,15 @@
       "leaderboardRequiresAccount": "Sign in to manage leaderboard participation.",
       "leaderboardRequiresHistory": "Turn on data retention before joining leaderboards.",
       "audioRetention": "Audio Retention",
-      "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Files are automatically deleted after the retention period. Meeting audio is never stored.",
+      "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Audio files on this device are deleted automatically after the retention period, whichever account recorded them. Meeting audio is never stored.",
       "audioRetentionDisabled": "Disabled",
       "retentionDays_one": "{{count}} day",
       "retentionDays_other": "{{count}} days",
       "audioStorageUsage": "Storage Usage",
       "audioStorageUsageDescription": "Audio files stored on this device",
-      "audioStorageFiles": "{{count}} files, {{size}}",
-      "audioStorageEmpty": "No audio files stored",
-      "clearAllAudio": "Clear All Audio",
+      "audioStorageHistoryFiles": "{{count}} files in this history, {{size}}",
+      "audioStorageHistoryEmpty": "No audio files in this history",
+      "clearHistoryAudio": "Clear Audio",
       "clearAllAudioConfirm": "Delete all stored audio files? This cannot be undone.",
       "dataRetention": "Data Retention",
       "dataRetentionDescription": "Store transcriptions and audio locally in your history. When disabled, transcriptions are pasted but not saved.",

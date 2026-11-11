@@ -392,3 +392,117 @@ test("the fork columns migrate idempotently on an existing database", (t) => {
     assert.equal(columns.filter((column) => column === name).length, 1);
   }
 });
+
+test("a fork belongs to the account that made it, and no other account can fork a chat", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const { conversation, rows } = seedConversation(db, "A's negotiation");
+  const fork = db.forkAgentConversation(conversation.id, rows[1].id, "A's selection");
+  assert.equal(
+    db.db.prepare("SELECT account_id FROM agent_conversations WHERE id = ?").get(fork.id)
+      .account_id,
+    "account-a"
+  );
+
+  db.setActiveAccountId("account-b");
+  assert.equal(db.getAgentConversation(fork.id), null, "B can't open A's fork");
+  assert.deepEqual(db.getAgentConversationsWithPreview(), [], "or list it");
+  assert.deepEqual(db.getPendingConversations(), [], "or upload it");
+  assert.equal(
+    db.forkAgentConversation(conversation.id, rows[1].id, null),
+    null,
+    "or fork A's chat by its id"
+  );
+  // A fork in a space is not waiting for whoever signs in next.
+  db.db.prepare("UPDATE agent_conversations SET space_id = 1 WHERE id = ?").run(fork.id);
+  db.claimSignedOutLocalRows();
+  assert.equal(
+    db.db.prepare("SELECT account_id FROM agent_conversations WHERE id = ?").get(fork.id)
+      .account_id,
+    "account-a"
+  );
+
+  db.setActiveAccountId("account-a");
+  assert.equal(db.getAgentConversation(fork.id).fork_context, "A's selection");
+});
+
+test("another account can't rewrite a saved message", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const { conversation, rows } = seedConversation(db);
+  const before = db.getAgentConversation(conversation.id);
+
+  db.setActiveAccountId("account-b");
+  assert.equal(db.updateAgentMessage(rows[0].id, "B's text", null), null);
+
+  db.setActiveAccountId("account-a");
+  const after = db.getAgentConversation(conversation.id);
+  assert.equal(after.messages[0].content, "Draft the launch email");
+  assert.equal(after.updated_at, before.updated_at, "the chat isn't touched either");
+  assert.equal(db.updateAgentMessage(rows[0].id, "A's edit", null).content, "A's edit");
+});
+
+test("a fork names its parent only to an account that can open the parent", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const { conversation } = seedConversation(db, "A's private title");
+
+  // B's cloud holds a fork that names A's chat as its parent: the same client
+  // id reached both clouds before rows carried an owner.
+  db.setActiveAccountId("account-b");
+  const fork = pull(
+    db,
+    {
+      id: "b-fork",
+      client_conversation_id: "b-fork-client",
+      title: "B's fork",
+      parent_client_conversation_id: conversation.client_conversation_id,
+      fork_message_count: 1,
+    },
+    [{ role: "user", content: "copied" }]
+  );
+  const opened = db.getAgentConversation(fork.id);
+  assert.equal(opened.parent_conversation_id, null, "A's row is not B's parent");
+  assert.equal(opened.parent_title, null);
+
+  // Even a link left from before owners were recorded shows no title.
+  db.db
+    .prepare("UPDATE agent_conversations SET parent_conversation_id = ? WHERE id = ?")
+    .run(conversation.id, fork.id);
+  assert.equal(db.getAgentConversation(fork.id).parent_title, null);
+});
+
+test("a replaced chat identity is for the account whose cloud holds the tombstone", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const { conversation } = seedConversation(db);
+  db.markConversationCreateAttempted(conversation.id);
+  const clientId = conversation.client_conversation_id;
+  const identity = () =>
+    db.db
+      .prepare(
+        "SELECT client_conversation_id, cloud_create_attempted FROM agent_conversations WHERE id = ?"
+      )
+      .get(conversation.id);
+
+  // B became active while A's create was in flight; B's own late answer for
+  // the same row changes nothing.
+  db.setActiveAccountId("account-b");
+  assert.equal(db.replaceConversationClientId(conversation.id, clientId).success, false);
+  assert.deepEqual(
+    { ...identity() },
+    { client_conversation_id: clientId, cloud_create_attempted: 1 }
+  );
+
+  // A's answer still lands for A.
+  assert.equal(
+    db.replaceConversationClientId(conversation.id, clientId, "account-a").success,
+    true
+  );
+  assert.notEqual(identity().client_conversation_id, clientId);
+  assert.equal(identity().cloud_create_attempted, 0);
+});

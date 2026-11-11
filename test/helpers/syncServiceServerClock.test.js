@@ -18,7 +18,8 @@ const {
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { createFakeCloud, createAccountCloud } = require("./harness/fakeCloud.js");
+const { createSyncDevice } = require("./harness/syncDevice.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 const { resetServerClock } = require("../../src/lib/serverClock.ts");
 
@@ -127,4 +128,46 @@ test("a device on time keeps the cursors it already has", async (t) => {
 
   const firstList = cloud.logFor("/api/notes/list")[0];
   assert.equal(new URL(firstList.path, "https://x").searchParams.get("since"), kept);
+});
+
+test("restoring another account's old cursors still recovers rows missed by a fast clock", async (t) => {
+  const device = createSyncDevice(t);
+  if (!device) return;
+  resetServerClock();
+  t.after(resetServerClock);
+  const serverIso = (shiftMs = 0) => new Date(Date.now() - HOUR + shiftMs).toISOString();
+  const cloudA = createAccountCloud({ serverDate: true });
+  const cloudB = createAccountCloud({ serverDate: true });
+  cloudA.setClock(() => serverIso());
+  cloudB.setClock(() => serverIso());
+
+  // B last synced two device-clock hours ago. Its cursor is no longer ahead
+  // of the server, but still skips the hour of writes its fast clock hid.
+  localStorageStub.setItem(
+    "lastSyncedAt.byAccount.account-b",
+    JSON.stringify({ "lastSyncedAt.conversations": serverIso(-HOUR) })
+  );
+  cloudB.seedConversation({
+    client_conversation_id: "missed-chat",
+    title: "Missed while the clock was fast",
+    created_at: serverIso(-90 * MINUTE),
+    updated_at: serverIso(-90 * MINUTE),
+  });
+  await device.signIn("account-a", cloudA);
+  await device.service.syncAll(true);
+  await device.signIn("account-b", cloudB);
+  await device.service.syncAll(true);
+
+  assert.deepEqual(
+    device.db.getAgentConversations().map((chat) => chat.title),
+    ["Missed while the clock was fast"]
+  );
+
+  // Each account's corrected cursors survive later switches without replaying.
+  await device.signIn("account-a", cloudA);
+  const listsBefore = cloudA.logFor("/api/conversations/list").length;
+  await device.service.syncAll(true);
+  const lists = cloudA.logFor("/api/conversations/list").slice(listsBefore);
+  assert.ok(lists.length > 0);
+  assert.ok(lists.every((call) => new URL(call.path, "https://x").searchParams.get("since")));
 });

@@ -985,7 +985,12 @@ test("a sign-out or account switch during a meeting prepare leaves no warm conne
       }),
     async () => {
       // A switch leaves a real account; a guest signing in keeps its work.
-      target.databaseManager = { activeAccountId: "personal-account", setActiveAccountId() {} };
+      target.databaseManager = {
+        activeAccountId: "personal-account",
+        setActiveAccountId() {},
+        claimSignedOutLocalRows() {},
+        claimLegacyRowsOfOnlyAccount() {},
+      };
       await handlers.get("set-active-account-scope")({}, "another-account", authGeneration);
       delete target.databaseManager;
     },

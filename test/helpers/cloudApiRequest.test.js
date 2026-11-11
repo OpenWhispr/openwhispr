@@ -23,16 +23,38 @@ test("an unvalidated or stale generation never reaches the network", async () =>
     return new Response("{}");
   });
 
-  const missing = await handler({ method: "GET", path: "/api/me/spaces" });
-  const stale = await handler({
-    method: "GET",
-    path: "/api/me/spaces",
-    expectedAuthGeneration: 1,
+  for (const [method, path] of [
+    ["GET", "/api/me/spaces"],
+    ["POST", "/api/conversations/create"],
+  ]) {
+    const missing = await handler({ method, path });
+    const stale = await handler({ method, path, expectedAuthGeneration: 1 });
+    assert.equal(missing.code, "AUTH_CONTEXT_UNVALIDATED");
+    assert.equal(stale.code, "AUTH_CONTEXT_CHANGED");
+    assert.equal(missing.requestSent, false);
+    assert.equal(stale.requestSent, false);
+  }
+  assert.equal(fetchCalls, 0);
+});
+
+// A chat create that may have reached the server is retried without its
+// messages, so a refusal only counts as "never sent" when nothing left.
+test("a refusal after the request left doesn't claim it was never sent", async () => {
+  const state = { current: { token: "token-a", generation: 4 } };
+  const handler = createHandler(state, async () => {
+    state.current = { token: "token-b", generation: 5 };
+    throw new Error("socket closed");
   });
 
-  assert.equal(missing.code, "AUTH_CONTEXT_UNVALIDATED");
-  assert.equal(stale.code, "AUTH_CONTEXT_CHANGED");
-  assert.equal(fetchCalls, 0);
+  const result = await handler({
+    method: "POST",
+    path: "/api/conversations/create",
+    body: { title: "Chat", messages: [{ role: "user", content: "hello" }] },
+    expectedAuthGeneration: 4,
+  });
+
+  assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
+  assert.equal(result.requestSent, true);
 });
 
 test("a token replacement while the request is in flight discards the response", async () => {
@@ -76,6 +98,25 @@ test("an auth-context change dominates a simultaneous network failure", async ()
 
   assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
   assert.doesNotMatch(result.error, /socket closed/);
+});
+
+test("failed chat creates and other conversation responses remain fenced", async () => {
+  for (const [method, path, status] of [
+    ["POST", "/api/conversations/create", 401],
+    ["POST", "/api/conversations/create", 409],
+    ["POST", "/api/conversations/create", 503],
+    ["GET", "/api/conversations/create", 200],
+    ["POST", "/api/conversations/update", 200],
+  ]) {
+    const state = { current: { token: "token-a", generation: 4 } };
+    const handler = createHandler(state, async () => {
+      state.current = { token: "token-b", generation: 5 };
+      return new Response(JSON.stringify({ id: "chat-a" }), { status });
+    });
+    const result = await handler({ method, path, expectedAuthGeneration: 4 });
+    assert.equal(result.code, "AUTH_CONTEXT_CHANGED", `${method} ${path}: ${status}`);
+    assert.equal(result.data, undefined);
+  }
 });
 
 test("a stable authenticated request is bearer-only and returns parsed data", async () => {

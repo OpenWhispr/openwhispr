@@ -8,12 +8,14 @@ class AuthContextError extends Error {
   }
 }
 
-function authFailure(error) {
+// `requestSent` false: the refusal came before anything left this device.
+function authFailure(error, requestSent) {
   return {
     success: false,
     error: error.message,
     code: error.code,
     status: 0,
+    requestSent,
   };
 }
 
@@ -73,6 +75,7 @@ function createCloudApiRequestHandler({
   logger,
 }) {
   return async function handleCloudApiRequest(opts) {
+    let requestSent = false;
     try {
       const apiUrl = getApiUrl();
       if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -92,6 +95,7 @@ function createCloudApiRequestHandler({
       // no account fence and remain usable while auth is unresolved.
       const fence = opts.public ? null : captureAuthFence(tokenStore, opts.expectedAuthGeneration);
       const method = (opts.method || "GET").toUpperCase();
+      const isConversationCreate = method === "POST" && opts.path === "/api/conversations/create";
       // Public invitation previews are not policy-aware and intentionally stay
       // on the legacy API contract. Authenticated cloud calls opt into policy
       // v1 using the same exact headers as direct main-process request paths.
@@ -109,9 +113,22 @@ function createCloudApiRequestHandler({
         fetchOptions.body = JSON.stringify(opts.body);
       }
 
-      const response = fence
-        ? await fence.awaitBound(() => proxyFetch(requestUrl, fetchOptions))
-        : await proxyFetch(requestUrl, fetchOptions);
+      requestSent = true;
+      const response =
+        fence && !isConversationCreate
+          ? await fence.awaitBound(() => proxyFetch(requestUrl, fetchOptions))
+          : await proxyFetch(requestUrl, fetchOptions).catch((error) => {
+              fence?.assertCurrent();
+              throw error;
+            });
+
+      if (isConversationCreate) {
+        // A successful create leaves a copy in the sender's cloud, so its result
+        // must reach the sender-bound acknowledgement even after the active
+        // sign-in changes: an unlinked chat would be created again elsewhere.
+        if (response.ok) return { success: true, data: await response.json().catch(() => null) };
+        fence?.assertCurrent();
+      }
 
       if (response.status === 401) {
         fence?.assertCurrent();
@@ -159,7 +176,7 @@ function createCloudApiRequestHandler({
       fence?.assertCurrent();
       return { success: true, data, ...dated };
     } catch (error) {
-      if (error instanceof AuthContextError) return authFailure(error);
+      if (error instanceof AuthContextError) return authFailure(error, requestSent);
       logger?.error?.(
         `Cloud API request error (${opts?.path}): ${error?.message || error} ${error?.code || ""}`.trim(),
         error?.stack
