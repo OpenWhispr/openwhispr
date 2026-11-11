@@ -88,7 +88,10 @@ function PeopleBody({
   const tab: PeopleTab = stored === "invitations" && !canManage ? "members" : stored;
   const canCreateTeam = teamCreationFor(workspace) !== "unavailable";
   // While no team exists the Teams tab's empty state has its own Create, as the design draws it.
-  const showAdd = (canManage || canCreateTeam) && !(tab === "teams" && teamsEmpty);
+  // Guests come from note shares, never an invite, so Add there would read as "add a guest" while
+  // sending a member invitation; each guest row keeps its own Invite to workspace.
+  const showAdd =
+    (canManage || canCreateTeam) && tab !== "guests" && !(tab === "teams" && teamsEmpty);
   const visibleTabs = PEOPLE_TABS.filter((id) => id !== "invitations" || canManage);
 
   const knownEmails = useMemo(

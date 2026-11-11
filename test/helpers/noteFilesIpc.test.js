@@ -243,6 +243,7 @@ test.beforeEach(() => {
   target._retireEnterpriseAudio = () => {};
   target.enterpriseIdentityManager = anything();
   target.audioStorageManager = anything();
+  target.parakeetManager = anything();
   target._buildSpeakerMappings = () => ({});
   openedPaths.length = 0;
 });
