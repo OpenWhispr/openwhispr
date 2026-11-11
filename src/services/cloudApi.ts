@@ -3,6 +3,7 @@ import {
   invalidateValidatedAuthContext,
   readAuthTokenState,
 } from "../lib/authRequestContext";
+import { recordServerDate } from "../lib/serverClock";
 import i18n from "../i18n";
 
 interface CloudApiResponse<T = unknown> {
@@ -11,6 +12,7 @@ interface CloudApiResponse<T = unknown> {
   error?: string;
   code?: string;
   status?: number;
+  serverDate?: string;
   requestSent?: boolean;
 }
 
@@ -69,6 +71,7 @@ async function cloudRequest<T = unknown>(
     public: isPublic,
     expectedAuthGeneration,
   })) as (CloudApiResponse<T> & { details?: unknown }) | undefined;
+  recordServerDate(result?.serverDate, Date.now());
 
   if (!result?.success) {
     if (result?.code === "AUTH_CONTEXT_CHANGED" || result?.code === "AUTH_CONTEXT_UNVALIDATED") {

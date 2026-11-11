@@ -245,3 +245,32 @@ test("a 400 keeps its status with or without a code, so callers can tell it from
   assert.deepEqual([uncoded.status, uncoded.code], [400, undefined]);
   assert.equal(uncoded.success, false);
 });
+
+test("a response's Date header reaches the renderer, answered or refused", async () => {
+  const state = { current: { token: "token-a", generation: 3 } };
+  const date = "Tue, 10 Nov 2026 12:00:00 GMT";
+  const responses = [
+    new Response(JSON.stringify({ notes: [] }), { headers: { date } }),
+    new Response(
+      JSON.stringify({ error: "Note was modified", code: "note_version_conflict", data: {} }),
+      { status: 409, headers: { date } }
+    ),
+  ];
+  const handler = createHandler(state, async () => responses.shift());
+
+  const answered = await handler({
+    method: "GET",
+    path: "/api/notes/list",
+    expectedAuthGeneration: 3,
+  });
+  const refused = await handler({
+    method: "PATCH",
+    path: "/api/notes/update",
+    body: { id: "note-a" },
+    expectedAuthGeneration: 3,
+  });
+
+  assert.equal(answered.serverDate, date);
+  assert.equal(refused.serverDate, date);
+  assert.equal(refused.code, "note_version_conflict");
+});

@@ -3204,6 +3204,7 @@ declare global {
         {
           success: boolean;
           data?: unknown;
+          serverDate?: string;
         } & PolicyFailureMetadata
       >;
 
