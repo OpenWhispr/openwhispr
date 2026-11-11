@@ -445,6 +445,29 @@ for (const restriction of ["local-only", "provider"]) {
     assert.deepEqual(errors, [i18nMain.t("common.policyTranscriptionRestricted")]);
     assert.equal(hidden, 1);
   });
+
+  test(`native ${restriction} retirement still closes a dictation stream whose renderer is gone`, async (t) => {
+    let destroyed = false;
+    const sender = {
+      id: 1,
+      isDestroyed: () => destroyed,
+      send() {
+        if (destroyed) throw new TypeError("Object has been destroyed");
+      },
+    };
+    t.after(() => invoke("dictation-realtime-stop"));
+    invoke("save-tinfoil-key", "saved-provider-key");
+    const started = await handlers.get("dictation-realtime-start")(
+      { sender },
+      { mode: "byok", provider: "tinfoil-realtime" }
+    );
+    assert.equal(started.success, true);
+    const stream = target._dictationStreaming;
+    destroyed = true;
+    revokeTranscription(restriction);
+    assert.equal(target._dictationStreaming, null);
+    assert.equal(stream.disconnects, 1);
+  });
 }
 
 for (const restriction of ["local-only", "provider"]) {

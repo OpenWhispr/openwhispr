@@ -10882,7 +10882,7 @@ class IPCHandlers {
     const setupDictationCallbacks = (streaming, event) => {
       const isOrukeet = streaming instanceof OrukeetStreaming;
       const canNotify = () =>
-        !isOrukeet || (this._dictationStreaming === streaming && !event.sender.isDestroyed?.());
+        !event.sender.isDestroyed?.() && (!isOrukeet || this._dictationStreaming === streaming);
       if (isOrukeet) {
         const ownerGone = () => {
           streaming.disconnect().catch(() => {});
