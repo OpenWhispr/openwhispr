@@ -131,6 +131,12 @@ function isWorkspaceIdArgument(value) {
 function isRowIdArgument(value) {
   return Number.isInteger(value) && value > 0;
 }
+// The spaces a search may read: null when the caller names none, and nothing
+// when it names them in any other shape than a list of row ids.
+function spaceIdsArgument(value) {
+  if (value == null) return null;
+  return Array.isArray(value) && value.every(isRowIdArgument) ? value : [];
+}
 // Workspace calls may name the account they were made for. One that arrives
 // after another account signed in is refused rather than applied to it.
 function isForOtherAccount(accountId, activeAccountId) {
@@ -2844,18 +2850,22 @@ class IPCHandlers {
 
     ipcMain.handle(
       "db-semantic-search-notes",
-      async (event, query, limit = 5, spaceId, folderId) => {
+      async (event, query, limit = 5, spaceId, folderId, requestedSpaceIds) => {
+        // The assistant names the spaces in its workspace scope; an empty or
+        // malformed list reads nothing rather than everything.
+        const spaceIds = spaceIdsArgument(requestedSpaceIds);
+        if (spaceIds?.length === 0) return [];
         try {
           // Qdrant payload updates are best-effort. Use its space filter to
           // reduce the candidate set, then validate every scoped vector hit
           // against SQLite before it can enter the fused ranking.
           const overFetch = folderId != null ? limit * 4 : limit * 2;
-          const vectorFilter =
-            spaceId != null
-              ? { must: [{ key: "space_id", match: { value: spaceId } }] }
-              : undefined;
+          const must = [];
+          if (spaceId != null) must.push({ key: "space_id", match: { value: spaceId } });
+          if (spaceIds) must.push({ key: "space_id", match: { any: spaceIds } });
+          const vectorFilter = must.length > 0 ? { must } : undefined;
           const [ftsResults, vectorResults] = await Promise.all([
-            this.databaseManager.searchNotes(query, overFetch, spaceId, folderId),
+            this.databaseManager.searchNotes(query, overFetch, spaceId, folderId, spaceIds),
             this.getSemanticSearch?.()?.search(query, overFetch, vectorFilter),
           ]);
           if (vectorResults == null) return ftsResults.slice(0, limit);
@@ -2863,7 +2873,8 @@ class IPCHandlers {
             this.databaseManager.getNoteIdsInScope(
               spaceId,
               folderId,
-              vectorResults.map(({ noteId }) => noteId)
+              vectorResults.map(({ noteId }) => noteId),
+              spaceIds
             )
           );
 
@@ -2900,7 +2911,7 @@ class IPCHandlers {
           debugLogger.error("Semantic search failed, falling back to FTS5", {
             error: error.message,
           });
-          return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
+          return this.databaseManager.searchNotes(query, limit, spaceId, folderId, spaceIds);
         }
       }
     );

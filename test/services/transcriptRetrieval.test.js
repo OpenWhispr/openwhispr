@@ -15,6 +15,7 @@ const RAW = JSON.stringify([
 ]);
 const NOTE = {
   id: 7,
+  space_id: 1,
   title: "Launch",
   content: "Keep the agenda.",
   enhanced_content: "Discussed launch.",
@@ -26,7 +27,8 @@ test.beforeEach(() => {
   global.window = { electronAPI: { getNote: async (id) => (id === 7 ? { ...stored } : null) } };
 });
 test.afterEach(() => delete global.window);
-const getTool = async () => (await import("../../src/services/tools/getNoteTool.ts")).getNoteTool;
+const getTool = async () =>
+  (await import("../../src/services/tools/getNoteTool.ts")).createGetNoteTool({ spaceIds: [1] });
 
 test("a question omitted from the summary retrieves evidence near the end without repeating editable fields", async () => {
   const tool = await getTool();

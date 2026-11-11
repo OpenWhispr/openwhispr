@@ -3,8 +3,8 @@ const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-async function setup(t) {
-  installBrowserGlobals(t);
+async function setup(t, { electronAPI, initialStorage } = {}) {
+  installBrowserGlobals(t, { initialStorage, window: { electronAPI: electronAPI ?? {} } });
   const vite = await createRendererServer(t);
   const { createChatTurnEngine } = await vite.ssrLoadModule("/components/chat/chatTurnEngine.ts");
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
@@ -133,4 +133,49 @@ test("a superseded send cannot set its replacement idle", async (t) => {
   releases[1]();
   await second;
   assert.deepEqual(fixture.writes, ["Answer"]);
+});
+
+test("RAG context excludes notes outside the active workspace", async (t) => {
+  const note = (id, spaceId, title) => ({
+    id,
+    title,
+    content: `${title}: the pricing tiers`,
+    enhanced_content: null,
+    space_id: spaceId,
+  });
+  const notes = [note(11, 1, "Own pricing plan"), note(44, 4, "Other workspace pricing plan")];
+  const ragQueries = [];
+  // Workspace A is active (the dictation window: no workspace list). Its Private is 1 and its
+  // teamspace 2; workspace B's Private is 4.
+  const fixture = await setup(t, {
+    initialStorage: { activeWorkspaceId: "a" },
+    electronAPI: {
+      getSpaces: async () => [
+        { id: 1, kind: "private", workspace_id: "a" },
+        { id: 4, kind: "private", workspace_id: "b" },
+        { id: 2, kind: "team", workspace_id: "a" },
+      ],
+      getPrivateSpaceId: async () => 1,
+      getDefaultPrivateSpaceId: async () => 1,
+      // Answers as if main applied no scope, the worst case.
+      semanticSearchNotes: async (...args) => {
+        ragQueries.push(args);
+        return notes;
+      },
+      getNote: async (id) => notes.find((candidate) => candidate.id === id) ?? null,
+    },
+  });
+  const requests = [];
+  t.mock.method(fixture.service, "processTextStreamingAI", async function* (...args) {
+    requests.push(JSON.stringify(args.slice(0, 4)));
+    yield { type: "content", text: "Answer" };
+  });
+
+  const question = "What are our pricing tiers?";
+  await fixture.engine.send(question, [{ id: "user-1", role: "user", content: question }]);
+
+  assert.deepEqual(ragQueries, [["What are our pricing tiers?", 5, null, null, [1, 2]]]);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0], /Own pricing plan/);
+  assert.doesNotMatch(requests[0], /Other workspace pricing plan/);
 });

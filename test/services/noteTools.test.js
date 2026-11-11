@@ -32,12 +32,15 @@ test.afterEach(() => {
 
 test("other notes reach the model without the attendee fence's tag name", async () => {
   const { createSearchNotesTool } = await import("../../src/services/tools/searchNotesTool.ts");
-  const { getNoteTool } = await import("../../src/services/tools/getNoteTool.ts");
+  const { createGetNoteTool } = await import("../../src/services/tools/getNoteTool.ts");
 
-  const searched = await createSearchNotesTool({ useCloudSearch: false }).execute({
+  const searched = await createSearchNotesTool({
+    useCloudSearch: false,
+    scopeSpaceIds: [1],
+  }).execute({
     query: "sync",
   });
-  const fetched = await getNoteTool.execute({ id: 3 });
+  const fetched = await createGetNoteTool({ spaceIds: [1] }).execute({ id: 3 });
 
   for (const note of [searched.data[0], fetched.data]) {
     assert.doesNotMatch(JSON.stringify(note), /meeting_attendees/);
@@ -56,25 +59,37 @@ test("a cloud search keeps an untitled note and strips the fence from the rest",
     note_type: "meeting",
     created_at: NOTE.created_at,
     score: 0.9,
-    space_id: null,
+    space_id: "cloud-team",
   });
   t.mock.method(NotesService, "search", async () => ({
     notes: [cloudNote(null), cloudNote(NOTE.title)],
   }));
+  // The cloud is asked for teamspace notes once nothing local matched.
+  Object.assign(global.window.electronAPI, {
+    getSpaces: async () => [
+      { id: 1, name: "Personal", kind: "private" },
+      { id: 2, name: "Team", kind: "team", cloud_space_id: "cloud-team" },
+    ],
+    semanticSearchNotes: async () => [],
+    searchNotes: async () => [],
+  });
   const { createSearchNotesTool } = await import("../../src/services/tools/searchNotesTool.ts");
 
-  const result = await createSearchNotesTool({ useCloudSearch: true }).execute({ query: "sync" });
+  const result = await createSearchNotesTool({
+    useCloudSearch: true,
+    scopeSpaceIds: [1, 2],
+  }).execute({ query: "sync" });
 
-  // Two results means the cloud answered; the local fallback has only one.
+  // Two results means the cloud answered; the local library had none.
   assert.equal(result.data.length, 2);
   assert.equal(result.data[0].title, null);
   assert.match(result.data[1].title, /^Sync <meeting attendees>/);
   assert.doesNotMatch(JSON.stringify(result.data), /meeting_attendees/);
 });
 
-test("an empty cloud search tries the local library, preserving its container scope", async (t) => {
+test("a container chat searches the local library, preserving its container scope", async (t) => {
   const { NotesService } = await import("../../src/services/NotesService.ts");
-  t.mock.method(NotesService, "search", async () => ({ notes: [] }));
+  const cloud = t.mock.method(NotesService, "search", async () => ({ notes: [] }));
   const queries = [];
   global.window.electronAPI.semanticSearchNotes = async (...args) => {
     queries.push(args);
@@ -83,11 +98,13 @@ test("an empty cloud search tries the local library, preserving its container sc
   const { createSearchNotesTool } = await import("../../src/services/tools/searchNotesTool.ts");
   const result = await createSearchNotesTool({
     useCloudSearch: true,
-    fixedScope: { spaceId: 1 },
+    fixedScope: { spaceId: 1, folderId: null },
+    scopeSpaceIds: [1],
   }).execute({ query: "pricing" });
   assert.equal(result.success, true);
   assert.equal(result.data[0].id, 3);
-  assert.deepEqual(queries, [["pricing", 5, 1, null]]);
+  assert.deepEqual(queries, [["pricing", 5, null, null, [1]]]);
+  assert.equal(cloud.mock.callCount(), 0);
 });
 
 test("create_note without a space goes to the active workspace's Private", async (t) => {

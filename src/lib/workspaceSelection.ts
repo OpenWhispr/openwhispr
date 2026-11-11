@@ -51,6 +51,49 @@ export function spacesInWorkspaceScope<S extends ScopedSpace>(
 }
 
 /**
+ * The spaces whose notes the assistant may read while `activeWorkspaceId` is active. A window
+ * holding the workspace list (the control panel) reads what its tree shows. Without it (the
+ * dictation window, or a list that doesn't hold the active workspace yet) the scope is main's
+ * Private for the active workspace, the pending Private too when main's is the default's (the
+ * tree merges the two), and the active workspace's teamspaces and those linked to no workspace.
+ * With no active workspace nothing says which teamspaces are in scope, so main's Private alone
+ * is: never every space.
+ */
+export function assistantScopeSpaceIds(input: {
+  spaces: Array<ScopedSpace & Pick<SpaceItem, "id">>;
+  activeWorkspaceId: string | null;
+  /** The window's workspace list; empty where it has none. */
+  workspaces: Workspace[];
+  defaultWorkspaceId: string | null;
+  /** Main's Private for the active workspace (getPrivateSpaceId). */
+  privateSpaceId: number | null;
+  /** Main's Private for the default workspace (getDefaultPrivateSpaceId). */
+  defaultPrivateSpaceId: number | null;
+}): number[] {
+  const { spaces, activeWorkspaceId, workspaces, privateSpaceId } = input;
+  const mainPrivate = privateSpaceId == null ? [] : [privateSpaceId];
+  if (activeWorkspaceId == null) return mainPrivate;
+  if (isListedWorkspace(activeWorkspaceId, workspaces)) {
+    return spacesInWorkspaceScope(
+      spaces,
+      activeWorkspaceId,
+      workspaces,
+      input.defaultWorkspaceId
+    ).map((space) => space.id);
+  }
+  const pendingCounts = privateSpaceId != null && privateSpaceId === input.defaultPrivateSpaceId;
+  const ids = new Set(mainPrivate);
+  for (const space of spaces) {
+    const inScope =
+      space.kind === "private"
+        ? pendingCounts && space.workspace_id == null
+        : space.workspace_id == null || space.workspace_id === activeWorkspaceId;
+    if (inScope) ids.add(space.id);
+  }
+  return [...ids];
+}
+
+/**
  * The Private the active workspace shows, from spaces already in scope: its own, else the pending
  * one. Both are in scope while the default workspace's own Private waits for main to bind the
  * pending one into it.

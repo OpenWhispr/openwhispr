@@ -5074,8 +5074,9 @@ class DatabaseManager {
 
   // Authoritative scope membership for semantic-search candidates. Qdrant
   // payload writes are asynchronous/best-effort, so its filters are only an
-  // optimization and must not decide which space or folder a hit belongs to.
-  getNoteIdsInScope(spaceId = null, folderId = null, candidateIds = null) {
+  // optimization and must not decide which space or folder a hit belongs to:
+  // a note moved since it was indexed still carries its old space there.
+  getNoteIdsInScope(spaceId = null, folderId = null, candidateIds = null, spaceIds = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (candidateIds && candidateIds.length === 0) return [];
@@ -5095,6 +5096,11 @@ class DatabaseManager {
       if (folderId != null) {
         conditions.push("folder_id = ?");
         params.push(folderId);
+      }
+      const spaceList = noteSpaceListCondition("space_id", spaceIds);
+      if (spaceList) {
+        conditions.push(spaceList.sql);
+        params.push(spaceList.param);
       }
       return this.db
         .prepare(`SELECT id FROM notes WHERE ${conditions.join(" AND ")}`)

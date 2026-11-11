@@ -1,10 +1,11 @@
 import { productHelpTools } from "./productHelpTools";
 import { ToolRegistry } from "./ToolRegistry";
 import { createSearchNotesTool } from "./searchNotesTool";
-import { getNoteTool } from "./getNoteTool";
+import { createGetNoteTool } from "./getNoteTool";
 import { createNoteTool } from "./createNoteTool";
-import { updateNoteTool } from "./updateNoteTool";
-import { listFoldersTool } from "./listFoldersTool";
+import { createUpdateNoteTool } from "./updateNoteTool";
+import { createListFoldersTool } from "./listFoldersTool";
+import type { NoteScope } from "./noteScope";
 import { clipboardTool } from "./clipboardTool";
 import { webSearchTool } from "./webSearchTool";
 import { calendarTool } from "./calendarTool";
@@ -41,6 +42,13 @@ interface ToolRegistrySettings {
   cloudBackupEnabled: boolean;
   /** Pins search_notes to a container (overview chat); the LLM cannot widen it. */
   searchScope?: ContainerScope;
+  /**
+   * The spaces whose notes the note tools may read or change: the active workspace's Private and
+   * its teamspaces in scope (resolveAssistantScopeSpaceIds). Nothing elsewhere reaches the model.
+   */
+  scopeSpaceIds: number[];
+  /** The note a note's chat is about, which that chat's tools reach wherever it is. */
+  openNoteId?: number | null;
   webSearchEnabled: boolean;
   /** Live dictionary and snippet access; enables the vocabulary tools. */
   vocabulary?: DictionaryActions & SnippetActions;
@@ -60,11 +68,21 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     for (const tool of productHelpTools) registry.register(tool);
 
   const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
-  registry.register(createSearchNotesTool({ useCloudSearch, fixedScope: settings.searchScope }));
-  registry.register(getNoteTool);
+  const noteScope: NoteScope = {
+    spaceIds: settings.scopeSpaceIds,
+    openNoteId: settings.openNoteId,
+  };
+  registry.register(
+    createSearchNotesTool({
+      useCloudSearch,
+      fixedScope: settings.searchScope,
+      scopeSpaceIds: noteScope.spaceIds,
+    })
+  );
+  registry.register(createGetNoteTool(noteScope));
   registry.register(createNoteTool);
-  if (!settings.keepNotesUnchanged) registry.register(updateNoteTool);
-  registry.register(listFoldersTool);
+  if (!settings.keepNotesUnchanged) registry.register(createUpdateNoteTool(noteScope));
+  registry.register(createListFoldersTool(noteScope));
   registry.register(clipboardTool);
 
   if (settings.vocabulary) {

@@ -6,14 +6,23 @@ import { withoutAttendeesFence } from "../../utils/noteAttendees";
 
 export const MAX_CONTENT_LENGTH = 500;
 
+// The most the cloud search endpoint returns at once.
+const CLOUD_SEARCH_MAX_LIMIT = 50;
+
 interface SearchToolOptions {
   useCloudSearch: boolean;
   /** Pins every search to this container; the LLM's space arg is dropped. */
   fixedScope?: ContainerScope;
+  /**
+   * The spaces search reads: the active workspace's Private and its teamspaces in scope. A note
+   * anywhere else never reaches the model, whatever the space arg names.
+   */
+  scopeSpaceIds: readonly number[];
 }
 
 export function createSearchNotesTool(options: SearchToolOptions): ToolDefinition {
   const { useCloudSearch, fixedScope } = options;
+  const scopeSpaceIds = new Set(options.scopeSpaceIds);
 
   const spaceParameter = fixedScope
     ? {}
@@ -53,7 +62,10 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
       const limit = typeof args.limit === "number" ? args.limit : 5;
       const spaceName = fixedScope ? undefined : (args.space as string | undefined);
 
-      const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
+      // Only spaces in scope can be named, listed or searched.
+      const spaces = ((await window.electronAPI.getSpaces?.()) ?? []).filter((s) =>
+        scopeSpaceIds.has(s.id)
+      );
       let space: SpaceItem | undefined;
       if (fixedScope) {
         space = spaces.find((s) => s.id === fixedScope.spaceId);
@@ -64,27 +76,24 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
         }
         space = resolved.space;
       }
-      const spaceId = fixedScope?.spaceId ?? space?.id ?? null;
+      const searchSpaceIds = spacesToSearch(space, spaces, scopeSpaceIds, !!fixedScope);
       const folderId = fixedScope?.folderId ?? null;
 
-      // Fallback chain: cloud → local semantic (hybrid RRF) → FTS5 keyword.
-      // A team space without a cloud team can't be scoped server-side, so its
-      // searches go straight to the local legs. Folder scoping is local-only:
-      // the cloud API has no folder filter, and a pinned scope whose space
-      // didn't resolve must not widen to an all-spaces cloud search.
-      const strategies: Array<() => Promise<ToolResult>> = [];
-      const cloudCanScope = fixedScope
-        ? !!space && (space.kind === "private" || !!space.cloud_space_id)
-        : !space || space.kind === "private" || !!space.cloud_space_id;
-      if (useCloudSearch && cloudCanScope && folderId == null) {
-        strategies.push(() => executeCloudSearch(query, limit, space, spaces));
+      // Fallback chain: local semantic (hybrid RRF) → FTS5 keyword → cloud. Everything in scope
+      // is on this device, so the cloud is asked only when nothing local matched, and only for
+      // teamspaces: private notes never leave the device, and the personal rows the cloud may
+      // still hold are stale copies of them. Folder scoping is local-only: the cloud API has no
+      // folder filter.
+      const cloudSpaces = spaces.filter(
+        (s) => s.kind === "team" && !!s.cloud_space_id && searchSpaceIds.includes(s.id)
+      );
+      const strategies: Array<() => Promise<ToolResult>> = [
+        () => executeLocalSearch(query, limit, true, space, spaces, searchSpaceIds, folderId),
+        () => executeLocalSearch(query, limit, false, space, spaces, searchSpaceIds, folderId),
+      ];
+      if (useCloudSearch && cloudSpaces.length > 0 && folderId == null) {
+        strategies.push(() => executeCloudSearch(query, limit, space, cloudSpaces, searchSpaceIds));
       }
-      strategies.push(() =>
-        executeLocalSearch(query, limit, true, space, spaces, spaceId, folderId)
-      );
-      strategies.push(() =>
-        executeLocalSearch(query, limit, false, space, spaces, spaceId, folderId)
-      );
 
       for (let i = 0; i < strategies.length; i++) {
         try {
@@ -108,6 +117,22 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
   };
 }
 
+// The spaces one search reads. Private stands for every Private in scope, as the tree's section
+// does (the pending one too, until main binds it). A pinned container outside the scope reads
+// nothing.
+function spacesToSearch(
+  space: SpaceItem | undefined,
+  spaces: SpaceItem[],
+  scopeSpaceIds: ReadonlySet<number>,
+  pinned: boolean
+): number[] {
+  if (!space) return pinned ? [] : [...scopeSpaceIds];
+  if (space.kind === "private" && !pinned) {
+    return spaces.filter((s) => s.kind === "private").map((s) => s.id);
+  }
+  return [space.id];
+}
+
 function summaryText(
   count: number,
   query: string,
@@ -125,15 +150,17 @@ async function executeLocalSearch(
   semantic: boolean,
   space: SpaceItem | undefined,
   spaces: SpaceItem[],
-  spaceId: number | null,
+  spaceIds: number[],
   folderId: number | null
 ): Promise<ToolResult> {
   const notes = semantic
-    ? await window.electronAPI.semanticSearchNotes(query, limit, spaceId, folderId)
-    : await window.electronAPI.searchNotes(query, limit, spaceId, folderId);
+    ? await window.electronAPI.semanticSearchNotes(query, limit, null, folderId, spaceIds)
+    : await window.electronAPI.searchNotes(query, limit, null, folderId, spaceIds);
 
   const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]));
-  const results = notes.map((note) => ({
+  // Main already searched these spaces only; a note it returns from anywhere else is dropped.
+  const inScope = notes.filter((note) => spaceIds.includes(note.space_id));
+  const results = inScope.map((note) => ({
     id: note.id,
     title: withoutAttendeesFence(note.title),
     date: note.created_at,
@@ -155,31 +182,43 @@ async function executeCloudSearch(
   query: string,
   limit: number,
   space: SpaceItem | undefined,
-  spaces: SpaceItem[]
+  cloudSpaces: SpaceItem[],
+  spaceIds: number[]
 ): Promise<ToolResult> {
   const { NotesService } = await import("../../services/NotesService.js");
-  // No space → all accessible spaces; team space → that space only (membership
-  // is server-enforced); private space → the personal-only default.
-  const spaceId = space?.kind === "team" ? (space.cloud_space_id ?? undefined) : undefined;
-  const scope = space ? undefined : ("all" as const);
-  const { notes: cloudNotes } = await NotesService.search(query, limit, scope, spaceId);
-
-  const spaceNameByCloudId = new Map(
-    spaces.filter((s) => s.cloud_space_id).map((s) => [s.cloud_space_id!, s.name])
+  const spaceByCloudId = new Map(cloudSpaces.map((s) => [s.cloud_space_id, s]));
+  // One teamspace is scoped by the server (membership is server-enforced). Several are asked for
+  // together, every accessible space, with room for the rows of spaces out of scope dropped here.
+  const single =
+    cloudSpaces.length === 1 ? (cloudSpaces[0].cloud_space_id ?? undefined) : undefined;
+  const { notes: cloudNotes } = await NotesService.search(
+    query,
+    Math.min(single ? limit : limit * 4, CLOUD_SEARCH_MAX_LIMIT),
+    single ? undefined : "all",
+    single
   );
-  const privateSpaceName = spaces.find((s) => s.kind === "private")?.name ?? null;
+  // A personal row (no space) is a stale cloud copy of a private note, and a space this device
+  // doesn't hold in scope is another workspace's: neither reaches the model.
+  const inScope = cloudNotes
+    .flatMap((cn) => {
+      const local = cn.space_id ? spaceByCloudId.get(cn.space_id) : undefined;
+      return local ? [{ cn, spaceName: local.name }] : [];
+    })
+    .slice(0, limit);
+
   const results = await Promise.all(
-    cloudNotes.map(async (cn) => ({
-      id: await resolveLocalNoteId(
-        cn.client_note_id ?? cn.id,
-        async () =>
-          (await window.electronAPI.getNoteForCloudRow?.(cn.client_note_id, cn.id)) ?? null
-      ),
+    inScope.map(async ({ cn, spaceName }) => ({
+      id: await resolveLocalNoteId(cn.client_note_id ?? cn.id, async () => {
+        const local =
+          (await window.electronAPI.getNoteForCloudRow?.(cn.client_note_id, cn.id)) ?? null;
+        // The local copy may have moved out of scope since: no id leads to it.
+        return local && spaceIds.includes(local.space_id) ? local : null;
+      }),
       title: cn.title && withoutAttendeesFence(cn.title),
       date: cn.created_at,
       type: cn.note_type,
       score: cn.score,
-      space: cn.space_id ? (spaceNameByCloudId.get(cn.space_id) ?? null) : privateSpaceName,
+      space: spaceName,
       content: withoutAttendeesFence(
         (cn.enhanced_content || cn.content).slice(0, MAX_CONTENT_LENGTH)
       ),

@@ -76,6 +76,7 @@ import {
 import type { SharedDictionaryWord } from "../../services/tools/dictionaryTool";
 import { setSharedWordsHidden } from "../../services/sharedDictionaryActions";
 import { readActiveWorkspaceId } from "../../stores/workspaceStore";
+import { resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
 import { selectAppliedSharedWords } from "../../utils/sharedDictionaryHints";
 import { executeTool, type ToolRegistry, type ToolResult } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
@@ -197,21 +198,28 @@ async function buildNoteAttendeesContext(
   }
 }
 
-async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
+// Notes from the turn's scope only (the same spaces its tools read), within the container when
+// the chat has one.
+async function buildRAGContext(
+  userText: string,
+  scopeSpaceIds: number[],
+  scope?: ContainerScope
+): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
   try {
     const results = await window.electronAPI.semanticSearchNotes(
       userText,
       RAG_NOTE_LIMIT,
       scope?.spaceId ?? null,
-      scope?.folderId ?? null
+      scope?.folderId ?? null,
+      scopeSpaceIds
     );
     if (!results || results.length === 0) return "";
 
     const snippets = await Promise.all(
       results.map(async (r: { id: number; title: string; score?: number }) => {
         const note = await window.electronAPI.getNote(r.id);
-        if (!note) return null;
+        if (!note || !scopeSpaceIds.includes(note.space_id)) return null;
         const content = [
           note.enhanced_content?.slice(0, RAG_NOTE_SNIPPET_LENGTH),
           note.content?.slice(0, RAG_NOTE_SNIPPET_LENGTH),
@@ -253,6 +261,11 @@ export interface ChatTurnOptions {
   openNote?: string | ((maxTranscriptTokens: number) => OpenNoteContext);
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
+  /**
+   * The note a note's chat is about. Its tools read and edit it even outside the active
+   * workspace's scope: its text is the chat's subject already. Every other note stays in scope.
+   */
+  openNoteId?: number | null;
   /**
    * The agent chat: offer the interaction tools (questions, connect cards,
    * access, keys, settings), show and save each turn's notes (status, timing,
@@ -644,6 +657,9 @@ export function createChatTurnEngine(
       }
 
       const scope = getOptions().searchScope;
+      // The spaces this turn may read, for its tools and its library context alike.
+      const scopeSpaceIds = await resolveAssistantScopeSpaceIds();
+      if (cancelled()) return;
       const policy = usePolicyStore.getState();
       const calendarConnected = selectCalendarConnected(settings);
       const webSearchEnabled = isWebSearchAllowed(policy);
@@ -704,6 +720,8 @@ export function createChatTurnEngine(
           calendarConnected,
           cloudBackupEnabled: settings.cloudBackupEnabled,
           searchScope: scope,
+          scopeSpaceIds,
+          openNoteId: getOptions().openNoteId,
           webSearchEnabled,
           productHelpEnabled,
           vocabulary: {
@@ -835,7 +853,7 @@ export function createChatTurnEngine(
       // A note's chat is about its note: other notes up front would compete with
       // it, and search_notes still reaches them when it doesn't answer.
       const [ragContext, attendeesContext] = await Promise.all([
-        currentOpenNote ? "" : buildRAGContext(userText, scope),
+        currentOpenNote ? "" : buildRAGContext(userText, scopeSpaceIds, scope),
         connectorsOffered ? buildNoteAttendeesContext(getOptions().noteMeeting) : "",
       ]);
       if (cancelled()) return;

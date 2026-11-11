@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   activePrivateSpace,
+  assistantScopeSpaceIds,
   decideNoteWorkspaceScope,
   isSpaceInWorkspaceScope,
   manageableWorkspaces,
@@ -97,6 +98,61 @@ test("activePrivateSpace: the active workspace's own Private comes before the pe
   assert.equal(activePrivateSpace(scoped), privateA);
   assert.equal(activePrivateSpace([teamIn(2, "a"), pending]), pending);
   assert.equal(activePrivateSpace([teamIn(2, "a")]), null);
+});
+
+// What the assistant may read: every space of workspace A's scope, none of workspace B's.
+const assistantSpaces = [
+  privateA,
+  pending,
+  privateOf(5, "b"),
+  teamIn(2, "a"),
+  teamIn(3, "b"),
+  teamIn(6, null),
+  teamIn(7, "gone"),
+];
+const assistantScope = (overrides) =>
+  assistantScopeSpaceIds({
+    spaces: assistantSpaces,
+    activeWorkspaceId: "a",
+    workspaces: listed,
+    defaultWorkspaceId: "a",
+    privateSpaceId: 1,
+    defaultPrivateSpaceId: 1,
+    ...overrides,
+  }).sort((x, y) => x - y);
+
+test("assistantScopeSpaceIds: with the workspace list, the assistant reads what the tree shows", () => {
+  assert.deepEqual(assistantScope(), [1, 2, 6, 7, 9]);
+  // Workspace B active: its own Private and teamspace, never A's Private or the default's pending one.
+  assert.deepEqual(assistantScope({ activeWorkspaceId: "b", privateSpaceId: 5 }), [3, 5, 6, 7]);
+});
+
+test("assistantScopeSpaceIds: without the workspace list (the dictation window), main's Private and the active workspace's teamspaces", () => {
+  // Main's Private is the default's, so the pending one (merged into it in the tree) counts too.
+  assert.deepEqual(assistantScope({ workspaces: [], defaultWorkspaceId: null }), [1, 2, 6, 9]);
+  // Main's Private isn't the default's: the default's pending notes belong to another workspace.
+  assert.deepEqual(
+    assistantScope({
+      activeWorkspaceId: "b",
+      workspaces: [],
+      defaultWorkspaceId: null,
+      privateSpaceId: 5,
+      defaultPrivateSpaceId: 1,
+    }),
+    [3, 5, 6]
+  );
+  // A list that doesn't hold the active workspace (just left, still loading) is no list at all.
+  assert.deepEqual(
+    assistantScope({ activeWorkspaceId: "gone", privateSpaceId: 1, defaultPrivateSpaceId: 1 }),
+    [1, 6, 7, 9]
+  );
+});
+
+test("assistantScopeSpaceIds fails closed to main's Private when no workspace is active", () => {
+  assert.deepEqual(assistantScope({ activeWorkspaceId: null }), [1]);
+  assert.deepEqual(assistantScope({ activeWorkspaceId: null, workspaces: [] }), [1]);
+  // Not even main's Private is known: nothing.
+  assert.deepEqual(assistantScope({ activeWorkspaceId: null, privateSpaceId: null }), []);
 });
 
 const decide = (overrides) =>

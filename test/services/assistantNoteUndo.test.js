@@ -43,7 +43,9 @@ test("safe assistant edits and atomic Undo", async (t) => {
   const { syncService } = await vite.ssrLoadModule("/services/SyncService.ts");
   const pushes = [];
   t.mock.method(syncService, "debouncedPush", (...args) => pushes.push(args));
-  const { updateNoteTool } = await vite.ssrLoadModule("/services/tools/updateNoteTool.ts");
+  const { createUpdateNoteTool } = await vite.ssrLoadModule("/services/tools/updateNoteTool.ts");
+  // Made for each edit, as a turn makes it: its scope is the Private of whoever is signed in.
+  const updateNoteTool = () => createUpdateNoteTool({ spaceIds: [database.getPrivateSpaceId()] });
   const { executeTool } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
   const fresh = () => {
     const note = database.saveNote("Workshop", "Private notes", "meeting").note;
@@ -57,7 +59,7 @@ test("safe assistant edits and atomic Undo", async (t) => {
   };
   const tokenFor = (id) => database.getNoteUndos().find((edit) => edit.noteId === id)?.token;
   const edit = (note, updates, turn) =>
-    updateNoteTool.execute(
+    updateNoteTool().execute(
       { id: note.id, ...updates },
       turn && { messageId: turn, signal: new AbortController().signal }
     );
@@ -312,7 +314,7 @@ test("safe assistant edits and atomic Undo", async (t) => {
       // later edit would wait on it forever.
       try {
         const pending = executeTool(
-          updateNoteTool,
+          updateNoteTool(),
           { id: note.id, content: "Assistant replacement" },
           { signal: controller.signal }
         );

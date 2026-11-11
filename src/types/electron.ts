@@ -2137,11 +2137,13 @@ declare global {
         folderId?: number | null,
         spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
+      // spaceIds: the spaces the assistant may read; an empty list reads nothing.
       semanticSearchNotes: (
         query: string,
         limit?: number,
         spaceId?: number | null,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceIds?: readonly number[] | null
       ) => Promise<NoteItem[]>;
       updateNoteCloudId: (id: number, cloudId: string) => Promise<NoteItem>;
       updateNoteShareState: (

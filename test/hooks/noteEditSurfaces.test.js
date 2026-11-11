@@ -62,6 +62,8 @@ for (const surface of ["note chat", "agent window"]) {
           window: {
             clearInterval: noop,
             electronAPI: {
+              // The note is in main's Private, all a chat reads with no workspace active.
+              getPrivateSpaceId: async () => 1,
               getNote: async () => ({ ...stored }),
               updateNote: async (_id, updates, options) => {
                 assert.equal(options.undoable, true);
