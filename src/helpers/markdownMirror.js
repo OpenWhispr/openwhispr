@@ -311,18 +311,67 @@ class MarkdownMirror {
   // companions open with "# <title>". BOM and CRLF are tolerated so a note an
   // external editor re-saved is still recognised.
   _isNoteMarkdownFile(filePath) {
+    return /^\uFEFF?---\r?\n/.test(this._readFileHead(filePath, 8) ?? "");
+  }
+
+  // A regular file's first bytes, or null for anything else.
+  _readFileHead(filePath, length) {
     let fd;
     try {
       const stats = fs.lstatSync(filePath);
-      if (stats.isSymbolicLink() || !stats.isFile()) return false;
+      if (stats.isSymbolicLink() || !stats.isFile()) return null;
       fd = fs.openSync(filePath, "r");
-      const marker = Buffer.alloc(8);
-      const bytesRead = fs.readSync(fd, marker, 0, marker.length, 0);
-      return /^\uFEFF?---\r?\n/.test(marker.toString("utf8", 0, bytesRead));
+      const head = Buffer.alloc(length);
+      const bytesRead = fs.readSync(fd, head, 0, length, 0);
+      return head.toString("utf8", 0, bytesRead);
     } catch {
-      return false;
+      return null;
     } finally {
       if (fd !== undefined) fs.closeSync(fd);
+    }
+  }
+
+  // A note file this mirror wrote: "<id>-<slug>.md" opening with its "id: <id>".
+  _mirroredNoteId(filePath) {
+    const id = /^(\d+)-.*\.md$/.exec(path.basename(filePath))?.[1];
+    if (!id) return null;
+    const head = this._readFileHead(filePath, 64) ?? "";
+    return new RegExp(`^\\uFEFF?---\\r?\\nid: ${id}\\r?\\n`).test(head) ? id : null;
+  }
+
+  // Erasing local data (#3030) in a folder the user chose removes only what
+  // this mirror wrote there: its note files, their transcripts, and folders
+  // that leaves empty. The chosen folder itself stays.
+  removeMirroredFiles(basePath) {
+    const files = fs
+      .readdirSync(basePath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .flatMap((entry) => {
+        const folder = path.join(basePath, entry.name);
+        try {
+          return fs.readdirSync(folder).map((name) => path.join(folder, name));
+        } catch {
+          return []; // An unreadable folder holds nothing this mirror could have written.
+        }
+      });
+    const noteIds = new Set();
+    const owned = files.filter((file) => {
+      const id = this._mirroredNoteId(file);
+      if (id) noteIds.add(id);
+      return id !== null;
+    });
+    for (const file of files) {
+      const id = /^(\d+)-.*-transcript\.(?:md|txt)$/.exec(path.basename(file))?.[1];
+      if (id && noteIds.has(id) && fs.lstatSync(file).isFile()) owned.push(file);
+    }
+    for (const file of owned) fs.rmSync(file, { force: true });
+    // Only a folder this emptied: one the user left empty stays.
+    for (const folder of new Set(owned.map((file) => path.dirname(file)))) {
+      try {
+        fs.rmdirSync(folder);
+      } catch {
+        /* Not empty: it holds files the mirror didn't write. */
+      }
     }
   }
 

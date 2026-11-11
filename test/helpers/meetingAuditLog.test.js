@@ -119,6 +119,33 @@ test("a refusal records its trigger and policy code", async () => {
   assert.equal(refused.sessionId, null);
 });
 
+// #3030: the offboarding wipe is recorded in the same fixed shape.
+test("a local data wipe is one line, marked incomplete when a store survived", async () => {
+  const { log } = harness();
+  log.localDataWiped({ incomplete: false });
+  log.localDataWiped({ incomplete: true });
+  await log.flush();
+  const [complete, incomplete] = lines();
+  assert.deepEqual(Object.keys(complete), FIELDS);
+  assert.deepEqual(
+    [complete, incomplete].map(({ event, trigger, reason, sessionId }) => ({
+      event,
+      trigger,
+      reason,
+      sessionId,
+    })),
+    [
+      { event: "local-data.wiped", trigger: "device-policy", reason: null, sessionId: null },
+      {
+        event: "local-data.wiped",
+        trigger: "device-policy",
+        reason: "incomplete",
+        sessionId: null,
+      },
+    ]
+  );
+});
+
 // A local transcription choice the policy refuses is reported with its own code.
 test("a refused local model choice keeps its policy code", async () => {
   const { log } = harness();

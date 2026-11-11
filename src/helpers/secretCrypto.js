@@ -139,4 +139,17 @@ function decrypt(blob) {
   throw new Error("decryption failed: no backend available");
 }
 
-module.exports = { encrypt, decrypt, isAvailable };
+// Erasing local data removes every secret this key encrypted, so a key that
+// can't be deleted (no keyring on this device) protects nothing; only logged.
+function deleteMasterKey() {
+  mode = null;
+  masterKey = null;
+  try {
+    const { Entry } = require("@napi-rs/keyring");
+    new Entry(SERVICE, ACCOUNT).deleteCredential();
+  } catch (error) {
+    debugLogger.warn("master key not deleted", { error: error?.message }, "secretCrypto");
+  }
+}
+
+module.exports = { encrypt, decrypt, isAvailable, deleteMasterKey };

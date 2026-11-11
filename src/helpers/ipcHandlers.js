@@ -162,7 +162,6 @@ const diarizationHost = (endpoint) => {
 };
 const { resolveLocalServerNeeds, shouldStopLocalServer } = require("./localServerPolicy");
 const autoStart = require("./autoStart");
-const { getRelaunchOptions, getRelaunchWaiter } = require("./autoStartPolicy");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
@@ -297,10 +296,7 @@ const { createAbortError } = require("./abortError");
 const { describeCortiTokenFailure, testProviderConnection } = require("./providerConnectionTest");
 const { createConnectionCheckCache } = require("./connectionCheckCache");
 const { PAID_KEY_CHECKS_FILE, createPaidKeyCheck } = require("./paidKeyCheck");
-const {
-  ENTERPRISE_AUDIO_DEVICE_ID_FILE,
-  registerEnterpriseAudioSetup,
-} = require("./enterpriseAudioSetup");
+const { registerEnterpriseAudioSetup } = require("./enterpriseAudioSetup");
 const { createUploadCancelRegistry } = require("./uploadCancelRegistry");
 const { applyOpenWhisprOriginHeader } = require("./sessionHeaders");
 const {
@@ -1571,9 +1567,14 @@ class IPCHandlers {
     );
   }
 
+  _initMirror(basePath) {
+    require("./markdownMirror").init(basePath);
+    require("./localDataWipe").rememberNotesMirrorPath(basePath, app.getPath("userData"));
+  }
+
   _rebuildMirror(basePath) {
     const markdownMirror = require("./markdownMirror");
-    if (basePath) markdownMirror.init(basePath);
+    if (basePath) this._initMirror(basePath);
     const notes = this.databaseManager.getNotes(null, 99999);
     const speakerMappingsMap = {};
     for (const note of notes) {
@@ -5274,29 +5275,11 @@ class IPCHandlers {
         if (success) return;
       }
       this.updateManager.deferInstallOnQuit();
-      const { launcherPath, args } = getRelaunchOptions({
-        argv: process.argv,
-        protocol: this.oauthProtocol,
-        appImagePath: process.env.APPIMAGE,
-      });
-      if (launcherPath) {
-        const waiter = getRelaunchWaiter({ launcherPath, args, pid: process.pid });
-        require("child_process")
-          .spawn(waiter.file, waiter.args, {
-            detached: true,
-            stdio: "ignore",
-            cwd: path.dirname(launcherPath), // never inside the directory being removed
-          })
-          .unref();
-      } else {
-        app.relaunch({ args });
-      }
+      autoStart.scheduleRelaunch(this.oauthProtocol);
       app.quit();
     });
 
     ipcMain.handle("cleanup-app", async (event) => {
-      const fs = require("fs");
-      const os = require("os");
       const errors = [];
       const mainWindow = this.windowManager.mainWindow;
 
@@ -5366,9 +5349,6 @@ class IPCHandlers {
       try {
         this.metaActivation?.dispose();
         this.metaActivation = null;
-        const activationPath = path.join(app.getPath("userData"), "meta-activation.db");
-        for (const suffix of ["", "-wal", "-shm"])
-          fs.rmSync(activationPath + suffix, { force: true });
       } catch (e) {
         errors.push(`Activation data cleanup: ${e.message}`);
       }
@@ -5380,21 +5360,7 @@ class IPCHandlers {
         errors.push(`DB close: ${e.message}`);
       }
 
-      // Delete audio files
-      try {
-        this.audioStorageManager.deleteAllAudio();
-      } catch (e) {
-        errors.push(`Audio delete: ${e.message}`);
-      }
-
-      // Delete downloaded models
-      try {
-        const { getModelsDirForService } = require("./modelDirUtils");
-        const whisperDir = getModelsDirForService("whisper");
-        if (fs.existsSync(whisperDir)) fs.rmSync(whisperDir, { recursive: true, force: true });
-      } catch (e) {
-        errors.push(`Whisper models: ${e.message}`);
-      }
+      // The managers stop their own downloads and servers before their models go.
       try {
         await this.parakeetManager?.deleteAllParakeetModels();
       } catch (e) {
@@ -5412,31 +5378,7 @@ class IPCHandlers {
         errors.push(`LLM models: ${e.message}`);
       }
 
-      // These caches are not owned by one account. Remove them only through
-      // the explicit device-erasure path, never during normal account deletion.
-      const homeCacheRoot = path.join(os.homedir(), ".cache", "openwhispr");
-      for (const cacheName of ["embedding-models", "qdrant-data", "qdrant-data-dev", "yt-dlp"]) {
-        try {
-          fs.rmSync(path.join(homeCacheRoot, cacheName), { recursive: true, force: true });
-        } catch (e) {
-          errors.push(`${cacheName} cache: ${e.message}`);
-        }
-      }
-
-      // Delete database file + WAL/SHM
-      try {
-        const dbPath = path.join(
-          app.getPath("userData"),
-          process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db"
-        );
-        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
-        if (fs.existsSync(dbPath + "-wal")) fs.unlinkSync(dbPath + "-wal");
-        if (fs.existsSync(dbPath + "-shm")) fs.unlinkSync(dbPath + "-shm");
-      } catch (e) {
-        errors.push(`DB file: ${e.message}`);
-      }
-
-      // Delete device-wide settings and encrypted credentials.
+      // Clear the settings and credentials this process still holds in memory.
       try {
         await this.environmentManager?.clearAllPersistedData();
       } catch (e) {
@@ -5453,49 +5395,11 @@ class IPCHandlers {
       } catch (e) {
         errors.push(`Enterprise settings: ${e.message}`);
       }
-      try {
-        for (const fileName of [
-          "workspace-policy.json",
-          "managed-enterprise-config.json",
-          "globe-preference-state.json",
-          ".system-audio-permission",
-          "account-scope-binding.json",
-          "installed-models.json",
-          "model-registry.json",
-          "model-registry.json.backup",
-          PAID_KEY_CHECKS_FILE,
-        ]) {
-          fs.rmSync(path.join(app.getPath("userData"), fileName), { force: true });
-        }
-      } catch (e) {
-        errors.push(`Device setting files: ${e.message}`);
-      }
-      try {
-        fs.rmSync(path.join(app.getPath("userData"), "enterprise-audio-keys"), {
-          recursive: true,
-          force: true,
-        });
-        for (const fileName of ["enterprise-audio-bootstrap.json", ENTERPRISE_AUDIO_DEVICE_ID_FILE])
-          fs.rmSync(path.join(app.getPath("userData"), fileName), { force: true });
-        await require("./enterpriseAudioBootstrap").removeClaimedBootstraps(
-          app.getPath("userData")
-        );
-      } catch (error) {
-        errors.push(`Enterprise audio credentials: ${error.message}`);
-      }
-      // "connectors" holds encrypted connector logins (Slack, Gmail), all
-      // revoked above. "skills" holds the user's assistant skills, and
-      // "skill-versions" the copies Undo restores.
-      for (const directoryName of ["bin", "llama-cpp", "connectors", "skills", "skill-versions"]) {
-        try {
-          fs.rmSync(path.join(app.getPath("userData"), directoryName), {
-            recursive: true,
-            force: true,
-          });
-        } catch (e) {
-          errors.push(`${directoryName} runtime: ${e.message}`);
-        }
-      }
+
+      // Every store on the device, shared with the device policy's offboarding
+      // wipe (#3030). The open log file is one, and Windows can't delete an open file.
+      debugLogger.close();
+      errors.push(...(await require("./localDataWipe").removeLocalData({ includeModels: true })));
       try {
         autoStart.setAutoStartEnabled(false);
       } catch (e) {
@@ -14887,7 +14791,7 @@ class IPCHandlers {
         if (!enabled) return { success: true };
         const basePath = customPath || path.join(app.getPath("userData"), "notes");
         if (options?.skipRebuild) {
-          require("./markdownMirror").init(basePath);
+          this._initMirror(basePath);
         } else {
           this._rebuildMirror(basePath);
         }

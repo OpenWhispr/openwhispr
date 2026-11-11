@@ -13,6 +13,12 @@ const DEVICE_KEYS = [
   "RequireSignIn",
   "AuditLogPath",
   "WipeLocalDataOnLaunch",
+  "WipeLocalDataIncludesModels",
+  "DisableMeetingRecording",
+];
+const BOOLEAN_DEVICE_KEYS = [
+  "RequireSignIn",
+  "WipeLocalDataIncludesModels",
   "DisableMeetingRecording",
 ];
 const MAX_POLICY_BYTES = 1024 * 1024;
@@ -95,13 +101,13 @@ function normalizeDeviceValues(input) {
   const values = Object.fromEntries(
     DEVICE_KEYS.filter((key) => Object.hasOwn(input, key)).map((key) => [key, input[key]])
   );
-  if (
-    Object.keys(values).length === 0 ||
-    (Object.keys(values).length === 1 && values.DisableMeetingRecording === false)
-  ) {
-    return ABSENT_SNAPSHOT;
-  }
-  for (const key of ["RequireSignIn", "DisableMeetingRecording"]) {
+  // Values that change nothing on their own don't make a device managed: the
+  // legacy alias left at false, and the models flag without a wipe token.
+  const inert = (key) =>
+    (key === "DisableMeetingRecording" && values[key] === false) ||
+    (key === "WipeLocalDataIncludesModels" && typeof values[key] === "boolean");
+  if (Object.keys(values).every(inert)) return ABSENT_SNAPSHOT;
+  for (const key of BOOLEAN_DEVICE_KEYS) {
     if (values[key] !== undefined && typeof values[key] !== "boolean")
       throw new Error("Invalid device boolean");
   }
@@ -133,6 +139,7 @@ function normalizeDeviceValues(input) {
     localOnly: values.RequireSignIn === false,
     auditLogPath: values.AuditLogPath ?? null,
     wipeLocalDataOnLaunch: values.WipeLocalDataOnLaunch ?? null,
+    wipeLocalDataIncludesModels: values.WipeLocalDataIncludesModels ?? false,
   };
 }
 
@@ -226,7 +233,7 @@ function parseRegistryExport(text) {
         (key) => key.toLowerCase() === unescapeRegistryString(rawName).toLowerCase()
       );
     if (!name) continue;
-    const boolean = ["RequireSignIn", "DisableMeetingRecording"].includes(name);
+    const boolean = BOOLEAN_DEVICE_KEYS.includes(name);
     const dword = /^dword:([0-9a-f]{8})$/i.exec(data)?.[1];
     const string = REGISTRY_STRING.exec(data)?.[1];
     if (boolean ? !["00000000", "00000001"].includes(dword) : string === undefined)

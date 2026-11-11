@@ -3,6 +3,13 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
+const {
+  CACHE_ENTRIES,
+  MODEL_CACHE_ENTRIES,
+  MODEL_USER_DATA_ENTRIES,
+  USER_DATA_ENTRIES,
+} = require("../../src/helpers/localDataWipe");
+
 const ipcHandlersSource = fs.readFileSync(
   path.join(__dirname, "../../src/helpers/ipcHandlers.js"),
   "utf8"
@@ -25,41 +32,34 @@ test("explicit device cleanup covers models, credentials, caches, and browser se
     "clearStorageData",
     "clearCache",
     "setAutoStartEnabled(false)",
+    // #3030: the files go through the inventory the offboarding wipe shares.
+    "removeLocalData({ includeModels: true })",
   ]) {
     assert.ok(source.includes(operation), `device cleanup includes ${operation}`);
   }
+  // Every channel on the device (production, staging, dev) shares the keyring
+  // master key: deleting it here would make the others' saved keys unreadable.
+  assert.ok(!source.includes("deleteMasterKey"), "device cleanup keeps the shared master key");
 
-  for (const cacheName of ["embedding-models", "qdrant-data", "qdrant-data-dev", "yt-dlp"]) {
-    assert.ok(source.includes(`"${cacheName}"`), `device cleanup removes ${cacheName}`);
-  }
+  const caches = [...CACHE_ENTRIES, ...MODEL_CACHE_ENTRIES];
+  for (const cacheName of ["embedding-models", "qdrant-data", "qdrant-data-dev", "yt-dlp"])
+    assert.ok(caches.includes(cacheName), `device cleanup removes ${cacheName}`);
 
-  assert.ok(
-    source.includes('"account-scope-binding.json"'),
-    "device cleanup removes the account scope binding"
-  );
-
+  const userData = [...USER_DATA_ENTRIES, ...MODEL_USER_DATA_ENTRIES];
   for (const fileName of [
+    "account-scope-binding.json",
     "installed-models.json",
     "model-registry.json",
     "model-registry.json.backup",
+    "paid-key-checks.json",
+    "connectors",
   ])
-    assert.ok(source.includes(`"${fileName}"`), `device cleanup removes ${fileName}`);
-
-  assert.ok(source.includes('"connectors"'), "device cleanup removes encrypted connector logins");
-  assert.ok(source.includes("PAID_KEY_CHECKS_FILE"), "device cleanup removes paid key checks");
+    assert.ok(userData.includes(fileName), `device cleanup removes ${fileName}`);
 });
 
 test("Reset app removes the skills folder and its versions folder", () => {
-  assert.ok(cleanupHandler, "cleanup-app handler is present");
-  const list = cleanupHandler[1].match(/for \(const directoryName of (\[[^\]]*\])\)/);
-  assert.ok(list, "device cleanup still removes its userData folders in one list");
-  assert.deepEqual(JSON.parse(list[1]), [
-    "bin",
-    "llama-cpp",
-    "connectors",
-    "skills",
-    "skill-versions",
-  ]);
+  for (const directoryName of ["bin", "llama-cpp", "connectors", "skills", "skill-versions"])
+    assert.ok(USER_DATA_ENTRIES.includes(directoryName), `device cleanup removes ${directoryName}`);
 });
 
 // cleanup-app can't run outside Electron (it closes the database, clears
@@ -81,10 +81,7 @@ test("device cleanup revokes every stored connector login before the files and r
     "device cleanup doesn't use disconnectAll, which needs a signed-in account"
   );
 
-  for (const later of [
-    "this.databaseManager?.db?.close()",
-    'for (const directoryName of ["bin", "llama-cpp", "connectors", "skills", "skill-versions"])',
-  ]) {
+  for (const later of ["this.databaseManager?.db?.close()", "removeLocalData("]) {
     const at = source.indexOf(later);
     assert.ok(at >= 0, `device cleanup still contains ${later}`);
     assert.ok(revoke < at, `connector logins are revoked before ${later}`);

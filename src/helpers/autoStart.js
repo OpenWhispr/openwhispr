@@ -2,6 +2,7 @@
 // macOS and Windows; on Linux it does nothing, so an XDG autostart entry stands in
 // (linuxAutostart.js). Decisions live in autoStartPolicy.js.
 
+const path = require("path");
 const { app } = require("electron");
 const linuxAutostart = require("./linuxAutostart");
 const {
@@ -9,6 +10,8 @@ const {
   resolveAutoStartState,
   needsHiddenFlagMigration,
   wasLaunchedHidden,
+  getRelaunchOptions,
+  getRelaunchWaiter,
 } = require("./autoStartPolicy");
 
 const isLinux = () => process.platform === "linux";
@@ -63,9 +66,32 @@ function syncAutoStartEntry() {
   return true;
 }
 
+// Starts a new instance once this one exits, without replaying how this one was
+// launched (see getRelaunchOptions). The caller quits.
+function scheduleRelaunch(protocol) {
+  const { launcherPath, args } = getRelaunchOptions({
+    argv: process.argv,
+    protocol,
+    appImagePath: process.env.APPIMAGE,
+  });
+  if (!launcherPath) {
+    app.relaunch({ args });
+    return;
+  }
+  const waiter = getRelaunchWaiter({ launcherPath, args, pid: process.pid });
+  require("child_process")
+    .spawn(waiter.file, waiter.args, {
+      detached: true,
+      stdio: "ignore",
+      cwd: path.dirname(launcherPath), // never inside the directory being removed
+    })
+    .unref();
+}
+
 module.exports = {
   getAutoStartState,
   setAutoStartEnabled,
+  scheduleRelaunch,
   wasLaunchedAtLoginHidden,
   syncAutoStartEntry,
 };

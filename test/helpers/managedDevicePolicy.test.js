@@ -193,6 +193,27 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
   );
 });
 
+// #3030: the offboarding wipe keeps downloaded models unless this key asks.
+test("WipeLocalDataIncludesModels is a strict boolean that defaults to keeping models", async () => {
+  const wipe = { WipeLocalDataOnLaunch: "offboard-1" };
+  assert.equal(normalizeDeviceValues(wipe).wipeLocalDataIncludesModels, false);
+  assert.equal(
+    normalizeDeviceValues({ ...wipe, WipeLocalDataIncludesModels: true })
+      .wipeLocalDataIncludesModels,
+    true
+  );
+  assert.throws(() => normalizeDeviceValues({ ...wipe, WipeLocalDataIncludesModels: "true" }));
+  // Without a token it does nothing, so it alone doesn't make the device managed.
+  for (const WipeLocalDataIncludesModels of [true, false])
+    assert.equal(normalizeDeviceValues({ WipeLocalDataIncludesModels }).status, "absent");
+  assert.deepEqual(await registryExport(['"WipeLocalDataIncludesModels"=dword:00000001'])(), {
+    WipeLocalDataIncludesModels: true,
+  });
+  await assert.rejects(registryExport(['"WipeLocalDataIncludesModels"="1"'])(), {
+    code: "DEVICE_POLICY_INVALID",
+  });
+});
+
 test("evidence of a deployment is the policy key or file, not the reader's success", async () => {
   const existing = (files) => ({
     lstat: async (file) => {

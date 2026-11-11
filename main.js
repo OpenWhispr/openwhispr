@@ -345,6 +345,7 @@ const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
 const { createManagedDevicePolicy } = require("./src/helpers/managedDevicePolicy");
 const { createMeetingAuditLog } = require("./src/helpers/meetingAuditLog");
+const { wipeLocalDataOnLaunch } = require("./src/helpers/localDataWipe");
 const { installManagedNetworkGuard } = require("./src/helpers/devicePolicyNetwork");
 const { applyOpenWhisprOriginHeader } = require("./src/helpers/sessionHeaders");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
@@ -1254,6 +1255,22 @@ async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
   // contend for its port or storage lock.
   await reapStaleSidecars();
+
+  // #3030: the device policy's offboarding wipe runs before the logger, the
+  // database or any sidecar opens a file it removes, then restarts the app as a
+  // fresh install.
+  const wiped = await wipeLocalDataOnLaunch({
+    userDataPath: app.getPath("userData"),
+    appVersion: app.getVersion(),
+    clearBrowserData: () =>
+      Promise.all([session.defaultSession.clearStorageData(), session.defaultSession.clearCache()]),
+  });
+  if (wiped) {
+    // Like Reset app data, a development build quits instead of relaunching.
+    if (process.env.NODE_ENV !== "development") autoStart.scheduleRelaunch(OAUTH_PROTOCOL);
+    app.exit(0);
+    return;
+  }
 
   // The registry loader reports cache problems before core managers exist, so the
   // logger starts first. Requiring it again in initializeCoreManagers is a no-op.
