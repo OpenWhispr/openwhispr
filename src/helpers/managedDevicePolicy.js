@@ -204,9 +204,8 @@ function runRegistryTool(run, args) {
 // tools), never that no policy is deployed.
 async function hasWindowsPolicyKey(run) {
   const { stdout } = await runRegistryTool(run, ["query", WINDOWS_POLICIES_KEY]);
-  return stdout
-    .split(/\r?\n/)
-    .some((line) => /^HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\OpenWhispr$/i.test(line.trim()));
+  const key = WINDOWS_POLICY_KEY.replace(/^HKLM\\/, "HKEY_LOCAL_MACHINE\\").toLowerCase();
+  return stdout.split(/\r?\n/).some((line) => line.trim().toLowerCase() === key);
 }
 
 const REGISTRY_STRING = /^"((?:[^"\\]|\\.)*)"$/;
