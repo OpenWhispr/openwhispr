@@ -280,9 +280,7 @@ test("an unresolved verdict never stops a server, even with none ever held", asy
   tokenState = { token: "token-a", generation: 1 };
   const app = build();
   t.after(() => app.teardown());
-  policyFetch = async () => {
-    throw new Error("offline");
-  };
+  policyFetch = async () => json({ code: "POLICY_UNRESOLVABLE" }, 409);
 
   await assert.rejects(app.gate.resolve(), { code: "POLICY_UNRESOLVABLE" });
   app.tokenChanged({ token: "token-b", generation: 2 });
@@ -290,6 +288,28 @@ test("an unresolved verdict never stops a server, even with none ever held", asy
 
   assert.equal(app.stops(), 0);
   assert.equal(app.gate.failure("transcription", "base").code, "POLICY_UNRESOLVABLE");
+});
+
+// Nothing says this identity is managed (no device policy, no server calling
+// its policy unresolvable), so its failed lookup restricts nothing.
+test("a failed lookup with nothing held leaves an unmanaged user every local feature", async (t) => {
+  tokenState = { token: "token-never-held", generation: 1 };
+  const app = build();
+  t.after(() => app.teardown());
+  policyFetch = async () => {
+    throw new Error("offline");
+  };
+  app.target.windowManager = { controlPanelWindow: null };
+  app.target.textEditMonitor = null;
+  const screen = { data: "image", mediaType: "image/jpeg" };
+  t.mock.method(require("../../src/helpers/screenContextCapture"), "captureActiveDisplay", () =>
+    Promise.resolve(screen)
+  );
+
+  app.gate.release(await app.gate.authorize("transcription", "base"));
+  assert.equal(await app.target._audioFeaturePolicy.resolve("meeting"), null);
+  assert.equal(await app.target._audioFeaturePolicy.resolve("upload"), null);
+  assert.equal(await handlers.get("capture-screen-context")({ sender: {} }), screen);
 });
 
 test("switching accounts cancels old-account work before the new verdict, which then decides", async (t) => {
@@ -421,12 +441,11 @@ test("offline, a rotated token keeps its account's verdict; another account gets
     code: "POLICY_MODEL_BLOCKED",
   });
 
+  // Nothing held, and nothing saying it is managed: B is unmanaged, not A.
   app.tokenChanged({ token: "token-of-b", generation: 3 });
   await app.setScope("account-b");
   await settle();
-  await assert.rejects(app.gate.authorize("transcription", "base"), {
-    code: "POLICY_UNRESOLVABLE",
-  });
+  app.gate.release(await app.gate.authorize("transcription", "small"));
 });
 
 test("the periodic refresh fetches when signed in and makes no request for a proven guest", async (t) => {
@@ -538,7 +557,7 @@ test("other lookup failures don't prove a session cookie holder is a guest", asy
   (IPCHandlers.default || IPCHandlers).prototype.loadLocalModelPolicy.call(app.target);
   await settle();
 
-  assert.equal(app.gate.failure("transcription", "base").code, "POLICY_UNRESOLVABLE");
+  assert.equal(app.target.effectivePolicyManager.getCurrent().workspaceRequired, true);
 });
 
 test("a device policy's local model allow-list applies to a guest", async (t) => {

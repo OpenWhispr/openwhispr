@@ -303,6 +303,9 @@ test("a failed lookup holds nothing closed without evidence that the identity is
     member
   );
   const loading = resolveEffectivePolicy(absentDevice, null, member);
+  assert.equal(failed.success, true);
+  assert.equal(failed.status, "unmanaged");
+  assert.equal(loading.status, "loading");
   for (const [channel] of channels) {
     assert.equal(productOperationAllowed(failed, "1.11.1", channel), true, channel);
     assert.equal(productOperationAllowed(loading, "1.11.1", channel), true, channel);
@@ -401,8 +404,8 @@ test("held lookups read no network, a failed lookup keeps the held verdict, and 
   assert.equal(updates.at(-1).revision, manager.getCurrent().revision);
   scope = { ...member, authGeneration: 2 };
   manager.updateWorkspace({ ...answer, authGeneration: 2 });
-  assert.equal(manager.getCurrent().success, false);
-  assert.equal(manager.getUpdatePolicy().success, true);
+  assert.equal(manager.getCurrent().status, "unmanaged");
+  assert.equal(manager.getUpdatePolicy().status, "unmanaged");
   manager.stop();
 });
 

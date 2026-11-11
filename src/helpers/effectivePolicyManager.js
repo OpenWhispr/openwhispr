@@ -112,19 +112,21 @@ function resolveEffectivePolicy(device, workspace, scope) {
   };
   // On a failure `managed` is the evidence that something manages this
   // identity: a device policy, or a server that called its policy
-  // unresolvable. Without it a failed lookup holds nothing closed.
+  // unresolvable. Without it a failed lookup restricts nothing: the identity
+  // is unmanaged, for updates as for everything else.
+  const managed = device.managed === true || workspace?.code === "POLICY_UNRESOLVABLE";
   const failure = (status, code) => ({
     ...metadata,
     success: false,
     status,
-    managed: device.managed === true || workspace?.code === "POLICY_UNRESOLVABLE",
+    managed,
     policy: null,
     code,
   });
   if (device.status === "loading") return failure("loading", "DEVICE_POLICY_LOADING");
   if (device.status === "invalid") return failure("error", "DEVICE_POLICY_INVALID");
   if (scope.authenticated && !workspace) return failure("loading", "POLICY_LOADING");
-  if (scope.authenticated && !workspace.success)
+  if (scope.authenticated && !workspace.success && managed)
     return failure("error", workspace.code ?? "POLICY_UNRESOLVABLE");
   if (!scope.authenticated && device.requireSignIn)
     return failure("error", "POLICY_SIGN_IN_REQUIRED");
@@ -149,18 +151,14 @@ function resolveEffectivePolicy(device, workspace, scope) {
 
 // What the updater obeys. A device policy that can't be read contributes
 // nothing, and as it also keeps the workspace off the network, its held
-// verdict or none decides. A lookup that failed without evidence that the
-// identity is managed leaves the update choice with the user.
+// verdict or none decides.
 function resolveUpdatePolicy(device, workspace, scope) {
   const invalidDevice = device.status === "invalid";
-  const snapshot = resolveEffectivePolicy(
+  return resolveEffectivePolicy(
     invalidDevice ? ABSENT_DEVICE : device,
     invalidDevice ? (workspace ?? { success: false }) : workspace,
     scope
   );
-  return snapshot.status === "error" && !snapshot.managed
-    ? { ...snapshot, success: true, status: "unmanaged" }
-    : snapshot;
 }
 
 function createEffectivePolicyManager({

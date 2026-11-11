@@ -48,7 +48,6 @@ const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager
 const { createEffectivePolicyManager } = require("./effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
 const {
-  isUnmanagedLookup,
   productOperationAllowed,
   productPolicyState,
   realtimeSelection,
@@ -1979,8 +1978,7 @@ class IPCHandlers {
   startPolicyCalendars() {
     this._remoteCalendarsReady = true;
     const snapshot = this.effectivePolicyManager.getCurrent();
-    if ((snapshot.success || isUnmanagedLookup(snapshot)) && !snapshot.localOnly)
-      this._startRemoteProductWork();
+    if (snapshot.success && !snapshot.localOnly) this._startRemoteProductWork();
   }
 
   setupHandlers() {
@@ -7204,8 +7202,9 @@ class IPCHandlers {
     ipcMain.handle("open-login-items-settings", () => openSystemSettings("loginItems"));
 
     ipcMain.handle("capture-screen-context", async (event) => {
+      // A verdict still on its way is waited for below.
       const held = this.effectivePolicyManager.getCurrent();
-      if ((!held.success && !isUnmanagedLookup(held)) || isScreenContextBlocked(held)) return null;
+      if (held.status === "error" || isScreenContextBlocked(held)) return null;
       const panel = this.windowManager.controlPanelWindow;
       const hidePanel = isFromWindow(event, panel) && panel.isVisible() && !panel.isMinimized();
       const focused = hidePanel && panel.isFocused();
@@ -7739,12 +7738,8 @@ class IPCHandlers {
       },
       getScope,
       broadcast: (snapshot, updatePolicy) => {
-        // A workspace verdict still loading, or one that failed for an unmanaged
-        // identity, changes nothing for the audio controls.
-        if (
-          !isUnmanagedLookup(snapshot) &&
-          (snapshot.status !== "loading" || !snapshot.deviceReady)
-        )
+        // A workspace verdict still loading changes nothing for the audio controls.
+        if (snapshot.status !== "loading" || !snapshot.deviceReady)
           this._audioFeaturePolicy?.update(snapshot);
         if (snapshot.workspaceRequired || snapshot.authGeneration === credentialsGeneration)
           this._localModelPolicy?.update(snapshot);
@@ -7756,7 +7751,7 @@ class IPCHandlers {
           (snapshot.status === "error" && snapshot.managed)
         )
           this._stopRemoteProductWork();
-        else if (snapshot.success || isUnmanagedLookup(snapshot)) {
+        else if (snapshot.success) {
           this._retireDisallowedProductWork(snapshot);
           this._startRemoteProductWork();
         }
@@ -9562,10 +9557,8 @@ class IPCHandlers {
 
     const resolveEnterpriseMeetingOptions = async (event, options) => {
       const policy = this.effectivePolicyManager.getCurrent();
-      if (
-        (!policy.success && !isUnmanagedLookup(policy)) ||
-        (policy.localOnly && options.provider !== "local")
-      ) {
+      const state = productPolicyState(policy, app.getVersion());
+      if (state.status === "error" || (policy.localOnly && options.provider !== "local")) {
         throw Object.assign(new Error(i18nMain.t("common.policyUnresolved")), {
           code: "DEVICE_POLICY_BLOCKED",
         });
@@ -9574,7 +9567,6 @@ class IPCHandlers {
         isTranscriptionSelectionAllowed,
         isModeAllowedByPolicy,
       } = require("../stores/policyRules.ts");
-      const state = productPolicyState(policy, app.getVersion());
       const selection = realtimeSelection(options);
       // The local model gate checks a local meeting's model.
       const allowed =
