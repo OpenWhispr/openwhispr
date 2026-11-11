@@ -75,7 +75,6 @@ function registerEventListeners() {
             }
           : {}),
       });
-      // The info a block cleared comes back with it.
       if (wasBlocked && !blocked) {
         window.electronAPI
           .getUpdateInfo?.()
