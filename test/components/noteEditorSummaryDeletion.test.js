@@ -223,8 +223,11 @@ async function loadNoteEditor(t, permission, options = {}) {
       "/services/NoteSharingService": `
         export const NoteSharingService = {
           fetchAcl: async () => null,
-          // A signed-in cloud note loads its sharing state; never answered here.
-          getShareSettings: () => new Promise(() => {}),
+          // A signed-in cloud note loads its sharing state; unanswered unless a test answers.
+          getShareSettings: (cloudId) =>
+            globalThis.__noteEditorShareSettings?.[cloudId]
+              ? Promise.resolve(globalThis.__noteEditorShareSettings[cloudId])
+              : new Promise(() => {}),
         };
       `,
       "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }
@@ -1509,5 +1512,48 @@ test("the copy-link segment shows only when the note can be shared in place", as
     await render(undefined, { note: { ...NOTE, ...note } });
     assert.equal(Boolean(linkSegment()), shown, JSON.stringify(note));
   }
+  await unmount();
+});
+
+// A private note's flag is what makes it sync (D10): an invite-only share that
+// names nobody must not start it syncing again.
+test("a private note's share flag rises only when its share reaches someone", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "me", name: "Me", email: "me@example.com" },
+  };
+  const invited = { visibility: "invited", token_prefix: "ow_share_abc1234" };
+  const owner = { my_permission: "owner", can_manage_access: true, grants: [] };
+  globalThis.__noteEditorShareSettings = {
+    "nobody-left": { share: invited, invitations: [], access: owner },
+    "shared-elsewhere": {
+      share: invited,
+      invitations: [{ id: "inv-1", email: "guest@example.com" }],
+      access: owner,
+    },
+  };
+  t.after(() => {
+    delete globalThis.__noteEditorAuth;
+    delete globalThis.__noteEditorShareSettings;
+  });
+  const { render, unmount, vite } = await loadNoteEditor(t);
+  const { loadSpaces } = await vite.ssrLoadModule("/stores/noteStore.ts");
+  globalThis.window.electronAPI.getSpaces = async () => [
+    { id: 2, kind: "private", cloud_space_id: null, workspace_id: "ws-1", teams: [] },
+  ];
+  await loadSpaces();
+  const written = [];
+  globalThis.window.electronAPI.updateNoteShareState = async (id, state) =>
+    written.push({ id, state });
+  const settle = () => React.act(() => new Promise((resolve) => setImmediate(resolve)));
+
+  for (const cloudId of ["nobody-left", "shared-elsewhere"]) {
+    await render(undefined, {
+      note: { ...NOTE, space_id: 2, cloud_id: cloudId, owner_user_id: "me", is_shared: 0 },
+    });
+    await settle();
+  }
+
+  assert.deepEqual(written, [{ id: NOTE.id, state: { is_shared: 1 } }]);
   await unmount();
 });

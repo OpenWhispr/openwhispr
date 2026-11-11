@@ -6067,6 +6067,10 @@
         "openTeamspaces": "Open Teamspaces",
         "cantMoveToShare": "Only the note's owner can move it to a teamspace to share it.",
         "legacySharedBanner": "This private note is shared, so it still syncs. Move it to a teamspace or stop sharing to keep it on this device.",
+        "stopSharing": {
+          "title": "Stop sharing?",
+          "description": "Removing {{name}} stops sharing. The note will stay on this device."
+        },
         "visibility": {
           "label": "Visibility",
           "private": "Private",

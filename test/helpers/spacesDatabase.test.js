@@ -1489,6 +1489,99 @@ test("a synced team folder, or one holding a synced note, moved to private is re
   assert.ok(!db.getPendingFolders("team").some((f) => f.id === local.id));
 });
 
+// A private note the old Cloud Backup uploaded keeps that copy's cloud id. Moved into a teamspace,
+// the note is created there whole (D32): the server upserts by client id, so the personal row
+// moves into the teamspace, or after its purge the note is created fresh.
+function giveBackupCloudCopy(db, noteId, cloudId) {
+  db.markNoteSynced(noteId, cloudId, "2026-06-01T10:00:00.000Z", "test-account");
+  db.db
+    .prepare(
+      "UPDATE notes SET cloud_revision = 4, updated_by_user_id = 'test-account', cloud_create_attempted = 1, cloud_create_pending = 'pending-key', cloud_create_rejected = 1 WHERE id = ?"
+    )
+    .run(noteId);
+  return db.getNote(noteId);
+}
+
+function assertNoCloudIdentity(note, clientNoteId) {
+  assert.equal(note.client_note_id, clientNoteId, "the note keeps its client id");
+  assert.equal(note.cloud_id, null);
+  assert.equal(note.cloud_updated_at, null);
+  assert.equal(note.cloud_revision, null);
+  assert.equal(note.owner_user_id, null);
+  assert.equal(note.updated_by_user_id, null);
+  assert.equal(note.cloud_create_rejected, 0);
+  assert.equal(note.cloud_create_pending, null);
+  assert.equal(note.cloud_create_attempted, 0);
+  assert.equal(note.sync_status, "pending");
+}
+
+test("a private note's Backup cloud id doesn't follow it into a teamspace", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const teamFolder = db.createFolder("Specs", team.id).folder;
+
+  const bySpace = db.saveNote("Plan", "body", "personal", null, null, null, privateId).note;
+  giveBackupCloudCopy(db, bySpace.id, "backup-cloud-1");
+  const moved = db.updateNote(bySpace.id, { space_id: team.id, folder_id: null });
+  assert.equal(moved.success, true);
+  assert.equal(moved.note.space_id, team.id);
+  assertNoCloudIdentity(moved.note, bySpace.client_note_id);
+
+  // A teamspace folder takes the note to its space (D2): the same.
+  const byFolder = db.saveNote("Notes", "body", "personal", null, null, null, privateId).note;
+  giveBackupCloudCopy(db, byFolder.id, "backup-cloud-2");
+  const filed = db.updateNote(byFolder.id, { folder_id: teamFolder.id });
+  assert.equal(filed.note.space_id, team.id);
+  assertNoCloudIdentity(filed.note, byFolder.client_note_id);
+
+  const pending = db.getPendingNotes("team").map((n) => n.id);
+  assert.ok(pending.includes(bySpace.id) && pending.includes(byFolder.id));
+});
+
+test("a shared private note keeps its cloud id when it moves into a teamspace", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const note = db.saveNote("Shared", "body", "personal", null, null, null, privateId).note;
+  db.markNoteSynced(note.id, "shared-cloud-1", "2026-06-01T10:00:00.000Z", "test-account");
+  db.updateNoteShareState(note.id, { is_shared: 1 });
+
+  const moved = db.updateNote(note.id, { space_id: team.id, folder_id: null });
+  assert.equal(moved.success, true);
+  // Its guests' row is the one that becomes the team's.
+  assert.equal(moved.note.cloud_id, "shared-cloud-1");
+  assert.equal(moved.note.owner_user_id, "test-account");
+});
+
+test("a private folder moved into a teamspace drops its and its notes' Backup cloud ids", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const folder = db.createFolder("Research", privateId).folder;
+  db.markFolderSynced(folder.id, "backup-folder-1");
+  const leftover = db.saveNote("Leftover", "body", "personal", null, null, folder.id).note;
+  giveBackupCloudCopy(db, leftover.id, "backup-cloud-1");
+  const shared = db.saveNote("Shared", "body", "personal", null, null, folder.id).note;
+  db.markNoteSynced(shared.id, "shared-cloud-1", "2026-06-01T10:00:00.000Z", "test-account");
+  db.updateNoteShareState(shared.id, { is_shared: 1 });
+
+  const moved = db.moveFolderToSpace(folder.id, team.id);
+  assert.equal(moved.success, true);
+
+  const folderRow = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(folder.id);
+  assert.equal(folderRow.space_id, team.id);
+  assert.equal(folderRow.client_folder_id, folder.client_folder_id);
+  assert.equal(folderRow.cloud_id, null);
+  assert.equal(folderRow.sync_status, "pending");
+  assertNoCloudIdentity(db.getNote(leftover.id), leftover.client_note_id);
+  assert.equal(db.getNote(shared.id).cloud_id, "shared-cloud-1");
+  assert.equal(db.getNote(shared.id).space_id, team.id);
+});
+
 test("markNoteSyncedIfUnchanged settles an exact identity and push snapshot", (t) => {
   const db = createDb(t);
   if (!db) return;

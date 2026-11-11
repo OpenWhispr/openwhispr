@@ -5754,6 +5754,10 @@
         "openTeamspaces": "開啟 Teamspace",
         "cantMoveToShare": "只有筆記擁有者才能將其移到 Teamspace 進行分享。",
         "legacySharedBanner": "這則私人筆記已分享，因此仍會同步。將其移到 Teamspace 或停止分享，即可只保存在這部裝置上。",
+        "stopSharing": {
+          "title": "停止分享？",
+          "description": "移除 {{name}} 後將停止分享。這則筆記將只保存在這部裝置上。"
+        },
         "visibility": {
           "label": "可見性",
           "private": "私人",

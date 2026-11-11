@@ -98,16 +98,33 @@ export function privateShareState(
   return isLegacySharedPrivateNote(note) ? "legacyShared" : "moveToShare";
 }
 
+type ShareAudience = {
+  share: Pick<ShareSettings, "visibility">;
+  invitations: ReadonlyArray<unknown>;
+  access?: Pick<NoteAccessState, "grants"> | null;
+};
+
+/**
+ * reconcileLocalShareState with a private note's stakes: its flag is what makes it sync (D10), so
+ * it rises only while the share reaches someone. An invite-only share naming nobody would
+ * otherwise start syncing a note nobody else can open.
+ */
+export function reconcileNoteShareFlag(
+  local: LocalShareState,
+  state: ShareAudience & { share: ShareLinkSettings },
+  { privateNote }: { privateNote: boolean }
+): LocalShareStateUpdate | null {
+  const update = reconcileLocalShareState(local, state.share);
+  if (privateNote && update?.is_shared === 1 && !shareReachesAnyone(state)) return null;
+  return update;
+}
+
 /**
  * Whether anyone but the owner can open a note shared this way. Private visibility shuts out
  * every invitation and grant (the API's kill switch), a link or domain share is open to whoever
  * has the link, and an invite-only share reaches only the people it still names.
  */
-export function shareReachesAnyone(state: {
-  share: Pick<ShareSettings, "visibility">;
-  invitations: ReadonlyArray<unknown>;
-  access?: Pick<NoteAccessState, "grants"> | null;
-}): boolean {
+export function shareReachesAnyone(state: ShareAudience): boolean {
   if (state.share.visibility === "private") return false;
   if (state.share.visibility !== "invited") return true;
   return state.invitations.length > 0 || (state.access?.grants.length ?? 0) > 0;

@@ -22,7 +22,7 @@ import {
   AlertTriangle,
 } from "../icons";
 import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
-import { privateShareState, reconcileLocalShareState } from "./shareNoteRules";
+import { privateShareState, reconcileNoteShareFlag } from "./shareNoteRules";
 import {
   canOrganizeNote,
   noteCapabilities,
@@ -353,7 +353,7 @@ export default function NoteEditor({
   );
   const isTeamNote = space?.kind === "team";
   // A private note that isn't shared moves to a teamspace to share, so it has no link to copy.
-  const sharesByMoving = privateShareState(note, space) === "moveToShare";
+  const sharesByMoving = space !== null && privateShareState(note, space) === "moveToShare";
   const spaceWorkspace = useWorkspaceStore(
     (state) => state.workspaces.find((workspace) => workspace.id === space?.workspace_id) ?? null
   );
@@ -399,9 +399,10 @@ export default function NoteEditor({
           access: res.access ?? entry?.access,
           rawToken: entry?.rawToken ?? null,
         }));
-        const update = reconcileLocalShareState(
+        const update = reconcileNoteShareFlag(
           { isShared: Boolean(note.is_shared), shareToken: note.share_token ?? null },
-          res.share
+          res,
+          { privateNote: !isTeamNote }
         );
         if (update) {
           void persistNoteShareState(note.id, update).catch((err) =>
@@ -420,6 +421,7 @@ export default function NoteEditor({
   }, [
     aclRetryVersion,
     isSignedIn,
+    isTeamNote,
     note.cloud_id,
     note.id,
     note.is_shared,
@@ -1707,7 +1709,7 @@ export default function NoteEditor({
         note={note}
         exportOptions={exportOptions}
         copyLinkOnOpen={shareIntent === "copy-link"}
-        canMoveNote={canMoveToSpace}
+        canMoveNote={notePermission === null ? null : canMoveToSpace}
         onMoveNote={onMoveNote}
         onOpenTeamspaces={onOpenTeamspaces}
       />

@@ -6095,6 +6095,10 @@
         "openTeamspaces": "Ouvrir les Teamspaces",
         "cantMoveToShare": "Seul le propriétaire de la note peut la déplacer dans un teamspace pour la partager.",
         "legacySharedBanner": "Cette note privée est partagée, elle continue donc d'être synchronisée. Déplacez-la dans un teamspace ou arrêtez le partage pour la garder sur cet appareil.",
+        "stopSharing": {
+          "title": "Arrêter le partage ?",
+          "description": "Retirer {{name}} arrête le partage. La note restera sur cet appareil."
+        },
         "visibility": {
           "label": "Visibilité",
           "private": "Privée",

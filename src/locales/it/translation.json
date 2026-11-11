@@ -5775,6 +5775,10 @@
         "openTeamspaces": "Apri Teamspace",
         "cantMoveToShare": "Solo il proprietario della nota può spostarla in un teamspace per condividerla.",
         "legacySharedBanner": "Questa nota privata è condivisa, quindi continua a sincronizzarsi. Spostala in un teamspace o interrompi la condivisione per tenerla su questo dispositivo.",
+        "stopSharing": {
+          "title": "Interrompere la condivisione?",
+          "description": "Rimuovendo {{name}} la condivisione si interrompe. La nota resterà su questo dispositivo."
+        },
         "visibility": {
           "label": "Visibilità",
           "private": "Privata",

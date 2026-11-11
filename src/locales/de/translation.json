@@ -6067,6 +6067,10 @@
         "openTeamspaces": "Teamspaces öffnen",
         "cantMoveToShare": "Nur der Besitzer der Notiz kann sie zum Teilen in einen Teamspace verschieben.",
         "legacySharedBanner": "Diese private Notiz ist geteilt und wird deshalb weiter synchronisiert. Verschiebe sie in einen Teamspace oder beende das Teilen, damit sie auf diesem Gerät bleibt.",
+        "stopSharing": {
+          "title": "Teilen beenden?",
+          "description": "Wenn du {{name}} entfernst, wird die Notiz nicht mehr geteilt. Sie bleibt auf diesem Gerät."
+        },
         "visibility": {
           "label": "Sichtbarkeit",
           "private": "Privat",

@@ -686,18 +686,6 @@ export function filterShareVisibilityOptions<T extends { id: ShareVisibility }>(
   return options.filter((option) => isShareVisibilityAllowed(state, option.id));
 }
 
-/** Whether this surface can offer at least one exposure-increasing share mode. */
-export function hasUsableExternalShareVisibility(
-  state: PolicyDecisionSnapshot,
-  canOfferDomainVisibility: boolean
-): boolean {
-  return (
-    isShareVisibilityAllowed(state, "link") ||
-    isShareVisibilityAllowed(state, "invited") ||
-    (canOfferDomainVisibility && isShareVisibilityAllowed(state, "domain"))
-  );
-}
-
 export type SharePolicyAction =
   | "create-link"
   | "copy-link"

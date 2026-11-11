@@ -5754,6 +5754,10 @@
         "openTeamspaces": "Teamspace を開く",
         "cantMoveToShare": "共有のために Teamspace へ移動できるのは、ノートの所有者のみです。",
         "legacySharedBanner": "このプライベートノートは共有されているため、同期が続いています。このデバイスだけに保存するには、Teamspace に移動するか共有を停止してください。",
+        "stopSharing": {
+          "title": "共有を停止しますか？",
+          "description": "{{name}} を削除すると共有が停止します。ノートはこのデバイスに残ります。"
+        },
         "visibility": {
           "label": "公開範囲",
           "private": "非公開",

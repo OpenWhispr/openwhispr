@@ -5782,6 +5782,10 @@
         "openTeamspaces": "Abrir Teamspaces",
         "cantMoveToShare": "Apenas o proprietário da nota pode movê-la para um teamspace para compartilhá-la.",
         "legacySharedBanner": "Esta nota privada está compartilhada, por isso continua sincronizando. Mova-a para um teamspace ou pare de compartilhá-la para mantê-la neste dispositivo.",
+        "stopSharing": {
+          "title": "Parar de compartilhar?",
+          "description": "Remover {{name}} interrompe o compartilhamento. A nota ficará neste dispositivo."
+        },
         "visibility": {
           "label": "Visibilidade",
           "private": "Privada",

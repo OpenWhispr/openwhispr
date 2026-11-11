@@ -16,7 +16,7 @@ import {
   canManageAccessGrant,
   currentShareToken,
   privateShareState,
-  reconcileLocalShareState,
+  reconcileNoteShareFlag,
   resolveShareLink,
   shareReachesAnyone,
   type LocalShareState,
@@ -81,8 +81,11 @@ interface ShareNoteDialogProps {
   exportOptions?: NoteExportOption[];
   /** Opened from the link segment of the Share button: copy the link as soon as it is usable. */
   copyLinkOnOpen?: boolean;
-  /** Whether the user may move the note to another space: a private note shares by moving. */
-  canMoveNote?: boolean;
+  /**
+   * Whether the user may move the note to another space: a private note shares by moving. Null
+   * while the note's access is still loading.
+   */
+  canMoveNote?: boolean | null;
   /** The notes view's move, which also takes the view along with the open note. */
   onMoveNote?: (noteId: number, target: NoteMoveTarget) => Promise<NoteMutationResult | void>;
   /** Opens Settings › Teamspaces, where teamspaces are made. */
@@ -99,41 +102,48 @@ export default function ShareNoteDialog({
   onMoveNote,
   onOpenTeamspaces,
 }: ShareNoteDialogProps) {
-  const { user } = useAuth();
+  const { user, isSignedIn } = useAuth();
   const ownerName: string | null = user?.name ?? null;
   const ownerEmail: string = user?.email ?? "";
   const { t } = useTranslation();
   const { toast } = useToast();
   const spaces = useSpaces();
-  // A note this dialog moved into a teamspace: the note prop lags behind the
-  // move until the next note-updated event.
-  const [moved, setMoved] = useState<{
-    noteId: number;
-    fromSpaceId: number;
-    toSpaceId: number;
-  } | null>(null);
-  const spaceId =
-    moved?.noteId === note.id && moved.fromSpaceId === note.space_id
-      ? moved.toSpaceId
-      : note.space_id;
+  // A note this dialog moved into a teamspace, until the note prop catches up
+  // with the move. Any change to the note's real space ends it: the move
+  // landed, or a fork took the note back.
+  const [moved, setMoved] = useState<{ noteId: number; toSpaceId: number } | null>(null);
+  const [seenSpaceId, setSeenSpaceId] = useState(note.space_id);
+  if (seenSpaceId !== note.space_id) {
+    setSeenSpaceId(note.space_id);
+    setMoved(null);
+  }
+  const spaceId = moved?.noteId === note.id ? moved.toSpaceId : note.space_id;
   const space = useMemo(
     () => spaces.find((candidate) => candidate.id === spaceId) ?? null,
     [spaces, spaceId]
   );
-  const shareState = privateShareState(note, space);
+  // What sharing means waits for the note's space: until it loads, a team
+  // note would read as private.
+  const shareState = space ? privateShareState(note, space) : null;
   const isTeamNote = shareState === "team";
 
   // A note synced from this dialog: the create acknowledgement doesn't
   // broadcast, so the note prop can lag behind the local DB until the next
-  // note-updated event.
-  const [syncedFor, setSyncedFor] = useState<{ noteId: number; cloudId: string } | null>(null);
-  const knownCloudId = note.cloud_id ?? (syncedFor?.noteId === note.id ? syncedFor.cloudId : null);
+  // note-updated event. The id holds only in the space it was made for.
+  const [syncedFor, setSyncedFor] = useState<{
+    noteId: number;
+    spaceId: number;
+    cloudId: string;
+  } | null>(null);
+  const knownCloudId =
+    note.cloud_id ??
+    (syncedFor?.noteId === note.id && syncedFor.spaceId === spaceId ? syncedFor.cloudId : null);
   // A private note that isn't shared has nothing to share from: a cloud id on
   // it is the old Backup's copy, and sharing that would start syncing it again.
-  const cloudId = shareState === "moveToShare" ? null : knownCloudId;
+  const cloudId = shareState === "team" || shareState === "legacyShared" ? knownCloudId : null;
   const cached = useShareCacheEntry(cloudId);
 
-  const { defaultWorkspaceId } = useWorkspace();
+  const { workspaces, loaded: workspacesLoaded, defaultWorkspaceId } = useWorkspace();
   const scopedSpaces = useSpacesInWorkspaceScope(spaces);
   // The active workspace's teamspaces the note can move into, as the tree offers them.
   const moveTargets = useMemo(
@@ -147,9 +157,20 @@ export default function ShareNoteDialog({
         : [],
     [space, scopedSpaces, defaultWorkspaceId]
   );
-  const canOfferMove = canMoveNote && Boolean(onMoveNote);
+  const canOfferMove = canMoveNote === true && Boolean(onMoveNote);
+  // Settings lists Teamspaces once signed in with a workspace (buildSettingsNav).
+  const teamspacesPending = Boolean(isSignedIn) && !workspacesLoaded;
+  const canOpenTeamspaces =
+    Boolean(onOpenTeamspaces) && Boolean(isSignedIn) && workspacesLoaded && workspaces.length > 0;
   const [confirmMove, setConfirmMove] = useState<{ target: SpaceItem; open: boolean } | null>(null);
   const [movingTo, setMovingTo] = useState<number | null>(null);
+  // Removing the last person from a shared private note also stops sharing it.
+  const [confirmStop, setConfirmStop] = useState<{
+    open: boolean;
+    name: string;
+    grant?: NoteAccessGrant;
+    invitation?: NoteShareInvitation;
+  } | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -261,7 +282,7 @@ export default function ShareNoteDialog({
         if (cancelled) return;
         if (!assignedCloudId) throw new Error("Note sync did not assign a cloud id");
         // Loading carries on into the share settings' load.
-        setSyncedFor({ noteId: note.id, cloudId: assignedCloudId });
+        setSyncedFor({ noteId: note.id, spaceId, cloudId: assignedCloudId });
       })
       .catch((err) => {
         if (cancelled) return;
@@ -272,7 +293,7 @@ export default function ShareNoteDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, isTeamNote, knownCloudId, note.id, loadAttempt]);
+  }, [open, isTeamNote, knownCloudId, note.id, spaceId, loadAttempt]);
 
   // Loading also reconciles the local is_shared flag with server truth.
   useEffect(() => {
@@ -284,7 +305,9 @@ export default function ShareNoteDialog({
       .then((res) => {
         if (cancelled || !res) return;
         setRefreshedCloudId(cloudId);
-        const update = reconcileLocalShareState(localShareStateRef.current, res.share);
+        const update = reconcileNoteShareFlag(localShareStateRef.current, res, {
+          privateNote: !isTeamNote,
+        });
         if (update) {
           void persistNoteShareState(note.id, update).catch((err) =>
             console.error("Share flag persist failed:", err)
@@ -302,7 +325,7 @@ export default function ShareNoteDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, cloudId, note.id, loadAttempt, refreshShareCache]);
+  }, [open, cloudId, note.id, isTeamNote, loadAttempt, refreshShareCache]);
 
   useEffect(() => {
     if (open) {
@@ -313,6 +336,7 @@ export default function ShareNoteDialog({
       setCopied(false);
       setConfirmingReplaceLink(false);
       setConfirmMove(null);
+      setConfirmStop(null);
       setRefreshedCloudId(null);
     }
   }, [open]);
@@ -437,6 +461,7 @@ export default function ShareNoteDialog({
   // A shared private note syncs only while its share lasts. Once removing
   // someone leaves nobody but the owner, ending the share keeps the note on
   // this device: the server confirms it private and the local flag follows.
+  // Only a removal the user confirmed as stopping sharing ends it.
   const endLegacyShareIfUnreachable = useCallback(
     async (state: ShareStateResponse | null): Promise<void> => {
       if (shareState !== "legacyShared" || !state || shareReachesAnyone(state)) return;
@@ -651,7 +676,7 @@ export default function ShareNoteDialog({
   }, [access, canInvite, emailInput, suggestions, handlePrincipalGrant, handleInvite]);
 
   const handleRevoke = useCallback(
-    async (invitation: NoteShareInvitation) => {
+    async (invitation: NoteShareInvitation, stopsSharing = false) => {
       if (!cloudId || !canManageAccess || !shareActionAllowed("revoke-invitation")) return;
       const previous = getShareCacheEntry(cloudId);
       if (!previous) return;
@@ -674,7 +699,7 @@ export default function ShareNoteDialog({
         toast({ title: t("noteEditor.share.dialog.error.revokeFailed"), variant: "destructive" });
         return;
       }
-      if (shareState === "legacyShared") {
+      if (stopsSharing) {
         await endLegacyShareIfUnreachable(await refreshShareCache().catch(() => null));
       }
     },
@@ -682,7 +707,6 @@ export default function ShareNoteDialog({
       cloudId,
       canManageAccess,
       shareActionAllowed,
-      shareState,
       endLegacyShareIfUnreachable,
       refreshShareCache,
       t,
@@ -763,13 +787,14 @@ export default function ShareNoteDialog({
   );
 
   const handleRemoveGrant = useCallback(
-    async (grant: NoteAccessGrant) => {
+    async (grant: NoteAccessGrant, stopsSharing = false) => {
       if (!cloudId || !canManageAccess || !shareActionAllowed("remove-grant")) return;
       setBusyGrantId(grant.id);
       replaceAccessGrant(grant.id, null);
       try {
         await NoteSharingService.removeAccessGrant(cloudId, grant.id);
-        await endLegacyShareIfUnreachable(await refreshShareCache());
+        const refreshed = await refreshShareCache();
+        if (stopsSharing) await endLegacyShareIfUnreachable(refreshed);
       } catch (err) {
         console.error("Access grant removal failed:", err);
         replaceAccessGrant(grant.id, grant);
@@ -790,12 +815,46 @@ export default function ShareNoteDialog({
     ]
   );
 
+  // Whether removing this grant or invitation leaves a shared private note
+  // reaching nobody: the removal then also stops sharing it, so it asks first.
+  const removalStopsSharing = useCallback(
+    (removing: { grantId?: string; invitationId?: string }): boolean => {
+      if (shareState !== "legacyShared" || !cloudId) return false;
+      const entry = getShareCacheEntry(cloudId);
+      if (!entry) return false;
+      return !shareReachesAnyone({
+        share: entry.share,
+        invitations: entry.invitations.filter((i) => i.id !== removing.invitationId),
+        access: entry.access && {
+          grants: entry.access.grants.filter((grant) => grant.id !== removing.grantId),
+        },
+      });
+    },
+    [shareState, cloudId]
+  );
+
+  const requestRemoveGrant = (grant: NoteAccessGrant): void => {
+    if (removalStopsSharing({ grantId: grant.id })) {
+      const name = grant.principal.name || grant.principal.email || "";
+      setConfirmStop({ open: true, name, grant });
+      return;
+    }
+    void handleRemoveGrant(grant);
+  };
+
+  const requestRevoke = (invitation: NoteShareInvitation): void => {
+    if (removalStopsSharing({ invitationId: invitation.id })) {
+      setConfirmStop({ open: true, name: invitation.email, invitation });
+      return;
+    }
+    void handleRevoke(invitation);
+  };
+
   // Moves the private note into a teamspace. The dialog then shares it from
   // there: the team share view gets the note's cloud id from its upload.
   const handleMoveToShare = useCallback(
     async (target: SpaceItem) => {
       if (!onMoveNote || !canMoveNote || movingTo !== null) return;
-      const fromSpaceId = note.space_id;
       setMovingTo(target.id);
       let result: NoteMutationResult | null;
       try {
@@ -814,10 +873,16 @@ export default function ShareNoteDialog({
         });
         return;
       }
-      setMoved({ noteId: note.id, fromSpaceId, toSpaceId: target.id });
+      setMoved({ noteId: note.id, toSpaceId: target.id });
     },
-    [onMoveNote, canMoveNote, movingTo, note.id, note.space_id, t, toast]
+    [onMoveNote, canMoveNote, movingTo, note.id, t, toast]
   );
+
+  // Waiting for the note's space, for its access (whether it may move), or
+  // for a team note's cloud id.
+  const waiting =
+    shareState === null ||
+    (shareState === "moveToShare" ? canMoveNote === null : !loadError && !cloudId);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || (e.metaKey && e.key === "Enter")) {
@@ -831,7 +896,14 @@ export default function ShareNoteDialog({
       <DialogContent className="max-w-md gap-3 p-5">
         <DialogTitle className="text-base">{t("noteEditor.share.dialog.title")}</DialogTitle>
 
-        {shareState === "moveToShare" ? (
+        {waiting ? (
+          <div className="flex items-center justify-center py-6">
+            <DialogDescription className="sr-only">
+              {t("noteEditor.share.dialog.description")}
+            </DialogDescription>
+            <Loader2 size={14} className="animate-spin text-foreground/45" />
+          </div>
+        ) : shareState === "moveToShare" ? (
           <>
             <DialogDescription className="text-xs text-foreground/50">
               {t(
@@ -871,19 +943,23 @@ export default function ShareNoteDialog({
                     </Button>
                   ))}
                 </div>
+              ) : teamspacesPending ? (
+                <div className="flex items-center justify-center py-2">
+                  <Loader2 size={12} className="animate-spin text-foreground/45" />
+                </div>
               ) : (
                 <div className="flex items-center justify-between gap-2 py-1">
                   <p className="text-xs text-foreground/50">
                     {t("noteEditor.share.dialog.noTeamspaces")}
                   </p>
-                  {onOpenTeamspaces && (
+                  {canOpenTeamspaces && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="h-7 px-2.5 text-xs"
                       onClick={() => {
                         onOpenChange(false);
-                        onOpenTeamspaces();
+                        onOpenTeamspaces?.();
                       }}
                     >
                       {t("noteEditor.share.dialog.openTeamspaces")}
@@ -905,13 +981,6 @@ export default function ShareNoteDialog({
             >
               {t("noteEditor.share.dialog.error.retry")}
             </Button>
-          </div>
-        ) : !cloudId ? (
-          <div className="flex items-center justify-center py-6">
-            <DialogDescription className="sr-only">
-              {t("noteEditor.share.dialog.description")}
-            </DialogDescription>
-            <Loader2 size={14} className="animate-spin text-foreground/45" />
           </div>
         ) : (
           <>
@@ -1059,7 +1128,7 @@ export default function ShareNoteDialog({
                   }
                   busy={busyGrantId === grant.id}
                   onPermissionChange={(permission) => void handleGrantPermission(grant, permission)}
-                  onRemove={() => void handleRemoveGrant(grant)}
+                  onRemove={() => requestRemoveGrant(grant)}
                 />
               ))}
 
@@ -1122,7 +1191,7 @@ export default function ShareNoteDialog({
                           )}
                           <DropdownMenuItem
                             className="text-xs text-red-500"
-                            onClick={() => void handleRevoke(invitation)}
+                            onClick={() => requestRevoke(invitation)}
                           >
                             {t("noteEditor.share.dialog.revoke")}
                           </DropdownMenuItem>
@@ -1233,6 +1302,24 @@ export default function ShareNoteDialog({
           cancelText={t("common.cancel")}
           onConfirm={() => {
             if (confirmMove) void handleMoveToShare(confirmMove.target);
+          }}
+        />
+
+        <ConfirmDialog
+          open={confirmStop?.open ?? false}
+          onOpenChange={(next) => {
+            if (!next) setConfirmStop((current) => current && { ...current, open: false });
+          }}
+          title={t("noteEditor.share.dialog.stopSharing.title")}
+          description={t("noteEditor.share.dialog.stopSharing.description", {
+            name: confirmStop?.name ?? "",
+          })}
+          confirmText={t("noteEditor.share.dialog.revoke")}
+          cancelText={t("common.cancel")}
+          variant="destructive"
+          onConfirm={() => {
+            if (confirmStop?.grant) void handleRemoveGrant(confirmStop.grant, true);
+            else if (confirmStop?.invitation) void handleRevoke(confirmStop.invitation, true);
           }}
         />
       </DialogContent>

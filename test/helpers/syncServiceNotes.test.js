@@ -928,6 +928,59 @@ test("canSync gating: sign-out blocks every call; no gate lets a private note pu
   assert.deepEqual(sent, [teamNote.client_note_id], "only the teamspace note was ever sent");
 });
 
+// A private note the old Cloud Backup uploaded still carries that copy's cloud id (D32). Moved into
+// a teamspace to share it, its first push must be a create carrying the whole note: the server
+// upserts by client id, so the personal row itself moves into the teamspace.
+test("a private note with a Backup cloud id moves into a teamspace as a full create", async (t) => {
+  const ctx = await setup(t, { team: true });
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const note = db.saveNote("Roadmap", "the body on this device", "personal").note;
+  const backup = cloud.seedNote({
+    client_note_id: note.client_note_id,
+    title: "Roadmap",
+    content: "the body Backup uploaded months ago",
+    space_id: null,
+    workspace_id: null,
+  });
+  db.markNoteSynced(note.id, backup.id, backup.updated_at, "user-harness");
+
+  assert.ok(db.updateNote(note.id, { space_id: ctx.team.id, folder_id: null }).success);
+  // The push asks for a pass, which must not outlive the test's database.
+  stopSyncTimers(service);
+  const mark = cloud.log.length;
+  const cloudId = await service.ensureNoteSynced(note.id);
+
+  const creates = cloud.log
+    .slice(mark)
+    .filter((call) => call.method === "POST" && call.path === "/api/notes/create");
+  assert.equal(creates.length, 1, "the share view gets its id from a create, not the old copy");
+  assert.equal(creates[0].body.client_note_id, note.client_note_id);
+  assert.equal(creates[0].body.content, "the body on this device");
+  assert.equal(creates[0].body.space_id, TEAM_SPACE.id);
+  assert.equal(cloudId, backup.id, "the personal row itself moved into the teamspace");
+  assert.equal(cloud.note(cloudId).space_id, TEAM_SPACE.id);
+  assert.equal(cloud.note(cloudId).content, "the body on this device");
+  assert.equal(db.getNote(note.id).cloud_id, cloudId);
+});
+
+test("a private note whose Backup copy was purged is created fresh in the teamspace", async (t) => {
+  const ctx = await setup(t, { team: true });
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const note = db.saveNote("Roadmap", "the body on this device", "personal").note;
+  db.markNoteSynced(note.id, "purged-backup-copy", "2026-06-01T10:00:00.000Z", "user-harness");
+
+  assert.ok(db.updateNote(note.id, { space_id: ctx.team.id, folder_id: null }).success);
+  stopSyncTimers(service);
+  const cloudId = await service.ensureNoteSynced(note.id);
+
+  assert.ok(cloudId && cloudId !== "purged-backup-copy", `got ${cloudId}`);
+  assert.equal(cloud.note(cloudId).client_note_id, note.client_note_id);
+  assert.equal(cloud.note(cloudId).space_id, TEAM_SPACE.id);
+  assert.equal(cloud.note(cloudId).content, "the body on this device");
+});
+
 test("retention opt-out still drains analytics deletes without uploading counters", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

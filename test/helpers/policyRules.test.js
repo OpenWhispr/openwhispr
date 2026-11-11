@@ -593,18 +593,6 @@ test("share visibility lists hide policy-denied choices", async () => {
   );
 });
 
-test("domain-only sharing is usable only when the owner can offer a domain choice", async () => {
-  const { hasUsableExternalShareVisibility } = await load();
-  const snapshot = {
-    status: "managed",
-    policy: { ...policy, sharing: { externalLinkSharing: "domain_only" } },
-    appVersion: "1.8.1",
-  };
-
-  assert.equal(hasUsableExternalShareVisibility(snapshot, true), true);
-  assert.equal(hasUsableExternalShareVisibility(snapshot, false), false);
-});
-
 test("provider fallback persistence is limited to resolved unmanaged and signed-out idle users", async () => {
   const { shouldPersistProviderFallback } = await load();
 

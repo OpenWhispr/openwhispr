@@ -5754,6 +5754,10 @@
         "openTeamspaces": "打开 Teamspace",
         "cantMoveToShare": "只有笔记所有者才能将其移到 Teamspace 进行分享。",
         "legacySharedBanner": "这条私人笔记已被分享，因此仍会同步。将其移到 Teamspace 或停止分享，即可只保存在此设备上。",
+        "stopSharing": {
+          "title": "停止分享？",
+          "description": "移除 {{name}} 后将停止分享。这条笔记将只保存在此设备上。"
+        },
         "visibility": {
           "label": "可见性",
           "private": "私密",

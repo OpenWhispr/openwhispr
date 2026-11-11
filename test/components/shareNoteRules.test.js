@@ -294,3 +294,42 @@ test("a private share reaches nobody and a link share reaches whoever has the li
     );
   }
 });
+
+// A private note's flag is what makes it sync (D10). An invite-only share that
+// names nobody reaches nobody, so it must not restart syncing the note.
+test("a private note's share flag rises only while its share reaches someone", async () => {
+  const { reconcileNoteShareFlag } = await load();
+  const unshared = { isShared: false, shareToken: null };
+  const invited = { visibility: "invited", token_prefix: PREFIX };
+
+  assert.equal(
+    reconcileNoteShareFlag(unshared, { share: invited, invitations: [] }, { privateNote: true }),
+    null
+  );
+  assert.deepEqual(
+    reconcileNoteShareFlag(
+      unshared,
+      { share: invited, invitations: [], access: access({ grants: [grant()] }) },
+      { privateNote: true }
+    ),
+    { is_shared: 1 }
+  );
+  // A team note's flag only colours its Share button: it follows visibility.
+  assert.deepEqual(
+    reconcileNoteShareFlag(unshared, { share: invited, invitations: [] }, { privateNote: false }),
+    { is_shared: 1 }
+  );
+});
+
+test("a private note's share flag still drops when the share goes private", async () => {
+  const { reconcileNoteShareFlag } = await load();
+
+  assert.deepEqual(
+    reconcileNoteShareFlag(
+      { isShared: true, shareToken: TOKEN },
+      { share: { visibility: "private", token_prefix: null }, invitations: [] },
+      { privateNote: true }
+    ),
+    { is_shared: 0, share_token: null }
+  );
+});
