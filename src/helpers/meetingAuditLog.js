@@ -19,8 +19,8 @@ const APPEND_FLAGS =
 const KEEP_FILES = 90;
 const CHECKPOINT_MS = 30_000;
 // A crash marker whose stop still can't be written a week after the first
-// failed attempt is treated as gone, so it stops holding later recordings' crash
-// recovery hostage.
+// failed attempt is treated as gone when a recording starts, so it stops holding
+// that recording's crash recovery hostage.
 const MARKER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const START_SOURCES = new Set([
   "hotkey",
@@ -51,12 +51,12 @@ const allowed = (values, value) => (values.has(value) ? value : null);
 const noteIdOf = (value) => (Number.isSafeInteger(value) ? value : null);
 const durationSec = (from, to) => Math.round((to - from) / 1000);
 
-// A marker that doesn't parse or lacks what a stop line needs can't be closed.
+// A marker that doesn't parse or lacks what a stop line needs can't be closed
+// (path.isAbsolute throws on a missing folder, which the catch counts too).
 function readMarker(text) {
   try {
     const open = JSON.parse(text);
     return typeof open?.sessionId === "string" &&
-      typeof open.dir === "string" &&
       path.isAbsolute(open.dir) &&
       Number.isFinite(open.startedAt) &&
       Number.isFinite(open.lastSeenAt)
@@ -198,7 +198,9 @@ function createMeetingAuditLog({
   }
 
   // Closes a recording the last launch never stopped, as of its last checkpoint.
-  function recoverInterrupted() {
+  // A kept marker only stands in the way of a new recording's crash recovery, so
+  // only a recording's start may drop it.
+  function recover(mayDrop) {
     enqueue(async () => {
       let text;
       try {
@@ -220,10 +222,10 @@ function createMeetingAuditLog({
             durationSec: durationSec(open.startedAt, open.lastSeenAt),
           });
         } catch (error) {
-          // Counted from the first failure, so an attempt made while a share is
-          // still mounting never drops a marker that could be recovered later.
+          // Counted from the first failure, not the crash, so a late first attempt
+          // made while a share is still mounting doesn't drop the marker.
           const failedSince = open.failedSince ?? now();
-          if (now() - failedSince <= MARKER_MAX_AGE_MS) {
+          if (!mayDrop || now() - failedSince <= MARKER_MAX_AGE_MS) {
             if (open.failedSince === undefined) await writeMarker({ ...open, failedSince });
             throw error;
           }
@@ -250,7 +252,7 @@ function createMeetingAuditLog({
     };
     session = open;
     // Retries a marker a failed recovery kept, in case its folder is back.
-    recoverInterrupted();
+    recover(true);
     enqueue(async () => {
       await append(open.dir, startedAt, { event: "recording.started", ...open });
       await saveMarker(open);
@@ -285,7 +287,7 @@ function createMeetingAuditLog({
   return {
     recordingStarted,
     recordingStopped,
-    recoverInterrupted,
+    recoverInterrupted: () => recover(false),
 
     recordingRefused({ noteId, trigger, reason }) {
       if (!isEnabled()) return;

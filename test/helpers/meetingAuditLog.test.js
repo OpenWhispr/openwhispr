@@ -305,8 +305,18 @@ test("a recording the app never stopped is closed on the next launch at its last
 // A marker that doesn't parse, or parses without what a stop line needs, can't be
 // closed; keeping it would leave every later recording without crash recovery.
 test("a marker that can't be closed is dropped, so the next recording's crash still closes", async () => {
-  const noFolder = JSON.stringify({ sessionId: "s0", startedAt: START, lastSeenAt: START });
-  for (const text of ["", "{}", noFolder]) {
+  // Each lacks one thing a stop line needs; its checkpoint is recent, so only
+  // that check can drop it. The relative folder can't be created if unchecked.
+  const dir = path.join(userData, "audit");
+  const complete = { sessionId: "s0", dir, startedAt: START, lastSeenAt: START };
+  const lacking = [
+    { ...complete, sessionId: undefined },
+    { ...complete, dir: undefined },
+    { ...complete, dir: "relative\0audit" },
+    { ...complete, startedAt: undefined },
+    { ...complete, lastSeenAt: undefined },
+  ].map((fields) => JSON.stringify(fields));
+  for (const text of ["", "{}", ...lacking]) {
     fs.rmSync(path.join(userData, "audit"), { recursive: true, force: true });
     fs.writeFileSync(marker(), text);
     const first = harness();
@@ -366,9 +376,12 @@ test("a kept marker is dropped only when its stop still fails a week after the f
   await late.log.flush();
   assert.equal(JSON.parse(fs.readFileSync(marker(), "utf8")).sessionId, "s1");
 
+  // A launch never drops it; only a recording that starts while it's still stuck does.
   const weekLater = harness({ configuredPath: share });
   weekLater.clock.now = START + 16 * 86_400_000;
   weekLater.log.recoverInterrupted();
+  await weekLater.log.flush();
+  assert.equal(JSON.parse(fs.readFileSync(marker(), "utf8")).sessionId, "s1");
   weekLater.state.configuredPath = path.join(userData, "new-share");
   weekLater.log.recordingStarted({ sessionId: "s2", noteId: 10, trigger: "tray" });
   await weekLater.log.flush();
