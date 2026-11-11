@@ -436,6 +436,37 @@ test("an enterprise_managed answer leaves the Enterprise workspace as default", 
   assert.equal(globalThis.__ws.listCalls, 1);
 });
 
+// Task 10 (a): Retry is how an unavailable list recovers, so it reads the list again even when
+// the server makes no default (enterprise_managed) or the request fails.
+test("Retry reads the list again when the server makes no default or fails", async (t) => {
+  for (const [label, ensureDefault] of [
+    ["enterprise_managed", async () => null],
+    [
+      "a failure",
+      async () => {
+        throw new Error("offline");
+      },
+    ],
+  ]) {
+    await t.test(label, async (st) => {
+      const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(st, {
+        list: async () => [TEAM],
+        ensureDefault,
+      });
+      await useWorkspaceStore.getState().refresh();
+      st.mock.method(console, "warn", () => {});
+      // Meanwhile the server came to list the Enterprise workspace that stands in as default.
+      globalThis.__ws.list = async () => [TEAM, ENTERPRISE];
+      const reads = globalThis.__ws.listCalls;
+
+      await ensureDefaultWorkspace("Ada's workspace", { again: true });
+
+      assert.equal(globalThis.__ws.listCalls, reads + 1, "the list is read again");
+      assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "corp");
+    });
+  }
+});
+
 test("a failed refresh relocates nothing", async (t) => {
   const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
     list: async () => {

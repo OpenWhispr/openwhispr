@@ -578,7 +578,9 @@ function askForDefaultAgain(): void {
  * Has the server make the account's default workspace (`name` is used the first time only),
  * then reads the list again so it shows. Asked once per account session; a failure is asked
  * again on the next call, and so is an answer that no longer holds (the Enterprise workspace
- * that stood in as the default is gone). `again` asks even after an answer, for Retry.
+ * that stood in as the default is gone). `again` asks even after an answer, for Retry, and
+ * then reads the list again whatever the answer: with no default made (enterprise_managed) or
+ * a failed request, a fresh list is what can still show one.
  */
 export function ensureDefaultWorkspace(
   name: string,
@@ -593,16 +595,21 @@ export function ensureDefaultWorkspace(
   }
   let request!: Promise<void>;
   request = (async () => {
+    let listRead = false;
     try {
       const workspace = await WorkspacesService.ensureDefault(name);
       if (generation !== accountGeneration) return;
       if (epoch === defaultEnsureEpoch) defaultEnsuredGeneration = generation;
       // An Enterprise member gets none: their Enterprise workspace stays the default.
-      if (!workspace) return;
-      const listed = useWorkspaceStore
-        .getState()
-        .workspaces.some((w) => w.id === workspace.id && w.is_default === true);
-      if (!listed) await useWorkspaceStore.getState().refresh({ fresh: true });
+      const listed =
+        !workspace ||
+        useWorkspaceStore
+          .getState()
+          .workspaces.some((w) => w.id === workspace.id && w.is_default === true);
+      if (!listed) {
+        listRead = true;
+        await useWorkspaceStore.getState().refresh({ fresh: true });
+      }
     } catch (error) {
       logger.warn(
         "Failed to ensure the default workspace",
@@ -611,6 +618,17 @@ export function ensureDefaultWorkspace(
       );
     } finally {
       if (defaultEnsureRequest?.promise === request) defaultEnsureRequest = null;
+    }
+    if (again && !listRead && generation === accountGeneration) {
+      try {
+        await useWorkspaceStore.getState().refresh({ fresh: true });
+      } catch (error) {
+        logger.warn(
+          "Failed to read the workspaces again",
+          { error: (error as Error).message },
+          "workspaces"
+        );
+      }
     }
   })();
   defaultEnsureRequest = { generation, epoch, promise: request };
