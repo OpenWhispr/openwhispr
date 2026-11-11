@@ -1559,6 +1559,8 @@ export interface ConversationPreview {
   note_id?: number | null;
   note_title?: string | null;
   note_deleted_at?: string | null;
+  /** That note's space, for the Chat list's workspace scope. */
+  note_space_id?: number | null;
 }
 
 export interface AgentMessageRow {

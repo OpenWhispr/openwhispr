@@ -9022,6 +9022,7 @@ class DatabaseManager {
           `SELECT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
             c.parent_conversation_id,
             c.note_id, n.title AS note_title, n.deleted_at AS note_deleted_at,
+            n.space_id AS note_space_id,
             COUNT(m.id) AS message_count,
             (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
             (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message_role
@@ -9055,6 +9056,7 @@ class DatabaseManager {
           `SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
             c.parent_conversation_id,
             c.note_id, n.title AS note_title, n.deleted_at AS note_deleted_at,
+            n.space_id AS note_space_id,
             COUNT(m.id) AS message_count,
             (SELECT content FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message,
             (SELECT role FROM agent_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS last_message_role

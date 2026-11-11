@@ -9,6 +9,8 @@ import ConversationItem, { type ConversationPreview } from "./ConversationItem";
 import ConversationDateGroup from "./ConversationDateGroup";
 import EmptyConversationList from "./EmptyConversationList";
 import type { ConversationPreview as ConversationRow } from "../../types/electron";
+import { resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
 
 type FlatItem =
   { type: "header"; label: string } | { type: "conversation"; data: ConversationPreview };
@@ -73,6 +75,8 @@ export default function ConversationList({
   const { t } = useTranslation();
   const listRevision = useChatTurnStore((state) => state.listRevision);
   const accountGeneration = useChatTurnStore((state) => state.accountGeneration);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const defaultWorkspaceId = useWorkspaceStore((state) => state.defaultWorkspaceId);
   const requestVersion = useRef(0);
   const [conversations, setConversations] = useState<ConversationPreview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,11 +96,16 @@ export default function ConversationList({
       generation === useChatTurnStore.getState().accountGeneration;
     setLoadError(false);
     try {
-      const [active, archived] = await Promise.all([
+      const [active, archived, scopeSpaceIds] = await Promise.all([
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false),
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, true),
+        resolveAssistantScopeSpaceIds(),
       ]);
       if (!current()) return;
+      // A chat about a note outside the active workspace stays out, as that note stays out of
+      // the chat's grounding: opened, its earlier replies would reach the model as history.
+      const inScope = (c: ConversationRow) =>
+        c.note_space_id == null || scopeSpaceIds.includes(c.note_space_id);
       const toPreview = (c: ConversationRow) => ({
         id: c.id,
         title: c.title || "Untitled",
@@ -111,9 +120,13 @@ export default function ConversationList({
             ? { title: c.note_title, deleted: c.note_deleted_at != null }
             : undefined,
       });
-      setConversations([...(active ?? []).map(toPreview), ...(archived ?? []).map(toPreview)]);
+      const shownArchived = (archived ?? []).filter(inScope);
+      setConversations([
+        ...(active ?? []).filter(inScope).map(toPreview),
+        ...shownArchived.map(toPreview),
+      ]);
       // The Archived toggle hides once nothing is archived; leave that view with it.
-      if (!archived?.length) setShowArchived(false);
+      if (!shownArchived.length) setShowArchived(false);
     } catch {
       if (current()) setLoadError(true);
     } finally {
@@ -139,7 +152,14 @@ export default function ConversationList({
       requestVersion.current += 1;
       if (showSkeletonTimer.current) clearTimeout(showSkeletonTimer.current);
     };
-  }, [loadConversations, refreshKey, listRevision, accountGeneration]);
+  }, [
+    loadConversations,
+    refreshKey,
+    listRevision,
+    accountGeneration,
+    activeWorkspaceId,
+    defaultWorkspaceId,
+  ]);
 
   useEffect(() => {
     setConversations([]);

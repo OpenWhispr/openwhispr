@@ -506,3 +506,17 @@ test("a replaced chat identity is for the account whose cloud holds the tombston
   assert.notEqual(identity().client_conversation_id, clientId);
   assert.equal(identity().cloud_create_attempted, 0);
 });
+
+// The Chat list hides a chat whose note sits outside the active workspace, so each row names
+// the space its note is in (M6).
+test("the Chat list rows name the space their note sits in", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote("Planning", "body").note;
+  const chat = db.createAgentConversation("About planning", note.id);
+  const plain = db.createAgentConversation("Plain");
+
+  const list = db.getAgentConversationsWithPreview(50, 0, false);
+  assert.equal(list.find((c) => c.id === chat.id).note_space_id, note.space_id);
+  assert.equal(list.find((c) => c.id === plain.id).note_space_id, null);
+});
