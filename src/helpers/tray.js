@@ -287,7 +287,7 @@ class TrayManager {
         // it under policy; the pill's menu hides it then, the tray disables it.
         label: i18nMain.t("app.commandMenu.startMeetingRecording"),
         enabled: !this.windowManager?.getMeetingRecordingRefusal?.(),
-        click: () => this.windowManager?.startManualMeeting(),
+        click: () => this.windowManager?.startManualMeeting({ startSource: "tray" }),
       },
       { type: "separator" },
       {

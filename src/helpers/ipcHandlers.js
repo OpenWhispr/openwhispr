@@ -708,6 +708,7 @@ class IPCHandlers {
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
     this.managedMeetingPolicy = managers.managedMeetingPolicy;
     this.managedDevicePolicy = managers.managedDevicePolicy;
+    this.meetingAuditLog = managers.meetingAuditLog;
     this._remoteProductRetirement = new AbortController();
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
@@ -1863,11 +1864,16 @@ class IPCHandlers {
         handler(event, options, this._productRequestContext.getStore().signal)
       );
     // Each handler takes at most one renderer argument, so the job's signal
-    // always lands after it and can't be supplied by the renderer.
-    const handleAudioFeature = (channel, purpose, handler) =>
+    // always lands after it and can't be supplied by the renderer. onRefused
+    // hears a refusal of work that did not go ahead, with that argument.
+    const handleAudioFeature = (channel, purpose, handler, onRefused) =>
       ipcMain.handle(channel, (event, options) =>
-        this._audioFeaturePolicy.run(event, purpose, (signal) => handler(event, options, signal))
+        this._audioFeaturePolicy.run(event, purpose, (signal) => handler(event, options, signal), {
+          onRefused: onRefused && ((failure) => onRefused(failure, options)),
+        })
       );
+    const auditMeetingRefusal = ({ code }, trigger, noteId = null) =>
+      this.meetingAuditLog?.recordingRefused({ noteId, trigger, reason: code });
     // Runs a job under the audio policy and the caller's own cancellation
     // ({ signal, release }); the handler gets one signal for both.
     const runAudioJob = (event, purpose, { signal, release }, handler) =>
@@ -10955,7 +10961,10 @@ class IPCHandlers {
         meetingLocalTimer = null;
       }
       if (wasActive) broadcastToWindows("meeting-transcription-error", reason);
-      const stopped = meetingTranscriptionLifecycle.stopSession();
+      const stopped = meetingTranscriptionLifecycle.stopSession(
+        undefined,
+        reason === "accountChanged" || reason === "workspaceChanged" ? "account-change" : "policy"
+      );
       // The renderer still needs this result after its capture cleanup to bind
       // diarization to the resumed note's seed rows.
       if (policyMeetingStop && !policyMeetingStop.promise) policyMeetingStop.promise = stopped;
@@ -11075,7 +11084,7 @@ class IPCHandlers {
     };
 
     const meetingTranscriptionLifecycle = createMeetingTranscriptionLifecycle({
-      start: ({
+      start: async ({
         sessionId,
         ownerWebContents,
         options: { transcriptionOptions, authGeneration },
@@ -11086,12 +11095,22 @@ class IPCHandlers {
           authGeneration,
           promise: null,
         };
-        return startMeetingTranscription(
+        const result = await startMeetingTranscription(
           { sender: ownerWebContents },
           { ...transcriptionOptions, sessionId }
         );
+        if (result?.success)
+          this.meetingAuditLog?.recordingStarted({
+            sessionId,
+            noteId: transcriptionOptions.noteId,
+            trigger: transcriptionOptions.startSource,
+          });
+        return result;
       },
-      stop: (sessionId) => stopMeetingTranscription(sessionId),
+      stop: (sessionId, reason) => {
+        this.meetingAuditLog?.recordingStopped({ sessionId, reason });
+        return stopMeetingTranscription(sessionId);
+      },
       onError: (error, sessionId) => {
         debugLogger.error(
           "Meeting transcription owner-loss teardown failed",
@@ -11105,22 +11124,32 @@ class IPCHandlers {
       this.managedMeetingPolicy.isMeetingRecordingDisabled()
     );
 
-    handleAudioFeature("meeting-transcription-start", "meeting", (event, options = {}) => {
-      const sessionId =
-        typeof options.sessionId === "string" && options.sessionId.length > 0
-          ? options.sessionId
-          : crypto.randomUUID();
-      return meetingTranscriptionLifecycle.startSession({
-        sessionId,
-        ownerWebContents: event.sender,
-        options: {
-          transcriptionOptions: options,
-          authGeneration: tokenStore.getState().generation,
-        },
-      });
+    handleAudioFeature(
+      "meeting-transcription-start",
+      "meeting",
+      (event, options = {}) => {
+        const sessionId =
+          typeof options.sessionId === "string" && options.sessionId.length > 0
+            ? options.sessionId
+            : crypto.randomUUID();
+        return meetingTranscriptionLifecycle.startSession({
+          sessionId,
+          ownerWebContents: event.sender,
+          options: {
+            transcriptionOptions: options,
+            authGeneration: tokenStore.getState().generation,
+          },
+        });
+      },
+      (failure, options = {}) => auditMeetingRefusal(failure, options.startSource, options.noteId)
+    );
+
+    // The renderer refuses some starts itself, before asking main.
+    ipcMain.handle("meeting-recording-refused", (_event, details = {}) => {
+      this.meetingAuditLog?.recordingRefused(details);
     });
 
-    ipcMain.handle("meeting-transcription-stop", async (event, expectedSessionId) => {
+    ipcMain.handle("meeting-transcription-stop", async (event, expectedSessionId, reason) => {
       const stopped = policyMeetingStop;
       if (stopped?.promise && stopped.sessionId === expectedSessionId) {
         if (
@@ -11133,7 +11162,7 @@ class IPCHandlers {
           ? result
           : { success: false, reason: "stale-session" };
       }
-      return meetingTranscriptionLifecycle.stopSession(expectedSessionId);
+      return meetingTranscriptionLifecycle.stopSession(expectedSessionId, reason);
     });
 
     ipcMain.handle(
@@ -13893,7 +13922,9 @@ class IPCHandlers {
       // Join opens the meeting even when the org refuses to let it be recorded;
       // only the recording is subject to the policy.
       if (action === "join") this.meetingDetectionEngine.openNotificationJoinUrl(owner);
-      return this._audioFeaturePolicy.run(event, "meeting", respond);
+      return this._audioFeaturePolicy.run(event, "meeting", respond, {
+        onRefused: (failure) => auditMeetingRefusal(failure, "prompt"),
+      });
     });
     ipcMain.handle("confirm-meeting-note-navigation", (event, navigationId, status) =>
       this.windowManager.confirmMeetingNoteNavigation(event.sender, navigationId, status)
@@ -13906,7 +13937,7 @@ class IPCHandlers {
         const refusal = await this.meetingDetectionEngine.joinCalendarMeeting(
           eventId,
           "calendar-join",
-          { activate: false }
+          { activate: false, startSource: "calendar-join" }
         );
         return refusal ?? { success: true };
       } catch (error) {
@@ -13914,8 +13945,12 @@ class IPCHandlers {
       }
     });
 
-    handleAudioFeature("start-manual-meeting", "meeting", () =>
-      this.windowManager.startManualMeeting()
+    // The pill's menu is the only renderer that starts a meeting by hand.
+    handleAudioFeature(
+      "start-manual-meeting",
+      "meeting",
+      () => this.windowManager.startManualMeeting({ startSource: "pill" }),
+      (failure) => auditMeetingRefusal(failure, "pill")
     );
 
     ipcMain.handle("get-meeting-notification-data", async (event) => {

@@ -49,9 +49,11 @@ class MeetingDetectionEngine {
       setInterval = global.setInterval,
       clearInterval = global.clearInterval,
       isMeetingRecordingDisabled = () => false,
+      onStartRefused = () => {},
     } = {}
   ) {
     this._isMeetingRecordingDisabled = isMeetingRecordingDisabled;
+    this._onStartRefused = onStartRefused;
     this.reminderScheduler = reminderScheduler;
     this.meetingProcessDetector = meetingProcessDetector;
     this.audioActivityDetector = audioActivityDetector;
@@ -585,19 +587,22 @@ class MeetingDetectionEngine {
 
   // Both manual starts record into the note they create, so a start the org
   // refuses must end before that note exists.
-  async _meetingStartRefusal() {
+  async _meetingStartRefusal(startSource) {
     const refusal = await this.windowManager.resolveMeetingRecordingRefusal?.();
-    if (refusal)
+    if (refusal) {
       debugLogger.info("Meeting start refused by policy", { code: refusal.code }, "meeting");
+      this._onStartRefused(refusal.code, startSource);
+    }
     return refusal;
   }
 
   async startManualMeeting(options) {
     if (this._isMeetingRecordingDisabled()) {
       debugLogger.info("Manual meeting ignored — disabled by administrator", {}, "meeting");
+      this._onStartRefused("POLICY_MEETING_RECORDING_DISABLED", options?.startSource);
       return;
     }
-    const refusal = await this._meetingStartRefusal();
+    const refusal = await this._meetingStartRefusal(options?.startSource);
     if (refusal) {
       this.windowManager.sendMeetingStartRefused(refusal.code);
       return;
@@ -643,6 +648,7 @@ class MeetingDetectionEngine {
         folderId: meetingsFolder.id,
         event,
         trigger: "hotkey",
+        startSource: options?.startSource,
       },
       options
     );
@@ -663,6 +669,7 @@ class MeetingDetectionEngine {
         folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
         event,
         trigger,
+        startSource: options?.startSource,
       },
       options
     );
@@ -677,9 +684,10 @@ class MeetingDetectionEngine {
         { eventId },
         "meeting"
       );
+      this._onStartRefused("POLICY_MEETING_RECORDING_DISABLED", options?.startSource);
       return;
     }
-    const refusal = await this._meetingStartRefusal();
+    const refusal = await this._meetingStartRefusal(options?.startSource);
     if (refusal) return refusal;
     this._meetingModeActive = true;
     debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
@@ -723,6 +731,7 @@ class MeetingDetectionEngine {
         folderId: meetingsFolder.id,
         event: calEvent,
         trigger,
+        startSource: options?.startSource,
       },
       options
     );

@@ -1319,3 +1319,49 @@ test("provider connection revocation aborts its probe and prevents fallback tran
   assert.equal(requests.length, 1);
   assert.equal(requests[0].signal.aborted, true);
 });
+
+// #3029: main writes each meeting start, stop and refusal to the local audit log.
+test("meeting starts, stops and refusals reach the audit log with their source and reason", async (t) => {
+  resetMeeting(t);
+  const audit = [];
+  target.meetingAuditLog = {
+    recordingStarted: (entry) => audit.push(["started", entry]),
+    recordingStopped: (entry) => audit.push(["stopped", entry]),
+    recordingRefused: (entry) => audit.push(["refused", entry]),
+  };
+  t.after(() => {
+    delete target.meetingAuditLog;
+  });
+  invoke("save-deepgram-key", "A");
+  const options = {
+    provider: "deepgram-realtime",
+    mode: "byok",
+    noteId: 12,
+    startSource: "record-button",
+  };
+
+  const start = (sessionId) => invoke("meeting-transcription-start", { ...options, sessionId });
+  assert.equal((await start("audit-1")).success, true);
+  await invoke("meeting-transcription-stop", "audit-1", "auto-end");
+  assert.equal((await start("audit-2")).success, true);
+  setWorkspacePolicy(REVOKED_MEETINGS);
+  await invoke("meeting-transcription-stop", "audit-2");
+  assert.equal((await start("audit-3")).code, "POLICY_MEETING_RECORDING_DISABLED");
+  await invoke("start-manual-meeting");
+  await invoke("meeting-recording-refused", {
+    noteId: 3,
+    trigger: "new-note",
+    reason: "policyRestricted",
+  });
+
+  const disabled = "POLICY_MEETING_RECORDING_DISABLED";
+  assert.deepEqual(audit, [
+    ["started", { sessionId: "audit-1", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-1", reason: "auto-end" }],
+    ["started", { sessionId: "audit-2", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-2", reason: "policy" }],
+    ["refused", { noteId: 12, trigger: "record-button", reason: disabled }],
+    ["refused", { noteId: null, trigger: "pill", reason: disabled }],
+    ["refused", { noteId: 3, trigger: "new-note", reason: "policyRestricted" }],
+  ]);
+});

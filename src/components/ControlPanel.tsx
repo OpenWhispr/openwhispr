@@ -107,6 +107,7 @@ import {
 } from "../utils/pendingInvitationToken";
 import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
 import type { SourceNote } from "./chat/useSourceNote";
+import type { MeetingStartSource } from "../types/electron";
 
 const platform = getCachedPlatform();
 
@@ -185,6 +186,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     noteId: number;
     folderId: number | null;
     event: any;
+    startSource?: MeetingStartSource;
   } | null>(null);
   // Try now and Create with assistant open a chat; Open skill on a chat's card opens the skill.
   const [skillChatRequest, setSkillChatRequest] = useState<SkillChatRequest | null>(null);
@@ -469,7 +471,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           () => import("./notes/PersonalNotesView"),
           (note) => {
             const { user: recordingUser, t: translate } = recordingIdentityRef.current;
-            void startRecordingForNote(note, recordingRecorderName(note, recordingUser, translate))
+            void startRecordingForNote(
+              note,
+              recordingRecorderName(note, recordingUser, translate),
+              "prompt"
+            )
               .then((accepted) => {
                 if (!accepted) void window.electronAPI?.restoreFromMeetingMode?.();
               })
@@ -492,6 +498,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
+        startSource: data.startSource,
       });
       void initializeNotes(null, 50, data.folderId);
       if (

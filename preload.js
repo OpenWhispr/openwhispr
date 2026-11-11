@@ -981,12 +981,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
   isMeetingRecordingDisabled: () => ipcRenderer.invoke("is-meeting-recording-disabled"),
+  meetingRecordingRefused: (details) => ipcRenderer.invoke("meeting-recording-refused", details),
   meetingTranscriptionSend: (buffer, source, capturedAt) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
     ipcRenderer.invoke("meeting-transcription-set-system-audio-available", sessionId, available),
-  meetingTranscriptionStop: (expectedSessionId) =>
-    ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId),
+  meetingTranscriptionStop: (expectedSessionId, reason) =>
+    ipcRenderer.invoke("meeting-transcription-stop", expectedSessionId, reason),
   meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
   onMeetingTranscriptionSegment: registerListener(
     "meeting-transcription-segment",

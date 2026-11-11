@@ -14,6 +14,8 @@ import {
   resolveParticipantSpeakerCountSync,
 } from "../utils/participants";
 import type {
+  MeetingStartSource,
+  MeetingStopReason,
   MeetingSystemAudioInterruption,
   NoteItem,
   SystemAudioAccessResult,
@@ -464,6 +466,8 @@ let isRecordingFlag = false;
 let isStartingFlag = false;
 let activeRecordingSessionId: string | null = null;
 const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator();
+// Why the last stop cancelled a start still in progress, for its teardown.
+let startCancelReason: MeetingStopReason = "user";
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
@@ -886,6 +890,7 @@ export interface StartRecordingArgs {
   expectedCount?: number | null;
   expectedCountIsExplicit?: boolean;
   autoEndEligible: boolean;
+  startSource?: MeetingStartSource;
 }
 
 // Resolves false only when workspace policy refuses the recording; every other
@@ -896,16 +901,25 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
   const policy = usePolicyStore.getState();
   if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");
-    reportMeetingError(
-      isAudioFeatureAllowed(policy, "meeting")
-        ? "policyRestricted"
-        : meetingPolicyRefusalError(policy, "start")
-    );
+    const refusal = isAudioFeatureAllowed(policy, "meeting")
+      ? "policyRestricted"
+      : meetingPolicyRefusalError(policy, "start");
+    reportMeetingError(refusal);
+    void window.electronAPI?.meetingRecordingRefused?.({
+      noteId: args.noteId,
+      trigger: args.startSource,
+      reason: refusal,
+    });
     return false;
   }
   if (await window.electronAPI?.isMeetingRecordingDisabled?.()) {
     logger.warn("Meeting recording disabled by administrator", {}, "meeting");
     reportMeetingError("policyRestricted");
+    void window.electronAPI?.meetingRecordingRefused?.({
+      noteId: args.noteId,
+      trigger: args.startSource,
+      reason: "POLICY_MEETING_RECORDING_DISABLED",
+    });
     return false;
   }
 
@@ -1020,9 +1034,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     const releaseSession = () => {
       if (activeRecordingSessionId === sessionId) activeRecordingSessionId = null;
     };
+    // A start that is no longer current was cancelled by a stop; otherwise its setup failed.
     const stopScopedMainOnce = () =>
       startOperation.stopMainOnce(async () => {
-        await window.electronAPI?.meetingTranscriptionStop?.(sessionId).catch(() => undefined);
+        await window.electronAPI
+          ?.meetingTranscriptionStop?.(
+            sessionId,
+            startOperation.isCurrent() ? "error" : startCancelReason
+          )
+          .catch(() => undefined);
       });
     const teardownStart = async () => {
       stopMediaStream(setupSystemCaptureResult.stream);
@@ -1097,6 +1117,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           autoEndEligible: args.autoEndEligible,
           aecEnabled: getSettings().meetingAecEnabled,
           speakerIndexBase: sessionSpeakerIndexBase,
+          startSource: args.startSource,
         });
       })();
       const micCapturePromise = getMeetingMicConstraints()
@@ -1452,7 +1473,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         logger.error("Meeting transcription stream error", { error: err }, "meeting");
         if (!MEETING_MAIN_STOPS.has(err)) return;
         mainStoppedSessionId = sessionId;
-        if (isRecordingFlag) void stopRecording(sessionId);
+        if (isRecordingFlag) void stopRecording(sessionId, "error");
       });
       if (errorCleanup) ipcCleanups.push(errorCleanup);
 
@@ -1464,7 +1485,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           { error: err },
           "meeting"
         );
-        if (isRecordingFlag) void stopRecording(sessionId);
+        if (isRecordingFlag) void stopRecording(sessionId, "error");
       });
       if (fatalErrorCleanup) ipcCleanups.push(fatalErrorCleanup);
 
@@ -1784,7 +1805,11 @@ export interface StopRecordingResult {
   cancelledStart?: boolean;
 }
 
-export async function stopRecording(expectedSessionId?: string): Promise<StopRecordingResult> {
+export async function stopRecording(
+  expectedSessionId?: string,
+  reason: MeetingStopReason = "user"
+): Promise<StopRecordingResult> {
+  startCancelReason = reason;
   const canceledStart = meetingRecordingStartCoordinator.cancelActiveStart(expectedSessionId);
   if (canceledStart) {
     isRecordingFlag = false;
@@ -1870,7 +1895,8 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
         let stoppedDiarizationSessionId: string | null = null;
         try {
           const result = await window.electronAPI?.meetingTranscriptionStop?.(
-            sessionId ?? undefined
+            sessionId ?? undefined,
+            reason
           );
           if (result?.diarizationSessionId) {
             stoppedDiarizationSessionId = result.diarizationSessionId;
@@ -1939,7 +1965,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 export async function stopRecordingForPolicy(): Promise<void> {
   const sessionId = activeRecordingSessionId;
   const reason = meetingPolicyRefusalError(usePolicyStore.getState(), "stop");
-  const { stopped, cancelledStart } = await stopRecording();
+  const { stopped, cancelledStart } = await stopRecording(undefined, "policy");
   if ((stopped || cancelledStart) && sessionId && mainStoppedSessionId !== sessionId) {
     reportMeetingError(reason);
   }

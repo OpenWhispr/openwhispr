@@ -296,6 +296,59 @@ test("a meeting start the org refuses creates no note and explains the refusal",
   assert.deepEqual(pillRefusals, Array(2).fill("POLICY_MEETING_RECORDING_DISABLED"));
 });
 
+// #3029: the local audit log records each refused start and where it came from.
+test("a refused meeting start reports its code and start source", async () => {
+  const refused = [];
+  let disabled = true;
+  const { engine, windowManager } = createEngine({
+    isMeetingRecordingDisabled: () => disabled,
+    onStartRefused: (code, startSource) => refused.push([code, startSource]),
+  });
+  windowManager.resolveMeetingRecordingRefusal = async () => ({
+    success: false,
+    code: "POLICY_UNRESOLVABLE",
+    error: "unresolved",
+  });
+  windowManager.sendMeetingStartRefused = () => {};
+  engine.databaseManager = createJoinDatabase(null).databaseManager;
+
+  await engine.startManualMeeting({ startSource: "tray" });
+  await engine.joinCalendarMeeting("event-1", "calendar-join", { startSource: "calendar-join" });
+  disabled = false;
+  await engine.startManualMeeting({ startSource: "pill" });
+  await engine.joinCalendarMeeting("event-1", "calendar-join", { startSource: "calendar-join" });
+
+  assert.deepEqual(refused, [
+    ["POLICY_MEETING_RECORDING_DISABLED", "tray"],
+    ["POLICY_MEETING_RECORDING_DISABLED", "calendar-join"],
+    ["POLICY_UNRESOLVABLE", "pill"],
+    ["POLICY_UNRESOLVABLE", "calendar-join"],
+  ]);
+});
+
+test("every note a manual or calendar start opens carries its start source", async () => {
+  const { engine, meetingNavigations } = createEngine();
+  // A new note, then an active event with a new note, then the user's own event note.
+  engine.databaseManager = {
+    ...createJoinDatabase(null).databaseManager,
+    getActiveEvents: () => [],
+  };
+  await engine.startManualMeeting({ startSource: "hotkey" });
+  engine.databaseManager.getActiveEvents = () => [{ id: "event-1" }];
+  await engine.startManualMeeting({ startSource: "tray" });
+  engine.databaseManager = createJoinDatabase({ id: 5, folder_id: 3 }).databaseManager;
+  await engine.joinCalendarMeeting("event-1", "calendar-join", { startSource: "calendar-join" });
+
+  assert.deepEqual(
+    meetingNavigations.map(({ trigger, startSource }) => [trigger, startSource]),
+    [
+      ["hotkey", "hotkey"],
+      ["hotkey", "tray"],
+      ["calendar-join", "calendar-join"],
+    ]
+  );
+});
+
 test("with meeting recording off, only a reminder with a link shows, and only to join", () => {
   const { engine, windowManager, shown } = createEngine();
   let refusal = { code: "POLICY_MEETING_RECORDING_DISABLED" };

@@ -121,7 +121,7 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
   async function handleSwitchAccount() {
     if (token) storePendingInvitationToken(token);
     // Signing out takes a live meeting's note out of scope; end it first.
-    await stopRecording();
+    await stopRecording(undefined, "account-change");
     await syncService.purgeTeamSpacesForSignOut();
     await signOut();
   }

@@ -13,7 +13,7 @@ import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
-import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
+import type { ActionItem, ActionKind, MeetingStartSource, NoteItem } from "../../types/electron";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
 import {
   useSettingsStore,
@@ -138,6 +138,7 @@ interface PersonalNotesViewProps {
     noteId: number;
     folderId: number | null;
     event: any;
+    startSource?: MeetingStartSource;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
   invitationEntry?: InvitationNotesEntry | null;
@@ -438,7 +439,11 @@ export default function PersonalNotesView({
 
   const startRecording = useCallback(
     () =>
-      startRecordingForNote(activeNote ?? null, recordingRecorderName(activeNote ?? null, user, t)),
+      startRecordingForNote(
+        activeNote ?? null,
+        recordingRecorderName(activeNote ?? null, user, t),
+        "record-button"
+      ),
     [activeNote, user, t]
   );
 
@@ -748,6 +753,7 @@ export default function PersonalNotesView({
         // Requests come from meeting detection, so a note that hasn't loaded
         // yet is still a meeting note.
         autoEndEligible: note ? isMeetingAutoEndEligible(note) : true,
+        startSource: meetingRecordingRequest.startSource,
       },
       startRecording: storeStartRecording,
       restoreFromMeetingMode: async () => {

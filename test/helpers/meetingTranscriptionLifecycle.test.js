@@ -243,3 +243,31 @@ test("a replacement start waits for a deferred accepted stop to finish", async (
   assert.deepEqual(stops, ["meeting-1"]);
   assert.equal(activeCaptureSessionId, "meeting-2");
 });
+
+// #3029: the audit log says why a recording stopped; the first stop's reason wins.
+test("a stop passes its reason through, owner loss stops as window-lost", async () => {
+  const reasons = [];
+  const lifecycle = createMeetingTranscriptionLifecycle({
+    start: async ({ sessionId }) => ({ success: true, sessionId }),
+    stop: async (sessionId, reason) => {
+      reasons.push([sessionId, reason]);
+      return { success: true };
+    },
+  });
+
+  await lifecycle.startSession({ sessionId: "s1", ownerWebContents: createOwnerWebContents() });
+  const first = lifecycle.stopSession("s1", "auto-end");
+  const second = lifecycle.stopSession("s1", "user");
+  assert.equal(first, second);
+  await first;
+
+  const owner = createOwnerWebContents();
+  await lifecycle.startSession({ sessionId: "s2", ownerWebContents: owner });
+  owner.emit("destroyed");
+  await lifecycle.stopSession("s2");
+
+  assert.deepEqual(reasons, [
+    ["s1", "auto-end"],
+    ["s2", "window-lost"],
+  ]);
+});

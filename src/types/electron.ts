@@ -1061,6 +1061,11 @@ export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
 export type SystemAudioStrategy =
   "native" | "loopback" | "pipewire-loopback" | "wasapi-loopback" | "unsupported";
 
+// Where a meeting recording started from and why it stopped, for the local audit log.
+export type MeetingStartSource =
+  "hotkey" | "tray" | "pill" | "prompt" | "calendar-join" | "record-button" | "new-note";
+export type MeetingStopReason = "user" | "auto-end" | "policy" | "account-change" | "error";
+
 export interface MeetingSystemAudioInterruption {
   systemAudioStrategy: SystemAudioStrategy;
   reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet" | "loopback_takeover_failed";
@@ -3485,6 +3490,7 @@ declare global {
         autoEndEligible: boolean;
         aecEnabled?: boolean;
         speakerIndexBase?: number;
+        startSource?: MeetingStartSource;
       }) => Promise<
         {
           success: boolean;
@@ -3497,6 +3503,11 @@ declare global {
         } & PolicyFailureMetadata
       >;
       isMeetingRecordingDisabled?: () => Promise<boolean>;
+      meetingRecordingRefused?: (details: {
+        noteId: number | null;
+        trigger?: MeetingStartSource;
+        reason: string;
+      }) => Promise<void>;
       meetingTranscriptionSend?: (
         buffer: ArrayBuffer,
         source: "mic" | "system",
@@ -3506,7 +3517,10 @@ declare global {
         sessionId: string,
         available: boolean
       ) => Promise<{ success: boolean; reason?: "stale-session" }>;
-      meetingTranscriptionStop?: (expectedSessionId?: string) => Promise<{
+      meetingTranscriptionStop?: (
+        expectedSessionId?: string,
+        reason?: MeetingStopReason
+      ) => Promise<{
         success: boolean;
         transcript?: string;
         diarizationSessionId?: string;
@@ -3802,6 +3816,7 @@ declare global {
         folderId: number | null;
         event: any;
         trigger?: "hotkey" | "manual" | "calendar-join";
+        startSource?: MeetingStartSource;
       } | null>;
       onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
       getPendingNoteNavigation?: () => Promise<{

@@ -156,8 +156,15 @@ function createAudioFeaturePolicy({
       for (const job of jobs.values()) job.controller.abort();
     },
     // The handler gets the job's signal, merged with the caller's own cancel
-    // signal when one is given.
-    async run(event, purpose, handler, { signal: cancelSignal } = {}) {
+    // signal when one is given. onRefused hears each policy refusal returned
+    // for work that did not go ahead: refused before the handler ran, or a
+    // handler that failed or threw under it. Work that succeeded and is then
+    // stopped by the policy was not refused.
+    async run(event, purpose, handler, { signal: cancelSignal, onRefused } = {}) {
+      const refused = (outcome) => {
+        if (isAudioPolicyRefusal(outcome)) onRefused?.(outcome);
+        return outcome;
+      };
       const job = { purpose, controller: new AbortController() };
       jobs.set(event, job);
       const onDestroyed = () => job.controller.abort();
@@ -168,9 +175,10 @@ function createAudioFeaturePolicy({
         if (FEATURE_BY_PURPOSE[purpose]) {
           if (snapshot?.success) void lookup(event);
           else await settle(event);
-          job.controller.signal.throwIfAborted();
-          const denied = failure(purpose);
-          if (denied) return denied;
+          // A policy that lands during the wait aborts this job with its refusal.
+          const { signal } = job.controller;
+          const denied = signal.aborted ? signal.reason : failure(purpose);
+          if (denied?.success === false) return refused(denied);
         }
         job.controller.signal.throwIfAborted();
         const result = await handler(
@@ -179,21 +187,22 @@ function createAudioFeaturePolicy({
             : job.controller.signal
         );
         refreshOnRefusal(event, result);
-        return abortedResult(job.controller) || activeFailure(purpose) || result;
+        const outcome = abortedResult(job.controller) || activeFailure(purpose) || result;
+        return result?.success === false ? refused(outcome) : outcome;
       } catch (error) {
         refreshOnRefusal(event, error);
-        return (
+        return refused(
           abortedResult(job.controller) ||
-          activeFailure(purpose) || {
-            success: false,
-            error: error.message,
-            code: typeof error.code === "string" ? error.code : "AUDIO_OPERATION_FAILED",
-            // Main-side enterprise errors are translated by the renderer.
-            ...(error.messageKey && {
-              messageKey: error.messageKey,
-              messageParams: error.messageParams,
-            }),
-          }
+            activeFailure(purpose) || {
+              success: false,
+              error: error.message,
+              code: typeof error.code === "string" ? error.code : "AUDIO_OPERATION_FAILED",
+              // Main-side enterprise errors are translated by the renderer.
+              ...(error.messageKey && {
+                messageKey: error.messageKey,
+                messageParams: error.messageParams,
+              }),
+            }
         );
       } finally {
         event.sender?.removeListener?.("destroyed", onDestroyed);

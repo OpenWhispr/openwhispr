@@ -69,12 +69,21 @@ test("account ownership operations forward the account and credential generation
   ]);
 });
 
-test("meeting stop forwards the optional expected recording session ID", async () => {
+test("meeting stop forwards the optional expected recording session ID and stop reason", async () => {
   const { api, invocations } = loadPreloadApi();
 
-  await api.meetingTranscriptionStop("meeting-2");
+  await api.meetingTranscriptionStop("meeting-2", "auto-end");
 
-  assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2"]]);
+  assert.deepEqual(invocations, [["meeting-transcription-stop", "meeting-2", "auto-end"]]);
+});
+
+test("a meeting start the renderer refuses is forwarded for the audit log", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const details = { noteId: 4, trigger: "record-button", reason: "POLICY_UNRESOLVABLE" };
+
+  await api.meetingRecordingRefused(details);
+
+  assert.deepEqual(invocations, [["meeting-recording-refused", details]]);
 });
 
 test("meeting system-audio availability forwards the scoped session", async () => {

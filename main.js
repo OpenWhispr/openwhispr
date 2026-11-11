@@ -332,6 +332,7 @@ const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
 const { createManagedDevicePolicy } = require("./src/helpers/managedDevicePolicy");
+const { createMeetingAuditLog } = require("./src/helpers/meetingAuditLog");
 const { installManagedNetworkGuard } = require("./src/helpers/devicePolicyNetwork");
 const { applyOpenWhisprOriginHeader } = require("./src/helpers/sessionHeaders");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
@@ -353,6 +354,7 @@ let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
 let managedDevicePolicy = null;
+let meetingAuditLog = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let linuxKeyManager = null;
@@ -656,6 +658,16 @@ function initializeCoreManagers() {
   const managedMeetingPolicy = createManagedMeetingPolicy({
     getSnapshot: () => managedDevicePolicy.getSnapshot(),
   });
+  meetingAuditLog = createMeetingAuditLog({
+    // The effective policy (MDM merged with the workspace) lives in the IPC
+    // handlers below; no recording starts before they exist.
+    isEnabled: () => ipcHandlers?.effectivePolicyManager?.getCurrent().managed === true,
+    getConfiguredPath: () => managedDevicePolicy.getSnapshot().auditLogPath,
+    userDataPath: app.getPath("userData"),
+    appVersion: app.getVersion(),
+    logger: debugLogger,
+  });
+  meetingAuditLog.recoverInterrupted();
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     meetingProcessDetector,
@@ -673,7 +685,10 @@ function initializeCoreManagers() {
     ),
     windowManager,
     databaseManager,
-    { isMeetingRecordingDisabled: managedMeetingPolicy.isMeetingRecordingDisabled }
+    {
+      isMeetingRecordingDisabled: managedMeetingPolicy.isMeetingRecordingDisabled,
+      onStartRefused: (reason, trigger) => meetingAuditLog.recordingRefused({ reason, trigger }),
+    }
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
@@ -732,6 +747,7 @@ function initializeCoreManagers() {
     meetingDetectionEngine,
     managedMeetingPolicy,
     managedDevicePolicy,
+    meetingAuditLog,
     audioTapManager,
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
@@ -1407,7 +1423,7 @@ async function startApp() {
     if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
     // Usually pressed mid-call: an open panel updates behind the meeting app.
-    windowManager.startManualMeeting({ activate: false });
+    windowManager.startManualMeeting({ activate: false, startSource: "hotkey" });
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1955,7 +1971,7 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting({ activate: false });
+        windowManager.startManualMeeting({ activate: false, startSource: "hotkey" });
       }
     };
 
@@ -2194,6 +2210,10 @@ if (gotSingleInstanceLock) {
     performSyncTeardown();
     Promise.allSettled([
       sidecarRegistry.shutdownAll(),
+      Promise.race([
+        meetingAuditLog?.closeOpenSession("app-quit"),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
       Promise.race([
         ipcHandlers?.metaActivation?.shutdown(),
         new Promise((resolve) => setTimeout(resolve, 1500)),

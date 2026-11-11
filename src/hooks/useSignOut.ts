@@ -24,7 +24,7 @@ export function useSignOut({ showConfirmDialog, showAlertDialog }: SignOutDialog
     try {
       // End a live meeting while its note is still in scope: signing out clears
       // the account scope, and anything said after that could not be saved.
-      await stopRecording();
+      await stopRecording(undefined, "account-change");
       // Clear account-scoped renderer/session state before ending the session.
       // Workspace-owned rows remain cached behind their membership boundary.
       await syncService.purgeTeamSpacesForSignOut();
