@@ -1018,6 +1018,19 @@ test("a rotated credential inherits its validated account's verdict offline", as
   assert.equal(inherited.authGeneration, 2);
 });
 
+test("a malformed API URL still answers a lookup that names an account", async (t) => {
+  const context = setup(async () => response(200, validPolicy()), {
+    getApiUrl: () => "not a url",
+  });
+  t.after(context.cleanup);
+  const failed = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 1,
+  });
+  assert.equal(failed.success, false);
+  assert.equal(failed.managed, false);
+});
+
 test("a rotated credential keeps inheriting across another rotation and a restart", async (t) => {
   const context = rotationSetup();
   t.after(context.cleanup);

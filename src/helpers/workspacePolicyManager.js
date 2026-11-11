@@ -174,7 +174,7 @@ function createWorkspacePolicyManager({
     const apiUrl = getApiUrl();
     return Boolean(
       accountId &&
-      apiUrl &&
+      URL.canParse(apiUrl) &&
       readAccountPolicyCache(cachePath, { apiOrigin: new URL(apiUrl).origin, accountId })
         ?.managed === true
     );
