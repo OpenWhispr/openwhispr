@@ -320,8 +320,7 @@ test("a free workspace's table and dialog stay fully working", async (t) => {
   const markup = render(Tab, workspace);
 
   assert.match(markup, /Designers/);
-  // Matches the attributes, not the checkbox's `disabled:` classes.
-  assert.doesNotMatch(markup, /\sdisabled(=|\s|>)/);
+  assert.doesNotMatch(markup, /disabled/);
   assert.doesNotMatch(markup, /aria-disabled/);
 
   const container = await mount(t, Tab, workspace);
@@ -511,18 +510,6 @@ test("Teamspaces reads None, a name, or a count", async (t) => {
   assert.match(many, /🗺/);
 });
 
-test("whoever manages teams gets a checkbox column; members don't", async (t) => {
-  const { Tab, workspace } = await loadTab(t, { teams: [team("t1", "Eng"), team("t2", "Design")] });
-
-  const admin = render(Tab, workspace);
-  assert.match(admin, /aria-label="settingsPage\.workspace\.teams\.selectAll"/);
-  assert.equal(admin.match(/role="checkbox"/g)?.length, 3, "the header and one per team");
-
-  const { Tab: MemberTab } = await loadTab(t, { workspace: MEMBER, teams: [team("t1", "Eng")] });
-  const member = render(MemberTab, MEMBER);
-  assert.doesNotMatch(member, /role="checkbox"/);
-});
-
 test("pressing a cell's menu doesn't open the dialog", async (t) => {
   const { Tab, workspace } = await loadTab(t, {
     teams: [
@@ -538,8 +525,7 @@ test("pressing a cell's menu doesn't open the dialog", async (t) => {
   const row = rowNode(container, "Eng");
   const cells = [...row.childNodes].filter((node) => node.tagName === "TD");
 
-  // The checkbox, Members and Teamspaces cells keep their click off the row; the name cell is the row.
-  for (const cell of cells.filter((node, index) => index !== 1)) {
+  for (const cell of cells.slice(1)) {
     let stopped = false;
     propsOf(cell).onClick({
       stopPropagation() {

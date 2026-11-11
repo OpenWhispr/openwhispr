@@ -470,10 +470,7 @@ export default function CreateSpaceDialog({
                 <div className={FIELD_GROUP}>
                   {manageableWorkspaces.length > 1 && !initialWorkspaceId ? (
                     <>
-                      <label
-                        htmlFor="create-space-workspace"
-                        className={FIELD_LABEL}
-                      >
+                      <label htmlFor="create-space-workspace" className={FIELD_LABEL}>
                         {t("settingsPage.workspace.title")}
                       </label>
                       <Select
@@ -495,9 +492,7 @@ export default function CreateSpaceDialog({
                     </>
                   ) : (
                     <>
-                      <p className={FIELD_LABEL}>
-                        {t("settingsPage.workspace.title")}
-                      </p>
+                      <p className={FIELD_LABEL}>{t("settingsPage.workspace.title")}</p>
                       <p dir="auto" className="text-sm text-foreground truncate">
                         {workspace.name}
                       </p>
@@ -507,10 +502,7 @@ export default function CreateSpaceDialog({
               )}
 
               <div className={FIELD_GROUP}>
-                <label
-                  htmlFor="create-space-name"
-                  className={FIELD_LABEL}
-                >
+                <label htmlFor="create-space-name" className={FIELD_LABEL}>
                   {t("settingsPage.workspace.teamspaces.form.nameAndIcon")}
                 </label>
                 <SpaceNameField
@@ -536,10 +528,7 @@ export default function CreateSpaceDialog({
               </div>
 
               <div className={FIELD_GROUP}>
-                <label
-                  htmlFor="create-space-description"
-                  className={FIELD_LABEL}
-                >
+                <label htmlFor="create-space-description" className={FIELD_LABEL}>
                   {t("settingsPage.workspace.teamspaces.form.descriptionLabel")}
                 </label>
                 <textarea
@@ -557,10 +546,7 @@ export default function CreateSpaceDialog({
 
               {showPeople && (
                 <div className={FIELD_GROUP}>
-                  <label
-                    htmlFor="create-space-people"
-                    className={FIELD_LABEL}
-                  >
+                  <label htmlFor="create-space-people" className={FIELD_LABEL}>
                     {t("settingsPage.workspace.teamspaces.form.people")}
                   </label>
                   {peopleLoading ? (

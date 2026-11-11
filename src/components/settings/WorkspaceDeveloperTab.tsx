@@ -172,9 +172,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
       <div className="flex items-center justify-between gap-3 pe-8">
         <div>
           <h2 className={PAGE_TITLE}>{t("settingsPage.workspace.developer.title")}</h2>
-          <p className={PAGE_DESCRIPTION}>
-            {t("settingsPage.workspace.developer.description")}
-          </p>
+          <p className={PAGE_DESCRIPTION}>{t("settingsPage.workspace.developer.description")}</p>
         </div>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="me-1.5 h-3.5 w-3.5" />

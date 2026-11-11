@@ -291,7 +291,7 @@ test("the role trigger is named by its label and its current role", async (t) =>
   assert.equal(labelledLabel, label[1]);
   assert.match(
     markup,
-    new RegExp(`<span id="${valueId}"[^>]*><span[^>]*>workspaces\\.invite\\.role\\.member<`)
+    new RegExp(`<span id="${valueId}"[^>]*>workspaces\\.invite\\.role\\.member<`)
   );
   // Radix's own trigger id is what labels the open menu, so it isn't overridden.
   assert.doesNotMatch(trigger[0], / id="/);

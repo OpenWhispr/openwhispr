@@ -1806,7 +1806,7 @@
         "roleMenuLabel": "Modifier le rôle de {{name}}",
         "roleDescription": {
           "member": "Utilise l'espace de travail.",
-          "admin": "Gère les membres, les invitations, les équipes, la facturation et les paramètres."
+          "admin": "Gère les membres, les invitations, les équipes et les paramètres."
         },
         "roleFailed": "Impossible de modifier le rôle de {{name}}. Vérifiez votre connexion et réessayez.",
         "roleNotAllowed": "Vous n'avez plus l'autorisation de modifier les rôles dans {{workspace}}.",
@@ -2276,9 +2276,7 @@
           "someDonePlural": "{{added}} ajouté à {{team}}. {{already}} en étaient déjà membres.",
           "left": "{{names}} a quitté l'espace de travail, personne n'a donc été ajouté.",
           "allAlready": "Ces personnes sont déjà dans {{team}}."
-        },
-        "selectAll": "Sélectionner toutes les équipes",
-        "selectRow": "Sélectionner {{name}}"
+        }
       },
       "invites": {
         "resending": "Renvoi…",
@@ -2394,10 +2392,7 @@
           "title_one": "Inviter {{count}} invité dans {{workspace}}",
           "title_many": "Inviter {{count}} d'invités dans {{workspace}}",
           "title_other": "Inviter {{count}} invités dans {{workspace}}",
-          "description": "Ils recevront un lien par e-mail pour rejoindre {{workspace}}.",
-          "sent_one": "{{count}} invitation envoyée pour rejoindre {{workspace}}",
-          "sent_many": "{{count}} d'invitations envoyées pour rejoindre {{workspace}}",
-          "sent_other": "{{count}} invitations envoyées pour rejoindre {{workspace}}"
+          "description": "Ils recevront un lien par e-mail pour rejoindre {{workspace}}."
         },
         "remove": {
           "titleOne": "Retirer {{name}} de {{workspace}} ?",
@@ -3710,7 +3705,7 @@
         "member": "Membre de l'espace"
       },
       "roleDescription": {
-        "admin": "Gère les membres, les invitations, les équipes, la facturation et les paramètres.",
+        "admin": "Gère les membres, les invitations, les équipes et les paramètres.",
         "member": "Utilise l'espace de travail."
       },
       "errors": {
@@ -3820,6 +3815,7 @@
       "transferConfirm": "Réattribuer et retirer",
       "transferring": "Transfert en cours…",
       "transferFailed": "Impossible de réattribuer le contenu. Aucun membre n'a été retiré. Réessayez.",
+      "transferUnconfirmed": "Impossible de confirmer la réattribution et le retrait. Vérifiez votre connexion et réessayez.",
       "invalidTarget": "{{name}} ne peut plus recevoir la propriété. Choisissez quelqu'un d'autre.",
       "cannotRemoveOwner": "Le propriétaire de l'espace ne peut pas être retiré.",
       "cannotRemoveSelf": "Vous ne pouvez pas vous retirer vous-même. Quittez l'espace depuis Général.",
@@ -3830,6 +3826,8 @@
       "alreadyRemoved_one": "{{count}} membre avait déjà été retiré",
       "alreadyRemoved_other": "{{count}} membres avaient déjà été retirés",
       "failedBody": "Leur accès à l'espace n'a pas changé. Vérifiez votre connexion et réessayez.",
+      "unconfirmedTitle": "Impossible de confirmer le retrait",
+      "unconfirmedBody": "Ils ont peut-être déjà été retirés. Vérifiez votre connexion et réessayez.",
       "reassignBody": "Transférez leurs notes et désignez un admin de teamspace avant de les retirer.",
       "ownersAll": "Ils possèdent des notes ou gèrent des teamspaces.",
       "failedTitle_one": "Impossible de retirer {{count}} membre",

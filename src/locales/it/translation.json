@@ -2545,7 +2545,7 @@
         "roleMenuLabel": "Cambia il ruolo di {{name}}",
         "roleDescription": {
           "member": "Usa l'area di lavoro.",
-          "admin": "Gestisce membri, inviti, team, fatturazione e impostazioni."
+          "admin": "Gestisce membri, inviti, team e impostazioni."
         },
         "roleFailed": "Impossibile cambiare il ruolo di {{name}}. Controlla la connessione e riprova.",
         "roleNotAllowed": "Non hai più l'autorizzazione per cambiare i ruoli in {{workspace}}.",
@@ -3015,9 +3015,7 @@
           "someDonePlural": "{{added}} aggiunto a {{team}}. {{already}} erano già membri.",
           "left": "{{names}} ha lasciato il workspace, quindi nessuno è stato aggiunto.",
           "allAlready": "Sono già in {{team}}."
-        },
-        "selectAll": "Seleziona tutti i team",
-        "selectRow": "Seleziona {{name}}"
+        }
       },
       "invites": {
         "resending": "Reinvio…",
@@ -3130,9 +3128,7 @@
         "invite": {
           "title_one": "Invita {{count}} ospite in {{workspace}}",
           "title_other": "Invita {{count}} ospiti in {{workspace}}",
-          "description": "Riceveranno un link via email per unirsi a {{workspace}}.",
-          "sent_one": "Inviato {{count}} invito per unirsi a {{workspace}}",
-          "sent_other": "Inviati {{count}} inviti per unirsi a {{workspace}}"
+          "description": "Riceveranno un link via email per unirsi a {{workspace}}."
         },
         "remove": {
           "titleOne": "Rimuovere {{name}} da {{workspace}}?",
@@ -5989,7 +5985,7 @@
         "member": "Membro dell'area di lavoro"
       },
       "roleDescription": {
-        "admin": "Gestisce membri, inviti, team, fatturazione e impostazioni.",
+        "admin": "Gestisce membri, inviti, team e impostazioni.",
         "member": "Usa l'area di lavoro."
       },
       "errors": {
@@ -6099,6 +6095,7 @@
       "transferConfirm": "Riassegna e rimuovi",
       "transferring": "Trasferimento in corso…",
       "transferFailed": "Impossibile riassegnare i contenuti. Nessun membro è stato rimosso. Riprova.",
+      "transferUnconfirmed": "Impossibile confermare la riassegnazione e la rimozione. Controlla la connessione e riprova.",
       "invalidTarget": "{{name}} non può più ricevere la proprietà. Scegli un'altra persona.",
       "cannotRemoveOwner": "Il proprietario dell'area di lavoro non può essere rimosso.",
       "cannotRemoveSelf": "Non puoi rimuovere te stesso. Esci dall'area di lavoro da Generale.",
@@ -6109,6 +6106,8 @@
       "alreadyRemoved_one": "{{count}} membro era già stato rimosso",
       "alreadyRemoved_other": "{{count}} membri erano già stati rimossi",
       "failedBody": "Il loro accesso all'area di lavoro non è cambiato. Controlla la connessione e riprova.",
+      "unconfirmedTitle": "Impossibile confermare la rimozione",
+      "unconfirmedBody": "Potrebbero essere già stati rimossi. Controlla la connessione e riprova.",
       "reassignBody": "Trasferisci le loro note e assegna un admin del teamspace prima di rimuoverli.",
       "ownersAll": "Possiedono note o gestiscono teamspace.",
       "failedTitle_one": "Impossibile rimuovere {{count}} membro",

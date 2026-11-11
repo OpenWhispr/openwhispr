@@ -2524,7 +2524,7 @@
         "roleMenuLabel": "Alterar a função de {{name}}",
         "roleDescription": {
           "member": "Usa o espaço de trabalho.",
-          "admin": "Gerencia membros, convites, equipes, cobrança e configurações."
+          "admin": "Gerencia membros, convites, equipes e configurações."
         },
         "roleFailed": "Não foi possível alterar a função de {{name}}. Verifique sua conexão e tente novamente.",
         "roleNotAllowed": "Você não tem mais permissão para alterar funções em {{workspace}}.",
@@ -2994,9 +2994,7 @@
           "someDonePlural": "{{added}} adicionado a {{team}}. {{already}} já eram membros.",
           "left": "{{names}} saiu do workspace, então ninguém foi adicionado.",
           "allAlready": "Elas já estão em {{team}}."
-        },
-        "selectAll": "Selecionar todas as equipes",
-        "selectRow": "Selecionar {{name}}"
+        }
       },
       "invites": {
         "resending": "Reenviando…",
@@ -3112,10 +3110,7 @@
           "title_one": "Convidar {{count}} convidado para {{workspace}}",
           "title_many": "Convidar {{count}} de convidados para {{workspace}}",
           "title_other": "Convidar {{count}} convidados para {{workspace}}",
-          "description": "Eles receberão um link por e-mail para entrar em {{workspace}}.",
-          "sent_one": "{{count}} convite enviado para entrar em {{workspace}}",
-          "sent_many": "{{count}} de convites enviados para entrar em {{workspace}}",
-          "sent_other": "{{count}} convites enviados para entrar em {{workspace}}"
+          "description": "Eles receberão um link por e-mail para entrar em {{workspace}}."
         },
         "remove": {
           "titleOne": "Remover {{name}} de {{workspace}}?",
@@ -5996,7 +5991,7 @@
         "member": "Membro do espaço de trabalho"
       },
       "roleDescription": {
-        "admin": "Gerencia membros, convites, equipes, cobrança e configurações.",
+        "admin": "Gerencia membros, convites, equipes e configurações.",
         "member": "Usa o espaço de trabalho."
       },
       "errors": {
@@ -6106,6 +6101,7 @@
       "transferConfirm": "Reatribuir e remover",
       "transferring": "Transferindo…",
       "transferFailed": "Não foi possível reatribuir o conteúdo. Nenhum membro foi removido. Tente novamente.",
+      "transferUnconfirmed": "Não foi possível confirmar a reatribuição e a remoção. Verifique sua conexão e tente novamente.",
       "invalidTarget": "{{name}} não pode mais receber a propriedade. Escolha outra pessoa.",
       "cannotRemoveOwner": "O proprietário do espaço de trabalho não pode ser removido.",
       "cannotRemoveSelf": "Você não pode remover a si mesmo. Saia do espaço de trabalho em Geral.",
@@ -6116,6 +6112,8 @@
       "alreadyRemoved_one": "{{count}} membro já tinha sido removido",
       "alreadyRemoved_other": "{{count}} membros já tinham sido removidos",
       "failedBody": "O acesso deles ao espaço de trabalho não foi alterado. Verifique sua conexão e tente novamente.",
+      "unconfirmedTitle": "Não foi possível confirmar a remoção",
+      "unconfirmedBody": "Eles podem já ter sido removidos. Verifique sua conexão e tente novamente.",
       "reassignBody": "Transfira as notas deles e atribua um admin de teamspace antes de removê-los.",
       "ownersAll": "Eles são donos de notas ou gerenciam teamspaces.",
       "failedTitle_one": "Não foi possível remover {{count}} membro",

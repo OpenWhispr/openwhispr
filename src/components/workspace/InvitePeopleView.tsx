@@ -486,19 +486,19 @@ export function InvitePeopleView({
                   disabled={sending || confirmed}
                   className="flex min-h-[52px] w-full items-center gap-2.5 rounded-xl bg-surface-1 px-3 py-2 text-start text-foreground outline-none ring-1 ring-inset ring-black/[0.06] transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-window dark:ring-0 dark:hover:bg-surface-1"
                 >
-                  <RoleIcon
-                    className="size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span id={roleValueId} className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm">
+                  <RoleIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span id={roleValueId} className="truncate text-sm">
                       {t(`workspaces.invite.role.${state.role}`)}
                     </span>
                     <span className="truncate text-xs text-muted-foreground">
                       {t(`workspaces.invite.roleDescription.${state.role}`)}
                     </span>
                   </span>
-                  <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <ChevronDown
+                    className="size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   aria-labelledby={roleLabelId}
@@ -643,7 +643,12 @@ function RecipientChip({
     >
       {profile?.name ? (
         <>
-          <MemberAvatar name={profile.name} email={recipient.email} image={profile.image} size="row" />
+          <MemberAvatar
+            name={profile.name}
+            email={recipient.email}
+            image={profile.image}
+            size="row"
+          />
           <span dir="auto" className="ms-1 truncate">
             {profile.name}
           </span>

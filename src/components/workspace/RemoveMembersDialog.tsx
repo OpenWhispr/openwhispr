@@ -206,22 +206,27 @@ export function RemoveMembersDialog({
             })
           : t("workspaces.removeMembers.directoryManagedOthers", { count: managed.length });
       }
+      // A refused request changed nothing. Any other failure may have landed before the reply
+      // was lost, so it only says the outcome is unknown.
+      case "rateLimited":
+        return transferring
+          ? t("workspaces.removeMembers.transferFailed")
+          : t("workspaces.removeMembers.failedBody");
       // The API reports people already gone in `already_removed`, never as `gone`, and the
       // reducer turns `transferRequired` into the picker; both read as a plain failure.
       case "gone":
       case "transferRequired":
-      case "rateLimited":
       case "failed":
         // Without a transfer these show as the dialog's failure state, not as a line under it.
         return transferring
-          ? t("workspaces.removeMembers.transferFailed")
-          : t("workspaces.removeMembers.failedBody");
+          ? t("workspaces.removeMembers.transferUnconfirmed")
+          : t("workspaces.removeMembers.unconfirmedBody");
     }
   };
 
-  // A plain failure replaces the dialog's question, as the design draws it: nothing changed, and
-  // the person can try again or leave. Failures with a reason of their own keep the question and
-  // say the reason under it.
+  // A plain failure replaces the dialog's question, as the design draws it, and the person can try
+  // again or leave. Failures with a reason of their own keep the question and say the reason
+  // under it.
   const plainFailure =
     !transferring &&
     state.kind === "failed" &&
@@ -238,12 +243,15 @@ export function RemoveMembersDialog({
 
   let body = count === 1 ? t("workspaces.removeMember.body") : t("workspaces.removeMembers.body");
   if (transferring) body = t("workspaces.removeMembers.reassignBody");
-  if (plainFailure) {
+  if (plainFailure && state.error?.kind === "rateLimited") {
     title =
       count === 1
         ? t("workspaces.removeMember.failedTitle", { name: firstName })
         : t("workspaces.removeMembers.failedTitle", { count });
     body = t("workspaces.removeMembers.failedBody");
+  } else if (plainFailure) {
+    title = t("workspaces.removeMembers.unconfirmedTitle");
+    body = t("workspaces.removeMembers.unconfirmedBody");
   }
   // Who owns what, said once the picker asks for someone to hand it to.
   const ownerNote =
@@ -306,7 +314,10 @@ export function RemoveMembersDialog({
               <DropdownMenuTrigger
                 aria-labelledby={`${pickerLabelId} ${pickerValueId}`}
                 disabled={busy || managedRefusal}
-                className={cn(PICKER_TRIGGER, "bg-black/[0.04] dark:bg-surface-1 dark:hover:bg-surface-2")}
+                className={cn(
+                  PICKER_TRIGGER,
+                  "bg-black/[0.04] dark:bg-surface-1 dark:hover:bg-surface-2"
+                )}
               >
                 {newOwner ? (
                   <MemberAvatar

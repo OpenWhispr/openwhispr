@@ -537,7 +537,7 @@ test("a second click while removing sends one request", async (t) => {
   assert.equal(globalThis.__removeCalls.length, 1);
 });
 
-test("transfer failure says no members were removed", async (t) => {
+test("a lost transfer reply says the outcome is unconfirmed", async (t) => {
   const { mount, opened } = await loadDialog(t);
   globalThis.__previewImpl = async () => preview([owns("u-liam")]);
   let reject;
@@ -557,7 +557,8 @@ test("transfer failure says no members were removed", async (t) => {
   assert.deepEqual(globalThis.__removeCalls, [
     ["w1", { userIds: ["u-liam"], transferTo: "u-self" }],
   ]);
-  assert.match(view.text(), /!workspaces\.removeMembers\.transferFailed/);
+  // The reply was lost, so the reassignment may have happened; the line says only that it's unknown.
+  assert.match(view.text(), /!workspaces\.removeMembers\.transferUnconfirmed/);
   // The same action retries, so the button keeps its label.
   assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.removeMembers.transferConfirm");
   assert.equal(globalThis.__actionDialogProps.primary.tone, "destructive");
@@ -572,8 +573,9 @@ test("a retry that finds everyone gone reports them removed", async (t) => {
   const view = await mount(opened([LIAM, ALEX]));
 
   await view.clickPrimary();
-  // A plain failure replaces the question: nothing changed, so the dialog says so and offers Try again.
-  assert.equal(globalThis.__actionDialogProps.title, 'workspaces.removeMembers.failedTitle|{"count":2}');
+  // A lost reply replaces the question with an unconfirmed state: the removal may have landed.
+  assert.equal(globalThis.__actionDialogProps.title, "workspaces.removeMembers.unconfirmedTitle");
+  assert.equal(globalThis.__actionDialogProps.body, "workspaces.removeMembers.unconfirmedBody");
   assert.equal(globalThis.__actionDialogProps.error, null);
   assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.exit.tryAgain");
 
@@ -685,7 +687,21 @@ for (const [error, line] of [
   });
 }
 
-for (const kind of ["failed", "rateLimited"]) {
+const failureStates = [
+  {
+    kind: "rateLimited",
+    title: `workspaces.removeMember.failedTitle|{"name":"${isolated("Liam")}"}`,
+    body: "workspaces.removeMembers.failedBody",
+  },
+  // Any other failure may have removed them before the reply was lost.
+  {
+    kind: "failed",
+    title: "workspaces.removeMembers.unconfirmedTitle",
+    body: "workspaces.removeMembers.unconfirmedBody",
+  },
+];
+
+for (const { kind, title, body } of failureStates) {
   test(`a ${kind} failure replaces the question with the failure state`, async (t) => {
     const { mount } = await loadDialog(t);
 
@@ -699,12 +715,27 @@ for (const kind of ["failed", "rateLimited"]) {
     });
 
     const props = globalThis.__actionDialogProps;
-    assert.equal(props.title, `workspaces.removeMember.failedTitle|{"name":"${isolated("Liam")}"}`);
-    assert.equal(props.body, "workspaces.removeMembers.failedBody");
+    assert.equal(props.title, title);
+    assert.equal(props.body, body);
     assert.equal(props.error, null);
     assert.equal(props.primary.label, "workspaces.exit.tryAgain");
   });
 }
+
+test("a rate-limited transfer says no members were removed", async (t) => {
+  const { mount } = await loadDialog(t);
+
+  const view = await mount({
+    kind: "failed",
+    subjects: [LIAM],
+    owners: [LIAM],
+    transferTo: "u-self",
+    defaultOwnerId: "u-self",
+    error: { kind: "rateLimited" },
+  });
+
+  assert.match(view.text(), /!workspaces\.removeMembers\.transferFailed/);
+});
 
 const directoryManaged = (CloudApiError, details) =>
   new CloudApiError(

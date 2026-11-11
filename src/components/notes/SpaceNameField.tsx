@@ -68,8 +68,7 @@ export default function SpaceNameField({
   const { t } = useTranslation();
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const invalidClass =
-    "ring-2 ring-destructive/40 focus-within:ring-destructive/50 dark:ring-2";
+  const invalidClass = "ring-2 ring-destructive/40 focus-within:ring-destructive/50 dark:ring-2";
 
   return (
     <div className="flex items-center gap-2">

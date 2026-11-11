@@ -1806,7 +1806,7 @@
         "roleMenuLabel": "Change {{name}}'s role",
         "roleDescription": {
           "member": "Uses the workspace.",
-          "admin": "Manages members, invites, teams, billing, and settings."
+          "admin": "Manages members, invites, teams, and settings."
         },
         "roleFailed": "Couldn't change {{name}}'s role. Check your connection and try again.",
         "roleNotAllowed": "You no longer have permission to change roles in {{workspace}}.",
@@ -2276,9 +2276,7 @@
           "someDonePlural": "Added {{added}} to {{team}}. {{already}} were already members.",
           "left": "{{names}} left the workspace, so nobody was added.",
           "allAlready": "They're already on {{team}}."
-        },
-        "selectAll": "Select all teams",
-        "selectRow": "Select {{name}}"
+        }
       },
       "invites": {
         "resending": "Resending…",
@@ -2391,9 +2389,7 @@
         "invite": {
           "title_one": "Invite {{count}} guest to {{workspace}}",
           "title_other": "Invite {{count}} guests to {{workspace}}",
-          "description": "They'll get an email link to join {{workspace}}.",
-          "sent_one": "Sent {{count}} invite to join {{workspace}}",
-          "sent_other": "Sent {{count}} invites to join {{workspace}}"
+          "description": "They'll get an email link to join {{workspace}}."
         },
         "remove": {
           "titleOne": "Remove {{name}} from {{workspace}}?",
@@ -3703,7 +3699,7 @@
         "member": "Workspace Member"
       },
       "roleDescription": {
-        "admin": "Manages members, invites, teams, billing, and settings.",
+        "admin": "Manages members, invites, teams, and settings.",
         "member": "Uses the workspace."
       },
       "errors": {
@@ -3813,6 +3809,7 @@
       "transferConfirm": "Reassign and remove",
       "transferring": "Transferring…",
       "transferFailed": "Couldn't reassign content. No members were removed. Try again.",
+      "transferUnconfirmed": "Couldn't confirm the reassignment and removal. Check your connection and try again.",
       "invalidTarget": "{{name}} can't receive ownership anymore. Choose someone else.",
       "cannotRemoveOwner": "The workspace owner can't be removed.",
       "cannotRemoveSelf": "You can't remove yourself. Leave the workspace from General.",
@@ -3823,6 +3820,8 @@
       "alreadyRemoved_one": "{{count}} member was already removed",
       "alreadyRemoved_other": "{{count}} members were already removed",
       "failedBody": "Their workspace access is unchanged. Check your connection and try again.",
+      "unconfirmedTitle": "Couldn't confirm the removal",
+      "unconfirmedBody": "They may already have been removed. Check your connection and try again.",
       "reassignBody": "Transfer their notes and assign a teamspace Admin before removing them.",
       "ownersAll": "They own notes or manage teamspaces.",
       "failedTitle_one": "Couldn't remove {{count}} member",

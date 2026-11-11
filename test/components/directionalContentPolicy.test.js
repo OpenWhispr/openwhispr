@@ -45,7 +45,7 @@ test("dynamic prose and identity values keep their own direction", () => {
     ["src/components/SettingsPage.tsx", /<bdi dir="ltr">\{user\.email\}<\/bdi>/],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",
-      /<p\s+dir="auto"[^>]*>\s*<HighlightMatch text=\{member\.name \|\| member\.email\}/,
+      /<p\s+dir="auto"[^>]*>\s*<HighlightMatch\s+text=\{member\.name \|\| member\.email\}/,
     ],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",

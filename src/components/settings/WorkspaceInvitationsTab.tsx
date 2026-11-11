@@ -386,19 +386,38 @@ export default function WorkspaceInvitationsTab({
                 </th>
                 <th
                   scope="col"
-                  className={cn(HEADER_CELL, COLUMN_DIVIDER, WIDE_ONLY, "px-3 text-start whitespace-nowrap")}
+                  className={cn(
+                    HEADER_CELL,
+                    COLUMN_DIVIDER,
+                    WIDE_ONLY,
+                    "px-3 text-start whitespace-nowrap"
+                  )}
                 >
                   {t("settingsPage.workspace.people.columns.role")}
                 </th>
                 <th
                   scope="col"
-                  className={cn(HEADER_CELL, COLUMN_DIVIDER, WIDE_ONLY, "px-3 text-start whitespace-nowrap")}
+                  className={cn(
+                    HEADER_CELL,
+                    COLUMN_DIVIDER,
+                    WIDE_ONLY,
+                    "px-3 text-start whitespace-nowrap"
+                  )}
                 >
                   {t("settingsPage.workspace.people.columns.status")}
                 </th>
-                <th scope="col" className={cn(HEADER_CELL, COLUMN_DIVIDER, "ps-3 pe-4 text-end whitespace-nowrap")}>
+                <th
+                  scope="col"
+                  className={cn(
+                    HEADER_CELL,
+                    COLUMN_DIVIDER,
+                    "ps-3 pe-4 text-end whitespace-nowrap"
+                  )}
+                >
                   {/* The design leaves this header blank; the name stays for screen readers. */}
-                  <span className="sr-only">{t("settingsPage.workspace.people.columns.actions")}</span>
+                  <span className="sr-only">
+                    {t("settingsPage.workspace.people.columns.actions")}
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -438,12 +457,21 @@ export default function WorkspaceInvitationsTab({
                       </p>
                       <p className="@xl:hidden mt-0.5 text-xs text-muted-foreground">
                         {role} ·{" "}
-                        <span title={statusTitle} className={expired ? "text-destructive" : undefined}>
+                        <span
+                          title={statusTitle}
+                          className={expired ? "text-destructive" : undefined}
+                        >
                           {status}
                         </span>
                       </p>
                     </td>
-                    <td className={cn(COLUMN_DIVIDER, WIDE_ONLY, "px-3 whitespace-nowrap text-xs text-foreground")}>
+                    <td
+                      className={cn(
+                        COLUMN_DIVIDER,
+                        WIDE_ONLY,
+                        "px-3 whitespace-nowrap text-xs text-foreground"
+                      )}
+                    >
                       {role}
                     </td>
                     <td
@@ -472,7 +500,10 @@ export default function WorkspaceInvitationsTab({
                           ) : (
                             <>
                               {t("common.actions")}
-                              <ChevronDown className="size-4 text-muted-foreground" aria-hidden="true" />
+                              <ChevronDown
+                                className="size-4 text-muted-foreground"
+                                aria-hidden="true"
+                              />
                             </>
                           )}
                         </DropdownMenuTrigger>

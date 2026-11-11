@@ -463,15 +463,7 @@ export default function SpaceMembersPanel({
         canManage,
         formatNames: (names) => formatList(i18n.language, names),
       }),
-    [
-      members,
-      invitations,
-      space.teams,
-      heldTeams,
-      workspaceTeams,
-      canManage,
-      i18n.language,
-    ]
+    [members, invitations, space.teams, heldTeams, workspaceTeams, canManage, i18n.language]
   );
   const teamEmoji = useMemo(
     () =>

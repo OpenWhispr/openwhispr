@@ -2545,7 +2545,7 @@
         "roleMenuLabel": "變更 {{name}} 的角色",
         "roleDescription": {
           "member": "使用工作區。",
-          "admin": "管理成員、邀請、團隊、帳單與設定。"
+          "admin": "管理成員、邀請、團隊和設定。"
         },
         "roleFailed": "無法變更 {{name}} 的角色。請檢查網路連線後再試一次。",
         "roleNotAllowed": "你已無權變更 {{workspace}} 中的角色。",
@@ -3015,9 +3015,7 @@
           "someDonePlural": "已將 {{added}} 加入 {{team}}。{{already}} 已是成員。",
           "left": "{{names}} 已離開工作區，因此沒有加入任何人。",
           "allAlready": "他們已在 {{team}} 中。"
-        },
-        "selectAll": "選取所有團隊",
-        "selectRow": "選取 {{name}}"
+        }
       },
       "invites": {
         "resending": "重新傳送中…",
@@ -3130,9 +3128,7 @@
         "invite": {
           "title_one": "邀請 {{count}} 位訪客加入 {{workspace}}",
           "title_other": "邀請 {{count}} 位訪客加入 {{workspace}}",
-          "description": "他們會收到一封電子郵件，透過其中的連結加入 {{workspace}}。",
-          "sent_one": "已傳送 {{count}} 份邀請，邀請加入 {{workspace}}",
-          "sent_other": "已傳送 {{count}} 份邀請，邀請加入 {{workspace}}"
+          "description": "他們會收到一封電子郵件，透過其中的連結加入 {{workspace}}。"
         },
         "remove": {
           "titleOne": "要將 {{name}} 從 {{workspace}} 移除嗎？",
@@ -5968,7 +5964,7 @@
         "member": "工作區成員"
       },
       "roleDescription": {
-        "admin": "管理成員、邀請、團隊、帳單與設定。",
+        "admin": "管理成員、邀請、團隊和設定。",
         "member": "使用工作區。"
       },
       "errors": {
@@ -6078,6 +6074,7 @@
       "transferConfirm": "重新分配並移除",
       "transferring": "正在轉讓…",
       "transferFailed": "無法重新分配內容。未移除任何成員。請再試一次。",
+      "transferUnconfirmed": "無法確認內容重新分配和移除是否完成。請檢查網路連線後再試一次。",
       "invalidTarget": "{{name}} 已無法接收擁有權。請選擇其他人。",
       "cannotRemoveOwner": "無法移除工作區擁有者。",
       "cannotRemoveSelf": "你無法移除自己。請在「一般」中離開工作區。",
@@ -6088,6 +6085,8 @@
       "alreadyRemoved_one": "{{count}} 名成員已被移除",
       "alreadyRemoved_other": "{{count}} 名成員已被移除",
       "failedBody": "他們對工作區的存取權未變。請檢查網路連線後再試一次。",
+      "unconfirmedTitle": "無法確認是否已移除",
+      "unconfirmedBody": "他們可能已被移除。請檢查網路連線後再試一次。",
       "reassignBody": "移除前，請轉移他們的筆記並指定 Teamspace 管理員。",
       "ownersAll": "他們擁有筆記或管理 Teamspace。",
       "failedTitle_one": "無法移除 {{count}} 位成員",

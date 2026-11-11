@@ -298,10 +298,10 @@ function PeopleBody({
         )}
       </div>
 
-      {/* Members scrolls only its table; the other tabs scroll here, under the fixed header. */}
-      <div
-        className={cn("mt-3 flex min-h-0 flex-1 flex-col", tab !== "members" && "overflow-y-auto")}
-      >
+      {/* Members scrolls only its table until the table reaches its minimum height (many join
+          requests, a short window); past that, and on the other tabs, this scrolls under the
+          fixed header. */}
+      <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto">
         {tab === "members" && (
           <WorkspaceMembersTab
             workspace={workspace}

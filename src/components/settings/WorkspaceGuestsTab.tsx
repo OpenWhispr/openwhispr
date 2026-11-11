@@ -97,7 +97,7 @@ function WorkspaceGuestsBody({
     setSelection((current) => keepRows(current, emails));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailKey]);
-  // Addresses invited since the invite dialog opened, for the toast when it closes.
+  // Addresses invited since the invite dialog opened, dropped from the selection when it closes.
   const sentRef = useRef<string[]>([]);
   const columnCount = canManage ? 4 : 2;
   const frameRef = useRef<HTMLDivElement>(null);
@@ -180,15 +180,10 @@ function WorkspaceGuestsBody({
     }
   };
 
+  // The invite dialog announces what it sent, so closing it only updates the selection.
   const closeInvite = (): void => {
     const invited = sentRef.current;
     if (invited.length > 0) {
-      toast({
-        title: t(`${KEY}.invite.sent`, {
-          count: invited.length,
-          workspace: isolate(workspace.name),
-        }),
-      });
       // Invited guests move to Invitations, so those are no longer there to act on.
       setSelection((current) => setRows(current, invited, false));
     }
@@ -408,9 +403,7 @@ function EmptyGuests({ ref }: { ref: React.Ref<HTMLDivElement> }): React.ReactEl
       <p className="mt-2 text-lg font-medium leading-[1.4] text-foreground">
         {t(`${KEY}.emptyTitle`)}
       </p>
-      <p className="mt-1.5 max-w-[339px] text-sm text-muted-foreground">
-        {t(`${KEY}.emptyBody`)}
-      </p>
+      <p className="mt-1.5 max-w-[339px] text-sm text-muted-foreground">{t(`${KEY}.emptyBody`)}</p>
     </div>
   );
 }

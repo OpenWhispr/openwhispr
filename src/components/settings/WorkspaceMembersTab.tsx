@@ -38,7 +38,13 @@ import { SelectionBar } from "../workspace/SelectionBar";
 import { STATE_ACTION_BUTTON } from "../workspace/dialogButtons";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
 import { MemberRoleMenu } from "./MemberRoleMenu";
-import { COLUMN_DIVIDER, CONTACTS_TRIGGER, HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
+import {
+  COLUMN_DIVIDER,
+  CONTACTS_TRIGGER,
+  HEADER_CELL,
+  ROW_DIVIDER,
+  TABLE_FRAME,
+} from "./tableTokens";
 
 interface WorkspaceMembersTabProps {
   workspace: Workspace;
@@ -341,9 +347,10 @@ export default function WorkspaceMembersTab({
         </div>
       )}
 
-      {(
-        // Only the rows scroll; the header sticks and the page around the table stays put.
-        <div className={cn(TABLE_FRAME, "min-h-0 overflow-y-auto")}>
+      {
+        // Only the rows scroll; the header sticks and the page around the table stays put. The
+        // floor keeps a header and a few rows when join requests take most of the height.
+        <div className={cn(TABLE_FRAME, "min-h-48 overflow-y-auto")}>
           <table className="w-full border-collapse">
             <thead>
               <tr>
@@ -370,13 +377,20 @@ export default function WorkspaceMembersTab({
                   {t("settingsPage.workspace.people.columns.name")}
                 </th>
                 {showTeams && (
-                  <th scope="col" className={cn(HEADER_CELL, COLUMN_DIVIDER, "w-[170px] px-3 text-start")}>
+                  <th
+                    scope="col"
+                    className={cn(HEADER_CELL, COLUMN_DIVIDER, "w-[170px] px-3 text-start")}
+                  >
                     {t("settingsPage.workspace.people.columns.team")}
                   </th>
                 )}
                 <th
                   scope="col"
-                  className={cn(HEADER_CELL, COLUMN_DIVIDER, "w-[150px] px-3 text-start whitespace-nowrap")}
+                  className={cn(
+                    HEADER_CELL,
+                    COLUMN_DIVIDER,
+                    "w-[150px] px-3 text-start whitespace-nowrap"
+                  )}
                 >
                   {t("settingsPage.workspace.people.columns.role")}
                 </th>
@@ -446,80 +460,87 @@ export default function WorkspaceMembersTab({
                   </td>
                 </tr>
               )}
-              {view.kind === "rows" && view.rows.map((member) => {
-                const isSelf = user?.id === member.user_id;
-                return (
-                  <tr key={member.user_id} className={cn("h-14", ROW_DIVIDER)}>
-                    {canManage && (
-                      <td className="w-11 px-3">
-                        {isSelectable(member) && (
-                          <RowCheckbox
-                            label={t("settingsPage.workspace.people.selection.selectRow", {
-                              name: isolate(member.name || member.email),
-                            })}
-                            checked={selection.has(member.user_id)}
-                            className={ROW_CHECKBOX}
-                            onToggle={() =>
-                              setSelection((current) => toggleRow(current, member.user_id))
-                            }
+              {view.kind === "rows" &&
+                view.rows.map((member) => {
+                  const isSelf = user?.id === member.user_id;
+                  return (
+                    <tr key={member.user_id} className={cn("h-14", ROW_DIVIDER)}>
+                      {canManage && (
+                        <td className="w-11 px-3">
+                          {isSelectable(member) && (
+                            <RowCheckbox
+                              label={t("settingsPage.workspace.people.selection.selectRow", {
+                                name: isolate(member.name || member.email),
+                              })}
+                              checked={selection.has(member.user_id)}
+                              className={ROW_CHECKBOX}
+                              onToggle={() =>
+                                setSelection((current) => toggleRow(current, member.user_id))
+                              }
+                            />
+                          )}
+                        </td>
+                      )}
+                      {/* max-w-0 lets the cell's text truncate inside an auto-layout table. */}
+                      <td className={cn("max-w-0 px-3", canManage && COLUMN_DIVIDER)}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <MemberAvatar
+                            name={member.name}
+                            email={member.email}
+                            image={member.image}
+                            size="row"
                           />
-                        )}
-                      </td>
-                    )}
-                    {/* max-w-0 lets the cell's text truncate inside an auto-layout table. */}
-                    <td className={cn("max-w-0 px-3", canManage && COLUMN_DIVIDER)}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <MemberAvatar
-                          name={member.name}
-                          email={member.email}
-                          image={member.image}
-                          size="row"
-                        />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <p dir="auto" className="text-xs font-medium text-foreground truncate">
-                              <HighlightMatch text={member.name || member.email} query={searchQuery} />
-                            </p>
-                            {isSelf && (
-                              <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-foreground/5 text-muted-foreground dark:bg-white/8">
-                                {t("settingsPage.workspace.people.you")}
-                              </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <p
+                                dir="auto"
+                                className="text-xs font-medium text-foreground truncate"
+                              >
+                                <HighlightMatch
+                                  text={member.name || member.email}
+                                  query={searchQuery}
+                                />
+                              </p>
+                              {isSelf && (
+                                <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-foreground/5 text-muted-foreground dark:bg-white/8">
+                                  {t("settingsPage.workspace.people.you")}
+                                </span>
+                              )}
+                            </div>
+                            {member.name && (
+                              <p className="text-xs text-muted-foreground/70 truncate">
+                                <bdi dir="ltr">
+                                  <HighlightMatch text={member.email} query={searchQuery} />
+                                </bdi>
+                              </p>
                             )}
                           </div>
-                          {member.name && (
-                            <p className="text-xs text-muted-foreground/70 truncate">
-                              <bdi dir="ltr">
-                                <HighlightMatch text={member.email} query={searchQuery} />
-                              </bdi>
-                            </p>
-                          )}
                         </div>
-                      </div>
-                    </td>
-                    {showTeams && <TeamCell teams={member.teams} />}
-                    <td className={cn(COLUMN_DIVIDER, "w-[150px] px-3 whitespace-nowrap")}>
-                      <MemberRoleMenu
-                        member={member}
-                        isSelf={isSelf}
-                        canManage={canManage}
-                        canTransfer={canTransferOwnership}
-                        pending={pendingRoleIds.has(member.user_id)}
-                        onRoleChange={(role) => void handleRoleChange(member, role)}
-                        onTransfer={() =>
-                          dispatchTransfer({ type: "open", candidateId: member.user_id })
-                        }
-                        onRemove={() => openRemoval([member])}
-                        workspace={canManage ? workspace : undefined}
-                        teamAdd={canManage ? teamAdd : undefined}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                      {showTeams && <TeamCell teams={member.teams} />}
+                      <td className={cn(COLUMN_DIVIDER, "w-[150px] px-3 whitespace-nowrap")}>
+                        <MemberRoleMenu
+                          member={member}
+                          isSelf={isSelf}
+                          canManage={canManage}
+                          canTransfer={canTransferOwnership}
+                          pending={pendingRoleIds.has(member.user_id)}
+                          onRoleChange={(role) => void handleRoleChange(member, role)}
+                          onTransfer={() =>
+                            dispatchTransfer({ type: "open", candidateId: member.user_id })
+                          }
+                          onRemove={() => openRemoval([member])}
+                          workspace={canManage ? workspace : undefined}
+                          teamAdd={canManage ? teamAdd : undefined}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
-      )}
+      }
 
       {/* The seat count is the workspace's, so a search that matches nobody keeps it. */}
       {canManage && (view.kind === "rows" || view.kind === "noResults") && (

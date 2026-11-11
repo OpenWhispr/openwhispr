@@ -178,7 +178,10 @@ export function TransferOwnershipDialog({
               <span dir="auto" className="min-w-0 flex-1 truncate">
                 {picked ? memberName(picked) : t("workspaces.transfer.placeholder")}
               </span>
-              <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <ChevronsUpDown
+                className="size-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
             </DropdownMenuTrigger>
             {/* Opens upward, over the title, and never flips: below the picker sit the dialog's
                 buttons, and picking enables Transfer ownership, so a double-click would land

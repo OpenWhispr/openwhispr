@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useWorkspaceTeams } from "../../hooks/useWorkspaceTeams";
-import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
+import { teamCreationFor } from "../../lib/capabilities";
 import { Button } from "../ui/button";
 import CreateTeamDialog from "../CreateTeamDialog";
 import TeamPaywallDialog from "../workspace/TeamPaywallDialog";
@@ -90,7 +90,6 @@ export default function WorkspaceTeamsTab({
         status={status}
         teams={teams}
         canCreate={canCreate}
-        selectable={workspaceCan(workspace, "manage_teams")}
         onRetry={() => void reload()}
         onCreate={openCreate}
         onOpen={(team) => setOpenTeamId(team.id)}

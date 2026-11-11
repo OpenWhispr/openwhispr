@@ -2545,7 +2545,7 @@
         "roleMenuLabel": "{{name}} のロールを変更",
         "roleDescription": {
           "member": "ワークスペースを利用します。",
-          "admin": "メンバー、招待、チーム、請求、設定を管理します。"
+          "admin": "メンバー、招待、チーム、設定を管理します。"
         },
         "roleFailed": "{{name}} のロールを変更できませんでした。接続を確認して、もう一度お試しください。",
         "roleNotAllowed": "{{workspace}} のロールを変更する権限がなくなりました。",
@@ -3015,9 +3015,7 @@
           "someDonePlural": "{{added}} を {{team}} に追加しました。{{already}} はすでにメンバーです。",
           "left": "{{names}} はワークスペースを退出したため、誰も追加されませんでした。",
           "allAlready": "全員がすでに {{team}} に入っています。"
-        },
-        "selectAll": "すべてのチームを選択",
-        "selectRow": "{{name}} を選択"
+        }
       },
       "invites": {
         "resending": "再送信中…",
@@ -3130,9 +3128,7 @@
         "invite": {
           "title_one": "{{count}} 人のゲストを {{workspace}} に招待",
           "title_other": "{{count}} 人のゲストを {{workspace}} に招待",
-          "description": "{{workspace}} に参加するためのリンクがメールで届きます。",
-          "sent_one": "{{workspace}} への招待を {{count}} 件送信しました",
-          "sent_other": "{{workspace}} への招待を {{count}} 件送信しました"
+          "description": "{{workspace}} に参加するためのリンクがメールで届きます。"
         },
         "remove": {
           "titleOne": "{{name}} を {{workspace}} から削除しますか？",
@@ -5968,7 +5964,7 @@
         "member": "ワークスペースのメンバー"
       },
       "roleDescription": {
-        "admin": "メンバー、招待、チーム、請求、設定を管理します。",
+        "admin": "メンバー、招待、チーム、設定を管理します。",
         "member": "ワークスペースを利用します。"
       },
       "errors": {
@@ -6078,6 +6074,7 @@
       "transferConfirm": "引き継いで削除",
       "transferring": "譲渡中…",
       "transferFailed": "コンテンツを引き継げませんでした。メンバーは削除されていません。もう一度お試しください。",
+      "transferUnconfirmed": "コンテンツの引き継ぎと削除を確認できませんでした。接続を確認して、もう一度お試しください。",
       "invalidTarget": "{{name}} はオーナー権限を受け取れなくなりました。別の人を選択してください。",
       "cannotRemoveOwner": "ワークスペースのオーナーは削除できません。",
       "cannotRemoveSelf": "自分自身は削除できません。「一般」からワークスペースを退出してください。",
@@ -6088,6 +6085,8 @@
       "alreadyRemoved_one": "{{count}} 人のメンバーはすでに削除されています",
       "alreadyRemoved_other": "{{count}} 人のメンバーはすでに削除されています",
       "failedBody": "ワークスペースへのアクセスは変更されていません。接続を確認して、もう一度お試しください。",
+      "unconfirmedTitle": "削除を確認できませんでした",
+      "unconfirmedBody": "すでに削除されている可能性があります。接続を確認して、もう一度お試しください。",
       "reassignBody": "削除する前に、ノートを引き継ぎ、Teamspace の管理者を割り当ててください。",
       "ownersAll": "ノートを所有しているか、Teamspace を管理しています。",
       "failedTitle_one": "{{count}} 人のメンバーを削除できませんでした",
