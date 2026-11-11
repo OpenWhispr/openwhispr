@@ -274,6 +274,41 @@ test("an interrupted stop a launch can't write is kept and written before its ne
   assert.equal(fs.existsSync(marker()), false);
 });
 
+test("a recording neither replaces nor removes the marker a failed recovery kept", async () => {
+  const share = path.join(userData, "share");
+  const away = path.join(userData, "share-away");
+  const first = harness({ configuredPath: share });
+  first.log.recordingStarted({ sessionId: "s1", noteId: 9, trigger: "hotkey" });
+  await first.log.flush();
+
+  fs.renameSync(share, away);
+  fs.writeFileSync(share, "");
+  const relaunch = harness({ configuredPath: share });
+  relaunch.log.recoverInterrupted();
+  relaunch.log.recordingStarted({ sessionId: "s2", noteId: 10, trigger: "tray" });
+  relaunch.timers[0].callback();
+  await relaunch.log.flush();
+
+  // The share comes back before the recording stops.
+  fs.rmSync(share);
+  fs.renameSync(away, share);
+  relaunch.log.recordingStopped({ sessionId: "s2", reason: "user" });
+  await relaunch.log.flush();
+  assert.equal(JSON.parse(fs.readFileSync(marker(), "utf8")).sessionId, "s1");
+
+  relaunch.log.recoverInterrupted();
+  await relaunch.log.flush();
+  assert.deepEqual(
+    lines(share).map((line) => [line.sessionId, line.event, line.reason]),
+    [
+      ["s1", "recording.started", null],
+      ["s2", "recording.stopped", "user"],
+      ["s1", "recording.stopped", "interrupted"],
+    ]
+  );
+  assert.equal(fs.existsSync(marker()), false);
+});
+
 test("values outside the known sets are written as null", async () => {
   const { log } = harness();
   log.recordingStarted({ sessionId: "s1", noteId: "42", trigger: "Board meeting notes" });

@@ -66,6 +66,9 @@ function createMeetingAuditLog({
   let lastFile = null;
   let session = null;
   let checkpointTimer = null;
+  // While a failed recovery keeps an earlier session's marker, no session may
+  // replace or remove it.
+  let markerKept = false;
 
   // A write never blocks or fails the recording; each problem is logged once.
   const warnOnce = (message, meta) => {
@@ -132,6 +135,7 @@ function createMeetingAuditLog({
 
   // Replaced whole, so a crash mid-write never leaves a torn marker.
   async function saveMarker(open) {
+    if (markerKept) return;
     const pending = `${markerPath}.tmp`;
     await fs.promises.writeFile(pending, JSON.stringify(open));
     await fs.promises.rename(pending, markerPath);
@@ -144,9 +148,11 @@ function createMeetingAuditLog({
       try {
         text = await fs.promises.readFile(markerPath, "utf8");
       } catch (error) {
-        if (error.code === "ENOENT") return;
-        throw error;
+        if (error.code !== "ENOENT") throw error;
+        markerKept = false;
+        return;
       }
+      markerKept = true;
       const open = JSON.parse(text);
       await append(open.dir, open.lastSeenAt, {
         event: "recording.stopped",
@@ -156,6 +162,7 @@ function createMeetingAuditLog({
         durationSec: durationSec(open.startedAt, open.lastSeenAt),
       });
       await fs.promises.rm(markerPath, { force: true });
+      markerKept = false;
     });
   }
 
@@ -172,7 +179,7 @@ function createMeetingAuditLog({
       lastSeenAt: startedAt,
     };
     session = open;
-    // A marker a failed recovery kept would be replaced by this start's.
+    // Retries a marker a failed recovery kept, in case its folder is back.
     recoverInterrupted();
     enqueue(async () => {
       await append(open.dir, startedAt, { event: "recording.started", ...open });
@@ -201,7 +208,7 @@ function createMeetingAuditLog({
         reason: allowed(STOP_REASONS, reason),
         durationSec: durationSec(open.startedAt, stoppedAt),
       });
-      await fs.promises.rm(markerPath, { force: true });
+      if (!markerKept) await fs.promises.rm(markerPath, { force: true });
     });
   }
 
