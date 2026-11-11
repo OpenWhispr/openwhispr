@@ -267,6 +267,12 @@ export interface ChatTurnOptions {
    */
   openNoteId?: number | null;
   /**
+   * The space of `openNote` when it isn't the note on screen but a Chat-section conversation's
+   * source note: the conversation list spans every workspace, so the note is sent only while its
+   * space is in the turn's scope (null, unknown: never). Unset, the note is always sent.
+   */
+  openNoteSpaceId?: number | null;
+  /**
    * The agent chat: offer the interaction tools (questions, connect cards,
    * access, keys, settings), show and save each turn's notes (status, timing,
    * reasoning), and keep a stopped reply. Only on surfaces that render them;
@@ -660,6 +666,12 @@ export function createChatTurnEngine(
       // The spaces this turn may read, for its tools and its library context alike.
       const scopeSpaceIds = await resolveAssistantScopeSpaceIds();
       if (cancelled()) return;
+      const { openNoteSpaceId } = getOptions();
+      const groundingNote =
+        openNoteSpaceId === undefined ||
+        (openNoteSpaceId !== null && scopeSpaceIds.includes(openNoteSpaceId))
+          ? currentOpenNote
+          : undefined;
       const policy = usePolicyStore.getState();
       const calendarConnected = selectCalendarConnected(settings);
       const webSearchEnabled = isWebSearchAllowed(policy);
@@ -718,7 +730,6 @@ export function createChatTurnEngine(
         registry = createToolRegistry({
           isSignedIn: settings.isSignedIn,
           calendarConnected,
-          cloudBackupEnabled: settings.cloudBackupEnabled,
           searchScope: scope,
           scopeSpaceIds,
           openNoteId: getOptions().openNoteId,
@@ -853,7 +864,7 @@ export function createChatTurnEngine(
       // A note's chat is about its note: other notes up front would compete with
       // it, and search_notes still reaches them when it doesn't answer.
       const [ragContext, attendeesContext] = await Promise.all([
-        currentOpenNote ? "" : buildRAGContext(userText, scopeSpaceIds, scope),
+        groundingNote ? "" : buildRAGContext(userText, scopeSpaceIds, scope),
         connectorsOffered ? buildNoteAttendeesContext(getOptions().noteMeeting) : "",
       ]);
       if (cancelled()) return;
@@ -864,9 +875,9 @@ export function createChatTurnEngine(
           ? FULL_TRANSCRIPT_MAX_TOKENS[contextTier]
           : Infinity;
       const currentNote: OpenNoteContext =
-        typeof currentOpenNote === "function"
-          ? currentOpenNote(maxTranscriptTokens)
-          : { text: currentOpenNote ?? "", transcriptPreview: false };
+        typeof groundingNote === "function"
+          ? groundingNote(maxTranscriptTokens)
+          : { text: groundingNote ?? "", transcriptPreview: false };
       // Only main's attendee block may carry its fence: note text and search
       // results can't fake a second list.
       const openNoteContext = [withoutAttendeesFence(currentNote.text), attendeesContext]

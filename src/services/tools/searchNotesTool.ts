@@ -6,8 +6,12 @@ import { withoutAttendeesFence } from "../../utils/noteAttendees";
 
 export const MAX_CONTENT_LENGTH = 500;
 
-// The most the cloud search endpoint returns at once.
-const CLOUD_SEARCH_MAX_LIMIT = 50;
+// The most the cloud search endpoint returns at once; it refuses a larger limit.
+const MAX_SEARCH_LIMIT = 50;
+// Teamspaces the cloud is asked about one by one. Each request names its space, so the server
+// sends that space's rows and no personal ones; past this many, one request for every accessible
+// space is filtered here instead, where personal rows can take some of its slots.
+const MAX_CLOUD_SPACE_REQUESTS = 10;
 
 interface SearchToolOptions {
   useCloudSearch: boolean;
@@ -59,7 +63,10 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
 
     async execute(args: Record<string, unknown>): Promise<ToolResult> {
       const query = args.query as string;
-      const limit = typeof args.limit === "number" ? args.limit : 5;
+      const limit =
+        typeof args.limit === "number" && Number.isFinite(args.limit)
+          ? Math.min(Math.max(Math.floor(args.limit), 1), MAX_SEARCH_LIMIT)
+          : 5;
       const spaceName = fixedScope ? undefined : (args.space as string | undefined);
 
       // Only spaces in scope can be named, listed or searched.
@@ -186,24 +193,32 @@ async function executeCloudSearch(
   spaceIds: number[]
 ): Promise<ToolResult> {
   const { NotesService } = await import("../../services/NotesService.js");
+  const cloudIds = cloudSpaces.flatMap((s) => (s.cloud_space_id ? [s.cloud_space_id] : []));
   const spaceByCloudId = new Map(cloudSpaces.map((s) => [s.cloud_space_id, s]));
-  // One teamspace is scoped by the server (membership is server-enforced). Several are asked for
-  // together, every accessible space, with room for the rows of spaces out of scope dropped here.
-  const single =
-    cloudSpaces.length === 1 ? (cloudSpaces[0].cloud_space_id ?? undefined) : undefined;
-  const { notes: cloudNotes } = await NotesService.search(
-    query,
-    Math.min(single ? limit : limit * 4, CLOUD_SEARCH_MAX_LIMIT),
-    single ? undefined : "all",
-    single
+  // Membership is server-enforced; one request per teamspace keeps personal rows out entirely.
+  const requests =
+    cloudIds.length <= MAX_CLOUD_SPACE_REQUESTS
+      ? cloudIds.map((cloudId) => NotesService.search(query, limit, undefined, cloudId))
+      : [NotesService.search(query, Math.min(limit * 4, MAX_SEARCH_LIMIT), "all")];
+  const answers = await Promise.allSettled(requests);
+  const answered = answers.flatMap((answer) =>
+    answer.status === "fulfilled" ? [answer.value.notes] : []
   );
+  // A teamspace whose request failed is left out; the search fails only when every one did.
+  if (answered.length === 0) {
+    throw answers.find((answer): answer is PromiseRejectedResult => answer.status === "rejected")
+      ?.reason;
+  }
   // A personal row (no space) is a stale cloud copy of a private note, and a space this device
-  // doesn't hold in scope is another workspace's: neither reaches the model.
-  const inScope = cloudNotes
+  // doesn't hold in scope is another workspace's: neither reaches the model, whatever a request
+  // returned.
+  const inScope = answered
+    .flat()
     .flatMap((cn) => {
       const local = cn.space_id ? spaceByCloudId.get(cn.space_id) : undefined;
       return local ? [{ cn, spaceName: local.name }] : [];
     })
+    .sort((a, b) => b.cn.score - a.cn.score)
     .slice(0, limit);
 
   const results = await Promise.all(

@@ -415,6 +415,8 @@ export function useMainChatSession(): MainChatSession {
         // A skill request starts a new chat and sends in one tick: never carry the last chat's note.
         openNote: currentSelection.kind === "conversation" ? source.openNote : undefined,
         sourceNoteId: currentSelection.kind === "conversation" ? source.sourceNote?.id : undefined,
+        sourceNoteSpaceId:
+          currentSelection.kind === "conversation" ? source.sourceNote?.spaceId : undefined,
         options,
       });
       if (currentSelection.kind === "conversation") {
@@ -431,6 +433,7 @@ export function useMainChatSession(): MainChatSession {
       source.isLoading,
       source.openNote,
       source.sourceNote?.id,
+      source.sourceNote?.spaceId,
       releaseConversation,
     ]
   );

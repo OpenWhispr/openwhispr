@@ -141,10 +141,55 @@ test("assistantScopeSpaceIds: without the workspace list (the dictation window),
     }),
     [3, 5, 6]
   );
-  // A list that doesn't hold the active workspace (just left, still loading) is no list at all.
+  // A list that doesn't hold the active workspace (just left, still loading) is no list at all,
+  // and main's Private, still A's, isn't the active workspace's.
   assert.deepEqual(
     assistantScope({ activeWorkspaceId: "gone", privateSpaceId: 1, defaultPrivateSpaceId: 1 }),
-    [1, 6, 7, 9]
+    [6, 7]
+  );
+});
+
+test("assistantScopeSpaceIds: a Private main names for another workspace never counts", () => {
+  // Main's workspace scope lags (startup, an account change): it still names the default
+  // workspace D's Private while workspace A is active and no list has loaded.
+  const lagging = {
+    spaces: [privateA, privateOf(5, "d"), teamIn(2, "a"), pending],
+    workspaces: [],
+    defaultWorkspaceId: null,
+    privateSpaceId: 5,
+    defaultPrivateSpaceId: 5,
+  };
+  // A's own Private and teamspace, never D's Private or D's pending notes.
+  assert.deepEqual(assistantScope(lagging), [1, 2]);
+  // Nothing of A's own yet: still nothing of D's.
+  assert.deepEqual(
+    assistantScope({ ...lagging, spaces: [privateOf(5, "d"), teamIn(2, "a")] }),
+    [2]
+  );
+  // Main's Private is A's own and A is the default: the pending one merges in, as in the tree.
+  assert.deepEqual(
+    assistantScope({ ...lagging, privateSpaceId: 1, defaultPrivateSpaceId: 1 }),
+    [1, 2, 9]
+  );
+  // Main's Private is the pending row itself (no default bound yet): it is the active Private.
+  assert.deepEqual(
+    assistantScope({
+      ...lagging,
+      spaces: [pending, teamIn(2, "a")],
+      privateSpaceId: 9,
+      defaultPrivateSpaceId: 9,
+    }),
+    [2, 9]
+  );
+  // A Private main names that isn't among the spaces can't be checked: left out.
+  assert.deepEqual(
+    assistantScope({
+      ...lagging,
+      spaces: [teamIn(2, "a")],
+      privateSpaceId: 1,
+      defaultPrivateSpaceId: 1,
+    }),
+    [2]
   );
 });
 

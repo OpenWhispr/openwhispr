@@ -247,3 +247,17 @@ test("a note moved out of scope after indexing is still filtered out", async (t)
     [moved.id]
   );
 });
+
+test("keyword search reads nothing for a malformed scope, never everything", async () => {
+  databaseCalls = { searchNotes: [], getNoteIdsInScope: [] };
+  const search = (spaceIds) =>
+    handlers.get("db-search-notes")(null, "query", 5, null, null, spaceIds);
+  await search([1, 2]);
+  await search(null);
+  await search("1,2");
+  await search([1, "2"]);
+  assert.deepEqual(
+    databaseCalls.searchNotes.map((args) => args.at(-1)),
+    [[1, 2], null, [], []]
+  );
+});

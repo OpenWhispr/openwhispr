@@ -53,9 +53,11 @@ export function spacesInWorkspaceScope<S extends ScopedSpace>(
 /**
  * The spaces whose notes the assistant may read while `activeWorkspaceId` is active. A window
  * holding the workspace list (the control panel) reads what its tree shows. Without it (the
- * dictation window, or a list that doesn't hold the active workspace yet) the scope is main's
- * Private for the active workspace, the pending Private too when main's is the default's (the
- * tree merges the two), and the active workspace's teamspaces and those linked to no workspace.
+ * dictation window, or a list that doesn't hold the active workspace yet) the scope is the active
+ * workspace's own Private, the pending Private too when main's Private is the active workspace's
+ * and the default's (the tree merges the two), and the active workspace's teamspaces and those
+ * linked to no workspace. Main's workspace scope lags at startup and after an account change, so
+ * a Private it names is checked against `spaces`: one bound to another workspace never counts.
  * With no active workspace nothing says which teamspaces are in scope, so main's Private alone
  * is: never every space.
  */
@@ -71,8 +73,7 @@ export function assistantScopeSpaceIds(input: {
   defaultPrivateSpaceId: number | null;
 }): number[] {
   const { spaces, activeWorkspaceId, workspaces, privateSpaceId } = input;
-  const mainPrivate = privateSpaceId == null ? [] : [privateSpaceId];
-  if (activeWorkspaceId == null) return mainPrivate;
+  if (activeWorkspaceId == null) return privateSpaceId == null ? [] : [privateSpaceId];
   if (isListedWorkspace(activeWorkspaceId, workspaces)) {
     return spacesInWorkspaceScope(
       spaces,
@@ -81,16 +82,21 @@ export function assistantScopeSpaceIds(input: {
       input.defaultWorkspaceId
     ).map((space) => space.id);
   }
-  const pendingCounts = privateSpaceId != null && privateSpaceId === input.defaultPrivateSpaceId;
-  const ids = new Set(mainPrivate);
-  for (const space of spaces) {
-    const inScope =
+  // Main's Private is the active workspace's own, or the pending one (no default bound yet).
+  const mainPrivate = spaces.find(
+    (space) => space.kind === "private" && space.id === privateSpaceId
+  );
+  const mainPrivateIsActive =
+    mainPrivate != null &&
+    (mainPrivate.workspace_id == null || mainPrivate.workspace_id === activeWorkspaceId);
+  const pendingCounts = mainPrivateIsActive && privateSpaceId === input.defaultPrivateSpaceId;
+  return spaces
+    .filter((space) =>
       space.kind === "private"
-        ? pendingCounts && space.workspace_id == null
-        : space.workspace_id == null || space.workspace_id === activeWorkspaceId;
-    if (inScope) ids.add(space.id);
-  }
-  return [...ids];
+        ? space.workspace_id === activeWorkspaceId || (space.workspace_id == null && pendingCounts)
+        : space.workspace_id == null || space.workspace_id === activeWorkspaceId
+    )
+    .map((space) => space.id);
 }
 
 /**

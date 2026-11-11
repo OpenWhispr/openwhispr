@@ -2845,7 +2845,13 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-search-notes", async (event, query, limit, spaceId, folderId, spaceIds) => {
-      return this.databaseManager.searchNotes(query, limit, spaceId, folderId, spaceIds);
+      return this.databaseManager.searchNotes(
+        query,
+        limit,
+        spaceId,
+        folderId,
+        spaceIdsArgument(spaceIds)
+      );
     });
 
     ipcMain.handle(

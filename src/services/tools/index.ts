@@ -2,7 +2,7 @@ import { productHelpTools } from "./productHelpTools";
 import { ToolRegistry } from "./ToolRegistry";
 import { createSearchNotesTool } from "./searchNotesTool";
 import { createGetNoteTool } from "./getNoteTool";
-import { createNoteTool } from "./createNoteTool";
+import { createCreateNoteTool } from "./createNoteTool";
 import { createUpdateNoteTool } from "./updateNoteTool";
 import { createListFoldersTool } from "./listFoldersTool";
 import type { NoteScope } from "./noteScope";
@@ -39,7 +39,6 @@ interface ToolRegistrySettings {
   /** Disabled for onboarding demos; supported normal chat surfaces default to enabled. */
   productHelpEnabled?: boolean;
   calendarConnected: boolean;
-  cloudBackupEnabled: boolean;
   /** Pins search_notes to a container (overview chat); the LLM cannot widen it. */
   searchScope?: ContainerScope;
   /**
@@ -67,7 +66,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   if (settings.productHelpEnabled !== false)
     for (const tool of productHelpTools) registry.register(tool);
 
-  const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
+  // Cloud search reads teamspaces only (D36), so it needs an account, not Cloud Backup.
+  const useCloudSearch = settings.isSignedIn;
   const noteScope: NoteScope = {
     spaceIds: settings.scopeSpaceIds,
     openNoteId: settings.openNoteId,
@@ -80,7 +80,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     })
   );
   registry.register(createGetNoteTool(noteScope));
-  registry.register(createNoteTool);
+  registry.register(createCreateNoteTool(noteScope));
   if (!settings.keepNotesUnchanged) registry.register(createUpdateNoteTool(noteScope));
   registry.register(createListFoldersTool(noteScope));
   registry.register(clipboardTool);

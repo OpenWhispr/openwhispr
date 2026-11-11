@@ -107,35 +107,74 @@ test("a container chat searches the local library, preserving its container scop
   assert.equal(cloud.mock.callCount(), 0);
 });
 
-test("create_note without a space goes to the active workspace's Private", async (t) => {
+// create_note as a turn's registry makes it, for the given read scope and saved active workspace.
+async function registryCreateNote(t, { activeWorkspaceId, scopeSpaceIds }) {
   const { createRendererServer } = require("../lib/rendererTestHarness");
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-create-note-registry-",
+    mockModules: {
+      "/SyncService.js": "export const syncService = { debouncedPush() {} };",
+      "/stores/workspaceStore": `export const readActiveWorkspaceId = () => ${JSON.stringify(
+        activeWorkspaceId
+      )};`,
+    },
+  });
+  const { createToolRegistry } = await vite.ssrLoadModule("/services/tools/index.ts");
+  return createToolRegistry({
+    isSignedIn: false,
+    calendarConnected: false,
+    cloudBackupEnabled: false,
+    webSearchEnabled: false,
+    scopeSpaceIds,
+  }).get("create_note");
+}
+
+test("create_note without a space goes to the active workspace's Private, even while main lags", async (t) => {
   const saved = [];
   Object.assign(global.window.electronAPI, {
-    // Another workspace's Private is listed first; main names the active one.
     getSpaces: async () => [
-      { id: 4, name: "Personal", kind: "private", workspace_id: "b" },
+      { id: 4, name: "Personal", kind: "private", workspace_id: "d" },
       { id: 1, name: "Personal", kind: "private", workspace_id: "a" },
     ],
-    getPrivateSpaceId: async (workspaceId) => (workspaceId == null ? 1 : null),
+    // Main hasn't taken the workspace scope yet: unnamed, it answers the default D's Private.
+    getPrivateSpaceId: async (workspaceId) => (workspaceId === "a" ? 1 : 4),
     saveNote: async (...args) => {
       saved.push(args);
       return { success: true, note: { id: 7, title: args[0] } };
     },
   });
-  const vite = await createRendererServer(t, {
-    cachePrefix: "openwhispr-create-note-tool-",
-    mockModules: {
-      "/SyncService.js": "export const syncService = { debouncedPush() {} };",
-      "/stores/workspaceStore": 'export const readActiveWorkspaceId = () => "a";',
-      "/i18n": "export default { t: (key) => key };",
-    },
-  });
-  const { createNoteTool } = await vite.ssrLoadModule("/services/tools/createNoteTool.ts");
+  const createNote = await registryCreateNote(t, { activeWorkspaceId: "a", scopeSpaceIds: [1] });
 
-  const result = await createNoteTool.execute({ title: "Plan", content: "Ship it" });
+  const result = await createNote.execute({ title: "Plan", content: "Ship it" });
   assert.equal(result.success, true);
   // saveNote(title, content, type, sourceFile, duration, folderId, spaceId)
   assert.equal(saved[0][5], null);
+  assert.equal(saved[0][6], 1);
+});
+
+test("with no active workspace, create_note files only where get_note can read", async (t) => {
+  const saved = [];
+  Object.assign(global.window.electronAPI, {
+    getSpaces: async () => [
+      { id: 1, name: "Personal", kind: "private", workspace_id: null },
+      { id: 2, name: "Alpha", kind: "team", workspace_id: "a" },
+      { id: 6, name: "Legacy", kind: "team", workspace_id: null },
+    ],
+    getPrivateSpaceId: async () => 1,
+    saveNote: async (...args) => {
+      saved.push(args);
+      return { success: true, note: { id: 7, title: args[0] } };
+    },
+  });
+  // The read scope with no workspace active is main's Private alone.
+  const createNote = await registryCreateNote(t, { activeWorkspaceId: null, scopeSpaceIds: [1] });
+
+  for (const space of ["Alpha", "Legacy"]) {
+    const refused = await createNote.execute({ title: "Plan", content: "Ship it", space });
+    assert.equal(refused.success, false, space);
+  }
+  assert.deepEqual(saved, []);
+  assert.equal((await createNote.execute({ title: "Plan", content: "Ship it" })).success, true);
   assert.equal(saved[0][6], 1);
 });
 
@@ -150,7 +189,7 @@ test("create_note files into a teamspace of the active workspace only", async (t
       { id: 3, name: "Beta", kind: "team", workspace_id: "b" },
       { id: 6, name: "Legacy", kind: "team", workspace_id: null },
     ],
-    getPrivateSpaceId: async (workspaceId) => (workspaceId == null ? 1 : null),
+    getPrivateSpaceId: async (workspaceId) => (workspaceId === "a" ? 1 : null),
     saveNote: async (...args) => {
       saved.push(args);
       return { success: true, note: { id: 7, title: args[0] } };
@@ -166,7 +205,9 @@ test("create_note files into a teamspace of the active workspace only", async (t
       };`,
     },
   });
-  const { createNoteTool } = await vite.ssrLoadModule("/services/tools/createNoteTool.ts");
+  const { createCreateNoteTool } = await vite.ssrLoadModule("/services/tools/createNoteTool.ts");
+  // The read scope: A's Private, its teamspace and the legacy one.
+  const createNoteTool = createCreateNoteTool({ spaceIds: [1, 2, 6] });
   const create = (space) => createNoteTool.execute({ title: "Plan", content: "Ship it", space });
   const savedSpaceId = () => saved.at(-1)[6];
 

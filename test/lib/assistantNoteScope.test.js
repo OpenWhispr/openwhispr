@@ -11,9 +11,9 @@ const SPACES = [
   { id: 6, kind: "team", workspace_id: null },
 ];
 
-async function loadResolver(t, electronAPI) {
+async function loadResolver(t, electronAPI, { activeWorkspaceId = "a" } = {}) {
   installBrowserGlobals(t, {
-    initialStorage: { activeWorkspaceId: "a" },
+    initialStorage: activeWorkspaceId ? { activeWorkspaceId } : {},
     window: { electronAPI },
   });
   const vite = await createRendererServer(t, { cachePrefix: "openwhispr-assistant-scope-" });
@@ -25,12 +25,28 @@ async function loadResolver(t, electronAPI) {
 const sorted = (ids) => [...ids].sort((x, y) => x - y);
 
 test("the dictation window, with no workspace list, reads main's Private and the active workspace's teamspaces", async (t) => {
+  const asked = [];
   const { resolve } = await loadResolver(t, {
     getSpaces: async () => SPACES,
-    getPrivateSpaceId: async () => 1,
+    getPrivateSpaceId: async (workspaceId) => {
+      asked.push(workspaceId);
+      return 1;
+    },
     getDefaultPrivateSpaceId: async () => 1,
   });
   assert.deepEqual(sorted(await resolve()), [1, 2, 6, 9]);
+  // Main is asked for the active workspace's Private by name: its own scope may lag.
+  assert.deepEqual(asked, ["a"]);
+});
+
+test("while main's workspace scope lags, the active workspace's own Private is read, never the default's", async (t) => {
+  // Main hasn't taken the scope yet: unnamed, it answers the default workspace B's Private.
+  const { resolve } = await loadResolver(t, {
+    getSpaces: async () => SPACES,
+    getPrivateSpaceId: async (workspaceId) => (workspaceId === "a" ? 1 : 5),
+    getDefaultPrivateSpaceId: async () => 5,
+  });
+  assert.deepEqual(sorted(await resolve()), [1, 2, 6]);
 });
 
 test("a window holding the workspace list reads what its tree shows", async (t) => {
@@ -56,7 +72,7 @@ test("a window holding the workspace list reads what its tree shows", async (t) 
   assert.equal(defaultAsked, 0);
 });
 
-test("a scope that can't be resolved fails closed to main's Private", async (t) => {
+test("a scope that can't be resolved reads nothing while a workspace is active", async (t) => {
   const { resolve } = await loadResolver(t, {
     getSpaces: async () => {
       throw new Error("database closed");
@@ -64,6 +80,21 @@ test("a scope that can't be resolved fails closed to main's Private", async (t) 
     getPrivateSpaceId: async () => 1,
     getDefaultPrivateSpaceId: async () => 1,
   });
+  // Without the spaces, which workspace main's Private belongs to can't be checked.
+  assert.deepEqual(await resolve(), []);
+});
+
+test("with no workspace active, a scope that can't be resolved is main's Private", async (t) => {
+  const { resolve } = await loadResolver(
+    t,
+    {
+      getSpaces: async () => {
+        throw new Error("database closed");
+      },
+      getPrivateSpaceId: async () => 1,
+    },
+    { activeWorkspaceId: null }
+  );
   assert.deepEqual(await resolve(), [1]);
 });
 

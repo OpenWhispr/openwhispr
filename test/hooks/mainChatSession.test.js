@@ -546,6 +546,8 @@ for (const [event, changedId, unmount = false] of [
         space_id: 2,
       }),
       getSpeakerMappings: async () => [],
+      // The source notes are in main's Private, all a turn reads with no workspace active.
+      getPrivateSpaceId: async () => 2,
       [event]: (listener) => {
         listeners.add(listener);
         return () => listeners.delete(listener);

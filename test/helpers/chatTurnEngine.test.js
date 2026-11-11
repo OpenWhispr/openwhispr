@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-async function setup(t, { electronAPI, initialStorage } = {}) {
+async function setup(t, { electronAPI, initialStorage, options } = {}) {
   installBrowserGlobals(t, { initialStorage, window: { electronAPI: electronAPI ?? {} } });
   const vite = await createRendererServer(t);
   const { createChatTurnEngine } = await vite.ssrLoadModule("/components/chat/chatTurnEngine.ts");
@@ -30,6 +30,7 @@ async function setup(t, { electronAPI, initialStorage } = {}) {
       userName: null,
       isOwnerCurrent: () => ownerCurrent,
       onStreamComplete: (_id, content) => writes.push(content),
+      ...options,
     }),
     {
       setMessages: (update) => {
@@ -179,3 +180,38 @@ test("RAG context excludes notes outside the active workspace", async (t) => {
   assert.match(requests[0], /Own pricing plan/);
   assert.doesNotMatch(requests[0], /Other workspace pricing plan/);
 });
+
+for (const [where, spaceId, grounded] of [
+  ["another workspace's Private", 4, false],
+  ["the active workspace", 1, true],
+]) {
+  test(`a conversation's source note in ${where} ${grounded ? "grounds" : "doesn't ground"} the turn`, async (t) => {
+    const fixture = await setup(t, {
+      initialStorage: { activeWorkspaceId: "a" },
+      electronAPI: {
+        getSpaces: async () => [
+          { id: 1, kind: "private", workspace_id: "a" },
+          { id: 4, kind: "private", workspace_id: "b" },
+        ],
+        getPrivateSpaceId: async () => 1,
+        getDefaultPrivateSpaceId: async () => 1,
+        semanticSearchNotes: async () => [],
+      },
+      // A Chat-section conversation started from a note; the list spans every workspace.
+      options: {
+        openNote: () => ({ text: "Note ID: 9\nTitle: Board secrets", transcriptPreview: false }),
+        openNoteSpaceId: spaceId,
+      },
+    });
+    const requests = [];
+    t.mock.method(fixture.service, "processTextStreamingAI", async function* (...args) {
+      requests.push(JSON.stringify(args.slice(0, 4)));
+      yield { type: "content", text: "Answer" };
+    });
+    const question = "What did we decide?";
+    await fixture.engine.send(question, [{ id: "user-1", role: "user", content: question }]);
+    assert.equal(requests.length, 1);
+    if (grounded) assert.match(requests[0], /Board secrets/);
+    else assert.doesNotMatch(requests[0], /Board secrets/);
+  });
+}
