@@ -57,11 +57,11 @@ test("a failed app-version read is retried instead of denying the session", asyn
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   const { isPolicyActionAllowed } = await vite.ssrLoadModule("/stores/policyRules.ts");
 
-  await usePolicyStore.getState().fetchPolicy("account-a", 1);
+  await usePolicyStore.getState().bootstrap();
   assert.equal(usePolicyStore.getState().appVersion, null);
   assert.equal(isPolicyActionAllowed(usePolicyStore.getState()), false);
 
-  await usePolicyStore.getState().fetchPolicy("account-a", 1);
+  await usePolicyStore.getState().bootstrap();
   assert.equal(versionRequestCount, 2);
   assert.equal(usePolicyStore.getState().appVersion, "1.8.1");
   assert.equal(isPolicyActionAllowed(usePolicyStore.getState()), true);

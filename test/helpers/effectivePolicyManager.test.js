@@ -303,6 +303,9 @@ test("a failed lookup holds nothing closed without evidence that the identity is
     member
   );
   const loading = resolveEffectivePolicy(absentDevice, null, member);
+  assert.equal(failed.success, true);
+  assert.equal(failed.status, "unmanaged");
+  assert.equal(loading.status, "loading");
   for (const [channel] of channels) {
     assert.equal(productOperationAllowed(failed, "1.11.1", channel), true, channel);
     assert.equal(productOperationAllowed(loading, "1.11.1", channel), true, channel);
@@ -318,6 +321,23 @@ test("a failed lookup holds nothing closed without evidence that the identity is
   ])
     for (const [channel] of channels)
       assert.equal(productOperationAllowed(snapshot, "1.11.1", channel), false, channel);
+});
+
+test("only a device policy or the server settles a failed lookup; the account's last verdict leaves it loading", () => {
+  const failed = (evidence) =>
+    resolveEffectivePolicy(absentDevice, { success: false, ...evidence }, member);
+  assert.equal(failed({ code: "POLICY_UNRESOLVABLE" }).status, "error");
+  assert.equal(
+    resolveEffectivePolicy(
+      normalizeDeviceValues({ RequireSignIn: true }),
+      { success: false },
+      member
+    ).status,
+    "error"
+  );
+  const lastSeenManaged = failed({ code: "POLICY_UNAVAILABLE", managed: true });
+  assert.equal(lastSeenManaged.status, "loading");
+  assert.equal(lastSeenManaged.managed, true);
 });
 
 test("a device with only RequireSignIn leaves OpenRouter transcription allowed", () => {
@@ -384,7 +404,7 @@ test("held lookups read no network, a failed lookup keeps the held verdict, and 
   assert.deepEqual(requests, [["held", { accountId: "member", expectedAuthGeneration: 1 }]]);
   assert.equal(manager.getCurrent().status, "loading");
   await manager.getPolicy({ accountId: "member", expectedAuthGeneration: 1, refresh: true });
-  assert.deepEqual(requests[1], [
+  assert.deepEqual(requests.at(-1), [
     "network",
     { accountId: "member", expectedAuthGeneration: 1, refresh: true },
   ]);
@@ -401,7 +421,45 @@ test("held lookups read no network, a failed lookup keeps the held verdict, and 
   assert.equal(updates.at(-1).revision, manager.getCurrent().revision);
   scope = { ...member, authGeneration: 2 };
   manager.updateWorkspace({ ...answer, authGeneration: 2 });
-  assert.equal(manager.getCurrent().success, false);
-  assert.equal(manager.getUpdatePolicy().success, true);
+  assert.equal(manager.getCurrent().status, "unmanaged");
+  assert.equal(manager.getUpdatePolicy().status, "unmanaged");
+  manager.stop();
+});
+
+test("a later failure doesn't lift a policy the server called unresolvable", () => {
+  const manager = createEffectivePolicyManager({
+    devicePolicy: { getSnapshot: () => absentDevice, subscribe: () => () => {} },
+    workspacePolicyManager: {},
+    getScope: () => member,
+  });
+  const identity = { accountId: "member", authGeneration: 1 };
+  manager.updateWorkspace({ ...identity, success: false, code: "POLICY_UNRESOLVABLE" });
+  manager.updateWorkspace({ ...identity, success: false, code: "AUTH_CONTEXT_UNVALIDATED" });
+  assert.equal(manager.getCurrent().code, "POLICY_UNRESOLVABLE");
+  assert.equal(manager.getCurrent().managed, true);
+  manager.stop();
+});
+
+test("an identity with no verdict yet answers from what it last had while the network refreshes it", async () => {
+  const { deferred } = require("./harness/deferred");
+  const network = deferred();
+  const manager = createEffectivePolicyManager({
+    devicePolicy: { getSnapshot: () => absentDevice, subscribe: () => () => {} },
+    workspacePolicyManager: {
+      heldPolicy: () => ({
+        success: true,
+        managed: true,
+        policy: defaultDevicePolicy(),
+        accountId: "member",
+        authGeneration: 1,
+      }),
+      getPolicy: () => network.promise,
+    },
+    getScope: () => member,
+  });
+  const refreshing = manager.getPolicy({ accountId: "member", expectedAuthGeneration: 1 });
+  assert.equal(manager.getCurrent().status, "managed");
+  network.resolve({ success: true, managed: false, accountId: "member", authGeneration: 1 });
+  assert.equal((await refreshing).status, "unmanaged");
   manager.stop();
 });

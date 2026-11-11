@@ -55,6 +55,31 @@ test("reasoning policy asserts throw messages localized to the active UI languag
   });
 });
 
+test("running work ends on a settled error, as in main, and only a loading verdict leaves it be", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-running-policy-check-test-",
+  });
+  const { runningPolicyCheck } = await vite.ssrLoadModule("/services/reasoningPolicy.ts");
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  let checks = 0;
+  const check = runningPolicyCheck(() => {
+    checks += 1;
+  });
+  for (const [status, code] of [
+    ["error", "POLICY_UNRESOLVABLE"],
+    ["error", "POLICY_SIGN_IN_REQUIRED"],
+    ["error", "DEVICE_POLICY_INVALID"],
+  ]) {
+    usePolicyStore.setState({ status, code });
+    check();
+  }
+  assert.equal(checks, 3);
+  usePolicyStore.setState({ status: "loading", code: "POLICY_LOADING" });
+  check();
+  assert.equal(checks, 3);
+});
+
 test("the model factory preserves a permitted self-hosted route without granting local or BYOK", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {

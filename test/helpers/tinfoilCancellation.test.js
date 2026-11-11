@@ -125,11 +125,48 @@ test("one caller's cancel leaves shared attestation running for the others", asy
   await receiving.promise;
   dictation.abort();
   assert.equal((await socket)[0].reason.name, "AbortError");
-  assert.equal(await closed.promise, true, "the shared attestation request was cut short");
+  assert.equal(
+    await closed.promise,
+    true,
+    "the shared attestation request must finish for the remaining caller"
+  );
   const [settled] = await catalog;
   assert.equal(settled.status, "rejected");
   assert.equal(settled.reason.name, "SyntaxError");
   assert.equal(calls, 1);
+});
+
+test("a caller after the last cancel starts a fresh attestation", async (t) => {
+  const { SecureClient, Verifier } = await import("tinfoil");
+  const { Identity } = await import("ehbp");
+  const hpkePublicKey = await (await Identity.generate()).getPublicKeyHex();
+  let calls = 0;
+  const options = await attestationServer(t, (_request, response) => {
+    calls++;
+    response.end(JSON.stringify({ domain: "enclave.invalid", enclaveAttestationReport: {} }));
+  });
+  // Verification ignores cancellation, so the cancelled one settles only when released.
+  const verifying = deferred();
+  const released = deferred();
+  let verifications = 0;
+  t.mock.method(Verifier.prototype, "verifyBundle", async () => {
+    if (++verifications === 1) {
+      verifying.resolve();
+      await released.promise;
+    }
+    return { hpkePublicKey };
+  });
+  const client = new SecureClient(options);
+  const caller = new AbortController();
+  const cancelled = client.ready(caller.signal);
+  await verifying.promise;
+  caller.abort();
+  await assert.rejects(cancelled, { name: "AbortError" });
+  const late = client.ready();
+  released.resolve();
+  await late;
+  await client.ready();
+  assert.equal(calls, 2, "the cancelled attestation must not reset the fresh one");
 });
 
 test("SDK abort during the attestation retry delay prevents the next request", async (t) => {

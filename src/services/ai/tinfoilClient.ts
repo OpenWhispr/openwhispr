@@ -6,7 +6,8 @@ import { refreshTinfoilModels } from "../../models/tinfoilModels";
 type TinfoilModule = typeof import("tinfoil");
 type TinfoilAISDKProvider = Awaited<ReturnType<TinfoilModule["createTinfoilAI"]>>;
 // One initialization per key serves every concurrent caller. Each waits on its
-// own signal, and the attestation is cancelled only once all of them have.
+// own signal, and the attestation is cancelled only once all of them have; a
+// caller arriving after that starts a fresh one.
 type SharedProvider = {
   provider: Promise<TinfoilAISDKProvider>;
   initialization: AbortController;
@@ -76,7 +77,7 @@ async function getTinfoilAISDKProvider(
     const provider = loadTinfoil()
       .then(({ createTinfoilAI }) => createTinfoilAI(key, { signal: initialization.signal }))
       .catch((error) => {
-        aiSdkProviderCache.delete(key);
+        if (aiSdkProviderCache.get(key) === shared) aiSdkProviderCache.delete(key);
         throw error;
       });
     shared = { provider, initialization, waiting: 0 };
@@ -91,7 +92,10 @@ async function getTinfoilAISDKProvider(
       provider.then(resolve, reject).finally(() => signal?.removeEventListener("abort", abort));
     });
   } finally {
-    if (--shared.waiting === 0 && signal?.aborted) shared.initialization.abort(signal.reason);
+    if (--shared.waiting === 0 && signal?.aborted) {
+      shared.initialization.abort(signal.reason);
+      if (aiSdkProviderCache.get(key) === shared) aiSdkProviderCache.delete(key);
+    }
   }
 }
 

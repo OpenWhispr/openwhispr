@@ -1,19 +1,15 @@
 const rules = require("../stores/policyRules.ts");
 
-// A verdict that failed or is still on its way, for an identity nothing says
-// is managed (no device policy, no server calling the policy unresolvable).
-// It restricts nothing.
-function isUnmanagedLookup(snapshot) {
-  return !snapshot.success && snapshot.deviceReady === true && !snapshot.managed;
-}
-
+// A verdict still on its way for an identity nothing says is managed (no
+// device policy, no server calling the policy unresolvable) restricts no
+// channel; new remote work waits for it all the same (mayStart in ipcHandlers).
 function productPolicyState(snapshot, appVersion) {
   return {
     status: snapshot.success
       ? snapshot.managed
         ? "managed"
         : "unmanaged"
-      : isUnmanagedLookup(snapshot)
+      : snapshot.status === "loading" && snapshot.deviceReady && !snapshot.managed
         ? "unmanaged"
         : "error",
     policy: snapshot.policy ?? null,
@@ -125,9 +121,17 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
   return true;
 }
 
+// Work already running ends only on a settled denial: a verdict still on its
+// way for the account the work started under says nothing new about it.
+function runningOperationAllowed(snapshot, accountId, appVersion, channel, args) {
+  return snapshot.status === "loading"
+    ? snapshot.accountId === accountId
+    : productOperationAllowed(snapshot, appVersion, channel, args);
+}
+
 module.exports = {
-  isUnmanagedLookup,
   productOperationAllowed,
   productPolicyState,
   realtimeSelection,
+  runningOperationAllowed,
 };
