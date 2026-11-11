@@ -68,10 +68,10 @@ index 8bef8f2..62f8a23 100644
       * Clear derived state without touching initPromise (preserves deduplication).
       */
 diff --git a/node_modules/tinfoil/dist/secure-client.js b/node_modules/tinfoil/dist/secure-client.js
-index 8a87d0b..62f1005 100644
+index 8a87d0b..46265f9 100644
 --- a/node_modules/tinfoil/dist/secure-client.js
 +++ b/node_modules/tinfoil/dist/secure-client.js
-@@ -115,14 +115,31 @@ export class SecureClient {
+@@ -115,14 +115,32 @@ export class SecureClient {
       *
       * @throws Error if verification fails
       */
@@ -80,10 +80,12 @@ index 8a87d0b..62f1005 100644
 +        signal?.throwIfAborted();
          if (!this.initPromise) {
 -            this.initPromise = this.initSecureClient().catch(async (err) => {
-+            this.initPromise = this.initSecureClient(signal).catch(async (err) => {
-+                if (signal?.aborted) {
++            const initAbort = new AbortController();
++            const initSignal = initAbort.signal;
++            this.initPromise = this.initSecureClient(initSignal).catch(async (err) => {
++                if (initSignal.aborted) {
 +                    this.reset();
-+                    throw signal.reason;
++                    throw initSignal.reason;
 +                }
                  // Only try recovery if the error is transient (network I/O, attestation errors)
                  if (err instanceof FetchError || err instanceof AttestationError) {
@@ -92,32 +94,47 @@ index 8a87d0b..62f1005 100644
 -                    return this.initSecureClient().catch(retryErr => {
 +                    await new Promise((resolve, reject) => {
 +                        const timer = setTimeout(() => {
-+                            signal?.removeEventListener('abort', abort);
++                            initSignal.removeEventListener('abort', abort);
 +                            resolve();
 +                        }, INIT_RETRY_DELAY_MS);
 +                        const abort = () => {
 +                            clearTimeout(timer);
 +                            this.reset();
-+                            reject(signal.reason);
++                            reject(initSignal.reason);
 +                        };
-+                        signal?.addEventListener('abort', abort, { once: true });
++                        initSignal.addEventListener('abort', abort, { once: true });
 +                    });
-+                    signal?.throwIfAborted();
-+                    return this.initSecureClient(signal).catch(retryErr => {
++                    return this.initSecureClient(initSignal).catch(retryErr => {
                          this.reset();
                          throw retryErr;
                      });
-@@ -132,7 +149,8 @@ export class SecureClient {
+@@ -131,8 +149,24 @@ export class SecureClient {
+                 this.reset();
                  throw err;
              });
++            this.initCallers = { promise: this.initPromise, abort: initAbort, waiting: 0 };
++        }
++        const init = this.initPromise;
++        const callers = this.initCallers?.promise === init ? this.initCallers : null;
++        if (callers)
++            callers.waiting++;
++        try {
++            await new Promise((resolve, reject) => {
++                const abort = () => reject(signal.reason);
++                signal?.addEventListener('abort', abort, { once: true });
++                init.then(resolve, reject).finally(() => signal?.removeEventListener('abort', abort));
++            });
++        }
++        finally {
++            // Attestation is shared, so only the last caller waiting on it can cancel it.
++            if (callers && --callers.waiting === 0 && signal?.aborted)
++                callers.abort.abort(signal.reason);
          }
 -        return this.initPromise;
-+        await this.initPromise;
-+        signal?.throwIfAborted();
      }
      /**
       * Clear derived state without touching initPromise (preserves deduplication).
-@@ -168,9 +186,11 @@ export class SecureClient {
+@@ -168,9 +202,11 @@ export class SecureClient {
          this.initPromise = null;
          this.clearDerivedState();
      }
@@ -130,7 +147,7 @@ index 8a87d0b..62f1005 100644
              enclaveURL: this.config.enclaveURL,
              configRepo: this.config.configRepo !== TINFOIL_CONFIG.DEFAULT_ROUTER_REPO
                  ? this.config.configRepo
-@@ -190,6 +210,7 @@ export class SecureClient {
+@@ -190,6 +226,7 @@ export class SecureClient {
          });
          try {
              const attestation = await verifier.verifyBundle(bundle);
@@ -138,7 +155,7 @@ index 8a87d0b..62f1005 100644
              this.attestedTlsPublicKeyFingerprint = attestation.tlsPublicKeyFingerprint;
              this._transport = await this.createTransport(attestation.hpkePublicKey, attestation.tlsPublicKeyFingerprint);
          }
-@@ -254,7 +275,8 @@ export class SecureClient {
+@@ -254,7 +291,8 @@ export class SecureClient {
       */
      get fetch() {
          return async (input, init) => {
@@ -148,7 +165,7 @@ index 8a87d0b..62f1005 100644
              try {
                  return await this._transport.fetch(input, init);
              }
-@@ -262,7 +284,7 @@ export class SecureClient {
+@@ -262,7 +300,7 @@ export class SecureClient {
                  // Channel recovery: server rotated keys, request was never processed — safe to retry
                  if (error instanceof KeyConfigMismatchError) {
                      this.reset();
@@ -157,7 +174,7 @@ index 8a87d0b..62f1005 100644
                      return await this._transport.fetch(input, init);
                  }
                  throw error;
-@@ -337,6 +359,7 @@ export class SecureClient {
+@@ -337,6 +375,7 @@ export class SecureClient {
       * ```
       */
      async createWebSocket(path, options) {
