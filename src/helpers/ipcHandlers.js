@@ -7401,6 +7401,7 @@ class IPCHandlers {
       const isExpiredSession =
         !authHeaders.Authorization &&
         typeof this.databaseManager.activeAccountId !== "string" &&
+        policy.code !== "POLICY_UNRESOLVABLE" &&
         policy.httpStatus === 401;
       return isExpiredSession ? guestAudioPolicy(generation) : policy;
     };

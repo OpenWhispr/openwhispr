@@ -16,6 +16,7 @@ const handlers = new Map();
 const broadcasts = [];
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
 let tokenState = { token: null, generation: 0 };
+const autoUpdater = { checkForUpdates: async () => null };
 
 const electronStub = {
   app: {
@@ -61,7 +62,7 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
-  if (request === "electron-updater") return { autoUpdater: {} };
+  if (request === "electron-updater") return { autoUpdater };
   if (parent?.filename === handlersModulePath) {
     if (request === "./tokenStore") {
       return {
@@ -347,19 +348,17 @@ function managedPolicy(mode) {
   };
 }
 
-// The verdict an earlier run left on disk for this bearer.
-function cachePolicyForBearer(token, data) {
+// The verdict an earlier run left on disk for this credential.
+function cachePolicyForHeaders(authHeaders, data) {
   const crypto = require("node:crypto");
   const { writeWorkspacePolicyCache } = require("../../src/helpers/workspacePolicyCache");
   const credentialHash = crypto
     .createHash("sha256")
-    .update(JSON.stringify([["Authorization", `Bearer ${token}`]]))
+    .update(JSON.stringify(Object.entries(authHeaders)))
     .digest("hex");
-  writeWorkspacePolicyCache(
-    path.join(userDataDirectory, "workspace-policy.json"),
-    { apiOrigin: TEST_API_URL, credentialHash, accountId: null },
-    data
-  );
+  const identity = { apiOrigin: TEST_API_URL, credentialHash, accountId: null };
+  writeWorkspacePolicyCache(path.join(userDataDirectory, "workspace-policy.json"), identity, data);
+  return identity;
 }
 
 async function signOutUpdater(t, generation) {
@@ -454,7 +453,7 @@ test("completed cookie sign-out discards a pending cookie-authorized updater pol
   );
 });
 
-test("a bearer the API refuses with nothing held updates as a guest, while a held IT verdict stands", async (t) => {
+test("an earlier consumer's bearer 401 permits guest updates while a held IT verdict stands", async (t) => {
   restoreUpdaterState(t);
   useTestApi(t);
   let refusals = 0;
@@ -462,19 +461,39 @@ test("a bearer the API refuses with nothing held updates as a guest, while a hel
     refusals++;
     return { ok: false, status: 401, json: async () => ({}) };
   });
-  // A 401 leaves the renderer's account scope in place. Seeded directly, as
-  // set-active-account-scope's own policy lookups would throttle the updater's.
+  // A 401 leaves the renderer's account scope in place, and another consumer
+  // can receive it before the updater's first lookup.
   tokenState = { token: "expired-bearer", generation: 110 };
   fakeThis.databaseManager = scopedDatabase("expired-account");
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };
   require("../../src/helpers/accountScopeBinding").persist("expired-account", "expired-bearer");
   fakeThis.updateManager = createUpdater();
+  fakeThis.updateManager.httpExecutor = { resumeRequests() {}, abortRequests() {} };
+  let checks = 0;
+  t.mock.method(autoUpdater, "checkForUpdates", async () => {
+    checks++;
+    return null;
+  });
+  const earlier = await handlers.get("get-workspace-policy")({}, "expired-account", 110);
+  assert.equal(earlier.httpStatus, 401);
+  assert.equal(earlier.success, false);
   await fakeThis.updateManager.refreshPolicy();
   let status = await fakeThis.updateManager.getUpdateStatus();
   assert.equal(status.policyReady, true);
   assert.equal(status.updateMode, "user_choice");
+  fakeThis.updateManager._autoCheckForUpdates("Periodic");
+  await new Promise(setImmediate);
+  assert.equal(checks, 1);
+  fakeThis.updateManager._autoCheckForUpdates("Periodic");
+  await new Promise(setImmediate);
+  assert.equal(checks, 2);
+  assert.equal((await fakeThis.updateManager.getUpdateStatus()).policyReady, true);
+  assert.equal(refusals, 1);
 
-  cachePolicyForBearer("expired-managed-bearer", managedPolicy("it_managed"));
+  cachePolicyForHeaders(
+    { Authorization: "Bearer expired-managed-bearer" },
+    managedPolicy("it_managed")
+  );
   tokenState = { token: "expired-managed-bearer", generation: 111 };
   fakeThis.updateManager.invalidatePolicy();
   const refusalsBefore = refusals;
@@ -482,7 +501,42 @@ test("a bearer the API refuses with nothing held updates as a guest, while a hel
   await new Promise(setImmediate);
   assert.equal(refusals, refusalsBefore + 1);
   status = await fakeThis.updateManager.getUpdateStatus();
+  assert.equal(status.policyReady, true);
   assert.equal(status.updateMode, "it_managed");
+});
+
+test("earlier non-401 policy failures never permit guest updates", async (t) => {
+  restoreUpdaterState(t);
+  useTestApi(t);
+  fakeThis.databaseManager = scopedDatabase("unavailable-account");
+  fakeThis.windowManager = { retireMeetingNotificationScope() {} };
+  let requests = 0;
+  let httpStatus;
+  t.mock.method(electronStub.net, "fetch", async () => {
+    requests++;
+    if (httpStatus === undefined) throw new Error("offline");
+    return { ok: false, status: httpStatus, json: async () => ({}) };
+  });
+  for (const [index, status] of [403, 503, undefined].entries()) {
+    httpStatus = status;
+    tokenState = { token: `unavailable-bearer-${index}`, generation: 112 + index };
+    fakeThis.updateManager = createUpdater();
+    const earlier = await handlers.get("get-workspace-policy")(
+      {},
+      "unavailable-account",
+      tokenState.generation
+    );
+    assert.equal(earlier.success, false);
+    assert.equal(
+      (await fakeThis.updateManager.checkForUpdates()).code,
+      "UPDATE_POLICY_UNAVAILABLE"
+    );
+    const updateStatus = await fakeThis.updateManager.getUpdateStatus();
+    assert.equal(updateStatus.policyReady, false);
+    assert.equal(updateStatus.updateMode, null);
+    fakeThis.updateManager.cleanup();
+  }
+  assert.equal(requests, 3);
 });
 
 test("a refused bearer the server called unresolvable stays fail-closed, not a guest", async (t) => {
@@ -494,12 +548,15 @@ test("a refused bearer the server called unresolvable stays fail-closed, not a g
     json: async () => ({}),
   }));
   // The fail-closed marker an earlier POLICY_UNRESOLVABLE left on disk.
-  cachePolicyForBearer("unresolved-bearer", {
-    managed: false,
-    policy: null,
-    policyUpdatedAt: null,
-    requiresManagedPolicy: true,
-  });
+  cachePolicyForHeaders(
+    { Authorization: "Bearer unresolved-bearer" },
+    {
+      managed: false,
+      policy: null,
+      policyUpdatedAt: null,
+      requiresManagedPolicy: true,
+    }
+  );
   tokenState = { token: "unresolved-bearer", generation: 115 };
   fakeThis.databaseManager = scopedDatabase(null);
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };
@@ -509,6 +566,81 @@ test("a refused bearer the server called unresolvable stays fail-closed, not a g
   assert.equal(status.policyReady, false);
   assert.equal(status.updateMode, null);
 });
+
+for (const [index, { name, data, mode }] of [
+  {
+    name: "unresolved",
+    data: {
+      managed: false,
+      policy: null,
+      policyUpdatedAt: null,
+      requiresManagedPolicy: true,
+    },
+    mode: null,
+  },
+  { name: "IT-managed", data: managedPolicy("it_managed"), mode: "it_managed" },
+  { name: "always-on", data: managedPolicy("always_on"), mode: "always_on" },
+  { name: "unmanaged", data: null, mode: "user_choice" },
+].entries()) {
+  test(`cookie expiry preserves ${name} policy in main and updater lookups`, async (t) => {
+    restoreUpdaterState(t);
+    useTestApi(t);
+    const { readWorkspacePolicyCache } = require("../../src/helpers/workspacePolicyCache");
+    tokenState = { token: null, generation: 140 + index };
+    fakeThis.databaseManager = scopedDatabase(null);
+    let cookieValue;
+    const cookieName = "__Secure-openwhispr.session_token";
+    fakeThis.windowManager = {
+      controlPanelWindow: {
+        isDestroyed: () => false,
+        webContents: {
+          session: { cookies: { get: async () => [{ name: cookieName, value: cookieValue }] } },
+        },
+      },
+      retireMeetingNotificationScope() {},
+    };
+    let requests = 0;
+    t.mock.method(electronStub.net, "fetch", async (_url, init) => {
+      requests++;
+      assert.equal(init.headers.Cookie, `${cookieName}=${cookieValue}`);
+      return { ok: false, status: 401, json: async () => ({}) };
+    });
+    fakeThis.updateManager = createUpdater();
+    fakeThis.updateManager.setAutoUpdatesEnabled(false);
+    for (const consumer of ["main", "updater"]) {
+      cookieValue = `expired-${name}-${consumer}`;
+      const identity =
+        data && cachePolicyForHeaders({ Cookie: `${cookieName}=${cookieValue}` }, data);
+      if (consumer === "main") {
+        const snapshot = await fakeThis._getMainModelPolicy({});
+        assert.equal(snapshot.success, mode !== null);
+        if (mode === null) assert.equal(snapshot.code, "POLICY_UNRESOLVABLE");
+        else assert.equal(snapshot.managed, data !== null);
+      } else {
+        await fakeThis.updateManager.refreshPolicy();
+        const status = await fakeThis.updateManager.getUpdateStatus();
+        assert.equal(status.policyReady, mode !== null);
+        assert.equal(status.updateMode, mode);
+        assert.equal(status.effectiveAutoUpdatesEnabled, mode === "always_on");
+        if (mode === null) {
+          assert.equal(
+            (await fakeThis.updateManager.checkForUpdates()).code,
+            "UPDATE_POLICY_UNAVAILABLE"
+          );
+        }
+        await new Promise(setImmediate);
+      }
+      if (data?.requiresManagedPolicy) {
+        assert.equal(
+          readWorkspacePolicyCache(path.join(userDataDirectory, "workspace-policy.json"), identity)
+            .requiresManagedPolicy,
+          true
+        );
+      }
+    }
+    assert.equal(requests, 2);
+  });
+}
 
 test("a stray cookie leaves a signed-out member a guest without reaching the API", async (t) => {
   restoreUpdaterState(t);
@@ -547,7 +679,7 @@ test("an offline restart adopts the cached verdict without waiting for the netwo
     () => new Promise((_resolve, reject) => (goOffline = reject))
   );
   t.after(() => goOffline?.(new Error("offline")));
-  cachePolicyForBearer("restarted-bearer", managedPolicy("always_on"));
+  cachePolicyForHeaders({ Authorization: "Bearer restarted-bearer" }, managedPolicy("always_on"));
   tokenState = { token: "restarted-bearer", generation: 130 };
   fakeThis.databaseManager = scopedDatabase(null);
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };

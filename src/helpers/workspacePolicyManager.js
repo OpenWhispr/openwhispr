@@ -391,7 +391,7 @@ function createWorkspacePolicyManager({
       );
     }
     const lastAttempt = lastAttempts.get(key);
-    const attemptAge = lastAttempt === undefined ? null : now() - lastAttempt;
+    const attemptAge = lastAttempt === undefined ? null : now() - lastAttempt.startedAt;
     const attemptIsThrottled =
       attemptAge !== null && attemptAge >= 0 && attemptAge < minimumAttemptIntervalMs;
     if (attemptIsThrottled) {
@@ -408,13 +408,20 @@ function createWorkspacePolicyManager({
       return errorSnapshot(
         identity,
         "POLICY_RETRY_THROTTLED",
-        "Workspace policy refresh is rate limited"
+        "Workspace policy refresh is rate limited",
+        lastAttempt.httpStatus
       );
     }
-    lastAttempts.set(key, now());
-    const pending = fetchPolicy(identity).finally(() => {
-      if (inFlight.get(key) === pending) inFlight.delete(key);
-    });
+    const attempt = { startedAt: now() };
+    lastAttempts.set(key, attempt);
+    const pending = fetchPolicy(identity)
+      .then((result) => {
+        attempt.httpStatus = result.httpStatus;
+        return result;
+      })
+      .finally(() => {
+        if (inFlight.get(key) === pending) inFlight.delete(key);
+      });
     inFlight.set(key, pending);
     return pending;
   }
