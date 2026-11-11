@@ -64,6 +64,7 @@ import {
   type SortKey,
 } from "./dictionary/dictionaryViewModel";
 import { useSettings } from "../hooks/useSettings";
+import { useListsOwnerRevision } from "../hooks/useListsOwnerRevision";
 import { getSettings } from "../stores/settingsStore";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useAuth } from "../hooks/useAuth";
@@ -173,9 +174,29 @@ interface DictionaryViewProps {
   onUpgrade: () => void;
 }
 
+// Remounted when the personal lists start belonging to another account, which
+// closes any open editor or selection; an edit from the old instance carries
+// its owner and is refused.
 export default function DictionaryView({ onUpgrade }: DictionaryViewProps): ReactElement {
+  const listsOwner = useListsOwnerRevision();
+  return <DictionaryPage key={listsOwner} listsOwner={listsOwner} onUpgrade={onUpgrade} />;
+}
+
+function DictionaryPage({
+  onUpgrade,
+  listsOwner,
+}: DictionaryViewProps & { listsOwner: number }): ReactElement {
   const { t, i18n } = useTranslation();
-  const { customDictionary, updateCustomDictionary, snippets } = useSettings();
+  const {
+    customDictionary,
+    updateCustomDictionary: updateStoredDictionary,
+    snippets,
+  } = useSettings();
+  const updateCustomDictionary = useCallback(
+    (changes: { add?: string[]; remove?: string[] }): void =>
+      updateStoredDictionary(changes, listsOwner),
+    [updateStoredDictionary, listsOwner]
+  );
   const { active: workspace } = useWorkspace();
   const { isSignedIn, user } = useAuth();
   const workspaceId = workspace?.id ?? null;

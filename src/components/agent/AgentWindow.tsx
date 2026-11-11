@@ -977,7 +977,8 @@ export default function AgentWindow() {
     latest?.role === "assistant" && Boolean(latest.content || latest.toolCalls?.length);
   // In the modal an answer card is on screen with its own Send, so the pill
   // waits only on an interaction card; outside it, the pill waits on any card.
-  // Either way it reads as at rest while an answer card waits or sends.
+  // Either way it reads as at rest while an answer card waits or sends. A
+  // streaming reply in the modal shows its own progress row, so the pill doesn't.
   const pillStatus = (placement: AgentPillPlacement): AgentPillStatus =>
     listening
       ? "listening"
@@ -989,7 +990,9 @@ export default function AgentWindow() {
             ? "waiting"
             : cardHolds
               ? "idle"
-              : busy && !answerStarted
+              : busy &&
+                  !answerStarted &&
+                  !(placement === "modal" && latest?.role === "assistant" && latest.isStreaming)
                 ? "thinking"
                 : busy
                   ? "streaming"

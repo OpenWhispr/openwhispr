@@ -1457,6 +1457,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-hard-delete-dictionary", id, expectedAuthGeneration),
   clearDictionaryCloudId: (id, expectedAuthGeneration) =>
     ipcRenderer.invoke("db-clear-dictionary-cloud-id", id, expectedAuthGeneration),
+  keepNewerDictionaryEdit: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-keep-newer-dictionary-edit", id, expectedAuthGeneration),
   broadcastDictionaryUpdated: () => ipcRenderer.invoke("db-broadcast-dictionary-updated"),
   getDictionaryEntriesByWords: (words) =>
     ipcRenderer.invoke("db-get-dictionary-entries-by-words", words),
@@ -1510,6 +1512,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-hard-delete-snippet", id, expectedAuthGeneration),
   clearSnippetCloudId: (id, expectedAuthGeneration) =>
     ipcRenderer.invoke("db-clear-snippet-cloud-id", id, expectedAuthGeneration),
+  keepNewerSnippetEdit: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-keep-newer-snippet-edit", id, expectedAuthGeneration),
   broadcastSnippetsUpdated: () => ipcRenderer.invoke("db-broadcast-snippets-updated"),
 
   // Google Calendar

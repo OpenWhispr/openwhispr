@@ -378,6 +378,38 @@ let lastSentSharedHints: string | null = null;
 // under, as main's database has it; undefined until first read. Main refuses a
 // personal-list edit from any other.
 let listsAccountId: string | null | undefined;
+// Whose lists this window shows (main's visible account, which a signed-out
+// sole account keeps), and a count of the times that changed once known. An
+// editor captures the count when it opens, so its save can't land in the list
+// of an account that took over meanwhile; a token rotation changes nothing.
+let listsVisibleAccountId: string | null | undefined;
+let listsOwnerRevision = 0;
+const listsOwnerListeners = new Set<() => void>();
+
+function noteListsVisibleAccount(next: string | null): void {
+  const previous = listsVisibleAccountId;
+  listsVisibleAccountId = next;
+  if (previous === undefined || previous === next) return;
+  listsOwnerRevision += 1;
+  for (const listener of listsOwnerListeners) listener();
+}
+
+export function getListsOwnerRevision(): number {
+  return listsOwnerRevision;
+}
+
+export function subscribeListsOwner(listener: () => void): () => void {
+  listsOwnerListeners.add(listener);
+  return () => {
+    listsOwnerListeners.delete(listener);
+  };
+}
+
+function listsOwnerChanged(listsOwner: number | undefined, list: string): boolean {
+  if (listsOwner === undefined || listsOwner === listsOwnerRevision) return false;
+  logger.info("Dropped a personal-list edit opened under another account", { list }, "settings");
+  return true;
+}
 
 // SQLite owns the list after a write or refusal. A read that outlives an
 // account change is dropped: that change's broadcast already brought the
@@ -1343,9 +1375,14 @@ export interface SettingsState
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
   setSharedDictionaryHints: (hints: SharedHintWords, workspaceId: string | null) => void;
-  updateCustomDictionary: (changes: { add?: string[]; remove?: string[] }) => void;
+  // `listsOwner`: the getListsOwnerRevision() an editor opened under; the edit
+  // is dropped if the lists have belonged to another account since.
+  updateCustomDictionary: (
+    changes: { add?: string[]; remove?: string[] },
+    listsOwner?: number
+  ) => void;
   applyCustomDictionaryFromExternal: (words: string[]) => void;
-  setSnippets: (snippets: Snippet[]) => void;
+  setSnippets: (snippets: Snippet[], listsOwner?: number) => void;
   applySnippetsFromExternal: (snippets: Snippet[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
@@ -2387,7 +2424,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       });
   },
 
-  updateCustomDictionary: ({ add = [], remove = [] }) => {
+  updateCustomDictionary: ({ add = [], remove = [] }, listsOwner) => {
+    if (listsOwnerChanged(listsOwner, "dictionary")) return;
     const owner = listsAccountId;
     const removeLower = new Set(remove.map((w) => w.toLowerCase()));
     const addLower = new Set(add.map((w) => w.toLowerCase()));
@@ -2435,7 +2473,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ customDictionary: words });
   },
 
-  setSnippets: (snippets: Snippet[]) => {
+  setSnippets: (snippets: Snippet[], listsOwner?: number) => {
+    if (listsOwnerChanged(listsOwner, "snippets")) return;
     if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
     set({ snippets });
     window.electronAPI
@@ -4548,6 +4587,7 @@ export async function initializeSettings(): Promise<void> {
     ?.getDatabaseAccountScope?.()
     .then((scope) => {
       if (listsAccountId === undefined) listsAccountId = scope.accountId;
+      if (listsVisibleAccountId === undefined) listsVisibleAccountId = scope.visibleAccountId;
     })
     .catch((error) => {
       logger.warn(
@@ -4558,6 +4598,7 @@ export async function initializeSettings(): Promise<void> {
     });
   window.electronAPI?.onDatabaseAccountScopeChanged?.((scope) => {
     listsAccountId = scope.accountId;
+    noteListsVisibleAccount(scope.visibleAccountId);
   });
 
   // Active hotkey updates from backend — display state, never persisted.

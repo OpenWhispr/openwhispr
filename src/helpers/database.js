@@ -40,6 +40,7 @@ const {
   localDateKey,
   summarizeAnalyticsDays,
 } = require("./analytics");
+const { EMBEDDING_VERSION } = require("../constants/speakerDetection.json");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -67,6 +68,26 @@ const ACCOUNT_OWNED_TABLES = [
   "analytics_events",
   "space_accounts",
 ];
+// A word or trigger's case-insensitive key. SQLite's lower() folds only ASCII,
+// so SQL compares keys through fold_key (registered per connection by
+// _registerKeyFolding) and JS through this, and both agree on "École".
+function foldKey(value) {
+  return typeof value === "string" ? value.toLowerCase() : value;
+}
+
+// One row per folded key from rows that may hold several casings of it: the
+// account's own row over an unattributed one, a live row over a tombstone.
+function rowsByFoldedKey(rows, key) {
+  const rank = (row) => (row.account_id ? 2 : 0) + (row.deleted_at ? 0 : 1);
+  const byKey = new Map();
+  for (const row of rows) {
+    const folded = foldKey(row[key]);
+    const current = byKey.get(folded);
+    if (!current || rank(row) > rank(current)) byKey.set(folded, row);
+  }
+  return byKey;
+}
+
 // legacy_unattributed: 0 is a row written since attribution; the others are from
 // before it, so nobody knows whose they are. A row this device uploaded for
 // whichever account synced first has a cloud id that says nothing about that.
@@ -519,9 +540,18 @@ class DatabaseManager {
     return this._ownedRowScope(tableName, alias, this.activeAccountId);
   }
 
+  // Uncorrelated, so SQLite folds the account's keys once per statement rather
+  // than once per row it checks.
   _ownedDuplicateSql(tableName) {
     const key = PERSONAL_ROW_KEYS[tableName];
-    return `EXISTS (SELECT 1 FROM ${tableName} owned WHERE owned.account_id = ? AND lower(owned.${key}) = lower(${tableName}.${key}))`;
+    return `fold_key(${tableName}.${key}) IN (SELECT fold_key(owned.${key}) FROM ${tableName} owned WHERE owned.account_id = ?)`;
+  }
+
+  // Deterministic, so SQLite may call it anywhere a built-in could go. The
+  // indexes keep lower(): an index on an app-defined function would stop an
+  // older build, which never registers it, from opening the database.
+  _registerKeyFolding() {
+    this.db.function("fold_key", { deterministic: true }, foldKey);
   }
 
   // Removing or renaming the account's word or snippet takes the hidden
@@ -535,7 +565,7 @@ class DatabaseManager {
     this.db
       .prepare(
         `DELETE FROM ${tableName}
-         WHERE account_id IS NULL AND cloud_id IS NULL AND lower(${key}) = lower(?)
+         WHERE account_id IS NULL AND cloud_id IS NULL AND fold_key(${key}) = fold_key(?)
            AND ${this._ownedDuplicateSql(tableName)}`
       )
       .run(keyValue, accountId);
@@ -552,7 +582,7 @@ class DatabaseManager {
       row.account_id &&
       this.db
         .prepare(
-          `SELECT 1 FROM ${tableName} WHERE account_id IS NULL AND cloud_id IS NOT NULL AND lower(${key}) = lower(?) LIMIT 1`
+          `SELECT 1 FROM ${tableName} WHERE account_id IS NULL AND cloud_id IS NOT NULL AND fold_key(${key}) = fold_key(?) LIMIT 1`
         )
         .get(row[key]);
     if (hiddenCopy) {
@@ -667,10 +697,9 @@ class DatabaseManager {
         const key = PERSONAL_ROW_KEYS[table];
         const noTwin = key
           ? `AND NOT ${this._ownedDuplicateSql(table)}
-               AND NOT EXISTS (
-                 SELECT 1 FROM ${table} synced
+               AND fold_key(${table}.${key}) NOT IN (
+                 SELECT fold_key(synced.${key}) FROM ${table} synced
                  WHERE synced.account_id IS NULL AND synced.cloud_id IS NOT NULL
-                   AND lower(synced.${key}) = lower(${table}.${key})
                )`
           : "";
         this.db
@@ -860,6 +889,7 @@ class DatabaseManager {
       const dbPath = path.join(app.getPath("userData"), dbFileName);
 
       this.db = new Database(dbPath);
+      this._registerKeyFolding();
       this.db.pragma("journal_mode = WAL");
 
       this.db.exec(`
@@ -1682,6 +1712,7 @@ class DatabaseManager {
           display_name TEXT NOT NULL,
           email TEXT,
           embedding BLOB NOT NULL,
+          embedding_version INTEGER,
           sample_count INTEGER DEFAULT 1,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -1705,6 +1736,7 @@ class DatabaseManager {
           note_id INTEGER NOT NULL,
           speaker_id TEXT NOT NULL,
           embedding BLOB NOT NULL,
+          embedding_version INTEGER,
           PRIMARY KEY (note_id, speaker_id),
           FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
         )
@@ -2319,6 +2351,21 @@ class DatabaseManager {
       }
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN created_by_user_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      // Speaker-embedding schema version. Rows written before this column existed
+      // predate the Kaldi/CMN fbank fix, so their embeddings live in an
+      // incompatible space; leaving the column NULL marks them stale so matching
+      // skips them until the speaker is re-enrolled (see EMBEDDING_VERSION).
+      try {
+        this.db.exec("ALTER TABLE speaker_profiles ADD COLUMN embedding_version INTEGER");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE note_speaker_embeddings ADD COLUMN embedding_version INTEGER");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -3339,7 +3386,7 @@ class DatabaseManager {
     };
   }
 
-  // Dedupe by lower(word), keeping the first occurrence's casing, so no caller
+  // Dedupe by folded key, keeping the first occurrence's casing, so no caller
   // can present two spellings of the same word to a write loop.
   _normalizeDictionaryWords(words) {
     const byLower = new Map();
@@ -3347,7 +3394,7 @@ class DatabaseManager {
       if (typeof raw !== "string") continue;
       const trimmed = raw.trim();
       if (!trimmed) continue;
-      const lower = trimmed.toLowerCase();
+      const lower = foldKey(trimmed);
       if (!byLower.has(lower)) byLower.set(lower, trimmed);
     }
     return byLower;
@@ -3360,7 +3407,7 @@ class DatabaseManager {
         `SELECT id, word, source, deleted_at, shared_at, cloud_id, account_id FROM custom_dictionary WHERE ${scope.sql}`
       )
       .all(...scope.params);
-    return { rows, byLower: new Map(rows.map((r) => [r.word.toLowerCase(), r])) };
+    return { rows, byLower: rowsByFoldedKey(rows, "word") };
   }
 
   // Returns true when the word became present, so callers can report how many
@@ -3456,7 +3503,7 @@ class DatabaseManager {
 
       this.db.transaction(() => {
         for (const existing of rows) {
-          if (incomingByLower.has(existing.word.toLowerCase())) continue;
+          if (incomingByLower.has(foldKey(existing.word))) continue;
           this._deleteDictionaryRow(stmts, existing);
         }
         for (const [lower, word] of incomingByLower) {
@@ -3618,7 +3665,7 @@ class DatabaseManager {
         this.db
           .prepare(
             `SELECT * FROM custom_dictionary
-             WHERE lower(word) = lower(?) AND ${scope.sql}
+             WHERE fold_key(word) = fold_key(?) AND ${scope.sql}
                AND ${this._mergeableByKeySql("custom_dictionary")}
              ORDER BY account_id IS NULL LIMIT 1`
           )
@@ -3661,7 +3708,7 @@ class DatabaseManager {
             .run(cloudEntry.id, mergedSource, ...claim.params, existing.id);
           return this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(existing.id);
         }
-        if (existing.word.toLowerCase() !== word.toLowerCase()) {
+        if (foldKey(existing.word) !== foldKey(word)) {
           this._dropHiddenDuplicates("custom_dictionary", existing.word);
         }
         // Renamed onto a word the same account already has: they merge, as the
@@ -3805,6 +3852,35 @@ class DatabaseManager {
       : `${tableName}.account_id = ?`;
   }
 
+  // A tombstone from the signed-in account's cloud for a row whose local edit
+  // is newer: the edit wins. The tombstone matched the row by its client or
+  // cloud id, which proves the row is this account's, so it is claimed and
+  // loses the dead cloud id, and the next push re-creates it.
+  _keepNewerEditOverCloudDelete(tableName, id) {
+    if (!this.activeAccountId) return 0;
+    return this.db
+      .prepare(
+        `UPDATE ${tableName} SET account_id = ?, cloud_id = NULL
+         WHERE id = ? AND deleted_at IS NULL AND sync_status = 'pending'
+           AND (account_id IS NULL OR account_id = ?)`
+      )
+      .run(this.activeAccountId, id, this.activeAccountId).changes;
+  }
+
+  keepNewerDictionaryEdit(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return { success: this._keepNewerEditOverCloudDelete("custom_dictionary", id) > 0 };
+    } catch (error) {
+      debugLogger.error(
+        "Error keeping a dictionary edit over its cloud deletion",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
   clearDictionaryCloudId(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -3815,8 +3891,7 @@ class DatabaseManager {
     }
   }
 
-  // Live personal rows keyed by JS lowercase, the same folding the write
-  // paths dedupe with (SQLite's lower() only folds ASCII).
+  // Live personal rows keyed by the folding the write paths dedupe with.
   _livePersonalRowsByLower() {
     const scope = this._ownedRowScope("custom_dictionary");
     const rows = this.db
@@ -3824,7 +3899,7 @@ class DatabaseManager {
         `SELECT id, word, cloud_id, account_id FROM custom_dictionary WHERE deleted_at IS NULL AND ${scope.sql}`
       )
       .all(...scope.params);
-    return new Map(rows.map((row) => [row.word.toLowerCase(), row]));
+    return rowsByFoldedKey(rows, "word");
   }
 
   getDictionaryEntriesByWords(words) {
@@ -4339,7 +4414,7 @@ class DatabaseManager {
         const replacement = typeof raw.replacement === "string" ? raw.replacement.trim() : "";
         if (!trigger || !replacement) continue;
         if (trigger.length > MAX_SNIPPET_TRIGGER_LENGTH) continue;
-        const lower = trigger.toLowerCase();
+        const lower = foldKey(trigger);
         if (!incomingByLower.has(lower)) incomingByLower.set(lower, { trigger, replacement });
       }
       const cleaned = Array.from(incomingByLower.values());
@@ -4349,12 +4424,7 @@ class DatabaseManager {
       const existingRows = this.db
         .prepare(`SELECT * FROM snippets WHERE ${scope.sql}`)
         .all(...scope.params);
-      const existingByLower = new Map();
-      for (const row of existingRows) {
-        const lower = row.trigger.toLowerCase();
-        const current = existingByLower.get(lower);
-        if (!current || (current.deleted_at && !row.deleted_at)) existingByLower.set(lower, row);
-      }
+      const existingByLower = rowsByFoldedKey(existingRows, "trigger");
 
       // As with dictionary words, the deleter pushes an unattributed tombstone.
       const tombstone = this.db.prepare(
@@ -4372,7 +4442,7 @@ class DatabaseManager {
 
       this.db.transaction(() => {
         for (const existing of existingRows) {
-          if (incomingLower.has(existing.trigger.toLowerCase())) continue;
+          if (incomingLower.has(foldKey(existing.trigger))) continue;
           if (existing.deleted_at) continue;
           if (existing.cloud_id) {
             this._dropHiddenDuplicates("snippets", existing.trigger);
@@ -4383,7 +4453,7 @@ class DatabaseManager {
         }
 
         for (const snippet of cleaned) {
-          const existing = existingByLower.get(snippet.trigger.toLowerCase());
+          const existing = existingByLower.get(foldKey(snippet.trigger));
           if (existing) {
             if (existing.deleted_at) {
               restore.run(snippet.trigger, snippet.replacement, existing.id);
@@ -4503,7 +4573,7 @@ class DatabaseManager {
         this.db
           .prepare(
             `SELECT * FROM snippets
-             WHERE lower(trigger) = lower(?) AND deleted_at IS ${deleted ? "NOT " : ""}NULL
+             WHERE fold_key(trigger) = fold_key(?) AND deleted_at IS ${deleted ? "NOT " : ""}NULL
                AND ${scope.sql} AND ${this._mergeableByKeySql("snippets")}
              ORDER BY account_id IS NULL LIMIT 1`
           )
@@ -4585,7 +4655,7 @@ class DatabaseManager {
         const collidingActive = this.db
           .prepare(
             `SELECT * FROM snippets
-             WHERE lower(trigger) = lower(?) AND deleted_at IS NULL AND id != ?
+             WHERE fold_key(trigger) = fold_key(?) AND deleted_at IS NULL AND id != ?
                AND ${scope.sql} AND ${this._mergeableByKeySql("snippets")}
              LIMIT 1`
           )
@@ -4597,7 +4667,7 @@ class DatabaseManager {
         if (orphanId) {
           this.db.prepare("DELETE FROM snippets WHERE id = ?").run(orphanId);
         }
-        if (target.trigger.toLowerCase() !== trigger.toLowerCase()) {
+        if (foldKey(target.trigger) !== foldKey(trigger)) {
           this._dropHiddenDuplicates("snippets", target.trigger);
         }
         const claim = this._claimUnattributedSql("snippets", {
@@ -4696,6 +4766,20 @@ class DatabaseManager {
       return { success: this._clearCloudIdOfOwnRow("snippets", id) > 0 };
     } catch (error) {
       debugLogger.error("Error clearing snippet cloud_id", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  keepNewerSnippetEdit(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return { success: this._keepNewerEditOverCloudDelete("snippets", id) > 0 };
+    } catch (error) {
+      debugLogger.error(
+        "Error keeping a snippet edit over its cloud deletion",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }
@@ -8965,43 +9049,77 @@ class DatabaseManager {
     return this.db.prepare("SELECT * FROM speaker_profiles WHERE lower(email) = ?").get(normalized);
   }
 
+  _findSpeakerProfile(name, email, profileId) {
+    return (
+      (profileId &&
+        this.db.prepare("SELECT * FROM speaker_profiles WHERE id = ?").get(profileId)) ||
+      this._findProfileByEmail(email) ||
+      this.db.prepare("SELECT * FROM speaker_profiles WHERE display_name = ?").get(name) ||
+      null
+    );
+  }
+
+  // A label with no voice to learn from (the note predates the current
+  // embeddings, or was never diarized) can't create a profile, which needs an
+  // embedding. It still links the one the person has and gives it the email.
+  linkSpeakerProfile(name, email, profileId = null) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const existing = this._findSpeakerProfile(name, email, profileId);
+      const normalizedEmail = this._normalizeEmail(email);
+      if (
+        !existing ||
+        !normalizedEmail ||
+        normalizedEmail === this._normalizeEmail(existing.email)
+      ) {
+        return existing;
+      }
+      return this.attachEmailToProfile(existing.id, normalizedEmail);
+    } catch (error) {
+      debugLogger.error("Error linking speaker profile", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
   upsertSpeakerProfile(name, email, embeddingBuffer, profileId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const normalizedEmail = this._normalizeEmail(email);
-      let existing = profileId
-        ? this.db.prepare("SELECT * FROM speaker_profiles WHERE id = ?").get(profileId)
-        : null;
-      if (!existing && normalizedEmail) {
-        existing = this._findProfileByEmail(normalizedEmail);
-      }
-      if (!existing) {
-        existing = this.db
-          .prepare("SELECT * FROM speaker_profiles WHERE display_name = ?")
-          .get(name);
-      }
+      const existing = this._findSpeakerProfile(name, normalizedEmail, profileId);
       if (existing) {
-        const stored = new Float32Array(
-          existing.embedding.buffer,
-          existing.embedding.byteOffset,
-          existing.embedding.byteLength / 4
-        );
         const incoming = new Float32Array(
           embeddingBuffer.buffer,
           embeddingBuffer.byteOffset,
           embeddingBuffer.byteLength / 4
         );
-        const updated = new Float32Array(stored.length);
-        for (let i = 0; i < stored.length; i++) {
-          updated[i] = 0.3 * incoming[i] + 0.7 * stored[i];
+        // A stored embedding from an older feature-extraction version lives in an
+        // incompatible space, so blending it with a current one is meaningless.
+        // Re-enroll by replacing it outright and restarting the running average.
+        const staleSpace = existing.embedding_version !== EMBEDDING_VERSION;
+        let updatedBuf;
+        let sampleCountExpr;
+        if (staleSpace) {
+          updatedBuf = Buffer.from(incoming.buffer, incoming.byteOffset, incoming.byteLength);
+          sampleCountExpr = "1";
+        } else {
+          const stored = new Float32Array(
+            existing.embedding.buffer,
+            existing.embedding.byteOffset,
+            existing.embedding.byteLength / 4
+          );
+          const updated = new Float32Array(stored.length);
+          for (let i = 0; i < stored.length; i++) {
+            updated[i] = 0.3 * incoming[i] + 0.7 * stored[i];
+          }
+          updatedBuf = Buffer.from(updated.buffer);
+          sampleCountExpr = "sample_count + 1";
         }
-        const updatedBuf = Buffer.from(updated.buffer);
         const finalEmail = normalizedEmail || existing.email || null;
         this.db
           .prepare(
-            "UPDATE speaker_profiles SET display_name = ?, email = ?, embedding = ?, sample_count = sample_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+            `UPDATE speaker_profiles SET display_name = ?, email = ?, embedding = ?, embedding_version = ?, sample_count = ${sampleCountExpr}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
           )
-          .run(name, finalEmail, updatedBuf, existing.id);
+          .run(name, finalEmail, updatedBuf, EMBEDDING_VERSION, existing.id);
         const resolved = this.db
           .prepare("SELECT * FROM speaker_profiles WHERE id = ?")
           .get(existing.id);
@@ -9016,8 +9134,10 @@ class DatabaseManager {
         return resolved;
       }
       const result = this.db
-        .prepare("INSERT INTO speaker_profiles (display_name, email, embedding) VALUES (?, ?, ?)")
-        .run(name, normalizedEmail, embeddingBuffer);
+        .prepare(
+          "INSERT INTO speaker_profiles (display_name, email, embedding, embedding_version) VALUES (?, ?, ?, ?)"
+        )
+        .run(name, normalizedEmail, embeddingBuffer, EMBEDDING_VERSION);
       return this.db
         .prepare("SELECT * FROM speaker_profiles WHERE id = ?")
         .get(result.lastInsertRowid);
@@ -9068,22 +9188,43 @@ class DatabaseManager {
     const winner = (a.sample_count || 0) >= (b.sample_count || 0) ? a : b;
     const loser = winner === a ? b : a;
 
-    const winnerEmb = new Float32Array(
-      winner.embedding.buffer,
-      winner.embedding.byteOffset,
-      winner.embedding.byteLength / 4
-    );
-    const loserEmb = new Float32Array(
-      loser.embedding.buffer,
-      loser.embedding.byteOffset,
-      loser.embedding.byteLength / 4
-    );
+    const toF32 = (p) =>
+      new Float32Array(p.embedding.buffer, p.embedding.byteOffset, p.embedding.byteLength / 4);
+    const f32ToBuf = (v) => Buffer.from(v.buffer, v.byteOffset, v.byteLength);
+
     const wSamples = winner.sample_count || 1;
     const lSamples = loser.sample_count || 1;
     const total = wSamples + lSamples;
-    const blended = new Float32Array(winnerEmb.length);
-    for (let i = 0; i < winnerEmb.length; i++) {
-      blended[i] = (winnerEmb[i] * wSamples + loserEmb[i] * lSamples) / total;
+
+    const winnerCurrent = winner.embedding_version === EMBEDDING_VERSION;
+    const loserCurrent = loser.embedding_version === EMBEDDING_VERSION;
+
+    // Identity (name/email/mappings) always merges; the embedding must never be
+    // blended across feature-extraction versions, so only combine same-space
+    // vectors and otherwise keep whichever one is current.
+    let finalEmbeddingBuf;
+    let finalVersion;
+    let finalSampleCount;
+    if (winnerCurrent && loserCurrent) {
+      const winnerEmb = toF32(winner);
+      const loserEmb = toF32(loser);
+      const blended = new Float32Array(winnerEmb.length);
+      for (let i = 0; i < winnerEmb.length; i++) {
+        blended[i] = (winnerEmb[i] * wSamples + loserEmb[i] * lSamples) / total;
+      }
+      finalEmbeddingBuf = Buffer.from(blended.buffer);
+      finalVersion = EMBEDDING_VERSION;
+      finalSampleCount = total;
+    } else if (winnerCurrent || loserCurrent) {
+      const keep = winnerCurrent ? winner : loser;
+      finalEmbeddingBuf = f32ToBuf(toF32(keep));
+      finalVersion = EMBEDDING_VERSION;
+      finalSampleCount = keep.sample_count || 1;
+    } else {
+      // Both stale: keep a valid blob but leave it marked stale for re-enrollment.
+      finalEmbeddingBuf = f32ToBuf(toF32(winner));
+      finalVersion = winner.embedding_version ?? null;
+      finalSampleCount = total;
     }
 
     const finalEmail = winner.email || loser.email || null;
@@ -9092,9 +9233,9 @@ class DatabaseManager {
     const tx = this.db.transaction(() => {
       this.db
         .prepare(
-          "UPDATE speaker_profiles SET display_name = ?, email = ?, embedding = ?, sample_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+          "UPDATE speaker_profiles SET display_name = ?, email = ?, embedding = ?, embedding_version = ?, sample_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
         )
-        .run(finalName, finalEmail, Buffer.from(blended.buffer), total, winner.id);
+        .run(finalName, finalEmail, finalEmbeddingBuf, finalVersion, finalSampleCount, winner.id);
       this.db
         .prepare(
           "UPDATE speaker_mappings SET profile_id = ?, display_name = ? WHERE profile_id = ?"
@@ -9110,11 +9251,16 @@ class DatabaseManager {
   getSpeakerProfiles(includeEmbedding = false) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // Embeddings are only returned for auto-matching, so restrict them to the
+      // current feature-extraction version. Legacy-space embeddings would produce
+      // meaningless cosine scores; the profile survives (name/email) and is matched
+      // again once re-enrolled. The name-only listing keeps every profile.
       const query = includeEmbedding
-        ? "SELECT * FROM speaker_profiles"
+        ? "SELECT * FROM speaker_profiles WHERE embedding_version = ?"
         : `SELECT id, display_name, email, sample_count, created_at, updated_at
            FROM speaker_profiles`;
-      return this.db.prepare(query).all();
+      const stmt = this.db.prepare(query);
+      return includeEmbedding ? stmt.all(EMBEDDING_VERSION) : stmt.all();
     } catch (error) {
       debugLogger.error("Error getting speaker profiles", { error: error.message }, "database");
       throw error;
@@ -9154,10 +9300,10 @@ class DatabaseManager {
       if (!this.getNote(noteId)) return { success: false, error: "Note not found" };
       const transaction = this.db.transaction((entries) => {
         const stmt = this.db.prepare(
-          "INSERT OR REPLACE INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)"
+          "INSERT OR REPLACE INTO note_speaker_embeddings (note_id, speaker_id, embedding, embedding_version) VALUES (?, ?, ?, ?)"
         );
         for (const [speakerId, buffer] of entries) {
-          stmt.run(noteId, speakerId, buffer);
+          stmt.run(noteId, speakerId, buffer, EMBEDDING_VERSION);
         }
       });
       transaction(Object.entries(embeddings));
@@ -9176,7 +9322,13 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (!this.getNote(noteId)) return [];
-      return this.db.prepare("SELECT * FROM note_speaker_embeddings WHERE note_id = ?").all(noteId);
+      // Only expose embeddings from the current feature-extraction version; older
+      // ones live in an incompatible space and must not seed profiles or matches.
+      return this.db
+        .prepare(
+          "SELECT * FROM note_speaker_embeddings WHERE note_id = ? AND embedding_version = ?"
+        )
+        .all(noteId, EMBEDDING_VERSION);
     } catch (error) {
       debugLogger.error(
         "Error getting note speaker embeddings",

@@ -5,6 +5,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
+import type { SplitLiveSpeakers } from "../utils/transcriptSpeakerState";
 import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
@@ -3922,6 +3923,7 @@ declare global {
           }>;
           speakerEmbeddings?: Record<string, number[]> | null;
           removedSegments?: RemovedTranscriptSegment[];
+          splitLiveSpeakers?: SplitLiveSpeakers;
         }) => void
       ) => () => void;
 
@@ -4349,6 +4351,11 @@ declare global {
         id: number,
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** Claims a pending word whose edit outlives its cloud tombstone, for re-creation. */
+      keepNewerDictionaryEdit?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
       /**
        * Live personal words matching `words` case-insensitively, in their stored
@@ -4432,6 +4439,11 @@ declare global {
         id: number,
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** As keepNewerDictionaryEdit, for a snippet. */
+      keepNewerSnippetEdit?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
     };
 
