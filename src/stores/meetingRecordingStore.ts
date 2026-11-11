@@ -758,22 +758,32 @@ function applySpeakerIdentification(
   });
 }
 
-// A provisional system row was only carried onto its speaker, so it shows the
-// user's name for them but stays movable until an identification confirms it.
-function applyUserSpeakerName(segment: TranscriptSegment): TranscriptSegment {
-  if (segment.speakerLocked || !segment.speaker) return segment;
-  const lockedName = speakerLocks.get(segment.speaker);
-  if (!lockedName) return segment;
+// A system row this session hasn't confirmed was only carried onto its speaker,
+// so it shows the user's name for them but stays movable until an identification
+// confirms it. Confirmed and already locked system rows, an earlier session's rows
+// (nothing can confirm them now), and mic rows are locked under the name.
+function nameSpeakerRow(segment: TranscriptSegment, name: string): TranscriptSegment {
   const patch = {
-    speakerName: lockedName,
+    speakerName: name,
     speakerIsPlaceholder: false,
     suggestedName: undefined,
     suggestedProfileId: undefined,
   };
-  if (segment.source === "system" && segment.speakerStatus !== "confirmed") {
+  if (
+    segment.source === "system" &&
+    !segment.speakerLocked &&
+    segment.speakerStatus !== "confirmed" &&
+    !isEarlierSessionSpeaker(segment.speaker)
+  ) {
     return normalizeTranscriptSegment({ ...segment, ...patch });
   }
   return lockTranscriptSpeaker(segment, patch);
+}
+
+function applyUserSpeakerName(segment: TranscriptSegment): TranscriptSegment {
+  if (segment.speakerLocked || !segment.speaker) return segment;
+  const lockedName = speakerLocks.get(segment.speaker);
+  return lockedName ? nameSpeakerRow(segment, lockedName) : segment;
 }
 
 function rememberSystemSpeaker(
@@ -2111,16 +2121,13 @@ export function lockSpeaker(speakerId: string, displayName: string, recorderName
   if (speakerId !== "you" || recorderName === sessionRecorderName) {
     speakerLocks.set(speakerId, displayName);
   }
-  const next = useMeetingRecordingStore.getState().segments.map((s) =>
-    s.speaker === speakerId && (speakerId !== "you" || s.recorderName === recorderName)
-      ? lockTranscriptSpeaker(s, {
-          speakerName: displayName,
-          speakerIsPlaceholder: false,
-          suggestedName: undefined,
-          suggestedProfileId: undefined,
-        })
-      : s
-  );
+  const next = useMeetingRecordingStore
+    .getState()
+    .segments.map((s) =>
+      s.speaker === speakerId && (speakerId !== "you" || s.recorderName === recorderName)
+        ? nameSpeakerRow(s, displayName)
+        : s
+    );
   segmentsRefValue = next;
   useMeetingRecordingStore.setState({ segments: next });
   if (recentSystemSpeaker?.speakerId === speakerId) {

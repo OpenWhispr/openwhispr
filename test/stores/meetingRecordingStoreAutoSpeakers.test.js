@@ -72,7 +72,7 @@ function createElectronAPI() {
   return { api, state };
 }
 
-async function startMeeting(t) {
+async function startMeeting(t, startArgs = {}) {
   const { api, state } = createElectronAPI();
   let store = null;
   // Registered before the globals so the recording stops while `window` still exists.
@@ -85,7 +85,7 @@ async function startMeeting(t) {
     cachePrefix: "openwhispr-meeting-auto-speakers-test-",
   });
   store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
-  assert.equal(await store.startRecording(START_ARGS), true);
+  assert.equal(await store.startRecording({ ...START_ARGS, ...startArgs }), true);
   return {
     api,
     identify: (identification) => state.speakerCallback(identification),
@@ -203,4 +203,37 @@ test("a press starts from the followed count and is sent as explicit", async (t)
     expectedCount: 5,
     countIsExplicit: true,
   });
+});
+
+test("naming a speaker doesn't lock a line only carried onto them", async (t) => {
+  const { identify, final, lockSpeaker, rows } = await startMeeting(t);
+  identify(A(T, T + 5000));
+  final({ text: "ana speaking", source: "system", timestamp: T + 1000 });
+  final({ text: "new voice", source: "system", timestamp: T + 8000 }); // carried onto speaker_0
+  lockSpeaker("speaker_0", "Ana");
+  assert.equal(rows()[1].speakerName, "Ana");
+  assert.notEqual(rows()[1].speakerLocked, true);
+  identify({ ...B(T + 7000, T + 10_000), retroactive: true });
+  assert.equal(rows()[1].speaker, "speaker_1");
+  assert.equal(rows()[1].speakerName, undefined);
+  assert.notEqual(rows()[1].speakerLocked, true);
+  assert.equal(rows()[0].speakerLocked, true);
+  assert.equal(rows()[0].speakerName, "Ana");
+});
+
+test("naming an earlier session's speaker locks its lines, which nothing can confirm now", async (t) => {
+  const seedSegments = [
+    {
+      id: "s0",
+      text: "from last time",
+      source: "system",
+      timestamp: Date.now() - 60_000,
+      speaker: "speaker_0",
+      speakerIsPlaceholder: true,
+    },
+  ];
+  const { lockSpeaker, rows } = await startMeeting(t, { seedSegments });
+  lockSpeaker("speaker_0", "Carol");
+  assert.equal(rows()[0].speakerName, "Carol");
+  assert.equal(rows()[0].speakerLocked, true);
 });
