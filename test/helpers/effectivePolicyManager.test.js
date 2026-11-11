@@ -1,5 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const ts = require("typescript");
 const {
   defaultDevicePolicy,
   normalizeDeviceValues,
@@ -12,6 +15,52 @@ const {
 const { devicePolicyNetworkAllowed } = require("../../src/helpers/devicePolicyNetwork");
 const { productOperationAllowed } = require("../../src/helpers/productPolicy");
 const guest = { accountId: null, authGeneration: 0, authenticated: false };
+
+// Every key path of OrgPolicy, read from the type itself.
+function orgPolicyKeyPaths() {
+  const file = path.join(__dirname, "../../src/types/policy.ts");
+  const source = ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest);
+  const orgPolicy = source.statements.find(
+    (statement) => ts.isInterfaceDeclaration(statement) && statement.name.text === "OrgPolicy"
+  );
+  const paths = [];
+  const walk = (members, prefix) => {
+    for (const member of members) {
+      const key = [...prefix, member.name.text];
+      paths.push(key);
+      if (member.type && ts.isTypeLiteralNode(member.type)) walk(member.type.members, key);
+    }
+  };
+  walk(orgPolicy.members, []);
+  return paths;
+}
+
+test("merging keeps every OrgPolicy field", () => {
+  const policy = JSON.parse(require("./fixtures/admin-mdm-device-values.json").Policy);
+  policy.features.memoryEnabled = true;
+  for (const key of orgPolicyKeyPaths())
+    assert.ok(
+      key.reduce((value, part) => value?.[part], policy) !== undefined,
+      `the sample policy needs ${key.join(".")}`
+    );
+  assert.deepEqual(mergePolicies([policy, policy]), policy);
+});
+
+test("local model allow-lists intersect, and any non-automatic meeting start wins", () => {
+  const device = defaultDevicePolicy();
+  const workspace = defaultDevicePolicy();
+  device.transcription.allowedLocalModels = ["base", "small"];
+  workspace.transcription.allowedLocalModels = ["small", "turbo"];
+  workspace.llm.allowedLocalModels = ["qwen"];
+  workspace.meetings = { transcriptionStart: "manual" };
+  const merged = mergePolicies([device, workspace]);
+  assert.deepEqual(merged.transcription.allowedLocalModels, ["small"]);
+  assert.deepEqual(merged.llm.allowedLocalModels, ["qwen"]);
+  assert.equal(merged.meetings.transcriptionStart, "manual");
+  assert.equal(mergePolicies([device]).llm.allowedLocalModels, null);
+  assert.equal(mergePolicies([device]).meetings.transcriptionStart, "automatic");
+});
+
 
 test("effective merge intersects permissions without granting disjoint modes", () => {
   const device = defaultDevicePolicy();

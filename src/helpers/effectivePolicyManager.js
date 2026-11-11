@@ -13,9 +13,17 @@ function mergePolicies(policies) {
     .map((policy) => policy.dataRetention.audioRetentionMaxDays)
     .filter((value) => value !== null);
   const versions = policies.map((policy) => policy.minAppVersion).filter(Boolean);
+  // Null is unrestricted, so only the lists that restrict are intersected.
+  const localModels = (scope) => {
+    const lists = policies.map((policy) => policy[scope].allowedLocalModels).filter(Boolean);
+    return lists.length ? intersect(lists) : null;
+  };
+  // Absent means allowed, for the flags this build knows and any it doesn't.
+  const features = [...new Set(policies.flatMap((policy) => Object.keys(policy.features)))];
   return {
     version: 1,
     transcription: {
+      allowedLocalModels: localModels("transcription"),
       allowedModes: modes("transcription"),
       allowedByokProviders: intersect(
         policies.map((policy) => policy.transcription.allowedByokProviders)
@@ -25,6 +33,7 @@ function mergePolicies(policies) {
       ),
     },
     llm: {
+      allowedLocalModels: localModels("llm"),
       allowedModes: modes("llm"),
       allowedByokProviders: intersect(policies.map((policy) => policy.llm.allowedByokProviders)),
       allowedEnterpriseProviders: intersect(
@@ -32,15 +41,18 @@ function mergePolicies(policies) {
       ),
     },
     features: Object.fromEntries(
-      [
-        "agentEnabled",
-        "webSearchEnabled",
-        "screenContextEnabled",
-        "connectorsEnabled",
-        "meetingRecordingEnabled",
-        "audioUploadEnabled",
-      ].map((feature) => [feature, policies.every((policy) => policy.features[feature] !== false)])
+      features.map((feature) => [
+        feature,
+        policies.every((policy) => policy.features[feature] !== false),
+      ])
     ),
+    // Any start other than automatic, known to this build or not, is manual.
+    meetings: {
+      transcriptionStart:
+        policies
+          .map((policy) => policy.meetings?.transcriptionStart ?? "automatic")
+          .find((start) => start !== "automatic") ?? "automatic",
+    },
     sharing: {
       externalLinkSharing: restrictive(
         policies.map((policy) => policy.sharing.externalLinkSharing),
