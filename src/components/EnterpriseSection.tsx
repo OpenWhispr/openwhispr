@@ -1,7 +1,9 @@
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { useCallback } from "react";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import EnterpriseProviderConfig from "./EnterpriseProviderConfig";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
+import { registryData } from "../models/registryData.js";
 import { useSettingsStore } from "../stores/settingsStore";
 import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 import {
@@ -29,6 +31,7 @@ export default function EnterpriseSection({
   setReasoningModel,
   setLocalReasoningProvider,
 }: EnterpriseSectionProps) {
+  useRegistryVersion();
   const azureDeploymentName = useSettingsStore((s) => s.azureDeploymentName);
   const bedrockRegion = useSettingsStore((s) => s.bedrockRegion);
   const policyState = usePolicySnapshot();
@@ -53,7 +56,12 @@ export default function EnterpriseSection({
 
       const providerData = REASONING_PROVIDERS[providerId];
       if (providerData?.models?.length) {
-        const defaultModel = providerData.models[0].value;
+        const named = registryData.enterpriseProviders.find(
+          (p) => p.id === providerId
+        )?.defaultModel;
+        const defaultModel =
+          providerData.models.find((model) => model.value === named)?.value ??
+          providerData.models[0].value;
         setReasoningModel(
           providerId === "bedrock"
             ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)

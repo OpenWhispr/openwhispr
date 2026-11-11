@@ -28,6 +28,7 @@ async function mountUseAuth(t, { initialStorage }) {
     if (root) await React.act(async () => root.unmount());
   });
   const calls = {
+    chatPrepared: [],
     fetchPolicy: [],
     setActiveAccountScope: [],
     purge: 0,
@@ -58,6 +59,11 @@ async function mountUseAuth(t, { initialStorage }) {
             ? { accountId: binding.accountId, authGeneration: token.generation }
             : null,
         setActiveAccountScope: async (accountId, generation) => {
+          assert.equal(
+            calls.chatPrepared.at(-1),
+            accountId,
+            "chat ownership is fenced before main scope changes"
+          );
           calls.setActiveAccountScope.push([accountId, generation]);
           return { success: true };
         },
@@ -110,6 +116,10 @@ async function mountUseAuth(t, { initialStorage }) {
         };
       `,
       "/lib/spaceRosterCache": "export const invalidateSpaceRoster = () => {};",
+      "/stores/chatTurnStore": `
+        export function prepareChatAccountScope(accountId) { globalThis.__authTest.calls.chatPrepared.push(accountId); }
+        export function resetForAccountChange() {}
+      `,
       "/stores/noteStore": "export const resetForAccountChange = () => {};",
       "/stores/workspaceStore": `
         const calls = globalThis.__authTest.calls;
@@ -213,10 +223,35 @@ async function mountUseAuth(t, { initialStorage }) {
     await setSession({ data, isPending: false, error: new TypeError("network down") });
   };
 
+  // A TLS-inspecting proxy answers a refetch with its own 200 HTML page.
+  const proxyBlocks = async () => {
+    const data = globalThis.__authTest.session.data;
+    const request = await authContext.prepareAuthRequest({
+      url: SESSION_URL,
+      headers: new Headers(),
+    });
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response("<html>Blocked</html>", { headers: { "Content-Type": "text/html" } });
+    let error = null;
+    try {
+      await React.act(() =>
+        authContext.authContextFetch(request.url, request).catch((caught) => {
+          error = caught;
+        })
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+    await setSession({ data, isPending: false, error });
+    return error;
+  };
+
   return {
     calls,
     history,
     loseNetwork,
+    proxyBlocks,
     storage,
     authContext,
     goOffline,
@@ -384,4 +419,28 @@ test("losing the network mid-session shows the account read-only until the serve
     []
   );
   assert.equal(auth.storage.getItem("isSubscribed"), "true");
+});
+
+test("a proxy's 200 HTML page keeps the account signed in and purges nothing", async (t) => {
+  const auth = await mountUseAuth(t, { initialStorage: reconciledFor("user-a") });
+  await auth.answer(USER_A);
+  auth.history.length = 0;
+
+  assert.ok(await auth.proxyBlocks());
+
+  assert.equal(auth.result().isSignedIn, true);
+  assert.equal(auth.result().user.id, "user-a");
+  assert.equal(auth.authContext.getValidatedAuthGeneration(), null);
+  assert.equal(auth.calls.purge, 0);
+  assert.equal(auth.storage.getItem("openwhispr:accountScopeUserId"), "user-a");
+  assert.equal(JSON.parse(auth.storage.getItem(PROFILE_KEY)).id, "user-a");
+  assert.ok(!auth.calls.setIsSignedIn.includes(false));
+  assert.deepEqual(
+    auth.history.filter((state) => !state.isSignedIn),
+    []
+  );
+
+  await auth.answer(USER_A);
+  assert.equal(auth.authContext.getValidatedAuthGeneration(), 5);
+  assert.equal(auth.result().isOfflineAccount, false);
 });

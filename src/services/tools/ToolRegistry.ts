@@ -1,5 +1,7 @@
 import { jsonSchema } from "ai";
 import type { Tool, ToolExecutionOptions } from "ai";
+import type { InteractionRecord } from "../../types/agentInteractions";
+import type { ChatImageAttachment } from "../../components/chat/types";
 
 export interface ToolResult {
   success: boolean;
@@ -7,9 +9,10 @@ export interface ToolResult {
   displayText: string;
 }
 
-export interface HoldDeliveryOptions {
-  /** The tool may have put user content on the clipboard; don't copy the answer over it. */
-  preserveClipboard?: boolean;
+export interface CompletedActionOutcome {
+  status: "sent" | "unknown" | "draft_opened";
+  url?: string;
+  reference?: string;
 }
 
 /**
@@ -22,14 +25,7 @@ export interface ToolExecutionContext {
   toolCallId: string;
   /** Aborts when the turn is cancelled or its conversation ends. */
   signal: AbortSignal;
-  /** Tells the chat surface an approval card needs the user's attention. */
   onApprovalRequested: () => void;
-  /**
-   * The turn's answer must stay in the chat surface instead of being pasted at
-   * the user's caret: the tool opened something outside the app or needs the
-   * user to answer.
-   */
-  onHoldDelivery: (options?: HoldDeliveryOptions) => void;
   /**
    * Counts one use of `key` in this turn and reports whether it stays within
    * `limit`, so a tool can cap what one turn does (drafts opened, clipboard
@@ -38,6 +34,21 @@ export interface ToolExecutionContext {
   claimTurnSlot: (key: string, limit: number) => boolean;
   /** Gives back a claimed use of `key` whose action never happened. */
   releaseTurnSlot: (key: string) => void;
+  /** Tells the chat this call now waits on the user (pending), or no longer does (settled). */
+  onInteraction: (record: InteractionRecord) => void;
+  /** Shows the model an image (a screenshot the user allowed) from its next step on. */
+  attachImage: (image: ChatImageAttachment) => void;
+  /**
+   * Claims the send with this key for this call: false when this request
+   * already made it (or may have), or the same call is running now.
+   */
+  claimAction: (actionKey: string) => boolean;
+  /** Gives back a claim; completed actions are recorded under their final key. */
+  releaseAction: (actionKey: string) => void;
+  /** Records a claimed send that happened or may have, on its tool call. */
+  recordCompletedAction: (actionKey: string, outcome?: CompletedActionOutcome) => void;
+  /** Whether an earlier request in this conversation made this send (the user may want it again). */
+  sentEarlier: (actionKey: string) => boolean;
 }
 
 export interface ToolDefinition {

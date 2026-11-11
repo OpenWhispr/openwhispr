@@ -7,8 +7,49 @@
 const AUTH_TOKEN = "harness-token";
 const AUTH_GENERATION = 0;
 
+// Mirrors the push-ack and pull-write handlers: an ack sent, or a pulled row
+// fetched, under a sign-in that has since changed is dropped (isStaleSyncAck in
+// ipcHandlers.js).
+const STALE_SYNC_ACK = { success: false, changes: 0, stale: true };
+
 // syncAll() asserts the whole snippet surface exists before doing any work and
-// aborts the pass if a name is missing, so it is present but inert.
+// aborts the pass if a name is missing, so it is present but inert unless a
+// test opts into the real bindings with { snippets: true }.
+function snippetApi(db, authState) {
+  return {
+    getPendingSnippets: async () => db.getPendingSnippets(),
+    getPendingSnippetDeletes: async () => db.getPendingSnippetDeletes(),
+    getSnippetForCloudMerge: async (cloudEntry, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.getSnippetForCloudMerge(cloudEntry),
+    upsertSnippetFromCloud: async (cloudEntry, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertSnippetFromCloud(cloudEntry),
+    markSnippetSynced: async (
+      id,
+      cloudId,
+      serverUpdatedAt,
+      expectedTrigger,
+      expectedReplacement,
+      expectedAuthGeneration
+    ) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.markSnippetSynced(id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement),
+    hardDeleteSnippet: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteSnippet(id),
+    clearSnippetCloudId: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? { success: false, stale: true }
+        : db.clearSnippetCloudId(id),
+    keepNewerSnippetEdit: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.keepNewerSnippetEdit(id),
+    broadcastSnippetsUpdated: async () => ({ success: true }),
+  };
+}
+
 function inertSnippetApi() {
   return {
     getPendingSnippets: async () => [],
@@ -18,6 +59,7 @@ function inertSnippetApi() {
     markSnippetSynced: async () => ({ success: true, changes: 1 }),
     hardDeleteSnippet: async () => ({ success: true }),
     clearSnippetCloudId: async () => ({ success: true }),
+    keepNewerSnippetEdit: async () => ({ success: true }),
     broadcastSnippetsUpdated: async () => undefined,
   };
 }
@@ -45,17 +87,55 @@ function createElectronApi(db, options = {}) {
   // UI signals SyncService rebroadcasts through the main process
   // (space-revoked, note-relocated, …), recorded for assertions.
   const syncEvents = [];
+  // The account each sign-in was scoped to (scopedAccountByGeneration in
+  // ipcHandlers.js, written by set-active-account-scope). A test scopes the
+  // database before it uses a sign-in, so the first use stands in for that call.
+  const scopedAccounts = new Map();
+  const scopedAccount = (generation) => {
+    if (!scopedAccounts.has(generation)) scopedAccounts.set(generation, db.activeAccountId);
+    return scopedAccounts.get(generation);
+  };
+  // The main process's token generation. A test bumps it to stand in for an
+  // account switch while a pass is in flight.
+  const authState = {
+    generation: AUTH_GENERATION,
+    isReplaced: (expected) => expected !== authState.generation,
+    // As isStaleSyncAck: the sign-in was replaced, or the account it was scoped
+    // to is no longer the active one (a session revoked under the same token).
+    isStale: (expected) =>
+      authState.isReplaced(expected) || scopedAccount(expected) !== db.activeAccountId,
+  };
+  // As syncSenderAccount: a chat ack names the account it was sent as, accepted
+  // only when it is the one that sign-in was scoped to.
+  const syncSender = (accountId, generation) =>
+    typeof accountId === "string" && accountId && scopedAccount(generation) === accountId
+      ? accountId
+      : null;
 
   return {
     syncEvents,
+    authState,
 
     cloudApiRequest: async (opts) => {
       if (!cloud) throw new Error("no fake cloud wired into this electronAPI");
+      // Mirrors cloudApiRequest.js's fence: a request pinned to another
+      // sign-in is refused before it reaches the cloud.
+      if (!opts?.public && authState.isReplaced(opts?.expectedAuthGeneration)) {
+        return {
+          success: false,
+          error: "Authentication context changed",
+          code: "AUTH_CONTEXT_CHANGED",
+          requestSent: false,
+        };
+      }
       return cloud.request(opts);
     },
 
     // Auth
-    authGetTokenState: async () => ({ token: AUTH_TOKEN, generation: AUTH_GENERATION }),
+    authGetTokenState: async () => {
+      scopedAccount(authState.generation);
+      return { token: AUTH_TOKEN, generation: authState.generation };
+    },
 
     emitSyncEvent: async (name, payload) => {
       syncEvents.push({ name, payload });
@@ -68,6 +148,8 @@ function createElectronApi(db, options = {}) {
     getPendingNotes: async (spaceKind) => db.getPendingNotes(spaceKind),
     getPendingNoteDeletes: async () => db.getPendingNoteDeletes(),
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
+    getNoteForCloudRow: async (clientNoteId, cloudId) =>
+      db.getNoteForCloudRow(clientNoteId, cloudId),
     upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
       db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
     markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
@@ -133,6 +215,8 @@ function createElectronApi(db, options = {}) {
 
     // Spaces
     getSpaces: async () => db.getSpaces(),
+    hasOtherAccountRows: async () => db.hasOtherAccountRows(),
+    hasUnclaimedLegacyRows: async () => db.hasUnclaimedLegacyRows(),
     upsertSpaceFromCloud: async (cloudSpace) => db.upsertSpaceFromCloud(cloudSpace),
     setSpaceSyncStatus: async (id, status) => db.setSpaceSyncStatus(id, status),
     purgeSpace: async (id, purgeOptions) => {
@@ -155,36 +239,101 @@ function createElectronApi(db, options = {}) {
     getPendingConversations: async () => db.getPendingConversations(),
     getPendingConversationDeletes: async () => db.getPendingConversationDeletes(),
     getConversationByClientId: async (clientId) => db.getConversationByClientId(clientId),
-    upsertConversationFromCloud: async (cloudConv, messages) =>
-      db.upsertConversationFromCloud(cloudConv, messages),
-    markConversationCreateAttempted: async (id) => db.markConversationCreateAttempted(id),
-    acknowledgeConversationCreate: async (id, snapshot, cloudId) =>
-      db.acknowledgeConversationCreate(id, snapshot, cloudId),
-    markConversationSynced: async (id, cloudId) => db.markConversationSynced(id, cloudId),
-    hardDeleteConversation: async (id) => db.hardDeleteConversation(id),
+    claimConversationFromCloud: async (cloudConv, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.claimConversationFromCloud(cloudConv),
+    upsertConversationFromCloud: async (cloudConv, messages, snapshot, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertConversationFromCloud(cloudConv, messages, snapshot),
+    markConversationCreateAttempted: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.markConversationCreateAttempted(id),
+    clearConversationCreateAttempted: async (id) => db.clearConversationCreateAttempted(id),
+    acknowledgeConversationCreate: async (id, snapshot, cloudId, accountId, authGeneration) => {
+      const sender = syncSender(accountId, authGeneration);
+      if (!sender) return { success: false, outcome: "unresolved", cloud_id: null };
+      return db.acknowledgeConversationCreate(id, snapshot, cloudId, sender);
+    },
+    markConversationSynced: async (
+      id,
+      cloudId,
+      snapshot,
+      cloudUpdatedAt,
+      accountId,
+      authGeneration
+    ) => {
+      const sender = syncSender(accountId, authGeneration);
+      if (!sender) return { success: false };
+      return db.markConversationSynced(id, cloudId, snapshot, cloudUpdatedAt, sender);
+    },
+    replaceConversationClientId: async (id, expectedClientId, accountId, authGeneration) => {
+      const sender = syncSender(accountId, authGeneration);
+      if (!sender) return { success: false };
+      return db.replaceConversationClientId(id, expectedClientId, sender);
+    },
+    hardDeleteConversation: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteConversation(id),
 
     // Transcriptions
     getTranscriptionById: async (id) => db.getTranscriptionById(id),
     getPendingTranscriptions: async () => db.getPendingTranscriptions(),
     getPendingTranscriptionDeletes: async () => db.getPendingTranscriptionDeletes(),
     getTranscriptionByClientId: async (clientId) => db.getTranscriptionByClientId(clientId),
-    upsertTranscriptionFromCloud: async (cloudTranscription) =>
-      db.upsertTranscriptionFromCloud(cloudTranscription),
-    markTranscriptionSynced: async (id, cloudId) => db.markTranscriptionSynced(id, cloudId),
-    hardDeleteTranscription: async (id) => db.hardDeleteTranscription(id),
+    upsertTranscriptionFromCloud: async (cloudTranscription, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertTranscriptionFromCloud(cloudTranscription),
+    markTranscriptionSynced: async (id, cloudId, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.markTranscriptionSynced(id, cloudId),
+    hardDeleteTranscription: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteTranscription(id),
 
     // Dictionary
     getPendingDictionary: async () => db.getPendingDictionary(),
     getPendingDictionaryDeletes: async () => db.getPendingDictionaryDeletes(),
     getDictionaryByClientId: async (clientDictId) => db.getDictionaryEntryByClientId(clientDictId),
-    upsertDictionaryFromCloud: async (cloudEntry) => db.upsertDictionaryFromCloud(cloudEntry),
-    markDictionarySynced: async (...args) => db.markDictionaryEntrySynced(...args),
-    hardDeleteDictionary: async (id) => db.hardDeleteDictionaryEntry(id),
-    clearDictionaryCloudId: async (id) => db.clearDictionaryCloudId(id),
+    upsertDictionaryFromCloud: async (cloudEntry, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertDictionaryFromCloud(cloudEntry),
+    markDictionarySynced: async (
+      id,
+      cloudId,
+      serverUpdatedAt,
+      expectedWord,
+      expectedSource,
+      serverSource,
+      pushed,
+      expectedAuthGeneration
+    ) =>
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.markDictionaryEntrySynced(
+            id,
+            cloudId,
+            serverUpdatedAt,
+            expectedWord,
+            expectedSource,
+            serverSource,
+            pushed
+          ),
+    hardDeleteDictionary: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteDictionaryEntry(id),
+    clearDictionaryCloudId: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration)
+        ? { success: false, stale: true }
+        : db.clearDictionaryCloudId(id),
+    keepNewerDictionaryEdit: async (id, expectedAuthGeneration) =>
+      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.keepNewerDictionaryEdit(id),
     // The real handler re-reads the words to broadcast them; there are no windows here.
     broadcastDictionaryUpdated: async () => ({ success: true }),
 
-    ...inertSnippetApi(),
+    ...(options.snippets ? snippetApi(db, authState) : inertSnippetApi()),
     ...inertAnalyticsApi(),
   };
 }

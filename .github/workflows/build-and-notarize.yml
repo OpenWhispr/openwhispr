@@ -43,6 +43,11 @@ jobs:
         run: npm run i18n:check
       - name: Audit dependencies
         run: npm audit --audit-level=high
+      - name: Install Linux native test dependencies
+        if: ${{ !cancelled() }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libatspi2.0-dev libglib2.0-dev libx11-dev libxtst-dev libxext-dev xvfb
       - name: Build better-sqlite3 for the runner's node
         # --ignore-scripts skips the native build; DB-backed tests silently
         # skip without it. This job is the only test gate on push to main.
@@ -65,7 +70,18 @@ jobs:
   build-linux:
     needs: quality
     if: needs.quality.outputs.build == 'true'
-    runs-on: ubuntu-latest
+    # SQLite is compiled here and links the runner's glibc: on 24.04 or later it
+    # needs GLIBC_2.38 and the app no longer starts on Ubuntu 22.04 (#3114). The
+    # 26.04 runner's amd64v3 loader also cannot run the older-CPU checks.
+    runs-on: ubuntu-22.04
+    env:
+      # SQLite is loaded before windows open, including on CPUs without AVX2 (#3038).
+      CFLAGS: "-march=x86-64 -mtune=generic"
+      CXXFLAGS: "-march=x86-64 -mtune=generic"
+      # gcc 11 and 12 on this runner reject Electron 43's V8 headers; clang 15 ships with it.
+      CC: clang-15
+      CXX: clang++-15
+      OPENWHISPR_VERIFY_SQLITE_BASELINE: "1"
     steps:
       - uses: actions/checkout@v7
 
@@ -125,7 +141,7 @@ jobs:
       - name: Install Linux build and packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config
+          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config qemu-user libgtk-3-0 libnss3 libasound2
 
       - name: Create runtime env
         run: |
@@ -179,6 +195,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify Windows hotwords file ACLs
+        run: >-
+          node --import tsx --test --test-name-pattern="current-user-only ACL"
+          test/helpers/parakeetWsStartup.test.js
 
       - name: Install platform-specific native binaries
         run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save

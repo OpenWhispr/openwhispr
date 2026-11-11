@@ -6,6 +6,7 @@ import {
   type TransferEvent,
   type TransferState,
 } from "../../lib/workspaceTransferFlow";
+import { rosterFor } from "../../lib/peopleRoster";
 import { serverRefusalMessage } from "../../services/cloudApi";
 import { transferOwnership } from "../../services/workspaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
@@ -42,7 +43,8 @@ export function TransferOwnershipDialog({
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const members = useWorkspaceStore((s) => s.members);
+  const members = useWorkspaceStore((s) => rosterFor(s, workspace.id));
+  const rosterIsOurs = useWorkspaceStore((s) => s.membersWorkspaceId === workspace.id);
   const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
   const [load, setLoad] = useState<RosterLoad>("idle");
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -79,7 +81,11 @@ export function TransferOwnershipDialog({
   if (state.kind === "closed") return null;
 
   const status: "loading" | "error" | "ready" =
-    load === "error" ? "error" : load === "loaded" ? "ready" : "loading";
+    load === "error" || (load === "loaded" && !rosterIsOurs)
+      ? "error"
+      : load === "loaded"
+        ? "ready"
+        : "loading";
 
   // Looked up in the whole roster: once the transfer lands the new owner is no
   // longer a candidate, but the dialog still names them until it closes.

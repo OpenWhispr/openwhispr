@@ -653,3 +653,15 @@ test("All words groups spellings dictation treats as one word, Unicode forms inc
     ["personal"]
   );
 });
+
+test("in Personal a member is asked to choose a workspace, not to upgrade", () => {
+  const input = {
+    status: "ready",
+    signedIn: true,
+    workspace: null,
+    serverPaused: null,
+    hasWords: false,
+  };
+  assert.equal(resolveSharedAccessState({ ...input, personalSelected: true }), "chooseWorkspace");
+  assert.equal(resolveSharedAccessState(input), "noWorkspace");
+});

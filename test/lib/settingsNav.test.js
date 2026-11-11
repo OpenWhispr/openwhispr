@@ -31,12 +31,38 @@ test("signed out shows no workspace group", async () => {
   ]);
 });
 
-test("member sees General and People, no Developer", async () => {
+test("member sees General, People and Teamspaces, no Developer", async () => {
   const { buildSettingsNav } = await load();
 
   const nav = buildSettingsNav(SIGNED_IN_MEMBER);
 
-  assert.deepEqual(ids(nav, "workspace"), ["workspaceGeneral", "workspacePeople"]);
+  assert.deepEqual(ids(nav, "workspace"), [
+    "workspaceGeneral",
+    "workspacePeople",
+    "workspaceTeamspaces",
+  ]);
+});
+
+test("everyone with a workspace sees Teamspaces, in order", async () => {
+  const { buildSettingsNav } = await load();
+
+  // Teamspaces needs no capability: members read the list and join open ones.
+  for (const canManageSettings of [false, true]) {
+    const nav = buildSettingsNav({ isSignedIn: true, hasWorkspace: true, canManageSettings });
+
+    assert.deepEqual(
+      ids(nav, "workspace").slice(0, 3),
+      ["workspaceGeneral", "workspacePeople", "workspaceTeamspaces"],
+      `canManageSettings: ${canManageSettings}`
+    );
+  }
+
+  for (const input of [
+    { isSignedIn: true, hasWorkspace: false, canManageSettings: true },
+    { isSignedIn: false, hasWorkspace: false, canManageSettings: false },
+  ]) {
+    assert.ok(!ids(buildSettingsNav(input)).includes("workspaceTeamspaces"));
+  }
 });
 
 test("admin sees Developer last in the workspace group", async () => {
@@ -47,6 +73,7 @@ test("admin sees Developer last in the workspace group", async () => {
   assert.deepEqual(ids(nav, "workspace"), [
     "workspaceGeneral",
     "workspacePeople",
+    "workspaceTeamspaces",
     "workspaceDeveloper",
   ]);
   assert.deepEqual(
@@ -57,6 +84,7 @@ test("admin sees Developer last in the workspace group", async () => {
       "account",
       "account",
       "account",
+      "workspace",
       "workspace",
       "workspace",
       "workspace",
@@ -123,6 +151,30 @@ test("hidden Developer falls back to General", async () => {
   );
 });
 
+test("a deep link without a workspace lands on the workspace group", async () => {
+  const { buildSettingsNav, resolveSettingsSection } = await load();
+
+  const noWorkspace = buildSettingsNav({
+    isSignedIn: true,
+    hasWorkspace: false,
+    canManageSettings: false,
+  });
+
+  assert.equal(resolveSettingsSection("workspaceTeamspaces", noWorkspace), "workspaceGeneral");
+  assert.equal(
+    resolveSettingsSection("workspaceTeamspaces", buildSettingsNav(SIGNED_IN_MEMBER)),
+    "workspaceTeamspaces"
+  );
+  // Signed out there is no workspace group to land in.
+  assert.equal(
+    resolveSettingsSection(
+      "workspaceTeamspaces",
+      buildSettingsNav({ isSignedIn: false, hasWorkspace: false, canManageSettings: false })
+    ),
+    "account"
+  );
+});
+
 test("legacy AI aliases still resolve", async () => {
   const { buildSettingsNav, resolveSettingsSection, LEGACY_SUB_TAB } = await load();
 
@@ -135,4 +187,13 @@ test("legacy AI aliases still resolve", async () => {
   assert.equal(resolveSettingsSection(undefined, nav), "account");
   assert.equal(resolveSettingsSection("noSuchSection", nav), "account");
   assert.equal(LEGACY_SUB_TAB.agentMode, "chatIntelligence");
+});
+
+test("a meeting's refusal opens Speech-to-Text on its Note Recording tab", async () => {
+  const nav = await load();
+  const { isProviderSettingsTarget } = await import("../../src/helpers/providerHttpErrors.js");
+
+  assert.equal(isProviderSettingsTarget("noteRecording"), true);
+  assert.equal(nav.SECTION_ALIASES.noteRecording, "speechToText");
+  assert.equal(nav.LEGACY_SUB_TAB.noteRecording, "noteRecording");
 });

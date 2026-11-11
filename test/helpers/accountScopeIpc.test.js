@@ -9,7 +9,7 @@ const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 
 // Registers the real handler closures against a fake `this` (the scaffolding
-// from agentDictationPillIpc.test.js) with the bearer state under test control
+// from windowIpcSenders.test.js) with the bearer state under test control
 // and the binding file in a temporary userData directory, so the scope
 // handlers run against the real accountScopeBinding.
 const handlers = new Map();
@@ -288,12 +288,15 @@ async function signOutUpdater(t, generation) {
     tokenState = previousTokenState;
   });
   tokenState = { token: `sign-out-token-${generation}`, generation };
-  fakeThis.databaseManager = {
-    activeAccountId: "departing-account",
-    setActiveAccountId(accountId) {
-      this.activeAccountId = accountId;
+  fakeThis.databaseManager = new Proxy(
+    {
+      activeAccountId: "departing-account",
+      setActiveAccountId(accountId) {
+        this.activeAccountId = accountId;
+      },
     },
-  };
+    { get: (value, property) => (property in value ? value[property] : anything()) }
+  );
   const win = {
     isDestroyed: () => false,
     webContents: { session: { cookies: { get: async () => [] } } },
@@ -505,27 +508,35 @@ test("senderless audio policy uses the current bearer or a live app window's coo
   const windowWithCookie = (value, destroyed = false) => ({
     isDestroyed: () => destroyed,
     webContents: {
-      session: { cookies: { get: async () => (value ? [{ name: "session", value }] : []) } },
+      session: {
+        cookies: { get: async () => (value ? [{ name: "openwhispr.session_token", value }] : []) },
+      },
     },
   });
   const renderer = windowWithCookie("renderer-session");
   t.mock.method(electronStub.BrowserWindow, "fromWebContents", () => renderer);
   for (const [token, controlPanel, main, event, expected] of [
     ["cli-bearer", null, null, {}, { Authorization: "Bearer cli-bearer" }],
-    [null, windowWithCookie("control-session"), null, {}, { Cookie: "session=control-session" }],
+    [
+      null,
+      windowWithCookie("control-session"),
+      null,
+      {},
+      { Cookie: "openwhispr.session_token=control-session" },
+    ],
     [
       null,
       windowWithCookie("stale", true),
       windowWithCookie("main-session"),
       {},
-      { Cookie: "session=main-session" },
+      { Cookie: "openwhispr.session_token=main-session" },
     ],
     [
       null,
       windowWithCookie("control-session"),
       null,
       { sender: {} },
-      { Cookie: "session=renderer-session" },
+      { Cookie: "openwhispr.session_token=renderer-session" },
     ],
     [null, windowWithCookie(""), null, {}, null],
   ]) {
