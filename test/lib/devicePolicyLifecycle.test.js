@@ -67,7 +67,6 @@ test("device management survives sign-out and an invalid policy recovers without
   });
   await emit(current);
   assert.equal(store.getState().code, undefined);
-  store.getState().clearPolicy();
   await store.getState().bootstrap();
   assert.equal(store.getState().localOnly, true);
   assert.equal(store.getState().deviceManaged, true);
@@ -303,7 +302,7 @@ test("a same-account verdict still loading keeps the settled one and its running
       code: "POLICY_LOADING",
     })
   );
-  store.getState().clearPolicy();
+  void store.getState().bootstrap();
   assert.equal(store.getState().status, "unmanaged");
   assert.equal(store.getState().authGeneration, 2);
   finishBody.enqueue(new TextEncoder().encode("transcript"));

@@ -198,7 +198,7 @@ test("a same-account token rotation never ends a running stream, whatever its tr
         assert.equal(sdk ? first.value.text : first.value, "first");
 
         generation += 1;
-        void usePolicyStore.getState().fetchPolicy("same", generation);
+        void usePolicyStore.getState().bootstrap();
         broadcastPolicy({
           success: false,
           status: "loading",

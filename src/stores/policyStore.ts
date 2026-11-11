@@ -19,11 +19,6 @@ export interface PolicyState extends PolicyDecisionSnapshot {
   requireSignIn: boolean;
   code?: string;
   bootstrap: () => Promise<void>;
-  // Main owns the effective verdict and broadcasts every account change, so
-  // these only ask it for the current one.
-  fetchPolicy: (accountId: string, authGeneration: number) => Promise<void>;
-  clearPolicy: () => void;
-  suspendPolicy: () => void;
 }
 
 let lifecycleListenersReady = false;
@@ -142,7 +137,4 @@ export const usePolicyStore = create<PolicyState>()(() => ({
   managed: false,
   policy: null,
   appVersion: null,
-  fetchPolicy: refreshEffectivePolicy,
-  clearPolicy: (): void => void refreshEffectivePolicy(),
-  suspendPolicy: (): void => void refreshEffectivePolicy(),
 }));
