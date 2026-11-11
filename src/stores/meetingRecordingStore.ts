@@ -94,6 +94,8 @@ interface SpeakerIdentification {
   displayName?: string | null;
   startTime: number;
   endTime: number;
+  /** An earlier window of a voice main just confirmed; it relabels rows but isn't the current speaker. */
+  retroactive?: boolean;
 }
 
 interface RecentSystemSpeaker {
@@ -745,13 +747,33 @@ function applySpeakerIdentification(
     return segment;
   }
 
+  // A provisional row can carry the previous speaker's name; it stays with that speaker.
+  const keptName = segment.speaker === identification.speakerId ? segment.speakerName : undefined;
   return normalizeTranscriptSegment({
     ...segment,
     speaker: identification.speakerId,
-    speakerName: identification.displayName ?? segment.speakerName,
+    speakerName: identification.displayName ?? keptName,
     speakerIsPlaceholder: false,
     speakerStatus: "confirmed",
   });
+}
+
+// A provisional system row was only carried onto its speaker, so it shows the
+// user's name for them but stays movable until an identification confirms it.
+function applyUserSpeakerName(segment: TranscriptSegment): TranscriptSegment {
+  if (segment.speakerLocked || !segment.speaker) return segment;
+  const lockedName = speakerLocks.get(segment.speaker);
+  if (!lockedName) return segment;
+  const patch = {
+    speakerName: lockedName,
+    speakerIsPlaceholder: false,
+    suggestedName: undefined,
+    suggestedProfileId: undefined,
+  };
+  if (segment.source === "system" && segment.speakerStatus !== "confirmed") {
+    return normalizeTranscriptSegment({ ...segment, ...patch });
+  }
+  return lockTranscriptSpeaker(segment, patch);
 }
 
 function rememberSystemSpeaker(
@@ -794,9 +816,10 @@ function adoptSpeakerIndexBase(base: number | undefined): void {
   nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, base);
 }
 
-// Other-speaker cap is expectedCount - 1 (the mic track is "you"); mirrors the
-// backend cap so live labels can't climb past the count the user expects. The
-// cap counts this session's speakers, so it starts at the session's base.
+// Other-speaker cap is expectedCount - 1 (the mic track is "you"), so live labels
+// can't climb past the count on the stepper. With no count set the stepper follows
+// main's confirmed speakers, so the cap only reaches ids main already confirmed.
+// The cap counts this session's speakers, so it starts at the session's base.
 function mintPlaceholderSpeakerId(): string {
   const expected = useMeetingRecordingStore.getState().sessionExpectedCount;
   const cap = Math.max(1, expected - 1);
@@ -1464,17 +1487,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
                 }
                 const provisional = assignProvisionalSpeaker(decorated);
                 reserveSpeakerIndex(provisional.speaker);
-                const lockedName = provisional.speaker
-                  ? speakerLocks.get(provisional.speaker)
-                  : undefined;
-                return lockedName
-                  ? lockTranscriptSpeaker(provisional, {
-                      speakerName: lockedName,
-                      speakerIsPlaceholder: false,
-                      suggestedName: undefined,
-                      suggestedProfileId: undefined,
-                    })
-                  : provisional;
+                return applyUserSpeakerName(provisional);
               },
             }
           );
@@ -1534,15 +1547,18 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       const speakerCleanup = window.electronAPI?.onMeetingSpeakerIdentified?.((data) => {
         if (activeRecordingSessionId !== sessionId) return;
         reserveSpeakerIndex(data.speakerId);
-        setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
-        rememberSystemSpeaker(data.speakerId, data.displayName ?? null, false, data.endTime);
+        if (!data.retroactive) {
+          setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
+          rememberSystemSpeaker(data.speakerId, data.displayName ?? null, false, data.endTime);
+        }
         speakerIdentifications = [
           ...pruneIdentifications(speakerIdentifications, data.endTime),
           data,
         ];
-        const next = useMeetingRecordingStore
-          .getState()
-          .segments.map((segment) => applySpeakerIdentification(segment, data));
+        const next = useMeetingRecordingStore.getState().segments.map((segment) => {
+          const identified = applySpeakerIdentification(segment, data);
+          return identified === segment ? segment : applyUserSpeakerName(identified);
+        });
         segmentsRefValue = next;
         useMeetingRecordingStore.setState({ segments: next });
       });
@@ -1628,10 +1644,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       if (systemAudioSilentCleanup) ipcCleanups.push(systemAudioSilentCleanup);
 
       // Main re-derives the expected count when participants are added mid-meeting
-      // (never for a count set explicitly via the stepper — main skips those).
+      // (never for a count set explicitly via the stepper — main skips those), and
+      // with no count set it follows the confirmed speakers (`auto`) until a press.
       const speakerConfigCleanup = window.electronAPI?.onMeetingSessionSpeakerConfigUpdated?.(
         (config) => {
           if (activeRecordingSessionId !== sessionId) return;
+          if (config.auto && useMeetingRecordingStore.getState().userTouchedStepper) return;
           const clamped = Math.max(1, Math.min(MAX_SPEAKER_COUNT, config.expectedCount));
           useMeetingRecordingStore.setState({ sessionExpectedCount: clamped });
         }
