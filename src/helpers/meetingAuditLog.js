@@ -28,7 +28,6 @@ const STOP_REASONS = new Set([
   "error",
   "window-lost",
   "app-quit",
-  "interrupted",
 ]);
 const REFUSAL_REASONS = new Set([...AUDIO_POLICY_REFUSAL_CODES, "policyRestricted"]);
 
@@ -74,7 +73,7 @@ function createMeetingAuditLog({
   const warnOnce = (message, meta) => {
     if (warned.has(message)) return;
     warned.add(message);
-    logger?.warn?.(message, meta);
+    logger.warn(message, meta);
   };
 
   const enqueue = (task) => {
@@ -168,7 +167,6 @@ function createMeetingAuditLog({
 
   function recordingStarted({ sessionId, noteId, trigger }) {
     if (!isEnabled()) return;
-    clearInterval(checkpointTimer);
     const startedAt = now();
     const open = {
       sessionId,
@@ -232,8 +230,8 @@ function createMeetingAuditLog({
     },
 
     // A quit ends a live recording with the app, before its session is torn down.
-    closeOpenSession(reason) {
-      if (session) recordingStopped({ sessionId: session.sessionId, reason });
+    closeOpenSession() {
+      if (session) recordingStopped({ sessionId: session.sessionId, reason: "app-quit" });
       return queue;
     },
 

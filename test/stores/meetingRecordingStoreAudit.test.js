@@ -128,7 +128,7 @@ test("a start the renderer refuses is reported to main with its code", async (t)
 
   assert.deepEqual(calls.starts, []);
   assert.deepEqual(calls.refusals, [
-    { noteId: NOTE_ID, trigger: "record-button", reason: "POLICY_MEETING_RECORDING_DISABLED" },
+    { noteId: NOTE_ID, startSource: "record-button", reason: "POLICY_MEETING_RECORDING_DISABLED" },
   ]);
 });
 
@@ -141,6 +141,6 @@ test("a start the administrator's managed preference disables is reported to mai
 
   assert.deepEqual(calls.starts, []);
   assert.deepEqual(calls.refusals, [
-    { noteId: NOTE_ID, trigger: "new-note", reason: "POLICY_MEETING_RECORDING_DISABLED" },
+    { noteId: NOTE_ID, startSource: "new-note", reason: "POLICY_MEETING_RECORDING_DISABLED" },
   ]);
 });

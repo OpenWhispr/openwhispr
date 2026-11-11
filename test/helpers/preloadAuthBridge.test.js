@@ -79,7 +79,7 @@ test("meeting stop forwards the optional expected recording session ID and stop 
 
 test("a meeting start the renderer refuses is forwarded for the audit log", async () => {
   const { api, invocations } = loadPreloadApi();
-  const details = { noteId: 4, trigger: "record-button", reason: "POLICY_UNRESOLVABLE" };
+  const details = { noteId: 4, startSource: "record-button", reason: "POLICY_UNRESOLVABLE" };
 
   await api.meetingRecordingRefused(details);
 

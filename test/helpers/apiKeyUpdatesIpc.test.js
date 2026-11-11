@@ -1350,7 +1350,7 @@ test("meeting starts, stops and refusals reach the audit log with their source a
   await invoke("start-manual-meeting");
   await invoke("meeting-recording-refused", {
     noteId: 3,
-    trigger: "new-note",
+    startSource: "new-note",
     reason: "policyRestricted",
   });
 
@@ -1361,7 +1361,7 @@ test("meeting starts, stops and refusals reach the audit log with their source a
     ["started", { sessionId: "audit-2", noteId: 12, trigger: "record-button" }],
     ["stopped", { sessionId: "audit-2", reason: "policy" }],
     ["refused", { noteId: 12, trigger: "record-button", reason: disabled }],
-    ["refused", { noteId: null, trigger: "pill", reason: disabled }],
+    ["refused", { noteId: undefined, trigger: "pill", reason: disabled }],
     ["refused", { noteId: 3, trigger: "new-note", reason: "policyRestricted" }],
   ]);
 });

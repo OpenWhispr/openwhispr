@@ -907,7 +907,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     reportMeetingError(refusal);
     void window.electronAPI?.meetingRecordingRefused?.({
       noteId: args.noteId,
-      trigger: args.startSource,
+      startSource: args.startSource,
       reason: refusal,
     });
     return false;
@@ -917,7 +917,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     reportMeetingError("policyRestricted");
     void window.electronAPI?.meetingRecordingRefused?.({
       noteId: args.noteId,
-      trigger: args.startSource,
+      startSource: args.startSource,
       reason: "POLICY_MEETING_RECORDING_DISABLED",
     });
     return false;
@@ -1809,9 +1809,9 @@ export async function stopRecording(
   expectedSessionId?: string,
   reason: MeetingStopReason = "user"
 ): Promise<StopRecordingResult> {
-  startCancelReason = reason;
   const canceledStart = meetingRecordingStartCoordinator.cancelActiveStart(expectedSessionId);
   if (canceledStart) {
+    startCancelReason = reason;
     isRecordingFlag = false;
     isStartingFlag = false;
     useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });

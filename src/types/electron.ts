@@ -3505,7 +3505,7 @@ declare global {
       isMeetingRecordingDisabled?: () => Promise<boolean>;
       meetingRecordingRefused?: (details: {
         noteId: number | null;
-        trigger?: MeetingStartSource;
+        startSource?: MeetingStartSource;
         reason: string;
       }) => Promise<void>;
       meetingTranscriptionSend?: (

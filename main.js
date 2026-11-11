@@ -2211,7 +2211,7 @@ if (gotSingleInstanceLock) {
     Promise.allSettled([
       sidecarRegistry.shutdownAll(),
       Promise.race([
-        meetingAuditLog?.closeOpenSession("app-quit"),
+        meetingAuditLog?.closeOpenSession(),
         new Promise((resolve) => setTimeout(resolve, 1500)),
       ]),
       Promise.race([

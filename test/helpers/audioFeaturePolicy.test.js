@@ -478,7 +478,7 @@ test("a managed-setup error reaches the meeting start result with its translatio
 
 // #3029: a refusal made before anything started is reported for the audit log,
 // whether the policy was already loaded or landed while the start waited for it.
-test("onRefused hears only a refusal made before the handler ran", async () => {
+test("onRefused hears a refusal made before the handler ran", async () => {
   let allowed = false;
   const guard = createAudioFeaturePolicy({ getPolicy: async () => policy(allowed) });
   const refused = [];

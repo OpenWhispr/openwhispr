@@ -1872,7 +1872,7 @@ class IPCHandlers {
           onRefused: onRefused && ((failure) => onRefused(failure, options)),
         })
       );
-    const auditMeetingRefusal = ({ code }, trigger, noteId = null) =>
+    const auditMeetingRefusal = ({ code }, trigger, noteId) =>
       this.meetingAuditLog?.recordingRefused({ noteId, trigger, reason: code });
     // Runs a job under the audio policy and the caller's own cancellation
     // ({ signal, release }); the handler gets one signal for both.
@@ -11145,8 +11145,8 @@ class IPCHandlers {
     );
 
     // The renderer refuses some starts itself, before asking main.
-    ipcMain.handle("meeting-recording-refused", (_event, details = {}) => {
-      this.meetingAuditLog?.recordingRefused(details);
+    ipcMain.handle("meeting-recording-refused", (_event, { noteId, startSource, reason } = {}) => {
+      this.meetingAuditLog?.recordingRefused({ noteId, trigger: startSource, reason });
     });
 
     ipcMain.handle("meeting-transcription-stop", async (event, expectedSessionId, reason) => {

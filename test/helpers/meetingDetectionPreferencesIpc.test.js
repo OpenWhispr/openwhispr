@@ -192,7 +192,10 @@ test("a refused notification Join still opens the meeting and refuses only the r
   assert.equal(joined.code, "POLICY_MEETING_RECORDING_DISABLED");
   assert.deepEqual(calls, [
     ["open", owner],
-    ["refused", { noteId: null, trigger: "prompt", reason: "POLICY_MEETING_RECORDING_DISABLED" }],
+    [
+      "refused",
+      { noteId: undefined, trigger: "prompt", reason: "POLICY_MEETING_RECORDING_DISABLED" },
+    ],
   ]);
 
   // A join-only card's Join records nothing, so the policy has no say in it.
