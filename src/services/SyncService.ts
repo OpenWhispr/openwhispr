@@ -178,6 +178,10 @@ const SYNC_ALL_LOCK = "openwhispr-sync-all";
 // once from the same base revision, and the server refuses whichever lands
 // second (409).
 const NOTE_PUSH_LOCK_PREFIX = "openwhispr-note-push:";
+// How long a sync pass waits for a note's push lock. It holds SYNC_ALL_LOCK
+// meanwhile, so a debounced push whose answer never comes must not stop every
+// sync; the note waits for the next pass instead.
+const NOTE_PUSH_LOCK_PASS_WAIT_MS = 10_000;
 // Pull cursors this device stamped on the server's clock (see serverClock).
 // Without this marker they came from the device's own clock.
 const SERVER_CLOCK_CURSORS_KEY = "syncCursors.serverClock";
@@ -1480,7 +1484,8 @@ export class SyncService {
   // Returns true when the server refused the edit and denied rows need restoring.
   private async pushNoteLocked(id: number): Promise<boolean> {
     const note = await window.electronAPI.getNote?.(id);
-    if (!note) return false;
+    // Synced: a pass sent it while this push waited for the lock.
+    if (!note || note.sync_status === "synced") return false;
     if (!(await this.settleOwnNoteConflict(note))) {
       // An unresolved conflict: the editor's debounced push would auto-resolve
       // it as local-wins (or 409-spam) before the user chose Keep or Refresh.
@@ -2207,9 +2212,11 @@ export class SyncService {
 
   // A pull found a newer cloud copy over unpushed local edits. A push of the
   // note may still be waiting for its answer, which can show that copy was this
-  // device's own write, so decide only once any such push has settled.
+  // device's own write, so decide only once any such push has settled. One that
+  // doesn't settle in time raises a real conflict itself: its own 409, or the
+  // next push's.
   private async surfacePulledNoteConflict(local: NoteItem, cloudNote: CloudNote): Promise<void> {
-    await this.withNotePushLock(local.id, async () => {
+    await this.withNotePushLocks([local.id], async () => {
       const current = await window.electronAPI.getNote?.(local.id);
       if (current && isStaleNoteConflict(current, cloudNote)) return;
       await this.surfaceNoteConflict(local.client_note_id, cloudNote);
@@ -2229,15 +2236,30 @@ export class SyncService {
 
   // Web Locks aren't re-entrant: nothing run under a note's lock may ask for
   // it again, and a pull (which takes note locks) never runs under one.
-  private withNotePushLock<T>(localId: number, task: () => Promise<T>): Promise<T> {
-    return navigator.locks.request(`${NOTE_PUSH_LOCK_PREFIX}${localId}`, task);
+  private withNotePushLock<T>(
+    localId: number,
+    task: () => Promise<T>,
+    signal?: AbortSignal
+  ): Promise<T> {
+    return navigator.locks.request(`${NOTE_PUSH_LOCK_PREFIX}${localId}`, { signal }, task);
   }
 
-  // Taken in id order, so two holders of overlapping sets can't deadlock.
-  private withNotePushLocks<T>(localIds: number[], task: () => Promise<T>): Promise<T> {
-    const [first, ...rest] = [...new Set(localIds)].sort((a, b) => a - b);
-    if (first === undefined) return task();
-    return this.withNotePushLock(first, () => this.withNotePushLocks(rest, task));
+  // A sync pass's note locks, taken in id order so two holders of overlapping
+  // sets can't deadlock. After NOTE_PUSH_LOCK_PASS_WAIT_MS the pass leaves
+  // these notes to the next one.
+  private async withNotePushLocks(localIds: number[], task: () => Promise<void>): Promise<void> {
+    const wait = new AbortController();
+    const timer = setTimeout(() => wait.abort(), NOTE_PUSH_LOCK_PASS_WAIT_MS);
+    const take = ([first, ...rest]: number[]): Promise<void> =>
+      first === undefined ? task() : this.withNotePushLock(first, () => take(rest), wait.signal);
+    try {
+      await take([...new Set(localIds)].sort((a, b) => a - b));
+    } catch (err) {
+      // Anything but the wait running out still propagates.
+      if (!wait.signal.aborted || err !== wait.signal.reason) throw err;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   private async settleNoteConflict(clientNoteId: string): Promise<void> {
@@ -2816,7 +2838,7 @@ export class SyncService {
 
     let denied = false;
     for (const { note: queued } of migration) {
-      await this.withNotePushLock(queued.id, async () => {
+      await this.withNotePushLocks([queued.id], async () => {
         // A debounced push may have sent the note while this pass waited for
         // its lock: read it again, so the PATCH carries the base it left.
         const note = await window.electronAPI.getNote?.(queued.id);

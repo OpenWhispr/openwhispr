@@ -15,6 +15,8 @@ const {
   enableSync,
   establishValidatedAuth,
   stopSyncTimers,
+  localStorage: localStorageStub,
+  navigator: navigatorStub,
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
@@ -122,6 +124,98 @@ test("a debounced push and a full pass never send one note's base twice", async 
   assert.equal(cloud.note(note.cloud_id).content, "first line\nsecond line\nthird");
   assert.equal(db.getNote(note.id).sync_status, "synced");
   assert.equal(db.getNote(note.id).cloud_revision, 2);
+});
+
+// The reported setup: a Free account, so no backup and only team passes, and a
+// note in a team space. The fake cloud keeps no spaces, so this serves the one
+// space and files every listed note in it.
+async function freeTeamNote(ctx) {
+  const { db, api, service } = ctx;
+  localStorageStub.removeItem("cloudBackupEnabled");
+  localStorageStub.removeItem("isSubscribed");
+  assert.equal(service.canSync(), false, "its passes are team-only");
+  db.setActiveAccountId("user-harness");
+  const space = {
+    id: "cloud-space",
+    workspace_id: "workspace",
+    name: "Team",
+    slug: "team",
+    description: null,
+    emoji: null,
+    my_role: "member",
+    my_direct_role: "member",
+    member_count: 2,
+    teams: [],
+    created_at: "2026-11-01T00:00:00.000Z",
+    updated_at: "2026-11-01T00:00:00.000Z",
+  };
+  const localSpace = db.upsertSpaceFromCloud(space);
+  db.setSpaceSyncStatus(localSpace.id, "synced");
+  const forward = api.cloudApiRequest;
+  api.cloudApiRequest = async (options) => {
+    if (options.path === "/api/me/spaces") return { success: true, data: { data: [space] } };
+    const response = await forward(options);
+    if (!options.path.startsWith("/api/notes/list") || !response.success) return response;
+    const notes = response.data.notes.map((note) => ({
+      ...note,
+      space_id: space.id,
+      user_id: "user-harness",
+    }));
+    return { ...response, data: { notes } };
+  };
+
+  const note = db.saveNote(
+    "Standup",
+    "first line",
+    "meeting",
+    null,
+    null,
+    null,
+    localSpace.id
+  ).note;
+  await service.syncAll(true);
+  const synced = db.getNote(note.id);
+  assert.ok(synced.cloud_id, "the team note reaches the cloud");
+  assert.equal(synced.cloud_revision, 0);
+  assert.equal(synced.sync_status, "synced");
+  return synced;
+}
+
+test("a Free account's team note never sends one base twice, in either order", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const note = await freeTeamNote(ctx);
+  const bases = () => cloud.logFor("/api/notes/update").map((call) => call.body.base_revision);
+
+  // A debounced push is out when the team pass reaches the note.
+  edit(db, note.id, "first line\nsecond line");
+  let held = holdRequest(api, isNotePatch);
+  const debounced = service.pushNote(note.id);
+  await held.arrived;
+  edit(db, note.id, "first line\nsecond line\nthird");
+  const pass = service.syncAll(true);
+  await settle();
+  held.release();
+  await Promise.all([debounced, pass]);
+  assert.deepEqual(bases(), [0, 1]);
+
+  // The team pass is out when a debounced push of the same text comes due:
+  // the pass has sent it, so the push has nothing left to send.
+  edit(db, note.id, "first line\nsecond line\nthird\nfourth");
+  held = holdRequest(api, isNotePatch);
+  const nextPass = service.syncAll(true);
+  await held.arrived;
+  const queued = service.pushNote(note.id);
+  await settle();
+  held.release();
+  await Promise.all([nextPass, queued]);
+  assert.deepEqual(bases(), [0, 1, 2], "no PATCH without content follows the pass's");
+
+  assert.equal(readNoteConflictIds().size, 0);
+  assert.equal(cloud.note(note.cloud_id).content, "first line\nsecond line\nthird\nfourth");
+  assert.equal(db.getNote(note.id).sync_status, "synced");
+  assert.equal(db.getNote(note.id).cloud_revision, 3);
 });
 
 test("a debounced create and a full pass create a new note once", async (t) => {
@@ -266,3 +360,66 @@ test("a racing 409 from another device still surfaces its conflict", async (t) =
   assert.equal(readNoteConflicts()[note.client_note_id]?.content, "their line");
   assert.equal(db.getNote(note.id).sync_status, "pending");
 });
+
+test("a debounced push that never hears back holds up a pass only so long", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const note = await syncedNote(ctx);
+
+  edit(db, note.id, "first line\nsecond line");
+  const held = holdRequest(api, isNotePatch);
+  const debounced = service.pushNote(note.id);
+  await held.arrived;
+  edit(db, note.id, "first line\nsecond line\nthird");
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let passDone = false;
+  const pass = service.pushPendingNotes(false).then(() => {
+    passDone = true;
+  });
+  await settle();
+  t.mock.timers.tick(10_000);
+  await settle();
+
+  assert.ok(passDone, "the pass leaves the note to the next one");
+  assert.equal(cloud.logFor("/api/notes/update").length, 0, "nothing goes out over the held push");
+  assert.equal(db.getNote(note.id).sync_status, "pending");
+  assert.equal(readNoteConflictIds().size, 0);
+  held.release();
+  await Promise.all([debounced, pass]);
+});
+
+// A refused edit forks the note to Personal, then a pull brings the server's
+// copy back. That pull takes note locks, so it must run with this one free.
+for (const via of ["debounced push", "full pass"]) {
+  test(`a ${via} refused by the server keeps the edit and restores the server copy`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, api, service } = ctx;
+    const note = await syncedNote(ctx);
+    edit(db, note.id, "my line");
+    cloud.failNext(isNotePatch, { status: 403, code: "note_access_denied" });
+    let lockFreeDuringRestore = null;
+    const forward = api.cloudApiRequest;
+    api.cloudApiRequest = async (options) => {
+      if (lockFreeDuringRestore === null && options.path.startsWith("/api/notes/list")) {
+        lockFreeDuringRestore = await navigatorStub.locks.request(
+          `openwhispr-note-push:${note.id}`,
+          { ifAvailable: true },
+          (lock) => lock !== null
+        );
+      }
+      return forward(options);
+    };
+
+    if (via === "debounced push") await service.pushNote(note.id);
+    else await service.pushPendingNotes(false);
+
+    assert.equal(lockFreeDuringRestore, true, "the restoring pull runs once the lock is free");
+    const fork = db.getNote(note.id);
+    assert.equal(fork.content, "my line");
+    assert.equal(fork.cloud_id, null);
+    assert.notEqual(fork.client_note_id, note.client_note_id);
+    assert.equal(db.getNoteByClientId(note.client_note_id)?.content, "first line");
+  });
+}
