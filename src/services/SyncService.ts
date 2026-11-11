@@ -188,7 +188,9 @@ const SERVER_CLOCK_CURSORS_KEY = "syncCursors.serverClock";
 // How far a stored cursor may run ahead of the server, or the device's clock
 // ahead of it, before the cursors are taken to have come from a fast clock.
 const FAST_CLOCK_TOLERANCE_MS = 2 * 60 * 1000;
-// Delta-pull cursors stamped with the time a pull started.
+// Delta-pull cursors, each stamped with the time its pull started on the
+// server's clock as that pull's answers read it; the server compares it against
+// its own updated_at.
 const PULL_CURSOR_KEYS = [
   "lastSyncedAt.notes",
   "lastSyncedAt.notes.team",
@@ -259,7 +261,7 @@ const NOTE_UPDATE_404_KEY = "noteUpdate404Counts";
 const NOTE_FEED_REPLAY_KEY = "noteFeedReplay.v1";
 const NOTE_FEED_REPLAY_TEAM_KEY = "noteFeedReplay.v1.team";
 const NOTE_FEED_REPLAY_ATTEMPTS = 3;
-const NOTE_FEED_START = "1970-01-01T00:00:00.000Z";
+const FEED_START = "1970-01-01T00:00:00.000Z";
 // An account's cursors travel with their clock-recovery marker and replay
 // counters, so another account's pass cannot spend either recovery attempt.
 const ACCOUNT_SYNC_STATE_KEYS = [
@@ -2244,8 +2246,9 @@ export class SyncService {
     return navigator.locks.request(`${NOTE_PUSH_LOCK_PREFIX}${localId}`, { signal }, task);
   }
 
-  // A sync pass's note locks. After NOTE_PUSH_LOCK_PASS_WAIT_MS the pass
-  // leaves these notes to the next one.
+  // These notes' push locks, for a pass or a pull. After
+  // NOTE_PUSH_LOCK_PASS_WAIT_MS the task is skipped, leaving the notes to the
+  // next pass.
   private async withNotePushLocks(localIds: number[], task: () => Promise<void>): Promise<void> {
     const wait = new AbortController();
     const timer = setTimeout(() => wait.abort(), NOTE_PUSH_LOCK_PASS_WAIT_MS);
@@ -2466,8 +2469,6 @@ export class SyncService {
     try {
       const cursorKey = teamOnly ? "lastSyncedAt.folders.team" : "lastSyncedAt.folders";
       const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
-      // The cursor is this start on the server's clock, read from the answers
-      // this pull gets; the server compares it against its own updated_at.
       const startedAtMs = Date.now();
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
       const scope = teamCapable ? "all" : undefined;
@@ -2653,7 +2654,7 @@ export class SyncService {
       if (!Number.isFinite(stamp)) continue;
       if (!oldStamps && stamp - serverNowMs <= FAST_CLOCK_TOLERANCE_MS) continue;
       if (key.startsWith("lastSyncedAt.notes")) localStorage.removeItem(key);
-      else localStorage.setItem(key, NOTE_FEED_START);
+      else localStorage.setItem(key, FEED_START);
     }
     localStorage.setItem(SERVER_CLOCK_CURSORS_KEY, "1");
   }
@@ -2780,13 +2781,7 @@ export class SyncService {
     let pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
     // A conflict this device's own write left behind is no conflict: settle it
     // first, so the note pushes in this pass (see isStaleNoteConflict).
-    const conflicts = readNoteConflicts();
-    for (const note of pending) {
-      const conflict = conflicts[note.client_note_id];
-      if (conflict && isStaleNoteConflict(note, conflict)) {
-        await this.settleNoteConflict(note.client_note_id);
-      }
-    }
+    for (const note of pending) await this.settleOwnNoteConflict(note);
     const conflicted = readNoteConflictIds();
     // A surfaced conflict already holds its cloud copy; only rows still
     // awaiting one need the snapshot pull, as an unchanged cloud row may be
@@ -2812,28 +2807,9 @@ export class SyncService {
 
     const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const ctx = await this.buildSpaceContext();
-    const pushable: NoteItem[] = [];
-    for (const note of pending) {
-      if (
-        conflicted.has(note.client_note_id) ||
-        noteAwaitsCloudResolution(note, this.noteRevisionsKnown !== false)
-      ) {
-        // An unresolved pull conflict or rejected create: pushing now would
-        // auto-resolve it as local-wins before the user chose Keep or Refresh
-        // (which clear the registry entry and unblock the row). A clear with
-        // no revision waits for a pull to supply one.
-        continue;
-      }
-      if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
-        // The folder's own changes haven't landed (e.g. a cross-space move
-        // that 409'd on a name conflict): the server would reject the note's
-        // folder_id as out of scope, stranding it in 'error'. Stay pending;
-        // folder and notes push together once the conflict resolves.
-        continue;
-      }
-      if (!this.resolvePushScope("note", note, ctx)) continue;
-      pushable.push(note);
-    }
+    const pushable = pending.filter((note) =>
+      this.stillPushable(note, note.cloud_id, blockedFolderIds, ctx)
+    );
 
     const migration = pushable.filter((note) => note.cloud_id);
     const fresh = pushable.filter((note) => !note.cloud_id);
@@ -2844,7 +2820,9 @@ export class SyncService {
         // A debounced push may have sent the note while this pass waited for
         // its lock: read it again, so the PATCH carries the base it left.
         const note = await window.electronAPI.getNote?.(queued.id);
-        const scope = note ? this.stillPushable(note, queued, blockedFolderIds, ctx) : null;
+        const scope = note
+          ? this.stillPushable(note, queued.cloud_id, blockedFolderIds, ctx)
+          : null;
         if (!note || !scope) return;
         try {
           // Carry the full content: a pending row may hold edits that never
@@ -2904,7 +2882,9 @@ export class SyncService {
           const unsent: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
           for (const queued of batch) {
             const note = await window.electronAPI.getNote?.(queued.id);
-            const scope = note ? this.stillPushable(note, queued, blockedFolderIds, ctx) : null;
+            const scope = note
+              ? this.stillPushable(note, queued.cloud_id, blockedFolderIds, ctx)
+              : null;
             if (note && scope) unsent.push({ note, scope });
           }
           const recorded = await recordNoteCreateAttempts(
@@ -2948,25 +2928,35 @@ export class SyncService {
     }
   }
 
-  // The scope to push a queued note in, read again under its push lock, or
-  // null once this push no longer applies: sent meanwhile, deleted, parked
-  // behind a conflict or create, or still behind its folder's own change.
+  // The scope to push a pending note in, as queued and again under its push
+  // lock, or null once this push no longer applies: sent meanwhile, deleted,
+  // parked behind a conflict or create, or still behind its folder's own change.
   private stillPushable(
     note: NoteItem,
-    queued: NoteItem,
+    queuedCloudId: string | null,
     blockedFolderIds: Set<number>,
     ctx: SpaceSyncContext
   ): PushScopeFields | null {
-    if (note.deleted_at || note.sync_status === "synced" || note.cloud_id !== queued.cloud_id) {
+    if (note.deleted_at || note.sync_status === "synced" || note.cloud_id !== queuedCloudId) {
       return null;
     }
     if (
       readNoteConflictIds().has(note.client_note_id) ||
       noteAwaitsCloudResolution(note, this.noteRevisionsKnown !== false)
     ) {
+      // An unresolved pull conflict or rejected create: pushing now would
+      // auto-resolve it as local-wins before the user chose Keep or Refresh
+      // (which clear the registry entry and unblock the row). A clear with
+      // no revision waits for a pull to supply one.
       return null;
     }
-    if (note.folder_id && blockedFolderIds.has(note.folder_id)) return null;
+    if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
+      // The folder's own changes haven't landed (e.g. a cross-space move
+      // that 409'd on a name conflict): the server would reject the note's
+      // folder_id as out of scope, stranding it in 'error'. Stay pending;
+      // folder and notes push together once the conflict resolves.
+      return null;
+    }
     return this.resolvePushScope("note", note, ctx);
   }
 
@@ -3013,10 +3003,8 @@ export class SyncService {
       const since = snapshot
         ? undefined
         : replayFeed
-          ? NOTE_FEED_START
+          ? FEED_START
           : (localStorage.getItem(cursorKey) ?? undefined);
-      // The cursor is this start on the server's clock, read from the answers
-      // this pull gets; the server compares it against its own updated_at.
       const startedAtMs = Date.now();
       const ctx = await this.buildSpaceContext();
       const { cloudToLocal, defaultFolderId } = await this.buildCloudToLocalFolderMap(
@@ -3356,8 +3344,6 @@ export class SyncService {
       const since = snapshot
         ? undefined
         : (localStorage.getItem("lastSyncedAt.conversations") ?? undefined);
-      // The cursor is this start on the server's clock, read from the answers
-      // this pull gets; the server compares it against its own updated_at.
       const startedAtMs = Date.now();
 
       let cursor: string | undefined = since;
@@ -3600,8 +3586,6 @@ export class SyncService {
       const since = snapshot
         ? undefined
         : (localStorage.getItem("lastSyncedAt.transcriptions") ?? undefined);
-      // The cursor is this start on the server's clock, read from the answers
-      // this pull gets; the server compares it against its own updated_at.
       const startedAtMs = Date.now();
 
       let cursor: string | undefined = since;

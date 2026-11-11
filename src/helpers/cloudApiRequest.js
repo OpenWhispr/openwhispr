@@ -153,7 +153,7 @@ function createCloudApiRequestHandler({
         ? await fence.awaitBound(() => response.json().catch(() => null))
         : await response.json().catch(() => null);
       // Sync stamps its pull cursors on the server's clock, read from here.
-      const serverDate = response.headers?.get?.("date");
+      const serverDate = response.headers.get("date");
       const dated = serverDate ? { serverDate } : {};
 
       if (!response.ok) {

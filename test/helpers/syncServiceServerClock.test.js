@@ -21,7 +21,7 @@ const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud, createAccountCloud } = require("./harness/fakeCloud.js");
 const { createSyncDevice } = require("./harness/syncDevice.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
-const { resetServerClock } = require("../../src/lib/serverClock.ts");
+const { resetServerClockForTests } = require("../../src/lib/serverClock.ts");
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -32,7 +32,7 @@ async function setup(t, behindMs) {
   if (!db) return null;
   resetBrowserGlobals();
   installBrowserGlobals();
-  resetServerClock();
+  resetServerClockForTests();
   enableSync();
   const cloud = createFakeCloud({ serverDate: true });
   const server = { offsetMs: -behindMs };
@@ -43,7 +43,7 @@ async function setup(t, behindMs) {
   const service = new SyncService();
   t.after(() => {
     stopSyncTimers(service);
-    resetServerClock();
+    resetServerClockForTests();
   });
   const serverIso = (shiftMs = 0) => new Date(Date.now() + server.offsetMs + shiftMs).toISOString();
   return { db, cloud, service, serverIso };
@@ -170,8 +170,8 @@ test("a device on time keeps the cursors it already has", async (t) => {
 test("restoring another account's old cursors still recovers rows missed by a fast clock", async (t) => {
   const device = createSyncDevice(t);
   if (!device) return;
-  resetServerClock();
-  t.after(resetServerClock);
+  resetServerClockForTests();
+  t.after(resetServerClockForTests);
   const serverIso = (shiftMs = 0) => new Date(Date.now() - HOUR + shiftMs).toISOString();
   const cloudA = createAccountCloud({ serverDate: true });
   const cloudB = createAccountCloud({ serverDate: true });

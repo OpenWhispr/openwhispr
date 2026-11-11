@@ -29,6 +29,6 @@ export function serverTimeIso(localMs: number): string {
   return new Date(localMs + (offsetMs ?? 0)).toISOString();
 }
 
-export function resetServerClock(): void {
+export function resetServerClockForTests(): void {
   offsetMs = null;
 }

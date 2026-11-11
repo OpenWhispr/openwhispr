@@ -3,12 +3,12 @@ const assert = require("node:assert/strict");
 
 const {
   recordServerDate,
-  resetServerClock,
+  resetServerClockForTests,
   serverClockOffsetMs,
   serverTimeIso,
 } = require("../../src/lib/serverClock.ts");
 
-test.beforeEach(() => resetServerClock());
+test.beforeEach(() => resetServerClockForTests());
 
 test("without a Date header yet, server time is the device's own", () => {
   assert.equal(serverClockOffsetMs(), null);

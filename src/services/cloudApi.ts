@@ -12,7 +12,6 @@ interface CloudApiResponse<T = unknown> {
   error?: string;
   code?: string;
   status?: number;
-  // The answer's HTTP Date header.
   serverDate?: string;
   requestSent?: boolean;
 }
