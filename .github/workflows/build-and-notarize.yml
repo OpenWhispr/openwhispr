@@ -197,6 +197,8 @@ jobs:
         run: npm ci
 
       - name: Verify Windows hotwords file ACLs
+        # Match the powershell.exe subprocess so it inherits compatible module paths.
+        shell: powershell
         run: >-
           node --import tsx --test --test-name-pattern="current-user-only ACL"
           test/helpers/parakeetWsStartup.test.js
