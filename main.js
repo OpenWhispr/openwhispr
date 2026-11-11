@@ -504,13 +504,14 @@ function initializeCoreManagers() {
   // Restore the last validated account scope before any window, IPC handler,
   // or meeting flow can read or create notes. Offline launches keep the
   // account's data visible; a stale or rotated credential fails the hash
-  // check and restores nothing.
+  // check and restores nothing. This is the only call that also restores the
+  // account's last workspace scope (D43).
   const accountScopeBinding = require("./src/helpers/accountScopeBinding");
   const bootAccountId = accountScopeBinding.resolveBootAccountScope({
     token: require("./src/helpers/tokenStore").get(),
     binding: accountScopeBinding.read(),
   });
-  if (bootAccountId) databaseManager.setActiveAccountId(bootAccountId);
+  if (bootAccountId) databaseManager.setActiveAccountId(bootAccountId, { atLaunch: true });
   clipboardManager = new ClipboardManager();
   const { createConnectorManager } = require("./src/helpers/connectors/connectorManager");
   const { createPendingActions } = require("./src/helpers/connectors/pendingActions");

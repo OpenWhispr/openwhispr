@@ -40,7 +40,10 @@ test("boot restores the validated scope before any main-process consumer constru
   );
   assert.ok(bootWindow, "DatabaseManager constructs before IPCHandlers");
   assert.ok(bootWindow[1].includes("resolveBootAccountScope"));
-  assert.ok(bootWindow[1].includes("databaseManager.setActiveAccountId(bootAccountId)"));
+  // Only this launch-time call restores the account's saved workspace scope (D43).
+  assert.ok(
+    bootWindow[1].includes("databaseManager.setActiveAccountId(bootAccountId, { atLaunch: true })")
+  );
 });
 
 test("account-scoped accessibility readiness is revalidated before opening the sticky gate", () => {

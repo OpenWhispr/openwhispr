@@ -386,8 +386,9 @@ class DatabaseManager {
     this.db = null;
     this.activeAccountId = null;
     // The active account's active and default workspace, as the renderer last
-    // said. An account change restores that account's last accepted scope
-    // (D40), since a login launch has no control panel to publish one.
+    // said. The account set at launch starts from its last accepted scope
+    // (D40), since a login launch has no control panel to publish one; an
+    // account change in a running session starts from none (D43).
     this.activeWorkspaceId = null;
     this.defaultWorkspaceId = null;
     this._accountTrackedSince = Date.now();
@@ -396,7 +397,9 @@ class DatabaseManager {
     this.initDatabase();
   }
 
-  setActiveAccountId(accountId) {
+  // atLaunch: the account main.js restores before any window opens. Only then
+  // is the account's saved workspace scope applied (D43).
+  setActiveAccountId(accountId, { atLaunch = false } = {}) {
     const next =
       typeof accountId === "string" && accountId.trim().length > 0 ? accountId.trim() : null;
     if (next !== this.activeAccountId) {
@@ -405,10 +408,13 @@ class DatabaseManager {
         this.db.prepare("INSERT OR IGNORE INTO device_accounts (account_id) VALUES (?)").run(next);
       }
       // Those were the last account's workspaces. Until the renderer names this
-      // account's, its notes go where they went when it last did; with nothing
-      // saved, to its default private space. A workspace lost since gets a
-      // Private the next successful list relocates (D18).
-      const saved = next ? this._savedWorkspaceScope(next) : null;
+      // account's, its notes go to its default private space. At launch, where
+      // they went when it last named them: the renderer reopens that workspace,
+      // and a login launch may never open a window to say so. A workspace lost
+      // since gets a Private the next successful list relocates (D18). In a
+      // running session the renderer forgets its own choice on an account
+      // change and opens the default, so main forgets too.
+      const saved = next && atLaunch ? this._savedWorkspaceScope(next) : null;
       this.activeWorkspaceId = saved?.activeWorkspaceId ?? null;
       this.defaultWorkspaceId = saved?.defaultWorkspaceId ?? null;
     }
