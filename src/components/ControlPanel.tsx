@@ -30,6 +30,7 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
+import { clearInsightsCache } from "../lib/insightsCache";
 import {
   getSettings,
   selectPolicyEffectiveSettings,
@@ -740,6 +741,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
+            // Insights is unmounted here, and would otherwise paint the cleared totals.
+            clearInsightsCache();
             syncService.requestSyncAll("manual");
             toast({
               title: t("controlPanel.history.clearAllSuccess"),
