@@ -10,7 +10,7 @@ import { addPeopleToTeam } from "../../services/spaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Team, Workspace, WorkspaceMember } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
-import { ChevronDown, Plus, UserPlus, Users } from "../icons";
+import { ChevronDown, Plus, UserPlus } from "../icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,18 +23,18 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useToast } from "../ui/useToast";
+import { MENU_ICON, MENU_PANEL, MENU_ROW, MENU_ROWS, MENU_SUBMENU_TRIGGER } from "./menuTokens";
 import { AddToTeamList, dialogBoundaryOf, teamCoverage } from "./AddToTeamList";
 import type { AddToTeamspace } from "./AddToTeamspaceMenu";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
+import { RAISED_PILL, SPLIT_PILL, SPLIT_PILL_CHEVRON, SPLIT_PILL_LABEL } from "./dialogButtons";
+import { cn } from "../lib/utils";
 
 export { teamCoverage };
 
 const COPY = "settingsPage.workspace.teams";
 // Names fit in a sentence up to here; a longer list reads as a count.
 const MAX_NAMED = 2;
-const SUBMENU_CLASS = "w-64 max-w-[calc(100vw-32px)] rounded-xl p-1.5";
-const SUBMENU_TRIGGER_CLASS =
-  "gap-2 rounded-lg px-2.5 py-2 focus:bg-muted data-[state=open]:bg-muted";
 
 interface AddSubject {
   team: Team;
@@ -314,9 +314,6 @@ interface PeopleAddMenuProps {
   onCreateTeam: () => void;
 }
 
-const PILL_BUTTON =
-  "inline-flex h-7 items-center outline-none transition-colors hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-
 /**
  * The selection bar's split button, one pill like People's Add. The label opens the team list; the
  * chevron opens the menu with Add to team ▸, Add to teamspace ▸ and Create team with selected.
@@ -342,7 +339,7 @@ export function PeopleAddMenu({
     });
 
   return (
-    <div className="inline-flex h-7 items-center rounded-full bg-primary text-primary-foreground">
+    <div className={cn(SPLIT_PILL, RAISED_PILL)}>
       <DropdownMenu
         onOpenChange={(open) => {
           if (!open) return;
@@ -352,11 +349,7 @@ export function PeopleAddMenu({
         }}
       >
         <DropdownMenuTrigger asChild>
-          <button
-            ref={labelRef}
-            type="button"
-            className={`${PILL_BUTTON} gap-1.5 rounded-s-full ps-3 pe-2 text-xs font-medium`}
-          >
+          <button ref={labelRef} type="button" className={SPLIT_PILL_LABEL}>
             <Plus className="size-3.5" aria-hidden="true" />
             {t("settingsPage.workspace.people.selection.addToTeam")}
           </button>
@@ -385,22 +378,22 @@ export function PeopleAddMenu({
             ref={chevronRef}
             type="button"
             aria-label={t("settingsPage.workspace.people.addMenu.label")}
-            className={`${PILL_BUTTON} rounded-e-full border-s border-primary-foreground/20 px-1.5`}
+            className={SPLIT_PILL_CHEVRON}
           >
             <ChevronDown className="size-3.5" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="end" className="w-60 max-w-[calc(100vw-32px)]">
+        <DropdownMenuContent side="top" align="end" className={`${MENU_PANEL} ${MENU_ROWS}`}>
           <DropdownMenuSub onOpenChange={(open) => open && teamAdd.open()}>
-            <DropdownMenuSubTrigger className={SUBMENU_TRIGGER_CLASS}>
-              <Users className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            <DropdownMenuSubTrigger className={MENU_SUBMENU_TRIGGER}>
+              <UserPlus className={MENU_ICON} aria-hidden="true" />
               {t("settingsPage.workspace.people.selection.addToTeam")}
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
               <DropdownMenuSubContent
                 sideOffset={6}
                 collisionBoundary={boundary ?? undefined}
-                className={SUBMENU_CLASS}
+                className={MENU_PANEL}
               >
                 <AddToTeamList
                   workspace={workspace}
@@ -414,9 +407,9 @@ export function PeopleAddMenu({
           {teamspace.submenu}
           {teamCreationFor(workspace) !== "unavailable" ? (
             <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="gap-2 text-sm" onSelect={onCreateTeam}>
-                <UserPlus className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              <DropdownMenuSeparator className="mx-0 my-0" />
+              <DropdownMenuItem className={MENU_ROW} onSelect={onCreateTeam}>
+                <UserPlus className={MENU_ICON} aria-hidden="true" />
                 {t("settingsPage.workspace.people.selection.createTeam")}
               </DropdownMenuItem>
             </>

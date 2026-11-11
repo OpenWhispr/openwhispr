@@ -5,6 +5,7 @@ import type { WorkspaceTeamsState } from "../../hooks/useWorkspaceTeams";
 import type { Team, Workspace, WorkspaceMember } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from "../ui/dropdown-menu";
+import { MENU_CHECK_ROW, MENU_ROWS } from "./menuTokens";
 
 const COPY = "settingsPage.workspace.teams";
 
@@ -99,7 +100,9 @@ export function AddToTeamList({
   }
 
   return (
-    <div className="max-h-[min(18rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto">
+    <div
+      className={`${MENU_ROWS} max-h-[min(18rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto`}
+    >
       {offered.map((team) => {
         const covered = teamCoverage(people, team.id);
         const access = accessOf(covered, people.length);
@@ -113,7 +116,7 @@ export function AddToTeamList({
             // strength, as the frame draws it: a ticked box, not a dimmed choice.
             disabled={access === true}
             onSelect={() => onChoose(team)}
-            className="gap-2 rounded-lg py-2 pe-2.5 focus:bg-muted data-[disabled]:opacity-100"
+            className={MENU_CHECK_ROW}
           >
             {access === "indeterminate" ? (
               <span dir="auto" className="min-w-0 flex-1 truncate">

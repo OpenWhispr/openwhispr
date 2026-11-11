@@ -13,7 +13,14 @@ import { addPeopleToSpace, localSpaceIdFor } from "../../services/spaceActions";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace, WorkspaceMember, WorkspaceSpace } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
-import { Building2 } from "../icons";
+import { Office } from "../icons";
+import {
+  MENU_CHECK_ROW,
+  MENU_ICON,
+  MENU_PANEL,
+  MENU_ROWS,
+  MENU_SUBMENU_TRIGGER,
+} from "./menuTokens";
 import { TileGlyph } from "../notes/SpaceNameField";
 import {
   DropdownMenuCheckboxItem,
@@ -215,22 +222,24 @@ export function useAddToTeamspace({
 
   const submenu = (
     <DropdownMenuSub onOpenChange={handleOpenChange}>
-      <DropdownMenuSubTrigger className="gap-2 rounded-lg px-2.5 py-2 focus:bg-muted data-[state=open]:bg-muted">
-        <Building2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
+      <DropdownMenuSubTrigger className={MENU_SUBMENU_TRIGGER}>
+        <Office className={MENU_ICON} aria-hidden="true" />
         {t("settingsPage.workspace.people.selection.addToTeamspace")}
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
         <DropdownMenuSubContent
           sideOffset={6}
           collisionBoundary={boundary ?? undefined}
-          className="w-64 max-w-[calc(100vw-32px)] rounded-xl p-1.5"
+          className={MENU_PANEL}
         >
           {directory.status === "ready" && directory.spaces.length === 0 ? (
             <DropdownMenuItem disabled className="text-sm text-muted-foreground">
               {t("settingsPage.workspace.teamspaces.addPeople.none")}
             </DropdownMenuItem>
           ) : directory.status === "ready" ? (
-            <div className="max-h-[min(18rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto">
+            <div
+              className={`${MENU_ROWS} max-h-[min(18rem,var(--radix-dropdown-menu-content-available-height))] overflow-y-auto`}
+            >
               {directory.spaces.map((space) => {
                 const access = accessOf(coverage.get(space.id) ?? 0, people.length);
                 return (
@@ -241,7 +250,7 @@ export function useAddToTeamspace({
                     // strength, as the frame draws it: a ticked box, not a dimmed choice.
                     disabled={access === true}
                     onSelect={() => void addTo(space)}
-                    className="gap-2 rounded-lg py-2 pe-2.5 focus:bg-muted data-[disabled]:opacity-100"
+                    className={MENU_CHECK_ROW}
                   >
                     <span
                       aria-hidden="true"

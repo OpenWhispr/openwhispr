@@ -439,7 +439,7 @@ test("a person with no name is shown by address, isolated left to right", async 
   assert.doesNotMatch(bravo, /dir="auto"[^>]*>one@example\.com/);
 });
 
-test("no admins lists the workspace's admins, read fresh when it opens", async (t) => {
+test("no admins shows the workspace's admins the way a teamspace's own are shown, read once up front", async (t) => {
   const { Section } = await loadSection(t, { spaces: [space("s1", "Orphan", { admins: [] })] });
   globalThis.__roster = [
     { user_id: "m1", role: "member", name: "Mia Member", email: "mia@example.com", image: null },
@@ -460,21 +460,39 @@ test("no admins lists the workspace's admins, read fresh when it opens", async (
   const container = await mount(t, Section);
   const row = rowNode(container, "Orphan");
   const listed = textOf(row);
-  assert.match(listed, new RegExp(`${KEY}\\.noAdmins`));
-  assert.doesNotMatch(listed, /adminCount/);
+  // Two of them, so a count with the list, not a role label.
+  assert.match(listed, /adminCount\|count=2/);
+  assert.doesNotMatch(listed, new RegExp(`${KEY}\\.noAdmins`));
   // Owner and admins only, owner first; a plain member is not someone to ask.
   assert.ok(listed.indexOf("Olivia Owner") >= 0);
   assert.ok(listed.indexOf("Adam Admin") > listed.indexOf("Olivia Owner"));
   assert.doesNotMatch(listed, /Mia Member/);
   assert.match(listed, /olivia@example\.com/);
 
-  // The roster is read when the menu opens, not before.
-  assert.deepEqual(refreshes, []);
+  // The roster is read when the list shows, once, so the count is there before anyone opens a menu.
+  assert.deepEqual(refreshes, ["w1"]);
   const popover = findNode(row, (node) => "onToggle" in propsOf(node));
   await React.act(async () => propsOf(popover).onToggle(true));
   assert.deepEqual(refreshes, ["w1"]);
-  await React.act(async () => propsOf(popover).onToggle(false));
-  assert.deepEqual(refreshes, ["w1"]);
+});
+
+test("a single workspace admin is named in the cell, as a teamspace's one admin is", async (t) => {
+  const { Section } = await loadSection(t, { spaces: [space("s1", "Orphan", { admins: [] })] });
+  globalThis.__roster = [
+    {
+      user_id: "o1",
+      role: "owner",
+      name: "Olivia Owner",
+      email: "olivia@example.com",
+      image: null,
+    },
+  ];
+  globalThis.__refreshMembers = async () => {};
+
+  const container = await mount(t, Section);
+  const listed = textOf(rowNode(container, "Orphan"));
+  assert.match(listed, /Olivia Owner/);
+  assert.doesNotMatch(listed, /adminCount|noAdmins/);
 });
 
 test("Join shows only where can_join is true", async (t) => {

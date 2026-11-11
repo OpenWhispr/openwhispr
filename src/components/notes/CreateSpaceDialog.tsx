@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { FolderRounded, Loader2, LogIn, Plus, UserPlus, type IconComponent } from "../icons";
+import { DoorOpen, Loader2, Office, Plus, UserPlus, type IconComponent } from "../icons";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Textarea } from "../ui/textarea";
 import { Toggle } from "../ui/toggle";
 import { useToast } from "../ui/useToast";
 import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
 import { WorkspaceErrorBar } from "../workspace/WorkspaceErrorBar";
-import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "../workspace/dialogButtons";
+import {
+  FIELD_AREA,
+  FIELD_GROUP,
+  FIELD_LABEL,
+  PRIMARY_BUTTON,
+  SECONDARY_BUTTON,
+} from "../workspace/dialogButtons";
 import { createSpace } from "../../services/spaceActions";
 import { inviteAfterCreate, inviteFollowUpToast } from "../../lib/inviteAfterCreate";
 import { TeamsService } from "../../services/TeamsService";
@@ -416,11 +421,11 @@ export default function CreateSpaceDialog({
       <Dialog open={open && !needsWorkspace} onOpenChange={handleOpenChange}>
         <DialogContent
           hideCloseButton
-          className="max-h-[calc(100vh-32px)] w-[420px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-6 overflow-y-auto rounded-[28px] p-5 sm:max-w-[420px]"
+          className="max-h-[calc(100vh-32px)] w-[520px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-7 overflow-y-auto rounded-[28px] p-5 sm:max-w-[520px]"
         >
           <DialogHeader className="items-center gap-3 space-y-0 text-center sm:text-center">
             <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">
-              <FolderRounded className="size-3.5" aria-hidden="true" />
+              <Office className="size-3.5" aria-hidden="true" />
             </div>
             <div className="flex flex-col items-center gap-1.5">
               <DialogTitle className="text-lg font-medium tracking-normal leading-snug">
@@ -462,13 +467,10 @@ export default function CreateSpaceDialog({
                   Opening from a workspace row's + already chose the target, so
                   it renders as fixed context rather than a picker. */}
               {workspaces.length > 1 && workspace && (
-                <div className="space-y-1.5">
+                <div className={FIELD_GROUP}>
                   {manageableWorkspaces.length > 1 && !initialWorkspaceId ? (
                     <>
-                      <label
-                        htmlFor="create-space-workspace"
-                        className="text-xs font-medium text-foreground/50"
-                      >
+                      <label htmlFor="create-space-workspace" className={FIELD_LABEL}>
                         {t("settingsPage.workspace.title")}
                       </label>
                       <Select
@@ -490,9 +492,7 @@ export default function CreateSpaceDialog({
                     </>
                   ) : (
                     <>
-                      <p className="text-xs font-medium text-foreground/50">
-                        {t("settingsPage.workspace.title")}
-                      </p>
+                      <p className={FIELD_LABEL}>{t("settingsPage.workspace.title")}</p>
                       <p dir="auto" className="text-sm text-foreground truncate">
                         {workspace.name}
                       </p>
@@ -501,11 +501,8 @@ export default function CreateSpaceDialog({
                 </div>
               )}
 
-              <div className="space-y-2">
-                <label
-                  htmlFor="create-space-name"
-                  className="text-xs font-medium text-foreground/50"
-                >
+              <div className={FIELD_GROUP}>
+                <label htmlFor="create-space-name" className={FIELD_LABEL}>
                   {t("settingsPage.workspace.teamspaces.form.nameAndIcon")}
                 </label>
                 <SpaceNameField
@@ -530,14 +527,11 @@ export default function CreateSpaceDialog({
                 )}
               </div>
 
-              <div className="space-y-2">
-                <label
-                  htmlFor="create-space-description"
-                  className="text-xs font-medium text-foreground/50"
-                >
+              <div className={FIELD_GROUP}>
+                <label htmlFor="create-space-description" className={FIELD_LABEL}>
                   {t("settingsPage.workspace.teamspaces.form.descriptionLabel")}
                 </label>
-                <Textarea
+                <textarea
                   id="create-space-description"
                   dir="auto"
                   value={description}
@@ -546,20 +540,17 @@ export default function CreateSpaceDialog({
                   readOnly={isCreating}
                   placeholder={t("settingsPage.workspace.teamspaces.form.descriptionPlaceholder")}
                   onChange={(event) => setDescription(event.target.value)}
-                  className="min-h-20 resize-none text-sm"
+                  className={FIELD_AREA}
                 />
               </div>
 
               {showPeople && (
-                <div className="space-y-2">
-                  <label
-                    htmlFor="create-space-people"
-                    className="text-xs font-medium text-foreground/50"
-                  >
+                <div className={FIELD_GROUP}>
+                  <label htmlFor="create-space-people" className={FIELD_LABEL}>
                     {t("settingsPage.workspace.teamspaces.form.people")}
                   </label>
                   {peopleLoading ? (
-                    <div className="h-10 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
+                    <div className="h-[38px] rounded-xl bg-foreground/5 dark:bg-white/5 animate-pulse" />
                   ) : peopleFailed ? (
                     <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
                       <p className="text-xs text-muted-foreground">
@@ -602,7 +593,7 @@ export default function CreateSpaceDialog({
                 </p>
               )}
 
-              <div className="divide-y divide-border/60 overflow-hidden rounded-xl bg-surface-1">
+              <div className="flex flex-col rounded-xl bg-surface-1 p-2">
                 <FlagRow
                   icon={UserPlus}
                   title={t("settingsPage.workspace.teamspaces.form.defaultTitle")}
@@ -612,7 +603,7 @@ export default function CreateSpaceDialog({
                   onChange={setIsDefault}
                 />
                 <FlagRow
-                  icon={LogIn}
+                  icon={DoorOpen}
                   title={t("settingsPage.workspace.teamspaces.form.openTitle")}
                   body={t("settingsPage.workspace.teamspaces.form.openBody")}
                   checked={isOpen}
@@ -673,13 +664,13 @@ function FlagRow({
   onChange,
 }: FlagRowProps): ReactElement {
   return (
-    <div className="flex items-center gap-3 px-3.5 py-3">
+    <div className="flex items-center gap-3 rounded-[9px] px-3 py-3 [&:not(:first-child)]:relative [&:not(:first-child)]:before:absolute [&:not(:first-child)]:before:inset-x-3 [&:not(:first-child)]:before:-top-px [&:not(:first-child)]:before:h-px [&:not(:first-child)]:before:bg-border/60">
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 text-sm font-medium text-foreground">
           <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="truncate">{title}</span>
         </p>
-        <p className="mt-0.5 ps-[22px] text-xs text-muted-foreground">{body}</p>
+        <p className="mt-0.5 ps-[22px] text-sm text-muted-foreground">{body}</p>
       </div>
       <Toggle checked={checked} onChange={onChange} disabled={disabled} ariaLabel={title} />
     </div>
