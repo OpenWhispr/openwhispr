@@ -347,7 +347,6 @@ test("an epoch end time is normalized with its start, and never sent", async () 
         timestamp: START_MS + 200,
         endTimestamp: START_MS + 4800,
         speaker: "speaker_0",
-        liveOverlapMs: 4600,
       },
     ],
     { outcome: "skipped" }
@@ -356,7 +355,6 @@ test("an epoch end time is normalized with its start, and never sent", async () 
   const [segment] = payload.segments;
   assert.equal(segment.speaker, "speaker_0");
   assert.equal("endTimestamp" in segment, false);
-  assert.equal("liveOverlapMs" in segment, false);
 });
 
 test("the merge receives a ranged row's end in seconds", async () => {

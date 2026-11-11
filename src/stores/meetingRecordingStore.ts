@@ -58,7 +58,8 @@ import { reduceMeetingSegmentEvent, type MeetingSegmentEvent } from "./meetingSe
 import {
   pickSpeakerForRange,
   pruneIdentifications,
-  relabelForIdentification,
+  rangeOverlapMs,
+  rangedLabelChanges,
 } from "../helpers/speakerRangeMatch";
 import {
   canStopMeetingRecordingSession,
@@ -500,9 +501,9 @@ let preparePromise: Promise<void> | null = null;
 let ipcCleanups: Array<() => void> = [];
 let speakerIdentifications: SpeakerIdentification[] = [];
 // Local-model rows arrive after the identifications that heard them, so each one
-// keeps its audio range (it starts at the row's timestamp) and the overlap of its
-// current label; a later identification that covers more of it takes the row.
-const segmentRanges = new Map<string, { end: number; overlapMs: number }>();
+// keeps the end of its audio range (it starts at the row's timestamp) and is picked
+// again from the kept identifications whenever a new one hears part of it.
+const segmentRangeEnds = new Map<string, number>();
 let nextPlaceholderSpeakerIndex = 0;
 // First speaker index this session owns; a resumed note's earlier sessions keep the
 // ids below it. Main may raise it (see _resolveMeetingSpeakerIndexBase).
@@ -705,24 +706,27 @@ function labelSegmentByRange(
   start: number,
   end: number
 ): TranscriptSegment {
+  segmentRangeEnds.set(segment.id, end);
   const heard: HeardSpeaker | null = pickSpeakerForRange(speakerIdentifications, start, end);
-  segmentRanges.set(segment.id, { end, overlapMs: heard?.overlapMs ?? 0 });
   return heard ? labelRangedSegment(segment, heard) : segment;
 }
 
 function relabelRangedSegment(
   segment: TranscriptSegment,
-  range: { end: number; overlapMs: number },
+  end: number,
   identification: SpeakerIdentification
 ): TranscriptSegment {
-  if (segment.timestamp == null) return segment;
-  const heard: HeardSpeaker | null = relabelForIdentification(
-    { start: segment.timestamp, end: range.end, overlapMs: range.overlapMs },
-    identification
-  );
-  if (!heard) return segment;
-  segmentRanges.set(segment.id, { end: range.end, overlapMs: heard.overlapMs });
-  return labelRangedSegment(segment, heard);
+  const start = segment.timestamp;
+  // Only rows in this identification's audio can change; re-picking the rest would
+  // let a label flip as old identifications age out.
+  if (
+    start == null ||
+    rangeOverlapMs(start, end, identification.startTime, identification.endTime) <= 0
+  ) {
+    return segment;
+  }
+  const heard: HeardSpeaker | null = pickSpeakerForRange(speakerIdentifications, start, end);
+  return heard && rangedLabelChanges(segment, heard) ? labelRangedSegment(segment, heard) : segment;
 }
 
 function applySpeakerIdentification(
@@ -731,8 +735,8 @@ function applySpeakerIdentification(
 ): TranscriptSegment {
   if (segment.source !== "system" || segment.speakerLocked) return segment;
 
-  const range = segmentRanges.get(segment.id);
-  if (range) return relabelRangedSegment(segment, range, identification);
+  const rangeEnd = segmentRangeEnds.get(segment.id);
+  if (rangeEnd != null) return relabelRangedSegment(segment, rangeEnd, identification);
 
   if (
     !isSegmentWithinIdentificationWindow(segment, identification) ||
@@ -1060,7 +1064,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     sessionSeedLength = seed.length;
     sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
-    segmentRanges.clear();
+    segmentRangeEnds.clear();
     sessionSpeakerIndexBase = maxSpeakerIndex + 1;
     nextPlaceholderSpeakerIndex = sessionSpeakerIndexBase;
     recentSystemSpeaker = null;

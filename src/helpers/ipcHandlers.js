@@ -175,8 +175,9 @@ const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifec
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
 const {
+  rangeOverlapMs,
   pickSpeakerForRange,
-  relabelForIdentification,
+  rangedLabelChanges,
   pruneIdentifications,
 } = require("./speakerRangeMatch");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
@@ -8469,10 +8470,7 @@ class IPCHandlers {
       // so label it from the ones we kept.
       if (source === "system" && endTimestamp !== null) {
         const heard = pickSpeakerForRange(meetingLiveIdentifications, timestamp, endTimestamp);
-        if (heard) {
-          labelRangedRow(segment, heard);
-          segment.liveOverlapMs = heard.overlapMs;
-        }
+        if (heard) labelRangedRow(segment, heard);
       }
       meetingDiarizationSegments.push(segment);
     };
@@ -8500,16 +8498,25 @@ class IPCHandlers {
         if (seg.source !== "system" || seg.timestamp == null) continue;
 
         if (seg.endTimestamp != null) {
-          // Ranged rows go to whoever was heard longest in their own audio, so a
-          // later identification only wins by covering more of the row.
-          const relabel = relabelForIdentification(
-            { start: seg.timestamp, end: seg.endTimestamp, overlapMs: seg.liveOverlapMs ?? 0 },
-            identification
-          );
-          if (relabel) {
-            labelRangedRow(seg, relabel);
-            seg.liveOverlapMs = relabel.overlapMs;
+          // Ranged rows go to whoever was heard longest in their own audio. Only rows in
+          // this identification's audio can change; re-picking the rest would let a label
+          // flip as old identifications age out.
+          if (
+            rangeOverlapMs(
+              seg.timestamp,
+              seg.endTimestamp,
+              identification.startTime,
+              identification.endTime
+            ) <= 0
+          ) {
+            continue;
           }
+          const heard = pickSpeakerForRange(
+            meetingLiveIdentifications,
+            seg.timestamp,
+            seg.endTimestamp
+          );
+          if (heard && rangedLabelChanges(seg, heard)) labelRangedRow(seg, heard);
           continue;
         }
 
@@ -15004,7 +15011,6 @@ class IPCHandlers {
             ({
               timestampIsSpeechStart: _timestampIsSpeechStart,
               endTimestamp: _endTimestamp,
-              liveOverlapMs: _liveOverlapMs,
               ...segment
             }) => segment
           ),

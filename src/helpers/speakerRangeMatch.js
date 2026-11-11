@@ -8,48 +8,89 @@ export function rangeOverlapMs(aStart, aEnd, bStart, bEnd) {
   return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
 }
 
-export function pickSpeakerForRange(identifications, start, end) {
-  // One speaker's windows grow cumulatively, so summing them would count the same audio repeatedly.
-  const bySpeaker = new Map();
-  for (const identification of identifications) {
-    const overlapMs = rangeOverlapMs(
-      start,
-      end,
-      identification.startTime,
-      identification.endTime
+// Every identification within one speech segment shares the segment's start and
+// covers all of it so far, and a segment can span a change of speaker. Each one is
+// credited only with the audio it added after the previous one, so the slices of a
+// segment never overlap and can be summed per speaker.
+function identificationSlices(identifications) {
+  const bySegment = new Map();
+  identifications.forEach((identification, order) => {
+    const group = bySegment.get(identification.startTime) ?? [];
+    group.push({ identification, order });
+    bySegment.set(identification.startTime, group);
+  });
+
+  const slices = [];
+  for (const group of bySegment.values()) {
+    group.sort(
+      (left, right) =>
+        left.identification.endTime - right.identification.endTime || left.order - right.order
     );
+    let sliceStart = group[0].identification.startTime;
+    for (const { identification, order } of group) {
+      slices.push({ identification, order, start: sliceStart, end: identification.endTime });
+      sliceStart = Math.max(sliceStart, identification.endTime);
+    }
+  }
+  return slices;
+}
+
+const isHeardMoreRecently = (candidate, other) =>
+  candidate.latestEnd > other.latestEnd ||
+  (candidate.latestEnd === other.latestEnd && candidate.latestOrder > other.latestOrder);
+
+export function pickSpeakerForRange(identifications, start, end) {
+  const bySpeaker = new Map();
+  for (const slice of identificationSlices(identifications)) {
+    const overlapMs = rangeOverlapMs(start, end, slice.start, slice.end);
     if (overlapMs <= 0) continue;
 
-    const previous = bySpeaker.get(identification.speakerId);
-    bySpeaker.delete(identification.speakerId);
-    // Re-inserting moves the speaker to the end, so a tie goes to the later identification.
-    bySpeaker.set(identification.speakerId, {
-      speakerId: identification.speakerId,
-      displayName: identification.displayName ?? previous?.displayName ?? null,
-      overlapMs: Math.max(overlapMs, previous?.overlapMs ?? 0),
-    });
+    const { speakerId, displayName } = slice.identification;
+    const candidate = bySpeaker.get(speakerId) ?? {
+      speakerId,
+      displayName: null,
+      nameOrder: -1,
+      overlapMs: 0,
+      latestEnd: -Infinity,
+      latestOrder: -1,
+    };
+    candidate.overlapMs += overlapMs;
+    if (displayName != null && slice.order > candidate.nameOrder) {
+      candidate.displayName = displayName;
+      candidate.nameOrder = slice.order;
+    }
+    if (isHeardMoreRecently({ latestEnd: slice.end, latestOrder: slice.order }, candidate)) {
+      candidate.latestEnd = slice.end;
+      candidate.latestOrder = slice.order;
+    }
+    bySpeaker.set(speakerId, candidate);
   }
 
   let best = null;
   for (const candidate of bySpeaker.values()) {
-    if (!best || candidate.overlapMs >= best.overlapMs) best = candidate;
+    if (
+      !best ||
+      candidate.overlapMs > best.overlapMs ||
+      (candidate.overlapMs === best.overlapMs && isHeardMoreRecently(candidate, best))
+    ) {
+      best = candidate;
+    }
   }
-  return best;
+  return best
+    ? { speakerId: best.speakerId, displayName: best.displayName, overlapMs: best.overlapMs }
+    : null;
 }
 
-export function relabelForIdentification(row, identification) {
-  const overlapMs = rangeOverlapMs(
-    row.start,
-    row.end,
-    identification.startTime,
-    identification.endTime
+// `row` is { speaker, speakerName, speakerStatus, speakerIsPlaceholder }. A row keeps
+// its name when the pick has none for the same speaker, so only a move, a label
+// that isn't confirmed yet, or a new name is a change.
+export function rangedLabelChanges(row, heard) {
+  return (
+    row.speaker !== heard.speakerId ||
+    row.speakerIsPlaceholder === true ||
+    row.speakerStatus !== "confirmed" ||
+    (heard.displayName != null && heard.displayName !== row.speakerName)
   );
-  if (overlapMs <= row.overlapMs) return null;
-  return {
-    speakerId: identification.speakerId,
-    displayName: identification.displayName ?? null,
-    overlapMs,
-  };
 }
 
 export function pruneIdentifications(

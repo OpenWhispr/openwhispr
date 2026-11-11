@@ -176,3 +176,29 @@ test("a row arriving 100 s after its audio still finds its speaker", async (t) =
   final({ text: "late", source: "system", timestamp: T + 500, endTimestamp: T + 4500 });
   assert.equal(rows()[0].speaker, "speaker_0");
 });
+
+// One speech segment as the live identifier reports it (padded start T): the
+// embedding hears A until T+5750, though B started talking at T+4000.
+const inSegment = (speaker, endOffset) => speaker(T, T + endOffset, null);
+
+test("a row first heard as the earlier speaker moves to the next one as their audio accumulates", async (t) => {
+  const { identify, final, rows } = await startMeeting(t);
+  for (const end of [1750, 2750, 3750, 4750, 5750]) identify(inSegment(A, end));
+  final({ text: "over to you", source: "system", timestamp: T + 4000, endTimestamp: T + 9000 });
+  assert.equal(rows()[0].speaker, "speaker_0");
+
+  // 1 s of B against 1.75 s of A: still A.
+  identify(inSegment(B, 6750));
+  assert.equal(rows()[0].speaker, "speaker_0");
+
+  identify(inSegment(B, 7750));
+  assert.equal(rows()[0].speaker, "speaker_1");
+});
+
+test("a row in the earlier speaker's part keeps them as the next speaker is heard", async (t) => {
+  const { identify, final, rows } = await startMeeting(t);
+  for (const end of [1750, 2750, 3750, 4750, 5750]) identify(inSegment(A, end));
+  final({ text: "my part", source: "system", timestamp: T + 750, endTimestamp: T + 4000 });
+  for (const end of [6750, 7750, 8750, 9750]) identify(inSegment(B, end));
+  assert.equal(rows()[0].speaker, "speaker_0");
+});
