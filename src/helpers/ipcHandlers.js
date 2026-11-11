@@ -9743,7 +9743,8 @@ class IPCHandlers {
       }
 
       meetingLiveSpeakerActive = false;
-      meetingLiveIdentifications = [];
+      // Kept: the stop path decodes the last local chunks after this, and only main can
+      // label them. Session capture and reset clear the list.
       meetingLiveSpeakerState = await liveSpeakerIdentifier.stop();
       return meetingLiveSpeakerState;
     };

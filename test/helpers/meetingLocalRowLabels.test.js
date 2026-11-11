@@ -218,3 +218,58 @@ test("a merge without a name keeps the identifications' own names", () => {
     [["speaker_0", "Bo"]]
   );
 });
+
+// The local stop path: the live identifier stops first, the last buffered chunks are
+// decoded and stored after it, then the session's state is captured and cleared.
+function stopHarness(identifications) {
+  const ctx = harness(identifications);
+  const sliceBetween = (startMarker, endMarker) => {
+    const start = source.indexOf(startMarker);
+    const end = source.indexOf(endMarker, start);
+    assert.ok(start >= 0 && end > start, `${startMarker} not found in ipcHandlers.js`);
+    return source.slice(start, end);
+  };
+  Object.assign(ctx, {
+    meetingLiveSpeakerActive: true,
+    meetingReclusterTimer: null,
+    meetingLiveSpeakerState: null,
+    liveSpeakerIdentifier: { stop: async () => ({ speakers: [] }) },
+    clearInterval,
+    meetingDiarizationPath: null,
+    meetingDiarizationStartedAt: null,
+    meetingMicDiarizationPath: null,
+    meetingMicDiarizationStartedAt: null,
+    meetingSystemAudioHeard: false,
+    meetingDiarizationStream: null,
+    meetingMicDiarizationStream: null,
+    meetingRetractedMicSegments: [],
+    meetingSystemAudioHandover: { reset: () => {} },
+    resolveDiarizationInput: () => ({ cleanupPcmPaths: [] }),
+    fs: { unlink: () => {} },
+  });
+  vm.runInContext(
+    `${sliceBetween("const stopLiveSpeakerIdentification =", "const startLiveSpeakerIdentification =")}
+     ${sliceBetween("const captureMeetingDiarizationState =", "const attachMeetingStreamingHandlers =")}
+     globalThis.stopLiveSpeakerIdentification = stopLiveSpeakerIdentification;
+     globalThis.captureMeetingDiarizationState = captureMeetingDiarizationState;`,
+    ctx
+  );
+  return ctx;
+}
+
+test("a ranged row decoded after the live identifier stops still gets its speaker", async () => {
+  const ctx = stopHarness([identification("speaker_0", 0, 4000, "Zero")]);
+  await ctx.stopLiveSpeakerIdentification();
+  ctx.store("last words", "system", T + 500, null, true, T + 3500);
+  const [row] = ctx.meetingDiarizationSegments;
+  assert.equal(row.speaker, "speaker_0");
+  assert.equal(row.speakerName, "Zero");
+});
+
+test("capturing a stopped session clears its identifications for the next one", async () => {
+  const ctx = stopHarness([identification("speaker_0", 0, 4000, "Zero")]);
+  await ctx.stopLiveSpeakerIdentification();
+  const { diarizationSegments } = await ctx.captureMeetingDiarizationState();
+  assert.deepEqual(Array.from(diarizationSegments), []);
+  assert.deepEqual(Array.from(ctx.meetingLiveIdentifications), []);
+});
