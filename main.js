@@ -1504,7 +1504,7 @@ async function startApp() {
   }
 
   app.on("browser-window-focus", () => {
-    void managedDevicePolicy.refresh();
+    managedDevicePolicy.refreshOnFocus();
     if (googleCalendarManager) googleCalendarManager.syncOnFocus();
     if (microsoftCalendarManager) microsoftCalendarManager.syncOnFocus();
     if (appleCalendarManager) appleCalendarManager.syncOnFocus();
