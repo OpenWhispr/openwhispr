@@ -284,6 +284,15 @@ test.before(async () => {
 });
 const invoke = (channel, ...args) => handlers.get(channel)({ sender: editor }, ...args);
 
+function revokeTranscription(restriction) {
+  if (restriction === "local-only") setDeviceValues({ RequireSignIn: false });
+  else {
+    const policy = defaultDevicePolicy();
+    policy.transcription.allowedByokProviders = ["openai"];
+    setDeviceValues({ Policy: JSON.stringify(policy) });
+  }
+}
+
 for (const restriction of ["local-only", "provider"]) {
   test(`native ${restriction} retirement closes realtime without committing buffered audio`, async (t) => {
     const { WebSocket, WebSocketServer } = require("ws");
@@ -322,15 +331,91 @@ for (const restriction of ["local-only", "provider"]) {
       channel: "dictation-realtime-start",
       args: [{ mode: "byok", provider: "tinfoil-realtime" }],
     });
-    if (restriction === "local-only") setDeviceValues({ RequireSignIn: false });
-    else {
-      const policy = defaultDevicePolicy();
-      policy.transcription.allowedByokProviders = ["openai"];
-      setDeviceValues({ Policy: JSON.stringify(policy) });
-    }
+    revokeTranscription(restriction);
     await closed.promise;
     assert.ok(frames.includes("input_audio_buffer.append"));
     assert.equal(frames.includes("input_audio_buffer.commit"), false);
+  });
+
+  test(`native ${restriction} retirement closes Gemini Live without ending the turn`, async (t) => {
+    const { WebSocketServer } = require("ws");
+    const { GeminiLiveStreaming } = require("../../src/helpers/geminiLiveStreaming");
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const received = [];
+    const audio = deferred();
+    const closed = deferred();
+    t.after(() => server.close());
+    server.on("connection", (socket) => {
+      socket.on("close", () => closed.resolve());
+      socket.on("message", (data) => {
+        const message = JSON.parse(data);
+        received.push(Object.keys(message.realtimeInput ?? message)[0]);
+        if (message.setup) socket.send(JSON.stringify({ setupComplete: {} }));
+        if (message.realtimeInput?.audio) audio.resolve();
+        if (message.realtimeInput?.audioStreamEnd)
+          socket.send(
+            JSON.stringify({
+              serverContent: { inputTranscription: { text: "revoked" }, generationComplete: true },
+            })
+          );
+      });
+    });
+    const streaming = new GeminiLiveStreaming();
+    t.after(() => streaming.cleanup());
+    streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+    const finals = [];
+    streaming.onFinalTranscript = (text) => finals.push(text);
+    await streaming.connect({ token: "saved-provider-key", mode: "byok" });
+    streaming.sendAudio(Buffer.alloc(1600));
+    await audio.promise;
+    target.geminiStreaming = streaming;
+    target._remoteStreamPolicies.set("geminiStreaming", {
+      channel: "gemini-streaming-start",
+      args: [{ mode: "byok" }],
+    });
+    revokeTranscription(restriction);
+    await closed.promise;
+    assert.deepEqual(received, ["setup", "audio"]);
+    assert.deepEqual(finals, []);
+  });
+
+  test(`native ${restriction} retirement closes Corti without flushing`, async (t) => {
+    const { WebSocketServer } = require("ws");
+    const CortiStreaming = require("../../src/helpers/cortiStreaming");
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const received = [];
+    const audio = deferred();
+    const closed = deferred();
+    t.after(() => server.close());
+    server.on("connection", (socket) => {
+      socket.on("close", () => closed.resolve());
+      socket.on("message", (data, isBinary) => {
+        if (isBinary) return audio.resolve();
+        const { type } = JSON.parse(data);
+        received.push(type);
+        if (type === "config") socket.send(JSON.stringify({ type: "CONFIG_ACCEPTED" }));
+        if (type === "flush") socket.send(JSON.stringify({ type: "flushed" }));
+      });
+    });
+    const streaming = new CortiStreaming();
+    t.after(() => streaming.cleanup());
+    streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+    const sessionEnds = [];
+    streaming.onSessionEnd = (result) => sessionEnds.push(result);
+    await streaming.connect({ token: "saved-provider-key", environment: "us", tenant: "base" });
+    streaming.sendAudio(Buffer.alloc(1600));
+    await audio.promise;
+    target.cortiStreaming = streaming;
+    target._remoteStreamPolicies.set("cortiStreaming", {
+      channel: "corti-streaming-start",
+      args: [{}],
+    });
+    revokeTranscription(restriction);
+    await closed.promise;
+    assert.deepEqual(received, ["config"]);
+    assert.deepEqual(sessionEnds, []);
   });
 }
 

@@ -721,6 +721,20 @@ const {
   meetingDestinationContext,
 } = require("./meetingNotificationDestination");
 
+// A replaced or revoked session must go quiet and drop what it holds: a commit
+// would send its audio on, and a late final or socket error would land in the
+// renderer as if it came from the live session.
+function retireStreaming(streaming) {
+  if (!streaming) return;
+  streaming.onPartialTranscript = null;
+  streaming.onFinalTranscript = null;
+  streaming.onError = null;
+  streaming.onSessionEnd = null;
+  if (streaming.cleanupAll) streaming.cleanupAll();
+  else streaming.cleanupWarmConnection?.();
+  streaming.disconnect({ commit: false }).catch(() => {});
+}
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -1907,9 +1921,7 @@ class IPCHandlers {
       "_meetingMicStreaming",
       "_meetingSystemStreaming",
     ]) {
-      if (this[key]?.cleanupAll) this[key].cleanupAll();
-      else this[key]?.cleanupWarmConnection?.();
-      void this[key]?.disconnect({ commit: false }).catch(() => {});
+      retireStreaming(this[key]);
       this[key] = null;
     }
     this.connectorManager?.accountChanged();
@@ -1923,9 +1935,7 @@ class IPCHandlers {
     for (const [property, operation] of this._remoteStreamPolicies) {
       if (productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
         continue;
-      if (this[property]?.cleanupAll) this[property].cleanupAll();
-      else this[property]?.cleanupWarmConnection?.();
-      void this[property]?.disconnect({ commit: false }).catch(() => {});
+      retireStreaming(this[property]);
       this[property] = null;
       this._remoteStreamPolicies.delete(property);
     }
@@ -10874,16 +10884,6 @@ class IPCHandlers {
       };
     };
 
-    // A session being replaced must go quiet: a late final or socket error from
-    // it would land in the renderer as if it came from the live session.
-    const retireDictationStreaming = (streaming) => {
-      streaming.onPartialTranscript = null;
-      streaming.onFinalTranscript = null;
-      streaming.onError = null;
-      streaming.onSessionEnd = null;
-      streaming.disconnect({ commit: false }).catch(() => {});
-    };
-
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
     const ORUKEET_IDLE_TIMEOUT_MS = 60 * 1000;
 
@@ -10972,7 +10972,7 @@ class IPCHandlers {
       // commit would only surface its head as a final from the wrong session.
       // Frames that reached the old session before the start are dropped with it.
       if (this._dictationStreaming) {
-        retireDictationStreaming(this._dictationStreaming);
+        retireStreaming(this._dictationStreaming);
         this._dictationStreaming = null;
       }
 
@@ -14082,7 +14082,7 @@ class IPCHandlers {
           !options.forceNew &&
           streaming.connectionKey === geminiConnectionKey(options);
         if (!usedWarmConnection) {
-          if (streaming.isConnected) await streaming.disconnect(false);
+          if (streaming.isConnected) await streaming.disconnect({ commit: false });
           await connectGeminiStreaming(event, options);
         }
         for (const buffer of geminiStartAudio) streaming.sendAudio(buffer);
@@ -14159,7 +14159,7 @@ class IPCHandlers {
         const audioBytesSent = this.geminiStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.geminiStreaming) {
-          result = await this.geminiStreaming.disconnect(true);
+          result = await this.geminiStreaming.disconnect();
         }
 
         return { success: true, text: result?.text || "", model, audioBytesSent };
@@ -14207,7 +14207,7 @@ class IPCHandlers {
           this.cortiStreaming = new CortiStreaming();
         }
         if (this.cortiStreaming.isConnected) {
-          await this.cortiStreaming.disconnect(false);
+          await this.cortiStreaming.disconnect({ commit: false });
         }
 
         // Buffer before the token mint (a network round trip unless cached) so
@@ -14260,7 +14260,7 @@ class IPCHandlers {
         const audioBytesSent = this.cortiStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.cortiStreaming) {
-          result = await this.cortiStreaming.disconnect(true);
+          result = await this.cortiStreaming.disconnect();
         }
         return { success: true, text: result?.text || "", model, audioBytesSent };
       } catch (error) {

@@ -489,7 +489,7 @@ class CortiStreaming {
     });
   }
 
-  async disconnect(closeStream = true) {
+  async disconnect({ commit = true } = {}) {
     if (!this.ws) {
       // A stop before the socket exists must not leave the start's held audio behind.
       this.cleanup();
@@ -498,7 +498,7 @@ class CortiStreaming {
 
     this.isDisconnecting = true;
 
-    if (closeStream && this.ws.readyState === WebSocket.OPEN) {
+    if (commit && this.ws.readyState === WebSocket.OPEN) {
       // Corti's close handshake: flush buffered audio, wait for the trailing
       // finals (`flushed`), then signal `end` and close cleanly.
       this.ws.send(JSON.stringify({ type: "flush" }));
