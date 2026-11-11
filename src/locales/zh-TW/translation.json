@@ -3479,7 +3479,7 @@
       "workspacePrivate": "{{workspace}} › 私人",
       "confirmCopyTitle": "複製到私人？",
       "confirmCopy": "筆記仍會保留在 {{space}} 中。副本為私人內容，只會儲存在這部裝置上。",
-      "copiedToPrivate": "已複製到私人",
+      "copiedToPrivate": "已複製到「私人」",
       "couldNotCopyNote": "無法複製筆記",
       "openCopy": "開啟",
       "noteAlreadyInTeam": "「{{title}}」已在 {{space}} 中。如需保留私人副本，請使用「複製到私人」。",

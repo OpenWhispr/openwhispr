@@ -4035,7 +4035,7 @@
       "workspacePrivate": "{{workspace}} › Privat",
       "confirmCopyTitle": "Nach Privat kopieren?",
       "confirmCopy": "Die Notiz bleibt in {{space}}. Die Kopie ist privat und bleibt auf diesem Gerät.",
-      "copiedToPrivate": "Nach Privat kopiert",
+      "copiedToPrivate": "Nach „Privat“ kopiert",
       "couldNotCopyNote": "Notiz konnte nicht kopiert werden",
       "openCopy": "Öffnen",
       "noteAlreadyInTeam": "„{{title}}“ ist bereits in {{space}}. Für eine private Kopie „Nach Privat kopieren“ verwenden.",
