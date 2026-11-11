@@ -1472,15 +1472,15 @@ class IPCHandlers {
         Math.min(MAX_SPEAKER_COUNT, Number(payload.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT)
       );
       this.activeMeetingSpeakerConfig = { enabled, expectedCount, explicit: true };
-    } else {
+    } else if (this.activeMeetingSpeakerConfig) {
       // The diarization toggle reuses this channel and only carries the count
       // along, so it changes `enabled` alone: it must neither end automatic mode
       // nor freeze the count against roster-driven refreshes.
-      const config =
-        this.activeMeetingSpeakerConfig ??
-        this._resolveInitialMeetingSpeakerConfig(this._activeMeetingNoteId);
-      this.activeMeetingSpeakerConfig = { ...config, enabled };
+      this.activeMeetingSpeakerConfig = { ...this.activeMeetingSpeakerConfig, enabled };
     }
+    // A toggle push with no session config is a debounced one landing after stop
+    // (or before start): building a config then would hand the next session a
+    // stale one, since start keeps a config it finds. Start resolves its own.
     liveSpeakerIdentifier.setEnabled(enabled);
     this._applyLiveSpeakerLimit();
   }

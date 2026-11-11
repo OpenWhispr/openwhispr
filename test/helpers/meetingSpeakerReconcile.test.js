@@ -410,6 +410,30 @@ test.describe("automatic speaker mode", () => {
     );
   });
 
+  // The renderer's diarization toggle push is debounced, so it can land after
+  // stop cleared the session config; building one then from a note id that may
+  // already be gone would hand the next session a stale automatic config.
+  test("a diarization toggle push with no session config stores none", () => {
+    const enabledCalls = [];
+    liveSpeakerIdentifier.setEnabled = (enabled) => enabledCalls.push(enabled);
+    self.activeMeetingSpeakerConfig = null;
+    self._activeMeetingNoteId = null;
+    call("_setSessionSpeakerConfig", { enabled: false, expectedCount: 2, countIsExplicit: false });
+    assert.equal(self.activeMeetingSpeakerConfig, null);
+    assert.deepEqual(enabledCalls, [false]);
+    assert.deepEqual(limits, []);
+  });
+
+  test("an explicit push with no session config still stores the user's count", () => {
+    self.activeMeetingSpeakerConfig = null;
+    call("_setSessionSpeakerConfig", { enabled: true, expectedCount: 4, countIsExplicit: true });
+    assert.deepEqual(self.activeMeetingSpeakerConfig, {
+      enabled: true,
+      expectedCount: 4,
+      explicit: true,
+    });
+  });
+
   test("the display count follows promotions and merges, never below 2, and is broadcast as automatic", () => {
     self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
     confirmed = 3;
