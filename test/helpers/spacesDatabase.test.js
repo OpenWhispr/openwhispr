@@ -376,6 +376,40 @@ test("migration 6 gives each account its own pending private space", (t) => {
   assertEveryRowInItsFolderSpace(after);
 });
 
+// Only the stand-in's rows split: a teamspace's notes, folders and chats stay where they are,
+// whoever's account a row carries.
+test("migration 6 leaves teamspace notes, folders and chats untouched", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const sqlite = db.db;
+  const standInId = db._standInPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const teamFolder = seedFolder(sqlite, team.id, { name: "Specs", cloudId: "cloud-specs" });
+  const ownedTeamFolder = seedFolder(sqlite, team.id, { name: "Mine", accountId: "a" });
+  const teamNotes = [
+    seedNote(sqlite, team.id, { title: "team root", cloudId: "cloud-1" }),
+    seedNote(sqlite, team.id, { title: "team filed", folderId: teamFolder, cloudId: "cloud-2" }),
+    seedNote(sqlite, team.id, { title: "carries a", accountId: "a", folderId: ownedTeamFolder }),
+  ];
+  const teamChat = seedChat(sqlite, { title: "Specs chat", accountId: "a", folderId: teamFolder });
+  // A private note of a's, so the split has an account to move.
+  seedNote(sqlite, standInId, { title: "a's own", accountId: "a" });
+  const notesBefore = new Map(teamNotes.map((id) => [id, noteRow(sqlite, id)]));
+  const foldersBefore = new Map(
+    [teamFolder, ownedTeamFolder].map((id) => [id, folderRow(sqlite, id)])
+  );
+  const chatBefore = chatRow(sqlite, teamChat);
+
+  const migrated = relaunchFromVersion5(t, db);
+  const after = migrated.db;
+  assert.ok(pendingRowId(after, "a"), "the split ran");
+  for (const id of teamNotes) assert.deepEqual(noteRow(after, id), notesBefore.get(id));
+  for (const id of [teamFolder, ownedTeamFolder]) {
+    assert.deepEqual(folderRow(after, id), foldersBefore.get(id));
+  }
+  assert.deepEqual(chatRow(after, teamChat), chatBefore);
+});
+
 test("migration 6 is idempotent across launches", (t) => {
   const db = createDb(t);
   if (!db) return;

@@ -59,26 +59,30 @@ test("while main lags, a workspace known not to be the default reads none of the
 });
 
 test("the dictation window knows the default from the last list this account saw", async (t) => {
-  const { resolve, usePolicyStore } = await loadResolver(
-    t,
-    { getSpaces: async () => SPACES, getPrivateSpaceId: async () => 1 },
-    {
-      storage: {
-        workspaceListCache: JSON.stringify({
-          accountId: "account-1",
-          fetchedAt: Date.now(),
-          workspaces: [
-            { id: "a", name: "A", role: "member" },
-            { id: "b", name: "B", role: "owner", is_default: true },
-          ],
-        }),
-      },
-      accountId: "account-1",
-    }
-  );
-  assert.ok(usePolicyStore);
-  // B is the default: the pending notes are B's, not A's.
-  assert.deepEqual(sorted(await resolve()), [1, 2, 6]);
+  const listSavedFor = (accountId) => ({
+    storage: {
+      workspaceListCache: JSON.stringify({
+        accountId,
+        fetchedAt: Date.now(),
+        workspaces: [
+          { id: "a", name: "A", role: "member" },
+          { id: "b", name: "B", role: "owner", is_default: true },
+        ],
+      }),
+    },
+    accountId: "account-1",
+  });
+  const electronAPI = { getSpaces: async () => SPACES, getPrivateSpaceId: async () => 1 };
+
+  await t.test("its own list names B the default: the pending notes are B's", async (st) => {
+    const { resolve } = await loadResolver(st, electronAPI, listSavedFor("account-1"));
+    assert.deepEqual(sorted(await resolve()), [1, 2, 6]);
+  });
+
+  await t.test("another account's list says nothing: the pending notes show", async (st) => {
+    const { resolve } = await loadResolver(st, electronAPI, listSavedFor("account-2"));
+    assert.deepEqual(sorted(await resolve()), [1, 2, 6, 9]);
+  });
 });
 
 test("a window holding the workspace list reads what its tree shows", async (t) => {
