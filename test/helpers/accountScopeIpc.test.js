@@ -485,6 +485,31 @@ test("a bearer the API refuses with nothing held updates as a guest, while a hel
   assert.equal(status.updateMode, "it_managed");
 });
 
+test("a refused bearer the server called unresolvable stays fail-closed, not a guest", async (t) => {
+  restoreUpdaterState(t);
+  useTestApi(t);
+  t.mock.method(electronStub.net, "fetch", async () => ({
+    ok: false,
+    status: 401,
+    json: async () => ({}),
+  }));
+  // The fail-closed marker an earlier POLICY_UNRESOLVABLE left on disk.
+  cachePolicyForBearer("unresolved-bearer", {
+    managed: false,
+    policy: null,
+    policyUpdatedAt: null,
+    requiresManagedPolicy: true,
+  });
+  tokenState = { token: "unresolved-bearer", generation: 115 };
+  fakeThis.databaseManager = scopedDatabase(null);
+  fakeThis.windowManager = { retireMeetingNotificationScope() {} };
+  fakeThis.updateManager = createUpdater();
+  await fakeThis.updateManager.refreshPolicy();
+  const status = await fakeThis.updateManager.getUpdateStatus();
+  assert.equal(status.policyReady, false);
+  assert.equal(status.updateMode, null);
+});
+
 test("a stray cookie leaves a signed-out member a guest without reaching the API", async (t) => {
   restoreUpdaterState(t);
   useTestApi(t);
