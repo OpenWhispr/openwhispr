@@ -195,3 +195,26 @@ test("identifications older than the retention window are pruned", () => {
     ["speaker_1"]
   );
 });
+
+test("a ranged row stored after a speaker merge is labelled with the kept speaker", () => {
+  const ctx = harness([identification("speaker_1", 0, 4000, null)]);
+  vm.runInContext("globalThis.remapMergedSpeakers = remapMergedSpeakers;", ctx);
+  ctx.remapMergedSpeakers([{ keep: "speaker_0", remove: "speaker_1", displayName: "Ana" }]);
+  ctx.store("hello", "system", T, null, true, T + 4000);
+  const [row] = ctx.meetingDiarizationSegments;
+  assert.equal(row.speaker, "speaker_0");
+  assert.equal(row.speakerName, "Ana");
+});
+
+test("a merge without a name keeps the identifications' own names", () => {
+  const ctx = harness([identification("speaker_1", 0, 4000, "Bo")]);
+  vm.runInContext("globalThis.remapMergedSpeakers = remapMergedSpeakers;", ctx);
+  ctx.remapMergedSpeakers([{ keep: "speaker_0", remove: "speaker_1", displayName: null }]);
+  assert.deepEqual(
+    Array.from(ctx.meetingLiveIdentifications, ({ speakerId, displayName }) => [
+      speakerId,
+      displayName,
+    ]),
+    [["speaker_0", "Bo"]]
+  );
+});

@@ -8534,6 +8534,27 @@ class IPCHandlers {
       }
     };
 
+    const remapMergedSpeakers = (merges) => {
+      for (const { keep, remove, displayName } of merges) {
+        for (const seg of meetingDiarizationSegments) {
+          if (seg.speaker === remove) {
+            seg.speaker = keep;
+            if (displayName) seg.speakerName = displayName;
+          }
+        }
+        // Local rows stored after the merge are labelled from these, and the removed id no longer exists.
+        meetingLiveIdentifications = meetingLiveIdentifications.map((identification) =>
+          identification.speakerId === remove
+            ? {
+                ...identification,
+                speakerId: keep,
+                ...(displayName ? { displayName } : {}),
+              }
+            : identification
+        );
+      }
+    };
+
     const sendMeetingFinalSegment = ({
       text,
       source,
@@ -9804,14 +9825,7 @@ class IPCHandlers {
           const merges = await liveSpeakerIdentifier.recluster();
           if (!merges.length) return;
 
-          for (const { keep, remove, displayName } of merges) {
-            for (const seg of meetingDiarizationSegments) {
-              if (seg.speaker === remove) {
-                seg.speaker = keep;
-                if (displayName) seg.speakerName = displayName;
-              }
-            }
-          }
+          remapMergedSpeakers(merges);
 
           win.webContents.send("meeting-speakers-merged", merges);
         }, 30_000);
