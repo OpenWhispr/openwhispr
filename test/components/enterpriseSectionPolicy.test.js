@@ -50,3 +50,47 @@ test("unmanaged users can still select and configure Azure OpenAI", async (t) =>
   assert.equal(tabs(panel).selectedId, "azure");
   assert.equal(panel.find((node) => node.props?.provider === "azure").length, 1);
 });
+
+test("an Azure-only policy hides manual setup and preserves every scope for policy removal", async (t) => {
+  const scopes = [
+    ["dictationCleanup", "cleanup"],
+    ["dictationAgent", "dictationAgent"],
+    ["noteFormatting", "noteFormatting"],
+    ["chatIntelligence", "chatAgent"],
+    ["dictationTranslation", "translation"],
+  ];
+  const panel = await mountSettingsPanel(t, {
+    module: "/components/settings/InferenceConfigEditor.tsx",
+    props: { scope: "dictationCleanup" },
+    settings: {
+      enterpriseSetupMode: "manual",
+      ...Object.fromEntries(
+        scopes.flatMap(([, prefix]) => [
+          [`${prefix}Mode`, "enterprise"],
+          [`${prefix}Provider`, "azure"],
+          [`${prefix}Model`, "personal-deployment"],
+        ])
+      ),
+    },
+    policy: { status: "unmanaged", policy: null },
+  });
+  const enterpriseSection = () =>
+    panel.find((node) => typeof node.props?.currentProvider === "string")[0]?.props;
+
+  for (const [scope, prefix] of scopes) {
+    await panel.setProps({ scope });
+    assert.equal(enterpriseSection().currentProvider, "azure", scope);
+    await panel.setPolicy({
+      status: "managed",
+      policy: managedPolicy({
+        llm: { allowedModes: ["enterprise"], allowedEnterpriseProviders: ["azure"] },
+      }),
+    });
+    assert.equal(enterpriseSection(), undefined, scope);
+    assert.equal(panel.state()[`${prefix}Provider`], "azure", scope);
+    assert.equal(panel.state()[`${prefix}Model`], "personal-deployment", scope);
+    await panel.setPolicy({ status: "unmanaged", policy: null });
+    assert.equal(enterpriseSection().currentProvider, "azure", scope);
+    assert.equal(enterpriseSection().reasoningModel, "personal-deployment", scope);
+  }
+});
