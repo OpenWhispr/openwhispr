@@ -591,8 +591,12 @@ test("a credential read that fails isn't the server's verdict, so it locks no on
   assert.equal(app.gate.failure("transcription", "base"), null);
 });
 
-test("a managed account's rotated token whose first lookup fails stays managed", async (t) => {
+test("a managed account's rotated token whose first lookup fails refuses new work, stops none", async (t) => {
   const app = await signedIn(t, { policy: () => managed(["base"]) });
+  const meeting = await app.gate.authorize("transcription", "base");
+  app.target._activeLocalMeetingLease = meeting;
+  let remoteStops = 0;
+  app.target._stopRemoteProductWork = () => remoteStops++;
   policyFetch = async () => json({}, 500);
 
   // Before set-active-account-scope, so the binding still names the old token.
@@ -602,6 +606,10 @@ test("a managed account's rotated token whose first lookup fails stays managed",
   const current = app.target.effectivePolicyManager.getCurrent();
   assert.equal(current.success, false);
   assert.equal(current.managed, true);
+  // A token rotation alone interrupts nothing running.
+  assert.deepEqual(app.stoppedMeetings, []);
+  assert.equal(remoteStops, 0);
+  assert.equal(meeting.signal.aborted, false);
   await assert.rejects(app.gate.authorize("transcription", "small"), {
     code: "POLICY_UNRESOLVABLE",
   });

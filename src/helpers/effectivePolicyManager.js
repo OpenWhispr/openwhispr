@@ -130,8 +130,13 @@ function resolveEffectivePolicy(device, workspace, scope) {
   if (device.status === "loading") return failure("loading", "DEVICE_POLICY_LOADING");
   if (device.status === "invalid") return failure("error", "DEVICE_POLICY_INVALID");
   if (scope.authenticated && !workspace) return failure("loading", "POLICY_LOADING");
+  // With only the account's last verdict as evidence, this credential's own is
+  // still on its way: new work is refused, and nothing running is revoked.
   if (scope.authenticated && !workspace.success && managed)
-    return failure("error", workspace.code ?? "POLICY_UNRESOLVABLE");
+    return failure(
+      device.managed === true || workspace.code === "POLICY_UNRESOLVABLE" ? "error" : "loading",
+      workspace.code ?? "POLICY_UNRESOLVABLE"
+    );
   if (!scope.authenticated && device.requireSignIn)
     return failure("error", "POLICY_SIGN_IN_REQUIRED");
   try {
