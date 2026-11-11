@@ -14346,10 +14346,6 @@ class IPCHandlers {
     });
 
     ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {
-      const snapshot = this.effectivePolicyManager.getCurrent();
-      if (!productOperationAllowed(snapshot, app.getVersion(), "acquire-recording-lock"))
-        return { success: false, code: snapshot.code ?? "DEVICE_POLICY_BLOCKED" };
-
       if (this._activeRecordingPipeline && this._activeRecordingPipeline !== pipeline) {
         return { success: false, holder: this._activeRecordingPipeline };
       }

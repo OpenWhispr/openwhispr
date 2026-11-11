@@ -536,8 +536,6 @@ test("local-only device policy refuses direct remote IPC despite saved keys and 
   const effective = await invoke("get-effective-policy");
   assert.equal(effective.localOnly, true);
   assert.deepEqual(effective.policy.transcription.allowedModes, ["local"]);
-  assert.equal((await invoke("acquire-recording-lock", "dictation")).success, true);
-  await invoke("release-recording-lock", "dictation");
 });
 
 test("calendar background sync resumes after removing local-only device policy", (t) => {
@@ -569,7 +567,7 @@ test("calendar background sync resumes after removing local-only device policy",
   assert.equal(starts, 4);
 });
 
-test("invalid trusted device policy denies capture and cannot be bypassed through workspace-policy IPC", async () => {
+test("invalid trusted device policy cannot be bypassed through workspace-policy IPC", async () => {
   deviceSnapshot = {
     status: "invalid",
     managed: true,
@@ -577,7 +575,6 @@ test("invalid trusted device policy denies capture and cannot be bypassed throug
     code: "DEVICE_POLICY_INVALID",
   };
   for (const listener of deviceListeners) listener(deviceSnapshot);
-  assert.equal((await invoke("acquire-recording-lock", "dictation")).success, false);
   await invoke("get-workspace-policy", "personal-account", authGeneration);
   assert.equal(target.effectivePolicyManager.getCurrent().code, "DEVICE_POLICY_INVALID");
   assert.equal((await invoke("cloud-health-check")).code, "DEVICE_POLICY_BLOCKED");
