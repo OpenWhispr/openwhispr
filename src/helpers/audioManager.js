@@ -1727,6 +1727,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         parakeetModel,
         cohereModel,
       } = getSettings();
+      // A local Whisper server that is down (unloaded when idle) cold-starts while
+      // the user speaks instead of after the recording stops.
+      if (this._runsLocalPreview() && localTranscriptionProvider === "whisper" && whisperModel) {
+        window.electronAPI?.whisperServerWarm?.(whisperModel)?.catch?.((error) => {
+          logger.debug("whisper-server warm-up failed", { error: error?.message }, "audio");
+        });
+      }
       const isNvidia = localTranscriptionProvider === "nvidia";
       // Online models stream+commit during capture, so PCM runs even with preview off.
       const streamingCommit = useLocalWhisper && isNvidia && isOnlineParakeetModel(parakeetModel);

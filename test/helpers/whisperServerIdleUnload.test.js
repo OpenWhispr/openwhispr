@@ -168,3 +168,73 @@ test("an idle unload stops the wake re-warm until the next dictation", async (t)
     false
   );
 });
+
+// A dictation that starts while the server is down warms it in the background,
+// so the cold start overlaps the speech instead of following it.
+function makeWarmableWhisper() {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-warm-"));
+  const modelFile = path.join(dir, "ggml-turbo.bin");
+  fs.writeFileSync(modelFile, "");
+  const whisper = new WhisperManager();
+  const starts = [];
+  const sm = whisper.serverManager;
+  sm.isAvailable = () => true;
+  sm._doStart = async (modelPath, options) => {
+    starts.push({ modelPath, options });
+    // The real _doStart records the GPU part of the start signature.
+    sm.gpuSignature = WhisperServerManager.getGpuSignature(options);
+    sm.process = {};
+    sm.ready = true;
+    sm.modelPath = modelPath;
+  };
+  sm.stop = async () => {
+    sm.clearIdleTimer();
+    sm.process = null;
+    sm.ready = false;
+  };
+  whisper.getModelPath = () => modelFile;
+  whisper.resolveGpuStartOptions = () => ({ useCuda: true, useVulkan: false });
+  return { whisper, sm, starts, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("a dictation after an idle unload restarts the server with the last dictation's options", async (t) => {
+  const { whisper, sm, starts, cleanup } = makeWarmableWhisper();
+  t.after(cleanup);
+  const dictationOptions = {
+    useCuda: true,
+    useVulkan: false,
+    vadEnabled: true,
+    vadModelPath: "/vad.bin",
+  };
+  await sm._policyAllowedStart(whisper.getModelPath(), dictationOptions);
+  await sm.stop(); // the idle unload
+
+  const result = await whisper.warmForDictation("turbo-q5");
+  assert.equal(result.success, true);
+  assert.equal(starts.length, 2);
+  assert.equal(starts[1].options.vadEnabled, true, "VAD is replayed");
+  assert.equal(whisper.currentServerModel, "turbo-q5");
+
+  // The transcription's own start finds the same signature and does not restart.
+  await sm._policyAllowedStart(whisper.getModelPath(), dictationOptions);
+  assert.equal(starts.length, 2);
+});
+
+test("a running or starting server is left alone by the dictation warm-up", async (t) => {
+  const { whisper, sm, starts, cleanup } = makeWarmableWhisper();
+  t.after(cleanup);
+  await sm._policyAllowedStart(whisper.getModelPath(), {});
+  assert.deepEqual(await whisper.warmForDictation("turbo-q5"), { success: true, skipped: true });
+
+  sm.ready = false;
+  sm.startupPromise = Promise.resolve();
+  assert.deepEqual(await whisper.warmForDictation("turbo-q5"), { success: true, skipped: true });
+  sm.startupPromise = null;
+
+  sm.isRemote = true;
+  assert.deepEqual(await whisper.warmForDictation("turbo-q5"), { success: true, skipped: true });
+  assert.equal(starts.length, 1);
+});

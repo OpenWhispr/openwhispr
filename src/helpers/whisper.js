@@ -476,6 +476,23 @@ class WhisperManager {
     this.currentServerModel = null;
   }
 
+  // A dictation that starts while the server is down (idle unload, a failed or
+  // skipped pre-warm) starts it in the background, so the cold start runs while
+  // the user speaks rather than after the recording stops. The last start options
+  // (VAD, threads) are replayed so the transcription's own start is a no-op; GPU
+  // flags are re-resolved like any start. A running or starting server is left alone.
+  async warmForDictation(modelName) {
+    const sm = this.serverManager;
+    if (!modelName || sm.isRemote || sm.ready || sm.startupPromise) {
+      return { success: true, skipped: true };
+    }
+    debugLogger.info("Warming whisper-server for a starting dictation", { model: modelName });
+    return this.startServer(modelName, {
+      ...sm.lastStartOptions,
+      ...this.resolveGpuStartOptions(),
+    });
+  }
+
   async onWakeFromSleep() {
     const sm = this.serverManager;
     const modelName = this.currentServerModel;
