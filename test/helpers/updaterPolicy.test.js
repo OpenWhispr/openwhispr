@@ -35,6 +35,7 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check, 
   const events = [];
   const autoUpdater = new EventEmitter();
   const nativeUpdater = new EventEmitter();
+  const app = new EventEmitter();
   const httpExecutor = {
     aborts: 0,
     resumeRequests() {},
@@ -87,7 +88,7 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check, 
         }
       };
     }
-    if (request === "electron") return { autoUpdater: nativeUpdater };
+    if (request === "electron") return { autoUpdater: nativeUpdater, app };
     if (request === "child_process") return { execSync: () => "0" };
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -104,6 +105,7 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check, 
     manager,
     autoUpdater,
     nativeUpdater,
+    app,
     httpExecutor,
     events,
     tokens,
@@ -431,6 +433,23 @@ test("a check during a download leaves IT policy the download's token to cancel"
   setPolicy(managed("it_managed"));
   assert.equal(tokens[0].cancelled, true);
 });
+
+for (const platform of ["win32", "linux"]) {
+  test(`${platform} installs a finished download on quit only under a current verdict`, async () => {
+    Object.defineProperty(process, "platform", { value: platform, configurable: true });
+    if (platform === "linux") process.env.APPIMAGE = "/tmp/OpenWhispr.AppImage";
+    const { manager, autoUpdater, app } = setup();
+    manager.setAutoUpdatesEnabled(false);
+    await manager.checkForUpdates();
+    await manager.downloadUpdate();
+    manager.invalidatePolicy();
+    manager.updatePolicy({ success: false, code: "POLICY_UNAVAILABLE" });
+    app.emit("before-quit");
+    assert.equal(autoUpdater.autoInstallOnAppQuit, false);
+    manager.cleanup();
+    assert.equal(app.listenerCount("before-quit"), 0);
+  });
+}
 
 test("a download after IT policy lifts starts on a fresh token", async () => {
   const { manager, autoUpdater, setPolicy } = setup();

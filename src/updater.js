@@ -15,6 +15,7 @@ class UpdateManager {
     this.isQuittingForUpdate = false;
     this.handleBeforeQuitForUpdate = null;
     this.handleNativeUpdateDownloaded = null;
+    this.handleBeforeQuit = null;
     this.eventListeners = [];
     this.updateCheckInterval = null;
     this.windowManager = null;
@@ -184,6 +185,11 @@ class UpdateManager {
     if (process.platform === "darwin") {
       this.handleNativeUpdateDownloaded = () => this._notifyStatus();
       nativeUpdater.on("update-downloaded", this.handleNativeUpdateDownloaded);
+    } else {
+      // main.js ends a quit with app.exit(), which skips will-quit but not the
+      // quit event NSIS and AppImage install from.
+      this.handleBeforeQuit = () => this._syncInstallOnQuit({ quitting: true });
+      require("electron").app.on("before-quit", this.handleBeforeQuit);
     }
   }
 
@@ -453,11 +459,16 @@ class UpdateManager {
     );
   }
 
-  // electron-updater reads this once, as a download completes, so it follows the
-  // verdict running work follows: a pending lookup must not turn it off.
-  _syncInstallOnQuit() {
+  // electron-updater reads this as a download completes, to decide whether to
+  // install it on quit (Squirrel.Mac only gets the file if so), and NSIS and
+  // AppImage read it again as the app quits. The first follows the verdict the
+  // download runs under, so a pending lookup doesn't drop it; the second needs
+  // a current verdict.
+  _syncInstallOnQuit({ quitting = false } = {}) {
     autoUpdater.autoInstallOnAppQuit =
-      this.updateMode !== null && this.updateMode !== "it_managed" && !this.installDeferred;
+      (quitting ? this.policyReady : this.updateMode !== null) &&
+      this.updateMode !== "it_managed" &&
+      !this.installDeferred;
   }
 
   _policyChanged() {
@@ -664,6 +675,10 @@ class UpdateManager {
         this.handleNativeUpdateDownloaded
       );
       this.handleNativeUpdateDownloaded = null;
+    }
+    if (this.handleBeforeQuit) {
+      require("electron").app.removeListener("before-quit", this.handleBeforeQuit);
+      this.handleBeforeQuit = null;
     }
   }
 }
