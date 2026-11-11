@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { AUDIO_POLICY_REFUSAL_CODES } = require("./audioPolicyRefusals");
+const { LOCAL_POLICY_CODES } = require("./localModelPolicyGate");
 
 // A local, append-only record of meeting recordings for an IT log collector
 // (#3029). Meeting audio never reaches the server, and a managed device may run
@@ -35,14 +36,11 @@ const STOP_REASONS = new Set([
   "window-lost",
   "app-quit",
 ]);
-// The renderer's own refusals: a restricted mode, and the local-model checks
-// (LocalModelRefusal in policyRules.ts) for a local transcription choice.
+// Plus the renderer's own "restricted" refusal.
 const REFUSAL_REASONS = new Set([
   ...AUDIO_POLICY_REFUSAL_CODES,
+  ...LOCAL_POLICY_CODES,
   "policyRestricted",
-  "POLICY_APP_VERSION_BLOCKED",
-  "POLICY_LOCAL_MODE_BLOCKED",
-  "POLICY_MODEL_BLOCKED",
 ]);
 
 const allowed = (values, value) => (values.has(value) ? value : null);
@@ -103,13 +101,18 @@ function createMeetingAuditLog({
     return path.join(userDataPath, "audit");
   }
 
-  async function rotate(dir) {
+  // Counts only this user's own files up to today's, so names another user
+  // planted in a shared folder can't push the real ones out.
+  async function rotate(dir, today) {
     try {
-      const files = (await fs.promises.readdir(dir))
-        .filter(
-          (name) => name.startsWith(filePrefix) && DAILY_FILE.test(name.slice(filePrefix.length))
-        )
-        .sort();
+      const files = [];
+      for (const name of (await fs.promises.readdir(dir)).sort()) {
+        if (!name.startsWith(filePrefix) || !DAILY_FILE.test(name.slice(filePrefix.length)))
+          continue;
+        if (name > today) continue;
+        const stat = await fs.promises.lstat(path.join(dir, name));
+        if (stat.isFile() && (!process.getuid || stat.uid === process.getuid())) files.push(name);
+      }
       await Promise.all(
         files.slice(0, -KEEP_FILES).map((name) => fs.promises.unlink(path.join(dir, name)))
       );
@@ -158,7 +161,7 @@ function createMeetingAuditLog({
     );
     if (file === lastFile) return;
     lastFile = file;
-    await rotate(dir);
+    await rotate(dir, path.basename(file));
   }
 
   // Replaced whole, so a crash mid-write never leaves a torn marker.

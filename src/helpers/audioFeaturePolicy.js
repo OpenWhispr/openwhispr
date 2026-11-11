@@ -1,5 +1,6 @@
 const { i18nMain } = require("./i18nMain");
 const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
+const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 const { POLICY_TIMEOUT_MS } = require("./connectors/connectorIpc");
 
 const FEATURE_BY_PURPOSE = {
@@ -162,7 +163,8 @@ function createAudioFeaturePolicy({
     // stopped by the policy was not refused.
     async run(event, purpose, handler, { signal: cancelSignal, onRefused } = {}) {
       const refused = (outcome) => {
-        if (isAudioPolicyRefusal(outcome)) onRefused?.(outcome);
+        if (isAudioPolicyRefusal(outcome) || isLocalModelPolicyRefusal(outcome))
+          onRefused?.(outcome);
         return outcome;
       };
       const job = { purpose, controller: new AbortController() };

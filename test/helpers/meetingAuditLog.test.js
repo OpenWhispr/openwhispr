@@ -185,6 +185,26 @@ test("rotation keeps the user's 90 newest daily files and leaves other files alo
   assert.ok(kept.includes("collector-state.json"));
 });
 
+// Another user of a shared folder could plant future-dated names to push this user's files out.
+test("rotation ignores future-dated names, keeping the user's real files", async () => {
+  const dir = path.join(userData, "audit");
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, `meeting-audit-jdoe-${day(1)}.jsonl`), "{}\n");
+  for (let index = 1; index <= 90; index += 1)
+    fs.writeFileSync(
+      path.join(dir, `meeting-audit-jdoe-9999-01-${String(index).padStart(2, "0")}.jsonl`),
+      ""
+    );
+
+  const { log } = harness();
+  log.recordingRefused({ noteId: null, trigger: "tray", reason: "POLICY_UNRESOLVABLE" });
+  await log.flush();
+
+  const kept = fs.readdirSync(dir);
+  assert.ok(kept.includes(`meeting-audit-jdoe-${day(1)}.jsonl`));
+  assert.ok(kept.includes(`meeting-audit-jdoe-${day(0)}.jsonl`));
+});
+
 // A device-wide AuditLogPath is shared by every OS user on the device.
 test("users sharing an AuditLogPath each write their own daily file", async () => {
   const shared = path.join(userData, "shared");
@@ -199,16 +219,27 @@ test("users sharing an AuditLogPath each write their own daily file", async () =
   ]);
 });
 
-test("a rotation that can't delete a file still keeps the open-session marker", async () => {
-  const dir = path.join(userData, "audit");
-  for (let offset = 1; offset <= 91; offset += 1)
-    fs.mkdirSync(path.join(dir, `meeting-audit-jdoe-${day(offset)}.jsonl`), { recursive: true });
-  const { log, warnings } = harness();
-  log.recordingStarted({ sessionId: "s1", noteId: 1, trigger: "hotkey" });
-  await log.flush();
-  assert.equal(JSON.parse(fs.readFileSync(marker(), "utf8")).sessionId, "s1");
-  assert.equal(warnings.length, 1);
-});
+// A folder whose files can't be deleted, though today's file still takes appends.
+test(
+  "a rotation that can't delete a file still keeps the open-session marker",
+  { skip: process.platform === "win32" },
+  async () => {
+    const dir = path.join(userData, "audit");
+    fs.mkdirSync(dir);
+    for (let offset = 0; offset <= 91; offset += 1)
+      fs.writeFileSync(path.join(dir, `meeting-audit-jdoe-${day(offset)}.jsonl`), "{}\n");
+    fs.chmodSync(dir, 0o555);
+    try {
+      const { log, warnings } = harness();
+      log.recordingStarted({ sessionId: "s1", noteId: 1, trigger: "hotkey" });
+      await log.flush();
+      assert.equal(JSON.parse(fs.readFileSync(marker(), "utf8")).sessionId, "s1");
+      assert.equal(warnings.length, 1);
+    } finally {
+      fs.chmodSync(dir, 0o755);
+    }
+  }
+);
 
 test("an unwritable path never throws into the recording and warns once", async () => {
   const blocked = path.join(userData, "not-a-folder");
