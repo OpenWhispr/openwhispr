@@ -35,16 +35,14 @@ export function assertAgentAllowedByPolicy(): void {
 }
 
 /**
- * The check for work already running, which ends only on a settled denial: an
- * unresolved verdict says nothing new about it. A device policy that can't be
- * read is a denial.
+ * The check for work already running, which ends only on a settled denial, as
+ * main's does: a verdict still loading says nothing new about it, while a
+ * settled error (an unreadable device policy, a policy the server called
+ * unresolvable, a sign-in the device requires) is a denial.
  */
 export function runningPolicyCheck(assertAllowed: () => void): () => void {
   return () => {
-    const { status, code } = usePolicyStore.getState();
-    const unresolved =
-      (status === "loading" || status === "error") && code !== "DEVICE_POLICY_INVALID";
-    if (!unresolved) assertAllowed();
+    if (usePolicyStore.getState().status !== "loading") assertAllowed();
   };
 }
 

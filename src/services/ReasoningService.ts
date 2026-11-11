@@ -194,8 +194,7 @@ function createAgentStreamPolicyCheck(
   let running = false;
   const assertAllowed = (): void => {
     const state = usePolicyStore.getState();
-    const unresolved =
-      state.status === "error" || state.status === "loading" || state.status === "idle";
+    const unresolved = state.status === "loading" || state.status === "idle";
     // By account, not credential: a rotated token keeps the account's verdict.
     // A suspended policy blanks the account without naming another one, and a
     // guest who signs in had no account to lose: its verdict decides from here.
@@ -206,7 +205,8 @@ function createAgentStreamPolicyCheck(
         messageKey: "common.policyAccountChanged",
       });
     }
-    // An unresolved verdict says nothing new about work already running.
+    // An unresolved verdict says nothing new about work already running; a
+    // settled error, as in runningPolicyCheck, is a denial.
     if (running && unresolved) return;
     assertAgentSessionAllowedByPolicy(provider, mode, model);
     running = true;
