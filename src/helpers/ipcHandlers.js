@@ -14916,14 +14916,11 @@ class IPCHandlers {
       transcriptSegments[0]?.timestamp ||
       0;
     const isEpochMs = startMs > 1e9;
+    const toSeconds = (value) => (isEpochMs ? (value - startMs) / 1000 : value);
     const normalized = transcriptSegments.map((seg) => ({
       ...seg,
-      timestamp:
-        seg.timestamp != null
-          ? isEpochMs
-            ? (seg.timestamp - startMs) / 1000
-            : seg.timestamp
-          : undefined,
+      timestamp: seg.timestamp != null ? toSeconds(seg.timestamp) : undefined,
+      ...(seg.endTimestamp != null ? { endTimestamp: toSeconds(seg.endTimestamp) } : {}),
     }));
 
     // Split before any send so diarized, skipped and failed runs drop the same
@@ -14946,7 +14943,12 @@ class IPCHandlers {
           noteId,
           ...payload,
           segments: payload.segments.map(
-            ({ timestampIsSpeechStart: _timestampIsSpeechStart, ...segment }) => segment
+            ({
+              timestampIsSpeechStart: _timestampIsSpeechStart,
+              endTimestamp: _endTimestamp,
+              liveOverlapMs: _liveOverlapMs,
+              ...segment
+            }) => segment
           ),
           removedSegments,
         });

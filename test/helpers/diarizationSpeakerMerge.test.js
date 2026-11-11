@@ -471,3 +471,34 @@ test("speech-start streaming rows still exclude a later speaker during a pause",
     ["speaker_0", "speaker_1"]
   );
 });
+
+const rangedDiarization = [
+  { speaker: "speaker_00", start: 0, end: 5 },
+  { speaker: "speaker_01", start: 5, end: 10 },
+];
+
+test("a ranged row takes the speaker of its own audio", () => {
+  const manager = new DiarizationManager();
+  const merged = manager.mergeWithTranscript(
+    [
+      { text: "first", source: "system", timestamp: 0.2, endTimestamp: 4.8 },
+      { text: "second", source: "system", timestamp: 5.1, endTimestamp: 9.7 },
+    ],
+    rangedDiarization
+  );
+
+  assert.deepEqual(
+    merged.map((row) => row.speaker),
+    ["speaker_0", "speaker_1"]
+  );
+});
+
+test("a ranged row spanning two speakers takes the one covering more of it", () => {
+  const manager = new DiarizationManager();
+  const merged = manager.mergeWithTranscript(
+    [{ text: "long", source: "system", timestamp: 3, endTimestamp: 9 }],
+    rangedDiarization
+  );
+
+  assert.equal(merged[0].speaker, "speaker_1");
+});
