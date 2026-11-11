@@ -934,6 +934,10 @@
     }
   },
   "transcription": {
+    "unloadWhenIdle": {
+      "label": "Décharger le modèle en veille",
+      "help": "Libère la mémoire GPU et la RAM après 5 minutes d'inactivité pour que le GPU d'un ordinateur portable puisse s'éteindre. La dictée suivante recharge le modèle, ce qui prend quelques secondes."
+    },
     "modelCard": "Fiche du modèle",
     "deleteModel": {
       "title": "Supprimer le modèle",

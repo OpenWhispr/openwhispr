@@ -120,6 +120,12 @@ class WhisperManager {
     // Server manager for HTTP-based transcription
     this.serverManager = new WhisperServerManager();
     this.currentServerModel = null;
+    // An idle-unloaded server is gone on purpose: a wake from sleep must not
+    // load it back onto the GPU (onWakeFromSleep keys off currentServerModel).
+    // The next dictation starts it again and sets the model.
+    this.serverManager.on("idle-stop", () => {
+      this.currentServerModel = null;
+    });
     this.cachedVadModelPath = undefined;
     this._transcribing = false;
     this._rewarmInFlight = false;

@@ -913,6 +913,10 @@
     }
   },
   "transcription": {
+    "unloadWhenIdle": {
+      "label": "Descarregar o modelo em inatividade",
+      "help": "Libera a memória da GPU e a RAM após 5 minutos de inatividade para que a GPU de um notebook possa desligar. O próximo ditado recarrega o modelo, o que leva alguns segundos."
+    },
     "modelCard": "Ficha do modelo",
     "deleteModel": {
       "title": "Excluir modelo",

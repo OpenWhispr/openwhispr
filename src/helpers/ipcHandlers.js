@@ -6417,6 +6417,9 @@ class IPCHandlers {
       // No workspace policy governs this, so it applies before the policy settles.
       const modelManager = require("./modelManagerBridge").default;
       modelManager.serverManager.setKeepResident(prefs.keepLocalModelLoaded === true);
+      this.whisperManager?.serverManager?.setUnloadWhenIdle?.(
+        prefs.unloadTranscriptionModelWhenIdle === true
+      );
 
       // A signed-in window whose workspace policy is still loading reports
       // unclamped modes, so it neither pre-warms nor stops the shared
