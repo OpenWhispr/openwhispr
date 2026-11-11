@@ -462,3 +462,13 @@ test("a meeting restriction drops native audio before transcription, speaker ana
   assert.equal(bytes(h.live), 0);
   assert.equal(bytes(h.observed), 0);
 });
+
+test("a local system chunk with no capture time starts at its receipt time minus its length", async () => {
+  const run = harness({ local: true });
+  run.at(5000);
+  run.rendererSend(Buffer.alloc(100 * 48, 1), "system");
+  assert.deepEqual(
+    run.context.meetingLocalBuffers.system.map(({ startAt }) => startAt),
+    [4900]
+  );
+});

@@ -10910,7 +10910,7 @@ class IPCHandlers {
           }
         }
 
-        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, capturedAt);
+        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, capturedAt, receivedAt);
         return;
       }
 
