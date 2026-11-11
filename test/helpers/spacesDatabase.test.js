@@ -3548,7 +3548,7 @@ function speakerRows(sqlite, noteId) {
       .map((row) => ({ ...row })),
     embeddings: sqlite
       .prepare(
-        "SELECT speaker_id, embedding FROM note_speaker_embeddings WHERE note_id = ? ORDER BY speaker_id"
+        "SELECT speaker_id, embedding, embedding_version FROM note_speaker_embeddings WHERE note_id = ? ORDER BY speaker_id"
       )
       .all(noteId)
       .map((row) => ({ ...row })),
@@ -3640,6 +3640,11 @@ test("copyNoteToSpace copies a team note into Private without its cloud identity
   assert.equal(copy.content_sync_operation, "set");
   assert.equal(copy.enhanced_content_sync_operation, "set");
   assert.deepEqual(speakerRows(db.db, copy.id), sourceSpeakers, "speakers and voices come along");
+  assert.equal(
+    db.getNoteSpeakerEmbeddings(copy.id).length,
+    1,
+    "the copied voice keeps its embedding version, so matching still reads it"
+  );
   assert.deepEqual(
     { ...db.db.prepare("SELECT * FROM notes WHERE id = ?").get(source.id) },
     original,

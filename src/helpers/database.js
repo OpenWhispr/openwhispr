@@ -6369,8 +6369,8 @@ class DatabaseManager {
           .run(id, source.id);
         this.db
           .prepare(
-            `INSERT INTO note_speaker_embeddings (note_id, speaker_id, embedding)
-             SELECT ?, speaker_id, embedding FROM note_speaker_embeddings WHERE note_id = ?`
+            `INSERT INTO note_speaker_embeddings (note_id, speaker_id, embedding, embedding_version)
+             SELECT ?, speaker_id, embedding, embedding_version FROM note_speaker_embeddings WHERE note_id = ?`
           )
           .run(id, source.id);
         return id;
