@@ -176,6 +176,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   );
   const [diarizationWarning, setDiarizationWarning] = useState(false);
   const [noteId, setNoteId] = useState<number | null>(null);
+  // The saved note's space: from then on the folder picker files that note, so it lists that
+  // space's folders, never the Private of a workspace switched to since (M10).
+  const noteSpaceIdRef = useRef<number | null>(null);
+  const loadFoldersRef = useRef<() => Promise<void>>(async () => {});
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -440,13 +444,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     // (and the by-name "Videos" destination lookup) to the active workspace's
     // Private so a same-named team folder can never capture them. Read again
     // each time main takes a new workspace scope (a switch), keeping a picked
-    // folder while that Private still has it.
+    // folder while that Private still has it. Once a note is saved, the list
+    // stays on that note's space.
     let unmounted = false;
     let latestLoad = 0;
     const loadFolders = async () => {
       const load = ++latestLoad;
       try {
-        const spaceId = (await window.electronAPI.getPrivateSpaceId?.()) ?? null;
+        const spaceId =
+          noteSpaceIdRef.current ?? (await window.electronAPI.getPrivateSpaceId?.()) ?? null;
         const items = (await window.electronAPI.getFolders?.(spaceId)) ?? [];
         if (unmounted || load !== latestLoad) return;
         setPrivateSpaceId(spaceId);
@@ -464,6 +470,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         if (!unmounted) console.error("Failed to load upload folders:", error);
       }
     };
+    loadFoldersRef.current = loadFolders;
     void loadFolders();
     const stopReloading = onWorkspaceScopePublished(() => void loadFolders());
     return () => {
@@ -715,6 +722,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setPartialWarning(null);
     setDiarizationWarning(false);
     setNoteId(null);
+    // The next upload files into the active workspace's Private again, which a switch made while
+    // the note was open may have changed.
+    if (noteSpaceIdRef.current != null) {
+      noteSpaceIdRef.current = null;
+      void loadFoldersRef.current();
+    }
     setError(null);
     setProgress(0);
     setChunkProgress(null);
@@ -859,7 +872,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           segments: res.segments,
         });
         if (runId !== runIdRef.current) return;
-        if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
+        if (noteRes.success && noteRes.note) {
+          noteSpaceIdRef.current = noteRes.note.space_id ?? null;
+          setNoteId(noteRes.note.id);
+        }
         if (currentTempPath) {
           window.electronAPI.deleteTempFile(currentTempPath);
           setDownloadedTempPath(null);

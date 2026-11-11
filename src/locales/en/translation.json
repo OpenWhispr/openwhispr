@@ -4360,7 +4360,9 @@
       "addExisting": "Add existing",
       "addCount": "Add {{count}} notes",
       "noResults": "No matching notes",
-      "noNotesAvailable": "No other notes available"
+      "noNotesAvailable": "No other notes available",
+      "notAdded_one": "{{count}} note couldn't be added",
+      "notAdded_other": "{{count}} notes couldn't be added"
     },
     "context": {
       "moveToFolder": "Move to folder",

@@ -3941,7 +3941,9 @@
       "addExisting": "新增現有筆記",
       "addCount": "新增 {{count}} 則筆記",
       "noResults": "沒有符合的筆記",
-      "noNotesAvailable": "沒有其他可用的筆記"
+      "noNotesAvailable": "沒有其他可用的筆記",
+      "notAdded_one": "{{count}} 則筆記無法加入",
+      "notAdded_other": "{{count}} 則筆記無法加入"
     },
     "onboarding": {
       "llm": {

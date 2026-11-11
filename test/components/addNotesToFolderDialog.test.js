@@ -24,16 +24,27 @@ const note = (id, title, spaceId) => ({
 
 // Mounts the dialog for folder 7 in `folderSpaceId`, over `spaces` and `notes`, with the workspace
 // store in `workspaceState`, and returns its text.
-async function renderDialog(t, { spaces, notes, workspaceState, folderSpaceId }) {
+async function renderDialog(t, options) {
+  return textOf((await mountDialog(t, options)).container);
+}
+
+async function mountDialog(
+  t,
+  { spaces, notes, workspaceState, folderSpaceId, updateNote = async () => ({ success: true }) }
+) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
+  const toasts = [];
+  const events = { added: 0, closed: 0 };
+  globalThis.__addNotesToasts = toasts;
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
         getNotes: async (_type, limit, _folderId, _spaceId, spaceIds) =>
           notes.filter((n) => !spaceIds || spaceIds.includes(n.space_id)).slice(0, limit),
+        updateNote,
       },
     },
   });
@@ -59,6 +70,9 @@ async function renderDialog(t, { spaces, notes, workspaceState, folderSpaceId })
         export const useShareCache = () => new Map();
       `,
       "/useAuth": `export const useAuth = () => ({ isSignedIn: true, user: { id: "me" } });`,
+      "/ui/useToast": `export const useToast = () => ({
+        toast: (options) => globalThis.__addNotesToasts.push(options),
+      });`,
       "/stores/workspaceStore": `
         const state = {
           ...${JSON.stringify(workspaceState)},
@@ -79,13 +93,31 @@ async function renderDialog(t, { spaces, notes, workspaceState, folderSpaceId })
     root.render(
       React.createElement(AddNotesToFolderDialog, {
         open: true,
-        onOpenChange: () => {},
+        onOpenChange: (open) => {
+          if (!open) events.closed += 1;
+        },
         targetFolderId: 7,
-        onNotesAdded: () => {},
+        onNotesAdded: () => {
+          events.added += 1;
+        },
       })
     )
   );
-  return textOf(container);
+  return { container, toasts, events };
+}
+
+function findButton(node, text) {
+  if (node.nodeName === "BUTTON" && textOf(node).includes(text)) return node;
+  for (const child of node.childNodes ?? []) {
+    const found = findButton(child, text);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function click(node) {
+  const propsKey = Object.keys(node).find((key) => key.startsWith("__reactProps$"));
+  await React.act(async () => node[propsKey].onClick());
 }
 
 const acmeAndOther = [
@@ -260,4 +292,53 @@ test("Add existing into a teamspace leaves out a teammate's note from another te
     /Teammate ops note/,
     "only its owner or an admin may change its audience"
   );
+});
+
+// The tree's own rule (crossesUnknownWorkspace): until the default workspace is known, the
+// section's pending Private may be another workspace's, so a note from it isn't offered here.
+test("while the default workspace is unknown, Add existing leaves out the other Private's notes", async (t) => {
+  const text = await renderDialog(t, {
+    spaces: [
+      { id: 3, kind: "private", workspace_id: "other" },
+      { id: 9, kind: "private", workspace_id: null },
+    ],
+    folderSpaceId: 3,
+    notes: [note(3, "Other private", 3), note(9, "Pending private", 9)],
+    workspaceState: {
+      workspaces: acmeAndOther.map((w) => ({ ...w, is_default: false })),
+      activeWorkspaceId: "other",
+      defaultWorkspaceId: null,
+      loaded: true,
+    },
+  });
+  assert.match(text, /Other private/);
+  assert.doesNotMatch(text, /Pending private/, "it might be another workspace's note");
+});
+
+test("an add main refuses is shown, not ignored", async (t) => {
+  const { container, toasts, events } = await mountDialog(t, {
+    spaces: [
+      { id: 1, kind: "private", workspace_id: "acme" },
+      { id: 2, kind: "team", workspace_id: "acme", cloud_space_id: "cs-2", my_role: "member" },
+    ],
+    folderSpaceId: 1,
+    notes: [note(1, "Kept", 1), note(2, "Refused", 1)],
+    workspaceState: {
+      workspaces: [{ id: "acme", name: "Acme", role: "member", is_default: true }],
+      activeWorkspaceId: "acme",
+      defaultWorkspaceId: "acme",
+      loaded: true,
+    },
+    updateNote: async (id) =>
+      id === 2 ? { success: false, error: "Folder not found" } : { success: true },
+  });
+  await click(findButton(container, "Kept"));
+  await click(findButton(container, "Refused"));
+  await click(findButton(container, "notes.addToFolder.addCount"));
+
+  assert.equal(events.added, 1, "the note that moved still shows in the folder");
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0].title, "notes.addToFolder.notAdded");
+  assert.equal(toasts[0].description, "notes.mutationErrors.folderNotFound");
+  assert.equal(toasts[0].variant, "destructive");
 });

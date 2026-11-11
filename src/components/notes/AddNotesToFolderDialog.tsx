@@ -11,7 +11,10 @@ import { useSpacesInWorkspaceScope, useWorkspace } from "../../hooks/useWorkspac
 import { useAuth } from "../../hooks/useAuth";
 import { canChangeSpaceNoteScope, spaceTransferAction } from "../../lib/spacePermissions";
 import { canOrganizeNote, resolveNotePermission } from "../../lib/notePermissions";
-import type { NoteItem } from "../../types/electron";
+import { privateSectionSpaces } from "../../lib/privateSection";
+import { localMutationErrorKey } from "../../lib/localMutationError";
+import { useToast } from "../ui/useToast";
+import type { NoteItem, NoteMutationResult } from "../../types/electron";
 
 interface AddNotesToFolderDialogProps {
   open: boolean;
@@ -58,6 +61,7 @@ export default function AddNotesToFolderDialog({
   const shareByCloudId = useShareCache();
   const { user } = useAuth();
   const { workspaces, defaultWorkspaceId } = useWorkspace();
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!open) return;
@@ -78,6 +82,15 @@ export default function AddNotesToFolderDialog({
     const targetSpaceId = folders.find((f) => f.id === targetFolderId)?.space_id;
     const to = spaces.find((s) => s.id === targetSpaceId);
     if (!to) return [];
+    // As the tree's crossesUnknownWorkspace: until the default workspace is known, the Private
+    // section's pending Private may be another workspace's, so a move between its Privates could
+    // cross workspaces.
+    const sectionIds = new Set(privateSectionSpaces(visibleSpaces).map((space) => space.id));
+    const crossesUnknownWorkspace = (fromId: number): boolean =>
+      defaultWorkspaceId == null &&
+      fromId !== to.id &&
+      sectionIds.has(fromId) &&
+      sectionIds.has(to.id);
     return allNotes.filter((note) => {
       if (note.folder_id === targetFolderId) return false;
       const from = spaces.find((s) => s.id === note.space_id);
@@ -93,6 +106,7 @@ export default function AddNotesToFolderDialog({
         return false;
       }
       if (from.id === to.id) return true;
+      if (crossesUnknownWorkspace(from.id)) return false;
       if (spaceTransferAction(from, to, { defaultWorkspaceId }) !== "move") return false;
       const workspace = workspaces.find((w) => w.id === from.workspace_id) ?? null;
       return canChangeSpaceNoteScope(note, from, user?.id ?? null, workspace);
@@ -102,6 +116,7 @@ export default function AddNotesToFolderDialog({
     targetFolderId,
     folders,
     spaces,
+    visibleSpaces,
     shareByCloudId,
     defaultWorkspaceId,
     workspaces,
@@ -134,17 +149,42 @@ export default function AddNotesToFolderDialog({
     if (selected.size === 0) return;
     setIsAdding(true);
     try {
-      await Promise.all(
-        Array.from(selected).map((id) =>
-          window.electronAPI.updateNote(id, { folder_id: targetFolderId })
-        )
+      const results = await Promise.all(
+        Array.from(selected).map(async (id) => {
+          let result: NoteMutationResult;
+          try {
+            result = await window.electronAPI.updateNote(id, { folder_id: targetFolderId });
+          } catch (error) {
+            result = { success: false, error: (error as Error)?.message };
+          }
+          return { id, result };
+        })
       );
-      onNotesAdded();
+      // Main refuses some moves (D31: a team note the cloud has never becomes private), and the
+      // list can be stale: say what didn't move instead of closing as if it had.
+      const refused = results.filter(({ result }) => result?.success === false);
+      if (refused.length < results.length) onNotesAdded();
+      if (refused.length > 0) {
+        const [first] = refused;
+        const firstNote = allNotes.find((note) => note.id === first.id);
+        const space = spaces.find((s) => s.id === firstNote?.space_id);
+        toast({
+          title: t("notes.addToFolder.notAdded", { count: refused.length }),
+          description:
+            first.result.code === "team_row_synced" && space
+              ? t("notes.spaces.noteAlreadyInTeam", {
+                  title: firstNote?.title || t("notes.list.untitled"),
+                  space: space.name,
+                })
+              : t(localMutationErrorKey(first.result.error)),
+          variant: "destructive",
+        });
+      }
       onOpenChange(false);
     } finally {
       setIsAdding(false);
     }
-  }, [selected, targetFolderId, onNotesAdded, onOpenChange]);
+  }, [selected, targetFolderId, onNotesAdded, onOpenChange, allNotes, spaces, t, toast]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

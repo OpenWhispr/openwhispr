@@ -3716,7 +3716,9 @@
       "addExisting": "既存を追加",
       "addCount": "{{count}}件のノートを追加",
       "noResults": "一致するノートがありません",
-      "noNotesAvailable": "他のノートはありません"
+      "noNotesAvailable": "他のノートはありません",
+      "notAdded_one": "{{count}} 件のノートを追加できませんでした",
+      "notAdded_other": "{{count}} 件のノートを追加できませんでした"
     },
     "folders": {
       "defaults": {

@@ -3993,7 +3993,9 @@
       "addExisting": "Añadir existentes",
       "addCount": "Añadir {{count}} notas",
       "noResults": "No hay notas coincidentes",
-      "noNotesAvailable": "No hay otras notas disponibles"
+      "noNotesAvailable": "No hay otras notas disponibles",
+      "notAdded_one": "No se pudo añadir {{count}} nota",
+      "notAdded_other": "No se pudieron añadir {{count}} notas"
     },
     "onboarding": {
       "llm": {

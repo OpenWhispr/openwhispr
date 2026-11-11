@@ -3941,7 +3941,9 @@
       "addExisting": "添加已有笔记",
       "addCount": "添加 {{count}} 条笔记",
       "noResults": "没有匹配的笔记",
-      "noNotesAvailable": "没有其他可用笔记"
+      "noNotesAvailable": "没有其他可用笔记",
+      "notAdded_one": "{{count}} 条笔记无法添加",
+      "notAdded_other": "{{count}} 条笔记无法添加"
     },
     "onboarding": {
       "llm": {

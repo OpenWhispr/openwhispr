@@ -4367,7 +4367,9 @@
       "addExisting": "Ajouter des notes existantes",
       "addCount": "Ajouter {{count}} notes",
       "noResults": "Aucune note correspondante",
-      "noNotesAvailable": "Aucune autre note disponible"
+      "noNotesAvailable": "Aucune autre note disponible",
+      "notAdded_one": "{{count}} note n'a pas pu être ajoutée",
+      "notAdded_other": "{{count}} notes n'ont pas pu être ajoutées"
     },
     "context": {
       "moveToFolder": "Déplacer vers un dossier",

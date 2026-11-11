@@ -4039,7 +4039,11 @@
       "addExisting": "Добавить существующие",
       "addCount": "Добавить: {{count}}",
       "noResults": "Не найдено",
-      "noNotesAvailable": "Нет доступных заметок"
+      "noNotesAvailable": "Нет доступных заметок",
+      "notAdded_one": "Не удалось добавить {{count}} заметку",
+      "notAdded_few": "Не удалось добавить {{count}} заметки",
+      "notAdded_many": "Не удалось добавить {{count}} заметок",
+      "notAdded_other": "Не удалось добавить {{count}} заметки"
     },
     "onboarding": {
       "llm": {

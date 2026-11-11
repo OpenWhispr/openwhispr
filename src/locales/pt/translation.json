@@ -3948,7 +3948,9 @@
       "addExisting": "Adicionar existentes",
       "addCount": "Adicionar {{count}} notas",
       "noResults": "Nenhuma nota encontrada",
-      "noNotesAvailable": "Nenhuma outra nota disponível"
+      "noNotesAvailable": "Nenhuma outra nota disponível",
+      "notAdded_one": "Não foi possível adicionar {{count}} nota",
+      "notAdded_other": "Não foi possível adicionar {{count}} notas"
     },
     "onboarding": {
       "llm": {

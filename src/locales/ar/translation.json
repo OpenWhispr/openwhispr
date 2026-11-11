@@ -3380,7 +3380,13 @@
       "addCount_many": "إضافة {{count}} ملاحظةً",
       "addCount_other": "إضافة {{count}} ملاحظة",
       "noResults": "لا توجد ملاحظات مطابقة",
-      "noNotesAvailable": "لا توجد ملاحظات أخرى متاحة"
+      "noNotesAvailable": "لا توجد ملاحظات أخرى متاحة",
+      "notAdded_zero": "تعذّرت إضافة {{count}} ملاحظة",
+      "notAdded_one": "تعذّرت إضافة ملاحظة واحدة ({{count}})",
+      "notAdded_two": "تعذّرت إضافة ملاحظتين ({{count}})",
+      "notAdded_few": "تعذّرت إضافة {{count}} ملاحظات",
+      "notAdded_many": "تعذّرت إضافة {{count}} ملاحظة",
+      "notAdded_other": "تعذّرت إضافة {{count}} ملاحظة"
     },
     "context": {
       "moveToFolder": "نقل إلى مجلد",

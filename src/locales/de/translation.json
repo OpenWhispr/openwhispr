@@ -4360,7 +4360,9 @@
       "addExisting": "Vorhandene hinzufügen",
       "addCount": "{{count}} Notizen hinzufügen",
       "noResults": "Keine passenden Notizen",
-      "noNotesAvailable": "Keine weiteren Notizen verfügbar"
+      "noNotesAvailable": "Keine weiteren Notizen verfügbar",
+      "notAdded_one": "{{count}} Notiz konnte nicht hinzugefügt werden",
+      "notAdded_other": "{{count}} Notizen konnten nicht hinzugefügt werden"
     },
     "context": {
       "moveToFolder": "In Ordner verschieben",
