@@ -67,8 +67,15 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
     ].includes(channel) &&
       args[3]?.requiresAgent === true);
   if (requiresAgent && !rules.isAgentAllowed(state)) return false;
-  const transcription = (selection) => rules.isTranscriptionSelectionAllowed(state, selection);
-  const llm = (mode, provider = "") => rules.isLlmSelectionAllowed(state, { mode, provider });
+  // No model rides on these operations: the local model gate checks a local model.
+  const transcription = (selection) =>
+    selection.mode === "local"
+      ? rules.isModeAllowedByPolicy(state, "transcription", "local")
+      : rules.isTranscriptionSelectionAllowed(state, selection);
+  const llm = (mode, provider = "") =>
+    mode === "local"
+      ? rules.isModeAllowedByPolicy(state, "llm", "local")
+      : rules.isLlmSelectionAllowed(state, { mode, provider });
   if (channel === "batch-transcription") return transcription(args[0]);
   if (["cloud-transcribe", "transcribe-audio-file-cloud"].includes(channel))
     return transcription({ mode: "openwhispr", provider: "" });

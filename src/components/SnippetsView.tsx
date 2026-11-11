@@ -17,6 +17,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { useSettings } from "../hooks/useSettings";
+import { useListsOwnerRevision } from "../hooks/useListsOwnerRevision";
 import { getCachedPlatform } from "../utils/platform";
 import type { Snippet } from "../utils/snippets";
 import DictionaryEmptyIllustration from "./DictionaryEmptyIllustration";
@@ -107,7 +108,14 @@ function EditSnippetDialog({
   );
 }
 
-export default function SnippetsView() {
+// Remounted when the snippets start belonging to another account, which drops
+// any open draft; a save from the old instance carries its owner and is refused.
+export default function SnippetsView(): React.ReactElement {
+  const listsOwner = useListsOwnerRevision();
+  return <SnippetsEditor key={listsOwner} listsOwner={listsOwner} />;
+}
+
+function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElement {
   const { t } = useTranslation();
   const { snippets, setSnippets } = useSettings();
   const [trigger, setTrigger] = useState("");
@@ -152,19 +160,28 @@ export default function SnippetsView() {
   };
 
   const handleCreate = () => {
-    setSnippets([...snippets, { trigger: trimmedTrigger, replacement: expansion.trim() }]);
+    setSnippets(
+      [...snippets, { trigger: trimmedTrigger, replacement: expansion.trim() }],
+      listsOwner
+    );
     setTrigger("");
     setShowEmptyInput(false);
     closePanel();
   };
 
   const handleSaveEdit = (snippet: Snippet) => {
-    setSnippets(snippets.map((s) => (s.trigger === editing?.trigger ? snippet : s)));
+    setSnippets(
+      snippets.map((s) => (s.trigger === editing?.trigger ? snippet : s)),
+      listsOwner
+    );
     setEditing(null);
   };
 
   const handleRemove = (removed: string) => {
-    setSnippets(snippets.filter((s) => s.trigger !== removed));
+    setSnippets(
+      snippets.filter((s) => s.trigger !== removed),
+      listsOwner
+    );
   };
 
   const canCreate = !!trimmedTrigger && !!expansion.trim() && !duplicate;

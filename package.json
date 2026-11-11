@@ -1,6 +1,6 @@
 {
   "name": "open-whispr",
-  "version": "1.11.0",
+  "version": "1.11.1",
   "description": "A desktop dictation application using whisper.cpp for speech-to-text transcription",
   "main": "main.js",
   "private": true,
@@ -78,11 +78,14 @@
     "lint": "eslint . && cd src && eslint .",
     "test": "node --import tsx --test \"test/**/*.test.js\"",
     "typecheck": "cd src && tsc --noEmit",
-    "quality-check": "npm run format:check && npm run typecheck",
+    "quality-check": "npm run model-registry:verify && npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",
     "preview": "cd src && vite preview",
     "clean": "node cleanup.js",
-    "compile:managed-policy": "node scripts/build-macos-managed-policy.js"
+    "compile:managed-policy": "node scripts/build-macos-managed-policy.js",
+    "model-registry:verify": "node scripts/sync-model-registry.mjs --check",
+    "model-registry:sync": "node scripts/sync-model-registry.mjs",
+    "model-registry:release-check": "node scripts/sync-model-registry.mjs --release-check"
   },
   "keywords": [
     "dictation",
@@ -99,7 +102,7 @@
   "license": "MIT",
   "devDependencies": {
     "@electron/notarize": "^3.0.1",
-    "@eslint/js": "^9.39.4",
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.2.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/react": "^19.1.2",
@@ -127,7 +130,7 @@
     "vite": "^8.1.6"
   },
   "dependencies": {
-    "@ai-sdk/amazon-bedrock": "^4.0.93",
+    "@ai-sdk/amazon-bedrock": "^4.0.129",
     "@ai-sdk/anthropic": "^3.0.58",
     "@ai-sdk/azure": "^3.0.53",
     "@ai-sdk/google": "^3.0.43",
@@ -180,7 +183,7 @@
     "flatted": "^3.4.4",
     "https-proxy-agent": "^7.0.6",
     "i18next": "^26.3.6",
-    "js-yaml": "^4.3.2",
+    "js-yaml": "^5.5.0",
     "kysely": "^0.28.17",
     "object-assign": "^4.1.1",
     "onnxruntime-node": "^1.21.0",

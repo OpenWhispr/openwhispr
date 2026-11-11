@@ -12,6 +12,7 @@ import {
   assertAgentAllowedByPolicy,
   assertReasoningAllowedByPolicy,
   onPolicyRestriction,
+  runningPolicyCheck,
 } from "../reasoningPolicy";
 import { guardLanguageModel } from "./policyModel";
 
@@ -44,6 +45,7 @@ async function createAIModel(
   opts?: {
     disableThinking?: boolean;
     reasoningEffort?: string;
+    fetch?: typeof fetch;
     mode?: InferenceMode;
     requiresAgent?: boolean;
     signal?: AbortSignal;
@@ -55,8 +57,7 @@ async function createAIModel(
     case "groq":
       return createGroq({ apiKey })(model);
     case "anthropic":
-      // The assistant panel runs in the pill window, which keeps Chromium's
-      // default webSecurity (the deleted agent overlay disabled it). Anthropic
+      // The agent window keeps Chromium's default webSecurity. Anthropic
       // only answers browser-origin requests that opt in with this header;
       // the dictation path avoids the issue by going through IPC.
       return createAnthropic({
@@ -92,7 +93,11 @@ async function createAIModel(
       }).chat(model);
     }
     case "local":
-      return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
+      return createOpenAI({
+        apiKey: apiKey || "no-key",
+        baseURL,
+        ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+      }).chat(model);
     default:
       throw new Error(`Unsupported AI SDK provider for renderer: ${provider}`);
   }
@@ -104,20 +109,21 @@ export async function getAIModel(
   const [provider, model, apiKey, baseURL, opts] = args;
   const mode = opts?.mode ?? (provider === "local" ? "local" : "providers");
   const assertAllowed = () => {
-    assertReasoningAllowedByPolicy(provider, mode);
+    assertReasoningAllowedByPolicy(provider, mode, model);
     if (opts?.requiresAgent) assertAgentAllowedByPolicy();
   };
   assertAllowed();
+  const assertStillAllowed = runningPolicyCheck(assertAllowed);
   const controller = new AbortController();
-  const unsubscribe = onPolicyRestriction(assertAllowed, (error) => controller.abort(error));
+  const unsubscribe = onPolicyRestriction(assertStillAllowed, (error) => controller.abort(error));
   const signal = opts?.signal
     ? AbortSignal.any([opts.signal, controller.signal])
     : controller.signal;
   try {
     const resolved = await createAIModel(provider, model, apiKey, baseURL, { ...opts, signal });
     signal.throwIfAborted();
-    assertAllowed();
-    return guardLanguageModel(resolved as LanguageModelV3, assertAllowed);
+    assertStillAllowed();
+    return guardLanguageModel(resolved as LanguageModelV3, assertStillAllowed);
   } finally {
     unsubscribe();
   }

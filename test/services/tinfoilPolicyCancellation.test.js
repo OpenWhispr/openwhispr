@@ -51,7 +51,8 @@ for (const restriction of ["provider", "unrelated feature", "user stop"]) {
         "glm-5-3",
         "tinfoil",
         { systemPrompt: "Answer" },
-        {}
+        {},
+        controller.signal
       );
     }
     const result = Promise.allSettled([
@@ -66,7 +67,7 @@ for (const restriction of ["provider", "unrelated feature", "user stop"]) {
     if (restriction === "provider") policy.llm.allowedByokProviders = ["openai"];
     else policy.features.webSearchEnabled = false;
     usePolicyStore.setState({ status: "managed", policy });
-    if (restriction === "user stop") service.cancelActiveStream();
+    if (restriction === "user stop") controller.abort();
     else if (restriction === "unrelated feature") {
       assert.ok(
         initializationSignal,
@@ -80,7 +81,7 @@ for (const restriction of ["provider", "unrelated feature", "user stop"]) {
     if (restriction === "user stop") {
       assert.equal(settled.status, "fulfilled");
       assert.deepEqual(settled.value, {
-        value: { type: "done", finishReason: "stop" },
+        value: { type: "done", finishReason: "abort" },
         done: false,
       });
       assert.equal((await stream.next()).done, true);

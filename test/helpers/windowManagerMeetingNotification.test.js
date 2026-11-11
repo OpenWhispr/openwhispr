@@ -134,7 +134,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   }
   if (request === "./hotkeyManager") return FakeHotkeyManager;
   if (request === "./dragManager") return FakeDragManager;
-  if (request === "./menuManager") return {};
+  if (request === "./menuManager") return { setupControlPanelMenu() {} };
   if (request === "./devServerManager") {
     return {
       DEV_SERVER_PORT: 5173,
@@ -260,131 +260,6 @@ test("a failed activation-mode change preserves the cached mode", async () => {
 
   assert.equal(await manager.setActivationModeCache("push"), false);
   assert.equal(manager.getActivationMode(), "tap");
-});
-
-test("a busy Assistant blocks its voice hotkey before native side effects", () => {
-  const manager = createNormalWindowManager();
-  const rendererChannels = [];
-  let showCount = 0;
-  let prepareCount = 0;
-  manager.mainWindow = {
-    isDestroyed: () => false,
-    webContents: { send: (channel) => rendererChannels.push(channel) },
-  };
-  manager.hotkeyManager = {
-    isInListeningMode: () => false,
-    unregisterAll: () => undefined,
-  };
-  manager.textEditMonitor = { captureTargetPid: () => Promise.resolve(null) };
-  manager.selectionManager = { captureTarget: () => undefined };
-  manager.showDictationPanel = () => {
-    showCount += 1;
-  };
-  manager.sendPrepareDictation = () => {
-    prepareCount += 1;
-  };
-  // Initial Assistant thinking happens before the response panel opens; busy
-  // state must stand on its own during that part of the journey.
-  manager._assistantPanelOpen = false;
-  manager._assistantPanelBusy = true;
-
-  manager.sendToggleVoiceAgent();
-  // Before the panel opens there is no companion pill to show a plain
-  // recording either, so the busy state blocks ordinary dictation too.
-  manager.sendToggleDictation();
-
-  assert.equal(showCount, 0);
-  assert.equal(prepareCount, 0);
-  assert.deepEqual(rendererChannels, []);
-
-  // The open panel alone is not enough: until the companion window is live,
-  // a recording would still be invisible, so the press only re-kicks its load.
-  manager._assistantPanelOpen = true;
-  let pillShowCalls = 0;
-  manager.showAgentDictationPill = () => {
-    pillShowCalls += 1;
-  };
-  manager.sendToggleDictation();
-
-  assert.equal(showCount, 0);
-  assert.deepEqual(rendererChannels, []);
-  assert.equal(pillShowCalls, 1);
-
-  manager._agentDictationPillReady = true;
-  manager.agentDictationPillWindow = {
-    isDestroyed: () => false,
-    isVisible: () => true,
-    webContents: { send: () => undefined },
-  };
-  manager.sendToggleDictation();
-
-  assert.equal(showCount, 1);
-  assert.equal(prepareCount, 1);
-  assert.deepEqual(rendererChannels, ["toggle-dictation"]);
-  assert.equal(pillShowCalls, 1);
-
-  manager._assistantPanelBusy = false;
-  manager.sendToggleVoiceAgent();
-
-  assert.equal(showCount, 2);
-  assert.equal(prepareCount, 2);
-  assert.deepEqual(rendererChannels, ["toggle-dictation", "toggle-voice-agent"]);
-});
-
-test("push-to-talk dictation follows the companion pill's availability", () => {
-  const manager = createNormalWindowManager();
-  const rendererChannels = [];
-  let showCount = 0;
-  manager.mainWindow = {
-    isDestroyed: () => false,
-    webContents: { send: (channel) => rendererChannels.push(channel) },
-  };
-  manager.hotkeyManager = {
-    isInListeningMode: () => false,
-    unregisterAll: () => undefined,
-  };
-  manager._dictationLifecycleState = "idle";
-  manager._assistantPanelOpen = false;
-  manager._assistantPanelBusy = true;
-  manager.textEditMonitor = { captureTargetPid: () => Promise.resolve(null) };
-  manager.selectionManager = { captureTarget: () => undefined };
-  manager.showDictationPanel = () => {
-    showCount += 1;
-  };
-
-  // Busy without an open panel: no surface could show the recording.
-  manager.sendPrepareDictation();
-  manager.sendStartDictation();
-
-  assert.equal(showCount, 0);
-  assert.deepEqual(rendererChannels, []);
-
-  // An open panel whose companion window is not live yet keeps PTT dictation
-  // blocked; each press re-kicks the companion load.
-  manager._assistantPanelOpen = true;
-  let pillShowCalls = 0;
-  manager.showAgentDictationPill = () => {
-    pillShowCalls += 1;
-  };
-  manager.sendPrepareDictation();
-  manager.sendStartDictation();
-
-  assert.equal(showCount, 0);
-  assert.deepEqual(rendererChannels, []);
-  assert.equal(pillShowCalls, 2);
-
-  // With a live companion pill, PTT dictation flows again.
-  manager._agentDictationPillReady = true;
-  manager.agentDictationPillWindow = {
-    isDestroyed: () => false,
-    isVisible: () => true,
-    webContents: { send: () => undefined },
-  };
-  manager.sendPrepareDictation();
-  manager.sendStartDictation();
-
-  assert.equal(showCount, 1);
-  assert.deepEqual(rendererChannels, ["prepare-dictation", "start-dictation"]);
 });
 
 test("a stop press probes the target again instead of reusing the start press's", () => {
@@ -723,41 +598,6 @@ test("manual meeting starts fail closed like the meeting hotkey", async () => {
   manager.hotkeyManager.isInListeningMode = () => false;
   await manager.startManualMeeting();
   assert.equal(starts, 1);
-});
-
-// Only the renderer can open the assistant panel, and it owns the policy and
-// recording state the pill menu gates the item on, so nothing may be shown,
-// focused, or created before it accepts.
-test("the tray's Ask assistant asks the renderer without showing or focusing the pill", () => {
-  const fakeMainWindow = (events) => ({
-    isDestroyed: () => false,
-    isMinimized: () => false,
-    isVisible: () => true,
-    focus: () => events.push("focus"),
-    show: () => events.push("show"),
-    showInactive: () => events.push("show"),
-    webContents: { send: (channel) => events.push(channel) },
-  });
-
-  const onboardingEvents = [];
-  const onboarding = new WindowManager();
-  onboarding.mainWindow = fakeMainWindow(onboardingEvents);
-  onboarding.sendOpenAssistantPanel();
-  assert.deepEqual(onboardingEvents, []);
-
-  const events = [];
-  const manager = createNormalWindowManager();
-  manager.mainWindow = fakeMainWindow(events);
-  manager.sendOpenAssistantPanel();
-  assert.deepEqual(events, ["open-assistant-panel"]);
-
-  // Capturing a hotkey swallows it, like every other input path.
-  const capturingEvents = [];
-  const capturing = createNormalWindowManager();
-  capturing.mainWindow = fakeMainWindow(capturingEvents);
-  capturing.hotkeyManager.isInListeningMode = () => true;
-  capturing.sendOpenAssistantPanel();
-  assert.deepEqual(capturingEvents, []);
 });
 
 async function showOwned(manager, id = "calendar:editing") {
@@ -1181,4 +1021,76 @@ test("release preserves macOS stacking while Windows and Linux still blur", asyn
   } finally {
     Object.defineProperty(process, "platform", platform);
   }
+});
+
+test("failed calendar panel creation releases only its pending note session", async () => {
+  const f = await navigationFixture();
+  const closed = [];
+  f.manager.meetingDetectionEngine.abandonMeetingNote = (id) => closed.push(id);
+  f.manager.createControlPanelWindow = async () => {
+    throw new Error("Panel unavailable");
+  };
+  await assert.rejects(
+    f.manager.queueMeetingNoteNavigation({ noteId: 9, noteSessionId: "calendar-session" }, {}),
+    /Panel unavailable/
+  );
+  assert.deepEqual(closed, ["calendar-session"]);
+  assert.equal(f.manager._pendingMeetingNoteNavigation, null);
+});
+
+test("cancelled notification navigation releases its note session", async () => {
+  const f = await navigationFixture();
+  const closed = [];
+  f.payload.noteSessionId = "notification-session";
+  f.manager.meetingDetectionEngine.abandonMeetingNote = (id) => closed.push(id);
+  const pending = f.start();
+  await new Promise(setImmediate);
+  f.manager._cancelMeetingNavigation("START_FAILED");
+  assert.equal((await pending).success, false);
+  assert.deepEqual(closed, ["notification-session"]);
+});
+
+test("control panel reload releases note ownership without consuming initial navigation", async (t) => {
+  const manager = createNormalWindowManager();
+  let closes = 0;
+  manager.meetingDetectionEngine = { closeCurrentMeetingNote: () => closes++ };
+  manager.registerExternalLinkHandlers = () => {};
+  manager.loadControlPanel = async () => {};
+  manager._hideNormalAppSurfaces = () => {};
+  manager.endOnboardingDemo = () => {};
+  await manager.createControlPanelWindow();
+  t.after(() => manager._clearControlPanelVisibilityTimer());
+  const panel = manager.controlPanelWindow;
+  panel.setTitle = () => {};
+  panel.webContents.emit("did-navigate");
+  panel.webContents.emit("did-finish-load");
+  assert.equal(closes, 0, "initial load must retain the pending meeting navigation");
+  panel.webContents.emit("did-start-navigation", { isSameDocument: false, isMainFrame: true });
+  assert.equal(closes, 0, "a navigation will-navigate blocks leaves the document in place");
+  panel.webContents.emit("did-navigate");
+  assert.equal(closes, 1, "a replacement document must release the outgoing note session");
+  panel.webContents.emit("did-finish-load");
+  assert.equal(closes, 1, "load completion must not close a newer pending session");
+  manager.showLoadFailureDialog = () => {};
+  manager._showControlPanel = () => {};
+  panel.webContents.emit("did-fail-load", {}, -3, "ERR_ABORTED", "file:///app", true);
+  assert.equal(closes, 1, "an aborted navigation leaves the document in place");
+  panel.webContents.emit("did-fail-load", {}, -6, "ERR_FILE_NOT_FOUND", "file:///app", false);
+  assert.equal(closes, 1, "a subframe failure leaves the document in place");
+  panel.webContents.emit("did-fail-load", {}, -6, "ERR_FILE_NOT_FOUND", "file:///app", true);
+  assert.equal(closes, 2, "a failed reload has already replaced the document");
+});
+
+test("a queued or undelivered navigation keeps its note session pending", async () => {
+  const f = await navigationFixture();
+  const { manager } = f;
+  assert.equal(manager.isMeetingNoteNavigationPending(undefined), false);
+  assert.equal(manager.isMeetingNoteNavigationPending("queued"), false);
+  manager._pendingMeetingNoteNavigation = { noteSessionId: "queued" };
+  assert.equal(manager.isMeetingNoteNavigationPending("queued"), true);
+  manager._pendingMeetingNoteNavigation = null;
+  manager._meetingNavigationOperation = { payload: { noteSessionId: "delivering" } };
+  assert.equal(manager.isMeetingNoteNavigationPending("delivering"), true);
+  assert.equal(manager.isMeetingNoteNavigationPending("other"), false);
+  manager._meetingNavigationOperation = null;
 });

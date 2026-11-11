@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { readStoredAccountScopeUserId, subscribeAccountScope } from "../lib/authAccountScope";
 import type { SharedDictionarySnapshot } from "../types/sharedDictionary";
 import { EMPTY_SHARED_HINTS, selectSharedHintWords } from "../utils/sharedDictionaryHints";
 import logger from "../utils/logger";
@@ -180,6 +181,7 @@ export const useSharedDictionaryStore = create<SharedDictionaryState>((set, get)
         return false;
       }
       const api = window.electronAPI;
+      const accountId = readStoredAccountScopeUserId();
       let snapshot: SharedDictionarySnapshot | undefined;
       let movedPersonal: string[] | undefined;
       try {
@@ -195,7 +197,13 @@ export const useSharedDictionaryStore = create<SharedDictionaryState>((set, get)
         );
         return false;
       }
-      if (!snapshot || !isCurrent(workspaceId, generation)) return false;
+      if (
+        !snapshot ||
+        !isCurrent(workspaceId, generation) ||
+        accountId !== readStoredAccountScopeUserId()
+      ) {
+        return false;
+      }
       set({
         snapshot,
         movedPersonal: movedPersonal ?? [],
@@ -299,6 +307,15 @@ export function handleSharedDictionaryStatusStorage(event: StorageEvent): void {
 // Registered once for the window's lifetime, like the store itself.
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   window.addEventListener("storage", handleSharedDictionaryStatusStorage);
+  let accountId = readStoredAccountScopeUserId();
+  subscribeAccountScope(() => {
+    const nextAccountId = readStoredAccountScopeUserId();
+    if (nextAccountId === accountId) return;
+    accountId = nextAccountId;
+    // A snapshot loaded before the account was verified has no trusted owner.
+    // Re-read the mirror once reconciliation commits its owner.
+    if (accountId) void useSharedDictionaryStore.getState().reload();
+  });
 }
 
 // Every change of the active workspace (setActiveWorkspaceId, refresh()'s

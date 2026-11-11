@@ -9,3 +9,8 @@ export function formatBytes(bytes: number, decimals = 2): string {
 
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
 }
+
+/** "631MB" → "631 MB", the registry size string as Settings shows it. */
+export function spaceSizeUnit(size: string): string {
+  return size.replace(/(?<=\d)(?=[A-Za-z])/, " ");
+}
