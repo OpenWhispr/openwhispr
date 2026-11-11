@@ -67,12 +67,25 @@ test("device management survives sign-out and an invalid policy recovers without
   });
   await emit(current);
   assert.equal(store.getState().code, undefined);
-  store.getState().clearPolicy();
   await store.getState().bootstrap();
   assert.equal(store.getState().localOnly, true);
   assert.equal(store.getState().deviceManaged, true);
   await emit(snapshot({ revision: 1 }));
   assert.equal(store.getState().localOnly, true);
+});
+
+test("a local-only device refuses sign-in in the user's language", async (t) => {
+  const { vite } = await boot(t, async () =>
+    snapshot({ status: "managed", managed: true, deviceManaged: true, localOnly: true })
+  );
+  const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
+  const { signInWithSocial, signInWithSSO } = await vite.ssrLoadModule("/lib/auth.ts");
+  await i18n.changeLanguage("es");
+  t.after(() => i18n.changeLanguage("en"));
+  const message = require("../../src/locales/es/translation.json").auth.errors
+    .signInDisabledByDevice;
+  assert.equal((await signInWithSocial("google")).error?.message, message);
+  assert.equal((await signInWithSSO("ada@example.com")).error?.message, message);
 });
 
 test("a failed older read cannot erase a newer device broadcast", async (t) => {
@@ -289,7 +302,7 @@ test("a same-account verdict still loading keeps the settled one and its running
       code: "POLICY_LOADING",
     })
   );
-  store.getState().clearPolicy();
+  void store.getState().bootstrap();
   assert.equal(store.getState().status, "unmanaged");
   assert.equal(store.getState().authGeneration, 2);
   finishBody.enqueue(new TextEncoder().encode("transcript"));

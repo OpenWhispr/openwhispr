@@ -49,6 +49,10 @@ test("fields and device values a later build reads are ignored; known ones stay 
   assert.equal(snapshot.status, "valid");
   assert.equal(snapshot.requireSignIn, true);
   assert.equal(normalizeDeviceValues({ FutureSetting: true }).status, "absent");
+  assert.equal(
+    normalizeDeviceValues({ AuditLogPath: "", WipeLocalDataOnLaunch: false }).status,
+    "absent"
+  );
   const wrongType = defaultDevicePolicy();
   wrongType.features.connectorsEnabled = "no";
   assert.throws(() => normalizeDeviceValues({ Policy: JSON.stringify(wrongType) }));
@@ -75,7 +79,6 @@ test("malformed documents, partial policies and wrong device types fail", () => 
     { Policy: JSON.stringify({ features: { meetingRecordingEnabled: false } }) },
     { RequireSignIn: 0 },
     { DisableMeetingRecording: "true" },
-    { WipeLocalDataOnLaunch: "" },
   ])
     assert.throws(() => normalizeDeviceValues(values));
 });
@@ -89,11 +92,31 @@ test("unknown update mode retains the specified user-choice fallback", () => {
   );
 });
 
+// What `reg query HKLM\SOFTWARE\Policies` prints: one line per subkey.
+const policiesListing = (...subkeys) =>
+  [
+    "",
+    ...["Microsoft", ...subkeys].map((key) => `HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\${key}`),
+  ].join("\r\n");
+
+// reg.exe without the OpenWhispr key or, `blocked`, unable to read any key.
+function registryWithoutPolicy({ blocked = false } = {}) {
+  return async () => {
+    if (blocked)
+      throw Object.assign(
+        new Error("ERROR: Registry editing has been disabled by your administrator."),
+        { code: 1 }
+      );
+    return { stdout: policiesListing() };
+  };
+}
+
 // reg.exe writes a .reg export as UTF-16 with a byte order mark.
 function registryExport(lines) {
   return (run) =>
     readWindowsValues(async (command, args, options) => {
       run?.(command, args, options);
+      if (args[0] === "query") return { stdout: policiesListing("OpenWhispr") };
       const text = [
         "Windows Registry Editor Version 5.00",
         "",
@@ -112,14 +135,12 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
   const values = await registryExport([
     `"Policy"="${policy}"`,
     '"RequireSignIn"=dword:00000000',
-    '"AuditLogPath"="C:\\\\企業\\\\監査.jsonl"',
     '"Unrelated"=hex(2):43,00,00,00',
   ])((...args) => {
     command = args;
   });
   assert.deepEqual(JSON.parse(values.Policy), defaultDevicePolicy());
   assert.equal(values.RequireSignIn, false);
-  assert.equal(values.AuditLogPath, "C:\\企業\\監査.jsonl");
   assert.equal(
     command[0],
     path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "reg.exe")
@@ -130,6 +151,10 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
   );
   assert.equal(command[2].windowsHide, true);
   assert.equal(fs.existsSync(command[1][2]), false);
+  // Value names are case-insensitive, as in the registry itself.
+  assert.deepEqual(await registryExport(['"requiresignin"=dword:00000001'])(), {
+    RequireSignIn: true,
+  });
   for (const line of [
     '"RequireSignIn"="0"',
     '"RequireSignIn"=dword:00000002',
@@ -137,11 +162,29 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
     '"Policy"=hex(2):7b,00,00,00',
   ])
     await assert.rejects(registryExport([line])(), /Invalid registry value type/);
+  // One reg.exe run when no key is deployed, which is every read on most machines.
+  let runs = 0;
+  const missing = registryWithoutPolicy();
   assert.deepEqual(
-    await readWindowsValues(async () => {
-      throw Object.assign(new Error("ERROR: The system was unable to find the key"), { code: 1 });
+    await readWindowsValues((...args) => {
+      runs += 1;
+      return missing(...args);
     }),
     {}
+  );
+  assert.equal(runs, 1);
+  // The key is there, but its export can't be written.
+  await assert.rejects(
+    readWindowsValues(async (_command, args) => {
+      if (args[0] === "export")
+        throw Object.assign(new Error("ERROR: Access is denied."), { code: 1 });
+      return { stdout: policiesListing("openwhispr") };
+    }),
+    /Access is denied/
+  );
+  await assert.rejects(
+    readWindowsValues(registryWithoutPolicy({ blocked: true })),
+    /Registry editing/
   );
   await assert.rejects(
     readWindowsValues(async () => {
@@ -181,21 +224,35 @@ test("evidence of a deployment is the policy key or file, not the reader's succe
       platform: "win32",
       run: async (command, args) => {
         query = args;
-        return { stdout: "" };
+        return { stdout: policiesListing("OpenWhispr") };
       },
     }),
     true
   );
-  assert.deepEqual(query, ["query", "HKLM\\SOFTWARE\\Policies\\OpenWhispr", "/reg:64"]);
-  assert.equal(
-    await hasPolicyEvidence({
-      platform: "win32",
-      run: async () => {
-        throw Object.assign(new Error("missing"), { code: 1 });
-      },
-    }),
-    false
+  assert.deepEqual(query, ["query", "HKLM\\SOFTWARE\\Policies", "/reg:64"]);
+  assert.equal(await hasPolicyEvidence({ platform: "win32", run: registryWithoutPolicy() }), false);
+  await assert.rejects(
+    hasPolicyEvidence({ platform: "win32", run: registryWithoutPolicy({ blocked: true }) }),
+    /Registry editing/
   );
+});
+
+test("an inaccessible Linux deployment fails closed on its first read", async () => {
+  for (const code of ["EACCES", "EPERM"]) {
+    const denied = async () => {
+      throw Object.assign(new Error("permission denied"), { code });
+    };
+    const manager = createManagedDevicePolicy({
+      platform: "linux",
+      read: denied,
+      hasPolicy: () => hasPolicyEvidence({ platform: "linux", fileSystem: { lstat: denied } }),
+      logger: { warn() {} },
+    });
+    await manager.refresh();
+    assert.equal(manager.getSnapshot().status, "invalid", code);
+    assert.equal(manager.getSnapshot().managed, true, code);
+    manager.stop();
+  }
 });
 
 function linuxFileSystem(files, overrides = {}) {
@@ -212,7 +269,7 @@ function linuxFileSystem(files, overrides = {}) {
       assert.ok(flags & require("node:fs").constants.O_NOFOLLOW);
       const value = files[filePath.split("/").at(-1)];
       if (value === undefined) throw Object.assign(new Error("missing"), { code: "ENOENT" });
-      const data = Buffer.from(JSON.stringify(value));
+      const data = Buffer.from(typeof value === "string" ? value : JSON.stringify(value));
       return {
         stat: async () => ({
           uid: 0,
@@ -268,7 +325,7 @@ function deviceReader({ evidence = false } = {}) {
       reader.reads += 1;
       return reader.next();
     },
-    hasPolicy: async () => evidence,
+    hasPolicy: typeof evidence === "function" ? evidence : async () => evidence,
     logger: { warn: (message) => warnings.push(message) },
   });
   return reader;
@@ -285,6 +342,15 @@ test("a reader that fails with nothing deployed reads as absent, and says so", a
   assert.equal(reader.manager.getSnapshot().status, "absent");
   assert.equal(reader.manager.getSnapshot().managed, false);
   assert.equal(reader.warnings.length, 1);
+  reader.manager.stop();
+});
+
+test("a reader that can't tell whether a policy is deployed reads as absent, and says so", async () => {
+  const reader = deviceReader({ evidence: unreadable });
+  reader.next = unreadable;
+  await reader.manager.refresh();
+  assert.equal(reader.manager.getSnapshot().status, "absent");
+  assert.match(reader.warnings[0], /nor whether one is deployed/);
   reader.manager.stop();
 });
 
@@ -311,6 +377,33 @@ test("a failed re-read keeps the policy last read in force", async () => {
   reader.manager.stop();
 });
 
+test("a deployment this build rejects replaces the policy last read", async () => {
+  for (const rejected of [
+    async () => ({ RequireSignIn: 0 }),
+    () => registryExport(['"RequireSignIn"="0"'])(),
+    () => readLinuxValues({ fileSystem: linuxFileSystem({ "device.json": { Policy: "{}" } }) }),
+  ]) {
+    const reader = deviceReader();
+    reader.next = async () => ({ RequireSignIn: false });
+    await reader.manager.refresh();
+    reader.next = rejected;
+    await reader.manager.refresh();
+    assert.equal(reader.manager.getSnapshot().code, "DEVICE_POLICY_INVALID");
+    reader.manager.stop();
+  }
+});
+
+test("a Linux policy file still being written keeps the policy last read", async () => {
+  const reader = deviceReader();
+  reader.next = async () => ({ RequireSignIn: false });
+  await reader.manager.refresh();
+  reader.next = () =>
+    readLinuxValues({ fileSystem: linuxFileSystem({ "policy.json": '{"version":1,' }) });
+  await reader.manager.refresh();
+  assert.equal(reader.manager.getSnapshot().localOnly, true);
+  reader.manager.stop();
+});
+
 test("reads already under way are joined, and focus re-reads are throttled", async () => {
   const reader = deviceReader();
   let finish;
@@ -324,10 +417,8 @@ test("reads already under way are joined, and focus re-reads are throttled", asy
   finish({ RequireSignIn: false });
   await Promise.all([first, second]);
   assert.equal(reader.reads, 1);
-  reader.next = async () => ({ RequireSignIn: false });
   reader.manager.refreshOnFocus();
-  await reader.manager.refresh();
-  assert.equal(reader.reads, 2);
+  assert.equal(reader.reads, 1);
   reader.manager.stop();
 });
 

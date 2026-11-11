@@ -3,6 +3,75 @@ const assert = require("node:assert/strict");
 const { defaultDevicePolicy } = require("../../src/helpers/managedDevicePolicy");
 const { productOperationAllowed } = require("../../src/helpers/productPolicy");
 
+test("generic cloud routes enforce backup and sharing policy while permitting erasure", () => {
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.cloudBackupAllowed = false;
+  policy.sharing.externalLinkSharing = "disabled";
+  const snapshot = { success: true, managed: true, policy };
+  const allowed = (path, method, body) =>
+    productOperationAllowed(snapshot, "1.11.2", "cloud-api-request", [{ path, method, body }]);
+  for (const path of [
+    "/api/transcriptions/batch-create",
+    "/api/transcriptions/create",
+    "/api/snippets/batch-create",
+    "/api/conversations/messages",
+    "/api/analytics/events/batch",
+    "/api/activation/device",
+    "/api/activation/batch",
+    "/api/product-events/batch",
+    "/api/product-events/app-session",
+    "/api/v1/dictionary/create",
+  ])
+    assert.equal(allowed(path, "POST", {}), false, path);
+  assert.equal(allowed("/api/dictionary/update", "PATCH", {}), false);
+  assert.equal(allowed("/api/v1/snippets/snippet-id", "PATCH", {}), false);
+  assert.equal(allowed("/api/notes/note/share", "PATCH", { visibility: "link" }), false);
+  assert.equal(allowed("/api/notes/note/share", "PATCH", { visibility: "private" }), true);
+  assert.equal(allowed("/api/notes/note/share/invitations", "POST", { emails: ["a@test"] }), false);
+  assert.equal(allowed("/api/notes/note/access/grants", "POST", {}), false);
+  assert.equal(
+    allowed("/api/notes/note/access/grants/grant", "PATCH", { permission: "viewer" }),
+    true
+  );
+  assert.equal(
+    allowed("/api/notes/note/access/grants/grant", "PATCH", { permission: "editor" }),
+    false
+  );
+  assert.equal(allowed("/api/notes/note/share", "DELETE"), true);
+  assert.equal(allowed("/api/transcriptions/batch-delete", "POST", { ids: ["id"] }), true);
+  assert.equal(allowed("/api/notes/delete", "DELETE", { id: "id" }), true);
+  assert.equal(allowed("/api/shared-dictionary/create", "POST", { term: "team" }), true);
+  assert.equal(allowed("/api/notes/create", "POST", { content: "share preparation" }), true);
+  assert.equal(allowed("/api/folders/batch-create", "POST", { folders: [] }), true);
+  assert.equal(allowed("/api/analytics/participation", "PATCH", { enabled: true }), false);
+  assert.equal(allowed("/api/analytics/participation", "PATCH", { enabled: false }), true);
+  assert.equal(allowed("/api/leaderboard/domain", "GET"), false);
+  assert.equal(allowed("/api/workspaces/workspace/leaderboard", "GET"), false);
+  assert.equal(allowed("/api/analytics/summary", "GET"), true);
+  assert.equal(allowed("/api/analytics/participation", "GET"), true);
+  assert.equal(allowed("/api/leaderboard/access", "GET"), true);
+  assert.equal(allowed("/api/conversations/search", "POST", { query: "read" }), true);
+  policy.sharing.externalLinkSharing = "domain_only";
+  assert.equal(allowed("/api/notes/note/share", "PATCH", { visibility: "domain" }), true);
+  assert.equal(allowed("/api/notes/note/share", "PATCH", { visibility: "link" }), false);
+});
+
+test("calendar connections and refreshes respect the connector setting", () => {
+  const policy = defaultDevicePolicy();
+  policy.features.agentEnabled = false;
+  const snapshot = { success: true, managed: true, policy };
+  assert.equal(productOperationAllowed(snapshot, "1.11.2", "gcal-start-oauth"), true);
+  assert.equal(productOperationAllowed(snapshot, "1.11.2", "mcal-start-oauth"), true);
+  policy.features.connectorsEnabled = false;
+  for (const channel of [
+    "gcal-start-oauth",
+    "mcal-start-oauth",
+    "gcal-sync-events",
+    "mcal-sync-events",
+  ])
+    assert.equal(productOperationAllowed(snapshot, "1.11.2", channel), false, channel);
+});
+
 test("main execution rejects cloud and BYOK inference while permitting independently allowed web search", () => {
   const policy = defaultDevicePolicy();
   policy.transcription.allowedModes = ["local"];

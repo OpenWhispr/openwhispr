@@ -111,21 +111,27 @@ function resolveEffectivePolicy(device, workspace, scope) {
     localOnly: device.localOnly === true,
   };
   // On a failure `managed` is the evidence that something manages this
-  // identity: a device policy, or a server that called its policy
-  // unresolvable. Without it a failed lookup holds nothing closed.
+  // identity: a device policy, a server that called its policy unresolvable,
+  // or a failed lookup for an account last seen managed. Without it a failed
+  // lookup restricts nothing: the identity is unmanaged, for updates as for
+  // everything else. Only the first two settle the verdict.
+  const settledManaged = device.managed === true || workspace?.code === "POLICY_UNRESOLVABLE";
+  const managed = settledManaged || workspace?.managed === true;
   const failure = (status, code) => ({
     ...metadata,
     success: false,
     status,
-    managed: device.managed === true || workspace?.code === "POLICY_UNRESOLVABLE",
+    managed,
     policy: null,
     code,
   });
   if (device.status === "loading") return failure("loading", "DEVICE_POLICY_LOADING");
   if (device.status === "invalid") return failure("error", "DEVICE_POLICY_INVALID");
   if (scope.authenticated && !workspace) return failure("loading", "POLICY_LOADING");
-  if (scope.authenticated && !workspace.success)
-    return failure("error", workspace.code ?? "POLICY_UNRESOLVABLE");
+  // With only the account's last verdict as evidence, this credential's own is
+  // still on its way: new work is refused, and nothing running is revoked.
+  if (scope.authenticated && !workspace.success && managed)
+    return failure(settledManaged ? "error" : "loading", workspace.code ?? "POLICY_UNRESOLVABLE");
   if (!scope.authenticated && device.requireSignIn)
     return failure("error", "POLICY_SIGN_IN_REQUIRED");
   try {
@@ -149,18 +155,14 @@ function resolveEffectivePolicy(device, workspace, scope) {
 
 // What the updater obeys. A device policy that can't be read contributes
 // nothing, and as it also keeps the workspace off the network, its held
-// verdict or none decides. A lookup that failed without evidence that the
-// identity is managed leaves the update choice with the user.
+// verdict or none decides.
 function resolveUpdatePolicy(device, workspace, scope) {
   const invalidDevice = device.status === "invalid";
-  const snapshot = resolveEffectivePolicy(
+  return resolveEffectivePolicy(
     invalidDevice ? ABSENT_DEVICE : device,
     invalidDevice ? (workspace ?? { success: false }) : workspace,
     scope
   );
-  return snapshot.status === "error" && !snapshot.managed
-    ? { ...snapshot, success: true, status: "unmanaged" }
-    : snapshot;
 }
 
 function createEffectivePolicyManager({
@@ -174,14 +176,15 @@ function createEffectivePolicyManager({
   let updates = null;
   let signature;
   let revision = 0;
+  const workspaceFor = (scope) =>
+    workspace?.accountId === scope.accountId && workspace?.authGeneration === scope.authGeneration
+      ? workspace
+      : null;
   function getCurrent() {
     const scope = getScope();
-    const matching =
-      workspace?.accountId === scope.accountId &&
-      workspace?.authGeneration === scope.authGeneration;
     const device = devicePolicy.getSnapshot();
-    const next = resolveEffectivePolicy(device, matching ? workspace : null, scope);
-    const nextUpdates = resolveUpdatePolicy(device, matching ? workspace : null, scope);
+    const next = resolveEffectivePolicy(device, workspaceFor(scope), scope);
+    const nextUpdates = resolveUpdatePolicy(device, workspaceFor(scope), scope);
     const nextSignature = JSON.stringify([next, nextUpdates]);
     if (nextSignature !== signature) {
       signature = nextSignature;
@@ -196,12 +199,13 @@ function createEffectivePolicyManager({
     const scope = getScope();
     if (snapshot.accountId !== scope.accountId || snapshot.authGeneration !== scope.authGeneration)
       return;
-    // A failed lookup says nothing new about a verdict already held, unless
-    // the server called the policy unresolvable.
+    // A failed lookup says nothing new about a verdict already held, nor
+    // lifts one the server called unresolvable: only the server calling it
+    // unresolvable replaces a held verdict with a failure.
     if (
       !snapshot.success &&
       snapshot.code !== "POLICY_UNRESOLVABLE" &&
-      workspace?.success &&
+      (workspace?.success || workspace?.code === "POLICY_UNRESOLVABLE") &&
       workspace.accountId === snapshot.accountId &&
       workspace.authGeneration === snapshot.authGeneration
     )
@@ -223,16 +227,17 @@ function createEffectivePolicyManager({
     },
     // `held` reads only what is already held for the identity. So does a
     // device that keeps it local or whose policy can't be read: neither
-    // contacts the server.
+    // contacts the server. Otherwise an identity with no verdict yet (just
+    // started, or invalidated) takes the one it last had while the network
+    // refreshes it.
     async getPolicy({ held = false, ...request } = {}) {
       const device = devicePolicy.getSnapshot();
       if (device.status === "loading") return getCurrent();
       const scope = getScope();
       if (scope.authenticated) {
         const offline = held || device.localOnly || device.status === "invalid";
-        const result = offline
-          ? workspacePolicyManager.heldPolicy(request)
-          : await workspacePolicyManager.getPolicy(request);
+        const result =
+          offline || !workspaceFor(scope) ? workspacePolicyManager.heldPolicy(request) : null;
         if (result) updateWorkspace(result);
         else if (device.localOnly)
           updateWorkspace({
@@ -241,6 +246,7 @@ function createEffectivePolicyManager({
             accountId: scope.accountId,
             authGeneration: scope.authGeneration,
           });
+        if (!offline) updateWorkspace(await workspacePolicyManager.getPolicy(request));
       }
       return getCurrent();
     },

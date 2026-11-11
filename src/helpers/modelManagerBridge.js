@@ -587,7 +587,6 @@ class ModelManager {
     ceilingFor,
     startServer,
   }) {
-    options.signal?.throwIfAborted();
     const reserveTokens = reserveFor(maxTokens);
     const running = this.serverManager.contextSize || contextFloor;
 
@@ -600,7 +599,6 @@ class ModelManager {
     const exactTokens = await this.serverManager.countPromptTokens(messages, {
       disableThinking: options.disableThinking,
     });
-    options.signal?.throwIfAborted();
 
     // A measurement we could not take must never fail the request; the
     // estimate already sized the window, and an overflow would still surface
@@ -726,8 +724,6 @@ class ModelManager {
       );
     }
 
-    options.signal?.throwIfAborted();
-
     // Build messages for chat completion
     const messages = [
       { role: "system", content: options.systemPrompt || "" },
@@ -771,7 +767,6 @@ class ModelManager {
     };
 
     const startServer = async (contextSize) => {
-      options.signal?.throwIfAborted();
       if (this.serverManager.ready && contextSize >= smallestRefusedContextSize) return;
 
       const { cacheRamMiB } = ceiling ?? {};

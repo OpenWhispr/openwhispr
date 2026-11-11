@@ -79,8 +79,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "./windowBroadcast") {
       return {
         broadcastToWindows: (channel, data) => {
-          if (!["effective-policy-changed", "workspace-policy-changed"].includes(channel))
-            broadcasts.push([channel, data]);
+          if (channel !== "effective-policy-changed") broadcasts.push([channel, data]);
         },
       };
     }
@@ -467,10 +466,6 @@ test("completed cookie sign-out discards a pending cookie-authorized updater pol
   await policy;
   assert.equal((await manager.getUpdateStatus()).policyReady, true);
   assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
-  assert.equal(
-    broadcasts.some(([channel]) => channel === "workspace-policy-changed"),
-    false
-  );
 });
 
 test("a bearer the API refuses with nothing held updates as a guest, while a held IT verdict stands", async (t) => {
@@ -982,6 +977,107 @@ for (const outcome of [
   });
 }
 
+for (const provider of ["whisper", "parakeet"]) {
+  for (const outcome of [
+    "permitted",
+    "denied",
+    "pending permitted",
+    "pending denied",
+    "second account",
+    "sign-out",
+  ]) {
+    test(`guest local dictation follows its first account: ${provider}, ${outcome}`, async (t) => {
+      const { deferred } = require("./harness/deferred");
+      const IPCHandlers = require(handlersModulePath);
+      const entered = deferred(),
+        finish = deferred(),
+        policyReady = deferred();
+      const previous = {
+        whisperManager: Object.getOwnPropertyDescriptor(fakeThis, "whisperManager"),
+        parakeetManager: Object.getOwnPropertyDescriptor(fakeThis, "parakeetManager"),
+        retire: fakeThis._retireDisallowedProductWork,
+        tokenState,
+        account: databaseManager.activeAccountId,
+      };
+      const apiUrl = process.env.OPENWHISPR_API_URL;
+      process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+      let pending;
+      t.after(async () => {
+        finish.resolve({ success: true, text: "guest dictation" });
+        policyReady.resolve();
+        await pending;
+        for (const property of ["whisperManager", "parakeetManager"])
+          if (previous[property]) Object.defineProperty(fakeThis, property, previous[property]);
+          else delete fakeThis[property];
+        fakeThis._retireDisallowedProductWork = previous.retire;
+        tokenState = previous.tokenState;
+        databaseManager.activeAccountId = previous.account;
+        if (apiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+        else process.env.OPENWHISPR_API_URL = apiUrl;
+        await fakeThis.refreshEffectivePolicy();
+      });
+      const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+      if (outcome.includes("denied")) policy.transcription.allowedModes = ["providers"];
+      t.mock.method(electronStub.net, "fetch", async (url) => {
+        assert.ok(url.endsWith("/api/workspace-policy"));
+        if (outcome.startsWith("pending")) await policyReady.promise;
+        return Response.json({
+          data: { managed: true, policy, policyUpdatedAt: "2026-11-12T00:00:00.000Z" },
+        });
+      });
+      const generation = tokenState.generation + 1;
+      handleAuthTokenChange({ token: null, generation });
+      await fakeThis.refreshEffectivePolicy();
+      fakeThis._retireDisallowedProductWork =
+        IPCHandlers.prototype._retireDisallowedProductWork.bind(fakeThis);
+      let decoderSignal;
+      fakeThis[`${provider}Manager`] = {
+        [`transcribeLocal${provider === "whisper" ? "Whisper" : "Parakeet"}`]: async (
+          _audio,
+          { signal }
+        ) => {
+          decoderSignal = signal;
+          entered.resolve();
+          return finish.promise;
+        },
+      };
+      pending = handlers.get(`transcribe-local-${provider}`)({ sender: {} }, new Uint8Array([1]));
+      await entered.promise;
+      const accountId = `first-${provider}-${outcome}`;
+      handleAuthTokenChange({ token: `token-${accountId}`, generation: generation + 1 });
+      await setScope(accountId, generation + 1);
+      if (!outcome.startsWith("pending")) await fakeThis.refreshEffectivePolicy();
+      if (outcome === "second account") {
+        handleAuthTokenChange({ token: `second-${accountId}`, generation: generation + 2 });
+        await setScope(`second-${accountId}`, generation + 2);
+        await fakeThis.refreshEffectivePolicy();
+      } else if (outcome === "sign-out") {
+        handleAuthTokenChange({ token: null, generation: generation + 2 });
+        await fakeThis.refreshEffectivePolicy();
+      }
+      finish.resolve({ success: true, text: "guest dictation" });
+      if (outcome.startsWith("pending")) {
+        let result;
+        void pending.then((value) => (result = value));
+        await new Promise(setImmediate);
+        assert.equal(result, undefined, "the new account's verdict must decide completion");
+        policyReady.resolve();
+      }
+      const result = await pending;
+      if (outcome.includes("denied")) {
+        assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+        assert.equal(decoderSignal.aborted, true);
+      } else if (["second account", "sign-out"].includes(outcome)) {
+        assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
+        assert.equal(result.text, undefined);
+      } else {
+        assert.deepEqual(result, { success: true, text: "guest dictation" });
+        assert.equal(decoderSignal.aborted, false);
+      }
+    });
+  }
+}
+
 // Runs an enterprise meeting under `workspace-a`, owned by main, and reports every stop.
 async function enterpriseMeeting(t, generation) {
   const originalStop = fakeThis._stopMeetingForPolicy;
@@ -1146,7 +1242,7 @@ test("repeated validated account scope preserves its settled policy while refres
   assert.equal(manager.getCurrent().authGeneration, 81);
 });
 
-test("while a verdict loads, local work runs, new remote work waits, and windows aren't held", async (t) => {
+test("while a verdict loads, local work runs, new remote work waits for it, and windows aren't held", async (t) => {
   const { deferred } = require("./harness/deferred");
   const answer = deferred();
   const previousApiUrl = process.env.OPENWHISPR_API_URL;
@@ -1176,10 +1272,47 @@ test("while a verdict loads, local work runs, new remote work waits, and windows
   };
   const local = await handlers.get("transcribe-local-whisper")({ sender: {} }, new Uint8Array([1]));
   assert.equal(local.text, "local dictation");
-  assert.equal(
-    (await handlers.get("cloud-health-check")({ sender: {} })).code,
-    "DEVICE_POLICY_BLOCKED"
-  );
+  const remote = handlers.get("cloud-health-check")({ sender: {} });
+  answer.resolve();
+  assert.deepEqual(await remote, { ok: true, status: 200 });
+});
+
+test("new remote work doesn't start on a verdict that never settles", async (t) => {
+  const { POLICY_TIMEOUT_MS } = require("../../src/helpers/connectors/connectorIpc");
+  const previousApiUrl = process.env.OPENWHISPR_API_URL;
+  const previousTokenState = tokenState;
+  const lookups = [];
+  t.after(() => {
+    for (const lookup of lookups) lookup.resolve();
+    if (previousApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = previousApiUrl;
+    tokenState = previousTokenState;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  const realFetch = electronStub.net.fetch;
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    if (String(url).endsWith("/api/workspace-policy")) {
+      const lookup = require("./harness/deferred").deferred();
+      lookups.push(lookup);
+      await lookup.promise;
+    }
+    return realFetch(url, init);
+  });
+  handleAuthTokenChange({ token: "unsettled-token", generation: tokenState.generation + 1 });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  let result;
+  const remote = handlers
+    .get("cloud-health-check")({ sender: {} })
+    .then((value) => {
+      result = value;
+    });
+  for (let turn = 0; turn < 20 && !result; turn++) {
+    await new Promise(setImmediate);
+    t.mock.timers.tick(POLICY_TIMEOUT_MS);
+  }
+  await remote;
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
 });
 
 test("an account change during a streaming start closes the socket the start opened", async (t) => {
@@ -1211,5 +1344,93 @@ test("an account change during a streaming start closes the socket the start ope
 
   assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
   assert.deepEqual(disconnects, [{ commit: false }]);
+  assert.equal(fakeThis.geminiStreaming, null);
+});
+
+for (const boundary of ["sign-out", "account switch"]) {
+  test(`a connected stream survives token rotation and ends on ${boundary}`, async (t) => {
+    const previous = {
+      stream: fakeThis.geminiStreaming,
+      account: databaseManager.activeAccountId,
+      tokenState,
+    };
+    t.after(() => {
+      fakeThis.geminiStreaming = previous.stream;
+      databaseManager.activeAccountId = previous.account;
+      tokenState = previous.tokenState;
+    });
+    tokenState = { token: "stream-owner-token", generation: tokenState.generation + 1 };
+    await setScope("stream-owner", tokenState.generation);
+    await fakeThis.refreshEffectivePolicy();
+    const disconnects = [];
+    const streaming = {
+      isConnected: true,
+      cleanupWarmConnection() {},
+      disconnect: async (options) => disconnects.push(options),
+    };
+    fakeThis.geminiStreaming = streaming;
+    assert.equal((await handlers.get("gemini-streaming-warmup")({ sender: {} }, {})).success, true);
+    handleAuthTokenChange({ token: "rotated-owner-token", generation: tokenState.generation + 1 });
+    await setScope("stream-owner", tokenState.generation);
+    assert.equal(fakeThis.geminiStreaming, streaming);
+    assert.equal(disconnects.length, 0);
+    if (boundary === "sign-out") {
+      handleAuthTokenChange({ token: null, generation: tokenState.generation + 1 });
+    } else {
+      handleAuthTokenChange({
+        token: "other-account-token",
+        generation: tokenState.generation + 1,
+      });
+      await setScope("other-account", tokenState.generation);
+    }
+    assert.equal(fakeThis.geminiStreaming, null);
+    assert.deepEqual(disconnects, [{ commit: false }]);
+  });
+}
+
+test("sign-out during a connecting stream preserves its late-socket cleanup", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const previous = {
+    stream: fakeThis.geminiStreaming,
+    account: databaseManager.activeAccountId,
+    tokenState,
+    environment: Object.getOwnPropertyDescriptor(fakeThis, "environmentManager"),
+  };
+  const entered = deferred(),
+    finish = deferred();
+  t.after(() => {
+    finish.resolve();
+    fakeThis.geminiStreaming = previous.stream;
+    databaseManager.activeAccountId = previous.account;
+    tokenState = previous.tokenState;
+    if (previous.environment)
+      Object.defineProperty(fakeThis, "environmentManager", previous.environment);
+    else delete fakeThis.environmentManager;
+  });
+  tokenState = { token: "connecting-token", generation: tokenState.generation + 1 };
+  await setScope("connecting-owner", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  fakeThis.environmentManager = { getGeminiKey: () => "saved-key" };
+  let connected = false;
+  const streaming = {
+    isConnected: false,
+    beginConnecting() {},
+    cleanupWarmConnection() {},
+    connect: async () => {
+      entered.resolve();
+      await finish.promise;
+      connected = true;
+    },
+    disconnect: async () => {
+      connected = false;
+    },
+  };
+  fakeThis.geminiStreaming = streaming;
+  const pending = handlers.get("gemini-streaming-warmup")({ sender: {} }, { mode: "byok" });
+  await entered.promise;
+  handleAuthTokenChange({ token: null, generation: tokenState.generation + 1 });
+  finish.resolve();
+  assert.equal((await pending).code, "AUTH_CONTEXT_CHANGED");
+  assert.equal(connected, false);
   assert.equal(fakeThis.geminiStreaming, null);
 });

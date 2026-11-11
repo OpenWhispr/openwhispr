@@ -48,10 +48,10 @@ const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager
 const { createEffectivePolicyManager } = require("./effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
 const {
-  isUnmanagedLookup,
   productOperationAllowed,
   productPolicyState,
   realtimeSelection,
+  runningOperationAllowed,
 } = require("./productPolicy");
 const { createCloudConfigRequestHandler } = require("./cloudConfigRequest");
 const { extractAnthropicText, describeMissingAnthropicText } = require("./anthropicResponse");
@@ -76,6 +76,7 @@ const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
   createConnectorAuthLookup,
+  POLICY_TIMEOUT_MS,
 } = require("./connectors/connectorIpc");
 const { createNoteAttendeesLookup, searchContacts } = require("./connectors/contactSearch");
 // The renderer's ModelRegistry is not main-loadable; the route resolver only
@@ -143,6 +144,12 @@ function localTranscriptionFailure(result) {
   }
   return error;
 }
+// The answer product work gets when the policy refuses or retires it.
+const policyBlockedFailure = () => ({
+  success: false,
+  code: "DEVICE_POLICY_BLOCKED",
+  error: i18nMain.t("common.policyUnresolved"),
+});
 // Which diarization dialect a resolved endpoint speaks, for Custom endpoints
 // that front a known provider. Null when the host offers no known dialect.
 const diarizationHost = (endpoint) => {
@@ -731,6 +738,38 @@ function retireStreaming(streaming) {
   streaming.disconnect({ commit: false }).catch(() => {});
 }
 
+// The dictation's renderer hears of the revocation at once and falls back,
+// rather than streaming into a closed session behind a frozen preview.
+function retireProductStream(handlers, property) {
+  handlers[property]?.onError?.(new Error(i18nMain.t("common.policyTranscriptionRestricted")));
+  retireStreaming(handlers[property]);
+  handlers[property] = null;
+  handlers._remoteStreamPolicies.delete(property);
+}
+
+function cancelWindowRequests(registry) {
+  for (const win of BrowserWindow.getAllWindows()) registry.cancelSender(win.webContents.id);
+}
+
+// What both policy retirements end: a disallowed preview, product request or
+// cloud request. `remoteStopped` also ends every request that leaves the device.
+function abortDisallowedRequests(handlers, snapshot, remoteStopped = false) {
+  const allowed = (channel, args) =>
+    productOperationAllowed(snapshot, app.getVersion(), channel, args);
+  if (!allowed("start-dictation-preview")) handlers._stopLocalDictationPreview?.();
+  for (const [controller, operation] of handlers._productRequests ?? []) {
+    if ((remoteStopped && operation.remote) || !allowed(operation.channel, operation.args))
+      controller.abort();
+  }
+  for (const [channel, registry] of [
+    ["cloud-agent-stream-start", handlers._agentStreamRequests],
+    ["cloud-reason", handlers._cloudReasonRequests],
+    ["cloud-transcribe", handlers._cloudTranscriptionRequests],
+  ]) {
+    if (remoteStopped || !allowed(channel)) cancelWindowRequests(registry);
+  }
+}
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -796,7 +835,6 @@ class IPCHandlers {
     this._dictionaryHotwordHints = null;
     this.parakeetManager.setDictionaryProvider(() => this._getDictionaryHotwords());
     this._textEditHandler = null;
-    this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
     this.skillLibrary = new SkillLibrary({
@@ -1102,6 +1140,7 @@ class IPCHandlers {
     // Like the jobs above, enterprise audio outlives a token rotation; a
     // different account or workspace retires it once it is learned.
     if (!token) {
+      if (!provenGuest) this._retireAccountProductStreams?.(this.databaseManager.activeAccountId);
       this._retireEnterpriseAudio?.(false, "accountChanged");
       this._enterpriseAudioOwner = null;
     }
@@ -1302,11 +1341,6 @@ class IPCHandlers {
   // Shared by the upload IPC handler and the CLI bridge. `filePath` must
   // already have passed resolveAllowedAudioPath (or approveAudioPath).
   async transcribeLocalFile(filePath, options = {}) {
-    const failure = () => ({
-      success: false,
-      code: "DEVICE_POLICY_BLOCKED",
-      error: i18nMain.t("common.policyUnresolved"),
-    });
     void this.refreshEffectivePolicy();
     if (
       !productOperationAllowed(
@@ -1315,7 +1349,7 @@ class IPCHandlers {
         "transcribe-audio-file"
       )
     )
-      return failure();
+      return policyBlockedFailure();
     const controller = new AbortController();
     this._productRequests.set(controller, {
       channel: "transcribe-audio-file",
@@ -1335,9 +1369,9 @@ class IPCHandlers {
             ...this._resolveWhisperVadOptions("noteRecording"),
             signal,
           });
-      return controller.signal.aborted ? failure() : result;
+      return controller.signal.aborted ? policyBlockedFailure() : result;
     } catch (error) {
-      if (controller.signal.aborted) return failure();
+      if (controller.signal.aborted) return policyBlockedFailure();
       throw error;
     } finally {
       this._productRequests.delete(controller);
@@ -1893,24 +1927,8 @@ class IPCHandlers {
     for (const controller of this.enterpriseStreamAborts?.values() ?? []) controller.abort();
     for (const controller of this.activeUrlDownloads?.values() ?? []) controller.abort();
     this._remoteCalendarsStarted = false;
-    const snapshot = this.effectivePolicyManager.getCurrent();
-    if (!productOperationAllowed(snapshot, app.getVersion(), "start-dictation-preview"))
-      this._stopLocalDictationPreview?.();
-    for (const [controller, operation] of this._productRequests ?? []) {
-      if (
-        operation.remote ||
-        !productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args)
-      )
-        controller.abort();
-    }
-    for (const registry of [
-      this._agentStreamRequests,
-      this._cloudReasonRequests,
-      this._cloudTranscriptionRequests,
-      this._enterpriseReasoningRequests,
-    ]) {
-      for (const win of BrowserWindow.getAllWindows()) registry.cancelSender(win.webContents.id);
-    }
+    abortDisallowedRequests(this, this.effectivePolicyManager.getCurrent(), true);
+    cancelWindowRequests(this._enterpriseReasoningRequests);
     if (this._meetingMicStreaming || this._meetingSystemStreaming)
       this._stopMeetingForPolicy?.("policyRestricted");
     for (const key of [
@@ -1919,30 +1937,22 @@ class IPCHandlers {
       "geminiStreaming",
       "cortiStreaming",
       "_dictationStreaming",
-      "_meetingMicStreaming",
-      "_meetingSystemStreaming",
-    ]) {
+    ])
+      retireProductStream(this, key);
+    // The meeting stop above already told the meeting's renderer.
+    for (const key of ["_meetingMicStreaming", "_meetingSystemStreaming"]) {
       retireStreaming(this[key]);
       this[key] = null;
     }
-    this.connectorManager?.accountChanged();
     this.googleCalendarManager?.stop();
     this.microsoftCalendarManager?.stop();
   }
 
   _retireDisallowedProductWork(snapshot) {
-    if (!productOperationAllowed(snapshot, app.getVersion(), "start-dictation-preview"))
-      this._stopLocalDictationPreview?.();
+    abortDisallowedRequests(this, snapshot);
     for (const [property, operation] of this._remoteStreamPolicies) {
-      if (productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
-        continue;
-      retireStreaming(this[property]);
-      this[property] = null;
-      this._remoteStreamPolicies.delete(property);
-    }
-    for (const [controller, operation] of this._productRequests) {
       if (!productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
-        controller.abort();
+        retireProductStream(this, property);
     }
     for (const [streamId, provider] of this._enterpriseStreamProviders) {
       if (
@@ -1960,18 +1970,23 @@ class IPCHandlers {
       ])
     )
       this._stopMeetingForPolicy?.("policyRestricted");
-    for (const [channel, registry] of [
-      ["cloud-agent-stream-start", this._agentStreamRequests],
-      ["cloud-reason", this._cloudReasonRequests],
-      ["cloud-transcribe", this._cloudTranscriptionRequests],
-    ]) {
-      if (productOperationAllowed(snapshot, app.getVersion(), channel)) continue;
-      for (const win of BrowserWindow.getAllWindows()) registry.cancelSender(win.webContents.id);
+    if (!productOperationAllowed(snapshot, app.getVersion(), "gcal-start-oauth")) {
+      this.googleCalendarManager?.stop();
+      this.microsoftCalendarManager?.stop();
+      this._remoteCalendarsStarted = false;
     }
   }
 
   _startRemoteProductWork() {
     if (!this._remoteCalendarsReady || this._remoteCalendarsStarted) return;
+    if (
+      !productOperationAllowed(
+        this.effectivePolicyManager.getCurrent(),
+        app.getVersion(),
+        "gcal-start-oauth"
+      )
+    )
+      return;
     this._remoteCalendarsStarted = true;
     this.googleCalendarManager?.start();
     this.microsoftCalendarManager?.start();
@@ -1980,36 +1995,70 @@ class IPCHandlers {
   startPolicyCalendars() {
     this._remoteCalendarsReady = true;
     const snapshot = this.effectivePolicyManager.getCurrent();
-    if ((snapshot.success || isUnmanagedLookup(snapshot)) && !snapshot.localOnly)
-      this._startRemoteProductWork();
+    if (snapshot.success && !snapshot.localOnly) this._startRemoteProductWork();
   }
 
   setupHandlers() {
     this._remoteStreamPolicies = new Map();
+    this._retireAccountProductStreams = (accountId) => {
+      for (const [property, operation] of this._remoteStreamPolicies) {
+        // A start still owns its marker until its late-socket check completes.
+        if (operation.accountId === accountId && !operation.pending)
+          retireProductStream(this, property);
+      }
+    };
     this._productRequests = new Map();
     this._productRequestContext = new AsyncLocalStorage();
     this._enterpriseStreamProviders = new Map();
+    // Work that leaves the device doesn't start on a verdict still on its way,
+    // and waits for one: a held verdict answers at once, the network only as
+    // long as a policy decision may take.
+    const awaitVerdict = async (event) => {
+      await this.refreshEffectivePolicy(event, { held: true });
+      if (this.effectivePolicyManager.getCurrent().status !== "loading") return;
+      let timer;
+      await Promise.race([
+        this.refreshEffectivePolicy(event),
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, POLICY_TIMEOUT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+    };
+    const mayStart = (operation) => {
+      const policy = this.effectivePolicyManager.getCurrent();
+      return (
+        (!operation.remote || (!policy.localOnly && policy.status !== "loading")) &&
+        productOperationAllowed(policy, app.getVersion(), operation.channel, operation.args)
+      );
+    };
     const handleProduct = (channel, handler, remote = false) =>
       ipcMain.handle(channel, async (event, ...args) => {
         const operation = { channel, args, remote };
-        const allowed = () => {
-          const policy = this.effectivePolicyManager.getCurrent();
-          return (
-            (!operation.remote || !policy.localOnly) &&
-            productOperationAllowed(policy, app.getVersion(), operation.channel, operation.args)
-          );
-        };
-        const failure = () => ({
-          success: false,
-          code: "DEVICE_POLICY_BLOCKED",
-          error: i18nMain.t("common.policyUnresolved"),
-        });
+        if (channel === "cloud-api-request")
+          operation.args = [
+            args[0],
+            {
+              resolvingShareVisibility:
+                args[0]?.method?.toUpperCase() === "POST" &&
+                /^\/api\/notes\/[^/?#]+\/share\/rotate-token\/?(?:[?#]|$)/.test(args[0]?.path),
+            },
+          ];
         void this.refreshEffectivePolicy(event);
+        if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading")
+          await awaitVerdict(event);
+        if (!mayStart(operation)) return policyBlockedFailure();
         const startedPolicy = this.effectivePolicyManager.getCurrent();
-        // New work that leaves the device waits for a verdict still on its
-        // way; work already running isn't stopped by one.
-        if (!allowed() || (operation.remote && startedPolicy.status === "loading"))
-          return failure();
+        operation.accountId = startedPolicy.accountId;
+        operation.guestLocalDictation =
+          startedPolicy.workspaceRequired === false &&
+          operation.accountId === null &&
+          ["transcribe-local-whisper", "transcribe-local-parakeet"].includes(channel);
+        operation.preserveCreateReceipt =
+          channel === "cloud-api-request" &&
+          !args[0]?.public &&
+          args[0]?.method?.toUpperCase() === "POST" &&
+          args[0]?.path === "/api/conversations/create";
         const streamProperty = channel.startsWith("dictation-realtime-")
           ? "_dictationStreaming"
           : /^(assemblyai|deepgram|gemini|corti)-streaming-(start|warmup)$/.test(channel)
@@ -2020,7 +2069,7 @@ class IPCHandlers {
                 corti: "cortiStreaming",
               }[channel.split("-")[0]]
             : null;
-        const streamPolicy = { channel, args };
+        const streamPolicy = { channel, args, accountId: operation.accountId, pending: true };
         if (streamProperty) this._remoteStreamPolicies.set(streamProperty, streamPolicy);
         const controller = new AbortController();
         operation.signal = controller.signal;
@@ -2029,18 +2078,20 @@ class IPCHandlers {
           const result = await this._productRequestContext.run(operation, () =>
             handler(event, ...args)
           );
+          // The sender-bound acknowledgement must learn which cloud copy now exists.
+          if (operation.preserveCreateReceipt && result?.success) return result;
           let snapshot = this.effectivePolicyManager.getCurrent();
           if (
             !controller.signal.aborted &&
             snapshot.status === "loading" &&
             snapshot.deviceReady &&
-            snapshot.accountId === startedPolicy.accountId &&
+            snapshot.accountId === operation.accountId &&
             snapshot.authGeneration !== startedPolicy.authGeneration
           ) {
             await this.refreshEffectivePolicy(event);
             snapshot = this.effectivePolicyManager.getCurrent();
           }
-          if (snapshot.accountId !== startedPolicy.accountId) {
+          if (snapshot.accountId !== operation.accountId) {
             // A stream this start opened, unless a later start replaced it,
             // belongs to the account that left.
             if (streamProperty && this._remoteStreamPolicies.get(streamProperty) === streamPolicy) {
@@ -2054,19 +2105,32 @@ class IPCHandlers {
               error: "Authentication context changed during the request",
             };
           }
-          if (controller.signal.aborted) return failure();
-          if (allowed()) return result;
+          if (controller.signal.aborted) return policyBlockedFailure();
+          if (
+            (!operation.remote || !snapshot.localOnly) &&
+            runningOperationAllowed(
+              snapshot,
+              operation.accountId,
+              app.getVersion(),
+              operation.channel,
+              operation.args
+            )
+          )
+            return result;
           if ((!snapshot.success && snapshot.status !== "loading") || snapshot.localOnly)
             this._stopRemoteProductWork();
           else if (snapshot.success) this._retireDisallowedProductWork(snapshot);
-          return failure();
+          return policyBlockedFailure();
         } finally {
           this._productRequests.delete(controller);
+          streamPolicy.pending = false;
         }
       });
     const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
-    const trackTranscriptionRoute = (route, selectedMode) => {
-      if (route.transport === "error") return this._productRequestContext.getStore().signal;
+    // Work that turns remote here starts remote work, under new remote work's rules.
+    const trackTranscriptionRoute = async (route, selectedMode) => {
+      const operation = this._productRequestContext.getStore();
+      if (route.transport === "error") return operation.signal;
       const mode =
         route.transport === "local"
           ? "local"
@@ -2077,10 +2141,22 @@ class IPCHandlers {
               : route.provider === "self-hosted" || selectedMode === "self-hosted"
                 ? "self-hosted"
                 : "providers";
-      const operation = this._productRequestContext.getStore();
+      const turnsRemote = !operation.remote && mode !== "local";
       operation.channel = "batch-transcription";
       operation.args = [{ mode, provider: route.provider ?? "" }];
       operation.remote = mode !== "local";
+      if (turnsRemote) {
+        if (this.effectivePolicyManager.getCurrent().status === "loading") await awaitVerdict();
+        if (!mayStart(operation)) {
+          const unsettled = this.effectivePolicyManager.getCurrent().status === "loading";
+          throw Object.assign(
+            new Error(
+              i18nMain.t(unsettled ? "common.policyUnresolved" : "common.managedPolicyConflict")
+            ),
+            { code: "DEVICE_POLICY_BLOCKED" }
+          );
+        }
+      }
       return operation.signal;
     };
     const handleProviderTranscription = (channel, handler) =>
@@ -3314,7 +3390,14 @@ class IPCHandlers {
       // decides it when it lands. Leaving an account does end its work.
       const leftAccount =
         accountChanged && typeof this.databaseManager.activeAccountId === "string";
+      if (accountChanged && !leftAccount && accountId !== null) {
+        for (const operation of this._productRequests.values()) {
+          if (operation.guestLocalDictation && operation.accountId === null)
+            operation.accountId = accountId;
+        }
+      }
       if (leftAccount) this._localModelPolicy?.cancelJobs();
+      if (leftAccount) this._retireAccountProductStreams?.(this.databaseManager.activeAccountId);
       // A rotated bearer no longer matches the stored binding, so this also
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
@@ -7210,8 +7293,9 @@ class IPCHandlers {
     ipcMain.handle("open-login-items-settings", () => openSystemSettings("loginItems"));
 
     ipcMain.handle("capture-screen-context", async (event) => {
+      // A verdict still on its way is waited for below.
       const held = this.effectivePolicyManager.getCurrent();
-      if ((!held.success && !isUnmanagedLookup(held)) || isScreenContextBlocked(held)) return null;
+      if (held.status === "error" || isScreenContextBlocked(held)) return null;
       const panel = this.windowManager.controlPanelWindow;
       const hidePanel = isFromWindow(event, panel) && panel.isVisible() && !panel.isMinimized();
       const focused = hidePanel && panel.isFocused();
@@ -7247,7 +7331,10 @@ class IPCHandlers {
           const snapshot = await Promise.race([
             this.refreshEffectivePolicy(event),
             new Promise((resolve) => {
-              timer = setTimeout(() => resolve(this.effectivePolicyManager.getCurrent()), 1500);
+              timer = setTimeout(
+                () => resolve(this.effectivePolicyManager.getCurrent()),
+                POLICY_TIMEOUT_MS
+              );
             }),
           ]);
           if (!snapshot.success || isScreenContextBlocked(snapshot)) return null;
@@ -7606,8 +7693,9 @@ class IPCHandlers {
         if (
           !networkAllowed(url) ||
           (operation &&
-            !productOperationAllowed(
+            !runningOperationAllowed(
               this.effectivePolicyManager.getCurrent(),
+              operation.accountId,
               app.getVersion(),
               operation.channel,
               operation.args
@@ -7628,7 +7716,7 @@ class IPCHandlers {
         useSessionCookies: false,
         signal: signals.length ? AbortSignal.any(signals) : undefined,
       });
-      assertAllowed();
+      if (!operation?.preserveCreateReceipt || !response.ok) assertAllowed();
       return response;
     };
     const withPolicyHeaders = (headers) => withPolicyRequestHeaders(headers, app.getVersion());
@@ -7695,10 +7783,7 @@ class IPCHandlers {
           ...tokenStore.getState(),
           binding: accountScopeBinding.read(),
         })?.accountId ?? null,
-      broadcast: (snapshot) => {
-        this.effectivePolicyManager?.updateWorkspace(snapshot);
-        broadcastToWindows("workspace-policy-changed", snapshot);
-      },
+      broadcast: (snapshot) => this.effectivePolicyManager?.updateWorkspace(snapshot),
       logger: debugLogger,
     });
     let cookieGeneration = null;
@@ -7745,12 +7830,8 @@ class IPCHandlers {
       },
       getScope,
       broadcast: (snapshot, updatePolicy) => {
-        // A workspace verdict still loading, or one that failed for an unmanaged
-        // identity, changes nothing for the audio controls.
-        if (
-          !isUnmanagedLookup(snapshot) &&
-          (snapshot.status !== "loading" || !snapshot.deviceReady)
-        )
+        // A workspace verdict still loading changes nothing for the audio controls.
+        if (snapshot.status !== "loading" || !snapshot.deviceReady)
           this._audioFeaturePolicy?.update(snapshot);
         if (snapshot.workspaceRequired || snapshot.authGeneration === credentialsGeneration)
           this._localModelPolicy?.update(snapshot);
@@ -7762,7 +7843,7 @@ class IPCHandlers {
           (snapshot.status === "error" && snapshot.managed)
         )
           this._stopRemoteProductWork();
-        else if (snapshot.success || isUnmanagedLookup(snapshot)) {
+        else if (snapshot.success) {
           this._retireDisallowedProductWork(snapshot);
           this._startRemoteProductWork();
         }
@@ -7790,11 +7871,13 @@ class IPCHandlers {
           return this.effectivePolicyManager.getCurrent();
         cookieGeneration = scope.authGeneration;
         credentialsGeneration = scope.authGeneration;
+        // Not the server's verdict: only an account last seen managed fails closed.
         this.effectivePolicyManager.updateWorkspace({
           success: false,
-          code: "POLICY_UNRESOLVABLE",
+          code: "POLICY_CREDENTIALS_UNREADABLE",
           accountId: scope.accountId,
           authGeneration: scope.authGeneration,
+          managed: workspacePolicyManager.accountWasManaged(scope.accountId),
         });
         return this.effectivePolicyManager.getCurrent();
       }
@@ -8266,7 +8349,10 @@ class IPCHandlers {
               fileName: fileName || "audio.webm",
               contentType: mimeType || "audio/webm",
               prompt,
-              signal: trackTranscriptionRoute({ transport: "managed", provider: managed.provider }),
+              signal: await trackTranscriptionRoute({
+                transport: "managed",
+                provider: managed.provider,
+              }),
             }
           );
         }
@@ -8486,7 +8572,7 @@ class IPCHandlers {
           route.transport !== "local" &&
           route.provider !== "self-hosted" &&
           settings?.cloudTranscriptionMode === "openwhispr";
-        const signal = trackTranscriptionRoute(
+        const signal = await trackTranscriptionRoute(
           usesCloud ? { transport: "cloud" } : route,
           settings?.transcriptionMode
         );
@@ -8503,20 +8589,6 @@ class IPCHandlers {
           if (route.messageKey) err.messageKey = route.messageKey;
           throw err;
         }
-
-        if (
-          usesCloud &&
-          !productOperationAllowed(
-            this.effectivePolicyManager.getCurrent(),
-            app.getVersion(),
-            "cloud-transcribe"
-          )
-        )
-          return {
-            success: false,
-            code: "DEVICE_POLICY_BLOCKED",
-            error: i18nMain.t("common.managedPolicyConflict"),
-          };
 
         // Mirrors the branch order below: self-hosted wins over OpenWhispr
         // cloud, which wins over the BYOK providers. Managed, local and cloud
@@ -9568,10 +9640,8 @@ class IPCHandlers {
 
     const resolveEnterpriseMeetingOptions = async (event, options) => {
       const policy = this.effectivePolicyManager.getCurrent();
-      if (
-        (!policy.success && !isUnmanagedLookup(policy)) ||
-        (policy.localOnly && options.provider !== "local")
-      ) {
+      const state = productPolicyState(policy, app.getVersion());
+      if (state.status === "error" || (policy.localOnly && options.provider !== "local")) {
         throw Object.assign(new Error(i18nMain.t("common.policyUnresolved")), {
           code: "DEVICE_POLICY_BLOCKED",
         });
@@ -9580,7 +9650,6 @@ class IPCHandlers {
         isTranscriptionSelectionAllowed,
         isModeAllowedByPolicy,
       } = require("../stores/policyRules.ts");
-      const state = productPolicyState(policy, app.getVersion());
       const selection = realtimeSelection(options);
       // The local model gate checks a local meeting's model.
       const allowed =
@@ -10870,7 +10939,7 @@ class IPCHandlers {
     const setupDictationCallbacks = (streaming, event) => {
       const isOrukeet = streaming instanceof OrukeetStreaming;
       const canNotify = () =>
-        !isOrukeet || (this._dictationStreaming === streaming && !event.sender.isDestroyed?.());
+        !event.sender.isDestroyed?.() && (!isOrukeet || this._dictationStreaming === streaming);
       if (isOrukeet) {
         const ownerGone = () => {
           streaming.disconnect().catch(() => {});
@@ -12306,15 +12375,22 @@ class IPCHandlers {
       sender.once("destroyed", cancelSenderRequests);
 
       try {
+        const operation = { channel: "cloud-agent-stream-start", args: [], remote: true };
+        const restricted = () =>
+          Object.assign(new Error(i18nMain.t("common.policyAiProcessingRestricted")), {
+            code: "DEVICE_POLICY_BLOCKED",
+          });
+        if (this.effectivePolicyManager.getCurrent().status === "loading")
+          await awaitVerdict(event);
+        if (!mayStart(operation)) throw restricted();
+        const { accountId } = this.effectivePolicyManager.getCurrent();
         const assertAllowed = () => {
           const policy = this.effectivePolicyManager.getCurrent();
           if (
             policy.localOnly ||
-            !productOperationAllowed(policy, app.getVersion(), "cloud-agent-stream-start")
+            !runningOperationAllowed(policy, accountId, app.getVersion(), operation.channel)
           )
-            throw Object.assign(new Error(i18nMain.t("common.policyAiProcessingRestricted")), {
-              code: "DEVICE_POLICY_BLOCKED",
-            });
+            throw restricted();
           controller.signal.throwIfAborted();
         };
         assertAllowed();
@@ -12678,7 +12754,34 @@ class IPCHandlers {
       }
     });
 
-    handleRemoteProduct("cloud-api-request", (_event, opts) => handleCloudApiRequest(opts));
+    handleRemoteProduct("cloud-api-request", async (_event, opts) => {
+      const operation = this._productRequestContext.getStore();
+      if (operation.args[1]?.resolvingShareVisibility) {
+        const path = new URL(opts.path, "https://api.example.test").pathname.replace(
+          /\/rotate-token\/?$/,
+          ""
+        );
+        const current = await handleCloudApiRequest({
+          ...opts,
+          path,
+          method: "GET",
+          body: undefined,
+        });
+        if (!current.success) return current;
+        const data = current.data?.data ?? current.data;
+        operation.args = [opts, { shareVisibility: data?.share?.visibility }];
+        if (
+          !productOperationAllowed(
+            this.effectivePolicyManager.getCurrent(),
+            app.getVersion(),
+            operation.channel,
+            operation.args
+          )
+        )
+          return policyBlockedFailure();
+      }
+      return handleCloudApiRequest(opts);
+    });
 
     ipcMain.handle("get-stt-config", handleSttConfigRequest);
 
@@ -12687,20 +12790,6 @@ class IPCHandlers {
     ipcMain.handle("get-effective-policy", (event) => {
       void this.refreshEffectivePolicy(event);
       return this.effectivePolicyManager.getCurrent();
-    });
-
-    ipcMain.handle("get-workspace-policy", async (event, accountId, expectedAuthGeneration) => {
-      const authHeaders = await getAuthHeader(event);
-      const snapshot = await workspacePolicyManager.getPolicy({
-        accountId,
-        expectedAuthGeneration,
-        authHeaders,
-      });
-      // A verdict served from memory is never broadcast; the effective policy,
-      // which main's audio and local model gates follow, takes it here too.
-      if (snapshot.success && snapshot.authGeneration === tokenStore.getState().generation)
-        this.effectivePolicyManager.updateWorkspace(snapshot);
-      return snapshot;
     });
 
     ipcMain.handle(
@@ -12931,7 +13020,7 @@ class IPCHandlers {
               };
             }
 
-            trackTranscriptionRoute(route, transcriptionMode);
+            await trackTranscriptionRoute(route, transcriptionMode);
 
             if (route.transport === "managed") {
               const result = await transcribeManagedAudio(event, route, {
@@ -13615,7 +13704,7 @@ class IPCHandlers {
             {},
             "streaming"
           );
-          await this.assemblyAiStreaming.disconnect(false);
+          await this.assemblyAiStreaming.disconnect({ commit: false });
         }
 
         const hasWarm = this.assemblyAiStreaming.hasWarmConnection();
@@ -13702,7 +13791,7 @@ class IPCHandlers {
       try {
         let result = { text: "" };
         if (this.assemblyAiStreaming) {
-          result = await this.assemblyAiStreaming.disconnect(true);
+          result = await this.assemblyAiStreaming.disconnect();
           this.assemblyAiStreaming.cleanupAll();
           this.assemblyAiStreaming = null;
         }
@@ -13897,7 +13986,7 @@ class IPCHandlers {
 
         if (this.deepgramStreaming.isConnected) {
           debugLogger.debug("Deepgram cleaning up stale connection before start", {}, "streaming");
-          await this.deepgramStreaming.disconnect(false);
+          await this.deepgramStreaming.disconnect({ commit: false });
         }
 
         const hasWarm = this.deepgramStreaming.hasWarmConnection();
@@ -14010,7 +14099,7 @@ class IPCHandlers {
         const audioBytesSent = this.deepgramStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.deepgramStreaming) {
-          result = await this.deepgramStreaming.disconnect(true);
+          result = await this.deepgramStreaming.disconnect();
         }
 
         return { success: true, text: result?.text || "", model, audioBytesSent };
@@ -14389,21 +14478,6 @@ class IPCHandlers {
       return this.environmentManager.getTranslationKey?.() || "";
     });
 
-    ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {
-      if (this._activeRecordingPipeline && this._activeRecordingPipeline !== pipeline) {
-        return { success: false, holder: this._activeRecordingPipeline };
-      }
-      this._activeRecordingPipeline = pipeline;
-      return { success: true };
-    });
-
-    ipcMain.handle("release-recording-lock", async (_event, pipeline) => {
-      if (this._activeRecordingPipeline === pipeline) {
-        this._activeRecordingPipeline = null;
-      }
-      return { success: true };
-    });
-
     // Provider-neutral availability over the shared calendar cache.
     ipcMain.handle("calendar-get-availability", async (_event, request) => {
       try {
@@ -14437,6 +14511,9 @@ class IPCHandlers {
       const requests = this._calendarAuthorizationRequests;
       const controller = requests.begin(event.sender.id, requestId);
       const abort = () => controller.abort();
+      const policySignal = this._productRequestContext.getStore()?.signal;
+      policySignal?.addEventListener("abort", abort, { once: true });
+      if (policySignal?.aborted) abort();
       event.sender.once("destroyed", abort);
       try {
         // A cancel after the account was saved doesn't undo it, so report what happened.
@@ -14448,6 +14525,7 @@ class IPCHandlers {
         return { success: false, error: error.message };
       } finally {
         event.sender.removeListener("destroyed", abort);
+        policySignal?.removeEventListener("abort", abort);
         requests.complete(event.sender.id, requestId, controller);
       }
     };

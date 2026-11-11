@@ -8,19 +8,14 @@ const { isValidPolicyShape } = require("./policyValidation");
 const { registryData } = require("../models/registryData.js");
 
 const execute = promisify(execFile);
-const DEVICE_KEYS = [
-  "Policy",
-  "RequireSignIn",
-  "AuditLogPath",
-  "WipeLocalDataOnLaunch",
-  "DisableMeetingRecording",
-];
+const DEVICE_KEYS = ["Policy", "RequireSignIn", "DisableMeetingRecording"];
 const MAX_POLICY_BYTES = 1024 * 1024;
 const MODES = ["openwhispr", "providers", "local", "self-hosted", "enterprise"];
 const FOCUS_REFRESH_THROTTLE_MS = 30 * 1000;
 const LINUX_POLICY_DIRECTORY = "/etc/openwhispr";
 const MACOS_PREFERENCES_DOMAIN = "com.gizmolabs.openwhispr";
-const WINDOWS_POLICY_KEY = "HKLM\\SOFTWARE\\Policies\\OpenWhispr";
+const WINDOWS_POLICIES_KEY = "HKLM\\SOFTWARE\\Policies";
+const WINDOWS_POLICY_KEY = `${WINDOWS_POLICIES_KEY}\\OpenWhispr`;
 const READER_TIMEOUT_MS = 5000;
 
 function defaultDevicePolicy() {
@@ -74,6 +69,10 @@ const ABSENT_SNAPSHOT = {
   requireSignIn: false,
   localOnly: false,
 };
+// A deployment a reader found and this build rejects (a wrong type or
+// shape), as opposed to a reader that couldn't read one.
+const invalidDeployment = (message) =>
+  Object.assign(new Error(message), { code: "DEVICE_POLICY_INVALID" });
 const INVALID_SNAPSHOT = {
   status: "invalid",
   managed: true,
@@ -100,11 +99,6 @@ function normalizeDeviceValues(input) {
     if (values[key] !== undefined && typeof values[key] !== "boolean")
       throw new Error("Invalid device boolean");
   }
-  for (const key of ["AuditLogPath", "WipeLocalDataOnLaunch"]) {
-    if (values[key] !== undefined && (typeof values[key] !== "string" || !values[key].trim())) {
-      throw new Error("Invalid device string");
-    }
-  }
   const hasPolicy = Object.hasOwn(values, "Policy");
   let policy = defaultDevicePolicy();
   if (hasPolicy) {
@@ -126,8 +120,6 @@ function normalizeDeviceValues(input) {
     policy,
     requireSignIn: values.RequireSignIn ?? hasPolicy,
     localOnly: values.RequireSignIn === false,
-    auditLogPath: values.AuditLogPath ?? null,
-    wipeLocalDataOnLaunch: values.WipeLocalDataOnLaunch ?? null,
   };
 }
 
@@ -182,13 +174,25 @@ async function readLinuxValues({
     readTrustedJson(path.join(directory, "device.json"), { fileSystem, ownerId }),
   ]);
   if (device !== undefined && (!isPlainObject(device) || Object.hasOwn(device, "Policy"))) {
-    throw new Error("Invalid Linux device settings");
+    throw invalidDeployment("Invalid Linux device settings");
   }
   return { ...device, ...(policy === undefined ? {} : { Policy: JSON.stringify(policy) }) };
 }
 
-function windowsRegistryTool() {
-  return path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "reg.exe");
+function runRegistryTool(run, args) {
+  const tool = path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "reg.exe");
+  return run(tool, [...args, "/reg:64"], { timeout: READER_TIMEOUT_MS, windowsHide: true });
+}
+
+// The Policies key every Windows install has lists the OpenWhispr key when
+// one is deployed. reg.exe exits 1 for any failure, a missing key among
+// them, so this asks the key that is always there: a query that fails means
+// reg.exe itself can't read (an AppLocker rule, a policy against registry
+// tools), never that no policy is deployed.
+async function hasWindowsPolicyKey(run) {
+  const { stdout } = await runRegistryTool(run, ["query", WINDOWS_POLICIES_KEY]);
+  const key = WINDOWS_POLICY_KEY.replace(/^HKLM\\/, "HKEY_LOCAL_MACHINE\\").toLowerCase();
+  return stdout.split(/\r?\n/).some((line) => line.trim().toLowerCase() === key);
 }
 
 const REGISTRY_STRING = /^"((?:[^"\\]|\\.)*)"$/;
@@ -202,32 +206,31 @@ function parseRegistryExport(text) {
   for (const line of lines.slice(lines.findIndex((entry) => entry.startsWith("[")) + 1)) {
     if (line.startsWith("[")) break;
     const [, rawName, data] = /^"((?:[^"\\]|\\.)*)"=(.*)$/.exec(line) ?? [];
-    const name = rawName && unescapeRegistryString(rawName);
-    if (!DEVICE_KEYS.includes(name)) continue;
+    // Value names are case-insensitive in the registry.
+    const name =
+      rawName &&
+      DEVICE_KEYS.find(
+        (key) => key.toLowerCase() === unescapeRegistryString(rawName).toLowerCase()
+      );
+    if (!name) continue;
     const boolean = ["RequireSignIn", "DisableMeetingRecording"].includes(name);
     const dword = /^dword:([0-9a-f]{8})$/i.exec(data)?.[1];
     const string = REGISTRY_STRING.exec(data)?.[1];
     if (boolean ? !["00000000", "00000001"].includes(dword) : string === undefined)
-      throw new Error("Invalid registry value type");
+      throw invalidDeployment("Invalid registry value type");
     values[name] = boolean ? dword === "00000001" : unescapeRegistryString(string);
   }
   return values;
 }
 
+// Exports only a key that is there: an export that then fails (its file
+// can't be written) is a reader failure, and keep-last-valid applies.
 async function readWindowsValues(run = execute) {
+  if (!(await hasWindowsPolicyKey(run))) return {};
   const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), "openwhispr-policy-"));
   const file = path.join(directory, "policy.reg");
   try {
-    try {
-      await run(windowsRegistryTool(), ["export", WINDOWS_POLICY_KEY, file, "/y", "/reg:64"], {
-        timeout: READER_TIMEOUT_MS,
-        windowsHide: true,
-      });
-    } catch (error) {
-      // reg.exe's exit status for a key that doesn't exist.
-      if (error.code === 1) return {};
-      throw error;
-    }
+    await runRegistryTool(run, ["export", WINDOWS_POLICY_KEY, file, "/y"]);
     return parseRegistryExport(await fs.promises.readFile(file, "utf16le"));
   } finally {
     await fs.promises.rm(directory, { recursive: true, force: true });
@@ -241,15 +244,7 @@ async function hasPolicyEvidence({
   run = execute,
   fileSystem = fs.promises,
 } = {}) {
-  if (platform === "win32") {
-    return run(windowsRegistryTool(), ["query", WINDOWS_POLICY_KEY, "/reg:64"], {
-      timeout: READER_TIMEOUT_MS,
-      windowsHide: true,
-    }).then(
-      () => true,
-      () => false
-    );
-  }
+  if (platform === "win32") return hasWindowsPolicyKey(run);
   const preferences = `${MACOS_PREFERENCES_DOMAIN}.plist`;
   const files =
     platform === "linux"
@@ -264,7 +259,7 @@ async function hasPolicyEvidence({
     files.map((file) =>
       fileSystem.lstat(file).then(
         () => true,
-        () => false
+        (error) => platform === "linux" && ["EACCES", "EPERM"].includes(error.code)
       )
     )
   );
@@ -333,22 +328,35 @@ function createManagedDevicePolicy({
   const listeners = new Set();
   // A reader that fails proves nothing on its own: the policy last read stays
   // in force, and without one only evidence of a deployment means invalid.
-  // Null keeps the snapshot as it is.
+  // A deployment this build rejects is invalid at once, as at the next
+  // launch. A Linux JSON file that doesn't parse stays a read failure: it may
+  // still be being written. Null keeps the snapshot as it is.
   async function readNext() {
+    let values;
     try {
-      return normalizeDeviceValues(await read());
+      values = await read();
     } catch (error) {
+      if (error.code === "DEVICE_POLICY_INVALID") return INVALID_SNAPSHOT;
       if (snapshot.status === "valid") {
         logger.warn("Device policy could not be re-read; keeping the last one", {
           error: error.message,
         });
         return null;
       }
-      if (await hasPolicy().catch(() => false)) return INVALID_SNAPSHOT;
-      logger.warn("Device policy could not be read, and none is deployed", {
-        error: error.message,
-      });
+      const deployed = await hasPolicy().catch(() => null);
+      if (deployed) return INVALID_SNAPSHOT;
+      logger.warn(
+        deployed === false
+          ? "Device policy could not be read, and none is deployed"
+          : "Device policy could not be read, nor whether one is deployed; none is enforced",
+        { error: error.message }
+      );
       return ABSENT_SNAPSHOT;
+    }
+    try {
+      return normalizeDeviceValues(values);
+    } catch {
+      return INVALID_SNAPSHOT;
     }
   }
   function refresh() {

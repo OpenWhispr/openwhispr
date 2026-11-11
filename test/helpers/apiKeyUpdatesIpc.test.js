@@ -218,6 +218,7 @@ test.after(() => {
 
 // Loaded after the electron stub above, and shared with ipcHandlers so tests can mock it.
 const liveSpeakerIdentifier = require("../../src/helpers/liveSpeakerIdentifier");
+const { i18nMain } = require("../../src/helpers/i18nMain");
 const MeetingEchoLeakDetector = require("../../src/helpers/meetingEchoLeakDetector");
 
 function anything() {
@@ -232,7 +233,6 @@ function anything() {
 }
 const target = {
   _remoteProductRetirement: new AbortController(),
-  _activeRecordingPipeline: null,
   _remoteCalendarsReady: false,
   _remoteCalendarsStarted: false,
   managedDevicePolicy: {
@@ -417,6 +417,56 @@ for (const restriction of ["local-only", "provider"]) {
     assert.deepEqual(received, ["config"]);
     assert.deepEqual(sessionEnds, []);
   });
+
+  test(`native ${restriction} retirement tells the realtime dictation renderer and hides its preview`, async (t) => {
+    const errors = [];
+    const sender = {
+      id: 1,
+      send: (channel, message) => channel === "dictation-realtime-error" && errors.push(message),
+    };
+    let hidden = 0;
+    target.windowManager = new Proxy(
+      { hideTranscriptionPreview: () => hidden++ },
+      { get: (value, property) => (property in value ? value[property] : anything()) }
+    );
+    t.after(() => {
+      delete target.windowManager;
+      return invoke("dictation-realtime-stop");
+    });
+    invoke("save-tinfoil-key", "saved-provider-key");
+    const started = await handlers.get("dictation-realtime-start")(
+      { sender },
+      { mode: "byok", provider: "tinfoil-realtime", preview: true }
+    );
+    assert.equal(started.success, true);
+    revokeTranscription(restriction);
+    assert.equal(target._dictationStreaming, null);
+    assert.deepEqual(errors, [i18nMain.t("common.policyTranscriptionRestricted")]);
+    assert.equal(hidden, 1);
+  });
+
+  test(`native ${restriction} retirement still closes a dictation stream whose renderer is gone`, async (t) => {
+    let destroyed = false;
+    const sender = {
+      id: 1,
+      isDestroyed: () => destroyed,
+      send() {
+        if (destroyed) throw new TypeError("Object has been destroyed");
+      },
+    };
+    t.after(() => invoke("dictation-realtime-stop"));
+    invoke("save-tinfoil-key", "saved-provider-key");
+    const started = await handlers.get("dictation-realtime-start")(
+      { sender },
+      { mode: "byok", provider: "tinfoil-realtime" }
+    );
+    assert.equal(started.success, true);
+    const stream = target._dictationStreaming;
+    destroyed = true;
+    revokeTranscription(restriction);
+    assert.equal(target._dictationStreaming, null);
+    assert.equal(stream.disconnects, 1);
+  });
 }
 
 for (const restriction of ["local-only", "provider"]) {
@@ -567,7 +617,213 @@ test("calendar background sync resumes after removing local-only device policy",
   assert.equal(starts, 4);
 });
 
-test("invalid trusted device policy cannot be bypassed through workspace-policy IPC", async () => {
+test("device backup restrictions stop backup-only uploads while note sharing preparation and team work remain allowed", async (t) => {
+  withManagedApi(t);
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.cloudBackupAllowed = false;
+  policy.sharing.externalLinkSharing = "disabled";
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  const sent = [];
+  t.mock.method(electron.net, "fetch", async (url) => {
+    sent.push(url);
+    return new Response(JSON.stringify({ data: {} }));
+  });
+  const request = (path, body, method = "POST") =>
+    invoke(
+      "cloud-api-request",
+      {
+        path,
+        method,
+        body,
+        expectedAuthGeneration: 1,
+      },
+      { sharedContent: true }
+    );
+  assert.equal(
+    (await request("/api/transcriptions/batch-create", { transcriptions: [{ text: "private" }] }))
+      .code,
+    "DEVICE_POLICY_BLOCKED"
+  );
+  assert.equal(
+    (await request("/api/notes/note/share", { visibility: "link" }, "PATCH")).code,
+    "DEVICE_POLICY_BLOCKED"
+  );
+  assert.equal(sent.length, 0);
+  // A user may prepare a private cloud copy before choosing its audience.
+  assert.equal(
+    (
+      await request("/api/notes/create", {
+        client_note_id: "new-share",
+        content: "share preparation",
+      })
+    ).success,
+    true
+  );
+  assert.equal(
+    (await request("/api/notes/update", { id: "private-note", content: "private" }, "PATCH"))
+      .success,
+    true
+  );
+  for (const id of ["shared-note", "team-note", "retracted-note"])
+    assert.equal(
+      (
+        await request(
+          "/api/notes/update",
+          { id, content: "shared", ...(id === "retracted-note" ? { space_id: null } : {}) },
+          "PATCH"
+        )
+      ).success,
+      true,
+      id
+    );
+  assert.equal(
+    (await request("/api/notes/create", { space_id: "team", content: "team" })).success,
+    true
+  );
+  assert.equal(
+    (await request("/api/folders/update", { id: "team-folder", name: "team" }, "PATCH")).success,
+    true
+  );
+  assert.equal(
+    (await request("/api/notes/delete", { id: "private-note" }, "DELETE")).success,
+    true
+  );
+  assert.equal(sent.length, 8);
+});
+
+test("connector revocation reaches calendar OAuth before credentials can be saved", async (t) => {
+  const previousManagers = [target.googleCalendarManager, target.microsoftCalendarManager];
+  const previousRegistry = target._calendarAuthorizationRequests;
+  t.after(() => {
+    [target.googleCalendarManager, target.microsoftCalendarManager] = previousManagers;
+    target._calendarAuthorizationRequests = previousRegistry;
+  });
+  for (const [channel, property] of [
+    ["gcal-start-oauth", "googleCalendarManager"],
+    ["mcal-start-oauth", "microsoftCalendarManager"],
+  ]) {
+    setDeviceValues({ RequireSignIn: true });
+    const previous = target[property];
+    const previousRegistry = target._calendarAuthorizationRequests;
+    target._calendarAuthorizationRequests =
+      new (require("../../src/helpers/agentStreamRequestRegistry"))();
+    const entered = deferred(),
+      finish = deferred();
+    let oauthSignal,
+      saved = false;
+    target[property] = {
+      stop() {},
+      startOAuth: async ({ signal }) => {
+        oauthSignal = signal;
+        entered.resolve();
+        await finish.promise;
+        if (!signal.aborted) saved = true;
+        return { success: true };
+      },
+    };
+    const sender = { id: 1, once() {}, removeListener() {} };
+    const pending = handlers.get(channel)({ sender }, "revoked-calendar");
+    await entered.promise;
+    const policy = defaultDevicePolicy();
+    policy.features.connectorsEnabled = false;
+    setDeviceValues({ Policy: JSON.stringify(policy) });
+    finish.resolve();
+    const result = await pending;
+    assert.equal(oauthSignal.aborted, true, channel);
+    assert.equal(saved, false, channel);
+    assert.equal(result.success, false, channel);
+    target[property] = previous;
+    target._calendarAuthorizationRequests = previousRegistry;
+  }
+});
+
+test("backup revocation aborts a private upload while allowing an in-flight shared note update", async (t) => {
+  withManagedApi(t);
+  setDeviceValues({ RequireSignIn: true });
+  const requests = new Map();
+  t.mock.method(
+    electron.net,
+    "fetch",
+    (url, init) =>
+      new Promise((resolve, reject) => {
+        requests.set(new URL(url).pathname, { signal: init.signal, resolve });
+        init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+      })
+  );
+  const upload = invoke("cloud-api-request", {
+    path: "/api/transcriptions/batch-create",
+    method: "POST",
+    expectedAuthGeneration: 1,
+    body: { transcriptions: [{ text: "private" }] },
+  });
+  const shared = invoke("cloud-api-request", {
+    path: "/api/notes/update",
+    method: "PATCH",
+    expectedAuthGeneration: 1,
+    body: { id: "shared-note", content: "shared" },
+  });
+  for (let turn = 0; turn < 100 && requests.size < 2; turn++) await new Promise(setImmediate);
+  assert.equal(requests.size, 2);
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.cloudBackupAllowed = false;
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.equal(requests.get("/api/transcriptions/batch-create").signal.aborted, true);
+  assert.equal(requests.get("/api/notes/update").signal.aborted, false);
+  requests.get("/api/notes/update").resolve(new Response(JSON.stringify({ data: {} })));
+  assert.equal((await upload).code, "DEVICE_POLICY_BLOCKED");
+  assert.equal((await shared).success, true);
+});
+
+test("share token rotation uses server visibility and ignores renderer provenance", async (t) => {
+  withManagedApi(t);
+  const policy = defaultDevicePolicy();
+  policy.sharing.externalLinkSharing = "domain_only";
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  const methods = [];
+  let visibility = "link";
+  const fetch = t.mock.method(electron.net, "fetch", async (_url, init) => {
+    methods.push(init.method);
+    return new Response(JSON.stringify({ share: { visibility } }));
+  });
+  const rotate = () =>
+    invoke(
+      "cloud-api-request",
+      {
+        path: "/api/notes/note/share/rotate-token",
+        method: "POST",
+        expectedAuthGeneration: 1,
+      },
+      { shareVisibility: "domain" }
+    );
+  assert.equal((await rotate()).code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(methods, ["GET"]);
+  visibility = "domain";
+  assert.equal((await rotate()).success, true);
+  assert.deepEqual(methods, ["GET", "GET", "POST"]);
+  visibility = undefined;
+  assert.equal((await rotate()).code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(methods, ["GET", "GET", "POST", "GET"]);
+  const entered = deferred(),
+    finish = deferred();
+  let signal;
+  fetch.mock.mockImplementation(async (_url, init) => {
+    methods.push(init.method);
+    signal = init.signal;
+    entered.resolve();
+    await finish.promise;
+    return new Response(JSON.stringify({ share: { visibility: "domain" } }));
+  });
+  const pending = rotate();
+  await entered.promise;
+  policy.sharing.externalLinkSharing = "disabled";
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.equal(signal.aborted, true);
+  finish.resolve();
+  assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(methods, ["GET", "GET", "POST", "GET", "GET"]);
+});
+
+test("an invalid trusted device policy blocks remote work", async () => {
   deviceSnapshot = {
     status: "invalid",
     managed: true,
@@ -575,7 +831,6 @@ test("invalid trusted device policy cannot be bypassed through workspace-policy 
     code: "DEVICE_POLICY_INVALID",
   };
   for (const listener of deviceListeners) listener(deviceSnapshot);
-  await invoke("get-workspace-policy", "personal-account", authGeneration);
   assert.equal(target.effectivePolicyManager.getCurrent().code, "DEVICE_POLICY_INVALID");
   assert.equal((await invoke("cloud-health-check")).code, "DEVICE_POLICY_BLOCKED");
 });
@@ -1422,6 +1677,66 @@ test("valid inference restrictions retire active provider streams without disabl
   assert.equal(messages[0][1].code, "DEVICE_POLICY_BLOCKED");
 });
 
+// A token rotation leaves the verdict loading, and with a device policy the
+// verdict on its way is managed: work it allowed must still finish.
+test("a token rotation on a managed device lets a request already in flight finish", async (t) => {
+  withManagedApi(t);
+  t.after(() => {
+    authGeneration = 1;
+  });
+  setDeviceValues({ RequireSignIn: true });
+  const sent = deferred();
+  const answer = deferred();
+  t.mock.method(electron.net, "fetch", () => {
+    sent.resolve();
+    return answer.promise;
+  });
+  const pending = invoke("cloud-health-check");
+  await sent.promise;
+  authGeneration++;
+  assert.equal(target.effectivePolicyManager.getCurrent().status, "loading");
+  assert.equal(target.effectivePolicyManager.getCurrent().managed, true);
+  answer.resolve({ ok: true, status: 200 });
+  assert.deepEqual(await pending, { ok: true, status: 200 });
+});
+
+test("a token rotation on a managed device doesn't cut off an agent answer", async (t) => {
+  withManagedApi(t);
+  t.after(() => {
+    authGeneration = 1;
+  });
+  setDeviceValues({ RequireSignIn: true });
+  const sent = deferred();
+  let body;
+  t.mock.method(electron.net, "fetch", async () => {
+    sent.resolve();
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          body = controller;
+        },
+      })
+    );
+  });
+  const messages = [];
+  const sender = {
+    id: 1,
+    isDestroyed: () => false,
+    send: (channel) => messages.push(channel),
+    once() {},
+    removeListener() {},
+  };
+  const streaming = eventHandlers.get("cloud-agent-stream-start")({ sender }, "rotating-agent", [
+    { role: "user", content: "hello" },
+  ]);
+  await sent.promise;
+  authGeneration++;
+  body.enqueue(new TextEncoder().encode('{"type":"text","text":"answer"}\n'));
+  body.close();
+  await streaming;
+  assert.deepEqual(messages, ["cloud-agent-stream-chunk", "cloud-agent-stream-end"]);
+});
+
 test("a local prepare cannot replace the policy identity of an active remote meeting", async (t) => {
   resetMeeting(t);
   invoke("save-deepgram-key", "saved-provider-key");
@@ -1441,6 +1756,89 @@ test("a local prepare cannot replace the policy identity of an active remote mee
   await new Promise(setImmediate);
   assert.ok(streams.every((stream) => !stream.isConnected));
 });
+
+// The end-of-stream frame makes the server finalize what it holds; it answers
+// with that final the way the provider does.
+for (const [provider, saveChannel, clientModule, endFrame, finalFrames] of [
+  [
+    "assemblyai-realtime",
+    "save-assemblyai-key",
+    "assemblyAiStreaming",
+    "Terminate",
+    [
+      { type: "Turn", transcript: "revoked audio", end_of_turn: true, turn_is_formatted: true },
+      { type: "Termination" },
+    ],
+  ],
+  [
+    "deepgram-realtime",
+    "save-deepgram-key",
+    "deepgramStreaming",
+    "CloseStream",
+    [
+      {
+        type: "Results",
+        is_final: true,
+        channel: { alternatives: [{ transcript: "revoked audio" }] },
+      },
+    ],
+  ],
+]) {
+  for (const restriction of ["local-only", "provider"]) {
+    test(`${restriction} revocation closes a real ${provider} meeting without finalizing its audio`, async (t) => {
+      const { WebSocketServer } = require("ws");
+      const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+      await once(server, "listening");
+      t.after(() => server.close());
+      const received = [];
+      const audio = deferred();
+      const closed = deferred();
+      let open = 0;
+      server.on("connection", (socket) => {
+        open++;
+        socket.on("close", () => --open === 0 && closed.resolve());
+        socket.on("message", (data, isBinary) => {
+          if (isBinary) return audio.resolve();
+          const { type } = JSON.parse(data);
+          received.push(type);
+          if (type !== endFrame) return;
+          for (const frame of finalFrames) socket.send(JSON.stringify(frame));
+          socket.close();
+        });
+        if (provider === "assemblyai-realtime")
+          socket.send(JSON.stringify({ type: "Begin", id: "session" }));
+      });
+      const clients = require(meetingProvidersPath).STREAMING_CLIENT_BY_PROVIDER;
+      const original = clients[provider];
+      clients[provider] = class extends require(`../../src/helpers/${clientModule}`) {
+        buildWebSocketUrl() {
+          return `ws://127.0.0.1:${server.address().port}`;
+        }
+      };
+      t.after(() => (clients[provider] = original));
+      resetMeeting(t);
+      invoke(saveChannel, "saved-provider-key");
+      assert.equal(
+        (await invoke("meeting-transcription-start", { provider, mode: "byok" })).success,
+        true
+      );
+      const notified = notifications.length;
+      target._meetingMicStreaming.sendAudio(Buffer.alloc(9600));
+      await audio.promise;
+      revokeTranscription(restriction);
+      await closed.promise;
+      assert.equal(received.includes(endFrame), false);
+      assert.deepEqual(
+        notifications
+          .slice(notified)
+          .filter(
+            ([, channel, segment]) => channel === "meeting-transcription-segment" && segment.text
+          ),
+        []
+      );
+    });
+  }
+}
 
 test("valid local-only policy refreshes retain permitted local work", () => {
   setDeviceValues({ RequireSignIn: false });

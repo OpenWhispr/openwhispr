@@ -62,7 +62,7 @@ test("managed policy gates preserve the user's raw preferences", async (t) => {
   assert.equal(before.transcriptionMode, "local");
   assert.equal(before.cloudBackupEnabled, true);
 
-  await usePolicyStore.getState().fetchPolicy("account-a", 1);
+  await usePolicyStore.getState().bootstrap();
 
   const after = useSettingsStore.getState();
   assert.equal(after.transcriptionMode, "local");

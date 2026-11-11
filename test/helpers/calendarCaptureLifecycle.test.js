@@ -38,7 +38,10 @@ test.before(() => {
       return { get: () => token, getState: () => ({ generation: 1 }) };
     if (parent?.filename === handlersPath && request === "./workspacePolicyManager")
       return {
-        createWorkspacePolicyManager: () => ({ getPolicy: async () => ({}) }),
+        createWorkspacePolicyManager: () => ({
+          getPolicy: async () => ({}),
+          heldPolicy: () => null,
+        }),
         isScreenContextBlocked: () => policyBlocked,
       };
     if (

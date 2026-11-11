@@ -1242,7 +1242,8 @@
       "failedUserCheck": "Failed to check user account",
       "generic": "Something went wrong. Please try again.",
       "invalidCredentials": "Invalid email or password",
-      "invalidEmail": "Enter a valid email address"
+      "invalidEmail": "Enter a valid email address",
+      "signInDisabledByDevice": "Sign-in is turned off on this device by your organization."
     },
     "getStarted": "Get Started",
     "legal": {
