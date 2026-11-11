@@ -1267,7 +1267,6 @@ async function startApp() {
           (id) => debugLogger.warn("Refused a catalog download from an untrusted source", { id })
         ),
       }),
-    fetch: (...args) => net.fetch(...args),
     onError: (error) =>
       debugLogger.warn("Model registry update unavailable", { error: error.message }),
   });
