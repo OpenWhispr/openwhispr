@@ -8470,15 +8470,24 @@ class IPCHandlers {
       if (source === "system" && endTimestamp !== null) {
         const heard = pickSpeakerForRange(meetingLiveIdentifications, timestamp, endTimestamp);
         if (heard) {
-          applyConfirmedSpeaker(segment, {
-            speaker: heard.speakerId,
-            speakerName: heard.displayName || segment.speakerName,
-            speakerIsPlaceholder: false,
-          });
+          labelRangedRow(segment, heard);
           segment.liveOverlapMs = heard.overlapMs;
         }
       }
       meetingDiarizationSegments.push(segment);
+    };
+
+    const labelRangedRow = (segment, heard) => {
+      if (!canAutoRelabelSpeaker(segment)) return;
+      // Another speaker's name must never stay on a row that turned out to be someone else.
+      const keptName = segment.speaker === heard.speakerId ? segment.speakerName : undefined;
+      const speakerName = heard.displayName ?? keptName;
+      applyConfirmedSpeaker(segment, {
+        speaker: heard.speakerId,
+        speakerName,
+        speakerIsPlaceholder: false,
+      });
+      if (speakerName == null) delete segment.speakerName;
     };
 
     const applyLiveIdentificationToRows = (identification) => {
@@ -8498,11 +8507,7 @@ class IPCHandlers {
             identification
           );
           if (relabel) {
-            applyConfirmedSpeaker(seg, {
-              speaker: relabel.speakerId,
-              speakerName: relabel.displayName || seg.speakerName,
-              speakerIsPlaceholder: false,
-            });
+            labelRangedRow(seg, relabel);
             seg.liveOverlapMs = relabel.overlapMs;
           }
           continue;

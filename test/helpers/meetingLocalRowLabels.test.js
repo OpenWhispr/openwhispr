@@ -8,7 +8,10 @@ const {
   relabelForIdentification,
   pruneIdentifications,
 } = require("../../src/helpers/speakerRangeMatch");
-const { applyConfirmedSpeaker } = require("../../src/helpers/speakerAssignmentPolicy");
+const {
+  applyConfirmedSpeaker,
+  canAutoRelabelSpeaker,
+} = require("../../src/helpers/speakerAssignmentPolicy");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
 
@@ -32,6 +35,7 @@ function harness(identifications = []) {
     relabelForIdentification,
     pruneIdentifications,
     applyConfirmedSpeaker,
+    canAutoRelabelSpeaker,
     Date,
   };
   vm.createContext(context);
@@ -111,4 +115,28 @@ test("identifications older than the retention window are pruned", () => {
     Array.from(ctx.meetingLiveIdentifications, (entry) => entry.speakerId),
     ["speaker_1"]
   );
+});
+
+test("a ranged row moved to another speaker drops the previous speaker's name", () => {
+  const ctx = harness();
+  const row = labelledRow(ctx);
+  ctx.applyIdentification({ ...identification("speaker_1", 1500, 4000), displayName: null });
+  assert.equal(row.speaker, "speaker_1");
+  assert.equal(row.speakerName, undefined);
+});
+
+test("a ranged row stored with an unnamed speaker carries no name", () => {
+  const ctx = harness([{ ...identification("speaker_1", 0, 4000), displayName: null }]);
+  ctx.store("hello", "system", T, null, true, T + 4000);
+  const [row] = ctx.meetingDiarizationSegments;
+  assert.equal(row.speaker, "speaker_1");
+  assert.equal(row.speakerName, undefined);
+});
+
+test("a ranged row moved within the same speaker keeps its name when the new one has none", () => {
+  const ctx = harness();
+  const row = labelledRow(ctx);
+  ctx.applyIdentification({ ...identification("speaker_0", 0, 4000), displayName: null });
+  assert.equal(row.speaker, "speaker_0");
+  assert.equal(row.speakerName, "Zero");
 });
