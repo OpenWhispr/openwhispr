@@ -810,6 +810,7 @@ test("a failed clear after NOT_MEMBER publishes empty hints instead of reloading
   assert.deepEqual(ctx.hints(), { space: [], workspace: [] });
   assert.deepEqual(JSON.parse(harness.localStorage.getItem("sharedDictionaryHints")), {
     workspaceId: W1,
+    accountId: null,
     space: [],
     workspace: [],
   });

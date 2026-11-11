@@ -647,6 +647,7 @@ Improve transcription accuracy for specific words, names, or technical terms:
 - Words stored as JSON array in localStorage (`customDictionary` key)
 - On transcription, words are joined and passed as `prompt` parameter to Whisper
 - Works with both local whisper.cpp and cloud OpenAI Whisper API
+- Local sherpa-onnx models with a measured hotword score (only Orukeet so far, `src/utils/sherpaHotwords.js`) get up to 100 dictionary words as sherpa hotwords instead, personal words first; other Parakeet and Cohere models ignore the dictionary
 
 **Implementation**:
 

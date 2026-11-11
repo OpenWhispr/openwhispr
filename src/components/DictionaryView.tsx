@@ -84,6 +84,8 @@ import {
   WHISPER_DECODER_PROMPT_CHARS,
   dictionaryReachesTranscriptionModel,
 } from "../utils/dictionaryPromptCap";
+import { getSherpaHotwordsScore, MAX_SHERPA_HOTWORDS } from "../utils/sherpaHotwords";
+import { getParakeetModelInfo } from "../models/ModelRegistry";
 import { workspaceCan } from "../lib/capabilities";
 import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
 import { usePolicySnapshot } from "../hooks/usePolicy";
@@ -319,8 +321,8 @@ function DictionaryPage({
 
   // Where dictation posts when it uses a bring-your-own-key batch provider,
   // resolved the way dictation resolves it (audioManager.resolveBatchRoute).
-  // Local models, OpenWhispr Cloud and managed workspaces get the dictionary
-  // their own way.
+  // OpenWhispr Cloud and managed workspaces get the dictionary their own way,
+  // local Whisper as a prompt and measured sherpa models as hotwords.
   const policyState = usePolicySnapshot();
   const enterpriseTranscriptionSetupMode = useSettingsStore(
     (s) => s.enterpriseTranscriptionSetupMode
@@ -337,6 +339,22 @@ function DictionaryPage({
     personalDictation &&
     dictationEndpoint !== null &&
     !dictionaryReachesTranscriptionModel(dictationEndpoint);
+  // The local sherpa model dictation runs, the way audioManager picks it.
+  const localSherpaModel = useSettingsStore((settings) => {
+    const s = selectPolicyEffectiveSettings(settings, policyState);
+    if (!s.useLocalWhisper) return null;
+    if (s.localTranscriptionProvider === "nvidia") return s.parakeetModel || null;
+    if (s.localTranscriptionProvider === "cohere") return s.cohereModel || null;
+    return null;
+  });
+  let localSherpaNotice: string | null = null;
+  if (personalDictation && localSherpaModel) {
+    const model = getParakeetModelInfo(localSherpaModel)?.name ?? localSherpaModel;
+    localSherpaNotice =
+      getSherpaHotwordsScore(localSherpaModel) === null
+        ? t("dictionary.localModelIgnoredNotice", { model })
+        : t("dictionary.localModelHotwordsLimitNotice", { model, limit: MAX_SHERPA_HOTWORDS });
+  }
 
   // Same membership rule as agentNameDictionaryChanges: a stored spelling that
   // differs only by case is still the agent name's entry, so keep it hidden.
@@ -1082,6 +1100,8 @@ function DictionaryPage({
               <p className="text-xs text-foreground/45 leading-relaxed">
                 {t("dictionary.openRouterIgnoredNotice")}
               </p>
+            ) : localSherpaNotice ? (
+              <p className="text-xs text-foreground/45 leading-relaxed">{localSherpaNotice}</p>
             ) : (
               promptChars > WHISPER_DECODER_PROMPT_CHARS && (
                 <p className="text-xs text-foreground/45 leading-relaxed">

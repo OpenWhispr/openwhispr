@@ -4084,6 +4084,8 @@
     "wordsReady_other": "{{count}} palavras prontas",
     "promptLimitNotice": "Seu dicionário tem {{chars}} caracteres. Os modelos Groq e Whisper leem apenas as últimas centenas de caracteres, portanto uma lista mais curta funciona melhor ali. Os demais modelos recebem a lista completa.",
     "openRouterIgnoredNotice": "O OpenRouter não repassa seu dicionário aos modelos de voz dele, então essas palavras não vão orientar a transcrição enquanto ele estiver selecionado para o ditado.",
+    "localModelIgnoredNotice": "O {{model}} não consegue usar seu dicionário, então essas palavras não vão orientar a transcrição enquanto ele estiver selecionado para o ditado. A limpeza por IA continua aplicando-as quando está ativada.",
+    "localModelHotwordsLimitNotice": "{{model}} usa até {{limit}} entradas do dicionário como sugestões para a transcrição. As entradas pessoais têm prioridade, seguidas pelas dos seus teamspaces e, por fim, pelas do seu espaço de trabalho.",
     "exportDictionary": "Exportar dicionário",
     "exportFailed": "Falha ao exportar",
     "editWord": "Editar {{word}}",

@@ -59,7 +59,11 @@ function isAbortError(err) {
 function managerWith(fake) {
   const manager = new ParakeetServerManager();
   manager.isModelDownloaded = () => true;
-  manager.wsServer = fake;
+  manager.wsServer = Object.assign(fake, {
+    activeTranscriptions: new Set(),
+    stopSignal: new AbortController().signal,
+    reserveTranscription: () => () => {},
+  });
   return manager;
 }
 
@@ -309,4 +313,163 @@ test("transducer models start the server without a language", async () => {
   await manager.transcribe(wavFromSeconds([{ seconds: 5 }]), { language: "pl" });
 
   assert.equal(startArgs[0][3], null);
+});
+
+function recordingStart(fake) {
+  const startArgs = [];
+  fake.start = async (...args) => {
+    startArgs.push(args);
+  };
+  return startArgs;
+}
+
+test("Orukeet starts with the dictionary as hotwords", async () => {
+  const fake = fakeWsServer([{ text: "hello" }]);
+  const startArgs = recordingStart(fake);
+  const manager = managerWith(fake);
+  manager.setDictionaryProvider(() => ["Schellhas van Kisfeld", "smile :)"]);
+
+  await manager.transcribe(wavFromSeconds([{ seconds: 5 }]), { modelName: "orukeet-v0.1.0" });
+
+  assert.deepEqual(startArgs[0][4], { score: 2, words: ["Schellhas van Kisfeld", "smile"] });
+});
+
+test("an empty dictionary starts Orukeet without hotwords", async () => {
+  const fake = fakeWsServer([{ text: "hello" }]);
+  const startArgs = recordingStart(fake);
+  const manager = managerWith(fake);
+  manager.setDictionaryProvider(() => []);
+
+  await manager.transcribe(wavFromSeconds([{ seconds: 5 }]), { modelName: "orukeet-v0.1.0" });
+
+  assert.equal(startArgs[0][4], null);
+});
+
+test("models without a measured hotword score never read the dictionary", async () => {
+  for (const modelName of ["parakeet-tdt-0.6b-v3", "cohere-transcribe-03-2026"]) {
+    const fake = fakeWsServer([{ text: "hello" }]);
+    const startArgs = recordingStart(fake);
+    const manager = managerWith(fake);
+    let reads = 0;
+    manager.setDictionaryProvider(() => {
+      reads++;
+      return ["Schellhas"];
+    });
+
+    await manager.transcribe(wavFromSeconds([{ seconds: 5 }]), { modelName, language: "de" });
+
+    assert.equal(startArgs[0][4], null, modelName);
+    assert.equal(reads, 0, modelName);
+  }
+});
+
+test("startServer passes the dictionary too, so a pre-warmed Orukeet is already biased", async () => {
+  const fake = fakeWsServer([]);
+  fake.isAvailable = () => true;
+  const startArgs = recordingStart(fake);
+  const manager = managerWith(fake);
+  manager.setDictionaryProvider(() => ["Schellhas"]);
+
+  const result = await manager.startServer("orukeet-v0.1.0");
+
+  assert.equal(result.success, true);
+  assert.deepEqual(startArgs[0][4], { score: 2, words: ["Schellhas"] });
+});
+
+test("a dictionary change restarts a running Orukeet server once, after edits settle", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fake = fakeWsServer([]);
+  const startArgs = recordingStart(fake);
+  Object.assign(fake, {
+    ready: true,
+    modelName: "orukeet-v0.1.0",
+    modelDir: "/models/orukeet-v0.1.0",
+    modelRuntime: "offline",
+    language: null,
+  });
+  const manager = managerWith(fake);
+  let words = ["Schellhas"];
+  manager.setDictionaryProvider(() => words);
+
+  manager.refreshHotwordsSoon();
+  words = ["Schellhas", "Kisfeld"];
+  manager.refreshHotwordsSoon();
+  assert.equal(startArgs.length, 0);
+
+  t.mock.timers.tick(5000);
+  await new Promise(setImmediate);
+
+  assert.equal(startArgs.length, 1);
+  assert.deepEqual(startArgs[0], [
+    "orukeet-v0.1.0",
+    "/models/orukeet-v0.1.0",
+    "offline",
+    null,
+    { score: 2, words: ["Schellhas", "Kisfeld"] },
+  ]);
+});
+
+test("a dictionary change leaves a stopped server or an unbiased model alone", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  for (const running of [
+    { ready: false, modelName: null },
+    { ready: true, modelName: "parakeet-tdt-0.6b-v3", modelRuntime: "offline" },
+  ]) {
+    const fake = fakeWsServer([]);
+    const startArgs = recordingStart(fake);
+    Object.assign(fake, running);
+    const manager = managerWith(fake);
+    manager.setDictionaryProvider(() => ["Schellhas"]);
+
+    manager.refreshHotwordsSoon();
+    t.mock.timers.tick(5000);
+    await new Promise(setImmediate);
+
+    assert.equal(startArgs.length, 0, JSON.stringify(running));
+  }
+});
+
+test("a dictionary change waits for a busy server instead of giving up", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const fake = fakeWsServer([]);
+  const startArgs = recordingStart(fake);
+  Object.assign(fake, {
+    ready: true,
+    modelName: "orukeet-v0.1.0",
+    modelDir: "/models/orukeet-v0.1.0",
+    modelRuntime: "offline",
+    language: null,
+  });
+  const manager = managerWith(fake);
+  manager.setDictionaryProvider(() => ["Schellhas"]);
+  const releaseTranscription = () => {};
+  fake.activeTranscriptions.add(releaseTranscription);
+
+  manager.refreshHotwordsSoon();
+  t.mock.timers.tick(5000);
+  await new Promise(setImmediate);
+  assert.equal(startArgs.length, 0);
+
+  fake.activeTranscriptions.delete(releaseTranscription);
+  t.mock.timers.tick(5000);
+  await new Promise(setImmediate);
+  assert.equal(startArgs.length, 1);
+  assert.deepEqual(startArgs[0][4], { score: 2, words: ["Schellhas"] });
+});
+
+test("stopping during audio conversion cancels the pending transcription before startup", async () => {
+  const manager = new ParakeetServerManager();
+  manager.isModelDownloaded = () => true;
+  let finishConversion;
+  manager._ensureWav = () => new Promise((resolve) => (finishConversion = resolve));
+  let starts = 0;
+  manager.wsServer.start = async () => starts++;
+
+  const transcription = manager.transcribe(Buffer.alloc(4));
+  const cancelled = assert.rejects(transcription, isAbortError);
+  await manager.stopServer();
+  finishConversion({ wavBuffer: wavFromSeconds([{ seconds: 1 }]), filesToCleanup: [] });
+
+  await cancelled;
+  assert.equal(starts, 0);
 });
