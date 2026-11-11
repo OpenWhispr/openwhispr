@@ -731,7 +731,10 @@ function retireStreaming(streaming) {
   streaming.disconnect({ commit: false }).catch(() => {});
 }
 
+// The dictation's renderer hears of the revocation at once and falls back,
+// rather than streaming into a closed session behind a frozen preview.
 function retireProductStream(handlers, property) {
+  handlers[property]?.onError?.(new Error(i18nMain.t("common.policyTranscriptionRestricted")));
   retireStreaming(handlers[property]);
   handlers[property] = null;
   handlers._remoteStreamPolicies.delete(property);
@@ -1931,10 +1934,13 @@ class IPCHandlers {
       "geminiStreaming",
       "cortiStreaming",
       "_dictationStreaming",
-      "_meetingMicStreaming",
-      "_meetingSystemStreaming",
     ])
       retireProductStream(this, key);
+    // The meeting stop above already told the meeting's renderer.
+    for (const key of ["_meetingMicStreaming", "_meetingSystemStreaming"]) {
+      retireStreaming(this[key]);
+      this[key] = null;
+    }
     this.googleCalendarManager?.stop();
     this.microsoftCalendarManager?.stop();
   }

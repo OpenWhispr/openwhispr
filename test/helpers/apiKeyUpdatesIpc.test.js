@@ -218,6 +218,7 @@ test.after(() => {
 
 // Loaded after the electron stub above, and shared with ipcHandlers so tests can mock it.
 const liveSpeakerIdentifier = require("../../src/helpers/liveSpeakerIdentifier");
+const { i18nMain } = require("../../src/helpers/i18nMain");
 const MeetingEchoLeakDetector = require("../../src/helpers/meetingEchoLeakDetector");
 
 function anything() {
@@ -416,6 +417,33 @@ for (const restriction of ["local-only", "provider"]) {
     await closed.promise;
     assert.deepEqual(received, ["config"]);
     assert.deepEqual(sessionEnds, []);
+  });
+
+  test(`native ${restriction} retirement tells the realtime dictation renderer and hides its preview`, async (t) => {
+    const errors = [];
+    const sender = {
+      id: 1,
+      send: (channel, message) => channel === "dictation-realtime-error" && errors.push(message),
+    };
+    let hidden = 0;
+    target.windowManager = new Proxy(
+      { hideTranscriptionPreview: () => hidden++ },
+      { get: (value, property) => (property in value ? value[property] : anything()) }
+    );
+    t.after(() => {
+      delete target.windowManager;
+      return invoke("dictation-realtime-stop");
+    });
+    invoke("save-tinfoil-key", "saved-provider-key");
+    const started = await handlers.get("dictation-realtime-start")(
+      { sender },
+      { mode: "byok", provider: "tinfoil-realtime", preview: true }
+    );
+    assert.equal(started.success, true);
+    revokeTranscription(restriction);
+    assert.equal(target._dictationStreaming, null);
+    assert.deepEqual(errors, [i18nMain.t("common.policyTranscriptionRestricted")]);
+    assert.equal(hidden, 1);
   });
 }
 
