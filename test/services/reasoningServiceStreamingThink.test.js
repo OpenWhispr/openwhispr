@@ -135,6 +135,7 @@ test("local streams reject buffered old-policy and old-identity deltas on both t
 });
 
 test("a same-account token rotation never ends a running stream, whatever its transport", async (t) => {
+  let broadcastPolicy;
   const { reasoningService, vite } = await loadReasoningService(
     t,
     "openwhispr-rotation-stream-test-",
@@ -143,7 +144,11 @@ test("a same-account token rotation never ends a running stream, whatever its tr
         electronAPI: {
           llamaServerStart: async () => ({ success: true, port: 11434 }),
           // A rotated credential's verdict is still on its way.
-          getWorkspacePolicy: () => new Promise(() => {}),
+          getEffectivePolicy: () => new Promise(() => {}),
+          onEffectivePolicyChanged: (callback) => {
+            broadcastPolicy = callback;
+            return () => {};
+          },
           getAppVersion: async () => ({ version: "1.11.1" }),
         },
       },
@@ -194,6 +199,18 @@ test("a same-account token rotation never ends a running stream, whatever its tr
 
         generation += 1;
         void usePolicyStore.getState().fetchPolicy("same", generation);
+        broadcastPolicy({
+          success: false,
+          status: "loading",
+          code: "POLICY_LOADING",
+          accountId: "same",
+          authGeneration: generation,
+          revision: generation,
+          managed: false,
+          policy: null,
+          deviceReady: true,
+        });
+        await new Promise(setImmediate);
         assert.equal(usePolicyStore.getState().authGeneration, generation);
         assert.equal(usePolicyStore.getState().status, "unmanaged");
         const second = await stream.next();

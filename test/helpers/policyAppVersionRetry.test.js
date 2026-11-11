@@ -30,18 +30,21 @@ test("a failed app-version read is retried instead of denying the session", asyn
           if (versionRequestCount === 1) throw new Error("IPC unavailable");
           return { version: "1.8.1" };
         },
-        getWorkspacePolicy: async () => ({
+        getEffectivePolicy: async () => ({
           success: true,
-          status: "network",
+          status: "managed",
           revision: 1,
           accountId: "account-a",
           authGeneration: 1,
           managed: true,
           policy: managedPolicy,
-          policyUpdatedAt: "2026-01-01T00:00:00.000Z",
-          endpointSupported: true,
+          deviceReady: true,
+          deviceManaged: false,
+          workspaceManaged: true,
+          workspaceRequired: true,
+          localOnly: false,
+          requireSignIn: false,
         }),
-        onWorkspacePolicyChanged() {},
       },
     },
   });
