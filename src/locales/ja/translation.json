@@ -1811,6 +1811,8 @@
           "askOwner": "{{name}}さんにワークスペースのアップグレードを依頼してください。"
         },
         "currentPlan": "現在のプラン",
+        "yourPersonalPlan": "あなたの個人プラン",
+        "yourWorkspacePlan": "ワークスペースのプラン",
         "coveredByWorkspace": "ワークスペースのプランに含まれています",
         "upgrade": "アップグレード",
         "downgrade": "ダウングレード",
@@ -3018,6 +3020,7 @@
         "nextInvoice": "次回の請求",
         "manageStripe": "Stripe で管理",
         "startSubscription": "サブスクリプションを開始",
+        "provisionedPlan": "OpenWhispr が設定したプランです。プランやシート数の変更は営業担当にお問い合わせください。",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",

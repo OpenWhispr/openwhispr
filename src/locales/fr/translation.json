@@ -2279,6 +2279,7 @@
         "nextInvoice": "Prochaine facture",
         "manageStripe": "Gérer dans Stripe",
         "startSubscription": "Démarrer l'abonnement",
+        "provisionedPlan": "Configuré par OpenWhispr. Contactez l'équipe commerciale pour modifier le forfait ou les places.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -2568,6 +2569,8 @@
           "askOwner": "Demandez à {{name}} de mettre à niveau votre espace de travail."
         },
         "currentPlan": "Forfait actuel",
+        "yourPersonalPlan": "Votre forfait personnel",
+        "yourWorkspacePlan": "Le forfait de votre espace de travail",
         "coveredByWorkspace": "Inclus dans votre plan d'espace de travail",
         "upgrade": "Passer au supérieur",
         "downgrade": "Rétrograder",

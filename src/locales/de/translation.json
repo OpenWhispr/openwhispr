@@ -2279,6 +2279,7 @@
         "nextInvoice": "Nächste Rechnung",
         "manageStripe": "In Stripe verwalten",
         "startSubscription": "Abonnement starten",
+        "provisionedPlan": "Von OpenWhispr eingerichtet. Wenden Sie sich an den Vertrieb, um Tarif oder Plätze zu ändern.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -2561,6 +2562,8 @@
           "askOwner": "Bitte {{name}}, euren Workspace zu upgraden."
         },
         "currentPlan": "Aktueller Tarif",
+        "yourPersonalPlan": "Ihr persönlicher Tarif",
+        "yourWorkspacePlan": "Tarif Ihres Workspace",
         "coveredByWorkspace": "In Ihrem Workspace-Tarif enthalten",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",

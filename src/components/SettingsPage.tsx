@@ -166,7 +166,11 @@ import WorkspacePeopleSection from "./settings/WorkspacePeopleSection";
 import WorkspaceTeamspacesSection from "./settings/WorkspaceTeamspacesSection";
 import WorkspaceDeveloperSection from "./settings/WorkspaceDeveloperSection";
 import type { SettingsSectionType } from "../lib/settingsNav";
-import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
+import {
+  enterpriseTileCta,
+  entitledWorkspacePlans,
+  type EnterpriseTileCta,
+} from "../lib/workspaceBilling";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
@@ -1431,6 +1435,10 @@ export default function SettingsPage({
   const enterpriseCta: EnterpriseTileCta = billingWorkspacesLoaded
     ? enterpriseTileCta(billingWorkspaces, activeWorkspaceId)
     : { action: "contactSales", ownerName: null };
+  // The grid's Pro badge is the personal plan; these mark what workspaces provide.
+  const workspacePlans = billingWorkspacesLoaded
+    ? entitledWorkspacePlans(billingWorkspaces)
+    : new Set<string>();
   const { accountPlan, isWorkspaceCovered, coveringWorkspaceNames, coveringPlanLabel, planLabel } =
     useAccountPlan(usage);
   const hasShownApproachingToast = useRef(false);
@@ -2746,7 +2754,9 @@ export default function SettingsPage({
                       {proCardCta === "currentPlan" ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary">
-                            {t("settingsPage.account.pricing.currentPlan")}
+                            {workspacePlans.size > 0
+                              ? t("settingsPage.account.pricing.yourPersonalPlan")
+                              : t("settingsPage.account.pricing.currentPlan")}
                           </span>
                         </div>
                       ) : proCardCta === "downgradeToPro" ? (
@@ -2797,7 +2807,14 @@ export default function SettingsPage({
                       ) : null}
                     </div>
 
-                    <div className="rounded-md border-2 border-primary/50 bg-primary/8 dark:border-primary/40 dark:bg-primary/10 p-2.5 flex flex-col relative">
+                    <div
+                      className={cn(
+                        "rounded-md border-2 p-2.5 flex flex-col relative",
+                        workspacePlans.has("business")
+                          ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
+                          : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
+                      )}
+                    >
                       <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
                         {t("settingsPage.account.pricing.business.badge")}
                       </span>
@@ -2859,16 +2876,29 @@ export default function SettingsPage({
                         >
                           {t("settingsPage.account.pricing.business.cta")}
                         </Button>
-                      ) : (
+                      ) : workspacePlans.has("business") ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary">
+                            {t("settingsPage.account.pricing.yourWorkspacePlan")}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-muted-foreground">
                             {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
                           </span>
                         </div>
                       )}
                     </div>
 
-                    <div className="rounded-md border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
+                    <div
+                      className={cn(
+                        "rounded-md p-2.5 flex flex-col",
+                        workspacePlans.has("enterprise")
+                          ? "border-2 border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
+                          : "border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                      )}
+                    >
                       <p className="text-xs font-semibold text-foreground">
                         {t("settingsPage.account.pricing.enterprise.name")}
                       </p>
@@ -2901,7 +2931,16 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
-                      {isSignedIn && enterpriseCta.action !== "contactSales" ? (
+                      {/* Another of the user's workspaces can still be upgraded: keep the dialog. */}
+                      {isSignedIn &&
+                      workspacePlans.has("enterprise") &&
+                      enterpriseCta.action !== "openDialog" ? (
+                        <div className="mt-2 text-center">
+                          <span className="text-[9px] font-medium text-primary">
+                            {t("settingsPage.account.pricing.yourWorkspacePlan")}
+                          </span>
+                        </div>
+                      ) : isSignedIn && enterpriseCta.action !== "contactSales" ? (
                         <div className="mt-2 space-y-1">
                           <Button
                             size="sm"

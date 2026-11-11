@@ -29,6 +29,20 @@ export function hasActiveWorkspaceSubscription(
   return PAID_PLANS.has(workspace.plan) && ENTITLED_STATUSES.has(workspace.status);
 }
 
+/**
+ * The paid plans the user's workspaces are currently on, so the Plans grid can
+ * mark the tiers a workspace provides, not only the personal plan.
+ */
+export function entitledWorkspacePlans(
+  workspaces: Array<Pick<Workspace, "plan" | "status">>
+): Set<string> {
+  return new Set(
+    workspaces
+      .filter((workspace) => hasActiveWorkspaceSubscription(workspace))
+      .map((workspace) => workspace.plan)
+  );
+}
+
 /** The shared team dictionary is a Business feature: Business or Enterprise, currently entitled. */
 export function hasSharedDictionaryPlan(
   workspace: Pick<Workspace, "plan" | "status"> | null | undefined

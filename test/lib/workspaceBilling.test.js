@@ -4,6 +4,7 @@ const {
   canSelfServeEnterprise,
   canUpgradeWorkspaceToEnterprise,
   enterpriseTileCta,
+  entitledWorkspacePlans,
   hasActiveWorkspaceSubscription,
   hasSharedDictionaryPlan,
   hasSubscription,
@@ -131,6 +132,21 @@ test("enterpriseTileCta: eligible owners get the dialog, first-timers get create
     action: "contactSales",
     ownerName: null,
   });
+});
+
+test("entitledWorkspacePlans: the paid plans of entitled workspaces only", () => {
+  assert.deepEqual(
+    [
+      ...entitledWorkspacePlans([
+        workspace({ plan: "enterprise" }),
+        workspace({ plan: "enterprise", status: "trialing" }),
+        workspace({ plan: "business", status: "canceled" }),
+        workspace({ plan: "free" }),
+      ]),
+    ],
+    ["enterprise"]
+  );
+  assert.equal(entitledWorkspacePlans([]).size, 0);
 });
 
 test("hasSharedDictionaryPlan: Business or Enterprise while entitled, nothing else", () => {
