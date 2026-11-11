@@ -316,12 +316,14 @@ function createFakeCloud(config = {}) {
     return null;
   }
 
-  // batch-create is idempotent by client id: a retried batch must return the
-  // existing row instead of forking a duplicate.
+  // Creates upsert by client id, so a retried batch returns the existing row
+  // instead of forking a duplicate. As lib/notes-service.ts, a note's upsert
+  // never touches deleted_at: the write (scope included) lands on a tombstone
+  // and the delete wins. A folder's, as lib/folders-service.ts, revives it.
   function upsertRow(collection, input) {
     const existing = findByClientId(collection, input[collection.clientKey]);
     if (!existing) return insertRow(collection, input);
-    if (existing.deleted_at) return existing;
+    if (existing.deleted_at && collection === folderCollection) existing.deleted_at = null;
     return applyWrite(collection, existing, input);
   }
 
@@ -847,6 +849,7 @@ function createFakeCloud(config = {}) {
     seedTranscription: (input) => structuredClone(insertRow(transcriptionCollection, input)),
     deleteTranscription: (id) => structuredClone(tombstone(transcriptionCollection, id)),
     deleteConversation: (id) => structuredClone(tombstone(conversationCollection, id)),
+    deleteNote: (id) => structuredClone(tombstone(noteCollection, id)),
     seedDictionaryEntry: (input) => structuredClone(insertRow(dictionaryCollection, input)),
     seedSnippet: (input) => structuredClone(insertRow(snippetCollection, input)),
     dictionary: () => [...dictionary.values()].map((row) => structuredClone(row)),

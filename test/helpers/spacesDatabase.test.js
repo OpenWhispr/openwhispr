@@ -1490,8 +1490,8 @@ test("a synced team folder, or one holding a synced note, moved to private is re
 });
 
 // A private note the old Cloud Backup uploaded keeps that copy's cloud id. Moved into a teamspace,
-// the note is created there whole (D32): the server upserts by client id, so the personal row
-// moves into the teamspace, or after its purge the note is created fresh.
+// the note is created there whole under a new client id (D32, D32a): the API's note upsert keeps a
+// deleted row deleted, so the old key could land the move on a tombstone.
 function giveBackupCloudCopy(db, noteId, cloudId) {
   db.markNoteSynced(noteId, cloudId, "2026-06-01T10:00:00.000Z", "test-account");
   db.db
@@ -1502,8 +1502,9 @@ function giveBackupCloudCopy(db, noteId, cloudId) {
   return db.getNote(noteId);
 }
 
-function assertNoCloudIdentity(note, clientNoteId) {
-  assert.equal(note.client_note_id, clientNoteId, "the note keeps its client id");
+function assertNoCloudIdentity(note, oldClientNoteId) {
+  assert.ok(note.client_note_id, "the note has a client id");
+  assert.notEqual(note.client_note_id, oldClientNoteId, "the note takes a new client id");
   assert.equal(note.cloud_id, null);
   assert.equal(note.cloud_updated_at, null);
   assert.equal(note.cloud_revision, null);
@@ -1540,6 +1541,32 @@ test("a private note's Backup cloud id doesn't follow it into a teamspace", (t) 
   assert.ok(pending.includes(bySpace.id) && pending.includes(byFolder.id));
 });
 
+// A create whose answer never came may have left the key on the server too.
+test("a private note whose create may have reached the server takes a new key into a teamspace", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const note = db.saveNote("Plan", "body", "personal", null, null, null, privateId).note;
+  db.db.prepare("UPDATE notes SET cloud_create_attempted = 1 WHERE id = ?").run(note.id);
+
+  const moved = db.updateNote(note.id, { space_id: team.id, folder_id: null });
+  assertNoCloudIdentity(moved.note, note.client_note_id);
+});
+
+// Nothing to land on: and a Granola re-import dedupes on the key.
+test("a private note the server never knew keeps its key into a teamspace", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const note = db.saveNote("Plan", "body", "personal", null, null, null, privateId).note;
+
+  const moved = db.updateNote(note.id, { space_id: team.id, folder_id: null });
+  assert.equal(moved.note.client_note_id, note.client_note_id);
+  assert.equal(moved.note.space_id, team.id);
+});
+
 test("a shared private note keeps its cloud id when it moves into a teamspace", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -1553,6 +1580,7 @@ test("a shared private note keeps its cloud id when it moves into a teamspace", 
   assert.equal(moved.success, true);
   // Its guests' row is the one that becomes the team's.
   assert.equal(moved.note.cloud_id, "shared-cloud-1");
+  assert.equal(moved.note.client_note_id, note.client_note_id);
   assert.equal(moved.note.owner_user_id, "test-account");
 });
 
@@ -1579,6 +1607,7 @@ test("a private folder moved into a teamspace drops its and its notes' Backup cl
   assert.equal(folderRow.sync_status, "pending");
   assertNoCloudIdentity(db.getNote(leftover.id), leftover.client_note_id);
   assert.equal(db.getNote(shared.id).cloud_id, "shared-cloud-1");
+  assert.equal(db.getNote(shared.id).client_note_id, shared.client_note_id);
   assert.equal(db.getNote(shared.id).space_id, team.id);
 });
 

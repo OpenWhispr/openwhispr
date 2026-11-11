@@ -241,11 +241,14 @@ const SPACE_CONTAINER_CONVERSATION_FILTER = `((space_id = ? AND folder_id IS NUL
 const LEGACY_SHARED_PRIVATE_NOTE_SQL =
   "(s.kind = 'private' AND n.is_shared = 1 AND n.cloud_id IS NOT NULL)";
 
-// D32: a private note the old Cloud Backup uploaded still holds that copy's identity. Moved into a
-// teamspace it drops it and keeps its client id, so its first push is a create the server upserts
-// by client id: the personal row moves into the teamspace, or after its purge the note is created
-// fresh. A PATCH of the old id would 404 once the copy is purged, and the 404s fork the note back
-// to Private. A shared note keeps its id: its guests' row becomes the team's.
+// D32/D32a: a private note the server may know (a copy the old Cloud Backup uploaded, or a create
+// whose answer never came) drops that identity when it moves into a teamspace, and takes a new
+// client id as the import does for a taken key (D28), so its first push is a fresh create. A PATCH
+// of the old cloud id would 404 once the copy is purged, and the 404s fork the note back to
+// Private. A create under the old key would upsert into the old personal row, and the API keeps a
+// deleted row deleted: a copy deleted on another device would take the moved note with it. A
+// shared note keeps both, since its guests' row becomes the team's. A note the server can't know
+// keeps its key, which a Granola re-import dedupes on.
 const BACKUP_NOTE_CLOUD_IDENTITY = Object.freeze({
   cloud_id: null,
   cloud_updated_at: null,
@@ -259,6 +262,13 @@ const BACKUP_NOTE_CLOUD_IDENTITY = Object.freeze({
 const CLEAR_BACKUP_NOTE_CLOUD_IDENTITY_SQL = Object.entries(BACKUP_NOTE_CLOUD_IDENTITY)
   .map(([column, value]) => `${column} = ${value === null ? "NULL" : value}`)
   .join(", ");
+const SERVER_KNOWN_UNSHARED_NOTE_SQL =
+  "(cloud_id IS NOT NULL OR cloud_create_attempted = 1) AND NOT (is_shared = 1 AND cloud_id IS NOT NULL)";
+
+function serverKnowsUnsharedNote(note) {
+  const knows = note.cloud_id != null || Boolean(note.cloud_create_attempted);
+  return knows && !(note.is_shared && note.cloud_id != null);
+}
 
 // The default folders a private space gets the first time a note needs one.
 // D31: a team row the cloud already holds never becomes private by a move, which would keep its
@@ -5205,7 +5215,7 @@ class DatabaseManager {
         // its acknowledgement detaching it (_leftTeamDuringPush).
         const current = this.db
           .prepare(
-            "SELECT n.space_id, n.cloud_id, n.is_shared, s.kind AS space_kind FROM notes n LEFT JOIN spaces s ON s.id = n.space_id WHERE n.id = ?"
+            "SELECT n.space_id, n.cloud_id, n.is_shared, n.cloud_create_attempted, s.kind AS space_kind FROM notes n LEFT JOIN spaces s ON s.id = n.space_id WHERE n.id = ?"
           )
           .get(id);
         if (current && current.space_id !== updates.space_id) {
@@ -5229,10 +5239,14 @@ class DatabaseManager {
             if (
               current.space_kind === "private" &&
               updates.cloud_id === undefined &&
-              current.cloud_id != null &&
-              !current.is_shared
+              updates.client_note_id === undefined &&
+              serverKnowsUnsharedNote(current)
             ) {
-              updates = { ...updates, ...BACKUP_NOTE_CLOUD_IDENTITY };
+              updates = {
+                ...updates,
+                ...BACKUP_NOTE_CLOUD_IDENTITY,
+                client_note_id: randomUUID(),
+              };
             }
           }
         }
@@ -5727,8 +5741,9 @@ class DatabaseManager {
         } else {
           // Nothing that reaches here leaves a team with a cloud copy (D31), so
           // no row keeps a pending retraction (left_team). Out of Private, the
-          // folder and its notes drop what Backup left them (D32); the server
-          // upserts folders by client id too.
+          // folder and its notes drop what Backup left them (D32, D32a). The
+          // folder keeps its client id: the server's folder upsert revives a
+          // deleted row.
           const intoTeam = oldKind === "private" && space.kind === "team";
           this.db
             .prepare(
@@ -5736,11 +5751,16 @@ class DatabaseManager {
             )
             .run(spaceId, nextAccountId, id);
           if (intoTeam) {
-            this.db
+            const rekey = this.db.prepare(
+              `UPDATE notes SET ${CLEAR_BACKUP_NOTE_CLOUD_IDENTITY_SQL}, client_note_id = ? WHERE id = ?`
+            );
+            const known = this.db
               .prepare(
-                `UPDATE notes SET ${CLEAR_BACKUP_NOTE_CLOUD_IDENTITY_SQL} WHERE folder_id = ? AND deleted_at IS NULL AND cloud_id IS NOT NULL AND is_shared = 0`
+                `SELECT id FROM notes WHERE folder_id = ? AND deleted_at IS NULL AND ${SERVER_KNOWN_UNSHARED_NOTE_SQL}`
               )
-              .run(id);
+              .pluck()
+              .all(id);
+            for (const noteId of known) rekey.run(randomUUID(), noteId);
           }
           this.db
             .prepare(

@@ -143,6 +143,37 @@ test("fake cloud answers a repeated transcription create with the row it already
   );
 });
 
+// As lib/notes-service.ts and lib/folders-service.ts: a note create landing on
+// a deleted row stays deleted, a folder create revives it.
+test("fake cloud keeps a deleted note deleted on a create and revives a folder", async () => {
+  const cloud = createFakeCloud();
+  const noteRow = cloud.seedNote({ client_note_id: "n-1", title: "Old", content: "old" });
+  cloud.deleteNote(noteRow.id);
+  const folderRow = cloud.seedFolder({ client_folder_id: "f-1", name: "Old" });
+  await cloud.request({
+    method: "DELETE",
+    path: "/api/folders/delete",
+    body: { id: folderRow.id },
+  });
+
+  const createdNote = await post(cloud, "/api/notes/create", {
+    client_note_id: "n-1",
+    title: "New",
+    content: "new",
+    space_id: null,
+  });
+  const createdFolder = await post(cloud, "/api/folders/create", {
+    client_folder_id: "f-1",
+    name: "New",
+    space_id: null,
+  });
+
+  assert.equal(createdNote.data.id, noteRow.id);
+  assert.ok(createdNote.data.deleted_at, "the delete wins");
+  assert.equal(createdFolder.data.id, folderRow.id);
+  assert.equal(createdFolder.data.deleted_at, null, "the folder is back");
+});
+
 // The bridge stands in for main's sync-write fence and chat-ack sender check;
 // a SyncService test proves nothing about them unless it refuses what main does.
 test("the bridge refuses a sync write once its sign-in's account is no longer the active one", async (t) => {

@@ -929,8 +929,8 @@ test("canSync gating: sign-out blocks every call; no gate lets a private note pu
 });
 
 // A private note the old Cloud Backup uploaded still carries that copy's cloud id (D32). Moved into
-// a teamspace to share it, its first push must be a create carrying the whole note: the server
-// upserts by client id, so the personal row itself moves into the teamspace.
+// a teamspace to share it, its first push must be a create carrying the whole note, under a key of
+// its own (D32a). The old personal row stays as it is.
 test("a private note with a Backup cloud id moves into a teamspace as a full create", async (t) => {
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
@@ -955,13 +955,16 @@ test("a private note with a Backup cloud id moves into a teamspace as a full cre
     .slice(mark)
     .filter((call) => call.method === "POST" && call.path === "/api/notes/create");
   assert.equal(creates.length, 1, "the share view gets its id from a create, not the old copy");
-  assert.equal(creates[0].body.client_note_id, note.client_note_id);
+  const moved = db.getNote(note.id);
+  assert.notEqual(moved.client_note_id, note.client_note_id);
+  assert.equal(creates[0].body.client_note_id, moved.client_note_id);
   assert.equal(creates[0].body.content, "the body on this device");
   assert.equal(creates[0].body.space_id, TEAM_SPACE.id);
-  assert.equal(cloudId, backup.id, "the personal row itself moved into the teamspace");
+  assert.notEqual(cloudId, backup.id);
   assert.equal(cloud.note(cloudId).space_id, TEAM_SPACE.id);
   assert.equal(cloud.note(cloudId).content, "the body on this device");
-  assert.equal(db.getNote(note.id).cloud_id, cloudId);
+  assert.equal(moved.cloud_id, cloudId);
+  assert.equal(cloud.note(backup.id).space_id, null, "the old personal row is left alone");
 });
 
 test("a private note whose Backup copy was purged is created fresh in the teamspace", async (t) => {
@@ -976,9 +979,46 @@ test("a private note whose Backup copy was purged is created fresh in the teamsp
   const cloudId = await service.ensureNoteSynced(note.id);
 
   assert.ok(cloudId && cloudId !== "purged-backup-copy", `got ${cloudId}`);
-  assert.equal(cloud.note(cloudId).client_note_id, note.client_note_id);
+  assert.equal(cloud.note(cloudId).client_note_id, db.getNote(note.id).client_note_id);
   assert.equal(cloud.note(cloudId).space_id, TEAM_SPACE.id);
   assert.equal(cloud.note(cloudId).content, "the body on this device");
+});
+
+// D32a: the API's note upsert keeps a tombstone deleted. A Backup copy deleted
+// on another device stays a live private note here (personal tombstones don't
+// reach private rows), so moving it into a teamspace under its old key would
+// land on the tombstone, and the next pull would delete the note.
+test("a private note whose Backup copy was deleted elsewhere stays live once moved into a teamspace", async (t) => {
+  const ctx = await setup(t, { team: true });
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const note = db.saveNote("Roadmap", "the body on this device", "personal").note;
+  const backup = cloud.seedNote({
+    client_note_id: note.client_note_id,
+    title: "Roadmap",
+    content: "the body Backup uploaded months ago",
+    space_id: null,
+    workspace_id: null,
+  });
+  db.markNoteSynced(note.id, backup.id, backup.updated_at, "user-harness");
+  cloud.deleteNote(backup.id);
+
+  assert.ok(db.updateNote(note.id, { space_id: ctx.team.id, folder_id: null }).success);
+  stopSyncTimers(service);
+  await service.ensureNoteSynced(note.id);
+  // The harness has no shared dictionary bindings; that stage's error is noise here.
+  silenceConsoleErrors(t);
+  await service.syncAll(true);
+
+  const local = db.getNote(note.id);
+  assert.ok(local && !local.deleted_at, "the moved note survives the next pull");
+  assert.equal(local.space_id, ctx.team.id);
+  assert.ok(local.cloud_id, "the moved note has a cloud copy in the teamspace");
+  const row = cloud.note(local.cloud_id);
+  assert.equal(row.deleted_at, null, "the team's copy is live");
+  assert.equal(row.space_id, TEAM_SPACE.id);
+  assert.equal(row.content, "the body on this device");
+  assert.equal(cloud.note(backup.id).deleted_at !== null, true, "the old copy stays deleted");
 });
 
 test("retention opt-out still drains analytics deletes without uploading counters", async (t) => {
