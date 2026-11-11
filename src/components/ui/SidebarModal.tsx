@@ -73,7 +73,7 @@ export default function SidebarModal<T extends string>({
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      setIsCompact(width > 0 && width < 800);
+      setIsCompact(width > 0 && width < 960);
     });
     observer.observe(el);
     observerRef.current = observer;
