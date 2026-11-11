@@ -731,6 +731,35 @@ function retireStreaming(streaming) {
   streaming.disconnect({ commit: false }).catch(() => {});
 }
 
+function retireProductStream(handlers, property) {
+  retireStreaming(handlers[property]);
+  handlers[property] = null;
+  handlers._remoteStreamPolicies.delete(property);
+}
+
+function cancelWindowRequests(registry) {
+  for (const win of BrowserWindow.getAllWindows()) registry.cancelSender(win.webContents.id);
+}
+
+// What both policy retirements end: a disallowed preview, product request or
+// cloud request. `remoteStopped` also ends every request that leaves the device.
+function abortDisallowedRequests(handlers, snapshot, remoteStopped = false) {
+  const allowed = (channel, args) =>
+    productOperationAllowed(snapshot, app.getVersion(), channel, args);
+  if (!allowed("start-dictation-preview")) handlers._stopLocalDictationPreview?.();
+  for (const [controller, operation] of handlers._productRequests ?? []) {
+    if ((remoteStopped && operation.remote) || !allowed(operation.channel, operation.args))
+      controller.abort();
+  }
+  for (const [channel, registry] of [
+    ["cloud-agent-stream-start", handlers._agentStreamRequests],
+    ["cloud-reason", handlers._cloudReasonRequests],
+    ["cloud-transcribe", handlers._cloudTranscriptionRequests],
+  ]) {
+    if (remoteStopped || !allowed(channel)) cancelWindowRequests(registry);
+  }
+}
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -1892,24 +1921,8 @@ class IPCHandlers {
     for (const controller of this.enterpriseStreamAborts?.values() ?? []) controller.abort();
     for (const controller of this.activeUrlDownloads?.values() ?? []) controller.abort();
     this._remoteCalendarsStarted = false;
-    const snapshot = this.effectivePolicyManager.getCurrent();
-    if (!productOperationAllowed(snapshot, app.getVersion(), "start-dictation-preview"))
-      this._stopLocalDictationPreview?.();
-    for (const [controller, operation] of this._productRequests ?? []) {
-      if (
-        operation.remote ||
-        !productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args)
-      )
-        controller.abort();
-    }
-    for (const registry of [
-      this._agentStreamRequests,
-      this._cloudReasonRequests,
-      this._cloudTranscriptionRequests,
-      this._enterpriseReasoningRequests,
-    ]) {
-      for (const win of BrowserWindow.getAllWindows()) registry.cancelSender(win.webContents.id);
-    }
+    abortDisallowedRequests(this, this.effectivePolicyManager.getCurrent(), true);
+    cancelWindowRequests(this._enterpriseReasoningRequests);
     if (this._meetingMicStreaming || this._meetingSystemStreaming)
       this._stopMeetingForPolicy?.("policyRestricted");
     for (const key of [
@@ -1920,28 +1933,17 @@ class IPCHandlers {
       "_dictationStreaming",
       "_meetingMicStreaming",
       "_meetingSystemStreaming",
-    ]) {
-      retireStreaming(this[key]);
-      this[key] = null;
-    }
-    this.connectorManager?.accountChanged();
+    ])
+      retireProductStream(this, key);
     this.googleCalendarManager?.stop();
     this.microsoftCalendarManager?.stop();
   }
 
   _retireDisallowedProductWork(snapshot) {
-    if (!productOperationAllowed(snapshot, app.getVersion(), "start-dictation-preview"))
-      this._stopLocalDictationPreview?.();
+    abortDisallowedRequests(this, snapshot);
     for (const [property, operation] of this._remoteStreamPolicies) {
-      if (productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
-        continue;
-      retireStreaming(this[property]);
-      this[property] = null;
-      this._remoteStreamPolicies.delete(property);
-    }
-    for (const [controller, operation] of this._productRequests) {
       if (!productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
-        controller.abort();
+        retireProductStream(this, property);
     }
     for (const [streamId, provider] of this._enterpriseStreamProviders) {
       if (
@@ -1959,14 +1961,6 @@ class IPCHandlers {
       ])
     )
       this._stopMeetingForPolicy?.("policyRestricted");
-    for (const [channel, registry] of [
-      ["cloud-agent-stream-start", this._agentStreamRequests],
-      ["cloud-reason", this._cloudReasonRequests],
-      ["cloud-transcribe", this._cloudTranscriptionRequests],
-    ]) {
-      if (productOperationAllowed(snapshot, app.getVersion(), channel)) continue;
-      for (const win of BrowserWindow.getAllWindows()) registry.cancelSender(win.webContents.id);
-    }
   }
 
   _startRemoteProductWork() {
