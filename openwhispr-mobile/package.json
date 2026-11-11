@@ -15,7 +15,7 @@
     "download:brand-fonts": "node ../scripts/download-brand-fonts.js --output-dir assets/fonts/yowza",
     "format": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "format:write": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
-    "lint": "eslint \"**/*.{js,jsx,ts,tsx}\"",
+    "lint": "eslint \"**/*.{js,jsx,mjs,ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "doctor": "expo-doctor && expo install --check",
     "check": "npm run format && npm run lint && npm run typecheck && npm run doctor",
