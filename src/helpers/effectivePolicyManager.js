@@ -172,14 +172,15 @@ function createEffectivePolicyManager({
   let updates = null;
   let signature;
   let revision = 0;
+  const workspaceFor = (scope) =>
+    workspace?.accountId === scope.accountId && workspace?.authGeneration === scope.authGeneration
+      ? workspace
+      : null;
   function getCurrent() {
     const scope = getScope();
-    const matching =
-      workspace?.accountId === scope.accountId &&
-      workspace?.authGeneration === scope.authGeneration;
     const device = devicePolicy.getSnapshot();
-    const next = resolveEffectivePolicy(device, matching ? workspace : null, scope);
-    const nextUpdates = resolveUpdatePolicy(device, matching ? workspace : null, scope);
+    const next = resolveEffectivePolicy(device, workspaceFor(scope), scope);
+    const nextUpdates = resolveUpdatePolicy(device, workspaceFor(scope), scope);
     const nextSignature = JSON.stringify([next, nextUpdates]);
     if (nextSignature !== signature) {
       signature = nextSignature;
@@ -222,16 +223,17 @@ function createEffectivePolicyManager({
     },
     // `held` reads only what is already held for the identity. So does a
     // device that keeps it local or whose policy can't be read: neither
-    // contacts the server.
+    // contacts the server. Otherwise an identity with no verdict yet (just
+    // started, or invalidated) takes the one it last had while the network
+    // refreshes it.
     async getPolicy({ held = false, ...request } = {}) {
       const device = devicePolicy.getSnapshot();
       if (device.status === "loading") return getCurrent();
       const scope = getScope();
       if (scope.authenticated) {
         const offline = held || device.localOnly || device.status === "invalid";
-        const result = offline
-          ? workspacePolicyManager.heldPolicy(request)
-          : await workspacePolicyManager.getPolicy(request);
+        const result =
+          offline || !workspaceFor(scope) ? workspacePolicyManager.heldPolicy(request) : null;
         if (result) updateWorkspace(result);
         else if (device.localOnly)
           updateWorkspace({
@@ -240,6 +242,7 @@ function createEffectivePolicyManager({
             accountId: scope.accountId,
             authGeneration: scope.authGeneration,
           });
+        if (!offline) updateWorkspace(await workspacePolicyManager.getPolicy(request));
       }
       return getCurrent();
     },

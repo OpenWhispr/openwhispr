@@ -2,7 +2,7 @@ const rules = require("../stores/policyRules.ts");
 
 // A verdict still on its way for an identity nothing says is managed (no
 // device policy, no server calling the policy unresolvable) restricts no
-// channel; new remote work waits for it all the same (handleProduct).
+// channel; new remote work waits for it all the same (startingPolicy).
 function productPolicyState(snapshot, appVersion) {
   return {
     status: snapshot.success
@@ -121,8 +121,17 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
   return true;
 }
 
+// Work already running ends only on a settled denial: a verdict still on its
+// way for the account the work started under says nothing new about it.
+function runningOperationAllowed(snapshot, accountId, appVersion, channel, args) {
+  return snapshot.status === "loading"
+    ? snapshot.accountId === accountId
+    : productOperationAllowed(snapshot, appVersion, channel, args);
+}
+
 module.exports = {
   productOperationAllowed,
   productPolicyState,
   realtimeSelection,
+  runningOperationAllowed,
 };

@@ -387,7 +387,7 @@ test("held lookups read no network, a failed lookup keeps the held verdict, and 
   assert.deepEqual(requests, [["held", { accountId: "member", expectedAuthGeneration: 1 }]]);
   assert.equal(manager.getCurrent().status, "loading");
   await manager.getPolicy({ accountId: "member", expectedAuthGeneration: 1, refresh: true });
-  assert.deepEqual(requests[1], [
+  assert.deepEqual(requests.at(-1), [
     "network",
     { accountId: "member", expectedAuthGeneration: 1, refresh: true },
   ]);
@@ -420,5 +420,29 @@ test("a later failure doesn't lift a policy the server called unresolvable", () 
   manager.updateWorkspace({ ...identity, success: false, code: "AUTH_CONTEXT_UNVALIDATED" });
   assert.equal(manager.getCurrent().code, "POLICY_UNRESOLVABLE");
   assert.equal(manager.getCurrent().managed, true);
+  manager.stop();
+});
+
+test("an identity with no verdict yet answers from what it last had while the network refreshes it", async () => {
+  const { deferred } = require("./harness/deferred");
+  const network = deferred();
+  const manager = createEffectivePolicyManager({
+    devicePolicy: { getSnapshot: () => absentDevice, subscribe: () => () => {} },
+    workspacePolicyManager: {
+      heldPolicy: () => ({
+        success: true,
+        managed: true,
+        policy: defaultDevicePolicy(),
+        accountId: "member",
+        authGeneration: 1,
+      }),
+      getPolicy: () => network.promise,
+    },
+    getScope: () => member,
+  });
+  const refreshing = manager.getPolicy({ accountId: "member", expectedAuthGeneration: 1 });
+  assert.equal(manager.getCurrent().status, "managed");
+  network.resolve({ success: true, managed: false, accountId: "member", authGeneration: 1 });
+  assert.equal((await refreshing).status, "unmanaged");
   manager.stop();
 });

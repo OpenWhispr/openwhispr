@@ -1422,6 +1422,66 @@ test("valid inference restrictions retire active provider streams without disabl
   assert.equal(messages[0][1].code, "DEVICE_POLICY_BLOCKED");
 });
 
+// A token rotation leaves the verdict loading, and with a device policy the
+// verdict on its way is managed: work it allowed must still finish.
+test("a token rotation on a managed device lets a request already in flight finish", async (t) => {
+  withManagedApi(t);
+  t.after(() => {
+    authGeneration = 1;
+  });
+  setDeviceValues({ RequireSignIn: true });
+  const sent = deferred();
+  const answer = deferred();
+  t.mock.method(electron.net, "fetch", () => {
+    sent.resolve();
+    return answer.promise;
+  });
+  const pending = invoke("cloud-health-check");
+  await sent.promise;
+  authGeneration++;
+  assert.equal(target.effectivePolicyManager.getCurrent().status, "loading");
+  assert.equal(target.effectivePolicyManager.getCurrent().managed, true);
+  answer.resolve({ ok: true, status: 200 });
+  assert.deepEqual(await pending, { ok: true, status: 200 });
+});
+
+test("a token rotation on a managed device doesn't cut off an agent answer", async (t) => {
+  withManagedApi(t);
+  t.after(() => {
+    authGeneration = 1;
+  });
+  setDeviceValues({ RequireSignIn: true });
+  const sent = deferred();
+  let body;
+  t.mock.method(electron.net, "fetch", async () => {
+    sent.resolve();
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          body = controller;
+        },
+      })
+    );
+  });
+  const messages = [];
+  const sender = {
+    id: 1,
+    isDestroyed: () => false,
+    send: (channel) => messages.push(channel),
+    once() {},
+    removeListener() {},
+  };
+  const streaming = eventHandlers.get("cloud-agent-stream-start")({ sender }, "rotating-agent", [
+    { role: "user", content: "hello" },
+  ]);
+  await sent.promise;
+  authGeneration++;
+  body.enqueue(new TextEncoder().encode('{"type":"text","text":"answer"}\n'));
+  body.close();
+  await streaming;
+  assert.deepEqual(messages, ["cloud-agent-stream-chunk", "cloud-agent-stream-end"]);
+});
+
 test("a local prepare cannot replace the policy identity of an active remote meeting", async (t) => {
   resetMeeting(t);
   invoke("save-deepgram-key", "saved-provider-key");

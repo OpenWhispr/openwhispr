@@ -14,6 +14,8 @@ const handlers = new Map();
 const fetches = [];
 let tinfoilBehavior = async () => ({ text: "tinfoil text", model: "tinfoil-model" });
 let policySnapshot = { success: true, managed: false };
+// A lookup that doesn't answer until the test lets it.
+let policyLookupGate = null;
 const broadcasts = [];
 let tokenState = { token: "test-token", generation: 1 };
 let fetchResponse = () => ({
@@ -165,11 +167,15 @@ Module._load = function loadWithMocks(request, parent, isMain) {
       return {
         ...originalLoad.call(this, request, parent, isMain),
         createWorkspacePolicyManager: () => ({
-          getPolicy: async ({ expectedAuthGeneration = tokenState.generation }) => ({
-            ...policySnapshot,
-            accountId: "account-a",
-            authGeneration: expectedAuthGeneration,
-          }),
+          getPolicy: async ({ expectedAuthGeneration = tokenState.generation }) => {
+            await policyLookupGate;
+            return {
+              ...policySnapshot,
+              accountId: "account-a",
+              authGeneration: expectedAuthGeneration,
+            };
+          },
+          heldPolicy: () => null,
         }),
       };
     if (request === "./tokenStore") {
@@ -1840,6 +1846,40 @@ test("a revoked retry aborts the provider and cannot save an ignored late result
   assert.equal(signal.aborted, true);
   assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
   assert.equal(textUpdates.length, 0);
+});
+
+test("a retry that turns remote doesn't upload on a verdict still on its way", async (t) => {
+  const { POLICY_TIMEOUT_MS } = require("../../src/helpers/connectors/connectorIpc");
+  const { deferred } = require("./harness/deferred");
+  const lookup = deferred();
+  const previousTokenState = tokenState;
+  t.after(async () => {
+    policyLookupGate = null;
+    lookup.resolve();
+    tokenState = previousTokenState;
+    await fakeThis.refreshEffectivePolicy();
+  });
+  // A rotated token whose lookup hasn't answered, with nothing held.
+  policyLookupGate = lookup.promise;
+  tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+  fetches.length = 0;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  let result;
+  const retry = invoke({
+    transcriptionMode: "providers",
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "mistral",
+  }).then((value) => {
+    result = value;
+  });
+  for (let turn = 0; turn < 20 && !result; turn++) {
+    await new Promise(setImmediate);
+    t.mock.timers.tick(POLICY_TIMEOUT_MS);
+  }
+  assert.equal(fetches.length, 0);
+  await retry;
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
 });
 
 test("a local retry ignores a retained cloud preference when cloud inference is forbidden", async (t) => {

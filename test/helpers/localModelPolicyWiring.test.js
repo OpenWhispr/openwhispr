@@ -243,8 +243,8 @@ for (const [label, policy] of [
     assert.doesNotThrow(() => app.gate.assertCurrent(job));
     assert.equal(app.stops(), 0);
     assert.deepEqual(app.stoppedMeetings, []);
-    // New work waits for the rotated credential's verdict.
-    assert.equal(app.gate.failure("transcription", "base").code, "POLICY_UNRESOLVABLE");
+    // The account's held verdict answers new work while the rotated credential's loads.
+    assert.equal(app.gate.failure("transcription", "base"), null);
 
     answer.resolve(policy());
     await settle();

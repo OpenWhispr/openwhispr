@@ -1146,7 +1146,7 @@ test("repeated validated account scope preserves its settled policy while refres
   assert.equal(manager.getCurrent().authGeneration, 81);
 });
 
-test("while a verdict loads, local work runs, new remote work waits, and windows aren't held", async (t) => {
+test("while a verdict loads, local work runs, new remote work waits for it, and windows aren't held", async (t) => {
   const { deferred } = require("./harness/deferred");
   const answer = deferred();
   const previousApiUrl = process.env.OPENWHISPR_API_URL;
@@ -1176,10 +1176,47 @@ test("while a verdict loads, local work runs, new remote work waits, and windows
   };
   const local = await handlers.get("transcribe-local-whisper")({ sender: {} }, new Uint8Array([1]));
   assert.equal(local.text, "local dictation");
-  assert.equal(
-    (await handlers.get("cloud-health-check")({ sender: {} })).code,
-    "DEVICE_POLICY_BLOCKED"
-  );
+  const remote = handlers.get("cloud-health-check")({ sender: {} });
+  answer.resolve();
+  assert.deepEqual(await remote, { ok: true, status: 200 });
+});
+
+test("new remote work doesn't start on a verdict that never settles", async (t) => {
+  const { POLICY_TIMEOUT_MS } = require("../../src/helpers/connectors/connectorIpc");
+  const previousApiUrl = process.env.OPENWHISPR_API_URL;
+  const previousTokenState = tokenState;
+  const lookups = [];
+  t.after(() => {
+    for (const lookup of lookups) lookup.resolve();
+    if (previousApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = previousApiUrl;
+    tokenState = previousTokenState;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  const realFetch = electronStub.net.fetch;
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    if (String(url).endsWith("/api/workspace-policy")) {
+      const lookup = require("./harness/deferred").deferred();
+      lookups.push(lookup);
+      await lookup.promise;
+    }
+    return realFetch(url, init);
+  });
+  handleAuthTokenChange({ token: "unsettled-token", generation: tokenState.generation + 1 });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  let result;
+  const remote = handlers
+    .get("cloud-health-check")({ sender: {} })
+    .then((value) => {
+      result = value;
+    });
+  for (let turn = 0; turn < 20 && !result; turn++) {
+    await new Promise(setImmediate);
+    t.mock.timers.tick(POLICY_TIMEOUT_MS);
+  }
+  await remote;
+  assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
 });
 
 test("an account change during a streaming start closes the socket the start opened", async (t) => {

@@ -51,6 +51,7 @@ const {
   productOperationAllowed,
   productPolicyState,
   realtimeSelection,
+  runningOperationAllowed,
 } = require("./productPolicy");
 const { createCloudConfigRequestHandler } = require("./cloudConfigRequest");
 const { extractAnthropicText, describeMissingAnthropicText } = require("./anthropicResponse");
@@ -75,6 +76,7 @@ const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
   createConnectorAuthLookup,
+  POLICY_TIMEOUT_MS,
 } = require("./connectors/connectorIpc");
 const { createNoteAttendeesLookup, searchContacts } = require("./connectors/contactSearch");
 // The renderer's ModelRegistry is not main-loadable; the route resolver only
@@ -1986,27 +1988,42 @@ class IPCHandlers {
     this._productRequests = new Map();
     this._productRequestContext = new AsyncLocalStorage();
     this._enterpriseStreamProviders = new Map();
+    // Work that leaves the device doesn't start on a verdict still on its way,
+    // and waits for one: a held verdict answers at once, the network only as
+    // long as a policy decision may take.
+    const awaitVerdict = async (event) => {
+      await this.refreshEffectivePolicy(event, { held: true });
+      if (this.effectivePolicyManager.getCurrent().status !== "loading") return;
+      let timer;
+      await Promise.race([
+        this.refreshEffectivePolicy(event),
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, POLICY_TIMEOUT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+    };
+    const mayStart = (operation) => {
+      const policy = this.effectivePolicyManager.getCurrent();
+      return (
+        (!operation.remote || (!policy.localOnly && policy.status !== "loading")) &&
+        productOperationAllowed(policy, app.getVersion(), operation.channel, operation.args)
+      );
+    };
     const handleProduct = (channel, handler, remote = false) =>
       ipcMain.handle(channel, async (event, ...args) => {
         const operation = { channel, args, remote };
-        const allowed = () => {
-          const policy = this.effectivePolicyManager.getCurrent();
-          return (
-            (!operation.remote || !policy.localOnly) &&
-            productOperationAllowed(policy, app.getVersion(), operation.channel, operation.args)
-          );
-        };
         const failure = () => ({
           success: false,
           code: "DEVICE_POLICY_BLOCKED",
           error: i18nMain.t("common.policyUnresolved"),
         });
         void this.refreshEffectivePolicy(event);
+        if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading")
+          await awaitVerdict(event);
+        if (!mayStart(operation)) return failure();
         const startedPolicy = this.effectivePolicyManager.getCurrent();
-        // New work that leaves the device waits for a verdict still on its
-        // way; work already running isn't stopped by one.
-        if (!allowed() || (operation.remote && startedPolicy.status === "loading"))
-          return failure();
+        operation.accountId = startedPolicy.accountId;
         const streamProperty = channel.startsWith("dictation-realtime-")
           ? "_dictationStreaming"
           : /^(assemblyai|deepgram|gemini|corti)-streaming-(start|warmup)$/.test(channel)
@@ -2052,7 +2069,17 @@ class IPCHandlers {
             };
           }
           if (controller.signal.aborted) return failure();
-          if (allowed()) return result;
+          if (
+            (!operation.remote || !snapshot.localOnly) &&
+            runningOperationAllowed(
+              snapshot,
+              operation.accountId,
+              app.getVersion(),
+              operation.channel,
+              operation.args
+            )
+          )
+            return result;
           if ((!snapshot.success && snapshot.status !== "loading") || snapshot.localOnly)
             this._stopRemoteProductWork();
           else if (snapshot.success) this._retireDisallowedProductWork(snapshot);
@@ -2062,8 +2089,10 @@ class IPCHandlers {
         }
       });
     const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
-    const trackTranscriptionRoute = (route, selectedMode) => {
-      if (route.transport === "error") return this._productRequestContext.getStore().signal;
+    // Work that turns remote here starts remote work, under new remote work's rules.
+    const trackTranscriptionRoute = async (route, selectedMode) => {
+      const operation = this._productRequestContext.getStore();
+      if (route.transport === "error") return operation.signal;
       const mode =
         route.transport === "local"
           ? "local"
@@ -2074,10 +2103,22 @@ class IPCHandlers {
               : route.provider === "self-hosted" || selectedMode === "self-hosted"
                 ? "self-hosted"
                 : "providers";
-      const operation = this._productRequestContext.getStore();
+      const turnsRemote = !operation.remote && mode !== "local";
       operation.channel = "batch-transcription";
       operation.args = [{ mode, provider: route.provider ?? "" }];
       operation.remote = mode !== "local";
+      if (turnsRemote) {
+        if (this.effectivePolicyManager.getCurrent().status === "loading") await awaitVerdict();
+        if (!mayStart(operation)) {
+          const unsettled = this.effectivePolicyManager.getCurrent().status === "loading";
+          throw Object.assign(
+            new Error(
+              i18nMain.t(unsettled ? "common.policyUnresolved" : "common.managedPolicyConflict")
+            ),
+            { code: "DEVICE_POLICY_BLOCKED" }
+          );
+        }
+      }
       return operation.signal;
     };
     const handleProviderTranscription = (channel, handler) =>
@@ -7599,8 +7640,9 @@ class IPCHandlers {
         if (
           !networkAllowed(url) ||
           (operation &&
-            !productOperationAllowed(
+            !runningOperationAllowed(
               this.effectivePolicyManager.getCurrent(),
+              operation.accountId,
               app.getVersion(),
               operation.channel,
               operation.args
@@ -8255,7 +8297,10 @@ class IPCHandlers {
               fileName: fileName || "audio.webm",
               contentType: mimeType || "audio/webm",
               prompt,
-              signal: trackTranscriptionRoute({ transport: "managed", provider: managed.provider }),
+              signal: await trackTranscriptionRoute({
+                transport: "managed",
+                provider: managed.provider,
+              }),
             }
           );
         }
@@ -8475,7 +8520,7 @@ class IPCHandlers {
           route.transport !== "local" &&
           route.provider !== "self-hosted" &&
           settings?.cloudTranscriptionMode === "openwhispr";
-        const signal = trackTranscriptionRoute(
+        const signal = await trackTranscriptionRoute(
           usesCloud ? { transport: "cloud" } : route,
           settings?.transcriptionMode
         );
@@ -8492,20 +8537,6 @@ class IPCHandlers {
           if (route.messageKey) err.messageKey = route.messageKey;
           throw err;
         }
-
-        if (
-          usesCloud &&
-          !productOperationAllowed(
-            this.effectivePolicyManager.getCurrent(),
-            app.getVersion(),
-            "cloud-transcribe"
-          )
-        )
-          return {
-            success: false,
-            code: "DEVICE_POLICY_BLOCKED",
-            error: i18nMain.t("common.managedPolicyConflict"),
-          };
 
         // Mirrors the branch order below: self-hosted wins over OpenWhispr
         // cloud, which wins over the BYOK providers. Managed, local and cloud
@@ -12269,15 +12300,22 @@ class IPCHandlers {
       sender.once("destroyed", cancelSenderRequests);
 
       try {
+        const operation = { channel: "cloud-agent-stream-start", args: [], remote: true };
+        const restricted = () =>
+          Object.assign(new Error(i18nMain.t("common.policyAiProcessingRestricted")), {
+            code: "DEVICE_POLICY_BLOCKED",
+          });
+        if (this.effectivePolicyManager.getCurrent().status === "loading")
+          await awaitVerdict(event);
+        if (!mayStart(operation)) throw restricted();
+        const { accountId } = this.effectivePolicyManager.getCurrent();
         const assertAllowed = () => {
           const policy = this.effectivePolicyManager.getCurrent();
           if (
             policy.localOnly ||
-            !productOperationAllowed(policy, app.getVersion(), "cloud-agent-stream-start")
+            !runningOperationAllowed(policy, accountId, app.getVersion(), operation.channel)
           )
-            throw Object.assign(new Error(i18nMain.t("common.policyAiProcessingRestricted")), {
-              code: "DEVICE_POLICY_BLOCKED",
-            });
+            throw restricted();
           controller.signal.throwIfAborted();
         };
         assertAllowed();
@@ -12894,7 +12932,7 @@ class IPCHandlers {
               };
             }
 
-            trackTranscriptionRoute(route, transcriptionMode);
+            await trackTranscriptionRoute(route, transcriptionMode);
 
             if (route.transport === "managed") {
               const result = await transcribeManagedAudio(event, route, {
