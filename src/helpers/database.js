@@ -386,7 +386,8 @@ class DatabaseManager {
     this.db = null;
     this.activeAccountId = null;
     // The active account's active and default workspace, as the renderer last
-    // said; null until it does, and again after every account change.
+    // said. An account change restores that account's last accepted scope
+    // (D40), since a login launch has no control panel to publish one.
     this.activeWorkspaceId = null;
     this.defaultWorkspaceId = null;
     this._accountTrackedSince = Date.now();
@@ -404,9 +405,12 @@ class DatabaseManager {
         this.db.prepare("INSERT OR IGNORE INTO device_accounts (account_id) VALUES (?)").run(next);
       }
       // Those were the last account's workspaces. Until the renderer names this
-      // account's, its notes go to its default private space.
-      this.activeWorkspaceId = null;
-      this.defaultWorkspaceId = null;
+      // account's, its notes go where they went when it last did; with nothing
+      // saved, to its default private space. A workspace lost since gets a
+      // Private the next successful list relocates (D18).
+      const saved = next ? this._savedWorkspaceScope(next) : null;
+      this.activeWorkspaceId = saved?.activeWorkspaceId ?? null;
+      this.defaultWorkspaceId = saved?.defaultWorkspaceId ?? null;
     }
     this.activeAccountId = next;
   }
@@ -414,6 +418,39 @@ class DatabaseManager {
   setActiveWorkspaceScope({ activeWorkspaceId = null, defaultWorkspaceId = null } = {}) {
     this.activeWorkspaceId = workspaceIdOrNull(activeWorkspaceId);
     this.defaultWorkspaceId = workspaceIdOrNull(defaultWorkspaceId);
+    if (!this.activeAccountId) return;
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO account_workspace_scopes (account_id, active_workspace_id, default_workspace_id, updated_at)
+           VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+           ON CONFLICT(account_id) DO UPDATE SET
+             active_workspace_id = excluded.active_workspace_id,
+             default_workspace_id = excluded.default_workspace_id,
+             updated_at = excluded.updated_at`
+        )
+        .run(this.activeAccountId, this.activeWorkspaceId, this.defaultWorkspaceId);
+    } catch (error) {
+      debugLogger.warn("Saving the workspace scope failed", { error: error.message }, "spaces");
+    }
+  }
+
+  _savedWorkspaceScope(accountId) {
+    try {
+      const row = this.db
+        .prepare(
+          "SELECT active_workspace_id, default_workspace_id FROM account_workspace_scopes WHERE account_id = ?"
+        )
+        .get(accountId);
+      if (!row) return null;
+      return {
+        activeWorkspaceId: workspaceIdOrNull(row.active_workspace_id),
+        defaultWorkspaceId: workspaceIdOrNull(row.default_workspace_id),
+      };
+    } catch (error) {
+      debugLogger.warn("Reading the workspace scope failed", { error: error.message }, "spaces");
+      return null;
+    }
   }
 
   // Whose personal rows are in view. Signed out, the only account this device
@@ -660,6 +697,19 @@ class DatabaseManager {
          SELECT DISTINCT account_id FROM ${table} WHERE account_id IS NOT NULL`
       );
     }
+  }
+
+  // Each account's last workspace scope main accepted (D40), so a launch with
+  // no control panel files notes where that account's workspace shows them.
+  _initWorkspaceScopes() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS account_workspace_scopes (
+        account_id TEXT PRIMARY KEY,
+        active_workspace_id TEXT,
+        default_workspace_id TEXT,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
   }
 
   // Signed-out rows normally join an account when they sync. These never sync
@@ -2306,6 +2356,7 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_space_accounts_account_id ON space_accounts(account_id)"
       );
       this._initDeviceAccounts();
+      this._initWorkspaceScopes();
 
       // Cloud-backed rows that just LEFT a team must keep pushing their scope
       // retraction (D6) even in the backup-off team-only pass, where the
@@ -5639,6 +5690,7 @@ class DatabaseManager {
       this.db.prepare("DELETE FROM connector_actions WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM space_accounts WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM device_accounts WHERE account_id = ?").run(accountId);
+      this.db.prepare("DELETE FROM account_workspace_scopes WHERE account_id = ?").run(accountId);
     };
 
     if (typeof this.db.transaction === "function") {

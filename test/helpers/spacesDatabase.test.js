@@ -2820,6 +2820,88 @@ test("getPrivateSpaceId resolves the active workspace's private space for the ac
   });
 });
 
+// D40: a login or start-minimized launch has no control panel to publish a scope, so main
+// starts from the account's last accepted one; the bridge's next publish still wins.
+test("a launch with no published scope files a meeting note into the last active workspace's Private", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", W2_ACTIVE);
+  db.bindDefaultPrivateSpace("w1");
+  const w2 = db.getPrivateSpaceId();
+  const w1 = db.getDefaultPrivateSpaceId();
+  db.db.close();
+
+  const relaunched = new DatabaseManager();
+  t.after(() => {
+    if (relaunched.db.open) relaunched.db.close();
+  });
+  relaunched.setActiveAccountId("a");
+  assert.equal(relaunched.activeWorkspaceId, "w2");
+  assert.equal(relaunched.defaultWorkspaceId, "w1");
+  const meeting = relaunched.saveNote("Standup", "", "meeting").note;
+  assert.equal(
+    meeting.space_id,
+    w2,
+    "the meeting lands where the workspace the user left shows it"
+  );
+  assert.equal(relaunched.getDefaultPrivateSpaceId(), w1);
+
+  relaunched.setActiveWorkspaceScope(W1_ACTIVE);
+  assert.equal(relaunched.getPrivateSpaceId(), w1, "the bridge's publish overrides it");
+});
+
+test("an account's saved workspace scope never applies to another account", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", W2_ACTIVE);
+  const aW2 = db.getPrivateSpaceId();
+
+  signIn(db, "b");
+  assert.equal(db.activeWorkspaceId, null);
+  assert.equal(db.defaultWorkspaceId, null);
+  const bNote = db.saveNote("B's meeting", "", "meeting").note;
+  assert.notEqual(bNote.space_id, aW2);
+  assert.equal(spaceIdentity(db.db, bNote.space_id).account_id, "b");
+
+  signIn(db, null);
+  assert.equal(db.activeWorkspaceId, null, "signed out has no workspace scope");
+
+  signIn(db, "a");
+  assert.equal(db.activeWorkspaceId, "w2", "A gets its own back");
+  assert.equal(db.getPrivateSpaceId(), aW2);
+});
+
+test("deleting an account forgets its saved workspace scope", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", W2_ACTIVE);
+  db.deleteAccountData("a");
+  signIn(db, null);
+  signIn(db, "a");
+  assert.equal(db.activeWorkspaceId, null);
+  assert.equal(db.defaultWorkspaceId, null);
+});
+
+// A workspace the account has lost since only costs a Private row the next successful list
+// relocates (D18); nothing refuses to start.
+test("a saved scope naming a workspace the account lost still starts", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", { activeWorkspaceId: "gone", defaultWorkspaceId: "w1" });
+  db.bindDefaultPrivateSpace("w1");
+  db.db.close();
+
+  const relaunched = new DatabaseManager();
+  t.after(() => {
+    if (relaunched.db.open) relaunched.db.close();
+  });
+  relaunched.setActiveAccountId("a");
+  const note = relaunched.saveNote("Call", "", "meeting").note;
+  assert.equal(spaceIdentity(relaunched.db, note.space_id).workspace_id, "gone");
+  assert.equal(relaunched.relocatePrivateSpace("gone").notes, 1);
+  assert.equal(relaunched.getNote(note.id).space_id, relaunched.getDefaultPrivateSpaceId());
+});
+
 test("signed out resolves the stand-in", (t) => {
   const db = createFreshDeviceDb(t);
   if (!db) return;
@@ -3898,9 +3980,15 @@ test("purgeSpace forks dirty notes into that workspace's Private with the active
   assert.deepEqual(placed(inW2.note.id), { space_id: w2, folder_id: null, account_id: "a" });
   assert.deepEqual(placed(inOther.note.id), { space_id: home, folder_id: null, account_id: "a" });
 
-  // Right after an account change main knows no workspace: the default.
+  // Back from another account, main starts from A's last scope (D40).
   signIn(db, "b");
   signIn(db, "a");
+  const restored = draftIn("w2", "After switching back");
+  assert.equal(db.purgeSpace(restored.team).success, true);
+  assert.deepEqual(placed(restored.note.id), { space_id: w2, folder_id: null, account_id: "a" });
+
+  // With no workspace known (nothing saved yet): the default.
+  db.setActiveWorkspaceScope({ activeWorkspaceId: null, defaultWorkspaceId: null });
   const unscoped = draftIn("w2", "Before the scope arrives");
   assert.equal(db.purgeSpace(unscoped.team).success, true);
   assert.deepEqual(placed(unscoped.note.id), { space_id: home, folder_id: null, account_id: "a" });

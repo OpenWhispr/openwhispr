@@ -139,6 +139,7 @@ function createDatabaseManager() {
   manager._accountChanges = [];
   manager._registerKeyFolding();
   manager._initDeviceAccounts();
+  manager._initWorkspaceScopes();
   return { manager, sqlite };
 }
 
