@@ -245,6 +245,28 @@ test("a recording the app never stopped is closed on the next launch at its last
   assert.equal(lines().length, 2);
 });
 
+// A power cut can leave the marker empty: it must not cost later recordings theirs.
+test("a marker that can't be read is replaced by the next recording's", async () => {
+  fs.writeFileSync(marker(), "");
+  const first = harness();
+  first.log.recoverInterrupted();
+  first.log.recordingStarted({ sessionId: "s2", noteId: 4, trigger: "tray" });
+  await first.log.flush();
+
+  const relaunch = harness();
+  relaunch.log.recoverInterrupted();
+  await relaunch.log.flush();
+
+  assert.deepEqual(
+    lines().map((line) => [line.sessionId, line.event, line.reason]),
+    [
+      ["s2", "recording.started", null],
+      ["s2", "recording.stopped", "interrupted"],
+    ]
+  );
+  assert.equal(fs.existsSync(marker()), false);
+});
+
 test("an interrupted stop a launch can't write is kept and written before its next recording", async () => {
   const share = path.join(userData, "share");
   const first = harness({ configuredPath: share });

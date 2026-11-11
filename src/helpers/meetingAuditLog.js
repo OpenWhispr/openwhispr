@@ -152,8 +152,8 @@ function createMeetingAuditLog({
         markerKept = false;
         return;
       }
-      markerKept = true;
       const open = JSON.parse(text);
+      markerKept = true;
       await append(open.dir, open.lastSeenAt, {
         event: "recording.stopped",
         sessionId: open.sessionId,
