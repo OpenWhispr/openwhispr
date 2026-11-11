@@ -9,6 +9,8 @@ export {
   ChevronsUpDown,
   Circle,
   CopyRounded,
+  DoorOpen,
+  EnvelopePlus,
   EyeOff,
   FolderRounded,
   GitFork,
@@ -22,6 +24,7 @@ export {
   Maximize,
   MessageCircleQuestion,
   Minimize,
+  Office,
   Quote,
   SkillStack,
   Square,
@@ -30,6 +33,9 @@ export {
   Strikethrough,
   Table,
   TextSelect,
+  UserMinus,
+  UserSettings,
+  UserXmark,
   Volume,
 } from "./primitives";
 

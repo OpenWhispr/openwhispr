@@ -2544,8 +2544,8 @@
         },
         "roleMenuLabel": "變更 {{name}} 的角色",
         "roleDescription": {
-          "member": "可以檢視和編輯筆記。",
-          "admin": "管理成員、邀請、團隊和設定。"
+          "member": "使用工作區。",
+          "admin": "管理成員、邀請、團隊、帳單與設定。"
         },
         "roleFailed": "無法變更 {{name}} 的角色。請檢查網路連線後再試一次。",
         "roleNotAllowed": "你已無權變更 {{workspace}} 中的角色。",
@@ -2581,7 +2581,8 @@
           "resentNoEmailMany_one": "{{count}} 封邀請已更新，但電子郵件無法送達，舊連結也已失效。它們仍處於選取狀態，你可以重新傳送。",
           "resentNoEmailMany_other": "{{count}} 封邀請已更新，但電子郵件無法送達，舊連結也已失效。它們仍處於選取狀態，你可以重新傳送。",
           "resendUnrenewable_one": "無法續訂 {{count}} 封已過期的邀請。請取消後重新邀請。",
-          "resendUnrenewable_other": "無法續訂 {{count}} 封已過期的邀請。請取消後重新邀請。"
+          "resendUnrenewable_other": "無法續訂 {{count}} 封已過期的邀請。請取消後重新邀請。",
+          "statusPending": "待處理"
         },
         "selection": {
           "count_one": "已選取 {{count}} 項",
@@ -2602,6 +2603,10 @@
           "invite": "邀請成員",
           "createTeam": "建立團隊",
           "label": "更多新增方式"
+        },
+        "roleMenu": {
+          "member": "工作區成員",
+          "admin": "工作區管理員"
         }
       },
       "teamspaces": {
@@ -2690,6 +2695,12 @@
           "roleMemberBody": "可以檢視和編輯筆記",
           "roleAdmin": "Teamspace 管理員",
           "roleAdminBody": "管理此 Teamspace 及其已指派的團隊。",
+          "teamAccessMember": "所有人都是成員",
+          "teamAccessMemberBody": "團隊中的所有人都可以檢視和編輯筆記。",
+          "teamAccessAdmin": "團隊管理員即管理員",
+          "teamAccessAdminBody": "團隊的管理員也管理此 Teamspace。團隊中的其他人是成員。",
+          "teamAccessMemberShort": "成員",
+          "teamAccessAdminShort": "團隊管理員",
           "removeItem": "從 Teamspace 中移除",
           "removeTitle": "要將 {{name}} 從 {{space}} 中移除嗎？",
           "removeBody": "這將結束 {{name}} 的直接成員身分。透過團隊取得的存取權將保留。對方仍留在工作區中。",
@@ -3004,7 +3015,9 @@
           "someDonePlural": "已將 {{added}} 加入 {{team}}。{{already}} 已是成員。",
           "left": "{{names}} 已離開工作區，因此沒有加入任何人。",
           "allAlready": "他們已在 {{team}} 中。"
-        }
+        },
+        "selectAll": "選取所有團隊",
+        "selectRow": "選取 {{name}}"
       },
       "invites": {
         "resending": "重新傳送中…",
@@ -5914,8 +5927,6 @@
       "submitOne": "傳送邀請",
       "submit_one": "傳送 {{count}} 份邀請",
       "submit_other": "傳送 {{count}} 份邀請",
-      "submitting_one": "正在邀請 {{count}} 人…",
-      "submitting_other": "正在邀請 {{count}} 人…",
       "sentTitle_one": "已傳送 {{count}} 份邀請",
       "sentTitle_other": "已傳送 {{count}} 份邀請",
       "attachedTitle_one": "已更新 {{count}} 個邀請",
@@ -5957,8 +5968,8 @@
         "member": "工作區成員"
       },
       "roleDescription": {
-        "admin": "管理成員、邀請、團隊和設定。",
-        "member": "可以檢視和編輯筆記。"
+        "admin": "管理成員、邀請、團隊、帳單與設定。",
+        "member": "使用工作區。"
       },
       "errors": {
         "invalid": "{{email}} 不是有效的電子郵件地址",
@@ -5972,7 +5983,8 @@
         "rateLimited": "目前邀請過多，請稍後再試。",
         "requestFailed": "無法邀請 {{email}}。請檢查你的網路連線後再試。",
         "refused": "無法邀請 {{email}}：{{reason}}"
-      }
+      },
+      "sending": "正在邀請…"
     },
     "join": {
       "title": "加入你的團隊",
@@ -6010,7 +6022,7 @@
     "exit": {
       "leave": {
         "title": "離開 {{name}}？",
-        "body": "你將失去此工作區、其團隊與 Teamspace 的存取權。工作區管理員可以再次邀請你。",
+        "body": "你將失去此工作區、其團隊與 Teamspace 的存取權。工作區擁有者或管理員可以再次邀請你。",
         "failed": "無法離開 {{name}}。請檢查網路連線後再試一次。"
       },
       "left": {
@@ -6040,9 +6052,9 @@
       "body": "對方將失去此工作區中所有 Teamspace 和團隊的存取權限。你可以隨時再次邀請對方。",
       "confirm": "移除",
       "removing": "正在移除…",
-      "failed": "無法確認已移除 {{name}}。請檢查網路連線後再試一次。",
       "notAllowed": "你已無權從 {{workspace}} 中移除成員。",
-      "alreadyRemoved": "{{name}} 已被移除"
+      "alreadyRemoved": "{{name}} 已被移除",
+      "failedTitle": "無法移除 {{name}}"
     },
     "removeMembers": {
       "title_one": "要將 {{count}} 名成員從 {{workspace}} 移除嗎？",
@@ -6050,8 +6062,6 @@
       "confirm_one": "移除 {{count}} 名成員",
       "confirm_other": "移除 {{count}} 名成員",
       "checking": "正在檢查…",
-      "failed_one": "無法確認已移除 {{count}} 名成員。請檢查網路連線後再試一次。",
-      "failed_other": "無法確認已移除 {{count}} 名成員。請檢查網路連線後再試一次。",
       "body": "這些人將失去此工作區中所有 Teamspace 和團隊的存取權限。你可以隨時再次邀請他們。",
       "ownerOne": "{{name}} 在此工作區中擁有筆記或 Teamspace。",
       "owners_one": "其中 {{count}} 人擁有筆記或 Teamspace。",
@@ -6062,24 +6072,28 @@
       "directoryManagedOneOthers": "{{name}} 由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
       "directoryManagedOthers_one": "其中 {{count}} 人由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
       "directoryManagedOthers_other": "其中 {{count}} 人由身分識別提供者指派。請在身分識別提供者中移除，或取消勾選以移除其他人。",
-      "transferLabel": "轉讓給",
-      "transferBody": "他們的筆記和 Teamspace 將轉給新擁有者。他們將失去此工作區的存取權限。",
+      "transferLabel": "重新分配給",
       "transferBodyLimited": "他們的筆記和 Teamspace 將轉給 {{name}}，但 {{name}} 無法存取的 Teamspace 中的筆記會留在原處。他們將失去此工作區的存取權限。",
       "you": "{{name}}（你）",
-      "transferConfirm": "轉讓並移除",
+      "transferConfirm": "重新分配並移除",
       "transferring": "正在轉讓…",
-      "transferFailed": "無法確認轉移和移除是否完成。請檢查網路連線後再試一次。",
+      "transferFailed": "無法重新分配內容。未移除任何成員。請再試一次。",
       "invalidTarget": "{{name}} 已無法接收擁有權。請選擇其他人。",
       "cannotRemoveOwner": "無法移除工作區擁有者。",
       "cannotRemoveSelf": "你無法移除自己。請在「一般」中離開工作區。",
       "done_one": "已移除 {{count}} 名成員",
       "done_other": "已移除 {{count}} 名成員",
-      "transferDone_one": "已將他們的筆記和 Teamspace 移至 {{name}}，並移除了 {{count}} 名成員。",
-      "transferDone_other": "已將他們的筆記和 Teamspace 移至 {{name}}，並移除了 {{count}} 名成員。",
       "transferPartial_one": "{{count}} 則筆記留在了 {{name}} 無法存取的 Teamspace 中。其餘內容已全部移動。",
       "transferPartial_other": "{{count}} 則筆記留在了 {{name}} 無法存取的 Teamspace 中。其餘內容已全部移動。",
       "alreadyRemoved_one": "{{count}} 名成員已被移除",
-      "alreadyRemoved_other": "{{count}} 名成員已被移除"
+      "alreadyRemoved_other": "{{count}} 名成員已被移除",
+      "failedBody": "他們對工作區的存取權未變。請檢查網路連線後再試一次。",
+      "reassignBody": "移除前，請轉移他們的筆記並指定 Teamspace 管理員。",
+      "ownersAll": "他們擁有筆記或管理 Teamspace。",
+      "failedTitle_one": "無法移除 {{count}} 位成員",
+      "failedTitle_other": "無法移除 {{count}} 位成員",
+      "transferDone_one": "已將內容與 Teamspace 管理權限重新分配給 {{name}}。已移除 {{count}} 位成員。",
+      "transferDone_other": "已將內容與 Teamspace 管理權限重新分配給 {{name}}。已移除 {{count}} 位成員。"
     },
     "cancelInvitation": {
       "title": "取消寄給 {{email}} 的邀請？",
@@ -6107,7 +6121,6 @@
       "body": "選擇一位現有的工作區成員。轉讓後你將成為管理員。",
       "newOwner": "新擁有者",
       "placeholder": "選擇工作區成員",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "將擁有權轉讓給 {{name}}？",
       "confirmBody": "{{name}} 將成為 {{workspace}} 的擁有者，你將成為管理員。",
       "submit": "轉讓擁有權",

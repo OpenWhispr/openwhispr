@@ -18,6 +18,7 @@ import { useDialogs } from "../../hooks/useDialogs";
 import { WorkspaceApiKeysService } from "../../services/WorkspaceApiKeysService";
 import type { Workspace, WorkspaceApiKey, NewWorkspaceApiKey } from "../../types/electron";
 import { cn } from "../lib/utils";
+import { PAGE_DESCRIPTION, PAGE_TITLE } from "./tableTokens";
 
 interface Props {
   workspace: Workspace;
@@ -167,12 +168,11 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* The end padding keeps New key clear of the modal's Close, which sits in this corner. */}
+      <div className="flex items-center justify-between gap-3 pe-8">
         <div>
-          <h3 className="text-xs font-semibold text-foreground">
-            {t("settingsPage.workspace.developer.title")}
-          </h3>
-          <p className="text-xs text-muted-foreground/80 mt-0.5">
+          <h2 className={PAGE_TITLE}>{t("settingsPage.workspace.developer.title")}</h2>
+          <p className={PAGE_DESCRIPTION}>
             {t("settingsPage.workspace.developer.description")}
           </p>
         </div>

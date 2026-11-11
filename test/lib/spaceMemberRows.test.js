@@ -190,15 +190,21 @@ test("a team assigned before the API sent access reads as admin, as it always ha
   assert.equal(row.team.access, "admin");
 });
 
-test("someone who comes through a team takes a role only when promoteInherited says so", () => {
+test("someone who comes through a team can be made an admin by a manager", () => {
   const members = [
     person("jin", "Jin", {
       direct_role: null,
       via_teams: [{ team_id: "sales", name: "Sales", role: "member", access: "member" }],
     }),
+    person("ana", "Ana", {
+      role: "admin",
+      direct_role: null,
+      via_teams: [{ team_id: "ops", name: "Ops", role: "admin", access: "admin" }],
+    }),
   ];
+  const promotable = (rows, id) => rows.find((row) => row.member?.user_id === id).promotable;
 
-  assert.equal(build({ members })[0].promotable, false);
-  assert.equal(build({ members, promoteInherited: true })[0].promotable, true);
-  assert.equal(build({ members, promoteInherited: true, canManage: false })[0].promotable, false);
+  assert.equal(promotable(build({ members }), "jin"), true);
+  assert.equal(promotable(build({ members, canManage: false }), "jin"), false);
+  assert.equal(promotable(build({ members }), "ana"), false, "already an admin through a team");
 });

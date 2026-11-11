@@ -45,7 +45,7 @@ test("dynamic prose and identity values keep their own direction", () => {
     ["src/components/SettingsPage.tsx", /<bdi dir="ltr">\{user\.email\}<\/bdi>/],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",
-      /<p\s+dir="auto"[^>]*>\s*\{member\.name \|\| member\.email\}/,
+      /<p\s+dir="auto"[^>]*>\s*<HighlightMatch text=\{member\.name \|\| member\.email\}/,
     ],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",
@@ -87,7 +87,10 @@ test("technical output values remain LTR inside an Arabic document", () => {
       "src/components/settings/WorkspaceBillingCard.tsx",
       /<span\s+dir="ltr"[^>]*>\s*\{seatsUsed\} \/ \{seatsTotal\}/,
     ],
-    ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{member\.email\}<\/bdi>/],
+    [
+      "src/components/settings/WorkspaceMembersTab.tsx",
+      /<bdi dir="ltr">\s*<HighlightMatch text=\{member\.email\}/,
+    ],
     [
       "src/components/settings/WorkspaceInvitationsTab.tsx",
       /<bdi dir="ltr">\{invitation\.email\}<\/bdi>/,

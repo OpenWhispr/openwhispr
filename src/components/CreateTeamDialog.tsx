@@ -6,10 +6,15 @@ import { Plus, Users } from "./icons";
 import { cn } from "./lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { useToast, type ToastProps } from "./ui/useToast";
 import { WorkspaceErrorBar } from "./workspace/WorkspaceErrorBar";
-import { PRIMARY_BUTTON, SECONDARY_BUTTON } from "./workspace/dialogButtons";
+import {
+  FIELD_CONTROL,
+  FIELD_GROUP,
+  FIELD_LABEL,
+  PRIMARY_BUTTON,
+  SECONDARY_BUTTON,
+} from "./workspace/dialogButtons";
 import { SpacePeopleField } from "./notes/SpacePeopleField";
 import { SpaceInviteSeatNotice } from "./notes/SpaceInviteSeatNotice";
 import { createTeam } from "../services/spaceActions";
@@ -72,7 +77,7 @@ export default function CreateTeamDialog({
     >
       <DialogContent
         hideCloseButton
-        className="max-h-[calc(100vh-32px)] w-[420px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-6 overflow-y-auto rounded-[28px] p-5 sm:max-w-[420px]"
+        className="max-h-[calc(100vh-32px)] w-[520px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-7 overflow-y-auto rounded-[28px] p-5 sm:max-w-[520px]"
       >
         {/* Mounted only while open, so every opening starts from nothing. */}
         <CreateTeamForm
@@ -120,6 +125,8 @@ function CreateTeamForm({
   const nameInputRef = useRef<HTMLInputElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState("");
+  // What the People field holds that is not a chip yet.
+  const [peopleQuery, setPeopleQuery] = useState("");
   const [picked, setPicked] = useState<PickedRecipient[]>(() =>
     (initialPeople ?? []).filter((person) => person.user_id !== user?.id).map(memberRecipient)
   );
@@ -321,14 +328,16 @@ function CreateTeamForm({
       </DialogHeader>
 
       <div className={cn("flex flex-col gap-4", isCreating && "opacity-70")}>
-        <div className="space-y-2">
-          <label htmlFor="create-team-name" className="text-xs font-medium text-foreground/50">
+        <div className={FIELD_GROUP}>
+          <label htmlFor="create-team-name" className={FIELD_LABEL}>
             {t(`${FORM_KEY}.name`)}
           </label>
-          <Input
+          <input
             ref={nameInputRef}
             dir="auto"
             id="create-team-name"
+            type="text"
+            className={FIELD_CONTROL}
             value={name}
             autoFocus
             maxLength={80}
@@ -345,8 +354,8 @@ function CreateTeamForm({
             bar(t(`${FORM_KEY}.nameTaken`, { name: isolate(nameError.name) }))}
         </div>
 
-        <div className="space-y-2">
-          <label htmlFor="create-team-people" className="text-xs font-medium text-foreground/50">
+        <div className={FIELD_GROUP}>
+          <label htmlFor="create-team-people" className={FIELD_LABEL}>
             {t(`${FORM_KEY}.people`)}
           </label>
           {loadFailed ? (
@@ -380,11 +389,12 @@ function CreateTeamForm({
                 disabled={isCreating}
                 placeholder={t(`${FORM_KEY}.peoplePlaceholder`)}
                 note={selectionFirst ? note : undefined}
+                onQueryChange={setPeopleQuery}
               />
               {selectionFirst ? null : note}
             </>
           ) : loadFailed ? null : (
-            <div className="h-10 animate-pulse rounded-lg bg-foreground/5 dark:bg-white/5" />
+            <div className="h-[38px] animate-pulse rounded-xl bg-foreground/5 dark:bg-white/5" />
           )}
           {peopleError}
           {emails.length > 0 && !isCreating && (
@@ -406,8 +416,12 @@ function CreateTeamForm({
           type="button"
           onClick={() => void handleCreate()}
           disabled={isCreating || blocked}
-          // Blank reads as not ready, but stays pressable so the missing name can be named.
-          className={cn(PRIMARY_BUTTON, !name.trim() && !isCreating && "opacity-60")}
+          // A blank name, or an address typed but not yet staged, reads as not ready. It stays
+          // pressable: the first names what is missing, and the second is staged by the press.
+          className={cn(
+            PRIMARY_BUTTON,
+            (!name.trim() || peopleQuery.trim() !== "") && !isCreating && "opacity-60"
+          )}
         >
           <Plus className="size-3.5" aria-hidden="true" />
           {primaryLabel}

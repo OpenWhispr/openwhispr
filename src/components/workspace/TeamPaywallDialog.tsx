@@ -73,7 +73,7 @@ export default function TeamPaywallDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         hideCloseButton
-        className="w-[320px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-5 rounded-[28px] p-5 sm:max-w-[320px]"
+        className="w-[330px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-5 rounded-[28px] p-5 sm:max-w-[330px]"
       >
         <DialogHeader className="items-center gap-3 space-y-0 text-center sm:text-center">
           <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">

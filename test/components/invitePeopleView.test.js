@@ -57,10 +57,6 @@ async function loadView(t) {
         },
         dispatch: () => {},
         suggestions: [],
-        seatLine: null,
-        seatCostLine: null,
-        canManageBilling: false,
-        billingManager: null,
         cancelLabel: "common.cancel",
         onCancel: () => {},
         onSend: () => {},
@@ -84,7 +80,7 @@ const bars = (markup) =>
 const drafts = (count) => Array.from({ length: count }, (_, index) => chip(`p${index}@x.com`));
 const primaryButton = (markup) =>
   markup.match(
-    /<button[^>]*>(?:(?!<\/button>)[\s\S])*workspaces\.invite\.(?:submit|done)[\s\S]*?<\/button>/
+    /<button[^>]*>(?:(?!<\/button>)[\s\S])*workspaces\.invite\.(?:submit|done|sending)[\s\S]*?<\/button>/
   )?.[0] ?? "";
 
 test("empty field shows the hint and a disabled send", async (t) => {
@@ -168,7 +164,7 @@ test("sending is busy and can't be dismissed", async (t) => {
   });
 
   assert.doesNotMatch(markup, /common\.cancel/);
-  assert.match(primaryButton(markup), /workspaces\.invite\.submitting\|\{&quot;count&quot;:1\}/);
+  assert.match(primaryButton(markup), /workspaces\.invite\.sending/);
   assert.match(primaryButton(markup), /disabled=""/);
   assert.match(primaryButton(markup), /animate-spin/);
 });
@@ -267,12 +263,14 @@ test("the workspace name is isolated inside the description", async (t) => {
     markup,
     /workspaces\.invite\.description\|\{&quot;workspace&quot;:&quot;\u2068Acme\u2069&quot;\}/
   );
+  // The Done screen, which a run with an updated invitation still ends on.
   const done = render({
     phase: "done",
     sent: [
       { email: "a@x.com", emailSent: true },
       { email: "b@x.com", emailSent: true },
     ],
+    attached: ["c@x.com"],
   });
   assert.match(
     done,
@@ -293,7 +291,7 @@ test("the role trigger is named by its label and its current role", async (t) =>
   assert.equal(labelledLabel, label[1]);
   assert.match(
     markup,
-    new RegExp(`<span id="${valueId}"[^>]*>workspaces\\.invite\\.role\\.member<`)
+    new RegExp(`<span id="${valueId}"[^>]*><span[^>]*>workspaces\\.invite\\.role\\.member<`)
   );
   // Radix's own trigger id is what labels the open menu, so it isn't overridden.
   assert.doesNotMatch(trigger[0], / id="/);
@@ -312,7 +310,7 @@ test("the field points at the error that's about it", async (t) => {
   assert.ok(describedBy.includes(alert[1]));
 });
 
-test("done shows the sent count and Done", async (t) => {
+test("a clean run keeps the form with Send turned into its confirmation", async (t) => {
   const { render } = await loadView(t);
 
   const markup = render({
@@ -321,6 +319,27 @@ test("done shows the sent count and Done", async (t) => {
       { email: "a@x.com", emailSent: true },
       { email: "b@x.com", emailSent: true },
     ],
+  });
+
+  // The host closes the dialog after a moment; until then the button says what happened.
+  const [button] = markup.match(/<button[^>]*bg-success[^>]*>[\s\S]*?<\/button>/) ?? [""];
+  assert.match(button, /workspaces\.invite\.sentTitle\|\{&quot;count&quot;:2\}/);
+  assert.match(button, /disabled=""/);
+  assert.doesNotMatch(markup, /common\.cancel/);
+  assert.match(markup, /workspaces\.invite\.emailLabel/);
+});
+
+test("done shows the sent count and Done", async (t) => {
+  const { render } = await loadView(t);
+
+  // An updated invitation beside the sent ones keeps the Done screen, which says so.
+  const markup = render({
+    phase: "done",
+    sent: [
+      { email: "a@x.com", emailSent: true },
+      { email: "b@x.com", emailSent: true },
+    ],
+    attached: ["c@x.com"],
   });
 
   assert.match(markup, /workspaces\.invite\.sentTitle\|\{&quot;count&quot;:2\}/);
@@ -358,99 +377,19 @@ test("suggestions render as a listbox while typing", async (t) => {
   assert.doesNotMatch(render({ draft: "bo" }), /role="listbox"/);
 });
 
-test("the seats warning offers Upgrade to billing managers and keeps Send enabled", async (t) => {
-  const { render } = await loadView(t);
-  const upgrades = [];
-  const state = { recipients: drafts(3), seats: { purchasedLeft: 1, ceilingLeft: 490 } };
-
-  const markup = render(state, { canManageBilling: true, onUpgrade: () => upgrades.push(true) });
-
-  const [bar, ...rest] = bars(markup);
-  assert.deepEqual(rest, []);
-  assert.equal(bar.tone, "warning");
-  assert.match(
-    bar.body,
-    /workspaces\.invite\.seatsLeft\|\{&quot;count&quot;:1,&quot;excess&quot;:2\}/
-  );
-  assert.equal(bar.action, "workspaces.invite.upgrade");
-  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
-  assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:3\}/);
-});
-
-test("Upgrade isn't offered while a send is running", async (t) => {
+test("running past the purchased seats shows no warning and keeps Send enabled", async (t) => {
   const { render } = await loadView(t);
 
-  // A chip still counted as sendable, so the warning itself stays up.
-  const markup = render(
-    { phase: "sending", recipients: drafts(3), seats: { purchasedLeft: 1, ceilingLeft: 490 } },
-    { canManageBilling: true, onUpgrade: () => {} }
-  );
+  for (const purchasedLeft of [1, 0, -2]) {
+    const markup = render({
+      recipients: drafts(3),
+      seats: { purchasedLeft, ceilingLeft: 490 },
+    });
 
-  const [bar] = bars(markup);
-  assert.match(bar.body, /workspaces\.invite\.seatsLeft\|/);
-  assert.equal(bar.action, null);
-});
-
-test("admins without billing are told to ask the owner", async (t) => {
-  const { render } = await loadView(t);
-  const state = { recipients: drafts(3), seats: { purchasedLeft: 1, ceilingLeft: null } };
-
-  const [bar] = bars(render(state, { billingManager: "Olivia", onUpgrade: () => {} }));
-  assert.equal(bar.tone, "warning");
-  assert.match(
-    bar.body,
-    /workspaces\.invite\.seatsLeftAskOwner\|\{&quot;count&quot;:1,&quot;excess&quot;:2,&quot;owner&quot;:&quot;\u2068Olivia\u2069&quot;\}/
-  );
-  assert.equal(bar.action, null);
-
-  const [unnamed] = bars(render(state, { billingManager: null, onUpgrade: () => {} }));
-  assert.match(
-    unnamed.body,
-    /workspaces\.invite\.seatsLeft\|\{&quot;count&quot;:1,&quot;excess&quot;:2\}/
-  );
-  assert.equal(unnamed.action, null);
-});
-
-test("no seats left offers Upgrade to billing managers and never says to remove everyone", async (t) => {
-  const { render } = await loadView(t);
-  const state = { recipients: drafts(3), seats: { purchasedLeft: -2, ceilingLeft: 490 } };
-
-  const markup = render(state, { canManageBilling: true, onUpgrade: () => {} });
-
-  const [bar, ...rest] = bars(markup);
-  assert.deepEqual(rest, []);
-  assert.equal(bar.tone, "warning");
-  assert.match(bar.body, /workspaces\.invite\.seatsNone/);
-  assert.doesNotMatch(bar.body, /seatsLeft/);
-  assert.equal(bar.action, "workspaces.invite.upgrade");
-  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
-});
-
-test("no seats left tells admins without billing to ask the owner", async (t) => {
-  const { render } = await loadView(t);
-  const state = { recipients: drafts(3), seats: { purchasedLeft: 0, ceilingLeft: null } };
-
-  const markup = render(state, { billingManager: "Olivia", onUpgrade: () => {} });
-
-  const [bar] = bars(markup);
-  assert.match(
-    bar.body,
-    /workspaces\.invite\.seatsNoneAskOwner\|\{&quot;owner&quot;:&quot;\u2068Olivia\u2069&quot;\}/
-  );
-  assert.equal(bar.action, null);
-  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
-});
-
-test("no seats left with nobody to ask has no action", async (t) => {
-  const { render } = await loadView(t);
-  const state = { recipients: drafts(3), seats: { purchasedLeft: 0, ceilingLeft: null } };
-
-  const markup = render(state, { billingManager: null, onUpgrade: () => {} });
-
-  const [bar] = bars(markup);
-  assert.match(bar.body, /workspaces\.invite\.seatsNone(?!AskOwner)/);
-  assert.equal(bar.action, null);
-  assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+    assert.deepEqual(bars(markup), []);
+    assert.doesNotMatch(markup, /seatsLeft|seatsNone|workspaces\.invite\.upgrade/);
+    assert.doesNotMatch(primaryButton(markup), /disabled=""/);
+  }
 });
 
 test("over the ceiling blocks Send with the ceiling copy", async (t) => {
@@ -670,9 +609,9 @@ test("a partial send says what went out while chips still need attention", async
     recipients: [chip("c@x.com", { status: "invalid" })],
   });
 
-  assert.match(markup, /role="status"[^>]*>workspaces\.invite\.sentTitle\|\{&quot;count&quot;:2\}/);
+  // What went out is the host's toast now; the form keeps only what still needs attention.
+  assert.doesNotMatch(markup, /role="status"/);
   assert.ok(bars(markup).some((bar) => /workspaces\.invite\.noEmail/.test(bar.body)));
-  assert.doesNotMatch(render(), /role="status"/);
 });
 
 test("a send that's too big offers to remove the excess", async (t) => {
@@ -738,7 +677,8 @@ test("the field holds a hundred chips and scrolls", async (t) => {
 
   const markup = render({ recipients: drafts(100) });
 
-  assert.match(markup, /class="[^"]*max-h-40[^"]*overflow-y-auto/);
+  // Three rows of chips, as the design caps the field.
+  assert.match(markup, /class="[^"]*max-h-\[104px\][^"]*overflow-y-auto/);
   assert.equal(bars(markup).length, 0);
   assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:100\}/);
   assert.match(

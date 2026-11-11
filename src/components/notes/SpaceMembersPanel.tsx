@@ -449,15 +449,6 @@ export default function SpaceMembersPanel({
   };
 
   const isWorkspaceAdmin = workspaceCan(workspace, "manage_settings");
-  const admins = members.filter((member) => member.role === "admin");
-  // Leave blocks this user until there is another admin, and nobody here can be made one.
-  const nobodyToPromote =
-    !isWorkspaceAdmin &&
-    admins.length === 1 &&
-    admins[0].user_id === user?.id &&
-    admins[0].direct_role === "admin" &&
-    members.every((member) => member.user_id === user?.id || member.direct_role == null);
-
   const rows = useMemo(
     () =>
       buildSpaceMemberRows({
@@ -470,7 +461,6 @@ export default function SpaceMembersPanel({
             .map((team): [string, number] => [team.id, team.member_count])
         ),
         canManage,
-        promoteInherited: nobodyToPromote,
         formatNames: (names) => formatList(i18n.language, names),
       }),
     [
@@ -480,7 +470,6 @@ export default function SpaceMembersPanel({
       heldTeams,
       workspaceTeams,
       canManage,
-      nobodyToPromote,
       i18n.language,
     ]
   );
@@ -826,7 +815,7 @@ export default function SpaceMembersPanel({
       disabled={
         adding || !peopleReady || picked.length === 0 || summary.hasInvalid || tooManyInvites
       }
-      className="h-10 shrink-0 rounded-lg px-4"
+      className="h-10 shrink-0 px-4 text-xs"
     >
       {addLabel}
     </Button>

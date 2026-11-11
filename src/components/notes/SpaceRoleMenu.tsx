@@ -4,9 +4,9 @@ import {
   Check,
   ChevronDown,
   Loader2,
-  ShieldCheck,
-  Trash2,
   User,
+  UserSettings,
+  UserXmark,
   type IconComponent,
 } from "../icons";
 import {
@@ -15,7 +15,6 @@ import {
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { isolate } from "../../utils/bidiIsolate";
@@ -23,11 +22,11 @@ import type { TeamRole } from "../../types/electron";
 
 const ROLES: TeamRole[] = ["member", "admin"];
 
-const ROLE_ICON: Record<TeamRole, IconComponent> = { member: User, admin: ShieldCheck };
+const ROLE_ICON: Record<TeamRole, IconComponent> = { member: User, admin: UserSettings };
 // Quiet trigger: reads as the cell's role text with a chevron, not as a button. The negative
 // margin keeps the text on the column header's edge.
 const TRIGGER_CLASS =
-  "-ms-2 inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-foreground outline-none transition-colors " +
+  "-ms-2 inline-flex h-7 max-w-full items-center gap-1 rounded-md px-2 text-sm text-foreground outline-none transition-colors " +
   "hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/40 data-[state=open]:bg-foreground/5 " +
   "disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent dark:hover:bg-white/5";
 
@@ -42,6 +41,8 @@ export interface SpaceRoleMenuCopy {
   roleAdmin: string;
   roleAdminBody: string;
   remove: string;
+  /** What the closed menu reads, where "Member"/"Admin" alone would mislead. */
+  trigger?: Record<TeamRole, string>;
 }
 
 const SPACE_COPY: SpaceRoleMenuCopy = {
@@ -100,10 +101,12 @@ export function SpaceRoleMenu({
         aria-label={t("settingsPage.workspace.people.roleMenuLabel", { name: isolate(subject) })}
         className={TRIGGER_CLASS}
       >
-        <span>
-          {role === "admin"
-            ? t("notes.spaces.members.roleAdmin")
-            : t("notes.spaces.members.roleMember")}
+        <span className="truncate">
+          {copy.trigger
+            ? t(copy.trigger[role])
+            : role === "admin"
+              ? t("notes.spaces.members.roleAdmin")
+              : t("notes.spaces.members.roleMember")}
         </span>
         {pending ? (
           <Loader2 className="size-3 animate-spin text-muted-foreground" aria-hidden="true" />
@@ -151,16 +154,13 @@ export function SpaceRoleMenu({
           })}
         </DropdownMenuRadioGroup>
         {onRemove ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="gap-2.5 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive"
-              onSelect={onRemove}
-            >
-              <Trash2 className="size-3.5 shrink-0" aria-hidden="true" />
-              {t(copy.remove)}
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem
+            className="gap-2.5 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive"
+            onSelect={onRemove}
+          >
+            <UserXmark className="size-3.5 shrink-0" aria-hidden="true" />
+            {t(copy.remove)}
+          </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>

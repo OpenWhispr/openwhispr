@@ -1,96 +1,167 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, FolderRounded, Loader2, Plus, Users } from "../icons";
+import { ChevronDown, FolderRounded, Loader2, Plus } from "../icons";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import MemberAvatar from "../MemberAvatar";
 import { TeamGlyph } from "../workspace/TeamGlyph";
+import { RowCheckbox } from "../dictionary/RowCheckbox";
+import { EmptyStateArt } from "../workspace/EmptyStateArt";
+import { SelectionBar } from "../workspace/SelectionBar";
+import { EMPTY_CREATE_BUTTON } from "../workspace/dialogButtons";
 import { cn } from "../lib/utils";
 import { isolate } from "../../utils/bidiIsolate";
 import { TeamsService } from "../../services/TeamsService";
 import type { WorkspaceTeamsState } from "../../hooks/useWorkspaceTeams";
+import {
+  headerCheckState,
+  keepRows,
+  setRows,
+  toggleRow,
+  type RowSelection,
+} from "../../lib/rowSelection";
 import type { Team, TeamMember } from "../../types/electron";
-import { CONTACTS_TRIGGER, HEADER_CELL, NAME_TILE, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
+import {
+  COLUMN_DIVIDER,
+  CONTACTS_TRIGGER,
+  HEADER_CELL,
+  NAME_TILE,
+  ROW_DIVIDER,
+  TABLE_FRAME,
+} from "./tableTokens";
 
 interface TeamsTableProps {
   status: WorkspaceTeamsState["status"];
   teams: Team[];
   /** The viewer may start a team, so the empty state offers Create where members read a note. */
   canCreate: boolean;
+  /** Whoever manages teams gets a checkbox column, as the design draws it for admins. */
+  selectable?: boolean;
   onRetry: () => void;
   onCreate: () => void;
   onOpen: (team: Team) => void;
 }
 
+const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
+
 export default function TeamsTable({
   status,
   teams,
   canCreate,
+  selectable = false,
   onRetry,
   onCreate,
   onOpen,
 }: TeamsTableProps): React.ReactElement {
   const { t } = useTranslation();
+  const [selection, setSelection] = useState<RowSelection>(() => new Set());
+  const teamIds = teams.map((team) => team.id);
+  const teamKey = teamIds.join(",");
+  // A team that left the list (deleted, or left by the viewer) leaves the selection too.
+  useEffect(() => {
+    setSelection((current) => keepRows(current, teamIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamKey]);
 
   if (status === "ready" && teams.length === 0) {
     return <EmptyTeams canCreate={canCreate} onCreate={onCreate} />;
   }
 
+  const headerChecked = HEADER_CHECKED[headerCheckState(teamIds, selection)];
+  const columnCount = selectable ? 4 : 3;
+
   return (
-    <div className={TABLE_FRAME}>
-      <table className="w-full table-fixed border-collapse">
-        <colgroup>
-          <col className="w-[46%]" />
-          <col className="w-[27%]" />
-          <col className="w-[27%]" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th scope="col" className={cn(HEADER_CELL, "ps-4 pe-3 text-start")}>
-              {t("settingsPage.workspace.teams.columns.name")}
-            </th>
-            <th scope="col" className={cn(HEADER_CELL, "px-3 text-start")}>
-              {t("settingsPage.workspace.teams.columns.members")}
-            </th>
-            <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-start")}>
-              {t("settingsPage.workspace.teams.columns.teamspaces")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {status === "ready" ? (
-            teams.map((team) => <TeamRow key={team.id} team={team} onOpen={onOpen} />)
-          ) : (
-            <tr className={ROW_DIVIDER}>
-              <td colSpan={3} className="px-4 py-8 text-center">
-                {status === "failed" ? (
-                  <div>
-                    <p className="text-xs font-medium text-foreground">
-                      {t("settingsPage.workspace.teams.failedTitle")}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {t("settingsPage.workspace.teams.failedBody")}
-                    </p>
-                    <Button variant="outline" size="sm" className="mt-3" onClick={() => onRetry()}>
-                      {t("settingsPage.workspace.teams.retry")}
-                    </Button>
-                  </div>
-                ) : (
-                  <div role="status">
-                    <p className="text-xs font-medium text-foreground">
-                      {t("settingsPage.workspace.teams.loadingTitle")}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {t("settingsPage.workspace.teams.loadingBody")}
-                    </p>
-                  </div>
-                )}
-              </td>
+    <>
+      <div className={TABLE_FRAME}>
+        <table className="w-full table-fixed border-collapse">
+          <colgroup>
+            {selectable ? <col className="w-11" /> : null}
+            <col className={selectable ? "w-[48%]" : "w-[55%]"} />
+            <col className="w-[24%]" />
+            <col className={selectable ? "w-[20%]" : "w-[21%]"} />
+          </colgroup>
+          <thead>
+            <tr>
+              {selectable ? (
+                <th scope="col" className={cn(HEADER_CELL, "px-3 text-start")}>
+                  {teamIds.length > 0 ? (
+                    <RowCheckbox
+                      label={t("settingsPage.workspace.teams.selectAll")}
+                      checked={headerChecked}
+                      className="-m-1 p-1 focus-visible:ring-primary/50"
+                      onToggle={() =>
+                        setSelection((current) => setRows(current, teamIds, headerChecked !== true))
+                      }
+                    />
+                  ) : null}
+                </th>
+              ) : null}
+              <th
+                scope="col"
+                className={cn(HEADER_CELL, "px-3 text-start", selectable ? COLUMN_DIVIDER : "ps-4")}
+              >
+                {t("settingsPage.workspace.teams.columns.name")}
+              </th>
+              <th scope="col" className={cn(HEADER_CELL, COLUMN_DIVIDER, "px-3 text-start")}>
+                {t("settingsPage.workspace.teams.columns.members")}
+              </th>
+              <th scope="col" className={cn(HEADER_CELL, COLUMN_DIVIDER, "ps-3 pe-4 text-start")}>
+                {t("settingsPage.workspace.teams.columns.teamspaces")}
+              </th>
             </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {status === "ready" ? (
+              teams.map((team) => (
+                <TeamRow
+                  key={team.id}
+                  team={team}
+                  onOpen={onOpen}
+                  selectable={selectable}
+                  selected={selection.has(team.id)}
+                  onToggle={() => setSelection((current) => toggleRow(current, team.id))}
+                />
+              ))
+            ) : (
+              <tr className={ROW_DIVIDER}>
+                <td colSpan={columnCount} className="px-4 py-8 text-center">
+                  {status === "failed" ? (
+                    <div>
+                      <p className="text-xs font-medium text-foreground">
+                        {t("settingsPage.workspace.teams.failedTitle")}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {t("settingsPage.workspace.teams.failedBody")}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => onRetry()}
+                      >
+                        {t("settingsPage.workspace.teams.retry")}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div role="status">
+                      <p className="text-xs font-medium text-foreground">
+                        {t("settingsPage.workspace.teams.loadingTitle")}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {t("settingsPage.workspace.teams.loadingBody")}
+                      </p>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {selectable ? (
+        <SelectionBar count={selection.size} onClear={() => setSelection(new Set())} actions={[]} />
+      ) : null}
+    </>
   );
 }
 
@@ -103,26 +174,21 @@ function EmptyTeams({
 }): React.ReactElement {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-center px-6 py-14 text-center">
-      <span
-        aria-hidden="true"
-        className="flex size-11 items-center justify-center rounded-xl bg-surface-3 text-foreground/70"
-      >
-        <Users size={20} />
-      </span>
-      <p className="mt-4 text-sm font-medium text-foreground">
+    <div className="flex flex-col items-center px-6 py-10 text-center">
+      <EmptyStateArt kind="teams" />
+      <p className="mt-2 text-lg font-medium leading-[1.4] text-foreground">
         {t("settingsPage.workspace.teams.emptyTitle")}
       </p>
-      <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+      <p className="mt-1.5 max-w-[339px] text-sm text-muted-foreground">
         {canCreate
           ? t("settingsPage.workspace.teams.emptyBody")
           : t("settingsPage.workspace.teams.emptyBodyMember")}
       </p>
       {canCreate && (
-        <Button size="sm" className="mt-5" onClick={onCreate}>
-          <Plus aria-hidden="true" />
+        <button type="button" className={cn(EMPTY_CREATE_BUTTON, "mt-5")} onClick={onCreate}>
+          <Plus className="size-3.5" aria-hidden="true" />
           {t("settingsPage.workspace.teams.create")}
-        </Button>
+        </button>
       )}
     </div>
   );
@@ -131,19 +197,36 @@ function EmptyTeams({
 function TeamRow({
   team,
   onOpen,
+  selectable,
+  selected,
+  onToggle,
 }: {
   team: Team;
   onOpen: (team: Team) => void;
+  selectable: boolean;
+  selected: boolean;
+  onToggle: () => void;
 }): React.ReactElement {
+  const { t } = useTranslation();
   // The cells that hold their own menus must not also count as a click on the row.
   const stopRowClick = (event: React.MouseEvent): void => event.stopPropagation();
 
   return (
     <tr
-      className={cn("h-14 cursor-pointer transition-colors hover:bg-foreground/3", ROW_DIVIDER)}
+      className={cn("h-12 cursor-pointer transition-colors hover:bg-foreground/3", ROW_DIVIDER)}
       onClick={() => onOpen(team)}
     >
-      <td className="ps-4 pe-3 max-w-0">
+      {selectable ? (
+        <td className="px-3" onClick={stopRowClick}>
+          <RowCheckbox
+            label={t("settingsPage.workspace.teams.selectRow", { name: isolate(team.name) })}
+            checked={selected}
+            className="-m-1 p-1 focus-visible:ring-primary/50"
+            onToggle={onToggle}
+          />
+        </td>
+      ) : null}
+      <td className={cn("pe-3 max-w-0", selectable ? cn(COLUMN_DIVIDER, "ps-3") : "ps-4")}>
         <div className="flex min-w-0 items-center gap-3">
           <span aria-hidden="true" className={NAME_TILE}>
             <TeamGlyph emoji={team.emoji} name={team.name} />
@@ -152,16 +235,16 @@ function TeamRow({
           <button
             type="button"
             dir="auto"
-            className="min-w-0 truncate rounded-sm text-start text-xs font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="min-w-0 truncate rounded-sm text-start text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             {team.name}
           </button>
         </div>
       </td>
-      <td className="px-3 max-w-0" onClick={stopRowClick}>
+      <td className={cn(COLUMN_DIVIDER, "px-3 max-w-0")} onClick={stopRowClick}>
         <MembersCell team={team} />
       </td>
-      <td className="ps-3 pe-4 max-w-0" onClick={stopRowClick}>
+      <td className={cn(COLUMN_DIVIDER, "ps-3 pe-4 max-w-0")} onClick={stopRowClick}>
         <SpacesCell teamName={team.name} spaces={team.spaces ?? []} />
       </td>
     </tr>
