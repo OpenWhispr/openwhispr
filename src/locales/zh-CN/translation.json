@@ -649,6 +649,13 @@
         "timeout": "网络超时 — VPN、强制门户或网络不稳定。",
         "tls": "TLS 握手失败 — 请检查系统时钟或企业代理。",
         "fallback": "Cloud 不可用 — 本次录音将使用本地引擎。"
+      },
+      "mistral": {
+        "sessionAlreadyOpen": "Mistral 转录会话已打开。",
+        "invalidMessage": "Mistral 返回了无效的实时消息。",
+        "audioFormatRejected": "Mistral 未接受会议音频格式。",
+        "connectionClosed": "Mistral 连接已关闭。正在重新连接以继续会议转录。",
+        "incompleteFinalization": "Mistral 未能完成转录。已保留收到的文本，但可能缺少最后几个词。"
       }
     }
   },
@@ -3216,6 +3223,7 @@
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
         "mistral_voxtral_mini_latest": "快速多语言转录",
+        "mistral_voxtral_mini_transcribe_realtime_3": "使用 Mistral 实时转录会议",
         "gemini_3_5_transcribe": "Google Gemini 语音转文字",
         "gemini_3_5_transcribe_live": "实时流式语音转文字",
         "corti_transcribe": "临床级医疗转录",

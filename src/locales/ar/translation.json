@@ -282,6 +282,7 @@
         "groq_whisper_large_v3": "تعرف على الكلام بدقة عالية",
         "groq_whisper_large_v3_turbo": "أسرع من الوقت الفعلي بـ216 ضعفًا",
         "mistral_voxtral_mini_latest": "تفريغ سريع متعدد اللغات",
+        "mistral_voxtral_mini_transcribe_realtime_3": "نسخ الاجتماعات مباشرةً باستخدام Mistral",
         "gemini_3_5_transcribe": "تحويل الكلام إلى نص من Google Gemini",
         "gemini_3_5_transcribe_live": "تحويل الكلام إلى نص بالبث في الوقت الفعلي",
         "corti_transcribe": "تفريغ طبي بدرجة سريرية",
@@ -6018,6 +6019,13 @@
         "timeout": "انتهت مهلة الشبكة — بسبب VPN أو صفحة تسجيل دخول للشبكة (captive portal) أو اتصال غير مستقر.",
         "tls": "فشلت مصافحة TLS — تحقق من ساعة نظامك أو وجود وكيل شبكة خاص بالشركة.",
         "fallback": "لا يمكن الوصول إلى السحابة — يتم استخدام المحرك المحلي لهذا التسجيل."
+      },
+      "mistral": {
+        "sessionAlreadyOpen": "جلسة نسخ صوتي من Mistral مفتوحة بالفعل.",
+        "invalidMessage": "أعاد Mistral رسالة غير صالحة للنسخ الفوري.",
+        "audioFormatRejected": "لم يقبل Mistral تنسيق صوت الاجتماع.",
+        "connectionClosed": "أُغلق اتصال Mistral. جارٍ إعادة الاتصال لنسخ الاجتماع.",
+        "incompleteFinalization": "تعذّر على Mistral إكمال النسخ. تم الاحتفاظ بالنص المستلَم؛ قد تكون الكلمات الأخيرة مفقودة."
       }
     }
   },

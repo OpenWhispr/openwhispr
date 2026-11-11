@@ -6,12 +6,13 @@ import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 // to a mounted editor would silently drop the tail since the last periodic
 // save. Delayed diarization results are handled by the store's #1495 listener.
 //
-// The captured segments are final the moment the stop begins, and the note
+// The captured segments are written the moment the stop begins, and the note
 // editor swaps to the stored transcript as soon as isRecording flips — so they
 // are written before the main-side stop (which can take seconds) is awaited.
 // A recording with no new segments also saves main's final transcript.
 export async function persistFinalTranscriptAroundStop<T>({
   segments,
+  getFinalSegments = () => segments,
   seedLength,
   serializeSegments,
   persist,
@@ -19,6 +20,7 @@ export async function persistFinalTranscriptAroundStop<T>({
   fallbackTranscript,
 }: {
   segments: TranscriptSegment[];
+  getFinalSegments?: () => TranscriptSegment[];
   seedLength: number;
   serializeSegments: (segments: TranscriptSegment[]) => string;
   persist: (transcript: string) => Promise<void>;
@@ -32,7 +34,12 @@ export async function persistFinalTranscriptAroundStop<T>({
   if (segmentWrite) {
     await segmentWrite;
   }
-  if (segments.length === seedLength) {
+  const drainedSegments = getFinalSegments();
+  if (drainedSegments !== segments) {
+    // Final deltas and retractions can arrive while the provider handles end
+    // of audio. Save the updated rows after the early write has settled.
+    await persist(serializeSegments(drainedSegments));
+  } else if (segments.length === seedLength) {
     const fallback = fallbackTranscript();
     if (fallback) await persist(fallback);
   }

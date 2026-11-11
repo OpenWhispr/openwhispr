@@ -16,6 +16,7 @@ import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
   getDictationTranscriptionProviders,
+  getUploadTranscriptionProviders,
   getTranscriptionProviders,
   getMeetingStreamingTranscriptionProviders,
   TranscriptionProviderData,
@@ -633,7 +634,7 @@ export default function TranscriptionModelPicker({
   const availableCloudProviders = useMemo(() => {
     if (streamingOnly) return getMeetingStreamingTranscriptionProviders();
     if (transcriptionContext !== "upload") return getDictationTranscriptionProviders();
-    return getTranscriptionProviders().filter(
+    return getUploadTranscriptionProviders().filter(
       (provider) => !STREAMING_ONLY_PROVIDERS.has(provider.id)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal

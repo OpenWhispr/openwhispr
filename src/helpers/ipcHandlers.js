@@ -8693,7 +8693,8 @@ class IPCHandlers {
 
     const attachMeetingStreamingHandlers = (streaming, win, source) => {
       // Deepgram's audio range can begin before its first spoken word.
-      const timestampIsSpeechStart = !(streaming instanceof DeepgramStreaming);
+      const timestampIsSpeechStart =
+        streaming.timestampIsSpeechStart ?? !(streaming instanceof DeepgramStreaming);
       const send = (channel, data) => {
         if (!win || win.isDestroyed()) {
           debugLogger.error("Meeting segment send failed: window unavailable", {

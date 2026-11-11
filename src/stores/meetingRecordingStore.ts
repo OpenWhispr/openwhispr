@@ -820,7 +820,12 @@ async function releaseSystemAudioCapture(): Promise<void> {
   systemContext = null;
 }
 
-async function cleanup(): Promise<void> {
+function cleanupIpcListeners(): void {
+  ipcCleanups.forEach((fn) => fn());
+  ipcCleanups = [];
+}
+
+async function cleanupCapture(): Promise<void> {
   micRecovery?.stop();
   micRecovery = null;
   await flushAndDisconnectProcessor(micProcessor);
@@ -844,8 +849,6 @@ async function cleanup(): Promise<void> {
 
   await releaseSystemAudioCapture();
 
-  ipcCleanups.forEach((fn) => fn());
-  ipcCleanups = [];
   // A debounced config push firing after stop would repopulate the session
   // config main just cleared, leaking this session's count into the next one.
   if (pushConfigTimeout) {
@@ -856,6 +859,14 @@ async function cleanup(): Promise<void> {
   isRecordingFlag = false;
   isStartingFlag = false;
   sessionSystemAudioActive = false;
+}
+
+async function cleanup(): Promise<void> {
+  try {
+    await cleanupCapture();
+  } finally {
+    cleanupIpcListeners();
+  }
 }
 
 export async function prepareTranscription(): Promise<void> {
@@ -1895,7 +1906,6 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     }
 
     const sessionId = activeRecordingSessionId;
-    activeRecordingSessionId = null;
     isRecordingFlag = false;
     isStartingFlag = false;
     useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
@@ -1904,7 +1914,6 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     // that view is unmounted, and any view-scoped saver dies with it. (Delayed
     // diarization results are persisted by the module-level listener below.)
     const { recordingNoteId, segments: finalSegments } = useMeetingRecordingStore.getState();
-    const hasNewSegments = finalSegments.length > sessionSeedLength;
     let stopTranscript = "";
     const persistTranscript = async (transcript: string) => {
       if (recordingNoteId == null) return;
@@ -1921,6 +1930,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 
     const diarizationSessionId = await persistFinalTranscriptAroundStop({
       segments: finalSegments,
+      getFinalSegments: () => useMeetingRecordingStore.getState().segments,
       seedLength: sessionSeedLength,
       serializeSegments: serializeTranscriptSegments,
       persist: persistTranscript,
@@ -1939,10 +1949,11 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
           recorderName: sessionRecorderName,
         };
         stoppingSeed = seed;
-        await cleanup();
-
+        // Capture stops immediately, but final server segments still belong
+        // to this session until main has drained both realtime connections.
         let stoppedDiarizationSessionId: string | null = null;
         try {
+          await cleanupCapture();
           const result = await window.electronAPI?.meetingTranscriptionStop?.(
             sessionId ?? undefined
           );
@@ -1954,7 +1965,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
             });
           }
           if (result?.success && result.transcript) {
-            if (hasNewSegments) {
+            if (useMeetingRecordingStore.getState().segments.length > sessionSeedLength) {
               useMeetingRecordingStore.setState({ transcript: result.transcript });
             } else {
               stopTranscript = result.transcript;
@@ -1980,6 +1991,8 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
             "meeting"
           );
         } finally {
+          cleanupIpcListeners();
+          if (activeRecordingSessionId === sessionId) activeRecordingSessionId = null;
           stoppingSeed = null;
         }
         return stoppedDiarizationSessionId;

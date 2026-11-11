@@ -6,6 +6,7 @@
 // table is unit-testable without Electron.
 
 const { readPolicyResponseError } = require("./policyResponseError");
+const { i18nMain } = require("./i18nMain");
 
 const dual = (streams, factory) =>
   streams === 2 ? Promise.all([factory(), factory()]) : factory();
@@ -22,6 +23,14 @@ function requirePurpose({ purpose }) {
 }
 
 const REALTIME_TOKEN_PROVIDERS = {
+  "mistral-realtime": async ({ environmentManager }, options, streams) => {
+    const apiKey = environmentManager.getMistralKey();
+    if (!apiKey) {
+      throw new Error(i18nMain.t("hooks.audioRecording.errorDescriptions.providerKeyMissing"));
+    }
+    return duplicate(streams, apiKey);
+  },
+
   "assemblyai-realtime": async (
     { environmentManager, proxyFetch, postServerToken },
     options,
