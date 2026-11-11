@@ -159,6 +159,15 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
   ])
     await assert.rejects(registryExport([line])(), /Invalid registry value type/);
   assert.deepEqual(await readWindowsValues(registryWithoutPolicy()), {});
+  // The key is there, but its export can't be written.
+  await assert.rejects(
+    readWindowsValues(async (_command, args) => {
+      if (args[0] === "export")
+        throw Object.assign(new Error("ERROR: Access is denied."), { code: 1 });
+      return { stdout: "" };
+    }),
+    /Access is denied/
+  );
   await assert.rejects(
     readWindowsValues(registryWithoutPolicy({ blocked: true })),
     /Registry editing/

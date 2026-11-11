@@ -240,7 +240,8 @@ async function readWindowsValues(run = execute) {
     try {
       await runRegistryTool(run, ["export", WINDOWS_POLICY_KEY, file, "/y"]);
     } catch (error) {
-      if (await isMissingRegistryKey(run, error)) return {};
+      // An export that can't write its file fails like a missing key does.
+      if (!(await hasPolicyEvidence({ platform: "win32", run }))) return {};
       throw error;
     }
     return parseRegistryExport(await fs.promises.readFile(file, "utf16le"));
