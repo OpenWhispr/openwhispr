@@ -1167,3 +1167,28 @@ test("empty replacement output is rejected without consuming a paste", async () 
   });
   assert.equal(pastes.length, 0);
 });
+
+test("captureSelectedText with forceFreshTarget forces a fresh target probe", async () => {
+  let forcedProbe = false;
+  const manager = new SelectionManager({
+    clipboardManager: {
+      runClipboardOperation: (op) => op(),
+    },
+    now: () => 1000,
+  });
+  manager.captureTarget = async (options = {}) => {
+    if (options.force) forcedProbe = true;
+    manager.lastTarget = { kind: "test", id: "1" };
+    return manager.lastTarget;
+  };
+  manager._readCurrentSelection = async () => ({
+    status: "selected",
+    text: "late text",
+    target: { kind: "test", id: "1" },
+  });
+
+  const res = await manager.captureSelectedText({ forceFreshTarget: true });
+  assert.equal(forcedProbe, true);
+  assert.equal(res.status, "selected");
+  assert.equal(res.text, "late text");
+});

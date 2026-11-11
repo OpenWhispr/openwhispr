@@ -3094,6 +3094,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let capture;
     try {
       capture = await this.consumeSelectionCapture();
+      if (!capture || capture.status !== "selected") {
+        try {
+          const late = await window.electronAPI?.captureSelectedText?.({
+            forceFreshTarget: true,
+          });
+          if (late && late.status === "selected") {
+            capture = late;
+          }
+        } catch {}
+      }
     } catch (cause) {
       const error = new Error(
         `Selection edit could not safely read the selection: ${cause.message}`

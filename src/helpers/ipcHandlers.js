@@ -3987,11 +3987,13 @@ class IPCHandlers {
       });
     });
 
-    ipcMain.handle("capture-selected-text", async () => {
+    ipcMain.handle("capture-selected-text", async (event, options = {}) => {
       if (!this.selectionManager) {
         return { status: "unavailable", code: "selection_manager_unavailable" };
       }
-      return this.selectionManager.captureSelectedText();
+      return this.selectionManager.captureSelectedText({
+        forceFreshTarget: options?.forceFreshTarget === true,
+      });
     });
 
     ipcMain.handle("cancel-selection-edit", (_event, sessionId) => {
