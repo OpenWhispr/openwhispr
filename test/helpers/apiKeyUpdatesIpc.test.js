@@ -824,6 +824,82 @@ for (const options of [{ provider: "local" }, { provider: "deepgram-realtime", m
   });
 }
 
+// Session start is what turns automatic mode on: a note with no speaker count
+// runs live identification at the app's limit behind the confidence gate, a note
+// with a count runs it at that count ungated, and a promoted voice's earlier
+// windows reach the renderer marked retroactive.
+const useNoteSpeakerConfig = (t, note) => {
+  const IPCHandlers = require(modulePath);
+  const methods = [
+    "_resolveInitialMeetingSpeakerConfig",
+    "_noteExpectedSpeakerCountOrNull",
+    "_parseNonSelfParticipants",
+  ];
+  for (const method of methods) target[method] = IPCHandlers.prototype[method];
+  target.activeMeetingSpeakerConfig = null;
+  target.speakerDiarizationEnabled = true;
+  target.databaseManager = { getNote: () => note, getGoogleAccounts: () => [] };
+  t.after(() => {
+    for (const method of methods) delete target[method];
+    delete target.activeMeetingSpeakerConfig;
+    delete target.speakerDiarizationEnabled;
+    delete target.databaseManager;
+  });
+};
+
+for (const [label, note, limit] of [
+  ["no speaker count", {}, { maxSpeakers: 7, gated: true }],
+  ["a speaker count", { expected_speaker_count: 3 }, { maxSpeakers: 2, gated: false }],
+]) {
+  test(`a meeting on a note with ${label} starts live identification with its limit`, async (t) => {
+    resetMeeting(t);
+    invoke("save-deepgram-key", "A");
+    useNoteSpeakerConfig(t, note);
+    t.mock.method(liveSpeakerIdentifier, "isAvailable", () => true);
+    const liveStart = t.mock.method(liveSpeakerIdentifier, "start", async () => false);
+
+    const options = { provider: "deepgram-realtime", mode: "byok", noteId: 41 };
+    assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+    const startOptions = liveStart.mock.calls[0].arguments[1];
+    assert.deepEqual(
+      { maxSpeakers: startOptions.maxSpeakers, gated: startOptions.gated },
+      limit
+    );
+  });
+}
+
+test("a retroactive identification reaches the renderer marked retroactive", async (t) => {
+  resetMeeting(t);
+  invoke("save-deepgram-key", "A");
+  useNoteSpeakerConfig(t, {});
+  t.mock.method(liveSpeakerIdentifier, "isAvailable", () => true);
+  t.mock.method(liveSpeakerIdentifier, "feedAudio", async () => {});
+  t.mock.method(liveSpeakerIdentifier, "stop", async () => null);
+  let onIdentified = null;
+  t.mock.method(liveSpeakerIdentifier, "start", async (callback) => {
+    onIdentified = callback;
+    return true;
+  });
+
+  const options = { provider: "deepgram-realtime", mode: "byok", noteId: 41 };
+  assert.equal((await invoke("meeting-transcription-start", options)).success, true);
+  // The first system chunk anchors identification times; nothing is sent before it.
+  for (const streaming of meetingStreams()) streaming.sendAudio = () => true;
+  eventHandlers.get("meeting-transcription-send")(
+    { sender: editor },
+    new Uint8Array(4800).buffer,
+    "system"
+  );
+  notifications.length = 0;
+  onIdentified({ speakerId: "speaker_1", startTime: 1, endTime: 4, retroactive: true });
+  const identified = notifications.filter(([, channel]) => channel === "meeting-speaker-identified");
+  assert.equal(identified.length, 1);
+  assert.equal(identified[0][2].speakerId, "speaker_1");
+  assert.equal(identified[0][2].retroactive, true);
+  // Converted to wall-clock times like any other identification.
+  assert.equal(identified[0][2].endTime - identified[0][2].startTime, 3000);
+});
+
 // The renderer stops applying retracts once a stop begins, so main hands each
 // meeting's retracted mic rows to its diarization and starts the next one empty.
 test("a mic row retracted during a meeting reaches that meeting's diarization only", async (t) => {
