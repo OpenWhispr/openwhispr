@@ -249,7 +249,8 @@ class UpdateManager {
       result?.cancellationToken?.cancel();
       return { ...(this._policyFailure() ?? this._policyChanged()), updateAvailable: false };
     }
-    this.updateCancellationToken = result?.cancellationToken ?? null;
+    // A running download keeps the token it was started with, for an abort to cancel.
+    if (!this.downloadPromise) this.updateCancellationToken = result?.cancellationToken ?? null;
     this.checkEpoch = null;
     this._autoDownloadIfEnabled();
 

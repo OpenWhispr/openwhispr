@@ -420,6 +420,18 @@ test("a download finishing while a verdict is pending keeps install-on-quit", as
   assert.equal(installOnQuitAtCompletion, true);
 });
 
+test("a check during a download leaves IT policy the download's token to cancel", async () => {
+  const { manager, tokens, setPolicy } = setup({ download: () => new Promise(() => {}) });
+  manager.setAutoUpdatesEnabled(false);
+  await manager.checkForUpdates();
+  void manager.downloadUpdate();
+  await flush();
+  await manager.checkForUpdates();
+  assert.equal(tokens.length, 2);
+  setPolicy(managed("it_managed"));
+  assert.equal(tokens[0].cancelled, true);
+});
+
 test("a download after IT policy lifts starts on a fresh token", async () => {
   const { manager, autoUpdater, setPolicy } = setup();
   manager.setAutoUpdatesEnabled(false);
