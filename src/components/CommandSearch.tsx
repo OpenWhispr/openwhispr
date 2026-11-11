@@ -23,12 +23,19 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "./ui/dropdown-menu";
-import type { NoteItem, FolderItem, SpaceItem, TranscriptionItem } from "../types/electron.js";
+import type {
+  ConversationPreview,
+  NoteItem,
+  FolderItem,
+  SpaceItem,
+  TranscriptionItem,
+} from "../types/electron.js";
 import { formatRelativeTime } from "../utils/dateFormatting";
 import { parseTranscriptSegments } from "../utils/parseTranscriptSegments";
 import { defaultFolderDisplayName, folderMatchesQuery } from "./notes/shared";
 import { useSpacesInWorkspaceScope } from "../hooks/useWorkspace";
 import { privateSectionFolders, privateSectionSpaces } from "../lib/privateSection";
+import { isConversationInScope, resolveAssistantScopeSpaceIds } from "../lib/assistantNoteScope";
 
 interface ConversationResult {
   id: number;
@@ -63,6 +70,23 @@ type FlatItem =
   | { kind: "conversation"; conversation: ConversationResult };
 
 const NO_SPACES: SpaceItem[] = [];
+
+// The chats a read returns that the conversations list shows: as in the Chat list, chats about
+// another workspace's notes stay out. null when there was nothing to read.
+async function conversationsInScope(
+  read: Promise<ConversationPreview[]> | undefined
+): Promise<ConversationResult[] | null> {
+  const [rows, scopeSpaceIds] = await Promise.all([read, resolveAssistantScopeSpaceIds()]);
+  if (!rows) return null;
+  return rows
+    .filter((c) => isConversationInScope(c, scopeSpaceIds))
+    .map((c) => ({
+      id: c.id,
+      title: c.title || "Untitled",
+      last_message: c.last_message,
+      updated_at: c.updated_at,
+    }));
+}
 
 function stripMarkdownPreview(text: string): string {
   return (
@@ -155,17 +179,11 @@ export default function CommandSearch({
   useEffect(() => {
     if (!open) return;
     if (isConversationsMode) {
-      window.electronAPI?.getAgentConversationsWithPreview?.(20, 0, false).then((r) => {
-        if (r)
-          setConversations(
-            r.map((c) => ({
-              id: c.id,
-              title: c.title || "Untitled",
-              last_message: c.last_message,
-              updated_at: c.updated_at,
-            }))
-          );
-      });
+      conversationsInScope(window.electronAPI?.getAgentConversationsWithPreview?.(20, 0, false))
+        .then((r) => {
+          if (r) setConversations(r);
+        })
+        .catch(() => {});
     } else if (visibleSpaceIds) {
       window.electronAPI
         .getNotes(null, undefined, null, null, visibleSpaceIds)
@@ -180,33 +198,19 @@ export default function CommandSearch({
 
     if (isConversationsMode) {
       if (!query.trim()) {
-        window.electronAPI?.getAgentConversationsWithPreview?.(20, 0, false).then((r) => {
-          if (searchVersionRef.current === version && r) {
-            setConversations(
-              r.map((c) => ({
-                id: c.id,
-                title: c.title || "Untitled",
-                last_message: c.last_message,
-                updated_at: c.updated_at,
-              }))
-            );
-          }
-        });
+        conversationsInScope(window.electronAPI?.getAgentConversationsWithPreview?.(20, 0, false))
+          .then((r) => {
+            if (searchVersionRef.current === version && r) setConversations(r);
+          })
+          .catch(() => {});
         return;
       }
       searchTimerRef.current = setTimeout(async () => {
         try {
-          const r = await window.electronAPI?.semanticSearchConversations?.(query, 20);
-          if (searchVersionRef.current === version && r) {
-            setConversations(
-              r.map((c) => ({
-                id: c.id,
-                title: c.title || "Untitled",
-                last_message: c.last_message,
-                updated_at: c.updated_at,
-              }))
-            );
-          }
+          const r = await conversationsInScope(
+            window.electronAPI?.semanticSearchConversations?.(query, 20)
+          );
+          if (searchVersionRef.current === version && r) setConversations(r);
         } catch {
           /* keep current */
         }

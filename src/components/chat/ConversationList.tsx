@@ -9,7 +9,7 @@ import ConversationItem, { type ConversationPreview } from "./ConversationItem";
 import ConversationDateGroup from "./ConversationDateGroup";
 import EmptyConversationList from "./EmptyConversationList";
 import type { ConversationPreview as ConversationRow } from "../../types/electron";
-import { resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
+import { isConversationInScope, resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 
 type FlatItem =
@@ -102,10 +102,7 @@ export default function ConversationList({
         resolveAssistantScopeSpaceIds(),
       ]);
       if (!current()) return;
-      // A chat about a note outside the active workspace stays out, as that note stays out of
-      // the chat's grounding: opened, its earlier replies would reach the model as history.
-      const inScope = (c: ConversationRow) =>
-        c.note_space_id == null || scopeSpaceIds.includes(c.note_space_id);
+      const inScope = (c: ConversationRow) => isConversationInScope(c, scopeSpaceIds);
       const toPreview = (c: ConversationRow) => ({
         id: c.id,
         title: c.title || "Untitled",

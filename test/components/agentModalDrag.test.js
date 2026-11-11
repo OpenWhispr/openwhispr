@@ -10,7 +10,17 @@ for (const surface of ["header", "pill", "modal pill"]) {
     const dom = await installHappyDom(t);
     const drags = [];
     dom.electronAPI = { agentWindowSetDragging: (active) => drags.push(active) };
-    const vite = await createRendererServer(t, { cachePrefix: "openwhispr-agent-modal-drag-" });
+    const vite = await createRendererServer(t, {
+      cachePrefix: "openwhispr-agent-modal-drag-",
+      // The chat switcher's workspace scope plays no part in dragging, and its stores would load
+      // the translations this test's labels are looked up without.
+      mockModules: {
+        "/lib/assistantNoteScope": `
+          export const isConversationInScope = () => true;
+          export const resolveAssistantScopeSpaceIds = async () => [];
+        `,
+      },
+    });
     const { AgentModal } = await vite.ssrLoadModule("/components/agent/AgentModal.tsx");
     const { AgentPill } = await vite.ssrLoadModule("/components/agent/AgentPill.tsx");
     const pill = React.createElement(AgentPill, {

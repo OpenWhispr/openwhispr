@@ -55,3 +55,18 @@ export async function resolveAssistantScopeSpaceIds(): Promise<number[]> {
     return activeWorkspaceId == null && privateSpaceId != null ? [privateSpaceId] : [];
   }
 }
+
+/**
+ * Whether a chat list shows this chat while the assistant's scope is `scopeSpaceIds` (from
+ * resolveAssistantScopeSpaceIds). A chat about a note outside the active workspace stays out, as
+ * that note stays out of the chat's grounding: opened, its earlier replies would reach the model as
+ * history. Root chats, and chats whose note is gone (`note_space_id` null), always show. Every
+ * chat list goes through this: the Chat list, command search's conversations and the agent
+ * window's chat switcher.
+ */
+export function isConversationInScope(
+  conversation: { note_space_id?: number | null },
+  scopeSpaceIds: readonly number[]
+): boolean {
+  return conversation.note_space_id == null || scopeSpaceIds.includes(conversation.note_space_id);
+}

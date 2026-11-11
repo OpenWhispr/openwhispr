@@ -31,8 +31,8 @@ const otherActive = { activeWorkspaceId: "other", defaultWorkspaceId: "acme" };
 
 // Opens command search with main holding `spaces` and `notes` and the workspace store choosing
 // `workspaceState`, and returns its text, its scope choices and the space lists the note queries
-// named.
-async function openSearch(t, { spaces, notes, workspaceState = otherActive }) {
+// named. `api` adds to main's IPC; `mode` is CommandSearch's.
+async function openSearch(t, { spaces, notes, workspaceState = otherActive, mode, api = {} }) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -47,6 +47,7 @@ async function openSearch(t, { spaces, notes, workspaceState = otherActive }) {
           queriedSpaceIds.push(spaceIds);
           return notes.filter((n) => !spaceIds || spaceIds.includes(n.space_id)).slice(0, limit);
         },
+        ...api,
       },
     },
   });
@@ -92,6 +93,9 @@ async function openSearch(t, { spaces, notes, workspaceState = otherActive }) {
           setActiveWorkspaceId() {},
         };
         export const useWorkspaceStore = (selector) => selector(state);
+        useWorkspaceStore.getState = () => state;
+        export const readActiveWorkspaceId = () => state.activeWorkspaceId;
+        export const readCachedDefaultWorkspaceId = () => null;
       `,
     },
   });
@@ -99,10 +103,10 @@ async function openSearch(t, { spaces, notes, workspaceState = otherActive }) {
 
   root = createRoot(container);
   await React.act(async () =>
-    root.render(React.createElement(CommandSearch, { open: true, onOpenChange: () => {} }))
+    root.render(React.createElement(CommandSearch, { open: true, onOpenChange: () => {}, mode }))
   );
   await React.act(async () => {
-    for (let i = 0; i < 3; i++) await new Promise(setImmediate);
+    for (let i = 0; i < 6; i++) await new Promise(setImmediate);
   });
   const scopeChoices = [];
   const collect = (node) => {
@@ -110,8 +114,19 @@ async function openSearch(t, { spaces, notes, workspaceState = otherActive }) {
     (node.childNodes ?? []).forEach(collect);
   };
   collect(container);
-  return { text: textOf(container), scopeChoices, queriedSpaceIds };
+  return { text: textOf(container), scopeChoices, queriedSpaceIds, container };
 }
+
+function findNode(node, nodeName) {
+  if (node.nodeName === nodeName) return node;
+  for (const child of node.childNodes ?? []) {
+    const found = findNode(child, nodeName);
+    if (found) return found;
+  }
+  return null;
+}
+
+const reactProps = (node) => node[Object.keys(node).find((key) => key.startsWith("__reactProps$"))];
 
 test("command search lists only the active workspace's notes", async (t) => {
   const { text, queriedSpaceIds } = await openSearch(t, {
@@ -166,4 +181,60 @@ test("command search offers the Private once while the pending one shows beside 
   assert.match(text, /Other private/);
   assert.match(text, /Pending private/);
   assert.match(text, /Other plan/);
+});
+
+const chat = (id, title, noteSpaceId, noteId = noteSpaceId == null ? null : id + 100) => ({
+  id,
+  title,
+  last_message: "",
+  updated_at: new Date().toISOString(),
+  note_id: noteId,
+  note_space_id: noteSpaceId,
+});
+
+// M6's rule, as in the Chat list: a chat about a note outside the active workspace stays out of
+// the recent chats and of search results, since opening it would bring that note's replies back
+// as history. Root chats and chats whose note is gone stay.
+test("conversations mode leaves out chats about another workspace's notes", async (t) => {
+  const chats = [
+    chat(20, "About this workspace's note", 3),
+    chat(21, "About another workspace's note", 1),
+    chat(22, "A plain chat", null),
+    chat(23, "Its note is gone", null, 32),
+  ];
+  const searched = [];
+  const { text, container } = await openSearch(t, {
+    mode: "conversations",
+    spaces: [
+      { id: 1, kind: "private", workspace_id: "acme", name: "Personal" },
+      { id: 2, kind: "team", workspace_id: "acme", name: "Acme team" },
+      { id: 3, kind: "private", workspace_id: "other", name: "Personal" },
+      { id: 4, kind: "team", workspace_id: "other", name: "Other team" },
+    ],
+    notes: [],
+    api: {
+      getPrivateSpaceId: async () => 3,
+      getAgentConversationsWithPreview: async () => chats,
+      semanticSearchConversations: async (query) => {
+        searched.push(query);
+        return chats;
+      },
+    },
+  });
+  const assertScoped = (shown, label) => {
+    assert.match(shown, /About this workspace's note/, label);
+    assert.doesNotMatch(shown, /About another workspace's note/, label);
+    assert.match(shown, /A plain chat/, label);
+    assert.match(shown, /Its note is gone/, label);
+  };
+  assertScoped(text, "recent chats");
+
+  const input = findNode(container, "INPUT");
+  await React.act(async () => reactProps(input).onChange({ target: { value: "note" } }));
+  await React.act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    for (let i = 0; i < 6; i++) await new Promise(setImmediate);
+  });
+  assert.deepEqual(searched, ["note"]);
+  assertScoped(textOf(container), "search results");
 });
