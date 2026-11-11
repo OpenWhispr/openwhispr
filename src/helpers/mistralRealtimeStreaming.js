@@ -193,10 +193,11 @@ class MistralRealtimeStreaming {
   flushText(force) {
     const remaining = this.text.slice(this.emittedLength);
     // Commit complete sentences as they arrive, or long phrases at a word
-    // boundary. Keep exact whitespace in `text`; meeting segments are trimmed.
+    // boundary. Wait for whitespace after Latin punctuation: the next delta
+    // may continue a decimal or address. Keep exact whitespace in `text`.
     let length = force ? remaining.length : 0;
     if (!force) {
-      const boundaries = [...remaining.matchAll(/[.!?](?:\s|$)|[。！？]/g)];
+      const boundaries = [...remaining.matchAll(/[.!?]\s|[。！？]/g)];
       const last = boundaries.at(-1);
       if (last) length = last.index + last[0].length;
       else if (remaining.length >= 180) {
@@ -214,7 +215,9 @@ class MistralRealtimeStreaming {
           this.segmentStartedAt || Date.now()
         );
       }
-      this.segmentStartedAt = null;
+      // A suffix in this delta already has text; do not date it at the next
+      // delta (or stop), which would reorder it against the other stream.
+      this.segmentStartedAt = remaining.slice(length).trim() ? Date.now() : null;
     }
     this.onPartialTranscript?.(this.text.slice(this.emittedLength).trim());
   }

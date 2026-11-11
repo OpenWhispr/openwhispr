@@ -140,6 +140,53 @@ test("append-only deltas preserve spaces, emit live segments and finalize last w
   assert.equal(client.isConnected, false);
 });
 
+for (const [name, deltas] of [
+  ["decimal", ["The amount is 3.", "14 euros."]],
+  ["email address", ["Email alex.", "smith@example.", "com."]],
+]) {
+  test(`${name} split across deltas stays intact in meeting segments`, async (t) => {
+    const { client, socket } = await connected();
+    t.after(() => client.cleanup());
+    for (const text of deltas) socket.event({ type: "transcription.text.delta", text });
+    const text = deltas.join("");
+    socket.event({ type: "transcription.text.delta", text: " Confirmed" });
+    assert.equal(client.completedSegments.join(" "), text);
+    const stop = client.disconnect();
+    socket.event({ type: "transcription.done", text: `${text} Confirmed` });
+    await stop;
+    assert.equal(client.completedSegments.join(" "), `${text} Confirmed`);
+  });
+}
+
+for (const finishAtStop of [false, true]) {
+  test(`unfinished text keeps its arrival time when finalized ${finishAtStop ? "at stop" : "by a later delta"}`, async (t) => {
+    const { client, socket } = await connected();
+    t.after(() => client.cleanup());
+    let now = 5_000;
+    t.mock.method(Date, "now", () => now);
+    const finals = [];
+    client.onFinalTranscript = (_text, timestamp) =>
+      finals.push({ text: client.completedSegments.at(-1), timestamp });
+    socket.event({ type: "transcription.text.delta", text: "First" });
+    now = 10_000;
+    socket.event({
+      type: "transcription.text.delta",
+      text: " sentence. An unfinished thought",
+    });
+    now = 30_000;
+    if (!finishAtStop) {
+      socket.event({ type: "transcription.text.delta", text: ". " });
+    }
+    const stop = client.disconnect();
+    socket.event({ type: "transcription.done", text: client.getFullTranscript() });
+    await stop;
+    assert.deepEqual(finals, [
+      { text: "First sentence.", timestamp: 5_000 },
+      { text: `An unfinished thought${finishAtStop ? "" : "."}`, timestamp: 10_000 },
+    ]);
+  });
+}
+
 test("long speech commits at word boundaries before the session ends", async () => {
   const { client, socket } = await connected();
   socket.event({ type: "transcription.text.delta", text: "réunion ".repeat(30) });
@@ -233,6 +280,8 @@ test("a lost connection commits the received suffix and old socket events cannot
   await pending;
   socket.event({ type: "transcription.done", text: "première connexion" });
   replacement.event({ type: "transcription.text.delta", text: "Deuxième connexion." });
+  assert.deepEqual(finals, ["première connexion"]);
+  replacement.event({ type: "transcription.text.delta", text: " " });
   assert.deepEqual(finals, ["première connexion", "Deuxième connexion."]);
   client.cleanup();
 });
