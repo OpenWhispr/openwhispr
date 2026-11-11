@@ -8,13 +8,7 @@ const { isValidPolicyShape } = require("./policyValidation");
 const { registryData } = require("../models/registryData.js");
 
 const execute = promisify(execFile);
-const DEVICE_KEYS = [
-  "Policy",
-  "RequireSignIn",
-  "AuditLogPath",
-  "WipeLocalDataOnLaunch",
-  "DisableMeetingRecording",
-];
+const DEVICE_KEYS = ["Policy", "RequireSignIn", "DisableMeetingRecording"];
 const MAX_POLICY_BYTES = 1024 * 1024;
 const MODES = ["openwhispr", "providers", "local", "self-hosted", "enterprise"];
 const FOCUS_REFRESH_THROTTLE_MS = 30 * 1000;
@@ -105,11 +99,6 @@ function normalizeDeviceValues(input) {
     if (values[key] !== undefined && typeof values[key] !== "boolean")
       throw new Error("Invalid device boolean");
   }
-  for (const key of ["AuditLogPath", "WipeLocalDataOnLaunch"]) {
-    if (values[key] !== undefined && (typeof values[key] !== "string" || !values[key].trim())) {
-      throw new Error("Invalid device string");
-    }
-  }
   const hasPolicy = Object.hasOwn(values, "Policy");
   let policy = defaultDevicePolicy();
   if (hasPolicy) {
@@ -131,8 +120,6 @@ function normalizeDeviceValues(input) {
     policy,
     requireSignIn: values.RequireSignIn ?? hasPolicy,
     localOnly: values.RequireSignIn === false,
-    auditLogPath: values.AuditLogPath ?? null,
-    wipeLocalDataOnLaunch: values.WipeLocalDataOnLaunch ?? null,
   };
 }
 
@@ -272,7 +259,7 @@ async function hasPolicyEvidence({
     files.map((file) =>
       fileSystem.lstat(file).then(
         () => true,
-        () => false
+        (error) => platform === "linux" && ["EACCES", "EPERM"].includes(error.code)
       )
     )
   );

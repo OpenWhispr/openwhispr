@@ -33,12 +33,52 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
   const state = productPolicyState(snapshot, appVersion);
   if (!rules.isPolicyActionAllowed(state)) return false;
   if (channel === "cloud-api-request") {
+    const request = args[0];
+    const method = (request?.method || "GET").toUpperCase();
     let path;
     try {
       path = new URL(args[0]?.path, "https://api.example.test").pathname.replace(/\/+$/, "");
     } catch {
       return false;
     }
+    const share = /^\/api\/notes\/[^/]+\/(share|access)(\/.*)?$/.exec(path);
+    if (share && !["GET", "DELETE"].includes(method)) {
+      if (share[1] === "share" && !share[2] && method === "PATCH")
+        return rules.isShareVisibilityAllowed(state, request.body?.visibility);
+      if (share[1] === "access" && method === "PATCH" && request.body?.permission === "viewer")
+        return true;
+      if (share[2] === "/rotate-token") {
+        if (args[1]?.resolvingShareVisibility)
+          return (
+            rules.isShareVisibilityAllowed(state, "link") ||
+            rules.isShareVisibilityAllowed(state, "domain")
+          );
+        const visibility = args[1]?.shareVisibility;
+        return (
+          ["link", "domain", "invited"].includes(visibility) &&
+          rules.isShareActionAllowed(state, "rotate-link", visibility)
+        );
+      }
+      return rules.isShareActionAllowed(state, "invite", "link");
+    }
+    // Notes and folders also carry deliberate sharing/team work, so their
+    // uploads follow the API's existing exception to the backup restriction.
+    const backupOnly =
+      (!["GET", "DELETE"].includes(method) &&
+        (/^\/api\/(transcriptions|dictionary|snippets|conversations)\/(create|batch-create|update|messages)$/.test(
+          path
+        ) ||
+          /^\/api\/v1\/(dictionary|snippets)\/(create|[^/]+)$/.test(path) ||
+          /^\/api\/(analytics\/events\/batch|activation\/(device|batch)|product-events\/(batch|app-session))$/.test(
+            path
+          ))) ||
+      (method === "PATCH" &&
+        path === "/api/analytics/participation" &&
+        request.body?.enabled === true) ||
+      (method === "GET" &&
+        (path === "/api/leaderboard/domain" ||
+          /^\/api\/workspaces\/[^/]+\/leaderboard$/.test(path)));
+    if (backupOnly && !rules.isCloudBackupAllowed(state)) return false;
     const operation =
       path === "/api/reason"
         ? "cloud-reason"
@@ -66,6 +106,8 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
         operation === "cloud-reason" ? [undefined, args[0]?.body] : []
       );
   }
+  if (/^(gcal|mcal)-/.test(channel))
+    return state.status !== "managed" || state.policy.features.connectorsEnabled !== false;
   const requiresAgent =
     channel === "enterprise-stream-start" ||
     (channel === "cloud-reason" && args[1]?.requestPurpose === "agent") ||

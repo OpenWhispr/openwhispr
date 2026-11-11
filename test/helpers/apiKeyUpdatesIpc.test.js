@@ -233,7 +233,6 @@ function anything() {
 }
 const target = {
   _remoteProductRetirement: new AbortController(),
-  _activeRecordingPipeline: null,
   _remoteCalendarsReady: false,
   _remoteCalendarsStarted: false,
   managedDevicePolicy: {
@@ -616,6 +615,212 @@ test("calendar background sync resumes after removing local-only device policy",
   assert.equal(stops, 2);
   setDeviceValues({});
   assert.equal(starts, 4);
+});
+
+test("device backup restrictions stop backup-only uploads while note sharing preparation and team work remain allowed", async (t) => {
+  withManagedApi(t);
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.cloudBackupAllowed = false;
+  policy.sharing.externalLinkSharing = "disabled";
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  const sent = [];
+  t.mock.method(electron.net, "fetch", async (url) => {
+    sent.push(url);
+    return new Response(JSON.stringify({ data: {} }));
+  });
+  const request = (path, body, method = "POST") =>
+    invoke(
+      "cloud-api-request",
+      {
+        path,
+        method,
+        body,
+        expectedAuthGeneration: 1,
+      },
+      { sharedContent: true }
+    );
+  assert.equal(
+    (await request("/api/transcriptions/batch-create", { transcriptions: [{ text: "private" }] }))
+      .code,
+    "DEVICE_POLICY_BLOCKED"
+  );
+  assert.equal(
+    (await request("/api/notes/note/share", { visibility: "link" }, "PATCH")).code,
+    "DEVICE_POLICY_BLOCKED"
+  );
+  assert.equal(sent.length, 0);
+  // A user may prepare a private cloud copy before choosing its audience.
+  assert.equal(
+    (
+      await request("/api/notes/create", {
+        client_note_id: "new-share",
+        content: "share preparation",
+      })
+    ).success,
+    true
+  );
+  assert.equal(
+    (await request("/api/notes/update", { id: "private-note", content: "private" }, "PATCH"))
+      .success,
+    true
+  );
+  for (const id of ["shared-note", "team-note", "retracted-note"])
+    assert.equal(
+      (
+        await request(
+          "/api/notes/update",
+          { id, content: "shared", ...(id === "retracted-note" ? { space_id: null } : {}) },
+          "PATCH"
+        )
+      ).success,
+      true,
+      id
+    );
+  assert.equal(
+    (await request("/api/notes/create", { space_id: "team", content: "team" })).success,
+    true
+  );
+  assert.equal(
+    (await request("/api/folders/update", { id: "team-folder", name: "team" }, "PATCH")).success,
+    true
+  );
+  assert.equal(
+    (await request("/api/notes/delete", { id: "private-note" }, "DELETE")).success,
+    true
+  );
+  assert.equal(sent.length, 8);
+});
+
+test("connector revocation reaches calendar OAuth before credentials can be saved", async (t) => {
+  const previousManagers = [target.googleCalendarManager, target.microsoftCalendarManager];
+  const previousRegistry = target._calendarAuthorizationRequests;
+  t.after(() => {
+    [target.googleCalendarManager, target.microsoftCalendarManager] = previousManagers;
+    target._calendarAuthorizationRequests = previousRegistry;
+  });
+  for (const [channel, property] of [
+    ["gcal-start-oauth", "googleCalendarManager"],
+    ["mcal-start-oauth", "microsoftCalendarManager"],
+  ]) {
+    setDeviceValues({ RequireSignIn: true });
+    const previous = target[property];
+    const previousRegistry = target._calendarAuthorizationRequests;
+    target._calendarAuthorizationRequests =
+      new (require("../../src/helpers/agentStreamRequestRegistry"))();
+    const entered = deferred(),
+      finish = deferred();
+    let oauthSignal,
+      saved = false;
+    target[property] = {
+      stop() {},
+      startOAuth: async ({ signal }) => {
+        oauthSignal = signal;
+        entered.resolve();
+        await finish.promise;
+        if (!signal.aborted) saved = true;
+        return { success: true };
+      },
+    };
+    const sender = { id: 1, once() {}, removeListener() {} };
+    const pending = handlers.get(channel)({ sender }, "revoked-calendar");
+    await entered.promise;
+    const policy = defaultDevicePolicy();
+    policy.features.connectorsEnabled = false;
+    setDeviceValues({ Policy: JSON.stringify(policy) });
+    finish.resolve();
+    const result = await pending;
+    assert.equal(oauthSignal.aborted, true, channel);
+    assert.equal(saved, false, channel);
+    assert.equal(result.success, false, channel);
+    target[property] = previous;
+    target._calendarAuthorizationRequests = previousRegistry;
+  }
+});
+
+test("backup revocation aborts a private upload while allowing an in-flight shared note update", async (t) => {
+  withManagedApi(t);
+  setDeviceValues({ RequireSignIn: true });
+  const requests = new Map();
+  t.mock.method(
+    electron.net,
+    "fetch",
+    (url, init) =>
+      new Promise((resolve, reject) => {
+        requests.set(new URL(url).pathname, { signal: init.signal, resolve });
+        init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true });
+      })
+  );
+  const upload = invoke("cloud-api-request", {
+    path: "/api/transcriptions/batch-create",
+    method: "POST",
+    expectedAuthGeneration: 1,
+    body: { transcriptions: [{ text: "private" }] },
+  });
+  const shared = invoke("cloud-api-request", {
+    path: "/api/notes/update",
+    method: "PATCH",
+    expectedAuthGeneration: 1,
+    body: { id: "shared-note", content: "shared" },
+  });
+  for (let turn = 0; turn < 100 && requests.size < 2; turn++) await new Promise(setImmediate);
+  assert.equal(requests.size, 2);
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.cloudBackupAllowed = false;
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.equal(requests.get("/api/transcriptions/batch-create").signal.aborted, true);
+  assert.equal(requests.get("/api/notes/update").signal.aborted, false);
+  requests.get("/api/notes/update").resolve(new Response(JSON.stringify({ data: {} })));
+  assert.equal((await upload).code, "DEVICE_POLICY_BLOCKED");
+  assert.equal((await shared).success, true);
+});
+
+test("share token rotation uses server visibility and ignores renderer provenance", async (t) => {
+  withManagedApi(t);
+  const policy = defaultDevicePolicy();
+  policy.sharing.externalLinkSharing = "domain_only";
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  const methods = [];
+  let visibility = "link";
+  const fetch = t.mock.method(electron.net, "fetch", async (_url, init) => {
+    methods.push(init.method);
+    return new Response(JSON.stringify({ share: { visibility } }));
+  });
+  const rotate = () =>
+    invoke(
+      "cloud-api-request",
+      {
+        path: "/api/notes/note/share/rotate-token",
+        method: "POST",
+        expectedAuthGeneration: 1,
+      },
+      { shareVisibility: "domain" }
+    );
+  assert.equal((await rotate()).code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(methods, ["GET"]);
+  visibility = "domain";
+  assert.equal((await rotate()).success, true);
+  assert.deepEqual(methods, ["GET", "GET", "POST"]);
+  visibility = undefined;
+  assert.equal((await rotate()).code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(methods, ["GET", "GET", "POST", "GET"]);
+  const entered = deferred(),
+    finish = deferred();
+  let signal;
+  fetch.mock.mockImplementation(async (_url, init) => {
+    methods.push(init.method);
+    signal = init.signal;
+    entered.resolve();
+    await finish.promise;
+    return new Response(JSON.stringify({ share: { visibility: "domain" } }));
+  });
+  const pending = rotate();
+  await entered.promise;
+  policy.sharing.externalLinkSharing = "disabled";
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.equal(signal.aborted, true);
+  finish.resolve();
+  assert.equal((await pending).code, "DEVICE_POLICY_BLOCKED");
+  assert.deepEqual(methods, ["GET", "GET", "POST", "GET", "GET"]);
 });
 
 test("an invalid trusted device policy blocks remote work", async () => {

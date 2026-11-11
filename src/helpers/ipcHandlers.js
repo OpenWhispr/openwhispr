@@ -834,7 +834,6 @@ class IPCHandlers {
     this._dictionaryHotwordHints = null;
     this.parakeetManager.setDictionaryProvider(() => this._getDictionaryHotwords());
     this._textEditHandler = null;
-    this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
     this.skillLibrary = new SkillLibrary({
@@ -1140,6 +1139,7 @@ class IPCHandlers {
     // Like the jobs above, enterprise audio outlives a token rotation; a
     // different account or workspace retires it once it is learned.
     if (!token) {
+      if (!provenGuest) this._retireAccountProductStreams?.(this.databaseManager.activeAccountId);
       this._retireEnterpriseAudio?.(false, "accountChanged");
       this._enterpriseAudioOwner = null;
     }
@@ -1969,10 +1969,23 @@ class IPCHandlers {
       ])
     )
       this._stopMeetingForPolicy?.("policyRestricted");
+    if (!productOperationAllowed(snapshot, app.getVersion(), "gcal-start-oauth")) {
+      this.googleCalendarManager?.stop();
+      this.microsoftCalendarManager?.stop();
+      this._remoteCalendarsStarted = false;
+    }
   }
 
   _startRemoteProductWork() {
     if (!this._remoteCalendarsReady || this._remoteCalendarsStarted) return;
+    if (
+      !productOperationAllowed(
+        this.effectivePolicyManager.getCurrent(),
+        app.getVersion(),
+        "gcal-start-oauth"
+      )
+    )
+      return;
     this._remoteCalendarsStarted = true;
     this.googleCalendarManager?.start();
     this.microsoftCalendarManager?.start();
@@ -1986,6 +1999,13 @@ class IPCHandlers {
 
   setupHandlers() {
     this._remoteStreamPolicies = new Map();
+    this._retireAccountProductStreams = (accountId) => {
+      for (const [property, operation] of this._remoteStreamPolicies) {
+        // A start still owns its marker until its late-socket check completes.
+        if (operation.accountId === accountId && !operation.pending)
+          retireProductStream(this, property);
+      }
+    };
     this._productRequests = new Map();
     this._productRequestContext = new AsyncLocalStorage();
     this._enterpriseStreamProviders = new Map();
@@ -2014,12 +2034,30 @@ class IPCHandlers {
     const handleProduct = (channel, handler, remote = false) =>
       ipcMain.handle(channel, async (event, ...args) => {
         const operation = { channel, args, remote };
+        if (channel === "cloud-api-request")
+          operation.args = [
+            args[0],
+            {
+              resolvingShareVisibility:
+                args[0]?.method?.toUpperCase() === "POST" &&
+                /^\/api\/notes\/[^/?#]+\/share\/rotate-token\/?(?:[?#]|$)/.test(args[0]?.path),
+            },
+          ];
         void this.refreshEffectivePolicy(event);
         if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading")
           await awaitVerdict(event);
         if (!mayStart(operation)) return policyBlockedFailure();
         const startedPolicy = this.effectivePolicyManager.getCurrent();
         operation.accountId = startedPolicy.accountId;
+        operation.guestLocalDictation =
+          startedPolicy.workspaceRequired === false &&
+          operation.accountId === null &&
+          ["transcribe-local-whisper", "transcribe-local-parakeet"].includes(channel);
+        operation.preserveCreateReceipt =
+          channel === "cloud-api-request" &&
+          !args[0]?.public &&
+          args[0]?.method?.toUpperCase() === "POST" &&
+          args[0]?.path === "/api/conversations/create";
         const streamProperty = channel.startsWith("dictation-realtime-")
           ? "_dictationStreaming"
           : /^(assemblyai|deepgram|gemini|corti)-streaming-(start|warmup)$/.test(channel)
@@ -2030,7 +2068,7 @@ class IPCHandlers {
                 corti: "cortiStreaming",
               }[channel.split("-")[0]]
             : null;
-        const streamPolicy = { channel, args };
+        const streamPolicy = { channel, args, accountId: operation.accountId, pending: true };
         if (streamProperty) this._remoteStreamPolicies.set(streamProperty, streamPolicy);
         const controller = new AbortController();
         operation.signal = controller.signal;
@@ -2039,18 +2077,20 @@ class IPCHandlers {
           const result = await this._productRequestContext.run(operation, () =>
             handler(event, ...args)
           );
+          // The sender-bound acknowledgement must learn which cloud copy now exists.
+          if (operation.preserveCreateReceipt && result?.success) return result;
           let snapshot = this.effectivePolicyManager.getCurrent();
           if (
             !controller.signal.aborted &&
             snapshot.status === "loading" &&
             snapshot.deviceReady &&
-            snapshot.accountId === startedPolicy.accountId &&
+            snapshot.accountId === operation.accountId &&
             snapshot.authGeneration !== startedPolicy.authGeneration
           ) {
             await this.refreshEffectivePolicy(event);
             snapshot = this.effectivePolicyManager.getCurrent();
           }
-          if (snapshot.accountId !== startedPolicy.accountId) {
+          if (snapshot.accountId !== operation.accountId) {
             // A stream this start opened, unless a later start replaced it,
             // belongs to the account that left.
             if (streamProperty && this._remoteStreamPolicies.get(streamProperty) === streamPolicy) {
@@ -2082,6 +2122,7 @@ class IPCHandlers {
           return policyBlockedFailure();
         } finally {
           this._productRequests.delete(controller);
+          streamPolicy.pending = false;
         }
       });
     const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
@@ -3343,7 +3384,14 @@ class IPCHandlers {
       // decides it when it lands. Leaving an account does end its work.
       const leftAccount =
         accountChanged && typeof this.databaseManager.activeAccountId === "string";
+      if (accountChanged && !leftAccount && accountId !== null) {
+        for (const operation of this._productRequests.values()) {
+          if (operation.guestLocalDictation && operation.accountId === null)
+            operation.accountId = accountId;
+        }
+      }
       if (leftAccount) this._localModelPolicy?.cancelJobs();
+      if (leftAccount) this._retireAccountProductStreams?.(this.databaseManager.activeAccountId);
       // A rotated bearer no longer matches the stored binding, so this also
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
@@ -7662,7 +7710,7 @@ class IPCHandlers {
         useSessionCookies: false,
         signal: signals.length ? AbortSignal.any(signals) : undefined,
       });
-      assertAllowed();
+      if (!operation?.preserveCreateReceipt || !response.ok) assertAllowed();
       return response;
     };
     const withPolicyHeaders = (headers) => withPolicyRequestHeaders(headers, app.getVersion());
@@ -12677,7 +12725,34 @@ class IPCHandlers {
       }
     });
 
-    handleRemoteProduct("cloud-api-request", (_event, opts) => handleCloudApiRequest(opts));
+    handleRemoteProduct("cloud-api-request", async (_event, opts) => {
+      const operation = this._productRequestContext.getStore();
+      if (operation.args[1]?.resolvingShareVisibility) {
+        const path = new URL(opts.path, "https://api.example.test").pathname.replace(
+          /\/rotate-token\/?$/,
+          ""
+        );
+        const current = await handleCloudApiRequest({
+          ...opts,
+          path,
+          method: "GET",
+          body: undefined,
+        });
+        if (!current.success) return current;
+        const data = current.data?.data ?? current.data;
+        operation.args = [opts, { shareVisibility: data?.share?.visibility }];
+        if (
+          !productOperationAllowed(
+            this.effectivePolicyManager.getCurrent(),
+            app.getVersion(),
+            operation.channel,
+            operation.args
+          )
+        )
+          return policyBlockedFailure();
+      }
+      return handleCloudApiRequest(opts);
+    });
 
     ipcMain.handle("get-stt-config", handleSttConfigRequest);
 
@@ -14374,21 +14449,6 @@ class IPCHandlers {
       return this.environmentManager.getTranslationKey?.() || "";
     });
 
-    ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {
-      if (this._activeRecordingPipeline && this._activeRecordingPipeline !== pipeline) {
-        return { success: false, holder: this._activeRecordingPipeline };
-      }
-      this._activeRecordingPipeline = pipeline;
-      return { success: true };
-    });
-
-    ipcMain.handle("release-recording-lock", async (_event, pipeline) => {
-      if (this._activeRecordingPipeline === pipeline) {
-        this._activeRecordingPipeline = null;
-      }
-      return { success: true };
-    });
-
     // Provider-neutral availability over the shared calendar cache.
     ipcMain.handle("calendar-get-availability", async (_event, request) => {
       try {
@@ -14422,6 +14482,9 @@ class IPCHandlers {
       const requests = this._calendarAuthorizationRequests;
       const controller = requests.begin(event.sender.id, requestId);
       const abort = () => controller.abort();
+      const policySignal = this._productRequestContext.getStore()?.signal;
+      policySignal?.addEventListener("abort", abort, { once: true });
+      if (policySignal?.aborted) abort();
       event.sender.once("destroyed", abort);
       try {
         // A cancel after the account was saved doesn't undo it, so report what happened.
@@ -14433,6 +14496,7 @@ class IPCHandlers {
         return { success: false, error: error.message };
       } finally {
         event.sender.removeListener("destroyed", abort);
+        policySignal?.removeEventListener("abort", abort);
         requests.complete(event.sender.id, requestId, controller);
       }
     };

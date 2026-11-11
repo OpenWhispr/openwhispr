@@ -49,6 +49,10 @@ test("fields and device values a later build reads are ignored; known ones stay 
   assert.equal(snapshot.status, "valid");
   assert.equal(snapshot.requireSignIn, true);
   assert.equal(normalizeDeviceValues({ FutureSetting: true }).status, "absent");
+  assert.equal(
+    normalizeDeviceValues({ AuditLogPath: "", WipeLocalDataOnLaunch: false }).status,
+    "absent"
+  );
   const wrongType = defaultDevicePolicy();
   wrongType.features.connectorsEnabled = "no";
   assert.throws(() => normalizeDeviceValues({ Policy: JSON.stringify(wrongType) }));
@@ -75,7 +79,6 @@ test("malformed documents, partial policies and wrong device types fail", () => 
     { Policy: JSON.stringify({ features: { meetingRecordingEnabled: false } }) },
     { RequireSignIn: 0 },
     { DisableMeetingRecording: "true" },
-    { WipeLocalDataOnLaunch: "" },
   ])
     assert.throws(() => normalizeDeviceValues(values));
 });
@@ -132,14 +135,12 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
   const values = await registryExport([
     `"Policy"="${policy}"`,
     '"RequireSignIn"=dword:00000000',
-    '"AuditLogPath"="C:\\\\企業\\\\監査.jsonl"',
     '"Unrelated"=hex(2):43,00,00,00',
   ])((...args) => {
     command = args;
   });
   assert.deepEqual(JSON.parse(values.Policy), defaultDevicePolicy());
   assert.equal(values.RequireSignIn, false);
-  assert.equal(values.AuditLogPath, "C:\\企業\\監査.jsonl");
   assert.equal(
     command[0],
     path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "reg.exe")
@@ -234,6 +235,24 @@ test("evidence of a deployment is the policy key or file, not the reader's succe
     hasPolicyEvidence({ platform: "win32", run: registryWithoutPolicy({ blocked: true }) }),
     /Registry editing/
   );
+});
+
+test("an inaccessible Linux deployment fails closed on its first read", async () => {
+  for (const code of ["EACCES", "EPERM"]) {
+    const denied = async () => {
+      throw Object.assign(new Error("permission denied"), { code });
+    };
+    const manager = createManagedDevicePolicy({
+      platform: "linux",
+      read: denied,
+      hasPolicy: () => hasPolicyEvidence({ platform: "linux", fileSystem: { lstat: denied } }),
+      logger: { warn() {} },
+    });
+    await manager.refresh();
+    assert.equal(manager.getSnapshot().status, "invalid", code);
+    assert.equal(manager.getSnapshot().managed, true, code);
+    manager.stop();
+  }
 });
 
 function linuxFileSystem(files, overrides = {}) {

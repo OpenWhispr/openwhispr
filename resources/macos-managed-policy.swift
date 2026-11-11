@@ -2,7 +2,7 @@ import Foundation
 import CoreFoundation
 
 let domain = "com.gizmolabs.openwhispr" as CFString
-let keys = ["Policy", "RequireSignIn", "AuditLogPath", "WipeLocalDataOnLaunch", "DisableMeetingRecording"]
+let keys = ["Policy", "RequireSignIn", "DisableMeetingRecording"]
 CFPreferencesAppSynchronize(domain)
 var values: [String: Any] = [:]
 for key in keys where CFPreferencesAppValueIsForced(key as CFString, domain) {
