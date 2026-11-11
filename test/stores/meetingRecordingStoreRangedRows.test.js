@@ -100,7 +100,8 @@ test("a ranged row takes the speaker heard for most of it", async (t) => {
   const { identify, final, rows } = await startMeeting(t);
   identify(A(T, T + 3000));
   identify(B(T + 3000, T + 9000));
-  final({ text: "hello", source: "system", timestamp: T + 3500, endTimestamp: T + 8000 });
+  // The row starts inside A's window, so the point rule would give it to A.
+  final({ text: "hello", source: "system", timestamp: T + 2500, endTimestamp: T + 8000 });
   assert.equal(rows()[0].speaker, "speaker_1");
   assert.equal(rows()[0].speakerStatus, "confirmed");
 });
@@ -130,6 +131,17 @@ test("a ranged row moved to another speaker drops the previous speaker's name", 
   identify(B(T + 1000, T + 8500));
   assert.equal(rows()[0].speaker, "speaker_1");
   assert.equal(rows()[0].speakerName, undefined);
+});
+
+test("a ranged row kept on the same speaker keeps its name when the new pick has none", async (t) => {
+  const { identify, final, rows } = await startMeeting(t);
+  identify(A(T, T + 2000, "Ana"));
+  final({ text: "hello", source: "system", timestamp: T + 500, endTimestamp: T + 8000 });
+  assert.equal(rows()[0].speakerName, "Ana");
+  // Its end puts the named identification past retention, so the pick itself has no name.
+  identify(A(T + 1000, T + 122_500, null));
+  assert.equal(rows()[0].speaker, "speaker_0");
+  assert.equal(rows()[0].speakerName, "Ana");
 });
 
 test("a ranged row heard by no identification yet is labelled by the next one", async (t) => {
