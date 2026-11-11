@@ -4466,7 +4466,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               wasCancelled
             );
             if (text) {
-              return { success: true, text, source: "local-fallback" };
+              return { success: true, text, rawText: result.text, source: "local-fallback" };
             }
           }
           throw error;

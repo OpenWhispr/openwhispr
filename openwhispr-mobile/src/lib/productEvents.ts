@@ -156,6 +156,8 @@ export function createProductEvents({
   // Every read-modify-write runs here in turn, so two writers never race.
   let chain: Promise<unknown> = Promise.resolve();
   let running: Promise<void> | null = null;
+  // A consent change can discard facts while the server is still acknowledging them.
+  const consentDiscardedDictations = new Set<string>();
   let flushAgain = false;
   let retryPending = false;
   let retryAttempt = 0;
@@ -273,10 +275,41 @@ export function createProductEvents({
     if (allowed === lastAllowed) return;
     lastAllowed = allowed;
     if (!allowed) {
-      await withState((current) => ({
-        next: current.events.length > 0 ? { ...current, events: [] } : undefined,
-        result: undefined,
-      }));
+      await withState((current) => {
+        if (current.events.length === 0) return { result: undefined };
+        const dictationWords = { ...current.dictationWords };
+        const uncountedDictations = new Set(current.uncountedDictations);
+        // Discarded facts cannot satisfy the reporting ceiling. Keep the
+        // progress of facts already acknowledged by the server.
+        for (const event of current.events) {
+          if (
+            event.event_name !== 'dictation_completed' ||
+            event.properties.is_practice !== false ||
+            event.properties.is_retranscribe !== false
+          ) {
+            continue;
+          }
+          if (running) consentDiscardedDictations.add(event.event_id);
+          const words = event.properties.word_count;
+          if (words === null) {
+            uncountedDictations.delete(event.owner_user_id);
+          } else if (typeof words === 'number') {
+            dictationWords[event.owner_user_id] = Math.max(
+              0,
+              (dictationWords[event.owner_user_id] ?? 0) - words,
+            );
+          }
+        }
+        return {
+          next: {
+            ...current,
+            events: [],
+            dictationWords,
+            uncountedDictations: [...uncountedDictations],
+          },
+          result: undefined,
+        };
+      });
       return;
     }
     const identity = getIdentity();
@@ -446,6 +479,7 @@ export function createProductEvents({
     running = runPass()
       .catch(() => scheduleRetry())
       .finally(() => {
+        consentDiscardedDictations.clear();
         running = null;
         if (flushAgain) flush().catch(() => undefined);
       });
@@ -501,11 +535,73 @@ export function createProductEvents({
       },
       identity.cookie,
     );
+    const body = asRecord(response.body);
+    const accepted = new Set(
+      (Array.isArray(body.accepted) ? body.accepted : []).map((id) => String(id).toLowerCase()),
+    );
+    if (response.status === 200 && accepted.size > 0) {
+      const bindings = pending
+        .filter(
+          (event) =>
+            event.event_name === 'app_session_authenticated' &&
+            accepted.has(event.event_id.toLowerCase()),
+        )
+        .map((event) => event.event_id.toLowerCase());
+      const acceptedDictationIds = new Set(
+        pending
+          .filter(
+            (event) =>
+              event.event_name === 'dictation_completed' &&
+              accepted.has(event.event_id.toLowerCase()),
+          )
+          .map((event) => event.event_id.toLowerCase()),
+      );
+      // Settle acknowledgements and consent rollbacks in the same write, so
+      // a consent change cannot discard progress between those operations.
+      await withState((current) => {
+        const currentSession = stillCurrent(identity);
+        if (!currentSession && acceptedDictationIds.size === 0) return { result: undefined };
+        const queuedIds = new Set(current.events.map((event) => event.event_id));
+        const dictationWords = { ...current.dictationWords };
+        const uncountedDictations = new Set(current.uncountedDictations);
+        for (const event of pending) {
+          if (
+            !consentDiscardedDictations.has(event.event_id) ||
+            !accepted.has(event.event_id.toLowerCase()) ||
+            queuedIds.has(event.event_id)
+          ) {
+            continue;
+          }
+          const words = event.properties.word_count;
+          if (words === null) uncountedDictations.add(event.owner_user_id);
+          else if (typeof words === 'number')
+            dictationWords[event.owner_user_id] =
+              (dictationWords[event.owner_user_id] ?? 0) + words;
+        }
+        return {
+          next: {
+            ...current,
+            dictationWords,
+            uncountedDictations: [...uncountedDictations],
+            acknowledgedBindings: currentSession
+              ? [...current.acknowledgedBindings, ...bindings].slice(-MAX_ACKNOWLEDGED_BINDINGS)
+              : current.acknowledgedBindings,
+            // Accepted dictations settle for their original owner even if the
+            // session changed, so a later consent change cannot undo that progress.
+            events: current.events.filter((event): boolean => {
+              const id = event.event_id.toLowerCase();
+              return !acceptedDictationIds.has(id) && (!currentSession || !accepted.has(id));
+            }),
+          },
+          result: undefined,
+        };
+      });
+      for (const event of pending) consentDiscardedDictations.delete(event.event_id);
+    }
     // The answer is for a session the store may no longer hold; the next
     // pass, under whichever session it holds now, settles the queue.
     if (!stillCurrent(identity)) return;
 
-    const body = asRecord(response.body);
     if (response.status === 403 && String(body.code ?? '').startsWith('POLICY_')) {
       // The organization keeps this account unobserved; what it queued is not
       // collected later either.
@@ -525,31 +621,6 @@ export function createProductEvents({
 
     retryAttempt = 0;
     reportedSessions.add(key);
-    // Only accepted ids leave the queue. Deferred ones (an older API that
-    // doesn't know the event yet) and any id the answer leaves out stay,
-    // until accepted or too old, and go again with the next upload.
-    const accepted = new Set(
-      (Array.isArray(body.accepted) ? body.accepted : []).map((id) => String(id).toLowerCase()),
-    );
-    if (accepted.size > 0) {
-      const bindings = pending
-        .filter(
-          (event) =>
-            event.event_name === 'app_session_authenticated' &&
-            accepted.has(event.event_id.toLowerCase()),
-        )
-        .map((event) => event.event_id.toLowerCase());
-      await withState((current) => ({
-        next: {
-          ...current,
-          acknowledgedBindings: [...current.acknowledgedBindings, ...bindings].slice(
-            -MAX_ACKNOWLEDGED_BINDINGS,
-          ),
-          events: current.events.filter((event) => !accepted.has(event.event_id.toLowerCase())),
-        },
-        result: undefined,
-      }));
-    }
     if (pending.length === BATCH_SIZE && accepted.size === pending.length) await runPass();
   }
 

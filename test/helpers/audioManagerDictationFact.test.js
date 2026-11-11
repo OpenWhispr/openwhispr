@@ -147,8 +147,18 @@ test("an assistant command, a selection edit, a failure or an empty transcript r
   const manager = createManager({ lastAudioMetadata: { provider: "local" } });
 
   for (const result of [
-    { success: true, rawText: "draft a reply", assistantConversation: {}, clientTranscriptionId: "a" },
-    { success: true, rawText: "make it formal", selectionEdit: { sessionId: 1 }, clientTranscriptionId: "b" },
+    {
+      success: true,
+      rawText: "draft a reply",
+      assistantConversation: {},
+      clientTranscriptionId: "a",
+    },
+    {
+      success: true,
+      rawText: "make it formal",
+      selectionEdit: { sessionId: 1 },
+      clientTranscriptionId: "b",
+    },
     { success: false, rawText: "never delivered", clientTranscriptionId: "c" },
     { success: true, rawText: "   ", clientTranscriptionId: "d" },
     { success: true, rawText: "no capture" },
@@ -200,6 +210,38 @@ test("a batch recording gets one capture id, shared by its fact and its completi
   assert.deepEqual(facts, [
     { captureId: completions[0].clientTranscriptionId, words: 4, mode: "local" },
   ]);
+});
+
+test("a successful cloud-to-local fallback reports its raw words before cleanup", async (t) => {
+  const { AudioManager, window } = await load(t, {
+    ...STREAMING_SETTINGS,
+    allowLocalFallback: true,
+  });
+  const facts = recordFacts(window);
+  const completions = [];
+  const rawText = "one two three four";
+  const cleanedText = "expanded ".repeat(20).trim();
+  window.electronAPI.transcribeLocalWhisper = async () => ({ success: true, text: rawText });
+  const manager = Object.assign(batchManager(AudioManager, deferred(), completions), {
+    getEffectiveSttLanguage: () => "auto",
+    getTranscriptionModel: () => "whisper-1",
+    getAPIKey: async () => {
+      throw new Error("cloud unavailable");
+    },
+    processTranscription: async () => cleanedText,
+  });
+
+  await manager.processAudio(new Blob(["audio"], { type: "audio/webm" }), {});
+
+  assert.equal(completions.length, 1);
+  assert.equal(completions[0].success, true);
+  assert.equal(completions[0].text, cleanedText);
+  assert.equal(completions[0].source, "local-fallback");
+  assert.match(completions[0].clientTranscriptionId, UUID);
+  assert.deepEqual(facts, [
+    { captureId: completions[0].clientTranscriptionId, words: 4, mode: "local" },
+  ]);
+  assert.equal(completions[0].rawText, rawText);
 });
 
 test("a cloud batch recording keeps the capture id it was uploaded under", async (t) => {

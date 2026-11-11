@@ -657,6 +657,164 @@ describe('mobile dictation', () => {
     );
   });
 
+  it('resumes dictation after consent discards an offline crossing, including after relaunch', async (): Promise<void> => {
+    const storage = memoryStorage();
+    const first = rig(storage);
+    await first.signInAs(ACCOUNT);
+    first.server.offline = true;
+    await first.events.recordDictationCompleted(dictation(1, 200, { provider: 'local' }));
+    expect(queuedDictation(first)).toEqual([[200, false, false]]);
+
+    await first.setUsageAnalytics(false);
+    expect(first.queued()).toEqual([]);
+    const relaunched = rig(storage, { allowed: false });
+    await relaunched.signInAs(ACCOUNT);
+    await relaunched.setUsageAnalytics(true);
+    await relaunched.events.recordDictationCompleted(dictation(2, 250));
+    await relaunched.events.recordDictationCompleted(dictation(3, 1));
+
+    expect(
+      relaunched.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+    ).toEqual([
+      expect.objectContaining({ properties: expect.objectContaining({ word_count: 250 }) }),
+    ]);
+  });
+
+  it('consent discards only unsent eligible words and preserves already uploaded progress', async (): Promise<void> => {
+    const client = rig();
+    await client.signInAs(ACCOUNT);
+    await client.events.recordDictationCompleted(dictation(1, 150));
+    client.server.offline = true;
+    client.setOnboarding(true);
+    await client.events.recordDictationCompleted(dictation(2, 180));
+    client.setOnboarding(false);
+    await client.events.recordDictationCompleted(dictation(3, 150, { retranscribe: true }));
+    await client.events.recordDictationCompleted(dictation(4, 50));
+
+    await client.setUsageAnalytics(false);
+    client.server.offline = false;
+    await client.setUsageAnalytics(true);
+    await client.events.recordDictationCompleted(dictation(5, 49));
+    await client.events.recordDictationCompleted(dictation(6, 1));
+    await client.events.recordDictationCompleted(dictation(7, 20));
+
+    expect(
+      client
+        .sentEvents()
+        .filter((event) => event.event_name === 'dictation_completed')
+        .map((event) => (event.properties as { word_count: number }).word_count),
+    ).toEqual([150, 49, 1]);
+  });
+
+  it('consent allows a new uncountable fact after discarding the queued one', async (): Promise<void> => {
+    const client = rig();
+    await client.signInAs(ACCOUNT);
+    client.server.offline = true;
+    await client.events.recordDictationCompleted(dictation(1, null));
+    await client.setUsageAnalytics(false);
+    client.server.offline = false;
+    await client.setUsageAnalytics(true);
+    await client.events.recordDictationCompleted(dictation(2, null));
+    await client.events.recordDictationCompleted(dictation(3, null));
+
+    expect(
+      client.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+    ).toEqual([
+      expect.objectContaining({ properties: expect.objectContaining({ word_count: null }) }),
+    ]);
+  });
+
+  it.each([
+    { words: 50, accepted: true, switchAccount: false, revokeAfterAck: false },
+    { words: null, accepted: true, switchAccount: false, revokeAfterAck: false },
+    { words: 50, accepted: true, switchAccount: true, revokeAfterAck: false },
+    { words: null, accepted: true, switchAccount: true, revokeAfterAck: false },
+    { words: 50, accepted: true, switchAccount: true, revokeAfterAck: true },
+    { words: null, accepted: true, switchAccount: true, revokeAfterAck: true },
+    { words: 50, accepted: false, switchAccount: false, revokeAfterAck: false },
+    { words: null, accepted: false, switchAccount: false, revokeAfterAck: false },
+  ])(
+    'settles an in-flight $words-word fact across consent changes (accepted=$accepted, switchAccount=$switchAccount, revokeAfterAck=$revokeAfterAck)',
+    async ({ words, accepted, switchAccount, revokeAfterAck }): Promise<void> => {
+      const storage = memoryStorage();
+      const client = rig(storage);
+      await client.signInAs(ACCOUNT);
+      await client.events.recordDictationCompleted(dictation(1, 150));
+      let release!: () => void;
+      client.server.hold = new Promise<void>((resolve): void => {
+        release = resolve;
+      });
+      const recording = client.events.recordDictationCompleted(dictation(2, words));
+      await new Promise<void>((resolve): void => {
+        setTimeout(resolve, 0);
+      });
+      expect(client.server.hold).toBeNull();
+
+      if (!revokeAfterAck) await client.setUsageAnalytics(false);
+      if (switchAccount) client.setIdentityQuietly(OTHER);
+      client.server.offline = !accepted;
+      release();
+      await recording;
+      if (revokeAfterAck) await client.setUsageAnalytics(false);
+      expect(client.queued()).toEqual([]);
+
+      const relaunched = rig(storage, { allowed: false });
+      await relaunched.signInAs(ACCOUNT);
+      await relaunched.setUsageAnalytics(true);
+      await relaunched.events.recordDictationCompleted(dictation(3, words));
+      await relaunched.events.recordDictationCompleted(dictation(4, words));
+      expect(
+        relaunched.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+      ).toHaveLength(accepted ? 0 : 1);
+    },
+  );
+
+  it('settles consent and acknowledgement atomically when another storage write is pending', async (): Promise<void> => {
+    const storage = memoryStorage();
+    const client = rig(storage);
+    await client.signInAs(ACCOUNT);
+    await client.events.recordDictationCompleted(dictation(1, 150));
+    let releaseUpload!: () => void;
+    client.server.hold = new Promise<void>((resolve): void => {
+      releaseUpload = resolve;
+    });
+    const recording = client.events.recordDictationCompleted(dictation(2, 50));
+    await new Promise<void>((resolve): void => {
+      setTimeout(resolve, 0);
+    });
+    expect(client.server.hold).toBeNull();
+
+    let releaseStorage!: () => void;
+    const storageHeld = new Promise<void>((resolve): void => {
+      releaseStorage = resolve;
+    });
+    const setItem = storage.setItem;
+    jest.spyOn(storage, 'setItem').mockImplementationOnce(async (key, value): Promise<void> => {
+      await storageHeld;
+      await setItem(key, value);
+    });
+    const onboarding = client.events.recordOnboardingCompleted(COMPLETION);
+    await new Promise<void>((resolve): void => {
+      setTimeout(resolve, 0);
+    });
+    expect(storage.setItem).toHaveBeenCalledTimes(1);
+    const consent = client.setUsageAnalytics(false);
+    releaseUpload();
+    await new Promise<void>((resolve): void => {
+      setTimeout(resolve, 0);
+    });
+    releaseStorage();
+    await Promise.all([recording, onboarding, consent]);
+
+    const relaunched = rig(storage, { allowed: false });
+    await relaunched.signInAs(ACCOUNT);
+    await relaunched.setUsageAnalytics(true);
+    await relaunched.events.recordDictationCompleted(dictation(3, 50));
+    expect(
+      relaunched.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+    ).toEqual([]);
+  });
+
   it('a policy block drops queued dictation and queues none while the session lasts', async () => {
     const r = rig();
     await r.signInAs(ACCOUNT);
