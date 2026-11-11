@@ -4,7 +4,7 @@ import { WorkspacesService } from "../services/WorkspacesService";
 import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
-import { defaultActiveWorkspaceId } from "../lib/workspaceSwitcher";
+import { canChoosePersonal, defaultActiveWorkspaceId } from "../lib/workspaceSwitcher";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -12,6 +12,8 @@ interface WorkspaceState {
   loading: boolean;
   error: boolean;
   activeWorkspaceId: string | null;
+  /** The user picked Personal over their workspaces, so no workspace is active on purpose. */
+  personalSelected: boolean;
   members: WorkspaceMember[];
   /**
    * The workspace `members` belongs to. A reader that shows one workspace reads the roster through
@@ -20,6 +22,7 @@ interface WorkspaceState {
   membersWorkspaceId: string | null;
 
   setActiveWorkspaceId: (id: string | null) => void;
+  selectPersonal: () => void;
   /**
    * Drops a workspace the user just left or deleted, so a failed refresh can't show it again, and
    * moves the active workspace off it.
@@ -44,6 +47,21 @@ export const ACTIVE_WORKSPACE_KEY = "activeWorkspaceId";
 export function readActiveWorkspaceId(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(ACTIVE_WORKSPACE_KEY);
+}
+
+// Separate from the active id, which every reader takes as a workspace id or none: a marker stored
+// there would reach the API as one. Without this key, no active id means none has been chosen yet.
+export const PERSONAL_SELECTED_KEY = "workspacePersonalSelected";
+
+function readPersonalSelected(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(PERSONAL_SELECTED_KEY) === "true";
+}
+
+function writePersonalSelected(selected: boolean): void {
+  if (typeof window === "undefined") return;
+  if (selected) localStorage.setItem(PERSONAL_SELECTED_KEY, "true");
+  else localStorage.removeItem(PERSONAL_SELECTED_KEY);
 }
 
 function writeActiveWorkspaceId(id: string | null): void {
@@ -178,16 +196,28 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   loading: false,
   error: false,
   activeWorkspaceId: readActiveWorkspaceId(),
+  personalSelected: readPersonalSelected(),
   members: [],
   membersWorkspaceId: null,
 
   setActiveWorkspaceId: (id) => {
+    writePersonalSelected(false);
     writeActiveWorkspaceId(id);
     // Invalidate in-flight member fetches so the old workspace's roster can't
     // land under the new one.
     membersRequestSeq++;
-    set({ activeWorkspaceId: id, members: [], membersWorkspaceId: null });
+    set({ activeWorkspaceId: id, personalSelected: false, members: [], membersWorkspaceId: null });
     refreshForWorkspace(id);
+  },
+
+  selectPersonal: () => {
+    if (!canChoosePersonal(get().workspaces)) return;
+    // The flag goes first: a window that hears the active id cleared must not pick a default.
+    writePersonalSelected(true);
+    writeActiveWorkspaceId(null);
+    membersRequestSeq++;
+    set({ activeWorkspaceId: null, personalSelected: true, members: [], membersWorkspaceId: null });
+    refreshForWorkspace(null);
   },
 
   forgetWorkspace: (id) => {
@@ -210,6 +240,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // Let the next account start its own request. The identity check in the
     // old request prevents its result/finally block from touching new state.
     refreshPromise = null;
+    writePersonalSelected(false);
     writeActiveWorkspaceId(null);
     clearWorkspaceListCache();
     useEnterpriseIdentityStore.getState().clear();
@@ -219,6 +250,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       loading: false,
       error: false,
       activeWorkspaceId: null,
+      personalSelected: false,
       members: [],
       membersWorkspaceId: null,
     });
@@ -236,20 +268,31 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       try {
         const workspaces = await WorkspacesService.list();
         if (superseded()) return;
+        // Both choices come from storage: another window may have changed them a task before
+        // this answer, ahead of its storage events. Memory only says what this window showed.
         const activeId = get().activeWorkspaceId;
-        const stillValid = activeId && workspaces.some((w) => w.id === activeId);
-        const resolvedActiveId = stillValid ? activeId : defaultActiveWorkspaceId(workspaces);
+        const savedActiveId = readActiveWorkspaceId();
+        const savedPersonal = readPersonalSelected();
+        const personalSelected = savedPersonal && canChoosePersonal(workspaces);
+        if (savedPersonal && !personalSelected) writePersonalSelected(false);
+        const stillValid = savedActiveId && workspaces.some((w) => w.id === savedActiveId);
+        const resolvedActiveId = personalSelected
+          ? null
+          : stillValid
+            ? savedActiveId
+            : defaultActiveWorkspaceId(workspaces);
         const activeChanged = resolvedActiveId !== activeId;
         if (activeChanged) membersRequestSeq++;
         // Written before the state changes, as setActiveWorkspaceId does: the
         // subscribers publish for the workspace localStorage names.
-        if (activeChanged) writeActiveWorkspaceId(resolvedActiveId);
+        if (resolvedActiveId !== savedActiveId) writeActiveWorkspaceId(resolvedActiveId);
         set({
           workspaces,
           loaded: true,
           loading: false,
           error: false,
           activeWorkspaceId: resolvedActiveId,
+          personalSelected,
           ...(activeChanged ? { members: [], membersWorkspaceId: null } : {}),
         });
         writeWorkspaceListCache(usePolicyStore.getState().accountId, workspaces);
@@ -328,6 +371,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 // left to the window's own refresh (the dictation window re-resolves it in
 // accountScopeMirror on this same event).
 export function handleActiveWorkspaceStorage(event: StorageEvent): void {
+  if (event.key === PERSONAL_SELECTED_KEY) {
+    useWorkspaceStore.setState({ personalSelected: event.newValue === "true" });
+    return;
+  }
   if (event.key !== ACTIVE_WORKSPACE_KEY) return;
   const id = event.newValue;
   if (id === useWorkspaceStore.getState().activeWorkspaceId) return;

@@ -3,6 +3,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { isLocalModelPolicyRefusal } = require("../../src/helpers/localModelPolicyGate");
+const {
+  fragmentFilterLanguages,
+  isWrongScriptFragment,
+} = require("../../src/helpers/meetingFragmentFilter");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
 
@@ -326,10 +331,13 @@ function chunkHarness() {
     debugLogger: { debug() {}, error() {} },
     Buffer,
     isLocalModelPolicyRefusal: (error) => error?.code?.startsWith("POLICY_"),
+    fragmentFilterLanguages,
+    isWrongScriptFragment,
   };
   vm.createContext(context);
   vm.runInContext(
     `
+    const meetingConnectionOptions = { language: "en" };
     const meetingLocalBuffers = { mic: [], system: [Buffer.alloc(4)] };
     const meetingLocalWin = { isDestroyed: () => false, webContents: { send: (channel, payload) => finals.push({ channel, payload }) } };
     const meetingLocalProvider = "nvidia";
@@ -436,6 +444,7 @@ test("model policy refresh stops only the active local meeting selection before 
       },
       _stopMeetingForPolicy: (code) => stopped.push(code),
       debugLogger: { warn() {} },
+      isLocalModelPolicyRefusal,
     };
     vm.createContext(context);
     vm.runInContext(

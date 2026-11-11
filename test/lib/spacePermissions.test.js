@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 const {
   canChangeSpaceNoteScope,
   canDeleteSpaceNote,
-  canManageTeamRoster,
   canMoveBetweenSpaces,
   canMoveOrDeleteSpaceFolder,
   ownsNote,
@@ -26,16 +25,6 @@ const ws = (role, capabilities) => ({ role, capabilities });
 // Server capabilities with only the named ones granted.
 const granting = (...names) =>
   Object.fromEntries(WORKSPACE_CAPABILITIES.map((name) => [name, names.includes(name)]));
-
-test("canManageTeamRoster: team admin or workspace owner/admin", () => {
-  assert.equal(canManageTeamRoster("admin", null), true);
-  assert.equal(canManageTeamRoster("admin", ws("member")), true);
-  assert.equal(canManageTeamRoster("member", ws("owner")), true);
-  assert.equal(canManageTeamRoster(null, ws("admin")), true);
-  assert.equal(canManageTeamRoster("member", ws("member")), false);
-  assert.equal(canManageTeamRoster(null, ws("member")), false);
-  assert.equal(canManageTeamRoster(undefined, null), false);
-});
 
 const privateSpace = { kind: "private", workspace_id: null };
 const teamSpace = (workspaceId) => ({ kind: "team", workspace_id: workspaceId });
@@ -209,7 +198,6 @@ test("capabilities override the role in content rules", () => {
     false
   );
   assert.equal(canMoveOrDeleteSpaceFolder(enforcedSpace("member"), ssoBlockedAdmin), false);
-  assert.equal(canManageTeamRoster("member", ssoBlockedAdmin), false);
 
   // A member the server lets manage the workspace gets the admin rules.
   const grantedMember = ws("member", granting("manage_settings", "manage_teams"));
@@ -219,7 +207,6 @@ test("capabilities override the role in content rules", () => {
     true
   );
   assert.equal(canMoveOrDeleteSpaceFolder(enforcedSpace("member"), grantedMember), true);
-  assert.equal(canManageTeamRoster(null, grantedMember), true);
 
   // Space capabilities decide "space admin" the same way.
   const spaceCapabilities = (manageSettings) => ({

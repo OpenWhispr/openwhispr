@@ -220,6 +220,45 @@ test("an icon-only action follows the labelled ones in the same row", async (t) 
   assert.equal(button("Copy details").getAttribute("title"), "Copy details");
 });
 
+test("onSettled runs once when a toast goes, however it goes", async (t) => {
+  const h = await setup(t);
+  const { ToastProvider } = await h.vite.ssrLoadModule("/components/ui/Toast.tsx");
+  const { useToast } = await h.vite.ssrLoadModule("/components/ui/useToast.ts");
+  let context;
+  function Probe() {
+    context = useToast();
+    return null;
+  }
+  await h.render(React.createElement(ToastProvider, null, React.createElement(Probe)));
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+
+  const settled = [];
+  let timed;
+  let dismissed;
+  await React.act(async () => {
+    timed = context.toast({
+      title: "Timed",
+      duration: 1000,
+      onSettled: () => settled.push("timed"),
+    });
+    dismissed = context.toast({
+      title: "Dismissed",
+      duration: 0,
+      onSettled: () => settled.push("dismissed"),
+    });
+  });
+  assert.deepEqual(settled, []);
+
+  await React.act(async () => context.dismiss(dismissed));
+  assert.deepEqual(settled, ["dismissed"]);
+  await React.act(async () => context.dismiss(dismissed));
+  assert.deepEqual(settled, ["dismissed"], "a second dismiss during the exit changes nothing");
+
+  await React.act(async () => t.mock.timers.tick(1000));
+  assert.deepEqual(settled, ["dismissed", "timed"]);
+  assert.ok(timed);
+});
+
 test("a standard toast with structured actions shows its description as text and the actions under it", async (t) => {
   const h = await setup(t);
   const { ToastProvider } = await h.vite.ssrLoadModule("/components/ui/Toast.tsx");

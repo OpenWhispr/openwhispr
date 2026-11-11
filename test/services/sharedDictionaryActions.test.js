@@ -15,6 +15,20 @@ const SPACE = "33333333-3333-4333-8333-333333333333";
 const SHARE = "/api/shared-dictionary/share";
 const CREATE = "/api/shared-dictionary/create";
 
+const ACCOUNT = "user-me";
+
+// A share sends a personal row by id only when it is the signed-in account's
+// own, so every test runs signed in. setup() resets the globals, not the auth
+// context, which lives in its module.
+test.beforeEach(async () => {
+  harness.resetBrowserGlobals();
+  harness.installBrowserGlobals();
+  harness.window.electronAPI = {
+    authGetTokenState: async () => ({ token: "harness-token", generation: 0 }),
+  };
+  await harness.establishValidatedAuth(ACCOUNT);
+});
+
 function changeAccount() {
   const { useSharedDictionaryStore } = require("../../src/stores/sharedDictionaryStore.ts");
   useSharedDictionaryStore.getState().resetForAccountChange();
@@ -28,7 +42,7 @@ function entry(word, spaceId = null) {
     workspace_id: WS,
     space_id: spaceId,
     word,
-    added_by_user_id: "user-me",
+    added_by_user_id: ACCOUNT,
     created_at: "2026-10-20T12:00:00.000Z",
     updated_at: "2026-10-20T12:00:00.000Z",
     deleted_at: null,
@@ -62,7 +76,12 @@ function setup(t, { personal = [], canSync = false } = {}) {
       words
         .map((word) => personalByLower.get(word.toLowerCase()))
         .filter(Boolean)
-        .map((row) => ({ word: row.word, cloudId: row.cloudId ?? null })),
+        // A fixture row is the account's own unless it names another owner.
+        .map((row) => ({
+          word: row.word,
+          cloudId: row.cloudId ?? null,
+          accountId: row.accountId === undefined ? ACCOUNT : row.accountId,
+        })),
     markDictionaryWordsShared: async (words, sharedAt, options) => {
       marks.push({ words, sharedAt, pendingWords: options?.pendingWords ?? [] });
       for (const word of words) {
@@ -234,6 +253,32 @@ test("share sends {id, word} for synced words and plain words for unsynced ones"
   assert.equal(ctx.counts.reloads, 1);
   assert.equal(ctx.counts.sharedSyncs, 1);
   assert.equal(ctx.counts.personalSyncs, 0);
+});
+
+// A row from before attribution, or one added signed out, may carry another
+// account's cloud id; the API answers PERSONAL_CHANGED for the whole request
+// over an id it can't find for the caller.
+test("share sends an unattributed word as a plain word, whatever cloud id it carries", async (t) => {
+  const ctx = setup(t, {
+    canSync: true,
+    personal: [
+      { word: "Mine", cloudId: "aaaaaaaa-aaaa-4aaa-8aaa-000000000001" },
+      { word: "Kubernetes", cloudId: "bbbbbbbb-bbbb-4bbb-8bbb-000000000001", accountId: null },
+    ],
+  });
+  ctx.on(SHARE, acceptShare);
+
+  const result = await ctx.actions.sharePersonalWords(WS, [null], ["Mine", "Kubernetes"]);
+
+  const [request] = ctx.requestsTo(SHARE);
+  assert.deepEqual(request.body.personal, [
+    { id: "aaaaaaaa-aaaa-4aaa-8aaa-000000000001", word: "Mine" },
+  ]);
+  assert.deepEqual(request.body.words, ["Kubernetes"]);
+  assert.deepEqual(result.moved, ["Mine", "Kubernetes"]);
+  assert.equal(result.failed, null);
+  // The server marked no personal row for it, so the local mark stays pending.
+  assert.deepEqual(ctx.marks[0].pendingWords, ["Kubernetes"]);
 });
 
 test("second chunk failure keeps the first 200 shared and returns the other 250", async (t) => {
@@ -923,7 +968,7 @@ test("with sync on, a synced fallback is left for the server to retire", async (
 
   await ctx.actions.setSharedWordsHidden(WS, [rows[0].id], true);
 
-  assert.deepEqual(ctx.retireOptions, [{ includeSynced: false }]);
+  assert.deepEqual(ctx.retireOptions, [{ includeSynced: false, expectedAuthGeneration: 0 }]);
   assert.equal(ctx.counts.personalSyncs, 1, "the pull brings the server's answer");
 });
 

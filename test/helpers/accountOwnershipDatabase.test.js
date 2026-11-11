@@ -67,13 +67,16 @@ function createDatabaseManager() {
       id INTEGER PRIMARY KEY,
       note_id INTEGER,
       folder_id INTEGER,
-      account_id TEXT,
       cloud_id TEXT,
       cloud_create_attempted INTEGER NOT NULL DEFAULT 0,
       sync_status TEXT NOT NULL DEFAULT 'synced',
+      account_id TEXT,
       deleted_at TEXT,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE transcriptions (id INTEGER PRIMARY KEY, text TEXT, account_id TEXT);
+    CREATE TABLE custom_dictionary (id INTEGER PRIMARY KEY, word TEXT, account_id TEXT);
+    CREATE TABLE snippets (id INTEGER PRIMARY KEY, trigger TEXT, account_id TEXT);
     CREATE TABLE agent_messages (
       id INTEGER PRIMARY KEY,
       conversation_id INTEGER NOT NULL REFERENCES agent_conversations(id) ON DELETE CASCADE
@@ -95,6 +98,10 @@ function createDatabaseManager() {
     );
     CREATE TABLE analytics_clear_requests (
       account_id TEXT PRIMARY KEY,
+      cleared_through TEXT NOT NULL
+    );
+    CREATE TABLE analytics_account_clear_state (
+      account_scope TEXT PRIMARY KEY,
       cleared_through TEXT NOT NULL
     );
     CREATE TABLE connector_actions (
@@ -121,6 +128,9 @@ function createDatabaseManager() {
   const manager = Object.create(DatabaseManager.prototype);
   manager.db = sqlite;
   manager.activeAccountId = null;
+  manager._accountChanges = [];
+  manager._registerKeyFolding();
+  manager._initDeviceAccounts();
   return { manager, sqlite };
 }
 
@@ -225,8 +235,17 @@ test("deleting one account removes only its personal rows and dependent private 
       (2, 'Personal A', '', 2, 1, 'account-a'),
       (3, 'Personal B', '', 3, 1, 'account-b'),
       (4, 'Workspace A', '', 4, 2, 'account-a');
-    INSERT INTO agent_conversations (id, note_id, folder_id) VALUES (1, 2, 2);
-    INSERT INTO agent_messages (id, conversation_id) VALUES (1, 1);
+    INSERT INTO agent_conversations (id, note_id, folder_id, account_id) VALUES
+      (1, 2, 2, NULL),
+      (2, NULL, NULL, 'account-a'),
+      (3, NULL, NULL, 'account-b');
+    INSERT INTO agent_messages (id, conversation_id) VALUES (1, 1), (2, 2), (3, 3);
+    INSERT INTO transcriptions (id, text, account_id) VALUES
+      (1, 'legacy', NULL), (2, 'a', 'account-a'), (3, 'b', 'account-b');
+    INSERT INTO custom_dictionary (id, word, account_id) VALUES
+      (1, 'legacy', NULL), (2, 'a', 'account-a'), (3, 'b', 'account-b');
+    INSERT INTO snippets (id, trigger, account_id) VALUES
+      (1, 'legacy', NULL), (2, 'a', 'account-a'), (3, 'b', 'account-b');
     INSERT INTO speaker_mappings (note_id) VALUES (2);
     INSERT INTO note_speaker_embeddings (note_id) VALUES (2);
     INSERT INTO optimistic_folder_delete_rows (folder_id, entity_type, entity_id)
@@ -238,6 +257,7 @@ test("deleting one account removes only its personal rows and dependent private 
 
   assert.deepEqual(result.deletedNoteIds, [2]);
   assert.deepEqual(result.deletedFolderIds, [2]);
+  assert.deepEqual(result.deletedTranscriptionIds, [2]);
   assert.deepEqual(
     sqlite
       .prepare("SELECT title FROM notes ORDER BY id")
@@ -252,8 +272,31 @@ test("deleting one account removes only its personal rows and dependent private 
       .map((row) => row.name),
     ["Legacy", "Personal B", "Workspace A"]
   );
-  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_conversations").get().count, 0);
-  assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM agent_messages").get().count, 0);
+  assert.deepEqual(
+    sqlite
+      .prepare("SELECT id FROM agent_conversations ORDER BY id")
+      .all()
+      .map((row) => row.id),
+    [3],
+    "the deleted note's chat and A's own chat go; B's stays"
+  );
+  assert.deepEqual(
+    sqlite
+      .prepare("SELECT conversation_id FROM agent_messages ORDER BY id")
+      .all()
+      .map((row) => row.conversation_id),
+    [3]
+  );
+  for (const table of ["transcriptions", "custom_dictionary", "snippets"]) {
+    assert.deepEqual(
+      sqlite
+        .prepare(`SELECT id FROM ${table} ORDER BY id`)
+        .all()
+        .map((row) => row.id),
+      [1, 3],
+      `${table}: unattributed and B's rows remain`
+    );
+  }
   assert.equal(sqlite.prepare("SELECT COUNT(*) AS count FROM speaker_mappings").get().count, 0);
   assert.equal(
     sqlite.prepare("SELECT COUNT(*) AS count FROM note_speaker_embeddings").get().count,

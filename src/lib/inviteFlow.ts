@@ -1,5 +1,7 @@
+import type { TFunction } from "i18next";
 import type { InviteFailure } from "./workspaceErrors";
 import type { InviteOutcome } from "../services/invitePeople";
+import { isolate } from "../utils/bidiIsolate";
 import { parseAddressList } from "../utils/emailApprovalFields";
 import { EMAIL_REGEX } from "../utils/validation";
 
@@ -27,6 +29,10 @@ export interface InviteFlowState {
   phase: "editing" | "sending" | "done";
   /** Accumulates across retries. */
   sent: Array<{ email: string; emailSent: boolean }>;
+  /** Already invited, and that invitation took this team or teamspace. No email went out. */
+  attached: string[];
+  /** On a team or teamspace, an address already invited still has something to send. */
+  attachInvited: boolean;
   memberEmails: string[];
   invitedEmails: string[];
   /** Invitations the workspace can still take; null while unknown, which never warns or blocks. */
@@ -94,12 +100,12 @@ function normalize(email: string): string {
 }
 
 // Deliberately loose: the server has the final say on what an address is.
-function isValidEmail(email: string): boolean {
+export function isValidEmail(email: string): boolean {
   return email.length <= MAX_EMAIL_LENGTH && EMAIL_REGEX.test(email);
 }
 
 /** The addresses in pasted or typed text, with any "Name <address>" reduced to its address. */
-function parseEmails(text: string): string[] {
+export function parseEmails(text: string): string[] {
   const emails: string[] = [];
   for (const line of text.split(/[\n\r]+/)) {
     for (const part of parseAddressList(line)) {
@@ -114,10 +120,17 @@ function parseEmails(text: string): string[] {
   return emails;
 }
 
-function classify(email: string, memberEmails: string[], invitedEmails: string[]): RecipientState {
+function classify(
+  email: string,
+  memberEmails: string[],
+  invitedEmails: string[],
+  attachInvited: boolean
+): RecipientState {
   if (!isValidEmail(email)) return { status: "invalid" };
   if (memberEmails.includes(email)) return { status: "blocked", reason: "alreadyMember" };
-  if (invitedEmails.includes(email)) return { status: "blocked", reason: "alreadyInvited" };
+  if (invitedEmails.includes(email) && !attachInvited) {
+    return { status: "blocked", reason: "alreadyInvited" };
+  }
   return { status: "draft" };
 }
 
@@ -125,7 +138,7 @@ function classify(email: string, memberEmails: string[], invitedEmails: string[]
 // person twice and doesn't vanish without a word.
 function addEmails(state: InviteFlowState, candidates: string[]): InviteFlowState {
   const known = new Set(state.recipients.map((recipient) => recipient.email));
-  const sentEmails = new Set(state.sent.map((entry) => entry.email));
+  const sentEmails = new Set([...state.sent.map((entry) => entry.email), ...state.attached]);
   const added: InviteRecipient[] = [];
   for (const candidate of candidates) {
     const email = normalize(candidate);
@@ -135,7 +148,7 @@ function addEmails(state: InviteFlowState, candidates: string[]): InviteFlowStat
       email,
       state: sentEmails.has(email)
         ? { status: "blocked", reason: "alreadyInvited" }
-        : classify(email, state.memberEmails, state.invitedEmails),
+        : classify(email, state.memberEmails, state.invitedEmails, state.attachInvited),
     });
   }
   return added.length === 0 ? state : { ...state, recipients: [...state.recipients, ...added] };
@@ -169,7 +182,7 @@ function setDraft(state: InviteFlowState, text: string): InviteFlowState {
   return { ...withChips, draft: rest.trimStart() };
 }
 
-function shortfall(left: number | null, requested: number): SeatShortfall | null {
+export function shortfall(left: number | null, requested: number): SeatShortfall | null {
   if (left === null) return null;
   // The room left can be negative, since sends over the purchased seats only warn. With nothing
   // to send, that is still no shortfall.
@@ -177,10 +190,32 @@ function shortfall(left: number | null, requested: number): SeatShortfall | null
   return requested <= available ? null : { available, excess: requested - available };
 }
 
+/** The warning when invitations would go past the seats a subscription has paid for. */
+export function seatsWarningMessage(
+  t: TFunction,
+  { available: count, excess }: SeatShortfall,
+  canManageBilling: boolean,
+  billingManager: string | null
+): string {
+  const askOwner = !canManageBilling && billingManager;
+  // With no seats left, removing the excess would mean removing everyone.
+  if (count === 0) {
+    return askOwner
+      ? t("workspaces.invite.seatsNoneAskOwner", { owner: isolate(askOwner) })
+      : t("workspaces.invite.seatsNone");
+  }
+  return askOwner
+    ? t("workspaces.invite.seatsLeftAskOwner", { count, excess, owner: isolate(askOwner) })
+    : t("workspaces.invite.seatsLeft", { count, excess });
+}
+
 // Something went out and only blocked chips are left, so there is nothing more to send or fix.
 // With nothing sent there is nothing to confirm: the chips stay to say why.
-function isSettled(recipients: InviteRecipient[], sent: InviteFlowState["sent"]): boolean {
-  return sent.length > 0 && recipients.every((recipient) => recipient.state.status === "blocked");
+function isSettled(recipients: InviteRecipient[], state: InviteFlowState): boolean {
+  return (
+    state.sent.length + state.attached.length > 0 &&
+    recipients.every((recipient) => recipient.state.status === "blocked")
+  );
 }
 
 function resolveResult(
@@ -199,6 +234,15 @@ function resolveResult(
       ...state,
       recipients: state.recipients.filter((recipient) => recipient !== chip),
       sent: [...state.sent, { email: target, emailSent: outcome.emailSent }],
+      rateLimit: null,
+    };
+  }
+
+  if (outcome.kind === "alreadyInvited" && outcome.grantsAdded === true) {
+    return {
+      ...state,
+      recipients: state.recipients.filter((recipient) => recipient !== chip),
+      attached: [...state.attached, target],
       rateLimit: null,
     };
   }
@@ -253,23 +297,35 @@ function resolveResult(
 // Removing the last chip that needed attention must still confirm the invitations that went out,
 // and warn about any whose email wasn't delivered.
 function withRecipients(state: InviteFlowState, recipients: InviteRecipient[]): InviteFlowState {
-  const settled =
-    state.phase === "editing" && isSettled(recipients, state.sent) && state.draft === "";
+  const settled = state.phase === "editing" && isSettled(recipients, state) && state.draft === "";
   return { ...state, recipients, phase: settled ? "done" : state.phase };
 }
 
-export function createInviteFlow(input: { initialEmail?: string }): InviteFlowState {
+export function createInviteFlow(input: {
+  initialEmail?: string;
+  /** Addresses to open as chips; invalid ones are dropped, since they came from the server. */
+  initialEmails?: string[];
+  attachInvited?: boolean;
+}): InviteFlowState {
   const base: InviteFlowState = {
     draft: "",
     recipients: [],
     role: "member",
     phase: "editing",
     sent: [],
+    attached: [],
+    attachInvited: input.attachInvited === true,
     memberEmails: [],
     invitedEmails: [],
     seats: { purchasedLeft: null, ceilingLeft: null },
     rateLimit: null,
   };
+  if (input.initialEmails !== undefined) {
+    return addEmails(
+      base,
+      input.initialEmails.filter((email) => isValidEmail(normalize(email)))
+    );
+  }
   const initialEmail = input.initialEmail?.trim() ?? "";
   if (!initialEmail) return base;
   // A caller can pass a half-typed address (a roster search for "john@acme"); a chip could only
@@ -306,7 +362,9 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
     draftAllowsSend &&
     !state.recipients.some((recipient) => recipient.email === draftText) &&
     !state.sent.some((entry) => entry.email === draftText) &&
-    classify(draftText, state.memberEmails, state.invitedEmails).status === "draft";
+    !state.attached.includes(draftText) &&
+    classify(draftText, state.memberEmails, state.invitedEmails, state.attachInvited).status ===
+      "draft";
   if (draftAddsChip) sendable.push(draftText);
   const invalid = state.recipients.filter(({ state: chip }) => chip.status === "invalid");
   const skipped = state.recipients.filter(({ state: chip }) => chip.status === "blocked");
@@ -316,9 +374,11 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
     state.recipients.length - skipped.length + (draftAddsChip ? 1 : 0) - MAX_INVITE_RECIPIENTS
   );
   const tooMany = tooManyBy > 0;
-  const overSeats = shortfall(state.seats.purchasedLeft, sendable.length);
-  const overCeiling = shortfall(state.seats.ceilingLeft, sendable.length);
-  const overRateRoom = state.rateLimit && shortfall(state.rateLimit.available, sendable.length);
+  // Adding to an invitation that exists takes no seat and sends no email.
+  const newInvitations = sendable.filter((email) => !state.invitedEmails.includes(email)).length;
+  const overSeats = shortfall(state.seats.purchasedLeft, newInvitations);
+  const overCeiling = shortfall(state.seats.ceilingLeft, newInvitations);
+  const overRateRoom = state.rateLimit && shortfall(state.rateLimit.available, newInvitations);
 
   return {
     sendable,
@@ -354,7 +414,7 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
       return {
         ...state,
         recipients,
-        phase: isSettled(recipients, state.sent) ? "done" : "editing",
+        phase: isSettled(recipients, state) ? "done" : "editing",
       };
     }
     return state;
@@ -400,7 +460,12 @@ export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): I
         // A batch seat refusal did not judge individual addresses, so a later roster can skip them.
         recipients: state.recipients.map((recipient) => {
           const chip = recipient.state;
-          const classified = classify(recipient.email, memberEmails, invitedEmails);
+          const classified = classify(
+            recipient.email,
+            memberEmails,
+            invitedEmails,
+            state.attachInvited
+          );
           return chip.status === "draft" ||
             (chip.status === "failed" &&
               chip.kind === "seatLimit" &&

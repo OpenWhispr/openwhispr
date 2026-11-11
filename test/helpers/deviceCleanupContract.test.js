@@ -38,6 +38,13 @@ test("explicit device cleanup covers models, credentials, caches, and browser se
     "device cleanup removes the account scope binding"
   );
 
+  for (const fileName of [
+    "installed-models.json",
+    "model-registry.json",
+    "model-registry.json.backup",
+  ])
+    assert.ok(source.includes(`"${fileName}"`), `device cleanup removes ${fileName}`);
+
   assert.ok(source.includes('"connectors"'), "device cleanup removes encrypted connector logins");
   assert.ok(source.includes("PAID_KEY_CHECKS_FILE"), "device cleanup removes paid key checks");
 });

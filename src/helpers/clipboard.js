@@ -53,6 +53,18 @@ const RESTORE_DELAYS = {
   linux_kde_wayland: 1200,
 };
 
+// VS Code can expose its class on Wayland without an X11 PID. In that case
+// the process-based Electron check cannot recognize its integrated terminal.
+// Match complete identities so unrelated apps containing "code" are unaffected.
+const LINUX_VSCODE_CLASSES = new Set([
+  "code",
+  "code-insiders",
+  "code - insiders",
+  "code-oss",
+  "code - oss",
+  "com.microsoft.vscode",
+]);
+
 // Window classes that identify terminal emulators, which expect
 // Ctrl+Shift+V/C instead of Ctrl+V/C. Mirrors terminal_classes in
 // resources/linux-fast-paste.c — keep the two lists in sync.
@@ -1851,6 +1863,9 @@ class ClipboardManager {
       });
     }
     const windowSignals = [detectedWindowClass, detectedWindowComm].filter(Boolean);
+    const detectedIsVSCode = windowSignals.some((signal) =>
+      LINUX_VSCODE_CLASSES.has(signal.trim().toLowerCase())
+    );
     const signalsMatch = (needle) => windowSignals.some((signal) => signal.includes(needle));
     const detectedIsKonsole = signalsMatch("konsole");
     const isTerminalTarget = windowSignals.some((signal) =>
@@ -1870,6 +1885,7 @@ class ClipboardManager {
       windowSignals.some(isOmarchyTerminalSignature) ||
       detectedIsKonsole ||
       detectedIsElectron ||
+      detectedIsVSCode ||
       (isWayland && (windowSignals.length === 0 || (isCosmic && !isTerminalTarget)));
     const hyprlandShortcut = useShiftInsert
       ? { modifiers: "SHIFT", key: "Insert" }
@@ -2061,12 +2077,12 @@ class ClipboardManager {
           this.portalTokenPasteFailed = true;
         }
 
-        // GNOME: a running ydotoold already owns a persistent uinput device, so
+        // GNOME/KDE: a running ydotoold already owns a persistent uinput device, so
         // paste through it instead of the throwaway device the binary creates per
-        // paste. Mutter can take 150–500 ms to pick up a hotplugged device, but the
+        // paste. On GNOME, Mutter can take 150–500 ms to pick up a hotplugged device, but the
         // binary destroys its device ~100 ms after creation and exits 0 regardless,
         // so the keystrokes are dropped and the fallbacks never run (#956).
-        if (isGnome && ydotoolDaemonRunning) {
+        if ((isGnome || isKde) && ydotoolDaemonRunning) {
           ydotoolAttempted = true;
           try {
             await this._runLinuxPasteCommand("ydotool", buildYdotoolArgs(), "ydotool");
@@ -2075,7 +2091,7 @@ class ClipboardManager {
             return { method: "ydotool", restoreComplete: restoreClipboard() };
           } catch (error) {
             debugLogger.warn(
-              "ydotool paste failed on GNOME, trying uinput",
+              "ydotool paste failed, trying uinput",
               { error: error?.message },
               "clipboard"
             );

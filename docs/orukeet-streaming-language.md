@@ -82,7 +82,7 @@ A recording lasting six seconds does not guarantee a completed six-second detect
 
 ### Session compatibility
 
-The desktop declares the `orukeet-language-routing` capability. The backend only returns a preview URL or language-routing flag to clients carrying that capability; older clients keep their production URL and normal streaming behavior. The adapter accepts only exact approved HTTPS/WSS URL pairs, including `https://orukeet.gizmovoice.ai/preview/language-routing`; lookalike hosts, arbitrary paths and query parameters are rejected. Session credentials stay in the main process. Operator setup and direct replay instructions are in the private deployment handoff.
+The desktop declares the `orukeet-language-routing` capability. The backend only returns a preview URL or language-routing flag to clients carrying that capability; older clients keep their production URL and normal streaming behavior. The adapter accepts only exact approved HTTPS/WSS URL pairs, including `/preview/language-routing` on `https://orukeet.gizmovoice.ai` or `https://orukeet.openwhispr.com`; lookalike hosts, arbitrary paths and query parameters are rejected. Session credentials stay in the main process. Operator setup and direct replay instructions are in the private deployment handoff.
 
 ### Comparison logs and validation
 

@@ -10,6 +10,8 @@ export interface ReasoningConfig {
   maxTokens?: number;
   temperature?: number;
   contextSize?: number;
+  /** Local models: how long to wait for another model's answer before giving up. */
+  busyWaitMs?: number;
   systemPrompt?: string;
   lanUrl?: string;
   baseUrl?: string;

@@ -2,13 +2,14 @@ import { useCallback, useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
+import { settingsWorkspace } from "../../lib/workspaceSwitcher";
 import type { Workspace } from "../../types/electron";
 
-export type SettingsWorkspaceStatus = "loading" | "error" | "empty" | "ready";
+export type SettingsWorkspaceStatus = "loading" | "error" | "empty" | "personal" | "ready";
 
 export interface SettingsWorkspaceState {
   status: SettingsWorkspaceStatus;
-  /** The active workspace, or the first one when the active id is gone. */
+  /** The active workspace, or the first one when the active id is gone. None while in Personal. */
   workspace: Workspace | null;
   workspaces: Workspace[];
   retry: () => void;
@@ -21,16 +22,18 @@ export interface SettingsWorkspaceState {
 
 export function useSettingsWorkspace(): SettingsWorkspaceState {
   const { isSignedIn } = useAuth();
-  const { workspaces, activeWorkspaceId, loaded, loading, error, refresh } = useWorkspaceStore(
-    useShallow((s) => ({
-      workspaces: s.workspaces,
-      activeWorkspaceId: s.activeWorkspaceId,
-      loaded: s.loaded,
-      loading: s.loading,
-      error: s.error,
-      refresh: s.refresh,
-    }))
-  );
+  const { workspaces, activeWorkspaceId, personalSelected, loaded, loading, error, refresh } =
+    useWorkspaceStore(
+      useShallow((s) => ({
+        workspaces: s.workspaces,
+        activeWorkspaceId: s.activeWorkspaceId,
+        personalSelected: s.personalSelected,
+        loaded: s.loaded,
+        loading: s.loading,
+        error: s.error,
+        refresh: s.refresh,
+      }))
+    );
 
   useEffect(() => {
     if (isSignedIn && !loaded) void refresh();
@@ -40,14 +43,16 @@ export function useSettingsWorkspace(): SettingsWorkspaceState {
     void refresh();
   }, [refresh]);
 
-  const workspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null;
+  const workspace = settingsWorkspace(workspaces, activeWorkspaceId, personalSelected);
   const status: SettingsWorkspaceStatus = !loaded
     ? "loading"
     : workspaces.length === 0
       ? error
         ? "error"
         : "empty"
-      : "ready";
+      : personalSelected
+        ? "personal"
+        : "ready";
 
   return {
     status,
