@@ -375,6 +375,7 @@ class UpdateManager {
   // Squirrel.Mac installs a staged update on any quit whatever the policy, so a
   // restart hands it over instead of racing app.relaunch().
   async restartIntoStagedUpdate() {
+    if (!this.hasStagedUpdate()) return { success: false, message: "No update is staged" };
     return this._quitAndInstall();
   }
 

@@ -566,6 +566,8 @@ test("a restart into a staged update goes through Squirrel under any policy, wit
       },
     });
     await manager.refreshPolicy();
+    assert.equal((await manager.restartIntoStagedUpdate()).success, false);
+    assert.equal(autoUpdater.installs, 0);
     autoUpdater.squirrelDownloadedUpdate = true;
     lookups = 0;
     assert.equal((await manager.restartIntoStagedUpdate()).success, true);
