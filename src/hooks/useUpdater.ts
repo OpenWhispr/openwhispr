@@ -48,6 +48,10 @@ function updateGlobalState(updates: Partial<UpdateState>) {
   notifyListeners();
 }
 
+// Main ends running work only once no verdict allows it, not while one is pending.
+const isBlocked = (status: UpdateStatus) =>
+  status.updateMode == null || status.updateMode === "it_managed";
+
 function registerEventListeners() {
   if (listenersRegistered || !window.electronAPI) {
     return;
@@ -57,8 +61,8 @@ function registerEventListeners() {
 
   if (window.electronAPI.onUpdateStatusChanged) {
     const dispose = window.electronAPI.onUpdateStatusChanged((status) => {
-      // Main ends running work only once no verdict allows it, not while one is pending.
-      const blocked = status.updateMode == null || status.updateMode === "it_managed";
+      const wasBlocked = isBlocked(globalState.status);
+      const blocked = isBlocked(status);
       updateGlobalState({
         status,
         ...(blocked
@@ -71,6 +75,15 @@ function registerEventListeners() {
             }
           : {}),
       });
+      // The info a block cleared comes back with it.
+      if (wasBlocked && !blocked) {
+        window.electronAPI
+          .getUpdateInfo?.()
+          .then((info) => {
+            if (info) updateGlobalState({ info });
+          })
+          .catch(() => {});
+      }
     });
     if (dispose) cleanupFunctions.push(dispose);
   }

@@ -31,3 +31,43 @@ test("only a policy refusal turns a download result into an error", async (t) =>
   });
   await assert.rejects(updater.downloadUpdate(), { code: "UPDATES_MANAGED_BY_ORG" });
 });
+
+test("the update info a policy block cleared comes back once updates are allowed", async (t) => {
+  const React = require("react");
+  const { installHappyDom } = require("../lib/happyDomDialog");
+  const { happyWindow, createRoot } = await installHappyDom();
+  const status = {
+    updateAvailable: false,
+    updateDownloaded: true,
+    updateMode: "user_choice",
+    isDevelopment: false,
+    isSupported: true,
+  };
+  let onStatus;
+  happyWindow.electronAPI = {
+    getUpdateStatus: async () => status,
+    getUpdateInfo: async () => ({ version: "99.0.0" }),
+    onUpdateStatusChanged: (callback) => {
+      onStatus = callback;
+      return () => {};
+    },
+  };
+  const { useUpdater } = await import("../../src/hooks/useUpdater.ts");
+  let updater;
+  function Probe() {
+    updater = useUpdater();
+    return null;
+  }
+  const root = createRoot(happyWindow.document.createElement("div"));
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    await happyWindow.happyDOM.close();
+  });
+  await React.act(async () => root.render(createElement(Probe)));
+  assert.equal(updater.info?.version, "99.0.0");
+
+  await React.act(async () => onStatus({ ...status, updateMode: "it_managed" }));
+  assert.equal(updater.info, null);
+  await React.act(async () => onStatus(status));
+  assert.equal(updater.info?.version, "99.0.0");
+});
