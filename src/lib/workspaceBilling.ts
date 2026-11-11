@@ -120,19 +120,20 @@ export function enterpriseManageAction(
 /**
  * The Business card's button for someone on Enterprise: Downgrade through the
  * Stripe portal when they bill a Stripe-billed Enterprise plan, contact sales
- * when they bill only provisioned ones, nothing when someone else bills.
+ * when they bill a provisioned plan, nothing when someone else bills.
+ * The active eligible billing workspace takes priority over the billing method.
  */
 export function businessDowngradeAction(
   workspaces: PlanCardWorkspace[],
   activeWorkspaceId: string | null
 ): WorkspacePlanAction | null {
-  const enterprise = entitledEnterpriseWorkspaces(workspaces, activeWorkspaceId);
-  const stripeBilled = enterprise.find(billsThroughStripe);
-  if (stripeBilled) return { kind: "stripePortal", workspaceId: stripeBilled.id };
-  if (enterprise.some((workspace) => workspaceCan(workspace, "manage_billing"))) {
-    return { kind: "contactSales" };
-  }
-  return null;
+  const workspace = entitledEnterpriseWorkspaces(workspaces, activeWorkspaceId).find((workspace) =>
+    workspaceCan(workspace, "manage_billing")
+  );
+  if (!workspace) return null;
+  return billsThroughStripe(workspace)
+    ? { kind: "stripePortal", workspaceId: workspace.id }
+    : { kind: "contactSales" };
 }
 
 /**

@@ -2899,6 +2899,7 @@ export default function SettingsPage({
                           {businessAction && (
                             <WorkspacePlanActionButton
                               action={businessAction}
+                              onRefreshEntitlement={usage?.refetch}
                               label={
                                 businessAction.kind === "contactSales"
                                   ? t("settingsPage.account.pricing.enterprise.cta")
@@ -2950,10 +2951,7 @@ export default function SettingsPage({
                           </li>
                         ))}
                       </ul>
-                      {/* Another of the user's workspaces can still be upgraded: keep the dialog. */}
-                      {isSignedIn &&
-                      workspacePlans.has("enterprise") &&
-                      enterpriseCta.action !== "openDialog" ? (
+                      {isSignedIn && workspacePlans.has("enterprise") && (
                         <div className="mt-2 space-y-1 text-center">
                           <span className="block text-[9px] font-medium text-primary">
                             {t("settingsPage.account.pricing.yourWorkspacePlan")}
@@ -2961,11 +2959,14 @@ export default function SettingsPage({
                           {enterpriseAction && (
                             <WorkspacePlanActionButton
                               action={enterpriseAction}
+                              onRefreshEntitlement={usage?.refetch}
                               label={t("settingsPage.account.pricing.manage")}
                             />
                           )}
                         </div>
-                      ) : isSignedIn && enterpriseCta.action !== "contactSales" ? (
+                      )}
+                      {/* Another workspace can still be upgraded alongside the current plan. */}
+                      {isSignedIn && enterpriseCta.action !== "contactSales" ? (
                         <div className="mt-2 space-y-1">
                           <Button
                             size="sm"
@@ -2994,7 +2995,7 @@ export default function SettingsPage({
                             {t("settingsPage.account.pricing.enterprise.cta")}
                           </Button>
                         </div>
-                      ) : isSignedIn ? (
+                      ) : isSignedIn && workspacePlans.has("enterprise") ? null : isSignedIn ? (
                         <div className="mt-2 space-y-1">
                           <Button
                             variant="outline"

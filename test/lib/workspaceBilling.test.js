@@ -193,7 +193,7 @@ test("businessDowngradeAction: Stripe for a Stripe-billed Enterprise owner, sale
       [ent("a", "owner"), ent("b", "owner", { stripe_subscription_id: "sub_1" })],
       "a"
     ),
-    { kind: "stripePortal", workspaceId: "b" }
+    { kind: "contactSales" }
   );
   assert.deepEqual(businessDowngradeAction([ent("a", "owner")], null), { kind: "contactSales" });
   assert.equal(
@@ -277,5 +277,55 @@ test("an owner of a manually provisioned plan stays sales-led", () => {
   assert.deepEqual(enterpriseTileCta([{ id: "a", ...manual }], null), {
     action: "contactSales",
     ownerName: null,
+  });
+});
+
+test("businessDowngradeAction: active eligible billing workspace wins before billing method", () => {
+  const provisioned = workspace({ id: "provisioned", plan: "enterprise" });
+  const stripe = workspace({ id: "stripe", plan: "enterprise", stripe_subscription_id: "sub_1" });
+  const workspaces = [provisioned, stripe];
+  assert.deepEqual(businessDowngradeAction(workspaces, "provisioned"), { kind: "contactSales" });
+  assert.deepEqual(businessDowngradeAction(workspaces, "stripe"), {
+    kind: "stripePortal",
+    workspaceId: "stripe",
+  });
+  for (const activeWorkspaceId of [null, "missing"]) {
+    assert.deepEqual(businessDowngradeAction(workspaces, activeWorkspaceId), {
+      kind: "contactSales",
+    });
+  }
+});
+
+test("businessDowngradeAction: skips ineligible active workspaces and respects billing capabilities", () => {
+  const fallback = workspace({ id: "fallback", plan: "enterprise" });
+  for (const overrides of [
+    { status: "past_due" },
+    { status: "canceled" },
+    { plan: "business" },
+    { role: "member" },
+    { capabilities: { manage_billing: false } },
+  ]) {
+    const active = workspace({
+      id: "active",
+      plan: "enterprise",
+      stripe_subscription_id: "sub_1",
+      ...overrides,
+    });
+    assert.deepEqual(businessDowngradeAction([active, fallback], "active"), {
+      kind: "contactSales",
+    });
+    assert.equal(businessDowngradeAction([active], "active"), null);
+  }
+  const delegated = workspace({
+    id: "delegated",
+    plan: "enterprise",
+    role: "member",
+    status: "trialing",
+    capabilities: { manage_billing: true },
+    stripe_subscription_id: "sub_delegated",
+  });
+  assert.deepEqual(businessDowngradeAction([fallback, delegated], "delegated"), {
+    kind: "stripePortal",
+    workspaceId: "delegated",
   });
 });

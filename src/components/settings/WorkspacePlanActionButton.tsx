@@ -15,6 +15,7 @@ interface Props {
   action: WorkspacePlanAction;
   label: string;
   variant?: "default" | "outline";
+  onRefreshEntitlement?: () => Promise<void>;
 }
 
 async function openUrl(url: string): Promise<void> {
@@ -27,11 +28,15 @@ export function WorkspacePlanActionButton({
   action,
   label,
   variant = "outline",
+  onRefreshEntitlement,
 }: Props): React.ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
   const refresh = useWorkspaceStore((s) => s.refresh);
-  const refreshOnReturn = useBillingRefreshOnReturn(() => void refresh({ fresh: true }));
+  const refreshOnReturn = useBillingRefreshOnReturn(() => {
+    void refresh({ fresh: true });
+    void onRefreshEntitlement?.();
+  });
   const [opening, setOpening] = useState(false);
 
   async function handleClick(): Promise<void> {
