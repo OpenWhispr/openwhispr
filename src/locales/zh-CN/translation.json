@@ -1834,6 +1834,7 @@
         "currentPlan": "当前套餐",
         "yourPersonalPlan": "你的个人方案",
         "yourWorkspacePlan": "你的工作区方案",
+        "manage": "管理",
         "coveredByWorkspace": "已包含在您的工作区套餐中",
         "upgrade": "升级",
         "downgrade": "降级",

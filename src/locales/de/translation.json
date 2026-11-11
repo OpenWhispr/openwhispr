@@ -2564,6 +2564,7 @@
         "currentPlan": "Aktueller Tarif",
         "yourPersonalPlan": "Ihr persönlicher Tarif",
         "yourWorkspacePlan": "Tarif Ihres Workspace",
+        "manage": "Verwalten",
         "coveredByWorkspace": "In Ihrem Workspace-Tarif enthalten",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",

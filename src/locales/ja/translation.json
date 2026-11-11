@@ -1813,6 +1813,7 @@
         "currentPlan": "現在のプラン",
         "yourPersonalPlan": "あなたの個人プラン",
         "yourWorkspacePlan": "ワークスペースのプラン",
+        "manage": "管理",
         "coveredByWorkspace": "ワークスペースのプランに含まれています",
         "upgrade": "アップグレード",
         "downgrade": "ダウングレード",

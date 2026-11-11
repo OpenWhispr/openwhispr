@@ -1838,6 +1838,7 @@
         "currentPlan": "Текущий тариф",
         "yourPersonalPlan": "Ваш личный тариф",
         "yourWorkspacePlan": "Тариф вашего рабочего пространства",
+        "manage": "Управлять",
         "coveredByWorkspace": "Включено в тариф вашего рабочего пространства",
         "upgrade": "Улучшить план",
         "downgrade": "Понизить план",

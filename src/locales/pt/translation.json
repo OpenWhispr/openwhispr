@@ -1813,6 +1813,7 @@
         "currentPlan": "Plano atual",
         "yourPersonalPlan": "Seu plano pessoal",
         "yourWorkspacePlan": "O plano do seu espaço de trabalho",
+        "manage": "Gerenciar",
         "coveredByWorkspace": "Incluído no plano do seu workspace",
         "upgrade": "Fazer upgrade",
         "downgrade": "Fazer downgrade",

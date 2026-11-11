@@ -2564,6 +2564,7 @@
         "currentPlan": "Current plan",
         "yourPersonalPlan": "Your personal plan",
         "yourWorkspacePlan": "Your workspace's plan",
+        "manage": "Manage",
         "coveredByWorkspace": "Included with your workspace plan",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",

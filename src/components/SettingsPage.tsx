@@ -167,10 +167,13 @@ import WorkspaceTeamspacesSection from "./settings/WorkspaceTeamspacesSection";
 import WorkspaceDeveloperSection from "./settings/WorkspaceDeveloperSection";
 import type { SettingsSectionType } from "../lib/settingsNav";
 import {
+  businessDowngradeAction,
+  enterpriseManageAction,
   enterpriseTileCta,
   entitledWorkspacePlans,
   type EnterpriseTileCta,
 } from "../lib/workspaceBilling";
+import { WorkspacePlanActionButton } from "./settings/WorkspacePlanActionButton";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
@@ -1439,6 +1442,12 @@ export default function SettingsPage({
   const workspacePlans = billingWorkspacesLoaded
     ? entitledWorkspacePlans(billingWorkspaces)
     : new Set<string>();
+  const enterpriseAction = billingWorkspacesLoaded
+    ? enterpriseManageAction(billingWorkspaces, activeWorkspaceId)
+    : null;
+  const businessAction = billingWorkspacesLoaded
+    ? businessDowngradeAction(billingWorkspaces, activeWorkspaceId)
+    : null;
   const { accountPlan, isWorkspaceCovered, coveringWorkspaceNames, coveringPlanLabel, planLabel } =
     useAccountPlan(usage);
   const hasShownApproachingToast = useRef(false);
@@ -2876,17 +2885,27 @@ export default function SettingsPage({
                         >
                           {t("settingsPage.account.pricing.business.cta")}
                         </Button>
-                      ) : workspacePlans.has("business") ? (
-                        <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-primary">
-                            {t("settingsPage.account.pricing.yourWorkspacePlan")}
-                          </span>
-                        </div>
                       ) : (
-                        <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-muted-foreground">
-                            {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
-                          </span>
+                        <div className="mt-2 space-y-1 text-center">
+                          {workspacePlans.has("business") ? (
+                            <span className="block text-[9px] font-medium text-primary">
+                              {t("settingsPage.account.pricing.yourWorkspacePlan")}
+                            </span>
+                          ) : !businessAction ? (
+                            <span className="block text-[9px] font-medium text-muted-foreground">
+                              {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
+                            </span>
+                          ) : null}
+                          {businessAction && (
+                            <WorkspacePlanActionButton
+                              action={businessAction}
+                              label={
+                                businessAction.kind === "contactSales"
+                                  ? t("settingsPage.account.pricing.enterprise.cta")
+                                  : t("settingsPage.account.pricing.downgrade")
+                              }
+                            />
+                          )}
                         </div>
                       )}
                     </div>
@@ -2935,10 +2954,16 @@ export default function SettingsPage({
                       {isSignedIn &&
                       workspacePlans.has("enterprise") &&
                       enterpriseCta.action !== "openDialog" ? (
-                        <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-primary">
+                        <div className="mt-2 space-y-1 text-center">
+                          <span className="block text-[9px] font-medium text-primary">
                             {t("settingsPage.account.pricing.yourWorkspacePlan")}
                           </span>
+                          {enterpriseAction && (
+                            <WorkspacePlanActionButton
+                              action={enterpriseAction}
+                              label={t("settingsPage.account.pricing.manage")}
+                            />
+                          )}
                         </div>
                       ) : isSignedIn && enterpriseCta.action !== "contactSales" ? (
                         <div className="mt-2 space-y-1">

@@ -78,6 +78,63 @@ export function isEnterpriseConsoleAvailable(
   );
 }
 
+/** Where a Plans grid button for a workspace's plan leads. */
+export type WorkspacePlanAction =
+  { kind: "stripePortal"; workspaceId: string } | { kind: "console" } | { kind: "contactSales" };
+
+type PlanCardWorkspace = Pick<Workspace, "id"> & WorkspaceBillingState;
+
+/** Entitled Enterprise workspaces, the active one first. */
+function entitledEnterpriseWorkspaces(
+  workspaces: PlanCardWorkspace[],
+  activeWorkspaceId: string | null
+): PlanCardWorkspace[] {
+  return workspaces
+    .filter(
+      (workspace) => workspace.plan === "enterprise" && hasActiveWorkspaceSubscription(workspace)
+    )
+    .sort((a, b) => Number(b.id === activeWorkspaceId) - Number(a.id === activeWorkspaceId));
+}
+
+/** The Stripe portal changes the plan only for the billing owner of a Stripe-billed plan. */
+function billsThroughStripe(workspace: PlanCardWorkspace): boolean {
+  return workspaceCan(workspace, "manage_billing") && Boolean(workspace.stripe_subscription_id);
+}
+
+/**
+ * The Enterprise card's Manage button: Stripe billing for the billing owner of
+ * a Stripe-billed plan, the admin console for owners and admins otherwise
+ * (a provisioned plan has no Stripe portal), nothing for members.
+ */
+export function enterpriseManageAction(
+  workspaces: PlanCardWorkspace[],
+  activeWorkspaceId: string | null
+): WorkspacePlanAction | null {
+  for (const workspace of entitledEnterpriseWorkspaces(workspaces, activeWorkspaceId)) {
+    if (billsThroughStripe(workspace)) return { kind: "stripePortal", workspaceId: workspace.id };
+    if (isEnterpriseConsoleAvailable(workspace)) return { kind: "console" };
+  }
+  return null;
+}
+
+/**
+ * The Business card's button for someone on Enterprise: Downgrade through the
+ * Stripe portal when they bill a Stripe-billed Enterprise plan, contact sales
+ * when they bill only provisioned ones, nothing when someone else bills.
+ */
+export function businessDowngradeAction(
+  workspaces: PlanCardWorkspace[],
+  activeWorkspaceId: string | null
+): WorkspacePlanAction | null {
+  const enterprise = entitledEnterpriseWorkspaces(workspaces, activeWorkspaceId);
+  const stripeBilled = enterprise.find(billsThroughStripe);
+  if (stripeBilled) return { kind: "stripePortal", workspaceId: stripeBilled.id };
+  if (enterprise.some((workspace) => workspaceCan(workspace, "manage_billing"))) {
+    return { kind: "contactSales" };
+  }
+  return null;
+}
+
 /**
  * An owned workspace with a live, entitled Stripe subscription on a lower plan
  * can upgrade in place (subscription price swap, no new checkout). Manually

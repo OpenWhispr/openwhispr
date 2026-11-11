@@ -1834,6 +1834,7 @@
         "currentPlan": "Piano attuale",
         "yourPersonalPlan": "Il tuo piano personale",
         "yourWorkspacePlan": "Il piano del tuo workspace",
+        "manage": "Gestisci",
         "coveredByWorkspace": "Incluso nel piano della tua area di lavoro",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",
