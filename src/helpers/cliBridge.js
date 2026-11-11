@@ -109,6 +109,58 @@ function unwrapMutationResult(result, label) {
 // The public v1 contract: a provided blank content or enhanced_content clears
 // that field. updateNote treats a bare blank as unconfirmed (never synced as a
 // clear), so the bridge states the intent; updateNote still validates it.
+// What a CLI edit may change: a note's own content and its folder. Its space,
+// identity and sync state belong to sync and main's move rules (D31, D39), which
+// a raw cloud_id or client_note_id from a local caller would get around, so
+// those are refused; a folder move still goes through the rules. Anything else
+// is dropped, as updateNote always ignored it.
+const CLI_NOTE_EDIT_FIELDS = [
+  "title",
+  "content",
+  "enhanced_content",
+  "enhancement_prompt",
+  "enhancement_template_id",
+  "enhanced_at_content_hash",
+  "transcript",
+  "calendar_event_id",
+  "participants",
+  "diarization_enabled",
+  "expected_speaker_count",
+  "folder_id",
+  "clear_fields",
+];
+const SYNC_OWNED_NOTE_FIELDS = new Set([
+  "space_id",
+  "cloud_id",
+  "client_note_id",
+  "sync_status",
+  "left_team",
+  "account_id",
+  "deleted_at",
+  "cloud_updated_at",
+  "cloud_revision",
+  "cloud_create_rejected",
+  "cloud_create_pending",
+  "cloud_create_attempted",
+  "owner_user_id",
+  "updated_by_user_id",
+  "content_sync_operation",
+  "enhanced_content_sync_operation",
+]);
+
+function cliNoteEdit(body) {
+  const refused = Object.keys(body).filter((field) => SYNC_OWNED_NOTE_FIELDS.has(field));
+  if (refused.length > 0) {
+    const err = new Error(`These fields can't be changed: ${refused.join(", ")}`);
+    err.code = "VALIDATION";
+    throw err;
+  }
+  const edit = Object.fromEntries(
+    CLI_NOTE_EDIT_FIELDS.filter((field) => field in body).map((field) => [field, body[field]])
+  );
+  return withProvidedBlanksCleared(edit);
+}
+
 function withProvidedBlanksCleared(body) {
   const blanks = NOTE_TEXT_FIELDS.filter(
     (field) =>
@@ -462,7 +514,7 @@ class CliBridge {
           err.code = "NOT_FOUND";
           throw err;
         }
-        const result = db.updateNote(id, withProvidedBlanksCleared(body || {}));
+        const result = db.updateNote(id, cliNoteEdit(body || {}));
         // The note exists, so a remaining error names a folder or space that doesn't.
         if (result.error) {
           const err = new Error(result.error);

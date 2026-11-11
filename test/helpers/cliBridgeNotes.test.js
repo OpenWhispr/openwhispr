@@ -50,7 +50,7 @@ test("PATCH /v1/notes/:id is not_found for a deleted note and leaves it unchange
   assert.equal(ctx.db.getNote(id).title, "Original");
 });
 
-test("PATCH /v1/notes/:id is a validation error when the folder or space does not exist", (t) => {
+test("PATCH /v1/notes/:id is a validation error when the folder does not exist", (t) => {
   const ctx = createBridge(t);
   if (!ctx) return;
 
@@ -60,10 +60,52 @@ test("PATCH /v1/notes/:id is a validation error when the folder or space does no
     code: "VALIDATION",
     message: "Folder not found",
   });
-  assert.throws(() => call(ctx.bridge, "PATCH", `/v1/notes/${id}`, { space_id: 888 }), {
-    code: "VALIDATION",
-    message: "Space not found",
+});
+
+// Sync owns a note's space, identity and state: a move between spaces re-keys it or refuses it
+// (D31, D39), which a raw cloud_id or client_note_id from a local caller would get around.
+test("PATCH /v1/notes/:id refuses fields sync owns and changes nothing", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
+
+  const before = ctx.db.saveNote("Original", "content").note;
+  for (const field of [
+    "space_id",
+    "cloud_id",
+    "client_note_id",
+    "sync_status",
+    "left_team",
+    "account_id",
+    "deleted_at",
+  ]) {
+    assert.throws(
+      () => call(ctx.bridge, "PATCH", `/v1/notes/${before.id}`, { title: "Edited", [field]: null }),
+      { code: "VALIDATION", message: new RegExp(field) },
+      field
+    );
+  }
+  const after = ctx.db.getNote(before.id);
+  assert.equal(after.title, "Original");
+  assert.equal(after.client_note_id, before.client_note_id);
+  assert.equal(after.space_id, before.space_id);
+});
+
+test("PATCH /v1/notes/:id changes the title, content, summary and folder", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
+
+  const { id } = ctx.db.saveNote("Original", "content").note;
+  const folder = ctx.db.createFolder("Ideas").folder;
+  const result = call(ctx.bridge, "PATCH", `/v1/notes/${id}`, {
+    title: "New",
+    content: "new body",
+    enhanced_content: "summary",
+    folder_id: folder.id,
   });
+  assert.equal(result.data.title, "New");
+  assert.equal(result.data.content, "new body");
+  assert.equal(result.data.enhanced_content, "summary");
+  assert.equal(result.data.folder_id, folder.id);
 });
 
 test("PATCH /v1/notes/:id is not_found for a non-integer id", (t) => {
