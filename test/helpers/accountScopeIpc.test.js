@@ -735,7 +735,13 @@ for (const outcome of [
     refreshed.resolve();
     const result = await pending;
     if (outcome === "allowed") assert.equal(result.text, "completed dictation");
-    else assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+    else
+      assert.equal(
+        result.code,
+        ["signed out", "account switched"].includes(outcome)
+          ? "AUTH_CONTEXT_CHANGED"
+          : "DEVICE_POLICY_BLOCKED"
+      );
     assert.deepEqual(
       stops,
       ["signed out", "account switched"].includes(outcome) ? ["accountChanged"] : []
@@ -943,4 +949,36 @@ test("while a verdict loads, local work runs, new remote work waits, and windows
     (await handlers.get("cloud-health-check")({ sender: {} })).code,
     "DEVICE_POLICY_BLOCKED"
   );
+});
+
+test("an account change during a streaming start closes the socket the start opened", async (t) => {
+  const previous = {
+    geminiStreaming: fakeThis.geminiStreaming,
+    account: databaseManager.activeAccountId,
+    tokenState,
+  };
+  t.after(() => {
+    fakeThis.geminiStreaming = previous.geminiStreaming;
+    databaseManager.activeAccountId = previous.account;
+    tokenState = previous.tokenState;
+  });
+  tokenState = { token: "stream-token", generation: tokenState.generation + 1 };
+  databaseManager.activeAccountId = "stream-account";
+  await fakeThis.refreshEffectivePolicy();
+  const disconnects = [];
+  fakeThis.geminiStreaming = {
+    // The account changes while the start is opening its socket.
+    get isConnected() {
+      databaseManager.activeAccountId = "other-account";
+      return true;
+    },
+    cleanupWarmConnection() {},
+    disconnect: async (options) => disconnects.push(options),
+  };
+
+  const result = await handlers.get("gemini-streaming-warmup")({ sender: {} }, {});
+
+  assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
+  assert.deepEqual(disconnects, [{ commit: false }]);
+  assert.equal(fakeThis.geminiStreaming, null);
 });

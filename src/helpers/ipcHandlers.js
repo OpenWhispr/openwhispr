@@ -2018,7 +2018,8 @@ class IPCHandlers {
                 corti: "cortiStreaming",
               }[channel.split("-")[0]]
             : null;
-        if (streamProperty) this._remoteStreamPolicies.set(streamProperty, { channel, args });
+        const streamPolicy = { channel, args };
+        if (streamProperty) this._remoteStreamPolicies.set(streamProperty, streamPolicy);
         const controller = new AbortController();
         operation.signal = controller.signal;
         this._productRequests.set(controller, operation);
@@ -2037,8 +2038,21 @@ class IPCHandlers {
             await this.refreshEffectivePolicy(event);
             snapshot = this.effectivePolicyManager.getCurrent();
           }
-          if (controller.signal.aborted || snapshot.accountId !== startedPolicy.accountId)
-            return failure();
+          if (snapshot.accountId !== startedPolicy.accountId) {
+            // A stream this start opened, unless a later start replaced it,
+            // belongs to the account that left.
+            if (streamProperty && this._remoteStreamPolicies.get(streamProperty) === streamPolicy) {
+              retireStreaming(this[streamProperty]);
+              this[streamProperty] = null;
+              this._remoteStreamPolicies.delete(streamProperty);
+            }
+            return {
+              success: false,
+              code: "AUTH_CONTEXT_CHANGED",
+              error: "Authentication context changed during the request",
+            };
+          }
+          if (controller.signal.aborted) return failure();
           if (allowed()) return result;
           if ((!snapshot.success && snapshot.status !== "loading") || snapshot.localOnly)
             this._stopRemoteProductWork();
