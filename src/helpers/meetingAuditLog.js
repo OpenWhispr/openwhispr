@@ -35,7 +35,15 @@ const STOP_REASONS = new Set([
   "window-lost",
   "app-quit",
 ]);
-const REFUSAL_REASONS = new Set([...AUDIO_POLICY_REFUSAL_CODES, "policyRestricted"]);
+// The renderer's own refusals: a restricted mode, and the local-model checks
+// (LocalModelRefusal in policyRules.ts) for a local transcription choice.
+const REFUSAL_REASONS = new Set([
+  ...AUDIO_POLICY_REFUSAL_CODES,
+  "policyRestricted",
+  "POLICY_APP_VERSION_BLOCKED",
+  "POLICY_LOCAL_MODE_BLOCKED",
+  "POLICY_MODEL_BLOCKED",
+]);
 
 const allowed = (values, value) => (values.has(value) ? value : null);
 const noteIdOf = (value) => (Number.isSafeInteger(value) ? value : null);

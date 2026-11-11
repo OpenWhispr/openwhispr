@@ -119,6 +119,18 @@ test("a refusal records its trigger and policy code", async () => {
   assert.equal(refused.sessionId, null);
 });
 
+// A local transcription choice the policy refuses is reported with its own code.
+test("a refused local model choice keeps its policy code", async () => {
+  const { log } = harness();
+  const codes = ["POLICY_APP_VERSION_BLOCKED", "POLICY_LOCAL_MODE_BLOCKED", "POLICY_MODEL_BLOCKED"];
+  for (const reason of codes) log.recordingRefused({ noteId: 3, trigger: "record-button", reason });
+  await log.flush();
+  assert.deepEqual(
+    lines().map((entry) => entry.reason),
+    codes
+  );
+});
+
 test("a stop is written beside its start after the policy or AuditLogPath changes", async () => {
   const custom = path.join(userData, "it-collector");
   const { log, state } = harness({ configuredPath: custom });
