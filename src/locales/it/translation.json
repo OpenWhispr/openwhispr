@@ -1244,7 +1244,8 @@
       "failedUserCheck": "Verifica dell'account utente non riuscita",
       "generic": "Qualcosa è andato storto. Riprova.",
       "invalidCredentials": "E-mail o password non valide",
-      "invalidEmail": "Inserisci un indirizzo email valido"
+      "invalidEmail": "Inserisci un indirizzo email valido",
+      "signInDisabledByDevice": "La tua organizzazione ha disattivato l'accesso su questo dispositivo."
     },
     "getStarted": "Inizia",
     "legal": {

@@ -75,6 +75,20 @@ test("device management survives sign-out and an invalid policy recovers without
   assert.equal(store.getState().localOnly, true);
 });
 
+test("a local-only device refuses sign-in in the user's language", async (t) => {
+  const { vite } = await boot(t, async () =>
+    snapshot({ status: "managed", managed: true, deviceManaged: true, localOnly: true })
+  );
+  const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
+  const { signInWithSocial, signInWithSSO } = await vite.ssrLoadModule("/lib/auth.ts");
+  await i18n.changeLanguage("es");
+  t.after(() => i18n.changeLanguage("en"));
+  const message = require("../../src/locales/es/translation.json").auth.errors
+    .signInDisabledByDevice;
+  assert.equal((await signInWithSocial("google")).error?.message, message);
+  assert.equal((await signInWithSSO("ada@example.com")).error?.message, message);
+});
+
 test("a failed older read cannot erase a newer device broadcast", async (t) => {
   let rejectRead;
   let reads = 0;

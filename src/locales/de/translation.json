@@ -1242,7 +1242,8 @@
       "failedUserCheck": "Kontostatus konnte nicht überprüft werden",
       "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "invalidCredentials": "Ungültige E-Mail-Adresse oder ungültiges Passwort",
-      "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein"
+      "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein",
+      "signInDisabledByDevice": "Ihre Organisation hat die Anmeldung auf diesem Gerät deaktiviert."
     },
     "getStarted": "Jetzt starten",
     "legal": {

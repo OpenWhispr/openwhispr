@@ -1242,7 +1242,8 @@
       "failedUserCheck": "Échec de la vérification du compte utilisateur",
       "generic": "Une erreur est survenue. Veuillez réessayer.",
       "invalidCredentials": "E-mail ou mot de passe incorrect",
-      "invalidEmail": "Entrez une adresse e-mail valide"
+      "invalidEmail": "Entrez une adresse e-mail valide",
+      "signInDisabledByDevice": "Votre organisation a désactivé la connexion sur cet appareil."
     },
     "getStarted": "Commencer",
     "legal": {

@@ -13,13 +13,14 @@ import {
 } from "./authRequestContext";
 import { clearOfflineAccountProfile } from "./offlineAccountProfile";
 import { refreshEffectivePolicy, usePolicyStore } from "../stores/policyStore";
+import i18n from "../i18n";
 
 async function deviceAwareAuthFetch(...args: Parameters<typeof fetch>): Promise<Response> {
   if (window.electronAPI?.getEffectivePolicy && !usePolicyStore.getState().deviceReady)
     await refreshEffectivePolicy();
   const policy = usePolicyStore.getState();
   if (policy.localOnly || policy.code === "DEVICE_POLICY_INVALID") {
-    throw Object.assign(new Error("Authentication is disabled by device policy"), {
+    throw Object.assign(new Error(i18n.t("auth.errors.signInDisabledByDevice")), {
       code: "DEVICE_POLICY_BLOCKED",
     });
   }
@@ -239,7 +240,7 @@ const DESKTOP_OAUTH_CALLBACK_URL = "https://openwhispr.com/auth/desktop-callback
 export async function signInWithSocial(provider: SocialProvider): Promise<{ error?: Error }> {
   try {
     if (usePolicyStore.getState().localOnly)
-      throw new Error("Sign-in is disabled by device policy");
+      throw new Error(i18n.t("auth.errors.signInDisabledByDevice"));
     const isElectron = Boolean((window as any).electronAPI);
 
     if (isElectron) {
@@ -267,7 +268,7 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
 export async function signInWithSSO(email: string): Promise<{ error?: Error }> {
   try {
     if (usePolicyStore.getState().localOnly)
-      throw new Error("Sign-in is disabled by device policy");
+      throw new Error(i18n.t("auth.errors.signInDisabledByDevice"));
     const isElectron = Boolean((window as any).electronAPI);
 
     if (isElectron) {
