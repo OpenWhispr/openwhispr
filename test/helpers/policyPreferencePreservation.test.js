@@ -31,18 +31,21 @@ test("managed policy gates preserve the user's raw preferences", async (t) => {
     window: {
       electronAPI: {
         getAppVersion: async () => ({ version: "1.8.1" }),
-        getWorkspacePolicy: async () => ({
+        getEffectivePolicy: async () => ({
           success: true,
-          status: "network",
+          status: "managed",
           revision: 1,
           accountId: "account-a",
           authGeneration: 1,
           managed: true,
-          policy,
-          policyUpdatedAt: "2026-08-05T00:00:00.000Z",
-          endpointSupported: true,
+          policy: policy,
+          deviceReady: true,
+          deviceManaged: false,
+          workspaceManaged: true,
+          workspaceRequired: true,
+          localOnly: false,
+          requireSignIn: false,
         }),
-        onWorkspacePolicyChanged() {},
       },
     },
   });

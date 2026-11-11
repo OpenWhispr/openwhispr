@@ -810,6 +810,7 @@ test("a failed clear after NOT_MEMBER publishes empty hints instead of reloading
   assert.deepEqual(ctx.hints(), { space: [], workspace: [] });
   assert.deepEqual(JSON.parse(harness.localStorage.getItem("sharedDictionaryHints")), {
     workspaceId: W1,
+    accountId: null,
     space: [],
     workspace: [],
   });
@@ -1027,6 +1028,8 @@ function personalRow(overrides = {}) {
     sync_status: "pending",
     deleted_at: null,
     shared_at: null,
+    // Owned: a pull always offers main an unattributed row, for it to claim.
+    account_id: "account-a",
     created_at: "2026-10-01 10:00:00",
     updated_at: "2026-10-01 10:00:00",
     ...overrides,

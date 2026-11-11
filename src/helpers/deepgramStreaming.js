@@ -1,5 +1,6 @@
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
+const { getRegistryData } = require("../models/registryData.js");
 
 const SAMPLE_RATE = 16000;
 const WEBSOCKET_TIMEOUT_MS = 30000;
@@ -64,13 +65,31 @@ const NOVA3_LANGUAGES = new Set([
   "multi",
 ]);
 
-// 100ms of silence at 16kHz 16-bit mono — sent to warm connections to prevent
-// Deepgram's net0001 idle timeout (which only resets on audio data, not KeepAlive).
+// 100ms of silence at 16kHz 16-bit mono to keep cached warm sockets alive.
 const SILENCE_FRAME = Buffer.alloc((SAMPLE_RATE / 10) * 2);
 
 // Deepgram binds the scheme to the credential: a raw API key (BYOK) is accepted
 // only as `Token`, `Bearer` only for what /v1/auth/grant mints (managed). #2140
 const authorizationHeader = (mode, token) => `${mode === "byok" ? "Token" : "Bearer"} ${token}`;
+
+function resolveModel(options) {
+  // A reconnect keeps the model its session started with, even if the catalog changed since.
+  if (options.resolvedModel) return options.resolvedModel;
+  const selected = typeof options.model === "string" ? options.model.trim() : "";
+  if (
+    options.mode === "byok" &&
+    selected !== "nova-3" &&
+    getRegistryData()
+      .transcriptionProviders.find((provider) => provider.id === "deepgram")
+      ?.models.some((model) => model.id === selected && model.streaming)
+  ) {
+    return selected;
+  }
+  // Keep the existing Nova-3 language fallback and managed routing contract.
+  const lang = options.language && options.language !== "auto" ? options.language : null;
+  const baseLang = lang ? lang.split("-")[0].toLowerCase() : null;
+  return !lang || NOVA3_LANGUAGES.has(lang) || NOVA3_LANGUAGES.has(baseLang) ? "nova-3" : "nova-2";
+}
 
 // Everything buildWebSocketUrl pins on the socket, folded the way it folds it, so
 // a warm connection can be compared against the session that wants to ride it.
@@ -81,6 +100,7 @@ const urlIdentity = (options) =>
     options.sampleRate || SAMPLE_RATE,
     options.language && options.language !== "auto" ? options.language : null,
     (options.keyterms || []).filter(Boolean),
+    resolveModel(options),
   ]);
 
 class DeepgramStreaming {
@@ -137,15 +157,10 @@ class DeepgramStreaming {
   buildWebSocketUrl(options) {
     const sampleRate = options.sampleRate || SAMPLE_RATE;
     const lang = options.language && options.language !== "auto" ? options.language : null;
-    const baseLang = lang ? lang.split("-")[0].toLowerCase() : null;
-    const useNova3 = !lang || NOVA3_LANGUAGES.has(lang) || NOVA3_LANGUAGES.has(baseLang);
-    // options.model is intentionally ignored: the registry only offers nova-3,
-    // and honouring a user-pinned family would defeat the nova-2 downgrade that
-    // keeps languages outside NOVA3_LANGUAGES working.
-    const model = useNova3 ? "nova-3" : "nova-2";
+    const model = resolveModel(options);
     this.currentModel = model;
 
-    if (!useNova3) {
+    if (model === "nova-2") {
       debugLogger.debug("Deepgram falling back to nova-2", { language: lang });
     }
 
@@ -157,12 +172,15 @@ class DeepgramStreaming {
       punctuate: "true",
       interim_results: "true",
     });
-    if (lang) {
-      params.set("language", lang);
-    }
+    // Deepgram reads a missing language as English, so "auto" asks Nova-3 for
+    // its multilingual mode, which detects and code-switches. The catalog can publish
+    // other models and says nothing of this mode, and a model without it refuses the
+    // connection, so those keep the English default.
+    if (lang) params.set("language", lang);
+    else if (model === "nova-3") params.set("language", "multi");
     if (Array.isArray(options.keyterms)) {
       // Nova-3 uses "keyterm", Nova-2 uses "keywords"
-      const paramName = useNova3 ? "keyterm" : "keywords";
+      const paramName = model.startsWith("nova-2") ? "keywords" : "keyterm";
       for (const term of options.keyterms) {
         if (term) params.append(paramName, term);
       }
@@ -211,9 +229,7 @@ class DeepgramStreaming {
     this.keepAliveInterval = setInterval(() => {
       if (target && target.readyState === WebSocket.OPEN) {
         try {
-          // Warm connections send silence audio — Deepgram's net0001 idle timeout
-          // only resets on audio data, not KeepAlive messages, for pre-audio sessions.
-          // Active connections use KeepAlive JSON (audio flow already resets the timer).
+          // KeepAlive also prevents idle timeouts before capture starts sending audio.
           target.send(isWarm ? SILENCE_FRAME : JSON.stringify({ type: "KeepAlive" }));
         } catch (err) {
           debugLogger.debug("Deepgram keep-alive failed", { error: err.message });
@@ -263,7 +279,9 @@ class DeepgramStreaming {
       this.cachedToken = token;
       this.tokenFetchedAt = Date.now();
     }
-    this.warmConnectionOptions = options;
+    // Pinned: the catalog can change while this socket is open, and the comparison before
+    // riding it must see the model it opened on.
+    this.warmConnectionOptions = { ...options, resolvedModel: resolveModel(options) };
     this.rewarmAttempts = 0;
 
     const url = this.buildWebSocketUrl(options);
@@ -617,9 +635,12 @@ class DeepgramStreaming {
       language: options.language,
       keyterms: options.keyterms,
       mode: options.mode,
+      model: options.model,
+      resolvedModel: resolveModel(options),
     };
     this.accumulatedText = "";
     this.finalSegments = [];
+    this.sessionStartedAt = null;
     this.audioBytesSent = 0;
     this.resultsReceived = 0;
     this.connectionLossNotified = false;
@@ -676,6 +697,15 @@ class DeepgramStreaming {
 
       this.ws.on("open", () => {
         debugLogger.debug("Deepgram WebSocket connected");
+        // Deepgram may send nothing until audio arrives, while meeting capture
+        // waits for connect(). Start keep-alive now to cover slow capture setup.
+        this.isConnected = true;
+        clearTimeout(this.connectionTimeout);
+        this.connectionTimeout = null;
+        this.startKeepAlive(this.ws);
+        this.pendingResolve?.();
+        this.pendingResolve = null;
+        this.pendingReject = null;
       });
 
       this.ws.on("message", (data) => {
@@ -739,26 +769,6 @@ class DeepgramStreaming {
   handleMessage(data) {
     try {
       const message = JSON.parse(data.toString());
-
-      // Resolve pending connect() promise on first valid message.
-      // With nova-3, when audio is already flowing, Deepgram may skip
-      // the Metadata message and jump straight to SpeechStarted/Results.
-      if (this.pendingResolve) {
-        this.isConnected = true;
-        this.sessionStartedAt = Date.now();
-        clearTimeout(this.connectionTimeout);
-        this.startKeepAlive(this.ws);
-        if (message.type === "Metadata") {
-          this.sessionId = message.request_id;
-        }
-        debugLogger.debug("Deepgram session started", {
-          sessionId: this.sessionId,
-          firstMessageType: message.type,
-        });
-        this.pendingResolve();
-        this.pendingResolve = null;
-        this.pendingReject = null;
-      }
 
       switch (message.type) {
         case "Metadata":
@@ -844,6 +854,11 @@ class DeepgramStreaming {
 
     if (this.keepAliveInterval) {
       this.stopKeepAlive();
+    }
+
+    // Deepgram offsets start with PCM audio, not the earlier socket handshake.
+    if (this.audioBytesSent === 0) {
+      this.sessionStartedAt = Date.now();
     }
 
     // Flush any audio buffered during cold start

@@ -802,3 +802,53 @@ test("cancelling a summary action before a provider returns keeps the saved summ
   assert.deepEqual(updates, []);
   assert.deepEqual(store.consumeAppliedEvents(), []);
 });
+
+test("a note action with no local model answers with the Settings line", async (t) => {
+  // Cleanup switched off at setup leaves note formatting on this device with no model.
+  const { store, calls } = await loadStore(t);
+  const options = { modelId: "", isCloudMode: false };
+  const labels = { ...LABELS, noModel: "notes.actions.errors.noModel" };
+  store.runBackgroundAction(803, "Some notes", "hash", ACTION, options, labels);
+  const { errorEvents } = store.useActionProcessingStore.getState();
+  assert.deepEqual(
+    errorEvents.map((event) => [event.noteId, event.message]),
+    [[803, "notes.actions.errors.noModel"]]
+  );
+  assert.equal(calls.length, 0);
+});
+
+test("a run blocked by policy says why and where to choose, not that no model is set up", async (t) => {
+  const { managedPolicy } = require("../helpers/harness/policyFixtures");
+  const { store, calls, vite } = await loadStore(t);
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  useSettingsStore.setState({
+    noteFormattingMode: "local",
+    noteFormattingProvider: "qwen",
+    noteFormattingModel: "qwen3.5-9b-q4_k_m",
+  });
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.11.1",
+    policy: {
+      ...managedPolicy({
+        llm: { allowedModes: ["local"], allowedLocalModels: ["qwen3.5-2b-q4_k_m"] },
+      }),
+      features: { agentEnabled: true, webSearchEnabled: false },
+    },
+  });
+
+  store.runBackgroundAction(
+    7,
+    "content",
+    "hash",
+    ACTION,
+    { modelId: "", isCloudMode: false },
+    LABELS
+  );
+
+  const [event] = store.useActionProcessingStore.getState().errorEvents.slice(-1);
+  assert.equal(event.messageKey, "models.policy.modelBlocked");
+  assert.equal(event.settingsTarget, "noteFormatting");
+  assert.equal(calls.length, 0);
+});

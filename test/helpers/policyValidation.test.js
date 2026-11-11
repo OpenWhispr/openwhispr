@@ -28,6 +28,28 @@ test("accepts a well-formed policy", () => {
   assert.equal(isValidPolicyShape(validPolicy()), true);
 });
 
+test("meeting start validates shape while accepting future string modes", () => {
+  for (const meetings of [
+    undefined,
+    {},
+    { transcriptionStart: "automatic" },
+    { transcriptionStart: "manual" },
+    { transcriptionStart: "future" },
+  ]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), true);
+  }
+  for (const meetings of [
+    null,
+    [],
+    true,
+    "manual",
+    { transcriptionStart: null },
+    { transcriptionStart: 42 },
+  ]) {
+    assert.equal(isValidPolicyShape({ ...validPolicy(), meetings }), false);
+  }
+});
+
 test("accepts special providers from the API policy contract", () => {
   const policy = validPolicy();
   policy.transcription.allowedByokProviders = ["custom"];

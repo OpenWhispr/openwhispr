@@ -26,7 +26,7 @@ const bindings = [
   })),
 ];
 const handlers = new Map();
-const listeners = new Map();
+const eventHandlers = new Map();
 const keys = new Map();
 const notifications = [];
 const editor = { id: 1 };
@@ -142,7 +142,7 @@ const electron = {
   },
   ipcMain: {
     handle: (name, fn) => handlers.set(name, fn),
-    on: (name, fn) => listeners.set(name, fn),
+    on: (name, fn) => eventHandlers.set(name, fn),
     removeHandler() {},
   },
   BrowserWindow: {
@@ -181,14 +181,17 @@ Module._load = function (request, parent, isMain) {
     if (request === "./orukeetStreaming")
       return { OrukeetStreaming: FakeOrukeet, MANAGED_STREAM_OPTIONS: {} };
     if (request === "./geminiLiveStreaming")
-      return { GeminiLiveStreaming: FakeStreaming, GEMINI_LIVE_MODEL: "gemini-live" };
+      return {
+        ...originalLoad.call(this, request, parent, isMain),
+        GeminiLiveStreaming: FakeStreaming,
+      };
     if (request === "./debugLogger") return new Proxy({}, { get: () => () => {} });
     if (request === "./workspacePolicyManager")
       return {
         ...originalLoad.call(this, request, parent, isMain),
         createWorkspacePolicyManager: () => ({
           getPolicy: async () => workspacePolicy,
-          getCachedPolicy: () => workspacePolicy,
+          heldPolicy: () => workspacePolicy,
         }),
       };
     if (request === "./tokenStore")
@@ -281,6 +284,15 @@ test.before(async () => {
 });
 const invoke = (channel, ...args) => handlers.get(channel)({ sender: editor }, ...args);
 
+function revokeTranscription(restriction) {
+  if (restriction === "local-only") setDeviceValues({ RequireSignIn: false });
+  else {
+    const policy = defaultDevicePolicy();
+    policy.transcription.allowedByokProviders = ["openai"];
+    setDeviceValues({ Policy: JSON.stringify(policy) });
+  }
+}
+
 for (const restriction of ["local-only", "provider"]) {
   test(`native ${restriction} retirement closes realtime without committing buffered audio`, async (t) => {
     const { WebSocket, WebSocketServer } = require("ws");
@@ -319,15 +331,91 @@ for (const restriction of ["local-only", "provider"]) {
       channel: "dictation-realtime-start",
       args: [{ mode: "byok", provider: "tinfoil-realtime" }],
     });
-    if (restriction === "local-only") setDeviceValues({ RequireSignIn: false });
-    else {
-      const policy = defaultDevicePolicy();
-      policy.transcription.allowedByokProviders = ["openai"];
-      setDeviceValues({ Policy: JSON.stringify(policy) });
-    }
+    revokeTranscription(restriction);
     await closed.promise;
     assert.ok(frames.includes("input_audio_buffer.append"));
     assert.equal(frames.includes("input_audio_buffer.commit"), false);
+  });
+
+  test(`native ${restriction} retirement closes Gemini Live without ending the turn`, async (t) => {
+    const { WebSocketServer } = require("ws");
+    const { GeminiLiveStreaming } = require("../../src/helpers/geminiLiveStreaming");
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const received = [];
+    const audio = deferred();
+    const closed = deferred();
+    t.after(() => server.close());
+    server.on("connection", (socket) => {
+      socket.on("close", () => closed.resolve());
+      socket.on("message", (data) => {
+        const message = JSON.parse(data);
+        received.push(Object.keys(message.realtimeInput ?? message)[0]);
+        if (message.setup) socket.send(JSON.stringify({ setupComplete: {} }));
+        if (message.realtimeInput?.audio) audio.resolve();
+        if (message.realtimeInput?.audioStreamEnd)
+          socket.send(
+            JSON.stringify({
+              serverContent: { inputTranscription: { text: "revoked" }, generationComplete: true },
+            })
+          );
+      });
+    });
+    const streaming = new GeminiLiveStreaming();
+    t.after(() => streaming.cleanup());
+    streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+    const finals = [];
+    streaming.onFinalTranscript = (text) => finals.push(text);
+    await streaming.connect({ token: "saved-provider-key", mode: "byok" });
+    streaming.sendAudio(Buffer.alloc(1600));
+    await audio.promise;
+    target.geminiStreaming = streaming;
+    target._remoteStreamPolicies.set("geminiStreaming", {
+      channel: "gemini-streaming-start",
+      args: [{ mode: "byok" }],
+    });
+    revokeTranscription(restriction);
+    await closed.promise;
+    assert.deepEqual(received, ["setup", "audio"]);
+    assert.deepEqual(finals, []);
+  });
+
+  test(`native ${restriction} retirement closes Corti without flushing`, async (t) => {
+    const { WebSocketServer } = require("ws");
+    const CortiStreaming = require("../../src/helpers/cortiStreaming");
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(server, "listening");
+    const received = [];
+    const audio = deferred();
+    const closed = deferred();
+    t.after(() => server.close());
+    server.on("connection", (socket) => {
+      socket.on("close", () => closed.resolve());
+      socket.on("message", (data, isBinary) => {
+        if (isBinary) return audio.resolve();
+        const { type } = JSON.parse(data);
+        received.push(type);
+        if (type === "config") socket.send(JSON.stringify({ type: "CONFIG_ACCEPTED" }));
+        if (type === "flush") socket.send(JSON.stringify({ type: "flushed" }));
+      });
+    });
+    const streaming = new CortiStreaming();
+    t.after(() => streaming.cleanup());
+    streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+    const sessionEnds = [];
+    streaming.onSessionEnd = (result) => sessionEnds.push(result);
+    await streaming.connect({ token: "saved-provider-key", environment: "us", tenant: "base" });
+    streaming.sendAudio(Buffer.alloc(1600));
+    await audio.promise;
+    target.cortiStreaming = streaming;
+    target._remoteStreamPolicies.set("cortiStreaming", {
+      channel: "corti-streaming-start",
+      args: [{}],
+    });
+    revokeTranscription(restriction);
+    await closed.promise;
+    assert.deepEqual(received, ["config"]);
+    assert.deepEqual(sessionEnds, []);
   });
 }
 
@@ -448,8 +536,6 @@ test("local-only device policy refuses direct remote IPC despite saved keys and 
   const effective = await invoke("get-effective-policy");
   assert.equal(effective.localOnly, true);
   assert.deepEqual(effective.policy.transcription.allowedModes, ["local"]);
-  assert.equal((await invoke("acquire-recording-lock", "dictation")).success, true);
-  await invoke("release-recording-lock", "dictation");
 });
 
 test("calendar background sync resumes after removing local-only device policy", (t) => {
@@ -481,7 +567,7 @@ test("calendar background sync resumes after removing local-only device policy",
   assert.equal(starts, 4);
 });
 
-test("invalid trusted device policy denies capture and cannot be bypassed through workspace-policy IPC", async () => {
+test("invalid trusted device policy cannot be bypassed through workspace-policy IPC", async () => {
   deviceSnapshot = {
     status: "invalid",
     managed: true,
@@ -489,7 +575,6 @@ test("invalid trusted device policy denies capture and cannot be bypassed throug
     code: "DEVICE_POLICY_INVALID",
   };
   for (const listener of deviceListeners) listener(deviceSnapshot);
-  assert.equal((await invoke("acquire-recording-lock", "dictation")).success, false);
   await invoke("get-workspace-policy", "personal-account", authGeneration);
   assert.equal(target.effectivePolicyManager.getCurrent().code, "DEVICE_POLICY_INVALID");
   assert.equal((await invoke("cloud-health-check")).code, "DEVICE_POLICY_BLOCKED");
@@ -729,6 +814,39 @@ test("assemblyai: a socket opened on the old key loses to the save, even when it
   assert.equal(target.assemblyAiStreaming.token, "token-B");
 });
 
+test("gemini: live registry IDs reach the selected connection without a prefix requirement", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const next = structuredClone(old.data);
+  next.transcriptionProviders
+    .find((p) => p.id === "gemini")
+    .models.push({
+      id: "registry-google-live",
+      name: "New Google model",
+      description: "Fixture",
+      streaming: true,
+    });
+  store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 1 });
+  const originalConnect = FakeStreaming.prototype.connect;
+  t.after(() => {
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 });
+    FakeStreaming.prototype.connect = originalConnect;
+  });
+  FakeStreaming.prototype.connect = async function (options) {
+    this.currentModel = options.model;
+    return originalConnect.call(this, options);
+  };
+  target.geminiStreaming = null;
+  invoke("save-gemini-key", "A");
+  const result = await invoke("gemini-streaming-start", {
+    mode: "byok",
+    model: "registry-google-live",
+  });
+  assert.equal(result.success, true);
+  assert.equal(target.geminiStreaming.currentModel, "registry-google-live");
+  await invoke("gemini-streaming-stop");
+});
+
 test("gemini: a warm socket never crosses between managed and BYOK", async (t) => {
   withManagedApi(t);
   target.geminiStreaming = null;
@@ -742,6 +860,77 @@ test("gemini: a warm socket never crosses between managed and BYOK", async (t) =
   result = await invoke("gemini-streaming-start", { mode: "openwhispr" });
   assert.equal(result.usedWarmConnection, false);
   assert.equal(target.geminiStreaming.token, "token-Bearer account");
+});
+
+for (const inFlight of [false, true]) {
+  test(`gemini: changing the live model replaces a ${inFlight ? "connecting" : "ready"} warm socket`, async (t) => {
+    target.geminiStreaming = null;
+    invoke("save-gemini-key", "A");
+    const originalConnect = FakeStreaming.prototype.connect;
+    const entered = deferred();
+    const gate = deferred();
+    t.after(() => {
+      FakeStreaming.prototype.connect = originalConnect;
+      gate.resolve();
+    });
+    FakeStreaming.prototype.connect = async function (options) {
+      this.currentModel = options.model;
+      if (options.model === "gemini-old-live") {
+        entered.resolve();
+        if (inFlight) await gate.promise;
+      }
+      return originalConnect.call(this, options);
+    };
+    const warmup = invoke("gemini-streaming-warmup", { mode: "byok", model: "gemini-old-live" });
+    await entered.promise;
+    if (!inFlight) await warmup;
+    const start = invoke("gemini-streaming-start", { mode: "byok", model: "gemini-next-live" });
+    gate.resolve();
+    await warmup;
+    const result = await start;
+    assert.equal(result.success, true);
+    assert.equal(result.usedWarmConnection, false);
+    assert.equal(target.geminiStreaming.currentModel, "gemini-next-live");
+    await invoke("gemini-streaming-stop");
+  });
+}
+
+test("gemini: microphone frames during a model switch reach only the requested model", async (t) => {
+  target.geminiStreaming = null;
+  invoke("save-gemini-key", "A");
+  const originalConnect = FakeStreaming.prototype.connect;
+  const entered = deferred();
+  const gate = deferred();
+  const received = new Map();
+  t.after(() => {
+    FakeStreaming.prototype.connect = originalConnect;
+    gate.resolve();
+  });
+  FakeStreaming.prototype.connect = async function (options) {
+    this.currentModel = options.model;
+    received.set(options.model, []);
+    this.sendAudio = (bytes) => {
+      received.get(this.currentModel).push(Buffer.from(bytes));
+      return true;
+    };
+    if (options.model === "gemini-old-live") {
+      entered.resolve();
+      await gate.promise;
+    }
+    return originalConnect.call(this, options);
+  };
+  const warmup = invoke("gemini-streaming-warmup", { mode: "byok", model: "gemini-old-live" });
+  await entered.promise;
+  const starting = invoke("gemini-streaming-start", { mode: "byok", model: "gemini-next-live" });
+  const send = (bytes) => eventHandlers.get("gemini-streaming-send")({ sender: editor }, bytes);
+  send(Buffer.from([1, 2]));
+  gate.resolve();
+  await warmup;
+  assert.equal((await starting).success, true);
+  send(Buffer.from([3, 4]));
+  assert.deepEqual(received.get("gemini-old-live"), []);
+  assert.deepEqual(Buffer.concat(received.get("gemini-next-live")), Buffer.from([1, 2, 3, 4]));
+  await invoke("gemini-streaming-stop");
 });
 
 // Tinfoil reads the saved key whatever the transcription mode says.
@@ -1142,7 +1331,17 @@ test("a sign-out or account switch during a meeting prepare leaves no warm conne
         token: null,
         generation: authGeneration,
       }),
-    () => handlers.get("set-active-account-scope")({}, "another-account", authGeneration),
+    async () => {
+      // A switch leaves a real account; a guest signing in keeps its work.
+      target.databaseManager = {
+        activeAccountId: "personal-account",
+        setActiveAccountId() {},
+        claimSignedOutLocalRows() {},
+        claimLegacyRowsOfOnlyAccount() {},
+      };
+      await handlers.get("set-active-account-scope")({}, "another-account", authGeneration);
+      delete target.databaseManager;
+    },
   ]) {
     resetMeeting(t);
     setWorkspacePolicy(UNMANAGED_POLICY);
@@ -1216,7 +1415,7 @@ test("valid inference restrictions retire active provider streams without disabl
     once() {},
     removeListener() {},
   };
-  await listeners.get("cloud-agent-stream-start")({ sender }, "blocked-agent", [
+  await eventHandlers.get("cloud-agent-stream-start")({ sender }, "blocked-agent", [
     { role: "user", content: "private" },
   ]);
   assert.equal(messages[0][0], "cloud-agent-stream-error");

@@ -15,20 +15,32 @@ class UpdateManager {
     this.isQuittingForUpdate = false;
     this.handleBeforeQuitForUpdate = null;
     this.handleNativeUpdateDownloaded = null;
+    this.handleBeforeQuit = null;
     this.eventListeners = [];
     this.updateCheckInterval = null;
     this.windowManager = null;
     // null until the renderer syncs the preference, so nothing downloads unasked.
     this.autoUpdatesEnabled = null;
     this.getPolicy = getPolicy;
+    // Whether new activity has the current credential's verdict.
     this.policyReady = getPolicy === null;
-    this.updateMode = "user_choice";
+    // Its lookup failed with nothing held, so only a retry can resolve it.
+    this.policyUnavailable = false;
+    // A check the policy refused, or work it cut short, checks again once the
+    // policy allows updates.
+    this.checkAwaitingPolicy = false;
+    // The verdict running work follows: the current one or, after
+    // invalidatePolicy, the previous one until the next lands. null while
+    // nothing allows updates.
+    this.updateMode = getPolicy === null ? "user_choice" : null;
     this.policyRevision = -1;
-    this.policyEpoch = 0;
+    // Bumped by invalidatePolicy, so a lookup for the previous credential never lands.
+    this.lookupEpoch = 0;
+    // Bumped when the policy ends running work, so its results never land.
+    this.workEpoch = 0;
     this.checkEpoch = null;
     this.checkPromise = null;
     this.downloadEpoch = null;
-    this.downloadToken = null;
     this.downloadPromise = null;
     this.requestCleanup = null;
     this.updateCancellationToken = null;
@@ -173,6 +185,11 @@ class UpdateManager {
     if (process.platform === "darwin") {
       this.handleNativeUpdateDownloaded = () => this._notifyStatus();
       nativeUpdater.on("update-downloaded", this.handleNativeUpdateDownloaded);
+    } else {
+      // main.js ends a quit with app.exit(), which skips will-quit but not the
+      // quit event NSIS and AppImage install from.
+      this.handleBeforeQuit = () => this._syncInstallOnQuit({ quitting: true });
+      require("electron").app.on("before-quit", this.handleBeforeQuit);
     }
   }
 
@@ -192,7 +209,10 @@ class UpdateManager {
       if (this.getPolicy) await this.refreshPolicy();
       if (!this._policyFailure() && this.requestCleanup) await this.requestCleanup;
       const failure = this._policyFailure();
-      if (failure) return { ...failure, updateAvailable: false };
+      if (failure) {
+        this.checkAwaitingPolicy = true;
+        return { ...failure, updateAvailable: false };
+      }
       if (process.env.NODE_ENV === "development") {
         return {
           updateAvailable: false,
@@ -210,7 +230,7 @@ class UpdateManager {
       if (this.checkPromise) return this.checkPromise;
 
       this.httpExecutor.resumeRequests();
-      const epoch = this.policyEpoch;
+      const epoch = this.workEpoch;
       this.checkEpoch = epoch;
       this.checkPromise = this._checkForUpdates(epoch);
       try {
@@ -220,8 +240,6 @@ class UpdateManager {
         this.checkEpoch = null;
       }
     } catch (error) {
-      const failure = this._policyFailure();
-      if (failure) return { ...failure, updateAvailable: false };
       console.error("❌ Update check error:", error);
       throw error;
     }
@@ -230,14 +248,15 @@ class UpdateManager {
   async _checkForUpdates(epoch) {
     console.log("🔍 Checking for updates...");
     const result = await autoUpdater.checkForUpdates().catch((error) => {
-      if (epoch !== this.policyEpoch) return null;
+      if (epoch !== this.workEpoch) return null;
       throw error;
     });
-    if (epoch !== this.policyEpoch || this._policyFailure()) {
+    if (epoch !== this.workEpoch) {
       result?.cancellationToken?.cancel();
       return { ...(this._policyFailure() ?? this._policyChanged()), updateAvailable: false };
     }
-    this.updateCancellationToken = result?.cancellationToken ?? null;
+    // A running download keeps the token it was started with, for an abort to cancel.
+    if (!this.downloadPromise) this.updateCancellationToken = result?.cancellationToken ?? null;
     this.checkEpoch = null;
     this._autoDownloadIfEnabled();
 
@@ -296,29 +315,26 @@ class UpdateManager {
       this.isDownloading = true;
       started = true;
       this.httpExecutor.resumeRequests();
-      const epoch = this.policyEpoch;
-      this.downloadToken = this.updateCancellationToken;
+      const epoch = this.workEpoch;
       this.downloadEpoch = epoch;
       console.log("📥 Starting update download...");
-      this.downloadPromise = autoUpdater.downloadUpdate(this.downloadToken ?? undefined);
+      this.downloadPromise = autoUpdater.downloadUpdate(this.updateCancellationToken ?? undefined);
       await this.downloadPromise;
-      if (epoch !== this.policyEpoch || this._policyFailure()) {
-        return this._policyFailure() ?? this._policyChanged();
-      }
+      if (epoch !== this.workEpoch) return this._policyFailure() ?? this._policyChanged();
       console.log("📥 Download initiated successfully");
 
       return { success: true, message: "Update download started" };
     } catch (error) {
       this.isDownloading = false;
-      if (this._policyFailure()) return this._policyFailure();
-      if (started && this.downloadEpoch !== this.policyEpoch) return this._policyChanged();
+      if (started && this.downloadEpoch !== this.workEpoch) {
+        return this._policyFailure() ?? this._policyChanged();
+      }
       console.error("❌ Update download error:", error);
       throw error;
     } finally {
       if (started) {
         this.isDownloading = false;
         this.downloadEpoch = null;
-        this.downloadToken = null;
         this.downloadPromise = null;
       }
     }
@@ -349,25 +365,39 @@ class UpdateManager {
         };
       }
 
-      if (this.isInstalling) {
-        return {
-          success: false,
-          message: "Update installation already in progress",
-        };
-      }
-
-      this.isInstalling = true;
-      console.log("🔄 Installing update and restarting...");
-
-      const isSilent = process.platform === "win32";
-      autoUpdater.quitAndInstall(isSilent, true);
-
-      return { success: true, message: "Update installation started" };
+      return this._quitAndInstall();
     } catch (error) {
-      this.isInstalling = false;
       console.error("❌ Update installation error:", error);
       throw error;
     }
+  }
+
+  // Squirrel.Mac installs a staged update on any quit whatever the policy, so a
+  // restart hands it over instead of racing app.relaunch().
+  async restartIntoStagedUpdate() {
+    if (!this.hasStagedUpdate()) return { success: false, message: "No update is staged" };
+    return this._quitAndInstall();
+  }
+
+  _quitAndInstall() {
+    if (this.isInstalling) {
+      return {
+        success: false,
+        message: "Update installation already in progress",
+      };
+    }
+
+    this.isInstalling = true;
+    console.log("🔄 Installing update and restarting...");
+    try {
+      const isSilent = process.platform === "win32";
+      autoUpdater.quitAndInstall(isSilent, true);
+    } catch (error) {
+      this.isInstalling = false;
+      throw error;
+    }
+
+    return { success: true, message: "Update installation started" };
   }
 
   async getAppVersion() {
@@ -387,7 +417,8 @@ class UpdateManager {
         updateDownloaded: this._eventsAllowed() && this.updateDownloaded,
         updateMode: this.updateMode,
         policyReady: this.policyReady,
-        effectiveAutoUpdatesEnabled: this._automaticUpdatesEnabled(),
+        policyUnavailable: this.policyUnavailable,
+        effectiveAutoUpdatesEnabled: this._automaticUpdatesSelected(),
         stagedUpdate: this.hasStagedUpdate(),
         isDevelopment: process.env.NODE_ENV === "development",
         isSupported: isUpdaterSupported,
@@ -407,27 +438,38 @@ class UpdateManager {
     }
   }
 
-  _automaticUpdatesEnabled() {
+  // What the toggle shows: the organization's choice, else the member's.
+  _automaticUpdatesSelected() {
     return (
       isUpdaterSupported &&
-      this.policyReady &&
       this.updateMode !== "it_managed" &&
       (this.updateMode === "always_on" || this.autoUpdatesEnabled === true)
     );
   }
 
+  _automaticUpdatesEnabled() {
+    return this.policyReady && this._automaticUpdatesSelected();
+  }
+
   _eventsAllowed() {
     return (
-      this.policyReady &&
+      this.updateMode !== null &&
       this.updateMode !== "it_managed" &&
-      (this.checkEpoch === null || this.checkEpoch === this.policyEpoch) &&
-      (this.downloadEpoch === null || this.downloadEpoch === this.policyEpoch)
+      (this.checkEpoch === null || this.checkEpoch === this.workEpoch) &&
+      (this.downloadEpoch === null || this.downloadEpoch === this.workEpoch)
     );
   }
 
-  _syncInstallOnQuit() {
+  // electron-updater reads this as a download completes, to decide whether to
+  // install it on quit (Squirrel.Mac only gets the file if so), and NSIS and
+  // AppImage read it again as the app quits. The first follows the verdict the
+  // download runs under, so a pending lookup doesn't drop it; the second needs
+  // a current verdict.
+  _syncInstallOnQuit({ quitting = false } = {}) {
     autoUpdater.autoInstallOnAppQuit =
-      this.policyReady && this.updateMode !== "it_managed" && !this.installDeferred;
+      (quitting ? this.policyReady : this.updateMode !== null) &&
+      this.updateMode !== "it_managed" &&
+      !this.installDeferred;
   }
 
   _policyChanged() {
@@ -460,53 +502,97 @@ class UpdateManager {
     );
   }
 
-  invalidatePolicy() {
-    this.policyEpoch += 1;
-    this.policyRevision = -1;
-    this.policyReady = false;
-    this.downloadToken?.cancel();
+  // Ends the check or download running and the update they found.
+  _abortWork() {
+    if (this.updateAvailable || this.checkPromise || this.downloadPromise) {
+      this.checkAwaitingPolicy = true;
+    }
+    this.workEpoch += 1;
     this.updateCancellationToken?.cancel();
+    // The next download must not start on a cancelled token.
+    this.updateCancellationToken = null;
     if (this.checkPromise || this.downloadPromise) {
       // Cancelling the updater promise alone leaves its download request open.
       this.httpExecutor.abortRequests();
-      this.requestCleanup = Promise.allSettled([this.checkPromise, this.downloadPromise]);
+      const cleanup = Promise.allSettled([this.checkPromise, this.downloadPromise]).then(() => {
+        if (this.requestCleanup === cleanup) this.requestCleanup = null;
+      });
+      this.requestCleanup = cleanup;
     }
     this.updateAvailable = false;
     if (!this.updateDownloaded) this.lastUpdateInfo = null;
-    this._syncInstallOnQuit();
+  }
+
+  // The credential or scope changed. New activity waits for its verdict, while
+  // a running check or download and the update it found keep the previous one
+  // until the next lands: only an IT-managed verdict ends them.
+  invalidatePolicy() {
+    this.lookupEpoch += 1;
+    this.policyRevision = -1;
+    this.policyReady = false;
+    this.policyUnavailable = false;
     this._notifyStatus();
   }
 
   updatePolicy(snapshot) {
     if (!snapshot?.success || (snapshot.managed && !snapshot.policy)) {
-      if (this.policyReady) this.invalidatePolicy();
+      // A failed lookup says nothing new; an unreadable policy revokes.
+      if (snapshot?.success || snapshot?.code === "POLICY_UNRESOLVABLE") {
+        this._abortWork();
+        this.updateMode = null;
+        this.policyReady = false;
+        this.policyUnavailable = true;
+        this._syncInstallOnQuit();
+        this._notifyStatus();
+      } else if (!this.policyReady && !this.policyUnavailable) {
+        this.policyUnavailable = true;
+        this._notifyStatus();
+      }
       return;
     }
     if (Number.isSafeInteger(snapshot.revision) && snapshot.revision < this.policyRevision) return;
     const mode = snapshot.managed ? snapshot.policy?.updates?.mode : "user_choice";
     const nextMode = mode === "always_on" || mode === "it_managed" ? mode : "user_choice";
+    const wasBlocked = !this.policyReady || this.updateMode === "it_managed";
     const changed = !this.policyReady || this.updateMode !== nextMode;
-    if (nextMode === "it_managed" && this.updateMode !== "it_managed") {
-      this.invalidatePolicy();
-    }
+    if (nextMode === "it_managed" && this.updateMode !== "it_managed") this._abortWork();
     this.policyRevision = snapshot.revision ?? this.policyRevision;
     this.policyReady = true;
+    this.policyUnavailable = false;
     this.updateMode = nextMode;
     this._syncInstallOnQuit();
     if (changed) {
       this._notifyStatus();
       this._autoDownloadIfEnabled();
     }
+    if (wasBlocked && nextMode !== "it_managed" && this.checkAwaitingPolicy) {
+      this.checkAwaitingPolicy = false;
+      this._autoCheckForUpdates("Deferred");
+    }
   }
 
+  // A held verdict answers at once and the network refreshes it behind, so
+  // nothing waits on a slow lookup; only a credential with none held waits.
   async refreshPolicy() {
     if (!this.getPolicy) return;
-    const epoch = this.policyEpoch;
+    const epoch = this.lookupEpoch;
+    if (!this.policyReady) await this._lookupPolicy({ held: true });
+    if (epoch !== this.lookupEpoch) return;
+    if (this.policyReady) void this._lookupPolicy();
+    else await this._lookupPolicy();
+  }
+
+  async _lookupPolicy(options) {
+    const epoch = this.lookupEpoch;
+    let snapshot;
     try {
-      const snapshot = await this.getPolicy();
-      if (epoch === this.policyEpoch) this.updatePolicy(snapshot);
+      snapshot = await this.getPolicy(options);
     } catch {
-      if (epoch === this.policyEpoch) this.updatePolicy({ success: false });
+      snapshot = { success: false };
+    }
+    // With nothing held, the network lookup decides.
+    if (epoch === this.lookupEpoch && (snapshot?.success || !options?.held)) {
+      this.updatePolicy(snapshot);
     }
   }
 
@@ -567,7 +653,6 @@ class UpdateManager {
       clearTimeout(this.startupCheckTimeout);
       this.startupCheckTimeout = null;
     }
-    this.downloadToken?.cancel();
     this.updateCancellationToken?.cancel();
     this.httpExecutor?.abortRequests();
     if (this.updateCheckInterval) {
@@ -591,6 +676,10 @@ class UpdateManager {
         this.handleNativeUpdateDownloaded
       );
       this.handleNativeUpdateDownloaded = null;
+    }
+    if (this.handleBeforeQuit) {
+      require("electron").app.removeListener("before-quit", this.handleBeforeQuit);
+      this.handleBeforeQuit = null;
     }
   }
 }

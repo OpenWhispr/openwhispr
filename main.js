@@ -224,6 +224,7 @@ function getProtocolAppArgs() {
 // Register custom protocol for OAuth callbacks.
 function registerOpenWhisprProtocol() {
   const protocol = OAUTH_PROTOCOL;
+  if (process.platform === "darwin" && app.isDefaultProtocolClient(protocol)) return true;
   const htmlHandler = process.platform === "linux" ? getDefaultHtmlHandler() : null;
   const appArgs = getProtocolAppArgs();
 
@@ -260,6 +261,9 @@ if (!protocolRegistered) {
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
+  console.warn(
+    "[Startup] Could not acquire the single-instance lock; another OpenWhispr instance may already be running. Exiting."
+  );
   app.exit(0);
 }
 
@@ -298,6 +302,14 @@ const dockManager = require("./src/helpers/dockManager");
 const autoStart = require("./src/helpers/autoStart");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
 const CliBridge = require("./src/helpers/cliBridge");
+const { createRegistryLoader } = require("./src/helpers/registryLoader");
+const { registerRegistryIpc } = require("./src/helpers/registryIpc");
+const { replaceRegistryData, bundledRegistryData } = require("./src/models/registryData.js");
+const { configureInstalledModels, withInstalledModels } = require("./src/helpers/installedModels");
+const { withTrustedDownloads } = require("./src/helpers/registryDownloadTrust");
+const registryTrustedKeys = require("./src/models/registryTrustedKeys.json");
+let registryLoader = null;
+let disposeRegistryIpc = null;
 const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
@@ -305,8 +317,8 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
-const { AssistantPasteTarget } = require("./src/helpers/assistantPasteTarget");
 const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
+const { AgentWindowManager } = require("./src/helpers/agentWindowManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
 const {
@@ -339,6 +351,7 @@ const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
 const sidecarRegistry = require("./src/helpers/sidecarRegistry");
 const { reapStaleSidecars } = require("./src/helpers/sidecarReaper");
+const { resolvePrewarmModel } = require("./src/helpers/localServerPolicy");
 
 // Manager instances - initialized after app.whenReady()
 let debugLogger = null;
@@ -693,7 +706,7 @@ function initializeCoreManagers() {
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
   updateManager = new UpdateManager({
-    getPolicy: () => ipcHandlers?.getUpdatePolicy?.() ?? { success: false },
+    getPolicy: (options) => ipcHandlers?.getUpdatePolicy?.(options) ?? { success: false },
   });
   updateManager.setWindowManager(windowManager);
   windowsKeyManager = new WindowsKeyManager();
@@ -711,13 +724,10 @@ function initializeCoreManagers() {
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
   windowManager.selectionManager = selectionManager;
-  windowManager.assistantPasteTarget = new AssistantPasteTarget({
-    textEditMonitor,
-    selectionManager,
-  });
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
   windowManager.permissionGuide = new PermissionGuideManager(windowManager);
+  windowManager.agentWindow = new AgentWindowManager(windowManager);
   if (process.platform === "linux") {
     windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
   } else if (process.platform === "win32") {
@@ -1245,6 +1255,44 @@ async function startApp() {
   // contend for its port or storage lock.
   await reapStaleSidecars();
 
+  // The registry loader reports cache problems before core managers exist, so the
+  // logger starts first. Requiring it again in initializeCoreManagers is a no-op.
+  debugLogger = require("./src/helpers/debugLogger");
+  debugLogger.ensureFileLogging();
+
+  // Only local signature/cache verification is awaited. Remote refresh starts
+  // later, so offline startup and settings migrations see a usable catalog.
+  const registryMetadata = require("./src/models/registryMetadata.json");
+  configureInstalledModels(path.join(app.getPath("userData"), "installed-models.json"));
+  registryLoader = createRegistryLoader({
+    cachePath: path.join(app.getPath("userData"), "model-registry.json"),
+    bundledSnapshot: {
+      data: bundledRegistryData,
+      manifestVersion: registryMetadata.manifestVersion,
+    },
+    clientContract: registryMetadata.clientContract,
+    trustedKeys: registryTrustedKeys,
+    appVersion: app.getVersion(),
+    applySnapshot: (snapshot) =>
+      replaceRegistryData({
+        ...snapshot,
+        // Installed records pass the same download checks as the catalog.
+        data: withTrustedDownloads(
+          withInstalledModels(snapshot.data, app.getVersion()),
+          bundledRegistryData,
+          (id) => debugLogger.warn("Refused a catalog download from an untrusted source", { id })
+        ),
+      }),
+    onError: (error) =>
+      debugLogger.warn("Model registry update unavailable", { error: error.message }),
+  });
+  await registryLoader.start();
+  disposeRegistryIpc = registerRegistryIpc(ipcMain, (channel, snapshot) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(channel, snapshot);
+    }
+  });
+
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
   installManagedNetworkGuard({
@@ -1270,6 +1318,7 @@ async function startApp() {
 
   await migrateCookieToBearerToken();
   void updateManager.refreshPolicy();
+  ipcHandlers.loadLocalModelPolicy();
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
@@ -1470,7 +1519,7 @@ async function startApp() {
   }
 
   app.on("browser-window-focus", () => {
-    void managedDevicePolicy.refresh();
+    managedDevicePolicy.refreshOnFocus();
     if (googleCalendarManager) googleCalendarManager.syncOnFocus();
     if (microsoftCalendarManager) microsoftCalendarManager.syncOnFocus();
     if (appleCalendarManager) appleCalendarManager.syncOnFocus();
@@ -1516,21 +1565,17 @@ async function startApp() {
   // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.
   const cleanupProvider = process.env.CLEANUP_PROVIDER || process.env.REASONING_PROVIDER;
   const cleanupLocalModel = process.env.LOCAL_CLEANUP_MODEL || process.env.LOCAL_REASONING_MODEL;
-  if (cleanupProvider === "local" && cleanupLocalModel) {
+  const prewarmModel = resolvePrewarmModel({
+    cleanupProvider,
+    cleanupModel: cleanupLocalModel,
+    dictationAgentProvider: process.env.DICTATION_AGENT_PROVIDER,
+    dictationAgentModel: process.env.LOCAL_DICTATION_AGENT_MODEL,
+  });
+  if (prewarmModel) {
     const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.prewarmServer(cleanupLocalModel).catch((err) => {
-      debugLogger.debug("llama-server pre-warm error (non-fatal)", { error: err.message });
-    });
-  }
-
-  if (
-    process.env.DICTATION_AGENT_PROVIDER === "local" &&
-    process.env.LOCAL_DICTATION_AGENT_MODEL &&
-    process.env.LOCAL_DICTATION_AGENT_MODEL !== cleanupLocalModel
-  ) {
-    const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.prewarmServer(process.env.LOCAL_DICTATION_AGENT_MODEL).catch((err) => {
-      debugLogger.debug("dictation-agent llama-server pre-warm error (non-fatal)", {
+    modelManager.prewarmServer(prewarmModel).catch((err) => {
+      debugLogger.debug("llama-server pre-warm error (non-fatal)", {
+        model: prewarmModel,
         error: err.message,
       });
     });
@@ -2036,8 +2081,11 @@ async function startApp() {
       });
     }
 
-    const STARTUP_DELAY_MS = 3000;
-    setTimeout(() => windowManager.reconcileNativeKeyListeners(), STARTUP_DELAY_MS);
+    windowManager.initializeNativeKeyListeners().catch((err) => {
+      debugLogger.warn("[Push-to-Talk] Native key listener startup failed", {
+        error: err.message,
+      });
+    });
 
     ipcMain.on("hotkey-changed", () => {
       windowManager.resetWindowsPushState();
@@ -2218,11 +2266,23 @@ if (gotSingleInstanceLock) {
         ipcHandlers?.metaActivation?.shutdown(),
         new Promise((resolve) => setTimeout(resolve, 1500)),
       ]),
+      // A teamspace delete still in its Undo window, which the toast already reported as done.
+      Promise.race([
+        isLiveWindow(windowManager?.controlPanelWindow)
+          ? windowManager.controlPanelWindow.webContents.executeJavaScript(
+              "window.commitHeldSpaceDeletes?.()"
+            )
+          : undefined,
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
     ]).finally(() => app.exit(0));
   });
 }
 
 function performSyncTeardown() {
+  registryLoader?.stop();
+  disposeRegistryIpc?.();
+  disposeRegistryIpc = null;
   if (wakeRewarmTimer) {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;

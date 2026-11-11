@@ -27,13 +27,21 @@ async function deviceAwareAuthFetch(...args: Parameters<typeof fetch>): Promise<
 }
 
 export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
+// Recorded by the API as the origin of an account created here; sent only when
+// Electron names the platform, so an unknown one stays unknown.
+const REGISTRATION_OS: string | undefined = (
+  { darwin: "macos", win32: "windows", linux: "linux" } as Record<string, string>
+)[window.electronAPI?.getPlatform?.() ?? ""];
 export const authClient = createAuthClient({
   baseURL: AUTH_URL,
   plugins: [ssoClient()],
   fetchOptions: {
     credentials: "omit",
     customFetchImpl: deviceAwareAuthFetch,
-    headers: { "x-openwhispr-source": "desktop" },
+    headers: {
+      "x-openwhispr-source": "desktop",
+      ...(REGISTRATION_OS ? { "x-openwhispr-os": REGISTRATION_OS } : {}),
+    },
     onRequest: prepareAuthRequest,
     onResponse: handleAuthRequestResponse,
     onSuccess: handleAuthRequestSuccess,
@@ -242,6 +250,8 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
       const protocol = (await window.electronAPI?.getOAuthProtocol?.()) || "openwhispr";
       const url = new URL(`${AUTH_URL}/api/desktop-signin/${provider}`);
       url.searchParams.set("callbackURL", `${DESKTOP_OAUTH_CALLBACK_URL}?protocol=${protocol}`);
+      // The browser carries none of the app's headers to the shim.
+      if (REGISTRATION_OS) url.searchParams.set("os", REGISTRATION_OS);
       openExternalLink(url.toString());
       return {};
     }

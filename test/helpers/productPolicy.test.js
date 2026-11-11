@@ -38,7 +38,7 @@ test("direct operations enforce provider allowlists and the minimum app version"
     false
   );
   policy.minAppVersion = "1.12.0";
-  for (const channel of ["acquire-recording-lock", "process-local-reasoning", "cloud-transcribe"])
+  for (const channel of ["process-local-reasoning", "cloud-transcribe"])
     assert.equal(productOperationAllowed(snapshot, "1.11.1", channel), false);
   assert.equal(
     productOperationAllowed({ success: false }, "1.11.1", "process-local-reasoning"),

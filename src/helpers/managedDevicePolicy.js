@@ -1,9 +1,11 @@
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
+const debugLogger = require("./debugLogger");
 const { isValidPolicyShape } = require("./policyValidation");
-const registry = require("../models/modelRegistryData.json");
+const { registryData } = require("../models/registryData.js");
 
 const execute = promisify(execFile);
 const DEVICE_KEYS = [
@@ -15,6 +17,11 @@ const DEVICE_KEYS = [
 ];
 const MAX_POLICY_BYTES = 1024 * 1024;
 const MODES = ["openwhispr", "providers", "local", "self-hosted", "enterprise"];
+const FOCUS_REFRESH_THROTTLE_MS = 30 * 1000;
+const LINUX_POLICY_DIRECTORY = "/etc/openwhispr";
+const MACOS_PREFERENCES_DOMAIN = "com.gizmolabs.openwhispr";
+const WINDOWS_POLICY_KEY = "HKLM\\SOFTWARE\\Policies\\OpenWhispr";
+const READER_TIMEOUT_MS = 5000;
 
 function defaultDevicePolicy() {
   return {
@@ -22,7 +29,7 @@ function defaultDevicePolicy() {
     transcription: {
       allowedModes: [...MODES],
       allowedByokProviders: [
-        ...registry.transcriptionProviders.map((provider) => provider.id),
+        ...registryData.transcriptionProviders.map((provider) => provider.id),
         "custom",
       ],
       allowedEnterpriseProviders: ["azure", "openai-compatible"],
@@ -30,7 +37,7 @@ function defaultDevicePolicy() {
     llm: {
       allowedModes: [...MODES],
       allowedByokProviders: [
-        ...registry.cloudProviders.map((provider) => provider.id),
+        ...registryData.cloudProviders.map((provider) => provider.id),
         "openrouter",
         "custom",
       ],
@@ -56,28 +63,38 @@ function defaultDevicePolicy() {
   };
 }
 
-function knownKeys(value, keys) {
-  return (
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    Object.keys(value).every((key) => keys.includes(key))
-  );
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function normalizeDeviceValues(values) {
-  if (!knownKeys(values, DEVICE_KEYS)) throw new Error("Invalid device settings");
+const ABSENT_SNAPSHOT = {
+  status: "absent",
+  managed: false,
+  policy: null,
+  requireSignIn: false,
+  localOnly: false,
+};
+const INVALID_SNAPSHOT = {
+  status: "invalid",
+  managed: true,
+  policy: null,
+  requireSignIn: false,
+  localOnly: false,
+  code: "DEVICE_POLICY_INVALID",
+};
+
+// Additive, like the workspace policy: a value or field a later build reads is
+// ignored here, while the ones this build knows keep their strict types.
+function normalizeDeviceValues(input) {
+  if (!isPlainObject(input)) throw new Error("Invalid device settings");
+  const values = Object.fromEntries(
+    DEVICE_KEYS.filter((key) => Object.hasOwn(input, key)).map((key) => [key, input[key]])
+  );
   if (
     Object.keys(values).length === 0 ||
     (Object.keys(values).length === 1 && values.DisableMeetingRecording === false)
   ) {
-    return {
-      status: "absent",
-      managed: false,
-      policy: null,
-      requireSignIn: false,
-      localOnly: false,
-    };
+    return ABSENT_SNAPSHOT;
   }
   for (const key of ["RequireSignIn", "DisableMeetingRecording"]) {
     if (values[key] !== undefined && typeof values[key] !== "boolean")
@@ -95,54 +112,7 @@ function normalizeDeviceValues(values) {
       throw new Error("Invalid policy string");
     }
     policy = JSON.parse(values.Policy);
-    if (
-      !isValidPolicyShape(policy) ||
-      !knownKeys(policy, [
-        "version",
-        "transcription",
-        "llm",
-        "features",
-        "sharing",
-        "dataRetention",
-        "requiredLocalModels",
-        "minAppVersion",
-        "updates",
-      ]) ||
-      !knownKeys(policy.transcription, [
-        "allowedModes",
-        "allowedByokProviders",
-        "allowedEnterpriseProviders",
-      ]) ||
-      !knownKeys(policy.llm, [
-        "allowedModes",
-        "allowedByokProviders",
-        "allowedEnterpriseProviders",
-      ]) ||
-      !knownKeys(policy.features, [
-        "agentEnabled",
-        "webSearchEnabled",
-        "screenContextEnabled",
-        "connectorsEnabled",
-        "meetingRecordingEnabled",
-        "audioUploadEnabled",
-        "memoryEnabled",
-      ]) ||
-      !knownKeys(policy.sharing, ["externalLinkSharing"]) ||
-      !knownKeys(policy.dataRetention, [
-        "audioRetentionMaxDays",
-        "localHistoryMode",
-        "cloudBackupAllowed",
-      ])
-    ) {
-      throw new Error("Unsupported or malformed policy");
-    }
-    if (
-      policy.updates !== undefined &&
-      (!knownKeys(policy.updates, ["mode"]) ||
-        (policy.updates.mode !== undefined && typeof policy.updates.mode !== "string"))
-    ) {
-      throw new Error("Invalid update policy");
-    }
+    if (!isValidPolicyShape(policy)) throw new Error("Unsupported or malformed policy");
     policy.updates = {
       mode: ["always_on", "it_managed"].includes(policy.updates?.mode)
         ? policy.updates.mode
@@ -187,7 +157,7 @@ async function readTrustedJson(filePath, { fileSystem = fs.promises, ownerId = 0
 }
 
 async function readLinuxValues({
-  directory = "/etc/openwhispr",
+  directory = LINUX_POLICY_DIRECTORY,
   fileSystem = fs.promises,
   ownerId = 0,
 } = {}) {
@@ -211,63 +181,94 @@ async function readLinuxValues({
     readTrustedJson(path.join(directory, "policy.json"), { fileSystem, ownerId }),
     readTrustedJson(path.join(directory, "device.json"), { fileSystem, ownerId }),
   ]);
-  if (
-    device !== undefined &&
-    !knownKeys(
-      device,
-      DEVICE_KEYS.filter((key) => key !== "Policy")
-    )
-  ) {
+  if (device !== undefined && (!isPlainObject(device) || Object.hasOwn(device, "Policy"))) {
     throw new Error("Invalid Linux device settings");
   }
   return { ...device, ...(policy === undefined ? {} : { Policy: JSON.stringify(policy) }) };
 }
 
-const WINDOWS_READER = `
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-$ErrorActionPreference = 'Stop'
-$base = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine, [Microsoft.Win32.RegistryView]::Registry64)
-$key = $base.OpenSubKey('SOFTWARE\\Policies\\OpenWhispr')
-$result = @{}
-try {
-  if ($null -ne $key) {
-    foreach ($name in @('Policy','RequireSignIn','AuditLogPath','WipeLocalDataOnLaunch','DisableMeetingRecording')) {
-      if ($key.GetValueNames() -contains $name) {
-        $result[$name] = @{ kind = $key.GetValueKind($name).ToString(); value = $key.GetValue($name) }
-      }
-    }
+function windowsRegistryTool() {
+  return path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "reg.exe");
+}
+
+const REGISTRY_STRING = /^"((?:[^"\\]|\\.)*)"$/;
+const unescapeRegistryString = (value) => value.replace(/\\(.)/g, "$1");
+
+// Reads the key's own values from a .reg export, which (unlike `reg query`)
+// keeps non-ASCII text intact: REG_SZ is a quoted string, REG_DWORD is dword:.
+function parseRegistryExport(text) {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const values = {};
+  for (const line of lines.slice(lines.findIndex((entry) => entry.startsWith("[")) + 1)) {
+    if (line.startsWith("[")) break;
+    const [, rawName, data] = /^"((?:[^"\\]|\\.)*)"=(.*)$/.exec(line) ?? [];
+    const name = rawName && unescapeRegistryString(rawName);
+    if (!DEVICE_KEYS.includes(name)) continue;
+    const boolean = ["RequireSignIn", "DisableMeetingRecording"].includes(name);
+    const dword = /^dword:([0-9a-f]{8})$/i.exec(data)?.[1];
+    const string = REGISTRY_STRING.exec(data)?.[1];
+    if (boolean ? !["00000000", "00000001"].includes(dword) : string === undefined)
+      throw new Error("Invalid registry value type");
+    values[name] = boolean ? dword === "00000001" : unescapeRegistryString(string);
   }
-  ConvertTo-Json -InputObject $result -Compress -Depth 4
-} finally { if ($null -ne $key) { $key.Dispose() }; $base.Dispose() }
-`;
+  return values;
+}
 
 async function readWindowsValues(run = execute) {
-  const { stdout } = await run(
-    "powershell.exe",
-    [
-      "-NoLogo",
-      "-NoProfile",
-      "-NonInteractive",
-      "-EncodedCommand",
-      Buffer.from(WINDOWS_READER, "utf16le").toString("base64"),
-    ],
-    { encoding: "utf8", timeout: 5000, windowsHide: true, maxBuffer: MAX_POLICY_BYTES * 2 + 4096 }
+  const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), "openwhispr-policy-"));
+  const file = path.join(directory, "policy.reg");
+  try {
+    try {
+      await run(windowsRegistryTool(), ["export", WINDOWS_POLICY_KEY, file, "/y", "/reg:64"], {
+        timeout: READER_TIMEOUT_MS,
+        windowsHide: true,
+      });
+    } catch (error) {
+      // reg.exe's exit status for a key that doesn't exist.
+      if (error.code === 1) return {};
+      throw error;
+    }
+    return parseRegistryExport(await fs.promises.readFile(file, "utf16le"));
+  } finally {
+    await fs.promises.rm(directory, { recursive: true, force: true });
+  }
+}
+
+// Whether an administrator deployed something, read without parsing it: a
+// reader that fails only means an invalid policy when one is there.
+async function hasPolicyEvidence({
+  platform = process.platform,
+  run = execute,
+  fileSystem = fs.promises,
+} = {}) {
+  if (platform === "win32") {
+    return run(windowsRegistryTool(), ["query", WINDOWS_POLICY_KEY, "/reg:64"], {
+      timeout: READER_TIMEOUT_MS,
+      windowsHide: true,
+    }).then(
+      () => true,
+      () => false
+    );
+  }
+  const preferences = `${MACOS_PREFERENCES_DOMAIN}.plist`;
+  const files =
+    platform === "linux"
+      ? ["policy.json", "device.json"].map((name) => path.join(LINUX_POLICY_DIRECTORY, name))
+      : platform === "darwin"
+        ? [
+            path.join("/Library/Managed Preferences", preferences),
+            path.join("/Library/Managed Preferences", os.userInfo().username, preferences),
+          ]
+        : [];
+  const found = await Promise.all(
+    files.map((file) =>
+      fileSystem.lstat(file).then(
+        () => true,
+        () => false
+      )
+    )
   );
-  const raw = JSON.parse(stdout.replace(/^\uFEFF/, ""));
-  if (!knownKeys(raw, DEVICE_KEYS)) throw new Error("Invalid registry response");
-  return Object.fromEntries(
-    Object.entries(raw).map(([key, entry]) => {
-      const boolean = ["RequireSignIn", "DisableMeetingRecording"].includes(key);
-      if (
-        boolean
-          ? entry.kind !== "DWord" || ![0, 1].includes(entry.value)
-          : entry.kind !== "String" || typeof entry.value !== "string"
-      ) {
-        throw new Error("Invalid registry value type");
-      }
-      return [key, boolean ? entry.value === 1 : entry.value];
-    })
-  );
+  return found.includes(true);
 }
 
 async function readDeviceValues({ platform = process.platform, run = execute, linux = {} } = {}) {
@@ -278,7 +279,7 @@ async function readDeviceValues({ platform = process.platform, run = execute, li
   if (!binary) throw new Error("Managed policy reader unavailable");
   const { stdout } = await run(binary, [], {
     encoding: "utf8",
-    timeout: 5000,
+    timeout: READER_TIMEOUT_MS,
     maxBuffer: MAX_POLICY_BYTES * 2 + 4096,
   });
   return JSON.parse(stdout);
@@ -286,11 +287,15 @@ async function readDeviceValues({ platform = process.platform, run = execute, li
 
 function createManagedDevicePolicy({
   read = readDeviceValues,
+  hasPolicy = hasPolicyEvidence,
+  logger = debugLogger,
   refreshMs = 60_000,
   platform = process.platform,
 } = {}) {
   let snapshot = { status: "loading", managed: false, policy: null, revision: 0 };
   let sequence = 0;
+  let reading = null;
+  let lastFocusRefresh = 0;
   let timer;
   let refreshTimer;
   const watchers = new Map();
@@ -309,7 +314,8 @@ function createManagedDevicePolicy({
             clearTimeout(refreshTimer);
             refreshTimer = setTimeout(() => {
               watchPolicyDirectory();
-              void refresh();
+              // A read already under way may have missed this change.
+              void Promise.resolve(reading).finally(refresh);
             }, 100);
             refreshTimer.unref?.();
           }
@@ -325,33 +331,52 @@ function createManagedDevicePolicy({
     }
   }
   const listeners = new Set();
-  async function refresh() {
-    const request = ++sequence;
-    let next;
+  // A reader that fails proves nothing on its own: the policy last read stays
+  // in force, and without one only evidence of a deployment means invalid.
+  // Null keeps the snapshot as it is.
+  async function readNext() {
     try {
-      next = normalizeDeviceValues(await read());
-    } catch {
-      next = {
-        status: "invalid",
-        managed: true,
-        policy: null,
-        requireSignIn: false,
-        localOnly: false,
-        code: "DEVICE_POLICY_INVALID",
-      };
+      return normalizeDeviceValues(await read());
+    } catch (error) {
+      if (snapshot.status === "valid") {
+        logger.warn("Device policy could not be re-read; keeping the last one", {
+          error: error.message,
+        });
+        return null;
+      }
+      if (await hasPolicy().catch(() => false)) return INVALID_SNAPSHOT;
+      logger.warn("Device policy could not be read, and none is deployed", {
+        error: error.message,
+      });
+      return ABSENT_SNAPSHOT;
     }
-    if (request !== sequence) return snapshot;
-    const previous = { ...snapshot };
-    delete previous.revision;
-    if (JSON.stringify(previous) !== JSON.stringify(next)) {
-      snapshot = { ...next, revision: snapshot.revision + 1 };
-      for (const listener of listeners) listener(snapshot);
-    }
-    return snapshot;
+  }
+  function refresh() {
+    reading ??= (async () => {
+      const request = ++sequence;
+      const next = await readNext();
+      if (request !== sequence || !next) return snapshot;
+      const previous = { ...snapshot };
+      delete previous.revision;
+      if (JSON.stringify(previous) !== JSON.stringify(next)) {
+        snapshot = { ...next, revision: snapshot.revision + 1 };
+        for (const listener of listeners) listener(snapshot);
+      }
+      return snapshot;
+    })().finally(() => {
+      reading = null;
+    });
+    return reading;
   }
   return {
     getSnapshot: () => snapshot,
     refresh,
+    refreshOnFocus() {
+      const now = Date.now();
+      if (now - lastFocusRefresh < FOCUS_REFRESH_THROTTLE_MS) return;
+      lastFocusRefresh = now;
+      void refresh();
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -382,6 +407,7 @@ function createManagedDevicePolicy({
 module.exports = {
   createManagedDevicePolicy,
   defaultDevicePolicy,
+  hasPolicyEvidence,
   normalizeDeviceValues,
   readDeviceValues,
   readLinuxValues,

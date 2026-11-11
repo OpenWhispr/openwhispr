@@ -13,9 +13,17 @@ function mergePolicies(policies) {
     .map((policy) => policy.dataRetention.audioRetentionMaxDays)
     .filter((value) => value !== null);
   const versions = policies.map((policy) => policy.minAppVersion).filter(Boolean);
+  // Null is unrestricted, so only the lists that restrict are intersected.
+  const localModels = (scope) => {
+    const lists = policies.map((policy) => policy[scope].allowedLocalModels).filter(Boolean);
+    return lists.length ? intersect(lists) : null;
+  };
+  // Absent means allowed, for the flags this build knows and any it doesn't.
+  const features = [...new Set(policies.flatMap((policy) => Object.keys(policy.features)))];
   return {
     version: 1,
     transcription: {
+      allowedLocalModels: localModels("transcription"),
       allowedModes: modes("transcription"),
       allowedByokProviders: intersect(
         policies.map((policy) => policy.transcription.allowedByokProviders)
@@ -25,6 +33,7 @@ function mergePolicies(policies) {
       ),
     },
     llm: {
+      allowedLocalModels: localModels("llm"),
       allowedModes: modes("llm"),
       allowedByokProviders: intersect(policies.map((policy) => policy.llm.allowedByokProviders)),
       allowedEnterpriseProviders: intersect(
@@ -32,15 +41,18 @@ function mergePolicies(policies) {
       ),
     },
     features: Object.fromEntries(
-      [
-        "agentEnabled",
-        "webSearchEnabled",
-        "screenContextEnabled",
-        "connectorsEnabled",
-        "meetingRecordingEnabled",
-        "audioUploadEnabled",
-      ].map((feature) => [feature, policies.every((policy) => policy.features[feature] !== false)])
+      features.map((feature) => [
+        feature,
+        policies.every((policy) => policy.features[feature] !== false),
+      ])
     ),
+    // Any start other than automatic, known to this build or not, is manual.
+    meetings: {
+      transcriptionStart:
+        policies
+          .map((policy) => policy.meetings?.transcriptionStart ?? "automatic")
+          .find((start) => start !== "automatic") ?? "automatic",
+    },
     sharing: {
       externalLinkSharing: restrictive(
         policies.map((policy) => policy.sharing.externalLinkSharing),
@@ -85,6 +97,8 @@ function localOnlyPolicy(policy) {
   return result;
 }
 
+const ABSENT_DEVICE = { status: "absent", managed: false, policy: null };
+
 function resolveEffectivePolicy(device, workspace, scope) {
   const metadata = {
     accountId: scope.accountId,
@@ -96,17 +110,20 @@ function resolveEffectivePolicy(device, workspace, scope) {
     requireSignIn: device.requireSignIn === true,
     localOnly: device.localOnly === true,
   };
+  // On a failure `managed` is the evidence that something manages this
+  // identity: a device policy, or a server that called its policy
+  // unresolvable. Without it a failed lookup holds nothing closed.
   const failure = (status, code) => ({
     ...metadata,
     success: false,
     status,
-    managed: device.managed === true || workspace?.managed === true,
+    managed: device.managed === true || workspace?.code === "POLICY_UNRESOLVABLE",
     policy: null,
     code,
   });
   if (device.status === "loading") return failure("loading", "DEVICE_POLICY_LOADING");
   if (device.status === "invalid") return failure("error", "DEVICE_POLICY_INVALID");
-  if (scope.authenticated && !workspace) return failure("loading", "POLICY_UNRESOLVABLE");
+  if (scope.authenticated && !workspace) return failure("loading", "POLICY_LOADING");
   if (scope.authenticated && !workspace.success)
     return failure("error", workspace.code ?? "POLICY_UNRESOLVABLE");
   if (!scope.authenticated && device.requireSignIn)
@@ -130,6 +147,22 @@ function resolveEffectivePolicy(device, workspace, scope) {
   }
 }
 
+// What the updater obeys. A device policy that can't be read contributes
+// nothing, and as it also keeps the workspace off the network, its held
+// verdict or none decides. A lookup that failed without evidence that the
+// identity is managed leaves the update choice with the user.
+function resolveUpdatePolicy(device, workspace, scope) {
+  const invalidDevice = device.status === "invalid";
+  const snapshot = resolveEffectivePolicy(
+    invalidDevice ? ABSENT_DEVICE : device,
+    invalidDevice ? (workspace ?? { success: false }) : workspace,
+    scope
+  );
+  return snapshot.status === "error" && !snapshot.managed
+    ? { ...snapshot, success: true, status: "unmanaged" }
+    : snapshot;
+}
+
 function createEffectivePolicyManager({
   devicePolicy,
   workspacePolicyManager,
@@ -138,6 +171,7 @@ function createEffectivePolicyManager({
 }) {
   let workspace = null;
   let current = null;
+  let updates = null;
   let signature;
   let revision = 0;
   function getCurrent() {
@@ -145,16 +179,16 @@ function createEffectivePolicyManager({
     const matching =
       workspace?.accountId === scope.accountId &&
       workspace?.authGeneration === scope.authGeneration;
-    const next = resolveEffectivePolicy(
-      devicePolicy.getSnapshot(),
-      matching ? workspace : null,
-      scope
-    );
-    const nextSignature = JSON.stringify(next);
+    const device = devicePolicy.getSnapshot();
+    const next = resolveEffectivePolicy(device, matching ? workspace : null, scope);
+    const nextUpdates = resolveUpdatePolicy(device, matching ? workspace : null, scope);
+    const nextSignature = JSON.stringify([next, nextUpdates]);
     if (nextSignature !== signature) {
       signature = nextSignature;
-      current = { ...next, revision: ++revision };
-      broadcast(current);
+      revision += 1;
+      current = { ...next, revision };
+      updates = { ...nextUpdates, revision };
+      broadcast(current, updates);
     }
     return current;
   }
@@ -162,26 +196,51 @@ function createEffectivePolicyManager({
     const scope = getScope();
     if (snapshot.accountId !== scope.accountId || snapshot.authGeneration !== scope.authGeneration)
       return;
+    // A failed lookup says nothing new about a verdict already held, unless
+    // the server called the policy unresolvable.
+    if (
+      !snapshot.success &&
+      snapshot.code !== "POLICY_UNRESOLVABLE" &&
+      workspace?.success &&
+      workspace.accountId === snapshot.accountId &&
+      workspace.authGeneration === snapshot.authGeneration
+    )
+      return;
     workspace = snapshot;
     getCurrent();
   }
   const unsubscribe = devicePolicy.subscribe(() => getCurrent());
   return {
     getCurrent,
+    getUpdatePolicy() {
+      getCurrent();
+      return updates;
+    },
     updateWorkspace,
     invalidate() {
       workspace = null;
       return getCurrent();
     },
-    async getPolicy(request = {}) {
+    // `held` reads only what is already held for the identity. So does a
+    // device that keeps it local or whose policy can't be read: neither
+    // contacts the server.
+    async getPolicy({ held = false, ...request } = {}) {
       const device = devicePolicy.getSnapshot();
-      if (device.status === "loading" || device.status === "invalid") return getCurrent();
+      if (device.status === "loading") return getCurrent();
       const scope = getScope();
       if (scope.authenticated) {
-        const result = devicePolicy.getSnapshot().localOnly
-          ? workspacePolicyManager.getCachedPolicy(request)
+        const offline = held || device.localOnly || device.status === "invalid";
+        const result = offline
+          ? workspacePolicyManager.heldPolicy(request)
           : await workspacePolicyManager.getPolicy(request);
-        updateWorkspace(result);
+        if (result) updateWorkspace(result);
+        else if (device.localOnly)
+          updateWorkspace({
+            success: false,
+            code: "POLICY_UNRESOLVABLE",
+            accountId: scope.accountId,
+            authGeneration: scope.authGeneration,
+          });
       }
       return getCurrent();
     },
@@ -204,4 +263,5 @@ module.exports = {
   localOnlyPolicy,
   mergePolicies,
   resolveEffectivePolicy,
+  resolveUpdatePolicy,
 };

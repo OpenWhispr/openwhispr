@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "./icons";
+import { resetForAccountChange as resetChatForAccountChange } from "../stores/chatTurnStore";
 import {
   Dialog,
   DialogContent,
@@ -119,6 +120,7 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
   // the next account. The old account's team content must not leak into the
   // new one (the purge never blocks the switch).
   async function handleSwitchAccount() {
+    resetChatForAccountChange();
     if (token) storePendingInvitationToken(token);
     // Signing out takes a live meeting's note out of scope; end it first.
     await stopRecording(undefined, "account-change");

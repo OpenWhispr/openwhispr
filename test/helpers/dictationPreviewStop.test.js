@@ -76,7 +76,7 @@ function deferred() {
 function scenario(t, { decode, stream, online = false } = {}) {
   const timers = new Map();
   t.mock.method(global, "setInterval", (callback) => {
-    const id = {};
+    const id = { unref() {} };
     timers.set(id, callback);
     return id;
   });
@@ -131,6 +131,8 @@ function scenario(t, { decode, stream, online = false } = {}) {
   t.after(() => invoke("dismiss-dictation-preview"));
   return {
     calls,
+    target,
+    parakeet: target.parakeetManager,
     invoke,
     start,
     audio,
@@ -143,6 +145,7 @@ function scenario(t, { decode, stream, online = false } = {}) {
           : { status: "valid", managed: true, policy, localOnly: change === "allowed update" };
       target.effectivePolicyManager.getCurrent();
     },
+    failStream: (error) => calls.streamOptions.onError(error),
     tick: () => Promise.all([...timers.values()].map((callback) => callback())),
   };
 }
@@ -267,6 +270,16 @@ for (const change of ["stop", "invalid", "local revoked", "allowed update"]) {
   });
 }
 
+test("a realtime stop hides the preview of a stream revocation already closed", async (t) => {
+  const s = scenario(t);
+  s.target._dictationPreviewEnabled = true;
+  s.target._dictationStreaming = { disconnect: async () => ({ text: "" }) };
+  s.setPolicy("invalid");
+  assert.equal(s.target._dictationStreaming, null);
+  assert.deepEqual(await s.invoke("dictation-realtime-stop"), { success: true, text: "" });
+  assert.equal(s.calls.hidden, 1);
+});
+
 test("local-mode revocation preserves a remote dictation preview", async (t) => {
   const s = scenario(t);
   await s.invoke("update-dictation-preview", "remote partial");
@@ -307,4 +320,80 @@ test("failed online startup skips the offline preview tail and leaves final deco
     text: "",
   });
   assert.equal(s.calls.decode.length, 0);
+});
+
+const blockedModel = () =>
+  Object.assign(new Error("Model blocked"), { code: "POLICY_MODEL_BLOCKED" });
+
+for (const stage of ["start", "send", "finish", "callback", "chunk"]) {
+  test(`policy denial during preview ${stage} is terminal and preserves its code`, async (t) => {
+    const error = blockedModel();
+    const s = scenario(t, {
+      online: stage !== "chunk",
+      decode: async () => {
+        throw error;
+      },
+      stream:
+        stage === "start"
+          ? error
+          : {
+              sendPcm16() {
+                if (stage === "send") throw error;
+              },
+              finish: async () => {
+                throw error;
+              },
+              abort() {},
+            },
+    });
+    const started = await s.start("online-model");
+    if (stage === "start") assert.equal(started.code, error.code);
+    assert.doesNotThrow(() => s.audio());
+    if (stage === "callback") s.failStream(error);
+    if (stage === "chunk") await s.tick();
+    const result = await s.invoke("stop-dictation-preview");
+    assert.equal(result.success, false);
+    assert.equal(result.code, error.code);
+    s.audio();
+    await s.tick();
+    assert.equal(s.calls.decode.length, stage === "chunk" ? 1 : 0);
+    assert.deepEqual(s.calls.appended, []);
+  });
+}
+
+test("a refusal landing after the preview ended never reaches a later dictation", async (t) => {
+  const refusal = deferred();
+  const s = scenario(t, {
+    online: true,
+    stream: {
+      sendPcm16() {},
+      finish: async () => ({ text: "", truncated: false }),
+      abort() {},
+    },
+  });
+  const manager = s.parakeet;
+  manager.createOnlineStream = () => refusal.promise;
+
+  const starting = s.start("online-model");
+  await s.invoke("hide-dictation-preview");
+  refusal.resolve(Promise.reject(blockedModel()));
+  await starting;
+
+  assert.deepEqual(await s.invoke("stop-dictation-preview"), {
+    success: true,
+    streamed: false,
+    text: "",
+  });
+});
+
+test("a preview refusal is reported by one stop only", async (t) => {
+  const s = scenario(t, { online: true, stream: blockedModel() });
+  await s.start("online-model");
+
+  assert.equal((await s.invoke("stop-dictation-preview")).code, blockedModel().code);
+  assert.deepEqual(await s.invoke("stop-dictation-preview"), {
+    success: true,
+    streamed: false,
+    text: "",
+  });
 });

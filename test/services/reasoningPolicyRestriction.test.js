@@ -160,15 +160,14 @@ test("raw chat streaming cannot transmit after its provider is revoked during ke
   const request = t.mock.method(globalThis, "fetch", async () => {
     throw new Error("Unexpected transmission");
   });
-  const chunks = [];
-  for await (const chunk of service.processTextStreaming(
-    [{ role: "user", content: "private" }],
-    "gpt-test",
-    "openai",
-    { systemPrompt: "Answer" }
-  ))
-    chunks.push(chunk);
-  assert.deepEqual(chunks, []);
+  await assert.rejects(
+    service
+      .processTextStreaming([{ role: "user", content: "private" }], "gpt-test", "openai", {
+        systemPrompt: "Answer",
+      })
+      .next(),
+    { code: "POLICY_RESTRICTED" }
+  );
   assert.equal(request.mock.callCount(), 0);
 });
 

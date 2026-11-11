@@ -62,7 +62,7 @@ test("remaps a scope pinned to the GPT-4.1 Nano OpenAI shut down onto a current 
   const openai = modelData.cloudProviders.find((provider) => provider.id === "openai");
   const replacement = openai.models.find((model) => model.id === "gpt-6-luna");
   assert.ok(replacement && !replacement.legacy, "the replacement is a current registry model");
-  assert.ok(!openai.models.some((model) => model.id === "gpt-4.1-nano"));
+  assert.ok(!openai.models.some((model) => model.id === "gpt-4.1-nano" && !model.retired));
 });
 
 test("still remaps the models Groq retired", async () => {

@@ -34,7 +34,8 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
       properties: {
         query: {
           type: "string",
-          description: "The search query to find relevant notes",
+          description:
+            "A few topic keywords, not the full question. For questions about plan costs or prices, search for pricing.",
         },
         limit: {
           type: "number",
@@ -87,7 +88,10 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
 
       for (let i = 0; i < strategies.length; i++) {
         try {
-          return await strategies[i]();
+          const result = await strategies[i]();
+          if (Array.isArray(result.data) && result.data.length === 0 && i < strategies.length - 1)
+            continue;
+          return result;
         } catch (error) {
           if (i === strategies.length - 1) {
             return {
@@ -166,7 +170,11 @@ async function executeCloudSearch(
   const privateSpaceName = spaces.find((s) => s.kind === "private")?.name ?? null;
   const results = await Promise.all(
     cloudNotes.map(async (cn) => ({
-      id: await resolveLocalNoteId(cn.client_note_id),
+      id: await resolveLocalNoteId(
+        cn.client_note_id ?? cn.id,
+        async () =>
+          (await window.electronAPI.getNoteForCloudRow?.(cn.client_note_id, cn.id)) ?? null
+      ),
       title: cn.title && withoutAttendeesFence(cn.title),
       date: cn.created_at,
       type: cn.note_type,

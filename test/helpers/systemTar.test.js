@@ -18,6 +18,22 @@ function makeChild({ closeOnKill = true } = {}) {
   return child;
 }
 
+test("forwards cancellation to the native extractor", async () => {
+  const controller = new AbortController();
+  let receivedSignal;
+  const child = makeChild();
+  const extraction = runSystemTar("/cache/model.tar.gz", "/cache/extract", {
+    signal: controller.signal,
+    spawnImpl: (_command, _args, options) => {
+      receivedSignal = options.signal;
+      setImmediate(() => child.emit("close", 0));
+      return child;
+    },
+  });
+  await extraction;
+  assert.equal(receivedSignal, controller.signal);
+});
+
 test("resolves Windows tar from System32 instead of PATH", () => {
   assert.equal(
     resolveSystemTarExecutable({

@@ -103,7 +103,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
         ...real(),
         createWorkspacePolicyManager: () => ({
           getPolicy: unmanagedWorkspace,
-          getCachedPolicy: unmanagedWorkspace,
+          heldPolicy: unmanagedWorkspace,
         }),
       };
     if (request === "./windowBroadcast") return { broadcastToWindows: () => {} };

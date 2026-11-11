@@ -1554,3 +1554,29 @@ test("a title save after an ack applied a clear does not bring the text back", a
   assert.equal(cloud.row().content, "");
   assert.equal(cloud.row().content_state, "clear");
 });
+
+test("a conflict is stale once the note's base covers the cloud copy it recorded", async () => {
+  const { isStaleNoteConflict } = await import("../../src/helpers/noteFieldSync.js");
+  const local = { cloud_id: "cloud-1", cloud_revision: 4 };
+  // This device's own write, acknowledged since: the base already holds it.
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-1", revision: 4 }), true);
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-1", revision: 3 }), true);
+  // Someone else's newer write is still a conflict.
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-1", revision: 5 }), false);
+  // Without revisions on both sides there is no proof either way.
+  assert.equal(
+    isStaleNoteConflict({ ...local, cloud_revision: null }, { id: "cloud-1", revision: 1 }),
+    false
+  );
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-1" }), false);
+  // Another cloud row, or a create that hasn't settled, is never matched.
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-2", revision: 1 }), false);
+  assert.equal(
+    isStaleNoteConflict({ ...local, cloud_create_rejected: 1 }, { id: "cloud-1", revision: 1 }),
+    false
+  );
+  assert.equal(
+    isStaleNoteConflict({ ...local, cloud_create_pending: "{}" }, { id: "cloud-1", revision: 1 }),
+    false
+  );
+});

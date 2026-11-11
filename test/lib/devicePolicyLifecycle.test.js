@@ -261,3 +261,49 @@ test("required-sign-in renderer can discover email without allowing unrelated AP
   );
   assert.equal(requests.length, 1);
 });
+
+test("a same-account verdict still loading keeps the settled one and its running requests", async (t) => {
+  const settled = snapshot({ accountId: "account-a", authGeneration: 1, deviceManaged: true });
+  const { store, vite, emit } = await boot(t, async () => settled);
+  let finishBody;
+  globalThis.window.fetch = async () =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          finishBody = controller;
+        },
+      })
+    );
+  const { installPolicyNetworkGuard } = await vite.ssrLoadModule("/lib/policyNetwork.ts");
+  t.after(installPolicyNetworkGuard());
+  const response = await globalThis.window.fetch("https://api.openai.com/v1/audio/transcriptions");
+  const body = response.text();
+  await emit(
+    snapshot({
+      accountId: "account-a",
+      authGeneration: 2,
+      revision: 2,
+      success: false,
+      status: "loading",
+      deviceManaged: true,
+      code: "POLICY_LOADING",
+    })
+  );
+  store.getState().clearPolicy();
+  assert.equal(store.getState().status, "unmanaged");
+  assert.equal(store.getState().authGeneration, 2);
+  finishBody.enqueue(new TextEncoder().encode("transcript"));
+  finishBody.close();
+  assert.equal(await body, "transcript");
+});
+
+test("the renderer network guard enforces a device policy, not a workspace lookup", async (t) => {
+  const { vite } = await boot(t, async () =>
+    snapshot({ success: false, status: "error", code: "POLICY_UNAVAILABLE", accountId: "a" })
+  );
+  globalThis.window.fetch = async () => Response.json({ text: "transcript" });
+  const { installPolicyNetworkGuard } = await vite.ssrLoadModule("/lib/policyNetwork.ts");
+  t.after(installPolicyNetworkGuard());
+  const response = await globalThis.window.fetch("https://api.openai.com/v1/audio/transcriptions");
+  assert.deepEqual(await response.json(), { text: "transcript" });
+});

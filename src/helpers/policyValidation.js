@@ -4,7 +4,7 @@
 // policy as "allow everything" — so a managed response must carry a
 // structurally valid policy or the whole response is malformed.
 const { isCanonicalAppVersion } = require("./appVersion");
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 
 const POLICY_SCOPES = ["transcription", "llm"];
 const TRANSCRIPTION_MODES = new Set([
@@ -41,6 +41,11 @@ function isValidPolicyShape(policy) {
     typeof policy === "object" &&
     policy.version === 1 &&
     POLICY_SCOPES.every((scope) => Boolean(policy[scope])) &&
+    POLICY_SCOPES.every(
+      (scope) =>
+        policy[scope].allowedLocalModels == null ||
+        isProviderIdList(policy[scope].allowedLocalModels)
+    ) &&
     isKnownList(policy.transcription.allowedModes, TRANSCRIPTION_MODES) &&
     isProviderIdList(policy.transcription.allowedByokProviders) &&
     // Additive within policy version 1: absent (older server) means none.
@@ -63,6 +68,12 @@ function isValidPolicyShape(policy) {
       typeof policy.features.screenContextEnabled === "boolean") &&
     (policy.features?.connectorsEnabled === undefined ||
       typeof policy.features.connectorsEnabled === "boolean") &&
+    (policy.meetings === undefined ||
+      (policy.meetings !== null &&
+        typeof policy.meetings === "object" &&
+        !Array.isArray(policy.meetings) &&
+        (policy.meetings.transcriptionStart === undefined ||
+          typeof policy.meetings.transcriptionStart === "string"))) &&
     SHARING_MODES.includes(policy.sharing?.externalLinkSharing) &&
     LOCAL_HISTORY_MODES.includes(policy.dataRetention?.localHistoryMode) &&
     typeof policy.dataRetention?.cloudBackupAllowed === "boolean" &&

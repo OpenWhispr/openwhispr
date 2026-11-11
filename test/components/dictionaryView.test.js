@@ -12,10 +12,24 @@ const SALES = "22222222-2222-4222-8222-222222222222";
 const MOCKS = {
   "react-i18next": `
     const t = (key, options) => (options ? key + JSON.stringify(options) : key);
-    export const useTranslation = () => ({ t, i18n: { language: "en" } });
+    export const useTranslation = () => ({ t, i18n: { language: "en", dir: () => "ltr" } });
+    export const initReactI18next = { type: "3rdParty", init() {} };
   `,
   "/hooks/useSettings": `
     export function useSettings() { return globalThis.__settings; }
+  `,
+  "/stores/settingsStore": `
+    export const getSettings = () => globalThis.__settings;
+    // Local dictation always gets the dictionary, so the OpenRouter notice stays hidden.
+    export const selectPolicyEffectiveSettings = () => ({ useLocalWhisper: true });
+    export const useSettingsStore = (selector) => selector({});
+    // Whose lists the page shows: a test moves them to another account by
+    // bumping the revision, as main's account-scope broadcast does.
+    export const getListsOwnerRevision = () => globalThis.__listsOwner.revision;
+    export const subscribeListsOwner = (listener) => {
+      globalThis.__listsOwner.listeners.add(listener);
+      return () => globalThis.__listsOwner.listeners.delete(listener);
+    };
   `,
   "/hooks/useWorkspace": `
     export function useWorkspace() {
@@ -90,9 +104,9 @@ const MOCKS = {
   "/ui/tabs": `
     import { createElement } from "react";
     const Pass = ({ children }) => createElement("div", null, children);
-    export const Tabs = ({ children, value, onValueChange }) => {
+    export const Tabs = ({ children, value, onValueChange, dir = "ltr" }) => {
       globalThis.__tabs = { value, onValueChange };
-      return createElement("div", null, children);
+      return createElement("div", { dir, "data-dictionary-tabs": "" }, children);
     };
     export const TabsList = Pass;
     export const TabsTrigger = ({ children, value }) =>
@@ -106,7 +120,7 @@ const MOCKS = {
   `,
   "/ui/dialog": `
     import { createElement } from "react";
-    export const ConfirmDialog = ({ open, title, description, onConfirm, onOpenChange, confirmText, cancelText }) =>
+    export const ConfirmDialog = ({ open, title, description, onConfirm, onOpenChange, confirmText, cancelText, confirmDisabled }) =>
       open
         ? createElement(
             "div",
@@ -116,8 +130,10 @@ const MOCKS = {
               "data-confirm-text": confirmText,
               "data-cancel-text": cancelText,
             },
+            description,
             createElement("button", {
               "data-confirm": "",
+              disabled: confirmDisabled,
               onClick: () => {
                 onConfirm();
                 onOpenChange(false);
@@ -182,10 +198,14 @@ function setState(t, { initialStorage = {}, shared = {}, settings = {} } = {}) {
   globalThis.__results = { deleteSharedWords: { undo: async () => {} } };
   globalThis.__settings = {
     customDictionary: ["OpenWhispr", "Supabase", "Whispr"],
-    updateCustomDictionary: (changes) => calls.push(["updateCustomDictionary", changes]),
+    updateCustomDictionary: (changes, listsOwner) => {
+      calls.push(["updateCustomDictionary", changes]);
+      globalThis.__listsOwner.writes.push(listsOwner);
+    },
     snippets: [],
     ...settings,
   };
+  globalThis.__listsOwner = { revision: 0, listeners: new Set(), writes: [] };
   globalThis.__workspace = {
     id: "ws",
     name: "Acme",
@@ -225,6 +245,7 @@ function setState(t, { initialStorage = {}, shared = {}, settings = {} } = {}) {
       "__shareProps",
       "__confirmPendingShare",
       "__ActionError",
+      "__listsOwner",
     ]) {
       delete globalThis[key];
     }
@@ -811,6 +832,62 @@ test("a Personal rename to a visible Personal word or the agent name is refused"
   );
 });
 
+// React keeps an element's current props on the node; a handler read before
+// the account change is the one an in-flight keypress or click would still run.
+const reactProps = (node) => node[Object.keys(node).find((key) => key.startsWith("__reactProps$"))];
+
+test("a Personal rename opened under one account never saves into the next one's list", async (t) => {
+  const { container, calls } = await renderView(t);
+  await openList(container, "personal");
+  await click(
+    byAttribute(
+      rowFor(container, "Supabase"),
+      "aria-label",
+      named("dictionary.editWord", "Supabase")
+    )
+  );
+  const editor = findElement(rowFor(container, "Supabase"), (node) => node.tagName === "INPUT");
+  await type(editor, "Supabase Cloud");
+  const staleKeyDown = reactProps(editor).onKeyDown;
+
+  // Another account takes over the lists while the editor is open.
+  await React.act(async () => {
+    globalThis.__listsOwner.revision = 1;
+    for (const listener of globalThis.__listsOwner.listeners) listener();
+  });
+  assert.equal(
+    rowFor(container, "Supabase") &&
+      findElement(rowFor(container, "Supabase"), (node) => node.tagName === "INPUT"),
+    null,
+    "the editor opened for the previous account is closed"
+  );
+
+  await React.act(async () => staleKeyDown(domEvent("keydown", { key: "Enter" })));
+  assert.deepEqual(
+    globalThis.__listsOwner.writes,
+    [0],
+    "the late save names the account it was opened under, which the store refuses"
+  );
+
+  // The page the next account sees saves under that account.
+  await openList(container, "personal");
+  await click(
+    byAttribute(
+      rowFor(container, "Supabase"),
+      "aria-label",
+      named("dictionary.editWord", "Supabase")
+    )
+  );
+  const fresh = findElement(rowFor(container, "Supabase"), (node) => node.tagName === "INPUT");
+  await type(fresh, "Supabase Cloud");
+  await pressEnter(fresh);
+  assert.deepEqual(globalThis.__listsOwner.writes, [0, 1]);
+  assert.deepEqual(calls.filter(([name]) => name === "updateCustomDictionary").at(-1), [
+    "updateCustomDictionary",
+    { add: ["Supabase Cloud"], remove: ["Supabase"] },
+  ]);
+});
+
 test("a requested list opens first and the request is cleared", async (t) => {
   const { container } = await renderView(t, {
     shared: { requestedList: `space:${SALES}` },
@@ -1170,7 +1247,7 @@ test("a ticked row that leaves the list isn't still ticked when it comes back", 
 
 const isDisabled = (node) => node.disabled === true || node.getAttribute("disabled") !== null;
 const buttonWithText = (container, text) =>
-  findElement(container, (node) => node.tagName === "BUTTON" && node.textContent === text);
+  findElement(container, (node) => node.tagName === "BUTTON" && node.textContent.trim() === text);
 const PAUSED = { ...SNAPSHOT, meta: { ...SNAPSHOT.meta, paused: true } };
 
 test("a locked shared list shows the upsell over dimmed lists, and View Plans opens billing", async (t) => {
@@ -2066,4 +2143,259 @@ test("Hide for me on a row says so, and its Undo unhides the word", async (t) =>
   );
   assert.equal(globalThis.__toasts.length, count + 1);
   assert.equal(globalThis.__toasts.at(-1).variant, "destructive");
+});
+
+const dragonDialog = (container) =>
+  byAttribute(container, "data-dialog", "dictionary.dragonImport.title");
+const dragonConfirm = (container) => byAttribute(dragonDialog(container), "data-confirm");
+const personalUpdates = (calls) =>
+  calls.filter(([name]) => name === "updateCustomDictionary").map(([, changes]) => changes);
+const almostFullDictionary = () => Array.from({ length: 4999 }, (_, index) => `existing-${index}`);
+
+const pickDragon = async (container, text) => {
+  globalThis.window.electronAPI.dragonImportPickFile = async () => ({
+    success: true,
+    canceled: false,
+    fileName: "vocabulary.txt",
+    bytes: Buffer.from(text),
+  });
+  const menuItem = buttonWithText(container, "dictionary.importFromDragon");
+  assert.ok(menuItem, "Dragon import is available for Personal");
+  await click(menuItem);
+};
+
+test("Dragon preview follows dictionary changes while the native picker is open", async (t) => {
+  const { container, calls, rerender } = await renderView(t, {
+    settings: { customDictionary: almostFullDictionary() },
+  });
+  const picker = deferred();
+  globalThis.window.electronAPI.dragonImportPickFile = () => picker.promise;
+  await click(buttonWithText(container, "dictionary.importFromDragon"));
+  globalThis.__settings.customDictionary = [...globalThis.__settings.customDictionary, "from-sync"];
+  await rerender();
+  await React.act(async () => {
+    picker.resolve({ success: true, bytes: Buffer.from("alpha\nbeta") });
+    await picker.promise;
+  });
+  assert.equal(
+    dragonDialog(container).getAttribute("data-confirm-text"),
+    'dictionary.dragonImport.confirm{"count":0}'
+  );
+  assert.ok(isDisabled(dragonConfirm(container)));
+  await click(dragonConfirm(container));
+  assert.deepEqual(personalUpdates(calls), []);
+  assert.deepEqual(globalThis.__toasts, []);
+});
+
+test("Dragon preview replans capacity and duplicates until confirmation", async (t) => {
+  const { container, calls, rerender } = await renderView(t, {
+    settings: { customDictionary: almostFullDictionary() },
+  });
+  await pickDragon(container, "alpha\nbeta");
+  assert.equal(
+    dragonDialog(container).getAttribute("data-confirm-text"),
+    'dictionary.dragonImport.confirm{"count":1}'
+  );
+  globalThis.__settings.customDictionary = [...globalThis.__settings.customDictionary, "alpha"];
+  await rerender();
+  assert.ok(isDisabled(dragonConfirm(container)));
+  assert.match(
+    dragonDialog(container).textContent,
+    /dictionary\.dragonImport\.overLimit\{"count":1/
+  );
+  globalThis.__settings.customDictionary = globalThis.__settings.customDictionary.slice(2);
+  await rerender();
+  assert.equal(
+    dragonDialog(container).getAttribute("data-confirm-text"),
+    'dictionary.dragonImport.confirm{"count":1}'
+  );
+  await click(dragonConfirm(container));
+  assert.deepEqual(personalUpdates(calls), [{ add: ["beta"] }]);
+  assert.equal(globalThis.__toasts.at(-1).title, 'dictionary.dragonImport.done{"count":1}');
+});
+
+test("Dragon confirmation checks current store state before React renders its update", async (t) => {
+  const { container, calls } = await renderView(t, {
+    settings: { customDictionary: almostFullDictionary() },
+  });
+  await pickDragon(container, "alpha\nbeta");
+  globalThis.__settings.customDictionary = [...globalThis.__settings.customDictionary, "from-sync"];
+  await click(dragonConfirm(container));
+  assert.deepEqual(personalUpdates(calls), []);
+  assert.deepEqual(globalThis.__toasts, []);
+});
+
+test("Dragon preserves cancellation, dedupe, warnings, errors and retry behavior", async (t) => {
+  const { container, calls, rerender } = await renderView(t);
+  await pickDragon(container, "OpenWhispr\nalpha\nALPHA\nbeta\\\\spoken\n" + "x".repeat(101));
+  assert.equal(
+    dragonDialog(container).getAttribute("data-confirm-text"),
+    'dictionary.dragonImport.confirm{"count":2}'
+  );
+  assert.match(dragonDialog(container).textContent, /dictionary\.dragonImport\.tooLong/);
+  await click(byAttribute(dragonDialog(container), "data-cancel"));
+  assert.deepEqual(personalUpdates(calls), []);
+  await pickDragon(container, "alpha\nbeta");
+  await click(dragonConfirm(container));
+  assert.deepEqual(personalUpdates(calls), [{ add: ["alpha", "beta"] }]);
+  assert.equal(globalThis.__toasts.pop().title, 'dictionary.dragonImport.done{"count":2}');
+  globalThis.__settings.customDictionary = ["OpenWhispr", "alpha", "beta"];
+  await rerender();
+  await pickDragon(container, "alpha\nbeta");
+  assert.ok(isDisabled(dragonConfirm(container)));
+  assert.match(dragonDialog(container).textContent, /dictionary\.dragonImport\.nothingNew/);
+  await click(byAttribute(dragonDialog(container), "data-cancel"));
+  for (const result of [
+    { canceled: true },
+    { canceled: false, success: false, error: "FILE_TOO_LARGE" },
+  ]) {
+    globalThis.window.electronAPI.dragonImportPickFile = async () => result;
+    await click(buttonWithText(container, "dictionary.importFromDragon"));
+    assert.equal(dragonDialog(container), null);
+  }
+  assert.equal(globalThis.__toasts.pop().variant, "destructive");
+  await pickDragon(container, '<WordExport><Word name="gamma"><Property/></Word></WordExport>');
+  assert.match(dragonDialog(container).textContent, /dictionary\.dragonImport\.propertiesIgnored/);
+  await click(dragonConfirm(container));
+  assert.deepEqual(personalUpdates(calls).at(-1), { add: ["gamma"] });
+});
+
+test("the Dragon menu preserves personal Enter, manual import, editing, removal and export", async (t) => {
+  const { container, calls, exported } = await renderView(t, {
+    shared: { status: "unavailable" },
+    settings: { customDictionary: ["Whispr", "existing"] },
+  });
+  await type(addInput(container), "new word");
+  await pressEnter(addInput(container));
+  assert.deepEqual(personalUpdates(calls).at(-1), { add: ["new word"] });
+  await click(buttonWithText(container, "dictionary.importList"));
+  const textarea = findElement(container, (node) => node.tagName === "TEXTAREA");
+  await type(textarea, "first, second\nexisting");
+  await click(
+    buttonWithText(container, 'dictionary.shared.importTo{"list":"dictionary.shared.personal"}')
+  );
+  assert.deepEqual(personalUpdates(calls).at(-1), { add: ["first", "second"] });
+  await click(
+    byAttribute(
+      rowFor(container, "existing"),
+      "aria-label",
+      named("dictionary.editWord", "existing")
+    )
+  );
+  const editor = findElement(rowFor(container, "existing"), (node) => node.tagName === "INPUT");
+  await type(editor, "edited");
+  await pressEnter(editor);
+  assert.deepEqual(personalUpdates(calls).at(-1), { add: ["edited"], remove: ["existing"] });
+  await click(
+    byAttribute(
+      rowFor(container, "existing"),
+      "aria-label",
+      named("dictionary.shared.actions.deleteWord", "existing")
+    )
+  );
+  assert.deepEqual(personalUpdates(calls).at(-1), { remove: ["existing"] });
+  await click(byAttribute(container, "aria-label", "dictionary.exportDictionary"));
+  assert.deepEqual(exported, [["Whispr", "existing"]]);
+});
+
+test("Dragon confirmation reports only additions that still fit before the next render", async (t) => {
+  const { container, calls } = await renderView(t, {
+    settings: { customDictionary: almostFullDictionary().slice(1) },
+  });
+  await pickDragon(container, "alpha\nbeta");
+  assert.equal(
+    dragonDialog(container).getAttribute("data-confirm-text"),
+    'dictionary.dragonImport.confirm{"count":2}'
+  );
+  globalThis.__settings.customDictionary = [...globalThis.__settings.customDictionary, "from-sync"];
+  await click(dragonConfirm(container));
+  assert.deepEqual(personalUpdates(calls), [{ add: ["alpha"] }]);
+  assert.equal(globalThis.__toasts.at(-1).title, 'dictionary.dragonImport.done{"count":1}');
+});
+
+test("Dragon imports remain personal and preserve commas and long written forms", async (t) => {
+  const { container, calls } = await renderView(t);
+  await openList(container, "workspace");
+  assert.equal(buttonWithText(container, "dictionary.importFromDragon"), null);
+  await click(byAttribute(container, "aria-label", "dictionary.importWords"));
+  assert.ok(
+    buttonWithText(
+      container,
+      'dictionary.shared.importTo{"list":"dictionary.shared.everyoneAt{\\"workspace\\":\\"Acme\\"}"}'
+    )
+  );
+  await openList(container, "personal");
+  const longWord = "x".repeat(100);
+  await pickDragon(container, `<3\\\\heart\nAcme, Inc.\n${longWord}`);
+  await click(dragonConfirm(container));
+  assert.deepEqual(personalUpdates(calls), [{ add: ["<3", "Acme, Inc.", longWord] }]);
+  assert.equal(
+    calls.some(([name]) => name === "addSharedWords" || name === "sharePersonalWords"),
+    false
+  );
+});
+
+test("Dragon import capacity includes personal words moved to shared lists", async (t) => {
+  const words = [...almostFullDictionary(), "ARR"];
+  const { container, calls } = await renderView(t, {
+    settings: { customDictionary: words },
+    shared: { movedPersonal: ["ARR"] },
+  });
+  await pickDragon(container, "alpha\nARR");
+  assert.ok(isDisabled(dragonConfirm(container)));
+  assert.match(
+    dragonDialog(container).textContent,
+    /dictionary\.dragonImport\.overLimit\{"count":1/
+  );
+  await click(dragonConfirm(container));
+  assert.deepEqual(personalUpdates(calls), []);
+});
+
+for (const scopeChange of ["account", "workspace", "sign-out"]) {
+  test(`Dragon picker and preview are withdrawn after ${scopeChange} changes`, async (t) => {
+    const { container, calls, rerender } = await renderView(t);
+    const changeScope = () => {
+      if (scopeChange === "account") globalThis.__userId = "another-user";
+      if (scopeChange === "workspace")
+        globalThis.__workspace = { ...globalThis.__workspace, id: "other-workspace" };
+      if (scopeChange === "sign-out") globalThis.__signedIn = false;
+    };
+    const picker = deferred();
+    globalThis.window.electronAPI.dragonImportPickFile = () => picker.promise;
+    await click(buttonWithText(container, "dictionary.importFromDragon"));
+    changeScope();
+    await rerender();
+    await React.act(async () => {
+      picker.resolve({ success: true, bytes: Buffer.from("alpha") });
+      await picker.promise;
+    });
+    assert.equal(dragonDialog(container), null);
+    assert.deepEqual(personalUpdates(calls), []);
+    assert.deepEqual(globalThis.__toasts, []);
+
+    globalThis.__userId = "u-me";
+    globalThis.__workspace = { ...globalThis.__workspace, id: "ws" };
+    globalThis.__signedIn = true;
+    await rerender();
+    await pickDragon(container, "alpha");
+    assert.ok(dragonDialog(container));
+    changeScope();
+    await rerender();
+    assert.equal(dragonDialog(container), null);
+    assert.deepEqual(personalUpdates(calls), []);
+    assert.deepEqual(globalThis.__toasts, []);
+  });
+}
+
+test("the dictionary follows Arabic direction through its tab container", async (t) => {
+  const { container } = await renderView(t, {
+    mockModules: {
+      "react-i18next": `
+        const t = (key, options) => options ? key + JSON.stringify(options) : key;
+        export const useTranslation = () => ({ t, i18n: { language: "ar", dir: () => "rtl" } });
+      `,
+    },
+  });
+  assert.equal(byAttribute(container, "data-dictionary-tabs").getAttribute("dir"), "rtl");
+  assert.equal(addInput(container).getAttribute("dir"), "auto");
 });

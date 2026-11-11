@@ -38,38 +38,49 @@ interface UseSourceNoteResult {
 export function useSourceNote(noteId: number | null | undefined): UseSourceNoteResult {
   const { user, isLoaded: authLoaded } = useAuth();
   const userId = user?.id ?? null;
-  const targetRef = useRef({ noteId, userId, authLoaded });
-  targetRef.current = { noteId, userId, authLoaded };
+  const targetRef = useRef({ userId, authLoaded });
+  targetRef.current = { userId, authLoaded };
   const [loaded, setLoaded] = useState<LoadedNote | null>(null);
   // Bumped when the note changes elsewhere (an assistant edit, a sync pull, a delete).
   const [revision, setRevision] = useState(0);
   const revisionRef = useRef(0);
+  const noteRevisionsRef = useRef(new Map<number, number>());
 
   if (noteId === null && loaded !== null) setLoaded(null);
 
   useEffect(() => {
-    if (noteId === null) return;
-    const invalidate = (): void => {
+    const invalidate = (changedNoteId?: number): void => {
       // Invalidate synchronously too: a send or IPC reply may already be preparing.
-      revisionRef.current += 1;
-      setRevision(revisionRef.current);
+      const noteRevisions = noteRevisionsRef.current;
+      if (changedNoteId === undefined) {
+        for (const [id, noteRevision] of noteRevisions) noteRevisions.set(id, noteRevision + 1);
+      } else {
+        const noteRevision = noteRevisions.get(changedNoteId);
+        if (noteRevision !== undefined) noteRevisions.set(changedNoteId, noteRevision + 1);
+      }
+      if (changedNoteId === undefined || noteId === undefined || changedNoteId === noteId) {
+        revisionRef.current += 1;
+        setRevision(revisionRef.current);
+      }
     };
     const refresh = (changed: { id: number } | null): void => {
-      if (noteId === undefined || changed?.id === noteId) invalidate();
+      if (changed) invalidate(changed.id);
+      else if (noteId === undefined) invalidate();
     };
     const disposers = [
       window.electronAPI?.onNoteUpdated?.(refresh),
       window.electronAPI?.onNoteSynced?.(refresh),
       window.electronAPI?.onNoteDeleted?.(refresh),
       // A pending fetch has no container metadata yet, so recheck on any removal.
-      window.electronAPI?.onSpacePurged?.(invalidate),
-      window.electronAPI?.onFolderDeleted?.(invalidate),
+      window.electronAPI?.onSpacePurged?.(() => invalidate()),
+      window.electronAPI?.onFolderDeleted?.(() => invalidate()),
     ];
     return () => disposers.forEach((dispose) => dispose?.());
   }, [noteId]);
 
   useEffect(() => {
     if (noteId == null || !authLoaded) return;
+    if (!noteRevisionsRef.current.has(noteId)) noteRevisionsRef.current.set(noteId, 0);
     let cancelled = false;
     void (async () => {
       const [note, mappings] = await Promise.all([
@@ -116,6 +127,7 @@ export function useSourceNote(noteId: number | null | undefined): UseSourceNoteR
       return { sourceNote: null, isLoading };
     }
     const { note, speakerMappings } = loaded;
+    const noteRevision = noteRevisionsRef.current.get(note.id);
     const deleted = note.deleted_at != null;
     const sourceNote: SourceNote = {
       id: note.id,
@@ -146,8 +158,7 @@ export function useSourceNote(noteId: number | null | undefined): UseSourceNoteR
       openNote: (maxTranscriptTokens: number): OpenNoteContext => {
         const target = targetRef.current;
         if (
-          revisionRef.current !== loaded.revision ||
-          target.noteId !== loaded.noteId ||
+          noteRevisionsRef.current.get(note.id) !== noteRevision ||
           target.userId !== loaded.userId ||
           !target.authLoaded
         ) {

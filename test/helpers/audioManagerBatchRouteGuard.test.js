@@ -198,3 +198,27 @@ for (const restriction of ["mode", "provider", "unrelated"]) {
     assert.equal(fallback.mock.callCount(), 0);
   });
 }
+
+test("a verdict that is still loading doesn't stop a permitted BYOK transcription", async (t) => {
+  const { createManager, usePolicyStore } = await loadManager(t);
+  setSettings({ cloudTranscriptionProvider: "openai", cloudTranscriptionModel: "whisper-1" });
+  const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+  usePolicyStore.setState({ status: "managed", policy, appVersion: "1.11.1" });
+  const manager = createManager({
+    getAPIKey: async () => "saved-key",
+    getWhisperPrompt: () => null,
+    shouldStreamTranscription: () => false,
+    isDictionaryEcho: () => false,
+    processTranscription: async (text) => text,
+    isReasoningAvailable: async () => false,
+  });
+  let requestSignal;
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    requestSignal = init.signal;
+    // A rotated token's verdict on its way, as main broadcasts it.
+    usePolicyStore.setState({ status: "loading", policy: null });
+    return Response.json({ text: "permitted output" });
+  });
+  assert.equal((await manager.processWithOpenAIAPI(audioBlob())).text, "permitted output");
+  assert.equal(requestSignal.aborted, false);
+});

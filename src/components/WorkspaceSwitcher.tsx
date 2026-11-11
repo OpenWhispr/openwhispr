@@ -16,7 +16,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { WorkspacesService } from "../services/WorkspacesService";
-import { resolveWorkspaceSwitcher } from "../lib/workspaceSwitcher";
+import { canChoosePersonal, resolveWorkspaceSwitcher } from "../lib/workspaceSwitcher";
 import {
   markWorkspaceIntroSeen,
   shouldShowWorkspaceIntro,
@@ -59,7 +59,7 @@ export default function WorkspaceSwitcher({
 }: WorkspaceSwitcherProps = {}): React.ReactElement | null {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
-  const { workspaces, setActive, refresh } = useWorkspace();
+  const { workspaces, personalSelected, selectPersonal, setActive, refresh } = useWorkspace();
   const { activeWorkspaceId, loaded, loading, error } = useWorkspaceStore(
     useShallow((s) => ({
       activeWorkspaceId: s.activeWorkspaceId,
@@ -84,6 +84,7 @@ export default function WorkspaceSwitcher({
     error,
     workspaces,
     activeWorkspaceId,
+    personalSelected,
   });
 
   // Derived on every render, so it follows the active workspace, the account and every modal below.
@@ -264,29 +265,33 @@ export default function WorkspaceSwitcher({
               <DropdownMenuSeparator className="-mx-1.5 my-1.5" />
             </>
           )}
-          {current ? (
-            workspaces.map((workspace) => (
-              <DropdownMenuItem
-                key={workspace.id}
-                onSelect={() => setActive(workspace.id)}
-                className={itemClass}
-              >
-                <MemberAvatar name={workspace.name} email={null} />
-                <span dir="auto" className="flex-1 min-w-0 truncate">
-                  {workspace.name}
-                </span>
-                {workspace.id === current.id && (
-                  <Check size={16} className="shrink-0 text-primary" />
-                )}
-              </DropdownMenuItem>
-            ))
-          ) : (
-            <DropdownMenuItem className={itemClass} disabled>
+          {(!current || canChoosePersonal(workspaces)) && (
+            <DropdownMenuItem
+              onSelect={selectPersonal}
+              className={itemClass}
+              // With no workspace there is nothing to switch from.
+              disabled={workspaces.length === 0}
+            >
               <UserCircle size={24} className="w-7 shrink-0 text-foreground/50" />
               <span className="flex-1">{t("notes.spaces.personal")}</span>
-              <Check size={16} className="shrink-0 text-primary" />
+              {!current && <Check size={16} className="shrink-0 text-primary" />}
             </DropdownMenuItem>
           )}
+          {workspaces.map((workspace) => (
+            <DropdownMenuItem
+              key={workspace.id}
+              onSelect={() => setActive(workspace.id)}
+              className={itemClass}
+            >
+              <MemberAvatar name={workspace.name} email={null} />
+              <span dir="auto" className="flex-1 min-w-0 truncate">
+                {workspace.name}
+              </span>
+              {workspace.id === current?.id && (
+                <Check size={16} className="shrink-0 text-primary" />
+              )}
+            </DropdownMenuItem>
+          ))}
           <DropdownMenuItem
             onSelect={() => setCreateOpen(true)}
             className={cn(itemClass, "text-muted-foreground focus:text-foreground")}

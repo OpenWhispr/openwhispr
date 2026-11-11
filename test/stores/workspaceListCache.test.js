@@ -51,8 +51,10 @@ async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } 
       `,
     },
   });
-  const { useWorkspaceStore } = await vite.ssrLoadModule("/stores/workspaceStore.ts");
-  return { storage, store: useWorkspaceStore, vite };
+  const { useWorkspaceStore, handleActiveWorkspaceStorage } = await vite.ssrLoadModule(
+    "/stores/workspaceStore.ts"
+  );
+  return { storage, store: useWorkspaceStore, handleActiveWorkspaceStorage, vite };
 }
 
 const failing = async () => {
@@ -230,8 +232,12 @@ for (const action of ["leaveWorkspace", "deleteWorkspace"]) {
       new Promise((resolve) => (answerStale = () => resolve(departedMembers)));
     const stale = store.getState().refreshMembers("gone");
     let membersAtSwitch;
+    let membersWorkspaceAtSwitch;
     const unsubscribe = store.subscribe((state, previous) => {
-      if (state.activeWorkspaceId !== previous.activeWorkspaceId) membersAtSwitch = state.members;
+      if (state.activeWorkspaceId !== previous.activeWorkspaceId) {
+        membersAtSwitch = state.members;
+        membersWorkspaceAtSwitch = state.membersWorkspaceId;
+      }
     });
     t.after(unsubscribe);
     globalThis.__workspaceCacheTest.remove = async (id) => {
@@ -246,10 +252,12 @@ for (const action of ["leaveWorkspace", "deleteWorkspace"]) {
     assert.equal(storage.getItem("activeWorkspaceId"), "team");
     assert.deepEqual(store.getState().workspaces, WORKSPACES);
     assert.deepEqual(membersAtSwitch, []);
+    assert.equal(membersWorkspaceAtSwitch, null);
     assert.deepEqual(store.getState().members, []);
     answerStale();
     await stale;
     assert.deepEqual(store.getState().members, []);
+    assert.equal(store.getState().membersWorkspaceId, null);
 
     globalThis.__workspaceCacheTest.listMembers = failing;
     await assert.rejects(store.getState().refreshMembers("team"), /offline/);
@@ -358,4 +366,26 @@ test("creating with no refresh in flight asks the server nothing more", async (t
     store.getState().workspaces.map((w) => w.id),
     ["team", "new"]
   );
+});
+
+test("another window's workspace switch clears the roster and discards its pending read", async (t) => {
+  const { store, handleActiveWorkspaceStorage } = await loadStore(t);
+  const members = [{ user_id: "member-1", role: "member" }];
+  store.setState({ activeWorkspaceId: "team", members, membersWorkspaceId: "team" });
+  let answerMembers;
+  globalThis.__workspaceCacheTest.listMembers = () =>
+    new Promise((resolve) => {
+      answerMembers = resolve;
+    });
+  const pending = store.getState().refreshMembers("team");
+
+  handleActiveWorkspaceStorage({ key: "activeWorkspaceId", newValue: "other-team" });
+  assert.equal(store.getState().activeWorkspaceId, "other-team");
+  assert.deepEqual(store.getState().members, []);
+  assert.equal(store.getState().membersWorkspaceId, null);
+
+  answerMembers(members);
+  await pending;
+  assert.deepEqual(store.getState().members, []);
+  assert.equal(store.getState().membersWorkspaceId, null);
 });
