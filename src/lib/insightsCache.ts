@@ -22,9 +22,11 @@ interface AccountInsights {
 }
 
 let current: AccountInsights | null = null;
+let leaderboardCacheVersion = 0;
 
 function forAccount(accountId: string): AccountInsights {
   if (current?.accountId !== accountId) {
+    leaderboardCacheVersion += 1;
     current = {
       accountId,
       summary: null,
@@ -34,6 +36,15 @@ function forAccount(accountId: string): AccountInsights {
     };
   }
   return current;
+}
+
+export function getLeaderboardCacheVersion(accountId: string): number {
+  forAccount(accountId);
+  return leaderboardCacheVersion;
+}
+
+export function isLeaderboardCacheCurrent(accountId: string, version: number): boolean {
+  return current?.accountId === accountId && leaderboardCacheVersion === version;
 }
 
 const cached = <T>(value: T): CachedInsight<T> => ({ value, fetchedAt: Date.now() });
@@ -89,6 +100,7 @@ export function cachedLeaderboardWeekStarts(accountId: string) {
  * joining, leaving or deleting a workspace, and a join request.
  */
 export function clearCachedLeaderboards(): void {
+  leaderboardCacheVersion += 1;
   if (!current) return;
   current.access = null;
   current.leaderboards.clear();
@@ -96,5 +108,6 @@ export function clearCachedLeaderboards(): void {
 }
 
 export function clearInsightsCache(): void {
+  leaderboardCacheVersion += 1;
   current = null;
 }
