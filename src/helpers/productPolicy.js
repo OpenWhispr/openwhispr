@@ -2,7 +2,7 @@ const rules = require("../stores/policyRules.ts");
 
 // A verdict still on its way for an identity nothing says is managed (no
 // device policy, no server calling the policy unresolvable) restricts no
-// channel; new remote work waits for it all the same (startingPolicy).
+// channel; new remote work waits for it all the same (mayStart in ipcHandlers).
 function productPolicyState(snapshot, appVersion) {
   return {
     status: snapshot.success
