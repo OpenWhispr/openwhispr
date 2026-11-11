@@ -647,6 +647,21 @@ test("a managed account's rotated token whose first lookup fails refuses new wor
   );
 });
 
+test("a rotated token the server calls unresolvable stops the running meeting", async (t) => {
+  const app = await signedIn(t, { policy: () => managed(["base"]) });
+  app.target._activeLocalMeetingLease = await app.gate.authorize("transcription", "base");
+  let remoteStops = 0;
+  app.target._stopRemoteProductWork = () => remoteStops++;
+  policyFetch = async () => json({ code: "POLICY_UNRESOLVABLE" }, 500);
+
+  app.tokenChanged({ token: "token-rotated", generation: 2 });
+  await settle();
+
+  assert.equal(app.target.effectivePolicyManager.getCurrent().status, "error");
+  assert.deepEqual(app.stoppedMeetings, ["POLICY_UNRESOLVABLE"]);
+  assert.ok(remoteStops > 0);
+});
+
 test("a device policy's local model allow-list applies to a guest", async (t) => {
   const { normalizeDeviceValues } = require("../../src/helpers/managedDevicePolicy");
   tokenState = { token: null, generation: 50 };

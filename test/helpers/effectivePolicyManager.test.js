@@ -323,6 +323,23 @@ test("a failed lookup holds nothing closed without evidence that the identity is
       assert.equal(productOperationAllowed(snapshot, "1.11.1", channel), false, channel);
 });
 
+test("only a device policy or the server settles a failed lookup; the account's last verdict leaves it loading", () => {
+  const failed = (evidence) =>
+    resolveEffectivePolicy(absentDevice, { success: false, ...evidence }, member);
+  assert.equal(failed({ code: "POLICY_UNRESOLVABLE" }).status, "error");
+  assert.equal(
+    resolveEffectivePolicy(
+      normalizeDeviceValues({ RequireSignIn: true }),
+      { success: false },
+      member
+    ).status,
+    "error"
+  );
+  const lastSeenManaged = failed({ code: "POLICY_UNAVAILABLE", managed: true });
+  assert.equal(lastSeenManaged.status, "loading");
+  assert.equal(lastSeenManaged.managed, true);
+});
+
 test("a device with only RequireSignIn leaves OpenRouter transcription allowed", () => {
   const snapshot = resolveEffectivePolicy(
     normalizeDeviceValues({ RequireSignIn: true }),
