@@ -14563,9 +14563,7 @@ class IPCHandlers {
             }
           }
         }
-        const existing = new Set(
-          this.databaseManager.getExistingClientNoteIds(notes.map((n) => n.clientNoteId))
-        );
+        const existing = new Set(this.databaseManager.getImportedClientNoteIds(notes));
         const freshNotes = notes.filter((n) => !existing.has(n.clientNoteId));
         // The run handler only ever imports what this preview parsed — the
         // renderer never sends a file path across the bridge.

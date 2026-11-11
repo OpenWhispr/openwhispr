@@ -1021,6 +1021,61 @@ test("a private note whose Backup copy was deleted elsewhere stays live once mov
   assert.equal(cloud.note(backup.id).deleted_at !== null, true, "the old copy stays deleted");
 });
 
+// D39: a Granola import derives the note's key from the meeting, so the same export imported on
+// another device gives the same key there. That device uploaded it with Backup and deleted it later;
+// this one never sent it. Moved into a teamspace under that key, the create would land on the
+// other device's tombstone and the next pull would delete the note the user just shared.
+test("a never-sent Granola note whose key was deleted elsewhere stays live once moved into a teamspace", async (t) => {
+  const ctx = await setup(t, { team: true });
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const { deterministicUuid } = await import("../../src/helpers/granolaImport.js");
+  const clientNoteId = deterministicUuid("granola-doc-1");
+  const imported = db.importNotes([
+    {
+      clientNoteId,
+      sourceFile: "granola:granola-doc-1",
+      title: "Kickoff",
+      content: "the body on this device",
+      transcript: null,
+      participants: null,
+      createdAt: "2026-05-01 10:00:00",
+    },
+  ]);
+  const noteId = imported.noteIds[0];
+  assert.equal(db.getNote(noteId).cloud_id, null);
+  assert.equal(db.getNote(noteId).cloud_create_attempted, 0);
+  const elsewhere = cloud.seedNote({
+    client_note_id: clientNoteId,
+    title: "Kickoff",
+    content: "the body the other device uploaded",
+    space_id: null,
+    workspace_id: null,
+  });
+  cloud.deleteNote(elsewhere.id);
+
+  assert.ok(db.updateNote(noteId, { space_id: ctx.team.id, folder_id: null }).success);
+  stopSyncTimers(service);
+  await service.ensureNoteSynced(noteId);
+  silenceConsoleErrors(t);
+  await service.syncAll(true);
+
+  const local = db.getNote(noteId);
+  assert.ok(local && !local.deleted_at, "the moved note survives the next pull");
+  assert.equal(local.space_id, ctx.team.id);
+  assert.notEqual(local.client_note_id, clientNoteId);
+  assert.ok(local.cloud_id, "the moved note has a cloud copy in the teamspace");
+  const row = cloud.note(local.cloud_id);
+  assert.equal(row.deleted_at, null, "the team's copy is live");
+  assert.equal(row.space_id, TEAM_SPACE.id);
+  assert.equal(row.content, "the body on this device");
+  assert.notEqual(
+    cloud.note(elsewhere.id).deleted_at,
+    null,
+    "the other device's copy stays deleted"
+  );
+});
+
 test("retention opt-out still drains analytics deletes without uploading counters", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

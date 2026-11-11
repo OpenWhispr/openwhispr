@@ -1554,8 +1554,9 @@ test("a private note whose create may have reached the server takes a new key in
   assertNoCloudIdentity(moved.note, note.client_note_id);
 });
 
-// Nothing to land on: and a Granola re-import dedupes on the key.
-test("a private note the server never knew keeps its key into a teamspace", (t) => {
+// A key this device never sent can still be on the server: Granola's import derives it from the
+// meeting, so another device that imported the same export may have uploaded and deleted it (D39).
+test("a private note the server never heard of from this device still takes a new key into a teamspace", (t) => {
   const db = createDb(t);
   if (!db) return;
   const privateId = db.getPrivateSpaceId();
@@ -1563,8 +1564,24 @@ test("a private note the server never knew keeps its key into a teamspace", (t) 
   const note = db.saveNote("Plan", "body", "personal", null, null, null, privateId).note;
 
   const moved = db.updateNote(note.id, { space_id: team.id, folder_id: null });
-  assert.equal(moved.note.client_note_id, note.client_note_id);
   assert.equal(moved.note.space_id, team.id);
+  assertNoCloudIdentity(moved.note, note.client_note_id);
+});
+
+test("a never-sent private note moved with its folder into a teamspace takes a new key", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const folder = db.createFolder("Imported calls", privateId).folder;
+  const note = db.saveNote("Call", "body", "meeting", null, null, folder.id).note;
+
+  assert.ok(db.moveFolderToSpace(folder.id, team.id).success);
+  const moved = db.getNote(note.id);
+  assert.equal(moved.space_id, team.id);
+  assertNoCloudIdentity(moved, note.client_note_id);
+  const folderRow = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(folder.id);
+  assert.equal(folderRow.client_folder_id, folder.client_folder_id, "the folder keeps its key");
 });
 
 test("a shared private note keeps its cloud id when it moves into a teamspace", (t) => {

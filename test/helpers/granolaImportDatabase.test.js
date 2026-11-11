@@ -189,13 +189,42 @@ test("importNotes reuses an existing Imported folder", (t) => {
   db.db.close();
 });
 
-test("getExistingClientNoteIds reports only ids already in the table", (t) => {
+test("getImportedClientNoteIds reports only rows already in the table", (t) => {
   const db = createDb(t);
   if (!db) return;
 
   const rowA = granolaRow("a");
   db.importNotes([rowA]);
-  const existing = db.getExistingClientNoteIds([rowA.clientNoteId, granolaRow("b").clientNoteId]);
+  const existing = db.getImportedClientNoteIds([rowA, granolaRow("b")]);
   assert.deepEqual(existing, [rowA.clientNoteId]);
+  db.db.close();
+});
+
+// A note moved into a teamspace takes a new client id (D39), so the re-import finds it by the
+// source key it stored instead.
+test("a re-import skips a note that moved into a teamspace under a new client id", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.setActiveAccountId("account-1");
+  const row = granolaRow("a");
+  const first = db.importNotes([row]);
+  const noteId = first.noteIds[0];
+  const teamId = db.db
+    .prepare(
+      "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES ('team-1', 'team', 'Design', 9)"
+    )
+    .run().lastInsertRowid;
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, 'account-1')")
+    .run(teamId);
+  assert.ok(db.updateNote(noteId, { space_id: teamId, folder_id: null }).success);
+  assert.notEqual(db.getNote(noteId).client_note_id, row.clientNoteId);
+
+  assert.deepEqual(db.getImportedClientNoteIds([row]), [row.clientNoteId]);
+  const rerun = db.importNotes([row]);
+  assert.equal(rerun.imported, 0);
+  assert.equal(rerun.skipped, 1);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS n FROM notes").get().n, 1);
   db.db.close();
 });
