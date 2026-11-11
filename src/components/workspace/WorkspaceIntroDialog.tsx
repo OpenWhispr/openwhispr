@@ -36,14 +36,6 @@ function WorkspaceMock({ workspaceName }: { workspaceName: string }): ReactEleme
           </span>
           <Check size={16} className="shrink-0 text-primary" />
         </div>
-        <div className="flex items-center gap-2 border-t border-border p-3">
-          <span className={MOCK_ICON}>
-            <User size={16} />
-          </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-            {t("notes.spaces.personal")}
-          </span>
-        </div>
       </div>
       <div
         className={cn(

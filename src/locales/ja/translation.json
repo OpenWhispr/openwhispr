@@ -2297,8 +2297,8 @@
     },
     "privacy": {
       "cloudBackup": "クラウドバックアップ",
-      "cloudBackupDescription": "文字起こしとノートをクラウドにバックアップして、すべてのデバイスからシームレスにアクセスできます。",
-      "cloudBackupTeamCaveat": "Teamspace 内のノートと共有したノートは、この設定に関係なく常に同期されます。",
+      "cloudBackupDescription": "文字起こし、チャット、辞書、スニペットをクラウドにバックアップして、すべてのデバイスからシームレスにアクセスできます。",
+      "cloudBackupTeamCaveat": "プライベートノートは常にこのデバイスにのみ保存されます。Teamspace 内のノートは常に同期されます。",
       "cloudNotesMigration": "ノートをバックアップ中… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "すべてのノートがバックアップされました",
       "description": "デバイスからのデータ送信を管理します。初期設定ではすべてオフです。",
@@ -2494,10 +2494,6 @@
         "title": "最初のワークスペースを作成",
         "description": "ワークスペースでは、チームメイトとのコラボレーションやノートの共有ができます。",
         "create": "ワークスペースを作成"
-      },
-      "personal": {
-        "title": "現在は「個人」です",
-        "description": "設定を管理するワークスペースを選択してください。"
       },
       "loadError": {
         "title": "ワークスペースを読み込めませんでした",
@@ -2764,8 +2760,8 @@
           "leaveBodyLoses": "{{space}} とそのノートにアクセスできなくなります。",
           "leaveBodyAdmins": "別の管理者がこの Teamspace の管理を続けます。",
           "deleteNotAllowed": "{{space}} を削除する権限がありません。",
-          "movedToPersonal_one": "同期されていない {{count}} 件のノートを個人スペースに移動しました。",
-          "movedToPersonal_other": "同期されていない {{count}} 件のノートを個人スペースに移動しました。"
+          "movedToPersonal_one": "同期されていない {{count}} 件のノートをプライベートに移動しました。",
+          "movedToPersonal_other": "同期されていない {{count}} 件のノートをプライベートに移動しました。"
         },
         "addPeople": {
           "loading": "Teamspace を読み込んでいます…",
@@ -3374,7 +3370,7 @@
       "defaultFolderImmutable": "デフォルトフォルダは変更できません。",
       "spaceNameRequired": "スペース名を入力してください。",
       "spaceNotFound": "そのスペースが見つかりませんでした。",
-      "privateSpaceImmutable": "個人用スペースは変更できません。",
+      "privateSpaceImmutable": "プライベートは変更できません。",
       "generic": "変更を完了できませんでした。もう一度お試しください。"
     },
     "sidebar": {
@@ -3383,10 +3379,10 @@
       "templatesAndActions": "テンプレートとアクション"
     },
     "spaces": {
-      "privateSpaces": "プライベートノート",
+      "privateSpaces": "プライベート",
       "teamSpaces": "Teamspaces",
-      "personal": "個人",
-      "privateTooltip": "パーソナルスペースはあなただけが見られます",
+      "personal": "プライベート",
+      "privateTooltip": "これらのノートはあなただけが見られます。このデバイスにのみ保存されます。",
       "newSpace": "新しい Teamspace",
       "nameAndIconLabel": "名前とアイコン",
       "changeEmoji": "絵文字を変更",
@@ -3437,10 +3433,10 @@
       "noteCount_other": "{{count}} 件のノート",
       "accessRevoked": "{{space}} へのアクセス権がなくなりました",
       "accessRevokedActiveNote": "{{space}} へのアクセス権がなくなりました — 「{{title}}」はこのデバイスでは利用できなくなりました",
-      "movedToPersonal": "{{space}} へのアクセス権がなくなったため、「{{title}}」は個人スペースに移動されました",
-      "updateDeniedNote": "「{{title}}」を変更する権限がありません — 未同期の編集内容は個人スペースにコピーとして保存されました",
+      "movedToPersonal": "{{space}} へのアクセス権がなくなったため、「{{title}}」はプライベートに移動されました",
+      "updateDeniedNote": "「{{title}}」を変更する権限がありません — 未同期の編集内容はプライベートにコピーとして保存されました",
       "deleteDeniedNote": "「{{title}}」は削除されませんでした — 削除できるのはノートの所有者または管理者のみです",
-      "updateDeniedFolder": "「{{name}}」を変更する権限がありません — 未同期の作業内容は個人スペースに保存されました",
+      "updateDeniedFolder": "「{{name}}」を変更する権限がありません — 未同期の作業内容はプライベートに保存されました",
       "deleteDeniedFolder": "「{{name}}」は削除されませんでした — スペースのフォルダを削除できるのは管理者のみです",
       "conflictBanner": "このノートには新しいバージョンがあります。",
       "conflictRefresh": "更新",
@@ -3470,8 +3466,8 @@
       "title": "ノートの保存場所",
       "description": "OpenWhispr は個人的な考えと共同作業を分け、適切な人だけがノートを見られるようにします。",
       "personal": {
-        "title": "個人スペース",
-        "description": "ここのフォルダーとノートは自分だけが見ることができます。"
+        "title": "プライベート",
+        "description": "これらのノートはあなただけが見られます。このデバイスにのみ保存されます。"
       },
       "workspace": {
         "title": "ワークスペース",
@@ -4178,7 +4174,6 @@
       },
       "locked": {
         "noWorkspace": "共有辞書は Business プランに含まれています。チームの専門用語、製品名、略語を全員と共有できます。",
-        "chooseWorkspace": "現在は「個人」です。共有単語を使うにはワークスペースに切り替えてください。",
         "upgradeAdmin": "共有辞書は Business プランに含まれています。{{workspace}} をアップグレードすると、全員が同じ単語を使えます。",
         "upgradeMember": "共有辞書は Business プランに含まれています。{{workspace}} のアップグレードを管理者に依頼してください。",
         "paused_one": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。Business にアップグレードすると、再び音声入力で使えます。",
@@ -5902,7 +5897,8 @@
     "switcher": {
       "workspaces": "ワークスペース",
       "add": "ワークスペースを追加",
-      "invitePeople": "メンバーを招待"
+      "invitePeople": "メンバーを招待",
+      "unavailable": "ワークスペースは現在利用できません。"
     },
     "create": {
       "title": "ワークスペースを作成",
@@ -6033,6 +6029,7 @@
       "leave": {
         "title": "{{name}} から退出しますか？",
         "body": "このワークスペースと、そのチームおよび Teamspace にアクセスできなくなります。ワークスペースの管理者があなたを再び招待できます。",
+        "privateNotes": "このワークスペースのプライベートノートは、このデバイス上で {{workspace}} に移動されます。",
         "failed": "{{name}} から退出できませんでした。接続を確認して、もう一度お試しください。"
       },
       "left": {
@@ -6042,7 +6039,8 @@
       "chooseWorkspace": "ワークスペースを選択",
       "delete": {
         "title": "{{name}} を削除しますか？",
-        "body": "ワークスペースと、そのノート、ファイル、チーム、Teamspace がすべてのユーザーに対して完全に削除されます。この操作は元に戻せません。"
+        "body": "ワークスペースと、そのノート、ファイル、チーム、Teamspace がすべてのユーザーに対して完全に削除されます。この操作は元に戻せません。",
+        "privateNotes": "このワークスペースのプライベートノートは、このデバイス上で {{workspace}} に移動されます。"
       },
       "deleting": {
         "title": "{{name}} を削除しています…",
@@ -6143,7 +6141,7 @@
     "intro": {
       "workspace": {
         "title": "ワークスペースは活動の拠点です",
-        "body": "会社の全員がここで作業します。プライベートノートは共有するまで非公開のままです。"
+        "body": "会社の全員がここで作業します。プライベートノートはお使いのデバイスにのみ保存されます。"
       },
       "teamspaces": {
         "title": "Teamspace でノートを共有",

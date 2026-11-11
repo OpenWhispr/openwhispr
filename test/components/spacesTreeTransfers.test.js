@@ -377,8 +377,8 @@ test("a private note moves to another workspace's Private, with Undo and no ques
 
 test("a team note dropped on Private asks to copy it, then copies", async (t) => {
   const tree = await mountTree(t);
-  const privateHeader = [...tree.container.querySelectorAll("button")].find((button) =>
-    button.textContent.includes("Private notes")
+  const privateHeader = [...tree.container.querySelectorAll("button")].find(
+    (button) => button.textContent.trim() === "Private"
   ).parentElement;
 
   await tree.drag(tree.noteRow("Spec"), privateHeader);
@@ -483,12 +483,12 @@ test("a folder of either Private shows the Private section as its place, never a
     inScopeIds: [1, 9, 2],
   });
   for (const folder of ["Ideas", "Plans"]) {
-    const ownSection = tree.menuItem(folder, "Personal");
+    const ownSection = tree.menuItem(folder, "Private");
     assert.ok(ownSection, `${folder} lists the Private section`);
     assert.equal(ownSection.disabled, true, `${folder} is already there`);
     assert.equal(tree.menuItem(folder, "Alpha").disabled, false);
   }
-  await tree.choose("Ideas", "Personal");
+  await tree.choose("Ideas", "Private");
   assert.deepEqual(
     tree.state.folderMoves,
     [],

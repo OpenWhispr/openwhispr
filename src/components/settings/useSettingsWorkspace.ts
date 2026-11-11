@@ -5,7 +5,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { settingsWorkspace } from "../../lib/workspaceSwitcher";
 import type { Workspace } from "../../types/electron";
 
-export type SettingsWorkspaceStatus = "loading" | "error" | "empty" | "personal" | "ready";
+export type SettingsWorkspaceStatus = "loading" | "error" | "empty" | "ready";
 
 export interface SettingsWorkspaceState {
   status: SettingsWorkspaceStatus;

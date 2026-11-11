@@ -289,8 +289,6 @@ export default function DictionaryView({ onUpgrade }: DictionaryViewProps): Reac
     status,
     signedIn: isSignedIn,
     workspace,
-    // No Personal choice is left to hide the workspace's shared lists.
-    personalSelected: false,
     serverPaused: snapshot?.meta?.paused ?? null,
     hasWords:
       (snapshot?.entries.length ?? 0) > 0 ||

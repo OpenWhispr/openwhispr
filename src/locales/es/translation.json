@@ -2349,8 +2349,8 @@
     },
     "privacy": {
       "cloudBackup": "Respaldo en la nube",
-      "cloudBackupDescription": "Respalda tus transcripciones y notas en la nube para acceder desde cualquier dispositivo.",
-      "cloudBackupTeamCaveat": "Las notas en teamspaces y las notas que has compartido siempre se sincronizan, independientemente de este ajuste.",
+      "cloudBackupDescription": "Respalda tus transcripciones, chats, diccionario y snippets en la nube para acceder desde cualquier dispositivo.",
+      "cloudBackupTeamCaveat": "Las notas privadas siempre se quedan en este dispositivo. Las notas en teamspaces siempre se sincronizan.",
       "cloudNotesMigration": "Respaldando notas… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Todas las notas respaldadas",
       "description": "Controla qué datos salen de tu dispositivo. Todo está desactivado por defecto.",
@@ -2546,10 +2546,6 @@
         "title": "Crea tu primer espacio de trabajo",
         "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
         "create": "Crear espacio de trabajo"
-      },
-      "personal": {
-        "title": "Estás en Personal",
-        "description": "Elige un espacio de trabajo para gestionar su configuración."
       },
       "loadError": {
         "title": "No se pudieron cargar los espacios de trabajo",
@@ -2816,8 +2812,8 @@
           "leaveBodyLoses": "Perderás el acceso a {{space}} y a sus notas.",
           "leaveBodyAdmins": "Otro administrador seguirá gestionando este Teamspace.",
           "deleteNotAllowed": "No tienes permiso para eliminar {{space}}.",
-          "movedToPersonal_one": "{{count}} nota sin sincronizar se movió a tu espacio personal.",
-          "movedToPersonal_other": "{{count}} notas sin sincronizar se movieron a tu espacio personal."
+          "movedToPersonal_one": "{{count}} nota sin sincronizar se movió a Privado.",
+          "movedToPersonal_other": "{{count}} notas sin sincronizar se movieron a Privado."
         },
         "addPeople": {
           "loading": "Cargando teamspaces…",
@@ -3498,7 +3494,7 @@
       "defaultFolderImmutable": "Las carpetas predeterminadas no se pueden modificar.",
       "spaceNameRequired": "Introduce un nombre para el espacio.",
       "spaceNotFound": "No se pudo encontrar ese espacio.",
-      "privateSpaceImmutable": "Tu espacio Personal no se puede modificar.",
+      "privateSpaceImmutable": "Privado no se puede modificar.",
       "generic": "No se pudo completar el cambio. Inténtalo de nuevo."
     },
     "sidebar": {
@@ -3507,10 +3503,10 @@
       "templatesAndActions": "Plantillas y acciones"
     },
     "spaces": {
-      "privateSpaces": "Notas privadas",
+      "privateSpaces": "Privado",
       "teamSpaces": "Teamspaces",
-      "personal": "Personal",
-      "privateTooltip": "Solo tú puedes ver tu espacio personal",
+      "personal": "Privado",
+      "privateTooltip": "Solo tú puedes ver estas notas. Se quedan en este dispositivo.",
       "newSpace": "Nuevo teamspace",
       "nameAndIconLabel": "Nombre e icono",
       "changeEmoji": "Cambiar emoji",
@@ -3561,10 +3557,10 @@
       "noteCount_other": "{{count}} notas",
       "accessRevoked": "Ya no tienes acceso a {{space}}",
       "accessRevokedActiveNote": "Ya no tienes acceso a {{space}} — \"{{title}}\" ya no está disponible en este dispositivo",
-      "movedToPersonal": "Ya no tienes acceso a {{space}} — “{{title}}” se movió a tu espacio personal",
-      "updateDeniedNote": "No tienes permiso para modificar “{{title}}” — tus cambios sin sincronizar se guardaron como una copia en tu espacio personal",
+      "movedToPersonal": "Ya no tienes acceso a {{space}} — “{{title}}” se movió a Privado",
+      "updateDeniedNote": "No tienes permiso para modificar “{{title}}” — tus cambios sin sincronizar se guardaron como una copia en Privado",
       "deleteDeniedNote": "“{{title}}” no se eliminó — solo el propietario de la nota o un administrador pueden eliminarla",
-      "updateDeniedFolder": "No tienes permiso para modificar “{{name}}” — tu trabajo sin sincronizar se guardó en tu espacio personal",
+      "updateDeniedFolder": "No tienes permiso para modificar “{{name}}” — tu trabajo sin sincronizar se guardó en Privado",
       "deleteDeniedFolder": "“{{name}}” no se eliminó — solo un administrador puede eliminar una carpeta del espacio",
       "conflictBanner": "Existe una versión más reciente de esta nota.",
       "conflictRefresh": "Actualizar",
@@ -3594,8 +3590,8 @@
       "title": "Dónde están tus notas",
       "description": "OpenWhispr separa las ideas privadas del trabajo compartido para que las notas lleguen a las personas adecuadas.",
       "personal": {
-        "title": "Espacio personal",
-        "description": "Solo tú puedes ver las carpetas y notas de este espacio."
+        "title": "Privado",
+        "description": "Solo tú puedes ver estas notas. Se quedan en este dispositivo."
       },
       "workspace": {
         "title": "Espacio de trabajo",
@@ -4314,7 +4310,6 @@
       },
       "locked": {
         "noWorkspace": "Los diccionarios compartidos están incluidos en Business. Comparte con todos la jerga, los nombres de productos y las siglas de tu equipo.",
-        "chooseWorkspace": "Estás en Personal. Cambia a un espacio de trabajo para usar sus palabras compartidas.",
         "upgradeAdmin": "Los diccionarios compartidos están incluidos en Business. Mejora el plan de {{workspace}} para que todos tengan las mismas palabras.",
         "upgradeMember": "Los diccionarios compartidos están incluidos en Business. Pide a un administrador que mejore el plan de {{workspace}}.",
         "paused_one": "La {{count}} palabra compartida de {{workspace}} está en pausa. Cámbiate a Business para volver a usarla al dictar.",
@@ -5923,7 +5918,8 @@
     "switcher": {
       "workspaces": "Espacios de trabajo",
       "add": "Añadir espacio de trabajo",
-      "invitePeople": "Invitar personas"
+      "invitePeople": "Invitar personas",
+      "unavailable": "Los espacios de trabajo no están disponibles en este momento."
     },
     "create": {
       "title": "Crear espacio de trabajo",
@@ -6054,6 +6050,7 @@
       "leave": {
         "title": "¿Salir de {{name}}?",
         "body": "Perderás el acceso a este espacio de trabajo, a sus equipos y a sus teamspaces. Un administrador del espacio de trabajo puede volver a invitarte.",
+        "privateNotes": "Tus notas privadas de este espacio de trabajo se moverán a {{workspace}} en este dispositivo.",
         "failed": "No se pudo salir de {{name}}. Comprueba tu conexión e inténtalo de nuevo."
       },
       "left": {
@@ -6063,7 +6060,8 @@
       "chooseWorkspace": "Elegir espacio de trabajo",
       "delete": {
         "title": "¿Eliminar {{name}}?",
-        "body": "Esto elimina de forma permanente el espacio de trabajo, sus notas, archivos, equipos y teamspaces para todos. No se puede deshacer."
+        "body": "Esto elimina de forma permanente el espacio de trabajo, sus notas, archivos, equipos y teamspaces para todos. No se puede deshacer.",
+        "privateNotes": "Tus notas privadas de este espacio de trabajo se moverán a {{workspace}} en este dispositivo."
       },
       "deleting": {
         "title": "Eliminando {{name}}…",
@@ -6164,7 +6162,7 @@
     "intro": {
       "workspace": {
         "title": "Tu espacio de trabajo es tu base",
-        "body": "Todos en tu empresa trabajan aquí. Tus notas privadas siguen siendo privadas hasta que las compartas."
+        "body": "Todos en tu empresa trabajan aquí. Tus notas privadas se quedan en tu dispositivo."
       },
       "teamspaces": {
         "title": "Comparte notas en teamspaces",

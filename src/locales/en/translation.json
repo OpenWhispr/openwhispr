@@ -1756,10 +1756,6 @@
         "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
       },
-      "personal": {
-        "title": "You're in Personal",
-        "description": "Choose a workspace to manage its settings."
-      },
       "loadError": {
         "title": "Couldn't load workspaces",
         "description": "Check your connection and try again.",
@@ -2025,8 +2021,8 @@
           "leaveBodyLoses": "You'll lose access to {{space}} and its notes.",
           "leaveBodyAdmins": "Another admin will continue managing this teamspace.",
           "deleteNotAllowed": "You don't have permission to delete {{space}}.",
-          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to your Personal space.",
-          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to your Personal space."
+          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to Private.",
+          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to Private."
         },
         "addPeople": {
           "loading": "Loading teamspaces…",
@@ -3047,8 +3043,8 @@
     },
     "privacy": {
       "cloudBackup": "Cloud backup",
-      "cloudBackupDescription": "Back up your transcriptions and notes to the cloud for seamless access across devices.",
-      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting.",
+      "cloudBackupDescription": "Back up your transcriptions, chats, dictionary and snippets to the cloud for seamless access across devices.",
+      "cloudBackupTeamCaveat": "Private notes always stay on this device. Notes in teamspaces always sync.",
       "cloudNotesMigration": "Backing up notes… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "All notes backed up",
       "description": "Control what data leaves your device. Everything is off by default.",
@@ -3617,7 +3613,8 @@
     "switcher": {
       "workspaces": "Workspaces",
       "add": "Add workspace",
-      "invitePeople": "Invite people"
+      "invitePeople": "Invite people",
+      "unavailable": "Workspaces aren't available right now."
     },
     "create": {
       "title": "Create workspace",
@@ -3748,6 +3745,7 @@
       "leave": {
         "title": "Leave {{name}}?",
         "body": "You'll lose access to this workspace, its teams, and its teamspaces. A workspace admin can invite you back.",
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}} on this device.",
         "failed": "Couldn't leave {{name}}. Check your connection and try again."
       },
       "left": {
@@ -3757,7 +3755,8 @@
       "chooseWorkspace": "Choose workspace",
       "delete": {
         "title": "Delete {{name}}?",
-        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone."
+        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone.",
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}} on this device."
       },
       "deleting": {
         "title": "Deleting {{name}}…",
@@ -3858,7 +3857,7 @@
     "intro": {
       "workspace": {
         "title": "Your workspace is home base",
-        "body": "Everyone at your company works here. Your private notes stay private until you share them."
+        "body": "Everyone at your company works here. Your private notes stay on your device."
       },
       "teamspaces": {
         "title": "Share notes in teamspaces",
@@ -4000,7 +3999,7 @@
       "defaultFolderImmutable": "Default folders cannot be changed.",
       "spaceNameRequired": "Enter a space name.",
       "spaceNotFound": "That space could not be found.",
-      "privateSpaceImmutable": "Your Personal space cannot be changed.",
+      "privateSpaceImmutable": "Private can't be changed.",
       "generic": "The change could not be completed. Please try again."
     },
     "sidebar": {
@@ -4009,10 +4008,10 @@
       "templatesAndActions": "Templates & Actions"
     },
     "spaces": {
-      "privateSpaces": "Private notes",
+      "privateSpaces": "Private",
       "teamSpaces": "Teamspaces",
-      "personal": "Personal",
-      "privateTooltip": "Only you can see your Personal space",
+      "personal": "Private",
+      "privateTooltip": "Only you can see these notes. They stay on this device.",
       "newSpace": "New teamspace",
       "nameAndIconLabel": "Name and icon",
       "changeEmoji": "Change emoji",
@@ -4063,10 +4062,10 @@
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
       "accessRevokedActiveNote": "You no longer have access to {{space}} — \"{{title}}\" is no longer available on this device",
-      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to your Personal space",
-      "updateDeniedNote": "You don't have permission to change “{{title}}” — your unsynced edits were saved as a copy in your Personal space",
+      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to Private",
+      "updateDeniedNote": "You don't have permission to change “{{title}}” — your unsynced edits were saved as a copy in Private",
       "deleteDeniedNote": "“{{title}}” wasn't deleted — only the note's owner or an admin can delete it",
-      "updateDeniedFolder": "You don't have permission to change “{{name}}” — your unsynced work was saved to your Personal space",
+      "updateDeniedFolder": "You don't have permission to change “{{name}}” — your unsynced work was saved to Private",
       "deleteDeniedFolder": "“{{name}}” wasn't deleted — only an admin can delete a space folder",
       "conflictBanner": "A newer version of this note exists.",
       "conflictRefresh": "Refresh",
@@ -4096,8 +4095,8 @@
       "title": "Where your notes live",
       "description": "OpenWhispr separates private thoughts from shared work so the right people see the right notes.",
       "personal": {
-        "title": "Personal space",
-        "description": "Only you can see the folders and notes here."
+        "title": "Private",
+        "description": "Only you can see these notes. They stay on this device."
       },
       "workspace": {
         "title": "Workspace",
@@ -4804,7 +4803,6 @@
       },
       "locked": {
         "noWorkspace": "Shared dictionaries are included with Business. Share your team's jargon, product names and acronyms with everyone.",
-        "chooseWorkspace": "You're in Personal. Switch to a workspace to use its shared words.",
         "upgradeAdmin": "Shared dictionaries are included with Business. Upgrade {{workspace}} so everyone gets the same words.",
         "upgradeMember": "Shared dictionaries are included with Business. Ask an admin to upgrade {{workspace}}.",
         "paused_one": "{{workspace}}'s {{count}} shared word is paused. Upgrade to Business to use it in dictation again.",

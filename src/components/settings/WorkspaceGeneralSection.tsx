@@ -9,6 +9,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
 import { workspaceCan } from "../../lib/capabilities";
+import { privateNotesDestinationName } from "../../lib/workspaceSwitcher";
 import { exitReducer } from "../../lib/workspaceExitFlow";
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import { WorkspaceExitDialog } from "../workspace/WorkspaceExitDialog";
@@ -38,8 +39,10 @@ export default function WorkspaceGeneralSection({
   onNavigateToSection,
   onChooseWorkspace,
 }: WorkspaceGeneralSectionProps): React.ReactElement | null {
+  const { t } = useTranslation();
   const state = useSettingsWorkspace();
   const { user } = useAuth();
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
   // Held here, outside the frame and not keyed by workspace, so the Left and
   // Deleted outcomes survive the refresh that moves the store to another
   // workspace (or to none, which unmounts the frame's page).
@@ -72,7 +75,7 @@ export default function WorkspaceGeneralSection({
 
   return (
     <>
-      <SettingsWorkspaceFrame state={state} onChooseWorkspace={onChooseWorkspace}>
+      <SettingsWorkspaceFrame state={state}>
         {(workspace) => (
           <GeneralPage
             workspace={workspace}
@@ -88,6 +91,13 @@ export default function WorkspaceGeneralSection({
         onConfirmLeave={confirmLeave}
         onConfirmDelete={confirmDelete}
         onChooseWorkspace={() => onChooseWorkspace?.()}
+        // Leave and Delete act on the workspace this page shows.
+        privateNotesWorkspace={privateNotesDestinationName(
+          workspaces,
+          state.workspace?.id ?? null,
+          user?.name,
+          t
+        )}
       />
       {transferWorkspace && (
         <TransferOwnershipDialog

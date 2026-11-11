@@ -17,10 +17,12 @@ const ROLE_CAPS = {
 
 const WORKSPACE = { id: "w1", name: "Acme Research", seats: 5 };
 
-async function loadSection(t) {
+// `realCapabilities` reads the workspace's own capabilities, as the app does.
+async function loadSection(t, { realCapabilities = false } = {}) {
   t.after(() => {
     delete globalThis.__caps;
     delete globalThis.__settingsWorkspace;
+    delete globalThis.__exitDialogProps;
   });
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
@@ -37,10 +39,14 @@ async function loadSection(t) {
           return state.workspace ? children(state.workspace) : null;
         }
       `,
-      "/lib/capabilities": `
-        export const workspaceCan = (workspace, capability) =>
-          globalThis.__caps?.[capability] === true;
-      `,
+      ...(realCapabilities
+        ? {}
+        : {
+            "/lib/capabilities": `
+              export const workspaceCan = (workspace, capability) =>
+                globalThis.__caps?.[capability] === true;
+            `,
+          }),
       "/services/workspaceActions": `
         export const leaveWorkspace = async () => {};
         export const deleteWorkspace = async () => {};
@@ -48,14 +54,19 @@ async function loadSection(t) {
       `,
       "/services/WorkspacesService": "export const WorkspacesService = {};",
       "/stores/workspaceStore": `
-        export const useWorkspaceStore = (selector) => selector({ refresh: async () => {} });
+        export const useWorkspaceStore = (selector) =>
+          selector({
+            refresh: async () => {},
+            workspaces: globalThis.__settingsWorkspace?.workspaces ?? [],
+          });
       `,
-      "/hooks/useAuth": "export const useAuth = () => ({ user: { id: 'u-self' } });",
+      "/hooks/useAuth": "export const useAuth = () => ({ user: { id: 'u-self', name: 'Ada' } });",
       "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
       "/EnterpriseConsoleRow": "export default function Mock() { return null; }",
       "/WorkspaceExitDialog": `
         import React from "react";
-        export function WorkspaceExitDialog() {
+        export function WorkspaceExitDialog(props) {
+          globalThis.__exitDialogProps = props;
           return React.createElement("div", { "data-exit-dialog": "" });
         }
       `,
@@ -70,13 +81,16 @@ async function loadSection(t) {
   return vite.ssrLoadModule("/components/settings/WorkspaceGeneralSection.tsx");
 }
 
-function render(module, { role, name = WORKSPACE.name, caps = ROLE_CAPS[role] }) {
-  const workspace = { ...WORKSPACE, name, role };
+function render(
+  module,
+  { role, name = WORKSPACE.name, caps = ROLE_CAPS[role], extra = {}, others = [] }
+) {
+  const workspace = { ...WORKSPACE, name, role, ...extra };
   globalThis.__caps = caps;
   globalThis.__settingsWorkspace = {
     status: "ready",
     workspace,
-    workspaces: [workspace],
+    workspaces: [workspace, ...others],
     retry: () => {},
   };
   return renderToStaticMarkup(
@@ -182,6 +196,52 @@ test("rows follow server capabilities, not the role", async (t) => {
   assert.ok(!blockedOwner.includes(ROW.delete));
   assert.ok(!blockedOwner.includes(ROW.owner));
   assert.match(nameInput(blockedOwner), /disabled=""/);
+});
+
+test("delete is unavailable for the default workspace", async (t) => {
+  const module = await loadSection(t, { realCapabilities: true });
+  const capabilities = {
+    manage_members: true,
+    manage_teams: true,
+    create_spaces: true,
+    manage_settings: true,
+    manage_billing: true,
+    transfer_ownership: true,
+    leave: false,
+  };
+
+  const own = render(module, {
+    role: "owner",
+    extra: {
+      is_default: true,
+      is_account_default: true,
+      capabilities: { ...capabilities, delete_workspace: false },
+    },
+  });
+  assert.ok(!own.includes(ROW.delete));
+  assert.ok(own.includes(ROW.owner), "the rest of the owner's page stays");
+
+  const another = render(module, {
+    role: "owner",
+    extra: {
+      is_default: false,
+      is_account_default: false,
+      capabilities: { ...capabilities, delete_workspace: true },
+    },
+  });
+  assert.ok(another.includes(ROW.delete));
+});
+
+test("the exit dialog names the default workspace as where private notes go", async (t) => {
+  const module = await loadSection(t);
+
+  render(module, {
+    role: "member",
+    extra: { is_default: false },
+    others: [{ id: "mine", name: "Ada's lab", role: "owner", is_default: true }],
+  });
+
+  assert.equal(globalThis.__exitDialogProps.privateNotesWorkspace, "Ada's lab");
 });
 
 test("icon shows initials and no upload control", async (t) => {

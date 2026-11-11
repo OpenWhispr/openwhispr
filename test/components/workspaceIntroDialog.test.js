@@ -87,16 +87,25 @@ test("last step shows Get started and no Skip", async (t) => {
   assert.equal(progressBars(markup), 3);
 });
 
-test("the mock switcher shows the real workspace name", async (t) => {
+test("the mock switcher shows the real workspace name and no Personal entry", async (t) => {
   const { renderDialog } = await loadIntro(t);
 
   const markup = renderDialog({ workspaceName: "Globex Research" });
 
   assert.match(markup, /Globex Research/);
-  assert.match(markup, /notes\.spaces\.personal/);
   assert.match(markup, /workspaces\.switcher\.add/);
+  // Private lives inside every workspace, so the switcher has nothing beside the workspaces.
+  assert.doesNotMatch(markup, /notes\.spaces\.personal/);
   // The mock is decoration; screen readers get the title and body only.
   assert.match(markup, /aria-hidden="true"[^>]*>(?:(?!<\/div>).)*Globex Research/s);
+});
+
+test("the teamspaces step shows Private inside the workspace", async (t) => {
+  const { renderCard } = await loadIntro(t);
+
+  const markup = renderCard({ step: 1, workspaceName: "Globex Research" });
+
+  assert.match(markup, /Globex Research(?:(?!Globex).)*notes\.spaces\.personal/s);
 });
 
 test("illustrations are decorative and sized for their slot", async (t) => {

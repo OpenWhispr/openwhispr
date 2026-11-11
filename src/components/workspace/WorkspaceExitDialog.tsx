@@ -12,6 +12,8 @@ interface WorkspaceExitDialogProps {
   onConfirmDelete: () => Promise<void>;
   /** Primary of the Left and Deleted outcomes. */
   onChooseWorkspace: () => void;
+  /** Where the workspace's private notes move on this device: the default workspace's name. */
+  privateNotesWorkspace: string;
 }
 
 export function WorkspaceExitDialog({
@@ -20,6 +22,7 @@ export function WorkspaceExitDialog({
   onConfirmLeave,
   onConfirmDelete,
   onChooseWorkspace,
+  privateNotesWorkspace,
 }: WorkspaceExitDialogProps): ReactElement | null {
   const { t } = useTranslation();
 
@@ -50,6 +53,7 @@ export function WorkspaceExitDialog({
   const leaveCopy = {
     title: t("workspaces.exit.leave.title", { name }),
     body: t("workspaces.exit.leave.body"),
+    detail: t("workspaces.exit.leave.privateNotes", { workspace: privateNotesWorkspace }),
   };
 
   switch (state.kind) {
@@ -118,6 +122,7 @@ export function WorkspaceExitDialog({
           icon="trash"
           title={t("workspaces.exit.delete.title", { name })}
           body={t("workspaces.exit.delete.body")}
+          detail={t("workspaces.exit.delete.privateNotes", { workspace: privateNotesWorkspace })}
           primary={{
             label: t("settingsPage.workspace.general.delete"),
             onClick: () => void run(onConfirmDelete),

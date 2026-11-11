@@ -30,6 +30,7 @@ async function loadDialog(t) {
             { "data-icon": props.icon },
             React.createElement("h2", null, props.title),
             React.createElement("p", null, props.body),
+            props.detail ? React.createElement("p", { "data-detail": "" }, props.detail) : null,
             props.error ? React.createElement("p", { role: "alert" }, props.error) : null,
             React.createElement(
               "button",
@@ -61,6 +62,7 @@ async function loadDialog(t) {
         onConfirmLeave: async () => {},
         onConfirmDelete: async () => {},
         onChooseWorkspace: () => {},
+        privateNotesWorkspace: "Ada's workspace",
         ...overrides,
       })
     );
@@ -86,6 +88,25 @@ test("confirmLeave shows the leave copy with the workspace name", async (t) => {
   assert.match(markup, /common\.cancel/);
   assert.equal(globalThis.__actionDialogProps.primary.tone, "destructive");
   assert.equal(globalThis.__actionDialogProps.icon, "info");
+});
+
+test("the leave dialog names where private notes go", async (t) => {
+  const { render } = await loadDialog(t);
+  const destination =
+    /data-detail="">workspaces\.exit\.leave\.privateNotes\|\{&quot;workspace&quot;:&quot;Ada&#x27;s workspace&quot;\}</;
+
+  for (const kind of ["confirmLeave", "leaving"]) {
+    assert.match(render({ kind, name: "Acme" }), destination, kind);
+  }
+  assert.match(render({ kind: "leaveFailed", name: "Acme", reason: null }), destination);
+  assert.match(
+    render({ kind: "confirmDelete", name: "Acme" }),
+    /data-detail="">workspaces\.exit\.delete\.privateNotes\|\{&quot;workspace&quot;:&quot;Ada&#x27;s workspace&quot;\}</
+  );
+  // Once the workspace is gone the outcome no longer promises anything.
+  for (const kind of ["left", "deleted"]) {
+    assert.doesNotMatch(render({ kind, name: "Acme" }), /privateNotes/, kind);
+  }
 });
 
 test("confirming dispatches confirm, runs the bound action, then succeeded", async (t) => {

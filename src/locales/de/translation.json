@@ -1756,10 +1756,6 @@
         "description": "Workspaces ermöglichen die Zusammenarbeit und das Teilen von Notizen.",
         "create": "Workspace erstellen"
       },
-      "personal": {
-        "title": "Du bist in „Persönlich“",
-        "description": "Wähle einen Workspace aus, um seine Einstellungen zu verwalten."
-      },
       "loadError": {
         "title": "Workspaces konnten nicht geladen werden",
         "description": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
@@ -2025,8 +2021,8 @@
           "leaveBodyLoses": "Sie verlieren den Zugriff auf {{space}} und seine Notizen.",
           "leaveBodyAdmins": "Ein anderer Admin verwaltet diesen Teamspace weiter.",
           "deleteNotAllowed": "Sie haben keine Berechtigung, {{space}} zu löschen.",
-          "movedToPersonal_one": "{{count}} nicht synchronisierte Notiz wurde in Ihren persönlichen Bereich verschoben.",
-          "movedToPersonal_other": "{{count}} nicht synchronisierte Notizen wurden in Ihren persönlichen Bereich verschoben."
+          "movedToPersonal_one": "{{count}} nicht synchronisierte Notiz wurde nach Privat verschoben.",
+          "movedToPersonal_other": "{{count}} nicht synchronisierte Notizen wurden nach Privat verschoben."
         },
         "addPeople": {
           "loading": "Teamspaces werden geladen…",
@@ -3047,8 +3043,8 @@
     },
     "privacy": {
       "cloudBackup": "Cloud-Backup",
-      "cloudBackupDescription": "Sichern Sie Ihre Transkriptionen und Notizen in der Cloud für nahtlosen Zugriff auf allen Geräten.",
-      "cloudBackupTeamCaveat": "Notizen in Teamspaces und geteilte Notizen werden unabhängig von dieser Einstellung immer synchronisiert.",
+      "cloudBackupDescription": "Sichern Sie Ihre Transkriptionen, Chats, Ihr Wörterbuch und Ihre Snippets in der Cloud für nahtlosen Zugriff auf allen Geräten.",
+      "cloudBackupTeamCaveat": "Private Notizen bleiben immer auf diesem Gerät. Notizen in Teamspaces werden immer synchronisiert.",
       "cloudNotesMigration": "Notizen werden gesichert… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "Alle Notizen gesichert",
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
@@ -3617,7 +3613,8 @@
     "switcher": {
       "workspaces": "Workspaces",
       "add": "Workspace hinzufügen",
-      "invitePeople": "Personen einladen"
+      "invitePeople": "Personen einladen",
+      "unavailable": "Workspaces sind gerade nicht verfügbar."
     },
     "create": {
       "title": "Workspace erstellen",
@@ -3748,6 +3745,7 @@
       "leave": {
         "title": "{{name}} verlassen?",
         "body": "Sie verlieren den Zugriff auf diesen Workspace, seine Teams und seine Teamspaces. Ein Workspace-Admin kann Sie wieder einladen.",
+        "privateNotes": "Ihre privaten Notizen in diesem Workspace werden auf diesem Gerät nach {{workspace}} verschoben.",
         "failed": "{{name}} konnte nicht verlassen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
       },
       "left": {
@@ -3757,7 +3755,8 @@
       "chooseWorkspace": "Workspace auswählen",
       "delete": {
         "title": "{{name}} löschen?",
-        "body": "Dadurch werden der Workspace, seine Notizen, Dateien, Teams und Teamspaces für alle dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden."
+        "body": "Dadurch werden der Workspace, seine Notizen, Dateien, Teams und Teamspaces für alle dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.",
+        "privateNotes": "Ihre privaten Notizen in diesem Workspace werden auf diesem Gerät nach {{workspace}} verschoben."
       },
       "deleting": {
         "title": "{{name}} wird gelöscht…",
@@ -3858,7 +3857,7 @@
     "intro": {
       "workspace": {
         "title": "Ihr Workspace ist Ihre Basis",
-        "body": "Alle in Ihrem Unternehmen arbeiten hier. Ihre privaten Notizen bleiben privat, bis Sie sie teilen."
+        "body": "Alle in Ihrem Unternehmen arbeiten hier. Ihre privaten Notizen bleiben auf Ihrem Gerät."
       },
       "teamspaces": {
         "title": "Notizen in Teamspaces teilen",
@@ -4000,7 +3999,7 @@
       "defaultFolderImmutable": "Standardordner können nicht geändert werden.",
       "spaceNameRequired": "Gib einen Bereichsnamen ein.",
       "spaceNotFound": "Dieser Bereich wurde nicht gefunden.",
-      "privateSpaceImmutable": "Dein persönlicher Bereich kann nicht geändert werden.",
+      "privateSpaceImmutable": "Privat kann nicht geändert werden.",
       "generic": "Die Änderung konnte nicht abgeschlossen werden. Bitte versuche es erneut."
     },
     "sidebar": {
@@ -4009,10 +4008,10 @@
       "templatesAndActions": "Vorlagen & Aktionen"
     },
     "spaces": {
-      "privateSpaces": "Private Notizen",
+      "privateSpaces": "Privat",
       "teamSpaces": "Teamspaces",
-      "personal": "Persönlich",
-      "privateTooltip": "Nur du kannst deinen persönlichen Bereich sehen",
+      "personal": "Privat",
+      "privateTooltip": "Nur du kannst diese Notizen sehen. Sie bleiben auf diesem Gerät.",
       "newSpace": "Neuer Teamspace",
       "nameAndIconLabel": "Name und Symbol",
       "changeEmoji": "Emoji ändern",
@@ -4063,10 +4062,10 @@
       "noteCount_other": "{{count}} Notizen",
       "accessRevoked": "Du hast keinen Zugriff mehr auf {{space}}",
       "accessRevokedActiveNote": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ ist auf diesem Gerät nicht mehr verfügbar",
-      "movedToPersonal": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ wurde in deinen persönlichen Bereich verschoben",
-      "updateDeniedNote": "Du darfst „{{title}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden als Kopie in deinem persönlichen Bereich gespeichert",
+      "movedToPersonal": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ wurde nach Privat verschoben",
+      "updateDeniedNote": "Du darfst „{{title}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden als Kopie in Privat gespeichert",
       "deleteDeniedNote": "„{{title}}“ wurde nicht gelöscht — nur der Besitzer der Notiz oder ein Admin kann sie löschen",
-      "updateDeniedFolder": "Du darfst „{{name}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden in deinem persönlichen Bereich gespeichert",
+      "updateDeniedFolder": "Du darfst „{{name}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden in Privat gespeichert",
       "deleteDeniedFolder": "„{{name}}“ wurde nicht gelöscht — nur ein Admin kann einen Bereichs-Ordner löschen",
       "conflictBanner": "Es existiert eine neuere Version dieser Notiz.",
       "conflictRefresh": "Aktualisieren",
@@ -4096,8 +4095,8 @@
       "title": "Wo Ihre Notizen gespeichert sind",
       "description": "OpenWhispr trennt private Gedanken von gemeinsamer Arbeit, damit nur die richtigen Personen Ihre Notizen sehen.",
       "personal": {
-        "title": "Persönlicher Bereich",
-        "description": "Nur Sie können die Ordner und Notizen hier sehen."
+        "title": "Privat",
+        "description": "Nur Sie können diese Notizen sehen; sie bleiben auf diesem Gerät."
       },
       "workspace": {
         "title": "Workspace",
@@ -4804,7 +4803,6 @@
       },
       "locked": {
         "noWorkspace": "Geteilte Wörterbücher sind in Business enthalten. Teile Fachbegriffe, Produktnamen und Abkürzungen deines Teams mit allen.",
-        "chooseWorkspace": "Du bist in „Persönlich“. Wechsle zu einem Workspace, um seine geteilten Wörter zu nutzen.",
         "upgradeAdmin": "Geteilte Wörterbücher sind in Business enthalten. Upgrade {{workspace}}, damit alle dieselben Wörter bekommen.",
         "upgradeMember": "Geteilte Wörterbücher sind in Business enthalten. Bitte einen Admin, {{workspace}} upzugraden.",
         "paused_one": "Das {{count}} geteilte Wort von {{workspace}} ist pausiert. Upgrade auf Business, um es wieder beim Diktieren zu nutzen.",

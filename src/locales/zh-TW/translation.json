@@ -2297,8 +2297,8 @@
     },
     "privacy": {
       "cloudBackup": "雲端備份",
-      "cloudBackupDescription": "將轉錄記錄和筆記備份至雲端，實現跨裝置無縫存取。",
-      "cloudBackupTeamCaveat": "Teamspace 中的筆記和您已分享的筆記會始終同步，不受此設定影響。",
+      "cloudBackupDescription": "將轉錄記錄、對話、字典和片段備份至雲端，實現跨裝置無縫存取。",
+      "cloudBackupTeamCaveat": "私人筆記一律只保存在這部裝置上。Teamspace 中的筆記一律會同步。",
       "cloudNotesMigration": "正在備份筆記… {{done}} / {{total}}",
       "cloudNotesMigrationDone": "所有筆記已備份",
       "description": "控制哪些資料會離開你的裝置。預設全部關閉。",
@@ -2494,10 +2494,6 @@
         "title": "建立你的第一個工作區",
         "description": "工作區讓你與團隊成員協作並分享筆記。",
         "create": "建立工作區"
-      },
-      "personal": {
-        "title": "你目前在「個人」中",
-        "description": "選擇一個工作區以管理其設定。"
       },
       "loadError": {
         "title": "無法載入工作區",
@@ -2764,8 +2760,8 @@
           "leaveBodyLoses": "你將無法再存取 {{space}} 及其筆記。",
           "leaveBodyAdmins": "其他管理員將繼續管理此 Teamspace。",
           "deleteNotAllowed": "你沒有刪除 {{space}} 的權限。",
-          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至你的個人空間。",
-          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至你的個人空間。"
+          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至私人。",
+          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至私人。"
         },
         "addPeople": {
           "loading": "正在載入 Teamspace…",
@@ -3446,7 +3442,7 @@
       "defaultFolderImmutable": "無法變更預設資料夾。",
       "spaceNameRequired": "請輸入空間名稱。",
       "spaceNotFound": "找不到該空間。",
-      "privateSpaceImmutable": "無法變更你的個人空間。",
+      "privateSpaceImmutable": "「私人」無法變更。",
       "generic": "無法完成變更，請再試一次。"
     },
     "sidebar": {
@@ -3455,10 +3451,10 @@
       "templatesAndActions": "範本與動作"
     },
     "spaces": {
-      "privateSpaces": "私人筆記",
+      "privateSpaces": "私人",
       "teamSpaces": "Teamspaces",
-      "personal": "個人",
-      "privateTooltip": "只有你可以看到你的個人空間",
+      "personal": "私人",
+      "privateTooltip": "只有你可以看到這些筆記。它們只會保存在這部裝置上。",
       "newSpace": "新增 Teamspace",
       "nameAndIconLabel": "名稱與圖示",
       "changeEmoji": "變更表情符號",
@@ -3509,10 +3505,10 @@
       "noteCount_other": "{{count}} 則筆記",
       "accessRevoked": "你已無法存取 {{space}}",
       "accessRevokedActiveNote": "你已無法存取 {{space}} — 「{{title}}」在此裝置上不再可用",
-      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至你的個人空間",
-      "updateDeniedNote": "你沒有權限變更「{{title}}」——未同步的編輯已作為副本儲存到你的個人空間",
+      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至私人",
+      "updateDeniedNote": "你沒有權限變更「{{title}}」——未同步的編輯已作為副本儲存到私人",
       "deleteDeniedNote": "「{{title}}」未被刪除——只有筆記擁有者或管理員才能刪除它",
-      "updateDeniedFolder": "你沒有權限變更「{{name}}」——未同步的內容已儲存到你的個人空間",
+      "updateDeniedFolder": "你沒有權限變更「{{name}}」——未同步的內容已儲存到私人",
       "deleteDeniedFolder": "「{{name}}」未被刪除——只有管理員才能刪除空間資料夾",
       "conflictBanner": "此筆記有更新的版本。",
       "conflictRefresh": "重新整理",
@@ -3542,8 +3538,8 @@
       "title": "筆記存放在哪裡",
       "description": "OpenWhispr 將個人想法與協作內容分開，讓合適的人看到合適的筆記。",
       "personal": {
-        "title": "個人空間",
-        "description": "只有你能看到這裡的資料夾和筆記。"
+        "title": "私人",
+        "description": "只有你可以看到這些筆記。它們只會保存在這部裝置上。"
       },
       "workspace": {
         "title": "工作區",
@@ -4250,7 +4246,6 @@
       },
       "locked": {
         "noWorkspace": "共享字典包含在 Business 方案中。與所有人共享團隊的術語、產品名稱和縮寫。",
-        "chooseWorkspace": "你目前在「個人」中。切換到一個工作區即可使用其共享詞語。",
         "upgradeAdmin": "共享字典包含在 Business 方案中。升級 {{workspace}}，讓每個人都使用相同的詞語。",
         "upgradeMember": "共享字典包含在 Business 方案中。請管理員升級 {{workspace}}。",
         "paused_one": "{{workspace}} 的 {{count}} 個共享詞語已暫停。升級到 Business 即可在聽寫中再次使用。",
@@ -5902,7 +5897,8 @@
     "switcher": {
       "workspaces": "工作區",
       "add": "新增工作區",
-      "invitePeople": "邀請成員"
+      "invitePeople": "邀請成員",
+      "unavailable": "工作區暫時無法使用。"
     },
     "create": {
       "title": "建立工作區",
@@ -6033,6 +6029,7 @@
       "leave": {
         "title": "離開 {{name}}？",
         "body": "你將失去此工作區、其團隊與 Teamspace 的存取權。工作區管理員可以再次邀請你。",
+        "privateNotes": "你在此工作區中的私人筆記將在這部裝置上移至 {{workspace}}。",
         "failed": "無法離開 {{name}}。請檢查網路連線後再試一次。"
       },
       "left": {
@@ -6042,7 +6039,8 @@
       "chooseWorkspace": "選擇工作區",
       "delete": {
         "title": "刪除 {{name}}？",
-        "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與 Teamspace，且無法復原。"
+        "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與 Teamspace，且無法復原。",
+        "privateNotes": "你在此工作區中的私人筆記將在這部裝置上移至 {{workspace}}。"
       },
       "deleting": {
         "title": "正在刪除 {{name}}…",
@@ -6143,7 +6141,7 @@
     "intro": {
       "workspace": {
         "title": "工作區是你的大本營",
-        "body": "公司裡的每個人都在這裡工作。你的私人筆記在你分享之前始終保持私密。"
+        "body": "公司裡的每個人都在這裡工作。你的私人筆記只會保存在你的裝置上。"
       },
       "teamspaces": {
         "title": "在 Teamspace 中分享筆記",

@@ -7,6 +7,8 @@ export type WorkspaceSwitcherState =
   | { kind: "hidden" }
   | { kind: "loading" }
   | { kind: "error" }
+  // Listed, but the default workspace isn't there yet: making it failed or is still on its way.
+  | { kind: "unavailable" }
   | { kind: "workspace"; current: Workspace; canInvite: boolean };
 
 interface WorkspaceSwitcherInput {
@@ -62,6 +64,33 @@ export function defaultWorkspaceName(userName: string | null | undefined, t: TFu
     : t("workspaces.defaultNameFallback");
 }
 
+/** The default workspace first, the rest in their order. */
+export function withDefaultFirst<W extends { id: string }>(
+  workspaces: W[],
+  defaultWorkspaceId: string | null
+): W[] {
+  const index = workspaces.findIndex((w) => w.id === defaultWorkspaceId);
+  if (index <= 0) return workspaces;
+  return [workspaces[index], ...workspaces.slice(0, index), ...workspaces.slice(index + 1)];
+}
+
+/**
+ * Where a workspace's private notes go when the user leaves or deletes it: the default among the
+ * workspaces left (as `forgetWorkspace` picks it), else the default the server makes next, by the
+ * name it is made with.
+ */
+export function privateNotesDestinationName(
+  workspaces: Workspace[],
+  exitingWorkspaceId: string | null,
+  userName: string | null | undefined,
+  t: TFunction
+): string {
+  const remaining = workspaces.filter((w) => w.id !== exitingWorkspaceId);
+  const defaultId = resolveDefaultWorkspaceId(remaining);
+  const listedName = remaining.find((w) => w.id === defaultId)?.name?.trim();
+  return listedName || defaultWorkspaceName(userName, t);
+}
+
 /** The workspace Settings manages: the active one, or the first when the active id is gone. */
 export function settingsWorkspace(
   workspaces: Workspace[],
@@ -80,8 +109,9 @@ export function resolveWorkspaceSwitcher({
   if (!isSignedIn) return { kind: "hidden" };
   if (!loaded) return { kind: "loading" };
   // Every account has a default workspace, so an empty list is either a failed load or one
-  // answered before the default was made, which a refresh follows.
-  if (workspaces.length === 0) return error ? { kind: "error" } : { kind: "loading" };
+  // answered before the default was made. Making it can keep failing (offline, an older API),
+  // so this never waits on it: the account's Private stays reachable meanwhile.
+  if (workspaces.length === 0) return error ? { kind: "error" } : { kind: "unavailable" };
   const current = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
   return { kind: "workspace", current, canInvite: workspaceCan(current, "manage_members") };
 }

@@ -10,8 +10,6 @@ import type { SettingsWorkspaceState } from "./useSettingsWorkspace";
 interface Props {
   state: SettingsWorkspaceState;
   children: (workspace: Workspace) => React.ReactNode;
-  /** Opens the Settings picker from the Personal state. */
-  onChooseWorkspace?: () => void;
 }
 
 /**
@@ -21,7 +19,6 @@ interface Props {
 export default function SettingsWorkspaceFrame({
   state,
   children,
-  onChooseWorkspace,
 }: Props): React.ReactElement | null {
   const { t } = useTranslation();
   const { status, workspace, workspaces, retry, loading, stale, signedOut } = state;
@@ -73,7 +70,6 @@ export default function SettingsWorkspaceFrame({
   );
 
   if (status !== "ready" || !workspace) {
-    const personal = status === "personal";
     return (
       <div className="space-y-4">
         <div>
@@ -98,23 +94,15 @@ export default function SettingsWorkspaceFrame({
           <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
             <Users className="w-5 h-5 text-muted-foreground/70 mx-auto mb-2" />
             <p className="text-xs font-medium text-foreground mb-1">
-              {t(`settingsPage.workspace.${personal ? "personal" : "empty"}.title`)}
+              {t("settingsPage.workspace.empty.title")}
             </p>
             <p className="text-xs text-muted-foreground mb-4">
-              {t(`settingsPage.workspace.${personal ? "personal" : "empty"}.description`)}
+              {t("settingsPage.workspace.empty.description")}
             </p>
-            {personal ? (
-              onChooseWorkspace && (
-                <Button size="sm" onClick={onChooseWorkspace}>
-                  {t("workspaces.exit.chooseWorkspace")}
-                </Button>
-              )
-            ) : (
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
-                <UserPlus className="me-1.5 h-3.5 w-3.5" />
-                {t("settingsPage.workspace.empty.create")}
-              </Button>
-            )}
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <UserPlus className="me-1.5 h-3.5 w-3.5" />
+              {t("settingsPage.workspace.empty.create")}
+            </Button>
           </div>
         )}
         {createDialog}

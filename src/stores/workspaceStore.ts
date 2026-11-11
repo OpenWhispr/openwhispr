@@ -4,7 +4,11 @@ import { WorkspacesService } from "../services/WorkspacesService";
 import logger from "../utils/logger";
 import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
-import { defaultActiveWorkspaceId, resolveDefaultWorkspaceId } from "../lib/workspaceSwitcher";
+import {
+  defaultActiveWorkspaceId,
+  resolveDefaultWorkspaceId,
+  withDefaultFirst,
+} from "../lib/workspaceSwitcher";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -157,13 +161,6 @@ function clearWorkspaceListCache(): void {
   } catch {
     // Nothing to clear if storage is unreachable.
   }
-}
-
-// The default first, the rest in the server's order.
-function withDefaultFirst(workspaces: Workspace[], defaultWorkspaceId: string | null): Workspace[] {
-  const index = workspaces.findIndex((w) => w.id === defaultWorkspaceId);
-  if (index <= 0) return workspaces;
-  return [workspaces[index], ...workspaces.slice(0, index), ...workspaces.slice(index + 1)];
 }
 
 let refreshPromise: Promise<void> | null = null;
