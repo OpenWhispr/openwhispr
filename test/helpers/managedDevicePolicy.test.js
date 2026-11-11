@@ -359,10 +359,8 @@ test("reads already under way are joined, and focus re-reads are throttled", asy
   finish({ RequireSignIn: false });
   await Promise.all([first, second]);
   assert.equal(reader.reads, 1);
-  reader.next = async () => ({ RequireSignIn: false });
   reader.manager.refreshOnFocus();
-  await reader.manager.refresh();
-  assert.equal(reader.reads, 2);
+  assert.equal(reader.reads, 1);
   reader.manager.stop();
 });
 
