@@ -185,6 +185,7 @@ const {
   partitionOverlappingPendingMicFinals,
 } = require("./meetingMicHoldback");
 const { fragmentFilterLanguages, isWrongScriptFragment } = require("./meetingFragmentFilter");
+const { localBufferEntry, describeLocalChunk } = require("./meetingLocalChunk");
 const {
   computeChunkStats,
   resolveMicChunkAction,
@@ -8445,13 +8446,15 @@ class IPCHandlers {
       source,
       timestamp,
       micSuppression = null,
-      timestampIsSpeechStart = true
+      timestampIsSpeechStart = true,
+      endTimestamp = null
     ) => {
       meetingDiarizationSegments.push({
         text,
         source,
         timestamp,
         ...(timestampIsSpeechStart === false ? { timestampIsSpeechStart: false } : {}),
+        ...(endTimestamp !== null ? { endTimestamp } : {}),
         committedAt: Date.now(),
         suppressionReason: source === "mic" ? micSuppression?.reason || null : null,
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
@@ -8464,6 +8467,7 @@ class IPCHandlers {
       source,
       timestamp,
       timestampIsSpeechStart = true,
+      endTimestamp = null,
       micSuppression = null,
       send = null,
       includeInLocalTranscript = false,
@@ -8477,7 +8481,8 @@ class IPCHandlers {
         source,
         timestamp,
         micSuppression,
-        timestampIsSpeechStart
+        timestampIsSpeechStart,
+        endTimestamp
       );
 
       if (send) {
@@ -8486,6 +8491,7 @@ class IPCHandlers {
           source,
           type: "final",
           timestamp,
+          ...(endTimestamp !== null ? { endTimestamp } : {}),
         });
       }
     };
@@ -9431,12 +9437,18 @@ class IPCHandlers {
       }
     };
 
-    const dispatchMeetingAudioBuffer = (buffer, source, synthetic = false, capturedAt = null) => {
+    const dispatchMeetingAudioBuffer = (
+      buffer,
+      source,
+      synthetic = false,
+      capturedAt = null,
+      receivedAt = null
+    ) => {
       if (meetingLocalMode) {
         // Local STT timestamps each batch with wall time, not a sample cursor.
         // Large synthetic gaps would dilute speech and inflate the next batch.
         if (synthetic) return;
-        meetingLocalBuffers[source].push(buffer);
+        meetingLocalBuffers[source].push(localBufferEntry(buffer, { capturedAt, receivedAt }));
         return;
       }
 
@@ -9585,7 +9597,7 @@ class IPCHandlers {
           continue;
         }
 
-        dispatchMeetingAudioBuffer(next.buffer, "mic", false, capturedAt);
+        dispatchMeetingAudioBuffer(next.buffer, "mic", false, capturedAt, next.queuedAt);
       }
     };
 
@@ -9748,11 +9760,11 @@ class IPCHandlers {
     };
 
     const transcribeLocalMeetingChunk = async (source) => {
-      const chunks = meetingLocalBuffers[source];
-      if (!chunks.length) return;
+      const chunk = describeLocalChunk(meetingLocalBuffers[source]);
+      if (!chunk) return;
       const lease = this._activeLocalMeetingLease;
 
-      const pcm24k = Buffer.concat(chunks);
+      const pcm24k = chunk.pcm;
       meetingLocalBuffers[source] = [];
 
       const pcm16k = downsample24kTo16k(pcm24k);
@@ -9819,14 +9831,9 @@ class IPCHandlers {
             debugLogger.debug("Dropping wrong-script local meeting fragment", { source });
             return;
           }
-          const segTimestamp = Date.now();
           let micSuppression = null;
           if (source === "mic") {
-            const chunkDurationMs = (pcm24k.length / 2 / 24000) * 1000;
-            micSuppression = shouldSuppressMicTranscriptSegment(
-              segTimestamp - chunkDurationMs,
-              segTimestamp
-            );
+            micSuppression = shouldSuppressMicTranscriptSegment(chunk.startAt, chunk.endAt);
             debugLogger.debug("Local meeting transcription candidate", {
               source,
               text: text.slice(0, 80),
@@ -9847,7 +9854,7 @@ class IPCHandlers {
               return;
             }
 
-            if (shouldSkipDuplicateMicSegment(text, segTimestamp, micSuppression)) {
+            if (shouldSkipDuplicateMicSegment(text, chunk.speechStartAt, micSuppression)) {
               debugLogger.debug("Skipping duplicate local mic segment that matches system audio", {
                 text: text.slice(0, 80),
                 averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
@@ -9863,7 +9870,7 @@ class IPCHandlers {
           }
 
           if (source === "system") {
-            const pending = removePendingMicFinalsFor(text, segTimestamp);
+            const pending = removePendingMicFinalsFor(text, chunk.speechStartAt);
             if (pending.length > 0) {
               debugLogger.debug(
                 "Dropping buffered local mic segments after system transcript arrived",
@@ -9874,7 +9881,7 @@ class IPCHandlers {
               );
             }
 
-            const retracted = removeRacingMicEntriesFor(text, segTimestamp);
+            const retracted = removeRacingMicEntriesFor(text, chunk.speechStartAt);
             for (const stale of retracted) {
               if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
                 meetingLocalWin.webContents.send("meeting-transcription-segment", {
@@ -9906,15 +9913,15 @@ class IPCHandlers {
             });
             queuePendingMicFinal({
               text,
-              timestamp: segTimestamp,
+              timestamp: chunk.speechStartAt,
               micSuppression,
               holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
               emit: () =>
                 sendMeetingFinalSegment({
                   text,
                   source,
-                  timestamp: segTimestamp,
-                  timestampIsSpeechStart: false,
+                  timestamp: chunk.speechStartAt,
+                  endTimestamp: chunk.speechEndAt,
                   micSuppression,
                   send: sendLocalSegment,
                   includeInLocalTranscript: true,
@@ -9926,8 +9933,8 @@ class IPCHandlers {
           sendMeetingFinalSegment({
             text,
             source,
-            timestamp: segTimestamp,
-            timestampIsSpeechStart: false,
+            timestamp: chunk.speechStartAt,
+            endTimestamp: chunk.speechEndAt,
             micSuppression,
             send: sendLocalSegment,
             includeInLocalTranscript: true,

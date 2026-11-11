@@ -8,6 +8,8 @@ const {
   fragmentFilterLanguages,
   isWrongScriptFragment,
 } = require("../../src/helpers/meetingFragmentFilter");
+const { localBufferEntry, describeLocalChunk } = require("../../src/helpers/meetingLocalChunk");
+const { makeSine, toInt16Buffer } = require("./harness/pcmFixtures");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
 
@@ -321,13 +323,19 @@ test("start sets the mic alignment strategy from the plan, then from the start r
 
 // Runs the real local chunk decode over a stubbed engine whose result the
 // test releases, to see what reaches the meeting window afterwards.
-function chunkHarness() {
+function chunkHarness({ entries = [localBufferEntry(Buffer.alloc(4), { capturedAt: 0 })] } = {}) {
   const decode = deferred();
   const finals = [];
+  const finalSegments = [];
+  const suppressionWindows = [];
   const context = {
     _audioFeaturePolicy: { activeFailure: () => null },
     parakeetManager: { transcribeLocalParakeet: () => decode.promise },
     finals,
+    finalSegments,
+    suppressionWindows,
+    entries,
+    describeLocalChunk,
     debugLogger: { debug() {}, error() {} },
     Buffer,
     isLocalModelPolicyRefusal: (error) => error?.code?.startsWith("POLICY_"),
@@ -338,7 +346,7 @@ function chunkHarness() {
   vm.runInContext(
     `
     const meetingConnectionOptions = { language: "en" };
-    const meetingLocalBuffers = { mic: [], system: [Buffer.alloc(4)] };
+    const meetingLocalBuffers = { mic: [], system: [] };
     const meetingLocalWin = { isDestroyed: () => false, webContents: { send: (channel, payload) => finals.push({ channel, payload }) } };
     const meetingLocalProvider = "nvidia";
     const meetingLocalModel = "parakeet";
@@ -356,16 +364,65 @@ function chunkHarness() {
     const removePendingMicFinalsFor = () => [];
     const removeRacingMicEntriesFor = () => [];
     const hasRiskyMicDuplicateProfile = () => false;
-    const sendMeetingFinalSegment = (segment) => finals.push(segment.text);
+    const sendMeetingFinalSegment = (segment) => {
+      finals.push(segment.text);
+      finalSegments.push(segment);
+    };
+    const shouldSuppressMicTranscriptSegment = (startAt, endAt) => {
+      suppressionWindows.push([startAt, endAt]);
+      return { suppress: false };
+    };
+    const shouldSkipDuplicateMicSegment = () => false;
 
     ${sliceBetween("const transcribeLocalMeetingChunk =", "const transcribeAllLocalBuffers =")}
 
-    globalThis.transcribe = () => transcribeLocalMeetingChunk("system");
+    globalThis.transcribe = (source = "system") => {
+      meetingLocalBuffers[source] = entries;
+      return transcribeLocalMeetingChunk(source);
+    };
     `,
     context
   );
-  return { context, decode, finals };
+  return { context, decode, finals, finalSegments, suppressionWindows };
 }
+
+const T = 1_700_000_000_000;
+const silence = (durationMs) => new Float32Array(Math.round((durationMs / 1000) * 24000));
+const tone = (durationMs) => makeSine({ durationMs, amplitude: 0.5 });
+const concatTracks = (...tracks) => {
+  const out = new Float32Array(tracks.reduce((sum, track) => sum + track.length, 0));
+  let offset = 0;
+  for (const track of tracks) {
+    out.set(track, offset);
+    offset += track.length;
+  }
+  return out;
+};
+
+test("a local row is stamped with its audio's range, not the decode time", async () => {
+  const buffer = toInt16Buffer(concatTracks(silence(2000), tone(1000), silence(2000)));
+  const { context, decode, finalSegments } = chunkHarness({
+    entries: [localBufferEntry(buffer, { capturedAt: T })],
+  });
+  const pending = context.transcribe("system");
+  await new Promise((resolve) => setTimeout(resolve, 50)); // decode time must not move the stamp
+  decode.resolve({ success: true, text: "hello there" });
+  await pending;
+  assert.equal(finalSegments[0].timestamp, T + 2000);
+  assert.equal(finalSegments[0].endTimestamp, T + 3000);
+  assert.equal(finalSegments[0].timestampIsSpeechStart, undefined);
+});
+
+test("the mic echo check looks at the chunk's capture window", async () => {
+  const buffer = toInt16Buffer(tone(5000));
+  const { context, decode, suppressionWindows } = chunkHarness({
+    entries: [localBufferEntry(buffer, { capturedAt: T })],
+  });
+  const pending = context.transcribe("mic");
+  decode.resolve({ success: true, text: "my own words" });
+  await pending;
+  assert.deepEqual(plain(suppressionWindows), [[T, T + 5000]]);
+});
 
 test("local meeting admission authorizes its selected model before capturing or loading", async () => {
   const { api, context, events } = harness();
