@@ -144,6 +144,12 @@ function localTranscriptionFailure(result) {
   }
   return error;
 }
+// The answer product work gets when the policy refuses or retires it.
+const policyBlockedFailure = () => ({
+  success: false,
+  code: "DEVICE_POLICY_BLOCKED",
+  error: i18nMain.t("common.policyUnresolved"),
+});
 // Which diarization dialect a resolved endpoint speaks, for Custom endpoints
 // that front a known provider. Null when the host offers no known dialect.
 const diarizationHost = (endpoint) => {
@@ -1302,11 +1308,6 @@ class IPCHandlers {
   // Shared by the upload IPC handler and the CLI bridge. `filePath` must
   // already have passed resolveAllowedAudioPath (or approveAudioPath).
   async transcribeLocalFile(filePath, options = {}) {
-    const failure = () => ({
-      success: false,
-      code: "DEVICE_POLICY_BLOCKED",
-      error: i18nMain.t("common.policyUnresolved"),
-    });
     void this.refreshEffectivePolicy();
     if (
       !productOperationAllowed(
@@ -1315,7 +1316,7 @@ class IPCHandlers {
         "transcribe-audio-file"
       )
     )
-      return failure();
+      return policyBlockedFailure();
     const controller = new AbortController();
     this._productRequests.set(controller, {
       channel: "transcribe-audio-file",
@@ -1335,9 +1336,9 @@ class IPCHandlers {
             ...this._resolveWhisperVadOptions("noteRecording"),
             signal,
           });
-      return controller.signal.aborted ? failure() : result;
+      return controller.signal.aborted ? policyBlockedFailure() : result;
     } catch (error) {
-      if (controller.signal.aborted) return failure();
+      if (controller.signal.aborted) return policyBlockedFailure();
       throw error;
     } finally {
       this._productRequests.delete(controller);
@@ -2013,15 +2014,10 @@ class IPCHandlers {
     const handleProduct = (channel, handler, remote = false) =>
       ipcMain.handle(channel, async (event, ...args) => {
         const operation = { channel, args, remote };
-        const failure = () => ({
-          success: false,
-          code: "DEVICE_POLICY_BLOCKED",
-          error: i18nMain.t("common.policyUnresolved"),
-        });
         void this.refreshEffectivePolicy(event);
         if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading")
           await awaitVerdict(event);
-        if (!mayStart(operation)) return failure();
+        if (!mayStart(operation)) return policyBlockedFailure();
         const startedPolicy = this.effectivePolicyManager.getCurrent();
         operation.accountId = startedPolicy.accountId;
         const streamProperty = channel.startsWith("dictation-realtime-")
@@ -2068,7 +2064,7 @@ class IPCHandlers {
               error: "Authentication context changed during the request",
             };
           }
-          if (controller.signal.aborted) return failure();
+          if (controller.signal.aborted) return policyBlockedFailure();
           if (
             (!operation.remote || !snapshot.localOnly) &&
             runningOperationAllowed(
@@ -2083,7 +2079,7 @@ class IPCHandlers {
           if ((!snapshot.success && snapshot.status !== "loading") || snapshot.localOnly)
             this._stopRemoteProductWork();
           else if (snapshot.success) this._retireDisallowedProductWork(snapshot);
-          return failure();
+          return policyBlockedFailure();
         } finally {
           this._productRequests.delete(controller);
         }
