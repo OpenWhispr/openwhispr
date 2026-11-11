@@ -131,6 +131,7 @@ function scenario(t, { decode, stream, online = false } = {}) {
   t.after(() => invoke("dismiss-dictation-preview"));
   return {
     calls,
+    target,
     parakeet: target.parakeetManager,
     invoke,
     start,
@@ -268,6 +269,16 @@ for (const change of ["stop", "invalid", "local revoked", "allowed update"]) {
     }
   });
 }
+
+test("a realtime stop hides the preview of a stream revocation already closed", async (t) => {
+  const s = scenario(t);
+  s.target._dictationPreviewEnabled = true;
+  s.target._dictationStreaming = { disconnect: async () => ({ text: "" }) };
+  s.setPolicy("invalid");
+  assert.equal(s.target._dictationStreaming, null);
+  assert.deepEqual(await s.invoke("dictation-realtime-stop"), { success: true, text: "" });
+  assert.equal(s.calls.hidden, 1);
+});
 
 test("local-mode revocation preserves a remote dictation preview", async (t) => {
   const s = scenario(t);

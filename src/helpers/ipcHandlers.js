@@ -11908,10 +11908,10 @@ class IPCHandlers {
       dictationStopGeneration += 1;
       dictationRecordingActive = false;
       clearDictationIdleTimer();
-      if (!this._dictationStreaming) {
-        return { success: true, text: "" };
-      }
-      const result = await this._dictationStreaming.disconnect().catch(() => ({ text: "" }));
+      // A policy retirement may already have taken the stream; its preview is still up.
+      const result = this._dictationStreaming
+        ? await this._dictationStreaming.disconnect().catch(() => ({ text: "" }))
+        : { text: "" };
       this._dictationStreaming = null;
       if (this._dictationPreviewEnabled) {
         this.windowManager.hideTranscriptionPreview();
