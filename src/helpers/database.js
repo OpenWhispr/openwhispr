@@ -10672,13 +10672,29 @@ class DatabaseManager {
             "SELECT id FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND id != ?"
           )
           .get(folder.name, folder.space_id, id);
+        // A merge or claim moves a held folder with its own name, so a Private
+        // can hold a live namesake: there the folder comes back renamed, which
+        // nothing syncs. A teamspace folder's name is the team's, and a local
+        // rename would fight the server's, so that clash waits for the user.
+        let restoredName = folder.name;
         if (collision) {
-          return {
-            success: false,
-            id,
-            reason: "name-taken",
-            error: "Folder name is no longer available",
-          };
+          const kind = this.db
+            .prepare("SELECT kind FROM spaces WHERE id = ?")
+            .get(folder.space_id)?.kind;
+          if (kind !== "private") {
+            return {
+              success: false,
+              id,
+              reason: "name-taken",
+              error: "Folder name is no longer available",
+            };
+          }
+          restoredName = this._uniqueFolderName(
+            folder.space_id,
+            folder.account_id,
+            folder.name,
+            id
+          );
         }
 
         const noteStates = journalRows.filter((row) => row.entity_type === "note");
@@ -10697,13 +10713,14 @@ class DatabaseManager {
         this.db
           .prepare(
             `UPDATE folders
-             SET deleted_at = ?, sync_status = ?, updated_at = ?
+             SET deleted_at = ?, sync_status = ?, updated_at = ?, name = ?
              WHERE id = ?`
           )
           .run(
             folderState.original_deleted_at,
             folderState.original_sync_status,
             folderState.original_updated_at,
+            restoredName,
             id
           );
         const restoreNote = this.db.prepare(

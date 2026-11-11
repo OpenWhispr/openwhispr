@@ -3389,6 +3389,76 @@ test("deleteAccountData removes the account's private space rows", (t) => {
   assert.ok(spaceIdentity(db.db, standInId).kind === "private");
 });
 
+// M11: a merge or claim moves a folder whose delete is still held with its own name, so the
+// Private it lands in can hold a live folder of that name. A denied delete then brings it back
+// under a free name rather than leaving it deleted for good.
+test("a denied delete brings a private folder back renamed when its name is taken", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const sqlite = db.db;
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getPrivateSpaceId();
+  const held = seedFolder(sqlite, home, { name: "Projects", accountId: "a", cloudId: "cloud-p" });
+  const note = seedNote(sqlite, home, { title: "inside", accountId: "a", folderId: held });
+  const journal = sqlite.prepare(
+    `INSERT INTO optimistic_folder_delete_rows
+       (folder_id, entity_type, entity_id, original_sync_status, original_deleted_at, original_updated_at)
+     VALUES (?, ?, ?, 'synced', NULL, ?)`
+  );
+  journal.run(held, "folder", held, SEEDED_AT);
+  journal.run(held, "note", note, SEEDED_AT);
+  sqlite
+    .prepare(
+      "UPDATE notes SET deleted_at = datetime('now'), sync_status = 'folder_delete_pending' WHERE id = ?"
+    )
+    .run(note);
+  sqlite
+    .prepare(
+      "UPDATE folders SET deleted_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+    )
+    .run(held);
+  // What a merge leaves: a live folder of that name beside the held one.
+  const live = seedFolder(sqlite, home, { name: "Projects", accountId: "a" });
+
+  const restored = db.restoreFolderAfterDeniedDelete(held);
+
+  assert.equal(restored.success, true);
+  const row = folderRow(sqlite, held);
+  assert.equal(row.deleted_at, null);
+  assert.equal(row.name, "Projects (2)");
+  assert.equal(folderRow(sqlite, live).name, "Projects");
+  assert.equal(noteRow(sqlite, note).deleted_at, null);
+  assert.equal(noteRow(sqlite, note).folder_id, held);
+});
+
+// A teamspace folder's name is the team's: a local rename would fight the server's copy, so a
+// taken name there still waits for the user.
+test("a denied delete still waits on a taken name in a teamspace", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const sqlite = db.db;
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const held = seedFolder(sqlite, team.id, { name: "Specs", cloudId: "cloud-specs" });
+  sqlite
+    .prepare(
+      `INSERT INTO optimistic_folder_delete_rows
+         (folder_id, entity_type, entity_id, original_sync_status, original_deleted_at, original_updated_at)
+       VALUES (?, 'folder', ?, 'synced', NULL, ?)`
+    )
+    .run(held, held, SEEDED_AT);
+  sqlite
+    .prepare(
+      "UPDATE folders SET deleted_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+    )
+    .run(held);
+  seedFolder(sqlite, team.id, { name: "Specs" });
+
+  const restored = db.restoreFolderAfterDeniedDelete(held);
+  assert.equal(restored.success, false);
+  assert.equal(restored.reason, "name-taken");
+  assert.equal(folderRow(sqlite, held).name, "Specs");
+});
+
 test("a folder delete the split left in the stand-in still finishes or rolls back once signed in", (t) => {
   const db = createFreshDeviceDb(t);
   if (!db) return;
