@@ -44,7 +44,9 @@ import {
   cacheLeaderboardAccess,
   cachedLeaderboardWeekStarts,
   clearCachedLeaderboards,
+  getLeaderboardCacheVersion,
   isInsightFresh,
+  isLeaderboardCacheCurrent,
   readCachedLeaderboard,
   readCachedLeaderboardAccess,
 } from "../lib/insightsCache";
@@ -267,6 +269,14 @@ export default function LeaderboardSection({
   const visibleFailure = failure?.requestKey === selectedRequestKey ? failure.kind : null;
   const boardParticipantCount = visibleLeaderboard?.totalMembers ?? null;
 
+  useEffect(
+    () => () => {
+      accessRequestIdRef.current += 1;
+      requestIdRef.current += 1;
+    },
+    []
+  );
+
   const loadAccess = useCallback(
     async (preferredScopeKey?: string) => {
       const requestId = ++accessRequestIdRef.current;
@@ -287,16 +297,25 @@ export default function LeaderboardSection({
       }
       setAccessLoading(true);
       setAccessError(null);
+      const cacheVersion = getLeaderboardCacheVersion(accountId);
       try {
         const response = await LeaderboardService.getAccess();
-        if (requestId !== accessRequestIdRef.current) return;
+        if (
+          requestId !== accessRequestIdRef.current ||
+          !isLeaderboardCacheCurrent(accountId, cacheVersion)
+        )
+          return;
         cacheLeaderboardAccess(accountId, response);
         setAccess(response);
         setScopeKey((current) =>
           resolveLeaderboardScopeKey(response.scopes, current, preferredScopeKey)
         );
       } catch (loadError) {
-        if (requestId !== accessRequestIdRef.current) return;
+        if (
+          requestId !== accessRequestIdRef.current ||
+          !isLeaderboardCacheCurrent(accountId, cacheVersion)
+        )
+          return;
         console.error("Loading leaderboard access failed:", loadError);
         const requiresAccount =
           loadError instanceof CloudApiError &&
@@ -412,6 +431,7 @@ export default function LeaderboardSection({
       }
     }
     const weekStartsCache = cachedLeaderboardWeekStarts(accountId);
+    const cacheVersion = getLeaderboardCacheVersion(accountId);
     const cachedWeekStarts = weekStartsCache.get(selectedScope.key);
     const includeWeekStarts = shouldFetchLeaderboardWeekStarts(cachedWeekStarts);
     setLoading(true);
@@ -424,7 +444,8 @@ export default function LeaderboardSection({
         includeWeekStarts,
         page,
       });
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current || !isLeaderboardCacheCurrent(accountId, cacheVersion))
+        return;
       const nextLeaderboard = includeWeekStarts
         ? response
         : {
@@ -457,7 +478,8 @@ export default function LeaderboardSection({
       }
       lastLoadedAtRef.current = Date.now();
     } catch (loadError) {
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current || !isLeaderboardCacheCurrent(accountId, cacheVersion))
+        return;
       console.error("Loading leaderboard failed:", loadError);
       // A refusal means a gate moved, so no board this session kept still holds.
       if (loadError instanceof CloudApiError && loadError.status >= 400 && loadError.status < 500)
