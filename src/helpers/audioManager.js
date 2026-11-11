@@ -81,6 +81,7 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
+  batchTranscriptionHttpError,
   byokFileSizeLimit,
   resolveByokModel,
   resolveTranscriptionRoute,
@@ -151,6 +152,7 @@ import {
 } from "../utils/dictionaryEchoFilter.js";
 import {
   dictionaryPromptLimit,
+  dictionaryReachesTranscriptionModel,
   formatDictionaryPrompt,
   joinDictionaryPromptTiers,
   PROMPT_HEAD_TERMS,
@@ -180,6 +182,7 @@ import {
   buildSelectionEditUserPrompt,
   buildLocalSelectionEditSystemPrompt,
   buildLocalSelectionEditUserPrompt,
+  createSelectionCompletionMarker,
   extractLocalSelectionEditReplacement,
   SELECTION_EDIT_RESPONSE_FORMAT,
   extractSelectionEditReplacement,
@@ -455,6 +458,9 @@ const isValidApiKey = (key, provider = "openai") => {
   const placeholder = PLACEHOLDER_KEYS[provider] || PLACEHOLDER_KEYS.openai;
   return key !== placeholder;
 };
+
+// Dictation won't wait out another model's answer: past this it goes in as spoken.
+const DICTATION_MODEL_BUSY_WAIT_MS = 2000;
 
 // Realtime providers expose no finalize handshake (unlike Deepgram/AssemblyAI/
 // Corti), so the transcript tail lands whenever it lands — wait, don't sleep.
@@ -2926,6 +2932,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "openrouter") {
+      apiKey = s.openrouterApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getOpenrouterKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "OpenRouter API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else {
       // Default to OpenAI
       // Prefer store value (user-entered via UI) over main process (.env)
@@ -2960,7 +2978,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const startTime = Date.now();
 
     try {
-      const result = await ReasoningService.processText(text, model, agentName, config);
+      const result = await ReasoningService.processText(text, model, agentName, {
+        ...config,
+        busyWaitMs: DICTATION_MODEL_BUSY_WAIT_MS,
+      });
 
       const processingTime = Date.now() - startTime;
 
@@ -2998,6 +3019,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         } = config;
         const result = await ReasoningService.processText(text, model, agentName, {
           ...textOnlyConfig,
+          busyWaitMs: DICTATION_MODEL_BUSY_WAIT_MS,
           systemPrompt: textOnlySystemPrompt ?? dictationAgentPrompt(getSettings(), agentName),
         });
         this._notifyScreenContextSkipped();
@@ -3169,7 +3191,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
       userPrompt = buildLocalSelectionEditUserPrompt(instruction, capture.text);
     } else {
-      completionMarker = `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}__`;
+      completionMarker = createSelectionCompletionMarker();
       selectionConfig.systemPrompt = buildSelectionEditSystemPrompt(
         withToneSentence(config?.systemPrompt),
         completionMarker
@@ -4179,6 +4201,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       const endpoint = this.getTranscriptionEndpoint(route);
+      // OpenRouter drops `prompt` on this path (see dictionaryPromptCap), so the
+      // dictionary stays on the device there and nothing can echo it back.
+      const sendsDictionary = dictionaryReachesTranscriptionModel(endpoint);
 
       // gpt-transcribe takes the dictionary on its own keywords[] channel (see
       // dictionaryKeywords), highest priority first so the keyword cap only ever
@@ -4224,7 +4249,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const promptTruncated = (promptDictionary?.length ?? 0) < (uncutDictionary?.length ?? 0);
       // Echoes are classified against this exact string (see dictionaryPromptCap).
       const dictionaryPrompt = this.getWhisperPrompt(apiSettings, promptDictionary);
-      if (dictionaryPrompt && model !== "orukeet-v0.1.0") {
+      if (dictionaryPrompt && sendsDictionary && model !== "orukeet-v0.1.0") {
         if (promptTruncated) {
           logger.debug(
             "Custom dictionary prompt truncated",
@@ -4238,7 +4263,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         formData.append("prompt", dictionaryPrompt);
       }
-      if (usesKeywords) {
+      if (usesKeywords && sendsDictionary) {
         for (const keyword of dictionaryKeywords(keywordDictionary)) {
           formData.append("keywords[]", keyword);
         }
@@ -4297,7 +4322,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // dictation keeps that setting (usually "openai") while posting to the
       // user's own server.
       const providerErrorContext = {
-        provider: route.provider === "groq" ? "Groq" : "OpenAI",
+        provider: getTranscriptionProvider(route.provider)?.name ?? route.provider,
         selfHosted: route.provider === "self-hosted" || route.provider === "custom",
         model: route.model ?? model,
         surface: "transcription",
@@ -4340,12 +4365,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           },
           "transcription"
         );
-        throw providerHttpError({
-          ...providerErrorContext,
-          status: response.status,
-          body: errorText,
-          headers: response.headers,
-        });
+        throw Object.assign(
+          providerHttpError({
+            ...providerErrorContext,
+            status: response.status,
+            body: errorText,
+            headers: response.headers,
+          }),
+          batchTranscriptionHttpError(response.status, endpoint)
+        );
       }
 
       let result;
@@ -4400,9 +4428,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
 
-      // Check for text - handle both empty string and missing field
-      if (result.text && result.text.trim().length > 0) {
+      // Check for text - handle both empty string and missing field. ElevenLabs
+      // Scribe answers silence with "[pause]" instead of an empty string.
+      const spokenText = result.text?.trim();
+      if (spokenText && spokenText !== "[pause]") {
         if (
+          sendsDictionary &&
           this.isDictionaryEcho(
             result.text,
             usesKeywords ? keywordDictionary : promptDictionary,
@@ -4414,7 +4445,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const rawText = this.stripTrailingDictionaryEcho(
           result.text,
-          model === "orukeet-v0.1.0" ? null : sentDictionaryPrompt
+          model === "orukeet-v0.1.0" || !sendsDictionary ? null : sentDictionaryPrompt
         );
 
         const reasoningStart = performance.now();

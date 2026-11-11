@@ -1,8 +1,9 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatPersistence } from "../chat/useChatPersistence";
 import { useChatStreaming } from "../chat/useChatStreaming";
 import { useChatMessageSender } from "../chat/useChatMessageSender";
 import { useInterruptedInteractions } from "../chat/useInterruptedInteractions";
+import { subscribeAuthBoundary } from "../../lib/authRequestContext";
 import type { SendToAIOptions } from "../chat/useChatStreaming";
 import type { Message } from "../chat/types";
 
@@ -29,6 +30,16 @@ export function useAgentChat({
     setPickedSkill(null);
     setSkillPickOff(true);
   }, []);
+  // Persistence and streaming start a new chat on an account change by
+  // themselves; the skill chosen for the chat that ended goes with it.
+  useEffect(
+    () =>
+      subscribeAuthBoundary(() => {
+        setPickedSkill(null);
+        setSkillPickOff(false);
+      }),
+    []
+  );
   const skillSendOptions = useCallback(
     (): SendToAIOptions => ({
       attachedSkill: pickedSkill ? { name: pickedSkill.name } : undefined,

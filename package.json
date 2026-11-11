@@ -127,7 +127,7 @@
     "vite": "^8.1.6"
   },
   "dependencies": {
-    "@ai-sdk/amazon-bedrock": "^4.0.93",
+    "@ai-sdk/amazon-bedrock": "^4.0.129",
     "@ai-sdk/anthropic": "^3.0.58",
     "@ai-sdk/azure": "^3.0.53",
     "@ai-sdk/google": "^3.0.43",
@@ -180,7 +180,7 @@
     "flatted": "^3.4.4",
     "https-proxy-agent": "^7.0.6",
     "i18next": "^26.3.6",
-    "js-yaml": "^4.3.2",
+    "js-yaml": "^5.5.0",
     "kysely": "^0.28.17",
     "object-assign": "^4.1.1",
     "onnxruntime-node": "^1.21.0",

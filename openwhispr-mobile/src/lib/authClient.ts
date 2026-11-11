@@ -5,6 +5,7 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { fetch } from 'expo/fetch';
+import { Platform } from 'react-native';
 import { getClientVersionHeader } from './apiClient';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.openwhispr.com';
@@ -42,6 +43,9 @@ function resolveAuthScheme(): string {
 
 const client = createAuthClient({
   baseURL: API_URL,
+  // Recorded by the API as the origin of an account created here, including
+  // through the browser OAuth flow, which carries them in its server-held state.
+  fetchOptions: { headers: { 'x-openwhispr-source': 'mobile', 'x-openwhispr-os': Platform.OS } },
   plugins: [
     anonymousClient(),
     expoClient({

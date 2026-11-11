@@ -6,6 +6,7 @@ import {
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
 import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
+import { isUploadOnlyTranscriptionModel } from "./appTranscriptionProviders.js";
 import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
@@ -460,6 +461,15 @@ export function getStreamingTranscriptionProviders(): TranscriptionProviderData[
     .filter((p) => p.models.length > 0);
 }
 
+// Dictation's list (the Settings picker's and onboarding's): Upload is the
+// only screen that offers upload-only models.
+export function getDictationTranscriptionProviders(): TranscriptionProviderData[] {
+  return modelRegistry.getTranscriptionProviders().map((p) => ({
+    ...p,
+    models: p.models.filter((m) => !isUploadOnlyTranscriptionModel(p.id, m.id)),
+  }));
+}
+
 // Streaming providers note recording can actually run (see
 // meetingTranscriptionRouting.MEETING_STREAMING_PROVIDER_IDS).
 export function getMeetingStreamingTranscriptionProviders(): TranscriptionProviderData[] {
@@ -508,9 +518,13 @@ export function getCloudModel(
     if (model) return model;
   }
   // OpenRouter ids carry a vendor prefix (google/gemini-3.5-flash-lite) that the
-  // registry stores without, so retry on the upstream id.
+  // registry stores without, so retry on the upstream id. Its Claude versions
+  // also use dots (claude-haiku-5.5) where Anthropic's own ids use dashes.
   if (providerId === "openrouter" && modelId.includes("/")) {
-    return getCloudModel(modelId.slice(modelId.lastIndexOf("/") + 1));
+    const upstream = modelId.slice(modelId.lastIndexOf("/") + 1);
+    return getCloudModel(
+      modelId.startsWith("anthropic/") ? upstream.replaceAll(".", "-") : upstream
+    );
   }
   return undefined;
 }

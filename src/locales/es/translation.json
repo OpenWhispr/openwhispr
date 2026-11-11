@@ -727,8 +727,8 @@
       "failedOffline": "Sin conexión",
       "clearAll": "Borrar todo",
       "clearAllTitle": "Borrar todas las transcripciones",
-      "clearAllDescription": "Todas las transcripciones, los archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo y de tu cuenta.",
-      "clearAllDescriptionDevice": "Todas las transcripciones, los archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo. Los recuentos ya sincronizados con una cuenta no se verán afectados.",
+      "clearAllDescription": "Todas las transcripciones de tu historial, sus archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo y de tu cuenta.",
+      "clearAllDescriptionDevice": "Todas las transcripciones de este historial, sus archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo. Las que ya se hayan sincronizado con una cuenta también se eliminarán de esa cuenta la próxima vez que inicie sesión en este dispositivo.",
       "clearAllSuccess": "Historial borrado",
       "clearAllErrorTitle": "No se pudo borrar el historial",
       "clearAllErrorDescription": "Algo salió mal. Inténtalo de nuevo.",
@@ -977,7 +977,8 @@
         "agentUnavailable": "Asistente no disponible",
         "screenContextSkipped": "Contexto de pantalla omitido",
         "cloudLimitReached": "Límite semanal de la nube alcanzado",
-        "providerRateLimited": "Límite de tasa del proveedor"
+        "providerRateLimited": "Límite de tasa del proveedor",
+        "outOfCredits": "Sin créditos"
       },
       "fallback": {
         "title": "Modo de respaldo",
@@ -989,6 +990,11 @@
       "noAudio": {
         "title": "No hemos entendido eso",
         "description": "Comprueba el micrófono e inténtalo de nuevo."
+      },
+      "commandAccountChanged": {
+        "title": "Comando sin responder",
+        "description": "La cuenta cambió antes de que terminara. Su transcripción está en el historial de la cuenta con la que lo dijiste.",
+        "descriptionNotSaved": "La cuenta cambió antes de que terminara. Dilo de nuevo para preguntar ahora."
       },
       "micDisconnected": {
         "title": "Micrófono desconectado",
@@ -1008,6 +1014,7 @@
         "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
         "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan.",
         "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo.",
+        "openRouterOutOfCredits": "Tu cuenta de OpenRouter se ha quedado sin créditos. Recárgala en openrouter.ai e inténtalo de nuevo.",
         "chunkLoss": "Un problema de red hizo que se perdiera demasiada parte de la grabación. Vuelve a transcribirla desde el historial.",
         "agentReasoningFailed": "Tu asistente de voz no pudo procesar el comando; se insertó la transcripción sin procesar.",
         "screenContextSkipped": "No se pudo enviar la captura, así que tu comando se ejecutó sin contexto de pantalla.",
@@ -2369,7 +2376,7 @@
       "lastSynced": "Última sincronización {{time}}",
       "minutesAgo": "hace {{count}}m",
       "audioRetention": "Retención de audio",
-      "audioRetentionDescription": "Almacena el audio de dictado localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención. El audio de las reuniones nunca se almacena.",
+      "audioRetentionDescription": "Almacena el audio de dictado localmente para volver a transcribir y descargar. Los archivos de audio de este dispositivo se eliminan automáticamente tras el periodo de retención, sea cual sea la cuenta que los grabó. El audio de las reuniones nunca se almacena.",
       "saveDiscarded": "Guardar dictados descartados",
       "saveDiscardedDescription": "Cuando cancelas un dictado con Escape, conserva su audio en el historial para poder recuperarlo. Requiere tener activadas la retención de datos y de audio.",
       "audioRetentionDisabled": "Desactivado",
@@ -2377,9 +2384,9 @@
       "retentionDays_other": "{{count}} días",
       "audioStorageUsage": "Uso de almacenamiento",
       "audioStorageUsageDescription": "Archivos de audio almacenados en este dispositivo",
-      "audioStorageFiles": "{{count}} archivos, {{size}}",
-      "audioStorageEmpty": "No hay archivos de audio almacenados",
-      "clearAllAudio": "Eliminar todo el audio",
+      "audioStorageHistoryFiles": "{{count}} archivos en este historial, {{size}}",
+      "audioStorageHistoryEmpty": "No hay archivos de audio en este historial",
+      "clearHistoryAudio": "Eliminar audio",
       "clearAllAudioConfirm": "¿Eliminar todos los archivos de audio almacenados? Esta acción no se puede deshacer."
     },
     "prompts": {
@@ -2540,6 +2547,10 @@
         "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
         "create": "Crear espacio de trabajo"
       },
+      "personal": {
+        "title": "Estás en Personal",
+        "description": "Elige un espacio de trabajo para gestionar su configuración."
+      },
       "loadError": {
         "title": "No se pudieron cargar los espacios de trabajo",
         "description": "Comprueba tu conexión e inténtalo de nuevo.",
@@ -2550,6 +2561,7 @@
         "general": "General",
         "members": "Miembros",
         "invitations": "Invitaciones",
+        "guests": "Invitados",
         "teams": "Equipos"
       },
       "people": {
@@ -3128,6 +3140,59 @@
         "title": "Consola Enterprise",
         "description": "Gestiona SSO, políticas y miembros desde la web",
         "open": "Abrir consola"
+      },
+      "guests": {
+        "columns": {
+          "name": "Nombre",
+          "access": "Acceso",
+          "actions": "Acciones"
+        },
+        "emptyTitle": "Aún no hay invitados",
+        "emptyBody": "Las personas ajenas a este espacio de trabajo que pueden ver tus notas compartidas aparecerán aquí.",
+        "loadingTitle": "Cargando invitados…",
+        "loadingBody": "Los invitados de tu espacio de trabajo aparecerán aquí.",
+        "failedTitle": "No se pudieron cargar los invitados",
+        "failedBody": "Comprueba tu conexión e inténtalo de nuevo.",
+        "noteCount_one": "{{count}} nota",
+        "noteCount_other": "{{count}} notas",
+        "notesTriggerLabel_one": "{{count}} nota compartida con {{name}}",
+        "notesTriggerLabel_other": "{{count}} notas compartidas con {{name}}",
+        "removeFromNote": "Quitar de {{note}}",
+        "removedFromNote": "{{name}} se quitó de {{note}}",
+        "removeFromNoteFailed": "No se pudo quitar a {{name}} de {{note}}. Comprueba tu conexión e inténtalo de nuevo.",
+        "menu": {
+          "label": "Acciones para {{name}}",
+          "invite": "Invitar al espacio de trabajo",
+          "copyEmail": "Copiar correo electrónico",
+          "remove": "Quitar como invitado"
+        },
+        "invite": {
+          "title_one": "Invitar a {{count}} invitado a {{workspace}}",
+          "title_other": "Invitar a {{count}} invitados a {{workspace}}",
+          "description": "Recibirán un enlace por correo para unirse a {{workspace}}.",
+          "sent_one": "Se envió {{count}} invitación para unirse a {{workspace}}",
+          "sent_other": "Se enviaron {{count}} invitaciones para unirse a {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "¿Quitar a {{name}} de {{workspace}}?",
+          "confirmOne": "Quitar invitado",
+          "title_one": "¿Quitar a {{count}} invitado de {{workspace}}?",
+          "title_other": "¿Quitar a {{count}} invitados de {{workspace}}?",
+          "body": "Perderán el acceso a todas las notas compartidas con ellos. Puedes volver a compartirles notas cuando quieras.",
+          "linkShared": "Los invitados pueden seguir teniendo acceso mediante enlaces o el uso compartido por dominio.",
+          "confirm_one": "Quitar {{count}} invitado",
+          "confirm_other": "Quitar {{count}} invitados",
+          "removing": "Quitando…",
+          "limit": "Selecciona hasta {{count}} invitados para eliminarlos a la vez.",
+          "failed": "No se pudo quitar a los invitados. No se quitó a nadie. Revisa tu conexión e inténtalo de nuevo.",
+          "done_one": "Se quitó {{count}} invitado",
+          "done_other": "Se quitaron {{count}} invitados"
+        },
+        "selection": {
+          "selectAll": "Seleccionar todos los invitados",
+          "invite": "Invitar al espacio de trabajo",
+          "remove": "Quitar como invitado"
+        }
       }
     },
     "enterpriseCheckout": {
@@ -3205,7 +3270,15 @@
         "assemblyai_universal_3_5_pro": "Máxima precisión en tiempo real, 18 idiomas",
         "assemblyai_universal_3_6_pro": "Máxima precisión en tiempo real, 32 idiomas",
         "mistral_voxtral_mini_transcribe_3_0": "Transcripción rápida en más de 50 idiomas (vista previa)",
-        "mistral_voxtral_small_transcribe_3_0": "El Voxtral más preciso, más de 50 idiomas (vista previa)"
+        "mistral_voxtral_small_transcribe_3_0": "El Voxtral más preciso, más de 50 idiomas (vista previa)",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Transcripción multilingüe rápida y precisa de Mistral",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "Transcripción económica de NVIDIA en 40 idiomas",
+        "openrouter_deepgram_nova_3": "Transcripción multilingüe rápida de Deepgram",
+        "openrouter_assemblyai_universal_3_6_pro": "La transcripción más precisa de AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "Transcripción precisa de ElevenLabs en más de 90 idiomas",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "El modelo de transcripción multilingüe más grande de Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "Transcripción económica de NVIDIA para idiomas europeos",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "La transcripción multilingüe más económica de NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
@@ -4055,6 +4128,9 @@
     "wordsReady_many": "{{count}} de palabras listas",
     "wordsReady_other": "{{count}} palabras listas",
     "promptLimitNotice": "Tu diccionario tiene {{chars}} caracteres. Los modelos de Groq y Whisper solo leen los últimos cientos de caracteres, así que allí funciona mejor una lista más corta. Los demás modelos reciben la lista completa.",
+    "openRouterIgnoredNotice": "OpenRouter no envía tu diccionario a sus modelos de voz, así que estas palabras no guiarán la transcripción mientras esté seleccionado para el dictado.",
+    "localModelIgnoredNotice": "{{model}} no puede usar tu diccionario, así que estas palabras no guiarán la transcripción mientras esté seleccionado para el dictado. La limpieza con IA sigue aplicándolas cuando está activada.",
+    "localModelHotwordsLimitNotice": "{{model}} usa hasta {{limit}} entradas del diccionario como ayuda para la transcripción. Tienen prioridad las entradas personales, seguidas de las de tus teamspaces y, por último, las de tu espacio de trabajo.",
     "exportDictionary": "Exportar diccionario",
     "exportFailed": "Error al exportar",
     "editWord": "Editar {{word}}",
@@ -4225,6 +4301,7 @@
       },
       "locked": {
         "noWorkspace": "Los diccionarios compartidos están incluidos en Business. Comparte con todos la jerga, los nombres de productos y las siglas de tu equipo.",
+        "chooseWorkspace": "Estás en Personal. Cambia a un espacio de trabajo para usar sus palabras compartidas.",
         "upgradeAdmin": "Los diccionarios compartidos están incluidos en Business. Mejora el plan de {{workspace}} para que todos tengan las mismas palabras.",
         "upgradeMember": "Los diccionarios compartidos están incluidos en Business. Pide a un administrador que mejore el plan de {{workspace}}.",
         "paused_one": "La {{count}} palabra compartida de {{workspace}} está en pausa. Cámbiate a Business para volver a usarla al dictar.",

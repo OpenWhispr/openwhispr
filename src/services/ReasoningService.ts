@@ -24,6 +24,7 @@ import {
 import { streamText, stepCountIs } from "ai";
 import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
+import { localServerFetch, startLocalServer } from "./ai/localServerFetch";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import type { InferenceScope } from "../config/inferenceScopes";
@@ -215,6 +216,20 @@ async function resolveStreamSetup<T>(pending: Promise<T>, assertAllowed: () => v
     return result;
   } catch (error) {
     assertAllowed();
+    throw error;
+  }
+}
+
+// Null when the turn was cancelled while main waited out another model's answer.
+async function startLocalStreamServer(
+  model: string,
+  abortController: AbortController,
+  assertAllowed: () => void
+): Promise<number | null> {
+  try {
+    return await resolveStreamSetup(startLocalServer(model, abortController.signal), assertAllowed);
+  } catch (error) {
+    if (abortController.signal.aborted && (error as Error).name === "AbortError") return null;
     throw error;
   }
 }
@@ -754,16 +769,9 @@ class ReasoningService extends BaseReasoningService {
       endpoint = buildApiUrl(baseUrl, "/chat/completions");
       apiKey = route.apiKey;
     } else if (isLocalProvider) {
-      const serverResult = await resolveStreamSetup(
-        window.electronAPI.llamaServerStart(model),
-        assertStreamAllowed
-      );
-      if (!serverResult.success || !serverResult.port) {
-        throw Object.assign(new Error(serverResult.error || "Failed to start local model server"), {
-          code: serverResult.code,
-        });
-      }
-      endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
+      const port = await startLocalStreamServer(model, abortController, assertStreamAllowed);
+      if (port === null) return;
+      endpoint = `http://127.0.0.1:${port}/v1/chat/completions`;
     } else {
       const access = await resolveStreamSetup(
         this.resolveByokAccess(provider, config),
@@ -1077,19 +1085,12 @@ class ReasoningService extends BaseReasoningService {
         apiKey = route.apiKey;
         baseURL = resolveSelfHostedOpenAIBase(route.baseUrl);
       } else if (isLocalProvider) {
-        const serverResult = await resolveStreamSetup(
-          window.electronAPI.llamaServerStart(model),
-          assertStreamAllowed
-        );
-        if (!serverResult.success || !serverResult.port) {
-          throw Object.assign(
-            new Error(serverResult.error || "Failed to start local model server"),
-            {
-              code: serverResult.code,
-            }
-          );
+        const port = await startLocalStreamServer(model, abortController, assertStreamAllowed);
+        if (port === null) {
+          yield { type: "done", finishReason: "abort" };
+          return;
         }
-        baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
+        baseURL = `http://127.0.0.1:${port}/v1`;
       } else {
         ({ apiKey, baseURL } = await resolveStreamSetup(
           this.resolveByokAccess(provider, config),
@@ -1118,6 +1119,7 @@ class ReasoningService extends BaseReasoningService {
             getAIModel(aiProvider, model, apiKey, baseURL, {
               disableThinking: openrouterDisableThinking,
               reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+              ...(isLocalProvider ? { fetch: localServerFetch(model) } : {}),
             }),
             assertStreamAllowed
           );

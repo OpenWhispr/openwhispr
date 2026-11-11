@@ -9,7 +9,8 @@
         "agentUnavailable": "المساعد غير متاح",
         "screenContextSkipped": "تم تخطي سياق الشاشة",
         "cloudLimitReached": "تم بلوغ الحد السحابي الأسبوعي",
-        "providerRateLimited": "تم تقييد المعدل من قبل المزود"
+        "providerRateLimited": "تم تقييد المعدل من قبل المزود",
+        "outOfCredits": "نفد الرصيد"
       },
       "fallback": {
         "title": "الوضع الاحتياطي",
@@ -21,6 +22,11 @@
       "noAudio": {
         "title": "لم نتمكن من التقاط الصوت",
         "description": "تحقق من الميكروفون وحاول مرة أخرى."
+      },
+      "commandAccountChanged": {
+        "title": "لم تتم الإجابة عن الأمر",
+        "description": "تغيّر الحساب قبل اكتمال الأمر. نصه المفرَّغ موجود في سجل الحساب الذي نطقته به.",
+        "descriptionNotSaved": "تغيّر الحساب قبل اكتمال الأمر. قله مرة أخرى لتسأل الآن."
       },
       "micDisconnected": {
         "title": "تم فصل الميكروفون",
@@ -40,6 +46,7 @@
         "offline": "أنت غير متصل بالإنترنت. يتطلب التفريغ السحابي اتصالًا بالإنترنت.",
         "dailyLimitReached": "لقد وصلت إلى حد التفريغ اليومي. حاول مرة أخرى غدًا أو قم بترقية خطتك.",
         "providerRateLimited": "قام مزود التفريغ بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
+        "openRouterOutOfCredits": "نفد رصيد حسابك على OpenRouter. اشحن رصيدك على openrouter.ai، ثم حاول مرة أخرى.",
         "chunkLoss": "أدت مشكلة في الشبكة إلى فقدان جزء كبير من التسجيل. أعد تفريغه من السجل.",
         "agentReasoningFailed": "لم يتمكن المساعد الصوتي من معالجة الأمر — تم إدراج النص المفرَّغ الخام بدلًا من ذلك.",
         "screenContextSkipped": "تعذر إرسال لقطة الشاشة، لذا تم تشغيل أمرك بدون سياق الشاشة.",
@@ -286,7 +293,15 @@
         "assemblyai_universal_3_5_pro": "أعلى دقة في الوقت الفعلي، 18 لغة",
         "assemblyai_universal_3_6_pro": "أعلى دقة في الوقت الفعلي، 32 لغة",
         "mistral_voxtral_mini_transcribe_3_0": "تفريغ سريع بأكثر من 50 لغة (معاينة)",
-        "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)"
+        "mistral_voxtral_small_transcribe_3_0": "Voxtral الأكثر دقة، أكثر من 50 لغة (معاينة)",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "تفريغ سريع ودقيق متعدد اللغات من Mistral",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "تفريغ منخفض التكلفة من NVIDIA بـ 40 لغة",
+        "openrouter_deepgram_nova_3": "تفريغ سريع متعدد اللغات من Deepgram",
+        "openrouter_assemblyai_universal_3_6_pro": "أدق تفريغ من AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "تفريغ دقيق من ElevenLabs بأكثر من 90 لغة",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "نموذج التفريغ الأكبر متعدد اللغات من Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "تفريغ منخفض التكلفة من NVIDIA للغات الأوروبية",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "أقل تفريغ متعدد اللغات تكلفةً من NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "نموذج استنتاج قوي",
@@ -663,7 +678,7 @@
       "rawTranscript": "النص المفرَّغ الخام",
       "clearAll": "مسح الكل",
       "clearAllTitle": "مسح جميع النصوص المفرَّغة",
-      "clearAllDescription": "ستتم إزالة جميع النصوص المفرَّغة والملفات الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز ومن حسابك.",
+      "clearAllDescription": "ستتم إزالة جميع النصوص المفرَّغة في سجلك وملفاتها الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز ومن حسابك.",
       "clearAllSuccess": "تم مسح السجل",
       "clearAllErrorTitle": "تعذر مسح السجل",
       "clearAllErrorDescription": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
@@ -677,7 +692,7 @@
         "recovered": "تمت الاستعادة"
       },
       "retryTranslationMode": "وضع الترجمة",
-      "clearAllDescriptionDevice": "ستتم إزالة جميع النصوص المفرَّغة والملفات الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز. أما العدادات التي تمت مزامنتها مع حسابك فلا تتأثر."
+      "clearAllDescriptionDevice": "ستتم إزالة جميع النصوص المفرَّغة في هذا السجل وملفاتها الصوتية وعدادات الإحصاءات نهائيًا من هذا الجهاز. وأي نص منها سبقت مزامنته مع حساب سيُحذف أيضًا من ذلك الحساب في المرة القادمة التي يُسجَّل فيها الدخول إليه على هذا الجهاز."
     },
     "aiCta": {
       "title": "قم بتحسين نصوصك المفرَّغة باستخدام الذكاء الاصطناعي",
@@ -2221,6 +2236,7 @@
       },
       "locked": {
         "noWorkspace": "القواميس المشتركة متاحة ضمن خطة Business. شارك مصطلحات فريقك وأسماء المنتجات والاختصارات مع الجميع.",
+        "chooseWorkspace": "أنت في «شخصي». انتقل إلى مساحة عمل لاستخدام كلماتها المشتركة.",
         "upgradeAdmin": "القواميس المشتركة متاحة ضمن خطة Business. قم بترقية {{workspace}} ليحصل الجميع على الكلمات نفسها.",
         "upgradeMember": "القواميس المشتركة متاحة ضمن خطة Business. اطلب من أحد المسؤولين ترقية {{workspace}}.",
         "paused_zero": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
@@ -2304,7 +2320,10 @@
       },
       "hiddenWord": "تم إخفاء \"{{word}}\" لك",
       "stillIn": "لا تزال \"{{word}}\" في {{list}}"
-    }
+    },
+    "openRouterIgnoredNotice": "لا يمرّر OpenRouter قاموسك إلى نماذج الكلام لديه، لذا لن تساعد هذه الكلمات في توجيه التفريغ ما دام محددًا للإملاء.",
+    "localModelIgnoredNotice": "لا يستطيع {{model}} استخدام قاموسك، لذا لن تساعد هذه الكلمات في توجيه التفريغ ما دام محددًا للإملاء. يظل تنظيف الذكاء الاصطناعي يطبّقها عند تفعيله.",
+    "localModelHotwordsLimitNotice": "{{model}} يستعين بما يصل إلى {{limit}} مدخلًا من القاموس لتوجيه التفريغ. الأولوية للمدخلات الشخصية، ثم مدخلات مساحات الفريق، ثم مدخلات مساحة العمل."
   },
   "promptStudio": {
     "common": {
@@ -4044,6 +4063,10 @@
         "description": "تتيح لك مساحات العمل التعاون مع زملائك ومشاركة الملاحظات.",
         "create": "إنشاء مساحة عمل"
       },
+      "personal": {
+        "title": "أنت في «شخصي»",
+        "description": "اختر مساحة عمل لإدارة إعداداتها."
+      },
       "loadError": {
         "title": "تعذر تحميل مساحات العمل",
         "description": "تحقق من اتصالك وحاول مرة أخرى.",
@@ -4054,6 +4077,7 @@
         "general": "عام",
         "members": "الأعضاء",
         "invitations": "الدعوات",
+        "guests": "الضيوف",
         "teams": "الفرق"
       },
       "people": {
@@ -4782,6 +4806,87 @@
         "title": "وحدة تحكم Enterprise",
         "description": "إدارة SSO والسياسات والأعضاء على الويب",
         "open": "فتح وحدة التحكم"
+      },
+      "guests": {
+        "columns": {
+          "name": "الاسم",
+          "access": "الوصول",
+          "actions": "الإجراءات"
+        },
+        "emptyTitle": "لا يوجد ضيوف بعد",
+        "emptyBody": "سيظهر هنا الأشخاص من خارج مساحة العمل هذه الذين يمكنهم عرض ملاحظاتك المشتركة.",
+        "loadingTitle": "جارٍ تحميل الضيوف…",
+        "loadingBody": "سيظهر ضيوف مساحة العمل هنا.",
+        "failedTitle": "تعذّر تحميل الضيوف",
+        "failedBody": "تحقق من اتصالك وحاول مرة أخرى.",
+        "noteCount_zero": "{{count}} ملاحظة",
+        "noteCount_one": "{{count}} ملاحظة",
+        "noteCount_two": "{{count}} ملاحظتان",
+        "noteCount_few": "{{count}} ملاحظات",
+        "noteCount_many": "{{count}} ملاحظة",
+        "noteCount_other": "{{count}} ملاحظة",
+        "notesTriggerLabel_zero": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "notesTriggerLabel_one": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "notesTriggerLabel_two": "{{count}} ملاحظتان مشتركتان مع {{name}}",
+        "notesTriggerLabel_few": "{{count}} ملاحظات مشتركة مع {{name}}",
+        "notesTriggerLabel_many": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "notesTriggerLabel_other": "{{count}} ملاحظة مشتركة مع {{name}}",
+        "removeFromNote": "إزالة من {{note}}",
+        "removedFromNote": "تمت إزالة {{name}} من {{note}}",
+        "removeFromNoteFailed": "تعذّرت إزالة {{name}} من {{note}}. تحقق من اتصالك وحاول مرة أخرى.",
+        "menu": {
+          "label": "إجراءات {{name}}",
+          "invite": "دعوة إلى مساحة العمل",
+          "copyEmail": "نسخ البريد الإلكتروني",
+          "remove": "إزالة كضيف"
+        },
+        "invite": {
+          "title_zero": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "title_one": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "title_two": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "title_few": "دعوة {{count}} ضيوف إلى {{workspace}}",
+          "title_many": "دعوة {{count}} ضيفًا إلى {{workspace}}",
+          "title_other": "دعوة {{count}} ضيف إلى {{workspace}}",
+          "description": "سيتلقون رابطًا عبر البريد الإلكتروني للانضمام إلى {{workspace}}.",
+          "sent_zero": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_one": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_two": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_few": "تم إرسال {{count}} دعوات للانضمام إلى {{workspace}}",
+          "sent_many": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}",
+          "sent_other": "تم إرسال {{count}} دعوة للانضمام إلى {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "إزالة {{name}} من {{workspace}}؟",
+          "confirmOne": "إزالة الضيف",
+          "title_zero": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "title_one": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "title_two": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "title_few": "إزالة {{count}} ضيوف من {{workspace}}؟",
+          "title_many": "إزالة {{count}} ضيفًا من {{workspace}}؟",
+          "title_other": "إزالة {{count}} ضيف من {{workspace}}؟",
+          "body": "سيفقدون الوصول إلى كل الملاحظات المشاركة معهم. يمكنك مشاركة الملاحظات معهم مجددًا في أي وقت.",
+          "linkShared": "قد يظل بإمكان الضيوف الوصول عبر المشاركة بالرابط أو النطاق.",
+          "confirm_zero": "إزالة {{count}} ضيف",
+          "confirm_one": "إزالة {{count}} ضيف",
+          "confirm_two": "إزالة {{count}} ضيف",
+          "confirm_few": "إزالة {{count}} ضيوف",
+          "confirm_many": "إزالة {{count}} ضيفًا",
+          "confirm_other": "إزالة {{count}} ضيف",
+          "removing": "جارٍ الإزالة…",
+          "limit": "حدد ما يصل إلى {{count}} ضيف لإزالتهم في كل مرة.",
+          "failed": "تعذّرت إزالة الضيوف. لم تتم إزالة أحد. تحقق من اتصالك وحاول مرة أخرى.",
+          "done_zero": "تمت إزالة {{count}} ضيف",
+          "done_one": "تمت إزالة {{count}} ضيف",
+          "done_two": "تمت إزالة {{count}} ضيف",
+          "done_few": "تمت إزالة {{count}} ضيوف",
+          "done_many": "تمت إزالة {{count}} ضيفًا",
+          "done_other": "تمت إزالة {{count}} ضيف"
+        },
+        "selection": {
+          "selectAll": "تحديد كل الضيوف",
+          "invite": "دعوة إلى مساحة العمل",
+          "remove": "إزالة كضيف"
+        }
       }
     },
     "unifiedBilling": {
@@ -5446,7 +5551,7 @@
       "modelListUpdates": "تحديثات قائمة النماذج",
       "modelListUpdatesDescription": "يتحقق كل 15 دقيقة من قائمة نماذج OpenWhispr العامة على GitHub بحثًا عن النماذج الجديدة والمتوقفة. تسري التغييرات بالكامل بعد إعادة التشغيل.",
       "audioRetention": "الاحتفاظ بالصوت",
-      "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة التفريغ والتنزيل. يتم حذف الملفات تلقائيًا بعد فترة الاحتفاظ. لا يتم تخزين صوت الاجتماعات أبدًا.",
+      "audioRetentionDescription": "تخزين صوت الإملاء محليًا لإعادة التفريغ والتنزيل. تُحذف الملفات الصوتية على هذا الجهاز تلقائيًا بعد فترة الاحتفاظ، أيًّا كان الحساب الذي سجّلها. لا يتم تخزين صوت الاجتماعات أبدًا.",
       "audioRetentionDisabled": "معطل",
       "retentionDays_zero": "{{count}} أيام",
       "retentionDays_one": "{{count}} يوم",
@@ -5456,15 +5561,15 @@
       "retentionDays_other": "{{count}} يوم",
       "audioStorageUsage": "استخدام التخزين",
       "audioStorageUsageDescription": "الملفات الصوتية المخزنة على هذا الجهاز",
-      "audioStorageFiles": "{{count}} ملفات، {{size}}",
-      "audioStorageFiles_zero": "{{count}} ملفات، {{size}}",
-      "audioStorageFiles_one": "{{count}} ملف، {{size}}",
-      "audioStorageFiles_two": "{{count}} ملفان، {{size}}",
-      "audioStorageFiles_few": "{{count}} ملفات، {{size}}",
-      "audioStorageFiles_many": "{{count}} ملفًا، {{size}}",
-      "audioStorageFiles_other": "{{count}} ملف، {{size}}",
-      "audioStorageEmpty": "لا توجد ملفات صوتية مخزنة",
-      "clearAllAudio": "مسح كل الصوت",
+      "audioStorageHistoryFiles": "{{count}} ملفات في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_zero": "{{count}} ملفات في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_one": "{{count}} ملف في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_two": "{{count}} ملفان في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_few": "{{count}} ملفات في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_many": "{{count}} ملفًا في هذا السجل، {{size}}",
+      "audioStorageHistoryFiles_other": "{{count}} ملف في هذا السجل، {{size}}",
+      "audioStorageHistoryEmpty": "لا توجد ملفات صوتية في هذا السجل",
+      "clearHistoryAudio": "مسح الصوت",
       "clearAllAudioConfirm": "هل تريد حذف جميع الملفات الصوتية المخزنة؟ لا يمكن التراجع عن هذا.",
       "dataRetention": "الاحتفاظ بالبيانات",
       "dataRetentionDescription": "تخزين النصوص المفرَّغة والصوت محليًا في سجلك. عند التعطيل، يتم لصق النصوص المفرَّغة ولكن لا يتم حفظها.",

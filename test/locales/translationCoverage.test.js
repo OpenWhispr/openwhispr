@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const modelRegistry = require("../../src/models/modelRegistryData.json");
+const { bundledRegistryData: modelRegistry } = require("../../src/models/registryData.js");
 
 const SRC = path.join(__dirname, "../../src");
 const LOCALES = path.join(SRC, "locales");
@@ -39,7 +39,7 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.unifiedBilling.seatUpdated",
   "settingsPage.unifiedBilling.confirmSeats.description",
   "settingsPage.privacy.retentionDays",
-  "settingsPage.privacy.audioStorageFiles",
+  "settingsPage.privacy.audioStorageHistoryFiles",
   "settingsPage.privacy.hoursAgo",
   "settingsPage.privacy.minutesAgo",
   "settingsPage.enterpriseCheckout.seatsHint",

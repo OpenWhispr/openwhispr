@@ -277,6 +277,15 @@ test("the initial email starts as a chip", () => {
   assert.equal(state.phase, "editing");
 });
 
+test("initialEmails become chips", () => {
+  const state = createInviteFlow({
+    initialEmails: ["Jin@Acme.test", "ravi@acme.test", "not an address", "jin@acme.test"],
+  });
+  assert.deepEqual(emails(state), ["jin@acme.test", "ravi@acme.test"]);
+  assert.equal(state.draft, "");
+  assert.equal(state.phase, "editing");
+});
+
 test("retry sends only the failed recipients", () => {
   let state = run(commitText(fresh(), "a@x.com b@y.io"), { type: "send" });
   state = run(

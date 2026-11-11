@@ -27,7 +27,7 @@ test("selection edits send the screenshot on their first call and validate compl
   const calls = [];
   t.mock.method(service, "processText", async (...args) => {
     calls.push(args);
-    const marker = args[3].systemPrompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[\w-]+__/)[0];
+    const marker = args[3].systemPrompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/)[0];
     return `Revised paragraph.${marker}`;
   });
   const result = await editSelectedText("Elaborate this", "Short paragraph.", {
@@ -53,7 +53,7 @@ test("a screenshot the model refuses costs the edit nothing: it runs once more w
   t.mock.method(service, "processText", async (...args) => {
     configs.push(args[3]);
     if (configs.length === 1) throw new Error("image rejected");
-    const marker = args[3].systemPrompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[\w-]+__/)[0];
+    const marker = args[3].systemPrompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/)[0];
     return `Revised.${marker}`;
   });
   const attachment = { image: "fixture-image", mediaType: "image/jpeg" };
@@ -99,6 +99,21 @@ test("selection questions return the existing editor verdict; partial edits are 
   });
 });
 
+test("an edit ending at the nonce, with no closing underscores, is accepted; a partial one is not", async (t) => {
+  const { service, editSelectedText } = await editor(t);
+  let cut = 0;
+  t.mock.method(service, "processText", async (...args) => {
+    const nonce = args[3].systemPrompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/)[0];
+    return `Revised.${nonce.slice(0, nonce.length - cut)}`;
+  });
+  const options = { signal: new AbortController().signal };
+  assert.equal(await editSelectedText("Rewrite this", "Original.", options), "Revised.");
+  cut = 1;
+  await assert.rejects(editSelectedText("Rewrite this", "Original.", options), {
+    code: "SELECTION_EDIT_INVALID_RESPONSE",
+  });
+});
+
 test("the local editor uses its JSON contract and drops an answer after cancellation", async (t) => {
   const { service, editSelectedText } = await editor(t, {
     dictationAgentMode: "local",
@@ -133,7 +148,7 @@ for (const mode of ["providers", "local"]) {
     let prompt;
     t.mock.method(service, "processText", async (_text, _model, _name, config) => {
       prompt = config.systemPrompt;
-      const marker = prompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[\w-]+__/)?.[0] ?? "";
+      const marker = prompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/)?.[0] ?? "";
       return mode === "local" ? '{"replacement":"edited"}' : `edited${marker}`;
     });
     await editSelectedText("Rewrite this", "Original", {

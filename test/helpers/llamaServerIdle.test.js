@@ -15,6 +15,9 @@ function makeManager() {
   const manager = new LlamaServerManager();
   const stops = [];
   manager.processing = false;
+  // A restart waits while `processing` is set; the handoff grace and /slots
+  // timeouts behind the real check are covered in llamaServerContext.test.js.
+  manager._isBusy = async () => manager.processing;
   manager._requestJson = async (path) =>
     path === "/slots" ? [{ is_processing: false }, { is_processing: manager.processing }] : null;
   manager._doStart = async (modelPath, options = {}) => {
@@ -256,16 +259,16 @@ test("switching models doesn't wait for an answer forever", async (t) => {
   const { manager, stops } = makeManager();
   await manager.start("/models/chat.gguf");
   manager.processing = true;
-  const restart = manager.start("/models/summary.gguf");
-  for (let elapsed = 0; elapsed <= 31_000; elapsed += 1000) {
+  const refused = assert.rejects(manager.start("/models/summary.gguf"), {
+    code: "LOCAL_MODEL_BUSY",
+  });
+  for (let elapsed = 0; elapsed <= 61_000; elapsed += 1000) {
     await settle();
     t.mock.timers.tick(1000);
   }
-  await settle();
-  await settle();
-  await restart;
-  assert.equal(stops.length, 1, "the request that is waiting wins in the end");
-  assert.equal(manager.modelPath, "/models/summary.gguf");
+  await refused;
+  assert.equal(stops.length, 0, "the answer keeps its server");
+  assert.equal(manager.modelPath, "/models/chat.gguf");
 });
 
 test("an idle server switches models without waiting", async (t) => {
@@ -293,6 +296,7 @@ test("requests that arrive during the wait share one restart", async (t) => {
   await settle();
   const second = manager.start("/models/summary.gguf");
   await settle();
+  assert.equal(stops.length, 0, "the running answer keeps its server");
   manager.processing = false;
   t.mock.timers.tick(1000);
   await settle();
@@ -341,6 +345,23 @@ test("asking for the running server cancels a deferred stop", async (t) => {
   assert.equal(stops.length, 0);
 });
 
+test("a start refused while the answer runs leaves a deferred stop in place", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const { manager, stops } = makeManager();
+  await manager.start("/models/chat.gguf");
+  manager.processing = true;
+  const deferredStop = manager.stopWhenIdle();
+  await settle();
+  await assert.rejects(manager.start("/models/summary.gguf", { busyWaitMs: 0 }), {
+    code: "LOCAL_MODEL_BUSY",
+  });
+  manager.processing = false;
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.equal(await deferredStop, true);
+  assert.equal(stops.length, 1);
+});
+
 for (const [label, modelPath, options] of [
   ["another model", "/models/other.gguf", { contextSize: 4096 }],
   ["a larger context", "/models/summary.gguf", { contextSize: 8192 }],
@@ -359,11 +380,11 @@ for (const [label, modelPath, options] of [
     };
     const first = manager.start("/models/summary.gguf", { contextSize: 4096 });
     await settle();
-    const second = manager.start(modelPath, options);
-    const rejected = assert.rejects(second, /another request|different|incompatible/i);
     manager.processing = false;
     t.mock.timers.tick(1000);
     await settle();
+    const second = manager.start(modelPath, { ...options, busyWaitMs: 0 });
+    const rejected = assert.rejects(second, /another request|different|incompatible/i);
     ready.resolve();
     await first;
     await rejected;

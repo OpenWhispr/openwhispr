@@ -736,8 +736,8 @@
       "rawTranscript": "Raw Transcript",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear All Transcriptions",
-      "clearAllDescription": "All transcriptions, audio files, and Insights counters will be permanently removed from this device and your account.",
-      "clearAllDescriptionDevice": "All transcriptions, audio files, and Insights counters will be permanently removed from this device. Counters already synced to an account are not affected.",
+      "clearAllDescription": "All transcriptions in your history, their audio files, and Insights counters will be permanently removed from this device and your account.",
+      "clearAllDescriptionDevice": "All transcriptions in this history, their audio files, and Insights counters will be permanently removed from this device. Any of these transcriptions already synced to an account are also deleted from that account the next time it signs in here.",
       "clearAllSuccess": "History cleared",
       "clearAllErrorTitle": "Couldn't clear history",
       "clearAllErrorDescription": "Something went wrong. Please try again.",
@@ -977,7 +977,8 @@
         "agentUnavailable": "Assistant Unavailable",
         "screenContextSkipped": "Screen Context Skipped",
         "cloudLimitReached": "Weekly Cloud Limit Reached",
-        "providerRateLimited": "Provider Rate Limited"
+        "providerRateLimited": "Provider Rate Limited",
+        "outOfCredits": "Out of Credits"
       },
       "fallback": {
         "title": "Fallback Mode",
@@ -989,6 +990,11 @@
       "noAudio": {
         "title": "We didn’t catch that",
         "description": "Check your microphone and try again."
+      },
+      "commandAccountChanged": {
+        "title": "Command not answered",
+        "description": "The account changed before it finished. Its transcript is in the history of the account you spoke it under.",
+        "descriptionNotSaved": "The account changed before it finished. Say it again to ask now."
       },
       "micDisconnected": {
         "title": "Microphone disconnected",
@@ -1008,6 +1014,7 @@
         "offline": "You're offline. Cloud transcription requires an internet connection.",
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
         "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
+        "openRouterOutOfCredits": "Your OpenRouter account is out of credits. Top up at openrouter.ai, then try again.",
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
         "agentReasoningFailed": "Your voice assistant couldn't process the command — the raw transcript was inserted instead.",
         "screenContextSkipped": "The screenshot couldn't be sent, so your command ran without screen context.",
@@ -1749,6 +1756,10 @@
         "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
       },
+      "personal": {
+        "title": "You're in Personal",
+        "description": "Choose a workspace to manage its settings."
+      },
       "loadError": {
         "title": "Couldn't load workspaces",
         "description": "Check your connection and try again.",
@@ -1759,6 +1770,7 @@
         "general": "General",
         "members": "Members",
         "invitations": "Invitations",
+        "guests": "Guests",
         "teams": "Teams"
       },
       "people": {
@@ -2337,6 +2349,59 @@
         "title": "Enterprise console",
         "description": "Manage SSO, policies, and members on the web",
         "open": "Open console"
+      },
+      "guests": {
+        "columns": {
+          "name": "Name",
+          "access": "Access",
+          "actions": "Actions"
+        },
+        "emptyTitle": "No guests yet",
+        "emptyBody": "People outside this workspace who can view your shared notes will show up here.",
+        "loadingTitle": "Loading guests…",
+        "loadingBody": "Your workspace guests will appear here.",
+        "failedTitle": "Couldn't load guests",
+        "failedBody": "Check your connection and try again.",
+        "noteCount_one": "{{count}} note",
+        "noteCount_other": "{{count}} notes",
+        "notesTriggerLabel_one": "{{count}} note shared with {{name}}",
+        "notesTriggerLabel_other": "{{count}} notes shared with {{name}}",
+        "removeFromNote": "Remove from {{note}}",
+        "removedFromNote": "Removed {{name}} from {{note}}",
+        "removeFromNoteFailed": "Couldn't remove {{name}} from {{note}}. Check your connection and try again.",
+        "menu": {
+          "label": "Actions for {{name}}",
+          "invite": "Invite to workspace",
+          "copyEmail": "Copy email",
+          "remove": "Remove as guest"
+        },
+        "invite": {
+          "title_one": "Invite {{count}} guest to {{workspace}}",
+          "title_other": "Invite {{count}} guests to {{workspace}}",
+          "description": "They'll get an email link to join {{workspace}}.",
+          "sent_one": "Sent {{count}} invite to join {{workspace}}",
+          "sent_other": "Sent {{count}} invites to join {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "Remove {{name}} from {{workspace}}?",
+          "confirmOne": "Remove guest",
+          "title_one": "Remove {{count}} guest from {{workspace}}?",
+          "title_other": "Remove {{count}} guests from {{workspace}}?",
+          "body": "They'll lose access to every note shared with them. You can share notes with them again anytime.",
+          "linkShared": "Guests may still have access through link or domain sharing.",
+          "confirm_one": "Remove {{count}} guest",
+          "confirm_other": "Remove {{count}} guests",
+          "removing": "Removing…",
+          "limit": "Select up to {{count}} guests to remove at once.",
+          "failed": "Couldn't remove guests. Nobody was removed. Check your connection and try again.",
+          "done_one": "Removed {{count}} guest",
+          "done_other": "Removed {{count}} guests"
+        },
+        "selection": {
+          "selectAll": "Select all guests",
+          "invite": "Invite to workspace",
+          "remove": "Remove as guest"
+        }
       }
     },
     "unifiedBilling": {
@@ -3000,15 +3065,15 @@
       "leaderboardRequiresAccount": "Sign in to manage leaderboard participation.",
       "leaderboardRequiresHistory": "Turn on data retention before joining leaderboards.",
       "audioRetention": "Audio Retention",
-      "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Files are automatically deleted after the retention period. Meeting audio is never stored.",
+      "audioRetentionDescription": "Store dictation audio locally for re-transcription and download. Audio files on this device are deleted automatically after the retention period, whichever account recorded them. Meeting audio is never stored.",
       "audioRetentionDisabled": "Disabled",
       "retentionDays_one": "{{count}} day",
       "retentionDays_other": "{{count}} days",
       "audioStorageUsage": "Storage Usage",
       "audioStorageUsageDescription": "Audio files stored on this device",
-      "audioStorageFiles": "{{count}} files, {{size}}",
-      "audioStorageEmpty": "No audio files stored",
-      "clearAllAudio": "Clear All Audio",
+      "audioStorageHistoryFiles": "{{count}} files in this history, {{size}}",
+      "audioStorageHistoryEmpty": "No audio files in this history",
+      "clearHistoryAudio": "Clear Audio",
       "clearAllAudioConfirm": "Delete all stored audio files? This cannot be undone.",
       "dataRetention": "Data Retention",
       "dataRetentionDescription": "Store transcriptions and audio locally in your history. When disabled, transcriptions are pasted but not saved.",
@@ -3251,7 +3316,15 @@
         "assemblyai_universal_3_5_pro": "Highest accuracy realtime, 18 languages",
         "assemblyai_universal_3_6_pro": "Highest accuracy realtime, 32 languages",
         "mistral_voxtral_mini_transcribe_3_0": "Fast transcription in 50+ languages (preview)",
-        "mistral_voxtral_small_transcribe_3_0": "Most accurate Voxtral, 50+ languages (preview)"
+        "mistral_voxtral_small_transcribe_3_0": "Most accurate Voxtral, 50+ languages (preview)",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Mistral's fast, accurate multilingual transcription",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "NVIDIA's low-cost transcription in 40 languages",
+        "openrouter_deepgram_nova_3": "Deepgram's fast multilingual transcription",
+        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI's most accurate transcription",
+        "openrouter_elevenlabs_scribe_v2": "ElevenLabs' accurate transcription in 90+ languages",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Mistral's larger multilingual transcription model",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "NVIDIA's low-cost transcription for European languages",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "NVIDIA's lowest-cost multilingual transcription"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -4554,6 +4627,9 @@
     "wordsReady_one": "{{count}} word ready",
     "wordsReady_other": "{{count}} words ready",
     "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models read only the last few hundred characters of it, so a shorter list works better there. Other models get the full list.",
+    "openRouterIgnoredNotice": "OpenRouter doesn't pass your dictionary to its speech models, so these words won't guide transcription while it's selected for dictation.",
+    "localModelIgnoredNotice": "{{model}} can't use your dictionary, so these words won't guide transcription while it's selected for dictation. AI cleanup still applies them when it's on.",
+    "localModelHotwordsLimitNotice": "{{model}} uses up to {{limit}} dictionary entries as transcription hints. Personal entries come first, followed by entries from your teamspaces, then your workspace.",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
     "editWord": "Edit {{word}}",
@@ -4713,6 +4789,7 @@
       },
       "locked": {
         "noWorkspace": "Shared dictionaries are included with Business. Share your team's jargon, product names and acronyms with everyone.",
+        "chooseWorkspace": "You're in Personal. Switch to a workspace to use its shared words.",
         "upgradeAdmin": "Shared dictionaries are included with Business. Upgrade {{workspace}} so everyone gets the same words.",
         "upgradeMember": "Shared dictionaries are included with Business. Ask an admin to upgrade {{workspace}}.",
         "paused_one": "{{workspace}}'s {{count}} shared word is paused. Upgrade to Business to use it in dictation again.",

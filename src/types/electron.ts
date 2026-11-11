@@ -5,6 +5,7 @@ import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
+import type { SplitLiveSpeakers } from "../utils/transcriptSpeakerState";
 import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
@@ -60,7 +61,7 @@ import type {
   SharedDictionaryMeta,
   SharedDictionarySnapshot,
 } from "./sharedDictionary";
-import type { SharedHintWords } from "../utils/sharedDictionaryHints";
+import type { ScopedSharedHintWords, SharedHintWords } from "../utils/sharedDictionaryHints";
 
 export type { SharedDictionarySnapshot } from "./sharedDictionary";
 
@@ -173,6 +174,7 @@ export type TranscriptionErrorCode =
   | "AUTH_REQUIRED"
   | "LIMIT_REACHED"
   | "PROVIDER_RATE_LIMITED"
+  | "OPENROUTER_OUT_OF_CREDITS"
   | "API_KEY_MISSING"
   | "INVALID_KEY"
   | "MODEL_NOT_AVAILABLE"
@@ -298,6 +300,13 @@ export interface ActiveAccountScope {
   authGeneration: number;
 }
 
+// What main's database is scoped to: the signed-in account (null signed out),
+// and whose rows are in view (signed out, the device's only account, if any).
+export interface DatabaseAccountScope {
+  accountId: string | null;
+  visibleAccountId: string | null;
+}
+
 export interface TranscriptionItem {
   id: number;
   text: string;
@@ -313,6 +322,7 @@ export interface TranscriptionItem {
   error_code: TranscriptionErrorCode;
   route_kind?: string | null;
   client_transcription_id: string;
+  account_id?: string | null;
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
@@ -727,6 +737,7 @@ export interface SpaceItem {
 
 export interface DictionaryEntryItem {
   id: number;
+  account_id?: string | null;
   word: string;
   source: "manual" | "learned";
   created_at: string;
@@ -745,6 +756,7 @@ export interface DictionaryEntryItem {
 
 export interface SnippetEntryItem {
   id: number;
+  account_id?: string | null;
   trigger: string;
   replacement: string;
   created_at: string;
@@ -926,6 +938,27 @@ export interface TeamInvitation {
   workspace_role: "admin" | "member";
   expires_at: string;
   created_at: string;
+}
+
+export interface WorkspaceGuestNote {
+  id: string;
+  title: string | null;
+  permission: "viewer" | "editor";
+  visibility: "link" | "domain" | "invited";
+}
+
+export interface WorkspaceGuest {
+  email: string;
+  name: string | null;
+  image: string | null;
+  notes: WorkspaceGuestNote[];
+}
+
+export interface GuestRemoval {
+  removed: string[];
+  not_found: string[];
+  skipped_members: string[];
+  link_shared_note_ids: string[];
 }
 
 export interface TeamMember {
@@ -1477,6 +1510,7 @@ export type LocalLLMDownloadProgressEvent =
 
 export interface ConversationPreview {
   id: number;
+  account_id?: string | null;
   title: string;
   created_at: string;
   updated_at: string;
@@ -1544,6 +1578,14 @@ export interface ConversationCreateAckResult {
   cloud_id?: string | null;
 }
 
+// Main refused a sync write because the sign-in that read or fetched it was
+// replaced.
+export interface StaleSyncWrite {
+  success: false;
+  changes: 0;
+  stale: true;
+}
+
 export type OnboardingDemoKind = "dictation" | "assistant";
 /**
  * "partial" streams the transcript, "processing" carries the final transcript,
@@ -1580,6 +1622,8 @@ export interface AgentWindowCommand {
   attachment: { image: string; mediaType: string } | null;
   /** Text selected in another app when the command was spoken. */
   selectedContext: { text: string; source: "external" } | null;
+  /** When the command was spoken (ISO), so main can refuse it after an account change. */
+  spokenAt?: string;
 }
 
 export interface ReferralItem {
@@ -1923,16 +1967,25 @@ declare global {
       // Dictionary operations
       getDictionary: () => Promise<string[]>;
       /** Replaces the whole dictionary — omitted words are deleted. Prefer applyDictionaryChanges. */
-      setDictionary: (words: string[]) => Promise<{ success: boolean }>;
-      applyDictionaryChanges?: (changes: {
-        add?: string[];
-        remove?: string[];
-      }) => Promise<{ success: boolean; added: number; removed: number }>;
+      setDictionary: (
+        words: string[],
+        listsAccountId?: string | null
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** Writes the cached list only into a database that has never held one. */
+      seedDictionary?: (words: string[]) => Promise<{ success: boolean; seeded: boolean }>;
+      applyDictionaryChanges?: (
+        changes: { add?: string[]; remove?: string[] },
+        listsAccountId?: string | null
+      ) => Promise<{ success: boolean; added: number; removed: number; stale?: boolean }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
       getSnippets?: () => Promise<Array<{ trigger: string; replacement: string }>>;
       setSnippets?: (
+        snippets: Array<{ trigger: string; replacement: string }>,
+        listsAccountId?: string | null
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      seedSnippets?: (
         snippets: Array<{ trigger: string; replacement: string }>
-      ) => Promise<{ success: boolean }>;
+      ) => Promise<{ success: boolean; seeded: boolean }>;
       onSnippetsUpdated?: (
         callback: (snippets: Array<{ trigger: string; replacement: string }>) => void
       ) => () => void;
@@ -2085,6 +2138,9 @@ declare global {
 
       // Space operations
       getSpaces?: () => Promise<SpaceItem[]>;
+      hasOtherAccountRows?: () => Promise<boolean>;
+      accountChangedSince?: (occurredAt?: string) => Promise<boolean>;
+      hasUnclaimedLegacyRows?: () => Promise<boolean>;
       setActiveAccountScope?: (
         accountId: string | null,
         expectedAuthGeneration?: number
@@ -2102,6 +2158,10 @@ declare global {
         setupMode: string | null;
         flowVersion: string;
       }) => Promise<void>;
+      getDatabaseAccountScope?: () => Promise<DatabaseAccountScope>;
+      onDatabaseAccountScopeChanged?: (
+        callback: (scope: DatabaseAccountScope) => void
+      ) => () => void;
       onActiveAccountScopeChanged?: (
         callback: (scope: ActiveAccountScope | null) => void
       ) => () => void;
@@ -2535,8 +2595,11 @@ declare global {
 
       // llama-server
       llamaServerStart: (
-        modelId: string
+        modelId: string,
+        requestId?: string
       ) => Promise<{ success: boolean; port?: number; error?: string; code?: string }>;
+      /** Stops the llamaServerStart tagged `requestId` from waiting, and from swapping its model in. */
+      llamaServerCancelStart: (requestId: string) => Promise<void>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
       detectVulkanGpu?: () => Promise<VulkanGpuResult>;
@@ -3198,8 +3261,13 @@ declare global {
         success: boolean;
         text?: string;
         error?: string;
+        code?: string;
+        messageKey?: string;
         diarized?: boolean;
         segments?: Array<{ text: string; start: number; end: number; speaker?: string }>;
+        warning?: string;
+        failedChunks?: number;
+        totalChunks?: number;
       }>;
 
       // Usage limit events
@@ -3783,6 +3851,7 @@ declare global {
           }>;
           speakerEmbeddings?: Record<string, number[]> | null;
           removedSegments?: RemovedTranscriptSegment[];
+          splitLiveSpeakers?: SplitLiveSpeakers;
         }) => void
       ) => () => void;
 
@@ -4102,61 +4171,105 @@ declare global {
       getPendingConversations?: () => Promise<ConversationPreview[]>;
       getPendingConversationDeletes?: () => Promise<ConversationPreview[]>;
       getConversationByClientId?: (clientId: string) => Promise<ConversationPreview | null>;
+      /** Hands an unattributed chat to the account whose cloud returned it; its messages stay. */
+      claimConversationFromCloud?: (
+        cloudConv: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<ConversationPreview | StaleSyncWrite | null>;
       upsertConversationFromCloud?: (
         cloudConv: Record<string, unknown>,
         messages: Array<Record<string, unknown>>,
-        snapshot: ConversationPreview | null
-      ) => Promise<void>;
-      markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
+        snapshot: ConversationPreview | null,
+        expectedAuthGeneration: number
+      ) => Promise<ConversationPreview | StaleSyncWrite | null>;
+      markConversationCreateAttempted?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      clearConversationCreateAttempted?: (id: number) => Promise<void>;
       acknowledgeConversationCreate?: (
         id: number,
         snapshot: ConversationCreateSnapshot,
-        cloudId: string
+        cloudId: string,
+        accountId: string,
+        authGeneration: number
       ) => Promise<ConversationCreateAckResult | undefined>;
       markConversationSynced?: (
         id: number,
         cloudId: string,
-        snapshot?: ConversationCreateSnapshot,
-        cloudUpdatedAt?: string
+        snapshot: ConversationCreateSnapshot | null,
+        cloudUpdatedAt: string | null,
+        accountId: string,
+        authGeneration: number
       ) => Promise<{ success: boolean } | undefined>;
       replaceConversationClientId?: (
         id: number,
-        expectedClientId: string | null
+        expectedClientId: string | null,
+        accountId: string,
+        authGeneration: number
       ) => Promise<{ success: boolean }>;
-      hardDeleteConversation?: (id: number) => Promise<void>;
+      hardDeleteConversation?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
 
       getPendingTranscriptions?: () => Promise<TranscriptionItem[]>;
       getTranscriptionByClientId?: (clientId: string) => Promise<TranscriptionItem | null>;
       upsertTranscriptionFromCloud?: (
-        cloudTranscription: Record<string, unknown>
-      ) => Promise<TranscriptionItem>;
-      markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
+        cloudTranscription: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<TranscriptionItem | StaleSyncWrite | null>;
+      markTranscriptionSynced?: (
+        id: number,
+        cloudId: string,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
       getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
-      hardDeleteTranscription?: (id: number) => Promise<{ success: boolean; id: number }>;
+      hardDeleteTranscription?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
 
       getPendingDictionary?: () => Promise<DictionaryEntryItem[]>;
       getPendingDictionaryDeletes?: () => Promise<DictionaryEntryItem[]>;
       getDictionaryByClientId?: (clientDictId: string) => Promise<DictionaryEntryItem | null>;
       upsertDictionaryFromCloud?: (
-        cloudEntry: Record<string, unknown>
-      ) => Promise<DictionaryEntryItem | null>;
+        cloudEntry: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<DictionaryEntryItem | StaleSyncWrite | null>;
       /** `pushed` (the row as pushed) keeps a row edited since then pending. */
       markDictionarySynced?: (
         id: number,
         cloudId: string,
-        serverUpdatedAt?: string,
-        expectedWord?: string,
-        expectedSource?: DictionaryEntryItem["source"],
-        serverSource?: DictionaryEntryItem["source"],
-        pushed?: Pick<DictionaryEntryItem, "word" | "shared_at" | "updated_at">
-      ) => Promise<{ success: boolean; changes: number }>;
-      hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
-      clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
+        serverUpdatedAt: string | undefined,
+        expectedWord: string | undefined,
+        expectedSource: DictionaryEntryItem["source"] | undefined,
+        serverSource: DictionaryEntryItem["source"] | undefined,
+        pushed: Pick<DictionaryEntryItem, "word" | "shared_at" | "updated_at"> | undefined,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; changes: number; stale?: boolean }>;
+      hardDeleteDictionary?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
+      clearDictionaryCloudId?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** Claims a pending word whose edit outlives its cloud tombstone, for re-creation. */
+      keepNewerDictionaryEdit?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
-      /** Live personal words matching `words` case-insensitively, in their stored spelling. */
+      /**
+       * Live personal words matching `words` case-insensitively, in their stored
+       * spelling. `accountId` is null on an unattributed row, whose cloud id may
+       * be another account's.
+       */
       getDictionaryEntriesByWords?: (
         words: string[]
-      ) => Promise<Array<{ word: string; cloudId: string | null }>>;
+      ) => Promise<Array<{ word: string; cloudId: string | null; accountId: string | null }>>;
       /**
        * Records a share the server accepted; sync state is left unchanged, except
        * for `pendingWords`, which went as plain words and still need shared_at pushed.
@@ -4164,18 +4277,21 @@ declare global {
       markDictionaryWordsShared?: (
         words: string[],
         sharedAt: string,
-        options?: { pendingWords?: string[] }
-      ) => Promise<{ marked: string[] }>;
+        options: { pendingWords?: string[]; expectedAuthGeneration: number | null }
+      ) => Promise<{ marked: string[]; stale?: boolean }>;
       /** Live personal words that were shared into a team list. */
       getMovedDictionaryWords?: () => Promise<string[]>;
       /** Removes moved personal words whose shared copy is gone for the sharer. */
       /** `includeSynced: false` leaves rows the cloud has to the personal pull. */
       retireMovedDictionaryWords?: (
         words: string[],
-        options?: { includeSynced?: boolean }
-      ) => Promise<{ retired: string[] }>;
+        options: { includeSynced?: boolean; expectedAuthGeneration: number | null }
+      ) => Promise<{ retired: string[]; stale?: boolean }>;
       /** Brings back fallbacks retired for these words, once their shared copy returns. */
-      reviveRetiredDictionaryWords?: (words: string[]) => Promise<{ revived: string[] }>;
+      reviveRetiredDictionaryWords?: (
+        words: string[],
+        options: { expectedAuthGeneration: number | null }
+      ) => Promise<{ revived: string[]; stale?: boolean }>;
 
       getSharedDictionary?: (workspaceId: string) => Promise<SharedDictionarySnapshot>;
       applySharedDictionaryPull?: (
@@ -4199,26 +4315,43 @@ declare global {
       clearSharedDictionary?: (workspaceId?: string) => Promise<{ changed: number }>;
       /** Clears every workspace's shared words except these workspaces'. */
       pruneSharedDictionary?: (keepWorkspaceIds: string[]) => Promise<{ changed: number }>;
-      /** Tells main which shared words apply, so auto-learn skips them. */
-      setSharedDictionaryHints?: (hints: SharedHintWords) => Promise<void>;
+      /** Sends capped prompt hints for auto-learn and eligible shared hints for local hotwords. */
+      setSharedDictionaryHints?: (
+        promptHints: SharedHintWords,
+        hotwordHints: ScopedSharedHintWords
+      ) => Promise<void>;
 
       getPendingSnippets?: () => Promise<SnippetEntryItem[]>;
       getPendingSnippetDeletes?: () => Promise<SnippetEntryItem[]>;
       getSnippetForCloudMerge?: (
-        cloudEntry: Record<string, unknown>
-      ) => Promise<SnippetEntryItem | null>;
+        cloudEntry: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<SnippetEntryItem | StaleSyncWrite | null>;
       upsertSnippetFromCloud?: (
-        cloudEntry: Record<string, unknown>
-      ) => Promise<SnippetEntryItem | null>;
+        cloudEntry: Record<string, unknown>,
+        expectedAuthGeneration: number
+      ) => Promise<SnippetEntryItem | StaleSyncWrite | null>;
       markSnippetSynced?: (
         id: number,
         cloudId: string,
-        serverUpdatedAt?: string,
-        expectedTrigger?: string,
-        expectedReplacement?: string
-      ) => Promise<{ success: boolean; changes: number }>;
-      hardDeleteSnippet?: (id: number) => Promise<{ success: boolean; id: number }>;
-      clearSnippetCloudId?: (id: number) => Promise<{ success: boolean }>;
+        serverUpdatedAt: string | undefined,
+        expectedTrigger: string | undefined,
+        expectedReplacement: string | undefined,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; changes: number; stale?: boolean }>;
+      hardDeleteSnippet?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
+      clearSnippetCloudId?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
+      /** As keepNewerDictionaryEdit, for a snippet. */
+      keepNewerSnippetEdit?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
     };
 

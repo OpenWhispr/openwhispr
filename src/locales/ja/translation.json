@@ -718,8 +718,8 @@
       "failedOffline": "オフラインです",
       "clearAll": "すべて削除",
       "clearAllTitle": "すべての文字起こしを削除",
-      "clearAllDescription": "すべての文字起こし、音声ファイル、Insights のカウントが、このデバイスとアカウントから完全に削除されます。",
-      "clearAllDescriptionDevice": "すべての文字起こし、音声ファイル、Insights のカウントが、このデバイスから完全に削除されます。アカウントに同期済みのカウントには影響しません。",
+      "clearAllDescription": "履歴内のすべての文字起こし、その音声ファイル、Insights のカウントが、このデバイスとアカウントから完全に削除されます。",
+      "clearAllDescriptionDevice": "この履歴内のすべての文字起こし、その音声ファイル、Insights のカウントが、このデバイスから完全に削除されます。そのうちすでにアカウントと同期済みの文字起こしは、そのアカウントが次にこのデバイスでサインインしたときに、アカウントからも削除されます。",
       "clearAllSuccess": "履歴を削除しました",
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",
@@ -977,7 +977,8 @@
         "agentUnavailable": "アシスタントを利用できません",
         "screenContextSkipped": "画面コンテキストをスキップしました",
         "cloudLimitReached": "週間のクラウド上限に達しました",
-        "providerRateLimited": "プロバイダーのレート制限"
+        "providerRateLimited": "プロバイダーのレート制限",
+        "outOfCredits": "クレジット不足"
       },
       "fallback": {
         "title": "フォールバックモード",
@@ -989,6 +990,11 @@
       "noAudio": {
         "title": "聞き取れませんでした",
         "description": "マイクを確認して、もう一度お試しください。"
+      },
+      "commandAccountChanged": {
+        "title": "コマンドに応答できませんでした",
+        "description": "処理が終わる前にアカウントが切り替わりました。文字起こしは、話したときのアカウントの履歴にあります。",
+        "descriptionNotSaved": "処理が終わる前にアカウントが切り替わりました。今すぐ尋ねるには、もう一度話しかけてください。"
       },
       "micDisconnected": {
         "title": "マイクが切断されました",
@@ -1008,6 +1014,7 @@
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
         "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
         "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+        "openRouterOutOfCredits": "OpenRouter アカウントのクレジットがなくなりました。openrouter.ai でチャージしてから、もう一度お試しください。",
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
         "agentReasoningFailed": "音声アシスタントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
         "screenContextSkipped": "スクリーンショットを送信できなかったため、画面コンテキストなしでコマンドを実行しました。",
@@ -2317,15 +2324,15 @@
       "lastSynced": "最終同期 {{time}}",
       "minutesAgo": "{{count}}分前",
       "audioRetention": "音声の保持",
-      "audioRetentionDescription": "再文字起こしやダウンロードのために、ディクテーションの音声をローカルに保存します。ファイルは保持期間が過ぎると自動的に削除されます。会議の音声は保存されません。",
+      "audioRetentionDescription": "再文字起こしやダウンロードのために、ディクテーションの音声をローカルに保存します。このデバイス上の音声ファイルは、どのアカウントで録音されたかにかかわらず、保持期間が過ぎると自動的に削除されます。会議の音声は保存されません。",
       "audioRetentionDisabled": "無効",
       "retentionDays_one": "{{count}}日",
       "retentionDays_other": "{{count}}日",
       "audioStorageUsage": "ストレージ使用量",
       "audioStorageUsageDescription": "このデバイスに保存された音声ファイル",
-      "audioStorageFiles": "{{count}}ファイル、{{size}}",
-      "audioStorageEmpty": "保存された音声ファイルはありません",
-      "clearAllAudio": "すべての音声を削除",
+      "audioStorageHistoryFiles": "この履歴の音声ファイル {{count}} 件、{{size}}",
+      "audioStorageHistoryEmpty": "この履歴に音声ファイルはありません",
+      "clearHistoryAudio": "音声を削除",
       "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。",
       "saveDiscarded": "破棄したディクテーションを保存",
       "saveDiscardedDescription": "Escape でディクテーションをキャンセルしたとき、音声を履歴に残して後で復元できるようにします。データと音声の保持を有効にする必要があります。"
@@ -2488,6 +2495,10 @@
         "description": "ワークスペースでは、チームメイトとのコラボレーションやノートの共有ができます。",
         "create": "ワークスペースを作成"
       },
+      "personal": {
+        "title": "現在は「個人」です",
+        "description": "設定を管理するワークスペースを選択してください。"
+      },
       "loadError": {
         "title": "ワークスペースを読み込めませんでした",
         "description": "接続を確認して、もう一度お試しください。",
@@ -2498,6 +2509,7 @@
         "general": "一般",
         "members": "メンバー",
         "invitations": "招待",
+        "guests": "ゲスト",
         "teams": "チーム"
       },
       "people": {
@@ -3076,6 +3088,59 @@
         "title": "Enterpriseコンソール",
         "description": "SSO、ポリシー、メンバーをウェブで管理",
         "open": "コンソールを開く"
+      },
+      "guests": {
+        "columns": {
+          "name": "名前",
+          "access": "アクセス",
+          "actions": "操作"
+        },
+        "emptyTitle": "ゲストはまだいません",
+        "emptyBody": "このワークスペース外で、共有ノートを閲覧できる人がここに表示されます。",
+        "loadingTitle": "ゲストを読み込み中…",
+        "loadingBody": "ワークスペースのゲストがここに表示されます。",
+        "failedTitle": "ゲストを読み込めませんでした",
+        "failedBody": "接続を確認して、もう一度お試しください。",
+        "noteCount_one": "{{count}} 件のノート",
+        "noteCount_other": "{{count}} 件のノート",
+        "notesTriggerLabel_one": "{{count}} 件のノートを {{name}} と共有中",
+        "notesTriggerLabel_other": "{{count}} 件のノートを {{name}} と共有中",
+        "removeFromNote": "{{note}} から削除",
+        "removedFromNote": "{{name}} を {{note}} から削除しました",
+        "removeFromNoteFailed": "{{name}} を {{note}} から削除できませんでした。接続を確認して、もう一度お試しください。",
+        "menu": {
+          "label": "{{name}} の操作",
+          "invite": "ワークスペースに招待",
+          "copyEmail": "メールアドレスをコピー",
+          "remove": "ゲストを削除"
+        },
+        "invite": {
+          "title_one": "{{count}} 人のゲストを {{workspace}} に招待",
+          "title_other": "{{count}} 人のゲストを {{workspace}} に招待",
+          "description": "{{workspace}} に参加するためのリンクがメールで届きます。",
+          "sent_one": "{{workspace}} への招待を {{count}} 件送信しました",
+          "sent_other": "{{workspace}} への招待を {{count}} 件送信しました"
+        },
+        "remove": {
+          "titleOne": "{{name}} を {{workspace}} から削除しますか？",
+          "confirmOne": "ゲストを削除",
+          "title_one": "{{count}} 人のゲストを {{workspace}} から削除しますか？",
+          "title_other": "{{count}} 人のゲストを {{workspace}} から削除しますか？",
+          "body": "共有されているすべてのノートにアクセスできなくなります。ノートはいつでも再共有できます。",
+          "linkShared": "ゲストはリンク共有やドメイン共有を通じて引き続きアクセスできる場合があります。",
+          "confirm_one": "{{count}} 人のゲストを削除",
+          "confirm_other": "{{count}} 人のゲストを削除",
+          "removing": "削除中…",
+          "limit": "一度に削除するゲストは{{count}}人まで選択できます。",
+          "failed": "ゲストを削除できませんでした。誰も削除されていません。接続を確認してもう一度お試しください。",
+          "done_one": "{{count}} 人のゲストを削除しました",
+          "done_other": "{{count}} 人のゲストを削除しました"
+        },
+        "selection": {
+          "selectAll": "すべてのゲストを選択",
+          "invite": "ワークスペースに招待",
+          "remove": "ゲストを削除"
+        }
       }
     },
     "enterpriseCheckout": {
@@ -3153,7 +3218,15 @@
         "assemblyai_universal_3_5_pro": "最高精度のリアルタイム、18言語",
         "assemblyai_universal_3_6_pro": "最高精度のリアルタイム、32言語",
         "mistral_voxtral_mini_transcribe_3_0": "50 以上の言語に対応した高速文字起こし（プレビュー）",
-        "mistral_voxtral_small_transcribe_3_0": "最も高精度な Voxtral、50 以上の言語（プレビュー）"
+        "mistral_voxtral_small_transcribe_3_0": "最も高精度な Voxtral、50 以上の言語（プレビュー）",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Mistral の高速・高精度な多言語文字起こし",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "NVIDIA の低コストな文字起こし（40 言語）",
+        "openrouter_deepgram_nova_3": "Deepgram の高速な多言語文字起こし",
+        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI の最も高精度な文字起こし",
+        "openrouter_elevenlabs_scribe_v2": "ElevenLabs の高精度な文字起こし（90 以上の言語）",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Mistral の大型多言語文字起こしモデル",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "NVIDIA の低コストな文字起こし（ヨーロッパの言語）",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "NVIDIA の最も低コストな多言語文字起こし"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -3929,6 +4002,9 @@
     "separateWithCommas": "1行に1語、またはカンマ区切り",
     "wordsReady_other": "{{count}} 個の単語が準備完了",
     "promptLimitNotice": "辞書は現在{{chars}}文字です。GroqとWhisperのモデルはその末尾の数百文字しか読み取らないため、リストは短いほうが効果的です。その他のモデルには全リストが送信されます。",
+    "openRouterIgnoredNotice": "OpenRouterは辞書を音声モデルに渡さないため、ディクテーションでOpenRouterを選択している間は、これらの単語は文字起こしに反映されません。",
+    "localModelIgnoredNotice": "{{model}}は辞書を使用できないため、ディクテーションで選択している間は、これらの単語は文字起こしに反映されません。AIクリーンアップがオンの場合は、引き続き適用されます。",
+    "localModelHotwordsLimitNotice": "{{model}}は文字起こしのヒントとして辞書の項目を最大{{limit}}件使用します。個人の項目が優先され、次にTeamspace、最後にワークスペースの項目が使われます。",
     "exportDictionary": "辞書をエクスポート",
     "exportFailed": "エクスポートに失敗しました",
     "editWord": "{{word}} を編集",
@@ -4089,6 +4165,7 @@
       },
       "locked": {
         "noWorkspace": "共有辞書は Business プランに含まれています。チームの専門用語、製品名、略語を全員と共有できます。",
+        "chooseWorkspace": "現在は「個人」です。共有単語を使うにはワークスペースに切り替えてください。",
         "upgradeAdmin": "共有辞書は Business プランに含まれています。{{workspace}} をアップグレードすると、全員が同じ単語を使えます。",
         "upgradeMember": "共有辞書は Business プランに含まれています。{{workspace}} のアップグレードを管理者に依頼してください。",
         "paused_one": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。Business にアップグレードすると、再び音声入力で使えます。",

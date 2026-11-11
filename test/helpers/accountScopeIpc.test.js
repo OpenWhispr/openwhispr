@@ -591,6 +591,59 @@ test("account deletion still deletes the note mirrors when the enterprise vault 
   assert.deepEqual(mirrored, [11, 12]);
 });
 
+test("account deletion still clears audio and note mirrors when product-event erasure fails", async (t) => {
+  const originalTokenState = tokenState;
+  const originals = {
+    productEvents: fakeThis.productEvents,
+    audioStorageManager: fakeThis.audioStorageManager,
+    metaActivation: fakeThis.metaActivation,
+    enterpriseAudioCredentials: fakeThis.enterpriseAudioCredentials,
+    _asyncMirrorDelete: fakeThis._asyncMirrorDelete,
+  };
+  t.after(() => {
+    Object.assign(fakeThis, originals);
+    delete connectorManager.disconnectAll;
+    delete databaseManager.deleteAccountData;
+    tokenState = originalTokenState;
+  });
+  const purged = [];
+  const audio = [];
+  const mirrored = [];
+  const credentials = [];
+  tokenState = { token: "delete-token", generation: 91 };
+  connectorManager.disconnectAll = async () => {};
+  databaseManager.deleteAccountData = () => ({
+    deletedNoteIds: [11, 12],
+    deletedTranscriptionIds: [21, 22],
+  });
+  fakeThis.productEvents = {
+    purge: (accountId) => {
+      purged.push(accountId);
+      throw new Error("product-event storage unavailable");
+    },
+  };
+  fakeThis.audioStorageManager = {
+    deleteAudioForTranscriptions: (ids) => audio.push(...ids),
+  };
+  fakeThis.metaActivation = { purge: () => {} };
+  fakeThis._asyncMirrorDelete = (noteId) => mirrored.push(noteId);
+  fakeThis.enterpriseAudioCredentials = {
+    removeAccount: async (accountId) => credentials.push(accountId),
+  };
+
+  const result = await handlers.get("delete-account-data")({}, "deleted-account", 91);
+
+  assert.deepEqual(result, {
+    success: false,
+    code: "LOCAL_ACCOUNT_CLEANUP_FAILED",
+    error: "product-event storage unavailable",
+  });
+  assert.deepEqual(purged, ["deleted-account"]);
+  assert.deepEqual(audio, [21, 22]);
+  assert.deepEqual(mirrored, [11, 12]);
+  assert.deepEqual(credentials, ["deleted-account"]);
+});
+
 test("a late product event binding cannot recreate the queue for an erased account", async (t) => {
   const originalApiUrl = process.env.OPENWHISPR_API_URL;
   const originalTokenState = tokenState;

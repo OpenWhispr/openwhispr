@@ -304,7 +304,7 @@ const IPCHandlers = require("./src/helpers/ipcHandlers");
 const CliBridge = require("./src/helpers/cliBridge");
 const { createRegistryLoader } = require("./src/helpers/registryLoader");
 const { registerRegistryIpc } = require("./src/helpers/registryIpc");
-const { replaceRegistryData } = require("./src/models/registryData.js");
+const { replaceRegistryData, bundledRegistryData } = require("./src/models/registryData.js");
 const { configureInstalledModels, withInstalledModels } = require("./src/helpers/installedModels");
 const { withTrustedDownloads } = require("./src/helpers/registryDownloadTrust");
 const registryTrustedKeys = require("./src/models/registryTrustedKeys.json");
@@ -1235,7 +1235,6 @@ async function startApp() {
   // Only local signature/cache verification is awaited. Remote refresh starts
   // later, so offline startup and settings migrations see a usable catalog.
   const registryMetadata = require("./src/models/registryMetadata.json");
-  const bundledRegistryData = require("./src/models/modelRegistryData.json");
   configureInstalledModels(path.join(app.getPath("userData"), "installed-models.json"));
   registryLoader = createRegistryLoader({
     cachePath: path.join(app.getPath("userData"), "model-registry.json"),

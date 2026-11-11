@@ -718,8 +718,8 @@
       "failedOffline": "离线",
       "clearAll": "全部清除",
       "clearAllTitle": "清除所有转录",
-      "clearAllDescription": "所有转录、音频文件和 Insights 统计数据都将从此设备和你的账户中永久删除。",
-      "clearAllDescriptionDevice": "所有转录、音频文件和 Insights 统计数据都将从此设备中永久删除。已同步到账户的统计数据不受影响。",
+      "clearAllDescription": "你的历史记录中的所有转录、其音频文件和 Insights 统计数据都将从此设备和你的账户中永久删除。",
+      "clearAllDescriptionDevice": "此历史记录中的所有转录、其音频文件和 Insights 统计数据都将从此设备中永久删除。其中已同步到某个账户的转录，也会在该账户下次在此设备上登录时从该账户中删除。",
       "clearAllSuccess": "历史记录已清除",
       "clearAllErrorTitle": "无法清除历史记录",
       "clearAllErrorDescription": "出了点问题，请重试。",
@@ -977,7 +977,8 @@
         "agentUnavailable": "助手不可用",
         "screenContextSkipped": "已跳过屏幕上下文",
         "cloudLimitReached": "已达本周云端上限",
-        "providerRateLimited": "服务商速率限制"
+        "providerRateLimited": "服务商速率限制",
+        "outOfCredits": "余额不足"
       },
       "fallback": {
         "title": "回退模式",
@@ -989,6 +990,11 @@
       "noAudio": {
         "title": "我们没听清",
         "description": "请检查麦克风后重试。"
+      },
+      "commandAccountChanged": {
+        "title": "指令未获回答",
+        "description": "处理完成前账户已切换。其转录内容保存在你说出它时所用账户的历史记录中。",
+        "descriptionNotSaved": "处理完成前账户已切换。请再说一遍，以便现在提问。"
       },
       "micDisconnected": {
         "title": "麦克风已断开",
@@ -1008,6 +1014,7 @@
         "offline": "你目前离线。云端转录需要互联网连接。",
         "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。",
         "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。",
+        "openRouterOutOfCredits": "你的 OpenRouter 账户余额不足。请在 openrouter.ai 充值后重试。",
         "chunkLoss": "网络问题导致录音大部分丢失。请从历史记录中重新转录。",
         "agentReasoningFailed": "语音助手无法处理该命令，已改为插入原始转录文本。",
         "screenContextSkipped": "截图无法发送，因此已在没有屏幕上下文的情况下执行你的命令。",
@@ -2317,15 +2324,15 @@
       "lastSynced": "上次同步 {{time}}",
       "minutesAgo": "{{count}}分钟前",
       "audioRetention": "音频保留",
-      "audioRetentionDescription": "在本地存储听写音频以便重新转录和下载。文件会在保留期过后自动删除。会议音频绝不会被存储。",
+      "audioRetentionDescription": "在本地存储听写音频以便重新转录和下载。此设备上的音频文件会在保留期过后自动删除，无论由哪个账户录制。会议音频绝不会被存储。",
       "audioRetentionDisabled": "已禁用",
       "retentionDays_one": "{{count}} 天",
       "retentionDays_other": "{{count}} 天",
       "audioStorageUsage": "存储用量",
       "audioStorageUsageDescription": "存储在此设备上的音频文件",
-      "audioStorageFiles": "{{count}} 个文件，{{size}}",
-      "audioStorageEmpty": "没有存储的音频文件",
-      "clearAllAudio": "清除所有音频",
+      "audioStorageHistoryFiles": "此历史记录中有 {{count}} 个文件，{{size}}",
+      "audioStorageHistoryEmpty": "此历史记录中没有音频文件",
+      "clearHistoryAudio": "清除音频",
       "clearAllAudioConfirm": "删除所有已存储的音频文件？此操作无法撤销。",
       "saveDiscarded": "保存已放弃的听写",
       "saveDiscardedDescription": "用 Escape 取消听写时，将其音频保留在历史记录中以便恢复。需开启数据和音频保留。"
@@ -2488,6 +2495,10 @@
         "description": "工作区让你与同事协作并共享笔记。",
         "create": "创建工作区"
       },
+      "personal": {
+        "title": "你当前在“个人”中",
+        "description": "选择一个工作区以管理其设置。"
+      },
       "loadError": {
         "title": "无法加载工作区",
         "description": "请检查网络连接后重试。",
@@ -2498,6 +2509,7 @@
         "general": "常规",
         "members": "成员",
         "invitations": "邀请",
+        "guests": "访客",
         "teams": "团队"
       },
       "people": {
@@ -3076,6 +3088,59 @@
         "title": "Enterprise 控制台",
         "description": "在网页端管理 SSO、策略和成员",
         "open": "打开控制台"
+      },
+      "guests": {
+        "columns": {
+          "name": "名称",
+          "access": "访问权限",
+          "actions": "操作"
+        },
+        "emptyTitle": "暂无访客",
+        "emptyBody": "此工作区之外、可以查看你共享笔记的人会显示在这里。",
+        "loadingTitle": "正在加载访客…",
+        "loadingBody": "你的工作区访客会显示在这里。",
+        "failedTitle": "无法加载访客",
+        "failedBody": "请检查网络连接后重试。",
+        "noteCount_one": "{{count}} 篇笔记",
+        "noteCount_other": "{{count}} 篇笔记",
+        "notesTriggerLabel_one": "{{count}} 篇笔记已与 {{name}} 共享",
+        "notesTriggerLabel_other": "{{count}} 篇笔记已与 {{name}} 共享",
+        "removeFromNote": "从 {{note}} 中移除",
+        "removedFromNote": "已将 {{name}} 从 {{note}} 中移除",
+        "removeFromNoteFailed": "无法将 {{name}} 从 {{note}} 中移除。请检查网络连接后重试。",
+        "menu": {
+          "label": "{{name}} 的操作",
+          "invite": "邀请加入工作区",
+          "copyEmail": "复制邮箱",
+          "remove": "移除访客"
+        },
+        "invite": {
+          "title_one": "邀请 {{count}} 位访客加入 {{workspace}}",
+          "title_other": "邀请 {{count}} 位访客加入 {{workspace}}",
+          "description": "他们将收到一封电子邮件，通过其中的链接加入 {{workspace}}。",
+          "sent_one": "已发送 {{count}} 份邀请，邀请加入 {{workspace}}",
+          "sent_other": "已发送 {{count}} 份邀请，邀请加入 {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "要将 {{name}} 从 {{workspace}} 移除吗？",
+          "confirmOne": "移除访客",
+          "title_one": "要将 {{count}} 位访客从 {{workspace}} 移除吗？",
+          "title_other": "要将 {{count}} 位访客从 {{workspace}} 移除吗？",
+          "body": "他们将无法再访问与其共享的所有笔记。你可以随时再次与他们共享笔记。",
+          "linkShared": "访客可能仍可通过链接共享或域名共享访问。",
+          "confirm_one": "移除 {{count}} 位访客",
+          "confirm_other": "移除 {{count}} 位访客",
+          "removing": "正在移除…",
+          "limit": "每次最多可选择移除 {{count}} 位访客。",
+          "failed": "无法移除访客。没有人被移除。请检查网络连接后重试。",
+          "done_one": "已移除 {{count}} 位访客",
+          "done_other": "已移除 {{count}} 位访客"
+        },
+        "selection": {
+          "selectAll": "选择所有访客",
+          "invite": "邀请加入工作区",
+          "remove": "移除访客"
+        }
       }
     },
     "enterpriseCheckout": {
@@ -3153,7 +3218,15 @@
         "assemblyai_universal_3_5_pro": "最高精度实时转录，支持 18 种语言",
         "assemblyai_universal_3_6_pro": "最高精度实时转录，支持 32 种语言",
         "mistral_voxtral_mini_transcribe_3_0": "支持 50 多种语言的快速转录（预览版）",
-        "mistral_voxtral_small_transcribe_3_0": "最准确的 Voxtral，支持 50 多种语言（预览版）"
+        "mistral_voxtral_small_transcribe_3_0": "最准确的 Voxtral，支持 50 多种语言（预览版）",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Mistral 的快速、精准多语言转录",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "NVIDIA 的低成本转录，支持 40 种语言",
+        "openrouter_deepgram_nova_3": "Deepgram 的快速多语言转录",
+        "openrouter_assemblyai_universal_3_6_pro": "AssemblyAI 最精准的转录",
+        "openrouter_elevenlabs_scribe_v2": "ElevenLabs 的精准转录，支持 90 多种语言",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Mistral 的大型多语言转录模型",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "NVIDIA 的低成本转录，支持欧洲语言",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "NVIDIA 成本最低的多语言转录"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",
@@ -4001,6 +4074,9 @@
     "separateWithCommas": "每行一个词，或用逗号分隔",
     "wordsReady_other": "{{count}} 个词语就绪",
     "promptLimitNotice": "词典当前共 {{chars}} 个字符。Groq 和 Whisper 模型只会读取其中最后几百个字符，因此列表越短效果越好；其他模型会收到完整列表。",
+    "openRouterIgnoredNotice": "OpenRouter 不会将你的词典传给其语音模型，因此在听写选用 OpenRouter 期间，这些词不会影响转录结果。",
+    "localModelIgnoredNotice": "{{model}} 无法使用你的词典，因此在听写选用该模型期间，这些词不会影响转录结果。开启 AI 清理时，这些词仍会生效。",
+    "localModelHotwordsLimitNotice": "{{model}} 最多使用 {{limit}} 条词典条目作为转录提示。个人条目优先，其次是团队空间条目，最后是工作区条目。",
     "exportDictionary": "导出词典",
     "exportFailed": "导出失败",
     "editWord": "编辑 {{word}}",
@@ -4161,6 +4237,7 @@
       },
       "locked": {
         "noWorkspace": "共享词典包含在 Business 方案中。与所有人共享团队的行话、产品名称和缩写。",
+        "chooseWorkspace": "你当前在“个人”中。切换到一个工作区即可使用其共享词语。",
         "upgradeAdmin": "共享词典包含在 Business 方案中。升级 {{workspace}}，让每个人都使用相同的词语。",
         "upgradeMember": "共享词典包含在 Business 方案中。请让管理员升级 {{workspace}}。",
         "paused_one": "{{workspace}} 的 {{count}} 个共享词语已暂停。升级到 Business 即可在听写中再次使用。",

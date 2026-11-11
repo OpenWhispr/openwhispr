@@ -73,7 +73,7 @@ test("switching active workspace reloads hints", async (t) => {
 
   // Emptied synchronously, for this window, the other windows and main.
   assert.deepEqual(ctx.hints(), EMPTY);
-  assert.deepEqual(ctx.persisted(), { workspaceId: W2, ...EMPTY });
+  assert.deepEqual(ctx.persisted(), { workspaceId: W2, accountId: null, ...EMPTY });
   assert.deepEqual(ctx.sentToMain.at(-1), EMPTY);
   const state = ctx.useSharedDictionaryStore.getState();
   assert.equal(state.workspaceId, W2);
@@ -82,7 +82,12 @@ test("switching active workspace reloads hints", async (t) => {
 
   await flush();
   assert.deepEqual(ctx.hints(), { space: [], workspace: ["Biscuit"] });
-  assert.deepEqual(ctx.persisted(), { workspaceId: W2, space: [], workspace: ["Biscuit"] });
+  assert.deepEqual(ctx.persisted(), {
+    workspaceId: W2,
+    accountId: null,
+    space: [],
+    workspace: ["Biscuit"],
+  });
   assert.deepEqual(ctx.sentToMain.at(-1), { space: [], workspace: ["Biscuit"] });
   assert.deepEqual(
     ctx.useSharedDictionaryStore.getState().snapshot.entries.map((entry) => entry.word),
@@ -115,7 +120,12 @@ test("refresh() replacing a missing active workspace reloads the fallback hints"
   assert.equal(ctx.useWorkspaceStore.getState().activeWorkspaceId, W2);
   assert.equal(ctx.useSharedDictionaryStore.getState().workspaceId, W2);
   assert.deepEqual(ctx.hints(), { space: [], workspace: ["Biscuit"] });
-  assert.deepEqual(ctx.persisted(), { workspaceId: W2, space: [], workspace: ["Biscuit"] });
+  assert.deepEqual(ctx.persisted(), {
+    workspaceId: W2,
+    accountId: null,
+    space: [],
+    workspace: ["Biscuit"],
+  });
 });
 
 test("refresh() losing all workspaces empties hints", async (t) => {
@@ -131,7 +141,7 @@ test("refresh() losing all workspaces empties hints", async (t) => {
   assert.equal(ctx.useWorkspaceStore.getState().activeWorkspaceId, null);
   assert.equal(ctx.useSharedDictionaryStore.getState().workspaceId, null);
   assert.deepEqual(ctx.hints(), EMPTY);
-  assert.deepEqual(ctx.persisted(), { workspaceId: null, ...EMPTY });
+  assert.deepEqual(ctx.persisted(), { workspaceId: null, accountId: null, ...EMPTY });
 });
 
 test("a load from an older generation never publishes", async (t) => {
@@ -268,7 +278,12 @@ test("hints for a workspace localStorage no longer names are never published", a
   useSettingsStore.getState().setSharedDictionaryHints({ space: [], workspace: ["Qdrant"] }, W1);
   useSettingsStore.getState().setSharedDictionaryHints(EMPTY, null);
 
-  assert.deepEqual(ctx.persisted(), { workspaceId: W2, space: [], workspace: ["Biscuit"] });
+  assert.deepEqual(ctx.persisted(), {
+    workspaceId: W2,
+    accountId: null,
+    space: [],
+    workspace: ["Biscuit"],
+  });
   assert.deepEqual(ctx.hints(), { space: [], workspace: ["Biscuit"] }, "it takes W2's instead");
   assert.equal(ctx.sentToMain.length, sent, "main keeps W2's");
 });

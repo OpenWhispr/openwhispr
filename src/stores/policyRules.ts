@@ -9,6 +9,7 @@ import {
   listRunnableLocalModels,
   registryData as modelRegistryData,
 } from "../models/registryData.js";
+import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 
 export type PolicyStatus = "idle" | "loading" | "managed" | "unmanaged" | "error";
 
@@ -841,6 +842,15 @@ interface CloudProviderOption {
   models?: ReadonlyArray<{ id: string }>;
 }
 
+// OpenRouter's speech-to-text catalog moves faster than the shortlist we ship,
+// so a vendor-prefixed id is a real selection even when the registry does not
+// list it; a bare id is another provider's leftover. Shared by the picker, the
+// settings store and the request resolver so none of them resets what another
+// keeps.
+export function acceptsUnlistedTranscriptionModel(providerId: string, modelId: string): boolean {
+  return providerId === "openrouter" && modelId.includes("/");
+}
+
 export function reconcileCloudProviderSelection({
   selectedProvider,
   selectedModel,
@@ -857,7 +867,14 @@ export function reconcileCloudProviderSelection({
   if (selectedProvider === "custom" && customAllowed) return null;
   const selected = allowedProviders.find((provider) => provider.id === selectedProvider);
   if (selected) {
-    if (!selected.models?.length || selected.models.some((model) => model.id === selectedModel)) {
+    if (
+      !selected.models?.length ||
+      selected.models.some((model) => model.id === selectedModel) ||
+      // An upload-only model is listed, so the unlisted pass-through must not
+      // keep it on a screen that leaves it out.
+      (acceptsUnlistedTranscriptionModel(selected.id, selectedModel) &&
+        !isUploadOnlyTranscriptionModel(selected.id, selectedModel))
+    ) {
       return null;
     }
     return { provider: selected.id, model: pickDefaultModelId(selected) };

@@ -72,7 +72,7 @@ export default function WorkspaceGeneralSection({
 
   return (
     <>
-      <SettingsWorkspaceFrame state={state}>
+      <SettingsWorkspaceFrame state={state} onChooseWorkspace={onChooseWorkspace}>
         {(workspace) => (
           <GeneralPage
             workspace={workspace}

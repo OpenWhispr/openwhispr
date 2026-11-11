@@ -1,4 +1,9 @@
-import bundled from "./modelRegistryData.json" with { type: "json" };
+import bundledCatalog from "./modelRegistryData.json" with { type: "json" };
+import { withAppTranscriptionProviders } from "./appTranscriptionProviders.js";
+
+// The catalog this build ships. Main's registry loader starts from it too.
+const bundled = withAppTranscriptionProviders(bundledCatalog);
+export { bundled as bundledRegistryData };
 
 const PROVIDER_SECTIONS = [
   "cloudProviders",

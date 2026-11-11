@@ -718,8 +718,8 @@
       "failedOffline": "Offline",
       "clearAll": "Cancella tutto",
       "clearAllTitle": "Cancella tutte le trascrizioni",
-      "clearAllDescription": "Tutte le trascrizioni, i file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo e dal tuo account.",
-      "clearAllDescriptionDevice": "Tutte le trascrizioni, i file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo. I conteggi già sincronizzati con un account non saranno interessati.",
+      "clearAllDescription": "Tutte le trascrizioni della tua cronologia, i relativi file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo e dal tuo account.",
+      "clearAllDescriptionDevice": "Tutte le trascrizioni di questa cronologia, i relativi file audio e i conteggi di Insights verranno rimossi definitivamente da questo dispositivo. Quelle già sincronizzate con un account verranno eliminate anche da quell'account al prossimo accesso su questo dispositivo.",
       "clearAllSuccess": "Cronologia cancellata",
       "clearAllErrorTitle": "Impossibile cancellare la cronologia",
       "clearAllErrorDescription": "Qualcosa è andato storto. Riprova.",
@@ -977,7 +977,8 @@
         "agentUnavailable": "Assistente non disponibile",
         "screenContextSkipped": "Contesto dello schermo ignorato",
         "cloudLimitReached": "Limite cloud settimanale raggiunto",
-        "providerRateLimited": "Limite di velocità del provider"
+        "providerRateLimited": "Limite di velocità del provider",
+        "outOfCredits": "Crediti esauriti"
       },
       "fallback": {
         "title": "Modalità fallback",
@@ -989,6 +990,11 @@
       "noAudio": {
         "title": "Non abbiamo capito",
         "description": "Controlla il microfono e riprova."
+      },
+      "commandAccountChanged": {
+        "title": "Comando senza risposta",
+        "description": "L'account è cambiato prima che finisse. La trascrizione si trova nella cronologia dell'account con cui l'hai pronunciato.",
+        "descriptionNotSaved": "L'account è cambiato prima che finisse. Ripetilo per chiedere ora."
       },
       "micDisconnected": {
         "title": "Microfono disconnesso",
@@ -1008,6 +1014,7 @@
         "offline": "Sei offline. La trascrizione cloud richiede una connessione Internet.",
         "dailyLimitReached": "Hai raggiunto il limite di trascrizioni di oggi. Riprova domani o aggiorna il tuo piano.",
         "providerRateLimited": "Il tuo provider di trascrizione ha limitato la richiesta. Attendi un momento e riprova.",
+        "openRouterOutOfCredits": "Il tuo account OpenRouter ha esaurito i crediti. Ricaricalo su openrouter.ai e riprova.",
         "chunkLoss": "Un problema di rete ha fatto perdere troppa parte della registrazione. Ritrascrivila dalla cronologia.",
         "agentReasoningFailed": "L'assistente vocale non è riuscito a elaborare il comando; è stata inserita la trascrizione grezza.",
         "screenContextSkipped": "Non è stato possibile inviare lo screenshot, quindi il comando è stato eseguito senza contesto dello schermo.",
@@ -2317,15 +2324,15 @@
       "lastSynced": "Ultima sincronizzazione {{time}}",
       "minutesAgo": "{{count}}m fa",
       "audioRetention": "Conservazione audio",
-      "audioRetentionDescription": "Salva l'audio di dettatura localmente per la ritrascrizione e il download. I file vengono eliminati automaticamente al termine del periodo di conservazione. L'audio delle riunioni non viene mai salvato.",
+      "audioRetentionDescription": "Salva l'audio di dettatura localmente per la ritrascrizione e il download. I file audio su questo dispositivo vengono eliminati automaticamente al termine del periodo di conservazione, qualunque sia l'account che li ha registrati. L'audio delle riunioni non viene mai salvato.",
       "audioRetentionDisabled": "Disattivato",
       "retentionDays_one": "{{count}} giorno",
       "retentionDays_other": "{{count}} giorni",
       "audioStorageUsage": "Spazio utilizzato",
       "audioStorageUsageDescription": "File audio salvati su questo dispositivo",
-      "audioStorageFiles": "{{count}} file, {{size}}",
-      "audioStorageEmpty": "Nessun file audio salvato",
-      "clearAllAudio": "Elimina tutti i file audio",
+      "audioStorageHistoryFiles": "{{count}} file in questa cronologia, {{size}}",
+      "audioStorageHistoryEmpty": "Nessun file audio in questa cronologia",
+      "clearHistoryAudio": "Elimina audio",
       "clearAllAudioConfirm": "Eliminare tutti i file audio salvati? Questa azione è irreversibile.",
       "saveDiscarded": "Salva le dettature scartate",
       "saveDiscardedDescription": "Quando annulli una dettatura con Escape, conserva l'audio nella cronologia per poterla recuperare. Richiede la conservazione di dati e audio attiva."
@@ -2488,6 +2495,10 @@
         "description": "Le aree di lavoro ti permettono di collaborare con il team e condividere note.",
         "create": "Crea area di lavoro"
       },
+      "personal": {
+        "title": "Sei in Personale",
+        "description": "Scegli un'area di lavoro per gestirne le impostazioni."
+      },
       "loadError": {
         "title": "Impossibile caricare le aree di lavoro",
         "description": "Controlla la connessione e riprova.",
@@ -2498,6 +2509,7 @@
         "general": "Generale",
         "members": "Membri",
         "invitations": "Inviti",
+        "guests": "Ospiti",
         "teams": "Team"
       },
       "people": {
@@ -3076,6 +3088,59 @@
         "title": "Console Enterprise",
         "description": "Gestisci SSO, policy e membri dal web",
         "open": "Apri console"
+      },
+      "guests": {
+        "columns": {
+          "name": "Nome",
+          "access": "Accesso",
+          "actions": "Azioni"
+        },
+        "emptyTitle": "Ancora nessun ospite",
+        "emptyBody": "Le persone esterne a questo spazio di lavoro che possono vedere le tue note condivise compariranno qui.",
+        "loadingTitle": "Caricamento degli ospiti…",
+        "loadingBody": "Gli ospiti del tuo spazio di lavoro compariranno qui.",
+        "failedTitle": "Impossibile caricare gli ospiti",
+        "failedBody": "Controlla la connessione e riprova.",
+        "noteCount_one": "{{count}} nota",
+        "noteCount_other": "{{count}} note",
+        "notesTriggerLabel_one": "{{count}} nota condivisa con {{name}}",
+        "notesTriggerLabel_other": "{{count}} note condivise con {{name}}",
+        "removeFromNote": "Rimuovi da {{note}}",
+        "removedFromNote": "{{name}} è stato rimosso da {{note}}",
+        "removeFromNoteFailed": "Impossibile rimuovere {{name}} da {{note}}. Controlla la connessione e riprova.",
+        "menu": {
+          "label": "Azioni per {{name}}",
+          "invite": "Invita nel workspace",
+          "copyEmail": "Copia email",
+          "remove": "Rimuovi come ospite"
+        },
+        "invite": {
+          "title_one": "Invita {{count}} ospite in {{workspace}}",
+          "title_other": "Invita {{count}} ospiti in {{workspace}}",
+          "description": "Riceveranno un link via email per unirsi a {{workspace}}.",
+          "sent_one": "Inviato {{count}} invito per unirsi a {{workspace}}",
+          "sent_other": "Inviati {{count}} inviti per unirsi a {{workspace}}"
+        },
+        "remove": {
+          "titleOne": "Rimuovere {{name}} da {{workspace}}?",
+          "confirmOne": "Rimuovi ospite",
+          "title_one": "Rimuovere {{count}} ospite da {{workspace}}?",
+          "title_other": "Rimuovere {{count}} ospiti da {{workspace}}?",
+          "body": "Perderanno l'accesso a tutte le note condivise con loro. Puoi condividere di nuovo le note con loro in qualsiasi momento.",
+          "linkShared": "Gli ospiti potrebbero avere ancora accesso tramite la condivisione via link o dominio.",
+          "confirm_one": "Rimuovi {{count}} ospite",
+          "confirm_other": "Rimuovi {{count}} ospiti",
+          "removing": "Rimozione in corso…",
+          "limit": "Seleziona fino a {{count}} ospiti da rimuovere alla volta.",
+          "failed": "Impossibile rimuovere gli ospiti. Nessuno è stato rimosso. Controlla la connessione e riprova.",
+          "done_one": "Rimosso {{count}} ospite",
+          "done_other": "Rimossi {{count}} ospiti"
+        },
+        "selection": {
+          "selectAll": "Seleziona tutti gli ospiti",
+          "invite": "Invita nel workspace",
+          "remove": "Rimuovi come ospite"
+        }
       }
     },
     "enterpriseCheckout": {
@@ -3153,7 +3218,15 @@
         "assemblyai_universal_3_5_pro": "Massima precisione in tempo reale, 18 lingue",
         "assemblyai_universal_3_6_pro": "Massima precisione in tempo reale, 32 lingue",
         "mistral_voxtral_mini_transcribe_3_0": "Trascrizione veloce in oltre 50 lingue (anteprima)",
-        "mistral_voxtral_small_transcribe_3_0": "Il Voxtral più preciso, oltre 50 lingue (anteprima)"
+        "mistral_voxtral_small_transcribe_3_0": "Il Voxtral più preciso, oltre 50 lingue (anteprima)",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Trascrizione multilingue veloce e precisa di Mistral",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "Trascrizione economica di NVIDIA in 40 lingue",
+        "openrouter_deepgram_nova_3": "Trascrizione multilingue veloce di Deepgram",
+        "openrouter_assemblyai_universal_3_6_pro": "La trascrizione più precisa di AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "Trascrizione precisa di ElevenLabs in oltre 90 lingue",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "Il modello di trascrizione multilingue più grande di Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "Trascrizione economica di NVIDIA per le lingue europee",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "La trascrizione multilingue più economica di NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",
@@ -4003,6 +4076,9 @@
     "wordsReady_many": "{{count}} di parole pronte",
     "wordsReady_other": "{{count}} parole pronte",
     "promptLimitNotice": "Il tuo dizionario contiene {{chars}} caratteri. I modelli Groq e Whisper ne leggono solo le ultime centinaia di caratteri, quindi lì conviene un elenco più corto. Gli altri modelli ricevono l'elenco completo.",
+    "openRouterIgnoredNotice": "OpenRouter non passa il tuo dizionario ai suoi modelli vocali, quindi queste parole non guideranno la trascrizione finché è selezionato per la dettatura.",
+    "localModelIgnoredNotice": "{{model}} non può usare il tuo dizionario, quindi queste parole non guideranno la trascrizione finché è selezionato per la dettatura. La pulizia IA le applica comunque quando è attiva.",
+    "localModelHotwordsLimitNotice": "{{model}} usa fino a {{limit}} voci del dizionario per guidare la trascrizione. Hanno la precedenza le voci personali, poi quelle dei tuoi teamspace e infine quelle del tuo spazio di lavoro.",
     "exportDictionary": "Esporta dizionario",
     "exportFailed": "Esportazione non riuscita",
     "editWord": "Modifica {{word}}",
@@ -4173,6 +4249,7 @@
       },
       "locked": {
         "noWorkspace": "I dizionari condivisi sono inclusi in Business. Condividi con tutti il gergo, i nomi dei prodotti e gli acronimi del tuo team.",
+        "chooseWorkspace": "Sei in Personale. Passa a un'area di lavoro per usarne le parole condivise.",
         "upgradeAdmin": "I dizionari condivisi sono inclusi in Business. Passa {{workspace}} a un piano superiore così tutti avranno le stesse parole.",
         "upgradeMember": "I dizionari condivisi sono inclusi in Business. Chiedi a un amministratore di passare {{workspace}} a un piano superiore.",
         "paused_one": "La {{count}} parola condivisa di {{workspace}} è in pausa. Passa a Business per usarla di nuovo nella dettatura.",

@@ -202,6 +202,29 @@ test("a policy that moves a configured override's provider clears its model", as
   });
 });
 
+// OpenRouter's catalog is live, so the registry holds no default for it; a policy
+// that forces it used to leave the assistant with an empty model.
+test("a policy that allows only OpenRouter lands on its default model", async (t) => {
+  const { useSettingsStore, selectPolicyEffectiveSettings } = await loadStore(
+    t,
+    {
+      ...unconfiguredOverride,
+      dictationAgentMode: "providers",
+      dictationAgentProvider: "openai",
+      dictationAgentModel: "gpt-6-astra",
+    },
+    "openwhispr-policy-openrouter-default-test-"
+  );
+
+  const effective = selectPolicyEffectiveSettings(
+    useSettingsStore.getState(),
+    managedByokPolicy(["openrouter"])
+  );
+
+  assert.equal(effective.dictationAgentProvider, "openrouter");
+  assert.equal(effective.dictationAgentModel, "anthropic/claude-haiku-5.5");
+});
+
 test("a blocked local assistant's screenshot reaches neither Chat nor a permitted vision override", async (t) => {
   const { useSettingsStore, selectPolicyEffectiveSettings, resolveChatStreamingInference } =
     await loadStore(

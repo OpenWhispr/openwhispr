@@ -16,13 +16,14 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import WorkspaceInvitationsTab from "./WorkspaceInvitationsTab";
+import WorkspaceGuestsTab from "./WorkspaceGuestsTab";
 import WorkspaceMembersTab from "./WorkspaceMembersTab";
 import WorkspaceTeamsTab from "./WorkspaceTeamsTab";
 import SettingsWorkspaceFrame from "./SettingsWorkspaceFrame";
 import { useSettingsWorkspace } from "./useSettingsWorkspace";
 import { useWorkspaceInvitations } from "./useWorkspaceInvitations";
 
-const PEOPLE_TABS = ["members", "invitations", "teams"] as const;
+const PEOPLE_TABS = ["members", "invitations", "guests", "teams"] as const;
 type PeopleTab = (typeof PEOPLE_TABS)[number];
 
 const PEOPLE_TAB_KEY = "settings.workspacePeopleTab";
@@ -87,7 +88,10 @@ function PeopleBody({
   const tab: PeopleTab = stored === "invitations" && !canManage ? "members" : stored;
   const canCreateTeam = teamCreationFor(workspace) !== "unavailable";
   // While no team exists the Teams tab's empty state has its own Create, as the design draws it.
-  const showAdd = (canManage || canCreateTeam) && !(tab === "teams" && teamsEmpty);
+  // Guests come from note shares, never an invite, so Add there would read as "add a guest" while
+  // sending a member invitation; each guest row keeps its own Invite to workspace.
+  const showAdd =
+    (canManage || canCreateTeam) && tab !== "guests" && !(tab === "teams" && teamsEmpty);
   const visibleTabs = PEOPLE_TABS.filter((id) => id !== "invitations" || canManage);
 
   const knownEmails = useMemo(
@@ -215,6 +219,9 @@ function PeopleBody({
         )}
         {tab === "invitations" && (
           <WorkspaceInvitationsTab workspace={workspace} invitations={invitations} />
+        )}
+        {tab === "guests" && (
+          <WorkspaceGuestsTab workspace={workspace} onInvitationsChanged={reload} />
         )}
         {tab === "teams" && (
           <WorkspaceTeamsTab
