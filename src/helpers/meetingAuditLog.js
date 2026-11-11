@@ -111,7 +111,8 @@ function createMeetingAuditLog({
           continue;
         if (name > today) continue;
         const stat = await fs.promises.lstat(path.join(dir, name));
-        if (stat.isFile() && (!process.getuid || stat.uid === process.getuid())) files.push(name);
+        if (stat.isFile() && stat.nlink === 1 && (!process.getuid || stat.uid === process.getuid()))
+          files.push(name);
       }
       await Promise.all(
         files.slice(0, -KEEP_FILES).map((name) => fs.promises.unlink(path.join(dir, name)))

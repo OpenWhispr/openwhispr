@@ -205,6 +205,27 @@ test("rotation ignores future-dated names, keeping the user's real files", async
   assert.ok(kept.includes(`meeting-audit-jdoe-${day(0)}.jsonl`));
 });
 
+// macOS has no protected_hardlinks, so another user can hard-link this user's files
+// under newer names; those links must not count toward the 90 kept.
+test(
+  "rotation ignores hard links, keeping the user's real files",
+  { skip: process.platform === "win32" },
+  async () => {
+    const dir = path.join(userData, "audit");
+    fs.mkdirSync(dir);
+    const name = (offset) => path.join(dir, `meeting-audit-jdoe-${day(offset)}.jsonl`);
+    for (let offset = 41; offset <= 130; offset += 1) fs.writeFileSync(name(offset), "{}\n");
+    for (let offset = 1; offset <= 40; offset += 1) fs.linkSync(name(130), name(offset));
+
+    const { log } = harness();
+    log.recordingRefused({ noteId: null, trigger: "tray", reason: "POLICY_UNRESOLVABLE" });
+    await log.flush();
+
+    for (let offset = 41; offset <= 130; offset += 1)
+      assert.ok(fs.existsSync(name(offset)), day(offset));
+  }
+);
+
 // A device-wide AuditLogPath is shared by every OS user on the device.
 test("users sharing an AuditLogPath each write their own daily file", async () => {
   const shared = path.join(userData, "shared");
