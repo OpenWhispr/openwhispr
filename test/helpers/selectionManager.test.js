@@ -1167,3 +1167,79 @@ test("empty replacement output is rejected without consuming a paste", async () 
   });
   assert.equal(pastes.length, 0);
 });
+
+test("_sameTarget normalizes Windows window handles across formats", () => {
+  const manager = new SelectionManager({
+    clipboardManager: { runClipboardOperation: (op) => op() },
+    platform: "win32",
+  });
+
+  // Zero-padded hex string vs unpadded hex string
+  assert.equal(
+    manager._sameTarget(
+      { kind: "win-hwnd", id: "0x0000000000001a04" },
+      { kind: "win-hwnd", id: "0x1a04" }
+    ),
+    true
+  );
+
+  // Uppercase hex with prefix vs lowercase without prefix
+  assert.equal(
+    manager._sameTarget(
+      { kind: "win-hwnd", id: "0X1A04" },
+      { kind: "win-hwnd", id: "1a04" }
+    ),
+    true
+  );
+
+  // Distinct handles
+  assert.equal(
+    manager._sameTarget(
+      { kind: "win-hwnd", id: "0x1a04" },
+      { kind: "win-hwnd", id: "0x1a05" }
+    ),
+    false
+  );
+
+  // Mismatched target kinds
+  assert.equal(
+    manager._sameTarget(
+      { kind: "win-hwnd", id: "0x1a04" },
+      { kind: "mac-pid", pid: "0x1a04" }
+    ),
+    false
+  );
+});
+
+test("replaceSelectedText passes targetWindow when target is a win-hwnd", async () => {
+  let pasteOptions;
+  const manager = new SelectionManager({
+    clipboardManager: {
+      runClipboardOperation: (op) => op(),
+      _pasteText: async (text, options) => {
+        pasteOptions = options;
+        return { pasted: true, restoreComplete: Promise.resolve() };
+      },
+    },
+    platform: "win32",
+    now: () => 1000,
+  });
+
+  // Stub _readCurrentSelection to report the matching selection
+  manager._readCurrentSelection = async () => ({
+    status: "selected",
+    text: "original text",
+    target: { kind: "win-hwnd", id: "0x1a04" },
+  });
+
+  const sessionId = "test-session";
+  manager.sessions.set(sessionId, {
+    text: "original text",
+    target: { kind: "win-hwnd", id: "0x1a04" },
+    expiresAt: 5000,
+  });
+
+  const res = await manager.replaceSelectedText(sessionId, "replaced text");
+  assert.equal(res.success, true);
+  assert.equal(pasteOptions?.targetWindow, "0x1a04");
+});
