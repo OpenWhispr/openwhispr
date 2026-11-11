@@ -1420,6 +1420,23 @@ test("sync defers both the user-only preparation gap and a held real lookup unti
   };
   h.db.api.markConversationCreateAttempted = async () => ({ success: true });
   h.db.api.acknowledgeConversationCreate = async () => ({ success: true, outcome: "synced" });
+  // A chat is pushed as the validated sign-in; without one nothing is sent.
+  h.db.api.authGetTokenState = async () => ({ token: "token-a", generation: 1 });
+  const origin = "https://auth.openwhispr.test";
+  globalThis.window.location = { origin };
+  const auth = await h.vite.ssrLoadModule("/lib/authRequestContext.ts");
+  await h.act(async () => {
+    const request = await auth.prepareAuthRequest({
+      url: `${origin}/api/auth/get-session`,
+      headers: {},
+    });
+    await auth.handleAuthRequestSuccess({
+      data: { user: { id: "account-a" } },
+      response: new Response(null),
+      request,
+    });
+    assert.equal(auth.commitValidatedAuthContext(1, "account-a"), true);
+  });
   const sync = new SyncService();
   let sending;
   await h.act(async () => {

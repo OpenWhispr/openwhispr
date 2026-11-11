@@ -46,7 +46,16 @@ const SPEECH_CHUNKS_MAX_SAMPLES = MAX_EMBEDDING_SAMPLES * 4;
 const SPEECH_THRESHOLD = 0.15;
 const SILENCE_THRESHOLD = 0.08;
 const SILENCE_WINDOWS_TO_END = 24;
-const MATCH_THRESHOLD = 0.65;
+// Minimum cosine to treat a live segment as an existing speaker (a voice already
+// heard in this meeting, or a stored profile). Calibrated for the zh-en "advanced"
+// CAM++ with Kaldi fbank: on real meetings, 0.60 kept wrong profile matches near
+// 2% while matching ~99% of segments to the right in-meeting voice. The old 0.65
+// was tuned to the previous model, whose embeddings sat in such a narrow cone that
+// most different speakers still cleared it.
+const MATCH_THRESHOLD = 0.6;
+// Merging two in-meeting voices has no runner-up margin to lean on, so it needs a
+// stricter bar: at 0.70 fewer than 1% of voices had a different speaker that close.
+const RECLUSTER_THRESHOLD = 0.7;
 const MATCH_MARGIN = 0.03;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 // The 24 kHz -> 16 kHz resampler restarts on every buffer and only divides
@@ -171,6 +180,7 @@ class LiveSpeakerIdentifier {
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentForced = false;
     this.lastLiveIdentificationSample = 0;
     this._diarizationManager = null;
     this.maxSpeakers = MAX_SPEAKER_COUNT;
@@ -283,7 +293,7 @@ class LiveSpeakerIdentifier {
         if (removed.has(speakers[j][0])) continue;
 
         const similarity = speakerEmbeddings.cosineSimilarity(speakers[i][1], speakers[j][1]);
-        if (similarity < MATCH_THRESHOLD) continue;
+        if (similarity < RECLUSTER_THRESHOLD) continue;
 
         // Confirmed-distinct identities (different profiles, or different
         // user-set names) must never merge on embedding similarity alone.
@@ -447,6 +457,7 @@ class LiveSpeakerIdentifier {
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentForced = false;
     this.lastLiveIdentificationSample = 0;
     this._resetVadRuntimeState();
   }
@@ -527,6 +538,7 @@ class LiveSpeakerIdentifier {
     this.silenceWindows = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentForced = false;
     this.lastLiveIdentificationSample = 0;
   }
 
@@ -631,6 +643,7 @@ class LiveSpeakerIdentifier {
 
     this.currentSegmentSpeakerId = resolved.speakerId;
     this.currentSegmentSpeakerName = resolved.displayName || null;
+    this.currentSegmentForced = resolved.forced;
     this.lastLiveIdentificationSample = this.segmentEndSample;
 
     if (!this.enabled) return;
@@ -683,6 +696,7 @@ class LiveSpeakerIdentifier {
 
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
+    this.currentSegmentForced = false;
     this.lastLiveIdentificationSample = 0;
   }
 
@@ -755,22 +769,27 @@ class LiveSpeakerIdentifier {
 
     let speakerId = this.currentSegmentSpeakerId || this._findTransientMatch(embedding);
     let displayName = this.currentSegmentSpeakerName || null;
+    // Set only while the segment's label came from an at-cap fold.
+    let forced = this.currentSegmentForced;
 
     if (speakerId) {
-      if (updateCentroid) {
+      // A folded segment keeps its label to its end, but its voice joins the
+      // centroid only if the whole segment turns out to match the cluster (see
+      // _assignOrForceCluster).
+      if (updateCentroid && (!forced || this._findTransientMatch(embedding) === speakerId)) {
         this._updateCentroid(speakerId, embedding);
       }
 
       return {
         speakerId,
         displayName: displayName || this.transientDisplayNames.get(speakerId) || null,
+        forced,
       };
     }
 
     const matchedProfile = this._findStoredProfileMatch(embedding);
     if (matchedProfile) {
       speakerId = this._findTransientSpeakerForProfile(matchedProfile.id);
-      let forced = false;
       if (!speakerId) {
         ({ speakerId, forced } = this._assignOrForceCluster(embedding));
       } else if (updateCentroid) {
@@ -785,6 +804,7 @@ class LiveSpeakerIdentifier {
         return {
           speakerId,
           displayName: this.transientDisplayNames.get(speakerId) || null,
+          forced,
         };
       }
 
@@ -793,21 +813,16 @@ class LiveSpeakerIdentifier {
       return {
         speakerId,
         displayName: matchedProfile.display_name,
+        forced,
       };
     }
 
-    speakerId = this.currentSegmentSpeakerId;
-    if (speakerId) {
-      if (updateCentroid) {
-        this._updateCentroid(speakerId, embedding);
-      }
-    } else {
-      ({ speakerId } = this._assignOrForceCluster(embedding));
-    }
+    ({ speakerId, forced } = this._assignOrForceCluster(embedding));
 
     return {
       speakerId,
       displayName: this.transientDisplayNames.get(speakerId) || null,
+      forced,
     };
   }
 

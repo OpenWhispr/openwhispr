@@ -736,8 +736,8 @@
       "rawTranscript": "Transcription brute",
       "clearAll": "Tout effacer",
       "clearAllTitle": "Effacer toutes les transcriptions",
-      "clearAllDescription": "Toutes les transcriptions, tous les fichiers audio et les compteurs Insights seront définitivement supprimés de cet appareil et de votre compte.",
-      "clearAllDescriptionDevice": "Toutes les transcriptions, tous les fichiers audio et les compteurs Insights seront définitivement supprimés de cet appareil. Les compteurs déjà synchronisés avec un compte ne seront pas affectés.",
+      "clearAllDescription": "Toutes les transcriptions de votre historique, leurs fichiers audio et les compteurs Insights seront définitivement supprimés de cet appareil et de votre compte.",
+      "clearAllDescriptionDevice": "Toutes les transcriptions de cet historique, leurs fichiers audio et les compteurs Insights seront définitivement supprimés de cet appareil. Celles qui ont déjà été synchronisées avec un compte seront aussi supprimées de ce compte la prochaine fois qu'il se connectera sur cet appareil.",
       "clearAllSuccess": "Historique effacé",
       "clearAllErrorTitle": "Impossible d'effacer l'historique",
       "clearAllErrorDescription": "Une erreur est survenue. Veuillez réessayer.",
@@ -990,6 +990,11 @@
       "noAudio": {
         "title": "Nous n’avons pas compris",
         "description": "Vérifiez votre microphone et réessayez."
+      },
+      "commandAccountChanged": {
+        "title": "Commande sans réponse",
+        "description": "Le compte a changé avant la fin. Sa transcription se trouve dans l'historique du compte sous lequel vous l'avez dictée.",
+        "descriptionNotSaved": "Le compte a changé avant la fin. Redites-la pour poser la question maintenant."
       },
       "micDisconnected": {
         "title": "Microphone déconnecté",
@@ -3067,15 +3072,15 @@
       "modelListUpdates": "Mises à jour de la liste des modèles",
       "modelListUpdatesDescription": "Consulte toutes les 15 minutes la liste publique des modèles d'OpenWhispr sur GitHub pour repérer les modèles nouveaux et retirés. Les changements prennent pleinement effet après un redémarrage.",
       "audioRetention": "Conservation de l'audio",
-      "audioRetentionDescription": "Stocke l'audio de dictée localement pour la retranscription et le téléchargement. Les fichiers sont automatiquement supprimés après la période de conservation. L'audio des réunions n'est jamais stocké.",
+      "audioRetentionDescription": "Stocke l'audio de dictée localement pour la retranscription et le téléchargement. Les fichiers audio de cet appareil sont automatiquement supprimés après la période de conservation, quel que soit le compte qui les a enregistrés. L'audio des réunions n'est jamais stocké.",
       "audioRetentionDisabled": "Désactivé",
       "retentionDays_one": "{{count}} jour",
       "retentionDays_other": "{{count}} jours",
       "audioStorageUsage": "Espace utilisé",
       "audioStorageUsageDescription": "Fichiers audio stockés sur cet appareil",
-      "audioStorageFiles": "{{count}} fichiers, {{size}}",
-      "audioStorageEmpty": "Aucun fichier audio stocké",
-      "clearAllAudio": "Supprimer tous les fichiers audio",
+      "audioStorageHistoryFiles": "{{count}} fichiers dans cet historique, {{size}}",
+      "audioStorageHistoryEmpty": "Aucun fichier audio dans cet historique",
+      "clearHistoryAudio": "Supprimer l'audio",
       "clearAllAudioConfirm": "Supprimer tous les fichiers audio stockés ? Cette action est irréversible.",
       "dataRetention": "Conservation des données",
       "dataRetentionDescription": "Stocker les transcriptions et l'audio localement dans votre historique. Lorsque désactivé, les transcriptions sont collées mais pas enregistrées.",

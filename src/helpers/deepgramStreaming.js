@@ -65,8 +65,7 @@ const NOVA3_LANGUAGES = new Set([
   "multi",
 ]);
 
-// 100ms of silence at 16kHz 16-bit mono — sent to warm connections to prevent
-// Deepgram's net0001 idle timeout (which only resets on audio data, not KeepAlive).
+// 100ms of silence at 16kHz 16-bit mono to keep cached warm sockets alive.
 const SILENCE_FRAME = Buffer.alloc((SAMPLE_RATE / 10) * 2);
 
 // Deepgram binds the scheme to the credential: a raw API key (BYOK) is accepted
@@ -230,9 +229,7 @@ class DeepgramStreaming {
     this.keepAliveInterval = setInterval(() => {
       if (target && target.readyState === WebSocket.OPEN) {
         try {
-          // Warm connections send silence audio — Deepgram's net0001 idle timeout
-          // only resets on audio data, not KeepAlive messages, for pre-audio sessions.
-          // Active connections use KeepAlive JSON (audio flow already resets the timer).
+          // KeepAlive also prevents idle timeouts before capture starts sending audio.
           target.send(isWarm ? SILENCE_FRAME : JSON.stringify({ type: "KeepAlive" }));
         } catch (err) {
           debugLogger.debug("Deepgram keep-alive failed", { error: err.message });
@@ -643,6 +640,7 @@ class DeepgramStreaming {
     };
     this.accumulatedText = "";
     this.finalSegments = [];
+    this.sessionStartedAt = null;
     this.audioBytesSent = 0;
     this.resultsReceived = 0;
     this.connectionLossNotified = false;
@@ -699,6 +697,15 @@ class DeepgramStreaming {
 
       this.ws.on("open", () => {
         debugLogger.debug("Deepgram WebSocket connected");
+        // Deepgram may send nothing until audio arrives, while meeting capture
+        // waits for connect(). Start keep-alive now to cover slow capture setup.
+        this.isConnected = true;
+        clearTimeout(this.connectionTimeout);
+        this.connectionTimeout = null;
+        this.startKeepAlive(this.ws);
+        this.pendingResolve?.();
+        this.pendingResolve = null;
+        this.pendingReject = null;
       });
 
       this.ws.on("message", (data) => {
@@ -762,26 +769,6 @@ class DeepgramStreaming {
   handleMessage(data) {
     try {
       const message = JSON.parse(data.toString());
-
-      // Resolve pending connect() promise on first valid message.
-      // With nova-3, when audio is already flowing, Deepgram may skip
-      // the Metadata message and jump straight to SpeechStarted/Results.
-      if (this.pendingResolve) {
-        this.isConnected = true;
-        this.sessionStartedAt = Date.now();
-        clearTimeout(this.connectionTimeout);
-        this.startKeepAlive(this.ws);
-        if (message.type === "Metadata") {
-          this.sessionId = message.request_id;
-        }
-        debugLogger.debug("Deepgram session started", {
-          sessionId: this.sessionId,
-          firstMessageType: message.type,
-        });
-        this.pendingResolve();
-        this.pendingResolve = null;
-        this.pendingReject = null;
-      }
 
       switch (message.type) {
         case "Metadata":
@@ -867,6 +854,11 @@ class DeepgramStreaming {
 
     if (this.keepAliveInterval) {
       this.stopKeepAlive();
+    }
+
+    // Deepgram offsets start with PCM audio, not the earlier socket handshake.
+    if (this.audioBytesSent === 0) {
+      this.sessionStartedAt = Date.now();
     }
 
     // Flush any audio buffered during cold start

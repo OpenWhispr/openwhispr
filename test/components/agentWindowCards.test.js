@@ -1660,6 +1660,40 @@ test("closing cancels the captured session while native replacement is still pen
   assert.deepEqual(globalThis.__chat.sent, []);
 });
 
+test("the modal shows Thinking... once: in the pill, unless the streaming reply's row shows it", async (t) => {
+  const view = await mountWindow(t);
+  const shown = () => view.host.textContent.split("Thinking...").length - 1;
+  await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+  await React.act(async () => view.main.handlers.hotkey({ external: false }));
+  await view.settle();
+
+  await view.chat({ busy: true, messages: [user] });
+  assert.equal(shown(), 1, "before the reply exists, the pill shows it");
+  await view.chat({ messages: [user, reply([])] });
+  assert.equal(shown(), 1, "once the reply streams, only its row shows it");
+  assert.equal(
+    view.host.querySelector("[data-agent-message]")?.textContent.includes("Thinking..."),
+    true
+  );
+  assert.ok(view.button("Stop"));
+
+  // A selection edit adds nothing to the conversation.
+  await view.chat({ busy: false, messages: [] });
+  const edit = defer();
+  globalThis.__selectionEdits.result = edit.promise;
+  view.happyWindow.electronAPI.captureSelectedText = async () => ({
+    status: "selected",
+    sessionId: "s1",
+    text: "Original",
+  });
+  view.happyWindow.electronAPI.replaceSelectedText = async () => ({ success: true });
+  await React.act(async () => view.main.handlers.hotkey({ external: true }));
+  await React.act(async () => globalThis.__voice.callbacks.onTranscript("Rewrite this", "submit"));
+  assert.equal(view.layout(), "modal");
+  assert.equal(shown(), 1, "a selection edit shows it in the pill");
+  await React.act(async () => edit.resolve("Rewritten"));
+});
+
 test("composer Stop cancels a selection edit after switching to the keyboard", async (t) => {
   const view = await mountWindow(t);
   const edit = defer();
