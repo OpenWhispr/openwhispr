@@ -1442,6 +1442,89 @@ test("a local prepare cannot replace the policy identity of an active remote mee
   assert.ok(streams.every((stream) => !stream.isConnected));
 });
 
+// The end-of-stream frame makes the server finalize what it holds; it answers
+// with that final the way the provider does.
+for (const [provider, saveChannel, clientModule, endFrame, finalFrames] of [
+  [
+    "assemblyai-realtime",
+    "save-assemblyai-key",
+    "assemblyAiStreaming",
+    "Terminate",
+    [
+      { type: "Turn", transcript: "revoked audio", end_of_turn: true, turn_is_formatted: true },
+      { type: "Termination" },
+    ],
+  ],
+  [
+    "deepgram-realtime",
+    "save-deepgram-key",
+    "deepgramStreaming",
+    "CloseStream",
+    [
+      {
+        type: "Results",
+        is_final: true,
+        channel: { alternatives: [{ transcript: "revoked audio" }] },
+      },
+    ],
+  ],
+]) {
+  for (const restriction of ["local-only", "provider"]) {
+    test(`${restriction} revocation closes a real ${provider} meeting without finalizing its audio`, async (t) => {
+      const { WebSocketServer } = require("ws");
+      const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+      await once(server, "listening");
+      t.after(() => server.close());
+      const received = [];
+      const audio = deferred();
+      const closed = deferred();
+      let open = 0;
+      server.on("connection", (socket) => {
+        open++;
+        socket.on("close", () => --open === 0 && closed.resolve());
+        socket.on("message", (data, isBinary) => {
+          if (isBinary) return audio.resolve();
+          const { type } = JSON.parse(data);
+          received.push(type);
+          if (type !== endFrame) return;
+          for (const frame of finalFrames) socket.send(JSON.stringify(frame));
+          socket.close();
+        });
+        if (provider === "assemblyai-realtime")
+          socket.send(JSON.stringify({ type: "Begin", id: "session" }));
+      });
+      const clients = require(meetingProvidersPath).STREAMING_CLIENT_BY_PROVIDER;
+      const original = clients[provider];
+      clients[provider] = class extends require(`../../src/helpers/${clientModule}`) {
+        buildWebSocketUrl() {
+          return `ws://127.0.0.1:${server.address().port}`;
+        }
+      };
+      t.after(() => (clients[provider] = original));
+      resetMeeting(t);
+      invoke(saveChannel, "saved-provider-key");
+      assert.equal(
+        (await invoke("meeting-transcription-start", { provider, mode: "byok" })).success,
+        true
+      );
+      const notified = notifications.length;
+      target._meetingMicStreaming.sendAudio(Buffer.alloc(9600));
+      await audio.promise;
+      revokeTranscription(restriction);
+      await closed.promise;
+      assert.equal(received.includes(endFrame), false);
+      assert.deepEqual(
+        notifications
+          .slice(notified)
+          .filter(
+            ([, channel, segment]) => channel === "meeting-transcription-segment" && segment.text
+          ),
+        []
+      );
+    });
+  }
+}
+
 test("valid local-only policy refreshes retain permitted local work", () => {
   setDeviceValues({ RequireSignIn: false });
   const local = new AbortController();

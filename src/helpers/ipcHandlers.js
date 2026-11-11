@@ -13586,7 +13586,7 @@ class IPCHandlers {
             {},
             "streaming"
           );
-          await this.assemblyAiStreaming.disconnect(false);
+          await this.assemblyAiStreaming.disconnect({ commit: false });
         }
 
         const hasWarm = this.assemblyAiStreaming.hasWarmConnection();
@@ -13673,7 +13673,7 @@ class IPCHandlers {
       try {
         let result = { text: "" };
         if (this.assemblyAiStreaming) {
-          result = await this.assemblyAiStreaming.disconnect(true);
+          result = await this.assemblyAiStreaming.disconnect();
           this.assemblyAiStreaming.cleanupAll();
           this.assemblyAiStreaming = null;
         }
@@ -13868,7 +13868,7 @@ class IPCHandlers {
 
         if (this.deepgramStreaming.isConnected) {
           debugLogger.debug("Deepgram cleaning up stale connection before start", {}, "streaming");
-          await this.deepgramStreaming.disconnect(false);
+          await this.deepgramStreaming.disconnect({ commit: false });
         }
 
         const hasWarm = this.deepgramStreaming.hasWarmConnection();
@@ -13981,7 +13981,7 @@ class IPCHandlers {
         const audioBytesSent = this.deepgramStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.deepgramStreaming) {
-          result = await this.deepgramStreaming.disconnect(true);
+          result = await this.deepgramStreaming.disconnect();
         }
 
         return { success: true, text: result?.text || "", model, audioBytesSent };
