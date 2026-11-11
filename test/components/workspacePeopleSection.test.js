@@ -311,6 +311,11 @@ test("an invite sent from Guests reloads the invitations list", async (t) => {
   assert.equal(globalThis.__reloadCalls, 1);
 });
 
+test("Add stays off the Guests tab, since guests come from note shares, not invites", async (t) => {
+  const Section = await loadSection(t, { storedTab: "guests" });
+  assert.doesNotMatch(render(Section, ADMIN), /settingsPage\.workspace\.people\.addLabel/);
+});
+
 test("a deep-linked invitations tab shows members without manage_members", async (t) => {
   const Section = await loadSection(t);
   const markup = render(Section, MEMBER, { initialSubTab: "invitations" });
