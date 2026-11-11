@@ -4,8 +4,10 @@ import { publishWorkspaceScope, useWorkspaceStore } from "./workspaceStore";
 /**
  * Keeps main's workspace scope in step with this window's workspace store: on start, whenever
  * the active or default workspace or the list's account changes, and after every account change
- * in main, which forgets the scope then. Once the default workspace is known, main binds the
- * account's pending Private to it, again after each account change.
+ * in main. Main starts a launch from the account's saved scope (a login launch may never open
+ * this window) and forgets the scope on an account change in a running session, as this store
+ * does (D43). Once the default workspace is known, main binds the account's pending Private to
+ * it, again after each account change.
  *
  * The sign-in claim of signed-out notes isn't sent from here: main runs it inside
  * set-active-account-scope, the one moment such notes become the account's, and a later call

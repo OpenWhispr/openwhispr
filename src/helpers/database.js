@@ -427,7 +427,8 @@ class DatabaseManager {
     this._saveWorkspaceScope();
   }
 
-  // Keeps the active account's scope for its next sign-in or launch (D40).
+  // Keeps the active account's scope for its next launch (D40; a sign-in in a
+  // running session starts from none, D43).
   _saveWorkspaceScope() {
     if (!this.activeAccountId) return;
     try {
@@ -6017,8 +6018,9 @@ class DatabaseManager {
   }
 
   // The account's default private space. With the default workspace known,
-  // that workspace's row; unknown (main forgets the workspaces on every
-  // account change), the row the account last bound as its default. Failing
+  // that workspace's row; unknown (main forgets the workspaces on an account
+  // change in a running session, and a launch may have no saved scope), the
+  // row the account last bound as its default. Failing
   // that, its pending row (no workspace yet), which bindDefaultPrivateSpace
   // binds, made if missing: for an account that has never bound, or whose
   // new default has no row before its bind. Signed out, the stand-in.
@@ -6056,8 +6058,9 @@ class DatabaseManager {
   // for the teamspace's workspace when main knows that workspace (the active
   // or the default one), else the account's default Private. A workspace main
   // doesn't know may be one the account has lost, and a row made for it would
-  // keep the note where no workspace shows it. Main forgets the workspaces on
-  // every account change, and knows none for an account that isn't signed in.
+  // keep the note where no workspace shows it. Main starts a launch from the
+  // account's saved scope, forgets it on an account change in a running
+  // session (D43), and knows none for an account that isn't signed in.
   // No account: the stand-in.
   _forkPrivateSpaceId(workspaceId, accountId = this.activeAccountId) {
     if (accountId == null) {
