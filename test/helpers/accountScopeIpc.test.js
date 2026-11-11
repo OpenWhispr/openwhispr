@@ -533,6 +533,31 @@ test("an offline restart adopts the cached verdict without waiting for the netwo
   assert.equal(status.updateMode, "always_on");
 });
 
+test("a relaunch with a staged macOS update restarts into it whatever the update policy", async (t) => {
+  restoreUpdaterState(t);
+  const calls = [];
+  fakeThis.updateManager = {
+    hasStagedUpdate: () => true,
+    restartIntoStagedUpdate: async () => {
+      calls.push("restart");
+      return { success: true };
+    },
+    installUpdate: async () => ({ success: false, code: "UPDATES_MANAGED_BY_ORG" }),
+    deferInstallOnQuit: () => calls.push("defer"),
+    cleanup() {},
+  };
+  Object.assign(electronStub.app, {
+    quit: () => calls.push("quit"),
+    relaunch: () => calls.push("relaunch"),
+  });
+  t.after(() => {
+    delete electronStub.app.quit;
+    delete electronStub.app.relaunch;
+  });
+  await handlers.get("relaunch-app")();
+  assert.deepEqual(calls, ["restart"]);
+});
+
 test("cookie storage failure still clears the local bearer and reports the failure", async (t) => {
   const { win } = await signOutUpdater(t, 104);
   win.webContents.session.clearStorageData = async () => {

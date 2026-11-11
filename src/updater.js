@@ -357,25 +357,38 @@ class UpdateManager {
         };
       }
 
-      if (this.isInstalling) {
-        return {
-          success: false,
-          message: "Update installation already in progress",
-        };
-      }
-
-      this.isInstalling = true;
-      console.log("🔄 Installing update and restarting...");
-
-      const isSilent = process.platform === "win32";
-      autoUpdater.quitAndInstall(isSilent, true);
-
-      return { success: true, message: "Update installation started" };
+      return this._quitAndInstall();
     } catch (error) {
-      this.isInstalling = false;
       console.error("❌ Update installation error:", error);
       throw error;
     }
+  }
+
+  // Squirrel.Mac installs a staged update on any quit whatever the policy, so a
+  // restart hands it over instead of racing app.relaunch().
+  async restartIntoStagedUpdate() {
+    return this._quitAndInstall();
+  }
+
+  _quitAndInstall() {
+    if (this.isInstalling) {
+      return {
+        success: false,
+        message: "Update installation already in progress",
+      };
+    }
+
+    this.isInstalling = true;
+    console.log("🔄 Installing update and restarting...");
+    try {
+      const isSilent = process.platform === "win32";
+      autoUpdater.quitAndInstall(isSilent, true);
+    } catch (error) {
+      this.isInstalling = false;
+      throw error;
+    }
+
+    return { success: true, message: "Update installation started" };
   }
 
   async getAppVersion() {

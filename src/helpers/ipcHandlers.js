@@ -4955,7 +4955,7 @@ class IPCHandlers {
       // of any flag, so the updater owns that restart instead of racing app.relaunch().
       if (this.updateManager.hasStagedUpdate()) {
         const { success } = await this.updateManager
-          .installUpdate()
+          .restartIntoStagedUpdate()
           .catch(() => ({ success: false }));
         if (success) return;
       }

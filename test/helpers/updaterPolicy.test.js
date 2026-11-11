@@ -505,6 +505,24 @@ test("managed mode reports an earlier macOS staged update without offering insta
   assert.equal(autoUpdater.installs, 0);
 });
 
+test("a restart into a staged update goes through Squirrel under any policy, without a lookup", async () => {
+  for (const snapshot of [managed("it_managed"), { success: false }]) {
+    let lookups = 0;
+    const { manager, autoUpdater } = setup({
+      getPolicy: async () => {
+        lookups++;
+        return snapshot;
+      },
+    });
+    await manager.refreshPolicy();
+    autoUpdater.squirrelDownloadedUpdate = true;
+    lookups = 0;
+    assert.equal((await manager.restartIntoStagedUpdate()).success, true);
+    assert.equal(autoUpdater.installs, 1);
+    assert.equal(lookups, 0);
+  }
+});
+
 test("late native staging broadcasts status even while IT policy blocks update events", async () => {
   const { manager, autoUpdater, nativeUpdater, events } = setup({
     snapshot: managed("it_managed"),
