@@ -39,11 +39,30 @@ function Test-RealFolder([string]$Path, [string]$Root) {
   return $true
 }
 
-# .NET removes a junction or link itself, never what it points to; Windows
-# PowerShell's Remove-Item -Recurse can follow one.
+# Deletes a file or folder tree, read-only files included. A junction or link
+# is removed itself, never what it points to (Windows PowerShell's
+# Remove-Item -Recurse can follow one).
+function Remove-Tree([IO.FileSystemInfo]$Item) {
+  $isLink = $Item.Attributes -band [IO.FileAttributes]::ReparsePoint
+  if ($Item -is [IO.DirectoryInfo] -and -not $isLink) {
+    foreach ($child in $Item.GetFileSystemInfos()) { Remove-Entry $child }
+  }
+  if ($Item.Attributes -band [IO.FileAttributes]::ReadOnly) {
+    $Item.Attributes = $Item.Attributes -band -bnot [IO.FileAttributes]::ReadOnly
+  }
+  $Item.Delete()
+}
+
+# A file that can't go (one in use, say) is reported and the wipe carries on;
+# the script then exits non-zero so the MDM tool shows the device as failed.
+$failed = $false
 function Remove-Entry([IO.FileSystemInfo]$Item) {
-  if ($Item -is [IO.DirectoryInfo]) { [IO.Directory]::Delete($Item.FullName, $true) }
-  else { [IO.File]::Delete($Item.FullName) }
+  try {
+    Remove-Tree $Item
+  } catch {
+    Write-Warning "Could not remove $($Item.FullName): $($_.Exception.Message)"
+    $script:failed = $true
+  }
 }
 
 # Removes everything in a folder under Root except the names given.
@@ -58,7 +77,7 @@ function Remove-TempFiles([string]$Dir, [string]$Root) {
   if (-not (Test-RealFolder $Dir $Root)) { return }
   Get-ChildItem -LiteralPath $Dir -Force |
     Where-Object { $name = $_.Name; $tempPrefixes | Where-Object { $name.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) } } |
-    ForEach-Object { try { Remove-Entry $_ } catch { } } # In use by a running process.
+    ForEach-Object { Remove-Entry $_ }
 }
 
 # In a folder of the profile the user chose for the notes mirror, removes only
@@ -92,7 +111,7 @@ function Remove-MirroredFiles([string]$Base, [string]$Root) {
     }
   }
   foreach ($folder in $emptied.Keys) {
-    if (-not (Get-ChildItem -LiteralPath $folder -Force)) { [IO.Directory]::Delete($folder) }
+    if (-not (Get-ChildItem -LiteralPath $folder -Force)) { Remove-Entry (Get-Item -LiteralPath $folder -Force) }
   }
 }
 
@@ -137,8 +156,9 @@ foreach ($profilePath in $UserProfile) {
   Remove-AllExcept $userData $profilePath $kept
   Remove-AllExcept (Join-Path $profilePath ".cache\openwhispr") $profilePath $cacheKept
   $bridge = Join-Path $profilePath ".openwhispr"
-  if (Test-RealFolder $bridge $profilePath) {
-    Remove-Item -LiteralPath (Join-Path $bridge "cli-bridge.json") -Force -ErrorAction SilentlyContinue
+  $bridgeFile = Join-Path $bridge "cli-bridge.json"
+  if ((Test-RealFolder $bridge $profilePath) -and (Test-Path -LiteralPath $bridgeFile -PathType Leaf)) {
+    Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force)
   }
   Remove-TempFiles (Join-Path $profilePath "AppData\Local\Temp") $profilePath
   Write-Output "Removed OpenWhispr local data from $profilePath"
@@ -151,3 +171,5 @@ foreach ($root in @($env:ProgramData, "$env:SystemDrive\")) {
   Remove-TempFiles (Join-Path $app "temp") $root
   Remove-AllExcept (Join-Path $app "cache") $root $cacheKept
 }
+
+if ($failed) { exit 1 }

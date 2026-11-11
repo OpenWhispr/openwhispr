@@ -33,6 +33,16 @@ if [[ ${#homes[@]} -eq 0 ]]; then
   done
 fi
 
+# A file that can't go (a locked one, say) is reported and the wipe carries on;
+# the script then exits non-zero so the MDM tool shows the device as failed.
+failed=0
+remove() {
+  rm -rf "$1" 2>/dev/null || {
+    echo "Could not remove $1" >&2
+    failed=1
+  }
+}
+
 contains() {
   local item="$1" entry
   shift
@@ -57,7 +67,7 @@ remove_all_except() {
   [[ -d "$dir" && ! -L "$dir" ]] && inside_home "$dir" || return 0
   for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
     [[ -e "$entry" || -L "$entry" ]] || continue
-    contains "$(basename "$entry")" "$@" || rm -rf "$entry"
+    contains "$(basename "$entry")" "$@" || remove "$entry"
   done
 }
 
@@ -76,9 +86,9 @@ remove_mirrored_files() {
       name="$(basename "$file")"
       id="${name%%-*}"
       [[ "$id" =~ ^[0-9]+$ ]] || continue
-      head="$(head -n 2 "$file" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//' | tr -d '\r')"
+      head="$(head -n 2 "$file" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//' | tr -d '\r')" || continue
       if [[ "$head" == $'---\nid: '"$id" ]]; then
-        rm -f "$file"
+        remove "$file"
         ids+=("$id")
         emptied+=("${folder%/}")
       fi
@@ -90,7 +100,7 @@ remove_mirrored_files() {
       [[ -f "$file" && ! -L "$file" ]] || continue
       name="$(basename "$file")"
       if contains "${name%%-*}" "${ids[@]}"; then
-        rm -f "$file"
+        remove "$file"
         emptied+=("${folder%/}")
       fi
     done
@@ -107,7 +117,7 @@ remove_temp_files() {
     name="$(basename "$entry")"
     for prefix in "${temp_prefixes[@]}"; do
       if [[ "$name" == "$prefix"* ]]; then
-        rm -rf "$entry"
+        remove "$entry"
         break
       fi
     done
@@ -147,7 +157,7 @@ for home in "${homes[@]}"; do
   done
   remove_all_except "$user_data" "${kept[@]}"
   remove_all_except "$home/.cache/openwhispr" "${cache_kept[@]}"
-  inside_home "$home/.openwhispr" && rm -f "$home/.openwhispr/cli-bridge.json"
+  inside_home "$home/.openwhispr" && remove "$home/.openwhispr/cli-bridge.json"
   echo "Removed OpenWhispr local data from $home"
 
   # The keychain item and the per-user temp folder are reachable only as the
@@ -159,3 +169,5 @@ for home in "${homes[@]}"; do
     remove_temp_files "$(launchctl asuser "$uid" sudo -u "$console_user" getconf DARWIN_USER_TEMP_DIR)"
   fi
 done
+
+exit "$failed"

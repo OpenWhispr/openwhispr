@@ -227,7 +227,10 @@ async function wipeLocalDataOnLaunch({
       errors.push(`${name}: ${error.message}`);
     }
   }
-  deleteMasterKey();
+  // Every channel on the device shares the key, but only production is the app
+  // IT manages: a staging or dev build acting on the same token later must not
+  // delete the key the next production user's saved keys now depend on.
+  if ((env.OPENWHISPR_CHANNEL ?? "production") === "production") deleteMasterKey();
 
   const { createMeetingAuditLog } = require("./meetingAuditLog");
   const audit = createMeetingAuditLog({

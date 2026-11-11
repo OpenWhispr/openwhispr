@@ -193,6 +193,17 @@ test("settings main loaded from .env don't follow the relaunch into the fresh in
   assert.deepEqual(env, { UI_LANGUAGE: "de", PATH: "/usr/bin" });
 });
 
+test("only a production build deletes the keyring master key every channel shares", async () => {
+  seedDevice();
+  const staging = launchHarness({
+    snapshot: managed("offboard-1"),
+    env: { OPENWHISPR_CHANNEL: "staging" },
+  });
+  assert.equal(await staging.wipe(), true);
+  assert.equal(staging.calls.includes("master key"), false);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+});
+
 test("an unreadable or rejected policy, or one without a token, never wipes", async () => {
   for (const harness of [
     launchHarness({ readError: new Error("Managed policy reader unavailable") }),
@@ -408,6 +419,25 @@ test(
       fs.readdirSync(path.join(linked, "Library", "Application Support", "OpenWhispr")),
       []
     );
+
+    // A folder it can't empty is reported, the rest still goes, and the exit
+    // code tells the MDM tool the device failed. (Root ignores the mode.)
+    if (process.getuid() !== 0) {
+      const stuck = path.join(root, "stuck-home");
+      const stuckData = path.join(stuck, "Library", "Application Support", "OpenWhispr");
+      seed(path.join(stuckData, "audio", "1.webm"));
+      seed(path.join(stuckData, "logs", "debug.log"));
+      fs.chmodSync(path.join(stuckData, "audio"), 0o555);
+      try {
+        assert.throws(
+          () => run(stuck),
+          (error) => error.status === 1
+        );
+        assert.deepEqual(fs.readdirSync(stuckData), ["audio"]);
+      } finally {
+        fs.chmodSync(path.join(stuckData, "audio"), 0o755);
+      }
+    }
 
     run("--include-models", home);
     assert.deepEqual(fs.readdirSync(userData).sort(), [...KEPT_USER_DATA_ENTRIES].sort());
