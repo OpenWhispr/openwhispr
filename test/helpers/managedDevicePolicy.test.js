@@ -237,7 +237,7 @@ function linuxFileSystem(files, overrides = {}) {
       assert.ok(flags & require("node:fs").constants.O_NOFOLLOW);
       const value = files[filePath.split("/").at(-1)];
       if (value === undefined) throw Object.assign(new Error("missing"), { code: "ENOENT" });
-      const data = Buffer.from(JSON.stringify(value));
+      const data = Buffer.from(typeof value === "string" ? value : JSON.stringify(value));
       return {
         stat: async () => ({
           uid: 0,
@@ -346,12 +346,29 @@ test("a failed re-read keeps the policy last read in force", async () => {
 });
 
 test("a deployment this build rejects replaces the policy last read", async () => {
+  for (const rejected of [
+    async () => ({ RequireSignIn: 0 }),
+    () => registryExport(['"RequireSignIn"="0"'])(),
+    () => readLinuxValues({ fileSystem: linuxFileSystem({ "device.json": { Policy: "{}" } }) }),
+  ]) {
+    const reader = deviceReader();
+    reader.next = async () => ({ RequireSignIn: false });
+    await reader.manager.refresh();
+    reader.next = rejected;
+    await reader.manager.refresh();
+    assert.equal(reader.manager.getSnapshot().code, "DEVICE_POLICY_INVALID");
+    reader.manager.stop();
+  }
+});
+
+test("a Linux policy file still being written keeps the policy last read", async () => {
   const reader = deviceReader();
   reader.next = async () => ({ RequireSignIn: false });
   await reader.manager.refresh();
-  reader.next = async () => ({ RequireSignIn: 0 });
+  reader.next = () =>
+    readLinuxValues({ fileSystem: linuxFileSystem({ "policy.json": '{"version":1,' }) });
   await reader.manager.refresh();
-  assert.equal(reader.manager.getSnapshot().code, "DEVICE_POLICY_INVALID");
+  assert.equal(reader.manager.getSnapshot().localOnly, true);
   reader.manager.stop();
 });
 

@@ -75,6 +75,10 @@ const ABSENT_SNAPSHOT = {
   requireSignIn: false,
   localOnly: false,
 };
+// A deployment a reader found and this build rejects (a wrong type or
+// shape), as opposed to a reader that couldn't read one.
+const invalidDeployment = (message) =>
+  Object.assign(new Error(message), { code: "DEVICE_POLICY_INVALID" });
 const INVALID_SNAPSHOT = {
   status: "invalid",
   managed: true,
@@ -183,7 +187,7 @@ async function readLinuxValues({
     readTrustedJson(path.join(directory, "device.json"), { fileSystem, ownerId }),
   ]);
   if (device !== undefined && (!isPlainObject(device) || Object.hasOwn(device, "Policy"))) {
-    throw new Error("Invalid Linux device settings");
+    throw invalidDeployment("Invalid Linux device settings");
   }
   return { ...device, ...(policy === undefined ? {} : { Policy: JSON.stringify(policy) }) };
 }
@@ -227,7 +231,7 @@ function parseRegistryExport(text) {
     const dword = /^dword:([0-9a-f]{8})$/i.exec(data)?.[1];
     const string = REGISTRY_STRING.exec(data)?.[1];
     if (boolean ? !["00000000", "00000001"].includes(dword) : string === undefined)
-      throw new Error("Invalid registry value type");
+      throw invalidDeployment("Invalid registry value type");
     values[name] = boolean ? dword === "00000001" : unescapeRegistryString(string);
   }
   return values;
@@ -349,13 +353,15 @@ function createManagedDevicePolicy({
   const listeners = new Set();
   // A reader that fails proves nothing on its own: the policy last read stays
   // in force, and without one only evidence of a deployment means invalid.
-  // Values it did read are the deployment, and ones this build rejects are
-  // invalid at once, as at the next launch. Null keeps the snapshot as it is.
+  // A deployment this build rejects is invalid at once, as at the next
+  // launch. A Linux JSON file that doesn't parse stays a read failure: it may
+  // still be being written. Null keeps the snapshot as it is.
   async function readNext() {
     let values;
     try {
       values = await read();
     } catch (error) {
+      if (error.code === "DEVICE_POLICY_INVALID") return INVALID_SNAPSHOT;
       if (snapshot.status === "valid") {
         logger.warn("Device policy could not be re-read; keeping the last one", {
           error: error.message,
