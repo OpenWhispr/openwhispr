@@ -196,12 +196,13 @@ function createEffectivePolicyManager({
     const scope = getScope();
     if (snapshot.accountId !== scope.accountId || snapshot.authGeneration !== scope.authGeneration)
       return;
-    // A failed lookup says nothing new about a verdict already held, unless
-    // the server called the policy unresolvable.
+    // A failed lookup says nothing new about a verdict already held, nor
+    // lifts one the server called unresolvable: only the server calling it
+    // unresolvable replaces a held verdict with a failure.
     if (
       !snapshot.success &&
       snapshot.code !== "POLICY_UNRESOLVABLE" &&
-      workspace?.success &&
+      (workspace?.success || workspace?.code === "POLICY_UNRESOLVABLE") &&
       workspace.accountId === snapshot.accountId &&
       workspace.authGeneration === snapshot.authGeneration
     )

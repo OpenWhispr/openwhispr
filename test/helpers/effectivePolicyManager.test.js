@@ -405,3 +405,17 @@ test("held lookups read no network, a failed lookup keeps the held verdict, and 
   assert.equal(manager.getUpdatePolicy().success, true);
   manager.stop();
 });
+
+test("a later failure doesn't lift a policy the server called unresolvable", () => {
+  const manager = createEffectivePolicyManager({
+    devicePolicy: { getSnapshot: () => absentDevice, subscribe: () => () => {} },
+    workspacePolicyManager: {},
+    getScope: () => member,
+  });
+  const identity = { accountId: "member", authGeneration: 1 };
+  manager.updateWorkspace({ ...identity, success: false, code: "POLICY_UNRESOLVABLE" });
+  manager.updateWorkspace({ ...identity, success: false, code: "AUTH_CONTEXT_UNVALIDATED" });
+  assert.equal(manager.getCurrent().code, "POLICY_UNRESOLVABLE");
+  assert.equal(manager.getCurrent().managed, true);
+  manager.stop();
+});
