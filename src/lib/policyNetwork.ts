@@ -10,7 +10,9 @@ function allowed(target: string): boolean {
   const policy = usePolicyStore.getState();
   if (!policy.deviceReady || policy.localOnly || policy.code === "DEVICE_POLICY_INVALID")
     return false;
-  if (policy.status !== "loading" && policy.status !== "error") return true;
+  // As in main: only a device policy that can't be met yet narrows traffic to
+  // the control plane, and a verdict still loading stops nothing.
+  if (policy.status !== "error" || !policy.deviceManaged) return true;
   const origins = [
     import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com",
     import.meta.env.VITE_OPENWHISPR_API_URL || "https://api.openwhispr.com",

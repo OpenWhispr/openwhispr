@@ -70,6 +70,7 @@ import {
   localModelRefusal,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { runningPolicyCheck } from "../services/reasoningPolicy";
 import {
   getBatchTranscriptionModel,
   getCloudModel,
@@ -4064,11 +4065,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             : "providers",
         provider: managedResolution?.provider ?? route.provider,
       };
-      const stopIfDisallowed = (state) => {
-        if (!isTranscriptionSelectionAllowed(state, selection)) requestController.abort();
-      };
+      // The recording is already made: only a settled denial stops it, not a
+      // verdict that is still loading, as a rotated token's is.
+      const stopIfDisallowed = runningPolicyCheck(() => {
+        if (!isTranscriptionSelectionAllowed(usePolicyStore.getState(), selection))
+          requestController.abort();
+      });
       unsubscribePolicy = usePolicyStore.subscribe(stopIfDisallowed);
-      stopIfDisallowed(usePolicyStore.getState());
+      stopIfDisallowed();
       const apiKey = managedResolution ? null : await this.getAPIKey();
       requestController?.signal.throwIfAborted();
       const optimizedAudio = audioBlob;

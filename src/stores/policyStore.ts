@@ -166,10 +166,28 @@ function applyEffectiveSnapshot(
     (current.authGeneration != null && snapshot.authGeneration < current.authGeneration)
   )
     return;
+  // A settled verdict stays while the same account's next one loads, as a
+  // rotated token keeps its account: a running stream isn't refused meanwhile.
+  const settled = current.status === "managed" || current.status === "unmanaged";
+  const keepSettled =
+    snapshot.status === "loading" &&
+    snapshot.deviceReady &&
+    settled &&
+    snapshot.accountId === current.accountId;
   usePolicyStore.setState({
     ...snapshot,
-    code: snapshot.code,
-    status: snapshot.success ? (snapshot.managed ? "managed" : "unmanaged") : snapshot.status,
+    ...(keepSettled
+      ? {
+          status: current.status,
+          managed: current.managed,
+          policy: current.policy,
+          workspaceManaged: current.workspaceManaged,
+          code: current.code,
+        }
+      : {
+          code: snapshot.code,
+          status: snapshot.success ? (snapshot.managed ? "managed" : "unmanaged") : snapshot.status,
+        }),
     appVersion,
   });
 }
@@ -235,8 +253,8 @@ function ensurePolicyLifecycleListeners(): void {
 
 export const usePolicyStore = create<PolicyState>()((set, get) => {
   const resetPolicy = (status: "idle" | "loading"): void => {
+    // Main owns the effective verdict and broadcasts every account change.
     if (window.electronAPI.getEffectivePolicy) {
-      set({ status: "loading", policy: null });
       void refreshEffectivePolicy();
       return;
     }
