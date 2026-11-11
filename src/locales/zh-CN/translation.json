@@ -4003,7 +4003,7 @@
         "notLabeled": "发言者未标记",
         "finalizing": "正在完成发言者识别…",
         "justYou": "只有你",
-        "assumedHint": "默认 2 人——如有更多请调整",
+        "assumedHint": "默认 2 人——更多发言人会自动识别",
         "speakersLabel": "发言人数",
         "labelToggle": "标记发言者",
         "toggleAria": "切换本次录音的发言者识别",

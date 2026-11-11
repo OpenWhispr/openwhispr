@@ -4003,7 +4003,7 @@
         "notLabeled": "發言者未標記",
         "finalizing": "正在完成發言者辨識…",
         "justYou": "只有你",
-        "assumedHint": "預設 2 人——如有更多請調整",
+        "assumedHint": "預設 2 人——更多發言者會自動辨識",
         "speakersLabel": "發言人數",
         "labelToggle": "標記發言者",
         "toggleAria": "切換此錄音的發言者辨識",
