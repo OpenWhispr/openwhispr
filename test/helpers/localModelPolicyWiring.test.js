@@ -7,6 +7,7 @@ const Module = require("node:module");
 const { managedPolicy } = require("./harness/policyFixtures");
 const { deferred } = require("./harness/deferred");
 const { withDevicePolicy } = require("./harness/devicePolicy");
+const { productOperationAllowed } = require("../../src/helpers/productPolicy");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -589,6 +590,29 @@ test("a credential read that fails isn't the server's verdict, so it locks no on
 
   assert.equal(app.target.effectivePolicyManager.getCurrent().managed, false);
   assert.equal(app.gate.failure("transcription", "base"), null);
+});
+
+test("a credential read that fails for an account last seen managed fails closed", async (t) => {
+  const app = await signedIn(t, { policy: () => managed(["base"]) });
+  electronStub.session.defaultSession = {
+    cookies: {
+      get: async ({ url }) => {
+        if (url) return [];
+        throw new Error("cookie store locked");
+      },
+    },
+  };
+  t.after(() => {
+    delete electronStub.session.defaultSession;
+  });
+  // The bearer is gone while the account is still in scope, so main reads cookies.
+  tokenState = { token: null, generation: 2 };
+
+  const current = await app.target.refreshEffectivePolicy();
+
+  assert.equal(current.code, "POLICY_CREDENTIALS_UNREADABLE");
+  assert.equal(current.managed, true);
+  assert.equal(productOperationAllowed(current, "1.11.1", "transcribe-local-whisper"), false);
 });
 
 test("a managed account's rotated token whose first lookup fails refuses new work, stops none", async (t) => {
