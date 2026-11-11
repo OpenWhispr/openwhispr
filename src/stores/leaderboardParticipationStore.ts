@@ -58,7 +58,7 @@ interface LeaderboardParticipationState {
 let readId = 0;
 // Keep write invalidation separate so an older account cannot clear a newer account's pending state.
 let writeId = 0;
-let activeRefresh: { key: string; promise: Promise<void> } | null = null;
+let activeRefresh: { key: string; promise: Promise<void>; keepAnswer: boolean } | null = null;
 
 export const useLeaderboardParticipationStore = create<LeaderboardParticipationState>(
   (set, get) => ({
@@ -101,7 +101,9 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     // leave one on the user's behalf.
     refresh: async (context, { keepAnswer = false } = {}) => {
       const key = `${context.userId}:${context.authGeneration}`;
-      if (activeRefresh?.key === key) {
+      const keepCurrentAnswer = keepAnswer && get().answeredUserId === context.userId;
+      // Recovery retires a mount check: its older answer cannot settle a board refusal.
+      if (activeRefresh?.key === key && (keepAnswer || !activeRefresh.keepAnswer)) {
         await activeRefresh.promise;
         return;
       }
@@ -114,7 +116,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         // A mount's re-read of the same account keeps its answer on screen until this
         // one lands. Any other read drops to loading, which is what lets the board's
         // 403 recovery reload once the answer settles.
-        if (!keepAnswer || get().answeredUserId !== context.userId) {
+        if (!keepCurrentAnswer) {
           set({ ready: false, error: null });
         }
         try {
@@ -150,7 +152,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
           if (currentReadId === readId) set({ ready: true });
         }
       })();
-      activeRefresh = { key, promise };
+      activeRefresh = { key, promise, keepAnswer: keepCurrentAnswer };
       try {
         await promise;
       } finally {
