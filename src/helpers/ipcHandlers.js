@@ -3048,6 +3048,10 @@ class IPCHandlers {
         return { success: false, code: "SIGNED_OUT", error: "No account is signed in" };
       }
       this.databaseManager.bindDefaultPrivateSpace(defaultWorkspaceId);
+      broadcastToWindows(
+        "space-synced",
+        this.databaseManager.getSpace(this.databaseManager.getDefaultPrivateSpaceId())
+      );
       // Moved notes carry their space in Qdrant payloads; the triggers journaled them.
       this.notifyVectorChanges();
       return { success: true };
@@ -3093,6 +3097,13 @@ class IPCHandlers {
           return { success: false, code: "SIGNED_OUT", error: "No account is signed in" };
         }
         const moved = this.databaseManager.relocatePrivateSpace(fromWorkspaceId, toWorkspaceId);
+        if (moved.notes > 0 || moved.folders > 0) {
+          const targetId =
+            toWorkspaceId == null
+              ? this.databaseManager.getDefaultPrivateSpaceId()
+              : this.databaseManager.getPrivateSpaceId(toWorkspaceId);
+          broadcastToWindows("space-synced", this.databaseManager.getSpace(targetId));
+        }
         // Moved notes carry their space in Qdrant payloads; the triggers journaled them.
         if (moved.notes > 0) this.notifyVectorChanges();
         return { success: true, ...moved };
@@ -3447,18 +3458,26 @@ class IPCHandlers {
 
     ipcMain.handle(
       "db-get-agent-conversations-with-preview",
-      async (event, limit, offset, includeArchived) => {
+      async (event, limit, offset, includeArchived, spaceIds = null) => {
         return this.databaseManager.getAgentConversationsWithPreview(
           limit,
           offset,
-          includeArchived
+          includeArchived,
+          spaceIdsArgument(spaceIds)
         );
       }
     );
 
-    ipcMain.handle("db-search-agent-conversations", async (event, query, limit) => {
-      return this.databaseManager.searchAgentConversations(query, limit);
-    });
+    ipcMain.handle(
+      "db-search-agent-conversations",
+      async (event, query, limit, spaceIds = null) => {
+        return this.databaseManager.searchAgentConversations(
+          query,
+          limit,
+          spaceIdsArgument(spaceIds)
+        );
+      }
+    );
 
     ipcMain.handle("db-archive-agent-conversation", async (event, id) => {
       return this.databaseManager.archiveAgentConversation(id);
@@ -3472,28 +3491,43 @@ class IPCHandlers {
       return this.databaseManager.updateAgentConversationCloudId(id, cloudId);
     });
 
-    ipcMain.handle("db-semantic-search-conversations", async (event, query, limit) => {
-      if (this.vectorIndex?.isReady?.()) {
-        try {
-          const vectorResults = await this.vectorIndex.searchConversations(query, limit);
-          if (vectorResults?.length > 0) {
-            const ids = vectorResults.map((r) => r.conversationId);
-            const previews = ids
-              .map((id) => this.databaseManager.getAgentConversation(id))
-              .filter(Boolean)
-              .map((c) => ({
-                ...c,
-                message_count: c.messages?.length ?? 0,
-                last_message: c.messages?.[c.messages.length - 1]?.content,
-              }));
-            if (previews.length > 0) return previews;
+    ipcMain.handle(
+      "db-semantic-search-conversations",
+      async (event, query, limit = 20, spaceIds = null) => {
+        const scopeSpaceIds = spaceIdsArgument(spaceIds);
+        const allowedIds = this.databaseManager.getConversationIdsInScope(scopeSpaceIds);
+        if (allowedIds.length === 0) return [];
+        if (this.vectorIndex?.isReady?.()) {
+          try {
+            const vectorResults = await this.vectorIndex.searchConversations(
+              query,
+              limit,
+              allowedIds
+            );
+            if (vectorResults?.length > 0) {
+              const currentIds = new Set(
+                this.databaseManager.getConversationIdsInScope(scopeSpaceIds)
+              );
+              const ids = vectorResults
+                .map((r) => r.conversationId)
+                .filter((id) => currentIds.has(id));
+              const previews = ids
+                .map((id) => this.databaseManager.getAgentConversation(id))
+                .filter(Boolean)
+                .map((c) => ({
+                  ...c,
+                  message_count: c.messages?.length ?? 0,
+                  last_message: c.messages?.[c.messages.length - 1]?.content,
+                }));
+              if (previews.length > 0) return previews;
+            }
+          } catch {
+            // fall through to keyword search
           }
-        } catch {
-          // fall through to keyword search
         }
+        return this.databaseManager.searchAgentConversations(query, limit, scopeSpaceIds);
       }
-      return this.databaseManager.searchAgentConversations(query, limit);
-    });
+    );
 
     // Notes sync
     // Only the upload queues sync reads: the renderer never gets a queue with

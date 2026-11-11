@@ -403,6 +403,7 @@ export function startChatSend(input: StartChatSendInput): boolean {
               }
             : undefined,
           openNoteSpaceId: openNote ? (input.sourceNoteSpaceId ?? null) : undefined,
+          sourceNoteId: input.sourceNoteId,
           allowConnectors: true,
           allowInteractions: true,
           skillsEnabled: true,

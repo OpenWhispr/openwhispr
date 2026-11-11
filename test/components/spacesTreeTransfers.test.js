@@ -55,6 +55,7 @@ async function mountTree(
     expanded = ["space:1", "space:2", "folder:10", "folder:20"],
     inScopeIds = [1, 2],
     defaultWorkspaceId = "a",
+    onFlushPendingSaves,
   } = {}
 ) {
   let root;
@@ -249,6 +250,7 @@ async function mountTree(
     root.render(
       React.createElement(SpacesTree, {
         onDeleteNote: () => {},
+        onFlushPendingSaves,
         onMoveNote: async (noteId, target) => {
           state.moves.push([noteId, target]);
           return state.moveResults.shift();
@@ -536,3 +538,36 @@ test("a private note dropped on a teamspace of no workspace says why it can't go
   assert.deepEqual(tree.state.moves, []);
   assert.deepEqual(tree.state.dialogs, []);
 });
+
+for (const route of ["menu", "drop"]) {
+  test(`copy to Private flushes the source draft before ${route} copying and aborts failed saves`, async (t) => {
+    let fail = false;
+    let tree;
+    tree = await mountTree(t, {
+      onFlushPendingSaves: async (noteId) => {
+        assert.equal(noteId, 202);
+        assert.equal(tree.state.calls.filter((call) => call[0] === "copyNoteToSpace").length, 0);
+        if (fail) throw new Error("save refused");
+        tree.state.notes.find((note) => note.id === noteId).content = "Latest draft";
+      },
+    });
+    const copy = async () => {
+      if (route === "menu") await tree.choose("Spec", "Copy to Private");
+      else {
+        const header = [...tree.container.querySelectorAll("button")].find(
+          (button) => button.textContent.trim() === "Private"
+        ).parentElement;
+        await tree.drag(tree.noteRow("Spec"), header);
+        await tree.confirmLastDialog();
+      }
+    };
+    fail = true;
+    await copy();
+    assert.equal(tree.state.calls.filter((call) => call[0] === "copyNoteToSpace").length, 0);
+    assert.equal(tree.state.toasts.at(-1).title, "Couldn't copy note");
+    fail = false;
+    await copy();
+    assert.equal(tree.state.notes.find((note) => note.id === 202).content, "Latest draft");
+    assert.equal(tree.state.calls.filter((call) => call[0] === "copyNoteToSpace").length, 1);
+  });
+}

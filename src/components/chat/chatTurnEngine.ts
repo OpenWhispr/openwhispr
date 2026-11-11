@@ -76,7 +76,7 @@ import {
 import type { SharedDictionaryWord } from "../../services/tools/dictionaryTool";
 import { setSharedWordsHidden } from "../../services/sharedDictionaryActions";
 import { readActiveWorkspaceId } from "../../stores/workspaceStore";
-import { resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
+import { resolveAssistantNoteScope } from "../../lib/assistantNoteScope";
 import { selectAppliedSharedWords } from "../../utils/sharedDictionaryHints";
 import { executeTool, type ToolRegistry, type ToolResult } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
@@ -272,6 +272,8 @@ export interface ChatTurnOptions {
    * space is in the turn's scope (null, unknown: never). Unset, the note is always sent.
    */
   openNoteSpaceId?: number | null;
+  /** A saved conversation’s source, checked before any of its history reaches the model. */
+  sourceNoteId?: number;
   /**
    * The agent chat: offer the interaction tools (questions, connect cards,
    * access, keys, settings), show and save each turn's notes (status, timing,
@@ -664,9 +666,17 @@ export function createChatTurnEngine(
 
       const scope = getOptions().searchScope;
       // The spaces this turn may read, for its tools and its library context alike.
-      const scopeSpaceIds = await resolveAssistantScopeSpaceIds();
+      const noteScope = await resolveAssistantNoteScope();
+      const scopeSpaceIds = noteScope.spaceIds;
       if (cancelled()) return;
-      const { openNoteSpaceId } = getOptions();
+      const { openNoteSpaceId, sourceNoteId } = getOptions();
+      if (sourceNoteId != null) {
+        const note = await window.electronAPI.getNote?.(sourceNoteId);
+        if (cancelled()) return;
+        if (note && !scopeSpaceIds.includes(note.space_id)) {
+          throw new Error("This conversation’s source note is outside the active workspace");
+        }
+      }
       const groundingNote =
         openNoteSpaceId === undefined ||
         (openNoteSpaceId !== null && scopeSpaceIds.includes(openNoteSpaceId))
@@ -732,6 +742,8 @@ export function createChatTurnEngine(
           calendarConnected,
           searchScope: scope,
           scopeSpaceIds,
+          privateWorkspaceId: noteScope.privateWorkspaceId,
+          privateCreationAllowed: noteScope.privateCreationAllowed,
           openNoteId: getOptions().openNoteId,
           webSearchEnabled,
           productHelpEnabled,

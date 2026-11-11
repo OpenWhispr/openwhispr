@@ -1,6 +1,7 @@
 import { forgetHeldSpaces, isSpaceHeld } from "../lib/heldSpaceDeletes";
 import { forgetHeldTeams } from "../lib/heldTeamDeletes";
 import { create } from "zustand";
+import logger from "../utils/logger";
 import { syncService } from "../services/SyncService.js";
 import {
   recordNoteCreateAttempts,
@@ -564,7 +565,60 @@ function ensureIpcListeners() {
   // Space rows written by a sync pull or membership mutation.
   if (window.electronAPI.onSpaceSynced) {
     const dispose = window.electronAPI.onSpaceSynced((space) => {
-      if (space) void loadSpaces();
+      if (!space) return;
+      if (space.kind !== "private") {
+        void loadSpaces();
+        return;
+      }
+      // Binding and relocation change local containers without note sync events.
+      const generation = accountGeneration;
+      const selectedId = useNoteStore.getState().activeNoteId;
+      void (async (): Promise<void> => {
+        if (selectedId != null) {
+          const note = await window.electronAPI.getNote(selectedId);
+          if (generation !== accountGeneration) return;
+          if (note && useNoteStore.getState().activeNoteId === selectedId) {
+            await ensureContainerLoaded(noteContainerKey(note));
+            if (generation !== accountGeneration) return;
+            if (useNoteStore.getState().activeNoteId === selectedId) updateNoteInStore(note);
+          }
+        }
+        await loadFolders();
+        if (generation !== accountGeneration) return;
+        await loadSpaces();
+        if (generation !== accountGeneration) return;
+        const state = useNoteStore.getState();
+        const validKeys = new Set([
+          ...state.spaces.map((item) => spaceContainerKey(item.id)),
+          ...state.folders.map((item) => folderContainerKey(item.id)),
+        ]);
+        const notesByContainer = Object.fromEntries(
+          Object.entries(state.notesByContainer).filter(([key]) => validKeys.has(key))
+        );
+        applyContainers(notesByContainer);
+        const current = useNoteStore.getState();
+        const context = current.activeContext;
+        if (
+          context &&
+          (!current.spaces.some((item) => item.id === context.spaceId) ||
+            (context.folderId != null &&
+              !current.folders.some((item) => item.id === context.folderId)))
+        ) {
+          const note =
+            current.activeNoteId != null ? findNoteInState(current, current.activeNoteId) : null;
+          const target = note
+            ? { spaceId: note.space_id, folderId: note.folder_id }
+            : defaultContext(current.spaces, current.folders);
+          if (target) setActiveContext(target.spaceId, target.folderId);
+        }
+        await Promise.all(Object.keys(notesByContainer).map((key) => loadContainerNotes(key)));
+      })().catch((error: unknown) =>
+        logger.warn(
+          "Failed to refresh relocated private notes",
+          { error: (error as Error).message },
+          "notes"
+        )
+      );
     });
     if (typeof dispose === "function") {
       disposers.push(dispose);

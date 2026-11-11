@@ -197,6 +197,7 @@ export interface RowA11yProps {
 }
 
 interface SpacesTreeProps {
+  onFlushPendingSaves?: (noteId: number) => Promise<void>;
   onDeleteNote: (id: number) => void;
   /** Moves the note; a result with `success: false` is a move main refused. */
   onMoveNote: (noteId: number, target: NoteMoveTarget) => Promise<NoteMutationResult | void>;
@@ -1191,6 +1192,7 @@ function SkeletonRows() {
 }
 
 export default function SpacesTree({
+  onFlushPendingSaves,
   onDeleteNote,
   onMoveNote,
   onCreateFolderAndMove,
@@ -1623,6 +1625,7 @@ export default function SpacesTree({
     const api = window.electronAPI;
     let copy: NoteItem | null = null;
     try {
+      await onFlushPendingSaves?.(note.id);
       const spaceId = target?.spaceId ?? (await api.getPrivateSpaceId?.()) ?? null;
       if (spaceId != null) {
         copy = (await api.copyNoteToSpace?.(note.id, spaceId, target?.folderId ?? null)) ?? null;

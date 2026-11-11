@@ -60,13 +60,16 @@ function ChatSwitcher({
           if (request === requestRef.current) setChats(list);
         };
         // As in the Chat list: chats about another workspace's notes stay out.
-        void Promise.all([
-          window.electronAPI?.getAgentConversationsWithPreview?.(CHAT_LIST_LIMIT, 0, false),
-          resolveAssistantScopeSpaceIds(),
-        ])
-          .then(([list, scopeSpaceIds]) =>
-            show((list ?? []).filter((chat) => isConversationInScope(chat, scopeSpaceIds)))
-          )
+        void resolveAssistantScopeSpaceIds()
+          .then(async (scopeSpaceIds) => {
+            const list = await window.electronAPI?.getAgentConversationsWithPreview?.(
+              CHAT_LIST_LIMIT,
+              0,
+              false,
+              scopeSpaceIds
+            );
+            show((list ?? []).filter((chat) => isConversationInScope(chat, scopeSpaceIds)));
+          })
           .catch(() => show([]));
       }}
     >

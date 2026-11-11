@@ -142,13 +142,16 @@ class VectorIndex {
     }
   }
 
-  async searchConversations(queryText, limit = 10) {
+  async searchConversations(queryText, limit = 10, conversationIds = null) {
     if (!this.client) return [];
     try {
       const vector = await localEmbeddings.embedText(queryText);
       const results = await this.client.search(this.conversationChunksCollection, {
         vector: Array.from(vector),
         limit: limit * 3,
+        ...(conversationIds
+          ? { filter: { must: [{ key: "conversation_id", match: { any: conversationIds } }] } }
+          : {}),
       });
 
       const bestByConversation = new Map();

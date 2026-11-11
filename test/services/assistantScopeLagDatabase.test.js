@@ -47,10 +47,15 @@ async function loadAssistant(t, db, activeWorkspaceId) {
     cachePrefix: "openwhispr-assistant-scope-lag-",
     mockModules: { "/SyncService.js": "export const syncService = { debouncedPush() {} };" },
   });
-  const { resolveAssistantScopeSpaceIds } = await vite.ssrLoadModule("/lib/assistantNoteScope.ts");
+  const { resolveAssistantScopeSpaceIds, resolveAssistantNoteScope } = await vite.ssrLoadModule(
+    "/lib/assistantNoteScope.ts"
+  );
   const { createCreateNoteTool } = await vite.ssrLoadModule("/services/tools/createNoteTool.ts");
   return {
     resolveScope: resolveAssistantScopeSpaceIds,
+    resolveNoteScope: resolveAssistantNoteScope,
+    createScopedNote: (scope, args) => createCreateNoteTool(scope).execute(args),
+    createTool: createCreateNoteTool,
     createNote: (scope, args) => createCreateNoteTool({ spaceIds: scope }).execute(args),
   };
 }
@@ -146,4 +151,71 @@ test("a workspace known not to be the default, with no Private yet: create_note 
   assert.equal(db.getNote(created.data.id).space_id, ownRow.id);
   // The next turn reads it.
   assert.deepEqual(await resolveScope(), [ownRow.id]);
+});
+
+test("a resolved turn keeps its private workspace if the selection changes before tool creation", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId(ACCOUNT);
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-d",
+    defaultWorkspaceId: "workspace-d",
+  });
+  db.bindDefaultPrivateSpace("workspace-d");
+  lagging(db);
+  const assistant = await loadAssistant(t, db, "workspace-a");
+  const scope = await assistant.resolveNoteScope();
+  assert.deepEqual(scope.spaceIds, []);
+  globalThis.localStorage.setItem("activeWorkspaceId", "workspace-b");
+  const result = await assistant.createScopedNote(scope, { title: "A", content: "A only" });
+  assert.equal(result.success, true);
+  const space = db.getSpace(db.getNote(result.data.id).space_id);
+  assert.equal(space.workspace_id, "workspace-a");
+});
+
+test("failed scope resolution cannot create a Private in the subsequently selected workspace", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId(ACCOUNT);
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-d",
+    defaultWorkspaceId: "workspace-d",
+  });
+  db.bindDefaultPrivateSpace("workspace-d");
+  lagging(db);
+  const assistant = await loadAssistant(t, db, "workspace-a");
+  const getSpaces = globalThis.window.electronAPI.getSpaces;
+  globalThis.window.electronAPI.getSpaces = async () => {
+    throw new Error("scope unavailable");
+  };
+  const scope = await assistant.resolveNoteScope();
+  globalThis.window.electronAPI.getSpaces = getSpaces;
+  globalThis.localStorage.setItem("activeWorkspaceId", "workspace-b");
+  const result = await assistant.createScopedNote(scope, { title: "Refused", content: "" });
+  assert.equal(result.success, false);
+  assert.equal(
+    livePrivateRows(db).some(
+      (space) => space.workspace_id === "workspace-a" || space.workspace_id === "workspace-b"
+    ),
+    false
+  );
+});
+
+test("a lazy Private supports repeated creates within the captured turn", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId(ACCOUNT);
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-d",
+    defaultWorkspaceId: "workspace-d",
+  });
+  db.bindDefaultPrivateSpace("workspace-d");
+  lagging(db);
+  const assistant = await loadAssistant(t, db, "workspace-a");
+  const tool = assistant.createTool(await assistant.resolveNoteScope());
+  const first = await tool.execute({ title: "First", content: "" });
+  const second = await tool.execute({ title: "Second", content: "" });
+  assert.equal(first.success, true);
+  assert.equal(second.success, true);
+  assert.equal(db.getNote(first.data.id).space_id, db.getNote(second.data.id).space_id);
 });

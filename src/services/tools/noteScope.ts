@@ -4,6 +4,8 @@ import type { NoteItem } from "../../types/electron";
 export interface NoteScope {
   /** The active workspace's Private and its teamspaces in scope (resolveAssistantScopeSpaceIds). */
   spaceIds: readonly number[];
+  privateWorkspaceId?: string | null;
+  privateCreationAllowed?: boolean;
   /**
    * The note a note's chat is about. That chat already holds its text, so its tools read and
    * edit it wherever it is.

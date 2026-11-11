@@ -215,3 +215,60 @@ for (const [where, spaceId, grounded] of [
     else assert.doesNotMatch(requests[0], /Board secrets/);
   });
 }
+
+for (const loadedContext of [true, false]) {
+  test(`a restored source-note chat refuses out-of-scope history with context ${loadedContext}`, async (t) => {
+    const fixture = await setup(t, {
+      initialStorage: { activeWorkspaceId: "b" },
+      electronAPI: {
+        getSpaces: async () => [
+          { id: 1, kind: "private", workspace_id: "a" },
+          { id: 4, kind: "private", workspace_id: "b" },
+        ],
+        getPrivateSpaceId: async () => 4,
+        getNote: async () => ({ id: 9, space_id: 1, deleted_at: null }),
+      },
+      options: { sourceNoteId: 9, openNote: loadedContext ? "A secret" : undefined },
+    });
+    let requests = 0;
+    t.mock.method(fixture.service, "processTextStreamingAI", async function* () {
+      requests++;
+      yield { type: "content", text: "Answer" };
+    });
+    await assert.rejects(
+      fixture.engine.send("Continue", [
+        { id: "old", role: "assistant", content: "Private A history" },
+      ]),
+      /outside the active workspace/
+    );
+    assert.equal(requests, 0);
+  });
+}
+
+for (const inScope of [false, true]) {
+  test(`a soft-deleted source ${inScope ? "inside" : "outside"} the workspace ${inScope ? "keeps" : "refuses"} chat history`, async (t) => {
+    const fixture = await setup(t, {
+      initialStorage: { activeWorkspaceId: "b" },
+      electronAPI: {
+        getSpaces: async () => [
+          { id: 1, kind: "private", workspace_id: "a" },
+          { id: 4, kind: "private", workspace_id: "b" },
+        ],
+        getPrivateSpaceId: async () => 4,
+        getNote: async () => ({ id: 9, space_id: inScope ? 4 : 1, deleted_at: "2026-11-11" }),
+      },
+      options: { sourceNoteId: 9 },
+    });
+    let requests = 0;
+    t.mock.method(fixture.service, "processTextStreamingAI", async function* () {
+      requests++;
+      yield { type: "content", text: "Answer" };
+    });
+    const sending = fixture.engine.send("Continue", [
+      { id: "old", role: "assistant", content: "Source history" },
+    ]);
+    if (inScope) await sending;
+    else await assert.rejects(sending, /outside the active workspace/);
+    assert.equal(requests, inScope ? 1 : 0);
+  });
+}

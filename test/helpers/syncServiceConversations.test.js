@@ -1194,3 +1194,99 @@ test("a pulled chat keeps its message and list order beside local timestamps", a
     assert.equal(row.last_message_role, "user");
   }
 });
+
+for (const pauseAt of ["earlier root chat", "note chat create", "message lookup"]) {
+  test(`a note moved to Private stops chat uploads during ${pauseAt}`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, api, service } = ctx;
+    const { joinTeamSpace } = require("./harness/teamSpace.js");
+    const team = joinTeamSpace(db, cloud);
+    const root = db.createAgentConversation("Root first");
+    db.addAgentMessage(root.id, "user", "root message");
+    const note = db.saveNote("Team", "draft", "personal", null, null, null, team.id).note;
+    const chat = db.createAgentConversation("Note chat", note.id);
+    db.addAgentMessage(chat.id, "user", "team message");
+    if (pauseAt === "message lookup") {
+      const copy = cloud.seedConversation({
+        client_conversation_id: chat.client_conversation_id,
+        messages: [{ role: "user", content: "team message" }],
+      });
+      updateConversation(db, chat.id, { cloud_id: copy.id, sync_status: "synced" });
+    }
+    db.addAgentMessage(chat.id, "user", "pending team message");
+    updateConversation(db, chat.id, { sync_status: "pending" });
+    const request = api.cloudApiRequest;
+    let resume;
+    let started;
+    const gate = new Promise((resolve) => {
+      resume = resolve;
+    });
+    const waiting = new Promise((resolve) => {
+      started = resolve;
+    });
+    api.cloudApiRequest = async (options) => {
+      const isCreate =
+        options.path === "/api/conversations/create" &&
+        options.body.client_conversation_id ===
+          (pauseAt === "earlier root chat" ? root : chat).client_conversation_id;
+      if (
+        (pauseAt === "message lookup" &&
+          options.method === "GET" &&
+          options.path.startsWith("/api/conversations/messages")) ||
+        (pauseAt !== "message lookup" && isCreate)
+      ) {
+        started();
+        await gate;
+      }
+      return request(options);
+    };
+    const syncing = service.syncAll(true);
+    await waiting;
+    assert.equal(db.updateNote(note.id, { content: "edited locally" }).success, true);
+    assert.equal(db.purgeSpace(team.id).success, true);
+    assert.equal(db.getSpace(db.getNote(note.id).space_id).kind, "private");
+    db.addAgentMessage(chat.id, "user", "PRIVATE AFTER MOVE");
+    resume();
+    await syncing;
+    const uploaded = cloud.conversation(chat.client_conversation_id);
+    assert.equal(
+      uploaded?.messages.some((message) => message.content === "PRIVATE AFTER MOVE") ?? false,
+      false
+    );
+    if (pauseAt === "earlier root chat") {
+      assert.equal(uploaded, null);
+      assert.equal(db.getAgentConversation(chat.id).cloud_create_attempted, 0);
+    }
+    if (pauseAt === "message lookup")
+      assert.deepEqual(cloudContents(cloud, chat.client_conversation_id), ["team message"]);
+    assert.deepEqual(cloudContents(cloud, root.client_conversation_id), ["root message"]);
+  });
+}
+
+test("conversation lists and keywords scope before their result limit", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db } = ctx;
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "a", defaultWorkspaceId: "a" });
+  const privateA = db.getPrivateSpaceId("a");
+  const privateB = db.getPrivateSpaceId("b");
+  const noteA = db.saveNote("A", "", "personal", null, null, null, privateA).note;
+  const noteB = db.saveNote("B", "", "personal", null, null, null, privateB).note;
+  const own = db.createAgentConversation("Match A", noteA.id);
+  updateConversation(db, own.id, { updated_at: LOCAL_EARLY });
+  for (let index = 0; index < 201; index++) db.createAgentConversation("Match B", noteB.id);
+  assert.deepEqual(
+    db.getAgentConversationsWithPreview(200, 0, false, [privateA]).map((row) => row.id),
+    [own.id]
+  );
+  assert.deepEqual(
+    db.searchAgentConversations("Match", 20, [privateA]).map((row) => row.id),
+    [own.id]
+  );
+  const root = db.createAgentConversation("Match root");
+  assert.deepEqual(
+    db.searchAgentConversations("Match", 20, []).map((row) => row.id),
+    [root.id]
+  );
+});

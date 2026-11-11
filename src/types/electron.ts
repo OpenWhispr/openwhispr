@@ -1573,6 +1573,8 @@ export interface AgentMessageRow {
 }
 
 export interface AgentConversationWithMessages {
+  note_space_id?: number | null;
+  note_deleted_at?: string | null;
   id: number;
   title: string;
   note_id?: number | null;
@@ -3515,9 +3517,14 @@ declare global {
       getAgentConversationsWithPreview?: (
         limit?: number,
         offset?: number,
-        includeArchived?: boolean
+        includeArchived?: boolean,
+        spaceIds?: number[]
       ) => Promise<ConversationPreview[]>;
-      searchAgentConversations?: (query: string, limit?: number) => Promise<ConversationPreview[]>;
+      searchAgentConversations?: (
+        query: string,
+        limit?: number,
+        spaceIds?: number[]
+      ) => Promise<ConversationPreview[]>;
       archiveAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       unarchiveAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       updateAgentConversationCloudId?: (
@@ -3526,7 +3533,8 @@ declare global {
       ) => Promise<{ success: boolean }>;
       semanticSearchConversations?: (
         query: string,
-        limit?: number
+        limit?: number,
+        spaceIds?: number[]
       ) => Promise<ConversationPreview[]>;
 
       // Deepgram Streaming

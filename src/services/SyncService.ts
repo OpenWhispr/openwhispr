@@ -1774,6 +1774,13 @@ export class SyncService {
     this.writeLocalRecord(key, queued);
   }
 
+  private async canUploadConversation(conversation: LocalConversation): Promise<boolean> {
+    if (conversation.note_id == null) return true;
+    const context = await this.buildSpaceContext();
+    const note = await window.electronAPI.getNote?.(conversation.note_id);
+    return !!note && isTeamRow(note, context);
+  }
+
   // A create can't carry what's missing, since it inserts its messages again on a
   // chat already in the cloud. Each attempt reads the copy first, so a retry after a
   // failure part way through sends nothing twice. The chat stays pending until
@@ -1786,13 +1793,14 @@ export class SyncService {
     sender: ChatPushSender
   ): Promise<void> {
     const local = await window.electronAPI.getAgentConversation?.(localId);
-    if (!local || hasTurnInProgress(local)) return;
+    if (!local || hasTurnInProgress(local) || !(await this.canUploadConversation(local))) return;
     const snapshot = conversationCreateSnapshot(local);
     const { messages: cloudMessages } = await ConversationsService.listMessages(
       cloudId,
       sender.authGeneration
     );
     for (const message of missingConversationMessages(local.messages, cloudMessages)) {
+      if (!(await this.canUploadConversation(local))) return;
       await ConversationsService.addMessage(
         cloudId,
         message.role,
@@ -1801,6 +1809,7 @@ export class SyncService {
         sender.authGeneration
       );
     }
+    if (!(await this.canUploadConversation(local))) return;
     const cloud = await ConversationsService.update(
       cloudId,
       { title: local.title },
@@ -1823,11 +1832,17 @@ export class SyncService {
     full: LocalConversation,
     sender: ChatPushSender
   ): Promise<void> {
+    if (!(await this.canUploadConversation(full))) return;
     const recorded = await window.electronAPI.markConversationCreateAttempted?.(
       full.id,
       sender.authGeneration
     );
     if (!recorded?.success) return;
+    if (!(await this.canUploadConversation(full))) {
+      if (!full.cloud_create_attempted)
+        await window.electronAPI.clearConversationCreateAttempted?.(full.id);
+      return;
+    }
     // An earlier request may have reached the cloud, and a second one would insert
     // its messages again. This one only finds the copy; the messages follow it.
     const messages = full.cloud_create_attempted ? [] : full.messages;

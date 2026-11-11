@@ -24,22 +24,29 @@ function namesPrivate(spaceName: string): boolean {
  * for a workspace main can't yet tell is the default (D37): the bind would later merge the
  * pending row into it.
  */
-async function activePrivateSpaceId(): Promise<number | null> {
+async function activePrivateSpaceId(
+  activeWorkspaceId: string | null,
+  scopeSpaceIds: ReadonlySet<number>,
+  privateCreationAllowed?: boolean
+): Promise<number | null> {
   const api = window.electronAPI;
-  const activeWorkspaceId = readActiveWorkspaceId();
-  if (activeWorkspaceId == null) return (await api.getPrivateSpaceId?.()) ?? null;
+  if (activeWorkspaceId == null) {
+    const privateId = (await api.getPrivateSpaceId?.()) ?? null;
+    return privateId != null && scopeSpaceIds.has(privateId) ? privateId : null;
+  }
   const spaces = (await api.getSpaces?.()) ?? [];
+  const knownDefault = knownDefaultWorkspaceId(listedDefaultWorkspaceId(), spaces);
+  const notTheDefault =
+    privateCreationAllowed ?? (knownDefault != null && knownDefault !== activeWorkspaceId);
   const own = spaces.find(
     (space) => space.kind === "private" && space.workspace_id === activeWorkspaceId
   );
-  if (own) return own.id;
-  const knownDefault = knownDefaultWorkspaceId(listedDefaultWorkspaceId(), spaces);
-  const notTheDefault = knownDefault != null && knownDefault !== activeWorkspaceId;
-  return (
+  if (own) return scopeSpaceIds.has(own.id) || notTheDefault ? own.id : null;
+  const privateId =
     (await (notTheDefault
       ? api.getPrivateSpaceId?.(activeWorkspaceId)
-      : api.getPrivateSpaceId?.())) ?? null
-  );
+      : api.getPrivateSpaceId?.())) ?? null;
+  return privateId != null && (notTheDefault || scopeSpaceIds.has(privateId)) ? privateId : null;
 }
 
 /**
@@ -48,6 +55,8 @@ async function activePrivateSpaceId(): Promise<number | null> {
  */
 export function createCreateNoteTool(scope: NoteScope): ToolDefinition {
   const scopeSpaceIds = new Set(scope.spaceIds);
+  const activeWorkspaceId =
+    scope.privateWorkspaceId !== undefined ? scope.privateWorkspaceId : readActiveWorkspaceId();
   return {
     name: "create_note",
     description:
@@ -101,7 +110,17 @@ export function createCreateNoteTool(scope: NoteScope): ToolDefinition {
           // No space argument, or Private by name, means the active workspace's
           // Private: folder resolution must never match a team folder, or the note
           // would silently inherit the team audience (D2 derives space from folder).
-          spaceId = await activePrivateSpaceId();
+          spaceId = await activePrivateSpaceId(
+            activeWorkspaceId,
+            scopeSpaceIds,
+            scope.privateCreationAllowed
+          );
+          if (spaceId == null)
+            return {
+              success: false,
+              data: null,
+              displayText: "The turn’s private note scope is unavailable",
+            };
         }
 
         let folderId: number | null = null;

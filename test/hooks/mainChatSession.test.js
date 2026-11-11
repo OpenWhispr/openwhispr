@@ -595,3 +595,240 @@ for (const [event, changedId, unmount = false] of [
     assert.equal(listeners.size, unmount ? 0 : 1, "the settled turn releases its subscription");
   });
 }
+
+for (const source of ["restore", "sidebar"]) {
+  test(`an out-of-scope source-note conversation opened by ${source} cannot expose history`, async (t) => {
+    const fixture = await setupChatTurns(t, {
+      getAgentConversation: async (id) => ({
+        id,
+        note_id: 9,
+        note_space_id: 1,
+        messages: [{ id: 1, role: "assistant", content: "A private history" }],
+      }),
+      getSpaces: async () => [
+        { id: 1, kind: "private", workspace_id: "a" },
+        { id: 4, kind: "private", workspace_id: "b" },
+      ],
+      getPrivateSpaceId: async () => 4,
+    });
+    globalThis.localStorage.setItem("activeWorkspaceId", "b");
+    const mounted = await mountSession(t, fixture);
+    await React.act(async () => mounted.session().openConversation(2, source));
+    assert.equal(mounted.session().selection.kind, "new-chat");
+    assert.deepEqual(mounted.session().messages, []);
+    assert.equal(fixture.streams.length, 0);
+  });
+}
+
+test("switching workspace refuses continuation of the selected source-note history", async (t) => {
+  const fixture = await setupChatTurns(t, {
+    getAgentConversation: async (id) => ({
+      id,
+      note_id: 9,
+      note_space_id: 1,
+      messages: [{ id: 1, role: "assistant", content: "A private history" }],
+    }),
+    getNote: async () => ({
+      id: 9,
+      title: "A source",
+      content: "A private source",
+      space_id: 1,
+      folder_id: null,
+    }),
+    getSpaces: async () => [
+      { id: 1, kind: "private", workspace_id: "a" },
+      { id: 4, kind: "private", workspace_id: "b" },
+    ],
+    getPrivateSpaceId: async () => 1,
+  });
+  globalThis.localStorage.setItem("activeWorkspaceId", "a");
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => mounted.session().openConversation(2, "sidebar"));
+  await React.act(async () => {
+    await flush();
+  });
+  globalThis.localStorage.setItem("activeWorkspaceId", "b");
+  let sent;
+  await React.act(async () => {
+    sent = await mounted.session().send("Continue the previous answer");
+  });
+  assert.equal(sent, false);
+  assert.equal(fixture.streams.length, 0);
+});
+
+test("the dictation assistant refuses saved source-note history after switching workspace", async (t) => {
+  const conversation = {
+    id: 7,
+    note_id: 9,
+    note_space_id: 1,
+    title: "A source",
+    messages: [
+      { id: 1, role: "user", content: "Summarize A" },
+      { id: 2, role: "assistant", content: "A private history" },
+    ],
+  };
+  const fixture = await setupChatTurns(t, {
+    getAgentConversation: async () => conversation,
+    getNote: async () => ({ id: 9, space_id: 1, deleted_at: null }),
+    getSpaces: async () => [
+      { id: 1, kind: "private", workspace_id: "a" },
+      { id: 4, kind: "private", workspace_id: "b" },
+    ],
+    getPrivateSpaceId: async () => 4,
+  });
+  globalThis.localStorage.setItem("activeWorkspaceId", "a");
+  (await fixture.vite.ssrLoadModule("/stores/settingsStore.ts")).useSettingsStore.setState({
+    dictationAgentMode: "self-hosted",
+    dictationAgentProvider: "lan",
+    dictationAgentModel: "qwen3-4b",
+    dictationAgentRemoteUrl: "http://127.0.0.1:11434/v1",
+  });
+  const requests = [];
+  fixture.reasoning.processTextStreamingAI = async function* (messages) {
+    requests.push(messages);
+    yield { type: "content", text: "Answer" };
+  };
+  const container = installHookDom(t);
+  const { useAgentChat } = await fixture.vite.ssrLoadModule("/components/agent/useAgentChat.ts");
+  let chat;
+  function Harness() {
+    chat = useAgentChat({ onRegenerateFailed() {} });
+    return null;
+  }
+  const root = createRoot(container);
+  fixture.unmounts.push(async () => React.act(async () => root.unmount()));
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => chat.switchChat(7));
+  assert.equal(chat.messages[1].content, "A private history");
+  globalThis.localStorage.setItem("activeWorkspaceId", "b");
+  await React.act(async () => chat.send("Continue"));
+  assert.equal(requests.length, 0);
+  await React.act(async () => chat.newChat());
+  let opened;
+  await React.act(async () => {
+    opened = await chat.switchChat(7);
+  });
+  assert.equal(opened, false);
+  assert.deepEqual(chat.messages, []);
+});
+
+test("leaving and reopening a conversation cancels a send still in scope preflight", async (t) => {
+  let deferNext = false;
+  let release;
+  const fixture = await setupChatTurns(t, {
+    getAgentConversation: async (id) => {
+      if (deferNext) {
+        deferNext = false;
+        await new Promise((resolve) => {
+          release = resolve;
+        });
+      }
+      return { id, note_id: null, messages: [] };
+    },
+  });
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => mounted.session().openConversation(7, "sidebar"));
+  deferNext = true;
+  let sending;
+  await React.act(async () => {
+    sending = mounted.session().send("Obsolete message");
+  });
+  assert.equal(typeof release, "function");
+  await React.act(async () => mounted.session().newChat());
+  await React.act(async () => mounted.session().openConversation(7, "sidebar"));
+  let accepted;
+  await React.act(async () => {
+    release();
+    accepted = await sending;
+  });
+  assert.equal(accepted, false);
+  assert.equal(fixture.streams.length, 0);
+});
+
+for (const firstFinishesFirst of [true, false]) {
+  test(`the latest assistant chat selection wins when ${firstFinishesFirst ? "earlier" : "later"} preflight finishes first`, async (t) => {
+    const reads = [deferred(), deferred()];
+    const seen = new Set();
+    const fixture = await setupChatTurns(t, {
+      getAgentConversation: async (id) => {
+        if (!seen.has(id)) {
+          seen.add(id);
+          await reads[id - 1].promise;
+        }
+        return { id, title: `Chat ${id}`, messages: [] };
+      },
+    });
+    const container = installHookDom(t);
+    const { useAgentChat } = await fixture.vite.ssrLoadModule("/components/agent/useAgentChat.ts");
+    let chat;
+    function Harness() {
+      chat = useAgentChat({ onRegenerateFailed() {} });
+      return null;
+    }
+    const root = createRoot(container);
+    fixture.unmounts.push(async () => React.act(async () => root.unmount()));
+    await React.act(async () => root.render(React.createElement(Harness)));
+    let first, second;
+    await React.act(async () => {
+      first = chat.switchChat(1);
+      second = chat.switchChat(2);
+    });
+    await React.act(async () => {
+      reads[firstFinishesFirst ? 0 : 1].resolve();
+      await (firstFinishesFirst ? first : second);
+    });
+    await React.act(async () => {
+      reads[firstFinishesFirst ? 1 : 0].resolve();
+      await (firstFinishesFirst ? second : first);
+    });
+    assert.equal(chat.conversationId, 2);
+  });
+}
+
+test("an earlier assistant target load cannot cancel a newer chat selection", async (t) => {
+  const earlierTarget = deferred();
+  const reachedTarget = deferred();
+  const newerPreflight = deferred();
+  const reads = new Map();
+  const fixture = await setupChatTurns(t, {
+    getAgentConversation: async (id) => {
+      const count = (reads.get(id) ?? 0) + 1;
+      reads.set(id, count);
+      if (id === 7 && count === 2) {
+        reachedTarget.resolve();
+        await earlierTarget.promise;
+      }
+      if (id === 8 && count === 1) await newerPreflight.promise;
+      return { id, note_id: null, note_space_id: null, title: `Chat ${id}`, messages: [] };
+    },
+  });
+  const container = installHookDom(t);
+  const { useAgentChat } = await fixture.vite.ssrLoadModule("/components/agent/useAgentChat.ts");
+  let chat;
+  function Harness() {
+    chat = useAgentChat({ onRegenerateFailed() {} });
+    return null;
+  }
+  const root = createRoot(container);
+  fixture.unmounts.push(async () => React.act(async () => root.unmount()));
+  await React.act(async () => root.render(React.createElement(Harness)));
+  let first, second;
+  await React.act(async () => {
+    first = chat.switchChat(7);
+    await reachedTarget.promise;
+  });
+  await React.act(async () => {
+    second = chat.switchChat(8);
+  });
+  await React.act(async () => {
+    earlierTarget.resolve();
+    await first;
+  });
+  let opened;
+  await React.act(async () => {
+    newerPreflight.resolve();
+    opened = await second;
+  });
+  assert.equal(opened, true);
+  assert.equal(chat.conversationId, 8);
+});

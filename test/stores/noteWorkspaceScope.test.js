@@ -35,10 +35,16 @@ async function fixture(
 ) {
   const liveSpaces = [...initialSpaces];
   const liveFolders = [...initialFolders];
+  let spaceSynced;
   // While held, space reads wait until the test answers them, in any order.
   let heldSpaceReads = null;
   installBrowserGlobals(t, { initialStorage: storage });
   globalThis.window.electronAPI = {
+    getNote: async (id) => allNotes.find((note) => note.id === id) ?? null,
+    onSpaceSynced: (callback) => {
+      spaceSynced = callback;
+      return () => {};
+    },
     getSpaces: () =>
       heldSpaceReads
         ? new Promise((resolve) => heldSpaceReads.push(() => resolve([...liveSpaces])))
@@ -46,11 +52,13 @@ async function fixture(
     getFolders: async () => [...liveFolders],
     getFolderNoteCounts: async () => [],
     getNotes: async (_type, _limit, folderId, spaceId) =>
-      allNotes.filter((note) =>
-        folderId != null
-          ? note.folder_id === folderId
-          : note.space_id === spaceId && note.folder_id == null
-      ),
+      allNotes
+        .filter((note) =>
+          folderId != null
+            ? note.folder_id === folderId
+            : note.space_id === spaceId && note.folder_id == null
+        )
+        .map((note) => ({ ...note })),
     setActiveWorkspaceScope: async () => ({ success: true }),
   };
   const vite = await createRendererServer(t, {
@@ -112,6 +120,13 @@ async function fixture(
       else liveSpaces[index] = space;
     },
     putFolder: (folder) => liveFolders.push(folder),
+    syncSpace: (space) => spaceSynced(space),
+    retireSpace: (id) =>
+      liveSpaces.splice(
+        liveSpaces.findIndex((space) => space.id === id),
+        1
+      ),
+    replaceFolders: (items) => liveFolders.splice(0, liveFolders.length, ...items),
     context: () => ({
       folderId: store.getActiveFolderIdValue(),
       noteId: store.getActiveNoteIdValue(),
@@ -762,4 +777,83 @@ test("an explicit switch stays when the default arrives and claims the open note
   assert.equal(localStorage.getItem("activeWorkspaceId"), "c");
   assert.equal(localStorage.getItem("activeWorkspaceSource"), "user");
   assert.equal(f.context().noteId, null);
+});
+
+for (const activeWorkspaceId of ["a", "b"]) {
+  test(`Private relocation refreshes cached notes after leaving ${activeWorkspaceId === "b" ? "active" : "another"} workspace without teamspaces`, async (t) => {
+    const liveNotes = [{ id: 400, space_id: 4, folder_id: 40, title: "Relocated draft" }];
+    const f = await fixture(t, {
+      spaces: spaces.filter((space) => space.kind === "private"),
+      folders: folders.filter((folder) => folder.space_id === 1 || folder.space_id === 4),
+      notes: liveNotes,
+      workspaceState: { activeWorkspaceId },
+      storage: { activeWorkspaceId },
+    });
+    await f.store.loadContainerNotes("f:40");
+    if (activeWorkspaceId === "b") {
+      f.store.setActiveNoteId(400);
+      f.switchTo("a");
+    }
+    Object.assign(liveNotes[0], { space_id: 1, folder_id: 10 });
+    f.retireSpace(4);
+    f.replaceFolders(folders.filter((folder) => folder.space_id === 1));
+    f.syncSpace(spaces[0]);
+    await f.settle();
+    assert.equal(
+      f.store.getSpacesValue().some((space) => space.id === 4),
+      false
+    );
+    assert.equal(
+      f.store.getFoldersValue().some((folder) => folder.id === 40),
+      false
+    );
+    assert.equal(f.store.getNoteFromStore(400)?.space_id, 1);
+    assert.equal(f.store.getNoteFromStore(400)?.folder_id, 10);
+  });
+}
+
+test("moving the active note to an unloaded folder loads its existing destination notes", async (t) => {
+  const f = await fixture(t);
+  await f.settle();
+  assert.equal(f.store.getNoteFromStore(110), null);
+  f.store.setActiveNoteId(100);
+  f.store.updateNoteInStore({ id: 100, space_id: 1, folder_id: 11, title: "Moved note" });
+  await f.settle();
+  const destination = await f.store.ensureContainerLoaded("f:11");
+  assert.ok(destination.some((note) => note.id === 110));
+});
+
+for (const selectNote of [false, true]) {
+  test(`binding a merged Private follows the open ${selectNote ? "note" : "empty folder"} context`, async (t) => {
+    const liveNotes = selectNote
+      ? [{ id: 900, space_id: 9, folder_id: 90, title: "Pending note" }]
+      : [];
+    const f = await fixture(t, {
+      spaces: [...spaces, { id: 9, kind: "private", workspace_id: null, name: "Pending" }],
+      folders: [...folders, { id: 90, space_id: 9, name: "Personal", is_default: 1 }],
+      notes: liveNotes,
+    });
+    f.store.setActiveNoteId(null);
+    f.store.setActiveContext(9, 90);
+    await f.settle();
+    if (selectNote) f.store.setActiveNoteId(900);
+    if (liveNotes[0]) Object.assign(liveNotes[0], { space_id: 1, folder_id: 10 });
+    f.retireSpace(9);
+    f.replaceFolders(folders);
+    f.syncSpace(spaces[0]);
+    await f.settle();
+    assert.equal(f.context().folderId, 10);
+    if (selectNote) assert.equal(f.context().noteId, 900);
+  });
+}
+
+test("relocating a cloud-held folder repairs the default folder it replaced", async (t) => {
+  const f = await fixture(t);
+  f.store.setActiveNoteId(null);
+  f.store.setActiveContext(1, 10);
+  f.retireSpace(4);
+  f.replaceFolders([{ id: 40, space_id: 1, name: "Personal", is_default: 1 }, folders[1]]);
+  f.syncSpace(spaces[0]);
+  await f.settle();
+  assert.equal(f.context().folderId, 40);
 });

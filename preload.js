@@ -1249,10 +1249,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   forkAgentConversation: (conversationId, throughMessageId, forkContext) =>
     ipcRenderer.invoke("db-fork-agent-conversation", conversationId, throughMessageId, forkContext),
   getAgentMessages: (conversationId) => ipcRenderer.invoke("db-get-agent-messages", conversationId),
-  getAgentConversationsWithPreview: (limit, offset, includeArchived) =>
-    ipcRenderer.invoke("db-get-agent-conversations-with-preview", limit, offset, includeArchived),
-  searchAgentConversations: (query, limit) =>
-    ipcRenderer.invoke("db-search-agent-conversations", query, limit),
+  getAgentConversationsWithPreview: (limit, offset, includeArchived, spaceIds) =>
+    ipcRenderer.invoke(
+      "db-get-agent-conversations-with-preview",
+      limit,
+      offset,
+      includeArchived,
+      spaceIds
+    ),
+  searchAgentConversations: (query, limit, spaceIds) =>
+    ipcRenderer.invoke("db-search-agent-conversations", query, limit, spaceIds),
   getConversationsForNote: (noteId, limit) =>
     ipcRenderer.invoke("db-get-conversations-for-note", noteId, limit),
   getConversationsForContainer: (spaceId, folderId, limit) =>
@@ -1261,8 +1267,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   unarchiveAgentConversation: (id) => ipcRenderer.invoke("db-unarchive-agent-conversation", id),
   updateAgentConversationCloudId: (id, cloudId) =>
     ipcRenderer.invoke("db-update-agent-conversation-cloud-id", id, cloudId),
-  semanticSearchConversations: (query, limit) =>
-    ipcRenderer.invoke("db-semantic-search-conversations", query, limit),
+  semanticSearchConversations: (query, limit, spaceIds) =>
+    ipcRenderer.invoke("db-semantic-search-conversations", query, limit, spaceIds),
 
   // Sync operations
   getPendingNotes: (spaceKind) => ipcRenderer.invoke("db-get-pending-notes", spaceKind),

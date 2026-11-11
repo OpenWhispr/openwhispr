@@ -1122,6 +1122,10 @@ test("relocate-private-space checks its arguments and the account it was sent fo
     folders: 2,
   });
   assert.equal(db.getNote(note.id).space_id, home);
+  assert.ok(
+    broadcasts.some(([channel, space]) => channel === "space-synced" && space.id === home),
+    "relocation announces final private scope"
+  );
   assert.deepEqual(await invoke("relocate-private-space", "w2", null), {
     success: true,
     notes: 0,

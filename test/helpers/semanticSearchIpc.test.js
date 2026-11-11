@@ -261,3 +261,68 @@ test("keyword search reads nothing for a malformed scope, never everything", asy
     [[1, 2], null, [], []]
   );
 });
+
+test("semantic conversations enforce authoritative scope before ranking", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const privateA = db.getPrivateSpaceId("a");
+  const privateB = db.getPrivateSpaceId("b");
+  const make = (title, space) => {
+    const note = db.saveNote(title, "", "personal", null, null, null, space).note;
+    return db.createAgentConversation(title, note.id);
+  };
+  const own = make("Own", privateA);
+  const other = make("Other", privateB);
+  const archived = db.createAgentConversation("Archived");
+  db.archiveAgentConversation(archived.id);
+  const container = db.createAgentConversation("Container", null, privateA);
+  target.databaseManager = db;
+  target.vectorIndex = {
+    isReady: () => true,
+    searchConversations: async (_query, limit, allowedIds) =>
+      [other, archived, container, own]
+        .filter((chat) => !allowedIds || allowedIds.includes(chat.id))
+        .slice(0, limit)
+        .map((chat) => ({ conversationId: chat.id, score: 0.9 })),
+  };
+  t.after(() => {
+    target.databaseManager = fakeDatabase;
+    delete target.vectorIndex;
+  });
+  const rows = await handlers.get("db-semantic-search-conversations")(null, "query", 1, [privateA]);
+  assert.deepEqual(
+    rows.map((row) => row.id),
+    [own.id]
+  );
+  assert.equal(rows[0].note_space_id, privateA);
+});
+
+test("semantic conversations recheck source scope after awaiting vector lookup", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const privateA = db.getPrivateSpaceId("a");
+  const privateB = db.getPrivateSpaceId("b");
+  const note = db.saveNote("Moved", "", "personal", null, null, null, privateA).note;
+  const chat = db.createAgentConversation("Moved", note.id);
+  target.databaseManager = db;
+  target.vectorIndex = {
+    isReady: () => true,
+    searchConversations: async () => {
+      db.updateNote(note.id, { space_id: privateB });
+      return [{ conversationId: chat.id, score: 0.9 }];
+    },
+  };
+  t.after(() => {
+    target.databaseManager = fakeDatabase;
+    delete target.vectorIndex;
+  });
+  const rows = await handlers.get("db-semantic-search-conversations")(
+    null,
+    "no matching keywords",
+    1,
+    [privateA]
+  );
+  assert.deepEqual(rows, []);
+});

@@ -7607,15 +7607,17 @@ class DatabaseManager {
       // A fork names its parent only to an account that can open the parent.
       const scope = this._ownedRowScope("agent_conversations", "c");
       const parentScope = this._ownedRowScope("agent_conversations", "p");
+      const noteScope = this._accountScopeCondition("n");
       const conversation = this.db
         .prepare(
-          `SELECT c.*, p.title AS parent_title
+          `SELECT c.*, p.title AS parent_title, n.space_id AS note_space_id, n.deleted_at AS note_deleted_at
            FROM agent_conversations c
            LEFT JOIN agent_conversations p
              ON p.id = c.parent_conversation_id AND p.deleted_at IS NULL AND ${parentScope.sql}
+           LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
            WHERE c.id = ? AND c.deleted_at IS NULL AND ${scope.sql}`
         )
-        .get(...parentScope.params, id, ...scope.params);
+        .get(...parentScope.params, ...noteScope.params, id, ...scope.params);
       if (!conversation) return null;
       // In the order they were saved. Their times can't order them: a pulled
       // message's is ISO ("…T…Z") and a local one's SQLite's ("… …"), so as text
@@ -9017,7 +9019,34 @@ class DatabaseManager {
       debugLogger.error("Error deleting database file", { error: error.message }, "database");
     }
   }
-  getAgentConversationsWithPreview(limit = 50, offset = 0, includeArchived = false) {
+  _conversationNoteScope(spaceIds) {
+    const list = noteSpaceListCondition("n.space_id", spaceIds);
+    return list
+      ? { sql: `(n.space_id IS NULL OR ${list.sql})`, params: [list.param] }
+      : { sql: "1 = 1", params: [] };
+  }
+
+  getConversationIdsInScope(spaceIds = null) {
+    const scope = this._ownedRowScope("agent_conversations", "c");
+    const noteScope = this._accountScopeCondition("n");
+    const list = this._conversationNoteScope(spaceIds);
+    return this.db
+      .prepare(
+        `SELECT c.id FROM agent_conversations c
+      LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
+      WHERE c.deleted_at IS NULL AND c.archived_at IS NULL
+        AND c.space_id IS NULL AND c.folder_id IS NULL AND ${scope.sql} AND ${list.sql}`
+      )
+      .all(...noteScope.params, ...scope.params, ...list.params)
+      .map((row) => row.id);
+  }
+
+  getAgentConversationsWithPreview(
+    limit = 50,
+    offset = 0,
+    includeArchived = false,
+    spaceIds = null
+  ) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const scope = this._ownedRowScope("agent_conversations", "c");
@@ -9026,6 +9055,7 @@ class DatabaseManager {
         : `WHERE c.archived_at IS NULL AND c.deleted_at IS NULL AND c.space_id IS NULL AND c.folder_id IS NULL AND ${scope.sql}`;
       // Only a note the active account can open names a chat's source.
       const noteScope = this._accountScopeCondition("n");
+      const list = this._conversationNoteScope(spaceIds);
       return this.db
         .prepare(
           `SELECT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
@@ -9038,12 +9068,12 @@ class DatabaseManager {
           FROM agent_conversations c
           LEFT JOIN agent_messages m ON m.conversation_id = c.id
           LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
-          ${archiveFilter}
+          ${archiveFilter} AND ${list.sql}
           GROUP BY c.id
           ORDER BY datetime(c.updated_at) DESC
           LIMIT ? OFFSET ?`
         )
-        .all(...noteScope.params, ...scope.params, limit, offset);
+        .all(...noteScope.params, ...scope.params, ...list.params, limit, offset);
     } catch (error) {
       debugLogger.error(
         "Error getting agent conversations with preview",
@@ -9054,12 +9084,13 @@ class DatabaseManager {
     }
   }
 
-  searchAgentConversations(query, limit = 20) {
+  searchAgentConversations(query, limit = 20, spaceIds = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const pattern = `%${query}%`;
       const scope = this._ownedRowScope("agent_conversations", "c");
       const noteScope = this._accountScopeCondition("n");
+      const list = this._conversationNoteScope(spaceIds);
       return this.db
         .prepare(
           `SELECT DISTINCT c.id, c.title, c.created_at, c.updated_at, c.archived_at, c.cloud_id,
@@ -9075,13 +9106,13 @@ class DatabaseManager {
           LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
           WHERE c.archived_at IS NULL AND c.deleted_at IS NULL
             AND c.space_id IS NULL AND c.folder_id IS NULL
-            AND ${scope.sql}
+            AND ${scope.sql} AND ${list.sql}
             AND (c.title LIKE ? OR ms.content LIKE ?)
           GROUP BY c.id
           ORDER BY datetime(c.updated_at) DESC
           LIMIT ?`
         )
-        .all(...noteScope.params, ...scope.params, pattern, pattern, limit);
+        .all(...noteScope.params, ...scope.params, ...list.params, pattern, pattern, limit);
     } catch (error) {
       debugLogger.error(
         "Error searching agent conversations",

@@ -955,6 +955,7 @@ export default function PersonalNotesView({
           </div>
 
           <SpacesTree
+            onFlushPendingSaves={savePendingNow}
             onDeleteNote={handleDelete}
             onMoveNote={handleMoveNote}
             onCreateFolderAndMove={handleCreateFolderAndMove}

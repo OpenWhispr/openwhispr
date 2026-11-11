@@ -74,9 +74,10 @@ const NO_SPACES: SpaceItem[] = [];
 // The chats a read returns that the conversations list shows: as in the Chat list, chats about
 // another workspace's notes stay out. null when there was nothing to read.
 async function conversationsInScope(
-  read: Promise<ConversationPreview[]> | undefined
+  read: (scopeSpaceIds: number[]) => Promise<ConversationPreview[]> | undefined
 ): Promise<ConversationResult[] | null> {
-  const [rows, scopeSpaceIds] = await Promise.all([read, resolveAssistantScopeSpaceIds()]);
+  const scopeSpaceIds = await resolveAssistantScopeSpaceIds();
+  const rows = await read(scopeSpaceIds);
   if (!rows) return null;
   return rows
     .filter((c) => isConversationInScope(c, scopeSpaceIds))
@@ -179,7 +180,9 @@ export default function CommandSearch({
   useEffect(() => {
     if (!open) return;
     if (isConversationsMode) {
-      conversationsInScope(window.electronAPI?.getAgentConversationsWithPreview?.(20, 0, false))
+      conversationsInScope((scopeSpaceIds) =>
+        window.electronAPI?.getAgentConversationsWithPreview?.(20, 0, false, scopeSpaceIds)
+      )
         .then((r) => {
           if (r) setConversations(r);
         })
@@ -198,7 +201,9 @@ export default function CommandSearch({
 
     if (isConversationsMode) {
       if (!query.trim()) {
-        conversationsInScope(window.electronAPI?.getAgentConversationsWithPreview?.(20, 0, false))
+        conversationsInScope((scopeSpaceIds) =>
+          window.electronAPI?.getAgentConversationsWithPreview?.(20, 0, false, scopeSpaceIds)
+        )
           .then((r) => {
             if (searchVersionRef.current === version && r) setConversations(r);
           })
@@ -207,8 +212,8 @@ export default function CommandSearch({
       }
       searchTimerRef.current = setTimeout(async () => {
         try {
-          const r = await conversationsInScope(
-            window.electronAPI?.semanticSearchConversations?.(query, 20)
+          const r = await conversationsInScope((scopeSpaceIds) =>
+            window.electronAPI?.semanticSearchConversations?.(query, 20, scopeSpaceIds)
           );
           if (searchVersionRef.current === version && r) setConversations(r);
         } catch {

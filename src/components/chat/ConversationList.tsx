@@ -96,10 +96,10 @@ export default function ConversationList({
       generation === useChatTurnStore.getState().accountGeneration;
     setLoadError(false);
     try {
-      const [active, archived, scopeSpaceIds] = await Promise.all([
-        window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false),
-        window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, true),
-        resolveAssistantScopeSpaceIds(),
+      const scopeSpaceIds = await resolveAssistantScopeSpaceIds();
+      const [active, archived] = await Promise.all([
+        window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false, scopeSpaceIds),
+        window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, true, scopeSpaceIds),
       ]);
       if (!current()) return;
       const inScope = (c: ConversationRow) => isConversationInScope(c, scopeSpaceIds);

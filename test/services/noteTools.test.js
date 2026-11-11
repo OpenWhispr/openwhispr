@@ -116,7 +116,7 @@ async function registryCreateNote(t, { activeWorkspaceId, scopeSpaceIds }) {
       "/SyncService.js": "export const syncService = { debouncedPush() {} };",
       "/stores/workspaceStore": `export const readActiveWorkspaceId = () => ${JSON.stringify(
         activeWorkspaceId
-      )};`,
+      )}; export const useWorkspaceStore = { getState: () => ({ defaultWorkspaceId: "d" }) };`,
     },
   });
   const { createToolRegistry } = await vite.ssrLoadModule("/services/tools/index.ts");
@@ -199,7 +199,8 @@ test("create_note files into a teamspace of the active workspace only", async (t
     cachePrefix: "openwhispr-create-note-tool-scope-",
     mockModules: {
       "/SyncService.js": "export const syncService = { debouncedPush() {} };",
-      "/stores/workspaceStore": 'export const readActiveWorkspaceId = () => "a";',
+      "/stores/workspaceStore":
+        'export const readActiveWorkspaceId = () => "a"; export const useWorkspaceStore = { getState: () => ({ defaultWorkspaceId: "d" }) };',
       "/i18n": `export default {
         t: (key) => (key === "meetingNotification.folders.private" ? "Privé" : key),
       };`,
@@ -227,4 +228,43 @@ test("create_note files into a teamspace of the active workspace only", async (t
     assert.equal((await create(name)).success, true, name);
     assert.equal(savedSpaceId(), 1, name);
   }
+});
+
+test("create_note keeps the turn workspace when the active workspace changes", async (t) => {
+  const { createRendererServer } = require("../lib/rendererTestHarness");
+  const saved = [];
+  globalThis.__turnWorkspace = "a";
+  t.after(() => {
+    delete globalThis.__turnWorkspace;
+  });
+  Object.assign(globalThis.window.electronAPI, {
+    getSpaces: async () => [
+      { id: 1, kind: "private", workspace_id: "a" },
+      { id: 4, kind: "private", workspace_id: "b" },
+    ],
+    getPrivateSpaceId: async () => (globalThis.__turnWorkspace === "a" ? 1 : 4),
+    saveNote: async (...args) => {
+      saved.push(args);
+      return { success: true, note: { id: 9, title: args[0] } };
+    },
+  });
+  const vite = await createRendererServer(t, {
+    mockModules: {
+      "/SyncService.js": "export const syncService = { debouncedPush() {} };",
+      "/stores/workspaceStore":
+        'export const readActiveWorkspaceId = () => globalThis.__turnWorkspace; export const useWorkspaceStore = { getState: () => ({ defaultWorkspaceId: "d" }) };',
+    },
+  });
+  const { createCreateNoteTool } = await vite.ssrLoadModule("/services/tools/createNoteTool.ts");
+  const tool = createCreateNoteTool({ spaceIds: [1] });
+  const failedScopeTool = createCreateNoteTool({
+    spaceIds: [],
+    privateWorkspaceId: "a",
+    privateCreationAllowed: false,
+  });
+  globalThis.__turnWorkspace = "b";
+  assert.equal((await tool.execute({ title: "A note", content: "A content" })).success, true);
+  assert.equal(saved[0][6], 1);
+  assert.equal((await failedScopeTool.execute({ title: "No scope", content: "" })).success, false);
+  assert.equal(saved.length, 1);
 });

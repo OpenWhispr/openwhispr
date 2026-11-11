@@ -30,6 +30,7 @@ import {
   type StoredChatConversation,
 } from "./chatPersistence";
 import type { SendToAIOptions, TurnDetails } from "./chatTurnEngine";
+import { isConversationInScope, resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
 import { useSourceNote, type SourceNote } from "./useSourceNote";
 import type { ChatSkills } from "./chatSkillMemory";
 import type { AgentState, Message, ToolCallInfo } from "./types";
@@ -187,6 +188,16 @@ export function useMainChatSession(): MainChatSession {
           return null;
         }
         if (source === "restore" && row.archived_at) {
+          if (owned) releaseChatConversation(id);
+          selectChat({ kind: "new-chat" });
+          return false;
+        }
+        const scopeSpaceIds = await resolveAssistantScopeSpaceIds();
+        if (!current()) {
+          if (owned) releaseChatConversation(id);
+          return false;
+        }
+        if (!isConversationInScope(row, scopeSpaceIds)) {
           if (owned) releaseChatConversation(id);
           selectChat({ kind: "new-chat" });
           return false;
@@ -381,6 +392,7 @@ export function useMainChatSession(): MainChatSession {
 
   const send = useCallback(
     async (text: string, options?: SendToAIOptions): Promise<boolean> => {
+      const expectedToken = selectionToken();
       const currentSelection = useChatTurnStore.getState().selection;
       if (
         currentSelection.kind === "conversation" &&
@@ -389,9 +401,18 @@ export function useMainChatSession(): MainChatSession {
         return false;
       let messages = currentSelection.kind === "conversation" ? (loaded?.messages ?? []) : [];
       if (currentSelection.kind === "conversation") {
+        const row = await window.electronAPI.getAgentConversation?.(
+          currentSelection.conversationId
+        );
+        const scopeSpaceIds = await resolveAssistantScopeSpaceIds();
+        if (
+          selectionToken() !== expectedToken ||
+          !row ||
+          !isConversationInScope(row, scopeSpaceIds)
+        )
+          return false;
         // Another window running this conversation (or holding its question) keeps it.
         const id = currentSelection.conversationId;
-        const expectedToken = selectionToken();
         const claim = await claimChatConversation(id);
         if (selectionToken() !== expectedToken) {
           if (claim?.owned) releaseConversation(id);
@@ -414,7 +435,8 @@ export function useMainChatSession(): MainChatSession {
         userName: user?.name ?? null,
         // A skill request starts a new chat and sends in one tick: never carry the last chat's note.
         openNote: currentSelection.kind === "conversation" ? source.openNote : undefined,
-        sourceNoteId: currentSelection.kind === "conversation" ? source.sourceNote?.id : undefined,
+        sourceNoteId:
+          currentSelection.kind === "conversation" ? (loaded?.noteId ?? undefined) : undefined,
         sourceNoteSpaceId:
           currentSelection.kind === "conversation" ? source.sourceNote?.spaceId : undefined,
         options,
@@ -432,7 +454,6 @@ export function useMainChatSession(): MainChatSession {
       user?.name,
       source.isLoading,
       source.openNote,
-      source.sourceNote?.id,
       source.sourceNote?.spaceId,
       releaseConversation,
     ]

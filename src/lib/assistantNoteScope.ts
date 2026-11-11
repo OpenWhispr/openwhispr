@@ -4,7 +4,7 @@ import {
   useWorkspaceStore,
 } from "../stores/workspaceStore";
 import logger from "../utils/logger";
-import { assistantScopeSpaceIds } from "./workspaceSelection";
+import { assistantScopeSpaceIds, knownDefaultWorkspaceId } from "./workspaceSelection";
 
 /**
  * The default workspace a workspace list names: this window's, else (the dictation window loads
@@ -23,7 +23,13 @@ export function listedDefaultWorkspaceId(): string | null {
  * (D37). Anything that fails reads nothing while a workspace is active, and main's Private alone
  * otherwise: never every space.
  */
-export async function resolveAssistantScopeSpaceIds(): Promise<number[]> {
+export interface AssistantNoteScope {
+  spaceIds: number[];
+  privateWorkspaceId: string | null;
+  privateCreationAllowed: boolean;
+}
+
+export async function resolveAssistantNoteScope(): Promise<AssistantNoteScope> {
   const api = typeof window !== "undefined" ? window.electronAPI : undefined;
   // The saved choice every window shares, as the tools that write notes use.
   const activeWorkspaceId = readActiveWorkspaceId();
@@ -38,7 +44,7 @@ export async function resolveAssistantScopeSpaceIds(): Promise<number[]> {
     if (spacesRead.status === "rejected") throw spacesRead.reason;
     const { workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
     const listed = workspaces.some((workspace) => workspace.id === activeWorkspaceId);
-    return assistantScopeSpaceIds({
+    const spaceIds = assistantScopeSpaceIds({
       spaces: spacesRead.value ?? [],
       activeWorkspaceId,
       workspaces,
@@ -46,14 +52,32 @@ export async function resolveAssistantScopeSpaceIds(): Promise<number[]> {
       defaultWorkspaceId: listed ? defaultWorkspaceId : listedDefaultWorkspaceId(),
       privateSpaceId,
     });
+    const knownDefault = knownDefaultWorkspaceId(
+      listedDefaultWorkspaceId(),
+      spacesRead.value ?? []
+    );
+    return {
+      spaceIds,
+      privateWorkspaceId: activeWorkspaceId,
+      privateCreationAllowed:
+        activeWorkspaceId != null && knownDefault != null && knownDefault !== activeWorkspaceId,
+    };
   } catch (error) {
     logger.warn(
       "Failed to resolve the assistant's workspace scope",
       { error: (error as Error).message },
       "workspaces"
     );
-    return activeWorkspaceId == null && privateSpaceId != null ? [privateSpaceId] : [];
+    return {
+      spaceIds: activeWorkspaceId == null && privateSpaceId != null ? [privateSpaceId] : [],
+      privateWorkspaceId: activeWorkspaceId,
+      privateCreationAllowed: false,
+    };
   }
+}
+
+export async function resolveAssistantScopeSpaceIds(): Promise<number[]> {
+  return (await resolveAssistantNoteScope()).spaceIds;
 }
 
 /**
