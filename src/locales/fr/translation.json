@@ -1752,8 +1752,6 @@
       "title": "Espace de travail",
       "description": "Collaborez, partagez des notes et gérez l'accès à l'espace de travail au même endroit.",
       "empty": {
-        "title": "Créez votre premier espace de travail",
-        "description": "Les espaces de travail vous permettent de collaborer et partager des notes.",
         "create": "Créer un espace"
       },
       "loadError": {
@@ -3752,18 +3750,17 @@
       "leave": {
         "title": "Quitter {{name}} ?",
         "body": "Vous perdrez l'accès à cet espace, à ses équipes et à ses teamspaces. Un administrateur de l'espace pourra vous réinviter.",
-        "privateNotes": "Vos notes privées de cet espace seront déplacées vers {{workspace}} sur cet appareil.",
+        "privateNotes": "Vos notes privées de cet espace de travail seront déplacées vers {{workspace}} sur cet appareil.",
         "failed": "Impossible de quitter {{name}}. Vérifiez votre connexion et réessayez."
       },
       "left": {
         "title": "Vous avez quitté {{name}}"
       },
-      "chooseAnother": "Choisissez un autre espace pour continuer.",
-      "chooseWorkspace": "Choisir un espace",
+      "nowIn": "Vous êtes maintenant dans {{workspace}}.",
       "delete": {
         "title": "Supprimer {{name}} ?",
         "body": "Cela supprime définitivement l'espace, ses notes, ses fichiers, ses équipes et ses teamspaces pour tout le monde. Cette action est irréversible.",
-        "privateNotes": "Vos notes privées de cet espace seront déplacées vers {{workspace}} sur cet appareil."
+        "privateNotes": "Vos notes privées de cet espace de travail seront déplacées vers {{workspace}} sur cet appareil."
       },
       "deleting": {
         "title": "Suppression de {{name}}…",

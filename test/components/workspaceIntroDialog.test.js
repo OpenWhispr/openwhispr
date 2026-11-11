@@ -144,3 +144,16 @@ test("Next and Get started take the first focus, not Skip", async (t) => {
   assert.match(first[0], /common\.next/);
   assert.match(focused(renderCard({ step: 2 }))[0], /workspaces\.intro\.getStarted/);
 });
+
+test("the Add workspace pill sits below the one-row switcher card, not over it", async (t) => {
+  const { renderCard } = await loadIntro(t);
+
+  const markup = renderCard({ step: 0 });
+
+  const bottomOf = (marker) =>
+    Number(markup.match(new RegExp(`bottom-\\[(\\d+)px\\][^"]*${marker}`))?.[1]);
+  const card = bottomOf("w-\\[254px\\]");
+  const pill = bottomOf("left-\\[calc\\(50%\\+97px\\)\\]");
+  // The pill is about 42px tall: py-1.5 around a 28px icon, plus its border.
+  assert.ok(card - pill >= 42, `card at ${card}px, pill at ${pill}px`);
+});

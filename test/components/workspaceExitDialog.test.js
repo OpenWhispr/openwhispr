@@ -61,8 +61,8 @@ async function loadDialog(t) {
         },
         onConfirmLeave: async () => {},
         onConfirmDelete: async () => {},
-        onChooseWorkspace: () => {},
         privateNotesWorkspace: "Ada's workspace",
+        currentWorkspace: "Ada's lab",
         ...overrides,
       })
     );
@@ -238,39 +238,46 @@ test("deleteFailed offers Try again and Cancel", async (t) => {
   assert.match(markup, /common\.cancel/);
 });
 
-test("left offers only Choose workspace, then dismisses", async (t) => {
+test("left says which workspace the user is in now, and Done dismisses", async (t) => {
   const { render, events } = await loadDialog(t);
   const order = [];
 
   const markup = render(
     { kind: "left", name: "Acme" },
-    {
-      dispatch: (event) => order.push(event.type),
-      onChooseWorkspace: () => order.push("choose"),
-    }
+    { dispatch: (event) => order.push(event.type) }
   );
 
   assert.match(markup, /workspaces\.exit\.left\.title/);
-  assert.match(markup, /workspaces\.exit\.chooseAnother/);
-  assert.match(markup, /workspaces\.exit\.chooseWorkspace/);
+  // The store already moved the user to another workspace; there's nothing to choose.
+  assert.match(
+    markup,
+    /workspaces\.exit\.nowIn\|\{&quot;workspace&quot;:&quot;Ada&#x27;s lab&quot;\}/
+  );
+  assert.match(markup, />common\.done</);
+  assert.doesNotMatch(markup, /chooseWorkspace|chooseAnother/);
   assert.doesNotMatch(markup, /common\.cancel/);
   assert.deepEqual(events, []);
 
   globalThis.__actionDialogProps.primary.onClick();
-  assert.deepEqual(order, ["choose", "dismiss"]);
+  assert.deepEqual(order, ["dismiss"]);
 
   // Esc does what the primary does.
   order.length = 0;
   globalThis.__actionDialogProps.onDismiss();
-  assert.deepEqual(order, ["choose", "dismiss"]);
+  assert.deepEqual(order, ["dismiss"]);
 });
 
-test("deleted names the deleted workspace and offers Choose workspace", async (t) => {
+test("deleted names the deleted workspace and where the user is now", async (t) => {
   const { render } = await loadDialog(t);
 
   const markup = render({ kind: "deleted", name: "Acme" });
 
   assert.match(markup, /workspaces\.exit\.deleted\.title\|/);
-  assert.match(markup, /workspaces\.exit\.chooseWorkspace/);
+  assert.match(
+    markup,
+    /workspaces\.exit\.nowIn\|\{&quot;workspace&quot;:&quot;Ada&#x27;s lab&quot;\}/
+  );
+  assert.match(markup, />common\.done</);
+  assert.doesNotMatch(markup, /chooseWorkspace|chooseAnother/);
   assert.doesNotMatch(markup, /common\.cancel/);
 });

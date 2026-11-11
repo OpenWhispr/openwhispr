@@ -26,7 +26,9 @@ function WorkspaceMock({ workspaceName }: { workspaceName: string }): ReactEleme
   const { t } = useTranslation();
   return (
     <>
-      <div className={cn(MOCK_CARD, "bottom-[90px] left-1/2 w-[254px] -translate-x-1/2")}>
+      {/* One row now: raised so the "Add workspace" pill (bottom-[70px], about 42px tall) sits
+          just below it, clear of the check. */}
+      <div className={cn(MOCK_CARD, "bottom-[120px] left-1/2 w-[254px] -translate-x-1/2")}>
         <div className="flex items-center gap-3 p-3">
           <span className={MOCK_ICON}>
             <Building2 size={16} />

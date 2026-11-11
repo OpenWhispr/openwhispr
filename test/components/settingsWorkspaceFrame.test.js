@@ -22,6 +22,14 @@ async function loadServer(t) {
         export const useWorkspaceStore = (selector) => selector(globalThis.__workspaceState);
       `,
       "/hooks/useAuth": "export const useAuth = () => ({ isSignedIn: true });",
+      "/hooks/useWorkspace": `
+        export const useRetryDefaultWorkspace = () => ({
+          retry: () => {
+            globalThis.__workspaceState.defaultRetries += 1;
+          },
+          retrying: false,
+        });
+      `,
     },
   });
 }
@@ -88,4 +96,43 @@ test("useSettingsWorkspace shows a workspace even with none active, never Person
 
   assert.equal(state.status, "ready");
   assert.equal(state.workspace, WORKSPACE);
+});
+
+test("an empty list offers Retry for the default workspace, not Create", async (t) => {
+  const vite = await loadServer(t);
+  const { useSettingsWorkspace } = await vite.ssrLoadModule(
+    "/components/settings/useSettingsWorkspace.ts"
+  );
+  const { default: Frame } = await vite.ssrLoadModule(
+    "/components/settings/SettingsWorkspaceFrame.tsx"
+  );
+  globalThis.__workspaceState = {
+    // Listed, but the default workspace isn't there yet.
+    workspaces: [],
+    activeWorkspaceId: null,
+    loaded: true,
+    loading: false,
+    error: false,
+    refresh: async () => {
+      globalThis.__workspaceState.refreshes += 1;
+    },
+    refreshes: 0,
+    defaultRetries: 0,
+  };
+  let state;
+  const Page = () => {
+    state = useSettingsWorkspace();
+    return createElement(Frame, { state }, () => "page");
+  };
+
+  const markup = renderToStaticMarkup(createElement(Page));
+
+  assert.equal(state.status, "unavailable");
+  assert.ok(markup.includes("workspaces.switcher.unavailable"));
+  assert.ok(markup.includes("settingsPage.workspace.loadError.retry"));
+  assert.ok(!markup.includes("settingsPage.workspace.empty"));
+  assert.ok(!markup.includes("page"));
+  state.retry();
+  assert.equal(globalThis.__workspaceState.defaultRetries, 1);
+  assert.equal(globalThis.__workspaceState.refreshes, 0);
 });

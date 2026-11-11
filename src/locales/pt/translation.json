@@ -2470,8 +2470,6 @@
       "title": "Espaço de trabalho",
       "description": "Colabore com colegas, compartilhe notas e gerencie o acesso ao workspace em um só lugar.",
       "empty": {
-        "title": "Crie seu primeiro espaço de trabalho",
-        "description": "Espaços de trabalho permitem colaborar com colegas e compartilhar notas.",
         "create": "Criar espaço de trabalho"
       },
       "loadError": {
@@ -6063,8 +6061,7 @@
       "left": {
         "title": "Você saiu de {{name}}"
       },
-      "chooseAnother": "Escolha outro espaço de trabalho para continuar.",
-      "chooseWorkspace": "Escolher espaço de trabalho",
+      "nowIn": "Agora você está em {{workspace}}.",
       "delete": {
         "title": "Excluir {{name}}?",
         "body": "Isso exclui permanentemente o espaço de trabalho, as notas, os arquivos, as equipes e os teamspaces dele para todos. Não é possível desfazer.",

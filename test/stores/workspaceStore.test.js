@@ -218,11 +218,13 @@ async function loadPrivateNotesStore(
     accountId = "acct-1",
     storage: initialStorage = {},
     spaces = [],
+    // Main's workspace calls, in place of the recording fakes (a real database, say).
+    main = null,
   }
 ) {
   const calls = [];
   const accountScopeListeners = [];
-  const api = {
+  const fakeMain = {
     setActiveWorkspaceScope: async (scope) => {
       calls.push(["scope", scope]);
       return { success: true };
@@ -239,11 +241,18 @@ async function loadPrivateNotesStore(
       }
       return { success: true, notes: 0, folders: 0 };
     },
-    getSpaces: async () => globalThis.__ws.spaces,
+    getSpaces: async () => {
+      calls.push(["spaces"]);
+      return globalThis.__ws.spaces;
+    },
     claimSignedOutPrivateNotes: async () => {
       calls.push(["claim"]);
       return { notes: 0, folders: 0 };
     },
+  };
+  const api = {
+    ...fakeMain,
+    ...main,
     onDatabaseAccountScopeChanged: (listener) => {
       accountScopeListeners.push(listener);
       return () => accountScopeListeners.splice(accountScopeListeners.indexOf(listener), 1);
@@ -653,8 +662,8 @@ test("the default's own Private is never relocated by the row check", async (t) 
     spaces: [
       // The default's row, marked or not yet bound.
       privateRow(2, "own"),
-      // A marked default whose workspace this list doesn't have (an older default): main
-      // refuses to move it, and the next bind moves the mark first.
+      // A row main still reads as marked (these rows stand in for main's answer, which the
+      // row check's own bind would have unmarked): main refuses to move one.
       privateRow(7, "previous-default", { is_default_private: 1 }),
       privateRow(3, "team"),
     ],
@@ -694,15 +703,14 @@ test("the bridge sends the scope on startup and on every switch", async (t) => {
   calls.length = 0;
   await useWorkspaceStore.getState().refresh();
   await flush();
-  // The refresh's own check of main's private rows sends the scope too.
+  // The refresh's own check of main's private rows sends the scope and binds too.
   assert.deepEqual(calls.filter(([name]) => name === "scope").at(-1), [
     "scope",
     { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" },
   ]);
-  assert.deepEqual(
-    calls.filter(([name]) => name === "bind"),
-    [["bind", "own", "acct-1"]]
-  );
+  const binds = calls.filter(([name]) => name === "bind");
+  assert.ok(binds.length > 0);
+  assert.ok(binds.every((bind) => bind[1] === "own" && bind[2] === "acct-1"));
 
   calls.length = 0;
   useWorkspaceStore.getState().setActiveWorkspaceId("team");
@@ -769,4 +777,166 @@ test("a refresh follows another window's workspace choice it hasn't heard of yet
   await useWorkspaceStore.getState().refresh({ fresh: true });
 
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+});
+
+test("Retry asks for the default workspace again after this session's answer", async (t) => {
+  const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+    list: async () => [],
+    ensureDefault: async () => null,
+  });
+  await useWorkspaceStore.getState().refresh();
+
+  await ensureDefaultWorkspace("Ada's workspace");
+  await ensureDefaultWorkspace("Ada's workspace");
+  assert.equal(globalThis.__ws.ensureCalls.length, 1, "asked once per session on its own");
+
+  globalThis.__ws.ensureDefault = async () => {
+    globalThis.__ws.list = async () => [OWN];
+    return OWN;
+  };
+  await ensureDefaultWorkspace("Ada's workspace", { again: true });
+
+  assert.equal(globalThis.__ws.ensureCalls.length, 2);
+  assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "own");
+});
+
+test("losing the Enterprise workspace that stood in as the default asks for a default again", async (t) => {
+  const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, ENTERPRISE],
+    ensureDefault: async () => null,
+  });
+  await useWorkspaceStore.getState().refresh();
+  await ensureDefaultWorkspace("Ada's workspace");
+  assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "corp");
+
+  // Left or deleted: the store forgets it, and the hook asks again once the list changes.
+  useWorkspaceStore.getState().forgetWorkspace("corp");
+  await ensureDefaultWorkspace("Ada's workspace");
+  assert.equal(globalThis.__ws.ensureCalls.length, 2);
+
+  // Listed again, the answer given since still holds.
+  globalThis.__ws.list = async () => [TEAM, ENTERPRISE];
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+  await ensureDefaultWorkspace("Ada's workspace");
+  assert.equal(globalThis.__ws.ensureCalls.length, 2);
+
+  // Gone from a list read elsewhere (another device, an admin): asked again.
+  globalThis.__ws.list = async () => [TEAM];
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+  await ensureDefaultWorkspace("Ada's workspace");
+  assert.equal(globalThis.__ws.ensureCalls.length, 3);
+});
+
+test("an answer to a request sent before the stand-in was lost isn't this session's answer", async (t) => {
+  const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, ENTERPRISE],
+  });
+  await useWorkspaceStore.getState().refresh();
+  let answer;
+  globalThis.__ws.ensureDefault = () => new Promise((resolve) => (answer = resolve));
+
+  const inFlight = ensureDefaultWorkspace("Ada's workspace");
+  useWorkspaceStore.getState().forgetWorkspace("corp");
+  answer(null);
+  await inFlight;
+  globalThis.__ws.ensureDefault = async () => null;
+  await ensureDefaultWorkspace("Ada's workspace");
+
+  assert.equal(globalThis.__ws.ensureCalls.length, 2);
+});
+
+test("the row check binds the default before it reads main's rows", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+  });
+
+  await useWorkspaceStore.getState().refresh();
+
+  // A Private that was the default until now loses its mark in the bind, so it can move.
+  assert.deepEqual(names(calls), ["scope", "bind", "spaces"]);
+  assert.deepEqual(calls[1], ["bind", "own", "acct-1"]);
+});
+
+test("the Enterprise stand-in's private notes reach the new default's Private in the same session", async (t) => {
+  const { createDb } = require("../helpers/harness/db.js");
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("acct-1");
+  // Main's handlers, account guard included, over a real database.
+  const refused = { success: false, code: "ACCOUNT_CHANGED" };
+  const forOtherAccount = (accountId) =>
+    accountId !== undefined && accountId !== db.activeAccountId;
+  const main = {
+    setActiveWorkspaceScope: async ({ accountId, ...scope }) => {
+      if (forOtherAccount(accountId)) return refused;
+      db.setActiveWorkspaceScope(scope);
+      return { success: true };
+    },
+    bindDefaultPrivateSpace: async (workspaceId, accountId) => {
+      if (forOtherAccount(accountId)) return refused;
+      db.bindDefaultPrivateSpace(workspaceId);
+      return { success: true };
+    },
+    relocatePrivateSpace: async (from, to, accountId) => {
+      if (forOtherAccount(accountId)) return refused;
+      return { success: true, ...db.relocatePrivateSpace(from, to) };
+    },
+    getSpaces: async () => db.getSpaces(),
+  };
+  const MINE = {
+    id: "mine",
+    name: "Ada's workspace",
+    plan: "free",
+    status: "active",
+    is_default: true,
+  };
+  const { useWorkspaceStore, ensureDefaultWorkspace, relocateLostWorkspaces, vite } =
+    await loadPrivateNotesStore(t, {
+      // An Enterprise member: the server makes no default of their own.
+      list: async () => [ENTERPRISE],
+      ensureDefault: async () => null,
+      main,
+    });
+  const { startWorkspaceScopeBridge } = await vite.ssrLoadModule("/stores/workspaceScopeBridge.ts");
+  const { spacesInWorkspaceScope } = await vite.ssrLoadModule("/lib/workspaceSelection.ts");
+  t.after(startWorkspaceScopeBridge());
+  await useWorkspaceStore.getState().refresh();
+  await ensureDefaultWorkspace("Ada's workspace");
+  await flush();
+  const corpPrivate = db.getDefaultPrivateSpaceId();
+  const note = db.saveNote("Corp idea", "").note;
+  assert.equal(note.space_id, corpPrivate, "written in the stand-in's Private");
+
+  // The user leaves the Enterprise workspace (workspaceActions' afterLosingWorkspace).
+  useWorkspaceStore.getState().forgetWorkspace("corp");
+  await relocateLostWorkspaces(["corp"]);
+  globalThis.__ws.list = async () => [];
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+  // The list changed, so useEnsureDefaultWorkspace asks again; the server makes their own now.
+  globalThis.__ws.ensureDefault = async () => {
+    globalThis.__ws.list = async () => [MINE];
+    return MINE;
+  };
+  await ensureDefaultWorkspace("Ada's workspace");
+  await flush();
+
+  const state = useWorkspaceStore.getState();
+  assert.equal(state.defaultWorkspaceId, "mine");
+  assert.equal(state.activeWorkspaceId, "mine");
+  const minePrivate = db.getPrivateSpaceId("mine");
+  assert.equal(db.getNote(note.id).space_id, minePrivate, "the note moved to the new default");
+  const visible = spacesInWorkspaceScope(
+    await db.getSpaces(),
+    state.activeWorkspaceId,
+    state.workspaces,
+    state.defaultWorkspaceId
+  );
+  assert.ok(
+    visible.some((space) => space.id === minePrivate),
+    "the new default's Private shows"
+  );
+  assert.ok(
+    !(await db.getSpaces()).some((space) => space.id === corpPrivate),
+    "the stand-in's Private is retired"
+  );
 });

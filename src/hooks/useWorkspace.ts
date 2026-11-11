@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ensureDefaultWorkspace, useWorkspaceStore } from "../stores/workspaceStore";
 import { spacesInWorkspaceScope } from "../lib/workspaceSelection";
@@ -83,21 +83,40 @@ export function useSpacesInWorkspaceScope(spaces: SpaceItem[]): SpaceItem[] {
   );
 }
 
+function useDefaultWorkspaceName(): string {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  return defaultWorkspaceName(user?.name, t);
+}
+
 /**
  * Has the server make the signed-in account's default workspace, named after the user, once a
  * list has loaded for the account (so the session is known to work). Mounted once, in the control
- * panel; ensureDefaultWorkspace asks once per account session and again after a failure, which the
- * next successful list read retries.
+ * panel; ensureDefaultWorkspace asks once per account session, and again after a failure or once
+ * an Enterprise workspace standing in as the default is gone, which the next list change retries.
  */
 export function useEnsureDefaultWorkspace(): void {
-  const { t } = useTranslation();
-  const { isSignedIn, isOfflineAccount, user } = useAuth();
+  const { isSignedIn, isOfflineAccount } = useAuth();
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const listed = useWorkspaceStore((s) => s.loaded && !s.error && s.listAccountId !== null);
-  const name = defaultWorkspaceName(user?.name, t);
+  const name = useDefaultWorkspaceName();
 
   useEffect(() => {
     if (!isSignedIn || isOfflineAccount || !listed) return;
     void ensureDefaultWorkspace(name);
   }, [isSignedIn, isOfflineAccount, listed, name, workspaces]);
+}
+
+/**
+ * Retry for a list with no default workspace in it: asks the server for the default again, even
+ * when this session already has an answer.
+ */
+export function useRetryDefaultWorkspace(): { retry: () => void; retrying: boolean } {
+  const name = useDefaultWorkspaceName();
+  const [retrying, setRetrying] = useState(false);
+  const retry = useCallback(() => {
+    setRetrying(true);
+    void ensureDefaultWorkspace(name, { again: true }).finally(() => setRetrying(false));
+  }, [name]);
+  return { retry, retrying };
 }

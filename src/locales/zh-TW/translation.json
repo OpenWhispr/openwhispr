@@ -2491,8 +2491,6 @@
       "title": "工作區",
       "description": "與團隊成員協作、分享筆記，並在同一處管理工作區存取權限。",
       "empty": {
-        "title": "建立你的第一個工作區",
-        "description": "工作區讓你與團隊成員協作並分享筆記。",
         "create": "建立工作區"
       },
       "loadError": {
@@ -2760,8 +2758,8 @@
           "leaveBodyLoses": "你將無法再存取 {{space}} 及其筆記。",
           "leaveBodyAdmins": "其他管理員將繼續管理此 Teamspace。",
           "deleteNotAllowed": "你沒有刪除 {{space}} 的權限。",
-          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至私人。",
-          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至私人。"
+          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至「私人」。",
+          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至「私人」。"
         },
         "addPeople": {
           "loading": "正在載入 Teamspace…",
@@ -3505,10 +3503,10 @@
       "noteCount_other": "{{count}} 則筆記",
       "accessRevoked": "你已無法存取 {{space}}",
       "accessRevokedActiveNote": "你已無法存取 {{space}} — 「{{title}}」在此裝置上不再可用",
-      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至私人",
-      "updateDeniedNote": "你沒有權限變更「{{title}}」——未同步的編輯已作為副本儲存到私人",
+      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至「私人」",
+      "updateDeniedNote": "你沒有權限變更「{{title}}」——未同步的編輯已作為副本儲存到「私人」",
       "deleteDeniedNote": "「{{title}}」未被刪除——只有筆記擁有者或管理員才能刪除它",
-      "updateDeniedFolder": "你沒有權限變更「{{name}}」——未同步的內容已儲存到私人",
+      "updateDeniedFolder": "你沒有權限變更「{{name}}」——未同步的內容已儲存到「私人」",
       "deleteDeniedFolder": "「{{name}}」未被刪除——只有管理員才能刪除空間資料夾",
       "conflictBanner": "此筆記有更新的版本。",
       "conflictRefresh": "重新整理",
@@ -6035,8 +6033,7 @@
       "left": {
         "title": "你已離開 {{name}}"
       },
-      "chooseAnother": "請選擇另一個工作區以繼續。",
-      "chooseWorkspace": "選擇工作區",
+      "nowIn": "你現在位於 {{workspace}}。",
       "delete": {
         "title": "刪除 {{name}}？",
         "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與 Teamspace，且無法復原。",

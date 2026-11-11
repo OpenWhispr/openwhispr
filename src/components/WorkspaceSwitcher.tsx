@@ -13,7 +13,7 @@ import {
 } from "./ui/dropdown-menu";
 import { cn } from "./lib/utils";
 import { useAuth } from "../hooks/useAuth";
-import { useWorkspace } from "../hooks/useWorkspace";
+import { useRetryDefaultWorkspace, useWorkspace } from "../hooks/useWorkspace";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { WorkspacesService } from "../services/WorkspacesService";
 import { resolveWorkspaceSwitcher, withDefaultFirst } from "../lib/workspaceSwitcher";
@@ -95,6 +95,7 @@ export default function WorkspaceSwitcher({
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
   const { workspaces, setActive, refresh } = useWorkspace();
+  const { retry: retryDefault, retrying: retryingDefault } = useRetryDefaultWorkspace();
   const { activeWorkspaceId, defaultWorkspaceId, loaded, loading, error } = useWorkspaceStore(
     useShallow((s) => ({
       activeWorkspaceId: s.activeWorkspaceId,
@@ -200,8 +201,8 @@ export default function WorkspaceSwitcher({
 
   const menuSide = placement === "settings" ? "bottom" : "top";
 
-  // The default workspace isn't listed yet. The notes the user has are in the account's Private,
-  // which the sidebar keeps showing, so the trigger names it rather than waiting on a spinner.
+  // The default workspace isn't listed yet: making it failed, or is still on its way. The trigger
+  // names the account's Private rather than spinning, and Retry asks the server for the default.
   if (state.kind === "unavailable") {
     const privateLabel = t("notes.spaces.personal");
     return (
@@ -223,8 +224,8 @@ export default function WorkspaceSwitcher({
         <DropdownMenuContent side={menuSide} align="start" sideOffset={8} className="w-60">
           <RetryMenuItem
             message={t("workspaces.switcher.unavailable")}
-            loading={loading}
-            onRetry={() => void refresh()}
+            loading={loading || retryingDefault}
+            onRetry={retryDefault}
           />
         </DropdownMenuContent>
       </DropdownMenu>

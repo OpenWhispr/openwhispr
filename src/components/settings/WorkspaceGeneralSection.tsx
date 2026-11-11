@@ -31,13 +31,10 @@ export function canSaveWorkspaceName(draft: string, saved: string): boolean {
 
 interface WorkspaceGeneralSectionProps {
   onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
-  /** Opens the workspace picker in the Settings nav. */
-  onChooseWorkspace?: () => void;
 }
 
 export default function WorkspaceGeneralSection({
   onNavigateToSection,
-  onChooseWorkspace,
 }: WorkspaceGeneralSectionProps): React.ReactElement | null {
   const { t } = useTranslation();
   const state = useSettingsWorkspace();
@@ -49,10 +46,14 @@ export default function WorkspaceGeneralSection({
   const [exitState, dispatchExit] = useReducer(exitReducer, { kind: "closed" });
   const [transferState, dispatchTransfer] = useReducer(transferReducer, { kind: "closed" });
   const exitTargetId = useRef<string | null>(null);
+  // Taken at start, as the exit state takes the name: once the leave runs, the store forgets the
+  // workspace and lands on the default, which would read as a different destination.
+  const [privateNotesWorkspace, setPrivateNotesWorkspace] = useState("");
   const [transferWorkspace, setTransferWorkspace] = useState<Workspace | null>(null);
 
   const startExit = (workspace: Workspace, type: "startLeave" | "startDelete"): void => {
     exitTargetId.current = workspace.id;
+    setPrivateNotesWorkspace(privateNotesDestinationName(workspaces, workspace.id, user?.name, t));
     dispatchExit({ type, name: workspace.name });
   };
 
@@ -90,14 +91,10 @@ export default function WorkspaceGeneralSection({
         dispatch={dispatchExit}
         onConfirmLeave={confirmLeave}
         onConfirmDelete={confirmDelete}
-        onChooseWorkspace={() => onChooseWorkspace?.()}
-        // Leave and Delete act on the workspace this page shows.
-        privateNotesWorkspace={privateNotesDestinationName(
-          workspaces,
-          state.workspace?.id ?? null,
-          user?.name,
-          t
-        )}
+        privateNotesWorkspace={privateNotesWorkspace}
+        // Where the store landed after the leave or delete; with nothing listed yet, the default
+        // being made, which the private notes went to.
+        currentWorkspace={state.workspace?.name ?? privateNotesWorkspace}
       />
       {transferWorkspace && (
         <TransferOwnershipDialog

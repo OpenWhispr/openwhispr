@@ -19,6 +19,12 @@ const MOCKS = {
         globalThis.__switcherState.refreshes += 1;
       },
     });
+    export const useRetryDefaultWorkspace = () => ({
+      retry: () => {
+        globalThis.__switcherState.defaultRetries += 1;
+      },
+      retrying: false,
+    });
   `,
   "/stores/workspaceStore": `
     const read = () => ({
@@ -84,6 +90,7 @@ async function loadSwitcher(t) {
     error: false,
     accountId: "user-1",
     refreshes: 0,
+    defaultRetries: 0,
   };
   globalThis.__intro = null;
   installBrowserGlobals(t);
@@ -242,7 +249,8 @@ test("an empty list never hides Private behind a spinner", async (t) => {
     ]);
   }
 
-  // Retry asks for the list again, which retries making the default workspace.
+  // Retry asks the server for the default workspace again, even after this session's answer.
   globalThis.__menu.items[0].onSelect({ preventDefault() {} });
-  assert.equal(globalThis.__switcherState.refreshes, 1);
+  assert.equal(globalThis.__switcherState.defaultRetries, 1);
+  assert.equal(globalThis.__switcherState.refreshes, 0);
 });

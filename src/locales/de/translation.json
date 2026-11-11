@@ -1752,8 +1752,6 @@
       "title": "Workspace",
       "description": "Arbeiten Sie zusammen, teilen Sie Notizen und verwalten Sie den Workspace-Zugriff an einem Ort.",
       "empty": {
-        "title": "Ersten Workspace erstellen",
-        "description": "Workspaces ermöglichen die Zusammenarbeit und das Teilen von Notizen.",
         "create": "Workspace erstellen"
       },
       "loadError": {
@@ -2021,8 +2019,8 @@
           "leaveBodyLoses": "Sie verlieren den Zugriff auf {{space}} und seine Notizen.",
           "leaveBodyAdmins": "Ein anderer Admin verwaltet diesen Teamspace weiter.",
           "deleteNotAllowed": "Sie haben keine Berechtigung, {{space}} zu löschen.",
-          "movedToPersonal_one": "{{count}} nicht synchronisierte Notiz wurde nach Privat verschoben.",
-          "movedToPersonal_other": "{{count}} nicht synchronisierte Notizen wurden nach Privat verschoben."
+          "movedToPersonal_one": "{{count}} nicht synchronisierte Notiz wurde nach „Privat“ verschoben.",
+          "movedToPersonal_other": "{{count}} nicht synchronisierte Notizen wurden nach „Privat“ verschoben."
         },
         "addPeople": {
           "loading": "Teamspaces werden geladen…",
@@ -3751,8 +3749,7 @@
       "left": {
         "title": "Sie haben {{name}} verlassen"
       },
-      "chooseAnother": "Wählen Sie einen anderen Workspace, um fortzufahren.",
-      "chooseWorkspace": "Workspace auswählen",
+      "nowIn": "Sie sind jetzt in {{workspace}}.",
       "delete": {
         "title": "{{name}} löschen?",
         "body": "Dadurch werden der Workspace, seine Notizen, Dateien, Teams und Teamspaces für alle dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.",
@@ -3999,7 +3996,7 @@
       "defaultFolderImmutable": "Standardordner können nicht geändert werden.",
       "spaceNameRequired": "Gib einen Bereichsnamen ein.",
       "spaceNotFound": "Dieser Bereich wurde nicht gefunden.",
-      "privateSpaceImmutable": "Privat kann nicht geändert werden.",
+      "privateSpaceImmutable": "„Privat“ kann nicht geändert werden.",
       "generic": "Die Änderung konnte nicht abgeschlossen werden. Bitte versuche es erneut."
     },
     "sidebar": {
@@ -4062,10 +4059,10 @@
       "noteCount_other": "{{count}} Notizen",
       "accessRevoked": "Du hast keinen Zugriff mehr auf {{space}}",
       "accessRevokedActiveNote": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ ist auf diesem Gerät nicht mehr verfügbar",
-      "movedToPersonal": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ wurde nach Privat verschoben",
-      "updateDeniedNote": "Du darfst „{{title}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden als Kopie in Privat gespeichert",
+      "movedToPersonal": "Du hast keinen Zugriff mehr auf {{space}} — „{{title}}“ wurde nach „Privat“ verschoben",
+      "updateDeniedNote": "Du darfst „{{title}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden als Kopie in „Privat“ gespeichert",
       "deleteDeniedNote": "„{{title}}“ wurde nicht gelöscht — nur der Besitzer der Notiz oder ein Admin kann sie löschen",
-      "updateDeniedFolder": "Du darfst „{{name}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden in Privat gespeichert",
+      "updateDeniedFolder": "Du darfst „{{name}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden in „Privat“ gespeichert",
       "deleteDeniedFolder": "„{{name}}“ wurde nicht gelöscht — nur ein Admin kann einen Bereichs-Ordner löschen",
       "conflictBanner": "Es existiert eine neuere Version dieser Notiz.",
       "conflictRefresh": "Aktualisieren",

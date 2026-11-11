@@ -229,6 +229,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   forgetWorkspace: (id) => {
+    // The Enterprise workspace that stood in as the default is gone: this session's answer that
+    // the account gets no default of its own no longer holds.
+    if (id === get().defaultWorkspaceId) askForDefaultAgain();
     const workspaces = get().workspaces.filter((w) => w.id !== id);
     const defaultWorkspaceId = resolveDefaultWorkspaceId(workspaces);
     set(
@@ -284,6 +287,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         const answer = await WorkspacesService.list();
         if (superseded()) return;
         const accountId = usePolicyStore.getState().accountId;
+        const previousDefaultId = get().defaultWorkspaceId;
+        if (previousDefaultId && !answer.some((w) => w.id === previousDefaultId)) {
+          askForDefaultAgain();
+        }
         const defaultWorkspaceId = resolveDefaultWorkspaceId(answer);
         const workspaces = withDefaultFirst(answer, defaultWorkspaceId);
         // Workspaces this account had and no longer has. Only a successful answer counts, and
@@ -481,6 +488,10 @@ async function orphanedPrivateWorkspaces({
   if (!(await publishWorkspaceScope())) return [];
   let spaces: SpaceItem[];
   try {
+    // Bound first, whatever the bridge has sent: a Private that was the default until now (an
+    // Enterprise workspace that stood in) keeps its mark until then, and main never moves one.
+    const bound = await api.bindDefaultPrivateSpace?.(defaultWorkspaceId, accountId);
+    if (bound && !bound.success) return [];
     spaces = await api.getSpaces();
   } catch (error) {
     logger.warn(
@@ -543,23 +554,40 @@ export async function relocateLostWorkspaces(workspaceIds: string[]): Promise<vo
 }
 
 let defaultEnsuredGeneration: number | null = null;
-let defaultEnsureRequest: { generation: number; promise: Promise<void> } | null = null;
+// Bumped when the session's answer stops holding; an answer to a request sent before then is
+// not taken as the session's.
+let defaultEnsureEpoch = 0;
+let defaultEnsureRequest: { generation: number; epoch: number; promise: Promise<void> } | null =
+  null;
+
+function askForDefaultAgain(): void {
+  defaultEnsureEpoch += 1;
+  defaultEnsuredGeneration = null;
+}
 
 /**
  * Has the server make the account's default workspace (`name` is used the first time only),
  * then reads the list again so it shows. Asked once per account session; a failure is asked
- * again on the next call.
+ * again on the next call, and so is an answer that no longer holds (the Enterprise workspace
+ * that stood in as the default is gone). `again` asks even after an answer, for Retry.
  */
-export function ensureDefaultWorkspace(name: string): Promise<void> {
+export function ensureDefaultWorkspace(
+  name: string,
+  { again = false }: { again?: boolean } = {}
+): Promise<void> {
+  if (again) askForDefaultAgain();
   const generation = accountGeneration;
+  const epoch = defaultEnsureEpoch;
   if (defaultEnsuredGeneration === generation) return Promise.resolve();
-  if (defaultEnsureRequest?.generation === generation) return defaultEnsureRequest.promise;
+  if (defaultEnsureRequest?.generation === generation && defaultEnsureRequest.epoch === epoch) {
+    return defaultEnsureRequest.promise;
+  }
   let request!: Promise<void>;
   request = (async () => {
     try {
       const workspace = await WorkspacesService.ensureDefault(name);
       if (generation !== accountGeneration) return;
-      defaultEnsuredGeneration = generation;
+      if (epoch === defaultEnsureEpoch) defaultEnsuredGeneration = generation;
       // An Enterprise member gets none: their Enterprise workspace stays the default.
       if (!workspace) return;
       const listed = useWorkspaceStore
@@ -576,7 +604,7 @@ export function ensureDefaultWorkspace(name: string): Promise<void> {
       if (defaultEnsureRequest?.promise === request) defaultEnsureRequest = null;
     }
   })();
-  defaultEnsureRequest = { generation, promise: request };
+  defaultEnsureRequest = { generation, epoch, promise: request };
   return request;
 }
 

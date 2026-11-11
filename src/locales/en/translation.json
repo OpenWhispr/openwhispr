@@ -1752,8 +1752,6 @@
       "title": "Workspace",
       "description": "Collaborate with teammates, share notes, and manage workspace access in one place.",
       "empty": {
-        "title": "Create your first workspace",
-        "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
       },
       "loadError": {
@@ -3751,8 +3749,7 @@
       "left": {
         "title": "You left {{name}}"
       },
-      "chooseAnother": "Choose another workspace to continue.",
-      "chooseWorkspace": "Choose workspace",
+      "nowIn": "You're now in {{workspace}}.",
       "delete": {
         "title": "Delete {{name}}?",
         "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone.",

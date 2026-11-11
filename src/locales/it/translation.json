@@ -2491,8 +2491,6 @@
       "title": "Area di lavoro",
       "description": "Collabora con il tuo team, condividi note e gestisci l'accesso all'area di lavoro in un unico posto.",
       "empty": {
-        "title": "Crea la tua prima area di lavoro",
-        "description": "Le aree di lavoro ti permettono di collaborare con il team e condividere note.",
         "create": "Crea area di lavoro"
       },
       "loadError": {
@@ -6056,8 +6054,7 @@
       "left": {
         "title": "Hai abbandonato {{name}}"
       },
-      "chooseAnother": "Scegli un'altra area di lavoro per continuare.",
-      "chooseWorkspace": "Scegli area di lavoro",
+      "nowIn": "Ora sei in {{workspace}}.",
       "delete": {
         "title": "Eliminare {{name}}?",
         "body": "Questo elimina definitivamente l'area di lavoro, le sue note, i file, i team e i teamspace per tutti. Non può essere annullato.",

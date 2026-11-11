@@ -2491,8 +2491,6 @@
       "title": "工作区",
       "description": "在一处与同事协作、共享笔记并管理工作区访问权限。",
       "empty": {
-        "title": "创建你的第一个工作区",
-        "description": "工作区让你与同事协作并共享笔记。",
         "create": "创建工作区"
       },
       "loadError": {
@@ -2760,8 +2758,8 @@
           "leaveBodyLoses": "你将无法再访问 {{space}} 及其笔记。",
           "leaveBodyAdmins": "其他管理员将继续管理此 Teamspace。",
           "deleteNotAllowed": "你没有删除 {{space}} 的权限。",
-          "movedToPersonal_one": "{{count}} 条未同步的笔记已移至私密。",
-          "movedToPersonal_other": "{{count}} 条未同步的笔记已移至私密。"
+          "movedToPersonal_one": "{{count}} 条未同步的笔记已移至“私密”。",
+          "movedToPersonal_other": "{{count}} 条未同步的笔记已移至“私密”。"
         },
         "addPeople": {
           "loading": "正在加载 Teamspace…",
@@ -3505,10 +3503,10 @@
       "noteCount_other": "{{count}} 条笔记",
       "accessRevoked": "你已无法访问 {{space}}",
       "accessRevokedActiveNote": "你已无法访问 {{space}} — “{{title}}”在此设备上不再可用",
-      "movedToPersonal": "你已无法访问 {{space}}，“{{title}}”已移至私密",
-      "updateDeniedNote": "你没有权限更改“{{title}}”——未同步的编辑已作为副本保存到私密",
+      "movedToPersonal": "你已无法访问 {{space}}，“{{title}}”已移至“私密”",
+      "updateDeniedNote": "你没有权限更改“{{title}}”——未同步的编辑已作为副本保存到“私密”",
       "deleteDeniedNote": "“{{title}}”未被删除——只有笔记所有者或管理员才能删除它",
-      "updateDeniedFolder": "你没有权限更改“{{name}}”——未同步的内容已保存到私密",
+      "updateDeniedFolder": "你没有权限更改“{{name}}”——未同步的内容已保存到“私密”",
       "deleteDeniedFolder": "“{{name}}”未被删除——只有管理员才能删除空间文件夹",
       "conflictBanner": "此笔记存在更新的版本。",
       "conflictRefresh": "刷新",
@@ -4034,7 +4032,7 @@
       "banner": {
         "title": {
           "team": "你的 Teamspace",
-          "private": "你的私人空间"
+          "private": "你的私密空间"
         },
         "body": {
           "team": "把对话变成共享知识。将用户访谈、销售通话和团队会议发布到大家都能找到的地方。",
@@ -6035,8 +6033,7 @@
       "left": {
         "title": "你已退出 {{name}}"
       },
-      "chooseAnother": "选择另一个工作区以继续。",
-      "chooseWorkspace": "选择工作区",
+      "nowIn": "你现在位于 {{workspace}}。",
       "delete": {
         "title": "删除 {{name}}？",
         "body": "这将为所有人永久删除该工作区及其笔记、文件、团队和 Teamspace，且无法撤销。",
