@@ -105,6 +105,33 @@ for (const stop of ["disconnect", "timeout"]) {
   });
 }
 
+test("one caller's cancel leaves shared attestation running for the others", async (t) => {
+  const { SecureClient } = await import("tinfoil");
+  const receiving = deferred();
+  const closed = deferred();
+  let calls = 0;
+  const options = await attestationServer(t, (_request, response) => {
+    calls++;
+    response.once("close", () => closed.resolve(response.writableFinished));
+    response.write('{"domain":');
+    receiving.resolve();
+  });
+  const client = new SecureClient(options);
+  const dictation = new AbortController();
+  const [socket, catalog] = [
+    client.createWebSocket("/v1/realtime", { wsOptions: { signal: dictation.signal } }),
+    client.fetch("/v1/models", { signal: new AbortController().signal }),
+  ].map((pending) => Promise.allSettled([pending]));
+  await receiving.promise;
+  dictation.abort();
+  assert.equal((await socket)[0].reason.name, "AbortError");
+  assert.equal(await closed.promise, true, "the shared attestation request was cut short");
+  const [settled] = await catalog;
+  assert.equal(settled.status, "rejected");
+  assert.equal(settled.reason.name, "SyntaxError");
+  assert.equal(calls, 1);
+});
+
 test("SDK abort during the attestation retry delay prevents the next request", async (t) => {
   const { SecureClient } = await import("tinfoil");
   let calls = 0;

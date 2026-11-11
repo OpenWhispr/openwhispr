@@ -5,11 +5,18 @@ import { refreshTinfoilModels } from "../../models/tinfoilModels";
 
 type TinfoilModule = typeof import("tinfoil");
 type TinfoilAISDKProvider = Awaited<ReturnType<TinfoilModule["createTinfoilAI"]>>;
+// One initialization per key serves every concurrent caller. Each waits on its
+// own signal, and the attestation is cancelled only once all of them have.
+type SharedProvider = {
+  provider: Promise<TinfoilAISDKProvider>;
+  initialization: AbortController;
+  waiting: number;
+};
 
 let tinfoilModulePromise: Promise<TinfoilModule> | null = null;
 
 const chatClientCache = new Map<string, Promise<TinfoilAI>>();
-const aiSdkProviderCache = new Map<string, Promise<TinfoilAISDKProvider>>();
+const aiSdkProviderCache = new Map<string, SharedProvider>();
 
 function loadTinfoil(): Promise<TinfoilModule> {
   if (!tinfoilModulePromise) {
@@ -63,17 +70,29 @@ async function getTinfoilAISDKProvider(
   signal?.throwIfAborted();
   const key = normalizeApiKey(apiKey);
   syncTinfoilCatalog();
-  const cached = aiSdkProviderCache.get(key);
-  if (cached) return cached;
-
-  const providerPromise = loadTinfoil()
-    .then(({ createTinfoilAI }) => createTinfoilAI(key, { signal }))
-    .catch((error) => {
-      aiSdkProviderCache.delete(key);
-      throw error;
+  let shared = aiSdkProviderCache.get(key);
+  if (!shared) {
+    const initialization = new AbortController();
+    const provider = loadTinfoil()
+      .then(({ createTinfoilAI }) => createTinfoilAI(key, { signal: initialization.signal }))
+      .catch((error) => {
+        aiSdkProviderCache.delete(key);
+        throw error;
+      });
+    shared = { provider, initialization, waiting: 0 };
+    aiSdkProviderCache.set(key, shared);
+  }
+  const { provider } = shared;
+  shared.waiting++;
+  try {
+    return await new Promise<TinfoilAISDKProvider>((resolve, reject) => {
+      const abort = () => reject(signal?.reason);
+      signal?.addEventListener("abort", abort, { once: true });
+      provider.then(resolve, reject).finally(() => signal?.removeEventListener("abort", abort));
     });
-  aiSdkProviderCache.set(key, providerPromise);
-  return providerPromise;
+  } finally {
+    if (--shared.waiting === 0 && signal?.aborted) shared.initialization.abort(signal.reason);
+  }
 }
 
 export async function getTinfoilLanguageModel(
