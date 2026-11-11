@@ -12663,12 +12663,10 @@ class IPCHandlers {
         expectedAuthGeneration,
         authHeaders,
       });
-      // A verdict served from memory is never broadcast; main's audio gate
-      // takes it here too, as it takes every broadcast.
-      if (snapshot.success && snapshot.authGeneration === tokenStore.getState().generation) {
+      // A verdict served from memory is never broadcast; the effective policy,
+      // which main's audio and local model gates follow, takes it here too.
+      if (snapshot.success && snapshot.authGeneration === tokenStore.getState().generation)
         this.effectivePolicyManager.updateWorkspace(snapshot);
-        this._localModelPolicy?.update(snapshot);
-      }
       return snapshot;
     });
 
