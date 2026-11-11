@@ -14,6 +14,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
 const { createDb } = require("./harness/db.js");
 const CliBridge = require("../../src/helpers/cliBridge.js");
 const { call } = require("./harness/cliBridge.js");
+const debugLogger = require("../../src/helpers/debugLogger");
 
 function createBridge(t) {
   const db = createDb(t);
@@ -63,30 +64,75 @@ test("PATCH /v1/notes/:id is a validation error when the folder does not exist",
 });
 
 // Sync owns a note's space, identity and state: a move between spaces re-keys it or refuses it
-// (D31, D39), which a raw cloud_id or client_note_id from a local caller would get around.
-test("PATCH /v1/notes/:id refuses fields sync owns and changes nothing", (t) => {
+// (D31, D39), which a raw cloud_id or client_note_id from a local caller would get around. As
+// the cloud v1 PATCH does with keys it doesn't take, those fields are dropped (D44), so a CLI
+// that sends back the whole row it read still saves its edit.
+test("PATCH /v1/notes/:id takes back a whole row from GET and changes only its content fields", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
+  const logged = [];
+  const originalDebug = debugLogger.debug;
+  debugLogger.debug = (message, meta, scope, ...rest) => {
+    if (scope === "cli-bridge") logged.push({ message, meta });
+    return originalDebug.call(debugLogger, message, meta, scope, ...rest);
+  };
+  t.after(() => {
+    debugLogger.debug = originalDebug;
+  });
+
+  const folder = ctx.db.createFolder("Ideas").folder;
+  const { id } = ctx.db.saveNote("Original", "content", "personal", null, null, folder.id).note;
+  const before = call(ctx.bridge, "GET", `/v1/notes/${id}`).data;
+
+  const result = call(ctx.bridge, "PATCH", `/v1/notes/${id}`, {
+    ...before,
+    title: "Edited",
+    content: "new body",
+    cloud_id: "forged-cloud-id",
+    client_note_id: "forged-client-id",
+    account_id: "someone-else",
+    left_team: 1,
+    deleted_at: "2026-01-01 00:00:00",
+  });
+
+  assert.equal(result.data.title, "Edited");
+  assert.equal(result.data.content, "new body");
+  const after = ctx.db.getNote(id);
+  for (const field of [
+    "space_id",
+    "folder_id",
+    "cloud_id",
+    "client_note_id",
+    "account_id",
+    "left_team",
+    "deleted_at",
+  ]) {
+    assert.deepEqual(after[field], before[field], field);
+  }
+  const dropped = logged.find((entry) => Array.isArray(entry.meta?.fields));
+  assert.ok(dropped, "the dropped fields are logged");
+  for (const field of ["space_id", "cloud_id", "client_note_id", "account_id", "deleted_at"]) {
+    assert.ok(dropped.meta.fields.includes(field), field);
+  }
+});
+
+// A move between spaces goes through folder_id and main's move rules; a space_id that names
+// another space is refused rather than silently ignored.
+test("PATCH /v1/notes/:id refuses a space_id other than the note's own and changes nothing", (t) => {
   const ctx = createBridge(t);
   if (!ctx) return;
 
   const before = ctx.db.saveNote("Original", "content").note;
-  for (const field of [
-    "space_id",
-    "cloud_id",
-    "client_note_id",
-    "sync_status",
-    "left_team",
-    "account_id",
-    "deleted_at",
-  ]) {
+  for (const spaceId of [before.space_id + 1, null]) {
     assert.throws(
-      () => call(ctx.bridge, "PATCH", `/v1/notes/${before.id}`, { title: "Edited", [field]: null }),
-      { code: "VALIDATION", message: new RegExp(field) },
-      field
+      () =>
+        call(ctx.bridge, "PATCH", `/v1/notes/${before.id}`, { title: "Edited", space_id: spaceId }),
+      { code: "VALIDATION", message: /space_id/ },
+      String(spaceId)
     );
   }
   const after = ctx.db.getNote(before.id);
   assert.equal(after.title, "Original");
-  assert.equal(after.client_note_id, before.client_note_id);
   assert.equal(after.space_id, before.space_id);
 });
 

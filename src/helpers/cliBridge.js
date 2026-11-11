@@ -111,9 +111,12 @@ function unwrapMutationResult(result, label) {
 // clear), so the bridge states the intent; updateNote still validates it.
 // What a CLI edit may change: a note's own content and its folder. Its space,
 // identity and sync state belong to sync and main's move rules (D31, D39), which
-// a raw cloud_id or client_note_id from a local caller would get around, so
-// those are refused; a folder move still goes through the rules. Anything else
-// is dropped, as updateNote always ignored it.
+// a raw cloud_id or client_note_id from a local caller would get around. Those
+// are dropped, as the cloud v1 PATCH drops keys it doesn't take, so a CLI that
+// sends back the whole row it read still saves its edit (D44). Only a space_id
+// naming another space is refused: a move goes through folder_id and the rules,
+// and must never look like it worked. Anything else is dropped, as updateNote
+// always ignored it.
 const CLI_NOTE_EDIT_FIELDS = [
   "title",
   "content",
@@ -148,12 +151,19 @@ const SYNC_OWNED_NOTE_FIELDS = new Set([
   "enhanced_content_sync_operation",
 ]);
 
-function cliNoteEdit(body) {
-  const refused = Object.keys(body).filter((field) => SYNC_OWNED_NOTE_FIELDS.has(field));
-  if (refused.length > 0) {
-    const err = new Error(`These fields can't be changed: ${refused.join(", ")}`);
+function cliNoteEdit(body, note) {
+  if ("space_id" in body && String(body.space_id ?? "") !== String(note.space_id ?? "")) {
+    const err = new Error("space_id can't be changed; move the note with folder_id");
     err.code = "VALIDATION";
     throw err;
+  }
+  const dropped = Object.keys(body).filter((field) => SYNC_OWNED_NOTE_FIELDS.has(field));
+  if (dropped.length > 0) {
+    debugLogger.debug(
+      "CLI bridge dropped sync-owned note fields",
+      { noteId: note.id, fields: dropped },
+      "cli-bridge"
+    );
   }
   const edit = Object.fromEntries(
     CLI_NOTE_EDIT_FIELDS.filter((field) => field in body).map((field) => [field, body[field]])
@@ -514,7 +524,7 @@ class CliBridge {
           err.code = "NOT_FOUND";
           throw err;
         }
-        const result = db.updateNote(id, cliNoteEdit(body || {}));
+        const result = db.updateNote(id, cliNoteEdit(body || {}, existing));
         // The note exists, so a remaining error names a folder or space that doesn't.
         if (result.error) {
           const err = new Error(result.error);
