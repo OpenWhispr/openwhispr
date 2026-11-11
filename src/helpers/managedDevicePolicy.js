@@ -20,7 +20,8 @@ const MODES = ["openwhispr", "providers", "local", "self-hosted", "enterprise"];
 const FOCUS_REFRESH_THROTTLE_MS = 30 * 1000;
 const LINUX_POLICY_DIRECTORY = "/etc/openwhispr";
 const MACOS_PREFERENCES_DOMAIN = "com.gizmolabs.openwhispr";
-const WINDOWS_POLICY_KEY = "HKLM\\SOFTWARE\\Policies\\OpenWhispr";
+const WINDOWS_POLICIES_KEY = "HKLM\\SOFTWARE\\Policies";
+const WINDOWS_POLICY_KEY = `${WINDOWS_POLICIES_KEY}\\OpenWhispr`;
 const READER_TIMEOUT_MS = 5000;
 
 function defaultDevicePolicy() {
@@ -187,8 +188,21 @@ async function readLinuxValues({
   return { ...device, ...(policy === undefined ? {} : { Policy: JSON.stringify(policy) }) };
 }
 
-function windowsRegistryTool() {
-  return path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "reg.exe");
+function runRegistryTool(run, args) {
+  const tool = path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "reg.exe");
+  return run(tool, [...args, "/reg:64"], { timeout: READER_TIMEOUT_MS, windowsHide: true });
+}
+
+// reg.exe exits 1 for every failure, a missing key among them. It is the
+// key that's missing only if reg.exe can still read the Policies key every
+// Windows install has; otherwise reg.exe itself is blocked (an AppLocker
+// rule, a policy against registry tools) and the failure stands.
+async function isMissingRegistryKey(run, error) {
+  if (error.code !== 1) return false;
+  return runRegistryTool(run, ["query", WINDOWS_POLICIES_KEY]).then(
+    () => true,
+    () => false
+  );
 }
 
 const REGISTRY_STRING = /^"((?:[^"\\]|\\.)*)"$/;
@@ -202,8 +216,13 @@ function parseRegistryExport(text) {
   for (const line of lines.slice(lines.findIndex((entry) => entry.startsWith("[")) + 1)) {
     if (line.startsWith("[")) break;
     const [, rawName, data] = /^"((?:[^"\\]|\\.)*)"=(.*)$/.exec(line) ?? [];
-    const name = rawName && unescapeRegistryString(rawName);
-    if (!DEVICE_KEYS.includes(name)) continue;
+    // Value names are case-insensitive in the registry.
+    const name =
+      rawName &&
+      DEVICE_KEYS.find(
+        (key) => key.toLowerCase() === unescapeRegistryString(rawName).toLowerCase()
+      );
+    if (!name) continue;
     const boolean = ["RequireSignIn", "DisableMeetingRecording"].includes(name);
     const dword = /^dword:([0-9a-f]{8})$/i.exec(data)?.[1];
     const string = REGISTRY_STRING.exec(data)?.[1];
@@ -219,13 +238,9 @@ async function readWindowsValues(run = execute) {
   const file = path.join(directory, "policy.reg");
   try {
     try {
-      await run(windowsRegistryTool(), ["export", WINDOWS_POLICY_KEY, file, "/y", "/reg:64"], {
-        timeout: READER_TIMEOUT_MS,
-        windowsHide: true,
-      });
+      await runRegistryTool(run, ["export", WINDOWS_POLICY_KEY, file, "/y"]);
     } catch (error) {
-      // reg.exe's exit status for a key that doesn't exist.
-      if (error.code === 1) return {};
+      if (await isMissingRegistryKey(run, error)) return {};
       throw error;
     }
     return parseRegistryExport(await fs.promises.readFile(file, "utf16le"));
@@ -242,12 +257,12 @@ async function hasPolicyEvidence({
   fileSystem = fs.promises,
 } = {}) {
   if (platform === "win32") {
-    return run(windowsRegistryTool(), ["query", WINDOWS_POLICY_KEY, "/reg:64"], {
-      timeout: READER_TIMEOUT_MS,
-      windowsHide: true,
-    }).then(
+    return runRegistryTool(run, ["query", WINDOWS_POLICY_KEY]).then(
       () => true,
-      () => false
+      async (error) => {
+        if (await isMissingRegistryKey(run, error)) return false;
+        throw error;
+      }
     );
   }
   const preferences = `${MACOS_PREFERENCES_DOMAIN}.plist`;
@@ -344,10 +359,14 @@ function createManagedDevicePolicy({
         });
         return null;
       }
-      if (await hasPolicy().catch(() => false)) return INVALID_SNAPSHOT;
-      logger.warn("Device policy could not be read, and none is deployed", {
-        error: error.message,
-      });
+      const deployed = await hasPolicy().catch(() => null);
+      if (deployed) return INVALID_SNAPSHOT;
+      logger.warn(
+        deployed === false
+          ? "Device policy could not be read, and none is deployed"
+          : "Device policy could not be read, nor whether one is deployed; none is enforced",
+        { error: error.message }
+      );
       return ABSENT_SNAPSHOT;
     }
   }

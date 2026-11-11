@@ -89,6 +89,23 @@ test("unknown update mode retains the specified user-choice fallback", () => {
   );
 });
 
+// reg.exe without the OpenWhispr key or, `blocked`, unable to read any key.
+// It exits 1 either way.
+function registryWithoutPolicy({ blocked = false } = {}) {
+  return async (_command, args) => {
+    if (blocked)
+      throw Object.assign(
+        new Error("ERROR: Registry editing has been disabled by your administrator."),
+        { code: 1 }
+      );
+    if (args[1].endsWith("\\OpenWhispr"))
+      throw Object.assign(new Error("ERROR: The system was unable to find the key."), {
+        code: 1,
+      });
+    return { stdout: "" };
+  };
+}
+
 // reg.exe writes a .reg export as UTF-16 with a byte order mark.
 function registryExport(lines) {
   return (run) =>
@@ -130,6 +147,10 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
   );
   assert.equal(command[2].windowsHide, true);
   assert.equal(fs.existsSync(command[1][2]), false);
+  // Value names are case-insensitive, as in the registry itself.
+  assert.deepEqual(await registryExport(['"requiresignin"=dword:00000001'])(), {
+    RequireSignIn: true,
+  });
   for (const line of [
     '"RequireSignIn"="0"',
     '"RequireSignIn"=dword:00000002',
@@ -137,11 +158,10 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
     '"Policy"=hex(2):7b,00,00,00',
   ])
     await assert.rejects(registryExport([line])(), /Invalid registry value type/);
-  assert.deepEqual(
-    await readWindowsValues(async () => {
-      throw Object.assign(new Error("ERROR: The system was unable to find the key"), { code: 1 });
-    }),
-    {}
+  assert.deepEqual(await readWindowsValues(registryWithoutPolicy()), {});
+  await assert.rejects(
+    readWindowsValues(registryWithoutPolicy({ blocked: true })),
+    /Registry editing/
   );
   await assert.rejects(
     readWindowsValues(async () => {
@@ -187,14 +207,10 @@ test("evidence of a deployment is the policy key or file, not the reader's succe
     true
   );
   assert.deepEqual(query, ["query", "HKLM\\SOFTWARE\\Policies\\OpenWhispr", "/reg:64"]);
-  assert.equal(
-    await hasPolicyEvidence({
-      platform: "win32",
-      run: async () => {
-        throw Object.assign(new Error("missing"), { code: 1 });
-      },
-    }),
-    false
+  assert.equal(await hasPolicyEvidence({ platform: "win32", run: registryWithoutPolicy() }), false);
+  await assert.rejects(
+    hasPolicyEvidence({ platform: "win32", run: registryWithoutPolicy({ blocked: true }) }),
+    /Registry editing/
   );
 });
 
@@ -268,7 +284,7 @@ function deviceReader({ evidence = false } = {}) {
       reader.reads += 1;
       return reader.next();
     },
-    hasPolicy: async () => evidence,
+    hasPolicy: typeof evidence === "function" ? evidence : async () => evidence,
     logger: { warn: (message) => warnings.push(message) },
   });
   return reader;
@@ -285,6 +301,15 @@ test("a reader that fails with nothing deployed reads as absent, and says so", a
   assert.equal(reader.manager.getSnapshot().status, "absent");
   assert.equal(reader.manager.getSnapshot().managed, false);
   assert.equal(reader.warnings.length, 1);
+  reader.manager.stop();
+});
+
+test("a reader that can't tell whether a policy is deployed reads as absent, and says so", async () => {
+  const reader = deviceReader({ evidence: unreadable });
+  reader.next = unreadable;
+  await reader.manager.refresh();
+  assert.equal(reader.manager.getSnapshot().status, "absent");
+  assert.match(reader.warnings[0], /nor whether one is deployed/);
   reader.manager.stop();
 });
 
