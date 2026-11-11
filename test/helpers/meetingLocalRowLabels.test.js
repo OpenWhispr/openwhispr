@@ -43,7 +43,10 @@ function harness(identifications = []) {
 }
 
 test("a ranged system row is labelled when it is stored", () => {
-  const ctx = harness([identification("speaker_0", 0, 3000), identification("speaker_1", 3000, 9000)]);
+  const ctx = harness([
+    identification("speaker_0", 0, 3000),
+    identification("speaker_1", 3000, 9000),
+  ]);
   ctx.store("hello", "system", T + 3500, null, true, T + 8000);
   const [row] = ctx.meetingDiarizationSegments;
   assert.equal(row.speaker, "speaker_1");
@@ -51,7 +54,10 @@ test("a ranged system row is labelled when it is stored", () => {
 });
 
 test("a mic row and a row without a range are left alone", () => {
-  const ctx = harness([identification("speaker_0", 0, 3000), identification("speaker_1", 3000, 9000)]);
+  const ctx = harness([
+    identification("speaker_0", 0, 3000),
+    identification("speaker_1", 3000, 9000),
+  ]);
   ctx.store("mine", "mic", T + 3500, null, true, T + 8000);
   ctx.store("cloud", "system", T + 3500);
   assert.deepEqual(
@@ -90,9 +96,7 @@ test("an identification covering less of a ranged row leaves it alone", () => {
 const speechSegment = (speakerId, endOffset) => identification(speakerId, 0, endOffset, null);
 
 test("a row first heard as the earlier speaker moves to the next one as their audio accumulates", () => {
-  const ctx = harness(
-    [1750, 2750, 3750, 4750, 5750].map((end) => speechSegment("speaker_0", end))
-  );
+  const ctx = harness([1750, 2750, 3750, 4750, 5750].map((end) => speechSegment("speaker_0", end)));
   ctx.store("over to you", "system", T + 4000, null, true, T + 9000);
   const [row] = ctx.meetingDiarizationSegments;
   assert.equal(row.speaker, "speaker_0");
@@ -106,9 +110,7 @@ test("a row first heard as the earlier speaker moves to the next one as their au
 });
 
 test("a row in the earlier speaker's part keeps them as the next speaker is heard", () => {
-  const ctx = harness(
-    [1750, 2750, 3750, 4750, 5750].map((end) => speechSegment("speaker_0", end))
-  );
+  const ctx = harness([1750, 2750, 3750, 4750, 5750].map((end) => speechSegment("speaker_0", end)));
   ctx.store("my part", "system", T + 750, null, true, T + 4000);
   const [row] = ctx.meetingDiarizationSegments;
   for (const end of [6750, 7750, 8750, 9750]) {
