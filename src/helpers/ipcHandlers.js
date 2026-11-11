@@ -7814,11 +7814,13 @@ class IPCHandlers {
           return this.effectivePolicyManager.getCurrent();
         cookieGeneration = scope.authGeneration;
         credentialsGeneration = scope.authGeneration;
+        // Not the server's verdict: only an account last seen managed fails closed.
         this.effectivePolicyManager.updateWorkspace({
           success: false,
-          code: "POLICY_UNRESOLVABLE",
+          code: "POLICY_CREDENTIALS_UNREADABLE",
           accountId: scope.accountId,
           authGeneration: scope.authGeneration,
+          managed: workspacePolicyManager.accountWasManaged(scope.accountId),
         });
         return this.effectivePolicyManager.getCurrent();
       }

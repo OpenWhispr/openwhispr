@@ -560,6 +560,37 @@ test("other lookup failures don't prove a session cookie holder is a guest", asy
   assert.equal(app.target.effectivePolicyManager.getCurrent().workspaceRequired, true);
 });
 
+test("a credential read that fails isn't the server's verdict, so it locks no one out", async (t) => {
+  // Only the unscoped fallback read, which nothing catches, fails, and once.
+  let fallbackReads = 0;
+  electronStub.session.defaultSession = {
+    cookies: {
+      get: async ({ url }) => {
+        if (url) return [];
+        if (++fallbackReads === 1) throw new Error("cookie store locked");
+        return [{ name: "openwhispr.session_token", value: "unmanaged" }];
+      },
+    },
+  };
+  t.after(() => {
+    delete electronStub.session.defaultSession;
+  });
+  tokenState = { token: null, generation: 34 };
+  const app = build();
+  t.after(() => app.teardown());
+  policyFetch = async () => {
+    throw new Error("offline");
+  };
+
+  // The read fails, then the lookup finds the network down, with nothing held.
+  await app.target.refreshEffectivePolicy();
+  await app.target.refreshEffectivePolicy();
+  await settle();
+
+  assert.equal(app.target.effectivePolicyManager.getCurrent().managed, false);
+  assert.equal(app.gate.failure("transcription", "base"), null);
+});
+
 test("a managed account's rotated token whose first lookup fails stays managed", async (t) => {
   const app = await signedIn(t, { policy: () => managed(["base"]) });
   policyFetch = async () => json({}, 500);
