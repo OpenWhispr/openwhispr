@@ -6,6 +6,7 @@ import { usePolicyStore } from "./policyStore";
 import { useEnterpriseIdentityStore } from "./enterpriseIdentityStore";
 import {
   defaultActiveWorkspaceId,
+  isOwnDefault,
   resolveDefaultWorkspaceId,
   withDefaultFirst,
 } from "../lib/workspaceSwitcher";
@@ -30,6 +31,7 @@ interface WorkspaceState {
    */
   membersWorkspaceId: string | null;
 
+  /** The user's choice: the switcher, a link, opening something of another workspace. */
   setActiveWorkspaceId: (id: string | null) => void;
   /**
    * Drops a workspace the user just left or deleted, so a failed refresh can't show it again, and
@@ -71,10 +73,41 @@ function dropLegacyPersonalChoice(): void {
   localStorage.removeItem(LEGACY_PERSONAL_SELECTED_KEY);
 }
 
-function writeActiveWorkspaceId(id: string | null): void {
+// Who picked the saved active workspace: the user, or the app (`defaultActiveWorkspaceId`, with no
+// choice saved). Only the app's pick yields to the account's own default when a list first shows
+// it (D45). An id saved by a build that recorded no source counts as the user's, so an update
+// moves nobody.
+export const ACTIVE_WORKSPACE_SOURCE_KEY = "activeWorkspaceSource";
+type ActiveWorkspaceSource = "user" | "auto";
+
+function isActiveWorkspaceAutoPicked(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(ACTIVE_WORKSPACE_SOURCE_KEY) === "auto";
+}
+
+function clearActiveWorkspaceChoice(): void {
   if (typeof window === "undefined") return;
-  if (id) localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
-  else localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+  localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+  localStorage.removeItem(ACTIVE_WORKSPACE_SOURCE_KEY);
+}
+
+function writeActiveWorkspaceId(id: string | null, source: ActiveWorkspaceSource): void {
+  if (typeof window === "undefined") return;
+  if (!id) {
+    clearActiveWorkspaceChoice();
+    return;
+  }
+  localStorage.setItem(ACTIVE_WORKSPACE_KEY, id);
+  localStorage.setItem(ACTIVE_WORKSPACE_SOURCE_KEY, source);
+}
+
+/**
+ * The user opened something of the active workspace: the app's pick becomes their choice, so the
+ * account's default showing up later doesn't take them out of what they opened (D45, D21).
+ */
+export function adoptActiveWorkspaceChoice(workspaceId: string): void {
+  if (readActiveWorkspaceId() !== workspaceId || !isActiveWorkspaceAutoPicked()) return;
+  localStorage.setItem(ACTIVE_WORKSPACE_SOURCE_KEY, "user");
 }
 
 // Last successful workspace list, shown when a signed-in session can't load the list (the API
@@ -225,17 +258,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   members: [],
   membersWorkspaceId: null,
 
-  setActiveWorkspaceId: (id) => {
-    // A choice made before the first list read outranks a Personal choice it hasn't turned
-    // into the default yet.
-    dropLegacyPersonalChoice();
-    writeActiveWorkspaceId(id);
-    // Invalidate in-flight member fetches so the old workspace's roster can't
-    // land under the new one.
-    membersRequestSeq++;
-    set({ activeWorkspaceId: id, members: [], membersWorkspaceId: null });
-    refreshForWorkspace(id);
-  },
+  setActiveWorkspaceId: (id) => selectActiveWorkspace(id, "user"),
 
   forgetWorkspace: (id) => {
     // The Enterprise workspace that stood in as the default is gone: this session's answer that
@@ -251,7 +274,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     pruneWorkspaceListCache(usePolicyStore.getState().accountId, id);
     // Chosen now, not by the refresh that follows: a failed refresh keeps the old active id.
     if (get().activeWorkspaceId === id) {
-      get().setActiveWorkspaceId(defaultActiveWorkspaceId(workspaces));
+      selectActiveWorkspace(defaultActiveWorkspaceId(workspaces), "auto");
     }
   },
 
@@ -262,7 +285,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // old request prevents its result/finally block from touching new state.
     refreshPromise = null;
     dropLegacyPersonalChoice();
-    writeActiveWorkspaceId(null);
+    clearActiveWorkspaceChoice();
     clearWorkspaceListCache();
     useEnterpriseIdentityStore.getState().clear();
     set({
@@ -319,12 +342,22 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         if (savedPersonal) dropLegacyPersonalChoice();
         const stillValid =
           !savedPersonal && savedActiveId && workspaces.some((w) => w.id === savedActiveId);
-        const resolvedActiveId = stillValid ? savedActiveId : defaultActiveWorkspaceId(workspaces);
+        // The app's own pick is made again the first time this session lists the account's own
+        // default (D45): a first sign-in reads the list before the server makes the default, so
+        // it could only pick a team the account was invited to. The user's choice stays.
+        const yieldsToDefault =
+          stillValid &&
+          isActiveWorkspaceAutoPicked() &&
+          !get().workspaces.some(isOwnDefault) &&
+          workspaces.some(isOwnDefault);
+        const keepsSaved = stillValid && !yieldsToDefault;
+        const resolvedActiveId = keepsSaved ? savedActiveId : defaultActiveWorkspaceId(workspaces);
         const activeChanged = resolvedActiveId !== activeId;
         if (activeChanged) membersRequestSeq++;
         // Written before the state changes, as setActiveWorkspaceId does: the
-        // subscribers publish for the workspace localStorage names.
-        if (resolvedActiveId !== savedActiveId) writeActiveWorkspaceId(resolvedActiveId);
+        // subscribers publish for the workspace localStorage names. Rewriting the same id
+        // fires no storage event in the other windows.
+        if (!keepsSaved) writeActiveWorkspaceId(resolvedActiveId, "auto");
         set({
           workspaces,
           loaded: true,
@@ -419,6 +452,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     return done;
   },
 }));
+
+function selectActiveWorkspace(id: string | null, source: ActiveWorkspaceSource): void {
+  // A choice made before the first list read outranks a Personal choice it hasn't turned
+  // into the default yet.
+  dropLegacyPersonalChoice();
+  writeActiveWorkspaceId(id, source);
+  // Invalidate in-flight member fetches so the old workspace's roster can't
+  // land under the new one.
+  membersRequestSeq++;
+  useWorkspaceStore.setState({ activeWorkspaceId: id, members: [], membersWorkspaceId: null });
+  refreshForWorkspace(id);
+}
 
 export interface PublishedWorkspaceScope {
   activeWorkspaceId: string | null;
@@ -538,7 +583,7 @@ export async function relocateLostWorkspaces(workspaceIds: string[]): Promise<vo
   if (lost.length === 0) return;
   if (store.activeWorkspaceId && lost.includes(store.activeWorkspaceId)) {
     const remaining = store.workspaces.filter((w) => !lost.includes(w.id));
-    store.setActiveWorkspaceId(defaultActiveWorkspaceId(remaining));
+    selectActiveWorkspace(defaultActiveWorkspaceId(remaining), "auto");
   }
   // A scope main refused (another account signed in) or never got means nothing moves.
   if (!(await publishWorkspaceScope())) return;

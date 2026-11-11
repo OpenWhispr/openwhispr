@@ -30,13 +30,14 @@ async function fixture(
     spaces: initialSpaces = spaces,
     folders: initialFolders = folders,
     notes: allNotes = notes,
+    storage = { activeWorkspaceId: "a" },
   } = {}
 ) {
   const liveSpaces = [...initialSpaces];
   const liveFolders = [...initialFolders];
   // While held, space reads wait until the test answers them, in any order.
   let heldSpaceReads = null;
-  installBrowserGlobals(t, { initialStorage: { activeWorkspaceId: "a" } });
+  installBrowserGlobals(t, { initialStorage: storage });
   globalThis.window.electronAPI = {
     getSpaces: () =>
       heldSpaceReads
@@ -56,7 +57,9 @@ async function fixture(
     cachePrefix: "openwhispr-note-workspace-scope-",
     mockModules: {
       "/services/SyncService.js": "export const syncService = { setNoteOpen() {} };",
-      "/services/WorkspacesService": "export const WorkspacesService = { list: async () => [] };",
+      // A test that reads the list for real steers the answer through globalThis.__workspaceList.
+      "/services/WorkspacesService":
+        "export const WorkspacesService = { list: async () => globalThis.__workspaceList ?? [] };",
       "/policyStore": `
         export const usePolicyStore = {
           getState: () => ({ accountId: null, authGeneration: null }),
@@ -91,6 +94,7 @@ async function fixture(
   };
   return {
     store,
+    workspaceStore,
     settle,
     activeWorkspaceId: () => useWorkspaceStore.getState().activeWorkspaceId,
     switchTo: (id) => useWorkspaceStore.getState().setActiveWorkspaceId(id),
@@ -507,3 +511,80 @@ test("the copy toast's Open enters the workspace whose Private holds the copy", 
   assert.equal(f.activeWorkspaceId(), "b");
   assert.deepEqual(f.context(), { folderId: 40, noteId: 450 });
 });
+
+// D45 + D21: a first sign-in lists only the team the account was invited to (b); the account's own
+// default (a) arrives a moment later. The app's own pick yields to it, unless the user has already
+// opened something in the team.
+for (const { label, opensTeamNote, expected } of [
+  {
+    label: "with nothing opened there, the team pick yields to the default",
+    opensTeamNote: false,
+    expected: "a",
+  },
+  {
+    label: "a team note the user opened keeps them in the team",
+    opensTeamNote: true,
+    expected: "b",
+  },
+]) {
+  test(`first sign-in: ${label}`, async (t) => {
+    t.after(() => {
+      delete globalThis.__workspaceList;
+    });
+    const f = await fixture(t, {
+      storage: {},
+      workspaceState: {
+        workspaces: [],
+        loaded: false,
+        activeWorkspaceId: null,
+        defaultWorkspaceId: null,
+        listAccountId: null,
+      },
+      // The account's imported notes wait in the pending Private (9) for the default.
+      spaces: [
+        { id: 9, kind: "private", workspace_id: null, name: "Personal" },
+        { id: 3, kind: "team", workspace_id: "b", name: "Beta" },
+        { id: 4, kind: "private", workspace_id: "b", name: "Personal" },
+      ],
+      folders: [
+        { id: 90, space_id: 9, name: "Personal", is_default: 1 },
+        { id: 30, space_id: 3, name: "Beta docs", is_default: 0 },
+        { id: 40, space_id: 4, name: "Personal", is_default: 1 },
+      ],
+      notes: [
+        { id: 900, space_id: 9, folder_id: 90, title: "Imported note" },
+        { id: 300, space_id: 3, folder_id: 30, title: "Beta note" },
+      ],
+    });
+    const { useWorkspaceStore } = f.workspaceStore;
+    await f.settle();
+    globalThis.__workspaceList = [{ id: "b", name: "B", role: "member", is_default: false }];
+    await useWorkspaceStore.getState().refresh();
+    await f.settle();
+    assert.equal(f.activeWorkspaceId(), "b");
+    // The tree's own pick: the pending Private's first note.
+    assert.deepEqual(f.context(), { folderId: 90, noteId: 900 });
+
+    if (opensTeamNote) {
+      f.store.setActiveFolderId(30);
+      await f.settle();
+      f.store.setActiveNoteId(300);
+    }
+    globalThis.__workspaceList = [
+      { id: "b", name: "B", role: "member", is_default: false },
+      { id: "a", name: "A", role: "member", is_default: true },
+    ];
+    await useWorkspaceStore.getState().refresh({ fresh: true });
+    await f.settle();
+
+    assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "a");
+    assert.equal(f.activeWorkspaceId(), expected);
+    assert.equal(localStorage.getItem("activeWorkspaceId"), expected);
+    // Nothing the user had open closes: the pending Private shows in the default, the team note
+    // in the team.
+    assert.deepEqual(
+      f.context(),
+      opensTeamNote ? { folderId: 30, noteId: 300 } : { folderId: 90, noteId: 900 }
+    );
+  });
+}

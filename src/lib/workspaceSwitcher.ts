@@ -22,7 +22,7 @@ interface WorkspaceSwitcherInput {
 type DefaultCandidate = Pick<Workspace, "id" | "plan" | "status"> & { is_default?: boolean };
 
 // Lists cached by builds from before the default workspace have no is_default.
-function isOwnDefault(workspace: DefaultCandidate): boolean {
+export function isOwnDefault(workspace: Pick<DefaultCandidate, "is_default">): boolean {
   return workspace.is_default === true;
 }
 

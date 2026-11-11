@@ -26,7 +26,11 @@ import {
   spacesInWorkspaceScope,
   type NoteWorkspaceScopeReason,
 } from "../lib/workspaceSelection";
-import { onWorkspaceScopePublished, useWorkspaceStore } from "./workspaceStore";
+import {
+  adoptActiveWorkspaceChoice,
+  onWorkspaceScopePublished,
+  useWorkspaceStore,
+} from "./workspaceStore";
 import { readTeamSpacesCapability } from "../lib/teamSpacesCapability";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
@@ -165,6 +169,18 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
     reason = "navigated";
   }
   if (reason === "navigated") {
+    // Opening something of the active workspace makes it the user's choice, so
+    // the account's default showing up later never moves them out of it (D45).
+    if (activeWorkspaceId != null) {
+      const opensActive = (space: SpaceItem | null, picked: boolean): boolean =>
+        space?.workspace_id === activeWorkspaceId && !picked;
+      if (
+        opensActive(noteSpace, state.activeNoteId === pickedNoteId) ||
+        opensActive(contextSpace, state.activeContext === pickedContext)
+      ) {
+        adoptActiveWorkspaceChoice(activeWorkspaceId);
+      }
+    }
     // Whichever would take the user away (the note when it's hidden) must be
     // one they opened.
     const noteHidden =

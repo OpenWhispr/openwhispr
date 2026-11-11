@@ -62,6 +62,7 @@ import {
   useSharedDictionaryStore,
 } from "../stores/sharedDictionaryStore";
 import {
+  ACTIVE_WORKSPACE_SOURCE_KEY,
   readActiveWorkspaceId,
   useWorkspaceStore,
   WORKSPACE_LIST_CACHE_KEY,
@@ -872,6 +873,7 @@ export class SyncService {
     localStorage.removeItem("purgedTeamIds");
     // Both hold account-scoped/local numeric ids that collide across accounts.
     localStorage.removeItem("activeWorkspaceId");
+    localStorage.removeItem(ACTIVE_WORKSPACE_SOURCE_KEY);
     localStorage.removeItem("notesTree.expanded");
     // Sign-out can happen offline, before the auth reconcile that resets the workspace store.
     localStorage.removeItem(WORKSPACE_LIST_CACHE_KEY);

@@ -971,3 +971,145 @@ test("the Enterprise stand-in's private notes reach the new default's Private in
     "the stand-in's Private is retired"
   );
 });
+
+// D45: what the app picked by itself (no saved choice) yields to the account's own default once a
+// list in this session first shows it; a choice the user made never does.
+const SOURCE_KEY = "activeWorkspaceSource";
+const OTHER_TEAM = { id: "other", plan: "business", status: "active", is_default: false };
+
+test("a first sign-in's automatic pick yields to the default the server makes", async (t) => {
+  // An invited account: the first list holds only the team; the default arrives after ensure.
+  const { useWorkspaceStore, ensureDefaultWorkspace, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM],
+    ensureDefault: async () => {
+      globalThis.__ws.list = async () => [TEAM, OWN];
+      return OWN;
+    },
+  });
+
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+
+  await ensureDefaultWorkspace("Ada's workspace");
+
+  const state = useWorkspaceStore.getState();
+  assert.equal(state.defaultWorkspaceId, "own");
+  assert.equal(state.activeWorkspaceId, "own");
+  assert.equal(storage.getItem("activeWorkspaceId"), "own");
+  assert.equal(storage.getItem(SOURCE_KEY), "auto");
+});
+
+test("a switch the user made before the default arrived is kept", async (t) => {
+  let answerEnsure;
+  const { useWorkspaceStore, ensureDefaultWorkspace, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [OTHER_TEAM, TEAM],
+    ensureDefault: () =>
+      new Promise((resolve) => {
+        answerEnsure = () => {
+          globalThis.__ws.list = async () => [OTHER_TEAM, TEAM, OWN];
+          resolve(OWN);
+        };
+      }),
+  });
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "other");
+
+  // The switcher, while the default is still being made.
+  const ensured = ensureDefaultWorkspace("Ada's workspace");
+  useWorkspaceStore.getState().setActiveWorkspaceId("team");
+  answerEnsure();
+  await ensured;
+
+  const state = useWorkspaceStore.getState();
+  assert.equal(state.defaultWorkspaceId, "own");
+  assert.equal(state.activeWorkspaceId, "team");
+  assert.equal(storage.getItem("activeWorkspaceId"), "team");
+});
+
+for (const { label, source, expected } of [
+  { label: "a choice the user saved in an earlier session", source: "user", expected: "team" },
+  // Saved by a build that recorded no source: counted as the user's, so nobody moves.
+  { label: "a choice an older build saved without a source", source: null, expected: "team" },
+  // Picked while the default didn't exist yet (ensure kept failing that session).
+  { label: "an automatic pick saved before the default existed", source: "auto", expected: "own" },
+]) {
+  test(`${label} meets the default on the first list: ${expected}`, async (t) => {
+    const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+      list: async () => [TEAM, OWN],
+      storage: { activeWorkspaceId: "team", ...(source ? { [SOURCE_KEY]: source } : {}) },
+    });
+
+    await useWorkspaceStore.getState().refresh();
+
+    assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "own");
+    assert.equal(useWorkspaceStore.getState().activeWorkspaceId, expected);
+    assert.equal(storage.getItem("activeWorkspaceId"), expected);
+  });
+}
+
+test("a saved Personal choice still reaches the default made after the first list", async (t) => {
+  // An older build saved both; Personal meant the account's own notes, so its default.
+  const { useWorkspaceStore, ensureDefaultWorkspace, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM],
+    storage: { workspacePersonalSelected: "true", activeWorkspaceId: "team" },
+    ensureDefault: async () => {
+      globalThis.__ws.list = async () => [TEAM, OWN];
+      return OWN;
+    },
+  });
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+
+  await ensureDefaultWorkspace("Ada's workspace");
+
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "own");
+  assert.equal(storage.getItem("activeWorkspaceId"), "own");
+});
+
+test("an automatically picked Enterprise workspace stays when the default arrives (D17)", async (t) => {
+  const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, ENTERPRISE],
+    ensureDefault: async () => {
+      globalThis.__ws.list = async () => [TEAM, ENTERPRISE, OWN];
+      return OWN;
+    },
+  });
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "corp");
+
+  await ensureDefaultWorkspace("Ada's workspace");
+
+  assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "own");
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "corp");
+});
+
+test("main hears the default's scope once a first sign-in's pick yields to it", async (t) => {
+  const { useWorkspaceStore, ensureDefaultWorkspace, vite, calls } = await loadPrivateNotesStore(
+    t,
+    {
+      list: async () => [TEAM],
+      ensureDefault: async () => {
+        globalThis.__ws.list = async () => [TEAM, OWN];
+        return OWN;
+      },
+    }
+  );
+  const { startWorkspaceScopeBridge } = await vite.ssrLoadModule("/stores/workspaceScopeBridge.ts");
+  t.after(startWorkspaceScopeBridge());
+  await useWorkspaceStore.getState().refresh();
+  await flush();
+  assert.deepEqual(calls.filter(([name]) => name === "scope").at(-1), [
+    "scope",
+    { activeWorkspaceId: "team", defaultWorkspaceId: null, accountId: "acct-1" },
+  ]);
+
+  calls.length = 0;
+  await ensureDefaultWorkspace("Ada's workspace");
+  await flush();
+
+  assert.deepEqual(calls.filter(([name]) => name === "scope").at(-1), [
+    "scope",
+    { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" },
+  ]);
+  assert.ok(calls.some((call) => call[0] === "bind" && call[1] === "own" && call[2] === "acct-1"));
+});
