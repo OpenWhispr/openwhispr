@@ -718,8 +718,8 @@
       "failedOffline": "オフラインです",
       "clearAll": "すべて削除",
       "clearAllTitle": "すべての文字起こしを削除",
-      "clearAllDescription": "すべての文字起こし、音声ファイル、Insights のカウントが、このデバイスとアカウントから完全に削除されます。",
-      "clearAllDescriptionDevice": "すべての文字起こし、音声ファイル、Insights のカウントが、このデバイスから完全に削除されます。アカウントに同期済みのカウントには影響しません。",
+      "clearAllDescription": "履歴内のすべての文字起こし、その音声ファイル、Insights のカウントが、このデバイスとアカウントから完全に削除されます。",
+      "clearAllDescriptionDevice": "この履歴内のすべての文字起こし、その音声ファイル、Insights のカウントが、このデバイスから完全に削除されます。そのうちすでにアカウントと同期済みの文字起こしは、そのアカウントが次にこのデバイスでサインインしたときに、アカウントからも削除されます。",
       "clearAllSuccess": "履歴を削除しました",
       "clearAllErrorTitle": "履歴を削除できませんでした",
       "clearAllErrorDescription": "問題が発生しました。もう一度お試しください。",
@@ -990,6 +990,11 @@
       "noAudio": {
         "title": "聞き取れませんでした",
         "description": "マイクを確認して、もう一度お試しください。"
+      },
+      "commandAccountChanged": {
+        "title": "コマンドに応答できませんでした",
+        "description": "処理が終わる前にアカウントが切り替わりました。文字起こしは、話したときのアカウントの履歴にあります。",
+        "descriptionNotSaved": "処理が終わる前にアカウントが切り替わりました。今すぐ尋ねるには、もう一度話しかけてください。"
       },
       "micDisconnected": {
         "title": "マイクが切断されました",
@@ -2319,15 +2324,15 @@
       "lastSynced": "最終同期 {{time}}",
       "minutesAgo": "{{count}}分前",
       "audioRetention": "音声の保持",
-      "audioRetentionDescription": "再文字起こしやダウンロードのために、ディクテーションの音声をローカルに保存します。ファイルは保持期間が過ぎると自動的に削除されます。会議の音声は保存されません。",
+      "audioRetentionDescription": "再文字起こしやダウンロードのために、ディクテーションの音声をローカルに保存します。このデバイス上の音声ファイルは、どのアカウントで録音されたかにかかわらず、保持期間が過ぎると自動的に削除されます。会議の音声は保存されません。",
       "audioRetentionDisabled": "無効",
       "retentionDays_one": "{{count}}日",
       "retentionDays_other": "{{count}}日",
       "audioStorageUsage": "ストレージ使用量",
       "audioStorageUsageDescription": "このデバイスに保存された音声ファイル",
-      "audioStorageFiles": "{{count}}ファイル、{{size}}",
-      "audioStorageEmpty": "保存された音声ファイルはありません",
-      "clearAllAudio": "すべての音声を削除",
+      "audioStorageHistoryFiles": "この履歴の音声ファイル {{count}} 件、{{size}}",
+      "audioStorageHistoryEmpty": "この履歴に音声ファイルはありません",
+      "clearHistoryAudio": "音声を削除",
       "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。",
       "saveDiscarded": "破棄したディクテーションを保存",
       "saveDiscardedDescription": "Escape でディクテーションをキャンセルしたとき、音声を履歴に残して後で復元できるようにします。データと音声の保持を有効にする必要があります。"

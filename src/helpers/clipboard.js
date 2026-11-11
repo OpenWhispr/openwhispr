@@ -2077,12 +2077,12 @@ class ClipboardManager {
           this.portalTokenPasteFailed = true;
         }
 
-        // GNOME: a running ydotoold already owns a persistent uinput device, so
+        // GNOME/KDE: a running ydotoold already owns a persistent uinput device, so
         // paste through it instead of the throwaway device the binary creates per
-        // paste. Mutter can take 150–500 ms to pick up a hotplugged device, but the
+        // paste. On GNOME, Mutter can take 150–500 ms to pick up a hotplugged device, but the
         // binary destroys its device ~100 ms after creation and exits 0 regardless,
         // so the keystrokes are dropped and the fallbacks never run (#956).
-        if (isGnome && ydotoolDaemonRunning) {
+        if ((isGnome || isKde) && ydotoolDaemonRunning) {
           ydotoolAttempted = true;
           try {
             await this._runLinuxPasteCommand("ydotool", buildYdotoolArgs(), "ydotool");
@@ -2091,7 +2091,7 @@ class ClipboardManager {
             return { method: "ydotool", restoreComplete: restoreClipboard() };
           } catch (error) {
             debugLogger.warn(
-              "ydotool paste failed on GNOME, trying uinput",
+              "ydotool paste failed, trying uinput",
               { error: error?.message },
               "clipboard"
             );

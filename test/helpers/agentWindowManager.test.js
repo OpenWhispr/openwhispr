@@ -807,6 +807,24 @@ test("a wake-word command carries its selection as context from another app", as
   ]);
 });
 
+test("a command waiting for the renderer is dropped if its account was replaced meanwhile", async () => {
+  const { manager, win } = await openedManager();
+  win.contentsListeners.get("did-navigate")({}, "http://app/?agent=true", 200, "OK");
+  win.sent.length = 0;
+
+  let current = true;
+  assert.equal(manager.deliverCommand({ text: "what's next" }, { isCurrent: () => current }), true);
+  assert.deepEqual(win.sent, [], "the new renderer is not ready yet");
+  current = false;
+  manager.markReady(fromAgent(win));
+  assert.deepEqual(win.sent, []);
+
+  win.contentsListeners.get("did-navigate")({}, "http://app/?agent=true", 200, "OK");
+  manager.deliverCommand({ text: "what's next" }, { isCurrent: () => true });
+  manager.markReady(fromAgent(win));
+  assert.equal(win.sent.at(-1).channel, "agent-window-command");
+});
+
 test("when its display goes away the window moves to the cursor's", async () => {
   cursor = { x: 1500, y: 100 };
   const { win } = await openedManager();

@@ -86,6 +86,46 @@ test("account ownership operations forward the account and credential generation
   ]);
 });
 
+test("sync writes forward the sign-in that read them and the account a chat was sent as", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.upsertTranscriptionFromCloud({ id: "t" }, 7);
+  await api.upsertDictionaryFromCloud({ id: "d" }, 7);
+  await api.getSnippetForCloudMerge({ id: "s" }, 7);
+  await api.upsertSnippetFromCloud({ id: "s" }, 7);
+  await api.hardDeleteSnippet(1, 7);
+  await api.hardDeleteConversation(1, 7);
+  await api.hardDeleteTranscription(1, 7);
+  await api.hardDeleteDictionary(1, 7);
+  await api.claimConversationFromCloud({ id: "c" }, 7);
+  await api.upsertConversationFromCloud({ id: "c" }, [], null, 7);
+  await api.markTranscriptionSynced(1, "t", 7);
+  await api.markDictionarySynced(1, "d", "now", "word", "manual", "manual", null, 7);
+  await api.markSnippetSynced(1, "s", "now", "addr", "home", 7);
+  await api.acknowledgeConversationCreate(1, { title: "Chat" }, "c", "account-a", 7);
+  await api.markConversationSynced(1, "c", { title: "Chat" }, "now", "account-a", 7);
+  await api.replaceConversationClientId(1, "client", "account-a", 7);
+
+  assert.deepEqual(invocations, [
+    ["db-upsert-transcription-from-cloud", { id: "t" }, 7],
+    ["db-upsert-dictionary-from-cloud", { id: "d" }, 7],
+    ["db-get-snippet-for-cloud-merge", { id: "s" }, 7],
+    ["db-upsert-snippet-from-cloud", { id: "s" }, 7],
+    ["db-hard-delete-snippet", 1, 7],
+    ["db-hard-delete-conversation", 1, 7],
+    ["db-hard-delete-transcription", 1, 7],
+    ["db-hard-delete-dictionary", 1, 7],
+    ["db-claim-conversation-from-cloud", { id: "c" }, 7],
+    ["db-upsert-conversation-from-cloud", { id: "c" }, [], null, 7],
+    ["db-mark-transcription-synced", 1, "t", 7],
+    ["db-mark-dictionary-synced", 1, "d", "now", "word", "manual", "manual", null, 7],
+    ["db-mark-snippet-synced", 1, "s", "now", "addr", "home", 7],
+    ["db-acknowledge-conversation-create", 1, { title: "Chat" }, "c", "account-a", 7],
+    ["db-mark-conversation-synced", 1, "c", { title: "Chat" }, "now", "account-a", 7],
+    ["db-replace-conversation-client-id", 1, "client", "account-a", 7],
+  ]);
+});
+
 test("meeting stop forwards the optional expected recording session ID", async () => {
   const { api, invocations } = loadPreloadApi();
 
@@ -235,4 +275,16 @@ test("prepare-dictation calls back without the Electron event", () => {
   dispose();
   assert.deepEqual(received, [[]]);
   assert.equal(listeners.has("prepare-dictation"), false);
+});
+
+test("dictionary deltas forward their account owner, including the signed-out scope", async () => {
+  const { api, invocations } = loadPreloadApi();
+
+  await api.applyDictionaryChanges({ add: ["Word"] }, "account-a");
+  await api.applyDictionaryChanges({ remove: ["Word"] }, null);
+
+  assert.deepEqual(invocations, [
+    ["db-apply-dictionary-changes", { add: ["Word"] }, "account-a"],
+    ["db-apply-dictionary-changes", { remove: ["Word"] }, null],
+  ]);
 });

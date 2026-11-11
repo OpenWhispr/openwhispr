@@ -1,4 +1,11 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudGetForAuthGeneration,
+  cloudPost,
+  cloudPatchForAuthGeneration,
+  cloudPostForAuthGeneration,
+  cloudDeleteForAuthGeneration,
+} from "./cloudApi.js";
 
 interface ConversationInput {
   client_conversation_id?: string;
@@ -15,7 +22,7 @@ interface ConversationInput {
   }>;
 }
 
-interface CloudConversation {
+export interface CloudConversation {
   id: string;
   client_conversation_id: string | null;
   title: string;
@@ -42,19 +49,31 @@ interface CloudConversationWithMessages extends CloudConversation {
   messages?: CloudMessage[];
 }
 
-async function create(input: ConversationInput): Promise<CloudConversation> {
-  return cloudPost<CloudConversation>("/api/conversations/create", input);
+async function create(
+  input: ConversationInput,
+  authGeneration: number
+): Promise<CloudConversation> {
+  return cloudPostForAuthGeneration<CloudConversation>(
+    "/api/conversations/create",
+    input,
+    authGeneration
+  );
 }
 
 async function update(
   id: string,
-  updates: { title?: string; archived_at?: string }
+  updates: { title?: string; archived_at?: string },
+  authGeneration: number
 ): Promise<CloudConversation> {
-  return cloudPatch<CloudConversation>("/api/conversations/update", { id, ...updates });
+  return cloudPatchForAuthGeneration<CloudConversation>(
+    "/api/conversations/update",
+    { id, ...updates },
+    authGeneration
+  );
 }
 
-async function deleteConversation(id: string): Promise<void> {
-  await cloudDelete("/api/conversations/delete", { id });
+async function deleteConversation(id: string, authGeneration: number): Promise<void> {
+  await cloudDeleteForAuthGeneration("/api/conversations/delete", { id }, authGeneration);
 }
 
 async function list(
@@ -80,19 +99,30 @@ async function addMessage(
   conversationId: string,
   role: "user" | "assistant" | "system",
   content: string,
-  metadata?: Record<string, unknown> | null
+  metadata: Record<string, unknown> | null,
+  authGeneration: number
 ): Promise<CloudMessage> {
-  return cloudPost<CloudMessage>("/api/conversations/messages", {
-    conversation_id: conversationId,
-    role,
-    content,
-    ...(metadata ? { metadata } : {}),
-  });
+  return cloudPostForAuthGeneration<CloudMessage>(
+    "/api/conversations/messages",
+    {
+      conversation_id: conversationId,
+      role,
+      content,
+      ...(metadata ? { metadata } : {}),
+    },
+    authGeneration
+  );
 }
 
-async function listMessages(conversationId: string): Promise<{ messages: CloudMessage[] }> {
+async function listMessages(
+  conversationId: string,
+  authGeneration: number
+): Promise<{ messages: CloudMessage[] }> {
   const params = new URLSearchParams({ conversation_id: conversationId });
-  return cloudGet<{ messages: CloudMessage[] }>(`/api/conversations/messages?${params}`);
+  return cloudGetForAuthGeneration<{ messages: CloudMessage[] }>(
+    `/api/conversations/messages?${params}`,
+    authGeneration
+  );
 }
 
 async function search(

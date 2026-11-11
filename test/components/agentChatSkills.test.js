@@ -5,12 +5,12 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const { SKILLS_MOCKS, ariaLabel, click, findAll, settle } = require("../lib/skillsHarness");
 
-async function mountChat(t) {
+async function mountChat(t, electronAPI = {}) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  installBrowserGlobals(t);
+  installBrowserGlobals(t, { window: { electronAPI } });
   const container = installInteractiveDom(t);
   const calls = { sends: [], regenerated: [], streaming: null };
   globalThis.__agentSkillCalls = calls;
@@ -121,6 +121,24 @@ test("new chat and switching conversations reset the assistant's skill choice", 
   await view.pick();
   await React.act(async () => view.chat().switchChat(2));
   assert.equal(view.chat().pickedSkill, null);
+});
+
+test("an account change resets the assistant's skill choice", async (t) => {
+  let scopeChanged;
+  const view = await mountChat(t, {
+    getActiveAccountScope: async () => ({ accountId: "account-a", authGeneration: 1 }),
+    onActiveAccountScopeChanged: (listener) => {
+      scopeChanged = listener;
+      return () => {};
+    },
+  });
+  await view.pick();
+  await React.act(async () => scopeChanged({ accountId: "account-b", authGeneration: 2 }));
+  assert.equal(view.chat().pickedSkill, null);
+  await view.pick();
+  await React.act(async () => view.chat().removePickedSkill());
+  await React.act(async () => scopeChanged(null));
+  assert.equal((await view.send("The next account's task")).allowSkillPick, true);
 });
 
 test("regenerating an assistant answer keeps the skill it was using", async (t) => {
