@@ -49,13 +49,22 @@ test("fields and device values a later build reads are ignored; known ones stay 
   assert.equal(snapshot.status, "valid");
   assert.equal(snapshot.requireSignIn, true);
   assert.equal(normalizeDeviceValues({ FutureSetting: true }).status, "absent");
-  assert.equal(
-    normalizeDeviceValues({ AuditLogPath: "", WipeLocalDataOnLaunch: false }).status,
-    "absent"
-  );
+  assert.equal(normalizeDeviceValues({ FutureString: "", FutureFlag: false }).status, "absent");
   const wrongType = defaultDevicePolicy();
   wrongType.features.connectorsEnabled = "no";
   assert.throws(() => normalizeDeviceValues({ Policy: JSON.stringify(wrongType) }));
+});
+
+// The meeting audit log (#3029) writes to AuditLogPath; a device that sets only
+// it is managed, so the log is on.
+test("AuditLogPath is read as a non-empty string and marks the device managed", () => {
+  const snapshot = normalizeDeviceValues({ AuditLogPath: "/var/log/openwhispr" });
+  assert.equal(snapshot.status, "valid");
+  assert.equal(snapshot.managed, true);
+  assert.equal(snapshot.auditLogPath, "/var/log/openwhispr");
+  assert.equal(normalizeDeviceValues({ RequireSignIn: false }).auditLogPath, null);
+  for (const AuditLogPath of ["", "  ", 5, true])
+    assert.throws(() => normalizeDeviceValues({ AuditLogPath }), String(AuditLogPath));
 });
 
 test("legacy alias works alone and cannot enable meetings denied by Policy", () => {
@@ -135,12 +144,14 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
   const values = await registryExport([
     `"Policy"="${policy}"`,
     '"RequireSignIn"=dword:00000000',
+    '"AuditLogPath"="C:\\\\ProgramData\\\\OpenWhispr\\\\Audit"',
     '"Unrelated"=hex(2):43,00,00,00',
   ])((...args) => {
     command = args;
   });
   assert.deepEqual(JSON.parse(values.Policy), defaultDevicePolicy());
   assert.equal(values.RequireSignIn, false);
+  assert.equal(values.AuditLogPath, "C:\\ProgramData\\OpenWhispr\\Audit");
   assert.equal(
     command[0],
     path.win32.join(process.env.SystemRoot || "C:\\Windows", "System32", "reg.exe")
@@ -292,11 +303,12 @@ test("Linux reads raw policy and separate device metadata", async () => {
   const values = await readLinuxValues({
     fileSystem: linuxFileSystem({
       "policy.json": defaultDevicePolicy(),
-      "device.json": { RequireSignIn: false },
+      "device.json": { RequireSignIn: false, AuditLogPath: "/var/log/openwhispr" },
     }),
   });
   assert.equal(JSON.parse(values.Policy).version, 1);
   assert.equal(values.RequireSignIn, false);
+  assert.equal(values.AuditLogPath, "/var/log/openwhispr");
   for (const options of [
     { directory: { mode: 0o777 } },
     { directory: { uid: 501 } },

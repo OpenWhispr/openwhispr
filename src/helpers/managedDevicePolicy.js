@@ -8,7 +8,7 @@ const { isValidPolicyShape } = require("./policyValidation");
 const { registryData } = require("../models/registryData.js");
 
 const execute = promisify(execFile);
-const DEVICE_KEYS = ["Policy", "RequireSignIn", "DisableMeetingRecording"];
+const DEVICE_KEYS = ["Policy", "RequireSignIn", "AuditLogPath", "DisableMeetingRecording"];
 const MAX_POLICY_BYTES = 1024 * 1024;
 const MODES = ["openwhispr", "providers", "local", "self-hosted", "enterprise"];
 const FOCUS_REFRESH_THROTTLE_MS = 30 * 1000;
@@ -99,6 +99,11 @@ function normalizeDeviceValues(input) {
     if (values[key] !== undefined && typeof values[key] !== "boolean")
       throw new Error("Invalid device boolean");
   }
+  if (
+    values.AuditLogPath !== undefined &&
+    (typeof values.AuditLogPath !== "string" || !values.AuditLogPath.trim())
+  )
+    throw new Error("Invalid device string");
   const hasPolicy = Object.hasOwn(values, "Policy");
   let policy = defaultDevicePolicy();
   if (hasPolicy) {
@@ -120,6 +125,8 @@ function normalizeDeviceValues(input) {
     policy,
     requireSignIn: values.RequireSignIn ?? hasPolicy,
     localOnly: values.RequireSignIn === false,
+    // Where the meeting audit log is written (meetingAuditLog.js).
+    auditLogPath: values.AuditLogPath ?? null,
   };
 }
 
