@@ -2271,7 +2271,7 @@
         "managedByOrganization": "Gestito dalla tua organizzazione.",
         "itManaged": "La tua organizzazione gestisce gli aggiornamenti.",
         "policyLoading": "Caricamento delle impostazioni di aggiornamento…",
-        "policyUnavailable": "La politica di aggiornamento non è disponibile. Riprova quando hai una connessione.",
+        "policyUnavailable": "Impossibile caricare le impostazioni di aggiornamento. Controlla gli aggiornamenti per riprovare.",
         "policyChanged": "La politica di aggiornamento è cambiata. Controlla di nuovo gli aggiornamenti.",
         "managedBadge": "Gestito",
         "stagedBeforePolicy": "Un aggiornamento è stato preparato prima dell’applicazione di questa politica e potrebbe essere installato alla chiusura dell’app. Contatta il reparto IT prima di chiudere o riavviare."
