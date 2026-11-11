@@ -7,6 +7,7 @@ const { createRequire } = require("node:module");
 const createWatchdog = require("../../src/helpers/meetingSystemAudioWatchdog");
 const createMeetingSystemAudioHandover = require("../../src/helpers/meetingSystemAudioHandover");
 const micGate = require("../../src/helpers/meetingMicGate");
+const { localBufferEntry } = require("../../src/helpers/meetingLocalChunk");
 
 // Execute the real IPC closures with only their native/network boundaries replaced.
 const ipcPath = path.join(__dirname, "../../src/helpers/ipcHandlers.js");
@@ -81,6 +82,7 @@ function harness({ native = true, local = false } = {}) {
     dropMeetingMicDiarizationCapture() {},
     ...micGate,
     meetingLocalMode: local,
+    localBufferEntry,
     meetingLocalBuffers: { mic: [], system: [] },
     meetingSendCounts: { mic: 0, system: 0 },
     _meetingSystemStreaming: { sendAudio: (buffer) => streamed.push(buffer) },
@@ -388,7 +390,7 @@ test("local transcription excludes synthetic silence while diarization retains t
   run.at(10000);
   await run.restart();
   run.chunk();
-  assert.equal(bytes(run.context.meetingLocalBuffers.system), 9600);
+  assert.equal(bytes(run.context.meetingLocalBuffers.system.map(({ buffer }) => buffer)), 9600);
   assert.equal(bytes(run.pcm), 484800);
 });
 
