@@ -18,8 +18,8 @@ const APPEND_FLAGS =
   (fs.constants.O_NOFOLLOW ?? 0);
 const KEEP_FILES = 90;
 const CHECKPOINT_MS = 30_000;
-// A crash marker whose stop still can't be written this long after its last
-// checkpoint is treated as gone, so it stops holding later recordings' crash
+// A crash marker whose stop still can't be written a week after the first
+// failed attempt is treated as gone, so it stops holding later recordings' crash
 // recovery hostage.
 const MARKER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const START_SOURCES = new Set([
@@ -186,11 +186,15 @@ function createMeetingAuditLog({
   }
 
   // Replaced whole, so a crash mid-write never leaves a torn marker.
-  async function saveMarker(open) {
-    if (markerKept) return;
+  async function writeMarker(open) {
     const pending = `${markerPath}.tmp`;
     await fs.promises.writeFile(pending, JSON.stringify(open));
     await fs.promises.rename(pending, markerPath);
+  }
+
+  // A kept marker belongs to an earlier recording, which this one must not replace.
+  async function saveMarker(open) {
+    if (!markerKept) await writeMarker(open);
   }
 
   // Closes a recording the last launch never stopped, as of its last checkpoint.
@@ -216,7 +220,13 @@ function createMeetingAuditLog({
             durationSec: durationSec(open.startedAt, open.lastSeenAt),
           });
         } catch (error) {
-          if (now() - open.lastSeenAt <= MARKER_MAX_AGE_MS) throw error;
+          // Counted from the first failure, so an attempt made while a share is
+          // still mounting never drops a marker that could be recovered later.
+          const failedSince = open.failedSince ?? now();
+          if (now() - failedSince <= MARKER_MAX_AGE_MS) {
+            if (open.failedSince === undefined) await writeMarker({ ...open, failedSince });
+            throw error;
+          }
           warnOnce("Dropped a crash marker that can't be closed", { error: error.message });
         }
       } else {

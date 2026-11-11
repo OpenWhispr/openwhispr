@@ -305,7 +305,8 @@ test("a recording the app never stopped is closed on the next launch at its last
 // A marker that doesn't parse, or parses without what a stop line needs, can't be
 // closed; keeping it would leave every later recording without crash recovery.
 test("a marker that can't be closed is dropped, so the next recording's crash still closes", async () => {
-  for (const text of ["", "{}"]) {
+  const noFolder = JSON.stringify({ sessionId: "s0", startedAt: START, lastSeenAt: START });
+  for (const text of ["", "{}", noFolder]) {
     fs.rmSync(path.join(userData, "audit"), { recursive: true, force: true });
     fs.writeFileSync(marker(), text);
     const first = harness();
@@ -350,7 +351,7 @@ test("a crash first recovered after a week is still closed when its folder is re
   assert.equal(fs.existsSync(marker()), false);
 });
 
-test("a kept marker whose folder stays unreachable for a week is dropped", async () => {
+test("a kept marker is dropped only when its stop still fails a week after the first failure", async () => {
   const share = path.join(userData, "share");
   const first = harness({ configuredPath: share });
   first.log.recordingStarted({ sessionId: "s1", noteId: 9, trigger: "hotkey" });
@@ -358,13 +359,19 @@ test("a kept marker whose folder stays unreachable for a week is dropped", async
   fs.rmSync(share, { recursive: true });
   fs.writeFileSync(share, "");
 
-  const later = harness({ configuredPath: share });
-  later.clock.now = START + 8 * 86_400_000;
-  later.log.recoverInterrupted();
-  later.state.configuredPath = path.join(userData, "new-share");
-  later.log.recordingStarted({ sessionId: "s2", noteId: 10, trigger: "tray" });
-  await later.log.flush();
+  // A first failure long after the crash keeps the marker for a later retry.
+  const late = harness({ configuredPath: share });
+  late.clock.now = START + 8 * 86_400_000;
+  late.log.recoverInterrupted();
+  await late.log.flush();
+  assert.equal(JSON.parse(fs.readFileSync(marker(), "utf8")).sessionId, "s1");
 
+  const weekLater = harness({ configuredPath: share });
+  weekLater.clock.now = START + 16 * 86_400_000;
+  weekLater.log.recoverInterrupted();
+  weekLater.state.configuredPath = path.join(userData, "new-share");
+  weekLater.log.recordingStarted({ sessionId: "s2", noteId: 10, trigger: "tray" });
+  await weekLater.log.flush();
   assert.equal(JSON.parse(fs.readFileSync(marker(), "utf8")).sessionId, "s2");
 });
 
