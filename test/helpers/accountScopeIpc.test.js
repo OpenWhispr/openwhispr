@@ -512,6 +512,27 @@ test("a stray cookie leaves a signed-out member a guest without reaching the API
   assert.deepEqual(requests, []);
 });
 
+test("an offline restart adopts the cached verdict without waiting for the network", async (t) => {
+  restoreUpdaterState(t);
+  useTestApi(t);
+  let goOffline;
+  t.mock.method(
+    electronStub.net,
+    "fetch",
+    () => new Promise((_resolve, reject) => (goOffline = reject))
+  );
+  t.after(() => goOffline?.(new Error("offline")));
+  cachePolicyForBearer("restarted-bearer", managedPolicy("always_on"));
+  tokenState = { token: "restarted-bearer", generation: 130 };
+  fakeThis.databaseManager = scopedDatabase(null);
+  fakeThis.windowManager = { retireMeetingNotificationScope() {} };
+  fakeThis.updateManager = createUpdater();
+  await Promise.race([fakeThis.updateManager.refreshPolicy(), new Promise(setImmediate)]);
+  const status = await fakeThis.updateManager.getUpdateStatus();
+  assert.equal(status.policyReady, true);
+  assert.equal(status.updateMode, "always_on");
+});
+
 test("cookie storage failure still clears the local bearer and reports the failure", async (t) => {
   const { win } = await signOutUpdater(t, 104);
   win.webContents.session.clearStorageData = async () => {

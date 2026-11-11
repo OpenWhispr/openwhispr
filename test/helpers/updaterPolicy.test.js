@@ -43,12 +43,14 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check, 
       onAbort?.();
     },
   };
-  const token = {
+  // Each check issues its own token, as electron-updater does.
+  const tokens = [];
+  const newToken = () => ({
     cancelled: false,
     cancel() {
       this.cancelled = true;
     },
-  };
+  });
   Object.assign(autoUpdater, {
     checks: 0,
     downloads: 0,
@@ -58,15 +60,17 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check, 
       this.checks++;
       if (check) await check();
       this.emit("update-available", { version: "99.0.0" });
+      const cancellationToken = newToken();
+      tokens.push(cancellationToken);
       return {
         isUpdateAvailable: true,
         updateInfo: { version: "99.0.0" },
-        cancellationToken: token,
+        cancellationToken,
       };
     },
-    downloadUpdate(cancellationToken) {
+    downloadUpdate(cancellationToken = newToken()) {
       this.downloads++;
-      assert.equal(cancellationToken, token);
+      if (cancellationToken.cancelled) return Promise.reject(new Error("cancelled"));
       return download ? download(cancellationToken) : Promise.resolve([]);
     },
     quitAndInstall() {
@@ -102,7 +106,7 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check, 
     nativeUpdater,
     httpExecutor,
     events,
-    token,
+    tokens,
     setPolicy(value) {
       current = value;
       manager.updatePolicy(value);
@@ -195,7 +199,7 @@ test("policy changes cancel the active download and reject late completion event
   const pending = new Promise((done) => {
     finish = done;
   });
-  const { manager, autoUpdater, httpExecutor, token, events, setPolicy } = setup({
+  const { manager, autoUpdater, httpExecutor, tokens, events, setPolicy } = setup({
     download: () => pending,
   });
   manager.setAutoUpdatesEnabled(false);
@@ -207,7 +211,7 @@ test("policy changes cancel the active download and reject late completion event
   await manager.downloadUpdate();
   assert.equal(manager.isDownloading, true);
   setPolicy(managed("it_managed"));
-  assert.equal(token.cancelled, true);
+  assert.equal(tokens[0].cancelled, true);
   await flush();
   assert.equal(httpExecutor.aborts, 1);
   assert.equal(autoUpdater.autoInstallOnAppQuit, false);
@@ -342,6 +346,106 @@ test("an old credential's late policy lookup cannot replace the new scope", asyn
   assert.equal(autoUpdater.autoInstallOnAppQuit, false);
 });
 
+test("a failed lookup leaves a held verdict and its download alone; an unresolvable one revokes", async () => {
+  let finish;
+  const { manager, httpExecutor, tokens } = setup({
+    download: () => new Promise((resolve) => (finish = resolve)),
+  });
+  manager.setAutoUpdatesEnabled(false);
+  await manager.checkForUpdates();
+  const downloading = manager.downloadUpdate();
+  await flush();
+  for (const code of ["POLICY_UNAVAILABLE", "POLICY_RETRY_THROTTLED"]) {
+    manager.updatePolicy({ success: false, code });
+  }
+  assert.equal(httpExecutor.aborts, 0);
+  assert.equal(tokens[0].cancelled, false);
+  assert.equal((await manager.getUpdateStatus()).policyReady, true);
+  finish([]);
+  assert.equal((await downloading).success, true);
+
+  manager.updatePolicy({ success: false, code: "POLICY_UNRESOLVABLE" });
+  const status = await manager.getUpdateStatus();
+  assert.equal(status.policyReady, false);
+  assert.equal(status.policyUnavailable, true);
+  assert.equal(status.updateMode, null);
+  assert.equal(status.updateAvailable, false);
+});
+
+test("a credential change lets a consumer download finish under the verdict it started with", async () => {
+  let finish;
+  const { manager, httpExecutor, tokens, events } = setup({
+    download: () => new Promise((resolve) => (finish = resolve)),
+  });
+  manager.setAutoUpdatesEnabled(false);
+  await manager.checkForUpdates();
+  const downloading = manager.downloadUpdate();
+  await flush();
+  manager.invalidatePolicy();
+  let status = await manager.getUpdateStatus();
+  assert.equal(status.policyReady, false);
+  assert.equal(status.updateAvailable, true);
+  manager.updatePolicy(managed("user_choice"));
+  await flush();
+  assert.equal(httpExecutor.aborts, 0);
+  assert.equal(tokens[0].cancelled, false);
+  finish([]);
+  assert.equal((await downloading).success, true);
+  status = await manager.getUpdateStatus();
+  assert.equal(status.policyReady, true);
+  assert.equal(status.updateAvailable, true);
+  assert.equal(events.includes("update-error"), false);
+});
+
+test("a download after IT policy lifts starts on a fresh token", async () => {
+  const { manager, autoUpdater, setPolicy } = setup();
+  manager.setAutoUpdatesEnabled(false);
+  await manager.checkForUpdates();
+  setPolicy(managed("it_managed"));
+  setPolicy(managed("user_choice"));
+  assert.equal((await manager.downloadUpdate()).success, true);
+  assert.equal(autoUpdater.downloads, 1);
+});
+
+test("a failed lookup with nothing held reports the policy unavailable until a retry resolves it", async () => {
+  let current = { success: false, code: "POLICY_UNAVAILABLE" };
+  const { manager, autoUpdater } = setup({ getPolicy: async () => current });
+  await manager.refreshPolicy();
+  let status = await manager.getUpdateStatus();
+  assert.equal(status.policyReady, false);
+  assert.equal(status.policyUnavailable, true);
+  current = managed("user_choice");
+  assert.equal((await manager.checkForUpdates()).updateAvailable, true);
+  status = await manager.getUpdateStatus();
+  assert.equal(status.policyReady, true);
+  assert.equal(status.policyUnavailable, false);
+  assert.equal(autoUpdater.checks, 1);
+});
+
+test("a held verdict answers without waiting for the network lookup", async () => {
+  const { manager, autoUpdater } = setup({
+    getPolicy: ({ held = false } = {}) => (held ? managed("user_choice") : new Promise(() => {})),
+  });
+  const answer = await Promise.race([manager.checkForUpdates(), flush().then(() => null)]);
+  assert.equal(answer?.updateAvailable, true);
+  assert.equal(autoUpdater.checks, 1);
+});
+
+test("a startup check refused for want of a verdict runs once the verdict lands", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  const { manager, autoUpdater, setPolicy } = setup({ snapshot: { success: false } });
+  manager.checkForUpdatesOnStartup();
+  t.mock.timers.tick(3000);
+  await flush();
+  assert.equal(autoUpdater.checks, 0);
+  setPolicy(managed("user_choice"));
+  await flush();
+  assert.equal(autoUpdater.checks, 1);
+  setPolicy(managed("always_on"));
+  await flush();
+  assert.equal(autoUpdater.checks, 1);
+});
+
 test("old policy revisions cannot lift a restriction", async () => {
   const { manager } = setup();
   manager.updatePolicy({ ...managed("it_managed"), revision: 10 });
@@ -354,14 +458,14 @@ test("a check finishing after policy changes cannot authorize a download", async
   const pending = new Promise((done) => {
     finish = done;
   });
-  const { manager, autoUpdater, token, setPolicy } = setup({ check: () => pending });
+  const { manager, autoUpdater, tokens, setPolicy } = setup({ check: () => pending });
   manager.setAutoUpdatesEnabled(true);
   const checking = manager.checkForUpdates();
   await flush();
   setPolicy(managed("it_managed"));
   finish();
   assert.equal((await checking).code, "UPDATES_MANAGED_BY_ORG");
-  assert.equal(token.cancelled, true);
+  assert.equal(tokens[0].cancelled, true);
   assert.equal(autoUpdater.downloads, 0);
   assert.equal((await manager.getUpdateStatus()).updateAvailable, false);
 });

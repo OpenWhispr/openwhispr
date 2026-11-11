@@ -1055,7 +1055,6 @@ class IPCHandlers {
 
   _handleAuthTokenChange({ generation, token }) {
     this._cancelCalendarAuthorizations();
-    this.updateManager?.invalidatePolicy();
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
     // account switch is cancelled once set-active-account-scope learns it.
@@ -1098,6 +1097,7 @@ class IPCHandlers {
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
     }
+    this.updateManager?.invalidatePolicy();
     void this.updateManager?.refreshPolicy();
     broadcastToWindows("auth-token-state-changed", {
       generation,
