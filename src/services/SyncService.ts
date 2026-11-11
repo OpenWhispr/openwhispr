@@ -2639,8 +2639,10 @@ export class SyncService {
   // Cursors from before they were stamped on the server's clock came from this
   // device's own. If that clock runs fast, they sit ahead of rows the server
   // stamped since, and every delta pull has skipped those rows. Such cursors
-  // are dropped once, so the next pull reads from the start; so is any cursor
-  // ahead of the server now, which only a fast clock could have written.
+  // go back to the start once, and so does any cursor ahead of the server now,
+  // which only a fast clock could have written. A note cursor is removed, so
+  // the next pull replays the feed; the others restart at the feed's start,
+  // since a pull without a cursor lists only live rows and misses deletes.
   private dropFastClockCursors(): void {
     const offsetMs = serverClockOffsetMs();
     if (offsetMs === null) return;
@@ -2650,7 +2652,9 @@ export class SyncService {
     for (const key of PULL_CURSOR_KEYS) {
       const stamp = Date.parse(localStorage.getItem(key) ?? "");
       if (!Number.isFinite(stamp)) continue;
-      if (oldStamps || stamp - serverNowMs > FAST_CLOCK_TOLERANCE_MS) localStorage.removeItem(key);
+      if (!oldStamps && stamp - serverNowMs <= FAST_CLOCK_TOLERANCE_MS) continue;
+      if (key.startsWith("lastSyncedAt.notes")) localStorage.removeItem(key);
+      else localStorage.setItem(key, NOTE_FEED_START);
     }
     localStorage.setItem(SERVER_CLOCK_CURSORS_KEY, "1");
   }

@@ -115,6 +115,43 @@ test("a fast clock's old cursor is dropped once so the notes it hid arrive", asy
   );
 });
 
+test("a fast clock's old cursors still bring the deletes made since they were stamped", async (t) => {
+  const ctx = await setup(t, HOUR);
+  if (!ctx) return;
+  const { db, cloud, service, serverIso } = ctx;
+
+  const at = serverIso(-3 * HOUR);
+  const chat = cloud.seedConversation({
+    title: "Chat",
+    client_conversation_id: "chat",
+    created_at: at,
+    updated_at: at,
+  });
+  const dictation = cloud.seedTranscription({
+    text: "Dictation",
+    client_transcription_id: "dictation",
+    created_at: at,
+    updated_at: at,
+  });
+  await service.syncAll(true);
+  assert.ok(db.getConversationByClientId("chat"));
+  assert.ok(db.getTranscriptionByClientId("dictation"));
+
+  // An older build pulled two hours ago by the device's clock. Without a
+  // cursor these pulls list live rows only, so the deletes since would be lost.
+  localStorageStub.removeItem("syncCursors.serverClock");
+  const oldCursor = new Date(Date.now() - 2 * HOUR).toISOString();
+  localStorageStub.setItem("lastSyncedAt.conversations", oldCursor);
+  localStorageStub.setItem("lastSyncedAt.transcriptions", oldCursor);
+  cloud.deleteConversation(chat.id);
+  cloud.deleteTranscription(dictation.id);
+
+  await service.syncAll(true);
+
+  assert.equal(db.getConversationByClientId("chat") ?? null, null);
+  assert.equal(db.getTranscriptionByClientId("dictation") ?? null, null);
+});
+
 test("a device on time keeps the cursors it already has", async (t) => {
   const ctx = await setup(t, 0);
   if (!ctx) return;
