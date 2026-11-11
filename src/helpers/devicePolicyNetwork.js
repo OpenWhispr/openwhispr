@@ -12,7 +12,10 @@ function devicePolicyNetworkAllowed(snapshot, target, controlOrigins = []) {
   if (!["http:", "https:", "ws:", "wss:"].includes(url.protocol) || isLoopback(url)) return true;
   if (!snapshot.deviceReady || snapshot.code === "DEVICE_POLICY_INVALID" || snapshot.localOnly)
     return false;
-  if (!snapshot.success) {
+  // A device policy that can't be met yet (sign-in required, or no workspace
+  // verdict) leaves only the control plane. A workspace's own policy is the
+  // product gates' to apply, and a verdict still loading stops nothing.
+  if (snapshot.status === "error" && snapshot.deviceManaged) {
     return (
       controlOrigins.includes(url.origin) &&
       (url.pathname.startsWith("/api/auth/") ||

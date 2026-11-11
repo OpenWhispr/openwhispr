@@ -908,3 +908,39 @@ test("repeated validated account scope preserves its settled policy while refres
   assert.equal(manager.getCurrent().status, "loading");
   assert.equal(manager.getCurrent().authGeneration, 81);
 });
+
+test("while a verdict loads, local work runs, new remote work waits, and windows aren't held", async (t) => {
+  const { deferred } = require("./harness/deferred");
+  const answer = deferred();
+  const previousApiUrl = process.env.OPENWHISPR_API_URL;
+  const previous = { whisperManager: fakeThis.whisperManager, tokenState };
+  t.after(async () => {
+    answer.resolve();
+    if (previousApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = previousApiUrl;
+    fakeThis.whisperManager = previous.whisperManager;
+    tokenState = previous.tokenState;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  const realFetch = electronStub.net.fetch;
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    if (String(url).endsWith("/api/workspace-policy")) await answer.promise;
+    return realFetch(url, init);
+  });
+  handleAuthTokenChange({ token: "loading-token", generation: tokenState.generation + 1 });
+
+  const snapshot = await Promise.race([
+    handlers.get("get-effective-policy")({ sender: {} }),
+    new Promise((resolve) => setTimeout(() => resolve("held"), 200)),
+  ]);
+  assert.equal(snapshot.status, "loading");
+  fakeThis.whisperManager = {
+    transcribeLocalWhisper: async () => ({ success: true, text: "local dictation" }),
+  };
+  const local = await handlers.get("transcribe-local-whisper")({ sender: {} }, new Uint8Array([1]));
+  assert.equal(local.text, "local dictation");
+  assert.equal(
+    (await handlers.get("cloud-health-check")({ sender: {} })).code,
+    "DEVICE_POLICY_BLOCKED"
+  );
+});

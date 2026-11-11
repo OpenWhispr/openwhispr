@@ -191,7 +191,7 @@ Module._load = function (request, parent, isMain) {
         ...originalLoad.call(this, request, parent, isMain),
         createWorkspacePolicyManager: () => ({
           getPolicy: async () => workspacePolicy,
-          getCachedPolicy: () => workspacePolicy,
+          heldPolicy: () => workspacePolicy,
         }),
       };
     if (request === "./tokenStore")

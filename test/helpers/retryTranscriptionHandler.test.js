@@ -1721,7 +1721,7 @@ test("main enterprise audio resolution honors provider and mode policy before HT
   await assert.rejects(realtime.createSocket(), { code: "MANAGED_CONFIG_CHANGED" });
   assert.equal(request.mock.callCount(), 1);
   assert.equal(socket.mock.callCount(), 1);
-  policySnapshot = { success: false };
+  policySnapshot = { success: false, code: "POLICY_UNRESOLVABLE" };
   await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, "realtime"), {
     code: "POLICY_UNRESOLVABLE",
   });

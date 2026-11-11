@@ -136,7 +136,7 @@ function nativeServer() {
   };
 }
 
-function build() {
+function build({ device } = {}) {
   const whisperServer = Object.assign(nativeServer(), { modelPath: "/models/ggml-base.bin" });
   const parakeetServer = Object.assign(nativeServer(), { modelName: "parakeet-tdt-0.6b-v3" });
   const llamaServer = Object.assign(nativeServer(), { modelPath: null });
@@ -173,7 +173,9 @@ function build() {
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
   Ctor.prototype._initLocalModelPolicy.call(fakeThis, llmManager);
-  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
+  withDevicePolicy(fakeThis);
+  if (device) target.managedDevicePolicy = { getSnapshot: () => device, subscribe: () => () => {} };
+  Ctor.prototype.setupHandlers.call(fakeThis);
   target._stopMeetingForPolicy = (reason) => stoppedMeetings.push(reason);
   clearInterval(target._localModelPolicyRefreshTimer);
 
@@ -537,6 +539,24 @@ test("other lookup failures don't prove a session cookie holder is a guest", asy
   await settle();
 
   assert.equal(app.gate.failure("transcription", "base").code, "POLICY_UNRESOLVABLE");
+});
+
+test("a device policy's local model allow-list applies to a guest", async (t) => {
+  const { normalizeDeviceValues } = require("../../src/helpers/managedDevicePolicy");
+  tokenState = { token: null, generation: 50 };
+  const policy = managedPolicy({
+    transcription: { allowedModes: ["local"], allowedLocalModels: ["small"] },
+    llm: { allowedModes: ["local"] },
+  });
+  const app = build({
+    device: normalizeDeviceValues({ Policy: JSON.stringify(policy), RequireSignIn: false }),
+  });
+  t.after(() => app.teardown());
+
+  await assert.rejects(app.gate.authorize("transcription", "base"), {
+    code: "POLICY_MODEL_BLOCKED",
+  });
+  app.gate.release(await app.gate.authorize("transcription", "small"));
 });
 
 test("startup loads the policy after the bearer migration", () => {

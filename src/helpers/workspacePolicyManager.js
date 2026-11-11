@@ -453,21 +453,7 @@ function createWorkspacePolicyManager({
     return cached && (!managedOnly || cached.managed) ? accept(identity, cached, "cached") : null;
   }
 
-  function getCachedPolicy(request) {
-    let identity;
-    try {
-      identity = captureIdentity(request ?? {});
-    } catch (error) {
-      return { success: false, code: error.code || "POLICY_UNAVAILABLE" };
-    }
-    const current = snapshots.get(identityKey(identity));
-    const data = current?.data ?? cachedData(identity);
-    return data
-      ? publicSnapshot(identity, data, "cached", current?.revision ?? revision)
-      : errorSnapshot(identity, "POLICY_UNRESOLVABLE", "No cached workspace policy is available");
-  }
-
-  return { getPolicy, peekPolicy, heldPolicy, getCachedPolicy };
+  return { getPolicy, peekPolicy, heldPolicy };
 }
 
 // Main-process capture gate: block an explicit managed denial or an

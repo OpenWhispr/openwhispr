@@ -1,8 +1,21 @@
 const rules = require("../stores/policyRules.ts");
 
+// A verdict that failed or is still on its way, for an identity nothing says
+// is managed: no device policy, no managed verdict, no server calling the
+// policy unresolvable. It restricts nothing.
+function isUnmanagedLookup(snapshot) {
+  return !snapshot.success && snapshot.deviceReady === true && !snapshot.managed;
+}
+
 function productPolicyState(snapshot, appVersion) {
   return {
-    status: snapshot.success ? (snapshot.managed ? "managed" : "unmanaged") : "error",
+    status: snapshot.success
+      ? snapshot.managed
+        ? "managed"
+        : "unmanaged"
+      : isUnmanagedLookup(snapshot)
+        ? "unmanaged"
+        : "error",
     policy: snapshot.policy ?? null,
     appVersion,
     workspaceManaged: snapshot.workspaceManaged,
@@ -112,4 +125,9 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
   return true;
 }
 
-module.exports = { productOperationAllowed, productPolicyState, realtimeSelection };
+module.exports = {
+  isUnmanagedLookup,
+  productOperationAllowed,
+  productPolicyState,
+  realtimeSelection,
+};

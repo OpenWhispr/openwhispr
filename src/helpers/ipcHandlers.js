@@ -48,6 +48,7 @@ const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager
 const { createEffectivePolicyManager } = require("./effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
 const {
+  isUnmanagedLookup,
   productOperationAllowed,
   productPolicyState,
   realtimeSelection,
@@ -396,11 +397,6 @@ function approveAudioPath(filePath) {
 
 // __Secure-openwhispr.session_token in production, and the names older builds used.
 const SESSION_COOKIE_PATTERN = /(?:^|;\s*)[^=;]*session_token=/;
-
-// Signed out, nothing restricts audio: guests keep every feature.
-function guestAudioPolicy(authGeneration) {
-  return { success: true, managed: false, authGeneration };
-}
 
 // Recordings save-temp-audio wrote for the chat voice draft, until deleted.
 const voiceDraftAudioPaths = new Set();
@@ -1012,8 +1008,10 @@ class IPCHandlers {
       ],
     ];
     this._localModelPolicy = createLocalModelPolicyGate({
-      getPolicy: (options) => this._getMainModelPolicy?.({}, options) ?? { success: false },
-      getHeldPolicy: () => this._getMainModelPolicy?.({}, { held: true }) ?? { success: false },
+      getPolicy: (options) =>
+        this.refreshEffectivePolicy?.(undefined, options) ?? { success: false },
+      getHeldPolicy: () =>
+        this.refreshEffectivePolicy?.(undefined, { held: true }) ?? { success: false },
       getIdentity: () => tokenStore.getState().generation,
       getAppVersion: () => app.getVersion(),
       isSnapshotCurrent: (snapshot) =>
@@ -1094,7 +1092,6 @@ class IPCHandlers {
       this._audioFeaturePolicy?.invalidate();
     } else {
       if (!provenGuest) this._localModelPolicy?.cancelJobs();
-      this._localModelPolicy?.invalidate(guestAudioPolicy(generation));
       this._audioFeaturePolicy?.invalidate();
       if (!provenGuest) {
         this._audioFeaturePolicy?.cancelJobs();
@@ -1123,7 +1120,9 @@ class IPCHandlers {
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
     }
-    this.effectivePolicyManager?.invalidate();
+    const effectivePolicy = this.effectivePolicyManager?.invalidate();
+    // Signed out is a guest, whose verdict (the device's policy, if any) is known.
+    if (!token) this._localModelPolicy?.invalidate(effectivePolicy);
     void this.refreshEffectivePolicy?.();
     broadcastToWindows("auth-token-state-changed", {
       generation,
@@ -1979,7 +1978,8 @@ class IPCHandlers {
   startPolicyCalendars() {
     this._remoteCalendarsReady = true;
     const snapshot = this.effectivePolicyManager.getCurrent();
-    if (snapshot.success && !snapshot.localOnly) this._startRemoteProductWork();
+    if ((snapshot.success || isUnmanagedLookup(snapshot)) && !snapshot.localOnly)
+      this._startRemoteProductWork();
   }
 
   setupHandlers() {
@@ -2003,8 +2003,11 @@ class IPCHandlers {
           error: i18nMain.t("common.policyUnresolved"),
         });
         void this.refreshEffectivePolicy(event);
-        if (!allowed()) return failure();
         const startedPolicy = this.effectivePolicyManager.getCurrent();
+        // New work that leaves the device waits for a verdict still on its
+        // way; work already running isn't stopped by one.
+        if (!allowed() || (operation.remote && startedPolicy.status === "loading"))
+          return failure();
         const streamProperty = channel.startsWith("dictation-realtime-")
           ? "_dictationStreaming"
           : /^(assemblyai|deepgram|gemini|corti)-streaming-(start|warmup)$/.test(channel)
@@ -3283,8 +3286,7 @@ class IPCHandlers {
         binding: accountScopeBinding.read(),
       });
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
-      const guestPolicy =
-        accountId === null && !state.token ? guestAudioPolicy(state.generation) : null;
+      const guest = accountId === null && !state.token;
       const scopeChanged =
         accountChanged || (accountId !== null && previousScope?.accountId !== accountId);
       // Work a guest started needs no account's leave to go on: the new verdict
@@ -3326,9 +3328,11 @@ class IPCHandlers {
       // After the scope moved: the verdict this fetches is stamped with the
       // account and cached under the binding, so neither may still be the old one.
       if (scopeChanged) {
-        this._localModelPolicy?.invalidate(guestPolicy);
+        this._localModelPolicy?.invalidate(
+          guest ? this.effectivePolicyManager.getCurrent() : undefined
+        );
         this.effectivePolicyManager.invalidate();
-      } else if (guestPolicy) this._localModelPolicy?.update(guestPolicy);
+      } else if (guest) this._localModelPolicy?.update(this.effectivePolicyManager.getCurrent());
       void this.refreshEffectivePolicy();
       broadcastToWindows(
         "active-account-scope-changed",
@@ -7184,7 +7188,7 @@ class IPCHandlers {
 
     ipcMain.handle("capture-screen-context", async (event) => {
       const held = this.effectivePolicyManager.getCurrent();
-      if (!held.success || isScreenContextBlocked(held)) return null;
+      if ((!held.success && !isUnmanagedLookup(held)) || isScreenContextBlocked(held)) return null;
       const panel = this.windowManager.controlPanelWindow;
       const hidePanel = isFromWindow(event, panel) && panel.isVisible() && !panel.isMinimized();
       const focused = hidePanel && panel.isFocused();
@@ -7671,14 +7675,14 @@ class IPCHandlers {
         })?.accountId ?? null,
       broadcast: (snapshot) => {
         this.effectivePolicyManager?.updateWorkspace(snapshot);
-        if (snapshot.authGeneration === tokenStore.getState().generation) {
-          this._localModelPolicy?.update(snapshot);
-        }
         broadcastToWindows("workspace-policy-changed", snapshot);
       },
       logger: debugLogger,
     });
     let cookieGeneration = null;
+    // The credential generation whose session was last read. Until it is, no
+    // bearer doesn't prove a guest: a cookie session may await its migration.
+    let credentialsGeneration = null;
     const getScope = () => {
       const state = tokenStore.getState();
       const active = accountScopeBinding.resolveActiveAccountScope({
@@ -7686,13 +7690,13 @@ class IPCHandlers {
         binding: accountScopeBinding.read(),
       });
       return {
+        // A binding the credential doesn't match names no account (see
+        // accountScopeBinding), so a guest or cookie session has none.
         accountId:
           active?.accountId ??
           (typeof this.databaseManager.activeAccountId === "string"
             ? this.databaseManager.activeAccountId
-            : null) ??
-          accountScopeBinding.read()?.accountId ??
-          null,
+            : null),
         authGeneration: state.generation,
         authenticated:
           Boolean(state.token) ||
@@ -7702,29 +7706,49 @@ class IPCHandlers {
     };
     this.effectivePolicyManager = createEffectivePolicyManager({
       devicePolicy: this.managedDevicePolicy,
-      workspacePolicyManager,
+      workspacePolicyManager: {
+        heldPolicy: (request) => workspacePolicyManager.heldPolicy(request),
+        // A session cookie the API rejects has expired: with no bearer and no
+        // account this is a guest, not an identity waiting on its policy.
+        getPolicy: async (request) => {
+          const policy = await workspacePolicyManager.getPolicy(request);
+          if (
+            !request.authHeaders?.Authorization &&
+            typeof this.databaseManager.activeAccountId !== "string" &&
+            policy.httpStatus === 401
+          )
+            cookieGeneration = null;
+          return policy;
+        },
+      },
       getScope,
-      broadcast: (snapshot) => {
-        if (snapshot.status !== "loading" || !snapshot.deviceReady)
+      broadcast: (snapshot, updatePolicy) => {
+        // A failed lookup says nothing new to the audio controls, as before.
+        if (
+          !isUnmanagedLookup(snapshot) &&
+          (snapshot.status !== "loading" || !snapshot.deviceReady)
+        )
           this._audioFeaturePolicy?.update(snapshot);
-        this.updateManager?.updatePolicy?.(snapshot);
-        if (!snapshot.deviceReady || snapshot.status === "error" || snapshot.localOnly)
+        if (snapshot.workspaceRequired || snapshot.authGeneration === credentialsGeneration)
+          this._localModelPolicy?.update(snapshot);
+        this.updateManager?.updatePolicy?.(updatePolicy);
+        if (
+          !snapshot.deviceReady ||
+          snapshot.localOnly ||
+          (snapshot.status === "error" && snapshot.managed)
+        )
           this._stopRemoteProductWork();
-        else if (snapshot.success) {
+        else if (snapshot.success || isUnmanagedLookup(snapshot)) {
           this._retireDisallowedProductWork(snapshot);
           this._startRemoteProductWork();
         }
         broadcastToWindows("effective-policy-changed", snapshot);
       },
     });
-    this.refreshEffectivePolicy = async (event, { refresh = false } = {}) => {
+    this.refreshEffectivePolicy = async (event, { refresh = false, held = false } = {}) => {
       const scope = getScope();
-      const device = this.managedDevicePolicy.getSnapshot();
-      if (device.status === "loading" || device.status === "invalid")
-        return this.effectivePolicyManager.getPolicy({
-          accountId: scope.accountId,
-          expectedAuthGeneration: scope.authGeneration,
-        });
+      if (this.managedDevicePolicy.getSnapshot().status === "loading")
+        return this.effectivePolicyManager.getCurrent();
       let authHeaders;
       try {
         authHeaders = event?.sender
@@ -7739,6 +7763,7 @@ class IPCHandlers {
         if (scope.authGeneration !== tokenStore.getState().generation)
           return this.effectivePolicyManager.getCurrent();
         cookieGeneration = scope.authGeneration;
+        credentialsGeneration = scope.authGeneration;
         this.effectivePolicyManager.updateWorkspace({
           success: false,
           code: "POLICY_UNRESOLVABLE",
@@ -7749,60 +7774,25 @@ class IPCHandlers {
       }
       if (scope.authGeneration !== tokenStore.getState().generation)
         return this.effectivePolicyManager.getCurrent();
-      cookieGeneration = authHeaders.Cookie ? scope.authGeneration : null;
+      // Other cookies in the jar say nothing about who this is.
+      cookieGeneration = SESSION_COOKIE_PATTERN.test(authHeaders.Cookie ?? "")
+        ? scope.authGeneration
+        : null;
+      credentialsGeneration = scope.authGeneration;
       const currentScope = getScope();
       return this.effectivePolicyManager.getPolicy({
         accountId: currentScope.accountId,
         expectedAuthGeneration: scope.authGeneration,
         authHeaders,
         refresh,
+        held,
       });
     };
-    this.getUpdatePolicy = () => this.refreshEffectivePolicy();
+    this.getUpdatePolicy = async (options) => {
+      await this.refreshEffectivePolicy(undefined, options);
+      return this.effectivePolicyManager.getUpdatePolicy();
+    };
     const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
-    const getMainPolicy = async (event = {}, { refresh = false, held = false } = {}) => {
-      const generation = tokenStore.getState().generation;
-      const authHeaders = event.sender
-        ? await getAuthHeader(event)
-        : await getAuthHeaderFromWindow(
-            [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
-              (win) => win && !win.isDestroyed()
-            ) ??
-              // With no window yet, no bearer doesn't prove a guest: a cookie
-              // session may still be waiting for its bearer migration.
-              (session.defaultSession && { webContents: { session: session.defaultSession } })
-          );
-      if (generation !== tokenStore.getState().generation) return { success: false };
-      // Other cookies in the jar say nothing about who this is.
-      if (!authHeaders.Authorization && !SESSION_COOKIE_PATTERN.test(authHeaders.Cookie ?? "")) {
-        return typeof this.databaseManager.activeAccountId === "string"
-          ? { success: false }
-          : guestAudioPolicy(generation);
-      }
-      if (held) {
-        return (
-          workspacePolicyManager.heldPolicy({
-            accountId: this.databaseManager.activeAccountId,
-            expectedAuthGeneration: generation,
-            authHeaders,
-          }) ?? { success: false }
-        );
-      }
-      const policy = await workspacePolicyManager.getPolicy({
-        accountId: this.databaseManager.activeAccountId,
-        expectedAuthGeneration: generation,
-        authHeaders,
-        refresh,
-      });
-      // A session cookie the API rejects has expired: with no bearer and no
-      // account this is a guest, not an identity waiting on its policy.
-      const isExpiredSession =
-        !authHeaders.Authorization &&
-        typeof this.databaseManager.activeAccountId !== "string" &&
-        policy.httpStatus === 401;
-      return isExpiredSession ? guestAudioPolicy(generation) : policy;
-    };
-    this._getMainModelPolicy = getMainPolicy;
     // CLI and tray-only sessions also refresh while a native server stays loaded.
     this._localModelPolicyRefreshTimer = this._localModelPolicy?.startPeriodicRefresh(
       5 * 60 * 1000
@@ -9553,7 +9543,10 @@ class IPCHandlers {
 
     const resolveEnterpriseMeetingOptions = async (event, options) => {
       const policy = this.effectivePolicyManager.getCurrent();
-      if (!policy.success || (policy.localOnly && options.provider !== "local")) {
+      if (
+        (!policy.success && !isUnmanagedLookup(policy)) ||
+        (policy.localOnly && options.provider !== "local")
+      ) {
         throw Object.assign(new Error(i18nMain.t("common.policyUnresolved")), {
           code: "DEVICE_POLICY_BLOCKED",
         });
@@ -12641,7 +12634,12 @@ class IPCHandlers {
 
     ipcMain.handle("get-stt-config", handleSttConfigRequest);
 
-    ipcMain.handle("get-effective-policy", (event) => this.refreshEffectivePolicy(event));
+    // Answers at once: only the device read gates a window, and the
+    // workspace verdict arrives by broadcast.
+    ipcMain.handle("get-effective-policy", (event) => {
+      void this.refreshEffectivePolicy(event);
+      return this.effectivePolicyManager.getCurrent();
+    });
 
     ipcMain.handle("get-workspace-policy", async (event, accountId, expectedAuthGeneration) => {
       const authHeaders = await getAuthHeader(event);
