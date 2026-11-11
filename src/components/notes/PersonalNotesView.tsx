@@ -63,6 +63,7 @@ import {
   createFolder,
   getNoteFromStore,
   getSpacesValue,
+  markNoteEdited,
 } from "../../stores/noteStore";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { isSpaceInWorkspaceScope } from "../../lib/workspaceSelection";
@@ -505,6 +506,7 @@ export default function PersonalNotesView({
       edits: Pick<PendingDocumentSnapshot, "contentEdited" | "clearContent">
     ) => {
       void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
+      markNoteEdited(snapshot.noteId);
       const current = pendingDocumentRef.current;
       if (current) clearTimeout(current.timer);
 
@@ -538,6 +540,7 @@ export default function PersonalNotesView({
   const scheduleEnhancedSave = useCallback(
     (snapshot: NoteEditorDraft) => {
       void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
+      markNoteEdited(snapshot.noteId);
       const current = pendingEnhancedRef.current;
       if (current) clearTimeout(current.timer);
 

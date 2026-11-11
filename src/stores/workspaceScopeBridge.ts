@@ -3,8 +3,8 @@ import { publishWorkspaceScope, useWorkspaceStore } from "./workspaceStore";
 
 /**
  * Keeps main's workspace scope in step with this window's workspace store: on start, whenever
- * the active or default workspace or the list's account changes, and after every account change
- * in main. Main starts a launch from the account's saved scope (a login launch may never open
+ * the active or default workspace, the list's account or whether the active pick is provisional
+ * changes, and after every account change in main. Main starts a launch from the account's saved scope (a login launch may never open
  * this window) and forgets the scope on an account change in a running session, as this store
  * does (D43). Once the default workspace is known, main binds the account's pending Private to
  * it, again after each account change.
@@ -56,6 +56,7 @@ export function startWorkspaceScopeBridge(): () => void {
   const unsubscribeStore = useWorkspaceStore.subscribe((state, previous) => {
     if (
       state.activeWorkspaceId !== previous.activeWorkspaceId ||
+      state.activeWorkspaceProvisional !== previous.activeWorkspaceProvisional ||
       state.defaultWorkspaceId !== previous.defaultWorkspaceId ||
       state.listAccountId !== previous.listAccountId
     ) {

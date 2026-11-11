@@ -17,6 +17,11 @@ interface WorkspaceState {
   loading: boolean;
   error: boolean;
   activeWorkspaceId: string | null;
+  /**
+   * The active workspace is the app's pick from a list without the account's own default
+   * (ACTIVE_WORKSPACE_SOURCE_KEY). Main hears no active workspace meanwhile (publishWorkspaceScope).
+   */
+  activeWorkspaceProvisional: boolean;
   /** The account's default workspace (see resolveDefaultWorkspaceId), from the list shown. */
   defaultWorkspaceId: string | null;
   /**
@@ -73,16 +78,25 @@ function dropLegacyPersonalChoice(): void {
   localStorage.removeItem(LEGACY_PERSONAL_SELECTED_KEY);
 }
 
-// Who picked the saved active workspace: the user, or the app (`defaultActiveWorkspaceId`, with no
-// choice saved). Only the app's pick yields to the account's own default when a list first shows
-// it (D45). An id saved by a build that recorded no source counts as the user's, so an update
-// moves nobody.
+// Who picked the saved active workspace:
+// - "user": the user (the switcher, a link, opening something of it);
+// - "auto": the app (`defaultActiveWorkspaceId`), from a list holding the account's own default;
+// - "provisional": the app, from a list without it (a first sign-in reads the list before the
+//   server makes the default). Only this one yields to the default, in whichever session first
+//   lists it, and then settles (D45, D46).
+// An id saved by a build that recorded no source counts as the user's, so an update moves nobody.
 export const ACTIVE_WORKSPACE_SOURCE_KEY = "activeWorkspaceSource";
-type ActiveWorkspaceSource = "user" | "auto";
+type ActiveWorkspaceSource = "user" | "auto" | "provisional";
 
-function isActiveWorkspaceAutoPicked(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(ACTIVE_WORKSPACE_SOURCE_KEY) === "auto";
+function readActiveWorkspaceSource(): ActiveWorkspaceSource | null {
+  if (typeof window === "undefined") return null;
+  const source = localStorage.getItem(ACTIVE_WORKSPACE_SOURCE_KEY);
+  return source === "user" || source === "auto" || source === "provisional" ? source : null;
+}
+
+/** The source the app's own pick from `workspaces` is saved with. */
+function autoPickSource(workspaces: Workspace[]): ActiveWorkspaceSource {
+  return workspaces.some(isOwnDefault) ? "auto" : "provisional";
 }
 
 function clearActiveWorkspaceChoice(): void {
@@ -106,8 +120,33 @@ function writeActiveWorkspaceId(id: string | null, source: ActiveWorkspaceSource
  * account's default showing up later doesn't take them out of what they opened (D45, D21).
  */
 export function adoptActiveWorkspaceChoice(workspaceId: string): void {
-  if (readActiveWorkspaceId() !== workspaceId || !isActiveWorkspaceAutoPicked()) return;
+  if (readActiveWorkspaceId() !== workspaceId) return;
+  const source = readActiveWorkspaceSource();
+  if (source !== "auto" && source !== "provisional") return;
   localStorage.setItem(ACTIVE_WORKSPACE_SOURCE_KEY, "user");
+  if (useWorkspaceStore.getState().activeWorkspaceId === workspaceId) {
+    useWorkspaceStore.setState({ activeWorkspaceProvisional: false });
+  }
+}
+
+export interface ActiveWorkspaceYield {
+  activeWorkspaceId: string | null;
+  workspaces: Workspace[];
+  defaultWorkspaceId: string | null;
+}
+
+// Registered by the note store (a callback, since it imports this store): whether the user's own
+// open note or container would be hidden by the given scope.
+let wouldHideUsersWork: ((next: ActiveWorkspaceYield) => boolean) | null = null;
+
+/**
+ * A provisional pick never yields to the default while that would hide what the user has open
+ * (D46): it becomes their choice instead.
+ */
+export function setActiveWorkspaceYieldGuard(
+  guard: ((next: ActiveWorkspaceYield) => boolean) | null
+): void {
+  wouldHideUsersWork = guard;
 }
 
 // Last successful workspace list, shown when a signed-in session can't load the list (the API
@@ -253,6 +292,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   loading: false,
   error: false,
   activeWorkspaceId: readActiveWorkspaceId(),
+  activeWorkspaceProvisional: readActiveWorkspaceSource() === "provisional",
   defaultWorkspaceId: null,
   listAccountId: null,
   members: [],
@@ -274,7 +314,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     pruneWorkspaceListCache(usePolicyStore.getState().accountId, id);
     // Chosen now, not by the refresh that follows: a failed refresh keeps the old active id.
     if (get().activeWorkspaceId === id) {
-      selectActiveWorkspace(defaultActiveWorkspaceId(workspaces), "auto");
+      selectActiveWorkspace(defaultActiveWorkspaceId(workspaces), autoPickSource(workspaces));
     }
   },
 
@@ -294,6 +334,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       loading: false,
       error: false,
       activeWorkspaceId: null,
+      activeWorkspaceProvisional: false,
       defaultWorkspaceId: null,
       listAccountId: null,
       members: [],
@@ -342,28 +383,40 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         if (savedPersonal) dropLegacyPersonalChoice();
         const stillValid =
           !savedPersonal && savedActiveId && workspaces.some((w) => w.id === savedActiveId);
-        // The app's own pick is made again the first time this session lists the account's own
-        // default (D45): a first sign-in reads the list before the server makes the default, so
-        // it could only pick a team the account was invited to. The user's choice stays.
-        const yieldsToDefault =
-          stillValid &&
-          isActiveWorkspaceAutoPicked() &&
-          !get().workspaces.some(isOwnDefault) &&
-          workspaces.some(isOwnDefault);
-        const keepsSaved = stillValid && !yieldsToDefault;
+        let source = readActiveWorkspaceSource();
+        let keepsSaved = Boolean(stillValid);
+        // A provisional pick is made again once a list holds the account's own default (D45),
+        // unless that would hide what the user has open: then it becomes their choice (D46).
+        if (stillValid && source === "provisional" && workspaces.some(isOwnDefault)) {
+          const next = defaultActiveWorkspaceId(workspaces);
+          const keepsUsersWork =
+            next !== savedActiveId &&
+            wouldHideUsersWork?.({ activeWorkspaceId: next, workspaces, defaultWorkspaceId }) ===
+              true;
+          if (keepsUsersWork) {
+            source = "user";
+            localStorage.setItem(ACTIVE_WORKSPACE_SOURCE_KEY, source);
+          } else {
+            keepsSaved = false;
+          }
+        }
         const resolvedActiveId = keepsSaved ? savedActiveId : defaultActiveWorkspaceId(workspaces);
         const activeChanged = resolvedActiveId !== activeId;
         if (activeChanged) membersRequestSeq++;
         // Written before the state changes, as setActiveWorkspaceId does: the
         // subscribers publish for the workspace localStorage names. Rewriting the same id
         // fires no storage event in the other windows.
-        if (!keepsSaved) writeActiveWorkspaceId(resolvedActiveId, "auto");
+        if (!keepsSaved) {
+          source = autoPickSource(workspaces);
+          writeActiveWorkspaceId(resolvedActiveId, source);
+        }
         set({
           workspaces,
           loaded: true,
           loading: false,
           error: false,
           activeWorkspaceId: resolvedActiveId,
+          activeWorkspaceProvisional: resolvedActiveId != null && source === "provisional",
           defaultWorkspaceId,
           listAccountId: accountId,
           ...(activeChanged ? { members: [], membersWorkspaceId: null } : {}),
@@ -461,7 +514,12 @@ function selectActiveWorkspace(id: string | null, source: ActiveWorkspaceSource)
   // Invalidate in-flight member fetches so the old workspace's roster can't
   // land under the new one.
   membersRequestSeq++;
-  useWorkspaceStore.setState({ activeWorkspaceId: id, members: [], membersWorkspaceId: null });
+  useWorkspaceStore.setState({
+    activeWorkspaceId: id,
+    activeWorkspaceProvisional: id != null && source === "provisional",
+    members: [],
+    membersWorkspaceId: null,
+  });
   refreshForWorkspace(id);
 }
 
@@ -494,8 +552,20 @@ export function onWorkspaceScopePublished(
 export async function publishWorkspaceScope(): Promise<boolean> {
   const api = typeof window !== "undefined" ? window.electronAPI : undefined;
   if (!api?.setActiveWorkspaceScope) return false;
-  const { activeWorkspaceId, defaultWorkspaceId, listAccountId } = useWorkspaceStore.getState();
-  const scope = { activeWorkspaceId, defaultWorkspaceId, accountId: listAccountId };
+  const { activeWorkspaceId, activeWorkspaceProvisional, defaultWorkspaceId, listAccountId } =
+    useWorkspaceStore.getState();
+  // A provisional pick isn't final (D46): main files unattended notes into the default's Private
+  // (the pending row the bind folds into it) and saves no scope for launch that names the pick.
+  // One that is the default (an Enterprise workspace standing in) is published as is: main files
+  // into it either way, and it still scopes main's teamspaces.
+  const scope = {
+    activeWorkspaceId:
+      activeWorkspaceProvisional && activeWorkspaceId !== defaultWorkspaceId
+        ? null
+        : activeWorkspaceId,
+    defaultWorkspaceId,
+    accountId: listAccountId,
+  };
   try {
     const result = await api.setActiveWorkspaceScope(scope);
     if (result?.success !== true) return false;
@@ -583,7 +653,7 @@ export async function relocateLostWorkspaces(workspaceIds: string[]): Promise<vo
   if (lost.length === 0) return;
   if (store.activeWorkspaceId && lost.includes(store.activeWorkspaceId)) {
     const remaining = store.workspaces.filter((w) => !lost.includes(w.id));
-    selectActiveWorkspace(defaultActiveWorkspaceId(remaining), "auto");
+    selectActiveWorkspace(defaultActiveWorkspaceId(remaining), autoPickSource(remaining));
   }
   // A scope main refused (another account signed in) or never got means nothing moves.
   if (!(await publishWorkspaceScope())) return;
@@ -686,12 +756,24 @@ export function ensureDefaultWorkspace(
 // left to the window's own refresh (the dictation window re-resolves it in
 // accountScopeMirror on this same event).
 export function handleActiveWorkspaceStorage(event: StorageEvent): void {
+  if (event.key === ACTIVE_WORKSPACE_SOURCE_KEY) {
+    const provisional = readActiveWorkspaceSource() === "provisional";
+    if (provisional !== useWorkspaceStore.getState().activeWorkspaceProvisional) {
+      useWorkspaceStore.setState({ activeWorkspaceProvisional: provisional });
+    }
+    return;
+  }
   if (event.key !== ACTIVE_WORKSPACE_KEY) return;
   const id = event.newValue;
   if (id === useWorkspaceStore.getState().activeWorkspaceId) return;
   // The old workspace's roster must not land under the new one.
   membersRequestSeq++;
-  useWorkspaceStore.setState({ activeWorkspaceId: id, members: [], membersWorkspaceId: null });
+  useWorkspaceStore.setState({
+    activeWorkspaceId: id,
+    activeWorkspaceProvisional: id != null && readActiveWorkspaceSource() === "provisional",
+    members: [],
+    membersWorkspaceId: null,
+  });
 }
 
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {

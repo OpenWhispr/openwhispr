@@ -588,3 +588,178 @@ for (const { label, opensTeamNote, expected } of [
     );
   });
 }
+
+// D46: the yield to the default never closes the user's own open work, even work that navigation
+// never adopted: a note the tree picked that the user then edited, or one opened before any
+// workspace was active. The tree's own untouched pick still yields.
+const B_ONLY = [{ id: "b", name: "B", role: "member", is_default: false }];
+const B_AND_DEFAULT = [...B_ONLY, { id: "a", name: "A", role: "member", is_default: true }];
+
+async function provisionalBFixture(t) {
+  t.after(() => {
+    delete globalThis.__workspaceList;
+  });
+  // A session after one where making the default kept failing: b was picked provisionally, and
+  // b's Private holds notes filed there.
+  const f = await fixture(t, {
+    storage: { activeWorkspaceId: "b", activeWorkspaceSource: "provisional" },
+    workspaceState: {
+      workspaces: [],
+      loaded: false,
+      activeWorkspaceId: "b",
+      defaultWorkspaceId: null,
+      listAccountId: null,
+    },
+    spaces: [
+      { id: 3, kind: "team", workspace_id: "b", name: "Beta" },
+      { id: 4, kind: "private", workspace_id: "b", name: "Personal" },
+    ],
+    folders: [
+      { id: 30, space_id: 3, name: "Beta docs", is_default: 0 },
+      { id: 40, space_id: 4, name: "Personal", is_default: 1 },
+    ],
+    notes: [
+      { id: 400, space_id: 4, folder_id: 40, title: "Dictated last session" },
+      { id: 300, space_id: 3, folder_id: 30, title: "Beta note" },
+    ],
+  });
+  await f.settle();
+  globalThis.__workspaceList = B_ONLY;
+  await f.workspaceStore.useWorkspaceStore.getState().refresh();
+  await f.settle();
+  assert.deepEqual(f.context(), { folderId: 40, noteId: 400 }, "the tree's own pick");
+  assert.equal(localStorage.getItem("activeWorkspaceSource"), "provisional");
+  return f;
+}
+
+test("the default arriving keeps a tree-picked note the user edited", async (t) => {
+  const f = await provisionalBFixture(t);
+  // Typing is no navigation; the editor reports it.
+  f.store.markNoteEdited(400);
+
+  globalThis.__workspaceList = B_AND_DEFAULT;
+  await f.workspaceStore.useWorkspaceStore.getState().refresh({ fresh: true });
+  await f.settle();
+
+  assert.equal(f.activeWorkspaceId(), "b");
+  assert.equal(localStorage.getItem("activeWorkspaceSource"), "user");
+  assert.deepEqual(f.context(), { folderId: 40, noteId: 400 });
+});
+
+test("the default arriving closes a tree-picked note the user never touched", async (t) => {
+  const f = await provisionalBFixture(t);
+
+  globalThis.__workspaceList = B_AND_DEFAULT;
+  await f.workspaceStore.useWorkspaceStore.getState().refresh({ fresh: true });
+  await f.settle();
+
+  assert.equal(f.activeWorkspaceId(), "a");
+  assert.equal(localStorage.getItem("activeWorkspaceSource"), "auto");
+  assert.equal(f.context().noteId, null);
+});
+
+test("the default arriving keeps a note opened before any workspace was active", async (t) => {
+  t.after(() => {
+    delete globalThis.__workspaceList;
+  });
+  const f = await fixture(t, {
+    storage: {},
+    workspaceState: {
+      workspaces: [],
+      loaded: false,
+      activeWorkspaceId: null,
+      defaultWorkspaceId: null,
+      listAccountId: null,
+    },
+    spaces: [
+      { id: 9, kind: "private", workspace_id: null, name: "Personal" },
+      { id: 3, kind: "team", workspace_id: "b", name: "Beta" },
+    ],
+    folders: [
+      { id: 90, space_id: 9, name: "Personal", is_default: 1 },
+      { id: 30, space_id: 3, name: "Beta docs", is_default: 0 },
+    ],
+    notes: [{ id: 300, space_id: 3, folder_id: 30, title: "Beta note" }],
+  });
+  await f.settle();
+  // Search, before the first list answers: nothing is active, so nothing adopts it.
+  f.store.setActiveFolderId(30);
+  await f.settle();
+  f.store.setActiveNoteId(300);
+  await f.settle();
+  globalThis.__workspaceList = B_ONLY;
+  await f.workspaceStore.useWorkspaceStore.getState().refresh();
+  await f.settle();
+  assert.equal(f.activeWorkspaceId(), "b");
+  assert.equal(localStorage.getItem("activeWorkspaceSource"), "provisional");
+
+  globalThis.__workspaceList = B_AND_DEFAULT;
+  await f.workspaceStore.useWorkspaceStore.getState().refresh({ fresh: true });
+  await f.settle();
+
+  assert.equal(f.activeWorkspaceId(), "b");
+  assert.equal(localStorage.getItem("activeWorkspaceSource"), "user");
+  assert.deepEqual(f.context(), { folderId: 30, noteId: 300 });
+});
+
+test("opening a note of the provisional workspace adopts it, whatever the tree picked", async (t) => {
+  const f = await provisionalBFixture(t);
+  // A note opened from search lands in the tree's picked container: only the note is the user's.
+  f.store.setActiveNoteId(300);
+  await f.store.loadContainerNotes(f.store.folderContainerKey(30));
+  await f.settle();
+
+  assert.equal(f.context().noteId, 300);
+  assert.equal(localStorage.getItem("activeWorkspaceSource"), "user");
+});
+
+// D46 M2: an explicit switch outranks a pending-Private note the default claims when it arrives.
+test("an explicit switch stays when the default arrives and claims the open note", async (t) => {
+  t.after(() => {
+    delete globalThis.__workspaceList;
+  });
+  const f = await fixture(t, {
+    storage: {},
+    workspaceState: {
+      workspaces: [],
+      loaded: false,
+      activeWorkspaceId: null,
+      defaultWorkspaceId: null,
+      listAccountId: null,
+    },
+    spaces: [
+      { id: 9, kind: "private", workspace_id: null, name: "Personal" },
+      { id: 3, kind: "team", workspace_id: "b", name: "Beta" },
+      { id: 5, kind: "team", workspace_id: "c", name: "Gamma" },
+    ],
+    folders: [
+      { id: 90, space_id: 9, name: "Personal", is_default: 1 },
+      { id: 30, space_id: 3, name: "Beta docs", is_default: 0 },
+      { id: 50, space_id: 5, name: "Gamma docs", is_default: 0 },
+    ],
+    notes: [
+      { id: 900, space_id: 9, folder_id: 90, title: "Imported 1" },
+      { id: 901, space_id: 9, folder_id: 90, title: "Imported 2" },
+    ],
+  });
+  const C = { id: "c", name: "C", role: "member", is_default: false };
+  await f.settle();
+  globalThis.__workspaceList = [...B_ONLY, C];
+  await f.workspaceStore.useWorkspaceStore.getState().refresh();
+  await f.settle();
+  assert.equal(f.activeWorkspaceId(), "b");
+  f.store.setActiveNoteId(901);
+  await f.settle();
+  f.switchTo("c");
+  await f.settle();
+  assert.equal(f.context().noteId, 901, "the pending Private shows while no default is known");
+
+  globalThis.__workspaceList = [...B_AND_DEFAULT, C];
+  await f.workspaceStore.useWorkspaceStore.getState().refresh({ fresh: true });
+  await f.settle();
+
+  assert.equal(f.activeWorkspaceId(), "c");
+  assert.equal(localStorage.getItem("activeWorkspaceId"), "c");
+  assert.equal(localStorage.getItem("activeWorkspaceSource"), "user");
+  assert.equal(f.context().noteId, null);
+});

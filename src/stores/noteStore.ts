@@ -29,6 +29,7 @@ import {
 import {
   adoptActiveWorkspaceChoice,
   onWorkspaceScopePublished,
+  setActiveWorkspaceYieldGuard,
   useWorkspaceStore,
 } from "./workspaceStore";
 import { readTeamSpacesCapability } from "../lib/teamSpacesCapability";
@@ -150,7 +151,34 @@ function pickNote(id: number): void {
   setActiveNoteId(id);
 }
 
-function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
+/** The user edited a note: one the tree picked is theirs from now on (D46). */
+export function markNoteEdited(id: number): void {
+  if (id === pickedNoteId) pickedNoteId = null;
+}
+
+// D46: the workspace store asks before a provisional pick yields to the default. The open note
+// or container the user opened (or edited, for the tree's own pick) keeps them where they are
+// when the default's scope would hide it.
+setActiveWorkspaceYieldGuard(({ activeWorkspaceId, workspaces, defaultWorkspaceId }) => {
+  const state = useNoteStore.getState();
+  const spaceById = (id: number): SpaceItem | null =>
+    state.spaces.find((space) => space.id === id) ?? null;
+  const hides = (space: SpaceItem | null): boolean =>
+    space != null &&
+    !isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces, defaultWorkspaceId);
+  const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
+  const ownNote = activeNote != null && state.activeNoteId !== pickedNoteId;
+  const ownContext = state.activeContext != null && state.activeContext !== pickedContext;
+  return (
+    (ownNote && hides(spaceById(activeNote.space_id))) ||
+    (ownContext && state.activeContext != null && hides(spaceById(state.activeContext.spaceId)))
+  );
+});
+
+function reconcileWorkspaceScope(
+  trigger: NoteWorkspaceScopeReason,
+  { defaultArrived = false }: { defaultArrived?: boolean } = {}
+): void {
   if (applyingWorkspaceScope) return;
   const state = useNoteStore.getState();
   const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
@@ -189,7 +217,12 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
     const picked = noteHidden
       ? state.activeNoteId === pickedNoteId
       : state.activeContext != null && state.activeContext === pickedContext;
-    if (picked) reason = "dataChanged";
+    // The default first becoming known claims the pending Private: whatever of it the user has
+    // open closes rather than taking them out of the workspace they're in (D46).
+    const target = noteHidden ? noteSpace : contextSpace;
+    const claimedPending =
+      defaultArrived && target?.kind === "private" && target.workspace_id == null;
+    if (picked || claimedPending) reason = "dataChanged";
   }
   const decision = decideNoteWorkspaceScope({
     reason,
@@ -287,7 +320,9 @@ useWorkspaceStore.subscribe((state, previous) => {
   } else if (state.workspaces !== previous.workspaces) {
     // A workspace that just arrived (an accepted invitation) can claim the
     // space the user already opened.
-    reconcileWorkspaceScope("navigated");
+    reconcileWorkspaceScope("navigated", {
+      defaultArrived: previous.defaultWorkspaceId == null && state.defaultWorkspaceId != null,
+    });
   } else if (state.defaultWorkspaceId !== previous.defaultWorkspaceId) {
     // The pending Private shows in the default workspace alone once that's known.
     reconcileWorkspaceScope("dataChanged");

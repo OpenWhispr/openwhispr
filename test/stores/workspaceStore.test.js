@@ -972,8 +972,9 @@ test("the Enterprise stand-in's private notes reach the new default's Private in
   );
 });
 
-// D45: what the app picked by itself (no saved choice) yields to the account's own default once a
-// list in this session first shows it; a choice the user made never does.
+// D45/D46: what the app picked from a list without the account's own default is provisional: it
+// yields to that default in whichever session first lists it, once. A pick made with the default
+// listed is settled ("auto") and kept like any saved choice; the user's choice never yields.
 const SOURCE_KEY = "activeWorkspaceSource";
 const OTHER_TEAM = { id: "other", plan: "business", status: "active", is_default: false };
 
@@ -989,6 +990,7 @@ test("a first sign-in's automatic pick yields to the default the server makes", 
 
   await useWorkspaceStore.getState().refresh();
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+  assert.equal(storage.getItem(SOURCE_KEY), "provisional");
 
   await ensureDefaultWorkspace("Ada's workspace");
 
@@ -1030,8 +1032,10 @@ for (const { label, source, expected } of [
   { label: "a choice the user saved in an earlier session", source: "user", expected: "team" },
   // Saved by a build that recorded no source: counted as the user's, so nobody moves.
   { label: "a choice an older build saved without a source", source: null, expected: "team" },
-  // Picked while the default didn't exist yet (ensure kept failing that session).
-  { label: "an automatic pick saved before the default existed", source: "auto", expected: "own" },
+  // Picked while the default didn't exist yet (ensure kept failing that session): yields once.
+  { label: "a provisional pick from an earlier session", source: "provisional", expected: "own" },
+  // Picked with the default listed: settled, kept as before.
+  { label: "a settled automatic pick", source: "auto", expected: "team" },
 ]) {
   test(`${label} meets the default on the first list: ${expected}`, async (t) => {
     const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
@@ -1044,6 +1048,7 @@ for (const { label, source, expected } of [
     assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "own");
     assert.equal(useWorkspaceStore.getState().activeWorkspaceId, expected);
     assert.equal(storage.getItem("activeWorkspaceId"), expected);
+    if (source === "provisional") assert.equal(storage.getItem(SOURCE_KEY), "auto", "settled");
   });
 }
 
@@ -1067,7 +1072,7 @@ test("a saved Personal choice still reaches the default made after the first lis
 });
 
 test("an automatically picked Enterprise workspace stays when the default arrives (D17)", async (t) => {
-  const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+  const { useWorkspaceStore, ensureDefaultWorkspace, storage } = await loadPrivateNotesStore(t, {
     list: async () => [TEAM, ENTERPRISE],
     ensureDefault: async () => {
       globalThis.__ws.list = async () => [TEAM, ENTERPRISE, OWN];
@@ -1076,11 +1081,13 @@ test("an automatically picked Enterprise workspace stays when the default arrive
   });
   await useWorkspaceStore.getState().refresh();
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "corp");
+  assert.equal(storage.getItem(SOURCE_KEY), "provisional");
 
   await ensureDefaultWorkspace("Ada's workspace");
 
   assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "own");
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "corp");
+  assert.equal(storage.getItem(SOURCE_KEY), "auto", "re-picked by defaultActiveWorkspaceId");
 });
 
 test("main hears the default's scope once a first sign-in's pick yields to it", async (t) => {
@@ -1098,9 +1105,10 @@ test("main hears the default's scope once a first sign-in's pick yields to it", 
   t.after(startWorkspaceScopeBridge());
   await useWorkspaceStore.getState().refresh();
   await flush();
+  // Provisional: main hears no active workspace, so nothing is filed as the team's for good.
   assert.deepEqual(calls.filter(([name]) => name === "scope").at(-1), [
     "scope",
-    { activeWorkspaceId: "team", defaultWorkspaceId: null, accountId: "acct-1" },
+    { activeWorkspaceId: null, defaultWorkspaceId: null, accountId: "acct-1" },
   ]);
 
   calls.length = 0;
@@ -1112,4 +1120,196 @@ test("main hears the default's scope once a first sign-in's pick yields to it", 
     { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" },
   ]);
   assert.ok(calls.some((call) => call[0] === "bind" && call[1] === "own" && call[2] === "acct-1"));
+});
+
+// D46 M1: a settled automatic pick isn't decided again at launch, whatever the entitlement does.
+for (const { label, saved, corpStatus } of [
+  { label: "a settled Enterprise pick whose plan lapsed", saved: "corp", corpStatus: "past_due" },
+  {
+    label: "a settled default pick with Enterprise active again",
+    saved: "own",
+    corpStatus: "active",
+  },
+]) {
+  test(`${label} stays at launch`, async (t) => {
+    const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+      list: async () => [{ ...ENTERPRISE, status: corpStatus }, OWN],
+      storage: { activeWorkspaceId: saved, [SOURCE_KEY]: "auto" },
+    });
+
+    await useWorkspaceStore.getState().refresh();
+
+    assert.equal(useWorkspaceStore.getState().activeWorkspaceId, saved);
+    assert.equal(storage.getItem(SOURCE_KEY), "auto");
+  });
+}
+
+test("a provisional pick waits for the default across sessions without one", async (t) => {
+  const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, OTHER_TEAM],
+    storage: { activeWorkspaceId: "team", [SOURCE_KEY]: "provisional" },
+  });
+
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+  assert.equal(storage.getItem(SOURCE_KEY), "provisional");
+
+  globalThis.__ws.list = async () => [TEAM, OTHER_TEAM, OWN];
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "own");
+  assert.equal(storage.getItem(SOURCE_KEY), "auto");
+
+  // Settled: a later list never moves it again.
+  globalThis.__ws.list = async () => [TEAM, OTHER_TEAM, ENTERPRISE, OWN];
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "own");
+});
+
+// D46 M4: the app's other picks record their source the same way.
+for (const { label, listed, expected, source } of [
+  {
+    label: "with the default listed, settled",
+    listed: [TEAM, OWN],
+    expected: "own",
+    source: "auto",
+  },
+  {
+    label: "without it, provisional",
+    listed: [TEAM, OTHER_TEAM],
+    expected: "other",
+    source: "provisional",
+  },
+]) {
+  test(`leaving the active workspace picks the next one ${label}`, async (t) => {
+    const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+      list: async () => listed,
+      storage: { activeWorkspaceId: "team", [SOURCE_KEY]: "user" },
+    });
+    await useWorkspaceStore.getState().refresh();
+
+    useWorkspaceStore.getState().forgetWorkspace("team");
+
+    assert.equal(useWorkspaceStore.getState().activeWorkspaceId, expected);
+    assert.equal(storage.getItem(SOURCE_KEY), source);
+    // What follows from it: a provisional pick yields to the default, a settled one stays put.
+    const remaining = listed.filter((w) => w.id !== "team");
+    globalThis.__ws.list = async () => [...new Set([...remaining, OWN]), ENTERPRISE];
+    await useWorkspaceStore.getState().refresh({ fresh: true });
+    assert.equal(
+      useWorkspaceStore.getState().activeWorkspaceId,
+      source === "provisional" ? "corp" : "own"
+    );
+  });
+
+  test(`losing the active workspace picks the next one ${label}`, async (t) => {
+    const { useWorkspaceStore, relocateLostWorkspaces, storage } = await loadPrivateNotesStore(t, {
+      list: async () => listed,
+      storage: { activeWorkspaceId: "team", [SOURCE_KEY]: "user" },
+    });
+    await useWorkspaceStore.getState().refresh();
+
+    await relocateLostWorkspaces(["team"]);
+
+    assert.equal(useWorkspaceStore.getState().activeWorkspaceId, expected);
+    assert.equal(storage.getItem(SOURCE_KEY), source);
+  });
+}
+
+test("an account change forgets who picked the active workspace", async (t) => {
+  const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM],
+  });
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(storage.getItem(SOURCE_KEY), "provisional");
+
+  useWorkspaceStore.getState().resetForAccountChange();
+
+  assert.equal(storage.getItem("activeWorkspaceId"), null);
+  assert.equal(storage.getItem(SOURCE_KEY), null);
+});
+
+// D46 M3: while the pick is provisional main hears no active workspace, so an unattended note goes
+// to the pending Private the bind folds into the default, and no team scope is saved for launch.
+test("main files unattended notes into the default while the pick is provisional", async (t) => {
+  const { createDb } = require("../helpers/harness/db.js");
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("acct-1");
+  const scopes = [];
+  const main = {
+    setActiveWorkspaceScope: async ({ activeWorkspaceId, defaultWorkspaceId }) => {
+      const scope = { activeWorkspaceId, defaultWorkspaceId };
+      scopes.push(scope);
+      db.setActiveWorkspaceScope(scope);
+      return { success: true };
+    },
+    bindDefaultPrivateSpace: async (workspaceId) => {
+      db.bindDefaultPrivateSpace(workspaceId);
+      return { success: true };
+    },
+    getSpaces: async () => db.getSpaces(),
+  };
+  const { useWorkspaceStore, ensureDefaultWorkspace, vite } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM],
+    main,
+  });
+  const { startWorkspaceScopeBridge } = await vite.ssrLoadModule("/stores/workspaceScopeBridge.ts");
+  t.after(startWorkspaceScopeBridge());
+  await useWorkspaceStore.getState().refresh();
+  await flush();
+
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+  assert.deepEqual(scopes.at(-1), { activeWorkspaceId: null, defaultWorkspaceId: null });
+  // A meeting prompt, the CLI or an upload: a note saved with no space.
+  const note = db.saveNote("Tray meeting", "").note;
+  const pending = (await db.getSpaces()).find((space) => space.id === note.space_id);
+  assert.equal(pending.kind, "private");
+  assert.equal(pending.workspace_id, null, "the pending row, not the team's Private");
+
+  globalThis.__ws.ensureDefault = async () => {
+    globalThis.__ws.list = async () => [TEAM, OWN];
+    return OWN;
+  };
+  await ensureDefaultWorkspace("Ada's workspace");
+  await flush();
+
+  assert.deepEqual(scopes.at(-1), { activeWorkspaceId: "own", defaultWorkspaceId: "own" });
+  assert.equal(db.getNote(note.id).space_id, db.getPrivateSpaceId("own"), "bound into the default");
+});
+
+test("the user adopting a provisional pick tells main", async (t) => {
+  const { useWorkspaceStore, adoptActiveWorkspaceChoice, vite, calls, storage } =
+    await loadPrivateNotesStore(t, { list: async () => [TEAM] });
+  const { startWorkspaceScopeBridge } = await vite.ssrLoadModule("/stores/workspaceScopeBridge.ts");
+  t.after(startWorkspaceScopeBridge());
+  await useWorkspaceStore.getState().refresh();
+  await flush();
+  calls.length = 0;
+
+  adoptActiveWorkspaceChoice("team");
+  await flush();
+
+  assert.equal(storage.getItem(SOURCE_KEY), "user");
+  assert.deepEqual(calls.filter(([name]) => name === "scope").at(-1), [
+    "scope",
+    { activeWorkspaceId: "team", defaultWorkspaceId: null, accountId: "acct-1" },
+  ]);
+});
+
+// An Enterprise member's list never holds a default of their own, so their pick stays provisional;
+// it is their default too (the stand-in), so main still hears it and scopes their teamspaces.
+test("a provisional pick that is the stand-in default is published as is", async (t) => {
+  const { useWorkspaceStore, vite, calls, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, ENTERPRISE],
+  });
+  const { startWorkspaceScopeBridge } = await vite.ssrLoadModule("/stores/workspaceScopeBridge.ts");
+  t.after(startWorkspaceScopeBridge());
+  await useWorkspaceStore.getState().refresh();
+  await flush();
+
+  assert.equal(storage.getItem(SOURCE_KEY), "provisional");
+  assert.deepEqual(calls.filter(([name]) => name === "scope").at(-1), [
+    "scope",
+    { activeWorkspaceId: "corp", defaultWorkspaceId: "corp", accountId: "acct-1" },
+  ]);
 });
