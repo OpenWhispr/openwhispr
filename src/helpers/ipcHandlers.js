@@ -4954,9 +4954,10 @@ class IPCHandlers {
       // Once Squirrel.Mac holds a downloaded update it installs it on this quit regardless
       // of any flag, so the updater owns that restart instead of racing app.relaunch().
       if (this.updateManager.hasStagedUpdate()) {
-        const { success } = await this.updateManager
-          .restartIntoStagedUpdate()
-          .catch(() => ({ success: false }));
+        const { success } = await this.updateManager.restartIntoStagedUpdate().catch((error) => {
+          debugLogger.error("Restart into staged update failed", { error: error.message });
+          return { success: false };
+        });
         if (success) return;
       }
       this.updateManager.deferInstallOnQuit();
