@@ -1,10 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
 const ts = require("typescript");
 const { createDb } = require("./harness/db.js");
+const { createNoteFilesSync } = require("../../src/helpers/noteFilesSync.js");
+const { formatMd } = require("../../src/helpers/transcriptFormatter.js");
 const {
   installBrowserGlobals,
   resetBrowserGlobals,
@@ -256,4 +259,68 @@ test("cloud pulls still adopt an unattributed note and move it between private a
   assert.equal(db.getNote(original.id).content, "Private again");
   db.setActiveAccountId("account-b");
   assert.equal(db.getNote(original.id), null);
+});
+
+test("startup cloud-note merging retains speaker names for safe legacy transcript cleanup", async (t) => {
+  let reopened;
+  t.after(() => reopened?.db.close());
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const copies = Array.from({ length: 3 }, () => db.saveNote("Same", "Body", "personal").note);
+  const segments = [{ speaker: "speaker_0", text: "Hello", timestamp: 0 }];
+  const mappings = { speaker_0: "Ada" };
+  for (const note of copies) {
+    db.db
+      .prepare("UPDATE notes SET cloud_id = ?, sync_status = 'synced', transcript = ? WHERE id = ?")
+      .run("shared-cloud-note", JSON.stringify(segments), note.id);
+    assert.equal(db.setSpeakerMapping(note.id, "speaker_0", null, "Ada").success, true);
+  }
+  const [, unchanged, edited] = copies.map((note) => db.getNote(note.id));
+  assert.equal(unchanged.account_id, "account-a");
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-startup-note-files-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  const legacyDir = path.join(basePath, "Personal");
+  fs.mkdirSync(legacyDir);
+  const unchangedPath = path.join(legacyDir, `${unchanged.id}-same-transcript.md`);
+  const editedPath = path.join(legacyDir, `${edited.id}-same-transcript.md`);
+  const editedContents = `${formatMd(edited, segments, mappings)}\nMy added meeting notes.\n`;
+  fs.writeFileSync(unchangedPath, formatMd(unchanged, segments, mappings));
+  fs.writeFileSync(editedPath, editedContents);
+
+  db.db.close();
+  reopened = new db.constructor();
+  assert.equal(reopened.activeAccountId, null);
+  assert.equal(reopened.getNote(copies[0].id), null);
+  assert.deepEqual(reopened.getSpeakerMappings(copies[0].id), []);
+  const snapshots = reopened.mergedNotes.splice(0);
+  assert.deepEqual(snapshots.map((note) => note.id).sort(), [unchanged.id, edited.id]);
+  reopened.setActiveAccountId("account-a");
+  const noteFiles = createNoteFilesSync({
+    getDatabase: () => reopened,
+    getSpeakerMappings: (noteId) =>
+      Object.fromEntries(
+        reopened.getSpeakerMappings(noteId).map((row) => [row.speaker_id, row.display_name])
+      ),
+  });
+  t.after(() => noteFiles.disable());
+  await noteFiles.enable(basePath, { skipRebuild: true });
+  for (const note of snapshots) noteFiles.deleteNote(note.id, note, note.speakerMappings);
+  await noteFiles.flush();
+
+  assert.deepEqual(
+    {
+      mappings: snapshots.map((note) => note.speakerMappings),
+      legacyFiles: fs.readdirSync(legacyDir).sort(),
+      editedContents: fs.readFileSync(
+        path.join(legacyDir, `edited-${edited.id}-same-transcript.md`),
+        "utf8"
+      ),
+    },
+    {
+      mappings: [mappings, mappings],
+      legacyFiles: [`edited-${edited.id}-same-transcript.md`],
+      editedContents,
+    }
+  );
 });

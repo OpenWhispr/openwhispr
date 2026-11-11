@@ -3,7 +3,6 @@ const path = require("path");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { WINDOWS_RESERVED_NAME } = require("./windowsReservedName");
-const { WORKSPACES_ROOT } = require("./notePlacement");
 
 // Most file systems allow 255 bytes per name; this leaves room for the suffix.
 const MAX_FOLDER_NAME_BYTES = 120;
@@ -17,10 +16,6 @@ const SAFE_NAME_SUFFIX = / \([0-9a-f]{8}\)$/i;
 const MAX_SLUG_BYTES = 150;
 
 const SYSTEM_LEFTOVERS = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
-// The current layout's top-level directory, which the old layout never wrote
-// notes directly into. Private notes is scanned like an old folder, since an old
-// folder may have had that name; only unrecorded files there count.
-const LAYOUT_ROOTS = new Set([WORKSPACES_ROOT.toLowerCase()]);
 const OLD_FRONTMATTER_LINE = /^(id|title|type|folder|created|updated):/;
 
 const normalizeText = (text) =>
@@ -109,10 +104,12 @@ class MarkdownMirror {
   constructor() {
     this._basePath = null;
     this._baseRealPath = null;
+    this._ledgerBasePath = null;
     this._ledger = createMemoryLedger();
     this._vacatedDirs = new Set();
     // Old-layout files by note id, read once and kept until the mirror moves.
     this._oldLayoutIndex = null;
+    this._oldFolderNames = new Set();
   }
 
   // { files(basePath, ownerId?), record(basePath, entry), forget(basePath, relPath) },
@@ -125,11 +122,15 @@ class MarkdownMirror {
   init(basePath) {
     this._basePath = basePath;
     this._baseRealPath = null;
+    this._ledgerBasePath = null;
     this._vacatedDirs.clear();
     this._oldLayoutIndex = null;
+    this._oldFolderNames.clear();
     try {
       fs.mkdirSync(basePath, { recursive: true });
-      this._baseRealPath = fs.realpathSync(basePath);
+      // Keep existing ledger keys while using native spelling for filesystem safety.
+      this._ledgerBasePath = fs.realpathSync(basePath);
+      this._baseRealPath = fs.realpathSync.native(basePath);
       debugLogger.debug("Markdown mirror initialized", { basePath }, "note-files");
     } catch (err) {
       debugLogger.error("Failed to init markdown mirror", { error: err.message }, "note-files");
@@ -192,12 +193,20 @@ class MarkdownMirror {
   }
 
   _resolveExistingFolderPath(candidatePath) {
-    const stats = fs.lstatSync(candidatePath);
-    if (stats.isSymbolicLink() || !stats.isDirectory()) {
-      throw new Error("Markdown mirror folder is not a regular directory");
+    if (!this._isInsideBase(candidatePath)) {
+      throw new Error("Markdown mirror folder is outside the configured directory");
+    }
+    let current = this._baseRealPath;
+    for (const segment of path.relative(this._baseRealPath, candidatePath).split(path.sep)) {
+      current = path.join(current, segment);
+      const stats = fs.lstatSync(current);
+      if (stats.isSymbolicLink() || !stats.isDirectory()) {
+        throw new Error("Markdown mirror folder is not a regular directory");
+      }
     }
 
-    const realPath = fs.realpathSync(candidatePath);
+    // The native resolver returns the stored spelling on case-insensitive disks.
+    const realPath = fs.realpathSync.native(candidatePath);
     if (!this._isInsideBase(realPath)) {
       throw new Error("Markdown mirror folder resolves outside the configured directory");
     }
@@ -216,11 +225,27 @@ class MarkdownMirror {
         fs.mkdirSync(candidatePath);
       }
       current = this._resolveExistingFolderPath(candidatePath);
+      if (create && path.basename(current) !== path.basename(candidatePath)) {
+        const oldRelPath = this._relPath(current);
+        fs.renameSync(current, candidatePath);
+        current = candidatePath;
+        const newRelPath = this._relPath(current);
+        for (const entry of this.recordedFiles()) {
+          if (entry.relPath === oldRelPath || entry.relPath.startsWith(`${oldRelPath}/`)) {
+            this._ledger.forget(this._ledgerBasePath, entry.relPath);
+            this._ledger.record(this._ledgerBasePath, {
+              ...entry,
+              relPath: newRelPath + entry.relPath.slice(oldRelPath.length),
+            });
+          }
+        }
+      }
     }
     return current;
   }
 
   _assertWritableFilePath(filePath) {
+    this._resolveExistingFolderPath(path.dirname(filePath));
     if (!fs.existsSync(filePath)) return;
     const stats = fs.lstatSync(filePath);
     if (stats.isSymbolicLink() || !stats.isFile()) {
@@ -280,18 +305,19 @@ class MarkdownMirror {
 
   recordedFiles() {
     if (!this._baseRealPath) return [];
-    return this._ledger.files(this._baseRealPath);
+    return this._ledger.files(this._ledgerBasePath);
   }
 
   _recorded(noteId, kind) {
     return this._ledger
-      .files(this._baseRealPath, noteId)
+      .files(this._ledgerBasePath, noteId)
       .filter((entry) => entry.ownerId === noteId && entry.kind === kind);
   }
 
   _isPristine(entry) {
     try {
       const filePath = this._absolutePath(entry.relPath);
+      this._assertWritableFilePath(filePath);
       const stats = fs.lstatSync(filePath);
       if (stats.isSymbolicLink() || !stats.isFile()) return false;
       const text = fs.readFileSync(filePath, "utf-8");
@@ -320,13 +346,20 @@ class MarkdownMirror {
 
   // Through a temporary file, so a failed write can't leave half a note.
   _writeAtomically(filePath, content) {
-    const temporaryPath = `${filePath}.${process.pid}.tmp`;
+    const temporaryPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    let ownsTemporary = false;
     try {
-      fs.writeFileSync(temporaryPath, content, "utf-8");
+      const descriptor = fs.openSync(temporaryPath, "wx");
+      ownsTemporary = true;
+      try {
+        fs.writeFileSync(descriptor, content, "utf-8");
+      } finally {
+        fs.closeSync(descriptor);
+      }
       fs.renameSync(temporaryPath, filePath);
-    } catch (err) {
-      fs.rmSync(temporaryPath, { force: true });
-      throw err;
+      ownsTemporary = false;
+    } finally {
+      if (ownsTemporary) fs.rmSync(temporaryPath, { force: true });
     }
   }
 
@@ -345,7 +378,7 @@ class MarkdownMirror {
       keptPath = path.join(dirPath, `edited-${copy}-${name}`);
     }
     fs.renameSync(filePath, keptPath);
-    this._ledger.forget(this._baseRealPath, this._relPath(filePath));
+    this._ledger.forget(this._ledgerBasePath, this._relPath(filePath));
   }
 
   // A file this mirror wrote goes if it still holds what was written; otherwise
@@ -354,10 +387,13 @@ class MarkdownMirror {
     const filePath = this._absolutePath(entry.relPath);
     try {
       if (!fs.existsSync(filePath)) {
-        this._ledger.forget(this._baseRealPath, entry.relPath);
-      } else if (this._isPristine(entry)) {
+        this._ledger.forget(this._ledgerBasePath, entry.relPath);
+        return;
+      }
+      this._assertWritableFilePath(filePath);
+      if (this._isPristine(entry)) {
         this._removeFile(filePath);
-        this._ledger.forget(this._baseRealPath, entry.relPath);
+        this._ledger.forget(this._ledgerBasePath, entry.relPath);
       } else {
         this._keepAside(filePath);
       }
@@ -373,6 +409,7 @@ class MarkdownMirror {
   // A file from the old layout goes when it says exactly what the note says.
   _releaseOldFile(filePath, isUnchanged) {
     try {
+      this._assertWritableFilePath(filePath);
       const text = fs.readFileSync(filePath, "utf-8");
       if (isUnchanged(filePath, text)) this._removeFile(filePath);
       else this._keepAside(filePath);
@@ -406,7 +443,7 @@ class MarkdownMirror {
     }
     // Identical content isn't rewritten, which keeps file-sync tools quiet.
     if (!unchanged) this._writeAtomically(filePath, content);
-    this._ledger.record(this._baseRealPath, {
+    this._ledger.record(this._ledgerBasePath, {
       relPath,
       ownerId: noteId,
       kind,
@@ -417,7 +454,7 @@ class MarkdownMirror {
     for (const entry of ownFiles) {
       if (entry.relPath === relPath) continue;
       if (this._isSameFile(this._absolutePath(entry.relPath), filePath)) {
-        this._ledger.forget(this._baseRealPath, entry.relPath);
+        this._ledger.forget(this._ledgerBasePath, entry.relPath);
       } else {
         this._releaseRecordedFile(entry);
       }
@@ -535,7 +572,7 @@ class MarkdownMirror {
     try {
       const dirPath = this._resolveFolderPath(location, { create: true });
       if (dirPath && folderId != null) {
-        this._ledger.record(this._baseRealPath, {
+        this._ledger.record(this._ledgerBasePath, {
           relPath: this._relPath(dirPath),
           ownerId: folderId,
           kind: "dir",
@@ -559,9 +596,11 @@ class MarkdownMirror {
       );
       if (fs.existsSync(oldPath) && this._isSameFile(oldPath, newPath)) {
         this._resolveExistingFolderPath(oldPath);
-        fs.renameSync(oldPath, newPath);
-        this._ledger.forget(this._baseRealPath, oldRelPath);
+        this._resolveFolderPath(location, { create: true });
         this.ensureFolder(location, folderId);
+        if (oldRelPath !== this.relPathFor(null, location, "dir")) {
+          this._ledger.forget(this._ledgerBasePath, oldRelPath);
+        }
         return;
       }
     } catch (err) {
@@ -578,7 +617,7 @@ class MarkdownMirror {
   // A recorded folder directory that no longer belongs to its folder.
   releaseFolderDir(relPath) {
     if (!this._baseRealPath) return;
-    this._ledger.forget(this._baseRealPath, relPath);
+    this._ledger.forget(this._ledgerBasePath, relPath);
     this._vacatedDirs.add(this._absolutePath(relPath));
   }
 
@@ -603,7 +642,7 @@ class MarkdownMirror {
       while (relPath && !relPath.startsWith("..") && !keepRelPaths.has(relPath)) {
         try {
           const resolved = this._resolveExistingFolderPath(this._absolutePath(relPath));
-          if (!this._removeDirIfEmpty(resolved)) break;
+          if (keepRelPaths.has(this._relPath(resolved)) || !this._removeDirIfEmpty(resolved)) break;
         } catch {
           break;
         }
@@ -620,7 +659,6 @@ class MarkdownMirror {
       // The old mirror hashed a name it couldn't use as is to __ow-<sha256>.
       const oldEncoding = `__ow-${crypto.createHash("sha256").update(name, "utf8").digest("hex")}`;
       for (const dirName of [this._safeFolderName(name), oldEncoding]) {
-        if (LAYOUT_ROOTS.has(dirName.toLowerCase())) continue;
         try {
           const dirPath = this._resolveExistingFolderPath(path.join(this._baseRealPath, dirName));
           this._removeDirIfEmpty(dirPath);
@@ -632,8 +670,20 @@ class MarkdownMirror {
   // Ids that still have a file in the old <folder>/<id>-<slug>.md layout. Reads
   // the old layout afresh and keeps it for later writes, which then don't read
   // the user's folders again.
-  legacyNoteIds() {
+  legacyNoteIds(folderNames = []) {
     if (!this._baseRealPath) return new Set();
+    this._oldFolderNames = new Set(
+      folderNames.map((name) => {
+        const folderName = this._safeFolderName(name);
+        try {
+          return path.basename(
+            this._resolveExistingFolderPath(path.join(this._baseRealPath, folderName))
+          );
+        } catch {
+          return folderName;
+        }
+      })
+    );
     this._oldLayoutIndex = this._scanOldLayout();
     const ids = new Set();
     for (const [noteId, filePaths] of this._oldLayoutIndex) {
@@ -673,7 +723,7 @@ class MarkdownMirror {
       fd = fs.openSync(filePath, "r");
       const marker = Buffer.alloc(8);
       const bytesRead = fs.readSync(fd, marker, 0, marker.length, 0);
-      return /^﻿?---\r?\n/.test(marker.toString("utf8", 0, bytesRead));
+      return /^\uFEFF?---\r?\n/.test(marker.toString("utf8", 0, bytesRead));
     } catch {
       return false;
     } finally {
@@ -722,6 +772,7 @@ class MarkdownMirror {
     const noteId = file.match(/^(\d+)-/)?.[1];
     if (!noteId) return null;
     try {
+      this._assertWritableFilePath(filePath);
       const stats = fs.lstatSync(filePath);
       if (stats.isSymbolicLink() || !stats.isFile()) return null;
     } catch {
@@ -735,15 +786,15 @@ class MarkdownMirror {
   }
 
   // Files one level inside each top-level directory, as the old layout put them,
-  // that the mirror hasn't recorded, by note id. Dot directories (.obsidian, .git)
-  // are never the mirror's.
+  // that the mirror hasn't recorded, by note id. Dot directories are scanned
+  // only when the database names them as app folders, protecting tool directories.
   _scanOldLayout() {
     const recorded = new Set(this.recordedFiles().map((entry) => entry.relPath));
     const index = new Map();
     try {
       for (const entry of fs.readdirSync(this._baseRealPath, { withFileTypes: true })) {
-        if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-        if (LAYOUT_ROOTS.has(entry.name.toLowerCase())) continue;
+        if (!entry.isDirectory()) continue;
+        if (entry.name.startsWith(".") && !this._oldFolderNames.has(entry.name)) continue;
         let dirPath;
         try {
           dirPath = this._resolveExistingFolderPath(path.join(this._baseRealPath, entry.name));

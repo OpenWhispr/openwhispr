@@ -910,3 +910,280 @@ test("a typed name that looks made safe, in any case, doesn't share a directory"
     generated.toLowerCase()
   );
 });
+
+test("recorded cleanup never follows a replaced ancestor directory", (t) => {
+  const basePath = tempMirror(t);
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cleanup-outside-"));
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
+  for (const edited of [false, true]) {
+    const note = { id: edited ? 902 : 901, title: "Plan", content: "Body" };
+    const folder = edited ? "Edited" : "Pristine";
+    write(note, "Workspaces", folder, "Team");
+    const original = path.join(basePath, "Workspaces", folder);
+    const moved = path.join(outside, folder);
+    fs.renameSync(original, moved);
+    const externalFile = path.join(moved, "Team", `${note.id}-plan.md`);
+    if (edited) fs.appendFileSync(externalFile, "\nmy external edit");
+    const before = fs.readFileSync(externalFile, "utf8");
+    fs.symlinkSync(moved, original, "dir");
+
+    markdownMirror.deleteNote(note.id);
+    markdownMirror.removeVacatedDirs();
+
+    assert.equal(fs.readFileSync(externalFile, "utf8"), before);
+    assert.deepEqual(fs.readdirSync(path.join(moved, "Team")), [`${note.id}-plan.md`]);
+  }
+});
+
+test("a cached old-layout path is not cleaned through a replaced ancestor", (t) => {
+  const basePath = tempMirror(t);
+  const oldDir = path.join(basePath, "General");
+  fs.mkdirSync(oldDir);
+  const before = "---\nid: 903\ntitle: Plan\ntype: personal\nfolder: General\n---\n\nBody";
+  fs.writeFileSync(path.join(oldDir, "903-plan.md"), before);
+  markdownMirror.legacyNoteIds();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-old-outside-"));
+  t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
+  const moved = path.join(outside, "General");
+  fs.renameSync(oldDir, moved);
+  fs.symlinkSync(moved, oldDir, "dir");
+
+  markdownMirror.deleteNote(903, { id: 903, title: "Plan", content: "Body" });
+
+  assert.equal(fs.readFileSync(path.join(moved, "903-plan.md"), "utf8"), before);
+});
+
+for (const collisionKind of ["file", "symlink"]) {
+  test(`an existing temporary ${collisionKind} is never overwritten or removed`, (t) => {
+    const basePath = tempMirror(t);
+    const dir = path.join(basePath, "Private notes");
+    fs.mkdirSync(dir);
+    const target = path.join(dir, "904-plan.md");
+    const outside = path.join(basePath, "external.txt");
+    fs.writeFileSync(outside, "my external file");
+    const temporary = `${target}.${process.pid}.tmp`;
+    if (collisionKind === "symlink") fs.symlinkSync(outside, temporary);
+    else fs.writeFileSync(temporary, "my temporary file");
+
+    write({ id: 904, title: "Plan", content: "Body" }, "Private notes");
+
+    assert.equal(fs.readFileSync(outside, "utf8"), "my external file");
+    assert.match(fs.readFileSync(target, "utf8"), /Body$/);
+    assert.equal(fs.lstatSync(temporary).isSymbolicLink(), collisionKind === "symlink");
+    assert.equal(
+      fs.readFileSync(temporary, "utf8"),
+      collisionKind === "symlink" ? "my external file" : "my temporary file"
+    );
+  });
+}
+
+for (const folder of ["Workspaces", ".archive"]) {
+  test(`old notes in ${folder} are migrated while unrelated files stay`, (t) => {
+    const basePath = tempMirror(t);
+    const dir = path.join(basePath, folder);
+    fs.mkdirSync(dir);
+    const old = (id, body) =>
+      `---\nid: ${id}\ntitle: Plan\ntype: personal\nfolder: ${folder}\n---\n\n${body}`;
+    fs.writeFileSync(path.join(dir, "905-plan.md"), old(905, "Body"));
+    fs.writeFileSync(path.join(dir, "906-plan.md"), old(906, "my edit"));
+    fs.writeFileSync(path.join(dir, "907-user.md"), "---\ntags: [mine]\n---\n\nmy own file");
+    fs.mkdirSync(path.join(dir, "User directory"));
+    fs.writeFileSync(path.join(dir, "User directory", "908-plan.md"), old(908, "nested"));
+
+    assert.deepEqual([...markdownMirror.legacyNoteIds([folder])].sort(), [905, 906]);
+    write({ id: 905, title: "Plan", content: "Body" }, "Private notes");
+    write({ id: 906, title: "Plan", content: "Body" }, "Private notes");
+    markdownMirror.removeEmptyOldDirs([folder]);
+
+    assert.equal(fs.existsSync(path.join(dir, "905-plan.md")), false);
+    assert.equal(
+      fs.readFileSync(path.join(dir, "edited-906-plan.md"), "utf8"),
+      old(906, "my edit")
+    );
+    assert.equal(
+      fs.readFileSync(path.join(dir, "907-user.md"), "utf8"),
+      "---\ntags: [mine]\n---\n\nmy own file"
+    );
+    assert.equal(
+      fs.readFileSync(path.join(dir, "User directory", "908-plan.md"), "utf8"),
+      old(908, "nested")
+    );
+  });
+}
+
+for (const changedSegment of [1, 2, 3]) {
+  test(
+    `a populated placement directory at level ${changedSegment} adopts case-only renames`,
+    { skip: !caseInsensitiveFileSystem() && "needs a case-insensitive file system" },
+    (t) => {
+      const basePath = tempMirror(t);
+      const before = ["Workspaces", "Acme", "Engineering", "General"];
+      const after = before.map((segment, index) =>
+        index === changedSegment ? segment.toLowerCase() : segment
+      );
+      const note = { id: 909, title: "Plan", content: "Body", created_at: "x", updated_at: "y" };
+      write(note, ...before);
+      const userFile = path.join(basePath, ...before, "mine.txt");
+      fs.writeFileSync(userFile, "keep my file");
+
+      write(note, ...after);
+      markdownMirror.removeVacatedDirs();
+
+      assert.deepEqual(fs.readdirSync(path.join(basePath, ...after.slice(0, changedSegment))), [
+        after[changedSegment],
+      ]);
+      assert.equal(
+        fs.readFileSync(path.join(basePath, ...after, "mine.txt"), "utf8"),
+        "keep my file"
+      );
+      assert.match(fs.readFileSync(markdownMirror.getNotePath(909), "utf8"), /Body$/);
+      assert.deepEqual(
+        markdownMirror.recordedFiles().map((entry) => entry.relPath),
+        [`${after.join("/")}/909-plan.md`]
+      );
+    }
+  );
+}
+
+test(
+  "a differently cased mirror base still resolves and writes inside its actual directory",
+  { skip: !caseInsensitiveFileSystem() && "needs a case-insensitive file system" },
+  (t) => {
+    const basePath = tempMirror(t);
+    markdownMirror.init(basePath.toUpperCase());
+
+    write({ id: 910, title: "Plan", content: "Body" }, "Private notes", "General");
+
+    assert.match(
+      fs.readFileSync(path.join(basePath, "Private notes", "General", "910-plan.md"), "utf8"),
+      /Body$/
+    );
+  }
+);
+
+test("an exclusive temporary-file collision preserves the colliding file", (t) => {
+  const basePath = tempMirror(t);
+  markdownMirror.ensureFolder("Private notes");
+  const target = path.join(basePath, "Private notes", "911-plan.md");
+  const temporary = `${target}.${process.pid}.collision.tmp`;
+  fs.writeFileSync(temporary, "my collision file");
+  t.mock.method(require("node:crypto"), "randomUUID", () => "collision");
+
+  write({ id: 911, title: "Plan", content: "Body" }, "Private notes");
+
+  assert.equal(fs.readFileSync(temporary, "utf8"), "my collision file");
+  assert.equal(fs.existsSync(target), false);
+});
+
+test(
+  "a populated recorded folder case rename rebases all descendant ledger entries",
+  { skip: !caseInsensitiveFileSystem() && "needs a case-insensitive file system" },
+  (t) => {
+    const basePath = tempMirror(t);
+    const before = placement("Private notes", "General");
+    const after = placement("Private notes", "general");
+    markdownMirror.ensureFolder(before, 1010);
+    markdownMirror.ensureFolder(placement("Private notes", "General", "Child"), 1011);
+    markdownMirror.writeNote({ id: 912, title: "First", content: "Body" }, before);
+    markdownMirror.writeNote({ id: 913, title: "Second", content: "Other account" }, before);
+
+    markdownMirror.moveFolderDir("Private notes/General", after, 1010);
+
+    assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), ["general"]);
+    assert.deepEqual(
+      markdownMirror
+        .recordedFiles()
+        .map((entry) => entry.relPath)
+        .sort(),
+      [
+        "Private notes/general",
+        "Private notes/general/912-first.md",
+        "Private notes/general/913-second.md",
+        "Private notes/general/Child",
+      ].sort()
+    );
+    assert.match(fs.readFileSync(markdownMirror.getNotePath(913), "utf8"), /Other account$/);
+  }
+);
+
+test("unknown dot directories keep matching legacy-looking user files", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, ".obsidian");
+  fs.mkdirSync(dir);
+  const before = "---\nid: 914\ntitle: Plan\ntype: personal\nfolder: .obsidian\n---\n\nBody";
+  fs.writeFileSync(path.join(dir, "914-plan.md"), before);
+
+  assert.equal(markdownMirror.legacyNoteIds([".archive"]).has(914), false);
+  write({ id: 914, title: "Plan", content: "Body" }, "Private notes");
+  markdownMirror.deleteNote(914, { id: 914, title: "Plan", content: "Body" });
+
+  assert.equal(fs.readFileSync(path.join(dir, "914-plan.md"), "utf8"), before);
+});
+
+test("a failed temporary write removes only its own partial file", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 915, title: "Plan", content: "Body" };
+  write(note, "Private notes");
+  const target = markdownMirror.getNotePath(915);
+  const before = fs.readFileSync(target, "utf8");
+  const writeFile = fs.writeFileSync;
+  t.mock.method(fs, "writeFileSync", (file, ...args) => {
+    if (typeof file !== "number") return writeFile(file, ...args);
+    writeFile(file, "partial write");
+    throw new Error("disk write failed");
+  });
+
+  write({ ...note, content: "Updated body" }, "Private notes");
+
+  assert.equal(fs.readFileSync(target, "utf8"), before);
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), [path.basename(target)]);
+});
+
+test("known dot folders use filesystem identity after an offline case rename", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, ".Archive");
+  fs.mkdirSync(dir);
+  const oldPath = path.join(dir, "916-plan.md");
+  fs.writeFileSync(
+    oldPath,
+    "---\nid: 916\ntitle: Plan\ntype: personal\nfolder: .Archive\n---\n\nBody"
+  );
+  const aliasesFolder = fs.existsSync(path.join(basePath, ".archive"));
+
+  assert.deepEqual([...markdownMirror.legacyNoteIds([".archive"])], aliasesFolder ? [916] : []);
+  write({ id: 916, title: "Plan", content: "Body" }, "Private notes");
+
+  assert.equal(fs.existsSync(oldPath), !aliasesFolder);
+});
+
+test(
+  "a differently cased base preserves the existing ledger identity on upgrade",
+  { skip: !caseInsensitiveFileSystem() && "needs a case-insensitive file system" },
+  (t) => {
+    const basePath = tempMirror(t);
+    const note = { id: 917, title: "Plan", content: "Original", created_at: "x", updated_at: "y" };
+    write(note, "Private notes");
+    const [entry] = markdownMirror.recordedFiles();
+    const configured = basePath.toUpperCase();
+    const legacyBaseKey = fs.realpathSync(configured);
+    const entries = new Map([
+      [`${legacyBaseKey}\0${entry.relPath}`, { ...entry, basePath: legacyBaseKey }],
+    ]);
+    markdownMirror.setLedger({
+      files: (base) => [...entries.values()].filter((stored) => stored.basePath === base),
+      record: (base, stored) =>
+        entries.set(`${base}\0${stored.relPath}`, { ...stored, basePath: base }),
+      forget: (base, relPath) => entries.delete(`${base}\0${relPath}`),
+    });
+    t.after(() => markdownMirror.setLedger(null));
+
+    markdownMirror.init(configured);
+
+    assert.equal(markdownMirror.recordedFiles().length, 1);
+    write({ ...note, content: "Updated" }, "Private notes");
+    assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), ["917-plan.md"]);
+    assert.match(fs.readFileSync(markdownMirror.getNotePath(917), "utf8"), /Updated$/);
+    assert.equal(entries.size, 1);
+    assert.equal([...entries.values()][0].basePath, legacyBaseKey);
+  }
+);

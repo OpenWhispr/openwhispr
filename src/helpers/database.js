@@ -5817,6 +5817,23 @@ class DatabaseManager {
       .all(JSON.stringify(noteIds), ...accountScope.params);
   }
 
+  // Soft-deleted folders can still contain files from before an upgrade.
+  getLegacyMirrorFolderNames() {
+    if (!this.db) throw new Error("Database not initialized");
+    return this.db.prepare("SELECT DISTINCT name FROM folders").pluck().all();
+  }
+
+  // Snapshot only affected, authorized rows while hard deletes still have bodies.
+  getNotesForMirrorDeletion(filter) {
+    if (!this.db) throw new Error("Database not initialized");
+    const field = ["folder_id", "space_id", "account_id"].find((key) => key in filter);
+    if (!field) throw new Error("Missing note deletion scope");
+    const accountScope = this._accountScopeCondition("notes");
+    return this.db
+      .prepare(`SELECT notes.* FROM notes WHERE notes.${field} = ? AND ${accountScope.sql}`)
+      .all(filter[field], ...accountScope.params);
+  }
+
   getSpaces() {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -8566,6 +8583,11 @@ class DatabaseManager {
     const moveConversations = this.db.prepare(
       "UPDATE agent_conversations SET note_id = ? WHERE note_id = ?"
     );
+    // Startup merges run before account restoration, so use the same unscoped
+    // access as readCopies rather than the account-filtered public getter.
+    const readSpeakerMappings = this.db.prepare(
+      "SELECT speaker_id, display_name FROM speaker_mappings WHERE note_id = ?"
+    );
     const moveSpeakerMappings = this.db.prepare(
       "UPDATE OR IGNORE speaker_mappings SET note_id = ? WHERE note_id = ?"
     );
@@ -8677,7 +8699,7 @@ class DatabaseManager {
         // Read before they move to the kept copy, so the merged copy's old
         // transcript file can still be checked against what it said.
         const speakerMappings = Object.fromEntries(
-          this.getSpeakerMappings(note.id).map((row) => [row.speaker_id, row.display_name])
+          readSpeakerMappings.all(note.id).map((row) => [row.speaker_id, row.display_name])
         );
         moveSpeakerMappings.run(kept.id, note.id);
         moveSpeakerEmbeddings.run(kept.id, note.id);

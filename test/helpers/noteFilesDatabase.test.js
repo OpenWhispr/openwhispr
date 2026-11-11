@@ -227,3 +227,56 @@ test("a merged copy carries its speaker names, which the merge moves away", (t) 
   assert.equal(removed.length, 1);
   assert.deepEqual(removed[0].speakerMappings, { speaker_0: "Ada" });
 });
+
+test("deletion snapshots include scoped tombstones and exclude another account's bodies", (t) => {
+  const context = setup(t);
+  if (!context) return;
+  const { db } = context;
+  const folder = db.createFolder("General").folder;
+  const mine = saveNote(db, "Mine", folder.id, null);
+  db.db.prepare("UPDATE notes SET deleted_at = 'now' WHERE id = ?").run(mine.id);
+  db.setActiveAccountId("account-b");
+  const theirs = saveNote(db, "Theirs", null, null);
+  db.setActiveAccountId("account-a");
+
+  for (const filter of [
+    { folder_id: folder.id },
+    { space_id: mine.space_id },
+    { account_id: "account-a" },
+  ]) {
+    const snapshots = db.getNotesForMirrorDeletion(filter);
+    assert.deepEqual(
+      snapshots.map((note) => note.id),
+      [mine.id]
+    );
+    assert.equal(snapshots[0].content, "Mine body");
+    assert.equal(snapshots[0].deleted_at, "now");
+  }
+  assert.deepEqual(db.getNotesForMirrorDeletion({ account_id: "account-b" }), []);
+  assert.equal(db.getNotesForMirror([theirs.id]).length, 0);
+});
+
+test("startup cleans a deleted note in a soft-deleted dot-prefixed app folder", async (t) => {
+  const context = setup(t);
+  if (!context) return;
+  const { db, noteFiles, basePath } = context;
+  const folder = db.createFolder(".archive").folder;
+  const note = saveNote(db, "Gone", folder.id, null);
+  db.db.prepare("UPDATE notes SET deleted_at = 'now' WHERE id = ?").run(note.id);
+  db.db.prepare("UPDATE folders SET deleted_at = 'now' WHERE id = ?").run(folder.id);
+  db.setActiveAccountId("account-b");
+  db.createFolder(".other-account");
+  db.setActiveAccountId("account-a");
+  assert.ok(db.getLegacyMirrorFolderNames().includes(".other-account"));
+  const oldPath = path.join(basePath, ".archive", `${note.id}-gone.md`);
+  fs.mkdirSync(path.dirname(oldPath), { recursive: true });
+  fs.writeFileSync(
+    oldPath,
+    `---\nid: ${note.id}\ntitle: Gone\ntype: personal\nfolder: .archive\n---\n\n${note.content}`
+  );
+
+  await noteFiles.enable(basePath, { skipRebuild: true });
+  await noteFiles.flush();
+
+  assert.equal(fs.existsSync(oldPath), false);
+});

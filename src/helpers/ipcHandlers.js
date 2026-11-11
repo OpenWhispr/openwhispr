@@ -1084,7 +1084,9 @@ class IPCHandlers {
     this.enterpriseIdentityManager?.clear();
     if (!token) {
       const scopeChanged = this.databaseManager.activeAccountId !== null;
+      this._noteFilesSync?.flushSync();
       this.databaseManager.setActiveAccountId(null);
+      if (scopeChanged) this._noteFilesSync?.accountChanged();
       accountScopeBinding.clear();
       broadcastToWindows("active-account-scope-changed", null);
       this._broadcastDatabaseAccountScope();
@@ -1321,15 +1323,40 @@ class IPCHandlers {
     this.noteFiles.writeNote(note);
   }
 
-  _asyncMirrorDelete(noteId) {
-    this.noteFiles.deleteNote(noteId);
+  _captureMirrorDeletionNotes(filter) {
+    if (!this.noteFiles.enabled) return new Map();
+    const notes =
+      filter.id !== undefined
+        ? this.databaseManager.getNotesForMirror([filter.id])
+        : this.databaseManager.getNotesForMirrorDeletion(filter);
+    return new Map(
+      notes.map((note) => [
+        note.id,
+        {
+          note,
+          speakerMappings: this._buildSpeakerMappings(note.id),
+        },
+      ])
+    );
+  }
+
+  _asyncMirrorDelete(noteId, snapshots) {
+    const snapshot = snapshots?.get(noteId);
+    this.noteFiles.deleteNote(noteId, snapshot?.note, snapshot?.speakerMappings);
   }
 
   // A deleted folder's files go by note id, not with its directory: another
   // account's folder can share that directory, and so can files of the user's.
   // Other accounts' notes were released to the space root, so they're rewritten.
-  _mirrorRemovedFolder({ noteIds = [], relocatedNotes = [] }) {
-    for (const noteId of noteIds) this._asyncMirrorDelete(noteId);
+  _mirrorRemovedFolder({ noteIds = [], relocatedNotes = [] }, snapshots) {
+    const removedIds = new Set(noteIds);
+    // Local folder deletes also erase tombstones omitted from the live-note result.
+    const otherIds = [...(snapshots?.keys() ?? [])].filter((noteId) => !removedIds.has(noteId));
+    if (otherIds.length > 0) {
+      const existingIds = new Set(this.databaseManager.getExistingNoteIds(otherIds));
+      for (const noteId of otherIds) if (!existingIds.has(noteId)) removedIds.add(noteId);
+    }
+    for (const noteId of removedIds) this._asyncMirrorDelete(noteId, snapshots);
     for (const note of relocatedNotes) {
       if (!note.deleted_at) this._asyncMirrorWrite(note);
     }
@@ -2853,10 +2880,11 @@ class IPCHandlers {
     );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
+      const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
       const result = this.databaseManager.deleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
-        this._mirrorRemovedFolder(result);
+        this._mirrorRemovedFolder(result, snapshots);
         setImmediate(() => broadcastToWindows("folder-deleted", { id }));
       }
       return result;
@@ -2947,6 +2975,7 @@ class IPCHandlers {
       } else if (guestPolicy) {
         this._audioFeaturePolicy?.update(guestPolicy);
       }
+      if (accountChanged) this._noteFilesSync?.flushSync();
       this.databaseManager.setActiveAccountId(accountId);
       this.databaseManager.claimSignedOutLocalRows();
       this.databaseManager.claimLegacyRowsOfOnlyAccount();
@@ -3008,12 +3037,13 @@ class IPCHandlers {
           await this.connectorManager?.disconnectAll({
             erasingDevice: options?.erasingDevice === true,
           });
+          const snapshots = this._captureMirrorDeletionNotes({ account_id: accountId });
           const result = this.databaseManager.deleteAccountData(accountId);
           this.audioStorageManager.deleteAudioForTranscriptions(result.deletedTranscriptionIds);
           this.metaActivation?.purge(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
-            this._asyncMirrorDelete(noteId);
+            this._asyncMirrorDelete(noteId, snapshots);
           }
           this.noteFiles.containersChanged();
           // The account's rows are already gone, so a vault that won't delete
@@ -3052,6 +3082,7 @@ class IPCHandlers {
           };
         }
       }
+      const snapshots = this._captureMirrorDeletionNotes({ space_id: id });
       const result = this.databaseManager.purgeSpace(id, options);
       if (result?.success) {
         if (!result.preservedForOtherAccounts) {
@@ -3062,7 +3093,7 @@ class IPCHandlers {
             this._asyncMirrorWrite(note);
           }
           for (const noteId of result.noteIds ?? []) {
-            this._asyncMirrorDelete(noteId);
+            this._asyncMirrorDelete(noteId, snapshots);
           }
         }
         this.noteFiles.containersChanged();
@@ -3377,10 +3408,11 @@ class IPCHandlers {
       return result;
     });
     ipcMain.handle("db-hard-delete-note", (_, id) => {
+      const snapshots = this._captureMirrorDeletionNotes({ id });
       const result = this.databaseManager.hardDeleteNote(id);
       if (result?.success) {
         this.notifyVectorChanges();
-        this._asyncMirrorDelete(id);
+        this._asyncMirrorDelete(id, snapshots);
         setImmediate(() => broadcastToWindows("note-deleted", { id }));
       }
       return result;
@@ -3438,15 +3470,17 @@ class IPCHandlers {
       return result;
     });
     ipcMain.handle("db-hard-delete-folder", (_, id) => {
+      const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
       const result = this.databaseManager.hardDeleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
-        this._mirrorRemovedFolder(result);
+        this._mirrorRemovedFolder(result, snapshots);
         setImmediate(() => broadcastToWindows("folder-deleted", { id }));
       }
       return result;
     });
     ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
+      const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
       if (result?.success) {
         // The triggers journaled the relocated and deleted notes. Mirror files live by
@@ -3457,7 +3491,7 @@ class IPCHandlers {
           this._asyncMirrorWrite(note);
         }
         for (const noteId of result.deletedNoteIds ?? []) {
-          this._asyncMirrorDelete(noteId);
+          this._asyncMirrorDelete(noteId, snapshots);
         }
         setImmediate(() => {
           if (result.folder) broadcastToWindows("folder-synced", result.folder);
@@ -15163,11 +15197,12 @@ class IPCHandlers {
   }
 
   deleteNoteInternal(id) {
+    const snapshots = this._captureMirrorDeletionNotes({ id });
     const result = this.databaseManager.deleteNote(id);
     if (result?.success) {
       setImmediate(() => broadcastToWindows("note-deleted", { id }));
       this.notifyVectorChanges();
-      this._asyncMirrorDelete(id);
+      this._asyncMirrorDelete(id, snapshots);
     }
     return result;
   }

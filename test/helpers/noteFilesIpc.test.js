@@ -1,6 +1,6 @@
 // Drives the real IPC handlers and the real mirror against a temp directory.
-// The database is an in-memory stand-in for the handful of queries the mirror
-// makes; its real queries are covered in spacesDatabase.test.js.
+// Most cases use an in-memory stand-in; deletion-result coverage also runs the
+// real SQLite database so tombstones and relocated rows follow production rules.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -12,6 +12,7 @@ const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
 const openedPaths = [];
+const tokenState = { token: "test-token", generation: 1 };
 
 const electronStub = {
   app: {
@@ -57,6 +58,21 @@ const electronStub = {
 
 Module._load = function loadWithElectronStub(request, parent, isMain) {
   if (request === "electron") return electronStub;
+  if (parent?.filename === handlersModulePath && request === "./tokenStore") {
+    return {
+      get: () => tokenState.token,
+      getState: () => ({ ...tokenState }),
+      subscribe: () => () => {},
+    };
+  }
+  if (parent?.filename === handlersModulePath && request === "./accountScopeBinding") {
+    return {
+      ...originalLoad.call(this, request, parent, isMain),
+      read: () => null,
+      persist: () => {},
+      clear: () => {},
+    };
+  }
   if (request === "./debugLogger" || request === "../helpers/debugLogger") {
     return new Proxy({}, { get: () => () => {} });
   }
@@ -126,6 +142,18 @@ function makeDatabase() {
       state.notes.filter((note) => ids.includes(note.id)).map((note) => note.id),
     getNotesForMirror: (ids) =>
       state.notes.filter((note) => ids.includes(note.id) && inScope(note)),
+    getLegacyMirrorFolderNames: () => state.folders.map((row) => row.name),
+    getNotesForMirrorDeletion: (filter) =>
+      state.notes.filter(
+        (note) =>
+          inScope(note) && Object.entries(filter).every(([field, value]) => note[field] === value)
+      ),
+    deleteNote: (id) => {
+      const index = state.notes.findIndex((note) => note.id === id && inScope(note));
+      if (index < 0) return { success: false, id };
+      state.notes.splice(index, 1);
+      return { success: true, id };
+    },
     getNote: (id) => state.notes.find((note) => note.id === id && inScope(note)) ?? null,
     getNotes: () => state.notes.filter((note) => !note.deleted_at && inScope(note)),
     getMirrorNoteSummaries: () => {
@@ -207,12 +235,22 @@ test.beforeEach(() => {
   basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-note-files-ipc-"));
   target.databaseManager = makeDatabase();
   target._noteFilesSync = undefined;
+  tokenState.token = "test-token";
+  target.windowManager = anything();
+  target._broadcastDatabaseAccountScope = () => {};
+  target._broadcastAccountScopedSettings = () => {};
+  target._cancelCalendarAuthorizations = () => {};
+  target._retireEnterpriseAudio = () => {};
+  target.enterpriseIdentityManager = anything();
+  target.audioStorageManager = anything();
+  target._buildSpeakerMappings = () => ({});
   openedPaths.length = 0;
 });
 
 test.afterEach(async () => {
   await settle();
   await invoke("note-files-set-enabled", false);
+  target.databaseManager.db?.close();
   fs.rmSync(basePath, { recursive: true, force: true });
 });
 
@@ -853,3 +891,282 @@ function caseInsensitive() {
     fs.rmSync(probe, { recursive: true, force: true });
   }
 }
+
+// Skip-rebuild migration yields after its first 50 rows; deletes can run before
+// the final note has ever acquired a ledger entry.
+for (const channel of [
+  "db-delete-note",
+  "db-hard-delete-note",
+  "db-delete-folder",
+  "db-hard-delete-folder",
+  "db-purge-space",
+  "db-relocate-revoked-folder",
+  "delete-account-data",
+]) {
+  test(`${channel} removes unchanged legacy files during background migration`, async () => {
+    const db = target.databaseManager;
+    db.state.notes = Array.from({ length: 51 }, (_, index) => ({
+      id: index + 1,
+      title: `Note ${index + 1}`,
+      content: "original body",
+      folder_id: 10,
+      space_id: 2,
+      account_id: null,
+      deleted_at: null,
+    }));
+    db.activeAccountId = "account-a";
+    if (channel === "delete-account-data") {
+      for (const note of db.state.notes) note.account_id = "account-a";
+    }
+    const lastNote = db.state.notes.at(-1);
+    lastNote.transcript = JSON.stringify([
+      { speaker: "SPEAKER_00", text: "spoken words", start: 0, end: 1 },
+    ]);
+    const mappings = { SPEAKER_00: "Alice" };
+    target._buildSpeakerMappings = (id) =>
+      db.state.notes.some((note) => note.id === id) ? mappings : {};
+    const { formatMd } = require("../../src/helpers/transcriptFormatter");
+    const transcriptFile = legacyFile(
+      "General",
+      "51-note-51-transcript.md",
+      formatMd(lastNote, JSON.parse(lastNote.transcript), mappings)
+    );
+    const oldFile = legacyFile(
+      "General",
+      "51-note-51.md",
+      legacyNote(51, "Note 51", "General", "original body")
+    );
+    const edited = legacyFile(
+      "General",
+      "51-copy.md",
+      legacyNote(51, "Note 51", "General", "user edit")
+    );
+    db.hardDeleteNote = db.deleteNote;
+    const removeFolder = () => {
+      db.state.notes = db.state.notes.filter((note) => note.folder_id !== 10);
+      db.state.folders = db.state.folders.filter((folder) => folder.id !== 10);
+      return {
+        success: true,
+        id: 10,
+        noteIds: Array.from({ length: 51 }, (_, index) => index + 1),
+        relocatedNotes: [],
+      };
+    };
+    db.deleteAccountData = () => ({
+      deletedNoteIds: removeFolder().noteIds,
+      deletedTranscriptionIds: [],
+    });
+    db.deleteFolder = removeFolder;
+    db.hardDeleteFolder = removeFolder;
+    db.addPendingVectorPurge = () => {};
+    db.purgeSpace = () => ({ ...removeFolder(), spaceId: 2 });
+    db.relocateRevokedFolder = () => {
+      const result = removeFolder();
+      return { ...result, deletedNoteIds: result.noteIds };
+    };
+    await invoke("note-files-set-enabled", true, basePath, { skipRebuild: true });
+    if (channel === "delete-account-data")
+      await invoke(channel, "account-a", tokenState.generation);
+    else
+      await invoke(channel, channel.includes("note") ? 51 : channel === "db-purge-space" ? 2 : 10);
+    await settle();
+    assert.equal(fs.existsSync(oldFile), false);
+    assert.equal(fs.existsSync(transcriptFile), false);
+    assert.equal(
+      fs.existsSync(path.join(basePath, "General", "edited-51-note-51-transcript.md")),
+      false
+    );
+    assert.equal(fs.existsSync(edited), false);
+    assert.equal(fs.existsSync(path.join(basePath, "General", "edited-51-copy.md")), true);
+  });
+}
+
+for (const transition of ["account switch", "scope sign-out", "token sign-out"]) {
+  test(`${transition} drains queued body updates before the scoped reader changes`, async () => {
+    await enableMirror();
+    const db = target.databaseManager;
+    db.activeAccountId = "account-a";
+    db.setActiveAccountId = (accountId) => {
+      db.activeAccountId = accountId;
+      db.state.outOfScopeNoteIds.add(100);
+    };
+    db.claimSignedOutLocalRows = () => {};
+    db.claimLegacyRowsOfOnlyAccount = () => {};
+    await invoke("db-upsert-note-from-cloud", { id: 100, content: "latest cloud body" });
+    if (transition === "token sign-out") {
+      target._handleAuthTokenChange({ token: null, generation: 2 });
+    } else {
+      const result = await invoke(
+        "set-active-account-scope",
+        transition === "account switch" ? "account-b" : null,
+        tokenState.generation
+      );
+      assert.equal(result.success, true);
+    }
+    await settle();
+    assert.match(fs.readFileSync(fileOf(100), "utf8"), /latest cloud body$/);
+  });
+}
+
+for (const mode of ["normal", "update", "held delete"]) {
+  const updating = mode === "update";
+  test(`${mode} quit synchronously drains queued and deferred note writes once`, async () => {
+    await enableMirror();
+    await invoke("db-upsert-note-from-cloud", { id: 100, content: "body at quit" });
+    const db = target.databaseManager;
+    let records = 0;
+    const record = db.recordMirrorFile;
+    db.recordMirrorFile = (...args) => {
+      records++;
+      return record(...args);
+    };
+    target.noteFiles.writeNote({ ...db.getNote(101), content: "local body at quit" });
+    const source = fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
+    const listener = source.slice(
+      source.indexOf("  let isShuttingDown = false;"),
+      source.indexOf("\n}\n\nfunction performSyncTeardown")
+    );
+    const teardown = source.slice(source.indexOf("function performSyncTeardown()"));
+    const callbacks = new Map();
+    let prevented = false;
+    let exited = false;
+    let bodyAtExit;
+    const context = {
+      app: {
+        on: (event, callback) => callbacks.set(event, callback),
+        exit: () => {
+          exited = true;
+          bodyAtExit = fs.readFileSync(fileOf(103), "utf8");
+        },
+      },
+      ipcHandlers: target,
+      sidecarRegistry: { shutdownAll: async () => {} },
+      updateManager: { isQuittingForUpdate: updating, cleanup: () => {} },
+      windowManager:
+        mode === "held delete"
+          ? {
+              controlPanelWindow: {
+                webContents: {
+                  executeJavaScript: async () => {
+                    await Promise.resolve();
+                    target.noteFiles.writeNote({
+                      ...db.getNote(103),
+                      content: "body from held delete",
+                    });
+                  },
+                },
+              },
+            }
+          : null,
+      isLiveWindow: (window) => Boolean(window),
+      setTimeout: (callback) => {
+        callback();
+      },
+      clearTimeout: () => {},
+      globalShortcut: { unregisterAll: () => {} },
+      clearPendingNoteDeepLink: () => {},
+    };
+    for (const name of [
+      "registryLoader",
+      "disposeRegistryIpc",
+      "wakeRewarmTimer",
+      "authBridgeServer",
+      "cliBridge",
+      "hotkeyManager",
+      "globeKeyManager",
+      "windowsKeyManager",
+      "linuxKeyManager",
+      "meetingDetectionEngine",
+      "googleCalendarManager",
+      "microsoftCalendarManager",
+      "appleCalendarManager",
+      "calendarReminderScheduler",
+      "audioTapManager",
+      "linuxPortalAudioManager",
+      "windowsLoopbackAudioManager",
+      "meetingAecManager",
+      "textEditMonitor",
+    ])
+      context[name] = null;
+    target._cleanupTextEditMonitor = () => {};
+    require("node:vm").runInNewContext(`${listener}\n${teardown}`, context);
+    callbacks.get("before-quit")({
+      preventDefault: () => {
+        prevented = true;
+      },
+    });
+    assert.match(fs.readFileSync(fileOf(100), "utf8"), /body at quit$/);
+    assert.match(fs.readFileSync(fileOf(101), "utf8"), /local body at quit$/);
+    const recordsAtQuit = records;
+    await settle();
+    assert.equal(
+      records,
+      recordsAtQuit + (mode === "held delete" ? 1 : 0),
+      "scheduled immediates do not write twice after the drain"
+    );
+    assert.equal(prevented, !updating);
+    assert.equal(exited, !updating);
+    if (mode === "held delete") assert.match(bodyAtExit, /body from held delete$/);
+  });
+}
+
+test("real local folder deletion cleans unmigrated tombstones omitted from live result IDs", async (t) => {
+  const originalGetPath = electronStub.app.getPath;
+  electronStub.app.getPath = () => basePath;
+  let db;
+  try {
+    const DatabaseManager = require("../../src/helpers/database");
+    db = new DatabaseManager();
+  } catch (error) {
+    if (
+      error?.code === "ERR_DLOPEN_FAILED" ||
+      error.message.includes("Could not locate the bindings file")
+    ) {
+      t.skip("better-sqlite3 native binding is not available for this Node runtime");
+      return;
+    }
+    throw error;
+  } finally {
+    electronStub.app.getPath = originalGetPath;
+  }
+  target.databaseManager = db;
+  db.setActiveAccountId("account-a");
+  const folder = db.createFolder("Archive").folder;
+  for (let index = 0; index < 50; index++) db.saveNote(`Live ${index}`, "body", "personal");
+  const gone = db.saveNote("Gone", "old body", "personal", null, null, folder.id).note;
+  db.db.prepare("UPDATE notes SET deleted_at = 'now' WHERE id = ?").run(gone.id);
+  db.setActiveAccountId("account-b");
+  const theirs = db.saveNote("Theirs", "other account body", "personal").note;
+  db.db.prepare("UPDATE notes SET folder_id = ? WHERE id = ?").run(folder.id, theirs.id);
+  db.setActiveAccountId("account-a");
+  legacyFile(
+    "Archive",
+    `${theirs.id}-theirs.md`,
+    legacyNote(theirs.id, "Theirs", "Archive", "other account body")
+  );
+  const oldPath = legacyFile(
+    "Archive",
+    `${gone.id}-gone.md`,
+    legacyNote(gone.id, "Gone", "Archive", "old body")
+  );
+  const editedPath = legacyFile(
+    "Archive",
+    `${gone.id}-copy.md`,
+    legacyNote(gone.id, "Gone", "Archive", "user edit")
+  );
+  await invoke("note-files-set-enabled", true, basePath, { skipRebuild: true });
+
+  const result = await invoke("db-delete-folder", folder.id);
+  await settle();
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.noteIds, [], "public result still reports only live notes");
+  assert.deepEqual(db.getExistingNoteIds([gone.id]), []);
+  const relocated = db.db.prepare("SELECT * FROM notes WHERE id = ?").get(theirs.id);
+  assert.equal(relocated.folder_id, null);
+  assert.equal(relocated.account_id, "account-b");
+  assert.match(fs.readFileSync(fileOf(theirs.id), "utf8"), /other account body$/);
+  assert.equal(fs.existsSync(oldPath), false);
+  assert.equal(fs.existsSync(editedPath), false);
+  assert.equal(fs.existsSync(path.join(basePath, "Archive", `edited-${gone.id}-copy.md`)), true);
+});

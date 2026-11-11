@@ -84,14 +84,18 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
 
   const whenEnabled = (work) => {
     if (!enabled) return;
-    const pending = new Promise((resolve) => {
-      setImmediate(() => {
-        pendingWrites.delete(pending);
-        if (enabled) guarded("Note file update failed", work);
-        resolve();
-      });
-    });
-    pendingWrites.add(pending);
+    const run = () => {
+      if (!pendingWrites.delete(run)) return;
+      if (enabled) guarded("Note file update failed", work);
+    };
+    pendingWrites.add(run);
+    setImmediate(run);
+  };
+
+  // Scope changes and update quits cannot wait for another event-loop turn.
+  const flushSync = () => {
+    for (const run of [...pendingWrites.values()]) run();
+    flushQueuedNotes();
   };
 
   const flushQueuedNotes = () => {
@@ -121,7 +125,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
     let placements = loadPlacements();
     const recorded = mirror.recordedFiles();
     const filesByNote = groupByNote(recorded.filter((entry) => entry.kind !== "dir"));
-    const legacy = mirror.legacyNoteIds();
+    const legacy = mirror.legacyNoteIds(db.getLegacyMirrorFolderNames());
     const summaries = db.getMirrorNoteSummaries();
     const liveIds = new Set(summaries.map((note) => note.id));
 
@@ -266,10 +270,10 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
     // A caller holding a row the database has already lost passes it, with the
     // speaker names it had.
     deleteNote(noteId, deletedRow = null, speakerMappings = null) {
-      whenEnabled(() => {
-        const [note] = deletedRow ? [deletedRow] : database().getNotesForMirror([noteId]);
-        mirror.deleteNote(noteId, note ?? null, speakerMappings ?? getSpeakerMappings(noteId));
-      });
+      if (!enabled) return;
+      const [note] = deletedRow ? [deletedRow] : database().getNotesForMirror([noteId]);
+      const mappings = speakerMappings ?? getSpeakerMappings(noteId);
+      whenEnabled(() => mirror.deleteNote(noteId, note ?? null, mappings));
     },
 
     // A note that arrived or changed through sync.
@@ -314,14 +318,16 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
 
     // The new account's notes may still be in the old layout or misplaced.
     accountChanged() {
+      generation++;
       if (enabled) reconcile();
     },
+
+    flushSync,
 
     // Runs everything scheduled now. Deletes finish before directories are
     // checked for being empty.
     async flush() {
-      await Promise.all(pendingWrites);
-      flushQueuedNotes();
+      flushSync();
       if (reconcileTimer) {
         clearTimeout(reconcileTimer);
         await scheduledReconcile();
