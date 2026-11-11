@@ -18,8 +18,9 @@ const APPEND_FLAGS =
   (fs.constants.O_NOFOLLOW ?? 0);
 const KEEP_FILES = 90;
 const CHECKPOINT_MS = 30_000;
-// A crash marker whose folder stays unreachable this long is treated as gone,
-// so it stops holding later recordings' crash recovery hostage.
+// A crash marker whose stop still can't be written this long after its last
+// checkpoint is treated as gone, so it stops holding later recordings' crash
+// recovery hostage.
 const MARKER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const START_SOURCES = new Set([
   "hotkey",
@@ -204,20 +205,23 @@ function createMeetingAuditLog({
         return;
       }
       const open = readMarker(text);
-      if (!open || now() - open.lastSeenAt > MARKER_MAX_AGE_MS) {
-        await fs.promises.rm(markerPath, { force: true });
-        markerKept = false;
+      if (open) {
+        markerKept = true;
+        try {
+          await append(open.dir, open.lastSeenAt, {
+            event: "recording.stopped",
+            sessionId: open.sessionId,
+            noteId: open.noteId,
+            reason: "interrupted",
+            durationSec: durationSec(open.startedAt, open.lastSeenAt),
+          });
+        } catch (error) {
+          if (now() - open.lastSeenAt <= MARKER_MAX_AGE_MS) throw error;
+          warnOnce("Dropped a crash marker that can't be closed", { error: error.message });
+        }
+      } else {
         warnOnce("Dropped a crash marker that can't be closed", {});
-        return;
       }
-      markerKept = true;
-      await append(open.dir, open.lastSeenAt, {
-        event: "recording.stopped",
-        sessionId: open.sessionId,
-        noteId: open.noteId,
-        reason: "interrupted",
-        durationSec: durationSec(open.startedAt, open.lastSeenAt),
-      });
       await fs.promises.rm(markerPath, { force: true });
       markerKept = false;
     });

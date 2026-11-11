@@ -330,6 +330,26 @@ test("a marker that can't be closed is dropped, so the next recording's crash st
   }
 });
 
+test("a crash first recovered after a week is still closed when its folder is reachable", async () => {
+  const first = harness();
+  first.log.recordingStarted({ sessionId: "s1", noteId: 9, trigger: "hotkey" });
+  await first.log.flush();
+
+  const later = harness();
+  later.clock.now = START + 8 * 86_400_000;
+  later.log.recoverInterrupted();
+  await later.log.flush();
+
+  assert.deepEqual(
+    lines().map((line) => [line.sessionId, line.event, line.reason]),
+    [
+      ["s1", "recording.started", null],
+      ["s1", "recording.stopped", "interrupted"],
+    ]
+  );
+  assert.equal(fs.existsSync(marker()), false);
+});
+
 test("a kept marker whose folder stays unreachable for a week is dropped", async () => {
   const share = path.join(userData, "share");
   const first = harness({ configuredPath: share });
