@@ -353,3 +353,26 @@ test("a quit closes a live recording as app-quit, and does nothing otherwise", a
   );
   assert.equal(fs.existsSync(marker()), false);
 });
+
+// Every user of a shared AuditLogPath can create files in it, so another user could
+// plant this user's daily file as a link to a file of theirs.
+test(
+  "a daily file planted as a symlink or hard link is refused, leaving its target untouched",
+  { skip: process.platform === "win32" },
+  async () => {
+    const shared = path.join(userData, "shared");
+    fs.mkdirSync(shared);
+    const target = path.join(userData, "shell-profile");
+    fs.writeFileSync(target, "original\n");
+    const daily = path.join(shared, "meeting-audit-jdoe-2026-11-11.jsonl");
+    for (const plant of [fs.symlinkSync, fs.linkSync]) {
+      fs.rmSync(daily, { force: true });
+      plant(target, daily);
+      const { log, warnings } = harness({ configuredPath: shared });
+      log.recordingRefused({ noteId: null, trigger: "hotkey", reason: "POLICY_UNRESOLVABLE" });
+      await log.flush();
+      assert.equal(fs.readFileSync(target, "utf8"), "original\n", plant.name);
+      assert.equal(warnings.length, 1, plant.name);
+    }
+  }
+);

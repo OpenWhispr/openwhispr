@@ -9,6 +9,12 @@ const { AUDIO_POLICY_REFUSAL_CODES } = require("./audioPolicyRefusals");
 // content: only when a recording started, stopped or was refused, and how.
 
 const DAILY_FILE = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
+// O_NOFOLLOW doesn't exist on Windows, where creating a symlink needs admin rights.
+const APPEND_FLAGS =
+  fs.constants.O_WRONLY |
+  fs.constants.O_APPEND |
+  fs.constants.O_CREAT |
+  (fs.constants.O_NOFOLLOW ?? 0);
 const KEEP_FILES = 90;
 const CHECKPOINT_MS = 30_000;
 const START_SOURCES = new Set([
@@ -104,11 +110,26 @@ function createMeetingAuditLog({
     }
   }
 
+  // Every user of a shared AuditLogPath can create files there, so a daily file
+  // another user planted as a symlink or hard link to one of this user's files
+  // is refused rather than appended to.
+  async function appendLine(file, line) {
+    const handle = await fs.promises.open(file, APPEND_FLAGS);
+    try {
+      const stat = await handle.stat();
+      if (stat.nlink !== 1 || (process.getuid && stat.uid !== process.getuid()))
+        throw new Error("Not this user's own audit file");
+      await handle.appendFile(line);
+    } finally {
+      await handle.close();
+    }
+  }
+
   async function append(dir, at, entry) {
     const ts = new Date(at).toISOString();
     const file = path.join(dir, `${filePrefix}${ts.slice(0, 10)}.jsonl`);
     await fs.promises.mkdir(dir, { recursive: true });
-    await fs.promises.appendFile(
+    await appendLine(
       file,
       `${JSON.stringify({
         ts,
