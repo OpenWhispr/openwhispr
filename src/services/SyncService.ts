@@ -2244,16 +2244,15 @@ export class SyncService {
     return navigator.locks.request(`${NOTE_PUSH_LOCK_PREFIX}${localId}`, { signal }, task);
   }
 
-  // A sync pass's note locks, taken in id order so two holders of overlapping
-  // sets can't deadlock. After NOTE_PUSH_LOCK_PASS_WAIT_MS the pass leaves
-  // these notes to the next one.
+  // A sync pass's note locks. After NOTE_PUSH_LOCK_PASS_WAIT_MS the pass
+  // leaves these notes to the next one.
   private async withNotePushLocks(localIds: number[], task: () => Promise<void>): Promise<void> {
     const wait = new AbortController();
     const timer = setTimeout(() => wait.abort(), NOTE_PUSH_LOCK_PASS_WAIT_MS);
     const take = ([first, ...rest]: number[]): Promise<void> =>
       first === undefined ? task() : this.withNotePushLock(first, () => take(rest), wait.signal);
     try {
-      await take([...new Set(localIds)].sort((a, b) => a - b));
+      await take(localIds);
     } catch (err) {
       // Anything but the wait running out still propagates.
       if (!wait.signal.aborted || err !== wait.signal.reason) throw err;
@@ -2813,7 +2812,7 @@ export class SyncService {
 
     const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const ctx = await this.buildSpaceContext();
-    const pushable: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
+    const pushable: NoteItem[] = [];
     for (const note of pending) {
       if (
         conflicted.has(note.client_note_id) ||
@@ -2832,16 +2831,15 @@ export class SyncService {
         // folder and notes push together once the conflict resolves.
         continue;
       }
-      const scope = this.resolvePushScope("note", note, ctx);
-      if (!scope) continue;
-      pushable.push({ note, scope });
+      if (!this.resolvePushScope("note", note, ctx)) continue;
+      pushable.push(note);
     }
 
-    const migration = pushable.filter(({ note }) => note.cloud_id);
-    const fresh = pushable.filter(({ note }) => !note.cloud_id);
+    const migration = pushable.filter((note) => note.cloud_id);
+    const fresh = pushable.filter((note) => !note.cloud_id);
 
     let denied = false;
-    for (const { note: queued } of migration) {
+    for (const queued of migration) {
       await this.withNotePushLocks([queued.id], async () => {
         // A debounced push may have sent the note while this pass waited for
         // its lock: read it again, so the PATCH carries the base it left.
@@ -2899,12 +2897,12 @@ export class SyncService {
     for (let i = 0; i < fresh.length; i += BATCH_SIZE) {
       const batch = fresh.slice(i, i + BATCH_SIZE);
       await this.withNotePushLocks(
-        batch.map(({ note }) => note.id),
+        batch.map((note) => note.id),
         async () => {
           // A debounced push may have created some of these meanwhile. They
           // hold a cloud id now, and their later text goes out as an update.
           const unsent: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
-          for (const { note: queued } of batch) {
+          for (const queued of batch) {
             const note = await window.electronAPI.getNote?.(queued.id);
             const scope = note ? this.stillPushable(note, queued, blockedFolderIds, ctx) : null;
             if (note && scope) unsent.push({ note, scope });
