@@ -278,3 +278,8 @@ test("a ranged row confirmed again for its named speaker keeps the name, unlocke
   assert.equal(rows()[0].speakerName, "Ana");
   assert.notEqual(rows()[0].speakerLocked, true);
 });
+
+test("the store says whether the session hears system audio, for the stepper hint", async (t) => {
+  const { store } = await startMeeting(t);
+  assert.equal(store().sessionSystemAudioActive, true);
+});

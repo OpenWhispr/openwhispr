@@ -127,6 +127,8 @@ interface MeetingRecordingState {
   sessionDiarizationEnabled: boolean;
   sessionExpectedCount: number;
   userTouchedStepper: boolean;
+  /** Whether this session captures system audio, which live speaker detection reads. */
+  sessionSystemAudioActive: boolean;
   error: string | null;
   /** Bumped on every error report so identical repeated errors still re-notify. */
   errorNonce: number;
@@ -538,6 +540,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
     (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ?? true,
   sessionExpectedCount: DEFAULT_EXPECTED_SPEAKER_COUNT,
   userTouchedStepper: false,
+  sessionSystemAudioActive: false,
   error: null,
   errorNonce: 0,
   systemAudioSilentWarning: false,
@@ -548,6 +551,15 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
 }));
+
+// The UI reads it from the store (the stepper hint); the module copy serves the
+// IPC handlers, which run outside React.
+function setSessionSystemAudioActive(active: boolean): void {
+  sessionSystemAudioActive = active;
+  if (useMeetingRecordingStore.getState().sessionSystemAudioActive !== active) {
+    useMeetingRecordingStore.setState({ sessionSystemAudioActive: active });
+  }
+}
 
 // Org-policy refusals: the main process's own sentinel and the refusal codes it
 // forwards. Each ends the recording; MeetingRecordingMount explains it.
@@ -950,7 +962,7 @@ async function cleanup(): Promise<void> {
   isPrepared = false;
   isRecordingFlag = false;
   isStartingFlag = false;
-  sessionSystemAudioActive = false;
+  setSessionSystemAudioActive(false);
 }
 
 export async function prepareTranscription(): Promise<void> {
@@ -1107,7 +1119,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     recentSystemSpeaker = null;
     speakerLocks = locks;
     systemPartialSpeakerIdValue = null;
-    sessionSystemAudioActive = false;
+    setSessionSystemAudioActive(false);
     recordingNoteDeleted = false;
 
     useMeetingRecordingStore.setState({
@@ -1801,7 +1813,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
                 reason: "loopback_takeover_failed",
                 recovering: false,
               });
-              sessionSystemAudioActive = false;
+              setSessionSystemAudioActive(false);
               void window.electronAPI
                 ?.meetingTranscriptionSetSystemAudioAvailable?.(sessionId, false)
                 .catch(() => undefined);
@@ -1843,7 +1855,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       }
 
       const systemAudioAvailable = systemAudioHandledInMain || systemStream !== null;
-      sessionSystemAudioActive = systemAudioAvailable;
+      setSessionSystemAudioActive(systemAudioAvailable);
       systemAudioAvailabilityResolved = true;
       if (systemAudioAvailable && pendingSystemAudioInterruption) {
         publishSystemAudioInterruption(pendingSystemAudioInterruption);
