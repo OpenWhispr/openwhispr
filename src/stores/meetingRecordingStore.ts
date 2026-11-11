@@ -760,8 +760,12 @@ function applySpeakerIdentification(
 
 // A system row this session hasn't confirmed was only carried onto its speaker,
 // so it shows the user's name for them but stays movable until an identification
-// confirms it. Confirmed and already locked system rows, an earlier session's rows
-// (nothing can confirm them now), and mic rows are locked under the name.
+// confirms it. A local-model row is never locked either, even once confirmed: it
+// is picked from whichever identifications overlap it so far, and a new voice
+// answering inside the previous speaker's window is picked for them until its own
+// (retroactive) window arrives; the re-pick keeps or drops the name. Other
+// confirmed and already locked system rows, an earlier session's rows (nothing can
+// confirm them now), and mic rows are locked under the name.
 function nameSpeakerRow(segment: TranscriptSegment, name: string): TranscriptSegment {
   const patch = {
     speakerName: name,
@@ -772,7 +776,7 @@ function nameSpeakerRow(segment: TranscriptSegment, name: string): TranscriptSeg
   if (
     segment.source === "system" &&
     !segment.speakerLocked &&
-    segment.speakerStatus !== "confirmed" &&
+    (segment.speakerStatus !== "confirmed" || segmentRangeEnds.has(segment.id)) &&
     !isEarlierSessionSpeaker(segment.speaker)
   ) {
     return normalizeTranscriptSegment({ ...segment, ...patch });

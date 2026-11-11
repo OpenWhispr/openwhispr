@@ -237,3 +237,44 @@ test("naming an earlier session's speaker locks its lines, which nothing can con
   assert.equal(rows()[0].speakerName, "Carol");
   assert.equal(rows()[0].speakerLocked, true);
 });
+
+// A speaker's identification window runs past their last word, so a new voice that
+// answers inside it has no identification yet and its local-model row is picked for
+// the previous speaker from that sliver. The row must stay movable, or the later
+// retroactive window could never reach it while main moves its own copy.
+test("a ranged row picked for a named speaker is named without locking, and moves on promotion", async (t) => {
+  const { identify, final, lockSpeaker, rows } = await startMeeting(t);
+  identify(A(T, T + 5000));
+  lockSpeaker("speaker_0", "Ana");
+  final({ text: "new voice", source: "system", timestamp: T + 4500, endTimestamp: T + 10_000 });
+  assert.equal(rows()[0].speaker, "speaker_0");
+  assert.equal(rows()[0].speakerName, "Ana");
+  assert.notEqual(rows()[0].speakerLocked, true);
+  identify({ ...B(T + 3750, T + 10_750), retroactive: true });
+  assert.equal(rows()[0].speaker, "speaker_1");
+  assert.notEqual(rows()[0].speakerName, "Ana");
+  assert.notEqual(rows()[0].speakerLocked, true);
+});
+
+test("naming a speaker doesn't lock their ranged rows", async (t) => {
+  const { identify, final, lockSpeaker, rows } = await startMeeting(t);
+  identify(A(T, T + 5000));
+  final({ text: "new voice", source: "system", timestamp: T + 4500, endTimestamp: T + 10_000 });
+  lockSpeaker("speaker_0", "Ana");
+  assert.equal(rows()[0].speakerName, "Ana");
+  assert.notEqual(rows()[0].speakerLocked, true);
+  identify({ ...B(T + 3750, T + 10_750), retroactive: true });
+  assert.equal(rows()[0].speaker, "speaker_1");
+  assert.notEqual(rows()[0].speakerName, "Ana");
+});
+
+test("a ranged row confirmed again for its named speaker keeps the name, unlocked", async (t) => {
+  const { identify, final, lockSpeaker, rows } = await startMeeting(t);
+  identify(A(T, T + 5000));
+  lockSpeaker("speaker_0", "Ana");
+  final({ text: "ana again", source: "system", timestamp: T + 4500, endTimestamp: T + 10_000 });
+  identify(A(T + 5000, T + 10_000));
+  assert.equal(rows()[0].speaker, "speaker_0");
+  assert.equal(rows()[0].speakerName, "Ana");
+  assert.notEqual(rows()[0].speakerLocked, true);
+});
