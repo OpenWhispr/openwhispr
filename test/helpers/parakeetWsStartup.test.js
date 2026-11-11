@@ -521,13 +521,15 @@ test(
   "Windows creates the real hotwords directory and file with a current-user-only ACL",
   { skip: process.platform !== "win32" },
   async (t) => {
+    // .NET rather than Get-Acl: a powershell.exe started under PowerShell 7, as CI's steps are,
+    // inherits PowerShell 7's module paths and can't autoload Microsoft.PowerShell.Security.
     const inspectAcl = `
 $ErrorActionPreference = 'Stop'
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $sid = [System.Security.Principal.SecurityIdentifier]
-$file = $env:OW_TEST_HOTWORDS_FILE
-foreach ($entry in @($file, [System.IO.Path]::GetDirectoryName($file))) {
-  $acl = Get-Acl -LiteralPath $entry
+$file = [System.IO.FileInfo]::new($env:OW_TEST_HOTWORDS_FILE)
+foreach ($entry in @($file, $file.Directory)) {
+  $acl = $entry.GetAccessControl()
   $rules = @($acl.GetAccessRules($true, $true, $sid))
   if (!$acl.AreAccessRulesProtected -or $rules.Count -ne 1 -or
       $rules[0].IdentityReference.Value -ne $user -or
