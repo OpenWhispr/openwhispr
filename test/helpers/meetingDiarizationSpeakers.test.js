@@ -304,6 +304,44 @@ test("a live speaker's name stays only on the voice it matches once the call is 
   ]);
 });
 
+// Automatic mode names several remote speakers live; after the call each name
+// must land on the cluster with that speaker's voice, whatever order the
+// diarizer numbered them in.
+test("names set on two live speakers carry to their matching after-call voices", async () => {
+  embeddingModelAvailable = true;
+  const voiceOf = { A: [1, 0, 0], B: [0, 1, 0], C: [0, 0, 1] };
+  const clusterVoices = { speaker_00: "B", speaker_01: "A", speaker_02: "C" };
+  voices = new Map(
+    Object.entries(clusterVoices).map(([cluster, voice]) => [cluster, voiceOf[voice]])
+  );
+  const output = turns(Object.keys(clusterVoices), 30, 8);
+
+  const result = await diarizeMeeting(output, {
+    liveSpeakerState: {
+      speaker_0: { displayName: "Ana", embedding: voiceOf.A },
+      speaker_1: { displayName: "Bea", embedding: voiceOf.B },
+    },
+  });
+
+  // Every line of a voice must carry the same name, so a voice with mixed names
+  // reads as a list and fails the comparison.
+  const namesByVoice = ({ lines }) => {
+    const names = {};
+    for (const turn of output) {
+      const line = lines.find((candidate) => candidate.timestamp === turn.start);
+      const voice = clusterVoices[turn.speaker];
+      names[voice] = [...new Set([...(names[voice] ?? []), line.speakerName ?? null])];
+    }
+    return Object.fromEntries(
+      Object.entries(names).map(([voice, voiceNames]) => [
+        voice,
+        voiceNames.length === 1 ? voiceNames[0] : voiceNames,
+      ])
+    );
+  };
+  assert.deepEqual(namesByVoice(result), { A: "Ana", B: "Bea", C: null });
+});
+
 test("live names stay when the voices can't be read to place them", async () => {
   embeddingModelAvailable = true;
   voicesUnreadable = true;
