@@ -7737,7 +7737,8 @@ class IPCHandlers {
       },
       getScope,
       broadcast: (snapshot, updatePolicy) => {
-        // A failed lookup says nothing new to the audio controls, as before.
+        // A workspace verdict still loading, or one that failed for an unmanaged
+        // identity, changes nothing for the audio controls.
         if (
           !isUnmanagedLookup(snapshot) &&
           (snapshot.status !== "loading" || !snapshot.deviceReady)

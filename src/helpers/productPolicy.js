@@ -1,8 +1,8 @@
 const rules = require("../stores/policyRules.ts");
 
 // A verdict that failed or is still on its way, for an identity nothing says
-// is managed: no device policy, no managed verdict, no server calling the
-// policy unresolvable. It restricts nothing.
+// is managed (no device policy, no server calling the policy unresolvable).
+// It restricts nothing.
 function isUnmanagedLookup(snapshot) {
   return !snapshot.success && snapshot.deviceReady === true && !snapshot.managed;
 }
