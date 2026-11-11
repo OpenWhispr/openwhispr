@@ -57,7 +57,8 @@ function registerEventListeners() {
 
   if (window.electronAPI.onUpdateStatusChanged) {
     const dispose = window.electronAPI.onUpdateStatusChanged((status) => {
-      const blocked = status.policyReady === false || status.updateMode === "it_managed";
+      // Main ends running work only once no verdict allows it, not while one is pending.
+      const blocked = status.updateMode == null || status.updateMode === "it_managed";
       updateGlobalState({
         status,
         ...(blocked
@@ -191,7 +192,9 @@ export function useUpdater() {
     updateGlobalState({ isDownloading: true, downloadProgress: 0 });
     try {
       const result = await window.electronAPI.downloadUpdate();
-      if (!result.success) throw Object.assign(new Error(result.message), { code: result.code });
+      if (!result.success && result.code) {
+        throw Object.assign(new Error(result.message), { code: result.code });
+      }
       return result;
     } catch (error) {
       updateGlobalState({ isDownloading: false });
@@ -209,7 +212,9 @@ export function useUpdater() {
 
     try {
       const result = await window.electronAPI.installUpdate();
-      if (!result.success) throw Object.assign(new Error(result.message), { code: result.code });
+      if (!result.success && result.code) {
+        throw Object.assign(new Error(result.message), { code: result.code });
+      }
 
       // Settings raises its own "almost there" dialog when the restart stalls.
       setTimeout(() => {

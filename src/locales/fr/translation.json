@@ -3029,6 +3029,7 @@
         "itManaged": "Votre organisation gère les mises à jour.",
         "policyLoading": "Chargement des paramètres de mise à jour…",
         "policyUnavailable": "La politique de mise à jour est indisponible. Réessayez une fois connecté.",
+        "policyChanged": "La politique de mise à jour a changé. Recherchez à nouveau les mises à jour.",
         "managedBadge": "Géré",
         "stagedBeforePolicy": "Une mise à jour a été préparée avant l’application de cette politique et peut s’installer à la fermeture de l’application. Contactez le service informatique avant de quitter ou de redémarrer."
       },

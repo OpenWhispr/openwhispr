@@ -2251,6 +2251,7 @@
         "itManaged": "A sua organização gere as atualizações.",
         "policyLoading": "A carregar as definições de atualização…",
         "policyUnavailable": "A política de atualizações está indisponível. Tente novamente quando tiver ligação.",
+        "policyChanged": "A política de atualizações mudou. Verifique novamente se há atualizações.",
         "managedBadge": "Gerido",
         "stagedBeforePolicy": "Uma atualização foi preparada antes da aplicação desta política e poderá ser instalada ao fechar a aplicação. Contacte a equipa de TI antes de fechar ou reiniciar."
       },

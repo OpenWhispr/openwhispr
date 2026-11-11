@@ -1235,7 +1235,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             // The side-panel layout (a meeting, or a narrow window with a note open) has no room for it.
             workspaceIntroAllowed={!showSettings && !isSidePanelLayout}
             updateAction={
-              updateStatus.policyReady !== false &&
               updateStatus.updateMode !== "it_managed" &&
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||

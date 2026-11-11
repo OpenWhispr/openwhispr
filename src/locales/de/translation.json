@@ -3022,6 +3022,7 @@
         "itManaged": "Deine Organisation verwaltet Updates.",
         "policyLoading": "Update-Einstellungen werden geladen…",
         "policyUnavailable": "Die Update-Richtlinie ist nicht verfügbar. Versuche es erneut, sobald eine Verbindung besteht.",
+        "policyChanged": "Die Update-Richtlinie hat sich geändert. Suche erneut nach Updates.",
         "managedBadge": "Verwaltet",
         "stagedBeforePolicy": "Ein Update wurde vor Anwendung dieser Richtlinie bereitgestellt und kann beim Beenden der App installiert werden. Kontaktiere die IT, bevor du die App beendest oder neu startest."
       },
