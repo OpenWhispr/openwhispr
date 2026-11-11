@@ -37,7 +37,9 @@ function fakeTools(
     "objdump",
     `[ "$1" = "-T" ] && file=symbols.txt || file=disassembly.txt\nwhile read -r line; do echo "$line"; done < "${dir}/$file"`
   );
-  if (qemu) write("qemu-x86_64", `echo "$2|$7" >> "${log}"\n${qemu}`);
+  if (qemu) {
+    write("qemu-x86_64", `for database do :; done\necho "$2|$4|$database" >> "${log}"\n${qemu}`);
+  }
 
   const originalPath = process.env.PATH;
   process.env.PATH = dir;
@@ -58,7 +60,7 @@ function fakeTools(
   };
 }
 
-test("checks every CPU profile and removes each scratch directory", { skip }, (t) => {
+test("checks CPUs without JavaScript JIT and cleans scratch directories", { skip }, (t) => {
   const tools = fakeTools(t);
   verifyLinuxSqliteBaseline("/app", "open-whispr-app");
 
@@ -67,7 +69,8 @@ test("checks every CPU profile and removes each scratch directory", { skip }, (t
     calls.map(([cpu]) => cpu),
     ["Nehalem", "IvyBridge", "Haswell,-avx2"]
   );
-  for (const [, database] of calls) {
+  for (const [, runtimeFlag, database] of calls) {
+    assert.equal(runtimeFlag, "--jitless");
     assert.equal(path.basename(database), "Grüße.db");
     assert.equal(fs.existsSync(path.dirname(database)), false);
   }

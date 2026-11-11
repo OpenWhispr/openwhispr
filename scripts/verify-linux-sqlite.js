@@ -86,9 +86,11 @@ function runProbe(binary, sqlite, cpu, timeoutMs) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-sqlite-baseline-"));
   try {
     console.log(`  afterPack: checking packaged SQLite on ${cpu}`);
+    // Keep V8's generated code out of this native-addon compatibility check;
+    // QEMU's Haswell emulation can fail during JavaScript module loading.
     execFileSync(
       "qemu-x86_64",
-      ["-cpu", cpu, binary, "-e", probe, sqlite, path.join(scratch, "Grüße.db")],
+      ["-cpu", cpu, binary, "--jitless", "-e", probe, sqlite, path.join(scratch, "Grüße.db")],
       {
         cwd: scratch,
         env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
