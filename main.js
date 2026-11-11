@@ -691,7 +691,7 @@ function initializeCoreManagers() {
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
   updateManager = new UpdateManager({
-    getPolicy: () => ipcHandlers?.getUpdatePolicy?.() ?? { success: false },
+    getPolicy: (options) => ipcHandlers?.getUpdatePolicy?.(options) ?? { success: false },
   });
   updateManager.setWindowManager(windowManager);
   windowsKeyManager = new WindowsKeyManager();

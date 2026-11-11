@@ -1285,8 +1285,11 @@ export interface UpdateCheckResult {
 }
 
 export interface UpdateStatusResult {
-  updateMode?: import("./policy").UpdateMode;
+  /** null while no verdict allows updates. */
+  updateMode?: import("./policy").UpdateMode | null;
   policyReady?: boolean;
+  /** The policy lookup failed with no verdict held; a check retries it. */
+  policyUnavailable?: boolean;
   effectiveAutoUpdatesEnabled?: boolean;
   stagedUpdate?: boolean;
   updateAvailable: boolean;

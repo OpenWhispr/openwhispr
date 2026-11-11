@@ -2329,7 +2329,8 @@
         "managedByOrganization": "Administrado por tu organización.",
         "itManaged": "Tu organización administra las actualizaciones.",
         "policyLoading": "Cargando los ajustes de actualización…",
-        "policyUnavailable": "La política de actualizaciones no está disponible. Inténtalo de nuevo cuando tengas conexión.",
+        "policyUnavailable": "No se pudieron cargar los ajustes de actualización. Busca actualizaciones para volver a intentarlo.",
+        "policyChanged": "La política de actualizaciones cambió. Vuelve a buscar actualizaciones.",
         "managedBadge": "Administrado",
         "stagedBeforePolicy": "Se preparó una actualización antes de que se aplicara esta política y puede instalarse al cerrar la aplicación. Contacta con TI antes de cerrar o reiniciar."
       },

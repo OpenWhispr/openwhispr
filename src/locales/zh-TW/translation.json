@@ -2277,7 +2277,8 @@
         "managedByOrganization": "由你的組織管理。",
         "itManaged": "更新由你的組織管理。",
         "policyLoading": "正在載入更新設定…",
-        "policyUnavailable": "無法取得更新原則。請連線後再試。",
+        "policyUnavailable": "無法載入更新設定。請檢查更新以重試。",
+        "policyChanged": "更新原則已變更。請再次檢查更新。",
         "managedBadge": "受管理",
         "stagedBeforePolicy": "在此原則生效前已有更新準備就緒，可能會在結束應用程式時安裝。結束或重新啟動前請聯絡 IT 部門。"
       },

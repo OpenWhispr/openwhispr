@@ -1077,7 +1077,6 @@ class IPCHandlers {
   }
 
   _handleAuthTokenChange({ generation, token }) {
-    this.updateManager?.invalidatePolicy();
     this._cancelCalendarAuthorizations();
     // A new bearer may belong to another account, so its policy is fetched
     // before new work; only a sign-out ends the work already running. A real
@@ -1120,9 +1119,11 @@ class IPCHandlers {
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
     }
+    this.updateManager?.invalidatePolicy();
     const effectivePolicy = this.effectivePolicyManager?.invalidate();
     // Signed out is a guest, whose verdict (the device's policy, if any) is known.
     if (!token) this._localModelPolicy?.invalidate(effectivePolicy);
+    void this.updateManager?.refreshPolicy();
     void this.refreshEffectivePolicy?.();
     broadcastToWindows("auth-token-state-changed", {
       generation,
@@ -3347,6 +3348,7 @@ class IPCHandlers {
         );
         this.effectivePolicyManager.invalidate();
       } else if (guest) this._localModelPolicy?.update(this.effectivePolicyManager.getCurrent());
+      void this.updateManager?.refreshPolicy();
       void this.refreshEffectivePolicy();
       broadcastToWindows(
         "active-account-scope-changed",
@@ -5224,9 +5226,10 @@ class IPCHandlers {
       // Once Squirrel.Mac holds a downloaded update it installs it on this quit regardless
       // of any flag, so the updater owns that restart instead of racing app.relaunch().
       if (this.updateManager.hasStagedUpdate()) {
-        const { success } = await this.updateManager
-          .installUpdate()
-          .catch(() => ({ success: false }));
+        const { success } = await this.updateManager.restartIntoStagedUpdate().catch((error) => {
+          debugLogger.error("Restart into staged update failed", { error: error.message });
+          return { success: false };
+        });
         if (success) return;
       }
       this.updateManager.deferInstallOnQuit();
@@ -7521,11 +7524,10 @@ class IPCHandlers {
     const getSessionCookiesFromWindow = async (win) => {
       const scopedUrls = [getAuthUrl(), getApiUrl()].filter(Boolean);
       const cookiesByName = new Map();
-      const cookieSession = win?.webContents.session ?? session.defaultSession;
 
       for (const url of scopedUrls) {
         try {
-          const scopedCookies = await cookieSession.cookies.get({ url });
+          const scopedCookies = await win.webContents.session.cookies.get({ url });
           for (const cookie of scopedCookies) {
             if (!cookiesByName.has(cookie.name)) {
               cookiesByName.set(cookie.name, cookie.value);
@@ -7541,7 +7543,7 @@ class IPCHandlers {
 
       // Fallback for older sessions where cookies are not URL-scoped as expected.
       if (cookiesByName.size === 0) {
-        const allCookies = await cookieSession.cookies.get({});
+        const allCookies = await win.webContents.session.cookies.get({});
         for (const cookie of allCookies) {
           if (!cookiesByName.has(cookie.name)) {
             cookiesByName.set(cookie.name, cookie.value);
@@ -7576,7 +7578,7 @@ class IPCHandlers {
     const getAuthHeaderFromWindow = async (win) => {
       const token = tokenStore.get();
       if (token) return { Authorization: `Bearer ${token}` };
-      const cookieHeader = await getSessionCookiesFromWindow(win);
+      const cookieHeader = win ? await getSessionCookiesFromWindow(win) : "";
       return cookieHeader ? { Cookie: cookieHeader } : {};
     };
 
@@ -7746,7 +7748,8 @@ class IPCHandlers {
           this._audioFeaturePolicy?.update(snapshot);
         if (snapshot.workspaceRequired || snapshot.authGeneration === credentialsGeneration)
           this._localModelPolicy?.update(snapshot);
-        this.updateManager?.updatePolicy?.(updatePolicy);
+        // The updater would take a verdict still loading for a failed lookup.
+        if (updatePolicy.status !== "loading") this.updateManager?.updatePolicy?.(updatePolicy);
         if (
           !snapshot.deviceReady ||
           snapshot.localOnly ||
@@ -7771,7 +7774,9 @@ class IPCHandlers {
           : await getAuthHeaderFromWindow(
               [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
                 (win) => win && !win.isDestroyed()
-              )
+              ) ??
+                // With no window yet, a cookie session is in the default session.
+                (session.defaultSession && { webContents: { session: session.defaultSession } })
             );
       } catch (error) {
         debugLogger.warn("Policy credentials could not be read", { error: error.message });
@@ -7789,16 +7794,15 @@ class IPCHandlers {
       }
       if (scope.authGeneration !== tokenStore.getState().generation)
         return this.effectivePolicyManager.getCurrent();
-      // Other cookies in the jar say nothing about who this is.
-      cookieGeneration = SESSION_COOKIE_PATTERN.test(authHeaders.Cookie ?? "")
-        ? scope.authGeneration
-        : null;
+      // Other cookies in the jar say nothing about who this is, so none is sent.
+      const sessionCookie = SESSION_COOKIE_PATTERN.test(authHeaders.Cookie ?? "");
+      cookieGeneration = sessionCookie ? scope.authGeneration : null;
       credentialsGeneration = scope.authGeneration;
       const currentScope = getScope();
       return this.effectivePolicyManager.getPolicy({
         accountId: currentScope.accountId,
         expectedAuthGeneration: scope.authGeneration,
-        authHeaders,
+        authHeaders: authHeaders.Authorization || sessionCookie ? authHeaders : {},
         refresh,
         held,
       });

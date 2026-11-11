@@ -48,7 +48,10 @@ function createUpdateManager(autoUpdater) {
   delete require.cache[updaterModulePath];
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron-updater") return { autoUpdater };
-    if (request === "electron") return { autoUpdater: { on() {}, removeListener() {} } };
+    if (request === "electron") {
+      const emitter = { on() {}, removeListener() {} };
+      return { autoUpdater: emitter, app: emitter };
+    }
     if (request === "child_process") return { execSync: () => "0" };
     return originalLoad.call(this, request, parent, isMain);
   };

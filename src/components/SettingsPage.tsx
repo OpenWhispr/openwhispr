@@ -1338,7 +1338,9 @@ export default function SettingsPage({
   } = useUpdater();
 
   const organizationManagesUpdates = updateStatus.updateMode === "it_managed";
-  const updatePolicyPending = updateStatus.policyReady === false;
+  const updatePolicyUnavailable =
+    updateStatus.policyReady === false && updateStatus.policyUnavailable === true;
+  const updatePolicyPending = updateStatus.policyReady === false && !updatePolicyUnavailable;
   const updateToggleLocked =
     updatePolicyPending || updateStatus.updateMode === "always_on" || organizationManagesUpdates;
 
@@ -1346,7 +1348,6 @@ export default function SettingsPage({
     !updateStatus.isDevelopment && (updateStatus.updateAvailable || updateStatus.updateDownloaded);
   const showUpdateDetails =
     !organizationManagesUpdates &&
-    !updatePolicyPending &&
     (isUpdateAvailable || updateStatus.updateDownloaded || updateInfo?.releaseNotes);
 
   const migration = useMigration();
@@ -4665,15 +4666,17 @@ EOF`,
                     description={
                       organizationManagesUpdates
                         ? t("settingsPage.general.updates.itManaged")
-                        : updatePolicyPending
-                          ? t("settingsPage.general.updates.policyLoading")
-                          : updateStatus.isDevelopment
-                            ? t("settingsPage.general.updates.devMode")
-                            : !updateStatus.isSupported
-                              ? t("settingsPage.general.updates.managedByPackageManager")
-                              : isUpdateAvailable
-                                ? t("settingsPage.general.updates.newVersionAvailable")
-                                : t("settingsPage.general.updates.latestVersion")
+                        : updateStatus.isDevelopment
+                          ? t("settingsPage.general.updates.devMode")
+                          : !updateStatus.isSupported
+                            ? t("settingsPage.general.updates.managedByPackageManager")
+                            : isUpdateAvailable
+                              ? t("settingsPage.general.updates.newVersionAvailable")
+                              : updatePolicyPending
+                                ? t("settingsPage.general.updates.policyLoading")
+                                : updatePolicyUnavailable
+                                  ? t("settingsPage.general.updates.policyUnavailable")
+                                  : t("settingsPage.general.updates.latestVersion")
                     }
                   >
                     <div className="flex items-center gap-2.5">
