@@ -25,6 +25,8 @@ const {
   fragmentFilterLanguages,
   isWrongScriptFragment,
 } = require("../../src/helpers/meetingFragmentFilter");
+const { pickSpeakerForRange } = require("../../src/helpers/speakerRangeMatch");
+const { applyConfirmedSpeaker } = require("../../src/helpers/speakerAssignmentPolicy");
 
 const systemSegment = (timestamp, text) => ({ source: "system", timestamp, text });
 const micSegment = (timestamp, text) => ({ source: "mic", timestamp, text });
@@ -266,6 +268,9 @@ function meetingRowsHarness({ holdMic = false } = {}) {
     DeepgramStreaming,
     Date: { now: () => now },
     meetingDiarizationSegments: segments,
+    meetingLiveIdentifications: [],
+    pickSpeakerForRange,
+    applyConfirmedSpeaker,
     meetingLocalTranscript: "",
     meetingLocalMode: false,
     meetingLocalBuffers: { mic: [], system: [] },

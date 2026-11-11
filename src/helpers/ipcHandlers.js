@@ -174,6 +174,11 @@ const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
+const {
+  pickSpeakerForRange,
+  relabelForIdentification,
+  pruneIdentifications,
+} = require("./speakerRangeMatch");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
 const createMeetingSystemAudioWatchdog = require("./meetingSystemAudioWatchdog");
 const createMeetingSystemAudioHandover = require("./meetingSystemAudioHandover");
@@ -8449,7 +8454,7 @@ class IPCHandlers {
       timestampIsSpeechStart = true,
       endTimestamp = null
     ) => {
-      meetingDiarizationSegments.push({
+      const segment = {
         text,
         source,
         timestamp,
@@ -8459,7 +8464,62 @@ class IPCHandlers {
         suppressionReason: source === "mic" ? micSuppression?.reason || null : null,
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
         likelyRenderBleed: source === "mic" ? !!micSuppression?.likelyRenderBleed : false,
-      });
+      };
+      // A local row is stored after the identifications for its audio have fired,
+      // so label it from the ones we kept.
+      if (source === "system" && endTimestamp !== null) {
+        const heard = pickSpeakerForRange(meetingLiveIdentifications, timestamp, endTimestamp);
+        if (heard) {
+          applyConfirmedSpeaker(segment, {
+            speaker: heard.speakerId,
+            speakerName: heard.displayName || segment.speakerName,
+            speakerIsPlaceholder: false,
+          });
+          segment.liveOverlapMs = heard.overlapMs;
+        }
+      }
+      meetingDiarizationSegments.push(segment);
+    };
+
+    const applyLiveIdentificationToRows = (identification) => {
+      meetingLiveIdentifications = pruneIdentifications(
+        [...meetingLiveIdentifications, identification],
+        identification.endTime
+      );
+
+      for (const seg of meetingDiarizationSegments) {
+        if (seg.source !== "system" || seg.timestamp == null) continue;
+
+        if (seg.endTimestamp != null) {
+          // Ranged rows go to whoever was heard longest in their own audio, so a
+          // later identification only wins by covering more of the row.
+          const relabel = relabelForIdentification(
+            { start: seg.timestamp, end: seg.endTimestamp, overlapMs: seg.liveOverlapMs ?? 0 },
+            identification
+          );
+          if (relabel) {
+            applyConfirmedSpeaker(seg, {
+              speaker: relabel.speakerId,
+              speakerName: relabel.displayName || seg.speakerName,
+              speakerIsPlaceholder: false,
+            });
+            seg.liveOverlapMs = relabel.overlapMs;
+          }
+          continue;
+        }
+
+        if (
+          seg.timestamp >= identification.startTime &&
+          seg.timestamp <= identification.endTime &&
+          (!seg.speaker || seg.speakerIsPlaceholder)
+        ) {
+          applyConfirmedSpeaker(seg, {
+            speaker: identification.speakerId,
+            speakerName: identification.displayName || seg.speakerName,
+            speakerIsPlaceholder: false,
+          });
+        }
+      }
     };
 
     const sendMeetingFinalSegment = ({
@@ -8617,6 +8677,7 @@ class IPCHandlers {
       meetingSystemAudioHeard = false;
       meetingSystemAudioHandover.reset();
       meetingDiarizationSegments = [];
+      meetingLiveIdentifications = [];
       meetingRetractedMicSegments = [];
       const { pcmPath, startedAt, diarizedSource, cleanupPcmPaths } = resolveDiarizationInput({
         systemPcmPath,
@@ -9347,6 +9408,9 @@ class IPCHandlers {
     let meetingSystemAudioHeard = false;
     const meetingSystemAudioHandover = createMeetingSystemAudioHandover();
     let meetingDiarizationSegments = [];
+    // Epoch-ms live identifications from the last couple of minutes, kept so rows
+    // stored after their window fired can still be labelled.
+    let meetingLiveIdentifications = [];
     let meetingRetractedMicSegments = [];
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
@@ -9646,6 +9710,7 @@ class IPCHandlers {
       }
 
       meetingLiveSpeakerActive = false;
+      meetingLiveIdentifications = [];
       meetingLiveSpeakerState = await liveSpeakerIdentifier.stop();
       return meetingLiveSpeakerState;
     };
@@ -9698,21 +9763,7 @@ class IPCHandlers {
 
             win.webContents.send("meeting-speaker-identified", enrichedIdentification);
 
-            for (const seg of meetingDiarizationSegments) {
-              if (
-                seg.source === "system" &&
-                seg.timestamp != null &&
-                seg.timestamp >= startTime &&
-                seg.timestamp <= endTime &&
-                (!seg.speaker || seg.speakerIsPlaceholder)
-              ) {
-                applyConfirmedSpeaker(seg, {
-                  speaker: identification.speakerId,
-                  speakerName: displayName || seg.speakerName,
-                  speakerIsPlaceholder: false,
-                });
-              }
-            }
+            applyLiveIdentificationToRows(enrichedIdentification);
           },
           {
             getSpeakerProfiles: getLiveSpeakerProfiles,
@@ -10028,6 +10079,7 @@ class IPCHandlers {
       meetingSystemAudioHeard = false;
       meetingSystemAudioHandover.reset();
       meetingDiarizationSegments = [];
+      meetingLiveIdentifications = [];
       meetingRetractedMicSegments = [];
       meetingLocalWin = null;
       meetingLocalTranscript = "";
@@ -10622,6 +10674,7 @@ class IPCHandlers {
       // Stop captures and clears the segments, but a stop that fails partway
       // (the audio tap won't stop) never gets there.
       meetingDiarizationSegments = [];
+      meetingLiveIdentifications = [];
       meetingConnectionOptions = options;
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
       meetingReconnectCount = 0;
