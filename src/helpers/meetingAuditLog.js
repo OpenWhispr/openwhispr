@@ -215,7 +215,6 @@ function createMeetingAuditLog({
           if (error.code === "ENOENT") return;
           throw error;
         }
-        await fs.promises.rm(markerPath, { force: true });
         const open = JSON.parse(text);
         await append(open.dir, open.lastSeenAt, {
           event: "recording.stopped",
@@ -224,6 +223,7 @@ function createMeetingAuditLog({
           reason: "interrupted",
           durationSec: durationSec(open.startedAt, open.lastSeenAt),
         });
+        await fs.promises.rm(markerPath, { force: true });
       });
     },
 

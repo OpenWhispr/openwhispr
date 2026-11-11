@@ -44,10 +44,10 @@ function extractFunction(relativePath, name) {
 function createContext(calls) {
   return {
     // Resolves on a later tick, so the order below also proves it is awaited.
-    stopRecording: () =>
+    stopRecording: (_sessionId, reason) =>
       new Promise((resolve) => {
         setTimeout(() => {
-          calls.push("meeting stopped");
+          calls.push(`meeting stopped: ${reason}`);
           resolve({ diarizationSessionId: null, stopped: true });
         }, 0);
       }),
@@ -78,7 +78,12 @@ test("sign-out ends a live meeting before the account scope is cleared", async (
 
   await performSignOut();
 
-  assert.deepEqual(calls, ["meeting stopped", "team spaces purged", "signed out", "reloaded"]);
+  assert.deepEqual(calls, [
+    "meeting stopped: account-change",
+    "team spaces purged",
+    "signed out",
+    "reloaded",
+  ]);
 });
 
 test("sign-out asks first only when it would end a meeting recording", () => {
@@ -122,7 +127,7 @@ test("switching account from an invitation ends a live meeting before signing ou
 
   assert.deepEqual(calls, [
     "invitation kept",
-    "meeting stopped",
+    "meeting stopped: account-change",
     "team spaces purged",
     "signed out",
   ]);

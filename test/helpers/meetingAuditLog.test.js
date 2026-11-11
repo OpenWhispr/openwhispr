@@ -245,6 +245,30 @@ test("a recording the app never stopped is closed on the next launch at its last
   assert.equal(lines().length, 2);
 });
 
+test("a launch that can't write the interrupted stop keeps it for the next launch", async () => {
+  const share = path.join(userData, "share");
+  const first = harness({ configuredPath: share });
+  first.log.recordingStarted({ sessionId: "s1", noteId: 9, trigger: "hotkey" });
+  await first.log.flush();
+
+  fs.rmSync(share, { recursive: true });
+  fs.writeFileSync(share, "");
+  const offline = harness({ configuredPath: share });
+  offline.log.recoverInterrupted();
+  await offline.log.flush();
+  assert.equal(fs.existsSync(marker()), true);
+
+  fs.rmSync(share);
+  const online = harness({ configuredPath: share });
+  online.log.recoverInterrupted();
+  await online.log.flush();
+  assert.deepEqual(
+    lines(share).map((line) => [line.event, line.reason]),
+    [["recording.stopped", "interrupted"]]
+  );
+  assert.equal(fs.existsSync(marker()), false);
+});
+
 test("values outside the known sets are written as null", async () => {
   const { log } = harness();
   log.recordingStarted({ sessionId: "s1", noteId: "42", trigger: "Board meeting notes" });
