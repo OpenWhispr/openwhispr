@@ -14,6 +14,8 @@ export interface MeetingSegmentEvent {
   source: "mic" | "system";
   type: "partial" | "final" | "retract";
   timestamp?: number;
+  /** Speech end of a local-model row; with `timestamp` it bounds the row's audio. */
+  endTimestamp?: number;
 }
 
 export interface MeetingSegmentState {
@@ -26,7 +28,7 @@ export interface MeetingSegmentReducerDeps {
   /** Renderer-side id for a new final (today `seg-${++segmentCounter}`). */
   mintSegmentId: () => string;
   /** Applies speaker identifications, provisional speaker, index reservation, locks. Must be free of store writes — the reducer inserts into the segments snapshot it was handed. */
-  decorateFinal: (segment: TranscriptSegment) => TranscriptSegment;
+  decorateFinal: (segment: TranscriptSegment, event: MeetingSegmentEvent) => TranscriptSegment;
 }
 
 export type MeetingSegmentReduction =
@@ -79,7 +81,7 @@ export function reduceMeetingSegmentEvent(
     source: event.source,
     timestamp: event.timestamp,
   });
-  const inserted = deps.decorateFinal(raw);
+  const inserted = deps.decorateFinal(raw, event);
   const { segments, index } = insertSegmentByTimestamp(state.segments, inserted);
   const partialPatch = event.source === "mic" ? { micPartial: "" } : { systemPartial: "" };
   return { kind: "final", inserted, index, state: { ...state, segments, ...partialPatch } };

@@ -168,3 +168,19 @@ test("reducer never mutates its inputs", async () => {
   reduceMeetingSegmentEvent(original, { type: "partial", source: "mic", text: "p" }, deps());
   assert.equal(JSON.stringify(original), snapshot);
 });
+
+test("a final's event reaches decorateFinal with its end time", async () => {
+  const { reduceMeetingSegmentEvent } = await load();
+  let seen;
+  reduceMeetingSegmentEvent(
+    state(),
+    { text: "hi", source: "system", type: "final", timestamp: 10, endTimestamp: 20 },
+    deps({
+      decorateFinal: (segment, event) => {
+        seen = event;
+        return segment;
+      },
+    })
+  );
+  assert.equal(seen.endTimestamp, 20);
+});
