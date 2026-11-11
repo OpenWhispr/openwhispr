@@ -251,14 +251,19 @@ export default function InviteTeammateDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, confirmed]);
 
-  // A run that left chips to fix still sent the rest, which the toast says. Counting what was
-  // already told (rather than watching the phase) keeps a run that finished between two renders
-  // from going unreported.
+  // A run that left chips to fix still created invitations. Counting what was already told
+  // (rather than watching the phase) keeps a run that finished between two renders from going
+  // unreported.
   const toldSent = useRef(0);
   useEffect(() => {
     if (state.phase === "sending") return;
     if (state.phase === "editing" && state.sent.length > toldSent.current) {
-      toast({ title: t("workspaces.invite.sentTitle", { count: state.sent.length }) });
+      const undelivered = state.sent.every((entry) => !entry.emailSent);
+      toast({
+        title: t(undelivered ? "workspaces.invite.createdTitle" : "workspaces.invite.sentTitle", {
+          count: state.sent.length,
+        }),
+      });
     }
     toldSent.current = state.sent.length;
     // eslint-disable-next-line react-hooks/exhaustive-deps

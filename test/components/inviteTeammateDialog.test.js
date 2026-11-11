@@ -382,6 +382,28 @@ test("a run that left chips to fix toasts how many went out", async (t) => {
   assert.equal(globalThis.__toasts[0].title, 'workspaces.invite.sentTitle|{"count":1}');
 });
 
+test("a partial run with no delivered email reports invitations as created", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  globalThis.__sendOutcomes = [
+    { ok: true, emailSent: false },
+    { ok: false, kind: "directoryRequired" },
+  ];
+  const closes = [];
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: (open) => closes.push(open),
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmails: ["a@x.com", "b@x.com"],
+  });
+  await React.act(async () => latest().onSend());
+  await React.act(async () => t.mock.timers.tick(5000));
+
+  assert.equal(latest().state.phase, "editing");
+  assert.deepEqual(globalThis.__toasts, [{ title: 'workspaces.invite.createdTitle|{"count":1}' }]);
+  assert.deepEqual(closes, []);
+});
+
 test("closing the page mid-send stops the rest of the run", async (t) => {
   let release;
   globalThis.__sendGate = new Promise((resolve) => {
