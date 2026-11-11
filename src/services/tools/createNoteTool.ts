@@ -2,6 +2,8 @@ import type { ToolDefinition, ToolResult } from "./ToolRegistry";
 import { resolveFolderId, resolveSpace } from "./utils";
 import { syncService } from "../SyncService.js";
 import { readActiveWorkspaceId } from "../../stores/workspaceStore";
+import { listedDefaultWorkspaceId } from "../../lib/assistantNoteScope";
+import { knownDefaultWorkspaceId } from "../../lib/workspaceSelection";
 import i18n from "../../i18n";
 import type { NoteScope } from "./noteScope";
 
@@ -12,6 +14,31 @@ function namesPrivate(spaceName: string): boolean {
     name === "personal" ||
     name === "private" ||
     name === i18n.t("meetingNotification.folders.private").toLowerCase()
+  );
+}
+
+/**
+ * The active workspace's Private: its own row when it has one. Without one, main makes it only when
+ * the workspace is known not to be the default; otherwise main's unnamed Private is used, which,
+ * while main's workspace scope lags, is the bound default or the pending row. A row is never made
+ * for a workspace main can't yet tell is the default (D37): the bind would later merge the
+ * pending row into it.
+ */
+async function activePrivateSpaceId(): Promise<number | null> {
+  const api = window.electronAPI;
+  const activeWorkspaceId = readActiveWorkspaceId();
+  if (activeWorkspaceId == null) return (await api.getPrivateSpaceId?.()) ?? null;
+  const spaces = (await api.getSpaces?.()) ?? [];
+  const own = spaces.find(
+    (space) => space.kind === "private" && space.workspace_id === activeWorkspaceId
+  );
+  if (own) return own.id;
+  const knownDefault = knownDefaultWorkspaceId(listedDefaultWorkspaceId(), spaces);
+  const notTheDefault = knownDefault != null && knownDefault !== activeWorkspaceId;
+  return (
+    (await (notTheDefault
+      ? api.getPrivateSpaceId?.(activeWorkspaceId)
+      : api.getPrivateSpaceId?.())) ?? null
   );
 }
 
@@ -74,11 +101,7 @@ export function createCreateNoteTool(scope: NoteScope): ToolDefinition {
           // No space argument, or Private by name, means the active workspace's
           // Private: folder resolution must never match a team folder, or the note
           // would silently inherit the team audience (D2 derives space from folder).
-          // Named, since main's own workspace scope lags at startup and after an
-          // account change and would answer the default workspace's: main finds the
-          // workspace's own row (the pending one while it stands for the default) or
-          // makes it, never another workspace's.
-          spaceId = (await window.electronAPI.getPrivateSpaceId?.(readActiveWorkspaceId())) ?? null;
+          spaceId = await activePrivateSpaceId();
         }
 
         let folderId: number | null = null;

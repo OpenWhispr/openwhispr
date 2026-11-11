@@ -133,6 +133,15 @@ function readWorkspaceListCache(
   }
 }
 
+/**
+ * The default workspace of the last list the signed-in account saw, for a window that loads no
+ * list of its own (the dictation window). Null when there is no recent list, or it names none.
+ */
+export function readCachedDefaultWorkspaceId(): string | null {
+  const cached = readWorkspaceListCache(usePolicyStore.getState().accountId);
+  return cached ? resolveDefaultWorkspaceId(cached) : null;
+}
+
 // Keeps the entry's age: pruning one workspace is not a fresh read of the list.
 function pruneWorkspaceListCache(accountId: string | null, workspaceId: string): void {
   const cached = readWorkspaceListCache(accountId);

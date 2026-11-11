@@ -117,7 +117,6 @@ const assistantScope = (overrides) =>
     workspaces: listed,
     defaultWorkspaceId: "a",
     privateSpaceId: 1,
-    defaultPrivateSpaceId: 1,
     ...overrides,
   }).sort((x, y) => x - y);
 
@@ -127,69 +126,59 @@ test("assistantScopeSpaceIds: with the workspace list, the assistant reads what 
   assert.deepEqual(assistantScope({ activeWorkspaceId: "b", privateSpaceId: 5 }), [3, 5, 6, 7]);
 });
 
-test("assistantScopeSpaceIds: without the workspace list (the dictation window), main's Private and the active workspace's teamspaces", () => {
-  // Main's Private is the default's, so the pending one (merged into it in the tree) counts too.
+test("assistantScopeSpaceIds: without the workspace list (the dictation window), the active workspace's Private and teamspaces", () => {
+  // The default isn't known here: the pending Private shows merged in, as the tree shows it.
   assert.deepEqual(assistantScope({ workspaces: [], defaultWorkspaceId: null }), [1, 2, 6, 9]);
-  // Main's Private isn't the default's: the default's pending notes belong to another workspace.
+  // Known (a cached list, or the row main last bound) to be another workspace's default: the
+  // pending notes are that workspace's.
   assert.deepEqual(
-    assistantScope({
-      activeWorkspaceId: "b",
-      workspaces: [],
-      defaultWorkspaceId: null,
-      privateSpaceId: 5,
-      defaultPrivateSpaceId: 1,
-    }),
+    assistantScope({ activeWorkspaceId: "b", workspaces: [], privateSpaceId: 5 }),
     [3, 5, 6]
   );
   // A list that doesn't hold the active workspace (just left, still loading) is no list at all,
-  // and main's Private, still A's, isn't the active workspace's.
-  assert.deepEqual(
-    assistantScope({ activeWorkspaceId: "gone", privateSpaceId: 1, defaultPrivateSpaceId: 1 }),
-    [6, 7]
-  );
+  // and A's Private isn't the active workspace's.
+  assert.deepEqual(assistantScope({ activeWorkspaceId: "gone", privateSpaceId: 1 }), [6, 7]);
 });
 
-test("assistantScopeSpaceIds: a Private main names for another workspace never counts", () => {
-  // Main's workspace scope lags (startup, an account change): it still names the default
-  // workspace D's Private while workspace A is active and no list has loaded.
+test("assistantScopeSpaceIds: a Private bound to another workspace never counts, whatever main names", () => {
+  // Main's workspace scope lags (startup, an account change): unnamed, it still answers the
+  // default workspace D's Private while workspace A is active and no list has loaded.
+  const boundD = { ...privateOf(5, "d"), is_default_private: 1 };
   const lagging = {
-    spaces: [privateA, privateOf(5, "d"), teamIn(2, "a"), pending],
+    spaces: [privateA, boundD, teamIn(2, "a")],
     workspaces: [],
     defaultWorkspaceId: null,
     privateSpaceId: 5,
-    defaultPrivateSpaceId: 5,
   };
-  // A's own Private and teamspace, never D's Private or D's pending notes.
   assert.deepEqual(assistantScope(lagging), [1, 2]);
+  // D is known as the default from the row main bound: its pending notes stay out of A.
+  assert.deepEqual(assistantScope({ ...lagging, spaces: [...lagging.spaces, pending] }), [1, 2]);
   // Nothing of A's own yet: still nothing of D's.
+  assert.deepEqual(assistantScope({ ...lagging, spaces: [boundD, teamIn(2, "a"), pending] }), [2]);
+  // Nothing says which workspace is the default: the pending row shows merged in (D20).
   assert.deepEqual(
-    assistantScope({ ...lagging, spaces: [privateOf(5, "d"), teamIn(2, "a")] }),
-    [2]
-  );
-  // Main's Private is A's own and A is the default: the pending one merges in, as in the tree.
-  assert.deepEqual(
-    assistantScope({ ...lagging, privateSpaceId: 1, defaultPrivateSpaceId: 1 }),
+    assistantScope({ ...lagging, spaces: [privateA, privateOf(5, "d"), teamIn(2, "a"), pending] }),
     [1, 2, 9]
   );
-  // Main's Private is the pending row itself (no default bound yet): it is the active Private.
+  // A is the default: the pending row is A's until main binds it.
   assert.deepEqual(
-    assistantScope({
-      ...lagging,
-      spaces: [pending, teamIn(2, "a")],
-      privateSpaceId: 9,
-      defaultPrivateSpaceId: 9,
-    }),
+    assistantScope({ ...lagging, spaces: [pending, teamIn(2, "a")], defaultWorkspaceId: "a" }),
     [2, 9]
   );
-  // A Private main names that isn't among the spaces can't be checked: left out.
+});
+
+test("assistantScopeSpaceIds: the active workspace's Private is a row that exists, never one main is asked to make", () => {
+  // First launch after the upgrade, main lagging: only the pending row exists, and the saved
+  // active workspace D is the default though nothing here knows it yet.
   assert.deepEqual(
     assistantScope({
-      ...lagging,
-      spaces: [teamIn(2, "a")],
-      privateSpaceId: 1,
-      defaultPrivateSpaceId: 1,
+      spaces: [pending, teamIn(2, "d")],
+      activeWorkspaceId: "d",
+      workspaces: [],
+      defaultWorkspaceId: null,
+      privateSpaceId: 9,
     }),
-    [2]
+    [2, 9]
   );
 });
 

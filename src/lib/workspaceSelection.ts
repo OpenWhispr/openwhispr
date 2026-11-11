@@ -50,27 +50,41 @@ export function spacesInWorkspaceScope<S extends ScopedSpace>(
   );
 }
 
+type AssistantSpace = ScopedSpace & Pick<SpaceItem, "id" | "is_default_private">;
+
 /**
- * The spaces whose notes the assistant may read while `activeWorkspaceId` is active. A window
- * holding the workspace list (the control panel) reads what its tree shows. Without it (the
- * dictation window, or a list that doesn't hold the active workspace yet) the scope is the active
- * workspace's own Private, the pending Private too when main's Private is the active workspace's
- * and the default's (the tree merges the two), and the active workspace's teamspaces and those
- * linked to no workspace. Main's workspace scope lags at startup and after an account change, so
- * a Private it names is checked against `spaces`: one bound to another workspace never counts.
- * With no active workspace nothing says which teamspaces are in scope, so main's Private alone
- * is: never every space.
+ * The default workspace as far as this window knows without asking main to make anything: the one
+ * a workspace list names (`listedDefaultId`: this window's, or the last one cached), else the one
+ * main last bound the account's Private to. Null when nothing says.
+ */
+export function knownDefaultWorkspaceId(
+  listedDefaultId: string | null,
+  spaces: AssistantSpace[]
+): string | null {
+  if (listedDefaultId != null) return listedDefaultId;
+  const bound = spaces.find((space) => space.kind === "private" && space.is_default_private === 1);
+  return bound?.workspace_id ?? null;
+}
+
+/**
+ * The spaces whose notes the assistant may read while `activeWorkspaceId` is active, from rows
+ * that already exist (D37: working out the scope never makes one). A window holding the workspace
+ * list (the control panel) reads what its tree shows. Without it (the dictation window, or a list
+ * that doesn't hold the active workspace yet) the scope is the Private bound to the active
+ * workspace, the pending Private too while the default isn't known or is the active workspace (as
+ * the tree merges it, D20), and the active workspace's teamspaces and those linked to no
+ * workspace. A Private bound to another workspace never counts. With no active workspace nothing
+ * says which teamspaces are in scope, so main's Private alone is: never every space.
  */
 export function assistantScopeSpaceIds(input: {
-  spaces: Array<ScopedSpace & Pick<SpaceItem, "id">>;
+  spaces: AssistantSpace[];
   activeWorkspaceId: string | null;
   /** The window's workspace list; empty where it has none. */
   workspaces: Workspace[];
+  /** The default the window's list names; without a list, the last cached list's. */
   defaultWorkspaceId: string | null;
-  /** Main's Private for the active workspace (getPrivateSpaceId). */
+  /** Main's Private for its own active workspace (getPrivateSpaceId with no workspace). */
   privateSpaceId: number | null;
-  /** Main's Private for the default workspace (getDefaultPrivateSpaceId). */
-  defaultPrivateSpaceId: number | null;
 }): number[] {
   const { spaces, activeWorkspaceId, workspaces, privateSpaceId } = input;
   if (activeWorkspaceId == null) return privateSpaceId == null ? [] : [privateSpaceId];
@@ -82,14 +96,8 @@ export function assistantScopeSpaceIds(input: {
       input.defaultWorkspaceId
     ).map((space) => space.id);
   }
-  // Main's Private is the active workspace's own, or the pending one (no default bound yet).
-  const mainPrivate = spaces.find(
-    (space) => space.kind === "private" && space.id === privateSpaceId
-  );
-  const mainPrivateIsActive =
-    mainPrivate != null &&
-    (mainPrivate.workspace_id == null || mainPrivate.workspace_id === activeWorkspaceId);
-  const pendingCounts = mainPrivateIsActive && privateSpaceId === input.defaultPrivateSpaceId;
+  const knownDefault = knownDefaultWorkspaceId(input.defaultWorkspaceId, spaces);
+  const pendingCounts = knownDefault == null || knownDefault === activeWorkspaceId;
   return spaces
     .filter((space) =>
       space.kind === "private"
