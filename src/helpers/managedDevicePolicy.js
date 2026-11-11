@@ -197,16 +197,16 @@ function runRegistryTool(run, args) {
   return run(tool, [...args, "/reg:64"], { timeout: READER_TIMEOUT_MS, windowsHide: true });
 }
 
-// reg.exe exits 1 for every failure, a missing key among them. It is the
-// key that's missing only if reg.exe can still read the Policies key every
-// Windows install has; otherwise reg.exe itself is blocked (an AppLocker
-// rule, a policy against registry tools) and the failure stands.
-async function isMissingRegistryKey(run, error) {
-  if (error.code !== 1) return false;
-  return runRegistryTool(run, ["query", WINDOWS_POLICIES_KEY]).then(
-    () => true,
-    () => false
-  );
+// The Policies key every Windows install has lists the OpenWhispr key when
+// one is deployed. reg.exe exits 1 for any failure, a missing key among
+// them, so this asks the key that is always there: a query that fails means
+// reg.exe itself can't read (an AppLocker rule, a policy against registry
+// tools), never that no policy is deployed.
+async function hasWindowsPolicyKey(run) {
+  const { stdout } = await runRegistryTool(run, ["query", WINDOWS_POLICIES_KEY]);
+  return stdout
+    .split(/\r?\n/)
+    .some((line) => /^HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\OpenWhispr$/i.test(line.trim()));
 }
 
 const REGISTRY_STRING = /^"((?:[^"\\]|\\.)*)"$/;
@@ -237,17 +237,14 @@ function parseRegistryExport(text) {
   return values;
 }
 
+// Exports only a key that is there: an export that then fails (its file
+// can't be written) is a reader failure, and keep-last-valid applies.
 async function readWindowsValues(run = execute) {
+  if (!(await hasWindowsPolicyKey(run))) return {};
   const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), "openwhispr-policy-"));
   const file = path.join(directory, "policy.reg");
   try {
-    try {
-      await runRegistryTool(run, ["export", WINDOWS_POLICY_KEY, file, "/y"]);
-    } catch (error) {
-      // An export that can't write its file fails like a missing key does.
-      if (!(await hasPolicyEvidence({ platform: "win32", run }))) return {};
-      throw error;
-    }
+    await runRegistryTool(run, ["export", WINDOWS_POLICY_KEY, file, "/y"]);
     return parseRegistryExport(await fs.promises.readFile(file, "utf16le"));
   } finally {
     await fs.promises.rm(directory, { recursive: true, force: true });
@@ -261,15 +258,7 @@ async function hasPolicyEvidence({
   run = execute,
   fileSystem = fs.promises,
 } = {}) {
-  if (platform === "win32") {
-    return runRegistryTool(run, ["query", WINDOWS_POLICY_KEY]).then(
-      () => true,
-      async (error) => {
-        if (await isMissingRegistryKey(run, error)) return false;
-        throw error;
-      }
-    );
-  }
+  if (platform === "win32") return hasWindowsPolicyKey(run);
   const preferences = `${MACOS_PREFERENCES_DOMAIN}.plist`;
   const files =
     platform === "linux"

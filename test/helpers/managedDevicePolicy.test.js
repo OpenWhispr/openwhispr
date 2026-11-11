@@ -89,20 +89,22 @@ test("unknown update mode retains the specified user-choice fallback", () => {
   );
 });
 
+// What `reg query HKLM\SOFTWARE\Policies` prints: one line per subkey.
+const policiesListing = (...subkeys) =>
+  [
+    "",
+    ...["Microsoft", ...subkeys].map((key) => `HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\${key}`),
+  ].join("\r\n");
+
 // reg.exe without the OpenWhispr key or, `blocked`, unable to read any key.
-// It exits 1 either way.
 function registryWithoutPolicy({ blocked = false } = {}) {
-  return async (_command, args) => {
+  return async () => {
     if (blocked)
       throw Object.assign(
         new Error("ERROR: Registry editing has been disabled by your administrator."),
         { code: 1 }
       );
-    if (args[1].endsWith("\\OpenWhispr"))
-      throw Object.assign(new Error("ERROR: The system was unable to find the key."), {
-        code: 1,
-      });
-    return { stdout: "" };
+    return { stdout: policiesListing() };
   };
 }
 
@@ -111,6 +113,7 @@ function registryExport(lines) {
   return (run) =>
     readWindowsValues(async (command, args, options) => {
       run?.(command, args, options);
+      if (args[0] === "query") return { stdout: policiesListing("OpenWhispr") };
       const text = [
         "Windows Registry Editor Version 5.00",
         "",
@@ -158,13 +161,23 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
     '"Policy"=hex(2):7b,00,00,00',
   ])
     await assert.rejects(registryExport([line])(), /Invalid registry value type/);
-  assert.deepEqual(await readWindowsValues(registryWithoutPolicy()), {});
+  // One reg.exe run when no key is deployed, which is every read on most machines.
+  let runs = 0;
+  const missing = registryWithoutPolicy();
+  assert.deepEqual(
+    await readWindowsValues((...args) => {
+      runs += 1;
+      return missing(...args);
+    }),
+    {}
+  );
+  assert.equal(runs, 1);
   // The key is there, but its export can't be written.
   await assert.rejects(
     readWindowsValues(async (_command, args) => {
       if (args[0] === "export")
         throw Object.assign(new Error("ERROR: Access is denied."), { code: 1 });
-      return { stdout: "" };
+      return { stdout: policiesListing("openwhispr") };
     }),
     /Access is denied/
   );
@@ -210,12 +223,12 @@ test("evidence of a deployment is the policy key or file, not the reader's succe
       platform: "win32",
       run: async (command, args) => {
         query = args;
-        return { stdout: "" };
+        return { stdout: policiesListing("OpenWhispr") };
       },
     }),
     true
   );
-  assert.deepEqual(query, ["query", "HKLM\\SOFTWARE\\Policies\\OpenWhispr", "/reg:64"]);
+  assert.deepEqual(query, ["query", "HKLM\\SOFTWARE\\Policies", "/reg:64"]);
   assert.equal(await hasPolicyEvidence({ platform: "win32", run: registryWithoutPolicy() }), false);
   await assert.rejects(
     hasPolicyEvidence({ platform: "win32", run: registryWithoutPolicy({ blocked: true }) }),
