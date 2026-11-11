@@ -11252,7 +11252,9 @@ class IPCHandlers {
 
         if (options.provider === "local") {
           await disconnectMeetingStreaming();
+          // The reset clears the options and window this start already chose.
           meetingConnectionOptions = options;
+          meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalMode = true;
           meetingLocalProvider = options.localProvider || "whisper";
           meetingLocalModel = options.localModel || null;
