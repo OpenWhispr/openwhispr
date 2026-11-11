@@ -105,9 +105,44 @@ test("one caller's cancel leaves shared model initialization running for the oth
   await receiving.promise;
   cancelledCaller.abort();
   assert.equal((await cancelled)[0].reason.name, "AbortError");
-  assert.equal(await closed.promise, true, "the shared attestation request was cut short");
+  assert.equal(
+    await closed.promise,
+    true,
+    "the shared attestation request must finish for the remaining caller"
+  );
   const [settled] = await other;
   assert.equal(settled.status, "rejected");
   assert.equal(settled.reason.name, "SyntaxError");
   assert.equal(attestation.calls, 1);
+});
+
+test("a model request after the last cancel starts a fresh initialization", async (t) => {
+  const vite = await createRendererServer(t, {
+    mockModules: {
+      "/models/tinfoilModels": "export const refreshTinfoilModels = async () => {};",
+    },
+  });
+  const { getTinfoilLanguageModel } = await vite.ssrLoadModule("/services/ai/tinfoilClient.ts");
+  const { SecureClient } = await import("tinfoil");
+  // Stands in for a step that ignores cancellation, so the cancelled
+  // initialization settles only when released.
+  const initializing = deferred();
+  const released = deferred();
+  let initializations = 0;
+  t.mock.method(SecureClient.prototype, "ready", async (signal) => {
+    if (++initializations > 1) return;
+    initializing.resolve();
+    await released.promise;
+    signal.throwIfAborted();
+  });
+  const caller = new AbortController();
+  const cancelled = getTinfoilLanguageModel("synthetic-key", "glm-5-3", caller.signal);
+  await initializing.promise;
+  caller.abort();
+  await assert.rejects(cancelled, { name: "AbortError" });
+  const late = getTinfoilLanguageModel("synthetic-key", "glm-5-3");
+  released.resolve();
+  assert.equal((await late).modelId, "glm-5-3");
+  await getTinfoilLanguageModel("synthetic-key", "glm-5-3");
+  assert.equal(initializations, 2, "the cancelled initialization must not evict the fresh one");
 });

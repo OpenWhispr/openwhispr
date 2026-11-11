@@ -665,12 +665,12 @@ class AssemblyAiStreaming {
     return true;
   }
 
-  async disconnect(terminate = true) {
+  async disconnect({ commit = true } = {}) {
     if (!this.ws) return { text: this.accumulatedText };
 
     this.isDisconnecting = true;
 
-    if (terminate && this.ws.readyState === WebSocket.OPEN) {
+    if (commit && this.ws.readyState === WebSocket.OPEN) {
       try {
         this.ws.send(JSON.stringify({ type: "Terminate" }));
 
