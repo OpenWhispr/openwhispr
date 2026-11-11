@@ -3050,20 +3050,86 @@ test("bindDefaultPrivateSpace merges into an existing row for that workspace", (
     },
     { name: "Personal", is_default: 1, space_id: w1, cloud_id: "cloud-personal" }
   );
-  assert.deepEqual(accountFolderNames(db.db, "a"), [
-    "Meetings",
-    "Personal",
-    "Projects",
-    "Projects (2)",
-  ]);
-  // Other folders keep the " (2)" rename.
-  assert.equal(folderRow(db.db, pendingProjects.id).name, "Projects (2)");
-  assert.equal(folderRow(db.db, pendingProjects.id).space_id, w1);
+  assert.deepEqual(accountFolderNames(db.db, "a"), ["Meetings", "Personal", "Projects"]);
+  // Both rows are the same Private (D41): every namesake folds, never a " (2)".
+  assert.equal(folderRow(db.db, pendingProjects.id), undefined, "the emptied namesake goes");
   assert.equal(folderRow(db.db, w1Projects.id).name, "Projects");
   assert.deepEqual(chatRow(db.db, pendingChat), { space_id: w1, folder_id: null, account_id: "a" });
-  assert.equal(chatRow(db.db, folderChat).space_id, w1);
+  assert.deepEqual(chatRow(db.db, folderChat), {
+    space_id: w1,
+    folder_id: w1Projects.id,
+    account_id: "a",
+  });
   assert.deepEqual(privateSpaceIds(db), [w1]);
   assertEveryRowInItsFolderSpace(db.db);
+});
+
+// D41: a Private made for the active workspace while main couldn't tell it is the default, then
+// bound as the default, is the same Private as the pending row. Its folders and the pending row's
+// become one each, notes and chats together; a cloud-linked folder survives the fold.
+test("the default's bind folds same-named folders into one instead of renaming them", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", { activeWorkspaceId: null, defaultWorkspaceId: null });
+  const pending = db.getPrivateSpaceId();
+  const pendingProjects = db.createFolder("Projects").folder;
+  const early = db.saveNote("Early", "", "personal", null, null, pendingProjects.id).note;
+  const pendingArchive = db.createFolder("Archive").folder;
+  db.markFolderSynced(pendingArchive.id, "cloud-archive");
+  const archived = db.saveNote("Old", "", "personal", null, null, pendingArchive.id).note;
+  const pendingChat = seedChat(db.db, {
+    title: "Projects chat",
+    accountId: "a",
+    spaceId: pending,
+    folderId: pendingProjects.id,
+  });
+
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w1", defaultWorkspaceId: null });
+  const w1 = db.getPrivateSpaceId();
+  assert.notEqual(w1, pending);
+  const w1Projects = db.createFolder("Projects").folder;
+  const late = db.saveNote("Late", "", "personal", null, null, w1Projects.id).note;
+  const w1Archive = db.createFolder("Archive").folder;
+  const filed = db.saveNote("Filed", "", "personal", null, null, w1Archive.id).note;
+
+  db.bindDefaultPrivateSpace("w1");
+
+  assert.deepEqual(accountFolderNames(db.db, "a"), ["Archive", "Projects"]);
+  assert.equal(noteRow(db.db, early.id).folder_id, w1Projects.id);
+  assert.equal(noteRow(db.db, late.id).folder_id, w1Projects.id);
+  assert.equal(noteRow(db.db, early.id).space_id, w1);
+  assert.deepEqual(chatRow(db.db, pendingChat), {
+    space_id: w1,
+    folder_id: w1Projects.id,
+    account_id: "a",
+  });
+  // The cloud-linked Archive survives and takes the unlinked one's notes.
+  assert.equal(folderRow(db.db, w1Archive.id), undefined);
+  assert.equal(noteRow(db.db, filed.id).folder_id, pendingArchive.id);
+  assert.equal(noteRow(db.db, archived.id).folder_id, pendingArchive.id);
+  assert.equal(folderRow(db.db, pendingArchive.id).space_id, w1);
+  assert.equal(folderRow(db.db, pendingArchive.id).cloud_id, "cloud-archive");
+  assert.equal(db.defaultWorkspaceId, "w1");
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+// A failed bind leaves main's default where it was: setting it first would point every later
+// note at a workspace whose Private the rolled-back transaction never bound.
+test("a bind that fails leaves main's default workspace unchanged", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", { activeWorkspaceId: null, defaultWorkspaceId: null });
+  const pending = db.getPrivateSpaceId();
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "w1", defaultWorkspaceId: null });
+  db.getPrivateSpaceId();
+  t.mock.method(db, "_mergePrivateSpace", () => {
+    throw new Error("disk I/O error");
+  });
+  t.mock.method(debugLogger, "error", () => {});
+  assert.throws(() => db.bindDefaultPrivateSpace("w1"), /disk I\/O error/);
+  assert.equal(db.defaultWorkspaceId, null);
+  db.setActiveWorkspaceScope({ activeWorkspaceId: null, defaultWorkspaceId: null });
+  assert.equal(db.getDefaultPrivateSpaceId(), pending, "the pending row is still the default");
 });
 
 test("claimSignedOutPrivateNotes moves signed-out notes to the signed-in account's default", (t) => {

@@ -418,6 +418,11 @@ class DatabaseManager {
   setActiveWorkspaceScope({ activeWorkspaceId = null, defaultWorkspaceId = null } = {}) {
     this.activeWorkspaceId = workspaceIdOrNull(activeWorkspaceId);
     this.defaultWorkspaceId = workspaceIdOrNull(defaultWorkspaceId);
+    this._saveWorkspaceScope();
+  }
+
+  // Keeps the active account's scope for its next sign-in or launch (D40).
+  _saveWorkspaceScope() {
     if (!this.activeAccountId) return;
     try {
       this.db
@@ -6215,8 +6220,6 @@ class DatabaseManager {
       const workspaceId = workspaceIdOrNull(defaultWorkspaceId);
       const accountId = this.activeAccountId;
       if (!workspaceId || !accountId) return;
-      // Defaults resolve to the bound row even before the renderer's next scope.
-      this.defaultWorkspaceId = workspaceId;
       this.db.transaction(() => {
         let boundId = this._findPrivateSpace(accountId, workspaceId);
         const pendingId = this._findPrivateSpace(accountId, null);
@@ -6226,7 +6229,9 @@ class DatabaseManager {
             .run(workspaceId, pendingId);
           boundId = pendingId;
         } else if (pendingId != null) {
-          this._mergePrivateSpace(pendingId, boundId, accountId);
+          // Both rows are the default's Private (one made before main knew
+          // the workspace was the default), so their namesakes become one (D41).
+          this._mergePrivateSpace(pendingId, boundId, accountId, { foldNamesakes: true });
         }
         boundId ??= this._insertPrivateSpace(accountId, workspaceId);
         this.db
@@ -6237,6 +6242,10 @@ class DatabaseManager {
           .run(accountId, boundId);
         this.db.prepare("UPDATE spaces SET is_default_private = 1 WHERE id = ?").run(boundId);
       })();
+      // Only once bound: defaults resolve to that row before the renderer's
+      // next scope, and a bind that rolled back leaves main's default as it was.
+      this.defaultWorkspaceId = workspaceId;
+      this._saveWorkspaceScope();
     } catch (error) {
       debugLogger.error(
         "Error binding the default private space",
@@ -6253,11 +6262,13 @@ class DatabaseManager {
   // of that name (its default, else one the user made) become one: the one
   // no cloud holds and no held delete needs is retired after its notes and
   // chats join the other, which takes the target folder's place. A cloud-held
-  // folder always survives, so its link is never lost. When both are held,
-  // or for any other folder whose name the target holds, the moved folder
-  // becomes "Name (2)" and stops being a default. Returns the live notes
-  // moved, and the live folders moved rather than folded into a namesake.
-  _mergePrivateSpace(fromId, toId, accountId) {
+  // folder always survives, so its link is never lost. With foldNamesakes
+  // (two rows of the same workspace's Private, D41) every folder folds that
+  // way. When both are held, or for any other folder whose name the target
+  // holds (another workspace's Private), the moved folder becomes
+  // "Name (2)" and stops being a default. Returns the live notes moved, and
+  // the live folders moved rather than folded into a namesake.
+  _mergePrivateSpace(fromId, toId, accountId, { foldNamesakes = false } = {}) {
     const moved = {
       notes: this.db
         .prepare("SELECT COUNT(*) AS count FROM notes WHERE space_id = ? AND deleted_at IS NULL")
@@ -6296,7 +6307,7 @@ class DatabaseManager {
     };
     for (const folder of folders) {
       const target =
-        folder.is_default && !folder.deleted_at
+        (folder.is_default || foldNamesakes) && !folder.deleted_at
           ? targetNamed.get(toId, folder.name, accountId)
           : null;
       if (target && retirable(folder)) {
