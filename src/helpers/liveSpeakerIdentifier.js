@@ -57,6 +57,23 @@ const MATCH_THRESHOLD = 0.6;
 // stricter bar: at 0.70 fewer than 1% of voices had a different speaker that close.
 const RECLUSTER_THRESHOLD = 0.7;
 const MATCH_MARGIN = 0.03;
+// Automatic mode (no speaker count) gates new voices: one that matches no
+// confirmed speaker is held as a candidate until it has 3 segments totalling
+// 8 s, or one segment of 12 s. On real meetings a voice drifts below 0.60
+// against its own earlier segments in 20% of segments, which splits one person
+// into several; matching at 0.45 while gated drops that to 2%. Stored profiles
+// keep MATCH_THRESHOLD.
+const CANDIDATE_MIN_SEGMENTS = 3;
+const CANDIDATE_MIN_SECONDS = 8;
+const CANDIDATE_SOLO_SECONDS = 12;
+const MAX_CANDIDATES = 8;
+const AUTO_MATCH_THRESHOLD = 0.45;
+const DEFAULT_CANDIDATE_RULE = Object.freeze({
+  minSegments: CANDIDATE_MIN_SEGMENTS,
+  minSeconds: CANDIDATE_MIN_SECONDS,
+  soloSeconds: CANDIDATE_SOLO_SECONDS,
+  matchThreshold: AUTO_MATCH_THRESHOLD,
+});
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 // The 24 kHz -> 16 kHz resampler restarts on every buffer and only divides
 // evenly on whole groups of 3 input samples (6 bytes). Capture buffers come in
@@ -136,6 +153,14 @@ function cloneFloat32Array(value) {
   return new Float32Array(value);
 }
 
+function addToRunningMean(mean, count, embedding) {
+  const next = new Float32Array(embedding.length);
+  for (let i = 0; i < embedding.length; i += 1) {
+    next[i] = (mean[i] * count + embedding[i]) / (count + 1);
+  }
+  return next;
+}
+
 function normalizeVadShape(shape) {
   if (!Array.isArray(shape) || shape.length === 0) {
     return DEFAULT_VAD_STATE_SHAPE;
@@ -184,6 +209,9 @@ class LiveSpeakerIdentifier {
     this.lastLiveIdentificationSample = 0;
     this._diarizationManager = null;
     this.maxSpeakers = MAX_SPEAKER_COUNT;
+    this.gated = false;
+    this.candidateRule = DEFAULT_CANDIDATE_RULE;
+    this._candidates = [];
     this.enabled = true;
   }
 
@@ -228,12 +256,16 @@ class LiveSpeakerIdentifier {
       maxSpeakers = MAX_SPEAKER_COUNT,
       enabled = true,
       speakerIndexBase = 0,
+      gated = false,
+      candidateRule = null,
     } = resolvedOptions;
 
     this.onSpeakerIdentified =
       typeof onSpeakerIdentified === "function" ? onSpeakerIdentified : null;
     this.getSpeakerProfiles = typeof getSpeakerProfiles === "function" ? getSpeakerProfiles : null;
     this.maxSpeakers = clampMaxSpeakers(maxSpeakers);
+    this.gated = gated === true;
+    this.candidateRule = { ...DEFAULT_CANDIDATE_RULE, ...candidateRule };
     this.enabled = enabled !== false;
     this._resetMeetingState();
     // A resumed note already holds earlier sessions' ids; see speakerIndexBase.js.
@@ -387,6 +419,16 @@ class LiveSpeakerIdentifier {
     this.maxSpeakers = clampMaxSpeakers(n);
   }
 
+  setSpeakerLimit({ maxSpeakers, gated }) {
+    this.maxSpeakers = clampMaxSpeakers(maxSpeakers);
+    this.gated = gated === true;
+    if (!this.gated) this._candidates = [];
+  }
+
+  getConfirmedSpeakerCount() {
+    return this.transientEmbeddings.size;
+  }
+
   setEnabled(enabled) {
     this.enabled = enabled !== false;
   }
@@ -454,6 +496,7 @@ class LiveSpeakerIdentifier {
     this.transientDisplayNames = new Map();
     this.transientProfileIds = new Map();
     this.transientNoteIds = new Map();
+    this._candidates = [];
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
@@ -673,25 +716,34 @@ class LiveSpeakerIdentifier {
       return;
     }
 
-    const resolved = this._resolveSpeakerForEmbedding(embedding, { updateCentroid: true });
-    if (!resolved?.speakerId) {
-      return;
-    }
+    const startTime = Math.max(
+      0,
+      this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS
+    );
+    const endTime = this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS;
+    const resolved = this._resolveSpeakerForEmbedding(embedding, {
+      updateCentroid: true,
+      segment: {
+        seconds: (this.segmentEndSample - this.segmentStartSample) / SAMPLE_RATE,
+        startTime,
+        endTime,
+      },
+    });
 
-    const speakerId = resolved.speakerId;
-    const displayName =
-      resolved.displayName ||
-      this.currentSegmentSpeakerName ||
-      this.transientDisplayNames.get(speakerId) ||
-      null;
+    const speakerId = resolved?.speakerId;
+    if (speakerId && this.enabled) {
+      const displayName =
+        resolved.displayName ||
+        this.currentSegmentSpeakerName ||
+        this.transientDisplayNames.get(speakerId) ||
+        null;
 
-    if (this.enabled) {
-      this.onSpeakerIdentified?.({
-        speakerId,
-        displayName,
-        startTime: Math.max(0, this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS),
-        endTime: this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS,
-      });
+      // A promoted or absorbed candidate's earlier lines go out first, so the
+      // renderer can relabel them without taking them for the current speaker.
+      for (const window of resolved.backfill || []) {
+        this.onSpeakerIdentified?.({ speakerId, displayName, ...window, retroactive: true });
+      }
+      this.onSpeakerIdentified?.({ speakerId, displayName, startTime, endTime });
     }
 
     this.currentSegmentSpeakerId = null;
@@ -716,10 +768,14 @@ class LiveSpeakerIdentifier {
       }
     }
 
-    return bestSimilarity >= MATCH_THRESHOLD &&
+    return bestSimilarity >= this._inMeetingMatchThreshold() &&
       bestSimilarity - secondBestSimilarity >= MATCH_MARGIN
       ? bestSpeakerId
       : null;
+  }
+
+  _inMeetingMatchThreshold() {
+    return this.gated ? this.candidateRule.matchThreshold : MATCH_THRESHOLD;
   }
 
   _findStoredProfileMatch(embedding) {
@@ -765,7 +821,7 @@ class LiveSpeakerIdentifier {
   }
 
   _resolveSpeakerForEmbedding(embedding, options = {}) {
-    const { updateCentroid = false } = options;
+    const { updateCentroid = false, segment = null } = options;
 
     let speakerId = this.currentSegmentSpeakerId || this._findTransientMatch(embedding);
     let displayName = this.currentSegmentSpeakerName || null;
@@ -784,6 +840,7 @@ class LiveSpeakerIdentifier {
         speakerId,
         displayName: displayName || this.transientDisplayNames.get(speakerId) || null,
         forced,
+        backfill: [],
       };
     }
 
@@ -805,6 +862,7 @@ class LiveSpeakerIdentifier {
           speakerId,
           displayName: this.transientDisplayNames.get(speakerId) || null,
           forced,
+          backfill: [],
         };
       }
 
@@ -814,7 +872,16 @@ class LiveSpeakerIdentifier {
         speakerId,
         displayName: matchedProfile.display_name,
         forced,
+        backfill: [],
       };
+    }
+
+    if (this.gated && this.transientEmbeddings.size > 0) {
+      // Live windows are too short to judge a new voice, so only finished
+      // segments add evidence.
+      return segment
+        ? this._holdAsCandidate(embedding, segment)
+        : { speakerId: null, displayName: null, forced: false, backfill: [] };
     }
 
     ({ speakerId, forced } = this._assignOrForceCluster(embedding));
@@ -823,7 +890,78 @@ class LiveSpeakerIdentifier {
       speakerId,
       displayName: this.transientDisplayNames.get(speakerId) || null,
       forced,
+      backfill: [],
     };
+  }
+
+  _holdAsCandidate(embedding, segment) {
+    let candidate = this._findCandidateMatch(embedding);
+    if (candidate) {
+      candidate.centroid = addToRunningMean(candidate.centroid, candidate.count, embedding);
+      candidate.count += 1;
+    } else {
+      if (this._candidates.length >= MAX_CANDIDATES) this._dropWeakestCandidate();
+      candidate = { centroid: cloneFloat32Array(embedding), count: 1, seconds: 0, windows: [] };
+      this._candidates.push(candidate);
+    }
+    candidate.seconds += segment.seconds;
+
+    const absorbedInto = this._findTransientMatch(candidate.centroid);
+    if (absorbedInto) {
+      this._updateCentroid(absorbedInto, candidate.centroid);
+      this._removeCandidate(candidate);
+      return {
+        speakerId: absorbedInto,
+        displayName: this.transientDisplayNames.get(absorbedInto) || null,
+        forced: false,
+        backfill: candidate.windows,
+      };
+    }
+
+    if (
+      this._candidateHasEnoughEvidence(candidate, segment.seconds) &&
+      this.transientEmbeddings.size < this.maxSpeakers
+    ) {
+      const speakerId = this._assignSpeakerId(candidate.centroid);
+      this._removeCandidate(candidate);
+      return { speakerId, displayName: null, forced: false, backfill: candidate.windows };
+    }
+
+    candidate.windows.push({ startTime: segment.startTime, endTime: segment.endTime });
+    return { speakerId: null, displayName: null, forced: false, backfill: [] };
+  }
+
+  _findCandidateMatch(embedding) {
+    let bestCandidate = null;
+    let bestSimilarity = -Infinity;
+    for (const candidate of this._candidates) {
+      const similarity = speakerEmbeddings.cosineSimilarity(embedding, candidate.centroid);
+      if (similarity > bestSimilarity) {
+        bestSimilarity = similarity;
+        bestCandidate = candidate;
+      }
+    }
+    return bestSimilarity >= this.candidateRule.matchThreshold ? bestCandidate : null;
+  }
+
+  _candidateHasEnoughEvidence(candidate, segmentSeconds) {
+    const { minSegments, minSeconds, soloSeconds } = this.candidateRule;
+    return (
+      (candidate.count >= minSegments && candidate.seconds >= minSeconds) ||
+      segmentSeconds >= soloSeconds
+    );
+  }
+
+  _dropWeakestCandidate() {
+    let weakest = this._candidates[0];
+    for (const candidate of this._candidates) {
+      if (candidate.seconds < weakest.seconds) weakest = candidate;
+    }
+    this._removeCandidate(weakest);
+  }
+
+  _removeCandidate(candidate) {
+    this._candidates = this._candidates.filter((other) => other !== candidate);
   }
 
   _assignOrForceCluster(embedding) {
@@ -882,13 +1020,7 @@ class LiveSpeakerIdentifier {
     }
 
     const count = this.transientCounts.get(speakerId) || 1;
-    const nextCentroid = new Float32Array(embedding.length);
-
-    for (let i = 0; i < embedding.length; i += 1) {
-      nextCentroid[i] = (centroid[i] * count + embedding[i]) / (count + 1);
-    }
-
-    this.transientEmbeddings.set(speakerId, nextCentroid);
+    this.transientEmbeddings.set(speakerId, addToRunningMean(centroid, count, embedding));
     this.transientCounts.set(speakerId, count + 1);
   }
 }
@@ -896,3 +1028,8 @@ class LiveSpeakerIdentifier {
 const instance = new LiveSpeakerIdentifier();
 module.exports = instance;
 module.exports.LiveSpeakerIdentifier = LiveSpeakerIdentifier;
+module.exports.CANDIDATE_MIN_SEGMENTS = CANDIDATE_MIN_SEGMENTS;
+module.exports.CANDIDATE_MIN_SECONDS = CANDIDATE_MIN_SECONDS;
+module.exports.CANDIDATE_SOLO_SECONDS = CANDIDATE_SOLO_SECONDS;
+module.exports.MAX_CANDIDATES = MAX_CANDIDATES;
+module.exports.AUTO_MATCH_THRESHOLD = AUTO_MATCH_THRESHOLD;
