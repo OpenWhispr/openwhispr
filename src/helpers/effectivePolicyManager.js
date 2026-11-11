@@ -114,11 +114,9 @@ function resolveEffectivePolicy(device, workspace, scope) {
   // identity: a device policy, a server that called its policy unresolvable,
   // or a failed lookup for an account last seen managed. Without it a failed
   // lookup restricts nothing: the identity is unmanaged, for updates as for
-  // everything else.
-  const managed =
-    device.managed === true ||
-    workspace?.managed === true ||
-    workspace?.code === "POLICY_UNRESOLVABLE";
+  // everything else. Only the first two settle the verdict.
+  const settledManaged = device.managed === true || workspace?.code === "POLICY_UNRESOLVABLE";
+  const managed = settledManaged || workspace?.managed === true;
   const failure = (status, code) => ({
     ...metadata,
     success: false,
@@ -133,10 +131,7 @@ function resolveEffectivePolicy(device, workspace, scope) {
   // With only the account's last verdict as evidence, this credential's own is
   // still on its way: new work is refused, and nothing running is revoked.
   if (scope.authenticated && !workspace.success && managed)
-    return failure(
-      device.managed === true || workspace.code === "POLICY_UNRESOLVABLE" ? "error" : "loading",
-      workspace.code ?? "POLICY_UNRESOLVABLE"
-    );
+    return failure(settledManaged ? "error" : "loading", workspace.code ?? "POLICY_UNRESOLVABLE");
   if (!scope.authenticated && device.requireSignIn)
     return failure("error", "POLICY_SIGN_IN_REQUIRED");
   try {
