@@ -560,6 +560,30 @@ test("other lookup failures don't prove a session cookie holder is a guest", asy
   assert.equal(app.target.effectivePolicyManager.getCurrent().workspaceRequired, true);
 });
 
+test("a managed account's rotated token whose first lookup fails stays managed", async (t) => {
+  const app = await signedIn(t, { policy: () => managed(["base"]) });
+  policyFetch = async () => json({}, 500);
+
+  // Before set-active-account-scope, so the binding still names the old token.
+  app.tokenChanged({ token: "token-rotated", generation: 2 });
+  await settle();
+
+  const current = app.target.effectivePolicyManager.getCurrent();
+  assert.equal(current.success, false);
+  assert.equal(current.managed, true);
+  await assert.rejects(app.gate.authorize("transcription", "small"), {
+    code: "POLICY_UNRESOLVABLE",
+  });
+  assert.equal(
+    (await app.target._audioFeaturePolicy.resolve("meeting"))?.code,
+    "POLICY_UNRESOLVABLE"
+  );
+  assert.equal(
+    (await handlers.get("cloud-transcribe")({ sender: {} }, new Uint8Array([1]))).code,
+    "DEVICE_POLICY_BLOCKED"
+  );
+});
+
 test("a device policy's local model allow-list applies to a guest", async (t) => {
   const { normalizeDeviceValues } = require("../../src/helpers/managedDevicePolicy");
   tokenState = { token: null, generation: 50 };

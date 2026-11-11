@@ -111,10 +111,14 @@ function resolveEffectivePolicy(device, workspace, scope) {
     localOnly: device.localOnly === true,
   };
   // On a failure `managed` is the evidence that something manages this
-  // identity: a device policy, or a server that called its policy
-  // unresolvable. Without it a failed lookup restricts nothing: the identity
-  // is unmanaged, for updates as for everything else.
-  const managed = device.managed === true || workspace?.code === "POLICY_UNRESOLVABLE";
+  // identity: a device policy, a server that called its policy unresolvable,
+  // or a failed lookup for an account last seen managed. Without it a failed
+  // lookup restricts nothing: the identity is unmanaged, for updates as for
+  // everything else.
+  const managed =
+    device.managed === true ||
+    workspace?.managed === true ||
+    workspace?.code === "POLICY_UNRESOLVABLE";
   const failure = (status, code) => ({
     ...metadata,
     success: false,
