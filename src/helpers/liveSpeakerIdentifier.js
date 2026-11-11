@@ -67,6 +67,9 @@ const CANDIDATE_MIN_SEGMENTS = 3;
 const CANDIDATE_MIN_SECONDS = 8;
 const CANDIDATE_SOLO_SECONDS = 12;
 const MAX_CANDIDATES = 8;
+// A promotion replays every stored window as its own IPC call, so a voice held a
+// long time (at the cap) keeps only its most recent windows.
+const MAX_CANDIDATE_WINDOWS = 50;
 const AUTO_MATCH_THRESHOLD = 0.45;
 const DEFAULT_CANDIDATE_RULE = Object.freeze({
   minSegments: CANDIDATE_MIN_SEGMENTS,
@@ -930,6 +933,7 @@ class LiveSpeakerIdentifier {
     }
 
     candidate.windows.push({ startTime: segment.startTime, endTime: segment.endTime });
+    if (candidate.windows.length > MAX_CANDIDATE_WINDOWS) candidate.windows.shift();
     return { speakerId: null, displayName: null, forced: false, backfill: [] };
   }
 
@@ -1034,4 +1038,5 @@ module.exports.CANDIDATE_MIN_SEGMENTS = CANDIDATE_MIN_SEGMENTS;
 module.exports.CANDIDATE_MIN_SECONDS = CANDIDATE_MIN_SECONDS;
 module.exports.CANDIDATE_SOLO_SECONDS = CANDIDATE_SOLO_SECONDS;
 module.exports.MAX_CANDIDATES = MAX_CANDIDATES;
+module.exports.MAX_CANDIDATE_WINDOWS = MAX_CANDIDATE_WINDOWS;
 module.exports.AUTO_MATCH_THRESHOLD = AUTO_MATCH_THRESHOLD;

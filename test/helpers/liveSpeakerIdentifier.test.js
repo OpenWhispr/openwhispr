@@ -792,6 +792,25 @@ test("a ready candidate held at the cap is promoted with all its windows once th
   });
 });
 
+// A promotion replays every stored window as its own IPC call, so a voice held a
+// long time at the cap keeps only its most recent windows.
+test("a candidate held with 60 windows is promoted with the most recent 50", () => {
+  const { id } = gatedIdentifier();
+  assert.equal(require(identifierModulePath).MAX_CANDIDATE_WINDOWS, 50);
+  id.setSpeakerLimit({ maxSpeakers: 1, gated: true });
+  hear(id, voiceA, 0, 2);
+  for (let i = 0; i < 60; i += 1) {
+    assert.equal(hear(id, voiceB, 10 + i * 10, 4).speakerId, null);
+  }
+
+  id.setSpeakerLimit({ maxSpeakers: 7, gated: true });
+  const { speakerId, backfill } = hear(id, voiceB, 1000, 4);
+  assert.equal(speakerId, "speaker_1");
+  assert.equal(backfill.length, 50);
+  assert.deepEqual(backfill[0], { startTime: 110, endTime: 114 });
+  assert.deepEqual(backfill.at(-1), { startTime: 600, endTime: 604 });
+});
+
 // Feeds 5 s of a new voice's live windows beside one confirmed speaker and
 // counts the embeddings extracted.
 async function countLiveExtractions({ gated }) {
