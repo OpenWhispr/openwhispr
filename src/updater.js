@@ -438,9 +438,11 @@ class UpdateManager {
     );
   }
 
+  // electron-updater reads this once, as a download completes, so it follows the
+  // verdict running work follows: a pending lookup must not turn it off.
   _syncInstallOnQuit() {
     autoUpdater.autoInstallOnAppQuit =
-      this.policyReady && this.updateMode !== "it_managed" && !this.installDeferred;
+      this.updateMode !== null && this.updateMode !== "it_managed" && !this.installDeferred;
   }
 
   _policyChanged() {
@@ -499,7 +501,6 @@ class UpdateManager {
     this.policyRevision = -1;
     this.policyReady = false;
     this.policyUnavailable = false;
-    this._syncInstallOnQuit();
     this._notifyStatus();
   }
 

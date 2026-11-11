@@ -397,6 +397,29 @@ test("a credential change lets a consumer download finish under the verdict it s
   assert.equal(events.includes("update-error"), false);
 });
 
+test("a download finishing while a verdict is pending keeps install-on-quit", async () => {
+  let finish;
+  let installOnQuitAtCompletion;
+  const { manager, autoUpdater } = setup({
+    download: () =>
+      new Promise((resolve) => {
+        finish = () => {
+          // electron-updater reads the flag once, when the download completes.
+          installOnQuitAtCompletion = autoUpdater.autoInstallOnAppQuit;
+          resolve([]);
+        };
+      }),
+  });
+  manager.setAutoUpdatesEnabled(false);
+  await manager.checkForUpdates();
+  const downloading = manager.downloadUpdate();
+  await flush();
+  manager.invalidatePolicy();
+  finish();
+  assert.equal((await downloading).success, true);
+  assert.equal(installOnQuitAtCompletion, true);
+});
+
 test("a download after IT policy lifts starts on a fresh token", async () => {
   const { manager, autoUpdater, setPolicy } = setup();
   manager.setAutoUpdatesEnabled(false);
