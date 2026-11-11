@@ -175,10 +175,9 @@ function createAudioFeaturePolicy({
         if (FEATURE_BY_PURPOSE[purpose]) {
           if (snapshot?.success) void lookup(event);
           else await settle(event);
-          // A policy that lands during the wait aborts this job with its refusal.
-          const { signal } = job.controller;
-          const denied = signal.aborted ? signal.reason : failure(purpose);
-          if (denied?.success === false) return refused(denied);
+          job.controller.signal.throwIfAborted();
+          const denied = failure(purpose);
+          if (denied) return refused(denied);
         }
         job.controller.signal.throwIfAborted();
         const result = await handler(

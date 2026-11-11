@@ -137,6 +137,28 @@ function createMeetingAuditLog({
     await fs.promises.rename(pending, markerPath);
   }
 
+  // Closes a recording the last launch never stopped, as of its last checkpoint.
+  function recoverInterrupted() {
+    enqueue(async () => {
+      let text;
+      try {
+        text = await fs.promises.readFile(markerPath, "utf8");
+      } catch (error) {
+        if (error.code === "ENOENT") return;
+        throw error;
+      }
+      const open = JSON.parse(text);
+      await append(open.dir, open.lastSeenAt, {
+        event: "recording.stopped",
+        sessionId: open.sessionId,
+        noteId: open.noteId,
+        reason: "interrupted",
+        durationSec: durationSec(open.startedAt, open.lastSeenAt),
+      });
+      await fs.promises.rm(markerPath, { force: true });
+    });
+  }
+
   function recordingStarted({ sessionId, noteId, trigger }) {
     if (!isEnabled()) return;
     clearInterval(checkpointTimer);
@@ -150,6 +172,8 @@ function createMeetingAuditLog({
       lastSeenAt: startedAt,
     };
     session = open;
+    // A marker a failed recovery kept would be replaced by this start's.
+    recoverInterrupted();
     enqueue(async () => {
       await append(open.dir, startedAt, { event: "recording.started", ...open });
       await saveMarker(open);
@@ -184,6 +208,7 @@ function createMeetingAuditLog({
   return {
     recordingStarted,
     recordingStopped,
+    recoverInterrupted,
 
     recordingRefused({ noteId, trigger, reason }) {
       if (!isEnabled()) return;
@@ -203,28 +228,6 @@ function createMeetingAuditLog({
     closeOpenSession(reason) {
       if (session) recordingStopped({ sessionId: session.sessionId, reason });
       return queue;
-    },
-
-    // Closes a recording the last launch never stopped, as of its last checkpoint.
-    recoverInterrupted() {
-      enqueue(async () => {
-        let text;
-        try {
-          text = await fs.promises.readFile(markerPath, "utf8");
-        } catch (error) {
-          if (error.code === "ENOENT") return;
-          throw error;
-        }
-        const open = JSON.parse(text);
-        await append(open.dir, open.lastSeenAt, {
-          event: "recording.stopped",
-          sessionId: open.sessionId,
-          noteId: open.noteId,
-          reason: "interrupted",
-          durationSec: durationSec(open.startedAt, open.lastSeenAt),
-        });
-        await fs.promises.rm(markerPath, { force: true });
-      });
     },
 
     flush: () => queue,

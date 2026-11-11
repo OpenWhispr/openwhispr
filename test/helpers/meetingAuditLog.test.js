@@ -245,7 +245,7 @@ test("a recording the app never stopped is closed on the next launch at its last
   assert.equal(lines().length, 2);
 });
 
-test("a launch that can't write the interrupted stop keeps it for the next launch", async () => {
+test("an interrupted stop a launch can't write is kept and written before its next recording", async () => {
   const share = path.join(userData, "share");
   const first = harness({ configuredPath: share });
   first.log.recordingStarted({ sessionId: "s1", noteId: 9, trigger: "hotkey" });
@@ -253,18 +253,23 @@ test("a launch that can't write the interrupted stop keeps it for the next launc
 
   fs.rmSync(share, { recursive: true });
   fs.writeFileSync(share, "");
-  const offline = harness({ configuredPath: share });
-  offline.log.recoverInterrupted();
-  await offline.log.flush();
+  const relaunch = harness({ configuredPath: share });
+  relaunch.log.recoverInterrupted();
+  await relaunch.log.flush();
   assert.equal(fs.existsSync(marker()), true);
 
+  // The share comes back later in the same launch.
   fs.rmSync(share);
-  const online = harness({ configuredPath: share });
-  online.log.recoverInterrupted();
-  await online.log.flush();
+  relaunch.log.recordingStarted({ sessionId: "s2", noteId: 10, trigger: "tray" });
+  relaunch.log.recordingStopped({ sessionId: "s2", reason: "user" });
+  await relaunch.log.flush();
   assert.deepEqual(
-    lines(share).map((line) => [line.event, line.reason]),
-    [["recording.stopped", "interrupted"]]
+    lines(share).map((line) => [line.sessionId, line.event, line.reason]),
+    [
+      ["s1", "recording.stopped", "interrupted"],
+      ["s2", "recording.started", null],
+      ["s2", "recording.stopped", "user"],
+    ]
   );
   assert.equal(fs.existsSync(marker()), false);
 });
