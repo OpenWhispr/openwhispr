@@ -1325,6 +1325,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingFolders: (spaceKind) => ipcRenderer.invoke("db-get-pending-folders", spaceKind),
   getFolderByClientId: (clientFolderId) =>
     ipcRenderer.invoke("db-get-folder-by-client-id", clientFolderId),
+  getFolderByCloudId: (cloudId) => ipcRenderer.invoke("db-get-folder-by-cloud-id", cloudId),
   upsertFolderFromCloud: (cloudFolder, localSpaceId, expectedAuthGeneration, options) =>
     ipcRenderer.invoke(
       "db-upsert-folder-from-cloud",

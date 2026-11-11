@@ -200,6 +200,7 @@ function createElectronApi(db, options = {}) {
     getPendingFolders: async (scope) => (scope === "team" ? db.getPendingFolders(scope) : []),
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
+    getFolderByCloudId: async (cloudId) => db.getFolderByCloudId(cloudId),
     upsertFolderFromCloud: async (cloudFolder, localSpaceId, expectedAuthGeneration, options) =>
       expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
         ? STALE_SYNC_ACK

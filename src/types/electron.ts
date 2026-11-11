@@ -4213,6 +4213,8 @@ declare global {
       // Team folders only: private folders never reach the cloud.
       getPendingFolders?: (scope: "team") => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
+      // The active account's folder bound to that cloud folder, under any key.
+      getFolderByCloudId?: (cloudId: string) => Promise<FolderItem | null>;
       // Given an auth generation (a pull pinned to a sign-in), refused once
       // that sign-in is replaced. Options as for upsertNoteFromCloud.
       upsertFolderFromCloud?: (

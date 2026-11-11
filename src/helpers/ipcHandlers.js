@@ -3608,6 +3608,11 @@ class IPCHandlers {
     ipcMain.handle("db-get-folder-by-client-id", (_, clientFolderId) =>
       this.databaseManager.getFolderByClientId(clientFolderId)
     );
+    ipcMain.handle("db-get-folder-by-cloud-id", (_, cloudId) =>
+      typeof cloudId === "string" && cloudId
+        ? this.databaseManager.getFolderByCloudId(cloudId)
+        : null
+    );
     // Pinned, and keyed afresh on request, like db-upsert-note-from-cloud.
     ipcMain.handle(
       "db-upsert-folder-from-cloud",

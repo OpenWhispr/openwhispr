@@ -660,6 +660,67 @@ test("a cloud folder whose key another account's folder holds here never takes i
   }
 });
 
+// I4: a run that fails after storing a folder and a note under keys of their own (D28) leaves
+// them for the next run to find by their cloud ids, so a change made here between the runs
+// survives it.
+test("a re-keyed folder and note keep a change made between a failed run and the next", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  const bSpace = privateSpaceOf(device.db, ACCOUNT_B);
+  device.db.db
+    .prepare(
+      `INSERT INTO folders (name, sort_order, client_folder_id, cloud_id, sync_status, space_id, account_id)
+       VALUES ('Projects', 1, 'shared-folder-key', 'b-cloud-folder', 'synced', ?, ?)`
+    )
+    .run(bSpace, ACCOUNT_B);
+  const cloudFolder = cloud.seedFolder({ name: "Projects", client_folder_id: "shared-folder-key" });
+  const [note] = seedPersonalNotes(cloud, 1, { folder_id: cloudFolder.id });
+  const bNote = device.db.upsertNoteFromCloud(
+    { ...note, id: "b-cloud-row", content: "B's copy", folder_id: null },
+    null
+  );
+  device.db.db
+    .prepare("UPDATE notes SET account_id = ?, space_id = ?, folder_id = NULL WHERE id = ?")
+    .run(ACCOUNT_B, bSpace, bNote.id);
+  t.mock.method(console, "error", () => {});
+  t.mock.method(console, "warn", () => {});
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  cloud.failNext((call) => routeOf(call) === SWITCH_ROUTE, { status: 503 });
+
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "failed");
+  const aFolderRows = () =>
+    device.db.db
+      .prepare("SELECT * FROM folders WHERE account_id = ? AND cloud_id = ? AND deleted_at IS NULL")
+      .all(ACCOUNT_A, cloudFolder.id);
+  const aNoteRows = () =>
+    device.db.db
+      .prepare("SELECT * FROM notes WHERE account_id = ? AND cloud_id = ? AND deleted_at IS NULL")
+      .all(ACCOUNT_A, note.id);
+  const [folder] = aFolderRows();
+  const [aNote] = aNoteRows();
+  assert.notEqual(folder.client_folder_id, "shared-folder-key", "the folder took a key of its own");
+  assert.notEqual(aNote.client_note_id, note.client_note_id, "the note took a key of its own");
+
+  assert.ok(device.db.renameFolder(folder.id, "Client work").success);
+  assert.ok(device.db.updateNote(aNote.id, { title: "Edited here" }).success);
+
+  t.mock.timers.tick(5 * MINUTE_MS);
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+
+  assert.deepEqual(
+    aFolderRows().map((row) => [row.id, row.name]),
+    [[folder.id, "Client work"]],
+    "the rename survives, and no second folder came in"
+  );
+  assert.deepEqual(
+    aNoteRows().map((row) => [row.id, row.title]),
+    [[aNote.id, "Edited here"]],
+    "the edit survives, and no second note came in"
+  );
+  assert.equal(rowOf(device.db, "notes", aNote.id).folder_id, folder.id);
+});
+
 test("a custom cloud folder merges into the default Private's folder of that name", async (t) => {
   const setup = await signedInDevice(t);
   if (!setup) return;

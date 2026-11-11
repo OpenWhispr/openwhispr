@@ -2556,9 +2556,14 @@ export class SyncService {
       for (const cloudFolder of cloudFolders) {
         try {
           stopIfSignInReplaced(importUnder);
-          const local = await window.electronAPI.getFolderByClientId?.(
-            cloudFolder.client_folder_id ?? ""
-          );
+          // A folder an earlier import run stored under a key of its own (D28)
+          // is found by its cloud id, as notes are, so its pending or newer
+          // local state still wins.
+          const local =
+            (await window.electronAPI.getFolderByClientId?.(cloudFolder.client_folder_id ?? "")) ??
+            (importUnder !== undefined
+              ? await window.electronAPI.getFolderByCloudId?.(cloudFolder.id)
+              : null);
 
           // Redacted stub: the folder moved out of one of our teams. Clean
           // local copies (folder and child notes) are no longer ours to keep;

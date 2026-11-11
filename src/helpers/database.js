@@ -10944,6 +10944,26 @@ class DatabaseManager {
     }
   }
 
+  // A folder the import stored under a key of its own (D28) is found by its
+  // cloud id, which the key lookup misses.
+  getFolderByCloudId(cloudId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const accountScope = this._accountScopeCondition("folders");
+      return (
+        this.db
+          .prepare(
+            `SELECT * FROM folders WHERE cloud_id = ? AND ${accountScope.sql}
+             ORDER BY deleted_at IS NOT NULL, id LIMIT 1`
+          )
+          .get(cloudId, ...accountScope.params) || null
+      );
+    } catch (error) {
+      debugLogger.error("Error getting folder by cloud id", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
   // newKeyIfTaken (the import of cloud private notes, D28): a cloud folder
   // whose client key another account's folder holds here is stored under a
   // key of its own, where the upsert would otherwise take that folder over.
