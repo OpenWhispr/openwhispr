@@ -472,7 +472,6 @@ test("purgeSpace leaves zero residue for the space and spares the private space"
   const result = db.purgeSpace(team.id);
   assert.ok(result.success);
   assert.deepEqual(result.noteIds, [teamNote.id]);
-  assert.deepEqual(result.folderNames, ["Vault"]);
   assert.equal(result.spaceId, team.id);
 
   // Never-synced notes exist nowhere else — relocated, not destroyed.
@@ -1605,7 +1604,6 @@ test("relocateRevokedFolder preserves dirty children and hard-deletes server-own
   const result = db.relocateRevokedFolder(folder.id, privateId, false);
   assert.ok(result.success);
   assert.equal(result.folder, null);
-  assert.equal(result.folderName, "Q3 calls");
   assert.deepEqual(result.deletedNoteIds, [clean.id]);
   assert.deepEqual(
     result.relocatedNotes.map((n) => n.id).sort((a, b) => a - b),

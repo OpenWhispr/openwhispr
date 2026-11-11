@@ -1061,20 +1061,6 @@ test(
   }
 );
 
-test("an exclusive temporary-file collision preserves the colliding file", (t) => {
-  const basePath = tempMirror(t);
-  markdownMirror.ensureFolder("Private notes");
-  const target = path.join(basePath, "Private notes", "911-plan.md");
-  const temporary = `${target}.${process.pid}.collision.tmp`;
-  fs.writeFileSync(temporary, "my collision file");
-  t.mock.method(require("node:crypto"), "randomUUID", () => "collision");
-
-  write({ id: 911, title: "Plan", content: "Body" }, "Private notes");
-
-  assert.equal(fs.readFileSync(temporary, "utf8"), "my collision file");
-  assert.equal(fs.existsSync(target), false);
-});
-
 test(
   "a populated recorded folder case rename rebases all descendant ledger entries",
   { skip: !caseInsensitiveFileSystem() && "needs a case-insensitive file system" },
@@ -1120,7 +1106,7 @@ test("unknown dot directories keep matching legacy-looking user files", (t) => {
   assert.equal(fs.readFileSync(path.join(dir, "914-plan.md"), "utf8"), before);
 });
 
-test("a failed temporary write removes only its own partial file", (t) => {
+test("a write that fails partway keeps the file's previous content and leaves nothing else", (t) => {
   const basePath = tempMirror(t);
   const note = { id: 915, title: "Plan", content: "Body" };
   write(note, "Private notes");
@@ -1187,3 +1173,185 @@ test(
     assert.equal([...entries.values()][0].basePath, legacyBaseKey);
   }
 );
+
+test("saving a note again keeps its file, so its creation date and tags stay", (t) => {
+  tempMirror(t);
+  const note = { id: 91, title: "Kept identity", content: "Body" };
+  write(note, "Private notes");
+  const filePath = markdownMirror.getNotePath(91);
+  const before = fs.statSync(filePath, { bigint: true });
+
+  write({ ...note, content: "Body v2" }, "Private notes");
+
+  const after = fs.statSync(filePath, { bigint: true });
+  assert.equal(after.ino, before.ino);
+  assert.equal(after.birthtimeNs, before.birthtimeNs);
+  assert.match(fs.readFileSync(filePath, "utf8"), /Body v2$/);
+});
+
+test("a save that fails partway leaves no half-written file behind to keep aside", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 92, title: "Disk full", content: "Body" };
+  write(note, "Private notes");
+  const realWrite = fs.writeFileSync;
+  t.mock.method(fs, "writeFileSync", (target, data, options) => {
+    if (typeof target === "number") {
+      realWrite(target, String(data).slice(0, 5), options);
+      throw Object.assign(new Error("no space"), { code: "ENOSPC" });
+    }
+    return realWrite(target, data, options);
+  });
+
+  write({ ...note, content: "Body v2" }, "Private notes");
+  fs.writeFileSync.mock.restore();
+  write({ ...note, content: "Body v3" }, "Private notes");
+
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), ["92-disk-full.md"]);
+  assert.match(fs.readFileSync(markdownMirror.getNotePath(92), "utf8"), /Body v3$/);
+});
+
+function callNote(id) {
+  return {
+    id,
+    title: "Call",
+    content: "Body",
+    created_at: "2026-07-21T12:00:00Z",
+    transcript: JSON.stringify([
+      { speaker: "speaker_0", timestamp: 0, text: "Hi" },
+      { speaker: "speaker_1", timestamp: 5, text: "Hello" },
+    ]),
+  };
+}
+
+test("an old transcript saved before its speakers were named still counts as unchanged", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "General");
+  fs.mkdirSync(dir);
+  const { formatMd } = require("../../src/helpers/transcriptFormatter");
+  const note = callNote(93);
+  const segments = JSON.parse(note.transcript);
+  fs.writeFileSync(path.join(dir, "93-call-transcript.md"), formatMd(note, segments, {}));
+  const partlyNamed = callNote(94);
+  fs.writeFileSync(
+    path.join(dir, "94-call-transcript.md"),
+    formatMd(partlyNamed, segments, { speaker_0: "Ada" })
+  );
+
+  const mappings = { speaker_0: "Ada", speaker_1: "Grace" };
+  markdownMirror.writeTranscript(note, placement("Private notes"), mappings);
+  markdownMirror.writeTranscript(partlyNamed, placement("Private notes"), mappings);
+
+  assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test("an old transcript with a speaker renamed by hand is kept", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "General");
+  fs.mkdirSync(dir);
+  const { formatMd } = require("../../src/helpers/transcriptFormatter");
+  const note = callNote(95);
+  const handEdited = formatMd(note, JSON.parse(note.transcript), { speaker_0: "Bob" });
+  fs.writeFileSync(path.join(dir, "95-call-transcript.md"), handEdited);
+
+  markdownMirror.writeTranscript(note, placement("Private notes"), { speaker_0: "Ada" });
+
+  assert.equal(fs.readFileSync(path.join(dir, "edited-95-call-transcript.md"), "utf8"), handEdited);
+});
+
+test("on Windows, a rename refused for a moment is tried again", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 96, title: "Plan", content: "Body" };
+  write(note, "Private notes");
+  fs.appendFileSync(markdownMirror.getNotePath(96), "\nmine");
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { ...original, value: "win32" });
+  t.after(() => Object.defineProperty(process, "platform", original));
+  const realRename = fs.renameSync;
+  let refused = 0;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (refused < 2) {
+      refused++;
+      throw Object.assign(new Error("busy"), { code: "EBUSY" });
+    }
+    return realRename(from, to);
+  });
+
+  write({ ...note, content: "Body v2" }, "Private notes");
+  fs.renameSync.mock.restore();
+
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")).sort(), [
+    "96-plan.md",
+    "edited-96-plan.md",
+  ]);
+});
+
+test("an old transcript saved before its speakers were identified counts as unchanged", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "General");
+  fs.mkdirSync(dir);
+  const { formatMd } = require("../../src/helpers/transcriptFormatter");
+  const before = callNote(97);
+  fs.writeFileSync(
+    path.join(dir, "97-call-transcript.md"),
+    formatMd(before, JSON.parse(before.transcript), {})
+  );
+  // Identifying a speaker later writes the name into the segments themselves.
+  const identified = {
+    ...before,
+    transcript: JSON.stringify(
+      JSON.parse(before.transcript).map((segment) =>
+        segment.speaker === "speaker_0" ? { ...segment, speakerName: "Ada" } : segment
+      )
+    ),
+  };
+
+  markdownMirror.writeTranscript(identified, placement("Private notes"), {});
+
+  assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test("a save whose close fails gets the file's previous content back", (t) => {
+  tempMirror(t);
+  const note = { id: 98, title: "Deferred error", content: "Body" };
+  write(note, "Private notes");
+  const filePath = markdownMirror.getNotePath(98);
+  const before = fs.readFileSync(filePath, "utf8");
+  const realWrite = fs.writeFileSync;
+  t.mock.method(fs, "writeFileSync", (target, data, options) =>
+    realWrite(target, typeof target === "number" ? "PART" : data, options)
+  );
+  const realClose = fs.closeSync;
+  t.mock.method(fs, "closeSync", (descriptor) => {
+    realClose(descriptor);
+    throw Object.assign(new Error("deferred write error"), { code: "EIO" });
+  });
+
+  write({ ...note, content: "Body v2" }, "Private notes");
+  t.mock.restoreAll();
+
+  assert.equal(fs.readFileSync(filePath, "utf8"), before);
+});
+
+test("a dangling link at a note's path is refused even where links can be followed", (t) => {
+  const basePath = tempMirror(t);
+  const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
+  t.after(() => fs.rmSync(outsidePath, { recursive: true, force: true }));
+  const dir = path.join(basePath, "Private notes");
+  fs.mkdirSync(dir);
+  const outsideTarget = path.join(outsidePath, "created-through-link.md");
+  fs.symlinkSync(outsideTarget, path.join(dir, "99-linked.md"));
+  // Windows has no O_NOFOLLOW, so the open would follow the link.
+  const realOpen = fs.openSync;
+  t.mock.method(fs, "openSync", (target, flags, mode) =>
+    realOpen(
+      target,
+      typeof flags === "number" ? flags & ~(fs.constants.O_NOFOLLOW ?? 0) : flags,
+      mode
+    )
+  );
+
+  write({ id: 99, title: "Linked", content: "Body" }, "Private notes");
+  t.mock.restoreAll();
+
+  assert.equal(fs.existsSync(outsideTarget), false);
+});

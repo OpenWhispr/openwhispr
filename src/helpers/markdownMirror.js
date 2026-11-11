@@ -3,6 +3,7 @@ const path = require("path");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { WINDOWS_RESERVED_NAME } = require("./windowsReservedName");
+const { renameWithRetry } = require("./renameWithRetry");
 
 // Most file systems allow 255 bytes per name; this leaves room for the suffix.
 const MAX_FOLDER_NAME_BYTES = 120;
@@ -227,7 +228,7 @@ class MarkdownMirror {
       current = this._resolveExistingFolderPath(candidatePath);
       if (create && path.basename(current) !== path.basename(candidatePath)) {
         const oldRelPath = this._relPath(current);
-        fs.renameSync(current, candidatePath);
+        renameWithRetry(current, candidatePath);
         current = candidatePath;
         const newRelPath = this._relPath(current);
         for (const entry of this.recordedFiles()) {
@@ -246,9 +247,10 @@ class MarkdownMirror {
 
   _assertWritableFilePath(filePath) {
     this._resolveExistingFolderPath(path.dirname(filePath));
-    if (!fs.existsSync(filePath)) return;
-    const stats = fs.lstatSync(filePath);
-    if (stats.isSymbolicLink() || !stats.isFile()) {
+    // lstat, not exists: a dangling link reads as missing, and where opens follow links
+    // (Windows has no O_NOFOLLOW) writing it would create the link's target.
+    const stats = fs.lstatSync(filePath, { throwIfNoEntry: false });
+    if (stats && (stats.isSymbolicLink() || !stats.isFile())) {
       throw new Error("Markdown mirror file is not a regular file");
     }
   }
@@ -344,22 +346,38 @@ class MarkdownMirror {
     return fold(leftPath) === fold(rightPath);
   }
 
-  // Through a temporary file, so a failed write can't leave half a note.
-  _writeAtomically(filePath, content) {
-    const temporaryPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-    let ownsTemporary = false;
+  // In place, as the old mirror did: replacing the file on every save would give it a new
+  // identity, which on macOS resets its creation date and drops its Finder tags. Only a file
+  // the mirror owns, or none, is written here. One that fails partway gets its previous
+  // content back, or goes if that fails too, rather than being kept aside as an edit.
+  _writeInPlace(filePath, content, previousContent) {
+    const { O_WRONLY, O_CREAT, O_TRUNC, O_NOFOLLOW = 0 } = fs.constants;
+    const descriptor = fs.openSync(filePath, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o666);
+    let failure = null;
     try {
-      const descriptor = fs.openSync(temporaryPath, "wx");
-      ownsTemporary = true;
-      try {
-        fs.writeFileSync(descriptor, content, "utf-8");
-      } finally {
-        fs.closeSync(descriptor);
-      }
-      fs.renameSync(temporaryPath, filePath);
-      ownsTemporary = false;
-    } finally {
-      if (ownsTemporary) fs.rmSync(temporaryPath, { force: true });
+      fs.writeFileSync(descriptor, content, "utf-8");
+    } catch (err) {
+      failure = err;
+    }
+    try {
+      fs.closeSync(descriptor);
+    } catch (err) {
+      // A network disk can report a failed write only when the file closes.
+      failure ??= err;
+    }
+    if (failure) {
+      this._undoPartialWrite(filePath, previousContent);
+      throw failure;
+    }
+  }
+
+  _undoPartialWrite(filePath, previousContent) {
+    try {
+      if (previousContent === null) throw new Error("no previous content");
+      fs.writeFileSync(filePath, previousContent, "utf-8");
+    } catch {
+      fs.rmSync(filePath, { force: true });
+      this._ledger.forget(this._ledgerBasePath, this._relPath(filePath));
     }
   }
 
@@ -377,7 +395,7 @@ class MarkdownMirror {
     for (let copy = 2; fs.existsSync(keptPath); copy++) {
       keptPath = path.join(dirPath, `edited-${copy}-${name}`);
     }
-    fs.renameSync(filePath, keptPath);
+    renameWithRetry(filePath, keptPath);
     this._ledger.forget(this._ledgerBasePath, this._relPath(filePath));
   }
 
@@ -427,8 +445,8 @@ class MarkdownMirror {
     const relPath = this._relPath(filePath);
     const ownFiles = this._recorded(noteId, kind);
     let unchanged = false;
+    let current = null;
     if (fs.existsSync(filePath)) {
-      let current = null;
       try {
         current = fs.readFileSync(filePath, "utf-8");
       } catch {}
@@ -439,10 +457,13 @@ class MarkdownMirror {
             this._isSameFile(this._absolutePath(entry.relPath), filePath)) &&
           this._isPristine(entry)
       );
-      if (!unchanged && !ownsIt) this._keepAside(filePath);
+      if (!unchanged && !ownsIt) {
+        this._keepAside(filePath);
+        current = null;
+      }
     }
     // Identical content isn't rewritten, which keeps file-sync tools quiet.
-    if (!unchanged) this._writeAtomically(filePath, content);
+    if (!unchanged) this._writeInPlace(filePath, content, current);
     this._ledger.record(this._ledgerBasePath, {
       relPath,
       ownerId: noteId,
@@ -499,15 +520,31 @@ class MarkdownMirror {
     }
   }
 
-  // An old transcript went when it matches what the note's transcript would
-  // give in its format; with no transcript in the database it's the only copy.
+  // An old transcript went when it matches what the note's transcript would give in its
+  // format; with no transcript in the database it's the only copy. Naming a speaker never
+  // rewrote the old file, so each speaker line may carry today's name or the unnamed label
+  // it was written with. Any other difference, a name typed in included, is an edit.
   _isUnchangedOldTranscript(note, speakerMappings) {
     const segments = this.transcriptSegments(note);
     return (filePath, text) => {
       if (!segments.length) return false;
       const { formatMd, formatTxt } = require("./transcriptFormatter");
       const format = filePath.endsWith(".txt") ? formatTxt : formatMd;
-      return normalizeText(text) === normalizeText(format(note, segments, speakerMappings || {}));
+      const linesOf = (content) => normalizeText(content).split("\n");
+      const named = linesOf(format(note, segments, speakerMappings || {}));
+      // Identifying a speaker writes the name into the segments, so the unnamed form
+      // leaves those names out too.
+      const unnamedSegments = segments.map(({ speakerName: _name, ...segment }) => segment);
+      const unnamed = linesOf(format(note, unnamedSegments, {}));
+      const lines = linesOf(text);
+      const matches = (variant) => variant.join("\n") === lines.join("\n");
+      // Line by line only when both forms have the same lines: unnamed segments can merge
+      // into fewer turns.
+      const mixed =
+        named.length === unnamed.length &&
+        lines.length === named.length &&
+        lines.every((line, index) => line === named[index] || line === unnamed[index]);
+      return matches(named) || matches(unnamed) || mixed;
     };
   }
 

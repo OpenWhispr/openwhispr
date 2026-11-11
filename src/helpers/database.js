@@ -6094,7 +6094,6 @@ class DatabaseManager {
         return {
           success: true,
           noteIds: [],
-          folderNames: [],
           spaceId: localSpaceId,
           relocatedNotes: [],
           relocatedCount: 0,
@@ -6121,7 +6120,7 @@ class DatabaseManager {
         }
       }
       const privateSpaceId = this.getPrivateSpaceId();
-      const { noteIds, folderNames, relocatedNotes } = this.db.transaction(() => {
+      const { noteIds, relocatedNotes } = this.db.transaction(() => {
         // Dirty or never-synced notes are the only surviving content (plan
         // §7.2, matching relocateRevokedFolder): they move to the private
         // space root with forked identities — the server row (if any) stays
@@ -6156,10 +6155,6 @@ class DatabaseManager {
           .prepare("SELECT id FROM notes WHERE space_id = ?")
           .all(localSpaceId)
           .map((row) => row.id);
-        const names = this.db
-          .prepare("SELECT name FROM folders WHERE space_id = ?")
-          .all(localSpaceId)
-          .map((row) => row.name);
         // Note chats normally carry only note_id, so container cleanup alone
         // cannot see them. Retire them while the doomed note rows still
         // identify the space; relocated dirty-note chats were moved above.
@@ -6204,12 +6199,11 @@ class DatabaseManager {
         }
         this.db.prepare("DELETE FROM folders WHERE space_id = ?").run(localSpaceId);
         this.db.prepare("DELETE FROM spaces WHERE id = ?").run(localSpaceId);
-        return { noteIds: ids, folderNames: names, relocatedNotes: relocated };
+        return { noteIds: ids, relocatedNotes: relocated };
       })();
       return {
         success: true,
         noteIds,
-        folderNames,
         spaceId: localSpaceId,
         relocatedNotes,
         relocatedCount: relocatedNotes.length,
@@ -9803,7 +9797,6 @@ class DatabaseManager {
         id,
         noteIds,
         relocatedNotes,
-        name: folder?.name ?? null,
       };
     } catch (error) {
       debugLogger.error("Error hard deleting folder", { error: error.message }, "database");
@@ -9906,7 +9899,7 @@ class DatabaseManager {
           deletedNoteIds,
         };
       })();
-      return { success: true, folderName: folder.name, ...result };
+      return { success: true, ...result };
     } catch (error) {
       debugLogger.error("Error relocating revoked folder", { error: error.message }, "database");
       throw error;

@@ -219,3 +219,22 @@ test("a suffixed name never lands on another folder's name", () => {
   );
   assert.equal(new Set(dirs).size, 3);
 });
+
+test("two accounts' folders differing only in case get their own directories", () => {
+  const result = placements({
+    spaces: [unboundPrivate, privateIn(5, "w-acme-1111"), privateIn(6, "w-acme-1111")],
+    folders: [
+      folder(10, "Work", 1, "a1"),
+      folder(11, "work", 1, "a2"),
+      folder(12, "Work", 1, "a3"),
+      folder(50, "Meetings", 5, "a1"),
+      folder(60, "meetings", 6, "a2"),
+    ],
+  });
+  const dirOf = (folderId, spaceId) =>
+    result.forNote({ folder_id: folderId, space_id: spaceId }).segments.join("/");
+
+  assert.notEqual(dirOf(10, 1).toLowerCase(), dirOf(11, 1).toLowerCase());
+  assert.equal(dirOf(10, 1), dirOf(12, 1), "the very same name still shares");
+  assert.notEqual(dirOf(50, 5).toLowerCase(), dirOf(60, 6).toLowerCase());
+});

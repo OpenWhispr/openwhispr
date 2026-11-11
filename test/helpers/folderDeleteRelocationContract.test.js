@@ -17,9 +17,8 @@ function handlerBody(channel, nextChannel) {
 }
 
 // Folder deletion releases other accounts' notes to the space root instead of
-// deleting them. Their markdown mirror files live under the folder's mirror
-// directory, which is removed with the folder — so the handlers must rewrite
-// every live relocated note at its new location.
+// deleting them. Their mirror files are still in the folder's directory, so the
+// handlers must rewrite every live relocated note at its new location.
 test("folder delete handlers rewrite relocated notes into the markdown mirror", () => {
   for (const [channel, nextChannel] of [
     ["db-delete-folder", "db-rename-folder"],

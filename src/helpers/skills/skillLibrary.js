@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const debugLogger = require("../debugLogger");
+const { renameWithRetry } = require("../renameWithRetry");
 const {
   SKILL_LIMITS,
   parseSkillMarkdown,
@@ -40,24 +41,6 @@ function isSkillFolderName(name) {
     !name.includes("/") &&
     isSafeArchivePath(name)
   );
-}
-
-// Windows refuses a rename for a moment while antivirus or the search indexer holds a file it
-// just saw written, so a rename there is tried again for about half a second in all.
-const RENAME_RETRY_DELAYS_MS = [50, 100, 150, 200];
-const BUSY_CODES = ["EPERM", "EACCES", "EBUSY"];
-
-function renameWithRetry(from, to) {
-  for (const delay of RENAME_RETRY_DELAYS_MS) {
-    try {
-      return fs.renameSync(from, to);
-    } catch (error) {
-      if (process.platform !== "win32" || !BUSY_CODES.includes(error.code)) throw error;
-      if (fs.existsSync(to)) throw error;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
-    }
-  }
-  return fs.renameSync(from, to);
 }
 
 function isInside(base, candidate) {

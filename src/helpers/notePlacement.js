@@ -98,24 +98,28 @@ function buildNotePlacements({ spaces, folders, workspaceNames }) {
     }
   }
 
-  // Grouped by account too: two accounts' same-named folders in one directory
-  // may share it, since files carry unique note ids and are handled one by one.
+  // Grouped by the directory they go in, which two accounts' Private sections of one
+  // workspace share. Folders with the very same name share a directory, since files carry
+  // unique note ids and are handled one by one; names that differ only in case don't, or a
+  // case-insensitive disk would merge them and each write would rename the directory.
   const knownFolders = folders.filter((folder) => spaceLocations.has(folder.space_id));
-  for (const siblings of groupBy(
-    knownFolders,
-    (folder) => `${folder.space_id}|${folder.account_id ?? ""}`
+  for (const siblings of groupBy(knownFolders, (folder) =>
+    spaceLocations.get(folder.space_id).segments.join("/")
   ).values()) {
-    const sorted = [...siblings].sort(byId);
+    const firstByName = new Map();
+    for (const folder of [...siblings].sort(byId)) {
+      if (!firstByName.has(folder.name)) firstByName.set(folder.name, folder);
+    }
     const folderDirs = distinctNames(
-      sorted,
+      [...firstByName.values()],
       (folder) => folder.name,
       (folder) => folder.id
     );
-    for (const folder of sorted) {
+    for (const folder of siblings) {
       const parent = spaceLocations.get(folder.space_id);
       folderLocations.set(folder.id, {
         ...parent,
-        segments: [...parent.segments, folderDirs.get(folder)],
+        segments: [...parent.segments, folderDirs.get(firstByName.get(folder.name))],
         folder: folder.name,
       });
     }
@@ -144,4 +148,4 @@ function buildNotePlacements({ spaces, folders, workspaceNames }) {
   };
 }
 
-module.exports = { buildNotePlacements, WORKSPACES_ROOT };
+module.exports = { buildNotePlacements };

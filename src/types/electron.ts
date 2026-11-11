@@ -2184,7 +2184,6 @@ declare global {
         code?: string;
         error?: string;
         noteIds?: number[];
-        folderNames?: string[];
         spaceId?: number;
         relocatedNotes?: NoteItem[];
         relocatedCount?: number;
@@ -4158,7 +4157,6 @@ declare global {
       ) => Promise<{
         success: boolean;
         folder?: FolderItem | null;
-        folderName?: string;
         relocatedNotes?: NoteItem[];
         deletedNoteIds?: number[];
         error?: string;
