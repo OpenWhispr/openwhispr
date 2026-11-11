@@ -1513,16 +1513,27 @@ class IPCHandlers {
   // (or empties) mid-meeting therefore leaves the cap where it is.
   //
   // In automatic mode the count is only a display number, so any count the note
-  // yields ends automatic mode; the live cap still never drops below the
-  // speakers already confirmed (resolveLiveSpeakerLimit).
+  // yields ends automatic mode. The stepper then never shows fewer than the
+  // speakers already on screen (new placeholder ids are minted from it), and the
+  // live cap never drops below the speakers already confirmed
+  // (resolveLiveSpeakerLimit). The after-call cap still reads the note.
+  //
+  // A stepper press from automatic mode also lands here first: the renderer's
+  // note write arrives before its debounced explicit push (150 ms), so for that
+  // moment the config is attendee-style until _setSessionSpeakerConfig makes it
+  // explicit.
   _refreshMeetingSpeakerConfigFromNote(noteId, note) {
     const config = this.activeMeetingSpeakerConfig;
     if (!config || config.explicit) return;
     if (noteId == null || this._activeMeetingNoteId !== noteId) return;
 
-    const expectedCount = this._noteExpectedSpeakerCountOrNull(note);
-    if (expectedCount == null) return;
-    if (!config.auto && expectedCount <= config.expectedCount) return;
+    const noteCount = this._noteExpectedSpeakerCountOrNull(note);
+    if (noteCount == null) return;
+    if (!config.auto && noteCount <= config.expectedCount) return;
+
+    const expectedCount = config.auto
+      ? Math.max(noteCount, autoDisplayCount(liveSpeakerIdentifier.getConfirmedSpeakerCount()))
+      : noteCount;
 
     this.activeMeetingSpeakerConfig = { ...config, expectedCount, auto: false };
     this._applyLiveSpeakerLimit();
@@ -15013,8 +15024,9 @@ class IPCHandlers {
 
     // Only system audio reaches the diarizer (the mic track is "you"), so a cap
     // would count other speakers. With no count there's none: live
-    // identification folds every remote voice into one then, so its speaker ids
-    // can't tell how many people spoke (#2641).
+    // identification ran in automatic mode then, where a voice may stay a
+    // candidate and similar voices can share an id, so its speaker ids can't
+    // tell how many people spoke; clustering decides (#2641).
     return null;
   }
 

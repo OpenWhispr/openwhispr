@@ -382,13 +382,32 @@ test.describe("automatic speaker mode", () => {
     assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: false });
   });
 
-  test("attendees ending automatic mode never lower the cap below the speakers found", () => {
+  // The stepper must not show fewer speakers than are on screen, and new
+  // placeholder ids are minted from it.
+  test("attendees ending automatic mode never lower the count or the cap below the speakers found", () => {
     self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 5, auto: true };
     confirmed = 4;
     call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
     assert.equal(self.activeMeetingSpeakerConfig.auto, false);
-    assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 3);
+    assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 5);
     assert.deepEqual(limits.at(-1), { maxSpeakers: 4, gated: false });
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [{ enabled: true, expectedCount: 5 }]
+    );
+  });
+
+  test("attendees ending automatic mode take the note's count when it is higher", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
+    confirmed = 1;
+    call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
+    assert.equal(self.activeMeetingSpeakerConfig.auto, false);
+    assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 3);
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: false });
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [{ enabled: true, expectedCount: 3 }]
+    );
   });
 
   test("the display count follows promotions and merges, never below 2, and is broadcast as automatic", () => {
