@@ -112,12 +112,26 @@ export default function ShareNoteDialog({
   // with the move. Any change to the note's real space ends it: the move
   // landed, or a fork took the note back.
   const [moved, setMoved] = useState<{ noteId: number; toSpaceId: number } | null>(null);
+  // A note synced from this dialog: the create acknowledgement doesn't
+  // broadcast, so the note prop can lag behind the local DB until the next
+  // note-updated event. The id holds only for the note's identity (a fork or
+  // a move into a teamspace gives it a new key) in the space it was made for,
+  // and a change of the note's real space ends it too.
+  const [syncedFor, setSyncedFor] = useState<{
+    noteId: number;
+    clientNoteId: string | null;
+    spaceId: number;
+    cloudId: string;
+  } | null>(null);
   const [seenSpaceId, setSeenSpaceId] = useState(note.space_id);
   if (seenSpaceId !== note.space_id) {
     setSeenSpaceId(note.space_id);
     setMoved(null);
+    setSyncedFor(null);
   }
   const spaceId = moved?.noteId === note.id ? moved.toSpaceId : note.space_id;
+  // The dialog's own move stands in for a prop that hasn't caught up with it.
+  const propLagsMove = note.space_id !== spaceId;
   const space = useMemo(
     () => spaces.find((candidate) => candidate.id === spaceId) ?? null,
     [spaces, spaceId]
@@ -127,17 +141,14 @@ export default function ShareNoteDialog({
   const shareState = space ? privateShareState(note, space) : null;
   const isTeamNote = shareState === "team";
 
-  // A note synced from this dialog: the create acknowledgement doesn't
-  // broadcast, so the note prop can lag behind the local DB until the next
-  // note-updated event. The id holds only in the space it was made for.
-  const [syncedFor, setSyncedFor] = useState<{
-    noteId: number;
-    spaceId: number;
-    cloudId: string;
-  } | null>(null);
+  const syncedHere =
+    syncedFor?.noteId === note.id &&
+    syncedFor.clientNoteId === (note.client_note_id ?? null) &&
+    syncedFor.spaceId === spaceId;
+  // While the prop lags the dialog's move, its cloud id is the private note's
+  // old Backup copy, which the move dropped (D32): never the one to share from.
   const knownCloudId =
-    note.cloud_id ??
-    (syncedFor?.noteId === note.id && syncedFor.spaceId === spaceId ? syncedFor.cloudId : null);
+    (propLagsMove ? null : note.cloud_id) ?? (syncedHere ? syncedFor.cloudId : null);
   // A private note that isn't shared has nothing to share from: a cloud id on
   // it is the old Backup's copy, and sharing that would start syncing it again.
   const cloudId = shareState === "team" || shareState === "legacyShared" ? knownCloudId : null;
@@ -282,7 +293,12 @@ export default function ShareNoteDialog({
         if (cancelled) return;
         if (!assignedCloudId) throw new Error("Note sync did not assign a cloud id");
         // Loading carries on into the share settings' load.
-        setSyncedFor({ noteId: note.id, spaceId, cloudId: assignedCloudId });
+        setSyncedFor({
+          noteId: note.id,
+          clientNoteId: note.client_note_id ?? null,
+          spaceId,
+          cloudId: assignedCloudId,
+        });
       })
       .catch((err) => {
         if (cancelled) return;
@@ -293,7 +309,7 @@ export default function ShareNoteDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, isTeamNote, knownCloudId, note.id, spaceId, loadAttempt]);
+  }, [open, isTeamNote, knownCloudId, note.id, note.client_note_id, spaceId, loadAttempt]);
 
   // Loading also reconciles the local is_shared flag with server truth.
   useEffect(() => {
@@ -873,6 +889,7 @@ export default function ShareNoteDialog({
         });
         return;
       }
+      setSyncedFor(null);
       setMoved({ noteId: note.id, toSpaceId: target.id });
     },
     [onMoveNote, canMoveNote, movingTo, note.id, t, toast]

@@ -719,6 +719,64 @@ test("moving a private note to a teamspace asks first, then shares it from there
   assert.ok(findLinkButton(state), "the team share view opens");
 });
 
+// M7: until the note prop catches up with the dialog's own move, its cloud id is the private
+// note's old Backup copy, which the move dropped: it is never the one to share from.
+test("a private note with a Backup copy moved to share never reads that copy's share", async (t) => {
+  const NEW_CLOUD_ID = "cloud-note-new";
+  const { state, callsTo } = await mountDialog(t, {
+    note: { ...PRIVATE_NOTE, cloud_id: "backup-copy" },
+    ensureResult: NEW_CLOUD_ID,
+    server: { share: shareSettings("private", null), invitations: [] },
+  });
+
+  const row = state.buttons.findLast((props) => textOf(props.children) === TEAM_SPACE.name);
+  await act(async () => row.onClick());
+  await act(async () => moveConfirm(state).onConfirm());
+  await act(settle);
+
+  assert.deepEqual(
+    callsTo("getShareSettings").map((call) => call.args[0]),
+    [NEW_CLOUD_ID]
+  );
+});
+
+// A fork back to Private and a second move give the note a new identity under the same local id
+// and teamspace; the cloud id the first move found belongs to the forked-away copy.
+test("a note moved to share again after a fork back never reuses the first move's cloud id", async (t) => {
+  const { state, setNote, callsTo } = await mountDialog(t, {
+    note: { ...PRIVATE_NOTE, client_note_id: "first-key" },
+    ensureResult: "cloud-first",
+    server: { share: shareSettings("private", null), invitations: [] },
+  });
+  const moveTo = async () => {
+    state.buttons.length = 0;
+    await setNote(current());
+    const row = state.buttons.findLast((props) => textOf(props.children) === TEAM_SPACE.name);
+    await act(async () => row.onClick());
+    await act(async () => moveConfirm(state).onConfirm());
+    await act(settle);
+  };
+  let note = { ...PRIVATE_NOTE, client_note_id: "first-key" };
+  const current = () => note;
+  await moveTo();
+  // The store catches up with the move, then a fork takes the note back to Private.
+  await setNote({
+    ...note,
+    space_id: TEAM_SPACE.id,
+    client_note_id: "team-key",
+    cloud_id: "cloud-first",
+  });
+  note = { ...PRIVATE_NOTE, client_note_id: "forked-key" };
+  await setNote(note);
+  state.ensureResult = "cloud-second";
+  await moveTo();
+
+  assert.deepEqual(
+    callsTo("getShareSettings").map((call) => call.args[0]),
+    ["cloud-first", "cloud-second"]
+  );
+});
+
 test("a refused move leaves the note private and says so", async (t) => {
   const { state } = await mountDialog(t, {
     note: PRIVATE_NOTE,
