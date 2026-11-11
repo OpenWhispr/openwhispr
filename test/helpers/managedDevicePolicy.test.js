@@ -336,6 +336,16 @@ test("a failed re-read keeps the policy last read in force", async () => {
   reader.manager.stop();
 });
 
+test("a deployment this build rejects replaces the policy last read", async () => {
+  const reader = deviceReader();
+  reader.next = async () => ({ RequireSignIn: false });
+  await reader.manager.refresh();
+  reader.next = async () => ({ RequireSignIn: 0 });
+  await reader.manager.refresh();
+  assert.equal(reader.manager.getSnapshot().code, "DEVICE_POLICY_INVALID");
+  reader.manager.stop();
+});
+
 test("reads already under way are joined, and focus re-reads are throttled", async () => {
   const reader = deviceReader();
   let finish;

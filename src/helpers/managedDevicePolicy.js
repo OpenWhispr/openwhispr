@@ -348,10 +348,12 @@ function createManagedDevicePolicy({
   const listeners = new Set();
   // A reader that fails proves nothing on its own: the policy last read stays
   // in force, and without one only evidence of a deployment means invalid.
-  // Null keeps the snapshot as it is.
+  // Values it did read are the deployment, and ones this build rejects are
+  // invalid at once, as at the next launch. Null keeps the snapshot as it is.
   async function readNext() {
+    let values;
     try {
-      return normalizeDeviceValues(await read());
+      values = await read();
     } catch (error) {
       if (snapshot.status === "valid") {
         logger.warn("Device policy could not be re-read; keeping the last one", {
@@ -368,6 +370,11 @@ function createManagedDevicePolicy({
         { error: error.message }
       );
       return ABSENT_SNAPSHOT;
+    }
+    try {
+      return normalizeDeviceValues(values);
+    } catch {
+      return INVALID_SNAPSHOT;
     }
   }
   function refresh() {
