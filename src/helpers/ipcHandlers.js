@@ -7277,7 +7277,10 @@ class IPCHandlers {
           const snapshot = await Promise.race([
             this.refreshEffectivePolicy(event),
             new Promise((resolve) => {
-              timer = setTimeout(() => resolve(this.effectivePolicyManager.getCurrent()), 1500);
+              timer = setTimeout(
+                () => resolve(this.effectivePolicyManager.getCurrent()),
+                POLICY_TIMEOUT_MS
+              );
             }),
           ]);
           if (!snapshot.success || isScreenContextBlocked(snapshot)) return null;
