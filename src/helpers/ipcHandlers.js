@@ -7220,11 +7220,10 @@ class IPCHandlers {
     const getSessionCookiesFromWindow = async (win) => {
       const scopedUrls = [getAuthUrl(), getApiUrl()].filter(Boolean);
       const cookiesByName = new Map();
-      const cookieSession = win?.webContents.session ?? session.defaultSession;
 
       for (const url of scopedUrls) {
         try {
-          const scopedCookies = await cookieSession.cookies.get({ url });
+          const scopedCookies = await win.webContents.session.cookies.get({ url });
           for (const cookie of scopedCookies) {
             if (!cookiesByName.has(cookie.name)) {
               cookiesByName.set(cookie.name, cookie.value);
@@ -7240,7 +7239,7 @@ class IPCHandlers {
 
       // Fallback for older sessions where cookies are not URL-scoped as expected.
       if (cookiesByName.size === 0) {
-        const allCookies = await cookieSession.cookies.get({});
+        const allCookies = await win.webContents.session.cookies.get({});
         for (const cookie of allCookies) {
           if (!cookiesByName.has(cookie.name)) {
             cookiesByName.set(cookie.name, cookie.value);
@@ -7275,7 +7274,7 @@ class IPCHandlers {
     const getAuthHeaderFromWindow = async (win) => {
       const token = tokenStore.get();
       if (token) return { Authorization: `Bearer ${token}` };
-      const cookieHeader = await getSessionCookiesFromWindow(win);
+      const cookieHeader = win ? await getSessionCookiesFromWindow(win) : "";
       return cookieHeader ? { Cookie: cookieHeader } : {};
     };
 
@@ -7361,31 +7360,6 @@ class IPCHandlers {
       },
       logger: debugLogger,
     });
-    this.getUpdatePolicy = async () => {
-      const { generation, token } = tokenStore.getState();
-      const binding = accountScopeBinding.read();
-      const scope = accountScopeBinding.resolveActiveAccountScope({
-        ...tokenStore.getState(),
-        binding,
-      });
-      const accountId =
-        scope?.accountId ?? this.databaseManager.activeAccountId ?? binding?.accountId;
-      const authHeaders = token
-        ? { Authorization: `Bearer ${token}` }
-        : await getAuthHeaderFromWindow(
-            [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
-              (win) => win && !win.isDestroyed()
-            )
-          );
-      if (generation !== tokenStore.getState().generation) return { success: false };
-      if (!token && !accountId && !authHeaders.Cookie)
-        return { success: true, managed: false, authGeneration: generation };
-      return workspacePolicyManager.getPolicy({
-        accountId,
-        expectedAuthGeneration: generation,
-        authHeaders,
-      });
-    };
     const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
     const getMainPolicy = async (event = {}, { refresh = false, held = false } = {}) => {
       const generation = tokenStore.getState().generation;
@@ -7430,6 +7404,17 @@ class IPCHandlers {
       return isExpiredSession ? guestAudioPolicy(generation) : policy;
     };
     this._getMainModelPolicy = getMainPolicy;
+    // The policy manager answers a refused request with any verdict it holds,
+    // a managed one included, so a 401 reaches here only for a session that
+    // ended with nothing held: its owner updates as a guest. The renderer keeps
+    // the account scope after a 401, so this can't wait for the account to
+    // clear the way isExpiredSession does.
+    this.getUpdatePolicy = async (options) => {
+      const policy = await getMainPolicy({}, options);
+      return policy.httpStatus === 401 && policy.code !== "POLICY_UNRESOLVABLE"
+        ? guestAudioPolicy(policy.authGeneration)
+        : policy;
+    };
     // CLI and tray-only sessions also refresh while a native server stays loaded.
     this._localModelPolicyRefreshTimer = this._localModelPolicy?.startPeriodicRefresh(
       5 * 60 * 1000
