@@ -25,7 +25,8 @@ class UpdateManager {
     this.policyReady = getPolicy === null;
     // Its lookup failed with nothing held, so only a retry can resolve it.
     this.policyUnavailable = false;
-    // A check the policy refused for want of a verdict runs once one lands.
+    // A check the policy refused, or work it cut short, checks again once the
+    // policy allows updates.
     this.checkAwaitingPolicy = false;
     // The verdict running work follows: the current one or, after
     // invalidatePolicy, the previous one until the next lands. null while
@@ -203,7 +204,7 @@ class UpdateManager {
       if (!this._policyFailure() && this.requestCleanup) await this.requestCleanup;
       const failure = this._policyFailure();
       if (failure) {
-        if (!this.policyReady) this.checkAwaitingPolicy = true;
+        this.checkAwaitingPolicy = true;
         return { ...failure, updateAvailable: false };
       }
       if (process.env.NODE_ENV === "development") {
@@ -490,6 +491,9 @@ class UpdateManager {
 
   // Ends the check or download running and the update they found.
   _abortWork() {
+    if (this.updateAvailable || this.checkPromise || this.downloadPromise) {
+      this.checkAwaitingPolicy = true;
+    }
     this.workEpoch += 1;
     this.updateCancellationToken?.cancel();
     // The next download must not start on a cancelled token.
@@ -536,8 +540,8 @@ class UpdateManager {
     if (Number.isSafeInteger(snapshot.revision) && snapshot.revision < this.policyRevision) return;
     const mode = snapshot.managed ? snapshot.policy?.updates?.mode : "user_choice";
     const nextMode = mode === "always_on" || mode === "it_managed" ? mode : "user_choice";
-    const wasReady = this.policyReady;
-    const changed = !wasReady || this.updateMode !== nextMode;
+    const wasBlocked = !this.policyReady || this.updateMode === "it_managed";
+    const changed = !this.policyReady || this.updateMode !== nextMode;
     if (nextMode === "it_managed" && this.updateMode !== "it_managed") this._abortWork();
     this.policyRevision = snapshot.revision ?? this.policyRevision;
     this.policyReady = true;
@@ -548,7 +552,7 @@ class UpdateManager {
       this._notifyStatus();
       this._autoDownloadIfEnabled();
     }
-    if (!wasReady && this.checkAwaitingPolicy) {
+    if (wasBlocked && nextMode !== "it_managed" && this.checkAwaitingPolicy) {
       this.checkAwaitingPolicy = false;
       this._autoCheckForUpdates("Deferred");
     }

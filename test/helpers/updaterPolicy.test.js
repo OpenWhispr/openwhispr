@@ -469,6 +469,24 @@ test("a startup check refused for want of a verdict runs once the verdict lands"
   assert.equal(autoUpdater.checks, 1);
 });
 
+test("lifting IT policy checks again for the update it cleared or refused", async () => {
+  const { manager, autoUpdater, setPolicy } = setup();
+  manager.setAutoUpdatesEnabled(false);
+  await manager.checkForUpdates();
+  setPolicy(managed("it_managed"));
+  assert.equal((await manager.getUpdateStatus()).updateAvailable, false);
+  setPolicy(managed("user_choice"));
+  await flush();
+  assert.equal(autoUpdater.checks, 2);
+  assert.equal((await manager.getUpdateStatus()).updateAvailable, true);
+
+  setPolicy(managed("it_managed"));
+  assert.equal((await manager.checkForUpdates()).code, "UPDATES_MANAGED_BY_ORG");
+  setPolicy(managed("always_on"));
+  await flush();
+  assert.equal(autoUpdater.checks, 3);
+});
+
 test("old policy revisions cannot lift a restriction", async () => {
   const { manager } = setup();
   manager.updatePolicy({ ...managed("it_managed"), revision: 10 });
