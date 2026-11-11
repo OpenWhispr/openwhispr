@@ -7730,10 +7730,7 @@ class IPCHandlers {
           ...tokenStore.getState(),
           binding: accountScopeBinding.read(),
         })?.accountId ?? null,
-      broadcast: (snapshot) => {
-        this.effectivePolicyManager?.updateWorkspace(snapshot);
-        broadcastToWindows("workspace-policy-changed", snapshot);
-      },
+      broadcast: (snapshot) => this.effectivePolicyManager?.updateWorkspace(snapshot),
       logger: debugLogger,
     });
     let cookieGeneration = null;
@@ -12688,20 +12685,6 @@ class IPCHandlers {
     ipcMain.handle("get-effective-policy", (event) => {
       void this.refreshEffectivePolicy(event);
       return this.effectivePolicyManager.getCurrent();
-    });
-
-    ipcMain.handle("get-workspace-policy", async (event, accountId, expectedAuthGeneration) => {
-      const authHeaders = await getAuthHeader(event);
-      const snapshot = await workspacePolicyManager.getPolicy({
-        accountId,
-        expectedAuthGeneration,
-        authHeaders,
-      });
-      // A verdict served from memory is never broadcast; the effective policy,
-      // which main's audio and local model gates follow, takes it here too.
-      if (snapshot.success && snapshot.authGeneration === tokenStore.getState().generation)
-        this.effectivePolicyManager.updateWorkspace(snapshot);
-      return snapshot;
     });
 
     ipcMain.handle(

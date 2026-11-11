@@ -79,8 +79,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "./windowBroadcast") {
       return {
         broadcastToWindows: (channel, data) => {
-          if (!["effective-policy-changed", "workspace-policy-changed"].includes(channel))
-            broadcasts.push([channel, data]);
+          if (channel !== "effective-policy-changed") broadcasts.push([channel, data]);
         },
       };
     }
@@ -467,10 +466,6 @@ test("completed cookie sign-out discards a pending cookie-authorized updater pol
   await policy;
   assert.equal((await manager.getUpdateStatus()).policyReady, true);
   assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
-  assert.equal(
-    broadcasts.some(([channel]) => channel === "workspace-policy-changed"),
-    false
-  );
 });
 
 test("a bearer the API refuses with nothing held updates as a guest, while a held IT verdict stands", async (t) => {

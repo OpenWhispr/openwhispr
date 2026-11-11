@@ -567,7 +567,7 @@ test("calendar background sync resumes after removing local-only device policy",
   assert.equal(starts, 4);
 });
 
-test("invalid trusted device policy cannot be bypassed through workspace-policy IPC", async () => {
+test("an invalid trusted device policy blocks remote work", async () => {
   deviceSnapshot = {
     status: "invalid",
     managed: true,
@@ -575,7 +575,6 @@ test("invalid trusted device policy cannot be bypassed through workspace-policy 
     code: "DEVICE_POLICY_INVALID",
   };
   for (const listener of deviceListeners) listener(deviceSnapshot);
-  await invoke("get-workspace-policy", "personal-account", authGeneration);
   assert.equal(target.effectivePolicyManager.getCurrent().code, "DEVICE_POLICY_INVALID");
   assert.equal((await invoke("cloud-health-check")).code, "DEVICE_POLICY_BLOCKED");
 });
