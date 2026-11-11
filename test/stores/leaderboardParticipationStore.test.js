@@ -427,6 +427,39 @@ test("a mount's same-account re-read keeps its answer on screen until the new on
   await recovery;
 });
 
+test("recovery replaces a mount check and shares its fresh read with other refreshes", async (t) => {
+  let releaseRead;
+  let reads = 0;
+  const { context, requests, store } = await loadStore(t, {
+    cloudApiRequest: async () => {
+      reads += 1;
+      if (reads === 1) {
+        await new Promise((resolve) => {
+          releaseRead = resolve;
+        });
+        return participation(true);
+      }
+      return participation(false);
+    },
+  });
+  store.setState({ enabled: true, ready: true, answeredUserId: context.userId });
+
+  const mount = store.getState().refresh(context, { keepAnswer: true });
+  await waitFor(() => typeof releaseRead === "function");
+  const recovery = store.getState().refresh(context);
+  const readyDuringRecovery = store.getState().ready;
+  const anotherRecovery = store.getState().refresh(context);
+  const remount = store.getState().refresh(context, { keepAnswer: true });
+
+  releaseRead();
+  await Promise.all([mount, recovery, anotherRecovery, remount]);
+
+  assert.equal(store.getState().enabled, false, "the pre-recovery joined answer is retired");
+  assert.equal(readyDuringRecovery, false, "recovery waits for its own current answer");
+  assert.equal(store.getState().ready, true);
+  assert.equal(requests.length, 2, "other refreshes share the recovery's authoritative read");
+});
+
 test("a successful read clears an earlier write error", async (t) => {
   const { context, store } = await loadStore(t, {
     cloudApiRequest: async () => participation(true),
