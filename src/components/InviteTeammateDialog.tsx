@@ -17,6 +17,8 @@ import {
   type InviteFlowEvent,
   type InviteFlowState,
 } from "../lib/inviteFlow";
+import { useInviteSeatLines } from "../hooks/useInviteSeatLines";
+import { workspaceCan } from "../lib/capabilities";
 import { invitePeople } from "../services/invitePeople";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 
@@ -85,14 +87,14 @@ export default function InviteTeammateDialog({
   const [contacts, setContacts] = useState<Contact[]>([]);
   const running = useRef(false);
   const runController = useRef<AbortController | null>(null);
-  const workspace = useWorkspaceStore((current) =>
-    current.workspaces.find((candidate) => candidate.id === workspaceId)
+  // An empty field still prices one, as the old single invite did.
+  const { workspace, purchasedLeft, seatLine, seatCostLine } = useInviteSeatLines(
+    workspaceId,
+    open,
+    state.phase === "editing" ? Math.max(1, inviteSummary(state).sendable.length) : null
   );
-  // The room under the seat ceiling reads the list's seats_used, which canceled invitations and
-  // other admins change without this device reading it again.
-  useEffect(() => {
-    if (open) void useWorkspaceStore.getState().refresh({ fresh: true });
-  }, [open]);
+  const canManageBilling = workspaceCan(workspace, "manage_billing");
+  const billingManager = workspace?.billing_manager ?? null;
 
   const workspaceSeatsUsed = workspace?.seats_used;
   const ceilingLeft =
@@ -130,9 +132,8 @@ export default function InviteTeammateDialog({
 
   // Re-sent on every open, since a fresh flow starts with nothing known.
   useEffect(() => {
-    // Purchased seats are no longer shown here, so only the ceiling the server enforces is judged.
-    if (open) dispatch({ type: "seats", purchasedLeft: null, ceilingLeft });
-  }, [open, ceilingLeft, dispatch]);
+    if (open) dispatch({ type: "seats", purchasedLeft, ceilingLeft });
+  }, [open, purchasedLeft, ceilingLeft, dispatch]);
 
   // A dialog unmounted mid-run (its workspace dropped out, or the page re-keyed) sends no more.
   useEffect(() => () => runController.current?.abort(), []);
@@ -263,6 +264,15 @@ export default function InviteTeammateDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase, state.sent.length]);
 
+  // A named section remounts Settings, so this also works from inside Settings and takes any
+  // dialog in there with it.
+  const handleUpgrade = (): void => {
+    // Closing mid-send would unmount the dialog, which aborts the run and loses its report.
+    if (state.phase === "sending") return;
+    close();
+    void window.electronAPI?.openSettingsSection?.("plansBilling");
+  };
+
   // Invitations in flight can't be taken back, so the dialog stays until the run reports.
   const handleOpenChange = (nextOpen: boolean): void => {
     if (!nextOpen && state.phase === "sending") return;
@@ -277,6 +287,11 @@ export default function InviteTeammateDialog({
         state={state}
         dispatch={dispatch}
         suggestions={suggestions}
+        seatLine={seatLine}
+        seatCostLine={seatCostLine}
+        canManageBilling={canManageBilling}
+        billingManager={billingManager}
+        onUpgrade={handleUpgrade}
         addsToContainer={attachInvited}
         cancelLabel={cancelLabel ?? t("common.cancel")}
         profiles={initialProfiles}

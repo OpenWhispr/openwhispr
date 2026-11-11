@@ -206,6 +206,93 @@ test("knownEmails blocks an address already in the workspace", async (t) => {
   ]);
 });
 
+test("several addresses show the seats they add, priced by their own preview", async (t) => {
+  globalThis.__seatPreview = {
+    seats_used: 5,
+    current_quantity: 5,
+    amount_due: 1200,
+    currency: "usd",
+  };
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmail: "a@x.com",
+  });
+  await React.act(async () => {});
+
+  assert.match(latest().seatCostLine, /^workspaces\.invite\.seatCost\|/);
+
+  await React.act(async () => latest().dispatch({ type: "draft", text: "b@x.com," }));
+  // Never silent while the price for two seats is on its way.
+  assert.equal(latest().seatCostLine, 'workspaces.invite.seatCostManyUnpriced|{"count":2}');
+
+  await React.act(async () => new Promise((resolve) => setTimeout(resolve, 350)));
+  assert.deepEqual(globalThis.__previewCalls, [1, 2]);
+  assert.match(latest().seatCostLine, /^workspaces\.invite\.seatCostMany\|\{"count":2,"amount":/);
+  assert.match(latest().seatCostLine, /24/);
+});
+
+test("only seats beyond the plan's free ones are priced", async (t) => {
+  globalThis.__seatPreview = {
+    seats_used: 4,
+    current_quantity: 5,
+    amount_due: 1200,
+    currency: "usd",
+  };
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmail: "a@x.com",
+  });
+  await React.act(async () => {});
+  assert.equal(latest().seatCostLine, null);
+
+  // The second address takes the first seat past the plan: the opening preview prices it.
+  await React.act(async () => latest().dispatch({ type: "draft", text: "b@x.com," }));
+  assert.match(latest().seatCostLine, /^workspaces\.invite\.seatCost\|/);
+  assert.deepEqual(globalThis.__previewCalls, [1]);
+});
+
+test("the seat cost line hides while invitations are sending", async (t) => {
+  globalThis.__seatPreview = {
+    seats_used: 5,
+    current_quantity: 5,
+    amount_due: 1200,
+    currency: "usd",
+  };
+  let release;
+  globalThis.__sendGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmail: "a@x.com",
+  });
+  await React.act(async () => {});
+  await React.act(async () => latest().dispatch({ type: "draft", text: "b@x.com," }));
+
+  let sending;
+  await React.act(async () => {
+    sending = latest().onSend();
+  });
+  // Every chip is sending, so none counts as sendable, which once let the one-seat line return.
+  assert.equal(latest().state.phase, "sending");
+  assert.equal(latest().seatCostLine, null);
+
+  await React.act(async () => {
+    release();
+    await sending;
+  });
+  assert.equal(latest().state.phase, "done");
+});
+
 test("a send reports everyone it invited at once", async (t) => {
   const invited = [];
   const { latest } = await mountDialog(t, {
@@ -295,18 +382,6 @@ test("a run that left chips to fix toasts how many went out", async (t) => {
   assert.equal(globalThis.__toasts[0].title, 'workspaces.invite.sentTitle|{"count":1}');
 });
 
-test("the dialog asks for no seat prices", async (t) => {
-  await mountDialog(t, {
-    open: true,
-    onOpenChange: () => {},
-    workspaceId: "w1",
-    workspaceName: "Acme",
-    initialEmail: "a@x.com",
-  });
-
-  assert.deepEqual(globalThis.__previewCalls, []);
-});
-
 test("closing the page mid-send stops the rest of the run", async (t) => {
   let release;
   globalThis.__sendGate = new Promise((resolve) => {
@@ -353,6 +428,120 @@ async function mountWithWorkspace(t, workspace, props = {}, options) {
   );
 }
 
+test("seats left come from the workspace list", async (t) => {
+  const { latest } = await mountWithWorkspace(
+    t,
+    {
+      ...WORKSPACE,
+      has_subscription: true,
+      seats: 20,
+      seats_used: 10,
+      seat_limit: 500,
+    },
+    { knownEmails: { members: [], invited: [] } }
+  );
+
+  assert.deepEqual(latest().state.seats, { purchasedLeft: 10, ceilingLeft: 490 });
+});
+
+test("the seat line and the seat warning count the same seats", async (t) => {
+  // An admin: the owner-only preview refuses, and seats_used counts pending invitations too.
+  const { latest } = await mountWithWorkspace(
+    t,
+    {
+      ...WORKSPACE,
+      has_subscription: true,
+      seats_used: 10,
+    },
+    { knownEmails: { members: [], invited: [] } }
+  );
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":10,"seats":20}');
+  assert.deepEqual(latest().state.seats, { purchasedLeft: 10, ceilingLeft: 490 });
+  assert.equal(globalThis.__memberListCalls, undefined);
+});
+
+test("the seat line prefers the workspace list over the preview", async (t) => {
+  globalThis.__seatPreview = {
+    seats_used: 9,
+    current_quantity: 20,
+    amount_due: 1200,
+    currency: "usd",
+  };
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: true,
+    seats_used: 10,
+  });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":10,"seats":20}');
+});
+
+test("a free workspace hides the seat line and reads no members for it", async (t) => {
+  // Its seats is a placeholder 1, so "Using 12 of 1 seats" would read wrong.
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: false,
+    seats: 1,
+    seats_used: 12,
+  });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, null);
+  assert.equal(globalThis.__memberListCalls, undefined);
+});
+
+test("a free workspace on an older API without seats_used reads no members either", async (t) => {
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: false,
+    seats: 1,
+  });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, null);
+  assert.equal(globalThis.__memberListCalls, undefined);
+});
+
+test("a subscribed workspace shows the seat line", async (t) => {
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    has_subscription: true,
+    seats_used: 12,
+  });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":12,"seats":20}');
+  assert.equal(globalThis.__memberListCalls, undefined);
+});
+
+test("a subscribed workspace with no count to show hides the line and reads no members", async (t) => {
+  // An older API without seats_used, and an admin, whom the owner-only preview refuses.
+  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, has_subscription: true });
+  await React.act(async () => {});
+
+  assert.equal(latest().seatLine, null);
+  assert.equal(globalThis.__memberListCalls, undefined);
+});
+
+test("a free workspace gets no seat warning", async (t) => {
+  // A free workspace's seats is a placeholder 1, so it says nothing about room left.
+  const { latest } = await mountWithWorkspace(
+    t,
+    {
+      ...WORKSPACE,
+      has_subscription: false,
+      seats: 1,
+      seats_used: 3,
+    },
+    { knownEmails: { members: [], invited: [] } }
+  );
+
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: 497 });
+});
+
 test("an older API without seat_limit has no ceiling check", async (t) => {
   const { seat_limit: _omitted, ...older } = WORKSPACE;
   const { latest } = await mountWithWorkspace(t, {
@@ -361,7 +550,7 @@ test("an older API without seat_limit has no ceiling check", async (t) => {
     seats_used: 18,
   });
 
-  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: 2, ceilingLeft: null });
 });
 
 test("without a roster, an existing address cannot block a valid batch near the ceiling", async (t) => {
@@ -496,6 +685,129 @@ test("a roster lost during sending cannot leave a blocking ceiling after refusal
   globalThis.__sendOutcome = { ok: true, emailSent: true };
   await pressButton(send());
   assert.equal(globalThis.__sendCalls.length, 2);
+});
+
+test("Upgrade shows from every entry point", async (t) => {
+  const { container } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "owner" },
+    { initialEmail: "a@x.com" },
+    { realView: true }
+  );
+  await React.act(async () => {});
+
+  assert.ok(findUpgrade(container), container.textContent);
+});
+
+test("Upgrade closes the dialog and asks for Plan & Billing", async (t) => {
+  const steps = [];
+  const { container } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "owner" },
+    {
+      initialEmail: "a@x.com",
+      onOpenChange: (open) => steps.push(`open:${open}`),
+    },
+    { realView: true }
+  );
+  await React.act(async () => {});
+
+  await pressButton(findUpgrade(container));
+
+  assert.deepEqual(steps, ["open:false"]);
+  assert.deepEqual(globalThis.__settingsRequests, ["plansBilling"]);
+});
+
+test("admins never see it", async (t) => {
+  const { container } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "admin" },
+    { initialEmail: "a@x.com" },
+    { realView: true }
+  );
+  await React.act(async () => {});
+
+  assert.ok(!findUpgrade(container), "no Upgrade for admins");
+  assert.match(container.textContent, /workspaces\.invite\.seatsNoneAskOwner/);
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("Upgrade can't interrupt a send with seats already over", async (t) => {
+  let release;
+  globalThis.__sendGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  t.after(() => release());
+  const opens = [];
+  const invited = [];
+  const { container } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "owner", seats_used: 22 },
+    {
+      initialEmail: "a@x.com",
+      onOpenChange: (open) => opens.push(open),
+      onInvited: (emails) => invited.push(emails),
+    },
+    { realView: true }
+  );
+  await React.act(async () => {});
+  assert.ok(findUpgrade(container), "offered before the send");
+
+  const send = findNode(
+    container,
+    (node) => node.localName === "button" && /invite\.submit/.test(node.textContent)
+  );
+  let sending;
+  await React.act(async () => {
+    sending = propsOf(send).onClick();
+  });
+
+  assert.equal(globalThis.__sendCalls.length, 1);
+  assert.ok(!findUpgrade(container), "no Upgrade while sending");
+  assert.deepEqual(opens, []);
+
+  release();
+  await React.act(async () => {
+    await sending;
+  });
+  assert.deepEqual(invited, [["a@x.com"]]);
+});
+
+test("Upgrade pressed as a send starts leaves the run alone", async (t) => {
+  let release;
+  globalThis.__sendGate = new Promise((resolve) => {
+    release = resolve;
+  });
+  t.after(() => release());
+  const opens = [];
+  const invited = [];
+  const { latest } = await mountWithWorkspace(
+    t,
+    { ...NO_SEATS_LEFT, role: "owner" },
+    {
+      initialEmail: "a@x.com",
+      onOpenChange: (open) => opens.push(open),
+      onInvited: (emails) => invited.push(emails),
+    }
+  );
+  // A press the render hadn't caught up with: the handler is the view's, from before the send.
+  let sending;
+  await React.act(async () => {
+    sending = latest().onSend();
+  });
+  assert.equal(latest().state.phase, "sending");
+
+  await React.act(async () => latest().onUpgrade());
+
+  assert.deepEqual(opens, []);
+  assert.equal(globalThis.__settingsRequests, undefined);
+  assert.equal(globalThis.__sendCalls[0].signal.aborted, false);
+
+  release();
+  await React.act(async () => {
+    await sending;
+  });
+  assert.deepEqual(invited, [["a@x.com"]]);
 });
 
 test("opening reads the workspace list, since canceled invitations free seats", async (t) => {
@@ -687,6 +999,34 @@ test("heading replaces the title and description", async (t) => {
   assert.doesNotMatch(container.textContent, /workspaces\.invite\.title/);
 });
 
+test("the view learns who manages billing", async (t) => {
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    role: "admin",
+    billing_manager: "Olivia",
+  });
+
+  assert.equal(latest().canManageBilling, false);
+  assert.equal(latest().billingManager, "Olivia");
+});
+
+test("an owner can upgrade from the invite dialog", async (t) => {
+  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, role: "owner" });
+
+  assert.equal(latest().canManageBilling, true);
+  assert.equal(latest().billingManager, null);
+});
+
+// Seats all taken, so one address brings up the warning. These run the real view, so they read and
+// press what a person does, and pass nothing about billing: the caller is any entry point.
+const NO_SEATS_LEFT = {
+  ...WORKSPACE,
+  has_subscription: true,
+  seats_used: 20,
+  billing_manager: "Olivia",
+};
+const UPGRADE = "workspaces.invite.upgrade";
+
 function findNode(node, predicate) {
   if (node.nodeType === 1 && predicate(node)) return node;
   for (const child of node.childNodes ?? []) {
@@ -695,6 +1035,9 @@ function findNode(node, predicate) {
   }
   return null;
 }
+
+const findUpgrade = (container) =>
+  findNode(container, (node) => node.localName === "button" && node.textContent === UPGRADE);
 
 const propsOf = (node) => node[Object.keys(node).find((name) => name.startsWith("__reactProps$"))];
 

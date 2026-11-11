@@ -13,6 +13,7 @@ import {
   inviteConfirmed,
   inviteSummary,
   isRetryableFailure,
+  seatsWarningMessage,
   type InviteFlowEvent,
   type InviteFlowState,
   type InviteRecipient,
@@ -58,6 +59,13 @@ export interface InvitePeopleViewProps {
   state: InviteFlowState;
   dispatch: (event: InviteFlowEvent) => void;
   suggestions: InviteSuggestion[];
+  seatLine: string | null;
+  seatCostLine: string | null;
+  canManageBilling: boolean;
+  /** Who to ask for more seats, for admins who can't buy them. */
+  billingManager: string | null;
+  /** Opens Plan & Billing from the seats warning, for those who can manage billing. */
+  onUpgrade: () => void;
   /** Accepting adds the invitee to a team or teamspace too, which a skipped address misses. */
   addsToContainer: boolean;
   cancelLabel: string;
@@ -122,6 +130,11 @@ export function InvitePeopleView({
   state,
   dispatch,
   suggestions,
+  seatLine,
+  seatCostLine,
+  canManageBilling,
+  billingManager,
+  onUpgrade,
   addsToContainer,
   cancelLabel,
   profiles,
@@ -228,6 +241,18 @@ export function InvitePeopleView({
   // Warnings never block Send: the server bills a seat only when an invitation is accepted, and
   // skipped addresses are left out of the send.
   const warningBars: Array<BarContent & { key: string }> = [];
+  // Over the ceiling, its blocking bar already says how many to remove; a seats count beside it
+  // would name a different number.
+  if (summary.overSeats && !summary.overCeiling) {
+    warningBars.push({
+      key: "seats",
+      message: seatsWarningMessage(t, summary.overSeats, canManageBilling, billingManager),
+      action:
+        canManageBilling && !sending
+          ? { label: t("workspaces.invite.upgrade"), onClick: onUpgrade }
+          : undefined,
+    });
+  }
   // On a team or teamspace, "skipped" alone would read as if they were added anyway.
   const namesSkippedAddress = summary.skipped.length === 1 && !addsToContainer;
   const skippedMessage: ReactNode = namesSkippedAddress
@@ -349,6 +374,8 @@ export function InvitePeopleView({
               {heading?.description ??
                 t("workspaces.invite.description", { workspace: isolate(workspaceName) })}
             </DialogDescription>
+            {seatLine ? <p className="text-xs text-muted-foreground">{seatLine}</p> : null}
+            {seatCostLine ? <p className="text-xs text-muted-foreground">{seatCostLine}</p> : null}
             {state.attached.length > 0 ? (
               <p role="status" className="text-xs font-medium text-foreground">
                 {t("workspaces.invite.attachedBody", { count: state.attached.length })}
