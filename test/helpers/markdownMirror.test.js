@@ -78,7 +78,8 @@ test("unsafe folder names do not collide with portable folder names", (t) => {
   assert.notEqual(unsafeFolderPath, portableFolderPath);
   assert.equal(portableFolderPath, path.join(basePath, "team-docs"));
 
-  markdownMirror.deleteFolder("team/docs");
+  markdownMirror.deleteNote(14);
+  markdownMirror.removeVacatedDirs();
 
   assert.equal(fs.existsSync(unsafeFolderPath), false);
   assert.equal(fs.existsSync(path.join(portableFolderPath, "15-flat.md")), true);
@@ -159,20 +160,22 @@ test("Windows-reserved and trailing-character folder names use distinct portable
   }
 });
 
-test("portable folders still support the normal ensure, rename, and delete journey", (t) => {
+test("portable folders still support the normal ensure, move, and delete journey", (t) => {
   const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   markdownMirror.init(basePath);
   markdownMirror.ensureFolder("Research");
   markdownMirror.writeNote({ id: 30, title: "Sources", content: "Body" }, "Research");
-  markdownMirror.renameFolder("Research", "Archive");
+  markdownMirror.writeNote({ id: 30, title: "Sources", content: "Body" }, "Archive");
+  markdownMirror.removeVacatedDirs();
 
   assert.equal(markdownMirror.getFolderPath("Research"), null);
   assert.equal(markdownMirror.getFolderPath("Archive"), path.join(basePath, "Archive"));
   assert.equal(fs.existsSync(path.join(basePath, "Archive", "30-sources.md")), true);
 
-  markdownMirror.deleteFolder("Archive");
+  markdownMirror.deleteNote(30);
+  markdownMirror.removeVacatedDirs();
   assert.equal(markdownMirror.getFolderPath("Archive"), null);
 });
 
@@ -318,4 +321,592 @@ test("a note file re-saved with a BOM or CRLF is still recognised as its note", 
     fs.writeFileSync(notePath, rewritten, "utf-8");
     assert.equal(markdownMirror.getNotePath(note.id), notePath);
   }
+});
+
+const placement = (...segments) => ({ segments, space: segments[1] });
+
+function tempMirror(t) {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  markdownMirror.init(basePath);
+  return basePath;
+}
+
+test("a note is written at its full path and found there", (t) => {
+  const basePath = tempMirror(t);
+
+  markdownMirror.writeNote(
+    { id: 50, title: "Deep", content: "Body" },
+    {
+      segments: ["Workspaces", "Acme", "Eng", "General"],
+      workspace: "Acme",
+      space: "Eng",
+      folder: "General",
+    }
+  );
+
+  const notePath = path.join(basePath, "Workspaces", "Acme", "Eng", "General", "50-deep.md");
+  assert.equal(markdownMirror.getNotePath(50), notePath);
+  const frontmatter = readFrontmatter(fs.readFileSync(notePath, "utf8"));
+  assert.equal(frontmatter.workspace, "Acme");
+  assert.equal(frontmatter.space, "Eng");
+  assert.equal(frontmatter.folder, "General");
+});
+
+test("moving a note between nested folders leaves one copy", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 51, title: "Moves", content: "Body" };
+
+  markdownMirror.writeNote(note, placement("Workspaces", "Acme", "Eng", "General"));
+  markdownMirror.writeNote(note, placement("Private notes", "Mine"));
+
+  assert.equal(
+    fs.existsSync(path.join(basePath, "Workspaces", "Acme", "Eng", "General", "51-moves.md")),
+    false
+  );
+  assert.equal(
+    markdownMirror.getNotePath(51),
+    path.join(basePath, "Private notes", "Mine", "51-moves.md")
+  );
+});
+
+test("a transcript moves with its note and deleteNote finds both", (t) => {
+  const basePath = tempMirror(t);
+  const note = {
+    id: 52,
+    title: "Call",
+    content: "Body",
+    created_at: "2026-07-21T12:00:00Z",
+    transcript: JSON.stringify([{ speaker: "speaker_0", timestamp: 0, text: "Hi" }]),
+  };
+  const oldPlace = placement("Workspaces", "Acme", "Eng", "General");
+  const newPlace = placement("Workspaces", "Beta", "Eng");
+  markdownMirror.writeTranscript(note, oldPlace, {});
+  markdownMirror.writeTranscript(note, newPlace, {});
+
+  assert.equal(
+    fs.existsSync(
+      path.join(basePath, "Workspaces", "Acme", "Eng", "General", "52-call-transcript.md")
+    ),
+    false
+  );
+  const moved = path.join(basePath, "Workspaces", "Beta", "Eng", "52-call-transcript.md");
+  assert.equal(fs.existsSync(moved), true);
+
+  markdownMirror.deleteNote(52);
+  assert.equal(fs.existsSync(moved), false);
+});
+
+const skipOnWindows = {
+  skip: process.platform === "win32" && "a read-only directory doesn't stop writes on Windows",
+};
+
+test("a write that fails leaves the note's existing file in place", skipOnWindows, (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 53, title: "Keep", content: "Body" };
+  markdownMirror.writeNote(note, placement("Private notes", "Old"));
+  const oldPath = markdownMirror.getNotePath(53);
+  const lockedDir = path.join(basePath, "Private notes", "Locked");
+  fs.mkdirSync(lockedDir, { recursive: true });
+  fs.chmodSync(lockedDir, 0o500);
+  try {
+    markdownMirror.writeNote(note, placement("Private notes", "Locked"));
+  } finally {
+    fs.chmodSync(lockedDir, 0o700);
+  }
+
+  assert.equal(fs.existsSync(oldPath), true);
+});
+
+test("an unchanged note isn't rewritten", (t) => {
+  tempMirror(t);
+  const note = { id: 54, title: "Same", content: "Body", created_at: "x", updated_at: "y" };
+  const place = placement("Private notes", "Mine");
+  markdownMirror.writeNote(note, place);
+  const filePath = markdownMirror.getNotePath(54);
+  const past = new Date("2020-01-01T00:00:00Z");
+  fs.utimesSync(filePath, past, past);
+
+  markdownMirror.writeNote(note, place);
+
+  assert.equal(fs.statSync(filePath).mtime.getTime(), past.getTime());
+});
+
+test("a name too long for one path segment still gets a directory", (t) => {
+  tempMirror(t);
+
+  markdownMirror.writeNote(
+    { id: 55, title: "Long", content: "Body" },
+    placement("Workspaces", "A".repeat(300), "Eng")
+  );
+
+  assert.ok(markdownMirror.getNotePath(55));
+});
+
+test("a nested level that is a link out of the mirror isn't written through", (t) => {
+  const basePath = tempMirror(t);
+  const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
+  t.after(() => fs.rmSync(outsidePath, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(basePath, "Workspaces"));
+  fs.symlinkSync(outsidePath, path.join(basePath, "Workspaces", "Acme"), "dir");
+
+  markdownMirror.writeNote(
+    { id: 56, title: "Escaped", content: "Body" },
+    placement("Workspaces", "Acme", "Eng")
+  );
+
+  assert.deepEqual(fs.readdirSync(outsidePath), []);
+  assert.equal(markdownMirror.getNotePath(56), null);
+});
+
+test("directories a note left are removed while empty, stopping at anything else", (t) => {
+  const basePath = tempMirror(t);
+  const place = placement("Workspaces", "Acme", "Eng", "General");
+  markdownMirror.writeNote({ id: 69, title: "N", content: "Body" }, place);
+  fs.writeFileSync(path.join(basePath, "Workspaces", "Acme", "keep.txt"), "mine");
+  fs.writeFileSync(path.join(basePath, "Workspaces", "Acme", "Eng", ".DS_Store"), "x");
+
+  markdownMirror.deleteNote(69);
+  markdownMirror.removeVacatedDirs();
+
+  assert.equal(fs.existsSync(path.join(basePath, "Workspaces", "Acme", "Eng")), false);
+  assert.equal(fs.existsSync(path.join(basePath, "Workspaces", "Acme", "keep.txt")), true);
+});
+
+test("a directory a note left stays when it's a current folder's, and the base always stays", (t) => {
+  const basePath = tempMirror(t);
+  markdownMirror.writeNote({ id: 68, title: "N", content: "Body" }, "Kept");
+  markdownMirror.writeNote({ id: 67, title: "N", content: "Body" }, "Only");
+
+  markdownMirror.deleteNote(68);
+  markdownMirror.deleteNote(67);
+  markdownMirror.removeVacatedDirs(new Set(["Kept"]));
+
+  assert.equal(fs.existsSync(path.join(basePath, "Kept")), true);
+  assert.equal(fs.existsSync(path.join(basePath, "Only")), false);
+  assert.equal(fs.existsSync(basePath), true);
+});
+
+const write = (note, ...segments) => markdownMirror.writeNote(note, placement(...segments));
+
+test("an edit made outside the app survives the note moving", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 70, title: "Plan", content: "Body" };
+  write(note, "Private notes", "Work");
+  const oldPath = path.join(basePath, "Private notes", "Work", "70-plan.md");
+  const edited = fs.readFileSync(oldPath, "utf8").replace("Body", "Body plus my edit");
+  fs.writeFileSync(oldPath, edited);
+
+  write(note, "Private notes", "Job");
+
+  assert.equal(
+    fs.readFileSync(path.join(basePath, "Private notes", "Work", "edited-70-plan.md"), "utf8"),
+    edited
+  );
+  assert.equal(
+    markdownMirror.getNotePath(70),
+    path.join(basePath, "Private notes", "Job", "70-plan.md")
+  );
+});
+
+test("an edit made outside the app survives the note being saved again", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 71, title: "Plan", content: "Body" };
+  write(note, "Private notes");
+  const filePath = path.join(basePath, "Private notes", "71-plan.md");
+  fs.appendFileSync(filePath, "\nmine");
+
+  write({ ...note, content: "Body v2" }, "Private notes");
+
+  assert.match(
+    fs.readFileSync(path.join(basePath, "Private notes", "edited-71-plan.md"), "utf8"),
+    /mine$/
+  );
+  assert.match(fs.readFileSync(filePath, "utf8"), /Body v2$/);
+});
+
+test("a file the mirror never wrote is kept when a note needs its name", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "Private notes");
+  fs.mkdirSync(dir, { recursive: true });
+  const before = "---\nid: 72\n---\n\nfrom before a reset";
+  fs.writeFileSync(path.join(dir, "72-plan.md"), before);
+
+  write({ id: 72, title: "Plan", content: "new note" }, "Private notes");
+
+  assert.equal(fs.readFileSync(path.join(dir, "edited-72-plan.md"), "utf8"), before);
+  assert.match(fs.readFileSync(path.join(dir, "72-plan.md"), "utf8"), /new note$/);
+});
+
+test("a file left half done, identical to what would be written, is simply taken over", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 73, title: "Plan", content: "Body", created_at: "x", updated_at: "y" };
+  write(note, "Private notes");
+  const filePath = markdownMirror.getNotePath(73);
+  const content = fs.readFileSync(filePath, "utf8");
+  markdownMirror.setLedger(null);
+  fs.writeFileSync(filePath, content);
+
+  write(note, "Private notes");
+
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), ["73-plan.md"]);
+});
+
+test("files the mirror didn't write are never taken for a note's", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "Workspaces", "Acme", "Private", "Work");
+  write({ id: 2024, title: "Note", content: "Body" }, "Workspaces", "Acme", "Private", "Work");
+  const daily = path.join(dir, "2024-01-15-daily.md");
+  fs.writeFileSync(daily, "---\ntags: [daily]\n---\n\nmine");
+  const other = path.join(dir, "74-old.md");
+  fs.writeFileSync(other, "---\nid: 74\n---\n\nfrom another device");
+
+  write({ id: 74, title: "New", content: "Body" }, "Workspaces", "Acme", "Private", "Work");
+  markdownMirror.deleteNote(2024);
+  markdownMirror.deleteNote(74);
+
+  assert.equal(fs.readFileSync(daily, "utf8"), "---\ntags: [daily]\n---\n\nmine");
+  assert.equal(fs.readFileSync(other, "utf8"), "---\nid: 74\n---\n\nfrom another device");
+});
+
+test("deleting a note keeps a file edited outside the app", (t) => {
+  const basePath = tempMirror(t);
+  write({ id: 75, title: "Plan", content: "Body" }, "Private notes");
+  const filePath = path.join(basePath, "Private notes", "75-plan.md");
+  fs.appendFileSync(filePath, "\nmine");
+
+  markdownMirror.deleteNote(75);
+
+  assert.equal(fs.existsSync(filePath), false);
+  assert.match(
+    fs.readFileSync(path.join(basePath, "Private notes", "edited-75-plan.md"), "utf8"),
+    /mine$/
+  );
+});
+
+test("deleting a note keeps an edited file from the old layout and drops an unchanged one", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "General");
+  fs.mkdirSync(dir);
+  const old = (id, body) =>
+    `---\nid: ${id}\ntitle: T\ntype: personal\nfolder: General\ncreated: x\nupdated: y\n---\n\n${body}`;
+  fs.writeFileSync(path.join(dir, "76-t.md"), old(76, "Body"));
+  fs.writeFileSync(path.join(dir, "77-t.md"), old(77, "my edit"));
+
+  markdownMirror.deleteNote(76, { id: 76, title: "T", content: "Body" });
+  markdownMirror.deleteNote(77, { id: 77, title: "T", content: "Body" });
+  markdownMirror.deleteNote(78);
+
+  assert.deepEqual(fs.readdirSync(dir).sort(), ["edited-77-t.md"]);
+});
+
+test("an old .txt transcript is dropped only when it says what the note's transcript says", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "General");
+  fs.mkdirSync(dir);
+  const note = {
+    id: 79,
+    title: "Call",
+    content: "Body",
+    created_at: "2026-07-21T12:00:00Z",
+    transcript: JSON.stringify([{ speaker: "speaker_0", timestamp: 0, text: "Hi" }]),
+  };
+  const { formatTxt } = require("../../src/helpers/transcriptFormatter");
+  fs.writeFileSync(
+    path.join(dir, "79-call-transcript.txt"),
+    formatTxt(note, JSON.parse(note.transcript), {})
+  );
+  const edited = { ...note, id: 80 };
+  fs.writeFileSync(
+    path.join(dir, "80-call-transcript.txt"),
+    `${formatTxt(edited, JSON.parse(edited.transcript), {})}\nmy own notes on the call`
+  );
+
+  markdownMirror.writeTranscript(note, placement("Private notes"), {});
+  markdownMirror.writeTranscript(edited, placement("Private notes"), {});
+
+  assert.deepEqual(fs.readdirSync(dir), ["edited-80-call-transcript.txt"]);
+});
+
+test("an old folder called Private notes counts as the old layout", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "Private notes");
+  fs.mkdirSync(dir);
+  const old =
+    "---\nid: 81\ntitle: T\ntype: personal\nfolder: Private notes\ncreated: x\nupdated: y\n---\n\nmy edit";
+  fs.writeFileSync(path.join(dir, "81-t.md"), old);
+
+  write({ id: 81, title: "T", content: "Body" }, "Private notes", "Work");
+
+  assert.equal(fs.readFileSync(path.join(dir, "edited-81-t.md"), "utf8"), old);
+});
+
+test("a note in a folder whose name starts with a dot is still tracked", (t) => {
+  const basePath = tempMirror(t);
+  write({ id: 82, title: "One", content: "Body" }, "Private notes", ".archive");
+  write({ id: 82, title: "Two", content: "Body" }, "Private notes", ".archive");
+
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes", ".archive")), ["82-two.md"]);
+  markdownMirror.deleteNote(82);
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes", ".archive")), []);
+});
+
+test("a case-only folder rename keeps the file where the file system can't tell paths apart", (t) => {
+  tempMirror(t);
+  const note = { id: 83, title: "Plan", content: "Body" };
+  write(note, "Private notes", "Work");
+  const realStat = fs.statSync;
+  t.mock.method(fs, "statSync", (target, options) => {
+    const stats = realStat(target, options);
+    return options?.bigint ? Object.assign(stats, { ino: 0n }) : stats;
+  });
+
+  write(note, "Private notes", "work");
+  fs.statSync.mock.restore();
+
+  assert.match(fs.readFileSync(markdownMirror.getNotePath(83), "utf8"), /Body$/);
+});
+
+test("a single write never scans the mirror's folders", (t) => {
+  tempMirror(t);
+  for (let folder = 0; folder < 5; folder++) {
+    write(
+      { id: 90 + folder, title: "N", content: "Body" },
+      "Workspaces",
+      "Acme",
+      "Teamspaces",
+      `F${folder}`
+    );
+  }
+  const readdir = t.mock.method(fs, "readdirSync");
+
+  write({ id: 90, title: "Renamed", content: "Body" }, "Workspaces", "Acme", "Teamspaces", "F0");
+
+  const scannedDeep = readdir.mock.calls.some((call) =>
+    String(call.arguments[0]).includes("Teamspaces")
+  );
+  readdir.mock.restore();
+  assert.equal(scannedDeep, false);
+});
+
+test("an old-layout file whose frontmatter values were edited is kept", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "Personal");
+  fs.mkdirSync(dir);
+  const old =
+    "---\nid: 84\ntitle: Board meeting\ntype: personal\nfolder: Personal\ncreated: x\nupdated: y\n---\n\nBody";
+  fs.writeFileSync(path.join(dir, "84-meeting.md"), old);
+
+  write({ id: 84, title: "Meeting", content: "Body", created_at: "x" }, "Private notes");
+
+  assert.equal(fs.readFileSync(path.join(dir, "edited-84-meeting.md"), "utf8"), old);
+});
+
+test("a file in a top-level folder is only an old note file when its frontmatter names the note", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "Daily");
+  fs.mkdirSync(dir);
+  const daily = "---\ncreated: x\n---\n\nBody";
+  fs.writeFileSync(path.join(dir, "2025-11-10.md"), daily);
+
+  write({ id: 2025, title: "Note", content: "Body", created_at: "x" }, "Private notes");
+
+  assert.deepEqual(fs.readdirSync(dir), ["2025-11-10.md"]);
+  assert.equal(fs.readFileSync(path.join(dir, "2025-11-10.md"), "utf8"), daily);
+  assert.equal(markdownMirror.legacyNoteIds().has(2025), false);
+});
+
+test("a re-save that only changes line endings or adds a BOM isn't an edit", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 85, title: "Plan", content: "Line one\nLine two" };
+  for (const resave of [(text) => text.replace(/\n/g, "\r\n"), (text) => `\uFEFF${text}`]) {
+    write(note, "Private notes");
+    const filePath = markdownMirror.getNotePath(85);
+    fs.writeFileSync(filePath, resave(fs.readFileSync(filePath, "utf8")));
+
+    write({ ...note, content: `${note.content} v2` }, "Private notes");
+
+    assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), ["85-plan.md"]);
+  }
+});
+
+test("a title cut inside an emoji still leaves one file the mirror keeps track of", (t) => {
+  const basePath = tempMirror(t);
+  // SQLite stores text as UTF-8, which turns half an emoji into U+FFFD.
+  const stored = new Map();
+  markdownMirror.setLedger({
+    files: (base) => [...stored.values()].filter((entry) => entry.base === base),
+    record: (base, entry) =>
+      stored.set(Buffer.from(entry.relPath).toString(), {
+        ...entry,
+        base,
+        relPath: Buffer.from(entry.relPath).toString(),
+      }),
+    forget: (_base, relPath) => stored.delete(Buffer.from(relPath).toString()),
+  });
+  t.after(() => markdownMirror.setLedger(null));
+  const note = { id: 86, title: `${"a".repeat(59)}😀 party`, content: "Body" };
+
+  write(note, "Private notes");
+  write({ ...note, content: "Body v2" }, "Private notes");
+  write({ ...note, content: "Body v3" }, "Private notes");
+
+  assert.equal(fs.readdirSync(path.join(basePath, "Private notes")).length, 1);
+  assert.equal(stored.size, 1);
+});
+
+test("a user's file named like a transcript isn't taken for one", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "Journal");
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, "2024-05-01-transcript.md"), "Notes from the call");
+  const note = {
+    id: 2024,
+    title: "Call",
+    content: "Body",
+    created_at: "2026-07-21T12:00:00Z",
+    transcript: JSON.stringify([{ speaker: "speaker_0", timestamp: 0, text: "Hi" }]),
+  };
+
+  markdownMirror.writeTranscript(note, placement("Private notes"), {});
+  markdownMirror.deleteNote(2024, note);
+
+  assert.deepEqual(fs.readdirSync(dir), ["2024-05-01-transcript.md"]);
+});
+
+test("deleting a note drops its unchanged old transcript that names speakers", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "General");
+  fs.mkdirSync(dir);
+  const note = {
+    id: 87,
+    title: "Call",
+    content: "Body",
+    created_at: "2026-07-21T12:00:00Z",
+    transcript: JSON.stringify([{ speaker: "speaker_0", timestamp: 0, text: "Hi" }]),
+  };
+  const mappings = { speaker_0: "Ada" };
+  const { formatMd } = require("../../src/helpers/transcriptFormatter");
+  fs.writeFileSync(
+    path.join(dir, "87-call-transcript.md"),
+    formatMd(note, JSON.parse(note.transcript), mappings)
+  );
+
+  markdownMirror.deleteNote(87, note, mappings);
+
+  assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test("workspace, space and folder names stay readable on disk", (t) => {
+  tempMirror(t);
+  const names = ["Acme Inc.", "What's next?", "Q1: plans", " Leading space", "a/b"];
+
+  const dirs = names.map((name) => {
+    markdownMirror.ensureFolder(name);
+    return path.basename(markdownMirror.getFolderPath(name));
+  });
+
+  assert.equal(new Set(dirs).size, names.length);
+  for (const dir of dirs) {
+    assert.doesNotMatch(dir, /^__ow-/);
+    assert.doesNotMatch(dir, /[<>:"/\\|?*]|[ .]$|^ /);
+  }
+  assert.match(dirs[0], /^Acme Inc/);
+});
+
+test("after the old layout is checked once, a write doesn't read the user's other folders", (t) => {
+  const basePath = tempMirror(t);
+  fs.mkdirSync(path.join(basePath, "Recipes"));
+  fs.writeFileSync(path.join(basePath, "Recipes", "soup.md"), "soup");
+  markdownMirror.legacyNoteIds();
+  const readdir = t.mock.method(fs, "readdirSync");
+
+  write({ id: 88, title: "N", content: "Body" }, "Private notes");
+
+  const readRecipes = readdir.mock.calls.some((call) =>
+    String(call.arguments[0]).endsWith("Recipes")
+  );
+  readdir.mock.restore();
+  assert.equal(readRecipes, false);
+});
+
+test(
+  "a folder renamed only in case is renamed on disk too",
+  { skip: !caseInsensitiveFileSystem() && "needs a case-insensitive file system" },
+  (t) => {
+    const basePath = tempMirror(t);
+    markdownMirror.ensureFolder(placement("Private notes", "General"), 5);
+
+    markdownMirror.moveFolderDir("Private notes/General", placement("Private notes", "general"), 5);
+
+    assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), ["general"]);
+    assert.deepEqual(
+      markdownMirror.recordedFiles().map((entry) => entry.relPath),
+      ["Private notes/general"]
+    );
+  }
+);
+
+function caseInsensitiveFileSystem() {
+  const probe = fs.mkdtempSync(path.join(os.tmpdir(), "OpenWhisprCaseProbe-"));
+  try {
+    return fs.existsSync(probe.toLowerCase()) && fs.existsSync(probe.toUpperCase());
+  } finally {
+    fs.rmSync(probe, { recursive: true, force: true });
+  }
+}
+
+test("a long title of wide characters still fits a file name", (t) => {
+  const basePath = tempMirror(t);
+  const note = {
+    id: 89,
+    title: "𝐀".repeat(70),
+    content: "Body",
+    created_at: "2026-07-21T12:00:00Z",
+    transcript: JSON.stringify([{ speaker: "speaker_0", timestamp: 0, text: "Hi" }]),
+  };
+
+  write(note, "Private notes");
+  markdownMirror.writeTranscript(note, placement("Private notes"), {});
+
+  for (const name of fs.readdirSync(path.join(basePath, "Private notes"))) {
+    assert.ok(Buffer.byteLength(name) <= 200, `${name.length} characters is too long`);
+  }
+});
+
+test("an unchanged old file of a title ending in a space goes", (t) => {
+  const basePath = tempMirror(t);
+  const dir = path.join(basePath, "General");
+  fs.mkdirSync(dir);
+  fs.writeFileSync(
+    path.join(dir, "90-hello.md"),
+    "---\nid: 90\ntitle: Hello \ntype: personal\nfolder: General\ncreated: x\nupdated: y\n---\n\nBody"
+  );
+
+  write({ id: 90, title: "Hello ", content: "Body", created_at: "x" }, "Private notes");
+
+  assert.deepEqual(fs.readdirSync(dir), []);
+});
+
+test("an emptied old folder whose name the old mirror hashed goes too", (t) => {
+  const basePath = tempMirror(t);
+  const oldName = `__ow-${require("node:crypto").createHash("sha256").update("Q1: plans").digest("hex")}`;
+  fs.mkdirSync(path.join(basePath, oldName));
+
+  markdownMirror.removeEmptyOldDirs(["Q1: plans"]);
+
+  assert.equal(fs.existsSync(path.join(basePath, oldName)), false);
+});
+
+test("a typed name that looks made safe, in any case, doesn't share a directory", (t) => {
+  tempMirror(t);
+  markdownMirror.ensureFolder("a/b");
+  const generated = path.basename(markdownMirror.getFolderPath("a/b"));
+  const typed = generated.replace(/\(([0-9a-f]{8})\)$/, (_match, hex) => `(${hex.toUpperCase()})`);
+  markdownMirror.ensureFolder(typed);
+
+  assert.notEqual(
+    path.basename(markdownMirror.getFolderPath(typed)).toLowerCase(),
+    generated.toLowerCase()
+  );
 });

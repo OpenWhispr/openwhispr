@@ -26,7 +26,10 @@ test("folder delete handlers rewrite relocated notes into the markdown mirror", 
     ["db-hard-delete-folder", "db-relocate-revoked-folder"],
   ]) {
     const source = handlerBody(channel, nextChannel);
-    assert.ok(source.includes("relocatedNotes"), `${channel} consumes relocatedNotes`);
-    assert.ok(source.includes("_asyncMirrorWrite"), `${channel} rewrites relocated mirror files`);
+    assert.ok(source.includes("_mirrorRemovedFolder(result)"), `${channel} updates the mirror`);
   }
+  const helper = ipcHandlersSource.match(/ {2}_mirrorRemovedFolder\(([\s\S]*?)\n {2}}\n/);
+  assert.ok(helper, "the mirror helper is present");
+  assert.ok(helper[1].includes("relocatedNotes"), "it consumes relocatedNotes");
+  assert.ok(helper[1].includes("_asyncMirrorWrite"), "it rewrites relocated mirror files");
 });

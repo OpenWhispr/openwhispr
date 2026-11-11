@@ -284,7 +284,9 @@ class DatabaseManager {
   constructor() {
     this.db = null;
     this.activeAccountId = null;
-    this.mergedNoteIds = [];
+    // Rows of copies merged at launch, so their old mirror files can be checked
+    // against them once the mirror starts.
+    this.mergedNotes = [];
     this.initDatabase();
   }
 
@@ -1423,6 +1425,32 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
 
+      // Workspace names, which only the renderer learns from the API, for the
+      // note-file mirror's directories to keep working offline.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS workspace_names (
+          workspace_id TEXT PRIMARY KEY,
+          name TEXT NOT NULL
+        )
+      `);
+
+      // Every file the note-file mirror wrote, with a hash of what it wrote, so it
+      // only ever replaces or removes its own unchanged files. Kept per base path,
+      // since the mirror's location can change.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS note_mirror_files (
+          base_path TEXT NOT NULL,
+          rel_path TEXT NOT NULL,
+          owner_id INTEGER,
+          kind TEXT NOT NULL CHECK (kind IN ('note', 'transcript', 'dir')),
+          content_hash TEXT,
+          PRIMARY KEY (base_path, rel_path)
+        )
+      `);
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_note_mirror_files_owner ON note_mirror_files(base_path, owner_id)"
+      );
+
       // Local mirror of the workspaces' shared lists. A hides row means the
       // member hid that entry; a visible entry has no row.
       this.db.exec(`
@@ -1802,7 +1830,7 @@ class DatabaseManager {
         debugLogger.error("Assistant note Undo unavailable", { error: error.message }, "database");
       }
       try {
-        this.mergedNoteIds = this.mergeDuplicateCloudNotes();
+        this.mergeDuplicateCloudNotes(this.mergedNotes);
       } catch (error) {
         debugLogger.error("Merging note copies failed", { error: error.message }, "database");
       }
@@ -4600,6 +4628,12 @@ class DatabaseManager {
       this.db.prepare("DELETE FROM analytics_clear_requests WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM connector_actions WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM space_accounts WHERE account_id = ?").run(accountId);
+      this.db
+        .prepare(
+          `DELETE FROM workspace_names WHERE workspace_id NOT IN
+             (SELECT workspace_id FROM spaces WHERE workspace_id IS NOT NULL)`
+        )
+        .run();
     };
 
     if (typeof this.db.transaction === "function") {
@@ -4878,6 +4912,106 @@ class DatabaseManager {
       }
     }
     return { ...row, teams, capabilities };
+  }
+
+  // Every live space and folder on the device, whichever account holds it: a
+  // directory's name can't depend on who is signed in right now.
+  getMirrorContainers() {
+    if (!this.db) throw new Error("Database not initialized");
+    const workspaceNames = {};
+    for (const row of this.db.prepare("SELECT workspace_id, name FROM workspace_names").all()) {
+      workspaceNames[row.workspace_id] = row.name;
+    }
+    return {
+      spaces: this.db
+        .prepare("SELECT id, kind, name, workspace_id FROM spaces WHERE deleted_at IS NULL")
+        .all(),
+      folders: this.db
+        .prepare("SELECT id, name, space_id, account_id FROM folders WHERE deleted_at IS NULL")
+        .all(),
+      workspaceNames,
+    };
+  }
+
+  // Returns how many names changed.
+  setWorkspaceNames(workspaces) {
+    if (!this.db) throw new Error("Database not initialized");
+    const upsert = this.db.prepare(
+      `INSERT INTO workspace_names (workspace_id, name) VALUES (?, ?)
+       ON CONFLICT(workspace_id) DO UPDATE SET name = excluded.name
+       WHERE name IS NOT excluded.name`
+    );
+    return this.db.transaction(() =>
+      workspaces.reduce((changed, { id, name }) => changed + upsert.run(id, name).changes, 0)
+    )();
+  }
+
+  // ownerId is a note's id, or a folder's for a directory.
+  getMirrorFiles(basePath, ownerId = undefined) {
+    if (!this.db) throw new Error("Database not initialized");
+    const columns =
+      "rel_path AS relPath, owner_id AS ownerId, kind, content_hash AS hash FROM note_mirror_files";
+    return ownerId === undefined
+      ? this.db.prepare(`SELECT ${columns} WHERE base_path = ?`).all(basePath)
+      : this.db
+          .prepare(`SELECT ${columns} WHERE base_path = ? AND owner_id = ?`)
+          .all(basePath, ownerId);
+  }
+
+  recordMirrorFile(basePath, { relPath, ownerId, kind, hash }) {
+    if (!this.db) throw new Error("Database not initialized");
+    this.db
+      .prepare(
+        `INSERT INTO note_mirror_files (base_path, rel_path, owner_id, kind, content_hash)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(base_path, rel_path) DO UPDATE SET
+           owner_id = excluded.owner_id, kind = excluded.kind, content_hash = excluded.content_hash`
+      )
+      .run(basePath, relPath, ownerId ?? null, kind, hash ?? null);
+  }
+
+  forgetMirrorFile(basePath, relPath) {
+    if (!this.db) throw new Error("Database not initialized");
+    this.db
+      .prepare("DELETE FROM note_mirror_files WHERE base_path = ? AND rel_path = ?")
+      .run(basePath, relPath);
+  }
+
+  // Any account's: only a note gone from the database entirely loses its files.
+  getExistingNoteIds(noteIds) {
+    if (!this.db) throw new Error("Database not initialized");
+    return this.db
+      .prepare("SELECT id FROM notes WHERE id IN (SELECT value FROM json_each(?))")
+      .all(JSON.stringify(noteIds))
+      .map((row) => row.id);
+  }
+
+  // What the mirror needs to see whether a note's files are where they belong,
+  // without loading every note's content and transcript.
+  getMirrorNoteSummaries() {
+    if (!this.db) throw new Error("Database not initialized");
+    const accountScope = this._accountScopeCondition("notes");
+    return this.db
+      .prepare(
+        `SELECT id, title, folder_id, space_id,
+           CASE WHEN json_valid(transcript) AND json_type(transcript) = 'array'
+             AND json_array_length(transcript) > 0 THEN 1 ELSE 0 END AS has_transcript
+         FROM notes WHERE deleted_at IS NULL AND ${accountScope.sql}`
+      )
+      .all(...accountScope.params);
+  }
+
+  // Deleted notes included, since the mirror removes their files. Another
+  // account's notes aren't returned, so their files are left alone.
+  getNotesForMirror(noteIds) {
+    if (!this.db) throw new Error("Database not initialized");
+    const accountScope = this._accountScopeCondition("notes");
+    return this.db
+      .prepare(
+        `SELECT * FROM notes
+         WHERE id IN (SELECT value FROM json_each(?)) AND ${accountScope.sql}`
+      )
+      .all(JSON.stringify(noteIds), ...accountScope.params);
   }
 
   getSpaces() {
@@ -7410,7 +7544,7 @@ class DatabaseManager {
   // Other distinct pending edits become notes of their own. Copies a folder
   // delete or unresolved create still owns wait for a later launch. Returns
   // the removed note ids.
-  mergeDuplicateCloudNotes() {
+  mergeDuplicateCloudNotes(removedNotes = []) {
     if (!this.db) throw new Error("Database not initialized");
     const cloudIds = this.db
       .prepare(
@@ -7536,11 +7670,16 @@ class DatabaseManager {
         // A chat following its note across spaces must not keep the old scope:
         // tearing that space down would retire it.
         if (note.space_id !== kept.space_id) detachConversations.run(kept.id);
+        // Read before they move to the kept copy, so the merged copy's old
+        // transcript file can still be checked against what it said.
+        const speakerMappings = Object.fromEntries(
+          this.getSpeakerMappings(note.id).map((row) => [row.speaker_id, row.display_name])
+        );
         moveSpeakerMappings.run(kept.id, note.id);
         moveSpeakerEmbeddings.run(kept.id, note.id);
         this._deleteSpeakerRowsForNotes("SELECT id FROM notes WHERE id = ?", note.id);
         deleteNote.run(note.id);
-        removed.push(note.id);
+        removed.push({ ...note, speakerMappings });
       }
       updateKept.run(
         account,
@@ -7570,7 +7709,10 @@ class DatabaseManager {
           );
           if (group.length > 1 && !held) {
             const account = group.find((note) => note.account_id)?.account_id ?? null;
-            removedIds.push(...merge(group, account));
+            // Only after the merge committed: a rolled-back one removed nothing.
+            const removed = merge(group, account);
+            removedIds.push(...removed.map((note) => note.id));
+            removedNotes.push(...removed);
           }
         }
       } catch (error) {

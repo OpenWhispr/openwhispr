@@ -86,7 +86,7 @@ function cloudUpsertHandler(db, broadcast, notifyVectorChanges) {
   );
   assert.ok(registration, "the cloud-note IPC callback must be present");
   return new Function("broadcastToWindows", "setImmediate", `return (${registration[1]}\n});`).call(
-    { databaseManager: db, notifyVectorChanges },
+    { databaseManager: db, notifyVectorChanges, noteFiles: { queueNote: () => {} } },
     broadcast,
     setImmediate
   );

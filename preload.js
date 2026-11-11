@@ -317,13 +317,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("note-files-set-enabled", enabled, customPath, options),
   noteFilesSetPath: (path) => ipcRenderer.invoke("note-files-set-path", path),
   noteFilesRebuild: () => ipcRenderer.invoke("note-files-rebuild"),
+  noteFilesSetWorkspaceNames: (workspaces) =>
+    ipcRenderer.invoke("note-files-set-workspace-names", workspaces),
   noteFilesGetDefaultPath: () => ipcRenderer.invoke("note-files-get-default-path"),
   noteFilesPickFolder: () => ipcRenderer.invoke("note-files-pick-folder"),
   granolaImportPickAndPreview: () => ipcRenderer.invoke("granola-import-pick-and-preview"),
   granolaImportRun: () => ipcRenderer.invoke("granola-import-run"),
   dragonImportPickFile: () => ipcRenderer.invoke("dragon-import-pick-file"),
   showNoteFile: (noteId) => ipcRenderer.invoke("show-note-file", noteId),
-  showFolderInExplorer: (folderName) => ipcRenderer.invoke("show-folder-in-explorer", folderName),
+  showFolderInExplorer: (folderId) => ipcRenderer.invoke("show-folder-in-explorer", folderId),
 
   // Action functions
   getActions: () => ipcRenderer.invoke("db-get-actions"),
