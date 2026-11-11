@@ -302,25 +302,50 @@ test("a recording the app never stopped is closed on the next launch at its last
 });
 
 // A power cut can leave the marker empty: it must not cost later recordings theirs.
-test("a marker that can't be read is replaced by the next recording's", async () => {
-  fs.writeFileSync(marker(), "");
-  const first = harness();
-  first.log.recoverInterrupted();
-  first.log.recordingStarted({ sessionId: "s2", noteId: 4, trigger: "tray" });
+// A marker that doesn't parse, or parses without what a stop line needs, can't be
+// closed; keeping it would leave every later recording without crash recovery.
+test("a marker that can't be closed is dropped, so the next recording's crash still closes", async () => {
+  for (const text of ["", "{}"]) {
+    fs.rmSync(path.join(userData, "audit"), { recursive: true, force: true });
+    fs.writeFileSync(marker(), text);
+    const first = harness();
+    first.log.recoverInterrupted();
+    first.log.recordingStarted({ sessionId: "s2", noteId: 4, trigger: "tray" });
+    await first.log.flush();
+    assert.equal(first.warnings.length, 1, JSON.stringify(text));
+
+    const relaunch = harness();
+    relaunch.log.recoverInterrupted();
+    await relaunch.log.flush();
+
+    assert.deepEqual(
+      lines().map((line) => [line.sessionId, line.event, line.reason]),
+      [
+        ["s2", "recording.started", null],
+        ["s2", "recording.stopped", "interrupted"],
+      ],
+      JSON.stringify(text)
+    );
+    assert.equal(fs.existsSync(marker()), false);
+  }
+});
+
+test("a kept marker whose folder stays unreachable for a week is dropped", async () => {
+  const share = path.join(userData, "share");
+  const first = harness({ configuredPath: share });
+  first.log.recordingStarted({ sessionId: "s1", noteId: 9, trigger: "hotkey" });
   await first.log.flush();
+  fs.rmSync(share, { recursive: true });
+  fs.writeFileSync(share, "");
 
-  const relaunch = harness();
-  relaunch.log.recoverInterrupted();
-  await relaunch.log.flush();
+  const later = harness({ configuredPath: share });
+  later.clock.now = START + 8 * 86_400_000;
+  later.log.recoverInterrupted();
+  later.state.configuredPath = path.join(userData, "new-share");
+  later.log.recordingStarted({ sessionId: "s2", noteId: 10, trigger: "tray" });
+  await later.log.flush();
 
-  assert.deepEqual(
-    lines().map((line) => [line.sessionId, line.event, line.reason]),
-    [
-      ["s2", "recording.started", null],
-      ["s2", "recording.stopped", "interrupted"],
-    ]
-  );
-  assert.equal(fs.existsSync(marker()), false);
+  assert.equal(JSON.parse(fs.readFileSync(marker(), "utf8")).sessionId, "s2");
 });
 
 test("an interrupted stop a launch can't write is kept and written before its next recording", async () => {
@@ -440,3 +465,53 @@ test(
     }
   }
 );
+
+// The owner check needs a file another user owns; stubbing process.getuid makes
+// this user's own files read as someone else's.
+test(
+  "a daily file another user owns is refused, leaving it untouched",
+  { skip: !process.getuid },
+  async () => {
+    const dir = path.join(userData, "audit");
+    fs.mkdirSync(dir);
+    const daily = path.join(dir, "meeting-audit-jdoe-2026-11-11.jsonl");
+    fs.writeFileSync(daily, "planted\n");
+    const realGetuid = process.getuid;
+    process.getuid = () => realGetuid() + 1;
+    try {
+      const { log, warnings } = harness();
+      log.recordingRefused({ noteId: null, trigger: "hotkey", reason: "POLICY_UNRESOLVABLE" });
+      await log.flush();
+      assert.equal(fs.readFileSync(daily, "utf8"), "planted\n");
+      assert.equal(warnings.length, 1);
+    } finally {
+      process.getuid = realGetuid;
+    }
+  }
+);
+
+test("rotation counts only files this user owns", { skip: !process.getuid }, async () => {
+  const dir = path.join(userData, "audit");
+  fs.mkdirSync(dir);
+  const name = (offset) => path.join(dir, `meeting-audit-jdoe-${day(offset)}.jsonl`);
+  for (let offset = 1; offset <= 95; offset += 1) fs.writeFileSync(name(offset), "{}\n");
+  const realGetuid = process.getuid;
+  // The append checks today's new file first; every file rotation then looks at
+  // reads as another user's.
+  let appendChecked = false;
+  process.getuid = () => {
+    if (appendChecked) return realGetuid() + 1;
+    appendChecked = true;
+    return realGetuid();
+  };
+  try {
+    const { log, warnings } = harness();
+    log.recordingRefused({ noteId: null, trigger: "hotkey", reason: "POLICY_UNRESOLVABLE" });
+    await log.flush();
+    assert.equal(warnings.length, 0);
+  } finally {
+    process.getuid = realGetuid;
+  }
+  for (let offset = 1; offset <= 95; offset += 1)
+    assert.ok(fs.existsSync(name(offset)), day(offset));
+});

@@ -18,6 +18,9 @@ const APPEND_FLAGS =
   (fs.constants.O_NOFOLLOW ?? 0);
 const KEEP_FILES = 90;
 const CHECKPOINT_MS = 30_000;
+// A crash marker whose folder stays unreachable this long is treated as gone,
+// so it stops holding later recordings' crash recovery hostage.
+const MARKER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const START_SOURCES = new Set([
   "hotkey",
   "tray",
@@ -46,6 +49,22 @@ const REFUSAL_REASONS = new Set([
 const allowed = (values, value) => (values.has(value) ? value : null);
 const noteIdOf = (value) => (Number.isSafeInteger(value) ? value : null);
 const durationSec = (from, to) => Math.round((to - from) / 1000);
+
+// A marker that doesn't parse or lacks what a stop line needs can't be closed.
+function readMarker(text) {
+  try {
+    const open = JSON.parse(text);
+    return typeof open?.sessionId === "string" &&
+      typeof open.dir === "string" &&
+      path.isAbsolute(open.dir) &&
+      Number.isFinite(open.startedAt) &&
+      Number.isFinite(open.lastSeenAt)
+      ? open
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 function currentDeviceUser() {
   try {
@@ -184,7 +203,13 @@ function createMeetingAuditLog({
         markerKept = false;
         return;
       }
-      const open = JSON.parse(text);
+      const open = readMarker(text);
+      if (!open || now() - open.lastSeenAt > MARKER_MAX_AGE_MS) {
+        await fs.promises.rm(markerPath, { force: true });
+        markerKept = false;
+        warnOnce("Dropped a crash marker that can't be closed", {});
+        return;
+      }
       markerKept = true;
       await append(open.dir, open.lastSeenAt, {
         event: "recording.stopped",
