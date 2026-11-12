@@ -2151,6 +2151,13 @@ declare global {
       finishActivationCapture?: (id: string, words: number) => Promise<void>;
       cancelActivationCapture?: (id: string) => Promise<void>;
       getActiveAccountScope?: () => Promise<ActiveAccountScope | null>;
+      /** Dashboard funnel: binds a session the renderer just validated (app sign-in). */
+      recordProductEventAppSession?: (context: AnalyticsSyncContext) => Promise<void>;
+      /** Dashboard funnel: the final onboarding completion was persisted. */
+      recordOnboardingCompleted?: (completion: {
+        setupMode: string | null;
+        flowVersion: string;
+      }) => Promise<void>;
       getDatabaseAccountScope?: () => Promise<DatabaseAccountScope>;
       onDatabaseAccountScopeChanged?: (
         callback: (scope: DatabaseAccountScope) => void

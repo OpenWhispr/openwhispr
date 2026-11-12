@@ -303,6 +303,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
   getActiveAccountScope: () => ipcRenderer.invoke("get-active-account-scope"),
+  recordProductEventAppSession: (context) =>
+    ipcRenderer.invoke("product-events-record-app-session", context),
+  recordOnboardingCompleted: (completion) =>
+    ipcRenderer.invoke("product-events-record-onboarding-completed", completion),
   getDatabaseAccountScope: () => ipcRenderer.invoke("get-database-account-scope"),
   onDatabaseAccountScopeChanged: registerListener(
     "database-account-scope-changed",
