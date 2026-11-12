@@ -90,3 +90,23 @@ test("S1-mini's answers go through the wider output check, part by part", async 
     { code: "CLEANUP_OUTPUT_INVALID" }
   );
 });
+
+test("S1-mini is listed under its own Superwhisper group, where its profile still finds it", async () => {
+  const { getCleanupPromptProfile } = await load();
+  const { localProviders } = require("../../src/models/modelRegistryData.json");
+  const group = localProviders.find((provider) => provider.id === "superwhisper");
+
+  assert.equal(group.name, "Superwhisper");
+  assert.deepEqual(
+    group.models.map((model) => model.name),
+    ["S1-mini"]
+  );
+  assert.equal(group.defaultModel, group.models[0].id);
+  assert.ok(getCleanupPromptProfile(group.models[0].id, dictation));
+
+  const elsewhere = localProviders
+    .filter((provider) => provider !== group)
+    .flatMap((provider) => provider.models)
+    .filter((model) => model.hfRepo?.startsWith("superwhisper/"));
+  assert.deepEqual(elsewhere, []);
+});

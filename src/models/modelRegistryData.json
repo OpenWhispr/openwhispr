@@ -1287,18 +1287,6 @@
           "supportsThinking": true
         },
         {
-          "name": "S1-mini by Superwhisper",
-          "description": "Trial build B: dictation cleanup fine-tune, on its own prompt with long dictations split (English only)",
-          "id": "s1-mini-q4_k_m",
-          "size": "0.48GB",
-          "sizeBytes": 484219808,
-          "fileName": "s1-mini-q4_k_m.gguf",
-          "quantization": "q4_k_m",
-          "contextLength": 32768,
-          "hfRepo": "superwhisper/s1-mini-GGUF",
-          "sha256": "3b41ebe2502cbd03e811d5d16b022f5ab551eda58d62597d152f89535003c634"
-        },
-        {
           "name": "Qwen3.8 27B",
           "description": "Most capable Qwen model for 32 GB machines",
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8_27b_q4_k_m",
@@ -1837,6 +1825,26 @@
           "quantization": "q8_0",
           "contextLength": 32768,
           "hfRepo": "LiquidAI/LFM2.5-230M-GGUF"
+        }
+      ]
+    },
+    {
+      "id": "superwhisper",
+      "name": "Superwhisper",
+      "defaultModel": "s1-mini-q4_k_m",
+      "baseUrl": "https://huggingface.co",
+      "models": [
+        {
+          "name": "S1-mini",
+          "description": "Trial build B: dictation cleanup fine-tune, on its own prompt with long dictations split (English only)",
+          "id": "s1-mini-q4_k_m",
+          "size": "0.48GB",
+          "sizeBytes": 484219808,
+          "fileName": "s1-mini-q4_k_m.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 32768,
+          "hfRepo": "superwhisper/s1-mini-GGUF",
+          "sha256": "3b41ebe2502cbd03e811d5d16b022f5ab551eda58d62597d152f89535003c634"
         }
       ]
     }

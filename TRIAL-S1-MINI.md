@@ -14,6 +14,11 @@ through a per-model prompt profile (`src/config/cleanupPromptProfiles.ts`):
    real speech, or an answer far longer than what was said, keeps the raw text
    and raises the usual cleanup notice.
 
+In the local model picker it has its own provider group, "Superwhisper", with
+"S1-mini" listed underneath, the way Qwen, Gemma and Liquid AI are listed. The
+group has no icon of its own (the picker falls back to its generic one); a
+Superwhisper logo is a brand asset to clear with them before any release.
+
 Every other model behaves exactly as before. The profile applies only to
 default dictation cleanup: a custom cleanup prompt, the agent and note
 formatting are sent as written. The profile does not carry the custom
@@ -35,7 +40,7 @@ reason as the verify script.
 
 ## What a real release needs instead
 
-- Add the model in `OpenWhispr/model-registry` with `minAppVersion`, a pinned
+- Add the `superwhisper` provider group and the model in `OpenWhispr/model-registry` with `minAppVersion`, a pinned
   `revision` and the SHA-256 below, then `npm run model-registry:sync` here.
 - Add `superwhisper` to the registry's `trusted-publishers.json` first, then
   copy the list into `src/helpers/registryDownloadTrust.js`.
@@ -44,6 +49,9 @@ reason as the verify script.
 - Licence: Apache 2.0 plus a naming clause. The model must be shown as
   "S1-mini" by "Superwhisper" with that capitalisation, and LICENSE and NOTICE
   ship with any redistribution of the file.
+  The picker shows the two names as group and model; check every place that
+  shows a model name on its own (status lines, download tray) still credits
+  Superwhisper.
 
 ## Model file
 
