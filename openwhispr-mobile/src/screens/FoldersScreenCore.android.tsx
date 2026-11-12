@@ -2,7 +2,7 @@ import {
   useDefaultLibraryPresentation,
   useDefaultLibraryBuckets,
   type LibraryScreenPlatform,
-} from './libraryScreenPlatform';
+} from './libraryScreenPlatform.android';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, ScrollView, Alert, ActionSheetIOS, RefreshControl } from 'react-native';
 import { Text } from '@/components/ui/Text';

@@ -1,5 +1,4 @@
-import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { Alert, ActivityIndicator, Platform, Pressable, useColorScheme } from 'react-native';
+import { Alert, ActivityIndicator, Pressable, useColorScheme } from 'react-native';
 import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import * as Sentry from '@sentry/react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';
@@ -48,7 +47,6 @@ export function NoteActionsMenu({
   onShare,
   onDelete,
 }: NoteActionsMenuProps) {
-  const { copy } = useAndroidCopy();
   const isPrivate = useNotesStore((s) => s.notes.find((n) => n.id === noteId)?.isPrivate === 1);
   const setNotePrivacy = useNotesStore((s) => s.setNotePrivacy);
 
@@ -67,7 +65,7 @@ export function NoteActionsMenu({
     })),
     {
       id: MANAGE_ID,
-      title: copy('editor.manageActions', 'Manage Actions…'),
+      title: 'Manage Actions…',
       image: 'slider.horizontal.3',
       imageColor: iconColor,
     },
@@ -75,7 +73,7 @@ export function NoteActionsMenu({
       ? [
           {
             id: ASK_NOTE_ID,
-            title: copy('editor.askNote', 'Ask about this note'),
+            title: 'Ask about this note',
             image: 'message',
             imageColor: iconColor,
             // Chat also reads the generated notes, so the caller decides when there is context.
@@ -87,7 +85,7 @@ export function NoteActionsMenu({
       ? [
           {
             id: COPY_GENERATED_NOTE_ID,
-            title: copy('editor.copyNotes', 'Copy Notes'),
+            title: 'Copy Notes',
             image: 'doc.on.doc',
             imageColor: iconColor,
           },
@@ -97,7 +95,7 @@ export function NoteActionsMenu({
       ? [
           {
             id: VIEW_TRANSCRIPT_ID,
-            title: copy('editor.viewTranscript', 'View Transcript'),
+            title: 'View Transcript',
             image: 'text.quote',
             imageColor: iconColor,
           },
@@ -105,21 +103,19 @@ export function NoteActionsMenu({
       : []),
     {
       id: SHARE_ID,
-      title: copy('editor.share', 'Share'),
+      title: 'Share',
       image: 'square.and.arrow.up',
       imageColor: iconColor,
     },
     {
       id: PRIVACY_ID,
-      title: isPrivate
-        ? copy('editor.enableSync', 'Enable Cloud Sync')
-        : copy('editor.disableSync', 'Disable Cloud Sync'),
+      title: isPrivate ? 'Enable Cloud Sync' : 'Disable Cloud Sync',
       image: isPrivate ? 'icloud' : 'icloud.slash',
       imageColor: iconColor,
     },
     {
       id: DELETE_ID,
-      title: copy('deleteAction', 'Delete'),
+      title: 'Delete',
       image: 'trash',
       // Hex literal — @react-native-menu/menu's processColor can't serialize
       // PlatformColor/iosColor; passing one collapses to imageColor=0 (transparent).
@@ -129,7 +125,6 @@ export function NoteActionsMenu({
   ];
 
   const handlePress = ({ nativeEvent }: { nativeEvent: { event: string } }) => {
-    if (Platform.OS === 'android' && disabled) return;
     const id = nativeEvent.event;
     safeHaptics('light');
 
@@ -158,11 +153,8 @@ export function NoteActionsMenu({
       setNotePrivacy(noteId, !isPrivate).catch((err) => {
         Sentry.captureException(err, { tags: { sync: 'setNotePrivacy.toggle' } });
         Alert.alert(
-          copy('editor.cloudRemovalPending', 'Cloud copy removal pending'),
-          copy(
-            'editor.cloudRemovalBody',
-            'The note stays private on this device. Its cloud copy could not be removed yet; OpenWhispr will retry when sync is available.',
-          ),
+          'Cloud copy removal pending',
+          'The note stays private on this device. Its cloud copy could not be removed yet; OpenWhispr will retry when sync is available.',
         );
       });
       return;
@@ -182,7 +174,7 @@ export function NoteActionsMenu({
         disabled={disabled}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={copy('editor.noteActions', 'Note actions')}
+        accessibilityLabel="Note actions"
         style={({ pressed }) => ({ opacity: disabled ? 0.4 : pressed ? 0.6 : 1 })}
       >
         <GlassCapsule>

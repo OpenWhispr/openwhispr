@@ -1,6 +1,5 @@
-import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Platform, Pressable, View } from 'react-native';
+import { Modal, Pressable, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import type { Speaker } from '@/data/types';
 import { getSpeakerDisplayColor, getSpeakerDisplayName } from '@/lib/diarization/transcriptDisplay';
@@ -25,7 +24,6 @@ export function SpeakerMergeSheet({
   onCancel,
   onMerge,
 }: SpeakerMergeSheetProps) {
-  const { copy } = useAndroidCopy();
   const targets = useMemo(
     () => speakers.filter((speaker) => speaker.id !== sourceSpeaker?.id),
     [sourceSpeaker?.id, speakers],
@@ -39,7 +37,7 @@ export function SpeakerMergeSheet({
   const selectedTarget = targets.find((speaker) => speaker.id === selectedTargetId) ?? null;
   const sourceName = sourceSpeaker
     ? getSpeakerDisplayName(sourceSpeaker, sourceSpeaker.sortOrder)
-    : copy('speakerControls.thisSpeaker', 'This speaker');
+    : 'This speaker';
   const targetName = selectedTarget
     ? getSpeakerDisplayName(selectedTarget, selectedTarget.sortOrder)
     : '';
@@ -54,27 +52,21 @@ export function SpeakerMergeSheet({
           testID="speaker-merge-sheet"
         >
           <Text accessibilityRole="header" className="text-lg font-semibold text-label">
-            {copy('speakerControls.mergeTitle', 'Merge speaker')}
+            Merge speaker
           </Text>
           {targets.length === 0 ? (
             <Text className="text-[15px] text-secondaryLabel">
-              {copy('speakerControls.noTargets', 'No other speakers to merge into.')}
+              No other speakers to merge into.
             </Text>
           ) : (
             <>
               <Text className="text-[14px] leading-5 text-secondaryLabel">
-                {copy(
-                  'speakerControls.mergeBody',
-                  `${targetName} survives. ${sourceName} disappears and its transcript moves into ${targetName}.`,
-                  { target: targetName, source: sourceName },
-                )}
+                {targetName} survives. {sourceName} disappears and its transcript moves into{' '}
+                {targetName}.
               </Text>
               {shouldWarnUnnamedTarget ? (
                 <Text className="text-[13px] leading-5 text-systemRed">
-                  {copy(
-                    'speakerControls.unnamedWarning',
-                    'The surviving speaker does not have a custom name.',
-                  )}
+                  The surviving speaker does not have a custom name.
                 </Text>
               ) : null}
               <View className="gap-2">
@@ -86,18 +78,14 @@ export function SpeakerMergeSheet({
                       key={speaker.id}
                       onPress={() => setSelectedTargetId(speaker.id)}
                       className={
-                        (Platform.OS === 'android'
-                          ? 'min-h-12 flex-row items-center gap-3 rounded-lg border px-3 py-3 '
-                          : 'h-12 flex-row items-center gap-3 rounded-lg border px-3 ') +
+                        'h-12 flex-row items-center gap-3 rounded-lg border px-3 ' +
                         (selected
                           ? 'border-brand bg-tertiarySystemFill'
                           : 'border-separator bg-secondarySystemBackground')
                       }
                       accessibilityRole="radio"
                       accessibilityState={{ selected }}
-                      accessibilityLabel={copy('speakerControls.mergeInto', `Merge into ${name}`, {
-                        name,
-                      })}
+                      accessibilityLabel={`Merge into ${name}`}
                       testID={`speaker-merge-target-${speaker.id}`}
                     >
                       <View
@@ -116,16 +104,12 @@ export function SpeakerMergeSheet({
           <View className="flex-row gap-3">
             <Pressable
               onPress={onCancel}
-              className={
-                Platform.OS === 'android'
-                  ? 'min-h-12 flex-1 items-center justify-center rounded-lg bg-tertiarySystemFill px-3 py-3'
-                  : 'h-11 flex-1 items-center justify-center rounded-lg bg-tertiarySystemFill'
-              }
+              className="h-11 flex-1 items-center justify-center rounded-lg bg-tertiarySystemFill"
               accessibilityRole="button"
-              accessibilityLabel={copy('speakerControls.cancelMerge', 'Cancel merge')}
+              accessibilityLabel="Cancel merge"
               testID="speaker-merge-cancel"
             >
-              <Text className="text-[15px] font-medium text-label">{copy('cancel', 'Cancel')}</Text>
+              <Text className="text-[15px] font-medium text-label">Cancel</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -134,21 +118,15 @@ export function SpeakerMergeSheet({
                 }
               }}
               disabled={!sourceSpeaker || selectedTargetId == null}
-              className={
-                Platform.OS === 'android'
-                  ? 'min-h-12 flex-1 items-center justify-center rounded-lg bg-brand px-3 py-3'
-                  : 'h-11 flex-1 items-center justify-center rounded-lg bg-brand'
-              }
+              className="h-11 flex-1 items-center justify-center rounded-lg bg-brand"
               accessibilityRole="button"
-              accessibilityLabel={copy('speakerControls.confirmMerge', 'Confirm speaker merge')}
+              accessibilityLabel="Confirm speaker merge"
               testID="speaker-merge-confirm"
               style={({ pressed }) => ({
                 opacity: !sourceSpeaker || selectedTargetId == null ? 0.4 : pressed ? 0.75 : 1,
               })}
             >
-              <Text className="text-[15px] font-semibold text-white">
-                {copy('speakerControls.mergeAction', 'Merge')}
-              </Text>
+              <Text className="text-[15px] font-semibold text-white">Merge</Text>
             </Pressable>
           </View>
         </View>

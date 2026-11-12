@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
 import { useConfigStore } from '@/store/useConfigStore';
 import type { KeyboardTone, UserConfig } from '@/types';
 import { Page, Card, Button, Row, styles, palette } from './ui';

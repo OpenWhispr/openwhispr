@@ -1,6 +1,6 @@
 import type { NativeStackHeaderProps } from '@react-navigation/native-stack';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { WorkflowSettingsHeader } from '@/components/settings/WorkflowSettingsHeader';
+import { WorkflowSettingsHeader } from '@/components/settings/WorkflowSettingsHeader.android';
 import { Stack, router } from 'expo-router';
 import { Pressable } from 'react-native';
 import { SystemIcon } from '@/components/ui/SystemIcon';

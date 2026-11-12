@@ -18,7 +18,7 @@ import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { INVALID_EMAIL_ERROR, useNoteSharing } from '@/hooks/useNoteSharing';
 import type { UserConfig } from '@/types';
-import type { NoteShareCopy } from './NoteSharePrincipalCore';
+import type { NoteShareCopy } from './NoteSharePrincipalCore.android';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { confirmDestructive } from '@/lib/alerts';

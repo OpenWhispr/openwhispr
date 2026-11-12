@@ -9,9 +9,8 @@ import type { SpeakerProfile } from '@/data/types';
 
 interface VoiceProfileListProps {
   profiles: SpeakerProfile[];
-  onEnrollOwner?: () => void;
-  onEnrollSpeaker?: () => void;
-  unavailableMessage?: string;
+  onEnrollOwner: () => void;
+  onEnrollSpeaker: () => void;
   onOpenProfile: (profile: SpeakerProfile) => void;
   /** `restore` slides a swiped row back; call it if the user cancels the delete. */
   onDelete: (profile: SpeakerProfile, restore: RestoreRow) => void;
@@ -40,7 +39,6 @@ export function VoiceProfileList({
   onOpenProfile,
   onDelete,
   onDeleteAll,
-  unavailableMessage,
 }: VoiceProfileListProps) {
   if (profiles.length === 0) {
     return (
@@ -55,28 +53,24 @@ export function VoiceProfileList({
             />
             <View className="items-center gap-1">
               <Text className="text-[17px] font-semibold text-label">
-                {unavailableMessage ? 'Voice profiles' : 'Label speakers automatically'}
+                Label speakers automatically
               </Text>
               <Text className="text-center text-[15px] leading-5 text-tertiaryLabel">
-                {unavailableMessage ??
-                  'Record a short voice sample and OpenWhispr will recognize you in future meeting transcripts instead of showing "Speaker 1". Works with on-device transcription. Voice samples stay on this device and can be deleted anytime.'}
+                Record a short voice sample and OpenWhispr will recognize you in future meeting
+                transcripts instead of showing "Speaker 1". Works with on-device transcription.
+                Voice samples stay on this device and can be deleted anytime.
               </Text>
             </View>
-            {onEnrollOwner ? (
-              <Pressable
-                onPress={onEnrollOwner}
-                accessibilityRole="button"
-                accessibilityLabel="Teach Your Voice"
-                testID="voice-profile-enroll-owner-empty"
-                className="mt-1 h-10 items-center justify-center rounded-[10px] bg-brand px-4"
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.85 : 1,
-                  borderCurve: 'continuous',
-                })}
-              >
-                <Text className="text-[15px] font-semibold text-white">Teach Your Voice</Text>
-              </Pressable>
-            ) : null}
+            <Pressable
+              onPress={onEnrollOwner}
+              accessibilityRole="button"
+              accessibilityLabel="Teach Your Voice"
+              testID="voice-profile-enroll-owner-empty"
+              className="mt-1 h-10 items-center justify-center rounded-[10px] bg-brand px-4"
+              style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1, borderCurve: 'continuous' })}
+            >
+              <Text className="text-[15px] font-semibold text-white">Teach Your Voice</Text>
+            </Pressable>
           </View>
         </GroupedList.Row>
       </GroupedList>
@@ -132,41 +126,37 @@ export function VoiceProfileList({
         ))}
       </GroupedList>
 
-      {onEnrollOwner || onEnrollSpeaker ? (
-        <View className="mt-6">
-          <GroupedList dividerInset={16}>
-            {hasOwner || !onEnrollOwner ? null : (
-              <GroupedList.Row
-                onPress={onEnrollOwner}
-                accessibilityRole="button"
-                accessibilityLabel="Teach Your Voice"
-                testID="voice-profile-enroll-owner"
-                contentInsetLeft={16}
-              >
-                <Text className="text-[17px] font-medium text-brand">Teach Your Voice</Text>
-              </GroupedList.Row>
-            )}
-            {onEnrollSpeaker ? (
-              <GroupedList.Row
-                onPress={onEnrollSpeaker}
-                accessibilityRole="button"
-                accessibilityLabel="Add Someone's Voice"
-                testID="voice-profile-enroll-speaker"
-                contentInsetLeft={16}
-              >
-                <View className="flex-row items-center gap-2">
-                  <SystemIcon name="plus" mdName="Plus" size={17} color="brand" />
-                  <Text className="text-[17px] font-medium text-brand">Add Someone's Voice</Text>
-                </View>
-              </GroupedList.Row>
-            ) : null}
-          </GroupedList>
-        </View>
-      ) : null}
+      <View className="mt-6">
+        <GroupedList dividerInset={16}>
+          {hasOwner ? null : (
+            <GroupedList.Row
+              onPress={onEnrollOwner}
+              accessibilityRole="button"
+              accessibilityLabel="Teach Your Voice"
+              testID="voice-profile-enroll-owner"
+              contentInsetLeft={16}
+            >
+              <Text className="text-[17px] font-medium text-brand">Teach Your Voice</Text>
+            </GroupedList.Row>
+          )}
+          <GroupedList.Row
+            onPress={onEnrollSpeaker}
+            accessibilityRole="button"
+            accessibilityLabel="Add Someone's Voice"
+            testID="voice-profile-enroll-speaker"
+            contentInsetLeft={16}
+          >
+            <View className="flex-row items-center gap-2">
+              <SystemIcon name="plus" mdName="Plus" size={17} color="brand" />
+              <Text className="text-[17px] font-medium text-brand">Add Someone's Voice</Text>
+            </View>
+          </GroupedList.Row>
+        </GroupedList>
+      </View>
 
       <Text className="mt-2 px-4 text-[13px] leading-5 text-secondaryLabel">
-        {unavailableMessage ??
-          'Voice profiles are local to this device. They help label future meeting transcripts and can be deleted at any time.'}
+        Voice profiles are local to this device. They help label future meeting transcripts and can
+        be deleted at any time.
       </Text>
 
       {onDeleteAll ? (

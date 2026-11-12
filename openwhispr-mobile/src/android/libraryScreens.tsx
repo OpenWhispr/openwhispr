@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { AccountButton } from './ui';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { useNoteBuckets } from '@/hooks/useNoteBuckets';
-import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
+import { NewFolderSheet } from '@/components/notes/NewFolderSheet.android';
 import { getNotesRouteOwner, withNotesRouteOwner } from '@/lib/notes/noteRouteOwner';
 import { supportsVoiceEnrollment } from '@/lib/voiceEnrollmentCapability';
 import { confirmDestructive } from '@/lib/alerts';
@@ -15,7 +15,7 @@ import type {
   LibraryFocus,
   LibraryFolderMenu,
   NotesListPlatform,
-} from '@/screens/libraryScreenPlatform';
+} from '@/screens/libraryScreenPlatform.android';
 
 function useLibraryPresentation() {
   const { t } = useTranslation('android');

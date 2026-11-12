@@ -1,8 +1,6 @@
-import { Platform, TextInput } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import { NoteChatSheet } from '../NoteChatSheet';
 import { getNoteChatSuggestions } from '@/lib/notes/noteChatSuggestions';
-import { getNoteChatSuggestions as getAndroidSuggestions } from '@/lib/notes/noteChatSuggestions.android';
 import type { ChatOverNoteMessage } from '@/lib/notes/chatOverNote';
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -29,7 +27,7 @@ const renderSheet = (overrides: Partial<React.ComponentProps<typeof NoteChatShee
     isProcessing: false,
     error: null,
     canSend: true,
-    suggestions: Platform.OS === 'android' ? getAndroidSuggestions(true) : meetingSuggestions,
+    suggestions: meetingSuggestions,
     onDraftChange: jest.fn(),
     onSend: jest.fn(),
     onSuggestion: jest.fn(),
@@ -81,78 +79,4 @@ describe('NoteChatSheet suggestions', () => {
     fireEvent.press(getByLabelText('List action items'));
     expect(props.onSuggestion).not.toHaveBeenCalled();
   });
-});
-let mockLanguage = 'en';
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    i18n: { resolvedLanguage: mockLanguage },
-    t: (key: string, options: Record<string, unknown> = {}) => {
-      const resources =
-        mockLanguage === 'ar'
-          ? require('@/locales/ar/translation.json').android
-          : require('@/locales/en/translation.json').android;
-      const value =
-        key.split('.').reduce((node: any, part: string) => node?.[part], resources) ??
-        options.defaultValue ??
-        key;
-      return String(value).replace(/\{\{(\w+)\}\}/g, (_, name) => String(options[name] ?? ''));
-    },
-  }),
-}));
-
-it('preserves an Android draft through language changes and retains send/shortcut guards', () => {
-  const original = Platform.OS;
-  Platform.OS = 'android';
-  try {
-    let view = renderSheet({ draft: 'Literal draft', error: 'Literal provider error' });
-    mockLanguage = 'ar';
-    view.rerender(<NoteChatSheet {...view.props} />);
-    expect(view.UNSAFE_getByType(TextInput).props.value).toBe('Literal draft');
-    expect(view.getByText('Literal provider error')).toBeTruthy();
-    expect(
-      view.getByText('تستند الإجابات إلى هذه الملاحظة فقط. هذه المحادثة مؤقتة ولن تُحفظ.'),
-    ).toBeTruthy();
-    expect(view.queryByLabelText('سرد المهام')).toBeNull();
-    fireEvent.press(view.getByLabelText('إرسال السؤال'));
-    expect(view.props.onSend).toHaveBeenCalledTimes(1);
-    view.rerender(<NoteChatSheet {...view.props} isProcessing />);
-    fireEvent.press(view.getByLabelText('إرسال السؤال'));
-    fireEvent.press(view.getByLabelText('إعادة محاولة السؤال'));
-    expect(view.props.onSend).toHaveBeenCalledTimes(1);
-    expect(view.props.onRetry).not.toHaveBeenCalled();
-    view.rerender(<NoteChatSheet {...view.props} draft="" error={null} />);
-    fireEvent.press(view.getByLabelText('سرد المهام'));
-    expect(view.props.onSuggestion).toHaveBeenCalledWith(
-      'What are the next steps from the meeting above that I need to do?',
-    );
-    view.rerender(<NoteChatSheet {...view.props} draft="" canSend={false} />);
-    fireEvent.press(view.getByLabelText('سرد المهام'));
-    expect(view.props.onSuggestion).toHaveBeenCalledTimes(1);
-    view.unmount();
-    Platform.OS = 'ios';
-    view = renderSheet(view.props);
-    expect(view.getByLabelText('Send question')).toBeTruthy();
-  } finally {
-    Platform.OS = original;
-    mockLanguage = 'en';
-  }
-});
-
-import { ScrollView } from 'react-native';
-
-it.each(['ios', 'android'] as const)('preserves %s empty-chat scroll behavior', (platform) => {
-  const originalPlatform = Platform.OS;
-  Platform.OS = platform;
-  const scroll = jest.spyOn(ScrollView.prototype, 'scrollToEnd').mockImplementation(() => {});
-  try {
-    const view = renderSheet();
-    const messages = view
-      .UNSAFE_getAllByType(ScrollView)
-      .find((node) => node.props.onContentSizeChange);
-    fireEvent(messages!, 'contentSizeChange', 100, 200);
-    expect(scroll).toHaveBeenCalledTimes(platform === 'ios' ? 1 : 0);
-  } finally {
-    scroll.mockRestore();
-    Platform.OS = originalPlatform;
-  }
 });

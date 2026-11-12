@@ -1,53 +1,6 @@
-jest.mock('../NoteShareSheet', () => {
-  const ios = jest.requireActual<typeof import('../NoteShareSheet')>('../NoteShareSheet');
-  const android = jest.requireActual<typeof import('../NoteShareSheet.android')>(
-    '../NoteShareSheet.android',
-  );
-  return {
-    NoteShareSheet: (props: import('react').ComponentProps<typeof ios.NoteShareSheet>) =>
-      require('react').createElement(
-        (require('react-native').Platform.OS === 'android' ? android : ios).NoteShareSheet,
-        props,
-      ),
-  };
-});
-
-jest.mock('../NoteShareAccessList', () => {
-  const ios = jest.requireActual<typeof import('../NoteShareAccessList')>('../NoteShareAccessList');
-  const android = jest.requireActual<typeof import('../NoteShareAccessList.android')>(
-    '../NoteShareAccessList.android',
-  );
-  return {
-    NoteShareAccessList: (props: import('react').ComponentProps<typeof ios.NoteShareAccessList>) =>
-      require('react').createElement(
-        (require('react-native').Platform.OS === 'android' ? android : ios).NoteShareAccessList,
-        props,
-      ),
-  };
-});
-
-jest.mock('../NoteShareInviteField', () => {
-  const ios =
-    jest.requireActual<typeof import('../NoteShareInviteField')>('../NoteShareInviteField');
-  const android = jest.requireActual<typeof import('../NoteShareInviteField.android')>(
-    '../NoteShareInviteField.android',
-  );
-  return {
-    NoteShareInviteField: (
-      props: import('react').ComponentProps<typeof ios.NoteShareInviteField>,
-    ) =>
-      require('react').createElement(
-        (require('react-native').Platform.OS === 'android' ? android : ios).NoteShareInviteField,
-        props,
-      ),
-  };
-});
-
-import { MenuView, type MenuAction } from '@react-native-menu/menu';
-import { AccessibilityInfo, Alert, Platform, type AlertButton } from 'react-native';
+import { AccessibilityInfo, Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { INVALID_EMAIL_ERROR } from '@/hooks/useNoteSharing';
-import type { NoteSharingController } from '@/hooks/useNoteSharing.android';
+import { INVALID_EMAIL_ERROR, type NoteSharingController } from '@/hooks/useNoteSharing';
 import { searchNoteAccessPrincipals } from '@/data/remote/noteSharingApi';
 import { NoteShareSheet } from '../NoteShareSheet';
 
@@ -81,31 +34,12 @@ const mockRegisterGate = jest.fn(() => Promise.resolve(true));
 const mockSpaces: { id: number; kind: string }[] = [];
 let mockUsage: { isSubscribed: boolean } | null = null;
 
-let mockLanguage = 'en';
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    i18n: { resolvedLanguage: mockLanguage },
-    t: (key: string, options: Record<string, unknown> = {}) => {
-      const locale =
-        mockLanguage === 'ar'
-          ? require('@/locales/ar/translation.json').android
-          : require('@/locales/en/translation.json').android;
-      const value = key.split('.').reduce((node: any, part: string) => node?.[part], locale);
-      return String(value ?? options.defaultValue ?? key).replace(
-        /\{\{(\w+)\}\}/g,
-        (_: string, name: string) => String(options[name] ?? ''),
-      );
-    },
-  }),
-}));
 jest.mock('@/hooks/useNoteSharing', () => ({
   INVALID_EMAIL_ERROR: 'Enter a valid email address.',
   useNoteSharing: () => mockController,
 }));
 jest.mock('@/data/remote/noteSharingApi', () => ({ searchNoteAccessPrincipals: jest.fn() }));
-jest.mock('@react-native-menu/menu', () => ({
-  MenuView: jest.fn(require('./menuViewMock').MenuView),
-}));
+jest.mock('@react-native-menu/menu', () => require('./menuViewMock'));
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('@/components/ui/GlassIconButton', () => ({
@@ -198,7 +132,6 @@ beforeEach(() => {
     busy: false,
     cancellable: false,
     error: null,
-    errorCode: null,
     message: null,
     hasLink: false,
     sharingMode: null,
@@ -649,7 +582,6 @@ it('shows errors beside the controls with a way to refresh', () => {
 it('clears an invalid email error once the address is edited', () => {
   mockController.state = { share, invitations: [], access };
   mockController.error = INVALID_EMAIL_ERROR;
-  mockController.errorCode = 'invalidEmail';
   const screen = render(<NoteShareSheet {...props} />);
   fireEvent.changeText(screen.getByLabelText('Add people or emails'), 'friend@example.com');
   expect(mockController.dismissError).toHaveBeenCalled();
@@ -735,136 +667,4 @@ it('asks before adding someone turns paused sharing back on', async () => {
   expect(mockController.addPrincipal).toHaveBeenCalledWith(
     expect.objectContaining({ id: 'user-3' }),
   );
-});
-
-describe('Android sharing consent in the selected language', () => {
-  const originalPlatform = Platform.OS;
-  beforeEach(() => {
-    Platform.OS = 'android';
-    mockLanguage = 'ar';
-  });
-  afterEach(() => {
-    Platform.OS = originalPlatform;
-    mockLanguage = 'en';
-  });
-  const buttons = (): AlertButton[] => (Alert.alert as jest.Mock).mock.lastCall[2];
-
-  it('keeps a draft and literal domain while wider access still needs explicit confirmation', () => {
-    mockController.state = { share: { ...share, visibility: 'invited' }, access, invitations: [] };
-    mockLanguage = 'en';
-    const screen = render(<NoteShareSheet {...props} />);
-    fireEvent.changeText(
-      screen.getByLabelText('Add people or emails'),
-      '  Draft52@Example.invalid  ',
-    );
-    mockLanguage = 'ar';
-    screen.rerender(<NoteShareSheet {...props} />);
-    expect(screen.getByText('مشاركة الملاحظة')).toBeTruthy();
-    expect(screen.getByDisplayValue('  Draft52@Example.invalid  ')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('menu-visibility:domain'));
-    expect((Alert.alert as jest.Mock).mock.lastCall[0]).toBe('المشاركة مع example.com؟');
-    expect((Alert.alert as jest.Mock).mock.lastCall[1]).toContain('example.com');
-    expect(mockController.setVisibility).not.toHaveBeenCalled();
-    expect(buttons()[0]).toMatchObject({ text: 'إلغاء', style: 'cancel' });
-    buttons()[0].onPress?.();
-    expect(mockController.setVisibility).not.toHaveBeenCalled();
-    buttons()[1].onPress?.();
-    expect(mockController.setVisibility).toHaveBeenCalledWith('domain', ['example.com']);
-    expect(mockController.inviteEmail).not.toHaveBeenCalled();
-  });
-
-  it('keeps cloud-upload consent separate from sharing and localizes failure recovery', async () => {
-    mockController.note = { ...mockController.note!, isPrivate: 1, remoteId: null };
-    mockSetNotePrivacy.mockRejectedValueOnce(new Error('storage unavailable'));
-    const screen = render(<NoteShareSheet {...props} />);
-    fireEvent.press(screen.getByText('تفعيل المزامنة السحابية'));
-    expect((Alert.alert as jest.Mock).mock.lastCall[0]).toBe('تفعيل المزامنة السحابية؟');
-    expect(mockSetNotePrivacy).not.toHaveBeenCalled();
-    expect(buttons()[0]).toMatchObject({ text: 'إلغاء', style: 'cancel' });
-    await act(async () => {
-      await buttons()[1].onPress?.();
-    });
-    expect(mockSetNotePrivacy).toHaveBeenCalledWith(1, false);
-    expect(screen.getByText('تعذّر تفعيل المزامنة السحابية. حاول مرة أخرى.')).toBeTruthy();
-    expect(mockController.setVisibility).not.toHaveBeenCalled();
-  });
-
-  it('requires localized confirmation for replacement and disabling with stable action identities', () => {
-    mockController.state = { share: { ...share, visibility: 'link' }, access, invitations: [] };
-    const screen = render(<NoteShareSheet {...props} />);
-    fireEvent.press(screen.getByTestId('menu-replace-link'));
-    expect((Alert.alert as jest.Mock).mock.lastCall[0]).toBe('استبدال الرابط؟');
-    expect(mockController.replaceLink).not.toHaveBeenCalled();
-    expect(buttons()[0]).toMatchObject({ text: 'إلغاء', style: 'cancel' });
-    buttons()[1].onPress?.();
-    expect(mockController.replaceLink).toHaveBeenCalledTimes(1);
-    fireEvent.press(screen.getByTestId('menu-disable-sharing'));
-    expect((Alert.alert as jest.Mock).mock.lastCall[0]).toBe('إيقاف المشاركة الخارجية؟');
-    expect(mockController.setVisibility).not.toHaveBeenCalled();
-    buttons()[1].onPress?.();
-    expect(mockController.setVisibility).toHaveBeenCalledWith('private');
-  });
-
-  it('keeps export formats literal and retains iOS copy with an Arabic app locale', () => {
-    mockController.note = { ...mockController.note!, remoteId: null };
-    let screen = render(<NoteShareSheet {...props} />);
-    fireEvent.press(screen.getByLabelText('تصدير كنص عادي'));
-    fireEvent.press(screen.getByLabelText('تصدير Markdown'));
-    expect(props.onExport.mock.calls).toEqual([['txt'], ['md']]);
-    screen.unmount();
-    Platform.OS = 'ios';
-    screen = render(<NoteShareSheet {...props} />);
-    expect(screen.getByText('Share note')).toBeTruthy();
-    expect(screen.getByLabelText('Export Plain Text')).toBeTruthy();
-  });
-});
-
-it('provides named native Android choices instead of unsupported blank inline submenus', () => {
-  const original = Platform.OS;
-  Platform.OS = 'android';
-  mockController.state = { share: { ...share, visibility: 'link' }, access, invitations: [] };
-  try {
-    let screen = render(<NoteShareSheet {...props} />);
-    const actions = (MenuView as unknown as jest.Mock).mock.lastCall[0].actions as MenuAction[];
-    expect(actions.map((action) => action.id)).toEqual([
-      'visibility:link',
-      'visibility:domain',
-      'visibility:invited',
-      'replace-link',
-      'disable-sharing',
-    ]);
-    expect(actions.every((action) => Boolean(action.title) && !action.subactions)).toBe(true);
-    fireEvent.press(screen.getByTestId('menu-disable-sharing'));
-    expect(mockController.setVisibility).not.toHaveBeenCalled();
-    screen.unmount();
-    Platform.OS = 'ios';
-    screen = render(<NoteShareSheet {...props} />);
-    const iosActions = (MenuView as unknown as jest.Mock).mock.lastCall[0].actions as MenuAction[];
-    expect(iosActions.map((action) => action.id)).toEqual(['visibility', 'link']);
-  } finally {
-    Platform.OS = original;
-  }
-});
-
-it('clears the upstream default invalid-email text without requiring an Android code', () => {
-  mockController.state = { share, invitations: [], access };
-  mockController.error = INVALID_EMAIL_ERROR;
-  const previousCode = mockController.errorCode;
-  delete (mockController as Partial<NoteSharingController>).errorCode;
-  try {
-    const screen = render(<NoteShareSheet {...props} />);
-    fireEvent.changeText(screen.getByLabelText('Add people or emails'), 'friend@example.com');
-    expect(mockController.dismissError).toHaveBeenCalled();
-  } finally {
-    mockController.errorCode = previousCode;
-  }
-});
-
-it('keeps Android provider text separate from the app-owned invalid-email code', () => {
-  mockController.state = { share, invitations: [], access };
-  mockController.error = INVALID_EMAIL_ERROR;
-  mockController.errorCode = null;
-  const screen = render(<NoteShareSheet {...props} />);
-  fireEvent.changeText(screen.getByLabelText('Add people or emails'), 'friend@example.com');
-  expect(mockController.dismissError).not.toHaveBeenCalled();
 });

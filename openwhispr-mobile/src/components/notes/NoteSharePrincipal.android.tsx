@@ -1,6 +1,6 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import type { NoteAccessPrincipalType } from '@/data/remote/noteSharingTypes';
-export { PRINCIPAL_LABEL, RowIcon, PrincipalAvatar } from './NoteSharePrincipalCore';
+export { PRINCIPAL_LABEL, RowIcon, PrincipalAvatar } from './NoteSharePrincipalCore.android';
 
 /** Keep principal types as stable server identities; translate only their display labels. */
 export function usePrincipalLabels(): Record<NoteAccessPrincipalType, string> {

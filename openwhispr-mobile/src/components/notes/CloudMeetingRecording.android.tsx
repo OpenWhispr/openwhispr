@@ -1,7 +1,7 @@
 import {
   CloudMeetingRecordingView,
   type CloudMeetingRecordingProps,
-} from './CloudMeetingRecordingView';
+} from './CloudMeetingRecordingView.android';
 import { LiveTranscriptList } from './LiveTranscriptList.android';
 import type { RealtimeUtterance } from '@/services/transcription/realtimeEvents';
 import type { CloudMeetingStatus } from '@/hooks/useCloudMeeting';

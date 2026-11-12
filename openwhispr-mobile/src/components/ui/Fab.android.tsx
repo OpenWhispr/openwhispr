@@ -4,9 +4,9 @@ import { View } from 'react-native';
 import { palette } from '@/android/ui';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { createFab, type FabPresentation } from './FabCore';
+import { createFab, type FabPresentation } from './FabCore.android';
 
-export { FAB_BOTTOM_PADDING, type FabAction } from './FabCore';
+export { FAB_BOTTOM_PADDING, type FabAction } from './FabCore.android';
 
 function useAndroidFabPresentation(): FabPresentation {
   const { t } = useTranslation('android');

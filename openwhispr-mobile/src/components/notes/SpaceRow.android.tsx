@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { createSpaceRow } from './SpaceRowCore';
+import { createSpaceRow } from './SpaceRowCore.android';
 
 export const SpaceRow = createSpaceRow(function useSpaceRowPresentation(count) {
   const { copy } = useAndroidCopy();

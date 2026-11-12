@@ -20,7 +20,7 @@ import {
 import { Sentry } from '@/lib/sentry';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 import { logPaywallViewed, logSubscription } from '@/lib/appsflyer';
-import { recordPurchaseForBilling } from './recordPurchaseForBilling';
+import { identifyRevenueCatUser, recordRevenueCatPurchase } from '@/lib/revenuecat';
 import { createAffiliatePaywallSession } from '@/lib/affiliatePaywall';
 
 type Props = {
@@ -194,6 +194,16 @@ function reportPurchaseCompletion(
       extra: { placement: gate.placement, completion },
     });
   }
+}
+
+// Reconciliation asks the backend to ask RevenueCat, which is not guaranteed to
+// have seen a Superwall-completed StoreKit 2 purchase until it is recorded.
+// Identify first so the receipt posts under the billing user, not an anonymous
+// id. Never rejects; the lib reports its own failures.
+async function recordPurchaseForBilling(productId: string): Promise<void> {
+  const billingUserId = useUsageStore.getState().usage?.billingUserId;
+  if (billingUserId) await identifyRevenueCatUser(billingUserId);
+  await recordRevenueCatPurchase(productId);
 }
 
 // The gate stays open while the purchase is recorded, so a hung native call must

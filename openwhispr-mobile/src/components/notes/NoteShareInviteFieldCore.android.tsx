@@ -14,7 +14,7 @@ import { isGroupPrincipal } from '@/lib/notes/noteShareAccess';
 import { GroupedList } from './GroupedList';
 import { NOTES_ROW_CONTENT_INSET } from './tokens';
 import { PRINCIPAL_LABEL, PrincipalAvatar, RowIcon } from './NoteSharePrincipal';
-import type { NoteShareCopy } from './NoteSharePrincipalCore';
+import type { NoteShareCopy } from './NoteSharePrincipalCore.android';
 
 const PLACEHOLDER_COLOR = iosColor('tertiaryLabel');
 const INPUT_STYLE: TextStyle = { fontFamily: AppFont.regular };

@@ -1,4 +1,3 @@
-import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { ReactNode } from 'react';
 import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -28,7 +27,6 @@ export function NotesTopBar({
   onSearchSubmit,
   onCompose,
 }: NotesTopBarProps) {
-  const { copy } = useAndroidCopy();
   const insets = useSafeAreaInsets();
   const hasTopRow = Boolean(showBack || rightSlots || title);
 
@@ -59,8 +57,7 @@ export function NotesTopBar({
           value={searchValue}
           onChangeText={onSearchChange}
           onSubmit={onSearchSubmit}
-          accessibilityLabel={copy('library.searchNotes', 'Search notes')}
-          placeholder={copy('library.search', 'Search')}
+          accessibilityLabel="Search notes"
         />
 
         {onCompose && (
@@ -71,7 +68,7 @@ export function NotesTopBar({
             }}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={copy('newNote', 'New note')}
+            accessibilityLabel="New note"
             style={({ pressed }) => ({
               opacity: pressed ? 0.5 : 1,
               width: 48,

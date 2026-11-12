@@ -14,7 +14,7 @@ jest.mock('expo-router', () => {
   return { Stack, router: { back: jest.fn() } };
 });
 jest.mock('@/hooks/useAndroidCopy', () => ({ useAndroidCopy: () => ({ copy: mockCopy }) }));
-jest.mock('@/components/settings/WorkflowSettingsHeader', () => ({
+jest.mock('@/components/settings/WorkflowSettingsHeader.android', () => ({
   WorkflowSettingsHeader: () => null,
 }));
 jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));

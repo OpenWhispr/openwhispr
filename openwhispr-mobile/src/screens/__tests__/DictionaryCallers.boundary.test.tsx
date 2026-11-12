@@ -41,7 +41,7 @@ jest.mock('@/components/ui/Fab', () => ({ Fab: () => null, FAB_BOTTOM_PADDING: 1
 jest.mock('@/components/features/AddWordsSheet', () => ({ AddWordsSheet: () => null }));
 jest.mock('@/components/features/AddSnippetSheet', () => ({ AddSnippetSheet: () => null }));
 jest.mock('@/components/notes/SyncStatusLabel', () => ({ SyncStatusLabel: () => null }));
-jest.mock('@/components/ui/SegmentedControl', () => ({ SegmentedControl: () => null }));
+jest.mock('@/components/ui/SegmentedControl.android', () => ({ SegmentedControl: () => null }));
 jest.mock('@/android/ui', () => ({ AccountButton: () => null }));
 jest.mock('@/android/libraryTime', () => ({ formatLibraryTime: () => 'android-date' }));
 jest.mock('@/lib/utils', () => ({

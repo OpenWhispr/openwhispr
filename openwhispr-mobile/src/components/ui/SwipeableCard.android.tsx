@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { createSwipeableCard, type SwipeableCardPresentation } from './SwipeableCardCore';
+import { createSwipeableCard, type SwipeableCardPresentation } from './SwipeableCardCore.android';
 
-export type { RestoreRow } from './SwipeableCardCore';
+export type { RestoreRow } from './SwipeableCardCore.android';
 
 function useAndroidSwipePresentation(): SwipeableCardPresentation {
   const { t } = useTranslation();

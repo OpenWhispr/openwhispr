@@ -1,6 +1,6 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { attendeeName } from '@/lib/notes/noteMeta.android';
-import { createAttendeesSheet } from './AttendeesSheetCore';
+import { createAttendeesSheet } from './AttendeesSheetCore.android';
 
 export const AttendeesSheet = createAttendeesSheet(function useAttendeesPresentation() {
   const { copy } = useAndroidCopy();

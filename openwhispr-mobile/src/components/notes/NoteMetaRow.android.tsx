@@ -1,5 +1,5 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { createNoteMetaRow } from './NoteMetaRowCore';
+import { createNoteMetaRow } from './NoteMetaRowCore.android';
 
 export const NoteMetaRow = createNoteMetaRow(function useMetadataPresentation() {
   const { copy } = useAndroidCopy();
