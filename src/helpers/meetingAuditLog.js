@@ -11,7 +11,8 @@ const { LOCAL_POLICY_CODES } = require("./localModelPolicyGate");
 // when the device policy wiped the device's local data (#3030).
 
 const DAILY_FILE = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
-// O_NOFOLLOW doesn't exist on Windows, where creating a symlink needs admin rights.
+// O_NOFOLLOW doesn't exist on Windows, so there the folder's ACLs must keep other
+// users from planting links.
 const APPEND_FLAGS =
   fs.constants.O_WRONLY |
   fs.constants.O_APPEND |
