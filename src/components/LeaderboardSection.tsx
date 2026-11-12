@@ -210,6 +210,7 @@ export default function LeaderboardSection({
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
   const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [boardRefreshRevision, setBoardRefreshRevision] = useState(0);
   const [failure, setFailure] = useState<{
     kind: "auth" | "generic" | "policy" | "sso";
     requestKey: string;
@@ -319,7 +320,10 @@ export default function LeaderboardSection({
         console.error("Loading leaderboard access failed:", loadError);
         const requiresAccount =
           loadError instanceof CloudApiError &&
-          (loadError.code === "ACCOUNT_REQUIRED" || loadError.status === 401);
+          (loadError.code === "ACCOUNT_REQUIRED" ||
+            loadError.code === "AUTH_EXPIRED" ||
+            loadError.status === 401);
+        if (requiresAccount) clearCachedLeaderboards();
         setAccessError(requiresAccount ? "auth" : "generic");
       } finally {
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
@@ -566,7 +570,7 @@ export default function LeaderboardSection({
     )
       return;
     void load();
-  }, [authGeneration, load, selectedRequestKey]);
+  }, [authGeneration, boardRefreshRevision, load, selectedRequestKey]);
 
   // The server owns how big a page is and how long a snapshot stays fresh; the
   // constants are only what to assume before the first response arrives.
@@ -630,6 +634,7 @@ export default function LeaderboardSection({
     try {
       await WorkspacesService.requestJoin(target.id);
       clearCachedLeaderboards();
+      setBoardRefreshRevision((revision) => revision + 1);
       setAccess((current) =>
         current?.joinableWorkspace
           ? {
@@ -732,7 +737,7 @@ export default function LeaderboardSection({
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
   if (accessLoading && !access) return <LeaderboardSkeleton />;
-  if (accessError && (!access || accountOffline)) {
+  if (accessError && (accessError === "auth" || !access || accountOffline)) {
     return (
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
