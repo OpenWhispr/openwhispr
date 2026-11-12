@@ -1128,27 +1128,29 @@ export class SyncService {
         if (!this.passIsCurrent()) return;
         this.dropFastClockCursors();
         if (full) {
-          await this.backfillUnownedCursors(accountId);
+          if (this.canSync()) await this.backfillUnownedCursors(accountId);
           if (!this.passIsCurrent()) return;
-          await this.syncFolders();
+          await this.syncFolders(!this.canSync());
           if (!this.passIsCurrent()) return;
-          await this.syncNotes();
+          await this.syncNotes(!this.canSync());
           if (!this.passIsCurrent()) return;
-          await this.syncConversations();
+          if (this.canSync()) await this.syncConversations();
           if (!this.passIsCurrent()) return;
-          await this.syncTranscriptions();
+          if (this.canSync()) await this.syncTranscriptions();
           if (!this.passIsCurrent()) return;
           // Edits during the awaits above set dictionaryDirty (syncing is already
           // true), so re-run until clean rather than stalling until the next trigger.
-          do {
-            this.dictionaryDirty = false;
-            if (!(await this.syncDictionary())) personalSucceeded = false;
-          } while (this.dictionaryDirty && this.passIsCurrent());
+          if (this.canSync())
+            do {
+              this.dictionaryDirty = false;
+              if (!(await this.syncDictionary())) personalSucceeded = false;
+            } while (this.dictionaryDirty && this.passIsCurrent() && this.canSync());
           if (!this.passIsCurrent()) return;
-          do {
-            this.snippetsDirty = false;
-            await this.syncSnippets();
-          } while (this.snippetsDirty && this.passIsCurrent());
+          if (this.canSync())
+            do {
+              this.snippetsDirty = false;
+              await this.syncSnippets();
+            } while (this.snippetsDirty && this.passIsCurrent() && this.canSync());
         } else {
           // Backup is off: team-space content still syncs (membership is
           // consent, D7) and note deletes still propagate so revoked/deleted

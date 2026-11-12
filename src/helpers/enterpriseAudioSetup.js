@@ -431,7 +431,6 @@ function registerEnterpriseAudioSetup({
 }
 
 module.exports = {
-  ENTERPRISE_AUDIO_DEVICE_ID_FILE,
   registerEnterpriseAudioSetup,
   configFingerprint,
   safeCheckCode,

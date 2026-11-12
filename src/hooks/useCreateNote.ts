@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import type { NoteItem } from "../types/electron";
+import type { MeetingStartSource, NoteItem } from "../types/electron";
 import {
   revealContainer,
   setActiveContext,
@@ -20,7 +20,8 @@ import { isMeetingAutoEndEligible } from "../helpers/meetingRecordingSession";
 /** Start a meeting recording seeded with the note's transcript and speaker setup. */
 export function startRecordingForNote(
   note: NoteItem | null,
-  recorderName?: string,
+  recorderName: string | undefined,
+  startSource: MeetingStartSource,
   canAutoStart?: () => boolean
 ): Promise<StartRecordingResult> {
   return startRecording({
@@ -33,6 +34,7 @@ export function startRecordingForNote(
     expectedCount: resolveExpectedSpeakerCount(note),
     expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),
     autoEndEligible: isMeetingAutoEndEligible(note),
+    startSource,
     canAutoStart,
   });
 }
@@ -64,7 +66,7 @@ export function useCreateNote(canAutoStart: () => boolean) {
       revealContainer(result.note.space_id, result.note.folder_id);
       setActiveNoteId(result.note.id);
       if (recordingAllowed && !isRecording && canAutoStart()) {
-        void startRecordingForNote(result.note, undefined, canAutoStart);
+        void startRecordingForNote(result.note, undefined, "new-note", canAutoStart);
       }
     },
     [t, recordingAllowed, isRecording, canAutoStart]

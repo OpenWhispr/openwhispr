@@ -30,18 +30,21 @@ test("a failed app-version read is retried instead of denying the session", asyn
           if (versionRequestCount === 1) throw new Error("IPC unavailable");
           return { version: "1.8.1" };
         },
-        getWorkspacePolicy: async () => ({
+        getEffectivePolicy: async () => ({
           success: true,
-          status: "network",
+          status: "managed",
           revision: 1,
           accountId: "account-a",
           authGeneration: 1,
           managed: true,
           policy: managedPolicy,
-          policyUpdatedAt: "2026-01-01T00:00:00.000Z",
-          endpointSupported: true,
+          deviceReady: true,
+          deviceManaged: false,
+          workspaceManaged: true,
+          workspaceRequired: true,
+          localOnly: false,
+          requireSignIn: false,
         }),
-        onWorkspacePolicyChanged() {},
       },
     },
   });
@@ -54,11 +57,11 @@ test("a failed app-version read is retried instead of denying the session", asyn
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   const { isPolicyActionAllowed } = await vite.ssrLoadModule("/stores/policyRules.ts");
 
-  await usePolicyStore.getState().fetchPolicy("account-a", 1);
+  await usePolicyStore.getState().bootstrap();
   assert.equal(usePolicyStore.getState().appVersion, null);
   assert.equal(isPolicyActionAllowed(usePolicyStore.getState()), false);
 
-  await usePolicyStore.getState().fetchPolicy("account-a", 1);
+  await usePolicyStore.getState().bootstrap();
   assert.equal(versionRequestCount, 2);
   assert.equal(usePolicyStore.getState().appVersion, "1.8.1");
   assert.equal(isPolicyActionAllowed(usePolicyStore.getState()), true);

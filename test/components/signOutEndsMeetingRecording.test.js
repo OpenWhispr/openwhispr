@@ -44,10 +44,10 @@ function extractFunction(relativePath, name) {
 function createContext(calls) {
   return {
     // Resolves on a later tick, so the order below also proves it is awaited.
-    stopRecording: () =>
+    stopRecording: (_sessionId, reason) =>
       new Promise((resolve) => {
         setTimeout(() => {
-          calls.push("meeting stopped");
+          calls.push(`meeting stopped: ${reason}`);
           resolve({ diarizationSessionId: null, stopped: true });
         }, 0);
       }),
@@ -81,7 +81,7 @@ test("sign-out ends a live meeting before the account scope is cleared", async (
 
   assert.deepEqual(calls, [
     "chat reset",
-    "meeting stopped",
+    "meeting stopped: account-change",
     "team spaces purged",
     "signed out",
     "reloaded",
@@ -130,7 +130,7 @@ test("switching account from an invitation ends a live meeting before signing ou
   assert.deepEqual(calls, [
     "chat reset",
     "invitation kept",
-    "meeting stopped",
+    "meeting stopped: account-change",
     "team spaces purged",
     "signed out",
   ]);

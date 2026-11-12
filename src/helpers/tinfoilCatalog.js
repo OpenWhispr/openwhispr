@@ -40,11 +40,13 @@ function parseModels(payload) {
     .map(toCatalogModel);
 }
 
-async function fetchModels() {
+async function fetchModels(signal) {
   // The first call also attests the enclave, so allow for more than a plain GET.
   const response = await tinfoilSecureFetch(TINFOIL_MODELS_PATH, {
     method: "GET",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
+      : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
     throw new Error(`Tinfoil models request failed: ${response.status}`);
@@ -57,18 +59,20 @@ async function fetchModels() {
  * the fetch fails so callers can tell "Tinfoil says this model is gone" apart
  * from "we couldn't ask".
  */
-async function getTinfoilChatModels() {
+async function getTinfoilChatModels(signal) {
+  signal?.throwIfAborted();
   if (Date.now() - lastFailureAt < RETRY_AFTER_FAILURE_MS) {
     throw new Error("Tinfoil models unavailable");
   }
 
   if (!inFlight) {
-    inFlight = fetchModels()
+    inFlight = fetchModels(signal)
       .then((models) => {
         lastFailureAt = 0;
         return models;
       })
       .catch((error) => {
+        if (signal?.aborted) throw error;
         lastFailureAt = Date.now();
         debugLogger.warn("Failed to fetch Tinfoil models", { error: error.message });
         throw error;

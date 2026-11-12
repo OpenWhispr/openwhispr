@@ -342,6 +342,11 @@ const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager")
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
+const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
+const { createManagedDevicePolicy } = require("./src/helpers/managedDevicePolicy");
+const { createMeetingAuditLog } = require("./src/helpers/meetingAuditLog");
+const { wipeLocalDataOnLaunch } = require("./src/helpers/localDataWipe");
+const { installManagedNetworkGuard } = require("./src/helpers/devicePolicyNetwork");
 const { applyOpenWhisprOriginHeader } = require("./src/helpers/sessionHeaders");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
@@ -362,6 +367,8 @@ let parakeetManager = null;
 let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
+let managedDevicePolicy = null;
+let meetingAuditLog = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let linuxKeyManager = null;
@@ -661,6 +668,20 @@ function initializeCoreManagers() {
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
   const meetingProcessDetector = new MeetingProcessDetector();
+  managedDevicePolicy = createManagedDevicePolicy();
+  const managedMeetingPolicy = createManagedMeetingPolicy({
+    getSnapshot: () => managedDevicePolicy.getSnapshot(),
+  });
+  meetingAuditLog = createMeetingAuditLog({
+    // The effective policy (MDM merged with the workspace) lives in the IPC
+    // handlers below; no recording starts before they exist.
+    isEnabled: () => ipcHandlers?.effectivePolicyManager?.getCurrent().managed === true,
+    getConfiguredPath: () => managedDevicePolicy.getSnapshot().auditLogPath,
+    userDataPath: app.getPath("userData"),
+    appVersion: app.getVersion(),
+    logger: debugLogger,
+  });
+  meetingAuditLog.recoverInterrupted();
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     meetingProcessDetector,
@@ -677,11 +698,17 @@ function initializeCoreManagers() {
       () => meetingProcessDetector.getDetectedProcesses().length > 0
     ),
     windowManager,
-    databaseManager
+    databaseManager,
+    {
+      isMeetingRecordingDisabled: managedMeetingPolicy.isMeetingRecordingDisabled,
+      onStartRefused: (reason, trigger) => meetingAuditLog.recordingRefused({ reason, trigger }),
+    }
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
-  updateManager = new UpdateManager();
+  updateManager = new UpdateManager({
+    getPolicy: (options) => ipcHandlers?.getUpdatePolicy?.(options) ?? { success: false },
+  });
   updateManager.setWindowManager(windowManager);
   windowsKeyManager = new WindowsKeyManager();
   linuxKeyManager = new LinuxKeyManager();
@@ -729,6 +756,9 @@ function initializeCoreManagers() {
     appleCalendarManager,
     connectorManager,
     meetingDetectionEngine,
+    managedMeetingPolicy,
+    managedDevicePolicy,
+    meetingAuditLog,
     audioTapManager,
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
@@ -797,8 +827,7 @@ function initializeDeferredManagers() {
     });
   }
 
-  googleCalendarManager.start();
-  microsoftCalendarManager.start();
+  ipcHandlers.startPolicyCalendars();
   appleCalendarManager.start();
   meetingDetectionEngine.start();
 }
@@ -1227,6 +1256,22 @@ async function startApp() {
   // contend for its port or storage lock.
   await reapStaleSidecars();
 
+  // #3030: the device policy's offboarding wipe runs before the logger, the
+  // database or any sidecar opens a file it removes, then restarts the app as a
+  // fresh install.
+  const wiped = await wipeLocalDataOnLaunch({
+    userDataPath: app.getPath("userData"),
+    appVersion: app.getVersion(),
+    clearBrowserData: () =>
+      Promise.all([session.defaultSession.clearStorageData(), session.defaultSession.clearCache()]),
+  });
+  if (wiped) {
+    // Like Reset app data, a development build quits instead of relaunching.
+    if (process.env.NODE_ENV !== "development") autoStart.scheduleRelaunch(OAUTH_PROTOCOL);
+    app.exit(0);
+    return;
+  }
+
   // The registry loader reports cache problems before core managers exist, so the
   // logger starts first. Requiring it again in initializeCoreManagers is a no-op.
   debugLogger = require("./src/helpers/debugLogger");
@@ -1255,7 +1300,6 @@ async function startApp() {
           (id) => debugLogger.warn("Refused a catalog download from an untrusted source", { id })
         ),
       }),
-    fetch: (...args) => net.fetch(...args),
     onError: (error) =>
       debugLogger.warn("Model registry update unavailable", { error: error.message }),
   });
@@ -1268,6 +1312,14 @@ async function startApp() {
 
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
+  installManagedNetworkGuard({
+    app,
+    session,
+    isAllowed: (url) => ipcHandlers.isProductNetworkAllowed(url),
+  });
+  await managedDevicePolicy.start();
+  const effectivePolicyReady = ipcHandlers.refreshEffectivePolicy();
+  if (managedDevicePolicy.getSnapshot().localOnly) await effectivePolicyReady;
   await environmentManager.init();
   // After any upgrade the GPU gets one fresh attempt: clear the remembered
   // failure before the whisper pre-warm below resolves its GPU backend.
@@ -1282,6 +1334,7 @@ async function startApp() {
   });
 
   await migrateCookieToBearerToken();
+  void updateManager.refreshPolicy();
   ipcHandlers.loadLocalModelPolicy();
 
   applyOpenWhisprOriginHeader(session.defaultSession);
@@ -1436,7 +1489,7 @@ async function startApp() {
     if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
     // Usually pressed mid-call: an open panel updates behind the meeting app.
-    windowManager.startManualMeeting({ activate: false });
+    windowManager.startManualMeeting({ activate: false, startSource: "hotkey" });
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1483,6 +1536,7 @@ async function startApp() {
   }
 
   app.on("browser-window-focus", () => {
+    managedDevicePolicy.refreshOnFocus();
     if (googleCalendarManager) googleCalendarManager.syncOnFocus();
     if (microsoftCalendarManager) microsoftCalendarManager.syncOnFocus();
     if (appleCalendarManager) appleCalendarManager.syncOnFocus();
@@ -1490,6 +1544,7 @@ async function startApp() {
 
   const { powerMonitor } = require("electron");
   powerMonitor.on("resume", () => {
+    void managedDevicePolicy.refresh();
     if (calendarReminderScheduler) calendarReminderScheduler.onWakeFromSleep();
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
@@ -1978,7 +2033,7 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting({ activate: false });
+        windowManager.startManualMeeting({ activate: false, startSource: "hotkey" });
       }
     };
 
@@ -2208,6 +2263,7 @@ if (gotSingleInstanceLock) {
   app.on("before-quit", (event) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    managedDevicePolicy?.stop();
     if (updateManager && updateManager.isQuittingForUpdate) {
       // Quit must proceed for the installer to run, so no preventDefault;
       // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).
@@ -2219,6 +2275,10 @@ if (gotSingleInstanceLock) {
     performSyncTeardown();
     Promise.allSettled([
       sidecarRegistry.shutdownAll(),
+      Promise.race([
+        meetingAuditLog?.closeOpenSession(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
       Promise.race([
         ipcHandlers?.metaActivation?.shutdown(),
         new Promise((resolve) => setTimeout(resolve, 1500)),

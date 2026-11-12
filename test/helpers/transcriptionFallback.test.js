@@ -117,6 +117,7 @@ test("denials the user must act on do not fall back", async () => {
     { success: false, code: "AUTH_CONTEXT_CHANGED", status: 0 },
     { success: false, code: "POLICY_MODE_BLOCKED", status: 403 },
     { success: false, code: "POLICY_UNRESOLVABLE", status: 403 },
+    { success: false, code: "DEVICE_POLICY_BLOCKED" },
     { success: false, code: "ACCOUNT_REQUIRED", status: 403 },
     { success: false, code: "UPGRADE_REQUIRED", status: 426, minAppVersion: "2.0.0" },
     { success: false, code: "LIMIT_REACHED", status: 429 },
@@ -146,4 +147,12 @@ test("only the managed Orukeet route falls back on session failures", async () =
     }),
     null
   );
+});
+
+test("a device policy's refusal is a policy refusal, so local fallback doesn't run", async () => {
+  const { isTranscriptionPolicyRefusal } =
+    await import("../../src/helpers/transcriptionFallback.js");
+  assert.equal(isTranscriptionPolicyRefusal({ code: "DEVICE_POLICY_BLOCKED" }), true);
+  assert.equal(isTranscriptionPolicyRefusal({ code: "POLICY_MODE_BLOCKED" }), true);
+  assert.equal(isTranscriptionPolicyRefusal({ code: "NETWORK_POLICY_ERROR" }), false);
 });

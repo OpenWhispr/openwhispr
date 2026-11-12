@@ -7,10 +7,12 @@ import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import CleanupFailureToastListener from "./components/CleanupFailureToastListener.tsx";
 import RetiredModelSwitchToastListener from "./components/RetiredModelSwitchToastListener.tsx";
 import GpuPackMigrationToastListener from "./components/GpuPackMigrationToastListener.tsx";
+import LocalDataWipeNoticeListener from "./components/LocalDataWipeNoticeListener.tsx";
 import { I18nDirectionProvider } from "./components/I18nDirectionProvider.tsx";
 import { ToastProvider } from "./components/ui/Toast.tsx";
 import { SettingsProvider } from "./hooks/useSettings";
 import { bindDocumentLanguage } from "./utils/i18nDocument";
+import { installPolicyNetworkGuard } from "./lib/policyNetwork";
 
 import i18n from "./i18n";
 // Self-hosted so it works offline and makes no network call — the "opsz" build
@@ -22,6 +24,8 @@ import "@fontsource-variable/caveat";
 import "./brandFonts";
 import "./index.css";
 
+const removePolicyNetworkGuard = installPolicyNetworkGuard();
+import.meta.hot?.dispose(removePolicyNetworkGuard);
 bindDocumentLanguage(i18n, document.documentElement, import.meta.hot);
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
@@ -35,6 +39,7 @@ root.render(
               <RetiredModelSwitchToastListener />
               <CleanupFailureToastListener />
               <GpuPackMigrationToastListener />
+              <LocalDataWipeNoticeListener />
               <AppRouter />
             </ToastProvider>
           </SettingsProvider>

@@ -195,7 +195,13 @@
     "managedConfigUnavailable": "O acesso empresarial gerenciado está indisponível. Entre novamente ou entre em contato com o administrador.",
     "managedConfigAmbiguous": "A configuração gerenciada da sua organização está inconsistente. Entre em contato com o administrador.",
     "managedPolicyConflict": "O acesso gerenciado está bloqueado pela política do seu espaço de trabalho. Entre em contato com o administrador.",
-    "resizePanel": "Redimensionar painel"
+    "resizePanel": "Redimensionar painel",
+    "managedDevice": "Dispositivo gerenciado",
+    "managedDeviceAndWorkspace": "Dispositivo e espaço de trabalho gerenciados",
+    "deviceLocalOnly": "Este dispositivo usa apenas processamento local. Os recursos na nuvem estão indisponíveis, inclusive para contas que já estavam conectadas.",
+    "deviceSignInRequired": "Sua organização exige login neste dispositivo.",
+    "devicePolicyInvalid": "Não foi possível ler a política do dispositivo ou ela é inválida. Contate seu administrador. As ações gerenciadas ficam bloqueadas até a correção da política.",
+    "deviceWorkspaceUnavailable": "Este dispositivo exige processamento local, mas a política do espaço de trabalho da conta salva está indisponível. Saia para continuar sem essa conta ou contate seu administrador."
   },
   "onboarding": {
     "rehaul": {
@@ -634,7 +640,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Atualização obrigatória",
-      "description": "Sua organização exige o OpenWhispr {{version}} ou mais recente. Atualize o aplicativo."
+      "description": "Sua organização exige o OpenWhispr {{version}} ou mais recente. Atualize o aplicativo.",
+      "contactIT": "A sua organização requer OpenWhispr {{version}} ou posterior. Contacte a equipa de TI para instalar uma versão aprovada."
     },
     "update": {
       "readyTitle": "Atualização pronta para instalar",
@@ -1216,7 +1223,8 @@
       "failedUserCheck": "Falha ao verificar conta do usuário",
       "generic": "Algo deu errado. Tente novamente.",
       "invalidCredentials": "E-mail ou senha inválidos",
-      "invalidEmail": "Digite um endereço de e-mail válido"
+      "invalidEmail": "Digite um endereço de e-mail válido",
+      "signInDisabledByDevice": "Sua organização desativou o login neste dispositivo."
     },
     "getStarted": "Começar",
     "legal": {
@@ -2245,7 +2253,14 @@
         "restarting": "Reiniciando...",
         "title": "Atualizações",
         "versionPlaceholder": "—",
-        "whatsNew": "Novidades na v{{version}}"
+        "whatsNew": "Novidades na v{{version}}",
+        "managedByOrganization": "Gerido pela sua organização.",
+        "itManaged": "A sua organização gere as atualizações.",
+        "policyLoading": "A carregar as definições de atualização…",
+        "policyUnavailable": "Não foi possível carregar as definições de atualização. Verifique se há atualizações para tentar novamente.",
+        "policyChanged": "A política de atualizações mudou. Verifique novamente se há atualizações.",
+        "managedBadge": "Gerido",
+        "stagedBeforePolicy": "Uma atualização foi preparada antes da aplicação desta política e poderá ser instalada ao fechar a aplicação. Contacte a equipa de TI antes de fechar ou reiniciar."
       },
       "translationHotkey": {
         "title": "Atalho de Tradução",
@@ -4593,6 +4608,10 @@
       "gpuPackMigration": {
         "title": "O pacote GPU precisa ser baixado novamente",
         "description": "Esta versão não consegue usar o pacote GPU anterior ({{packs}}). Baixe-o novamente nas Configurações para reativar a aceleração GPU."
+      },
+      "localDataWiped": {
+        "title": "Sua organização removeu os dados do OpenWhispr deste dispositivo",
+        "description": "Você foi removido do espaço de trabalho da sua organização, então o OpenWhispr apagou o que guardava neste dispositivo e recomeçou do zero."
       },
       "cleanupFailed": {
         "title": "Falha na limpeza",

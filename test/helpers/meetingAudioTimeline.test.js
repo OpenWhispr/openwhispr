@@ -41,6 +41,10 @@ function harness({ native = true, local = false } = {}) {
     recordChunk(audible);
   };
   const context = {
+    effectivePolicyManager: { getCurrent: () => ({ success: true, managed: false }) },
+    app: { getVersion: () => "1.11.1" },
+    productOperationAllowed: require("../../src/helpers/productPolicy").productOperationAllowed,
+    meetingConnectionOptions: null,
     require: (specifier) => {
       const imported = createRequire(ipcPath)(specifier);
       return specifier === "./meetingAudioTimeline"

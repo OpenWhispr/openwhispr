@@ -1,12 +1,7 @@
 import { create } from "zustand";
 import logger from "../utils/logger";
-import type { OrgPolicy } from "../types/policy";
-import {
-  POLICY_SUCCESS_REFRESH_MS,
-  resolvedPolicyRefreshIdentity,
-  shouldAcceptPolicySnapshot,
-  shouldPreserveResolvedPolicyOnFailure,
-} from "./policyLifecycle";
+import type { EffectivePolicySnapshot } from "../types/policy";
+import { POLICY_SUCCESS_REFRESH_MS } from "./policyLifecycle";
 import type { PolicyDecisionSnapshot } from "./policyRules";
 
 export interface PolicyState extends PolicyDecisionSnapshot {
@@ -16,40 +11,18 @@ export interface PolicyState extends PolicyDecisionSnapshot {
   revision: number;
   /** True once the org enforces a policy on this user. */
   managed: boolean;
-  fetchPolicy: (accountId: string, authGeneration: number) => Promise<void>;
-  clearPolicy: () => void;
-  /**
-   * Fail-closed placeholder while account reconciliation resolves the active
-   * identity. Unlike clearPolicy (idle = allowed), "loading" denies managed
-   * actions until the new account's policy is fetched.
-   */
-  suspendPolicy: () => void;
+  deviceReady: boolean;
+  deviceManaged: boolean;
+  workspaceManaged?: boolean;
+  workspaceRequired?: boolean;
+  localOnly: boolean;
+  requireSignIn: boolean;
+  code?: string;
+  bootstrap: () => Promise<void>;
 }
 
-// Several components mount useAuth at startup; share one in-flight fetch
-// between them instead of hitting the API once per consumer.
-let fetchInFlight: {
-  accountId: string;
-  authGeneration: number;
-  promise: Promise<void>;
-} | null = null;
-let fetchSequence = 0;
 let lifecycleListenersReady = false;
 let appVersionPromise: Promise<string | null> | null = null;
-
-interface PolicyIpcSnapshot {
-  success: boolean;
-  status?: string;
-  revision?: number;
-  accountId?: string | null;
-  authGeneration?: number | null;
-  managed?: boolean;
-  policy?: OrgPolicy | null;
-  policyUpdatedAt?: string | null;
-  endpointSupported?: boolean;
-  code?: string;
-  error?: string;
-}
 
 function readAppVersion(): Promise<string | null> {
   if (!appVersionPromise) {
@@ -71,211 +44,97 @@ function readAppVersion(): Promise<string | null> {
   return appVersionPromise;
 }
 
-function normalizeSnapshot(
-  result: PolicyIpcSnapshot,
-  current: PolicyState
-): Required<
-  Pick<PolicyIpcSnapshot, "revision" | "accountId" | "authGeneration" | "managed" | "policy">
-> {
-  return {
-    revision: result.revision ?? current.revision + 1,
-    // A mixed new-renderer/old-main response has no credential identity. It
-    // must never inherit the renderer's requested account or generation,
-    // because an older main may be returning a global cache from another user.
-    accountId: result.accountId ?? null,
-    authGeneration: result.authGeneration ?? null,
-    managed: Boolean(result.managed),
-    policy: result.policy ?? null,
-  };
-}
+let effectiveFetch: Promise<void> | null = null;
 
-function applyPolicySnapshot(result: PolicyIpcSnapshot, appVersion: string | null): boolean {
+function applyEffectiveSnapshot(
+  snapshot: EffectivePolicySnapshot,
+  appVersion: string | null
+): void {
   const current = usePolicyStore.getState();
-  const snapshot = normalizeSnapshot(result, current);
   if (
-    !current.accountId ||
-    current.authGeneration == null ||
-    snapshot.accountId !== current.accountId ||
-    snapshot.authGeneration !== current.authGeneration ||
-    !shouldAcceptPolicySnapshot(
-      {
-        accountId: current.accountId,
-        authGeneration: current.authGeneration,
-        revision: current.revision,
-      },
-      {
-        accountId: snapshot.accountId,
-        authGeneration: snapshot.authGeneration,
-        revision: snapshot.revision,
-      }
-    )
-  ) {
-    return false;
-  }
-
-  if (snapshot.managed && !snapshot.policy) return false;
+    snapshot.revision < current.revision ||
+    (current.authGeneration != null && snapshot.authGeneration < current.authGeneration)
+  )
+    return;
+  // A settled verdict stays while the same account's next one loads, as a
+  // rotated token keeps its account: a running stream isn't refused meanwhile.
+  const settled = current.status === "managed" || current.status === "unmanaged";
+  const keepSettled =
+    snapshot.status === "loading" &&
+    snapshot.deviceReady &&
+    settled &&
+    snapshot.accountId === current.accountId;
   usePolicyStore.setState({
-    accountId: snapshot.accountId,
-    authGeneration: snapshot.authGeneration,
-    revision: snapshot.revision,
-    status: snapshot.managed ? "managed" : "unmanaged",
-    managed: snapshot.managed,
-    policy: snapshot.policy,
+    ...snapshot,
+    ...(keepSettled
+      ? {
+          status: current.status,
+          managed: current.managed,
+          policy: current.policy,
+          workspaceManaged: current.workspaceManaged,
+          code: current.code,
+        }
+      : {
+          code: snapshot.code,
+          status: snapshot.success ? (snapshot.managed ? "managed" : "unmanaged") : snapshot.status,
+        }),
     appVersion,
   });
-  return true;
 }
 
-function applyPolicyFailure(result: PolicyIpcSnapshot): boolean {
-  const current = usePolicyStore.getState();
-  if (
-    result.code !== "POLICY_UNRESOLVABLE" ||
-    !current.accountId ||
-    current.authGeneration == null ||
-    result.accountId !== current.accountId ||
-    result.authGeneration !== current.authGeneration
-  ) {
-    return false;
+export function refreshEffectivePolicy(): Promise<void> {
+  ensurePolicyLifecycleListeners();
+  if (effectiveFetch) return effectiveFetch;
+  const read = window.electronAPI.getEffectivePolicy;
+  if (!read) {
+    usePolicyStore.setState({ deviceReady: true });
+    return Promise.resolve();
   }
-  if (current.status === "managed") return true;
-  usePolicyStore.setState({
-    status: "error",
-    managed: false,
-    policy: null,
+  const pending = (async () => {
+    const revision = usePolicyStore.getState().revision;
+    try {
+      const [snapshot, appVersion] = await Promise.all([read(), readAppVersion()]);
+      applyEffectiveSnapshot(snapshot, appVersion);
+    } catch (error) {
+      if (usePolicyStore.getState().revision !== revision) return;
+      logger.error("Failed to read effective policy:", error);
+      usePolicyStore.setState({
+        status: "error",
+        deviceReady: true,
+        code: "DEVICE_POLICY_INVALID",
+        policy: null,
+      });
+    }
+  })();
+  effectiveFetch = pending.finally(() => {
+    effectiveFetch = null;
   });
-  return true;
+  return effectiveFetch;
 }
 
 function ensurePolicyLifecycleListeners(): void {
   if (lifecycleListenersReady) return;
   lifecycleListenersReady = true;
-  window.electronAPI.onWorkspacePolicyChanged?.((snapshot) => {
-    if (!snapshot.success) {
-      applyPolicyFailure(snapshot);
-      return;
-    }
-    void readAppVersion().then((appVersion) => applyPolicySnapshot(snapshot, appVersion));
+  window.electronAPI.onEffectivePolicyChanged?.((snapshot) => {
+    void readAppVersion().then((version) => applyEffectiveSnapshot(snapshot, version));
   });
-  const refreshResolvedPolicy = (): void => {
-    const state = usePolicyStore.getState();
-    const identity = resolvedPolicyRefreshIdentity(state);
-    if (!identity) return;
-    void state.fetchPolicy(identity.accountId, identity.authGeneration);
-  };
-  window.addEventListener("online", refreshResolvedPolicy);
-  window.addEventListener("focus", refreshResolvedPolicy);
-  window.setInterval(refreshResolvedPolicy, POLICY_SUCCESS_REFRESH_MS);
+  const refresh = (): void => void refreshEffectivePolicy();
+  window.addEventListener("online", refresh);
+  window.addEventListener("focus", refresh);
+  window.setInterval(refresh, POLICY_SUCCESS_REFRESH_MS);
 }
 
-export const usePolicyStore = create<PolicyState>()((set, get) => {
-  const resetPolicy = (status: "idle" | "loading"): void => {
-    fetchSequence += 1;
-    fetchInFlight = null;
-    set({
-      accountId: null,
-      authGeneration: null,
-      revision: 0,
-      status,
-      managed: false,
-      policy: null,
-      appVersion: null,
-    });
-  };
-
-  return {
-    accountId: null,
-    authGeneration: null,
-    revision: 0,
-    status: "idle",
-    managed: false,
-    policy: null,
-    appVersion: null,
-    fetchPolicy: (accountId: string, authGeneration: number): Promise<void> => {
-      ensurePolicyLifecycleListeners();
-      if (
-        fetchInFlight?.accountId === accountId &&
-        fetchInFlight.authGeneration === authGeneration
-      ) {
-        return fetchInFlight.promise;
-      }
-
-      const previous = get();
-      const sameAccount = previous.accountId === accountId;
-      const sameIdentity = sameAccount && previous.authGeneration === authGeneration;
-      // Keep every settled state visible while refreshing the same account.
-      // In particular, replacing `error` with `loading` makes AppRouter unmount
-      // onboarding; the remounted useAuth then starts another refresh and can
-      // create an error -> loading -> error loop while the service is offline.
-      // A rotated token keeps it too, as main does, so a running local stream
-      // isn't refused while the new credential's answer is on its way.
-      const preserveSettledPolicy =
-        sameAccount && previous.status !== "idle" && previous.status !== "loading";
-      const sequence = ++fetchSequence;
-      if (preserveSettledPolicy) {
-        if (!sameIdentity) set({ authGeneration, revision: 0 });
-      } else {
-        set({
-          accountId,
-          authGeneration,
-          revision: sameIdentity ? previous.revision : 0,
-          status: "loading",
-          managed: false,
-          policy: null,
-          appVersion: null,
-        });
-      }
-
-      const promise = (async () => {
-        const versionPromise = readAppVersion();
-        try {
-          const result = await window.electronAPI.getWorkspacePolicy?.(accountId, authGeneration);
-          const appVersion = await versionPromise;
-          if (sequence !== fetchSequence) return;
-          if (result?.success) {
-            if (applyPolicySnapshot(result, appVersion)) return;
-            throw new Error("Workspace policy response did not match the active credential");
-          }
-          throw Object.assign(new Error(result?.error || "Workspace policy is unavailable"), {
-            code: result?.code,
-          });
-        } catch (error) {
-          if (sequence !== fetchSequence) return;
-          logger.error("Failed to fetch workspace policy:", error);
-          const failureCode =
-            error && typeof error === "object" && "code" in error && typeof error.code === "string"
-              ? error.code
-              : undefined;
-          // Resolve the version before the staleness re-check: awaiting inside set()
-          // would let a clearPolicy()/newer fetch land first and then be clobbered.
-          const appVersion = await versionPromise;
-          if (sequence !== fetchSequence) return;
-          const current = get();
-          if (!(
-            current.accountId === accountId &&
-            shouldPreserveResolvedPolicyOnFailure(current.status, failureCode)
-          )) {
-            set({
-              accountId,
-              status: "error",
-              managed: false,
-              policy: null,
-              appVersion,
-            });
-          }
-        } finally {
-          if (
-            fetchInFlight?.accountId === accountId &&
-            fetchInFlight.authGeneration === authGeneration
-          ) {
-            fetchInFlight = null;
-          }
-        }
-      })();
-
-      fetchInFlight = { accountId, authGeneration, promise };
-      return promise;
-    },
-    clearPolicy: (): void => resetPolicy("idle"),
-    suspendPolicy: (): void => resetPolicy("loading"),
-  };
-});
+export const usePolicyStore = create<PolicyState>()(() => ({
+  deviceReady: false,
+  deviceManaged: false,
+  localOnly: false,
+  requireSignIn: false,
+  bootstrap: refreshEffectivePolicy,
+  accountId: null,
+  authGeneration: null,
+  revision: 0,
+  status: "idle",
+  managed: false,
+  policy: null,
+  appVersion: null,
+}));

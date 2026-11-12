@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -74,6 +75,7 @@ function anything() {
 function buildFakeThis() {
   const target = {
     sessionId: "test-session",
+    windowManager: { controlPanelWindow: null, mainWindow: null },
     environmentManager: {
       getAnthropicKey: () => "sk-ant-test-key",
     },
@@ -88,7 +90,7 @@ test.before(() => {
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(buildFakeThis());
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(buildFakeThis()));
   anthropicHandler = handlers.get("process-anthropic-reasoning");
   assert.ok(anthropicHandler, "process-anthropic-reasoning must be registered");
 });
@@ -135,6 +137,7 @@ test("an Anthropic HTTP failure resolves with classified IPC fields", async () =
 test("an already-classified failure (missing key) passes through unchanged", async () => {
   const noKeyThis = {
     sessionId: "test-session",
+    windowManager: { controlPanelWindow: null, mainWindow: null },
     environmentManager: { getAnthropicKey: () => "" },
   };
   const proxiedThis = new Proxy(noKeyThis, {
@@ -146,7 +149,7 @@ test("an already-classified failure (missing key) passes through unchanged", asy
   delete require.cache[handlersModulePath];
   const IPCHandlers = require(handlersModulePath);
   const Ctor = IPCHandlers.default || IPCHandlers;
-  Ctor.prototype.setupHandlers.call(proxiedThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(proxiedThis));
   electronStub.ipcMain.handle = originalHandle;
 
   const handler = handlersForNoKey.get("process-anthropic-reasoning");

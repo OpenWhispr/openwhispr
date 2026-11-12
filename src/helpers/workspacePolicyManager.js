@@ -5,7 +5,10 @@ const crypto = require("crypto");
 // logic stays local here, but the error taxonomy is shared.
 const { AuthContextError } = require("./cloudApiRequest");
 const { isValidPolicyShape } = require("./policyValidation");
-const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
+const {
+  WORKSPACE_REMOVAL_CAPABILITY,
+  withPolicyRequestHeaders,
+} = require("./policyRequestHeaders");
 const {
   readWorkspacePolicyCache,
   readAccountPolicyCache,
@@ -57,6 +60,7 @@ function createWorkspacePolicyManager({
   tokenStore,
   getValidatedAccountId = () => null,
   broadcast,
+  onWorkspaceRemoval = () => {},
   logger,
   requestTimeoutMs = 10_000,
   successfulRefreshMs = 5 * 60 * 1000,
@@ -166,6 +170,46 @@ function createWorkspacePolicyManager({
     return cached?.managed === false && cached.requiresManagedPolicy === true;
   }
 
+  // Whether the account's last validated verdict was managed. A failed lookup
+  // carries it, so a credential that can't inherit that verdict yet (a rotated
+  // token before its binding) still fails closed. It never grants anything,
+  // so a renderer's account label is enough to read it by.
+  function accountWasManaged(accountId) {
+    const apiUrl = getApiUrl();
+    return Boolean(
+      accountId &&
+      URL.canParse(apiUrl) &&
+      readAccountPolicyCache(cachePath, { apiOrigin: new URL(apiUrl).origin, accountId })
+        ?.managed === true
+    );
+  }
+
+  // #3030: the server says this account was removed from a managed workspace.
+  // Only a device whose last managed verdict for this credential (or account)
+  // named that workspace acts on it: a removal from some other workspace, or a
+  // sign-in on another device, wipes nothing. The credential's own verdict
+  // still counts once a rejected session has cleared the account label.
+  function reportRemoval(identity, removal) {
+    if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
+    const verdicts = [
+      readWorkspacePolicyCache(cachePath, cacheIdentity(identity)),
+      identity.accountId &&
+        readAccountPolicyCache(cachePath, {
+          apiOrigin: identity.apiOrigin,
+          accountId: identity.accountId,
+        }),
+    ];
+    const managedBy = verdicts.flatMap((verdict) =>
+      verdict?.managed && Array.isArray(verdict.managedBy) ? verdict.managedBy : []
+    );
+    if (!managedBy.includes(removal.workspaceId)) return;
+    onWorkspaceRemoval({
+      accountId: identity.accountId,
+      workspaceId: removal.workspaceId,
+      removedAt: removal.removedAt,
+    });
+  }
+
   function errorSnapshot(identity, code, error, httpStatus) {
     const current = snapshots.get(identityKey(identity));
     return {
@@ -174,6 +218,7 @@ function createWorkspacePolicyManager({
       revision: current?.revision ?? revision,
       accountId: identity.accountId,
       authGeneration: identity.authGeneration,
+      managed: accountWasManaged(identity.accountId),
       code,
       error,
       httpStatus,
@@ -268,7 +313,9 @@ function createWorkspacePolicyManager({
         // server refusal with the verdict the server just contradicted.
         const response = await proxyFetch(`${identity.apiUrl}/api/workspace-policy`, {
           method: "GET",
-          headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion()),
+          headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion(), [
+            WORKSPACE_REMOVAL_CAPABILITY,
+          ]),
           cache: "no-store",
           signal: controller.signal,
         });
@@ -298,6 +345,10 @@ function createWorkspacePolicyManager({
           if (errorBody?.code === "POLICY_UNRESOLVABLE") {
             throw unresolvablePolicyError(errorBody.error || "Organization policy is unresolvable");
           }
+          // An admin removal revoked this session.
+          if (response.status === 401 && errorBody?.code === "WORKSPACE_MEMBER_REMOVED") {
+            reportRemoval(identity, errorBody);
+          }
           const error = new Error(`API error: ${response.status}`);
           error.status = response.status;
           throw error;
@@ -315,6 +366,10 @@ function createWorkspacePolicyManager({
           }
           throw new Error("Malformed policy response");
         }
+        // Still signed in (directory deprovisioning keeps the session), maybe
+        // still managed by another workspace; read before this verdict replaces
+        // the one that named the removing workspace.
+        if (data.workspaceRemoval) reportRemoval(identity, data.workspaceRemoval);
         return acceptSuccessfulResponse(identity, data, "network");
       } finally {
         clearTimeout(timeout);
@@ -352,12 +407,14 @@ function createWorkspacePolicyManager({
     try {
       identity = captureIdentity(request ?? {});
     } catch (error) {
+      const accountId = normalizeAccountId(request?.accountId);
       return {
         success: false,
         status: "error",
         revision,
-        accountId: normalizeAccountId(request?.accountId),
+        accountId,
         authGeneration: tokenStore.getState()?.generation ?? null,
+        managed: accountWasManaged(accountId),
         code: error.code || "POLICY_UNAVAILABLE",
         error: error.message,
       };
@@ -453,7 +510,7 @@ function createWorkspacePolicyManager({
     return cached && (!managedOnly || cached.managed) ? accept(identity, cached, "cached") : null;
   }
 
-  return { getPolicy, peekPolicy, heldPolicy };
+  return { getPolicy, peekPolicy, heldPolicy, accountWasManaged };
 }
 
 // Main-process capture gate: block an explicit managed denial or an

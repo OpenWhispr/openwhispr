@@ -45,3 +45,14 @@ test("rejects a non-canonical app version instead of advertising a malformed cli
   assert.throws(() => withPolicyRequestHeaders({}, "1.8"), /canonical app version/i);
   assert.throws(() => withPolicyRequestHeaders({}, "1.8.1-beta.1"), /canonical app version/i);
 });
+
+// #3030: the workspace policy lookup alone asks for the removal signal.
+test("a caller can ask for an extra capability on top of the client's own", () => {
+  const { WORKSPACE_REMOVAL_CAPABILITY } = require("../../src/helpers/policyRequestHeaders");
+  assert.equal(
+    withPolicyRequestHeaders({}, "1.8.1", [WORKSPACE_REMOVAL_CAPABILITY])[
+      "x-openwhispr-capabilities"
+    ],
+    `${CLIENT_CAPABILITIES},workspace-removal-v1`
+  );
+});
