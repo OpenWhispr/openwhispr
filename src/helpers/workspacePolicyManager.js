@@ -166,18 +166,18 @@ function createWorkspacePolicyManager({
     return cached?.managed === false && cached.requiresManagedPolicy === true;
   }
 
-  // Whether the account's last validated verdict was managed. A failed lookup
-  // carries it, so a credential that can't inherit that verdict yet (a rotated
+  // Whether the account's last validated verdict requires managed policy. A
+  // failed lookup carries it, so a credential that can't inherit it yet (a rotated
   // token before its binding) still fails closed. It never grants anything,
   // so a renderer's account label is enough to read it by.
   function accountWasManaged(accountId) {
     const apiUrl = getApiUrl();
-    return Boolean(
-      accountId &&
-      URL.canParse(apiUrl) &&
-      readAccountPolicyCache(cachePath, { apiOrigin: new URL(apiUrl).origin, accountId })
-        ?.managed === true
-    );
+    if (!accountId || !URL.canParse(apiUrl)) return false;
+    const cached = readAccountPolicyCache(cachePath, {
+      apiOrigin: new URL(apiUrl).origin,
+      accountId,
+    });
+    return cached?.managed === true || cached?.requiresManagedPolicy === true;
   }
 
   function errorSnapshot(identity, code, error, httpStatus) {
@@ -219,6 +219,20 @@ function createWorkspacePolicyManager({
   }
 
   function publicSnapshot(identity, data, status, snapshotRevision) {
+    // A policy can arrive before its bearer is bound. Its first validated
+    // read must replace the account's older restrictive evidence too.
+    if (
+      !data.managed &&
+      data.endpointSupported !== false &&
+      isValidatedAccount(identity) &&
+      accountWasManaged(identity.accountId)
+    ) {
+      try {
+        writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
+      } catch (error) {
+        logger?.error?.("Policy cache write failed", error);
+      }
+    }
     return {
       success: true,
       status,

@@ -14,6 +14,7 @@ const originalLoad = Module._load;
 // and the binding file in a temporary userData directory, so the scope
 // handlers run against the real accountScopeBinding.
 const handlers = new Map();
+const eventHandlers = new Map();
 const broadcasts = [];
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
 let tokenState = { token: null, generation: 0 };
@@ -29,7 +30,7 @@ const electronStub = {
   },
   ipcMain: {
     handle: (channel, fn) => handlers.set(channel, fn),
-    on: () => {},
+    on: (channel, fn) => eventHandlers.set(channel, fn),
     removeHandler: () => {},
   },
   net: {
@@ -1630,6 +1631,148 @@ function useProductLifecycle(t) {
   return prototype;
 }
 
+for (const stage of ["admission", "streaming"]) {
+  for (const boundary of [
+    "another account",
+    "away and back",
+    "same-account rotation",
+    "user cancellation",
+  ]) {
+    test(`cloud agent ${stage} retains ownership across ${boundary}`, async (t) => {
+      useProductLifecycle(t);
+      const { deferred } = require("./harness/deferred");
+      const verdict = deferred(),
+        entered = deferred();
+      const pending = [],
+        sent = [],
+        outputs = [],
+        messages = [];
+      const originalToken = `agent-${stage}-${boundary}-first`;
+      const owner = `agent-${stage}-${boundary}-owner`;
+      const sender = new (require("node:events").EventEmitter)();
+      sender.id = 101;
+      sender.isDestroyed = () => false;
+      sender.send = (channel, payload) => messages.push([channel, payload]);
+      t.mock.method(electronStub.net, "fetch", async (url, init) => {
+        if (String(url).endsWith("/api/agent/stream")) {
+          sent.push({
+            authorization: init.headers.Authorization,
+            signal: init.signal,
+          });
+          const output = { cancelled: false, closed: false };
+          const response =
+            stage === "admission"
+              ? new Response("")
+              : new Response(
+                  new ReadableStream({
+                    start(controller) {
+                      output.controller = controller;
+                      outputs.push(output);
+                    },
+                    cancel() {
+                      output.cancelled = true;
+                    },
+                  })
+                );
+          if (sent.length === 2) entered.resolve();
+          return response;
+        }
+        if (stage === "admission" && init.headers.Authorization === `Bearer ${originalToken}`)
+          await verdict.promise;
+        return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+      });
+      t.after(async () => {
+        verdict.resolve();
+        for (const output of outputs)
+          if (!output.cancelled && !output.closed) output.controller.close();
+        await Promise.allSettled(pending);
+      });
+      handleAuthTokenChange({ token: originalToken, generation: tokenState.generation + 1 });
+      await setScope(owner, tokenState.generation);
+      if (stage === "streaming") await fakeThis.refreshEffectivePolicy();
+      for (const requestId of ["first-agent", "second-agent"])
+        pending.push(
+          eventHandlers.get("cloud-agent-stream-start")({ sender }, requestId, [
+            { role: "user", content: requestId },
+          ])
+        );
+      if (stage === "streaming") await entered.promise;
+      await new Promise(setImmediate);
+      if (stage === "admission") assert.deepEqual(sent, []);
+      if (boundary === "user cancellation") {
+        for (const requestId of ["first-agent", "second-agent"])
+          eventHandlers.get("cloud-agent-stream-cancel")({ sender }, requestId);
+      } else {
+        handleAuthTokenChange({
+          token: `agent-${stage}-${boundary}-next`,
+          generation: tokenState.generation + 1,
+        });
+        await setScope(
+          boundary === "same-account rotation" ? owner : "agent-replacement",
+          tokenState.generation
+        );
+        if (boundary === "away and back") {
+          handleAuthTokenChange({
+            token: `agent-${stage}-${boundary}-return`,
+            generation: tokenState.generation + 1,
+          });
+          await setScope(owner, tokenState.generation);
+        }
+        await fakeThis.refreshEffectivePolicy();
+      }
+      const permitted = boundary === "same-account rotation";
+      if (stage === "streaming")
+        for (const request of sent) assert.equal(request.signal.aborted, !permitted);
+      verdict.resolve();
+      for (const output of outputs) {
+        output.controller.enqueue(
+          new TextEncoder().encode('{"type":"text","text":"late owner output"}\n')
+        );
+        if (permitted) {
+          output.controller.close();
+          output.closed = true;
+        }
+      }
+      await Promise.all(pending);
+      assert.equal(sent.length, stage === "streaming" || permitted ? 2 : 0);
+      if (stage === "admission" && permitted)
+        assert.ok(sent.every((request) => request.authorization === `Bearer ${tokenState.token}`));
+      assert.equal(
+        messages.filter(([channel]) => channel === "cloud-agent-stream-chunk").length,
+        stage === "streaming" && permitted ? 2 : 0
+      );
+      if (stage === "streaming")
+        assert.ok(outputs.every((output) => output.cancelled === !permitted));
+      assert.equal(sender.listenerCount("destroyed"), 0);
+      assert.equal(fakeThis._productRequests.size, 0);
+      assert.equal(fakeThis._agentStreamRequests.requestsBySender.size, 0);
+    });
+  }
+}
+
+test("cloud agent admission preserves typed API failures and releases ownership", async (t) => {
+  useProductLifecycle(t);
+  const messages = [];
+  t.mock.method(electronStub.net, "fetch", async (url) =>
+    String(url).endsWith("/api/agent/stream")
+      ? Response.json({}, { status: 401 })
+      : Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } })
+  );
+  handleAuthTokenChange({ token: "agent-error-token", generation: tokenState.generation + 1 });
+  await setScope("agent-error-owner", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  const sender = new (require("node:events").EventEmitter)();
+  sender.id = 102;
+  sender.isDestroyed = () => false;
+  sender.send = (channel, payload) => messages.push([channel, payload]);
+  await eventHandlers.get("cloud-agent-stream-start")({ sender }, "failed-agent", []);
+  assert.equal(messages[0][0], "cloud-agent-stream-error");
+  assert.equal(messages[0][1].code, "AUTH_EXPIRED");
+  assert.equal(sender.listenerCount("destroyed"), 0);
+  assert.equal(fakeThis._productRequests.size, 0);
+  assert.equal(fakeThis._agentStreamRequests.requestsBySender.size, 0);
+});
+
 for (const boundary of ["another account", "away and back", "same-account rotation"]) {
   test(`pending product admissions retain their original owner across ${boundary}`, async (t) => {
     useProductLifecycle(t);
@@ -1794,6 +1937,94 @@ for (const stage of ["startup", "streaming"]) {
           "a retired reader is cancelled despite buffered output"
         );
       }
+    });
+  }
+}
+
+for (const provider of ["google", "microsoft"]) {
+  for (const boundary of ["policy revocation", "account departure"]) {
+    test(`${provider} calendar authorization cannot revive sync after ${boundary}`, async (t) => {
+      useProductLifecycle(t);
+      const { deferred } = require("./harness/deferred");
+      const {
+        defaultDevicePolicy,
+        normalizeDeviceValues,
+      } = require("../../src/helpers/managedDevicePolicy");
+      const Manager = require(`../../src/helpers/${provider}CalendarManager`);
+      const property = `${provider}CalendarManager`;
+      const previous = fakeThis[property];
+      const previousRequests = Object.getOwnPropertyDescriptor(
+        fakeThis,
+        "_calendarAuthorizationRequests"
+      );
+      fakeThis._calendarAuthorizationRequests =
+        new (require("../../src/helpers/agentStreamRequestRegistry"))();
+      const entered = deferred(),
+        finish = deferred();
+      const manager = provider === "google" ? new Manager({}, {}, {}) : new Manager({}, {});
+      let pending,
+        signal,
+        syncs = 0;
+      fakeThis[property] = manager;
+      t.after(async () => {
+        finish.resolve();
+        await pending;
+        manager.stop();
+        fakeThis[property] = previous;
+        if (previousRequests)
+          Object.defineProperty(fakeThis, "_calendarAuthorizationRequests", previousRequests);
+        else delete fakeThis._calendarAuthorizationRequests;
+      });
+      t.mock.method(electronStub.net, "fetch", async () =>
+        Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } })
+      );
+      handleAuthTokenChange({
+        token: `${provider}-${boundary}-token`,
+        generation: tokenState.generation + 1,
+      });
+      await setScope(`${provider}-${boundary}-owner`, tokenState.generation);
+      await fakeThis.refreshEffectivePolicy();
+      manager.oauth.startOAuthFlow = async (options) => {
+        signal = options.signal;
+        return { success: true, email: "saved-calendar@test" };
+      };
+      manager.fetchCalendars = async () => {
+        entered.resolve();
+        await finish.promise;
+      };
+      manager.syncEvents = async () => syncs++;
+      manager.reminderScheduler.scheduleNextMeeting = () => {};
+      manager._broadcastAccountsChanged = () => {};
+      const sender = new (require("node:events").EventEmitter)();
+      sender.id = 103;
+      const channel = provider === "google" ? "gcal-start-oauth" : "mcal-start-oauth";
+      pending = handlers.get(channel)({ sender }, "late-calendar");
+      await entered.promise;
+      if (boundary === "policy revocation") {
+        const policy = defaultDevicePolicy();
+        policy.features.connectorsEnabled = false;
+        t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () =>
+          normalizeDeviceValues({ Policy: JSON.stringify(policy) })
+        );
+        fakeThis.effectivePolicyManager.getCurrent();
+      } else {
+        handleAuthTokenChange({
+          token: `${provider}-replacement-token`,
+          generation: tokenState.generation + 1,
+        });
+        await setScope(`${provider}-replacement`, tokenState.generation);
+        await fakeThis.refreshEffectivePolicy();
+      }
+      assert.equal(signal.aborted, true);
+      finish.resolve();
+      const result = await pending;
+      assert.equal(
+        result.code,
+        boundary === "policy revocation" ? "DEVICE_POLICY_BLOCKED" : "AUTH_CONTEXT_CHANGED"
+      );
+      assert.equal(manager.syncRunner.timer, null);
+      assert.equal(syncs, 0);
+      assert.equal(sender.listenerCount("destroyed"), 0);
     });
   }
 }

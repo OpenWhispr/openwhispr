@@ -87,7 +87,9 @@ class GoogleCalendarManager {
     this.addAccount(result.email);
 
     await this.fetchCalendars(result.email);
+    if (signal?.aborted) return result;
     await this.syncEvents();
+    if (signal?.aborted) return result;
     this.reminderScheduler.scheduleNextMeeting();
     this.syncRunner.start();
     this._broadcastAccountsChanged();

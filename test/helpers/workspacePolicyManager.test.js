@@ -1043,6 +1043,77 @@ test("a failed lookup for an account last seen managed says so, whatever the cre
   assert.equal(uncredentialed.code, "AUTH_CONTEXT_UNVALIDATED");
 });
 
+test("unbound rotations retain account policy markers and permitted recovery stays clear offline", async (t) => {
+  const { resolveEffectivePolicy } = require("../../src/helpers/effectivePolicyManager");
+  let phase = "unresolvable";
+  const context = rotationSetup({
+    successfulRefreshMs: 5 * 60 * 1000,
+    proxyFetch: async () => {
+      if (phase === "offline") throw new Error("offline");
+      if (phase === "unsupported") return response(404, {});
+      return phase === "unresolvable"
+        ? response(403, { code: "POLICY_UNRESOLVABLE" })
+        : response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } });
+    },
+  });
+  t.after(context.cleanup);
+  const read = (accountId) =>
+    context.manager.getPolicy({ accountId, expectedAuthGeneration: context.tokenState.generation });
+  const effective = (snapshot) =>
+    resolveEffectivePolicy({ status: "absent", managed: false, policy: null }, snapshot, {
+      accountId: snapshot.accountId,
+      authGeneration: snapshot.authGeneration,
+      authenticated: true,
+    });
+  assert.equal((await read("account-a")).code, "POLICY_UNRESOLVABLE");
+  context.validated.accountId = null;
+  phase = "offline";
+  for (const generation of [2, 3]) {
+    context.rotate(`unbound-${generation}`, generation);
+    const restricted = await read("account-a");
+    assert.equal(restricted.managed, true);
+    assert.equal(effective(restricted).success, false);
+  }
+  context.rotate("unsupported-before-binding", 4);
+  phase = "unsupported";
+  assert.equal((await read("account-a")).endpointSupported, false);
+  context.validated.accountId = "account-a";
+  await read("account-a");
+  assert.equal(
+    context.manager.accountWasManaged("account-a"),
+    true,
+    "an unsupported endpoint is not an authoritative recovery"
+  );
+  context.validated.accountId = null;
+  phase = "offline";
+  context.rotate("other-account", 5);
+  assert.equal(effective(await read("account-b")).status, "unmanaged");
+  phase = "permitted";
+  assert.equal((await read("account-b")).managed, false);
+  context.validated.accountId = "account-b";
+  await read("account-b");
+  assert.equal(
+    context.manager.accountWasManaged("account-a"),
+    true,
+    "another account's recovery cannot clear the marker"
+  );
+  context.validated.accountId = null;
+  context.rotate("permitted-recovery", 6);
+  assert.equal((await read("account-a")).managed, false);
+  assert.equal(
+    context.manager.accountWasManaged("account-a"),
+    true,
+    "an unbound reply cannot clear account evidence"
+  );
+  // The policy answer can precede session validation of this new bearer.
+  context.validated.accountId = "account-a";
+  assert.equal((await read("account-a")).status, "current");
+  phase = "offline";
+  context.validated.accountId = null;
+  context.rotate("after-recovery", 7);
+  assert.equal(effective(await read("account-a")).status, "unmanaged");
+});
+
 test("a malformed API URL still answers a lookup that names an account", async (t) => {
   const context = setup(async () => response(200, validPolicy()), {
     getApiUrl: () => "not a url",

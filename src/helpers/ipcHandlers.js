@@ -12409,6 +12409,13 @@ class IPCHandlers {
       const sender = event.sender;
       const senderId = sender.id;
       const controller = this._agentStreamRequests.begin(senderId, requestId);
+      const operation = {
+        channel: "cloud-agent-stream-start",
+        args: [],
+        remote: true,
+        accountId: this.effectivePolicyManager.getCurrent().accountId,
+      };
+      this._productRequests.set(controller, operation);
       const cancelSenderRequests = () => this._agentStreamRequests.cancelSender(senderId);
       const sendToRenderer = (channel, payload) => {
         if (!sender.isDestroyed()) sender.send(channel, payload);
@@ -12416,7 +12423,6 @@ class IPCHandlers {
       sender.once("destroyed", cancelSenderRequests);
 
       try {
-        const operation = { channel: "cloud-agent-stream-start", args: [], remote: true };
         const restricted = () =>
           Object.assign(new Error(i18nMain.t("common.policyAiProcessingRestricted")), {
             code: "DEVICE_POLICY_BLOCKED",
@@ -12424,12 +12430,16 @@ class IPCHandlers {
         if (this.effectivePolicyManager.getCurrent().status === "loading")
           await awaitVerdict(event);
         if (!mayStart(operation)) throw restricted();
-        const { accountId } = this.effectivePolicyManager.getCurrent();
         const assertAllowed = () => {
           const policy = this.effectivePolicyManager.getCurrent();
           if (
             policy.localOnly ||
-            !runningOperationAllowed(policy, accountId, app.getVersion(), operation.channel)
+            !runningOperationAllowed(
+              policy,
+              operation.accountId,
+              app.getVersion(),
+              operation.channel
+            )
           )
             throw restricted();
           controller.signal.throwIfAborted();
@@ -12508,6 +12518,8 @@ class IPCHandlers {
             }
           }
         } finally {
+          if (controller.signal.aborted)
+            await reader.cancel(controller.signal.reason).catch(() => {});
           reader.releaseLock();
         }
 
@@ -12525,6 +12537,7 @@ class IPCHandlers {
       } finally {
         sender.removeListener("destroyed", cancelSenderRequests);
         this._agentStreamRequests.complete(senderId, requestId, controller);
+        this._productRequests.delete(controller);
       }
     });
 
