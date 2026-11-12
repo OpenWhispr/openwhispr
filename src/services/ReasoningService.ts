@@ -1466,7 +1466,9 @@ class ReasoningService extends BaseReasoningService {
       arguments?: string;
       finishReason?: string;
     };
-    const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
+    const queue: Array<
+      StreamEvent | { type: "__error"; error: string; code?: string } | { type: "__end" }
+    > = [];
     let resolve: (() => void) | null = null;
     let cancelled = false;
     let closed = false;
@@ -1481,7 +1483,7 @@ class ReasoningService extends BaseReasoningService {
     });
     const cleanupError = electronAPI?.onAgentStreamError?.((payload) => {
       if (payload.requestId !== requestId || closed || cancelled) return;
-      queue.push({ type: "__error", error: payload.error });
+      queue.push({ type: "__error", error: payload.error, code: payload.code });
       resolve?.();
     });
     const cleanupEnd = electronAPI?.onAgentStreamEnd?.((payload) => {
@@ -1525,7 +1527,10 @@ class ReasoningService extends BaseReasoningService {
           while (queue.length > 0) {
             const item = queue.shift()!;
             if (item.type === "__end") return;
-            if (item.type === "__error") throw new Error((item as { error: string }).error);
+            if (item.type === "__error") {
+              const { error, code } = item as { error: string; code?: string };
+              throw Object.assign(new Error(error), code ? { code } : {});
+            }
             yield item as StreamEvent;
           }
         }

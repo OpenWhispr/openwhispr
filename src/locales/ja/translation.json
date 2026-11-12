@@ -4622,7 +4622,8 @@
     },
     "chat": {
       "errorPrefix": "エラー",
-      "emptyResponse": "モデルから応答がありませんでした。"
+      "emptyResponse": "モデルから応答がありませんでした。",
+      "cloudLimitReached": "週間のクラウド上限に達しました。チャットを続けるには、Pro にアップグレードするか、自分の API キーを使用してください。"
     },
     "input": {
       "listening": "聞いています...",

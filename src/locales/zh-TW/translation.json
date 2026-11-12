@@ -4622,7 +4622,8 @@
     },
     "chat": {
       "errorPrefix": "錯誤",
-      "emptyResponse": "模型沒有回傳任何回覆。"
+      "emptyResponse": "模型沒有回傳任何回覆。",
+      "cloudLimitReached": "你已達到每週雲端使用上限。升級至 Pro 或使用自己的 API Key 即可繼續聊天。"
     },
     "input": {
       "listening": "正在聆聽...",

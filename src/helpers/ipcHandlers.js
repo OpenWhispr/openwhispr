@@ -11801,6 +11801,7 @@ class IPCHandlers {
           const error = await readPolicyResponseError(response, `API error: ${response.status}`);
           if (response.status === 401 && !error.code) error.code = "AUTH_EXPIRED";
           if (response.status === 503 && !error.code) error.code = "SERVER_ERROR";
+          if (response.status === 429 && !error.code) error.code = "LIMIT_REACHED";
           sendToRenderer("cloud-agent-stream-error", {
             requestId,
             ...toPolicyFailure(error),

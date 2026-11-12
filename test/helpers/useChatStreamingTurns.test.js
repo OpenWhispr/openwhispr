@@ -179,6 +179,19 @@ test("the agent chat saves a reply that failed before any tool as failed; other 
   }
 });
 
+test("the weekly Cloud limit names itself and opens AI Models", async (t) => {
+  const h = await renderChatStreaming(t, { allowInteractions: true });
+  h.setStream(() =>
+    (async function* () {
+      yield { type: "reasoning", text: "" };
+      throw Object.assign(new Error("Usage limit reached"), { code: "LIMIT_REACHED" });
+    })()
+  );
+  await h.captured.sendToAI("Go", [], { conversationId: 1 });
+  assert.match(h.assistant().content, /weekly Cloud limit/);
+  assert.deepEqual(h.assistant().error, { settingsTarget: "llms" });
+});
+
 test("classified live provider failures retain their actionable copy and details", async (t) => {
   const h = await renderChatStreaming(t, { allowInteractions: true });
   const { providerHttpError } = await h.vite.ssrLoadModule("/helpers/providerHttpErrors.js");

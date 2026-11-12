@@ -4978,7 +4978,8 @@
     },
     "chat": {
       "errorPrefix": "Fehler",
-      "emptyResponse": "Das Modell hat keine Antwort zurückgegeben."
+      "emptyResponse": "Das Modell hat keine Antwort zurückgegeben.",
+      "cloudLimitReached": "Sie haben Ihr wöchentliches Cloud-Limit erreicht. Upgraden Sie auf Pro oder nutzen Sie Ihren eigenen API-Schlüssel, um weiterzuchatten."
     },
     "input": {
       "listening": "Hört zu...",

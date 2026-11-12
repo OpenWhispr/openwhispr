@@ -5005,7 +5005,8 @@
     },
     "chat": {
       "errorPrefix": "Erreur",
-      "emptyResponse": "Le modèle n'a renvoyé aucune réponse."
+      "emptyResponse": "Le modèle n'a renvoyé aucune réponse.",
+      "cloudLimitReached": "Vous avez atteint votre limite cloud hebdomadaire. Passez à Pro ou utilisez votre propre clé API pour continuer à discuter."
     },
     "input": {
       "listening": "Écoute...",

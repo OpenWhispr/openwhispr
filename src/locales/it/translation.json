@@ -4643,7 +4643,8 @@
     },
     "chat": {
       "errorPrefix": "Errore",
-      "emptyResponse": "Il modello non ha restituito alcuna risposta."
+      "emptyResponse": "Il modello non ha restituito alcuna risposta.",
+      "cloudLimitReached": "Hai raggiunto il limite cloud settimanale. Passa a Pro o usa la tua chiave API per continuare a chattare."
     },
     "input": {
       "listening": "Ascolto...",

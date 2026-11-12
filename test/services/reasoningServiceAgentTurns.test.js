@@ -321,9 +321,9 @@ function cloudBridge() {
       for (const chunk of chunks) listeners.chunk({ requestId, chunk });
       listeners.end({ requestId });
     },
-    fail(error) {
+    fail(error, details = {}) {
       const [requestId] = startCalls.at(-1);
-      listeners.error({ requestId, error });
+      listeners.error({ requestId, error, ...details });
     },
   };
 }
@@ -364,6 +364,20 @@ test("the cloud loop keeps a step's text for the next step and flags a throwing 
   const result = chunks.find((chunk) => chunk.type === "tool_result");
   assert.equal(result.isError, true);
   assert.deepEqual(chunks.at(-1), { type: "done", finishReason: "stop" });
+});
+
+test("a cloud stream error keeps main's code, so the chat can name the weekly limit", async (t) => {
+  const bridge = cloudBridge();
+  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
+  const output = collect(
+    reasoningService.processTextStreamingCloud([{ role: "user", content: "Hi" }], {
+      systemPrompt: "Answer.",
+    })
+  );
+  await settle();
+  bridge.fail("Usage limit reached", { code: "LIMIT_REACHED", status: 429 });
+
+  await assert.rejects(output, { message: "Usage limit reached", code: "LIMIT_REACHED" });
 });
 
 test("a cloud run whose every step calls a tool answers once more, without tools", async (t) => {
