@@ -88,6 +88,8 @@ test("malformed documents, partial policies and wrong device types fail", () => 
     { Policy: JSON.stringify({ features: { meetingRecordingEnabled: false } }) },
     { RequireSignIn: 0 },
     { DisableMeetingRecording: "true" },
+    { WipeLocalDataOnLaunch: "" },
+    { WipeLocalDataOnLaunch: false },
   ])
     assert.throws(() => normalizeDeviceValues(values));
 });
@@ -208,6 +210,7 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
 // #3030: the offboarding wipe keeps downloaded models unless this key asks.
 test("WipeLocalDataIncludesModels is a strict boolean that defaults to keeping models", async () => {
   const wipe = { WipeLocalDataOnLaunch: "offboard-1" };
+  assert.equal(normalizeDeviceValues(wipe).wipeLocalDataOnLaunch, "offboard-1");
   assert.equal(normalizeDeviceValues(wipe).wipeLocalDataIncludesModels, false);
   assert.equal(
     normalizeDeviceValues({ ...wipe, WipeLocalDataIncludesModels: true })
@@ -218,9 +221,13 @@ test("WipeLocalDataIncludesModels is a strict boolean that defaults to keeping m
   // Without a token it does nothing, so it alone doesn't make the device managed.
   for (const WipeLocalDataIncludesModels of [true, false])
     assert.equal(normalizeDeviceValues({ WipeLocalDataIncludesModels }).status, "absent");
-  assert.deepEqual(await registryExport(['"WipeLocalDataIncludesModels"=dword:00000001'])(), {
-    WipeLocalDataIncludesModels: true,
-  });
+  assert.deepEqual(
+    await registryExport([
+      '"WipeLocalDataOnLaunch"="offboard-1"',
+      '"WipeLocalDataIncludesModels"=dword:00000001',
+    ])(),
+    { WipeLocalDataOnLaunch: "offboard-1", WipeLocalDataIncludesModels: true }
+  );
   await assert.rejects(registryExport(['"WipeLocalDataIncludesModels"="1"'])(), {
     code: "DEVICE_POLICY_INVALID",
   });
