@@ -36,9 +36,9 @@ The app can't revoke tokens at Google, Microsoft or connector providers during t
 
 ## Removal from the workspace
 
-When an admin removes someone from a workspace with a policy (one at a time or in bulk), or your identity provider deprovisions them through directory sync, every device that workspace managed for them wipes the same data at its next check-in. It then opens as a fresh install and shows "Your organization removed this device's OpenWhispr data." The audit log records it with `trigger: "workspace-removal"`.
+When an admin removes someone from a workspace with a policy (one at a time or in bulk), or your identity provider deprovisions them through directory sync, every device that workspace managed for them wipes the same data at its next policy check, even if another workspace still manages them. A device needs one policy check on this version before the removal to know which workspaces manage it. It then opens as a fresh install and shows "Your organization removed this device's OpenWhispr data." The audit log records it with `trigger: "workspace-removal"`.
 
-Nothing is wiped when a member leaves the workspace on their own, signs out, or their session expires, when the directory moves an account to a new email address, or on a device that workspace never managed. A device keeps downloaded models unless it also has `WipeLocalDataIncludesModels`.
+Nothing is wiped when a member leaves the workspace on their own, signs out, or their session expires, when the directory moves an account to a new email address, or on a device that workspace never managed. A member who rejoins before a device checks in keeps that device's data. A device keeps downloaded models unless it also has `WipeLocalDataIncludesModels`.
 
 ## Scripts (app closed)
 

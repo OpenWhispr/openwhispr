@@ -1300,6 +1300,11 @@ test("a device the workspace managed hears its removal, signed in or not", async
       }),
     // Directory deprovisioning kept it signed in.
     () => unmanagedWith({ workspaceRemoval: removal }),
+    // ...while another workspace still manages them.
+    () =>
+      response(200, {
+        data: { ...validPolicy().data, managedBy: ["workspace-2"], workspaceRemoval: removal },
+      }),
   ]) {
     const context = removalSetup([managedBy("workspace-1", "workspace-2"), removed]);
     t.after(context.cleanup);

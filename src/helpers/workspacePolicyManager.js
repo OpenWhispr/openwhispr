@@ -369,11 +369,10 @@ function createWorkspacePolicyManager({
           }
           throw new Error("Malformed policy response");
         }
-        // Still signed in (directory deprovisioning keeps the session); read
-        // before the unmanaged verdict replaces the managed one.
-        if (data.managed === false && data.workspaceRemoval) {
-          reportRemoval(identity, data.workspaceRemoval);
-        }
+        // Still signed in (directory deprovisioning keeps the session), maybe
+        // still managed by another workspace; read before this verdict replaces
+        // the one that named the removing workspace.
+        if (data.workspaceRemoval) reportRemoval(identity, data.workspaceRemoval);
         return acceptSuccessfulResponse(identity, data, "network");
       } finally {
         clearTimeout(timeout);
