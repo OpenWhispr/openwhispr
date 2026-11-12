@@ -17,7 +17,8 @@ const {
   window: windowStub,
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
-const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { createFakeCloud, createAccountCloud } = require("./harness/fakeCloud.js");
+const { createSyncDevice } = require("./harness/syncDevice.js");
 const { TEAM_SPACE, joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 
@@ -591,6 +592,118 @@ test("ensureNoteSynced returns an existing personal cloud copy", async (t) => {
   assert.equal(await service.ensureNoteSynced(backedUp.id), "cloud-backed-up");
   assert.equal(await service.ensureNoteSynced(shared.id), "cloud-shared");
   assert.deepEqual(cloud.log, [], "existing identities need no new upload");
+});
+
+for (const replacement of ["source-account", "other-account"]) {
+  for (const phase of ["existing", "pending", "receipt"]) {
+    test(`sharing preflight refuses ${phase} after sign-in replacement by ${replacement}`, async (t) => {
+      const device = createSyncDevice(t);
+      if (!device) return;
+      const source = createAccountCloud();
+      const other = createAccountCloud();
+      await device.signIn("source-account", source);
+      const note = device.db.saveNote("Source private", "source secret").note;
+      if (phase === "existing") {
+        const remote = source.seedNote({ client_note_id: note.client_note_id, title: note.title });
+        device.db.markNoteSynced(note.id, remote.id, remote.updated_at, "source-account");
+      }
+      const getNote = device.api.getNote;
+      let switched = false;
+      device.api.getNote = async (id) => {
+        const read = await getNote(id);
+        if (!switched && (phase !== "receipt" || read?.sync_status === "synced")) {
+          switched = true;
+          await device.signIn(replacement, replacement === "source-account" ? source : other);
+        }
+        return read;
+      };
+      assert.equal(await device.service.ensureNoteSynced(note.id), null);
+      assert.equal(switched, true);
+      assert.equal(other.log.length, 0, "the replacement account receives no request");
+      assert.equal(source.logFor("/api/notes/create").length, phase === "receipt" ? 1 : 0);
+    });
+  }
+}
+
+for (const changedField of ["client_note_id", "space_id", "cloud_id"]) {
+  test(`sharing consent does not follow a changed ${changedField} while waiting to push`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, api, service } = ctx;
+    const note = db.saveNote("Selected", "selected text").note;
+    updateNote(db, note.id, { cloud_id: "original-cloud-id" });
+    const replacement =
+      changedField === "space_id"
+        ? db.getPrivateSpaceId("another-workspace")
+        : "replacement-identity";
+    const getNote = api.getNote;
+    let changed = false;
+    api.getNote = async (id) => {
+      const read = await getNote(id);
+      if (!changed) {
+        changed = true;
+        updateNote(db, id, { [changedField]: replacement });
+      }
+      return read;
+    };
+    assert.equal(await service.ensureNoteSynced(note.id), null);
+    assert.equal(cloud.log.filter((call) => call.method !== "GET").length, 0);
+    assert.equal(db.getNote(note.id).content, "selected text");
+    assert.equal(db.getNote(note.id).sync_status, "pending");
+  });
+}
+
+test("sharing receipt does not adopt a replaced local note identity", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, api, service } = ctx;
+  const note = db.saveNote("Selected", "selected text").note;
+  const getNote = api.getNote;
+  api.getNote = async (id) => {
+    const read = await getNote(id);
+    if (read?.sync_status !== "synced") return read;
+    return updateNote(db, id, { client_note_id: "replacement-identity" });
+  };
+  assert.equal(await service.ensureNoteSynced(note.id), null);
+});
+
+test("explicit sharing with Backup off uploads only the selected Private note", async (t) => {
+  const device = createSyncDevice(t);
+  if (!device) return;
+  const cloud = createAccountCloud({ privateWorkspacePlacement: true });
+  await device.signIn("source-account", cloud);
+  device.db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-b",
+    defaultWorkspaceId: "workspace-a",
+  });
+  device.db.bindDefaultPrivateSpace("workspace-a");
+  const privateId = device.db.getPrivateSpaceId("workspace-b");
+  const folder = device.db.createFolder("Only on this device", privateId).folder;
+  const selected = saveNoteIn(device.db, privateId, "Share this", "selected content").note;
+  device.db.updateNote(selected.id, { folder_id: folder.id });
+  const unrelated = saveNoteIn(device.db, privateId, "Keep local", "unrelated content").note;
+  const chat = device.db.createAgentConversation("Private conversation", selected.id);
+  device.db.addAgentMessage(chat.id, "user", "private chat content");
+  windowStub.localStorage.setItem("cloudBackupEnabled", "false");
+  await device.service.pushEntity("note", selected.id);
+  assert.equal(cloud.notes().length, 0, "ordinary pushes still honor Backup off");
+
+  const cloudId = await device.service.ensureNoteSynced(selected.id);
+  assert.ok(cloudId, JSON.stringify({ local: device.db.getNote(selected.id), calls: cloud.log }));
+  assert.equal(cloud.note(cloudId).content, "selected content");
+  assert.equal(cloud.note(cloudId).private_workspace_id, "workspace-b");
+  assert.equal(cloud.note(cloudId).folder_id, null);
+  const after = device.db.getNote(selected.id);
+  assert.equal(after.space_id, privateId);
+  assert.equal(after.folder_id, folder.id);
+  assert.equal(after.is_shared, 0, "upload consent does not invent an audience");
+  assert.equal(after.client_note_id, selected.client_note_id);
+  assert.equal(device.db.getNote(unrelated.id).cloud_id, null);
+  assert.equal(device.db.getAgentConversation(chat.id).cloud_id, null);
+  assert.equal(cloud.notes().length, 1);
+  assert.equal(cloud.folders().length, 0);
+  assert.equal(cloud.conversations().length, 0);
+  assert.equal(windowStub.localStorage.getItem("cloudBackupEnabled"), "false");
 });
 
 test("the legacy upload sends a teamspace note with its scope, so it never lands as personal", async (t) => {

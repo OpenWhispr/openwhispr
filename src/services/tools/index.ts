@@ -36,6 +36,7 @@ export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 interface ToolRegistrySettings {
   isSignedIn: boolean;
+  cloudBackupEnabled: boolean;
   /** Disabled for onboarding demos; supported normal chat surfaces default to enabled. */
   productHelpEnabled?: boolean;
   calendarConnected: boolean;
@@ -70,8 +71,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   if (settings.productHelpEnabled !== false)
     for (const tool of productHelpTools) registry.register(tool);
 
-  // Cloud search reads teamspaces only (D36), so it needs an account, not Cloud Backup.
-  const useCloudSearch = settings.isSignedIn;
+  const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
   const noteScope: NoteScope = {
     spaceIds: settings.scopeSpaceIds,
     protectNotes: settings.protectNotes,
@@ -85,6 +85,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
       useCloudSearch,
       fixedScope: settings.searchScope,
       scopeSpaceIds: noteScope.spaceIds,
+      privateWorkspaceId: settings.privateWorkspaceId,
       protectNotes: settings.protectNotes,
     })
   );

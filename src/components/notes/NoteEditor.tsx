@@ -22,14 +22,14 @@ import {
   AlertTriangle,
 } from "../icons";
 import ShareNoteDialog, { type NoteExportOption } from "./ShareNoteDialog";
-import { privateShareState, reconcileNoteShareFlag } from "./shareNoteRules";
+import { reconcileLocalShareState } from "./shareNoteRules";
 import {
   canOrganizeNote,
   noteCapabilities,
   resolveNotePermission,
   type NoteAclState,
 } from "../../lib/notePermissions";
-import { canChangeSpaceNoteScope, ownsNote } from "../../lib/spacePermissions";
+import { ownsNote } from "../../lib/spacePermissions";
 import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   markNoteEdited,
@@ -43,8 +43,6 @@ import {
   updateShareCache,
 } from "../../stores/noteStore";
 import { NoteSharingService } from "../../services/NoteSharingService";
-import { useWorkspaceStore } from "../../stores/workspaceStore";
-import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
 import { fetchSpaceRoster, useSpaceRoster } from "../../hooks/useSpaceRoster";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
@@ -69,13 +67,7 @@ import {
   SPLIT_BUTTON_SEGMENT_CLASS,
 } from "../ui/splitButton";
 import type { CalendarEvent } from "../../types/calendar";
-import type {
-  NoteItem,
-  FolderItem,
-  ActionItem,
-  ActionKind,
-  NoteMutationResult,
-} from "../../types/electron";
+import type { NoteItem, FolderItem, ActionItem, ActionKind } from "../../types/electron";
 import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import type { NoteActionProgress } from "../../stores/actionProcessingStore";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
@@ -258,10 +250,6 @@ interface NoteEditorProps {
   folders?: FolderItem[];
   onMoveToFolder?: (noteId: number, folderId: number) => void;
   onCreateFolderAndMove?: (noteId: number, folderName: string) => void;
-  /** Moves the note to another space; sharing a private note moves it to a teamspace. */
-  onMoveNote?: (noteId: number, target: NoteMoveTarget) => Promise<NoteMutationResult | void>;
-  /** Opens Settings › Teamspaces. */
-  onOpenTeamspaces?: () => void;
   /** Cancels the owner's debounced autosaves before an external copy is applied. */
   onCancelPendingSaves?: (noteId: number) => void;
   /** Saves the owner's debounced autosaves now; rejects when a save fails. */
@@ -299,8 +287,6 @@ export default function NoteEditor({
   folders,
   onMoveToFolder,
   onCreateFolderAndMove,
-  onMoveNote,
-  onOpenTeamspaces,
   onCancelPendingSaves,
   onFlushPendingSaves,
 }: NoteEditorProps) {
@@ -357,11 +343,6 @@ export default function NoteEditor({
     [spaces, note.space_id]
   );
   const isTeamNote = space?.kind === "team";
-  // A private note that isn't shared moves to a teamspace to share, so it has no link to copy.
-  const sharesByMoving = space !== null && privateShareState(note, space) === "moveToShare";
-  const spaceWorkspace = useWorkspaceStore(
-    (state) => state.workspaces.find((workspace) => workspace.id === space?.workspace_id) ?? null
-  );
   // Persisted flag is the restart-safe truth; the live cache overlays it for
   // the current session (it reflects server state before the flag persists).
   const isShared = shareCache ? shareCache.share.visibility !== "private" : Boolean(note.is_shared);
@@ -388,8 +369,6 @@ export default function NoteEditor({
     isTeamNote,
     hasCloudCopy: Boolean(note.cloud_id),
   });
-  const canMoveToSpace =
-    canMoveToFolders && canChangeSpaceNoteScope(note, space, user?.id, spaceWorkspace);
   useEffect(() => {
     if (!isSignedIn || !note.cloud_id || shareCache) return;
     const cloudId = note.cloud_id;
@@ -404,10 +383,9 @@ export default function NoteEditor({
           access: res.access ?? entry?.access,
           rawToken: entry?.rawToken ?? null,
         }));
-        const update = reconcileNoteShareFlag(
+        const update = reconcileLocalShareState(
           { isShared: Boolean(note.is_shared), shareToken: note.share_token ?? null },
-          res,
-          { privateNote: !isTeamNote }
+          res.share
         );
         if (update) {
           void persistNoteShareState(note.id, update).catch((err) =>
@@ -1431,19 +1409,15 @@ export default function NoteEditor({
                   <Lock size={13} className={isShared ? "text-primary" : "text-foreground/60"} />
                   {t("noteEditor.share.button")}
                 </button>
-                {!sharesByMoving && (
-                  <>
-                    <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
-                    <button
-                      type="button"
-                      onClick={() => openShare("copy-link")}
-                      aria-label={t("noteEditor.share.dialog.copyLink")}
-                      className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
-                    >
-                      <Link2 size={13} className="text-foreground/60" />
-                    </button>
-                  </>
-                )}
+                <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
+                <button
+                  type="button"
+                  onClick={() => openShare("copy-link")}
+                  aria-label={t("noteEditor.share.dialog.copyLink")}
+                  className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
+                >
+                  <Link2 size={13} className="text-foreground/60" />
+                </button>
               </div>
             </div>
           </div>
@@ -1725,9 +1699,6 @@ export default function NoteEditor({
         note={note}
         exportOptions={exportOptions}
         copyLinkOnOpen={shareIntent === "copy-link"}
-        canMoveNote={notePermission === null ? null : canMoveToSpace}
-        onMoveNote={onMoveNote}
-        onOpenTeamspaces={onOpenTeamspaces}
       />
       {isTeamNote && space?.cloud_space_id && (
         <SpaceSettingsDialog

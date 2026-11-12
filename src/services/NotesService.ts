@@ -170,18 +170,27 @@ async function deleteAll(): Promise<{ deleted: number; errors: number }> {
 
 // scope "all" opts into space results (legacy clients stay personal-only);
 // space_id narrows to a single space and takes precedence over scope.
+export interface NoteSearchScope {
+  spaceIds: string[];
+  privateWorkspaceId: string | null;
+}
+
 async function search(
   query: string,
   limit?: number,
   scope?: "all",
   spaceId?: string,
-  authGeneration?: number
+  authGeneration?: number,
+  noteScope?: NoteSearchScope
 ): Promise<{ notes: SearchResult[] }> {
   const body = {
     query,
     ...(limit !== undefined ? { limit } : {}),
     ...(scope !== undefined ? { scope } : {}),
     ...(spaceId !== undefined ? { space_id: spaceId } : {}),
+    ...(noteScope !== undefined
+      ? { space_ids: noteScope.spaceIds, private_workspace_id: noteScope.privateWorkspaceId }
+      : {}),
   };
   return authGeneration === undefined
     ? cloudPost<{ notes: SearchResult[] }>("/api/notes/search", body)

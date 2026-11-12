@@ -1545,18 +1545,37 @@ export class SyncService {
     return { ...buildNoteUpdatePayload(note, cloudFolderId), ...scope };
   }
 
-  private async pushNote(id: number): Promise<void> {
-    const authGeneration = getValidatedAuthGeneration();
-    if (authGeneration == null) return;
+  private async pushNote(
+    id: number,
+    sharing?: { note: NoteItem; authGeneration: number }
+  ): Promise<void> {
+    const authGeneration = sharing?.authGeneration ?? getValidatedAuthGeneration();
+    if (authGeneration == null || getValidatedAuthGeneration() !== authGeneration) return;
     await this.ensurePrivatePlacementCapability();
-    const denied = await this.withNotePushLock(id, () => this.pushNoteLocked(id, authGeneration));
+    if (getValidatedAuthGeneration() !== authGeneration) return;
+    const denied = await this.withNotePushLock(id, () =>
+      this.pushNoteLocked(id, authGeneration, sharing?.note)
+    );
     // Its restoring pull waits on note locks, so it runs once this one is free.
     if (denied) await this.restoreDeniedRows("note");
   }
 
   // Returns true when the server refused the edit and denied rows need restoring.
-  private async pushNoteLocked(id: number, authGeneration: number): Promise<boolean> {
+  private async pushNoteLocked(
+    id: number,
+    authGeneration: number,
+    sharedNote?: NoteItem
+  ): Promise<boolean> {
     const note = await window.electronAPI.getNote?.(id);
+    if (getValidatedAuthGeneration() !== authGeneration) return false;
+    if (
+      sharedNote &&
+      (!note ||
+        note.client_note_id !== sharedNote.client_note_id ||
+        note.space_id !== sharedNote.space_id ||
+        (sharedNote.cloud_id && note.cloud_id !== sharedNote.cloud_id))
+    )
+      return false;
     // Synced: a pass sent it while this push waited for the lock.
     if (!note || note.sync_status === "synced") return false;
     const ctx = await this.buildSpaceContext();
@@ -1575,16 +1594,19 @@ export class SyncService {
     }
 
     const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
-    if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
+    const sharingPrivate = !!sharedNote && !isTeamRow(note, ctx);
+    const folderBlocked = !!note.folder_id && blockedFolderIds.has(note.folder_id);
+    if (folderBlocked && !sharingPrivate) {
       // The folder's own changes haven't landed (e.g. a cross-space move that
       // 409'd on a name conflict): the server would reject this note's
       // folder_id as out of scope. Stay pending; the note retries after the
       // folder settles.
       return false;
     }
-    const scope = this.resolvePushScope("note", note, ctx);
+    const scope = this.resolvePushScope("note", note, ctx, sharingPrivate);
     if (!scope) return false;
-    const cloudFolderId = pushedFolderId(note, localToCloud);
+    // One-note sharing does not consent to uploading or relocating its local folder.
+    const cloudFolderId = folderBlocked ? null : pushedFolderId(note, localToCloud);
 
     try {
       if (note.cloud_id) {
@@ -1607,7 +1629,7 @@ export class SyncService {
           authGeneration
         );
       } else {
-        await this.createCloudNote(note, cloudFolderId, scope, authGeneration);
+        await this.createCloudNote(note, cloudFolderId, scope, authGeneration, sharingPrivate);
       }
     } catch (err) {
       if (isNoteVersionConflictError(err)) {
@@ -1701,11 +1723,18 @@ export class SyncService {
     note: NoteItem,
     cloudFolderId: string | null,
     scope: PushScopeFields,
-    authGeneration: number
+    authGeneration: number,
+    sharingPrivateNote = false
   ): Promise<void> {
     const recorded = await recordNoteCreateAttempts([note.client_note_id], authGeneration);
     if (!recorded.has(note.client_note_id)) return;
-    if (!scope.space_id && !this.canSync() && !note.is_shared && !(note.left_team && note.cloud_id))
+    if (
+      !scope.space_id &&
+      !this.canSync() &&
+      !sharingPrivateNote &&
+      !note.is_shared &&
+      !(note.left_team && note.cloud_id)
+    )
       return;
     const cloud = await NotesService.create(
       {
@@ -1745,13 +1774,22 @@ export class SyncService {
   // Sharing requires a cloud copy. Deliberate single-note push that does not
   // depend on the global backup toggle; returns the note's cloud id.
   async ensureNoteSynced(localId: number): Promise<string | null> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return null;
     const note = await window.electronAPI.getNote?.(localId);
-    if (!note) return null;
+    if (!note || getValidatedAuthGeneration() !== authGeneration) return null;
     if (note.cloud_id && note.sync_status === "synced") return note.cloud_id;
     if (!this.canSyncSharedNotes()) return null;
-    await this.pushNote(localId);
+    await this.pushNote(localId, { note, authGeneration });
+    if (getValidatedAuthGeneration() !== authGeneration) return null;
     const synced = await window.electronAPI.getNote?.(localId);
-    return synced?.sync_status === "synced" ? (synced.cloud_id ?? null) : null;
+    return getValidatedAuthGeneration() === authGeneration &&
+      synced?.client_note_id === note.client_note_id &&
+      synced?.space_id === note.space_id &&
+      (!note.cloud_id || synced?.cloud_id === note.cloud_id) &&
+      synced?.sync_status === "synced"
+      ? (synced.cloud_id ?? null)
+      : null;
   }
 
   private async acknowledgeConversationCreate(
@@ -2327,7 +2365,8 @@ export class SyncService {
   private resolvePushScope(
     kind: "folder" | "note",
     row: FolderItem | NoteItem,
-    ctx: SpaceSyncContext
+    ctx: SpaceSyncContext,
+    sharingPrivateNote = false
   ): PushScopeFields | null {
     if (row.left_team && row.cloud_id && !this.hasTeamSpacesCapability()) return null;
 
@@ -2335,6 +2374,7 @@ export class SyncService {
     if (
       space?.kind !== "team" &&
       !this.canSync() &&
+      !sharingPrivateNote &&
       !(kind === "note" && (row as NoteItem).is_shared) &&
       !(row.left_team && row.cloud_id)
     )

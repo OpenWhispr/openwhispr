@@ -5,7 +5,14 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 // Workspace A is active. Its Private (1), its teamspace (2) and a teamspace linked to no
 // workspace (6) are in scope; workspace B's Private (4) and teamspace (3) are not.
 const SPACES = [
-  { id: 1, name: "Personal", kind: "private", workspace_id: "a", cloud_space_id: null },
+  {
+    id: 1,
+    name: "Personal",
+    kind: "private",
+    workspace_id: "a",
+    cloud_space_id: null,
+    is_default_private: 1,
+  },
   { id: 4, name: "Personal", kind: "private", workspace_id: "b", cloud_space_id: null },
   { id: 2, name: "Alpha", kind: "team", workspace_id: "a", cloud_space_id: "cloud-alpha" },
   { id: 3, name: "Beta", kind: "team", workspace_id: "b", cloud_space_id: "cloud-beta" },
@@ -165,173 +172,306 @@ test("a container chat's search stays inside the scope", async () => {
   assert.deepEqual(calls.semantic.at(-1).at(-1), []);
 });
 
-test("a non-empty cloud answer no longer hides local private matches", async (t) => {
+test("cloud-first search returns the server ranking without reading the local indexes", async (t) => {
   const { NotesService } = await import("../../src/services/NotesService.ts");
   const search = t.mock.method(NotesService, "search", async () => ({
     notes: [cloudRow("cloud-alpha", "Alpha cloud plan")],
   }));
-  const createSearchNotesTool = await loadSearch();
-
-  const result = await createSearchNotesTool({
-    useCloudSearch: true,
-    scopeSpaceIds: SCOPE,
-  }).execute({ query: "pricing" });
-
+  const create = await loadSearch();
+  const result = await create({ useCloudSearch: true, scopeSpaceIds: SCOPE }).execute({
+    query: "pricing",
+  });
   assert.deepEqual(
-    result.data.map((found) => found.id),
-    [OWN_PRIVATE.id]
+    result.data.map((row) => row.title),
+    ["Alpha cloud plan"]
   );
-  assert.equal(search.mock.callCount(), 0, "local answered, so the cloud isn't asked");
+  assert.deepEqual(calls, { semantic: [], keyword: [] });
+  assert.deepEqual(search.mock.calls[0].arguments, [
+    "pricing",
+    5,
+    "all",
+    undefined,
+    1,
+    { spaceIds: ["cloud-alpha", "cloud-legacy"], privateWorkspaceId: "a" },
+  ]);
 });
 
-test("a cloud personal row never reaches the model", async (t) => {
+for (const cloudFails of [false, true]) {
+  test(`cloud empty/error falls back to semantic then keyword (${cloudFails})`, async (t) => {
+    const { NotesService } = await import("../../src/services/NotesService.ts");
+    const order = [];
+    t.mock.method(NotesService, "search", async () => {
+      order.push("cloud");
+      if (cloudFails) throw new Error("offline");
+      return { notes: [] };
+    });
+    global.window.electronAPI.semanticSearchNotes = async () => {
+      order.push("semantic");
+      return [];
+    };
+    global.window.electronAPI.searchNotes = async (...args) => {
+      order.push("keyword");
+      calls.keyword.push(args);
+      return [OWN_PRIVATE];
+    };
+    const create = await loadSearch();
+    const result = await create({ useCloudSearch: true, scopeSpaceIds: SCOPE }).execute({
+      query: "pricing",
+    });
+    assert.deepEqual(
+      result.data.map((row) => row.id),
+      [OWN_PRIVATE.id]
+    );
+    assert.deepEqual(order, ["cloud", "semantic", "keyword"]);
+    assert.deepEqual(calls.keyword[0].at(-1), SCOPE);
+  });
+}
+
+test("cloud Private results preserve scope and protect the chat before content is returned", async (t) => {
   const { NotesService } = await import("../../src/services/NotesService.ts");
-  global.window.electronAPI.semanticSearchNotes = async () => [];
-  global.window.electronAPI.searchNotes = async () => [];
   const rows = [
-    // A stale Backup copy of a private note: personal rows carry no space.
-    cloudRow(null, "Backup copy", "own-key"),
+    { ...cloudRow(null, "Backup copy", "own-key"), private_workspace_id: "a" },
+    { ...cloudRow(null, "Cloud only Private"), private_workspace_id: "a" },
+    cloudRow(null, "Legacy default"),
+    { ...cloudRow(null, "Other Private"), private_workspace_id: "b" },
+    cloudRow(null, "Moved legacy", "moved-key"),
+    { ...cloudRow(null, "Legacy workspace"), workspace_id: "a" },
     cloudRow("cloud-beta", "Beta cloud plan"),
     cloudRow("cloud-alpha", "Alpha cloud plan", "alpha-key"),
     cloudRow("cloud-alpha", "Alpha moved plan", "moved-key"),
-    cloudRow("cloud-unknown", "Unmapped plan"),
-    cloudRow("cloud-legacy", "Legacy cloud plan", null, 0.95),
   ];
-  const search = t.mock.method(NotesService, "search", cloudAnswering(rows));
-  const createSearchNotesTool = await loadSearch();
-
-  // Each teamspace in scope is asked on its own, so the server sends no personal rows, and
-  // the answers are merged by score.
-  const both = await createSearchNotesTool({
+  t.mock.method(NotesService, "search", cloudAnswering(rows));
+  const protectedCalls = [];
+  const create = await loadSearch();
+  const result = await create({
     useCloudSearch: true,
     scopeSpaceIds: SCOPE,
-  }).execute({ query: "pricing" });
+    protectNotes: async (notes, deviceOnly) => {
+      protectedCalls.push({ notes, deviceOnly });
+    },
+  }).execute({ query: "pricing", limit: 20 });
   assert.deepEqual(
-    both.data.map((found) => found.title),
-    ["Legacy cloud plan", "Alpha cloud plan", "Alpha moved plan"]
+    result.data.map((row) => row.title),
+    ["Backup copy", "Cloud only Private", "Legacy default", "Alpha cloud plan", "Alpha moved plan"]
   );
   assert.deepEqual(
-    both.data.map((found) => found.space),
-    ["Legacy", "Alpha", "Alpha"]
+    result.data.map((row) => row.id),
+    [11, null, null, 22, null]
   );
-  // The moved copy's local note is in another workspace now: no id leads to it.
+  assert.equal(protectedCalls.length, 1);
+  assert.equal(protectedCalls[0].deviceOnly, true);
   assert.deepEqual(
-    both.data.map((found) => found.id),
-    [null, ALPHA_NOTE.id, null]
+    protectedCalls[0].notes.map((row) => row.id),
+    [11, 22]
   );
-  assert.doesNotMatch(JSON.stringify(both.data), /Backup copy|Beta cloud|Unmapped/);
-  assert.deepEqual(
-    search.mock.calls.map((call) => call.arguments),
-    [
-      ["pricing", 5, undefined, "cloud-alpha", 1],
-      ["pricing", 5, undefined, "cloud-legacy", 1],
-    ]
-  );
+  assert.deepEqual(calls, { semantic: [], keyword: [] });
+});
 
-  // Private alone: nothing in scope lives in the cloud, so it's never asked.
-  const calls = search.mock.callCount();
-  const privateOnly = await createSearchNotesTool({
+test("a Private cloud result cannot escape a failed privacy checkpoint", async (t) => {
+  const { NotesService } = await import("../../src/services/NotesService.ts");
+  t.mock.method(NotesService, "search", async () => ({
+    notes: [{ ...cloudRow(null, "PRIVATE CANARY"), private_workspace_id: "a" }],
+  }));
+  const create = await loadSearch();
+  const result = await create({
     useCloudSearch: true,
     scopeSpaceIds: [1],
+    protectNotes: async () => {
+      throw new Error("privacy unavailable");
+    },
   }).execute({ query: "pricing" });
-  assert.deepEqual(privateOnly.data, []);
-  assert.equal(search.mock.callCount(), calls);
+  assert.equal(result.success, false);
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE CANARY|Own private plan/);
 });
 
-test("past ten teamspaces every request remains server scoped", async (t) => {
+test("cloud-only Private text waits for durable chat protection", async (t) => {
   const { NotesService } = await import("../../src/services/NotesService.ts");
-  const teams = Array.from({ length: 11 }, (_, index) => ({
-    id: 100 + index,
+  t.mock.method(NotesService, "search", async () => ({
+    notes: [{ ...cloudRow(null, "Private canary"), private_workspace_id: "a" }],
+  }));
+  let release;
+  let entered;
+  const protecting = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const protectedChat = new Promise((resolve) => {
+    release = resolve;
+  });
+  let completed = false;
+  const create = await loadSearch();
+  const result = create({
+    useCloudSearch: true,
+    scopeSpaceIds: [1],
+    protectNotes: async (notes, deviceOnly) => {
+      assert.deepEqual(notes, []);
+      assert.equal(deviceOnly, true);
+      entered();
+      await protectedChat;
+    },
+  })
+    .execute({ query: "pricing" })
+    .then((value) => {
+      completed = true;
+      return value;
+    });
+  await protecting;
+  assert.equal(completed, false);
+  release();
+  assert.equal((await result).data[0].title, "Private canary");
+});
+
+test("a pending default Private uses the turn's workspace without widening scope", async (t) => {
+  const { NotesService } = await import("../../src/services/NotesService.ts");
+  global.window.electronAPI.getSpaces = async () => [
+    { id: 1, name: "Private", kind: "private", workspace_id: null },
+  ];
+  const search = t.mock.method(NotesService, "search", async () => ({
+    notes: [
+      { ...cloudRow(null, "Pending bound"), private_workspace_id: "a" },
+      cloudRow(null, "Unproven legacy"),
+    ],
+  }));
+  const create = await loadSearch();
+  const result = await create({
+    useCloudSearch: true,
+    scopeSpaceIds: [1],
+    privateWorkspaceId: "a",
+  }).execute({ query: "pricing" });
+  assert.deepEqual(search.mock.calls[0].arguments.at(-1), {
+    spaceIds: [],
+    privateWorkspaceId: "a",
+  });
+  assert.deepEqual(
+    result.data.map((row) => row.title),
+    ["Pending bound"]
+  );
+});
+
+test("named Private searches cloud personal notes within the active workspace", async (t) => {
+  const { NotesService } = await import("../../src/services/NotesService.ts");
+  const search = t.mock.method(NotesService, "search", async () => ({
+    notes: [{ ...cloudRow(null, "Backup copy"), private_workspace_id: "a" }],
+  }));
+  const create = await loadSearch();
+  const result = await create({ useCloudSearch: true, scopeSpaceIds: SCOPE }).execute({
+    query: "pricing",
+    space: "Personal",
+  });
+  assert.deepEqual(
+    result.data.map((row) => row.title),
+    ["Backup copy"]
+  );
+  assert.deepEqual(search.mock.calls[0].arguments.at(-1), {
+    spaceIds: [],
+    privateWorkspaceId: "a",
+  });
+});
+
+test("legacy NULL Private results require default placement or an in-scope local copy", async (t) => {
+  const { NotesService } = await import("../../src/services/NotesService.ts");
+  t.mock.method(NotesService, "search", async () => ({
+    notes: [
+      cloudRow(null, "Unknown legacy"),
+      { ...cloudRow(null, "B Private"), private_workspace_id: "b" },
+    ],
+  }));
+  const create = await loadSearch();
+  const result = await create({ useCloudSearch: true, scopeSpaceIds: [4] }).execute({
+    query: "pricing",
+  });
+  assert.deepEqual(
+    result.data.map((row) => row.title),
+    ["B Private"]
+  );
+});
+
+test("many teamspaces still use a single ranked request with an exact allowed scope", async (t) => {
+  const { NotesService } = await import("../../src/services/NotesService.ts");
+  const teams = Array.from({ length: 24 }, (_, index) => ({
+    id: index + 100,
     name: `Team ${index}`,
     kind: "team",
-    workspace_id: "a",
-    cloud_space_id: `cloud-team-${index}`,
+    cloud_space_id: `team-${index}`,
   }));
-  Object.assign(global.window.electronAPI, {
-    getSpaces: async () => [...SPACES, ...teams],
-    semanticSearchNotes: async () => [],
-    searchNotes: async () => [],
-  });
-  const search = t.mock.method(
-    NotesService,
-    "search",
-    cloudAnswering([
-      cloudRow(null, "Backup copy", "own-key"),
-      cloudRow("cloud-team-3", "Team three plan"),
-      cloudRow("cloud-beta", "Beta cloud plan"),
-    ])
-  );
-  const createSearchNotesTool = await loadSearch();
-  const result = await createSearchNotesTool({
+  global.window.electronAPI.getSpaces = async () => teams;
+  const search = t.mock.method(NotesService, "search", async () => ({
+    notes: [
+      cloudRow("team-23", "First", null, 0.5),
+      cloudRow("team-1", "Second", null, 0.9),
+      cloudRow(null, "Excluded Private"),
+      cloudRow("foreign", "Excluded team"),
+    ],
+  }));
+  const create = await loadSearch();
+  const result = await create({
     useCloudSearch: true,
-    scopeSpaceIds: [1, ...teams.map((team) => team.id)],
+    scopeSpaceIds: teams.map((team) => team.id),
   }).execute({ query: "pricing" });
+  assert.equal(search.mock.callCount(), 1);
+  assert.deepEqual(search.mock.calls[0].arguments.at(-1), {
+    spaceIds: teams.map((team) => team.cloud_space_id),
+    privateWorkspaceId: null,
+  });
   assert.deepEqual(
-    result.data.map((found) => found.title),
-    ["Team three plan"]
-  );
-  assert.deepEqual(
-    search.mock.calls.map((call) => call.arguments),
-    teams.map((team) => ["pricing", 5, undefined, team.cloud_space_id, 1])
+    result.data.map((row) => row.title),
+    ["First", "Second"]
   );
 });
 
-test("a limit past the API's maximum is clamped", async (t) => {
+test("a limit past the API maximum is clamped for every strategy", async (t) => {
   const { NotesService } = await import("../../src/services/NotesService.ts");
-  global.window.electronAPI.searchNotes = async (...args) => {
-    calls.keyword.push(args);
-    return [];
-  };
   global.window.electronAPI.semanticSearchNotes = async (...args) => {
     calls.semantic.push(args);
     return [];
   };
+  global.window.electronAPI.searchNotes = async (...args) => {
+    calls.keyword.push(args);
+    return [];
+  };
   const search = t.mock.method(NotesService, "search", async () => ({ notes: [] }));
-  const createSearchNotesTool = await loadSearch();
-  await createSearchNotesTool({ useCloudSearch: true, scopeSpaceIds: [1, 2] }).execute({
+  const create = await loadSearch();
+  await create({ useCloudSearch: true, scopeSpaceIds: SCOPE }).execute({
     query: "pricing",
     limit: 500,
   });
-  assert.equal(calls.semantic.at(-1)[1], 50);
-  assert.equal(calls.keyword.at(-1)[1], 50);
-  assert.deepEqual(search.mock.calls.at(-1).arguments, [
-    "pricing",
-    50,
-    undefined,
-    "cloud-alpha",
-    1,
-  ]);
+  assert.equal(search.mock.calls[0].arguments[1], 50);
+  assert.equal(calls.semantic[0][1], 50);
+  assert.equal(calls.keyword[0][1], 50);
 });
 
-test("teamspace cloud search needs a signed-in account, not Cloud Backup", async (t) => {
-  // The registry's create_note reads the saved active workspace from storage.
+test("registry uses main's signed-in and Backup-enabled cloud-search gate", async (t) => {
   installBrowserGlobals(t, { window: { electronAPI: global.window.electronAPI } });
   const { NotesService } = await import("../../src/services/NotesService.ts");
-  global.window.electronAPI.semanticSearchNotes = async () => [];
-  global.window.electronAPI.searchNotes = async () => [];
-  const search = t.mock.method(
-    NotesService,
-    "search",
-    cloudAnswering([cloudRow("cloud-alpha", "Alpha cloud plan")])
-  );
+  const search = t.mock.method(NotesService, "search", async () => ({
+    notes: [cloudRow("cloud-alpha", "Alpha cloud plan")],
+  }));
   const { createToolRegistry } = await import("../../src/services/tools/index.ts");
-  const settings = {
-    calendarConnected: false,
-    cloudBackupEnabled: false,
-    webSearchEnabled: false,
-    scopeSpaceIds: [1, 2],
-  };
-
-  const signedIn = createToolRegistry({ ...settings, isSignedIn: true }).get("search_notes");
-  const found = await signedIn.execute({ query: "pricing" });
+  const settings = { calendarConnected: false, webSearchEnabled: false, scopeSpaceIds: SCOPE };
+  for (const [isSignedIn, cloudBackupEnabled] of [
+    [false, false],
+    [false, true],
+    [true, false],
+  ]) {
+    const result = await createToolRegistry({ ...settings, isSignedIn, cloudBackupEnabled })
+      .get("search_notes")
+      .execute({ query: "pricing" });
+    assert.deepEqual(
+      result.data.map((row) => row.id),
+      [OWN_PRIVATE.id]
+    );
+  }
+  assert.equal(search.mock.callCount(), 0);
+  const result = await createToolRegistry({
+    ...settings,
+    isSignedIn: true,
+    cloudBackupEnabled: true,
+  })
+    .get("search_notes")
+    .execute({ query: "pricing" });
   assert.deepEqual(
-    found.data.map((row) => row.title),
+    result.data.map((row) => row.title),
     ["Alpha cloud plan"]
   );
-  assert.equal(search.mock.callCount(), 1);
-
-  const signedOut = createToolRegistry({ ...settings, isSignedIn: false }).get("search_notes");
-  assert.deepEqual((await signedOut.execute({ query: "pricing" })).data, []);
   assert.equal(search.mock.callCount(), 1);
 });
 
@@ -402,56 +542,6 @@ test("update_note refuses another workspace's private note", async (t) => {
     true
   );
 });
-
-for (const allFail of [false, true]) {
-  test(`large cloud search bounds concurrency and tolerates partial failure (${allFail})`, async (t) => {
-    const { NotesService } = await import("../../src/services/NotesService.ts");
-    const teams = Array.from({ length: 24 }, (_, index) => ({
-      id: index + 100,
-      name: `Team ${index}`,
-      kind: "team",
-      cloud_space_id: `team-${index}`,
-    }));
-    Object.assign(globalThis.window.electronAPI, {
-      getSpaces: async () => teams,
-      semanticSearchNotes: async () => [],
-      searchNotes: async () => [],
-    });
-    let active = 0;
-    let peak = 0;
-    let completed = 0;
-    t.mock.method(NotesService, "search", async (_query, limit, scope, spaceId) => {
-      assert.equal(scope, undefined);
-      assert.ok(spaceId);
-      peak = Math.max(peak, ++active);
-      await new Promise((resolve) => setImmediate(resolve));
-      active--;
-      completed++;
-      if (allFail || spaceId === "team-0") throw new Error("offline");
-      // A scope=all result would be saturated with unrelated high-score rows.
-      return {
-        notes: [
-          cloudRow(null, "Private copy", null, 100),
-          cloudRow("outsider", "Other", null, 99),
-          cloudRow(spaceId, spaceId, null, Number(spaceId.split("-")[1])),
-        ],
-      };
-    });
-    const create = await loadSearch();
-    const result = await create({
-      useCloudSearch: true,
-      scopeSpaceIds: teams.map((team) => team.id),
-    }).execute({ query: "pricing", limit: 3 });
-    assert.equal(completed, 24);
-    assert.ok(peak <= 10, `peak ${peak}`);
-    assert.equal(result.success, !allFail);
-    if (!allFail)
-      assert.deepEqual(
-        result.data.map((row) => row.title),
-        ["team-23", "team-22", "team-21"]
-      );
-  });
-}
 
 test("an empty folder-pinned team search never widens to cloud", async (t) => {
   const { NotesService } = await import("../../src/services/NotesService.ts");

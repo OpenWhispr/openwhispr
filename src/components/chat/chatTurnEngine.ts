@@ -779,6 +779,7 @@ export function createChatTurnEngine(
         const keepNotesUnchanged = !!options?.keepNotesUnchanged;
         registry = createToolRegistry({
           isSignedIn: settings.isSignedIn,
+          cloudBackupEnabled: settings.cloudBackupEnabled,
           calendarConnected,
           searchScope: scope,
           scopeSpaceIds,

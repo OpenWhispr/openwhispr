@@ -6072,16 +6072,8 @@
         "invitationActions": "Einladungsaktionen",
         "resendSent": "Einladung gesendet",
         "resendThrottled": "Einladung wurde kürzlich gesendet. Versuche es in einer Minute erneut.",
-        "moveToShare": "Zum Teilen in einen Teamspace verschieben",
-        "moveConfirmTitle": "Nach {{space}} verschieben, um sie mit den Mitgliedern zu teilen?",
-        "noTeamspaces": "Es gibt noch keinen Teamspace, in den du sie verschieben kannst.",
-        "openTeamspaces": "Teamspaces öffnen",
-        "cantMoveToShare": "Nur der Besitzer der Notiz kann sie zum Teilen in einen Teamspace verschieben.",
-        "legacySharedBanner": "Diese Notiz ist geteilt und wird auch bei ausgeschaltetem Cloud-Backup synchronisiert.",
-        "stopSharing": {
-          "title": "Teilen beenden?",
-          "description": "Wenn du {{name}} entfernst, wird die Notiz nicht mehr geteilt."
-        },
+        "syncPrompt": "Beim Teilen wird eine Kopie dieser Notiz in deiner OpenWhispr-Cloud gespeichert. Nur du kannst sie sehen, bis du auswählst, mit wem du sie teilst.",
+        "syncAndShare": "Notiz synchronisieren",
         "visibility": {
           "label": "Sichtbarkeit",
           "private": "Privat",
@@ -6098,6 +6090,7 @@
           "copyFailed": "Der Link konnte nicht kopiert werden. Versuche es erneut.",
           "revokeFailed": "Die Einladung konnte nicht entfernt werden. Versuche es erneut.",
           "resendFailed": "Die Einladung konnte nicht erneut gesendet werden. Versuche es erneut.",
+          "syncFailed": "Die Notiz konnte nicht synchronisiert werden. Versuche es erneut.",
           "loadFailed": "Freigabeeinstellungen konnten nicht geladen werden",
           "retry": "Erneut versuchen"
         }

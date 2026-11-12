@@ -87,12 +87,12 @@ async function setup(t, { teamCount = 11, respond, beforeIpc, validated = true }
   };
 }
 
-test("an aborted search sends no later batch after another account signs in", async (t) => {
+test("an aborted cloud search cannot publish after another account signs in", async (t) => {
   const batch = deferred();
   const started = deferred();
   const f = await setup(t, {
     respond: async (_request, count) => {
-      if (count === 10) started.resolve();
+      if (count === 1) started.resolve();
       await batch.promise;
       return new Response(JSON.stringify({ notes: [] }));
     },
@@ -105,20 +105,20 @@ test("an aborted search sends no later batch after another account signs in", as
   await f.validate("account-b", 2);
   batch.resolve();
   await f.completed();
-  assert.equal(f.requests.length, 10);
+  assert.equal(f.requests.length, 1);
   assert.ok(f.requests.every((request) => request.authorization === "Bearer token-a"));
-  assert.equal(f.attempts.length, 10, "cancelled work does not schedule another batch");
+  assert.equal(f.attempts.length, 1, "one cloud request only");
 });
 
 test("main rejects a replacement account between renderer checks and IPC dispatch", async (t) => {
   let f;
   f = await setup(t, {
     beforeIpc: async (_options, count) => {
-      if (count === 11) await f.validate("account-b", 2);
+      if (count === 1) await f.validate("account-b", 2);
     },
   });
   const result = await f.run(new AbortController().signal);
-  assert.equal(f.requests.length, 10, "no old query reaches the replacement bearer");
+  assert.equal(f.requests.length, 0, "no old query reaches the replacement bearer");
   assert.ok(f.attempts.every((request) => request.expectedAuthGeneration === 1));
   assert.ok(f.requests.every((request) => request.authorization === "Bearer token-a"));
   assert.equal(result.success, false, "a changed account receives no old result");
@@ -171,46 +171,45 @@ for (const phase of ["spaces", "semantic", "keyword", "protect"]) {
     assert.equal(result.success, false);
     assert.equal(result.data, null);
     assert.equal(reads.at(-1), phase);
-    assert.deepEqual(f.requests, []);
+    assert.equal(f.requests.length, phase === "spaces" ? 0 : 1);
   });
 }
 
-for (const partial of [false, true]) {
-  test(`stable batches use the captured bearer and keep partial successes (${partial})`, async (t) => {
-    const f = await setup(t, {
-      respond: async (request, count) => {
-        if (partial && count === 1) return new Response("{}", { status: 503 });
-        return new Response(
-          JSON.stringify({
-            notes: [
-              {
-                id: `note-${count}`,
-                title: `Result ${count}`,
-                content: "body",
-                score: count,
-                space_id: request.body.space_id,
-              },
-            ],
-          })
-        );
-      },
-    });
-    const result = await f.run(new AbortController().signal);
-    assert.equal(result.success, true);
-    assert.equal(f.requests.length, 11);
-    assert.ok(f.requests.every((request) => request.authorization === "Bearer token-a"));
-    assert.ok(f.attempts.every((request) => request.expectedAuthGeneration === 1));
-    assert.deepEqual(
-      result.data.map((note) => note.title),
-      ["Result 11", "Result 10", "Result 9", "Result 8", "Result 7"]
-    );
+test("a single cloud request pins both account generation and exact scope", async (t) => {
+  const f = await setup(t, {
+    respond: async () =>
+      new Response(
+        JSON.stringify({
+          notes: [
+            { id: "note-first", title: "First", content: "body", score: 0.4, space_id: "team-10" },
+            { id: "note-second", title: "Second", content: "body", score: 0.9, space_id: "team-0" },
+          ],
+        })
+      ),
   });
-}
+  const result = await f.run(new AbortController().signal);
+  assert.equal(result.success, true);
+  assert.equal(f.requests.length, 1);
+  assert.equal(f.requests[0].authorization, "Bearer token-a");
+  assert.equal(f.attempts[0].expectedAuthGeneration, 1);
+  assert.deepEqual(f.requests[0].body, {
+    query: QUERY,
+    limit: 5,
+    scope: "all",
+    space_ids: Array.from({ length: 11 }, (_, index) => `team-${index}`),
+    private_workspace_id: null,
+  });
+  assert.deepEqual(
+    result.data.map((note) => note.title),
+    ["First", "Second"]
+  );
+});
 
-test("an unvalidated search cannot start cloud fallback", async (t) => {
+test("an unvalidated search uses only local fallback", async (t) => {
   const f = await setup(t, { validated: false });
   const result = await f.run(new AbortController().signal);
-  assert.equal(result.success, false);
+  assert.equal(result.success, true);
+  assert.deepEqual(result.data, []);
   assert.deepEqual(f.requests, []);
 });
 
@@ -233,7 +232,9 @@ test("cancellation while resolving cloud note links suppresses the result", asyn
     respond: async (request) =>
       new Response(
         JSON.stringify({
-          notes: [{ id: "cloud-note", content: "body", score: 1, space_id: request.body.space_id }],
+          notes: [
+            { id: "cloud-note", content: "body", score: 1, space_id: request.body.space_ids[0] },
+          ],
         })
       ),
   });

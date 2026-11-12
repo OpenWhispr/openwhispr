@@ -81,7 +81,7 @@ test("a cloud search keeps an untitled note and strips the fence from the rest",
   t.mock.method(NotesService, "search", async () => ({
     notes: [cloudNote(null), cloudNote(NOTE.title)],
   }));
-  // The cloud is asked for teamspace notes once nothing local matched.
+  // The cloud answers before local fallback.
   Object.assign(global.window.electronAPI, {
     getSpaces: async () => [
       { id: 1, name: "Personal", kind: "private" },
@@ -104,7 +104,7 @@ test("a cloud search keeps an untitled note and strips the fence from the rest",
   assert.doesNotMatch(JSON.stringify(result.data), /meeting_attendees/);
 });
 
-test("a container chat searches the local library, preserving its container scope", async (t) => {
+test("an unbound Private container uses the local library with its container scope", async (t) => {
   const { NotesService } = await import("../../src/services/NotesService.ts");
   const cloud = t.mock.method(NotesService, "search", async () => ({ notes: [] }));
   const queries = [];

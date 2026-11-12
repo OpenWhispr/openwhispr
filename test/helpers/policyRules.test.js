@@ -1158,3 +1158,15 @@ test("audio controls independently gate every mode while leaving dictation avail
     }
   }
 });
+
+test("domain-only sharing is usable only when the owner can offer a domain choice", async () => {
+  const { hasUsableExternalShareVisibility } = await load();
+  const snapshot = {
+    status: "managed",
+    policy: { ...policy, sharing: { externalLinkSharing: "domain_only" } },
+    appVersion: "1.8.1",
+  };
+
+  assert.equal(hasUsableExternalShareVisibility(snapshot, true), true);
+  assert.equal(hasUsableExternalShareVisibility(snapshot, false), false);
+});

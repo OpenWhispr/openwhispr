@@ -1487,7 +1487,7 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
   await unmount();
 });
 
-test("the copy-link segment shows only when the note can be shared in place", async (t) => {
+test("the copy-link segment opens sharing in place for Private and team notes", async (t) => {
   const { render, latest, unmount, vite } = await loadNoteEditor(t);
   const { loadSpaces } = await vite.ssrLoadModule("/stores/noteStore.ts");
   globalThis.window.electronAPI.getSpaces = async () => [
@@ -1503,22 +1503,28 @@ test("the copy-link segment shows only when the note can be shared in place", as
     return found;
   };
 
-  for (const [note, shown] of [
-    [{ space_id: 2, cloud_id: null, is_shared: 0 }, false],
-    // A cloud id the old Backup left doesn't make a private note shareable.
-    [{ space_id: 2, cloud_id: "backup-copy", is_shared: 0 }, false],
-    [{ space_id: 2, cloud_id: "shared-note", is_shared: 1 }, true],
-    [{ space_id: 1, cloud_id: null, is_shared: 0 }, true],
+  for (const note of [
+    { space_id: 2, cloud_id: null, is_shared: 0 },
+    { space_id: 2, cloud_id: "backup-copy", is_shared: 0 },
+    { space_id: 2, cloud_id: "shared-note", is_shared: 1 },
+    { space_id: 1, cloud_id: null, is_shared: 0 },
   ]) {
     await render(undefined, { note: { ...NOTE, ...note } });
-    assert.equal(Boolean(linkSegment()), shown, JSON.stringify(note));
+    assert.ok(linkSegment(), JSON.stringify(note));
+    await React.act(async () => linkSegment().props.onClick());
+    let dialog = null;
+    walk(latest(), (node) => {
+      if ("copyLinkOnOpen" in node.props) dialog = node;
+    });
+    assert.equal(dialog.props.open, true);
+    assert.equal(dialog.props.copyLinkOnOpen, true);
+    assert.equal(dialog.props.note.space_id, note.space_id);
+    assert.equal(dialog.props.note.cloud_id, note.cloud_id);
   }
   await unmount();
 });
 
-// A private note's flag is what makes it sync (D10): an invite-only share that
-// names nobody must not start it syncing again.
-test("a private note's share flag rises only when its share reaches someone", async (t) => {
+test("a Private note's share flag follows server visibility independently of its audience", async (t) => {
   globalThis.__noteEditorAuth = {
     isSignedIn: true,
     user: { id: "me", name: "Me", email: "me@example.com" },
@@ -1530,6 +1536,11 @@ test("a private note's share flag rises only when its share reaches someone", as
     "shared-elsewhere": {
       share: invited,
       invitations: [{ id: "inv-1", email: "guest@example.com" }],
+      access: owner,
+    },
+    "sharing-stopped": {
+      share: { visibility: "private", token_prefix: null },
+      invitations: [],
       access: owner,
     },
   };
@@ -1548,14 +1559,22 @@ test("a private note's share flag rises only when its share reaches someone", as
     written.push({ id, state });
   const settle = () => React.act(() => new Promise((resolve) => setImmediate(resolve)));
 
-  for (const cloudId of ["nobody-left", "shared-elsewhere"]) {
+  for (const [cloudId, isShared] of [
+    ["nobody-left", 0],
+    ["shared-elsewhere", 0],
+    ["sharing-stopped", 1],
+  ]) {
     await render(undefined, {
-      note: { ...NOTE, space_id: 2, cloud_id: cloudId, owner_user_id: "me", is_shared: 0 },
+      note: { ...NOTE, space_id: 2, cloud_id: cloudId, owner_user_id: "me", is_shared: isShared },
     });
     await settle();
   }
 
-  assert.deepEqual(written, [{ id: NOTE.id, state: { is_shared: 1 } }]);
+  assert.deepEqual(written, [
+    { id: NOTE.id, state: { is_shared: 1 } },
+    { id: NOTE.id, state: { is_shared: 1 } },
+    { id: NOTE.id, state: { is_shared: 0, share_token: null } },
+  ]);
   await unmount();
 });
 

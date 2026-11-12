@@ -6072,16 +6072,8 @@
         "invitationActions": "Invitation actions",
         "resendSent": "Invitation sent",
         "resendThrottled": "Invitation sent recently. Try again in a minute.",
-        "moveToShare": "Move to a teamspace to share",
-        "moveConfirmTitle": "Move to {{space}} to share it with its members?",
-        "noTeamspaces": "There's no teamspace to move it to yet.",
-        "openTeamspaces": "Open Teamspaces",
-        "cantMoveToShare": "Only the note's owner can move it to a teamspace to share it.",
-        "legacySharedBanner": "This note is shared and syncs even when Cloud Backup is off.",
-        "stopSharing": {
-          "title": "Stop sharing?",
-          "description": "Removing {{name}} stops sharing."
-        },
+        "syncPrompt": "Sharing keeps a copy of this note in your OpenWhispr cloud. Only you can see it until you choose who to share it with.",
+        "syncAndShare": "Sync note",
         "visibility": {
           "label": "Visibility",
           "private": "Private",
@@ -6098,6 +6090,7 @@
           "copyFailed": "Couldn't copy the link. Try again.",
           "revokeFailed": "Couldn't remove the invitation. Try again.",
           "resendFailed": "Couldn't resend the invitation. Try again.",
+          "syncFailed": "Couldn't sync this note. Try again.",
           "loadFailed": "Couldn't load share settings",
           "retry": "Retry"
         }

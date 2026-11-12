@@ -1,11 +1,4 @@
-import { isLegacySharedPrivateNote } from "../../services/syncPassPolicy";
-import type {
-  NoteAccessGrant,
-  NoteAccessState,
-  NoteItem,
-  ShareSettings,
-  SpaceItem,
-} from "../../types/electron";
+import type { NoteAccessGrant, NoteAccessState, ShareSettings } from "../../types/electron";
 
 const SHARE_VIEWER_BASE_URL = "https://notes.openwhispr.com";
 
@@ -80,49 +73,4 @@ export function canManageAccessGrant(
     !grant.id.startsWith("scope:") &&
     (!grant.inherited || access.can_manage_inherited_access)
   );
-}
-
-/**
- * New shares belong to a teamspace. Existing personal shares keep their audience.
- * A Backup cloud identity alone does not mean a Private note is shared.
- */
-export type PrivateShareState = "moveToShare" | "legacyShared" | "team";
-
-export function privateShareState(
-  note: Pick<NoteItem, "is_shared" | "cloud_id">,
-  space: Pick<SpaceItem, "kind"> | null | undefined
-): PrivateShareState {
-  if (space?.kind === "team") return "team";
-  return isLegacySharedPrivateNote(note) ? "legacyShared" : "moveToShare";
-}
-
-type ShareAudience = {
-  share: Pick<ShareSettings, "visibility">;
-  invitations: ReadonlyArray<unknown>;
-  access?: Pick<NoteAccessState, "grants"> | null;
-};
-
-/**
- * A Private note syncs independently of Backup only while its share reaches someone.
- * An invite-only share naming nobody does not establish that audience.
- */
-export function reconcileNoteShareFlag(
-  local: LocalShareState,
-  state: ShareAudience & { share: ShareLinkSettings },
-  { privateNote }: { privateNote: boolean }
-): LocalShareStateUpdate | null {
-  const update = reconcileLocalShareState(local, state.share);
-  if (privateNote && update?.is_shared === 1 && !shareReachesAnyone(state)) return null;
-  return update;
-}
-
-/**
- * Whether anyone but the owner can open a note shared this way. Private visibility shuts out
- * every invitation and grant (the API's kill switch), a link or domain share is open to whoever
- * has the link, and an invite-only share reaches only the people it still names.
- */
-export function shareReachesAnyone(state: ShareAudience): boolean {
-  if (state.share.visibility === "private") return false;
-  if (state.share.visibility !== "invited") return true;
-  return state.invitations.length > 0 || (state.access?.grants.length ?? 0) > 0;
 }

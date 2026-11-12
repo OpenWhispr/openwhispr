@@ -26,7 +26,7 @@ Conversation privacy is durable and monotonic. A chat consuming Private note con
 
 ## Moves and workspace loss
 
-Team-to-Private uses Copy to Private; moving a synced team row to Private is rejected. Private-to-team sharing requires the same workspace and preserves cloud identity. Private-to-Private moves queue owner-only placement updates while preserving cloud identity.
+Team-to-Private uses Copy to Private; moving a synced team row to Private is rejected. Private notes can be shared directly in place using main’s explicit Sync and share consent when no cloud copy exists. Existing cloud identities are reused; sharing does not change workspace or folder. Optional Private-to-team moves still require the same workspace and preserve cloud identity. Private-to-Private moves queue owner-only placement updates while preserving cloud identity.
 
 A successful nonempty workspace list detects losses using both cached membership and main's Private rows. Explicit leave/delete forgets the workspace before relocation. Private content moves to the current default, preserving content and handling folder collisions. Account-session and refresh-epoch guards surround awaited work; membership and default status are checked immediately before every move. Superseded scans cannot bind or relocate a replacement account's data, and later scans retry failed moves.
 
@@ -34,7 +34,7 @@ A successful nonempty workspace list detects losses using both cached membership
 
 `resolveAssistantScopeSpaceIds` restricts tools to current Private and accessible teamspaces. It never creates a named Private for an unknown workspace; unnamed `getPrivateSpaceId()` and `getSpaces()` can lazily create current Private. `create_note` without `space` files the note and its folder into Private. Explicit names first match in-scope teamspaces case-insensitively, even names such as Private, Personal, or the localized Private label; unmatched Private aliases use Private. Existing exact-match/first-match semantics remain.
 
-Search tries local semantic, then local FTS, then team-only cloud. Every cloud request names one in-scope teamspace, in batches of at most ten concurrent requests. Successful responses merge by score and final limit; one failed teamspace does not discard others. Folder-pinned searches remain local. Note creation, edits and automatic folder creation carry account/credential write guards; privacy callbacks remain part of the tool result boundary.
+Search follows main: when signed in with Backup enabled, one cloud request ranks personal and teamspace notes, then empty or failed results fall back to local semantic search and local FTS. The API intersects explicit teamspace IDs with authorized membership and filters owner-only Private workspace placement before ranking. Client-side scope and account checks remain, and Private cloud results protect the conversation before exposure even without a local copy. Folder-pinned searches remain local. Note creation, edits and automatic folder creation carry account/credential write guards; privacy callbacks remain part of the tool result boundary.
 
 ## Evidence and limits
 

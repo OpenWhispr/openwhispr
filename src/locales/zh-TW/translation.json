@@ -5754,16 +5754,8 @@
         "invitationActions": "邀請操作",
         "resendSent": "邀請已傳送",
         "resendThrottled": "邀請剛剛已傳送，請一分鐘後再試。",
-        "moveToShare": "移到 Teamspace 即可分享",
-        "moveConfirmTitle": "移動到 {{space}}，與其成員分享？",
-        "noTeamspaces": "目前沒有可移入的 Teamspace。",
-        "openTeamspaces": "開啟 Teamspace",
-        "cantMoveToShare": "只有筆記擁有者才能將其移到 Teamspace 進行分享。",
-        "legacySharedBanner": "這則筆記已分享，即使關閉雲端備份也會同步。",
-        "stopSharing": {
-          "title": "停止分享？",
-          "description": "移除 {{name}} 後將停止分享。"
-        },
+        "syncPrompt": "分享後，這則筆記會在你的 OpenWhispr 雲端保留一份副本。在你選擇分享對象之前，只有你能看到它。",
+        "syncAndShare": "同步筆記",
         "visibility": {
           "label": "可見性",
           "private": "私人",
@@ -5780,6 +5772,7 @@
           "copyFailed": "無法複製連結。請再試一次。",
           "revokeFailed": "無法移除邀請。請再試一次。",
           "resendFailed": "無法重新傳送邀請。請再試一次。",
+          "syncFailed": "無法同步此筆記。請再試一次。",
           "loadFailed": "無法載入分享設定",
           "retry": "重試"
         }
