@@ -22,6 +22,7 @@ const cases = [
   { name: "a successful join request", requestJoin: true },
   { name: "an access authentication refusal", accessExpired: true },
   { name: "an expired credential without an HTTP response", accessExpired: true, accessStatus: 0 },
+  { name: "a mounted first-access invalidation", firstAccess: true },
 ];
 
 for (const scenario of cases) {
@@ -49,7 +50,9 @@ for (const scenario of cases) {
         : null,
       scopes: [scope],
     };
-    const currentAccess = { ...access, state: "create", scopes: [] };
+    const currentAccess = scenario.requestJoin
+      ? { ...access, joinableWorkspace: { ...access.joinableWorkspace, requestState: "pending" } }
+      : { ...access, state: "create", scopes: [] };
     const member = {
       userId: "coworker",
       name: "Former coworker",
@@ -125,9 +128,9 @@ for (const scenario of cases) {
     const { default: Section } = await vite.ssrLoadModule("/components/LeaderboardSection.tsx");
     const cache = await vite.ssrLoadModule("/lib/insightsCache.ts");
     const { CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts");
-    cache.cacheLeaderboardAccess("user-a", access);
+    if (!scenario.firstAccess) cache.cacheLeaderboardAccess("user-a", access);
     const keptAccess = cache.readCachedLeaderboardAccess("user-a");
-    keptAccess.fetchedAt -= 61_000;
+    if (keptAccess) keptAccess.fetchedAt -= 61_000;
     const props = {
       accountId: "user-a",
       authGeneration: 7,
@@ -154,6 +157,13 @@ for (const scenario of cases) {
     root = createRoot(container);
     await act(async () => root.render(createElement(Section, props)));
     assert.equal(state.accessReads, 1);
+    if (scenario.firstAccess) {
+      await act(async () => cache.clearCachedLeaderboards());
+      await act(async () => state.access.resolve(access));
+      assert.equal(state.accessReads, 2, "mounted access is re-read without a remount");
+      assert.ok(container.textContent.includes("Create your team leaderboard"));
+      return;
+    }
     if (scenario.accessExpired) {
       await act(async () =>
         state.access.reject(
@@ -215,8 +225,12 @@ for (const scenario of cases) {
       assert.equal(nextBoard?.value, currentBoard, "an old refusal cannot clear a newer board");
     } else {
       assert.equal(
-        nextAccess,
-        scenario.invalidate ? null : keptAccess,
+        scenario.invalidate && !scenario.unmount ? nextAccess?.value : nextAccess,
+        scenario.invalidate && !scenario.unmount
+          ? currentAccess
+          : scenario.invalidate
+            ? null
+            : keptAccess,
         "retired access must not refresh the cache"
       );
       assert.equal(nextBoard, undefined, "retired rows must not repopulate the cache");

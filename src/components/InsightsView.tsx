@@ -8,8 +8,11 @@ import { useSettings } from "../hooks/useSettings";
 import { hasValidatedAuthContext } from "../lib/authRequestContext";
 import {
   cacheInsightsSummary,
+  getInsightsCacheVersion,
   isInsightFresh,
+  isInsightsCacheCurrent,
   readCachedInsightsSummary,
+  subscribeToInsightsCacheInvalidation,
 } from "../lib/insightsCache";
 import {
   getAccountAnalyticsSummary,
@@ -392,10 +395,22 @@ function YourUsage({
   // batch and leave the winner reading a summary the other has not finished.
   const requestIdRef = useRef(0);
   const accountReadFailedRef = useRef(false);
+  const [cacheInvalidationRevision, setCacheInvalidationRevision] = useState(0);
+
+  useEffect(
+    () =>
+      subscribeToInsightsCacheInvalidation((scope) => {
+        if (scope !== "all") return;
+        setSummary(null);
+        setCacheInvalidationRevision((revision) => revision + 1);
+      }),
+    []
+  );
 
   const load = useCallback(
     async (cache: AccountSummaryCache = "refresh") => {
       const requestId = ++requestIdRef.current;
+      const cacheVersion = accountId ? getInsightsCacheVersion(accountId) : null;
       setLoading(true);
       setSyncError(false);
 
@@ -423,6 +438,7 @@ function YourUsage({
           }
           const account = await getAccountAnalyticsSummary(accountId, cache);
           if (requestId !== requestIdRef.current) return;
+          if (accountId && !isInsightsCacheCurrent(accountId, cacheVersion!)) return;
           if (accountId) cacheInsightsSummary(accountId, account);
           accountReadFailedRef.current = false;
           setSummary(account);
@@ -442,23 +458,24 @@ function YourUsage({
     [accountId, isLoaded, syncActive]
   );
 
-  useEffect(
-    () =>
-      subscribeToAnalyticsRefresh((dataChanged) => {
-        // A check for other devices' changes can wait out a summary this fresh,
-        // unless the last account read failed.
-        if (
-          !dataChanged &&
-          !accountReadFailedRef.current &&
-          accountId &&
-          isInsightFresh(readCachedInsightsSummary(accountId))
-        )
-          return;
-        // Only a check may be answered from the API's copy; a change needs the database.
-        return load(dataChanged ? "refresh" : "allow");
-      }, syncActive),
-    [accountId, load, syncActive]
-  );
+  useEffect(() => {
+    const unsubscribe = subscribeToAnalyticsRefresh((dataChanged) => {
+      // A check for other devices' changes can wait out a summary this fresh,
+      // unless the last account read failed.
+      if (
+        !dataChanged &&
+        !accountReadFailedRef.current &&
+        accountId &&
+        isInsightFresh(readCachedInsightsSummary(accountId))
+      )
+        return;
+      return load(dataChanged ? "refresh" : "allow");
+    }, syncActive);
+    return () => {
+      requestIdRef.current += 1;
+      unsubscribe();
+    };
+  }, [accountId, cacheInvalidationRevision, load, syncActive]);
 
   useEffect(() => {
     onSyncErrorChange(syncError);

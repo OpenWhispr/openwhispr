@@ -49,6 +49,7 @@ import {
   isLeaderboardCacheCurrent,
   readCachedLeaderboard,
   readCachedLeaderboardAccess,
+  subscribeToInsightsCacheInvalidation,
 } from "../lib/insightsCache";
 import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
@@ -210,7 +211,7 @@ export default function LeaderboardSection({
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
   const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [boardRefreshRevision, setBoardRefreshRevision] = useState(0);
+  const [cacheInvalidationRevision, setCacheInvalidationRevision] = useState(0);
   const [failure, setFailure] = useState<{
     kind: "auth" | "generic" | "policy" | "sso";
     requestKey: string;
@@ -271,6 +272,17 @@ export default function LeaderboardSection({
   const boardParticipantCount = visibleLeaderboard?.totalMembers ?? null;
 
   useEffect(
+    () =>
+      subscribeToInsightsCacheInvalidation(() => {
+        setAccess(null);
+        setAccessLoading(true);
+        setLeaderboard(null);
+        setCacheInvalidationRevision((revision) => revision + 1);
+      }),
+    []
+  );
+
+  useEffect(
     () => () => {
       accessRequestIdRef.current += 1;
       requestIdRef.current += 1;
@@ -323,7 +335,7 @@ export default function LeaderboardSection({
           (loadError.code === "ACCOUNT_REQUIRED" ||
             loadError.code === "AUTH_EXPIRED" ||
             loadError.status === 401);
-        if (requiresAccount) clearCachedLeaderboards();
+        if (requiresAccount) clearCachedLeaderboards({ revalidate: false });
         setAccessError(requiresAccount ? "auth" : "generic");
       } finally {
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
@@ -381,7 +393,7 @@ export default function LeaderboardSection({
       return;
     }
     void loadAccess();
-  }, [accountId, authGeneration, loadAccess]);
+  }, [accountId, authGeneration, cacheInvalidationRevision, loadAccess]);
 
   useEffect(() => {
     requestIdRef.current += 1;
@@ -487,7 +499,7 @@ export default function LeaderboardSection({
       console.error("Loading leaderboard failed:", loadError);
       // A refusal means a gate moved, so no board this session kept still holds.
       if (loadError instanceof CloudApiError && loadError.status >= 400 && loadError.status < 500)
-        clearCachedLeaderboards();
+        clearCachedLeaderboards({ revalidate: false });
       // A 403 names the gate that moved under us, and retrying the same call
       // can never clear it. Re-read exactly that gate so the surface settles on
       // the card that matches reality instead of a dead "Try again".
@@ -570,7 +582,7 @@ export default function LeaderboardSection({
     )
       return;
     void load();
-  }, [authGeneration, boardRefreshRevision, load, selectedRequestKey]);
+  }, [authGeneration, cacheInvalidationRevision, load, selectedRequestKey]);
 
   // The server owns how big a page is and how long a snapshot stays fresh; the
   // constants are only what to assume before the first response arrives.
@@ -634,7 +646,6 @@ export default function LeaderboardSection({
     try {
       await WorkspacesService.requestJoin(target.id);
       clearCachedLeaderboards();
-      setBoardRefreshRevision((revision) => revision + 1);
       setAccess((current) =>
         current?.joinableWorkspace
           ? {
@@ -1045,7 +1056,7 @@ export default function LeaderboardSection({
                 className="gap-2 text-xs"
                 disabled={loading || !cloudAccessAllowed}
                 onSelect={() => {
-                  clearCachedLeaderboards();
+                  clearCachedLeaderboards({ revalidate: false });
                   void load();
                 }}
               >
