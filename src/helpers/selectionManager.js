@@ -395,7 +395,6 @@ class SelectionManager {
       try {
         const pasteResult = await this.clipboardManager._pasteText(text, {
           ...options,
-          restoreClipboard: options.restoreClipboard !== false,
           ...(session.target?.kind === "win-hwnd" ? { targetWindow: session.target.id } : {}),
         });
         await pasteResult?.restoreComplete;

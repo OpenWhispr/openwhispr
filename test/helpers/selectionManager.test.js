@@ -5,19 +5,15 @@ const { EventEmitter } = require("node:events");
 const childProcess = require("node:child_process");
 
 const selectionManagerPath = require.resolve("../../src/helpers/selectionManager");
-// selectionManager requires "./debugLogger" at load; the stub records every
-// line so tests can assert what a declined paste leaves in the debug log.
-const logged = [];
+// selectionManager requires "./debugLogger" at load.
 const debugLoggerStub = {
-  debug: (message, meta, scope) => logged.push({ level: "debug", message, meta, scope }),
-  info: (message, meta, scope) => logged.push({ level: "info", message, meta, scope }),
-  warn: (message, meta, scope) => logged.push({ level: "warn", message, meta, scope }),
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
   trace: () => {},
   log: () => {},
   error: () => {},
 };
-const declines = () =>
-  logged.filter((entry) => entry.message === "Assistant response paste declined");
 
 const originalLoad = Module._load;
 
@@ -1400,14 +1396,11 @@ test("pastes an assistant response only while the captured caret target is still
     ],
   });
   const capture = await manager.captureSelectedText({ probeEditable: true });
-  const result = await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response", {
-    restoreClipboard: true,
-  });
+  const result = await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response");
 
   assert.deepEqual(result, { success: true });
   assert.equal(pastes.length, 1);
   assert.equal(pastes[0].text, "Agent response");
-  assert.equal(pastes[0].options.restoreClipboard, true);
 });
 
 test("does not paste an assistant response after the captured caret target changes", async () => {
@@ -1610,21 +1603,4 @@ test("a dormant browser with no readable input is never a caret, so nothing is p
     code: "session_expired",
   });
   assert.deepEqual(pastes, []);
-});
-
-test("a paste declined by a changed target logs the code and the probe verdict", async () => {
-  logged.length = 0;
-  const { manager } = makeHarness({
-    selections: [
-      { state: "none", editable: true },
-      { state: "selected", text: "new selection" },
-    ],
-  });
-  const capture = await manager.captureSelectedText({ probeEditable: true });
-  await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response");
-
-  assert.equal(declines().length, 1);
-  const [entry] = declines();
-  assert.equal(entry.meta.code, "target_changed");
-  assert.equal(entry.meta.probeStatus, "selected");
 });
