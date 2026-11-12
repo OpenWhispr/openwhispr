@@ -23,6 +23,13 @@ const cases = [
   { name: "an access authentication refusal", accessExpired: true },
   { name: "an expired credential without an HTTP response", accessExpired: true, accessStatus: 0 },
   { name: "a mounted first-access invalidation", firstAccess: true },
+  { name: "removing a member from a mounted board", removeMembers: true },
+  { name: "removing a member before remount", removeMembers: true, unmount: true },
+  {
+    name: "removing a member when the roster refresh fails",
+    removeMembers: true,
+    refreshFails: true,
+  },
 ];
 
 for (const scenario of cases) {
@@ -50,9 +57,11 @@ for (const scenario of cases) {
         : null,
       scopes: [scope],
     };
-    const currentAccess = scenario.requestJoin
-      ? { ...access, joinableWorkspace: { ...access.joinableWorkspace, requestState: "pending" } }
-      : { ...access, state: "create", scopes: [] };
+    const currentAccess = scenario.removeMembers
+      ? access
+      : scenario.requestJoin
+        ? { ...access, joinableWorkspace: { ...access.joinableWorkspace, requestState: "pending" } }
+        : { ...access, state: "create", scopes: [] };
     const member = {
       userId: "coworker",
       name: "Former coworker",
@@ -81,7 +90,7 @@ for (const scenario of cases) {
       generatedAt: new Date().toISOString(),
       refreshAfterSeconds: 60,
     };
-    const currentBoard = { ...board, leaders: [], members: [], totalMembers: 0 };
+    const currentBoard = { ...board, leaders: [], members: [], totalMembers: 1 };
     const state = {
       accessReads: 0,
       boardReads: 0,
@@ -89,6 +98,7 @@ for (const scenario of cases) {
       board: Promise.withResolvers(),
       currentAccess,
       currentBoard,
+      refreshFails: scenario.refreshFails,
     };
     globalThis.__leaderboardCacheInvalidation = state;
     t.after(() => delete globalThis.__leaderboardCacheInvalidation);
@@ -98,8 +108,15 @@ for (const scenario of cases) {
       mockModules: {
         "/lib/authRequestContext": "export const getValidatedAuthGeneration = () => 7;",
         "/stores/workspaceStore": `
-          const state = { loaded: true, workspaces: [], activeWorkspaceId: null };
+          const state = {
+            loaded: true, workspaces: [], activeWorkspaceId: null,
+            refresh: async () => {},
+            refreshMembers: async () => {
+              if (globalThis.__leaderboardCacheInvalidation.refreshFails) throw Error('offline');
+            },
+          };
           export const useWorkspaceStore = select => select(state);
+          useWorkspaceStore.getState = () => state;
         `,
         "/services/LeaderboardService": `
           export const LeaderboardService = {
@@ -114,9 +131,13 @@ for (const scenario of cases) {
           };
         `,
         "/ui/useToast": "export const useToast = () => ({ toast() {} });",
-        "/services/WorkspacesService": `
-          export const WorkspacesService = { requestJoin: async () => {} };
+        "/WorkspacesService": `
+          export const WorkspacesService = {
+            requestJoin: async () => {},
+            removeMembers: async () => ({ removed: ['coworker'], already_removed: [], transferred: null }),
+          };
         `,
+        "/SyncService": "export const syncService = { requestSyncAll() {} };",
         "/ui/select": `
           import { createElement } from 'react';
           const Wrapper = ({children}) => createElement('div', null, children);
@@ -176,6 +197,28 @@ for (const scenario of cases) {
       return;
     }
     assert.equal(state.boardReads, 1);
+
+    if (scenario.removeMembers) {
+      await act(async () => {
+        state.access.resolve(access);
+        state.board.resolve(board);
+      });
+      assert.ok(container.textContent.includes(member.name));
+      if (scenario.unmount) {
+        await act(() => root.unmount());
+        root = null;
+      }
+      const { removeMembers } = await vite.ssrLoadModule("/services/workspaceActions.ts");
+      await act(async () => removeMembers(scope.id, { userIds: [member.userId] }));
+      if (!root) {
+        root = createRoot(container);
+        await act(async () => root.render(createElement(Section, props)));
+      }
+      assert.equal(state.accessReads, 2, "member removal replaces even fresh access");
+      assert.equal(state.boardReads, 2, "member removal replaces even a fresh board");
+      assert.ok(!container.textContent.includes(member.name), "the removed member is gone");
+      return;
+    }
 
     if (scenario.requestJoin) {
       state.currentBoard = {

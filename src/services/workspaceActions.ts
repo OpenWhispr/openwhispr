@@ -17,7 +17,10 @@ const actions = createWorkspaceActions({
       useWorkspaceStore.getState().forgetWorkspace(id);
     },
     refresh: (options) => useWorkspaceStore.getState().refresh(options),
-    refreshMembers: (workspaceId) => useWorkspaceStore.getState().refreshMembers(workspaceId),
+    refreshMembers: (workspaceId) => {
+      clearCachedLeaderboards();
+      return useWorkspaceStore.getState().refreshMembers(workspaceId);
+    },
     // An account switch empties the list without an error, which must not read as "not listed".
     listedWorkspaceIds: () => {
       const { loaded, error, workspaces } = useWorkspaceStore.getState();
