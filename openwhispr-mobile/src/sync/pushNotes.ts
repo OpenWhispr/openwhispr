@@ -410,8 +410,9 @@ export async function pushNotes(
       try {
         checkpoint(true);
         recordNoteCreateAttempts(chunk.map((create) => create.payload.client_note_id));
-        const created = await batchCreateNotes(chunk.map((c) => c.payload));
+        const { created, refused = [] } = await batchCreateNotes(chunk.map((c) => c.payload));
         checkpoint();
+        const refusedIds = new Set(refused.map((row) => row.client_note_id));
         const byClientId = new Map(
           created
             .filter((server) => server.client_note_id)
@@ -420,9 +421,16 @@ export async function pushNotes(
         let unmatched = 0;
         for (let j = 0; j < chunk.length; j += 1) {
           const create = chunk[j];
+          if (
+            refusedIds.has(create.payload.client_note_id) &&
+            !byClientId.has(create.payload.client_note_id)
+          ) {
+            unmatched += 1;
+            continue;
+          }
           const server =
             byClientId.get(create.payload.client_note_id) ??
-            (!created[j]?.client_note_id ? created[j] : undefined);
+            (refused.length === 0 && !created[j]?.client_note_id ? created[j] : undefined);
           if (!server?.id) {
             unmatched += 1;
             continue;
@@ -446,6 +454,7 @@ export async function pushNotes(
           }
         }
         if (unmatched > 0) {
+          failed += 1;
           Sentry.captureMessage(
             `pushNotes: ${unmatched}/${chunk.length} create rows had no matching server response`,
             'warning',

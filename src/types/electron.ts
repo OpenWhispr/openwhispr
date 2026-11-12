@@ -575,6 +575,7 @@ export interface NoteCreateAckResult {
 }
 
 export interface NoteCreateAckWriteOptions {
+  expectedAuthGeneration?: number;
   settleIfUnchanged?: boolean;
   cloudRevision?: number | null;
   // The server refused the create without writing it (write_applied: false).
@@ -1620,10 +1621,6 @@ export interface ConversationCreateAckResult {
   cloud_id?: string | null;
 }
 
-export interface PrivateNoteImportAcknowledgement {
-  imported: true;
-}
-
 export interface CloudRowWriteOptions {
   newKeyIfTaken?: boolean;
 }
@@ -1634,6 +1631,11 @@ export interface StaleSyncWrite {
   success: false;
   changes: 0;
   stale: true;
+}
+
+export interface PrivatePlacementBackupCandidates {
+  notes: string[];
+  folders: string[];
 }
 
 export type OnboardingDemoKind = "dictation" | "assistant";
@@ -2208,10 +2210,16 @@ declare global {
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
       // The active workspace's private space, or the named workspace's. Null
       // for an invalid id.
-      getPrivateSpaceId?: (workspaceId?: string | null) => Promise<number | null>;
+      getPrivateSpaceId?: (
+        workspaceId?: string | null,
+        expectedAuthGeneration?: number
+      ) => Promise<number | null>;
       // The account's default workspace's private space (its pending row
       // while that workspace isn't known yet); the stand-in signed out.
-      getDefaultPrivateSpaceId?: () => Promise<number>;
+      getDefaultPrivateSpaceId?: {
+        (): Promise<number>;
+        (expectedAuthGeneration: number | undefined): Promise<number | null>;
+      };
       bindDefaultPrivateSpace?: (
         defaultWorkspaceId: string,
         accountId?: string | null
@@ -3305,6 +3313,7 @@ declare global {
         body?: unknown;
         public?: boolean;
         expectedAuthGeneration?: number;
+        cache?: "no-store";
       }) => Promise<
         {
           success: boolean;
@@ -4193,8 +4202,8 @@ declare global {
 
       // Sync operations
       // A sync pass's upload queue: team rows (and rows that left a team), plus
-      // legacy shared private notes for "syncable". No other private note.
-      getPendingNotes?: (scope: "team" | "syncable") => Promise<NoteItem[]>;
+      // shared private notes for "syncable". An omitted scope includes personal Backup.
+      getPendingNotes?: (scope?: "private" | "team" | "syncable" | null) => Promise<NoteItem[]>;
       getPendingNoteDeletes?: () => Promise<NoteItem[]>;
       getNoteByClientId?: (clientNoteId: string) => Promise<NoteItem | null>;
       getNoteForCloudRow?: (
@@ -4209,16 +4218,33 @@ declare global {
         ): Promise<NoteItem | null>;
         // A pull pinned to a sign-in: refused once that sign-in is replaced.
         // newKeyIfTaken stores a cloud row whose key is taken under a key of
-        // its own (the cloud private notes import).
+        // its own without taking over another account's local row.
         (
           cloudNote: Record<string, unknown>,
           localFolderId: number | null,
           localSpaceId: number | null | undefined,
           expectedAuthGeneration: number | undefined,
           options?: CloudRowWriteOptions
-        ): Promise<NoteItem | PrivateNoteImportAcknowledgement | StaleSyncWrite | null>;
+        ): Promise<NoteItem | StaleSyncWrite | null>;
       };
-      markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
+      markNoteCreatesAttempted?: (
+        clientNoteIds: string[],
+        expectedAuthGeneration?: number
+      ) => Promise<string[]>;
+      renewNoteCloudIdentity?: (
+        id: number,
+        expectedClientNoteId: string,
+        expectedCloudId: string | null,
+        expectedSpaceId: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; note?: NoteItem }>;
+      getPrivatePlacementBackupCandidates?: (
+        expectedAuthGeneration: number
+      ) => Promise<PrivatePlacementBackupCandidates | StaleSyncWrite>;
+      queuePrivatePlacementBackup?: (
+        expectedAuthGeneration: number,
+        candidates: PrivatePlacementBackupCandidates
+      ) => Promise<{ success: boolean; queuedNotes?: number; queuedFolders?: number }>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
@@ -4226,7 +4252,7 @@ declare global {
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
         options?: NoteCreateAckWriteOptions
-      ) => Promise<NoteCreateAckResult>;
+      ) => Promise<NoteCreateAckResult | StaleSyncWrite>;
       markNoteSyncedIfUnchanged?: (
         id: number,
         snapshot: NoteUpdateSnapshot,
@@ -4234,8 +4260,9 @@ declare global {
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
         cloudRevision?: number | null,
-        cloudNote?: NoteCloudText | null
-      ) => Promise<NoteUpdateAckResult>;
+        cloudNote?: NoteCloudText | null,
+        expectedAuthGeneration?: number
+      ) => Promise<NoteUpdateAckResult | StaleSyncWrite>;
       setNoteCloudBase?: (
         id: number,
         cloudUpdatedAt: string | null,
@@ -4244,13 +4271,18 @@ declare global {
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       setNoteOwnerFromCloud?: (id: number, ownerUserId: string) => Promise<void>;
       countTeamNotesMissingOwner?: () => Promise<number>;
-      countNotesMissingRevision?: (scope: "team" | "syncable") => Promise<number>;
+      countNotesMissingRevision?: (
+        scope?: "private" | "team" | "syncable" | null
+      ) => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;
       restoreNoteAfterDeniedDelete?: (id: number) => Promise<{ success: boolean; id: number }>;
-      hardDeleteNote?: (id: number) => Promise<void>;
+      hardDeleteNote?: (
+        id: number,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
 
-      // Team folders only: private folders never reach the cloud.
-      getPendingFolders?: (scope: "team") => Promise<FolderItem[]>;
+      // An omitted scope includes personal folders for consented Backup.
+      getPendingFolders?: (scope?: "private" | "team" | null) => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
       // The active account's folder bound to that cloud folder, under any key.
       getFolderByCloudId?: (cloudId: string) => Promise<FolderItem | null>;
@@ -4274,8 +4306,9 @@ declare global {
       markFolderSyncedIfUnchanged?: (
         id: number,
         snapshot: FolderPushSnapshot,
-        expectedCloudId: string
-      ) => Promise<FolderAckResult>;
+        expectedCloudId: string,
+        expectedAuthGeneration?: number
+      ) => Promise<FolderAckResult | StaleSyncWrite>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{
@@ -4287,7 +4320,10 @@ declare global {
         reason?: "name-taken";
         error?: string;
       }>;
-      hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
+      hardDeleteFolder?: (
+        id: number,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
       // A new client identity and no cloud link: the folder's cloud row is
       // left to whoever still has it.
       forkFolderIdentity?: (id: number) => Promise<{ success: boolean }>;

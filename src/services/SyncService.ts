@@ -13,6 +13,7 @@ import type {
   ConversationPreview,
   ConversationCreateSnapshot,
   StaleSyncWrite,
+  PrivatePlacementBackupCandidates,
 } from "../types/electron";
 import { NotesService, type CloudNote } from "./NotesService.js";
 import { ConversationsService, type CloudConversation } from "./ConversationsService.js";
@@ -23,14 +24,6 @@ import { syncPendingAnalytics } from "./AnalyticsService.js";
 import { DictionaryService, type CloudDictionaryEntry } from "./DictionaryService.js";
 import { SharedDictionaryService } from "./SharedDictionaryService";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
-import { PrivateNotesService } from "./PrivateNotesService";
-import {
-  importCloudPrivateNotesOnce,
-  isWaitingToImport,
-  nextImportWait,
-  type PrivateNotesImportResult,
-  type PrivateNotesImportWait,
-} from "./privateNotesImport";
 import { CloudApiError, isAuthContextError, wasRefusedBeforeSending } from "./cloudApi.js";
 import { LeaderboardService } from "./LeaderboardService";
 import {
@@ -66,6 +59,7 @@ import {
 import {
   ACTIVE_WORKSPACE_SOURCE_KEY,
   readActiveWorkspaceId,
+  relocateLostWorkspaces,
   useWorkspaceStore,
   WORKSPACE_LIST_CACHE_KEY,
 } from "../stores/workspaceStore";
@@ -100,10 +94,6 @@ import {
   keepPurgedSpaceEntry,
   nextAmbientEmptyStreak,
   normalizePurgedSpaceEntries,
-  PERSONAL_NOTES_ON_DEVICE,
-  privateFolderSync,
-  privateNoteSync,
-  PRIVATE_NOTE_NOT_SYNCABLE,
   prunePurgedSpaceEntries,
   recordUpdate404,
   resolvePulledNoteFolderId,
@@ -155,66 +145,32 @@ function conflictCloudNote(err: unknown): CloudNote | null {
   return details?.note ?? null;
 }
 
-// Typed 409 for a personal note or folder write once the account keeps private
-// notes on its devices. The row stays pending as it is: no error mark, no fork,
-// no retry this pass. For a note the refusal is also authoritative about its
-// share (see endStaleShare).
-function isPersonalNotesOnDeviceError(err: unknown): boolean {
-  return err instanceof CloudApiError && err.code === PERSONAL_NOTES_ON_DEVICE;
-}
-
-export { PRIVATE_NOTE_NOT_SYNCABLE };
-
-// Sharing a private note means moving it to a teamspace first (D10): only a
-// note shared before Private stayed on the device has a cloud copy to share.
-export class PrivateNoteNotSyncableError extends Error {
-  readonly code = PRIVATE_NOTE_NOT_SYNCABLE;
-
-  constructor() {
-    super("Private notes stay on this device. Move the note to a teamspace to share it.");
-    this.name = "PrivateNoteNotSyncableError";
-  }
-}
-
 // Extra fields pushed with note/folder payloads so the server files rows into
 // the right space scope; `null` scope means the row must not push at all.
-type PushScopeFields = { workspace_id?: string | null; space_id?: string | null };
-
-// A pull applies personal rows (no space) only for the one-time import of
-// cloud private notes; otherwise just a legacy shared note's (D10).
-interface PullOptions {
-  includePersonal?: boolean;
-  // The import's auth generation: it lists the account's personal rows alone,
-  // and its writes are refused once that sign-in is replaced (#2924's fence).
-  importUnder?: number;
-}
+type PushScopeFields = {
+  workspace_id?: string | null;
+  space_id?: string | null;
+  private_workspace_id?: string | null;
+};
 
 // Per-pull-pass mapping of cloud spaces to local spaces.
 interface SpaceSyncContext {
   byId: Map<number, SpaceItem>;
   byCloudSpaceId: Map<string, SpaceItem>;
-  // The account's default Private, read on first use (defaultPrivateSpace):
-  // most passes apply no personal row and never need it.
+  // The default Private receives personal rows first seen on this device.
   defaultPrivateSpace?: SpaceItem | null;
   // Guard: at most one mid-pass spaces re-pull per pass.
   refreshedSpaces: boolean;
 }
 
-// Only team rows sync whole. A row whose space isn't known here counts as
-// private, so nothing unknown is ever uploaded.
+// Team membership and personal Backup consent remain separate sync scopes.
 function isTeamRow(row: { space_id: number }, ctx: SpaceSyncContext): boolean {
   return ctx.byId.get(row.space_id)?.kind === "team";
 }
 
-// The cloud folder a note push names. Private folders never reach the cloud,
-// so a legacy shared private note goes to the cloud root on create and update
-// alike, and a pull keeps it in its local folder (see pullNotes).
-function pushedFolderId(
-  note: NoteItem,
-  teamRow: boolean,
-  localToCloud: Map<number, string>
-): string | null {
-  if (!teamRow || !note.folder_id) return null;
+// A note keeps its cloud folder association in both personal and team scope.
+function pushedFolderId(note: NoteItem, localToCloud: Map<number, string>): string | null {
+  if (!note.folder_id) return null;
   return localToCloud.get(note.folder_id) ?? null;
 }
 
@@ -551,7 +507,7 @@ function stopIfPullStale<T>(result: T): asserts result is Exclude<T, StaleSyncWr
   if ((result as StaleSyncWrite | null | undefined)?.stale) throw pullStaleError();
 }
 
-// A pull pinned to a sign-in (the import's) looks at no further row once it is
+// A pull pinned to a sign-in looks at no further row once it is
 // replaced. Main's refusal (stopIfPullStale) covers a switch mid-row.
 function stopIfSignInReplaced(authGeneration: number | undefined): void {
   if (authGeneration !== undefined && getValidatedAuthGeneration() !== authGeneration) {
@@ -725,6 +681,8 @@ export class SyncService {
   // past an account switch would finish as the next account and stamp that
   // account's values into the departed account's cursor slots.
   private passGeneration: number | null = null;
+  private privatePlacementGeneration: number | null = null;
+  private privatePlacementProbeGeneration: number | null = null;
   // One owner_user_id backfill probe per session (see backfillNoteOwners).
   private ownerBackfillChecked = false;
   // Whether the API keeps note revisions; null until a pulled row or the
@@ -743,10 +701,6 @@ export class SyncService {
   // Set by any pass that actually moves team or shared content; drives the
   // ambient team-only backoff (see shouldRunAmbientTeamOnlyPass).
   private teamPassMovedWork = false;
-  // The cloud private notes import running for each account, and the wait a
-  // failed one left (D29).
-  private privateNotesImports = new Map<string, Promise<PrivateNotesImportResult>>();
-  private privateNotesImportWaits = new Map<string, PrivateNotesImportWait>();
   // Set when the current shared dictionary pass changed the mirror or hides.
   private sharedDictionaryPassChanged = false;
   // The auth generation a plain 404 answered the shared dictionary routes
@@ -923,6 +877,12 @@ export class SyncService {
   // A deleted account's sync bookkeeping; it holds ids and timestamps only.
   forgetAccount(accountId: string): void {
     localStorage.removeItem(`${SYNC_CURSOR_SAVED_PREFIX}${accountId}`);
+    for (const prefix of [
+      "syncCursors.privateBackup:",
+      "syncCursors.privatePlacement:",
+      "syncCursors.privatePlacementCandidates:",
+    ])
+      localStorage.removeItem(`${prefix}${accountId}`);
     // While it is the cursor owner its cursors are the live ones, and the next
     // account's claim would file them back under its id.
     if (localStorage.getItem(SYNC_CURSOR_ACCOUNT_KEY) === accountId) {
@@ -1174,7 +1134,7 @@ export class SyncService {
   }
 
   async syncAll(waitForLock = false): Promise<void> {
-    const full = this.canSync();
+    let full = this.canSync();
     if (!full && !this.canSyncTeamSpaces()) return;
     const accountId = getAuthRequestContextSnapshot().sessionUserId;
     const authGeneration = getValidatedAuthGeneration();
@@ -1204,12 +1164,23 @@ export class SyncService {
         let personalSucceeded = true;
         if (!this.passIsCurrent()) return;
         this.dropFastClockCursors();
+        full = this.canSync();
         if (full) {
+          const personalCursorVersion = `syncCursors.privateBackup:${accountId}`;
+          if (localStorage.getItem(personalCursorVersion) !== "1") {
+            localStorage.removeItem("lastSyncedAt.notes");
+            localStorage.setItem("lastSyncedAt.folders", FEED_START);
+            localStorage.setItem(personalCursorVersion, "1");
+          }
           await this.backfillUnownedCursors(accountId);
+          if (!this.passIsCurrent()) return;
+          await this.backfillPrivatePlacement(accountId, authGeneration);
           if (!this.passIsCurrent()) return;
           await this.syncFolders();
           if (!this.passIsCurrent()) return;
           await this.syncNotes();
+          if (!this.passIsCurrent()) return;
+          await this.relocatePulledPrivateWorkspaces(accountId, authGeneration);
           if (!this.passIsCurrent()) return;
           await this.syncConversations();
           if (!this.passIsCurrent()) return;
@@ -1234,10 +1205,6 @@ export class SyncService {
           if (!this.passIsCurrent()) return;
           await this.syncNotes(true);
         }
-        if (!this.passIsCurrent()) return;
-        // Once per account, Backup or not: the cloud's private notes come to
-        // this device, which keeps them from then on (D2).
-        await this.importCloudPrivateNotes(accountId);
         if (!this.passIsCurrent()) return;
         if (personalSucceeded && sharedResult !== "failed" && (full || sharedResult === "synced")) {
           useSharedDictionaryStore.getState().markSynced(dictionaryGeneration);
@@ -1478,33 +1445,41 @@ export class SyncService {
   }
 
   private async pushFolder(id: number): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    await this.ensurePrivatePlacementCapability();
     const folders = (await window.electronAPI.getFolders?.()) ?? [];
     const folder = folders.find((f) => f.id === id);
     if (!folder) return;
 
     const ctx = await this.buildSpaceContext();
-    // Private folders never reach the cloud (D2).
-    if (!isTeamRow(folder, ctx)) return this.keepPrivateFolderLocal(folder);
     const scope = this.resolvePushScope("folder", folder, ctx);
     if (!scope) return;
 
     if (folder.cloud_id) {
       try {
-        await FoldersService.update(folder.cloud_id, {
-          name: folder.name,
-          sort_order: folder.sort_order,
-          ...scope,
-        });
+        await FoldersService.update(
+          folder.cloud_id,
+          {
+            name: folder.name,
+            sort_order: folder.sort_order,
+            ...scope,
+          },
+          authGeneration
+        );
         // Settle like the batch path: a delivered row left pending would both
         // block its notes' pushes (blockedFolderIds) and re-PATCH stale state
         // over a teammate's newer rename on the next pass. Guarded settle: a
         // rename landing mid-flight stays pending so it still pushes (a blind
         // settle would let the next pull's LWW revert it).
-        await window.electronAPI.markFolderSyncedIfUnchanged?.(folder.id, folder, folder.cloud_id);
+        await window.electronAPI.markFolderSyncedIfUnchanged?.(
+          folder.id,
+          folder,
+          folder.cloud_id,
+          authGeneration
+        );
       } catch (err) {
-        if (isPersonalNotesOnDeviceError(err)) {
-          return;
-        } else if (isFolderNameTakenError(err)) {
+        if (isFolderNameTakenError(err)) {
           this.dispatchFolderNameTaken(folder.name);
         } else if (isPermissionDenialError(err)) {
           await this.handleDeniedFolderUpdate(folder, ctx);
@@ -1524,20 +1499,7 @@ export class SyncService {
         }
       }
     } else {
-      try {
-        await this.createCloudFolder(folder, scope);
-      } catch (err) {
-        if (!isPersonalNotesOnDeviceError(err)) throw err;
-      }
-    }
-  }
-
-  // A private folder that left a team before Private stayed on the device
-  // still holds the team's cloud identity; any other private folder has
-  // nothing to do with the cloud.
-  private async keepPrivateFolderLocal(folder: FolderItem): Promise<void> {
-    if (privateFolderSync(folder) === "detach") {
-      await window.electronAPI.forkFolderIdentity?.(folder.id);
+      await this.createCloudFolder(folder, scope, authGeneration);
     }
   }
 
@@ -1545,21 +1507,29 @@ export class SyncService {
   // isolation fallback. On a same-name collision the API returns the WINNER's
   // existing row; adopt its identity (as the batch path does) so later pulls
   // of that row match this folder instead of inserting a colliding duplicate.
-  private async createCloudFolder(folder: FolderItem, scope: PushScopeFields): Promise<void> {
-    const cloud = await FoldersService.create({
-      name: folder.name,
-      client_folder_id: folder.client_folder_id,
-      is_default: !!folder.is_default,
-      sort_order: folder.sort_order,
-      ...scope,
-    });
+  private async createCloudFolder(
+    folder: FolderItem,
+    scope: PushScopeFields,
+    authGeneration: number
+  ): Promise<void> {
+    const cloud = await FoldersService.create(
+      {
+        name: folder.name,
+        client_folder_id: folder.client_folder_id,
+        is_default: !!folder.is_default,
+        sort_order: folder.sort_order,
+        ...scope,
+      },
+      authGeneration
+    );
     await window.electronAPI.acknowledgeFolderCreate?.(
       folder.id,
       folder,
       folder.cloud_id,
       cloud.client_folder_id ?? folder.client_folder_id,
       cloud.id,
-      cloud.updated_at
+      cloud.updated_at,
+      authGeneration
     );
   }
 
@@ -1576,19 +1546,20 @@ export class SyncService {
   }
 
   private async pushNote(id: number): Promise<void> {
-    const denied = await this.withNotePushLock(id, () => this.pushNoteLocked(id));
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    await this.ensurePrivatePlacementCapability();
+    const denied = await this.withNotePushLock(id, () => this.pushNoteLocked(id, authGeneration));
     // Its restoring pull waits on note locks, so it runs once this one is free.
     if (denied) await this.restoreDeniedRows("note");
   }
 
   // Returns true when the server refused the edit and denied rows need restoring.
-  private async pushNoteLocked(id: number): Promise<boolean> {
+  private async pushNoteLocked(id: number, authGeneration: number): Promise<boolean> {
     const note = await window.electronAPI.getNote?.(id);
     // Synced: a pass sent it while this push waited for the lock.
     if (!note || note.sync_status === "synced") return false;
     const ctx = await this.buildSpaceContext();
-    const teamRow = isTeamRow(note, ctx);
-    if (!teamRow && !(await this.settlePrivateNote(note))) return false;
     if (!(await this.settleOwnNoteConflict(note))) {
       // An unresolved conflict: the editor's debounced push would auto-resolve
       // it as local-wins (or 409-spam) before the user chose Keep or Refresh.
@@ -1604,7 +1575,7 @@ export class SyncService {
     }
 
     const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
-    if (teamRow && note.folder_id && blockedFolderIds.has(note.folder_id)) {
+    if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
       // The folder's own changes haven't landed (e.g. a cross-space move that
       // 409'd on a name conflict): the server would reject this note's
       // folder_id as out of scope. Stay pending; the note retries after the
@@ -1613,13 +1584,14 @@ export class SyncService {
     }
     const scope = this.resolvePushScope("note", note, ctx);
     if (!scope) return false;
-    const cloudFolderId = pushedFolderId(note, teamRow, localToCloud);
+    const cloudFolderId = pushedFolderId(note, localToCloud);
 
     try {
       if (note.cloud_id) {
         const cloud = await NotesService.update(
           note.cloud_id,
-          this.notePushPayload(note, cloudFolderId, scope)
+          this.notePushPayload(note, cloudFolderId, scope),
+          authGeneration
         );
         // Settle only if the row wasn't edited while the PATCH was in flight;
         // a blind settle would leave the delivered snapshot pending and let a
@@ -1631,16 +1603,13 @@ export class SyncService {
           cloud.updated_at,
           cloud.user_id ?? null,
           cloud.revision ?? null,
-          cloud
+          cloud,
+          authGeneration
         );
       } else {
-        await this.createCloudNote(note, cloudFolderId, scope);
+        await this.createCloudNote(note, cloudFolderId, scope, authGeneration);
       }
     } catch (err) {
-      if (isPersonalNotesOnDeviceError(err)) {
-        await this.endStaleShare(note, ctx);
-        return;
-      }
       if (isNoteVersionConflictError(err)) {
         // Another device wrote first. The row stays pending and the banner
         // asks the user to Refresh or Keep; no requestSyncAll echo.
@@ -1675,12 +1644,55 @@ export class SyncService {
   // Single-note create shared by the debounced push and the batch-create
   // isolation fallback. The returned row carries the server-assigned owner
   // (user_id), persisted so the UI can tell "my note" from a teammate's.
+  private async renewTeamPublicationFromPersonalTombstone(
+    note: NoteItem,
+    cloud: CloudNoteCreateResult,
+    generation: number
+  ): Promise<boolean> {
+    await assertAuthGenerationCurrent(generation);
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    if (
+      !accountId ||
+      generation == null ||
+      !cloud.deleted_at ||
+      cloud.access_removed ||
+      cloud.space_id !== null ||
+      cloud.workspace_id !== null ||
+      cloud.user_id !== accountId ||
+      cloud.client_note_id !== note.client_note_id ||
+      (note.cloud_id && note.cloud_id !== cloud.id) ||
+      note.sync_status === "synced" ||
+      note.deleted_at ||
+      note.folder_delete_pending
+    )
+      return false;
+    const result = await window.electronAPI.renewNoteCloudIdentity?.(
+      note.id,
+      note.client_note_id,
+      note.cloud_id,
+      note.space_id,
+      generation
+    );
+    await assertAuthGenerationCurrent(generation);
+    if (!result?.success) return false;
+    this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
+    await this.settleNoteConflict(note.client_note_id);
+    if (this.syncing) this.syncAllPending = true;
+    else this.requestSyncAll("retry");
+    return true;
+  }
+
   private async acknowledgeCloudNoteCreate(
     note: NoteItem,
-    cloud: CloudNoteCreateResult
+    cloud: CloudNoteCreateResult,
+    authGeneration: number
   ): Promise<void> {
-    const outcome = await resolveRendererCloudNoteCreate(note, cloud, (cloudId) =>
-      NotesService.delete(cloudId)
+    if (await this.renewTeamPublicationFromPersonalTombstone(note, cloud, authGeneration)) return;
+    const outcome = await resolveRendererCloudNoteCreate(
+      note,
+      cloud,
+      (cloudId) => NotesService.delete(cloudId, authGeneration),
+      { expectedAuthGeneration: authGeneration }
     );
     if (outcome === "write-rejected" || outcome === "awaiting-cloud") this.requestSyncAll("retry");
   }
@@ -1688,36 +1700,39 @@ export class SyncService {
   private async createCloudNote(
     note: NoteItem,
     cloudFolderId: string | null,
-    scope: PushScopeFields
+    scope: PushScopeFields,
+    authGeneration: number
   ): Promise<void> {
-    const recorded = await recordNoteCreateAttempts([note.client_note_id]);
+    const recorded = await recordNoteCreateAttempts([note.client_note_id], authGeneration);
     if (!recorded.has(note.client_note_id)) return;
-    const cloud = await NotesService.create({
-      client_note_id: note.client_note_id,
-      ...buildNoteCreatePayload(note, cloudFolderId),
-      ...scope,
-      created_at: note.created_at,
-    });
-    await this.acknowledgeCloudNoteCreate(note, cloud);
+    if (!scope.space_id && !this.canSync() && !note.is_shared && !(note.left_team && note.cloud_id))
+      return;
+    const cloud = await NotesService.create(
+      {
+        client_note_id: note.client_note_id,
+        ...buildNoteCreatePayload(note, cloudFolderId),
+        ...scope,
+        created_at: note.created_at,
+      },
+      authGeneration
+    );
+    await this.acknowledgeCloudNoteCreate(note, cloud, authGeneration);
   }
 
   // Batch-create fallback row push: recognized terminal rejections settle the
-  // row by forking it into Private, where it stays on this device; anything
+  // row by forking it into Private, with a fresh identity; anything
   // else re-queues as 'error'.
   private async pushFreshNote(
     note: NoteItem,
     scope: PushScopeFields,
     cloudFolderId: string | null,
-    ctx: SpaceSyncContext
+    ctx: SpaceSyncContext,
+    authGeneration: number
   ): Promise<void> {
     try {
-      await this.createCloudNote(note, cloudFolderId, scope);
+      await this.createCloudNote(note, cloudFolderId, scope, authGeneration);
     } catch (err) {
       if (isAuthContextError(err)) throw err;
-      if (isPersonalNotesOnDeviceError(err)) {
-        await this.endStaleShare(note, ctx);
-        return;
-      }
       if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
         await this.handleRevokedNotePush(note, ctx);
         this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
@@ -1728,23 +1743,15 @@ export class SyncService {
   }
 
   // Sharing requires a cloud copy. Deliberate single-note push that does not
-  // depend on the global backup toggle; returns the note's cloud id. A private
-  // note is shared by moving it to a teamspace (D10), so one is refused with
-  // PRIVATE_NOTE_NOT_SYNCABLE, unless it was shared before and so still has
-  // its cloud copy. A copy this device made for an unshared note while Backup
-  // covered notes doesn't count: sharing it would start a new share.
+  // depend on the global backup toggle; returns the note's cloud id.
   async ensureNoteSynced(localId: number): Promise<string | null> {
     const note = await window.electronAPI.getNote?.(localId);
     if (!note) return null;
-    if (!isTeamRow(note, await this.buildSpaceContext())) {
-      if (!isLegacySharedPrivateNote(note)) throw new PrivateNoteNotSyncableError();
-      return note.cloud_id;
-    }
-    if (note.cloud_id) return note.cloud_id;
+    if (note.cloud_id && note.sync_status === "synced") return note.cloud_id;
     if (!this.canSyncSharedNotes()) return null;
     await this.pushNote(localId);
     const synced = await window.electronAPI.getNote?.(localId);
-    return synced?.cloud_id ?? null;
+    return synced?.sync_status === "synced" ? (synced.cloud_id ?? null) : null;
   }
 
   private async acknowledgeConversationCreate(
@@ -1998,14 +2005,14 @@ export class SyncService {
     if (!this.canSyncTeamSpaces()) return true;
     let cloudSpaces: MySpace[];
     try {
-      cloudSpaces = await SpacesService.mySpaces();
-      await assertAuthGenerationCurrent(authGeneration);
+      cloudSpaces = await this.readSpacesWithCapabilities(authGeneration);
     } catch (err) {
       if (isAuthContextError(err)) throw err;
       // 404 = endpoint not deployed yet (rollout probe): remember and skip
       // silently so pulls and pushes stay personal-only until a probe succeeds.
       if (isHttpStatus(err, 404)) {
         this.cacheTeamSpacesCapability(false);
+        this.privatePlacementGeneration = null;
         return true;
       }
       console.error("Spaces fetch failed:", err);
@@ -2070,6 +2077,164 @@ export class SyncService {
     return true;
   }
 
+  private async readSpacesWithCapabilities(authGeneration: number): Promise<MySpace[]> {
+    try {
+      const snapshot = await SpacesService.mySpacesSnapshot();
+      await assertAuthGenerationCurrent(authGeneration);
+      this.privatePlacementProbeGeneration = authGeneration;
+      this.privatePlacementGeneration =
+        snapshot.private_workspace_placement === true ? authGeneration : null;
+      return snapshot.data;
+    } catch (error) {
+      if (isHttpStatus(error, 404)) {
+        await assertAuthGenerationCurrent(authGeneration);
+        this.privatePlacementProbeGeneration = authGeneration;
+        this.privatePlacementGeneration = null;
+      }
+      throw error;
+    }
+  }
+
+  private async ensurePrivatePlacementCapability(): Promise<void> {
+    const generation = getValidatedAuthGeneration();
+    if (generation == null || generation === this.privatePlacementProbeGeneration) return;
+    try {
+      await this.readSpacesWithCapabilities(generation);
+    } catch (error) {
+      if (!isHttpStatus(error, 404)) throw error;
+    }
+  }
+
+  private hasPrivatePlacementCapability(): boolean {
+    return (
+      this.privatePlacementGeneration !== null &&
+      this.privatePlacementGeneration === getValidatedAuthGeneration()
+    );
+  }
+
+  private placementBackfillComplete(): boolean {
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    return !!accountId && localStorage.getItem(`syncCursors.privatePlacement:${accountId}`) === "1";
+  }
+
+  private async privatePlacementCandidates(
+    authGeneration: number
+  ): Promise<PrivatePlacementBackupCandidates | null> {
+    await assertAuthGenerationCurrent(authGeneration);
+    const accountId = getAuthRequestContextSnapshot().sessionUserId;
+    if (!accountId || !this.canSync()) return null;
+    const key = `syncCursors.privatePlacementCandidates:${accountId}`;
+    const parse = (stored: string): PrivatePlacementBackupCandidates => {
+      const candidates = JSON.parse(stored) as PrivatePlacementBackupCandidates;
+      if (
+        !Array.isArray(candidates.notes) ||
+        !candidates.notes.every((id) => typeof id === "string") ||
+        !Array.isArray(candidates.folders) ||
+        !candidates.folders.every((id) => typeof id === "string")
+      ) {
+        throw new Error("Invalid Private placement backfill candidates");
+      }
+      return candidates;
+    };
+    const stored = localStorage.getItem(key);
+    if (stored !== null) return parse(stored);
+    const candidates =
+      await window.electronAPI.getPrivatePlacementBackupCandidates?.(authGeneration);
+    await assertAuthGenerationCurrent(authGeneration);
+    if (!candidates || "stale" in candidates || !this.canSync()) return null;
+    // Another window may have captured before it restored rows during the IPC await.
+    const first = localStorage.getItem(key);
+    if (first !== null) return parse(first);
+    // Keep the original local rows through failed pulls and delayed default binding.
+    // Rows restored afterwards have no evidence of a user-chosen local placement.
+    if (!this.placementBackfillComplete()) localStorage.setItem(key, JSON.stringify(candidates));
+    return candidates;
+  }
+
+  private async backfillPrivatePlacement(accountId: string, authGeneration: number): Promise<void> {
+    if (
+      !this.hasPrivatePlacementCapability() ||
+      this.placementBackfillComplete() ||
+      !this.canSync()
+    )
+      return;
+    const candidates = await this.privatePlacementCandidates(authGeneration);
+    if (!candidates || this.placementBackfillComplete()) return;
+    // Read current cloud text before queueing clean local rows for metadata-only writes.
+    if (!(await this.pullFolders(false, true)) || !(await this.pullNotes(false, true))) return;
+    if (!this.canSync()) return;
+    await assertAuthGenerationCurrent(authGeneration);
+    const queued = await window.electronAPI.queuePrivatePlacementBackup?.(
+      authGeneration,
+      candidates
+    );
+    await assertAuthGenerationCurrent(authGeneration);
+    if (queued?.success && this.canSync()) {
+      localStorage.setItem(`syncCursors.privatePlacement:${accountId}`, "1");
+      localStorage.removeItem(`syncCursors.privatePlacementCandidates:${accountId}`);
+    }
+  }
+
+  private async relocatePulledPrivateWorkspaces(
+    accountId: string,
+    authGeneration: number
+  ): Promise<void> {
+    const state = useWorkspaceStore.getState();
+    if (!state.loaded || state.error || state.listAccountId !== accountId || !this.canSync())
+      return;
+    const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
+    await assertAuthGenerationCurrent(authGeneration);
+    const lost = spaces.filter(
+      (space) =>
+        space.kind === "private" &&
+        space.account_id === accountId &&
+        space.workspace_id &&
+        space.workspace_id !== state.defaultWorkspaceId &&
+        !space.is_default_private &&
+        !state.workspaces.some((workspace) => workspace.id === space.workspace_id)
+    );
+    await relocateLostWorkspaces(
+      lost.map((space) => space.workspace_id!),
+      () => this.canSync() && getValidatedAuthGeneration() === authGeneration
+    );
+    if (lost.length > 0) {
+      const remaining = (await window.electronAPI.getSpaces?.()) ?? [];
+      await assertAuthGenerationCurrent(authGeneration);
+      if (lost.some((space) => !remaining.some((current) => current.id === space.id)))
+        this.syncAllPending = true;
+    }
+  }
+
+  private async personalSpaceForCloudRow(
+    cloud: { private_workspace_id?: string | null },
+    localSpaceId: number | undefined,
+    ctx: SpaceSyncContext,
+    authGeneration: number
+  ): Promise<SpaceItem | null> {
+    if (cloud.private_workspace_id) {
+      const known = [...ctx.byId.values()].find(
+        (space) => space.kind === "private" && space.workspace_id === cloud.private_workspace_id
+      );
+      if (known) return known;
+      await assertAuthGenerationCurrent(authGeneration);
+      const id = await window.electronAPI.getPrivateSpaceId?.(
+        cloud.private_workspace_id,
+        authGeneration
+      );
+      await assertAuthGenerationCurrent(authGeneration);
+      if (id != null) {
+        const fresh = await this.buildSpaceContext();
+        ctx.byId = fresh.byId;
+        ctx.byCloudSpaceId = fresh.byCloudSpaceId;
+        return ctx.byId.get(id) ?? null;
+      }
+      return null;
+    }
+    const known = localSpaceId === undefined ? undefined : ctx.byId.get(localSpaceId);
+    if (cloud.private_workspace_id == null && known?.kind === "private") return known;
+    return this.defaultPrivateSpace(ctx, authGeneration);
+  }
+
   private async buildSpaceContext(): Promise<SpaceSyncContext> {
     const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
     return {
@@ -2081,13 +2246,16 @@ export class SyncService {
     };
   }
 
-  // The account's default Private, where a personal cloud row this device
-  // applies is filed (D14): the cloud has one personal space, and the active
-  // workspace's Private is only the one on screen. Main may make the row (its
-  // pending default) as it answers, so an unlisted id reads the spaces again.
-  private async defaultPrivateSpace(ctx: SpaceSyncContext): Promise<SpaceItem | null> {
+  // Personal rows without a workspace association land in the default Private.
+  // Main may create its pending row while answering, so refresh an unlisted id.
+  private async defaultPrivateSpace(
+    ctx: SpaceSyncContext,
+    authGeneration?: number
+  ): Promise<SpaceItem | null> {
     if (ctx.defaultPrivateSpace !== undefined) return ctx.defaultPrivateSpace;
-    const id = await window.electronAPI.getDefaultPrivateSpaceId?.();
+    if (authGeneration !== undefined) await assertAuthGenerationCurrent(authGeneration);
+    const id = await window.electronAPI.getDefaultPrivateSpaceId?.(authGeneration);
+    if (authGeneration !== undefined) await assertAuthGenerationCurrent(authGeneration);
     if (id != null && !ctx.byId.has(id)) {
       const fresh = await this.buildSpaceContext();
       ctx.byId = fresh.byId;
@@ -2139,9 +2307,18 @@ export class SyncService {
   private pushScopeFields(space: SpaceItem | undefined): PushScopeFields | null {
     if (space?.kind === "team") {
       if (!space.cloud_space_id || !this.hasTeamSpacesCapability()) return null;
-      return { workspace_id: space.workspace_id, space_id: space.cloud_space_id };
+      return {
+        workspace_id: space.workspace_id,
+        space_id: space.cloud_space_id,
+        ...(this.hasPrivatePlacementCapability() ? { private_workspace_id: null } : {}),
+      };
     }
-    return this.hasTeamSpacesCapability() ? { workspace_id: null, space_id: null } : {};
+    return {
+      ...(this.hasTeamSpacesCapability() ? { workspace_id: null, space_id: null } : {}),
+      ...(this.hasPrivatePlacementCapability()
+        ? { private_workspace_id: space?.workspace_id ?? null }
+        : {}),
+    };
   }
 
   // Resolves every note/folder push through the same two gates. Retractions
@@ -2154,7 +2331,15 @@ export class SyncService {
   ): PushScopeFields | null {
     if (row.left_team && row.cloud_id && !this.hasTeamSpacesCapability()) return null;
 
-    const scope = this.pushScopeFields(ctx.byId.get(row.space_id));
+    const space = ctx.byId.get(row.space_id);
+    if (
+      space?.kind !== "team" &&
+      !this.canSync() &&
+      !(kind === "note" && (row as NoteItem).is_shared) &&
+      !(row.left_team && row.cloud_id)
+    )
+      return null;
+    const scope = this.pushScopeFields(space);
     if (!scope) {
       console.warn(`Skipping ${kind} ${row.id} push: its team space has no cloud team yet`);
     }
@@ -2165,8 +2350,7 @@ export class SyncService {
   // (plan §7.2). The server row (if any) stays the team's, but this pending
   // row carries unpushed work — it is here because a push was attempted — so
   // it survives as a private note with a forked identity, exactly like the
-  // pull-side access_removed stub; never destroy the edits. Private notes
-  // never upload (D2), so the fork stays on this device.
+  // pull-side access_removed stub; never destroy the edits. Personal Backup consent governs later uploads of the fork.
   private async handleRevokedNotePush(note: NoteItem, ctx: SpaceSyncContext): Promise<void> {
     const spaceName = ctx.byId.get(note.space_id)?.name ?? null;
     const privateSpaceId = await this.forkPrivateSpaceId(note.space_id, ctx);
@@ -2189,33 +2373,6 @@ export class SyncService {
     const workspaceId = space?.workspace_id ?? null;
     const id = workspaceId ? await window.electronAPI.getPrivateSpaceId?.(workspaceId) : null;
     return id ?? (await this.defaultPrivateSpace(ctx))?.id ?? null;
-  }
-
-  // Settles a private note a push read, and answers whether it pushes: only a
-  // legacy shared one does (D10). One that left a team before this change is
-  // first cut loose from the team's row (detachFromTeam); nothing else changes.
-  private async settlePrivateNote(note: NoteItem): Promise<boolean> {
-    const action = privateNoteSync(note);
-    if (action === "detach") await this.detachFromTeam(note);
-    return action === "push";
-  }
-
-  // A private note that left a team before this change still holds the team's
-  // cloud identity and owes it a scope retraction, which would upload the note.
-  // It takes a new identity in place instead, so neither the retraction nor its
-  // later edits upload and the team keeps its copy, as Copy to Private does (D8).
-  private async detachFromTeam(note: NoteItem): Promise<void> {
-    await this.forkNoteToPrivate(note, note.space_id, "push", null);
-  }
-
-  // The server refuses a write to a personal note only when nobody else can
-  // reach it, so a refused private note's share has ended (unshared or revoked
-  // on another device). This device's flag is stale: dropping it takes the note
-  // out of the syncable queue and the push gate, or every edit and pass would
-  // resend the whole note to be refused again. The row stays pending, unmarked.
-  private async endStaleShare(note: NoteItem, ctx: SpaceSyncContext): Promise<void> {
-    if (isTeamRow(note, ctx) || !note.is_shared) return;
-    await window.electronAPI.updateNoteShareState?.(note.id, { is_shared: 0, share_token: null });
   }
 
   private readLocalRecord<T = number>(key: string): Record<string, T> {
@@ -2298,7 +2455,7 @@ export class SyncService {
   // A folder PATCH was rejected because its team is gone or access was
   // revoked: the server row moved to a scope we can't write, so retrying
   // would fail forever. Preserve the dirty folder in Private with a forked
-  // identity (plan §7.2); private folders never upload, so it stays here.
+  // identity (plan §7.2); later personal uploads require Backup consent.
   private async handleRevokedFolderPush(folder: FolderItem, ctx: SpaceSyncContext): Promise<void> {
     const privateSpaceId = await this.forkPrivateSpaceId(folder.space_id, ctx);
     if (privateSpaceId == null) return;
@@ -2468,7 +2625,7 @@ export class SyncService {
   }
 
   private async syncFolders(teamOnly = false): Promise<void> {
-    await this.pushPendingFolders();
+    await this.pushPendingFolders(teamOnly);
     if (!this.passIsCurrent()) return;
     await this.pushFolderDeletes(teamOnly);
     if (!this.passIsCurrent()) return;
@@ -2480,6 +2637,8 @@ export class SyncService {
   }
 
   private async pushFolderDeletes(teamOnly = false): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     let deletes = (await window.electronAPI.getPendingFolderDeletes?.()) ?? [];
     if (teamOnly && deletes.length > 0) {
       const { byId } = await this.buildSpaceContext();
@@ -2489,9 +2648,10 @@ export class SyncService {
     for (const f of deletes) {
       if (!f.cloud_id) continue;
       try {
-        await FoldersService.delete(f.cloud_id);
-        await window.electronAPI.hardDeleteFolder?.(f.id);
+        await FoldersService.delete(f.cloud_id, authGeneration);
+        await window.electronAPI.hardDeleteFolder?.(f.id, authGeneration);
       } catch (err) {
+        if (isAuthContextError(err)) throw err;
         if (isPermissionDenialError(err)) {
           await this.handleDeniedFolderDelete(f);
           denied = true;
@@ -2499,7 +2659,7 @@ export class SyncService {
           // An already-gone row or a space we can no longer access can never
           // be deleted by this client. Clear the local tombstone (and any
           // update-404 streak the row carried) instead of retrying forever.
-          await window.electronAPI.hardDeleteFolder?.(f.id);
+          await window.electronAPI.hardDeleteFolder?.(f.id, authGeneration);
           this.clear404(FOLDER_UPDATE_404_KEY, f.client_folder_id);
         } else {
           console.error("Folder delete sync failed:", err);
@@ -2509,19 +2669,17 @@ export class SyncService {
     if (denied) await this.restoreDeniedRows("folder");
   }
 
-  // Team folders only, whether or not Backup is on: private folders never
-  // reach the cloud (D2), so a full pass reads the team queue too.
-  private async pushPendingFolders(): Promise<void> {
-    const pending = (await window.electronAPI.getPendingFolders?.("team")) ?? [];
+  private async pushPendingFolders(teamOnly = false): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    await this.ensurePrivatePlacementCapability();
+    const pending =
+      (await window.electronAPI.getPendingFolders?.(teamOnly ? "team" : undefined)) ?? [];
     if (pending.length === 0) return;
 
     const ctx = await this.buildSpaceContext();
     const pushable: Array<{ folder: FolderItem; scope: PushScopeFields }> = [];
     for (const folder of pending) {
-      if (!isTeamRow(folder, ctx)) {
-        await this.keepPrivateFolderLocal(folder);
-        continue;
-      }
       const scope = this.resolvePushScope("folder", folder, ctx);
       if (!scope) continue;
       pushable.push({ folder, scope });
@@ -2533,18 +2691,26 @@ export class SyncService {
     let denied = false;
     for (const { folder, scope } of migration) {
       try {
-        await FoldersService.update(folder.cloud_id!, {
-          name: folder.name,
-          sort_order: folder.sort_order,
-          ...scope,
-        });
+        await FoldersService.update(
+          folder.cloud_id!,
+          {
+            name: folder.name,
+            sort_order: folder.sort_order,
+            ...scope,
+          },
+          authGeneration
+        );
         // Settle only if the row wasn't edited while the PATCH was in flight.
-        await window.electronAPI.markFolderSyncedIfUnchanged?.(folder.id, folder, folder.cloud_id!);
+        await window.electronAPI.markFolderSyncedIfUnchanged?.(
+          folder.id,
+          folder,
+          folder.cloud_id!,
+          authGeneration
+        );
         this.clear404(FOLDER_UPDATE_404_KEY, folder.client_folder_id);
       } catch (err) {
-        if (isPersonalNotesOnDeviceError(err)) {
-          // Stays pending as it is; the next pass looks at it again.
-        } else if (isFolderNameTakenError(err)) {
+        if (isAuthContextError(err)) throw err;
+        if (isFolderNameTakenError(err)) {
           // Leave the row pending; retried on the next pass. The 409 also
           // proves the folder is still accessible, so reset any 404 streak.
           this.dispatchFolderNameTaken(folder.name);
@@ -2573,9 +2739,10 @@ export class SyncService {
             is_default: !!folder.is_default,
             sort_order: folder.sort_order,
             ...scope,
-          }))
+          })),
+          authGeneration
         );
-        // Refused rows stay pending as they are (isPersonalNotesOnDeviceError).
+        // An unacknowledged row retains its local content and pending state.
         const refusedIds = new Set(refused.map((row) => row.client_folder_id));
         const accepted = fresh.filter(({ folder }) => !refusedIds.has(folder.client_folder_id));
         // created preserves the order of the rows the server accepted; the
@@ -2596,16 +2763,18 @@ export class SyncService {
             local.cloud_id,
             cloudFolder.client_folder_id ?? local.client_folder_id,
             cloudFolder.id,
-            cloudFolder.updated_at
+            cloudFolder.updated_at,
+            authGeneration
           );
         }
       } catch (err) {
+        if (isAuthContextError(err)) throw err;
         if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
           // A typed rejection can't be attributed to a row from the batch
           // response; create individually so one rejected folder settles
           // terminally without stranding (or relocating) the rest.
           for (const { folder, scope } of fresh) {
-            await this.pushFreshFolder(folder, scope, ctx);
+            await this.pushFreshFolder(folder, scope, ctx, authGeneration);
           }
         } else {
           console.error("Folder batch create failed:", err);
@@ -2615,19 +2784,19 @@ export class SyncService {
   }
 
   // Batch-create fallback row push: recognized terminal rejections settle the
-  // row by forking it into Private, where it stays on this device; anything
+  // row by forking it into Private, with a fresh identity; anything
   // else stays 'pending' for the next pass.
   private async pushFreshFolder(
     folder: FolderItem,
     scope: PushScopeFields,
-    ctx: SpaceSyncContext
+    ctx: SpaceSyncContext,
+    authGeneration: number
   ): Promise<void> {
     try {
-      await this.createCloudFolder(folder, scope);
+      await this.createCloudFolder(folder, scope, authGeneration);
     } catch (err) {
-      if (isPersonalNotesOnDeviceError(err)) {
-        // Stays pending as it is; the next pass looks at it again.
-      } else if (isFolderNameTakenError(err)) {
+      if (isAuthContextError(err)) throw err;
+      if (isFolderNameTakenError(err)) {
         this.dispatchFolderNameTaken(folder.name);
       } else if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
         await this.handleRevokedFolderPush(folder, ctx);
@@ -2638,22 +2807,29 @@ export class SyncService {
     }
   }
 
-  private async pullFolders(
-    teamOnly = false,
-    snapshot = false,
-    { includePersonal = false, importUnder }: PullOptions = {}
-  ): Promise<boolean> {
+  private async pullFolders(teamOnly = false, snapshot = false): Promise<boolean> {
     try {
+      const authGeneration = getValidatedAuthGeneration();
+      if (authGeneration == null || (!teamOnly && !this.canSync())) return false;
+      if (
+        !teamOnly &&
+        !this.placementBackfillComplete() &&
+        !(await this.privatePlacementCandidates(authGeneration))
+      )
+        return false;
       const cursorKey = teamOnly ? "lastSyncedAt.folders.team" : "lastSyncedAt.folders";
       const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
       const startedAtMs = Date.now();
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
       // Without a scope the list holds the account's personal rows alone.
-      const scope = teamCapable && importUnder === undefined ? "all" : undefined;
-      const { folders: cloudFolders } = await FoldersService.list(since, scope, importUnder);
-      // The import's rows are no team work (they'd keep team-only passes from backing off).
-      if (cloudFolders.length > 0 && importUnder === undefined) this.teamPassMovedWork = true;
-      const importWrite = importUnder !== undefined ? { newKeyIfTaken: true } : undefined;
+      const scope = teamCapable ? "all" : undefined;
+      const { folders: cloudFolders } = await FoldersService.list(
+        since,
+        scope,
+        authGeneration,
+        "no-store"
+      );
+      if (cloudFolders.length > 0) this.teamPassMovedWork = true;
       const ctx = await this.buildSpaceContext();
       // Parked or failed rows must retry: they hold the cursor back (and fail
       // a backfill) so one bad row never drops the rest of the delta.
@@ -2661,15 +2837,13 @@ export class SyncService {
 
       for (const cloudFolder of cloudFolders) {
         try {
-          stopIfSignInReplaced(importUnder);
-          // A folder an earlier import run stored under a key of its own (D28)
-          // is found by its cloud id, as notes are, so its pending or newer
-          // local state still wins.
+          stopIfSignInReplaced(authGeneration);
+          if (!teamOnly && !this.canSync()) return false;
+          // Cloud identity also finds rows whose local client key was preserved
+          // after a collision with an earlier import.
           const local =
             (await window.electronAPI.getFolderByClientId?.(cloudFolder.client_folder_id ?? "")) ??
-            (importUnder !== undefined
-              ? await window.electronAPI.getFolderByCloudId?.(cloudFolder.id)
-              : null);
+            (await window.electronAPI.getFolderByCloudId?.(cloudFolder.id));
 
           // Redacted stub: the folder moved out of one of our teams. Clean
           // local copies (folder and child notes) are no longer ours to keep;
@@ -2703,41 +2877,48 @@ export class SyncService {
                 console.warn(`Could not relocate revoked folder ${local.id}:`, result?.error);
               }
             } else {
-              await window.electronAPI.hardDeleteFolder?.(local.id);
+              await window.electronAPI.hardDeleteFolder?.(local.id, authGeneration);
               this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
             }
             continue;
           }
 
-          // Private folders stay on the device (D2): a personal row, tombstone
-          // included, changes no private folder. Outside the one-time import
-          // (includePersonal) it is applied only to a team copy, as the
-          // team→personal transition an older build made: otherwise a later
-          // edit's push would re-team the privatized folder. It lands in the
-          // default's Private (D14).
-          if (!cloudFolder.space_id && !includePersonal) {
+          // With Backup off, only an existing team row's transition to personal
+          // scope is applied; ordinary personal rows remain untouched.
+          if (teamOnly && !cloudFolder.space_id) {
             if (!local || local.deleted_at || !isTeamRow(local, ctx)) continue;
-            const privateSpace = await this.defaultPrivateSpace(ctx);
-            if (!privateSpace) continue;
             if (cloudFolder.deleted_at) {
-              await window.electronAPI.hardDeleteFolder?.(local.id);
+              await window.electronAPI.hardDeleteFolder?.(local.id, authGeneration);
               this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
             } else if (
               // Pending rows are never overwritten by pull (D2), here too.
               local.sync_status !== "pending" &&
               isCloudEntryNewer(cloudFolder.updated_at, local.updated_at)
             ) {
-              await window.electronAPI.upsertFolderFromCloud?.(
-                cloudFolder as unknown as Record<string, unknown>,
-                privateSpace.id
+              const privateSpace = await this.personalSpaceForCloudRow(
+                cloudFolder,
+                local.space_id,
+                ctx,
+                authGeneration
               );
+              if (!privateSpace) {
+                parkedRows++;
+                continue;
+              }
+              const stored = await window.electronAPI.upsertFolderFromCloud?.(
+                cloudFolder as unknown as Record<string, unknown>,
+                privateSpace.id,
+                authGeneration
+              );
+              stopIfPullStale(stored);
+              if (!stored) parkedRows++;
             }
             continue;
           }
 
           if (cloudFolder.deleted_at) {
             if (local) {
-              await window.electronAPI.hardDeleteFolder?.(local.id);
+              await window.electronAPI.hardDeleteFolder?.(local.id, authGeneration);
               // A tombstone disambiguates a 404'd push as a genuine delete;
               // drop any streak so it can't resurrect the folder in Personal.
               this.clear404(FOLDER_UPDATE_404_KEY, local.client_folder_id);
@@ -2745,7 +2926,9 @@ export class SyncService {
             continue;
           }
 
-          const space = await this.resolveSpaceForCloudRow(cloudFolder.space_id, ctx);
+          const space = !cloudFolder.space_id
+            ? await this.personalSpaceForCloudRow(cloudFolder, local?.space_id, ctx, authGeneration)
+            : await this.resolveSpaceForCloudRow(cloudFolder.space_id, ctx);
           if (!space) {
             parkedRows++;
             console.warn(`Parking folder ${cloudFolder.id}: unknown space ${cloudFolder.space_id}`);
@@ -2782,7 +2965,7 @@ export class SyncService {
                   clientFolderId,
                   cloudFolder.id,
                   cloudFolder.updated_at,
-                  importUnder
+                  authGeneration
                 );
                 stopIfPullStale(result);
                 return result?.outcome === "synced" || result?.outcome === "pending";
@@ -2790,13 +2973,8 @@ export class SyncService {
               const adopted = await adopt(
                 cloudFolder.client_folder_id ?? nameMatch.client_folder_id
               );
-              // The import leaves no folder behind (D28). Another folder here
-              // may hold the cloud's key, so it keeps the folder's own.
-              if (
-                importUnder !== undefined &&
-                !adopted &&
-                !(await adopt(nameMatch.client_folder_id))
-              ) {
+              // A local key collision must not strand an otherwise matching row.
+              if (!adopted && !(await adopt(nameMatch.client_folder_id))) {
                 parkedRows++;
                 console.warn(`Parking folder ${cloudFolder.id}: no local folder took it`);
               }
@@ -2816,11 +2994,10 @@ export class SyncService {
             const stored = await window.electronAPI.upsertFolderFromCloud?.(
               cloudFolder as unknown as Record<string, unknown>,
               space.id,
-              importUnder,
-              importWrite
+              authGeneration
             );
             stopIfPullStale(stored);
-            if (importUnder !== undefined && !stored) {
+            if (!stored) {
               parkedRows++;
               console.warn(`Parking folder ${cloudFolder.id}: it wasn't stored`);
             }
@@ -2968,7 +3145,7 @@ export class SyncService {
     if (this.revisionBackfillChecked) return;
     try {
       const missing =
-        (await window.electronAPI.countNotesMissingRevision?.(teamOnly ? "team" : "syncable")) ?? 0;
+        (await window.electronAPI.countNotesMissingRevision?.(teamOnly ? "team" : undefined)) ?? 0;
       // An unanswered probe retries on the next pass.
       const supported = missing > 0 ? await this.noteRevisionsSupported() : false;
       if (supported === null) return;
@@ -2992,10 +3169,11 @@ export class SyncService {
     return this.noteRevisionsKnown;
   }
 
-  // A full pass also pushes legacy shared private notes ("syncable"); no other
-  // private note is ever read for upload (D2, D10).
   private async pushPendingNotes(teamOnly = false): Promise<void> {
-    const queue = teamOnly ? "team" : "syncable";
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    await this.ensurePrivatePlacementCapability();
+    const queue = teamOnly ? "team" : undefined;
     let pending = (await window.electronAPI.getPendingNotes?.(queue)) ?? [];
     // A conflict this device's own write left behind is no conflict: settle it
     // first, so the note pushes in this pass (see isStaleNoteConflict).
@@ -3042,19 +3220,21 @@ export class SyncService {
           ? this.stillPushable(note, queued.cloud_id, blockedFolderIds, ctx)
           : null;
         if (!note || !scope) return;
-        const teamRow = isTeamRow(note, ctx);
-        if (!teamRow && !(await this.settlePrivateNote(note))) return;
         try {
           // Carry the full content: a pending row may hold edits that never
           // reached the server (offline debounced pushes fail silently), and
           // this PATCH marks the row synced — settling it without content
           // would strand the edit locally and hand the next pull a stale-but-
           // newer cloud copy to overwrite it with.
-          const cloudFolderId = pushedFolderId(note, teamRow, localToCloud);
-          const cloud = await NotesService.update(note.cloud_id!, {
-            client_note_id: note.client_note_id,
-            ...this.notePushPayload(note, cloudFolderId, scope),
-          });
+          const cloudFolderId = pushedFolderId(note, localToCloud);
+          const cloud = await NotesService.update(
+            note.cloud_id!,
+            {
+              client_note_id: note.client_note_id,
+              ...this.notePushPayload(note, cloudFolderId, scope),
+            },
+            authGeneration
+          );
           // Settle only if the row wasn't edited while the PATCH was in flight.
           await window.electronAPI.markNoteSyncedIfUnchanged?.(
             note.id,
@@ -3063,14 +3243,13 @@ export class SyncService {
             cloud.updated_at,
             cloud.user_id ?? null,
             cloud.revision ?? null,
-            cloud
+            cloud,
+            authGeneration
           );
           this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
         } catch (err) {
           if (isAuthContextError(err)) throw err;
-          if (isPersonalNotesOnDeviceError(err)) {
-            await this.endStaleShare(note, ctx);
-          } else if (isNoteVersionConflictError(err)) {
+          if (isNoteVersionConflictError(err)) {
             // Stays pending (not error): unpushed local work awaiting the
             // user's Keep/Refresh choice; the registry gate above skips the
             // row on later passes so the 409 doesn't repeat. A 409 also proves
@@ -3107,37 +3286,36 @@ export class SyncService {
             const scope = note
               ? this.stillPushable(note, queued.cloud_id, blockedFolderIds, ctx)
               : null;
-            if (note && scope && (isTeamRow(note, ctx) || (await this.settlePrivateNote(note)))) {
+            if (note && scope) {
               unsent.push({ note, scope });
             }
           }
           const recorded = await recordNoteCreateAttempts(
-            unsent.map(({ note }) => note.client_note_id)
+            unsent.map(({ note }) => note.client_note_id),
+            authGeneration
           );
-          const chunk = unsent.filter(({ note }) => recorded.has(note.client_note_id));
+          const chunk = unsent.filter(
+            ({ note }) =>
+              recorded.has(note.client_note_id) && this.resolvePushScope("note", note, ctx)
+          );
           if (chunk.length === 0) return;
           try {
-            const { created, refused = [] } = await NotesService.batchCreate(
+            const { created } = await NotesService.batchCreate(
               chunk.map(({ note: n, scope }) => ({
                 client_note_id: n.client_note_id,
-                ...buildNoteCreatePayload(n, pushedFolderId(n, isTeamRow(n, ctx), localToCloud)),
+                ...buildNoteCreatePayload(n, pushedFolderId(n, localToCloud)),
                 created_at: n.created_at,
                 ...scope,
-              }))
+              })),
+              authGeneration
             );
             for (const cloud of created) {
               const local = chunk.find(({ note }) => note.client_note_id === cloud.client_note_id);
-              if (local) await this.acknowledgeCloudNoteCreate(local.note, cloud);
-            }
-            for (const row of refused) {
-              const local = chunk.find(({ note }) => note.client_note_id === row.client_note_id);
-              if (local) await this.endStaleShare(local.note, ctx);
+              if (local) await this.acknowledgeCloudNoteCreate(local.note, cloud, authGeneration);
             }
           } catch (err) {
             if (isAuthContextError(err)) throw err;
-            if (isPersonalNotesOnDeviceError(err)) {
-              for (const { note } of chunk) await this.endStaleShare(note, ctx);
-            } else if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
+            if (isSpaceAccessError(err) || isPermissionDenialError(err)) {
               // A typed rejection can't be attributed to a row from the batch
               // response; create individually so one rejected note settles
               // terminally without stranding (or relocating) the rest.
@@ -3145,8 +3323,9 @@ export class SyncService {
                 await this.pushFreshNote(
                   note,
                   scope,
-                  pushedFolderId(note, isTeamRow(note, ctx), localToCloud),
-                  ctx
+                  pushedFolderId(note, localToCloud),
+                  ctx,
+                  authGeneration
                 );
               }
             } else {
@@ -3182,7 +3361,7 @@ export class SyncService {
       // no revision waits for a pull to supply one.
       return null;
     }
-    if (isTeamRow(note, ctx) && note.folder_id && blockedFolderIds.has(note.folder_id)) {
+    if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
       // The folder's own changes haven't landed (e.g. a cross-space move
       // that 409'd on a name conflict): the server would reject the note's
       // folder_id as out of scope, stranding it in 'error'. Stay pending;
@@ -3196,17 +3375,20 @@ export class SyncService {
   // so deletes always propagate — even for notes never shared and with the
   // backup toggle off.
   private async pushNoteDeletes(): Promise<void> {
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
     const deletes = (await window.electronAPI.getPendingNoteDeletes?.()) ?? [];
     let denied = false;
     for (const note of deletes) {
       if (!note.cloud_id) continue;
       try {
-        await NotesService.delete(note.cloud_id);
-        await window.electronAPI.hardDeleteNote?.(note.id);
+        await NotesService.delete(note.cloud_id, authGeneration);
+        await window.electronAPI.hardDeleteNote?.(note.id, authGeneration);
         // A settled tombstone can never resolve a conflict; drop the entry
         // (and its full cloud snapshot) from the durable registry.
         await this.settleNoteConflict(note.client_note_id);
       } catch (err) {
+        if (isAuthContextError(err)) throw err;
         if (isPermissionDenialError(err)) {
           await this.handleDeniedNoteDelete(note);
           denied = true;
@@ -3214,7 +3396,7 @@ export class SyncService {
           // An already-gone row or a space we can no longer access can never
           // be deleted by this client. Clear the local tombstone (and any
           // update-404 streak the row carried) instead of retrying forever.
-          await window.electronAPI.hardDeleteNote?.(note.id);
+          await window.electronAPI.hardDeleteNote?.(note.id, authGeneration);
           this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
           await this.settleNoteConflict(note.client_note_id);
         } else {
@@ -3228,10 +3410,17 @@ export class SyncService {
   private async pullNotes(
     teamOnly = false,
     snapshot = false,
-    replayFeed = false,
-    { includePersonal = false, importUnder }: PullOptions = {}
+    replayFeed = false
   ): Promise<boolean> {
     try {
+      const authGeneration = getValidatedAuthGeneration();
+      if (authGeneration == null || (!teamOnly && !this.canSync())) return false;
+      if (
+        !teamOnly &&
+        !this.placementBackfillComplete() &&
+        !(await this.privatePlacementCandidates(authGeneration))
+      )
+        return false;
       const cursorKey = teamOnly ? "lastSyncedAt.notes.team" : "lastSyncedAt.notes";
       const since = snapshot
         ? undefined
@@ -3243,7 +3432,7 @@ export class SyncService {
       const { cloudToLocal, personalFolderIn } = await this.buildCloudToLocalFolderMap();
       const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
       // Without a scope the list holds the account's personal rows alone.
-      const scope = teamCapable && importUnder === undefined ? "all" : undefined;
+      const scope = teamCapable ? "all" : undefined;
 
       let cursor: string | undefined = since;
       let cursorId: string | undefined;
@@ -3251,22 +3440,47 @@ export class SyncService {
       // Conflicts are durable in the local registry and resolve directly from
       // their stored cloud copy, so they must not re-pull the whole delta.
       let parkedRows = 0;
-      const importWrite = importUnder !== undefined ? { newKeyIfTaken: true } : undefined;
       while (true) {
         const { notes: cloudNotes } = since
-          ? await NotesService.list(BATCH_SIZE, undefined, cursor, scope, cursorId, importUnder)
-          : await NotesService.list(BATCH_SIZE, cursor, undefined, scope, cursorId, importUnder);
+          ? await NotesService.list(
+              BATCH_SIZE,
+              undefined,
+              cursor,
+              scope,
+              cursorId,
+              authGeneration,
+              "no-store"
+            )
+          : await NotesService.list(
+              BATCH_SIZE,
+              cursor,
+              undefined,
+              scope,
+              cursorId,
+              authGeneration,
+              "no-store"
+            );
         if (cloudNotes.length === 0) break;
-        // The import's rows are no team work (they'd keep team-only passes from backing off).
-        if (importUnder === undefined) this.teamPassMovedWork = true;
+        this.teamPassMovedWork = true;
 
         for (const cloudNote of cloudNotes) {
           try {
-            stopIfSignInReplaced(importUnder);
+            stopIfSignInReplaced(authGeneration);
+            if (!teamOnly && !this.canSync()) return false;
             const local = await window.electronAPI.getNoteForCloudRow?.(
               cloudNote.client_note_id,
               cloudNote.id
             );
+
+            if (
+              local &&
+              (await this.renewTeamPublicationFromPersonalTombstone(
+                local,
+                cloudNote,
+                authGeneration
+              ))
+            )
+              continue;
 
             // An old delete must not take text this device hasn't pushed. Its
             // push gets a 404 and forks it into a note of its own.
@@ -3283,25 +3497,9 @@ export class SyncService {
               this.noteRevisionsKnown = hasNoteRevision(cloudNote.revision);
             }
 
-            // Private notes stay on the device (D2): a personal row, tombstone
-            // included, creates, changes or deletes no private note, except
-            // during the one-time import (includePersonal) and for a legacy
-            // shared note, whose guests' edits still arrive (D10). It is
-            // applied to a team copy as before: the team→personal transition
-            // an older build made.
             const personalRow = !cloudNote.space_id && !cloudNote.access_removed;
             const teamCopy = !!local && isTeamRow(local, ctx);
-            const legacyShared =
-              personalRow &&
-              !includePersonal &&
-              !!local &&
-              !teamCopy &&
-              isLegacySharedPrivateNote(local);
-            if (personalRow && !includePersonal && !teamCopy && !legacyShared) continue;
-            // Private folders never sync, so a personal row's folder is known
-            // only during the import: waiting for it elsewhere would park the
-            // row, and hold the cursor, for good.
-            const parksOnFolder = !personalRow || includePersonal;
+            const sharedPersonal = personalRow && !!local && isLegacySharedPrivateNote(local);
 
             // Copy the cloud owner before any last-write-wins decision: an
             // unchanged note skips the upsert but must still gain its owner
@@ -3329,7 +3527,7 @@ export class SyncService {
                   ctx.byCloudSpaceId.get(cloudNote.previous_space_id ?? "")?.name
                 );
               } else {
-                await window.electronAPI.hardDeleteNote?.(local.id);
+                await window.electronAPI.hardDeleteNote?.(local.id, authGeneration);
               }
               // The pull disambiguated a 404'd push as a revocation and resolved
               // it, so the fallback fork must stand down. Any unresolved
@@ -3348,28 +3546,34 @@ export class SyncService {
               continue;
             }
 
-            if (
-              teamOnly &&
-              personalRow &&
-              !includePersonal &&
-              !legacyShared &&
-              !local?.cloud_create_pending
-            ) {
+            if (teamOnly && personalRow && !sharedPersonal && !local?.cloud_create_pending) {
               // A personal row whose local copy still sits in a team space
               // announces a team→personal transition — apply it, or a later
-              // edit's push would re-team the privatized note. It lands in the
-              // default's Private (D14).
-              const privateSpace = local?.deleted_at ? null : await this.defaultPrivateSpace(ctx);
-              if (local && privateSpace) {
+              // edit's push would re-team the privatized note. An explicit
+              // owner-only workspace association determines its Private filing.
+              if (local && teamCopy && !local.deleted_at) {
                 if (cloudNote.deleted_at) {
-                  await window.electronAPI.hardDeleteNote?.(local.id);
+                  await window.electronAPI.hardDeleteNote?.(local.id, authGeneration);
                   await this.settleNoteConflict(local.client_note_id);
                 } else if (isCloudNoteNewer(cloudNote, local)) {
                   // 'error' rows carry unpushed work just like 'pending' ones.
                   if (local.sync_status !== "synced") {
                     await this.surfacePulledNoteConflict(local, cloudNote);
                   } else {
-                    await window.electronAPI.upsertNoteFromCloud?.(
+                    const privateSpace = await this.personalSpaceForCloudRow(
+                      cloudNote,
+                      local.space_id,
+                      ctx,
+                      authGeneration
+                    );
+                    if (
+                      !privateSpace ||
+                      (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id))
+                    ) {
+                      parkedRows++;
+                      continue;
+                    }
+                    const stored = await window.electronAPI.upsertNoteFromCloud?.(
                       cloudNote as unknown as Record<string, unknown>,
                       resolvePulledNoteFolderId(
                         cloudNote,
@@ -3377,8 +3581,11 @@ export class SyncService {
                         cloudToLocal,
                         personalFolderIn(privateSpace.id)
                       ),
-                      privateSpace.id
+                      privateSpace.id,
+                      authGeneration
                     );
+                    stopIfPullStale(stored);
+                    if (!stored) parkedRows++;
                   }
                 }
               }
@@ -3387,7 +3594,7 @@ export class SyncService {
 
             if (cloudNote.deleted_at) {
               if (local) {
-                await window.electronAPI.hardDeleteNote?.(local.id);
+                await window.electronAPI.hardDeleteNote?.(local.id, authGeneration);
                 // A tombstone disambiguates a 404'd push as a genuine delete;
                 // drop any streak so it can't resurrect the note in Personal,
                 // and settle any conflict so the registry doesn't keep the
@@ -3398,19 +3605,21 @@ export class SyncService {
               continue;
             }
 
-            // A legacy shared note stays where it is filed here: the cloud has
-            // one personal space and keeps no private folder (pushedFolderId).
-            const space =
-              legacyShared && local
-                ? (ctx.byId.get(local.space_id) ?? null)
-                : await this.resolveSpaceForCloudRow(cloudNote.space_id, ctx);
+            const personalSpaceId = personalRow
+              ? local && !teamCopy
+                ? local.space_id
+                : cloudToLocal.get(cloudNote.folder_id ?? "")?.space_id
+              : undefined;
+            const space = personalRow
+              ? await this.personalSpaceForCloudRow(cloudNote, personalSpaceId, ctx, authGeneration)
+              : await this.resolveSpaceForCloudRow(cloudNote.space_id, ctx);
             if (!space) {
               parkedRows++;
               console.warn(`Parking note ${cloudNote.id}: unknown space ${cloudNote.space_id}`);
               continue;
             }
             const localFolderId =
-              legacyShared && local
+              teamOnly && sharedPersonal && local
                 ? local.folder_id
                 : resolvePulledNoteFolderId(
                     cloudNote,
@@ -3419,7 +3628,9 @@ export class SyncService {
                     personalFolderIn(space.id)
                   );
             const folderUnknown =
-              parksOnFolder && !!cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id);
+              !(teamOnly && sharedPersonal) &&
+              !!cloudNote.folder_id &&
+              !cloudToLocal.has(cloudNote.folder_id);
 
             if (local?.deleted_at) continue;
             if (local?.cloud_create_pending) {
@@ -3434,6 +3645,7 @@ export class SyncService {
                 cloudNote.updated_at,
                 cloudNote.user_id ?? null,
                 {
+                  expectedAuthGeneration: authGeneration,
                   reconcilePending: true,
                   cloudNote,
                   cloudRevision: cloudNote.revision ?? null,
@@ -3441,6 +3653,7 @@ export class SyncService {
                   localSpaceId: space.id,
                 }
               );
+              stopIfPullStale(result);
               if (result?.outcome === "conflict") {
                 await this.surfaceNoteConflict(local.client_note_id, cloudNote);
               } else if (result?.outcome === "synced" || result?.outcome === "pending") {
@@ -3499,14 +3712,11 @@ export class SyncService {
                 cloudNote as unknown as Record<string, unknown>,
                 localFolderId,
                 space.id,
-                importUnder,
-                importWrite
+                authGeneration
               );
               stopIfPullStale(applied);
-              if (applied && "imported" in applied) continue;
-              // The import leaves no note behind (D28): one main didn't store
-              // holds the switch back.
-              if (importUnder !== undefined && !applied) {
+              // A failed local write must keep this row eligible for the next pull.
+              if (!applied) {
                 parkedRows++;
                 console.warn(`Parking note ${cloudNote.id}: it wasn't stored`);
                 continue;
@@ -3562,58 +3772,6 @@ export class SyncService {
       if (!isAuthContextError(err)) console.error("Note pull failed:", err);
       return false;
     }
-  }
-
-  // Brings the account's cloud private notes into its default Private once,
-  // then switches the account to device-only (privateNotesImport.ts). One run
-  // per account at a time: a call while one runs gets that run's result.
-  // syncAll calls it under its lock, once spaces have synced.
-  importCloudPrivateNotes(accountId: string): Promise<PrivateNotesImportResult> {
-    const running = this.privateNotesImports.get(accountId);
-    if (running) return running;
-    const run = this.runPrivateNotesImport(accountId).finally(() => {
-      this.privateNotesImports.delete(accountId);
-    });
-    this.privateNotesImports.set(accountId, run);
-    return run;
-  }
-
-  // Pinned to the sign-in that starts it: once that sign-in is replaced, main
-  // refuses its requests and its writes. Backup plays no part, a sign-in does.
-  private async runPrivateNotesImport(accountId: string): Promise<PrivateNotesImportResult> {
-    const authGeneration = getValidatedAuthGeneration();
-    if (authGeneration == null) return "failed";
-    const wait = this.privateNotesImportWaits.get(accountId);
-    if (isWaitingToImport(wait, authGeneration, Date.now())) return "failed";
-    const isCurrent = (): boolean =>
-      getValidatedAuthGeneration() === authGeneration &&
-      getAuthRequestContextSnapshot().sessionUserId === accountId &&
-      this.consent().shared;
-    // Snapshots: no cursor is read or moved, so the regular passes' deltas go
-    // on from where they were.
-    const pullOptions: PullOptions = { includePersonal: true, importUnder: authGeneration };
-    const outcome = await importCloudPrivateNotesOnce(accountId, {
-      isCurrent,
-      pushDeletes: async () => {
-        await this.pushFolderDeletes();
-        await this.pushNoteDeletes();
-      },
-      getState: () => PrivateNotesService.getState(authGeneration),
-      pull: async () =>
-        (await this.pullFolders(false, true, pullOptions)) &&
-        (await this.pullNotes(false, true, false, pullOptions)),
-      switchOnDevice: (pulledThrough) =>
-        PrivateNotesService.switchOnDevice(pulledThrough, authGeneration),
-      onSwitched: (state) => {
-        if (isCurrent()) {
-          this.emitSyncUiEvent("private-notes-on-device", { purgeAfter: state.purge_after });
-        }
-      },
-    });
-    const nextWait = nextImportWait(wait, authGeneration, outcome, Date.now());
-    if (nextWait) this.privateNotesImportWaits.set(accountId, nextWait);
-    else this.privateNotesImportWaits.delete(accountId);
-    return outcome === "unsupported" ? "failed" : outcome;
   }
 
   private async syncConversations(): Promise<void> {

@@ -313,8 +313,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   accountChangedSince: (occurredAt) => ipcRenderer.invoke("db-account-changed-since", occurredAt),
   hasUnclaimedLegacyRows: () => ipcRenderer.invoke("db-has-unclaimed-legacy-rows"),
   setActiveWorkspaceScope: (scope) => ipcRenderer.invoke("set-active-workspace-scope", scope),
-  getPrivateSpaceId: (workspaceId) => ipcRenderer.invoke("get-private-space-id", workspaceId),
-  getDefaultPrivateSpaceId: () => ipcRenderer.invoke("get-default-private-space-id"),
+  getPrivateSpaceId: (workspaceId, authGeneration) =>
+    ipcRenderer.invoke("get-private-space-id", workspaceId, authGeneration),
+  getDefaultPrivateSpaceId: (authGeneration) =>
+    ipcRenderer.invoke("get-default-private-space-id", authGeneration),
   bindDefaultPrivateSpace: (defaultWorkspaceId, accountId) =>
     ipcRenderer.invoke("bind-default-private-space", defaultWorkspaceId, accountId),
   copyNoteToSpace: (noteId, targetSpaceId, folderId) =>
@@ -1303,8 +1305,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
       expectedAuthGeneration,
       options
     ),
-  markNoteCreatesAttempted: (clientNoteIds) =>
-    ipcRenderer.invoke("db-mark-note-creates-attempted", clientNoteIds),
+  markNoteCreatesAttempted: (clientNoteIds, authGeneration) =>
+    ipcRenderer.invoke("db-mark-note-creates-attempted", clientNoteIds, authGeneration),
+  renewNoteCloudIdentity: (id, clientNoteId, cloudId, spaceId, authGeneration) =>
+    ipcRenderer.invoke(
+      "db-renew-note-cloud-identity",
+      id,
+      clientNoteId,
+      cloudId,
+      spaceId,
+      authGeneration
+    ),
+  getPrivatePlacementBackupCandidates: (authGeneration) =>
+    ipcRenderer.invoke("db-get-private-placement-backup-candidates", authGeneration),
+  queuePrivatePlacementBackup: (authGeneration, candidates) =>
+    ipcRenderer.invoke("db-queue-private-placement-backup", authGeneration, candidates),
   acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",
@@ -1322,7 +1337,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     cloudUpdatedAt,
     ownerUserId,
     cloudRevision,
-    cloudNote
+    cloudNote,
+    authGeneration
   ) =>
     ipcRenderer.invoke(
       "db-mark-note-synced-if-unchanged",
@@ -1332,7 +1348,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       cloudUpdatedAt,
       ownerUserId,
       cloudRevision,
-      cloudNote
+      cloudNote,
+      authGeneration
     ),
   setNoteCloudBase: (id, cloudUpdatedAt, cloudRevision, options) =>
     ipcRenderer.invoke("db-set-note-cloud-base", id, cloudUpdatedAt, cloudRevision, options),
@@ -1344,7 +1361,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   markNoteSyncError: (id) => ipcRenderer.invoke("db-mark-note-sync-error", id),
   restoreNoteAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-note-after-denied-delete", id),
-  hardDeleteNote: (id) => ipcRenderer.invoke("db-hard-delete-note", id),
+  hardDeleteNote: (id, authGeneration) =>
+    ipcRenderer.invoke("db-hard-delete-note", id, authGeneration),
 
   getPendingFolders: (spaceKind) => ipcRenderer.invoke("db-get-pending-folders", spaceKind),
   getFolderByClientId: (clientFolderId) =>
@@ -1377,13 +1395,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
       cloudUpdatedAt,
       expectedAuthGeneration
     ),
-  markFolderSyncedIfUnchanged: (id, snapshot, expectedCloudId) =>
-    ipcRenderer.invoke("db-mark-folder-synced-if-unchanged", id, snapshot, expectedCloudId),
+  markFolderSyncedIfUnchanged: (id, snapshot, expectedCloudId, authGeneration) =>
+    ipcRenderer.invoke(
+      "db-mark-folder-synced-if-unchanged",
+      id,
+      snapshot,
+      expectedCloudId,
+      authGeneration
+    ),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
   restoreFolderAfterDeniedDelete: (id) =>
     ipcRenderer.invoke("db-restore-folder-after-denied-delete", id),
-  hardDeleteFolder: (id) => ipcRenderer.invoke("db-hard-delete-folder", id),
+  hardDeleteFolder: (id, authGeneration) =>
+    ipcRenderer.invoke("db-hard-delete-folder", id, authGeneration),
   relocateRevokedFolder: (id, privateSpaceId, preserveFolder) =>
     ipcRenderer.invoke("db-relocate-revoked-folder", id, privateSpaceId, preserveFolder),
   forkFolderIdentity: (id) => ipcRenderer.invoke("db-fork-folder-identity", id),

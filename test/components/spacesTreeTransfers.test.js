@@ -387,10 +387,7 @@ test("a team note dropped on Private asks to copy it, then copies", async (t) =>
   assert.equal(tree.state.dialogs.length, 1);
   const dialog = tree.state.dialogs[0];
   assert.equal(dialog.title, "Copy to Private?");
-  assert.equal(
-    dialog.description,
-    "The note stays in Alpha. The copy is private and stays on this device."
-  );
+  assert.equal(dialog.description, "The note stays in Alpha.");
   assert.equal(dialog.confirmText, "Copy");
   assert.deepEqual(tree.state.calls, [], "nothing happens before the answer");
 

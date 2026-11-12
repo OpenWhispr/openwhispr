@@ -4,7 +4,7 @@ import type { Space } from '@/data/spacesTypes';
 import { fetchMySpaces } from '@/data/remote/spacesApi';
 import { fetchMyWorkspaces, type RemoteWorkspace } from '@/data/remote/workspacesApi';
 import { ApiError } from '@/lib/apiClient';
-import { setTeamSpacesCapability } from './teamSpacesCapability';
+import { setDefaultPrivateWorkspaceId, setTeamSpacesCapability } from './teamSpacesCapability';
 
 // Mirrors syncEngine.ts's isEndpointUnavailable: a missing/undeployed route
 // answers with 404 (not found), 405 (method not allowed behind a catch-all),
@@ -61,12 +61,14 @@ export async function syncSpaces(
     if (isEndpointUnavailable(err)) {
       // Backend predates team spaces: not an error, just the probe result.
       setTeamSpacesCapability(false);
+      setDefaultPrivateWorkspaceId(null);
       return { capable: false, activeSpaces: [], workspaces: null };
     }
     throw err;
   }
 
   setTeamSpacesCapability(true);
+  setDefaultPrivateWorkspaceId(remote.default_workspace_id ?? null);
 
   // Only reached once team spaces are known to exist, so accounts without them
   // never pay for this request.

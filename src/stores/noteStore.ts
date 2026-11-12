@@ -34,6 +34,7 @@ import {
   useWorkspaceStore,
 } from "./workspaceStore";
 import { readTeamSpacesCapability } from "../lib/teamSpacesCapability";
+import { assertAuthGenerationCurrent, getValidatedAuthGeneration } from "../lib/authRequestContext";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
   FolderItem,
@@ -1383,16 +1384,20 @@ export function useMigration(): { total: number; done: number } | null {
 }
 
 export async function startMigration(): Promise<void> {
+  if (!syncService.canSync()) return;
+  const authGeneration = getValidatedAuthGeneration();
+  if (authGeneration == null) return;
   const gen = ++migrationGeneration;
   const accountGen = accountGeneration;
+  const requestStillCurrent = (): boolean =>
+    accountGen === accountGeneration && getValidatedAuthGeneration() === authGeneration;
   const allNotes = (await window.electronAPI.getNotes(null, 9999, null)) ?? [];
+  await assertAuthGenerationCurrent(authGeneration);
   const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
-  if (gen !== migrationGeneration) return;
-  // Private notes stay on the device (D2), whatever Backup says: only a team
-  // note still waiting for its first upload is left for this to send, with the
-  // scope the team passes send (SyncService's pushScopeFields). Without it the
-  // server files the note as a personal one. A teamspace with no cloud id, or
-  // before a pass has confirmed the API takes teamspaces, waits for that pass.
+  await assertAuthGenerationCurrent(authGeneration);
+  if (gen !== migrationGeneration || !requestStillCurrent() || !syncService.canSync()) return;
+  // Private notes follow Backup consent. Team notes must carry their cloud
+  // scope so this upload sweep cannot file them as personal notes.
   const teamScopes = new Map(
     readTeamSpacesCapability()
       ? spaces
@@ -1400,7 +1405,14 @@ export async function startMigration(): Promise<void> {
           .map((s) => [s.id, { workspace_id: s.workspace_id, space_id: s.cloud_space_id }])
       : []
   );
-  const unsynced = allNotes.filter((n) => !n.cloud_id && teamScopes.has(n.space_id));
+  const privateScopes = new Map(
+    spaces
+      .filter((space) => space.kind === "private")
+      .map((space) => [space.id, { private_workspace_id: space.workspace_id ?? null }])
+  );
+  const unsynced = allNotes.filter(
+    (note) => !note.cloud_id && (privateScopes.has(note.space_id) || teamScopes.has(note.space_id))
+  );
   if (unsynced.length === 0) return;
 
   useNoteStore.setState({ migration: { total: unsynced.length, done: 0 } });
@@ -1409,12 +1421,17 @@ export async function startMigration(): Promise<void> {
   const CHUNK_SIZE = 50;
 
   for (let i = 0; i < unsynced.length; i += CHUNK_SIZE) {
-    if (gen !== migrationGeneration) return;
+    if (gen !== migrationGeneration || !requestStillCurrent() || !syncService.canSync()) break;
     const chunk = unsynced.slice(i, i + CHUNK_SIZE);
     try {
-      const recorded = await recordNoteCreateAttempts(chunk.map((n) => n.client_note_id));
+      const recorded = await recordNoteCreateAttempts(
+        chunk.map((n) => n.client_note_id),
+        authGeneration
+      );
+      await assertAuthGenerationCurrent(authGeneration);
       const sendable = chunk.filter((n) => recorded.has(n.client_note_id));
       if (sendable.length === 0) continue;
+      if (gen !== migrationGeneration || !requestStillCurrent() || !syncService.canSync()) break;
       const { created } = await NotesService.batchCreate(
         sendable.map((n) => ({
           client_note_id: n.client_note_id,
@@ -1429,8 +1446,9 @@ export async function startMigration(): Promise<void> {
           audio_duration_seconds: n.audio_duration_seconds,
           created_at: n.created_at,
           updated_at: n.updated_at,
-          ...teamScopes.get(n.space_id),
-        }))
+          ...(teamScopes.get(n.space_id) ?? privateScopes.get(n.space_id)),
+        })),
+        authGeneration
       );
       // A reset may invalidate the UI migration while the POST is in flight.
       // Still run every response through the atomic identity/snapshot guard so
@@ -1438,16 +1456,17 @@ export async function startMigration(): Promise<void> {
       await resolveRendererCloudNoteCreateBatch(
         sendable,
         created,
-        (cloudId) => NotesService.delete(cloudId),
+        (cloudId) => NotesService.delete(cloudId, authGeneration),
         // Migration POSTs intentionally omit transcript/diarization fields
         // and folder mapping. Adopt the id/base but leave the row pending so
         // SyncService follows with the complete PATCH.
         {
           settleIfUnchanged: false,
+          expectedAuthGeneration: authGeneration,
           // Starting a newer migration supersedes only this run's progress.
           // Both runs target the same account and idempotent cloud identity;
           // only an account reset makes the response an orphan to delete.
-          requestStillCurrent: () => accountGen === accountGeneration,
+          requestStillCurrent,
         }
       );
       if (gen !== migrationGeneration) return;

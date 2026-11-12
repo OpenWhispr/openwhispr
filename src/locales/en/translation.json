@@ -3054,10 +3054,9 @@
     },
     "privacy": {
       "cloudBackup": "Cloud backup",
-      "cloudBackupDescription": "Back up your transcriptions, chats, dictionary and snippets to the cloud for seamless access across devices.",
-      "cloudBackupTeamCaveat": "Private notes always stay on this device. Notes in teamspaces always sync.",
+      "cloudBackupDescription": "Back up your transcriptions and notes to the cloud for seamless access across devices.",
+      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting. Chats that use Private content stay on this device. Chats from earlier versions and chats restored from Backup are also excluded.",
       "cloudNotesMigration": "Backing up notes… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "All notes backed up",
       "description": "Control what data leaves your device. Everything is off by default.",
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
@@ -3755,7 +3754,7 @@
       "leave": {
         "title": "Leave {{name}}?",
         "body": "You'll lose access to this workspace, its teams, and its teamspaces. The workspace Owner or an Admin can invite you back.",
-        "privateNotes": "Your private notes in this workspace will move to {{workspace}} on this device.",
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}}.",
         "failed": "Couldn't leave {{name}}. Check your connection and try again."
       },
       "left": {
@@ -3765,7 +3764,7 @@
       "delete": {
         "title": "Delete {{name}}?",
         "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone.",
-        "privateNotes": "Your private notes in this workspace will move to {{workspace}} on this device."
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}}."
       },
       "deleting": {
         "title": "Deleting {{name}}…",
@@ -3870,7 +3869,7 @@
     "intro": {
       "workspace": {
         "title": "Your workspace is home base",
-        "body": "Everyone at your company works here. Your private notes stay on your device."
+        "body": "Everyone at your company works here. Your private notes stay private until you share them."
       },
       "teamspaces": {
         "title": "Share notes in teamspaces",
@@ -4024,7 +4023,7 @@
       "privateSpaces": "Private",
       "teamSpaces": "Teamspaces",
       "personal": "Private",
-      "privateTooltip": "Only you can see these notes. They stay on this device.",
+      "privateTooltip": "Only you can see the folders and notes here.",
       "newSpace": "New teamspace",
       "nameAndIconLabel": "Name and icon",
       "changeEmoji": "Change emoji",
@@ -4050,7 +4049,7 @@
       "moveToWorkspacePrivate": "Move to {{workspace}} › Private",
       "workspacePrivate": "{{workspace}} › Private",
       "confirmCopyTitle": "Copy to Private?",
-      "confirmCopy": "The note stays in {{space}}. The copy is private and stays on this device.",
+      "confirmCopy": "The note stays in {{space}}.",
       "copiedToPrivate": "Copied to Private",
       "couldNotCopyNote": "Couldn't copy note",
       "openCopy": "Open",
@@ -4109,7 +4108,7 @@
       "description": "OpenWhispr separates private thoughts from shared work so the right people see the right notes.",
       "personal": {
         "title": "Private",
-        "description": "Only you can see these notes. They stay on this device."
+        "description": "Only you can see the folders and notes here."
       },
       "workspace": {
         "title": "Workspace",
@@ -4641,9 +4640,6 @@
       "loading": "Loading notes…",
       "retry": "Couldn’t load notes. Try again",
       "results": "{{count}} of {{total}} notes"
-    },
-    "privateOnDevice": {
-      "switched": "Private notes now stay on this device. Their cloud copies will be deleted on {{date}}."
     }
   },
   "dictionary": {
@@ -6081,10 +6077,10 @@
         "noTeamspaces": "There's no teamspace to move it to yet.",
         "openTeamspaces": "Open Teamspaces",
         "cantMoveToShare": "Only the note's owner can move it to a teamspace to share it.",
-        "legacySharedBanner": "This private note is shared, so it still syncs. Move it to a teamspace or stop sharing to keep it on this device.",
+        "legacySharedBanner": "This note is shared and syncs even when Cloud Backup is off.",
         "stopSharing": {
           "title": "Stop sharing?",
-          "description": "Removing {{name}} stops sharing. The note will stay on this device."
+          "description": "Removing {{name}} stops sharing."
         },
         "visibility": {
           "label": "Visibility",

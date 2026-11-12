@@ -34,9 +34,7 @@ const BATCH_SIZE = 50;
 const LOCAL_EARLY = "2026-07-20 10:00:00";
 const LOCAL_LATE = "2026-07-20 11:00:00";
 
-// With team, the device is in a teamspace the fake cloud files its rows into:
-// private notes stay on the device (D2), so the note sync machinery a test
-// drives end to end runs on a teamspace's notes.
+// Team fixtures exercise collaboration independently from personal backup consent.
 async function setup(t, { team = false } = {}) {
   const db = createDb(t);
   if (!db) return null;
@@ -48,6 +46,8 @@ async function setup(t, { team = false } = {}) {
   windowStub.electronAPI = api;
   const teamSpace = team ? joinTeamSpace(db, cloud) : null;
   await establishValidatedAuth();
+  // These scenarios start after the one-time restored-backup cursor repair.
+  localStorageStub.setItem("syncCursors.privateBackup:user-harness", "1");
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
   return { db, cloud, api, service, team: teamSpace };
@@ -555,6 +555,7 @@ async function signInAs(t, db, cloud, accountId) {
   db.setActiveAccountId(accountId);
   windowStub.electronAPI = createElectronApi(db, { cloud });
   await establishValidatedAuth(accountId);
+  localStorageStub.setItem(`syncCursors.privateBackup:${accountId}`, "1");
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
   return service;
@@ -610,9 +611,7 @@ test("the first pass after an account switch pulls the new account's older chats
   const accountB = await signInAs(t, db, cloudB, "account-b");
   await accountB.syncAll(true);
 
-  // B's private note is left to the one-time import: private notes stay on
-  // the devices that hold them (D2).
-  assert.deepEqual(db.getNotes(null, 100, null), []);
+  assert.equal(db.getNoteByClientId("b-note")?.content, "written on B's laptop");
   assert.equal(db.getConversationByClientId("b-conversation")?.title, "B's chat");
   for (const path of LIST_PATHS) {
     assert.notEqual(
@@ -818,7 +817,7 @@ test("unowned cursors on a device another account used get one snapshot pull", a
   const accountB = await signInAs(t, db, cloudB, "account-b");
   await accountB.syncAll(true);
   assert.equal(db.getConversationByClientId("b-chat")?.title, "B's chat");
-  assert.deepEqual(db.getNotes(null, 100, null), [], "B's private note stays in the cloud (D2)");
+  assert.equal(db.getNoteByClientId("b-note")?.content, "older than the inherited cursor");
   assert.equal(localStorageStub.getItem("lastSyncedAt.accountId"), "account-b");
 
   await accountB.syncAll(true);
@@ -876,7 +875,7 @@ test("a pass requested during a dictionary edit runs once the edit finishes", as
   assert.equal(cloud.logFor("/api/notes/list").length, 1);
 });
 
-test("canSync gating: sign-out blocks every call; no gate lets a private note push", async (t) => {
+test("canSync gating: private backup requires sign-in, subscription and consent", async (t) => {
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud } = ctx;
@@ -911,26 +910,22 @@ test("canSync gating: sign-out blocks every call; no gate lets a private note pu
   stopSyncTimers(teamOnlyService);
   assert.equal(db.getNote(note.id).sync_status, "pending");
 
-  // With every gate open the pass does real work, and the private note still
-  // stays on this device (D2).
+  // Ordinary personal notes join collaboration only once every backup gate is open.
   enableSync();
   const mark = cloud.log.length;
   const fullService = new SyncService();
   await fullService.syncAll(true);
   stopSyncTimers(fullService);
   assert.ok(cloud.log.length > mark, "with all three keys set the same pass must do real work");
-  assert.equal(db.getNote(note.id).sync_status, "pending");
-  assert.equal(db.getNote(note.id).cloud_id, null);
+  assert.equal(db.getNote(note.id).sync_status, "synced");
+  assert.ok(db.getNote(note.id).cloud_id);
   const sent = cloud.log.flatMap((call) =>
     call.path === "/api/notes/batch-create" ? call.body.notes.map((n) => n.client_note_id) : []
   );
-  assert.deepEqual(sent, [teamNote.client_note_id], "only the teamspace note was ever sent");
+  assert.deepEqual(sent, [teamNote.client_note_id, note.client_note_id]);
 });
 
-// A private note the old Cloud Backup uploaded still carries that copy's cloud id (D32). Moved into
-// a teamspace to share it, its first push must be a create carrying the whole note, under a key of
-// its own (D32a). The old personal row stays as it is.
-test("a private note with a Backup cloud id moves into a teamspace as a full create", async (t) => {
+test("a backed-up private note moves into a teamspace with the same cloud identity", async (t) => {
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
@@ -943,35 +938,31 @@ test("a private note with a Backup cloud id moves into a teamspace as a full cre
   const backup = cloud.seedNote({
     client_note_id: note.client_note_id,
     title: "Roadmap",
-    content: "the body Backup uploaded months ago",
+    content: "the earlier cloud body",
+    created_at: "2026-07-20T09:00:00.000Z",
+    updated_at: "2026-07-20T09:00:00.000Z",
     space_id: null,
     workspace_id: null,
   });
   db.markNoteSynced(note.id, backup.id, backup.updated_at, "user-harness");
-
   assert.ok(db.updateNote(note.id, { space_id: ctx.team.id, folder_id: null }).success);
-  // The push asks for a pass, which must not outlive the test's database.
-  stopSyncTimers(service);
   const mark = cloud.log.length;
-  const cloudId = await service.ensureNoteSynced(note.id);
-
-  const creates = cloud.log
-    .slice(mark)
-    .filter((call) => call.method === "POST" && call.path === "/api/notes/create");
-  assert.equal(creates.length, 1, "the share view gets its id from a create, not the old copy");
+  await service.syncAll(true);
   const moved = db.getNote(note.id);
-  assert.notEqual(moved.client_note_id, note.client_note_id);
-  assert.equal(creates[0].body.client_note_id, moved.client_note_id);
-  assert.equal(creates[0].body.content, "the body on this device");
-  assert.equal(creates[0].body.space_id, TEAM_SPACE.id);
-  assert.notEqual(cloudId, backup.id);
-  assert.equal(cloud.note(cloudId).space_id, TEAM_SPACE.id);
-  assert.equal(cloud.note(cloudId).content, "the body on this device");
-  assert.equal(moved.cloud_id, cloudId);
-  assert.equal(cloud.note(backup.id).space_id, null, "the old personal row is left alone");
+  assert.equal(moved.cloud_id, backup.id);
+  assert.equal(moved.client_note_id, note.client_note_id);
+  assert.equal(cloud.note(backup.id).space_id, TEAM_SPACE.id);
+  assert.equal(cloud.note(backup.id).content, "the body on this device");
+  assert.equal(cloud.notes().length, 1);
+  assert.equal(
+    cloud.log
+      .slice(mark)
+      .filter((call) => call.method === "POST" && call.path.includes("/api/notes/")).length,
+    0
+  );
 });
 
-test("a private note whose Backup copy was purged is created fresh in the teamspace", async (t) => {
+test("an ambiguous missing cloud copy keeps local work pending without republishing it", async (t) => {
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
@@ -987,16 +978,19 @@ test("a private note whose Backup copy was purged is created fresh in the teamsp
   stopSyncTimers(service);
   const cloudId = await service.ensureNoteSynced(note.id);
 
-  assert.ok(cloudId && cloudId !== "purged-backup-copy", `got ${cloudId}`);
-  assert.equal(cloud.note(cloudId).client_note_id, db.getNote(note.id).client_note_id);
-  assert.equal(cloud.note(cloudId).space_id, TEAM_SPACE.id);
-  assert.equal(cloud.note(cloudId).content, "the body on this device");
+  assert.equal(cloudId, null, "sharing waits for a verified live cloud copy");
+  const pending = db.getNote(note.id);
+  assert.equal(pending.cloud_id, "purged-backup-copy");
+  assert.equal(pending.client_note_id, note.client_note_id);
+  assert.equal(pending.content, "the body on this device");
+  assert.equal(pending.space_id, ctx.team.id);
+  assert.notEqual(pending.sync_status, "synced");
+  assert.equal(cloud.notes().length, 0);
+  assert.equal(cloud.logFor("/api/notes/create").length, 0);
 });
 
-// D32a: the API's note upsert keeps a tombstone deleted. A Backup copy deleted
-// on another device stays a live private note here (personal tombstones don't
-// reach private rows), so moving it into a teamspace under its old key would
-// land on the tombstone, and the next pull would delete the note.
+// The API keeps tombstones deleted. A pending move must preserve the local text
+// when a different device deleted the previous personal copy before this sync.
 test("a private note whose Backup copy was deleted elsewhere stays live once moved into a teamspace", async (t) => {
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
@@ -1026,6 +1020,7 @@ test("a private note whose Backup copy was deleted elsewhere stays live once mov
 
   const local = db.getNote(note.id);
   assert.ok(local && !local.deleted_at, "the moved note survives the next pull");
+  assert.notEqual(local.client_note_id, note.client_note_id);
   assert.equal(local.space_id, ctx.team.id);
   assert.ok(local.cloud_id, "the moved note has a cloud copy in the teamspace");
   const row = cloud.note(local.cloud_id);
@@ -1035,7 +1030,7 @@ test("a private note whose Backup copy was deleted elsewhere stays live once mov
   assert.equal(cloud.note(backup.id).deleted_at !== null, true, "the old copy stays deleted");
 });
 
-// D39: a Granola import derives the note's key from the meeting, so the same export imported on
+// A Granola import derives the note's key from the meeting, so the same export imported on
 // another device gives the same key there. That device uploaded it with Backup and deleted it later;
 // this one never sent it. Moved into a teamspace under that key, the create would land on the
 // other device's tombstone and the next pull would delete the note the user just shared.
@@ -1359,11 +1354,12 @@ function copiesOf(db, cloudId) {
 
 async function editInCloud(cloud, id, fields) {
   await new Promise((resolve) => setTimeout(resolve, 5));
-  await cloud.request({
+  const response = await cloud.request({
     method: "PATCH",
     path: "/api/notes/update",
     body: { id, ...fields },
   });
+  assert.equal(response.success, true, JSON.stringify(response));
 }
 
 test("a cloud note with no client id keeps one local copy through edits and a delete", async (t) => {
@@ -1990,7 +1986,7 @@ test("a copy with no base never overwrites the cloud note through a current sibl
   assert.equal(db.getNote(stale).content, "stale text");
 });
 
-test("unpushed text that differs is kept as a note of its own on this device", async (t) => {
+test("unpushed text that differs is backed up as a distinct personal note", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud, service } = ctx;
@@ -2028,11 +2024,12 @@ test("unpushed text that differs is kept as a note of its own on this device", a
   await service.syncAll(true);
 
   const detached = db.getNote(other);
-  assert.equal(detached.cloud_id, null, "a private note never uploads (D2)");
+  assert.ok(detached.cloud_id, "backup includes the preserved personal copy");
+  assert.notEqual(detached.cloud_id, row.id);
+  assert.equal(cloud.note(detached.cloud_id).content, "only here");
   assert.notEqual(detached.client_note_id, "edited-copy", "it has an identity of its own");
   assert.equal(detached.content, "only here");
-  assert.equal(detached.sync_status, "pending");
-  assert.deepEqual(noteAndFolderWrites(cloud), []);
+  assert.equal(detached.sync_status, "synced");
   assert.equal(noteCount(db), 2, "a blank difference made no note of its own");
 });
 
@@ -2587,10 +2584,13 @@ for (const backup of [true, false]) {
   test(`${backup ? "full" : "team-only"} replay waits for team capability without spending attempts`, async (t) => {
     const ctx = await setup(t);
     if (!ctx) return;
-    const { db, cloud, api, service } = ctx;
+    const { db, cloud, service } = ctx;
     silenceConsoleErrors(t);
     localStorageStub.setItem("cloudBackupEnabled", String(backup));
     db.setActiveAccountId("user-harness");
+    const api = createElectronApi(db, { cloud });
+    windowStub.electronAPI = api;
+    await establishValidatedAuth();
     const space = {
       id: "cloud-space",
       workspace_id: "workspace",
@@ -2653,7 +2653,7 @@ for (const backup of [true, false]) {
 
     assert.ok(db.getNote(local.id), "personal scope cannot see the old team tombstone");
     assert.equal(localStorageStub.getItem(replayKey), null, "incomplete scope spends no attempts");
-    assert.equal(copiesOf(db, personal.id).length, 0, "a personal row stays in the cloud (D2)");
+    assert.equal(copiesOf(db, personal.id).length, backup ? 1 : 0);
     available = true;
 
     await service.syncAll(true);
@@ -2698,7 +2698,7 @@ test("a pull landing on a just-deleted note keeps its delete queued", (t) => {
   );
 });
 
-// --- Private notes stay on the device (D2) -----------------------------------
+// --- Ordinary Private notes follow Cloud Backup consent --------------------
 
 const PRIVATE_ACCOUNT = "user-harness";
 const NOTE_AND_FOLDER_WRITES = new Set([
@@ -2723,6 +2723,10 @@ async function setupSignedIn(t, { backup = true } = {}) {
   const ctx = await setup(t);
   if (!ctx) return null;
   ctx.db.setActiveAccountId(PRIVATE_ACCOUNT);
+  // Bind the simulated sign-in after main has scoped the database to this account.
+  ctx.api = createElectronApi(ctx.db, { cloud: ctx.cloud });
+  windowStub.electronAPI = ctx.api;
+  await establishValidatedAuth(PRIVATE_ACCOUNT);
   ctx.db.setActiveWorkspaceScope({
     activeWorkspaceId: "workspace-active",
     defaultWorkspaceId: "workspace-default",
@@ -2748,7 +2752,7 @@ function linkPrivateNote(db, cloud, spaceId, fields = {}) {
   return { row, local };
 }
 
-test("a full pass with Backup on uploads no private note or folder", async (t) => {
+test("a full pass with Backup on uploads ordinary private notes and folders", async (t) => {
   const ctx = await setupSignedIn(t);
   if (!ctx) return;
   const { db, cloud, service, activePrivateId, defaultPrivateId } = ctx;
@@ -2783,18 +2787,23 @@ test("a full pass with Backup on uploads no private note or folder", async (t) =
   await service.pushEntity("folder", folder.id);
   await service.pushEntity("folder", linkedFolder.id);
 
-  assert.deepEqual(noteAndFolderWrites(cloud), [], "no private note or folder was sent");
-  assert.equal(cloud.notes().length, 1, "only the copy that already existed");
-  assert.equal(cloud.note(row.id).content, "cloud body", "the old cloud copy is untouched");
-  assert.equal(cloud.folder(cloudFolder.id).name, "Old name");
+  assert.ok(noteAndFolderWrites(cloud).length > 0);
+  assert.equal(cloud.notes().length, 3);
+  assert.equal(cloud.note(row.id).content, "edited since");
+  assert.equal(cloud.folder(cloudFolder.id).name, "Linked");
   for (const note of [fresh, inDefault, backedUp]) {
-    assert.equal(db.getNote(note.id).sync_status, "pending", "left as it was, not marked");
+    assert.equal(db.getNote(note.id).sync_status, "synced");
+    assert.ok(db.getNote(note.id).cloud_id);
   }
-  assert.equal(db.getNote(backedUp.id).content, "edited since");
-  assert.equal(db.getNote(fresh.id).cloud_id, null);
+  assert.equal(db.getNote(backedUp.id).space_id, activePrivateId);
+  assert.equal(
+    cloud.note(db.getNote(fresh.id).cloud_id).folder_id,
+    db.getFolders().find((row) => row.id === folder.id).cloud_id
+  );
+  assert.equal(cloud.logFor("/api/me/private-notes/on-device").length, 0);
 });
 
-test("a shared private note still pushes edits, without its private folder", async (t) => {
+test("a shared private note pushes edits with its existing cloud folder under either backup setting", async (t) => {
   for (const backup of [true, false]) {
     await t.test(backup ? "Backup on" : "Backup off", async (st) => {
       const ctx = await setupSignedIn(st, { backup });
@@ -2803,17 +2812,15 @@ test("a shared private note still pushes edits, without its private folder", asy
       const cloudFolder = cloud.seedFolder({ name: "Ideas", client_folder_id: "ideas" });
       const folder = db.createFolder("Ideas", activePrivateId).folder;
       db.db
-        .prepare("UPDATE folders SET client_folder_id = 'ideas', cloud_id = ? WHERE id = ?")
+        .prepare(
+          "UPDATE folders SET client_folder_id = 'ideas', cloud_id = ?, sync_status = 'synced' WHERE id = ?"
+        )
         .run(cloudFolder.id, folder.id);
       const { row, local } = linkPrivateNote(db, cloud, activePrivateId, {
         folder_id: cloudFolder.id,
       });
       db.updateNote(local.id, { folder_id: folder.id });
       db.updateNoteShareState(local.id, { is_shared: 1 });
-      // The server still takes a shared note's edits once the account is on
-      // device-only.
-      cloud.shareNote(row.id);
-      cloud.switchOnDevice();
 
       db.updateNote(local.id, { content: "an edit the guests should see" });
       if (backup) await service.syncAll(true);
@@ -2823,7 +2830,7 @@ test("a shared private note still pushes edits, without its private folder", asy
       assert.equal(patches.length, 1);
       assert.equal(patches[0].body.id, row.id);
       assert.equal(patches[0].body.content, "an edit the guests should see");
-      assert.equal(patches[0].body.folder_id, null, "private folders never reach the cloud");
+      assert.equal(patches[0].body.folder_id, cloudFolder.id);
       assert.equal(cloud.note(row.id).content, "an edit the guests should see");
       const after = db.getNote(local.id);
       assert.equal(after.sync_status, "synced");
@@ -2834,7 +2841,7 @@ test("a shared private note still pushes edits, without its private folder", asy
   }
 });
 
-test("a pull with a personal row for an unshared note changes nothing locally", async (t) => {
+test("ordinary personal pulls follow the backup setting", async (t) => {
   for (const backup of [true, false]) {
     await t.test(backup ? "Backup on" : "Backup off", async (st) => {
       const ctx = await setupSignedIn(st, { backup });
@@ -2846,10 +2853,10 @@ test("a pull with a personal row for an unshared note changes nothing locally", 
       const folder = db.createFolder("Ideas", activePrivateId).folder;
       db.db
         .prepare(
-          "UPDATE folders SET client_folder_id = 'ideas', cloud_id = ?, sync_status = 'synced' WHERE id = ?"
+          "UPDATE folders SET client_folder_id = 'ideas', cloud_id = ?, sync_status = 'synced', updated_at = '2026-07-20T09:00:00.000Z' WHERE id = ?"
         )
         .run(cloudFolder.id, folder.id);
-      // Another device, or the 30-day grace, still writes personal rows.
+      // Another device changes ordinary personal content.
       await editInCloud(cloud, edited.row.id, {
         content: "changed elsewhere",
         updated_at: "2026-07-21T00:00:00.000Z",
@@ -2870,19 +2877,24 @@ test("a pull with a personal row for an unshared note changes nothing locally", 
       const folders = db.db.prepare("SELECT * FROM folders ORDER BY id").all();
 
       await service.syncAll(true);
-      // A snapshot pull, as a denial or backfill runs, ignores them too.
+      // Snapshot recovery must honor the same consent gate as the normal delta pass.
       await service.pullNotes(!backup, true);
       await service.pullFolders(!backup, true);
 
-      assert.deepEqual(
-        snapshotNotes(db),
-        before,
-        "no private note was created, changed or deleted"
-      );
-      assert.deepEqual(db.db.prepare("SELECT * FROM folders ORDER BY id").all(), folders);
-      assert.equal(db.getNoteByClientId("cloud-only"), null);
-      assert.equal(db.getNote(edited.local.id).content, "kept here");
-      assert.ok(db.getNote(deleted.local.id), "a personal tombstone deletes nothing");
+      if (backup) {
+        assert.equal(db.getNote(edited.local.id).content, "changed elsewhere");
+        assert.equal(db.getNote(edited.local.id).space_id, activePrivateId);
+        assert.equal(db.getNote(deleted.local.id), null);
+        assert.equal(db.getNoteByClientId("cloud-only")?.title, "From the cloud");
+        assert.ok(db.getFolders().some((row) => row.name === "Cloud folder"));
+        assert.equal(db.getFolderByClientId("ideas").name, "Renamed elsewhere");
+      } else {
+        assert.deepEqual(snapshotNotes(db), before);
+        assert.deepEqual(db.db.prepare("SELECT * FROM folders ORDER BY id").all(), folders);
+        assert.equal(db.getNoteByClientId("cloud-only"), null);
+        assert.equal(db.getNote(edited.local.id).content, "kept here");
+        assert.ok(db.getNote(deleted.local.id), "backup-off does not import a personal tombstone");
+      }
     });
   }
 });
@@ -2897,8 +2909,17 @@ test("a guest's edit to a shared private note pulls in where the note is filed",
       const { row, local } = linkPrivateNote(db, cloud, activePrivateId);
       // Filed and shared on this device before the guest's edit.
       updateNote(db, local.id, { folder_id: folder.id, is_shared: 1 });
-      cloud.shareNote(row.id);
-      cloud.switchOnDevice();
+      if (backup) {
+        const cloudFolder = cloud.seedFolder({
+          name: folder.name,
+          client_folder_id: folder.client_folder_id,
+        });
+        db.markFolderSynced(folder.id, cloudFolder.id);
+        await editInCloud(cloud, row.id, {
+          folder_id: cloudFolder.id,
+          updated_at: "2026-07-20T10:00:00.000Z",
+        });
+      }
       await editInCloud(cloud, row.id, {
         content: "a guest's edit",
         updated_at: "2026-07-21T00:00:00.000Z",
@@ -2954,11 +2975,11 @@ test("a revoked team note forks into that workspace's Private", async (t) => {
   );
   const mark = cloud.log.length;
   await service.syncAll(true);
-  assert.deepEqual(
-    noteAndFolderWrites({ log: cloud.log.slice(mark) }),
-    [],
-    "the fork stays private"
-  );
+  assert.ok(noteAndFolderWrites({ log: cloud.log.slice(mark) }).length > 0);
+  const backedUp = db.getNote(local.id);
+  assert.ok(backedUp.cloud_id);
+  assert.equal(cloud.note(backedUp.cloud_id).space_id, null);
+  assert.equal(cloud.note(backedUp.cloud_id).content, "unpushed edit");
 });
 
 test("a team note's access stub forks a dirty copy into that workspace's Private", async (t) => {
@@ -3121,48 +3142,30 @@ test("a folder batch the server partly refuses links the rest by position", asyn
   assert.equal(left.sync_status, "pending");
 });
 
-test("a share ended on another device stops the note's pushes after one refusal", async (t) => {
-  for (const first of ["full pass", "debounced push"]) {
-    await t.test(`found by a ${first}`, async (st) => {
-      const ctx = await setupSignedIn(st);
+test("ending a share returns ordinary edits to the backup gate", async (t) => {
+  for (const backup of [true, false]) {
+    await t.test(backup ? "Backup on" : "Backup off", async (st) => {
+      const ctx = await setupSignedIn(st, { backup });
       if (!ctx) return;
       const { db, cloud, service, activePrivateId } = ctx;
-      const errors = silenceConsoleErrors(st);
       const { row, local } = linkPrivateNote(db, cloud, activePrivateId);
-      db.updateNoteShareState(local.id, { is_shared: 1, share_token: "ow_share_stale" });
-      // Unshared or revoked elsewhere: the server no longer counts it as shared,
-      // and nothing this device pulls says so.
-      cloud.switchOnDevice();
-      db.updateNote(local.id, { content: "edit" });
-
-      if (first === "full pass") await service.syncAll(true);
-      else await service.pushEntity("note", local.id);
-
-      assert.equal(cloud.logFor("/api/notes/update").length, 1, "one refused attempt");
-      const after = db.getNote(local.id);
-      assert.equal(after.is_shared, 0, "the refusal ends this device's share");
-      assert.equal(after.share_token, null);
-      assert.equal(after.sync_status, "pending", "not marked error");
-      assert.equal(after.cloud_id, row.id, "not forked");
-      assert.equal(after.client_note_id, local.client_note_id);
-
-      // Now an ordinary private note: no edit or pass sends it again.
-      db.updateNote(local.id, { content: "a later edit" });
+      db.updateNoteShareState(local.id, { is_shared: 1, share_token: "prior-share" });
+      db.updateNoteShareState(local.id, { is_shared: 0, share_token: null });
+      db.updateNote(local.id, { content: "ordinary edit after unsharing" });
       await service.pushEntity("note", local.id);
       await service.syncAll(true);
-      assert.equal(cloud.logFor("/api/notes/update").length, 1);
-      assert.equal(cloud.note(row.id).content, "cloud body");
-      assert.equal(db.getNote(local.id).content, "a later edit");
-      assert.deepEqual(
-        errorMessages(errors).filter((message) => /note/i.test(message)),
-        [],
-        "nothing about it is logged as a failure"
+      assert.equal(
+        cloud.note(row.id).content,
+        backup ? "ordinary edit after unsharing" : "cloud body"
       );
+      assert.equal(db.getNote(local.id).sync_status, backup ? "synced" : "pending");
+      assert.equal(db.getNote(local.id).cloud_id, row.id);
+      assert.equal(db.getNote(local.id).client_note_id, local.client_note_id);
     });
   }
 });
 
-test("a note that left a team before this change is cut loose, not retracted", async (t) => {
+test("a pending team-to-private move publishes its scope retraction without changing identity", async (t) => {
   const ctx = await setupSignedIn(t);
   if (!ctx) return;
   const { db, cloud, service, activePrivateId } = ctx;
@@ -3184,17 +3187,17 @@ test("a note that left a team before this change is cut loose, not retracted", a
 
   await service.syncAll(true);
 
-  assert.deepEqual(noteAndFolderWrites(cloud), [], "nothing is retracted or uploaded");
-  assert.equal(cloud.note(row.id).space_id, TEAM_SPACE.id, "the team keeps its copy");
+  assert.equal(cloud.note(row.id).space_id, null, "the team no longer owns the copy");
+  assert.equal(cloud.note(row.id).content, "private edit");
   const after = db.getNote(local.id);
   assert.equal(after.space_id, activePrivateId);
   assert.equal(after.content, "private edit");
-  assert.equal(after.cloud_id, null);
+  assert.equal(after.cloud_id, row.id);
   assert.equal(after.left_team, 0);
-  assert.notEqual(after.client_note_id, row.client_note_id);
+  assert.equal(after.client_note_id, row.client_note_id);
 });
 
-test("the upload queues hold teamspace rows and legacy shared private notes only", (t) => {
+test("the full upload queue includes ordinary private rows and the team queue remains narrow", (t) => {
   const db = createDb(t);
   if (!db) return;
   const team = joinTeamSpace(db, null);
@@ -3209,12 +3212,12 @@ test("the upload queues hold teamspace rows and legacy shared private notes only
 
   const ids = (rows) => rows.map((row) => row.id).sort((a, b) => a - b);
   assert.deepEqual(ids(db.getPendingNotes("team")), [teamNote.id]);
-  assert.deepEqual(ids(db.getPendingNotes("syncable")), [teamNote.id, shared.id]);
+  assert.deepEqual(ids(db.getPendingNotes()), [teamNote.id, privateNote.id, shared.id, forked.id]);
   assert.ok(
     db.getPendingNotes().some((note) => note.id === privateNote.id),
     "still queued locally"
   );
-  assert.ok(!db.getPendingNotes("syncable").some((note) => note.id === forked.id));
+  assert.ok(!db.getPendingNotes("team").some((note) => note.id === forked.id));
   assert.deepEqual(ids(db.getPendingFolders("team")), [teamFolder.id]);
 });
 

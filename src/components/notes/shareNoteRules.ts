@@ -83,10 +83,8 @@ export function canManageAccessGrant(
 }
 
 /**
- * How the share dialog shares a note. A team note shares in place. A private note stays on this
- * device, so it shares by moving to a teamspace, unless an older build shared it: that one keeps
- * its share and syncs while it lasts. A cloud id the old Cloud Backup left on a private note
- * doesn't make it shared.
+ * New shares belong to a teamspace. Existing personal shares keep their audience.
+ * A Backup cloud identity alone does not mean a Private note is shared.
  */
 export type PrivateShareState = "moveToShare" | "legacyShared" | "team";
 
@@ -105,9 +103,8 @@ type ShareAudience = {
 };
 
 /**
- * reconcileLocalShareState with a private note's stakes: its flag is what makes it sync (D10), so
- * it rises only while the share reaches someone. An invite-only share naming nobody would
- * otherwise start syncing a note nobody else can open.
+ * A Private note syncs independently of Backup only while its share reaches someone.
+ * An invite-only share naming nobody does not establish that audience.
  */
 export function reconcileNoteShareFlag(
   local: LocalShareState,

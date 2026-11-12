@@ -4,13 +4,16 @@ import {
   cloudPost,
   cloudPostForAuthGeneration,
   cloudPatch,
+  cloudPatchForAuthGeneration,
   cloudDelete,
+  cloudDeleteForAuthGeneration,
 } from "./cloudApi.js";
 import { buildNotesListPath } from "./noteListQuery";
 import type { CloudNoteCreateResult } from "./noteCreateAck";
 
 interface NoteInput {
   client_note_id?: string;
+  private_workspace_id?: string | null;
   workspace_id?: string | null;
   space_id?: string | null;
   title?: string | null;
@@ -62,6 +65,7 @@ export interface CloudNote {
   calendar_event_id: string | null;
   diarization_enabled: number | null;
   expected_speaker_count: number | null;
+  private_workspace_id?: string | null;
   workspace_id: string | null;
   space_id: string | null;
   // The note's owner (creator), not its last editor. Absent on access_removed
@@ -84,13 +88,13 @@ interface SearchResult extends CloudNote {
   score: number;
 }
 
-async function create(note: NoteInput): Promise<CloudNote> {
-  return cloudPost<CloudNote>("/api/notes/create", note);
+async function create(note: NoteInput, authGeneration?: number): Promise<CloudNote> {
+  return authGeneration === undefined
+    ? cloudPost<CloudNote>("/api/notes/create", note)
+    : cloudPostForAuthGeneration<CloudNote>("/api/notes/create", note, authGeneration);
 }
 
-// Notes the server left out of a batch, with why: personal notes of an account
-// that keeps private notes on its devices (personal_notes_on_device). Absent
-// from APIs that predate it.
+// Per-row refusals are optional on older batch endpoints.
 export interface RefusedNote {
   client_note_id: string | null;
   code: string;
@@ -101,16 +105,36 @@ interface NoteBatchCreateResult {
   refused?: RefusedNote[];
 }
 
-async function batchCreate(notes: NoteInput[]): Promise<NoteBatchCreateResult> {
-  return cloudPost<NoteBatchCreateResult>("/api/notes/batch-create", { notes });
+async function batchCreate(
+  notes: NoteInput[],
+  authGeneration?: number
+): Promise<NoteBatchCreateResult> {
+  return authGeneration === undefined
+    ? cloudPost<NoteBatchCreateResult>("/api/notes/batch-create", { notes })
+    : cloudPostForAuthGeneration<NoteBatchCreateResult>(
+        "/api/notes/batch-create",
+        { notes },
+        authGeneration
+      );
 }
 
-async function update(id: string, updates: Partial<NoteInput>): Promise<CloudNote> {
-  return cloudPatch<CloudNote>("/api/notes/update", { id, ...updates });
+async function update(
+  id: string,
+  updates: Partial<NoteInput>,
+  authGeneration?: number
+): Promise<CloudNote> {
+  return authGeneration === undefined
+    ? cloudPatch<CloudNote>("/api/notes/update", { id, ...updates })
+    : cloudPatchForAuthGeneration<CloudNote>(
+        "/api/notes/update",
+        { id, ...updates },
+        authGeneration
+      );
 }
 
-async function deleteNote(id: string): Promise<void> {
-  await cloudDelete("/api/notes/delete", { id });
+async function deleteNote(id: string, authGeneration?: number): Promise<void> {
+  if (authGeneration === undefined) await cloudDelete("/api/notes/delete", { id });
+  else await cloudDeleteForAuthGeneration("/api/notes/delete", { id }, authGeneration);
 }
 
 // Given an auth generation, the request is pinned to that sign-in: refused
@@ -121,12 +145,13 @@ async function list(
   since?: string,
   scope?: "all",
   cursorId?: string,
-  authGeneration?: number
+  authGeneration?: number,
+  cache?: "no-store"
 ): Promise<{ notes: CloudNote[] }> {
   const path = buildNotesListPath({ limit, before, since, scope, cursorId });
   return authGeneration === undefined
-    ? cloudGet<{ notes: CloudNote[] }>(path)
-    : cloudGetForAuthGeneration<{ notes: CloudNote[] }>(path, authGeneration);
+    ? cloudGet<{ notes: CloudNote[] }>(path, cache)
+    : cloudGetForAuthGeneration<{ notes: CloudNote[] }>(path, authGeneration, cache);
 }
 
 async function deleteAll(): Promise<{ deleted: number; errors: number }> {

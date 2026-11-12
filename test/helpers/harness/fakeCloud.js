@@ -16,14 +16,7 @@
 // seed names it; a row nobody scoped carries neither key, as before teamspaces.
 // seedSpace lists a teamspace under /api/me/spaces (a 404 until one is seeded,
 // the pre-teamspace API) and can file the rows a test seeds without a scope
-// into it; a client's write without one stays personal, as on the server. switchOnDevice
-// puts the account on device-only (lib/private-notes-on-device.ts): personal
-// note and folder writes answer 409 personal_notes_on_device, and batch
-// creates list them in `refused`, except writes to a note shareNote marked.
-// With privateNotesRoutes set, GET /api/me/private-notes and POST
-// /api/me/private-notes/on-device answer as the API does (the switch refuses
-// a pulled_through that personal rows changed after); without it they answer
-// 404, as an API before them does.
+// into it; a client's write without one stays personal, as on the server.
 // Two more model the current server and are off unless a test asks for them:
 //   revisionGuard      note writes advance `revision`, and a PATCH whose
 //                      base_revision isn't the stored one gets the server's
@@ -122,11 +115,7 @@ const TRANSCRIPTION_FIELDS = ["text", "raw_text", "status", "provider", "model"]
 
 const TRANSCRIPTION_DEFAULTS = { text: "", raw_text: null, status: "completed" };
 
-const SCOPE_FIELDS = ["workspace_id", "space_id"];
-
-const PERSONAL_NOTES_ON_DEVICE = "personal_notes_on_device";
-
-const PRIVATE_NOTES_PURGE_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+const SCOPE_FIELDS = ["workspace_id", "space_id", "private_workspace_id"];
 
 function createFakeCloud(config = {}) {
   const cfg = {
@@ -146,8 +135,6 @@ function createFakeCloud(config = {}) {
   const snippets = new Map();
   const transcriptions = new Map();
   const spaces = new Map();
-  // Ids of notes someone else can reach: they keep syncing on device-only.
-  const sharedNoteIds = new Set();
   const log = [];
   const failures = [];
   let seq = 0;
@@ -155,9 +142,6 @@ function createFakeCloud(config = {}) {
   // Where a note or folder no write scoped lands, and whose it is.
   let homeSpace = null;
   let ownerId = null;
-  // { on_device_since, purge_after } once the account keeps private notes on
-  // its devices.
-  let onDeviceState = null;
 
   // Real cloud ids are UUIDs; `idSpace` keeps two fake accounts' ids apart too
   // (see createAccountCloud).
@@ -252,71 +236,13 @@ function createFakeCloud(config = {}) {
         row.space_id = homeSpace.id;
         row.workspace_id = homeSpace.workspace_id;
       }
+      if (cfg.privateWorkspacePlacement || "private_workspace_id" in input)
+        row.private_workspace_id = input.private_workspace_id ?? null;
       if (ownerId && collection === noteCollection) row.user_id = ownerId;
     }
     if (cfg.revisionGuard && collection === noteCollection) row.revision = 0;
     collection.store.set(row.id, row);
     return row;
-  }
-
-  // As personalWriteRefusals: on device-only, a write that leaves a note or
-  // folder personal is refused unless it lands on a note someone else can
-  // reach. A payload without space_id keeps an existing row's scope.
-  function refusesPersonalWrite(collection, existing, input) {
-    if (!onDeviceState || !collection.scoped) return false;
-    const target = "space_id" in input ? (input.space_id ?? null) : (existing?.space_id ?? null);
-    if (target) return false;
-    if (!existing) return true;
-    return !(collection === noteCollection && sharedNoteIds.has(existing.id));
-  }
-
-  function personalWriteError() {
-    return new HttpError(
-      409,
-      "Private notes stay on your devices. Move a note to a teamspace to sync it.",
-      PERSONAL_NOTES_ON_DEVICE
-    );
-  }
-
-  function onDeviceStateAt(now) {
-    return {
-      on_device_since: now,
-      purge_after: new Date(Date.parse(now) + PRIVATE_NOTES_PURGE_GRACE_MS).toISOString(),
-    };
-  }
-
-  // As switchToOnDevice: idempotent, and refused while a personal note or
-  // folder (tombstones included) changed after pulled_through, which the
-  // client then never pulled.
-  function switchToOnDevice(pulledThrough) {
-    const at = typeof pulledThrough === "string" ? Date.parse(pulledThrough) : NaN;
-    if (Number.isNaN(at)) throw new HttpError(400, "pulled_through must be a date-time");
-    const now = toIso(clock());
-    const pulled = new Date(at).toISOString();
-    if (pulled > now) {
-      throw new HttpError(400, "pulled_through is in the future", "invalid_pulled_through");
-    }
-    if (onDeviceState) return onDeviceState;
-    const changed = [...notes.values(), ...folders.values()].some((row) => {
-      if (row.space_id || row.workspace_id) return false;
-      const updatedAt = toIso(row.updated_at);
-      return updatedAt > pulled && updatedAt <= now;
-    });
-    if (changed) {
-      throw new HttpError(
-        409,
-        "Private notes changed since they were pulled",
-        "personal_notes_changed"
-      );
-    }
-    onDeviceState = onDeviceStateAt(now);
-    return onDeviceState;
-  }
-
-  function requirePrivateNotesRoutes() {
-    if (!cfg.privateNotesRoutes) {
-      throw new HttpError(404, "fake cloud has no private notes route", "no_route");
-    }
   }
 
   function findByClientId(collection, clientId) {
@@ -329,11 +255,11 @@ function createFakeCloud(config = {}) {
 
   // Creates upsert by client id, so a retried batch returns the existing row
   // instead of forking a duplicate. As lib/notes-service.ts, a note's upsert
-  // never touches deleted_at: the write (scope included) lands on a tombstone
-  // and the delete wins. A folder's, as lib/folders-service.ts, revives it.
+  // keeps tombstones unchanged. A folder's, as lib/folders-service.ts, revives it.
   function upsertRow(collection, input) {
     const existing = findByClientId(collection, input[collection.clientKey]);
     if (!existing) return insertRow(collection, input);
+    if (existing.deleted_at && collection === noteCollection) return existing;
     if (existing.deleted_at && collection === folderCollection) existing.deleted_at = null;
     return applyWrite(collection, existing, input);
   }
@@ -556,35 +482,25 @@ function createFakeCloud(config = {}) {
     switch (route) {
       case "POST /api/notes/create": {
         const existing = findByClientId(noteCollection, body?.client_note_id);
-        if (refusesPersonalWrite(noteCollection, existing, body ?? {})) throw personalWriteError();
         return {
           ...upsertRow(noteCollection, body ?? {}),
           row_created: !existing,
-          write_applied: true,
+          write_applied: !existing?.deleted_at,
         };
       }
       case "POST /api/notes/batch-create": {
         const inputs = Array.isArray(body?.notes) ? body.notes : [];
-        const refused = [];
         const created = [];
         for (const input of inputs) {
           const existing = findByClientId(noteCollection, input.client_note_id);
-          if (refusesPersonalWrite(noteCollection, existing, input)) {
-            refused.push({
-              client_note_id: input.client_note_id ?? null,
-              code: PERSONAL_NOTES_ON_DEVICE,
-            });
-            continue;
-          }
           const row = upsertRow(noteCollection, input);
-          created.push({ ...row, row_created: !existing, write_applied: true });
+          created.push({ ...row, row_created: !existing, write_applied: !existing?.deleted_at });
         }
-        return { created, refused };
+        return { created };
       }
       case "PATCH /api/notes/update": {
         const { id, ...updates } = body ?? {};
         const row = requireLive(noteCollection, id);
-        if (refusesPersonalWrite(noteCollection, row, updates)) throw personalWriteError();
         if (
           cfg.revisionGuard &&
           updates.base_revision !== undefined &&
@@ -617,45 +533,33 @@ function createFakeCloud(config = {}) {
         return { notes: [] };
 
       case "POST /api/folders/create": {
-        const existing = findByClientId(folderCollection, body?.client_folder_id);
-        if (refusesPersonalWrite(folderCollection, existing, body ?? {})) {
-          throw personalWriteError();
-        }
         return upsertRow(folderCollection, body ?? {});
       }
       case "POST /api/folders/batch-create": {
         const inputs = Array.isArray(body?.folders) ? body.folders : [];
-        const refused = [];
         const created = [];
         for (const input of inputs) {
-          const existing = findByClientId(folderCollection, input.client_folder_id);
-          if (refusesPersonalWrite(folderCollection, existing, input)) {
-            refused.push({
-              client_folder_id: input.client_folder_id ?? null,
-              code: PERSONAL_NOTES_ON_DEVICE,
-            });
-            continue;
-          }
           created.push(upsertRow(folderCollection, input));
         }
-        return { created, refused };
+        return { created };
       }
       case "PATCH /api/folders/update": {
         const { id, ...updates } = body ?? {};
         const row = requireLive(folderCollection, id);
-        if (refusesPersonalWrite(folderCollection, row, updates)) throw personalWriteError();
         return applyWrite(folderCollection, row, updates);
       }
-      case "GET /api/me/private-notes":
-        requirePrivateNotesRoutes();
-        return { data: onDeviceState, server_time: toIso(clock()) };
-      case "POST /api/me/private-notes/on-device":
-        requirePrivateNotesRoutes();
-        return { data: switchToOnDevice(body?.pulled_through) };
       case "GET /api/me/spaces":
-        if (spaces.size === 0)
+        if (spaces.size === 0 && !cfg.privateWorkspacePlacement)
           throw new HttpError(404, "fake cloud has no spaces route", "no_route");
-        return { data: [...spaces.values()].map((space) => structuredClone(space)) };
+        return {
+          data: [...spaces.values()].map((space) => structuredClone(space)),
+          ...(cfg.privateWorkspacePlacement
+            ? {
+                private_workspace_placement: true,
+                default_workspace_id: cfg.defaultWorkspaceId ?? null,
+              }
+            : {}),
+        };
       case "DELETE /api/folders/delete":
         tombstone(folderCollection, body?.id);
         return {};
@@ -854,13 +758,6 @@ function createFakeCloud(config = {}) {
       return structuredClone(space);
     },
     removeSpace: (id) => spaces.delete(id),
-    switchOnDevice: () => {
-      onDeviceState ??= onDeviceStateAt(toIso(clock()));
-    },
-    privateNotesState: () => structuredClone(onDeviceState),
-    shareNote: (id) => {
-      sharedNoteIds.add(notes.get(id)?.id ?? findByClientId(noteCollection, id)?.id ?? id);
-    },
     // A row the public API stored without a client id, and the server backfill
     // that later keys it by its own id without moving updated_at.
     seedUnkeyedNote: (input) => {

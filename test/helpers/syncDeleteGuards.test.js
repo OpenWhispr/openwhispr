@@ -1,7 +1,7 @@
 // A local tombstone must outlive a pull, a note or chat no create request has
 // carried leaves the device when it is deleted, and delete pushes must never
-// reach the cloud for rows that were never synced. Private notes never upload
-// (D2), so the create races below run on a teamspace's notes.
+// reach the cloud for rows that were never synced. The create races below cover
+// personal Backup and teamspace notes.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -580,28 +580,17 @@ test("a chat on a private note is not uploaded; a root chat is", async (t) => {
   );
 });
 
-test("ensureNoteSynced refuses an unshared private note", async (t) => {
+test("ensureNoteSynced returns an existing personal cloud copy", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud, service } = ctx;
-  const { PRIVATE_NOTE_NOT_SYNCABLE } = require("../../src/services/SyncService.ts");
-  const fresh = db.saveNote("Never synced", "body").note;
-  // A copy Backup made before Private stayed on the device is no share.
   const backedUp = db.saveNote("Backed up", "body").note;
   updateNote(db, backedUp.id, { cloud_id: "cloud-backed-up", sync_status: "synced" });
   const shared = db.saveNote("Shared earlier", "body").note;
   updateNote(db, shared.id, { cloud_id: "cloud-shared", is_shared: 1, sync_status: "synced" });
-
-  for (const note of [fresh, backedUp]) {
-    await assert.rejects(service.ensureNoteSynced(note.id), (err) => {
-      assert.equal(err.code, PRIVATE_NOTE_NOT_SYNCABLE);
-      return true;
-    });
-  }
+  assert.equal(await service.ensureNoteSynced(backedUp.id), "cloud-backed-up");
   assert.equal(await service.ensureNoteSynced(shared.id), "cloud-shared");
-  assert.deepEqual(cloud.log, [], "nothing was sent");
-  assert.equal(db.getNote(fresh.id).cloud_id, null);
-  assert.equal(attempted(db, "notes", fresh.id), 0);
+  assert.deepEqual(cloud.log, [], "existing identities need no new upload");
 });
 
 test("the legacy upload sends a teamspace note with its scope, so it never lands as personal", async (t) => {
@@ -620,12 +609,32 @@ test("the legacy upload sends a teamspace note with its scope, so it never lands
   assert.equal(cloud.note(note.client_note_id).space_id, TEAM_SPACE.id);
 });
 
-test("the legacy upload Backup starts never sends a private note", async (t) => {
+test("enabling Backup uploads an ordinary Private note", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud, api } = ctx;
+  db.bindDefaultPrivateSpace("personal-workspace");
   const note = db.saveNote("Private", "body").note;
   api.getNotes = async () => [db.getNote(note.id)];
+
+  await require("../../src/stores/noteStore.ts").startMigration();
+
+  assert.equal(cloud.note(note.client_note_id).content, "body");
+  assert.equal(cloud.note(note.client_note_id).space_id ?? null, null);
+  assert.equal(
+    cloud.logFor("/api/notes/batch-create")[0].body.notes[0].private_workspace_id,
+    "personal-workspace"
+  );
+  assert.ok(db.getNote(note.id).cloud_id);
+  assert.equal(attempted(db, "notes", note.id), 1);
+});
+
+test("the Backup upload sweep does nothing while Backup is off", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud } = ctx;
+  localStorage.setItem("cloudBackupEnabled", "false");
+  const note = db.saveNote("Private", "body").note;
 
   await require("../../src/stores/noteStore.ts").startMigration();
 
@@ -654,4 +663,163 @@ test("deleting a private note queues deletion of its historical chat backup", (t
   assert.equal(queued.device_only, 1);
   assert.ok(queued.deleted_at);
   assert.deepEqual(db.getAgentMessages(chat.id), []);
+});
+
+for (const mode of ["normal pass", "isolated push", "Backup enable sweep"]) {
+  test(`${mode} never sends a previous account's note after its create journal await`, async (t) => {
+    const { createSyncDevice } = require("./harness/syncDevice.js");
+    const { createAccountCloud } = require("./harness/fakeCloud.js");
+    const device = createSyncDevice(t);
+    if (!device) return;
+    silenceConsoleErrors(t);
+    const source = createAccountCloud();
+    const replacement = createAccountCloud();
+    await device.signIn("source-account", source);
+    device.db.bindDefaultPrivateSpace("source-workspace");
+    const note = device.db.saveNote("Source private", "Source content").note;
+    device.api.getNotes = async () => [device.db.getNote(note.id)];
+    const record = device.api.markNoteCreatesAttempted;
+    device.api.markNoteCreatesAttempted = async (...args) => {
+      const recorded = await record(...args);
+      await device.signIn("replacement-account", replacement);
+      return recorded;
+    };
+    if (mode === "normal pass") await device.service.syncAll(true);
+    else if (mode === "Backup enable sweep")
+      await require("../../src/stores/noteStore.ts").startMigration();
+    else
+      await assert.rejects(
+        device.service.pushNote(note.id),
+        (error) => error.code === "AUTH_CONTEXT_CHANGED"
+      );
+    assert.equal(replacement.logFor("/api/notes/batch-create").length, 0);
+    assert.equal(replacement.logFor("/api/notes/create").length, 0);
+    assert.equal(replacement.logFor("/api/notes/delete").length, 0);
+    device.db.setActiveAccountId("source-account");
+    assert.equal(device.db.getNote(note.id).cloud_id, null);
+    assert.equal(device.db.getNote(note.id).content, "Source content");
+  });
+}
+
+for (const mode of [
+  "folder create",
+  "folder update",
+  "isolated folder",
+  "note delete",
+  "folder delete",
+]) {
+  test(`${mode} stays pinned if its local queue read overlaps an account switch`, async (t) => {
+    const { createSyncDevice } = require("./harness/syncDevice.js");
+    const { createAccountCloud } = require("./harness/fakeCloud.js");
+    const device = createSyncDevice(t);
+    if (!device) return;
+    silenceConsoleErrors(t);
+    const source = createAccountCloud();
+    const replacement = createAccountCloud();
+    await device.signIn("source-account", source);
+    device.db.bindDefaultPrivateSpace("source-workspace");
+    const folder = device.db.createFolder(
+      "Source folder",
+      device.db.getDefaultPrivateSpaceId()
+    ).folder;
+    if (mode === "folder update" || mode === "folder delete") {
+      const remote = source.seedFolder({
+        client_folder_id: folder.client_folder_id,
+        name: folder.name,
+      });
+      device.db.markFolderSynced(folder.id, remote.id);
+      if (mode === "folder delete") device.db.deleteFolder(folder.id);
+      else device.db.renameFolder(folder.id, "Private rename");
+    }
+    if (mode === "note delete") {
+      const note = device.db.saveNote("Source note", "Text").note;
+      const remote = source.seedNote({ client_note_id: note.client_note_id });
+      device.db.markNoteSynced(note.id, remote.id);
+      device.db.deleteNote(note.id);
+    }
+    const readName =
+      mode === "note delete"
+        ? "getPendingNoteDeletes"
+        : mode === "folder delete"
+          ? "getPendingFolderDeletes"
+          : mode === "isolated folder"
+            ? "getFolders"
+            : "getPendingFolders";
+    const read = device.api[readName];
+    device.api[readName] = async (...args) => {
+      const rows = await read(...args);
+      await device.signIn("replacement-account", replacement);
+      return rows;
+    };
+    const run =
+      mode === "note delete"
+        ? () => device.service.pushNoteDeletes()
+        : mode === "folder delete"
+          ? () => device.service.pushFolderDeletes()
+          : mode === "isolated folder"
+            ? () => device.service.pushFolder(folder.id)
+            : () => device.service.pushPendingFolders();
+    await assert.rejects(run, (error) => error.code === "AUTH_CONTEXT_CHANGED");
+    assert.equal(replacement.log.filter((call) => call.method !== "GET").length, 0);
+  });
+}
+
+test("a note create response cannot acknowledge into a replacement account", async (t) => {
+  const { createSyncDevice } = require("./harness/syncDevice.js");
+  const { createAccountCloud } = require("./harness/fakeCloud.js");
+  const device = createSyncDevice(t);
+  if (!device) return;
+  const source = createAccountCloud();
+  const replacement = createAccountCloud();
+  await device.signIn("source-account", source);
+  device.db.bindDefaultPrivateSpace("source-workspace");
+  const note = device.db.saveNote("Source note", "Retain pending").note;
+  const acknowledge = device.api.acknowledgeNoteCreate;
+  device.api.acknowledgeNoteCreate = async (...args) => {
+    await device.signIn("replacement-account", replacement);
+    return acknowledge(...args);
+  };
+  await device.service.pushNote(note.id);
+  assert.equal(replacement.log.filter((call) => call.method !== "GET").length, 0);
+  device.db.setActiveAccountId("source-account");
+  assert.equal(device.db.getNote(note.id).cloud_id, null);
+  assert.equal(device.db.getNote(note.id).sync_status, "pending");
+  assert.equal(source.notes()[0].content, "Retain pending");
+});
+
+test("a pulled create receipt cannot acknowledge after the sign-in is replaced", async (t) => {
+  const { createSyncDevice } = require("./harness/syncDevice.js");
+  const { createAccountCloud } = require("./harness/fakeCloud.js");
+  const device = createSyncDevice(t);
+  if (!device) return;
+  silenceConsoleErrors(t);
+  const source = createAccountCloud();
+  const replacement = createAccountCloud();
+  await device.signIn("source-account", source);
+  device.db.bindDefaultPrivateSpace("source-workspace");
+  const note = device.db.saveNote("Source note", "Retain pending").note;
+  const remote = source.seedNote({
+    client_note_id: note.client_note_id,
+    title: note.title,
+    content: note.content,
+  });
+  device.db.acknowledgeNoteCreate(note.id, note, remote.id, remote.updated_at, null, {
+    requiresReconciliation: true,
+    settleIfUnchanged: true,
+    cloudRevision: remote.revision,
+  });
+  const acknowledge = device.api.acknowledgeNoteCreate;
+  let acknowledgements = 0;
+  device.api.acknowledgeNoteCreate = async (...args) => {
+    acknowledgements++;
+    await device.signIn("source-account", replacement);
+    return acknowledge(...args);
+  };
+
+  assert.equal(await device.service.pullNotes(false, true), false);
+  assert.equal(acknowledgements, 1);
+  device.db.setActiveAccountId("source-account");
+  assert.ok(device.db.getNote(note.id).cloud_create_pending);
+  assert.equal(device.db.getNote(note.id).sync_status, "pending");
+  assert.equal(device.db.getNote(note.id).content, "Retain pending");
 });

@@ -50,6 +50,7 @@ export const createMemoryRepository = (): { repo: LocalNotesRepository; db: Test
       is_default INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
       client_folder_id TEXT,
+      private_workspace_id TEXT,
       remote_id TEXT,
       deleted_at TEXT,
       pending_sync INTEGER NOT NULL DEFAULT 0,

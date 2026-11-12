@@ -199,6 +199,6 @@ test("the structure intro shows Private inside the workspace", async (t) => {
   const { notes } = require("../../src/locales/en/translation.json");
   assert.deepEqual(notes.structureIntro.personal, {
     title: "Private",
-    description: "Only you can see these notes. They stay on this device.",
+    description: "Only you can see the folders and notes here.",
   });
 });

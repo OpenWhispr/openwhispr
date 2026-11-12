@@ -39,8 +39,7 @@ const INITIAL = {
 const OTHER = { ...INITIAL, id: "cloud-other", client_note_id: "client-other" };
 const copy = (value) => JSON.parse(JSON.stringify(value));
 
-// Private notes stay on the device (D2), so recovery runs on a teamspace's
-// notes: the device joins it on first use, and INITIAL and OTHER are its.
+// Recovery also runs without personal Backup consent for a joined teamspace.
 const teamIn = (db) => joinTeamSpace(db, null).id;
 
 // HTTP alone is simulated. Every delta is quiet, so unchanged pre-revision
@@ -54,6 +53,7 @@ function recoveryCloud({ notes = [INITIAL], failedSnapshots = 0, probeNote = not
     row: (id = INITIAL.id) => copy(rows.get(id)),
     async request(opts) {
       calls.push(copy(opts));
+      if (opts.path === "/api/me/spaces") return { success: true, data: { data: [TEAM_SPACE] } };
       if (opts.path.startsWith("/api/notes/list")) {
         const query = new URLSearchParams(opts.path.split("?")[1]);
         if (query.get("limit") === "1")

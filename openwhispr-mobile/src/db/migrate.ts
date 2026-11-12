@@ -356,6 +356,8 @@ export function runMigrations(): void {
   addColumnIfMissing('folders', 'sort_order', 'INTEGER DEFAULT 0');
 
   // Cloud sync additive migrations
+  const needsPrivateFolderPlacement = !columnExists('folders', 'private_workspace_id');
+  addColumnIfMissing('folders', 'private_workspace_id', 'TEXT');
   addColumnIfMissing('folders', 'client_folder_id', 'TEXT');
   addColumnIfMissing('folders', 'remote_id', 'TEXT');
   addColumnIfMissing('folders', 'deleted_at', 'TEXT');
@@ -448,6 +450,9 @@ export function runMigrations(): void {
     'CREATE INDEX IF NOT EXISTS idx_google_calendar_events_calendar_window ON google_calendar_events(calendar_local_id, start_at, end_at)',
   );
   tryAlter('CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, value TEXT)');
+  // Refresh metadata before any default-folder name adoption on the next consented sync.
+  if (needsPrivateFolderPlacement)
+    rawDb.runSync("DELETE FROM sync_state WHERE key = 'folders.last_sync_at'");
   tryAlter(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_client_space_id ON spaces(client_space_id)',
   );

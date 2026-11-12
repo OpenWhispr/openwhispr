@@ -291,6 +291,16 @@ function noteRow(sqlite, id) {
     .get(id);
 }
 
+function assertPlacementQueued(actual, previous, placement) {
+  assert.notEqual(actual.updated_at, previous.updated_at);
+  assert.deepEqual(actual, {
+    ...previous,
+    ...placement,
+    sync_status: "pending",
+    updated_at: actual.updated_at,
+  });
+}
+
 function folderRow(sqlite, id) {
   return sqlite.prepare("SELECT * FROM folders WHERE id = ?").get(id);
 }
@@ -1533,9 +1543,7 @@ test("a synced team folder, or one holding a synced note, moved to private is re
   assert.ok(!db.getPendingFolders("team").some((f) => f.id === local.id));
 });
 
-// A private note the old Cloud Backup uploaded keeps that copy's cloud id. Moved into a teamspace,
-// the note is created there whole under a new client id (D32, D32a): the API's note upsert keeps a
-// deleted row deleted, so the old key could land the move on a tombstone.
+// A move must update the existing Backup row instead of leaving a second personal copy.
 function giveBackupCloudCopy(db, noteId, cloudId) {
   db.markNoteSynced(noteId, cloudId, "2026-06-01T10:00:00.000Z", "test-account");
   db.db
@@ -1546,21 +1554,24 @@ function giveBackupCloudCopy(db, noteId, cloudId) {
   return db.getNote(noteId);
 }
 
-function assertNoCloudIdentity(note, oldClientNoteId) {
-  assert.ok(note.client_note_id, "the note has a client id");
-  assert.notEqual(note.client_note_id, oldClientNoteId, "the note takes a new client id");
-  assert.equal(note.cloud_id, null);
-  assert.equal(note.cloud_updated_at, null);
-  assert.equal(note.cloud_revision, null);
-  assert.equal(note.owner_user_id, null);
-  assert.equal(note.updated_by_user_id, null);
-  assert.equal(note.cloud_create_rejected, 0);
-  assert.equal(note.cloud_create_pending, null);
-  assert.equal(note.cloud_create_attempted, 0);
+function assertPreservedCloudIdentity(note, before) {
+  for (const key of [
+    "client_note_id",
+    "cloud_id",
+    "cloud_updated_at",
+    "cloud_revision",
+    "owner_user_id",
+    "updated_by_user_id",
+    "cloud_create_rejected",
+    "cloud_create_pending",
+    "cloud_create_attempted",
+  ]) {
+    assert.equal(note[key], before[key], `${key} survives the move`);
+  }
   assert.equal(note.sync_status, "pending");
 }
 
-test("a private note's Backup cloud id doesn't follow it into a teamspace", (t) => {
+test("a private note keeps its Backup cloud identity when moving into a teamspace", (t) => {
   const db = createDb(t);
   if (!db) return;
   db.setActiveWorkspaceScope({
@@ -1573,25 +1584,25 @@ test("a private note's Backup cloud id doesn't follow it into a teamspace", (t) 
   const teamFolder = db.createFolder("Specs", team.id).folder;
 
   const bySpace = db.saveNote("Plan", "body", "personal", null, null, null, privateId).note;
-  giveBackupCloudCopy(db, bySpace.id, "backup-cloud-1");
+  const bySpaceBefore = giveBackupCloudCopy(db, bySpace.id, "backup-cloud-1");
   const moved = db.updateNote(bySpace.id, { space_id: team.id, folder_id: null });
   assert.equal(moved.success, true);
   assert.equal(moved.note.space_id, team.id);
-  assertNoCloudIdentity(moved.note, bySpace.client_note_id);
+  assertPreservedCloudIdentity(moved.note, bySpaceBefore);
 
   // A teamspace folder takes the note to its space (D2): the same.
   const byFolder = db.saveNote("Notes", "body", "personal", null, null, null, privateId).note;
-  giveBackupCloudCopy(db, byFolder.id, "backup-cloud-2");
+  const byFolderBefore = giveBackupCloudCopy(db, byFolder.id, "backup-cloud-2");
   const filed = db.updateNote(byFolder.id, { folder_id: teamFolder.id });
   assert.equal(filed.note.space_id, team.id);
-  assertNoCloudIdentity(filed.note, byFolder.client_note_id);
+  assertPreservedCloudIdentity(filed.note, byFolderBefore);
 
   const pending = db.getPendingNotes("team").map((n) => n.id);
   assert.ok(pending.includes(bySpace.id) && pending.includes(byFolder.id));
 });
 
 // A create whose answer never came may have left the key on the server too.
-test("a private note whose create may have reached the server takes a new key into a teamspace", (t) => {
+test("a private note whose create may have reached the server keeps its key into a teamspace", (t) => {
   const db = createDb(t);
   if (!db) return;
   db.setActiveWorkspaceScope({
@@ -1603,14 +1614,14 @@ test("a private note whose create may have reached the server takes a new key in
   const team = createTestTeamSpace(db, { name: "Design" }).space;
   const note = db.saveNote("Plan", "body", "personal", null, null, null, privateId).note;
   db.db.prepare("UPDATE notes SET cloud_create_attempted = 1 WHERE id = ?").run(note.id);
+  note.cloud_create_attempted = 1;
 
   const moved = db.updateNote(note.id, { space_id: team.id, folder_id: null });
-  assertNoCloudIdentity(moved.note, note.client_note_id);
+  assertPreservedCloudIdentity(moved.note, note);
 });
 
-// A key this device never sent can still be on the server: Granola's import derives it from the
-// meeting, so another device that imported the same export may have uploaded and deleted it (D39).
-test("a private note the server never heard of from this device still takes a new key into a teamspace", (t) => {
+// Keeping the key also preserves create idempotency for notes not yet uploaded.
+test("a private note not yet uploaded keeps its key into a teamspace", (t) => {
   const db = createDb(t);
   if (!db) return;
   db.setActiveWorkspaceScope({
@@ -1624,10 +1635,10 @@ test("a private note the server never heard of from this device still takes a ne
 
   const moved = db.updateNote(note.id, { space_id: team.id, folder_id: null });
   assert.equal(moved.note.space_id, team.id);
-  assertNoCloudIdentity(moved.note, note.client_note_id);
+  assertPreservedCloudIdentity(moved.note, note);
 });
 
-test("a never-sent private note moved with its folder into a teamspace takes a new key", (t) => {
+test("a never-sent private note moved with its folder into a teamspace keeps its key", (t) => {
   const db = createDb(t);
   if (!db) return;
   db.setActiveWorkspaceScope({
@@ -1643,7 +1654,7 @@ test("a never-sent private note moved with its folder into a teamspace takes a n
   assert.ok(db.moveFolderToSpace(folder.id, team.id).success);
   const moved = db.getNote(note.id);
   assert.equal(moved.space_id, team.id);
-  assertNoCloudIdentity(moved, note.client_note_id);
+  assertPreservedCloudIdentity(moved, note);
   const folderRow = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(folder.id);
   assert.equal(folderRow.client_folder_id, folder.client_folder_id, "the folder keeps its key");
 });
@@ -1670,7 +1681,68 @@ test("a shared private note keeps its cloud id when it moves into a teamspace", 
   assert.equal(moved.note.owner_user_id, "test-account");
 });
 
-test("a private folder moved into a teamspace drops its and its notes' Backup cloud ids", (t) => {
+test("confirmed tombstone recovery renews a team note without losing current edits or filing", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const folder = db.createFolder("Specs", team.id).folder;
+  const note = db.saveNote("Plan", "Current content", "personal", null, null, folder.id).note;
+  giveBackupCloudCopy(db, note.id, "deleted-backup");
+  db.updateNote(note.id, { content: "Edited while the request was pending" });
+
+  const result = db.renewNoteCloudIdentity(note.id, note.client_note_id, "deleted-backup", team.id);
+  assert.equal(result.success, true);
+  assert.notEqual(result.note.client_note_id, note.client_note_id);
+  assert.equal(result.note.cloud_id, null);
+  assert.equal(result.note.cloud_revision, null);
+  assert.equal(result.note.cloud_create_pending, null);
+  assert.equal(result.note.cloud_create_attempted, 0);
+  assert.equal(result.note.content, "Edited while the request was pending");
+  assert.equal(result.note.space_id, team.id);
+  assert.equal(result.note.folder_id, folder.id);
+  assert.equal(result.note.sync_status, "pending");
+  assert.equal(
+    db.renewNoteCloudIdentity(note.id, note.client_note_id, "deleted-backup", team.id).success,
+    false
+  );
+});
+
+test("tombstone recovery refuses deleted, private, foreign-account and changed-scope rows", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = createTestTeamSpace(db, { name: "Design" }).space;
+  const note = db.saveNote("Plan", "body", "personal", null, null, null, team.id).note;
+  assert.equal(
+    db.renewNoteCloudIdentity(note.id, note.client_note_id, null, team.id + 1).success,
+    false
+  );
+  const privateNote = db.saveNote("Private", "body").note;
+  assert.equal(
+    db.renewNoteCloudIdentity(
+      privateNote.id,
+      privateNote.client_note_id,
+      null,
+      privateNote.space_id
+    ).success,
+    false
+  );
+  db.db.prepare("UPDATE notes SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?").run(note.id);
+  assert.equal(
+    db.renewNoteCloudIdentity(note.id, note.client_note_id, null, team.id).success,
+    false
+  );
+  db.setActiveAccountId("another-account");
+  assert.equal(
+    db.renewNoteCloudIdentity(note.id, note.client_note_id, null, team.id).success,
+    false
+  );
+  assert.equal(
+    db.db.prepare("SELECT client_note_id FROM notes WHERE id = ?").get(note.id).client_note_id,
+    note.client_note_id
+  );
+});
+
+test("a private folder moved into a teamspace preserves its and its notes' Backup cloud identities", (t) => {
   const db = createDb(t);
   if (!db) return;
   db.setActiveWorkspaceScope({
@@ -1683,7 +1755,7 @@ test("a private folder moved into a teamspace drops its and its notes' Backup cl
   const folder = db.createFolder("Research", privateId).folder;
   db.markFolderSynced(folder.id, "backup-folder-1");
   const leftover = db.saveNote("Leftover", "body", "personal", null, null, folder.id).note;
-  giveBackupCloudCopy(db, leftover.id, "backup-cloud-1");
+  const leftoverBefore = giveBackupCloudCopy(db, leftover.id, "backup-cloud-1");
   const shared = db.saveNote("Shared", "body", "personal", null, null, folder.id).note;
   db.markNoteSynced(shared.id, "shared-cloud-1", "2026-06-01T10:00:00.000Z", "test-account");
   db.updateNoteShareState(shared.id, { is_shared: 1 });
@@ -1694,9 +1766,9 @@ test("a private folder moved into a teamspace drops its and its notes' Backup cl
   const folderRow = db.db.prepare("SELECT * FROM folders WHERE id = ?").get(folder.id);
   assert.equal(folderRow.space_id, team.id);
   assert.equal(folderRow.client_folder_id, folder.client_folder_id);
-  assert.equal(folderRow.cloud_id, null);
+  assert.equal(folderRow.cloud_id, "backup-folder-1");
   assert.equal(folderRow.sync_status, "pending");
-  assertNoCloudIdentity(db.getNote(leftover.id), leftover.client_note_id);
+  assertPreservedCloudIdentity(db.getNote(leftover.id), leftoverBefore);
   assert.equal(db.getNote(shared.id).cloud_id, "shared-cloud-1");
   assert.equal(db.getNote(shared.id).client_note_id, shared.client_note_id);
   assert.equal(db.getNote(shared.id).space_id, team.id);
@@ -4055,7 +4127,7 @@ test("the copy survives purging the source teamspace", (t) => {
   }
 });
 
-test("a private note moves between two of the account's private spaces without a sync retraction", (t) => {
+test("a private move queues placement Backup without changing cloud identity", (t) => {
   const db = createFreshDeviceDb(t);
   if (!db) return;
   const { home, w2 } = defaultAndW2(db);
@@ -4073,7 +4145,7 @@ test("a private note moves between two of the account's private spaces without a
   }
 
   for (const prior of before) {
-    assert.deepEqual(noteRow(db.db, prior.id), { ...prior, space_id: w2, folder_id: null });
+    assertPlacementQueued(noteRow(db.db, prior.id), prior, { space_id: w2, folder_id: null });
   }
 
   // A folder moves the same way, its notes and chats with it.
@@ -4096,9 +4168,9 @@ test("a private note moves between two of the account's private spaces without a
   assert.equal(moved.success, true);
   assert.deepEqual(
     pick(folderRow(db.db, projects.id), ["space_id", "account_id", "sync_status", "left_team"]),
-    { space_id: w2, account_id: "a", sync_status: "synced", left_team: 0 }
+    { space_id: w2, account_id: "a", sync_status: "pending", left_team: 0 }
   );
-  assert.deepEqual(noteRow(db.db, plan.id), { ...planBefore, space_id: w2 });
+  assertPlacementQueued(noteRow(db.db, plan.id), planBefore, { space_id: w2 });
   assert.deepEqual(chatRow(db.db, chat), { space_id: w2, folder_id: projects.id, account_id: "a" });
   assertEveryRowInItsFolderSpace(db.db);
 
@@ -4113,6 +4185,121 @@ test("a private note moves between two of the account's private spaces without a
   assert.equal(db.moveFolderToSpace(projects.id, bHome).success, false);
   assert.equal(noteRow(db.db, local.id).space_id, w2);
   assert.equal(folderRow(db.db, projects.id).space_id, w2);
+});
+
+test("explicit cloud placement moves personal notes and folders, including back to default", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const { home, w2 } = defaultAndW2(db);
+  const folder = {
+    id: "cloud-folder",
+    client_folder_id: "client-folder",
+    name: "Backup project",
+    created_at: "2026-01-01",
+    updated_at: "2026-01-01",
+  };
+  const localFolder = db.upsertFolderFromCloud(folder, home);
+  const note = {
+    id: "cloud-note",
+    client_note_id: "client-note",
+    title: "Backed up",
+    content: "body",
+    created_at: "2026-01-01",
+    updated_at: "2026-01-01",
+    revision: 1,
+  };
+  const localNote = db.upsertNoteFromCloud(note, localFolder.id, home);
+
+  db.upsertFolderFromCloud({ ...folder, private_workspace_id: "w2" }, w2);
+  db.upsertNoteFromCloud({ ...note, private_workspace_id: "w2", revision: 2 }, localFolder.id, w2);
+  assert.equal(db.getNote(localNote.id).space_id, w2);
+  assert.equal(folderRow(db.db, localFolder.id).space_id, w2);
+
+  // An older server that omits placement cannot undo the known arrangement.
+  db.upsertFolderFromCloud(folder, home);
+  db.upsertNoteFromCloud({ ...note, revision: 3 }, localFolder.id, home);
+  assert.equal(db.getNote(localNote.id).space_id, w2);
+  assert.equal(folderRow(db.db, localFolder.id).space_id, w2);
+
+  db.upsertFolderFromCloud({ ...folder, private_workspace_id: "w1" }, home);
+  db.upsertNoteFromCloud(
+    { ...note, private_workspace_id: "w1", revision: 4 },
+    localFolder.id,
+    home
+  );
+  assert.equal(db.getNote(localNote.id).space_id, home);
+  assert.equal(folderRow(db.db, localFolder.id).space_id, home);
+  assert.equal(db.getNote(localNote.id).cloud_id, note.id);
+});
+
+test("placement backfill queues only the active account's clean Private rows and keeps conflict bases", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const { home, w2 } = defaultAndW2(db);
+  const folder = db.createFolder("Backfill", w2).folder;
+  const note = db.saveNote("Backfill", "current content", "personal", null, null, folder.id).note;
+  db.markNoteSynced(note.id, "cloud-note", "2026-01-01", "a", 7);
+  db.markFolderSynced(folder.id, "cloud-folder");
+  const before = db.getNote(note.id);
+  signIn(db, "b");
+  const foreign = db.saveNote("Other account", "leave alone").note;
+  db.markNoteSynced(foreign.id, "foreign-cloud");
+  signIn(db, "a", W1_ACTIVE);
+  const candidates = db.getPrivatePlacementBackupCandidates();
+  const restored = db.upsertNoteFromCloud(
+    {
+      id: "restored-cloud",
+      client_note_id: "restored-client",
+      title: "Legacy restored",
+      content: "no original placement",
+      created_at: "2026-01-01",
+      updated_at: "2026-01-01",
+    },
+    null,
+    home
+  );
+  const restoredFolder = db.upsertFolderFromCloud(
+    {
+      id: "restored-folder-cloud",
+      client_folder_id: "restored-folder-client",
+      name: "Legacy restored folder",
+      created_at: "2026-01-01",
+      updated_at: "2026-01-01",
+    },
+    home
+  );
+  const result = db.queuePrivatePlacementBackup(candidates);
+  assert.equal(result.success, true);
+  assert.equal(result.queuedNotes, 1);
+  assert.ok(result.queuedFolders >= 1);
+  assert.deepEqual(db.getNote(note.id), { ...before, sync_status: "pending" });
+  assert.equal(folderRow(db.db, folder.id).sync_status, "pending");
+  assert.equal(noteRow(db.db, foreign.id).sync_status, "synced");
+  assert.equal(db.getNote(restored.id).sync_status, "synced");
+  assert.equal(folderRow(db.db, restoredFolder.id).sync_status, "synced");
+  assert.equal(db.getDefaultPrivateSpaceId(), home);
+  assert.equal(db.queuePrivatePlacementBackup(candidates).queuedNotes, 0);
+});
+
+test("placement backfill waits for the default Private row to bind after workspace scope arrives", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a");
+  const note = db.saveNote("Existing backup", "keep placement pending").note;
+  db.markNoteSynced(note.id, "cloud-existing");
+  const before = db.getNote(note.id);
+  const candidates = db.getPrivatePlacementBackupCandidates();
+
+  db.setActiveWorkspaceScope(W1_ACTIVE);
+  assert.equal(db.queuePrivatePlacementBackup(candidates).success, false);
+  assert.deepEqual(db.getNote(note.id), before);
+
+  db.bindDefaultPrivateSpace("w1");
+  const result = db.queuePrivatePlacementBackup(candidates);
+  assert.equal(result.success, true);
+  assert.equal(result.queuedNotes, 1);
+  assert.equal(db.getNote(note.id).sync_status, "pending");
+  assert.equal(db.getSpace(db.getNote(note.id).space_id).workspace_id, "w1");
 });
 
 test("relocatePrivateSpace moves a lost workspace's notes into the default and renames collisions", (t) => {
@@ -4159,14 +4346,12 @@ test("relocatePrivateSpace moves a lost workspace's notes into the default and r
   assert.ok(spaceIdentity(db.db, w2).deleted_at, "the lost workspace's Private is retired");
   assert.deepEqual(privateSpaceIds(db), [home]);
   // Its Meetings and Personal join the default's own; other folders keep a name of their own.
-  assert.deepEqual(noteRow(db.db, w2Meeting.id), {
-    ...before[w2Meeting.id],
+  assertPlacementQueued(noteRow(db.db, w2Meeting.id), before[w2Meeting.id], {
     space_id: home,
     folder_id: homeMeeting.folder_id,
   });
-  assert.deepEqual(noteRow(db.db, w2Plan.id), { ...before[w2Plan.id], space_id: home });
-  assert.deepEqual(noteRow(db.db, w2Root), {
-    ...before[w2Root],
+  assertPlacementQueued(noteRow(db.db, w2Plan.id), before[w2Plan.id], { space_id: home });
+  assertPlacementQueued(noteRow(db.db, w2Root), before[w2Root], {
     space_id: home,
     account_id: "a",
   });
@@ -4431,7 +4616,7 @@ test("pending Private cannot move to a team before the default workspace is know
   assert.equal(db.updateNote(note.id, { space_id: team.id }).success, true);
 });
 
-test("private import move history survives database reopen", (t) => {
+test("a backed-up note keeps its identity after a team move and database reopen", (t) => {
   let db = createDb(t);
   if (!db) return;
   db.setActiveWorkspaceScope({
@@ -4453,12 +4638,8 @@ test("private import move history survives database reopen", (t) => {
   db = new DatabaseManager();
   t.after(() => db.db.close());
   db.setActiveAccountId("test-account");
-  assert.deepEqual(db.upsertNoteFromCloud(remote, null, privateId, { newKeyIfTaken: true }), {
-    imported: true,
-  });
-  assert.equal(
-    db.db.prepare("SELECT COUNT(*) AS count FROM notes WHERE deleted_at IS NULL").get().count,
-    1
-  );
+  assert.equal(db.getNote(note.id).cloud_id, remote.id);
+  assert.equal(db.getNote(note.id).client_note_id, remote.client_note_id);
+  assert.equal(db.getNote(note.id).sync_status, "pending");
   assert.equal(db.getNote(note.id).space_id, team.id);
 });

@@ -146,9 +146,7 @@ function createElectronApi(db, options = {}) {
     getNote: async (id) => db.getNote(id),
     updateNote: async (id, updates) => db.updateNote(id, updates),
     updateNoteShareState: async (id, state) => db.updateNoteShareState(id, state),
-    // As db-get-pending-notes: only the upload queues a sync pass reads.
-    getPendingNotes: async (scope) =>
-      scope === "team" || scope === "syncable" ? db.getPendingNotes(scope) : [],
+    getPendingNotes: async (scope) => db.getPendingNotes(scope),
     getPendingNoteDeletes: async () => db.getPendingNoteDeletes(),
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
     getNoteForCloudRow: async (clientNoteId, cloudId) =>
@@ -165,9 +163,23 @@ function createElectronApi(db, options = {}) {
         : db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId, {
             newKeyIfTaken: options?.newKeyIfTaken === true,
           }),
-    markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
+    renewNoteCloudIdentity: async (id, clientId, cloudId, spaceId, generation) =>
+      authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.renewNoteCloudIdentity(id, clientId, cloudId, spaceId),
+    getPrivatePlacementBackupCandidates: async (generation) =>
+      authState.isStale(generation) ? STALE_SYNC_ACK : db.getPrivatePlacementBackupCandidates(),
+    queuePrivatePlacementBackup: async (generation, candidates) =>
+      authState.isStale(generation) ? STALE_SYNC_ACK : db.queuePrivatePlacementBackup(candidates),
+    markNoteCreatesAttempted: async (clientNoteIds, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? []
+        : db.markNoteCreatesAttempted(clientNoteIds),
     acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
-      db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
+      options?.expectedAuthGeneration !== undefined &&
+      authState.isStale(options.expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
     markNoteSyncedIfUnchanged: async (
       id,
       snapshot,
@@ -175,17 +187,20 @@ function createElectronApi(db, options = {}) {
       cloudUpdatedAt,
       ownerUserId,
       cloudRevision,
-      cloudNote
+      cloudNote,
+      generation
     ) =>
-      db.markNoteSyncedIfUnchanged(
-        id,
-        snapshot,
-        expectedCloudId,
-        cloudUpdatedAt,
-        ownerUserId,
-        cloudRevision,
-        cloudNote
-      ),
+      generation !== undefined && authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.markNoteSyncedIfUnchanged(
+            id,
+            snapshot,
+            expectedCloudId,
+            cloudUpdatedAt,
+            ownerUserId,
+            cloudRevision,
+            cloudNote
+          ),
     setNoteCloudBase: async (id, cloudUpdatedAt, cloudRevision, options) =>
       db.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, options),
     markNoteSyncError: async (id) => db.markNoteSyncError(id),
@@ -193,11 +208,14 @@ function createElectronApi(db, options = {}) {
     countTeamNotesMissingOwner: async () => db.countTeamNotesMissingOwner(),
     countNotesMissingRevision: async (spaceKind) => db.countNotesMissingRevision(spaceKind),
     restoreNoteAfterDeniedDelete: async (id) => db.restoreNoteAfterDeniedDelete(id),
-    hardDeleteNote: async (id) => db.hardDeleteNote(id),
+    hardDeleteNote: async (id, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.hardDeleteNote(id),
 
     // Folders
     getFolders: async (spaceId) => db.getFolders(spaceId),
-    getPendingFolders: async (scope) => (scope === "team" ? db.getPendingFolders(scope) : []),
+    getPendingFolders: async (scope) => db.getPendingFolders(scope),
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
     getFolderByCloudId: async (cloudId) => db.getFolderByCloudId(cloudId),
@@ -226,23 +244,41 @@ function createElectronApi(db, options = {}) {
             cloudId,
             cloudUpdatedAt
           ),
-    markFolderSyncedIfUnchanged: async (id, snapshot, expectedCloudId) =>
-      db.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId),
+    markFolderSyncedIfUnchanged: async (id, snapshot, expectedCloudId, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId),
     restoreFolderAfterDeniedDelete: async (id) => db.restoreFolderAfterDeniedDelete(id),
     relocateRevokedFolder: async (id, privateSpaceId, preserveFolder) =>
       db.relocateRevokedFolder(id, privateSpaceId, preserveFolder),
     forkFolderIdentity: async (id) => db.forkFolderIdentity(id),
     getFolderIdMap: async () => db.getFolderIdMap(),
-    hardDeleteFolder: async (id) => db.hardDeleteFolder(id),
+    hardDeleteFolder: async (id, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.hardDeleteFolder(id),
 
     // Spaces
     getSpaces: async () => db.getSpaces(),
     // As get-private-space-id: null for anything but a workspace id or null.
-    getPrivateSpaceId: async (workspaceId = null) =>
-      workspaceId === null || (typeof workspaceId === "string" && workspaceId.trim())
-        ? db.getPrivateSpaceId(workspaceId)
-        : null,
-    getDefaultPrivateSpaceId: async () => db.getDefaultPrivateSpaceId(),
+    getPrivateSpaceId: async (workspaceId = null, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? null
+        : workspaceId === null || (typeof workspaceId === "string" && workspaceId.trim())
+          ? db.getPrivateSpaceId(workspaceId)
+          : null,
+    getDefaultPrivateSpaceId: async (generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? null
+        : db.getDefaultPrivateSpaceId(),
+    setActiveWorkspaceScope: async (scope) =>
+      scope.accountId === db.activeAccountId
+        ? { success: true, ...db.setActiveWorkspaceScope(scope) }
+        : { success: false, code: "ACCOUNT_CHANGED" },
+    relocatePrivateSpace: async (from, to, accountId) =>
+      accountId === db.activeAccountId
+        ? { success: true, ...db.relocatePrivateSpace(from, to) }
+        : { success: false, code: "ACCOUNT_CHANGED" },
     hasOtherAccountRows: async () => db.hasOtherAccountRows(),
     hasUnclaimedLegacyRows: async () => db.hasUnclaimedLegacyRows(),
     upsertSpaceFromCloud: async (cloudSpace) => db.upsertSpaceFromCloud(cloudSpace),

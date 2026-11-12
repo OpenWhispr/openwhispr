@@ -1,5 +1,7 @@
 # Private notes review fixes
 
+> Historical review record: the later restoration of ordinary Private-note Backup and cross-device placement supersedes the import-history and device-only-note behavior below. See [current release checks](../../private-notes-release-checklist.md).
+
 **Goal:** Resolve PR 3167's confirmed review defects on `feat/workspace-private-notes`, preserve main's fixes, and verify the affected journeys without committing or pushing.
 
 **Architecture:** Preserve account/workspace scoped storage and enforce privacy at the database and sync boundaries. Mark conversations that consume Private content as device-only before persisting that content; keep that classification through future turns and forks. Preserve import provenance independently of a note's new team identity.

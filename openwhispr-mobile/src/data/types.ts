@@ -70,6 +70,7 @@ export interface RemoteFolder {
   deleted_at: string | null;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
+  private_workspace_id?: string | null;
   space_id?: string | null;
   workspace_id?: string | null;
   previous_space_id?: string | null;
@@ -103,6 +104,7 @@ export interface RemoteNote {
   created_at?: string;
   updated_at: string;
   // Scope fields declared for a later task; not yet populated by pull/apply.
+  private_workspace_id?: string | null;
   space_id?: string | null;
   workspace_id?: string | null;
   previous_space_id?: string | null;

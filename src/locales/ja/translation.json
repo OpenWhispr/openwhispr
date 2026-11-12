@@ -2300,10 +2300,9 @@
     },
     "privacy": {
       "cloudBackup": "クラウドバックアップ",
-      "cloudBackupDescription": "文字起こし、チャット、辞書、スニペットをクラウドにバックアップして、すべてのデバイスからシームレスにアクセスできます。",
-      "cloudBackupTeamCaveat": "プライベートノートは常にこのデバイスにのみ保存されます。Teamspace 内のノートは常に同期されます。",
+      "cloudBackupDescription": "文字起こしとノートをクラウドにバックアップして、すべてのデバイスからシームレスにアクセスできます。",
+      "cloudBackupTeamCaveat": "Teamspace 内のノートと共有したノートは、この設定に関係なく常に同期されます。 プライベートな内容を使用するチャットは、このデバイスにのみ保存されます。 以前のバージョンのチャットとバックアップから復元したチャットも対象外です。",
       "cloudNotesMigration": "ノートをバックアップ中… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "すべてのノートがバックアップされました",
       "description": "デバイスからのデータ送信を管理します。初期設定ではすべてオフです。",
       "title": "プライバシー",
       "insightsSync": "個人の統計を同期",
@@ -3393,7 +3392,7 @@
       "privateSpaces": "プライベート",
       "teamSpaces": "Teamspaces",
       "personal": "プライベート",
-      "privateTooltip": "これらのノートはあなただけが見られます。このデバイスにのみ保存されます。",
+      "privateTooltip": "ここのフォルダーとノートは自分だけが見ることができます。",
       "newSpace": "新しい Teamspace",
       "nameAndIconLabel": "名前とアイコン",
       "changeEmoji": "絵文字を変更",
@@ -3419,7 +3418,7 @@
       "moveToWorkspacePrivate": "{{workspace}} › プライベートに移動",
       "workspacePrivate": "{{workspace}} › プライベート",
       "confirmCopyTitle": "プライベートにコピーしますか？",
-      "confirmCopy": "ノートは{{space}}に残ります。コピーはプライベートで、このデバイスにのみ保存されます。",
+      "confirmCopy": "ノートは{{space}}に残ります。",
       "copiedToPrivate": "プライベートにコピーしました",
       "couldNotCopyNote": "ノートをコピーできませんでした",
       "openCopy": "開く",
@@ -3478,7 +3477,7 @@
       "description": "OpenWhispr は個人的な考えと共同作業を分け、適切な人だけがノートを見られるようにします。",
       "personal": {
         "title": "プライベート",
-        "description": "これらのノートはあなただけが見られます。このデバイスにのみ保存されます。"
+        "description": "ここのフォルダーとノートは自分だけが見ることができます。"
       },
       "workspace": {
         "title": "ワークスペース",
@@ -4010,9 +4009,6 @@
       "loading": "ノートを読み込み中…",
       "retry": "ノートを読み込めませんでした。再試行",
       "results": "{{total}} 件中 {{count}} 件のノート"
-    },
-    "privateOnDevice": {
-      "switched": "プライベートノートはこのデバイスにのみ保存されるようになりました。クラウド上のコピーは {{date}} に削除されます。"
     }
   },
   "dictionary": {
@@ -5763,10 +5759,10 @@
         "noTeamspaces": "移動できる Teamspace がまだありません。",
         "openTeamspaces": "Teamspace を開く",
         "cantMoveToShare": "共有のために Teamspace へ移動できるのは、ノートの所有者のみです。",
-        "legacySharedBanner": "このプライベートノートは共有されているため、同期が続いています。このデバイスだけに保存するには、Teamspace に移動するか共有を停止してください。",
+        "legacySharedBanner": "このノートは共有されており、クラウドバックアップがオフでも同期されます。",
         "stopSharing": {
           "title": "共有を停止しますか？",
-          "description": "{{name}} を削除すると共有が停止します。ノートはこのデバイスに残ります。"
+          "description": "{{name}} を削除すると共有が停止します。"
         },
         "visibility": {
           "label": "公開範囲",
@@ -6043,7 +6039,7 @@
       "leave": {
         "title": "{{name}} から退出しますか？",
         "body": "このワークスペースと、そのチームおよび Teamspace にアクセスできなくなります。ワークスペースのオーナーまたは管理者があなたを再び招待できます。",
-        "privateNotes": "このワークスペースのプライベートノートは、このデバイス上で {{workspace}} に移動されます。",
+        "privateNotes": "このワークスペースのプライベートノートは、{{workspace}} に移動されます。",
         "failed": "{{name}} から退出できませんでした。接続を確認して、もう一度お試しください。"
       },
       "left": {
@@ -6053,7 +6049,7 @@
       "delete": {
         "title": "{{name}} を削除しますか？",
         "body": "ワークスペースと、そのノート、ファイル、チーム、Teamspace がすべてのユーザーに対して完全に削除されます。この操作は元に戻せません。",
-        "privateNotes": "このワークスペースのプライベートノートは、このデバイス上で {{workspace}} に移動されます。"
+        "privateNotes": "このワークスペースのプライベートノートは、{{workspace}} に移動されます。"
       },
       "deleting": {
         "title": "{{name}} を削除しています…",
@@ -6158,7 +6154,7 @@
     "intro": {
       "workspace": {
         "title": "ワークスペースは活動の拠点です",
-        "body": "会社の全員がここで作業します。プライベートノートはお使いのデバイスにのみ保存されます。"
+        "body": "会社の全員がここで作業します。プライベートノートは共有するまで非公開のままです。"
       },
       "teamspaces": {
         "title": "Teamspace でノートを共有",

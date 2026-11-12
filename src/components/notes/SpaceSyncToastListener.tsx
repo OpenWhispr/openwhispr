@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useUiLocale } from "../../hooks/useUiLocale";
 import { readPurgeDisplacedNote } from "../../stores/noteStore";
 import { useToast } from "../ui/useToast";
 
@@ -18,7 +17,6 @@ const DEDUPE_MS = 15_000;
  */
 export default function SpaceSyncToastListener() {
   const { t } = useTranslation();
-  const locale = useUiLocale();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -69,16 +67,6 @@ export default function SpaceSyncToastListener() {
             title: title || t("notes.list.untitled"),
           }),
         });
-      } else if (name === "private-notes-on-device") {
-        // The cloud copies' purge date, once this device brought them in.
-        const { purgeAfter } = (payload ?? {}) as { purgeAfter?: string };
-        const purgeDate = purgeAfter ? new Date(purgeAfter) : null;
-        if (!purgeDate || Number.isNaN(purgeDate.getTime())) return;
-        toast({
-          title: t("notes.privateOnDevice.switched", {
-            date: purgeDate.toLocaleDateString(locale, { dateStyle: "long" }),
-          }),
-        });
       } else if (name === "note-update-denied" || name === "note-delete-denied") {
         const { title } = (payload ?? {}) as { title?: string | null };
         toast({
@@ -106,7 +94,7 @@ export default function SpaceSyncToastListener() {
     });
 
     return () => dispose?.();
-  }, [toast, t, locale]);
+  }, [toast, t]);
 
   return null;
 }

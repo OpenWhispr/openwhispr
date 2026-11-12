@@ -224,7 +224,7 @@ export interface RevokedNoteFork {
 // to the private space (unless it already sits there, e.g. a left_team row or
 // one just relocated by its folder's stub — those keep their folder link),
 // drop the cloud link, and fork the client identity so it never writes to the
-// team's row again; as a private note it stays on this device (D2). Push-side
+// team's row again; personal Backup consent governs later uploads. Push-side
 // rejections fork the
 // identity only when a server row exists (cloud_id) and clear the pending
 // left_team retraction the server will never accept. Every new identity also
@@ -284,20 +284,9 @@ export function isPermissionDenialCode(code: string | undefined): boolean {
   return code !== undefined && PERMISSION_DENIAL_CODES.has(code);
 }
 
-// The server's 409 for a personal note or folder write once the account keeps
-// private notes on its devices. Batch creates list such rows in `refused`
-// instead. Either way the row stays pending, unforked and unmarked: only a
-// downgraded or racing build queues one, and the next pass looks at it again.
-export const PERSONAL_NOTES_ON_DEVICE = "personal_notes_on_device";
-
-// What ensureNoteSynced rejects with for a private note that may not sync:
-// sharing a private note means moving it to a teamspace first (D10).
-export const PRIVATE_NOTE_NOT_SYNCABLE = "PRIVATE_NOTE_NOT_SYNCABLE";
-
 /**
- * A private note shared before Private stayed on the device (D10). Its guests
- * keep access, so it is the one private note that still syncs, and its cloud
- * copy is what makes it one: a fork that dropped the copy is local again.
+ * An existing personal share remains eligible for collaboration independently
+ * of Backup consent. A fork that dropped its cloud identity is not shared.
  * Mirrors LEGACY_SHARED_PRIVATE_NOTE_SQL in database.js.
  */
 export function isLegacySharedPrivateNote(note: {
@@ -305,32 +294,6 @@ export function isLegacySharedPrivateNote(note: {
   cloud_id?: string | null;
 }): boolean {
   return !!note.is_shared && !!note.cloud_id;
-}
-
-/**
- * What a sync pass does with a note or folder that sits in a private space.
- * Nothing private is uploaded (D2), except edits to a legacy shared note
- * ("push"). A row that left a team before this change still owes that team a
- * scope retraction, which would upload it, so it is cut loose from the team's
- * row instead ("detach"), as Copy to Private leaves the team's copy alone (D8).
- * Anything else stays on the device ("keep").
- */
-export type PrivateRowSync = "push" | "detach" | "keep";
-
-export function privateNoteSync(note: {
-  is_shared?: number | boolean | null;
-  cloud_id?: string | null;
-  left_team?: number | boolean | null;
-}): PrivateRowSync {
-  if (note.left_team && note.cloud_id) return "detach";
-  return isLegacySharedPrivateNote(note) ? "push" : "keep";
-}
-
-export function privateFolderSync(folder: {
-  cloud_id?: string | null;
-  left_team?: number | boolean | null;
-}): PrivateRowSync {
-  return folder.left_team && folder.cloud_id ? "detach" : "keep";
 }
 
 // Whether a pulled note should copy its cloud owner onto the local row. Kept

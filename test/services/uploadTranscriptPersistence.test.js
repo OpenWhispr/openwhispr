@@ -316,6 +316,7 @@ test("upload creation keeps its selected workspace and sends transcript in the r
   const { window } = installBrowserGlobals(t);
   Object.assign(window.electronAPI, {
     saveNote: async (...args) => db.saveNote(...args),
+    authGetTokenState: async () => ({ token: "synthetic-token", generation: 1 }),
     cloudApiRequest: async (request) => {
       assert.equal(request.path, "/api/notes/create");
       calls.push(JSON.parse(JSON.stringify(request)));
@@ -348,11 +349,26 @@ test("upload creation keeps its selected workspace and sends transcript in the r
   const note = db.getNote(saved.note.id);
   assert.equal(note.folder_id, folder.id);
   assert.equal(note.space_id, spaceId);
+  const auth = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+  window.location = { origin: "https://desktop.openwhispr.test" };
+  await auth.handleAuthRequestSuccess({
+    data: { user: { id: "synthetic-account" } },
+    response: new Response("{}"),
+    request: {
+      url: "https://auth.test/get-session",
+      headers: { Authorization: "Bearer synthetic-token" },
+      openWhisprAuthGeneration: 1,
+    },
+  });
+  assert.equal(auth.commitValidatedAuthContext(1, "synthetic-account"), true);
   const { SyncService } = await vite.ssrLoadModule("/services/SyncService.ts");
   const service = new SyncService();
-  await service.createCloudNote(note, "synthetic-cloud-folder", {
-    space_id: "synthetic-cloud-space",
-  });
+  await service.createCloudNote(
+    note,
+    "synthetic-cloud-folder",
+    { space_id: "synthetic-cloud-space" },
+    1
+  );
   assert.equal(calls.length, 1);
   const { body } = calls[0];
   assert.equal(body.content, "");

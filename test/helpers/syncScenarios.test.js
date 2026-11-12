@@ -647,6 +647,7 @@ test("S5 a tombstone as the last row of a delta page still hands the next page a
   cloud.setClock(() => new Date().toISOString());
 
   device.storage["lastSyncedAt.notes"] = cursor;
+  device.storage["syncCursors.privateBackup:user-harness"] = "1";
   // Only the delta's pages count here, not the one-time read of the whole feed.
   device.storage["noteFeedReplay.v1"] = "3";
   const before = snapshotNotes(db);
@@ -676,7 +677,7 @@ test("S5 a tombstone as the last row of a delta page still hands the next page a
 // stall guard in pullNotes and silently skips everything past that page.
 test.todo("S5 a full delta page tied on updated_at must not abandon the rest of the pull");
 
-test("S6 a teamspace folder from another device takes both note directions, and private ones stay put", async (t) => {
+test("S6 personal and team folders keep their associations in both sync directions", async (t) => {
   const cloud = freshCloud();
   const device = createDevice(t, cloud);
   if (!device) return;
@@ -724,20 +725,19 @@ test("S6 a teamspace folder from another device takes both note directions, and 
   const before = snapshotNotes(db);
   await syncOnce(device);
 
-  const [batch] = cloud.logFor("/api/notes/batch-create");
-  assert.deepEqual(
-    batch.body.notes.map((note) => note.client_note_id),
-    [localMeeting.client_note_id],
-    "the private meeting never goes up"
-  );
-  assert.equal(
-    batch.body.notes[0].folder_id,
+  const sent = cloud.logFor("/api/notes/batch-create").flatMap((batch) => batch.body.notes);
+  const teamPush = sent.find((note) => note.client_note_id === localMeeting.client_note_id);
+  assert.ok(teamPush, "the team note was backed up");
+  assert.equal(teamPush.folder_id, cloudMeetings.id, "the team note retains its cloud folder");
+  assert.notEqual(teamPush.folder_id, meetings.id);
+  const privatePush = sent.find((note) => note.client_note_id === privateMeeting.client_note_id);
+  assert.ok(privatePush, "ordinary personal notes follow Backup consent");
+  assert.ok(db.getNote(privateMeeting.id).cloud_id);
+  assert.notEqual(
+    privatePush.folder_id,
     cloudMeetings.id,
-    "the pushed note must carry the cloud folder id, never the local integer"
+    "personal content stays outside the team folder"
   );
-  assert.notEqual(batch.body.notes[0].folder_id, meetings.id);
-  assert.equal(cloud.folders().length, 1, "no private folder reached the cloud");
-  assert.equal(db.getNote(privateMeeting.id).cloud_id, null);
 
   assertNoContentRegression(before, snapshotNotes(db), cloud.notes());
 });

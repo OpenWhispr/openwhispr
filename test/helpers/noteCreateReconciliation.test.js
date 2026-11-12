@@ -9,8 +9,8 @@ const { SyncService } = require("../../src/services/SyncService.ts");
 const { resolveCloudNoteCreate } = require("../../src/services/noteCreateAck.ts");
 const { readNoteConflictIds } = require("../../src/lib/noteConflictRegistry.ts");
 
-// A teamspace note whose create response was lost: private notes never upload
-// (D2), so only a teamspace's notes reach this reconciliation.
+// A teamspace note whose create response was lost exercises the same
+// reconciliation used by ordinary personal Backup.
 function setup(t) {
   const db = createDb(t);
   assert.ok(db);

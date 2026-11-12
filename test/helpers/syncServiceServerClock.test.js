@@ -166,6 +166,7 @@ test("a device on time keeps the cursors it already has", async (t) => {
   const { cloud, service } = ctx;
 
   const kept = new Date(Date.now() - 5 * MINUTE).toISOString();
+  localStorageStub.setItem("syncCursors.privateBackup:user-harness", "1");
   localStorageStub.setItem("lastSyncedAt.notes", kept);
   localStorageStub.setItem("noteFeedReplay.v1", "3");
 

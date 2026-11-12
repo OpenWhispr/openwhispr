@@ -19,7 +19,7 @@ type TransferSpace = Pick<SpaceItem, "id" | "kind" | "workspace_id" | "account_i
 /**
  * What taking a note from one space to another does (spec D8):
  * - Private → a teamspace of its workspace: a move; the note uploads into the teamspace.
- * - Private → another of the account's Privates, in any workspace: a move, on this device.
+ * - Private → another of the account's Privates, in any workspace: a move with Backup placement.
  * - Teamspace → a Private: a copy. The team keeps its note, so no move ever makes a team note
  *   private while it keeps its cloud identity.
  * - Teamspace → a teamspace of the same workspace: a move.

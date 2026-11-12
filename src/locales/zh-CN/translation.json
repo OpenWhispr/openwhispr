@@ -2300,10 +2300,9 @@
     },
     "privacy": {
       "cloudBackup": "云端备份",
-      "cloudBackupDescription": "将转录记录、对话、词典和片段备份到云端，实现跨设备无缝访问。",
-      "cloudBackupTeamCaveat": "私密笔记始终仅保存在此设备上。Teamspace 中的笔记始终会同步。",
+      "cloudBackupDescription": "将转录记录和笔记备份到云端，实现跨设备无缝访问。",
+      "cloudBackupTeamCaveat": "Teamspace 中的笔记和您已分享的笔记会始终同步，不受此设置影响。 使用私密内容的对话仅保留在此设备上。 早期版本中的对话和从备份恢复的对话也不参与备份。",
       "cloudNotesMigration": "正在备份笔记… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "所有笔记已备份",
       "description": "控制哪些数据会离开你的设备。默认全部关闭。",
       "title": "隐私",
       "insightsSync": "同步个人统计",
@@ -3465,7 +3464,7 @@
       "privateSpaces": "私密",
       "teamSpaces": "Teamspaces",
       "personal": "私密",
-      "privateTooltip": "只有你可以看到这些笔记。它们仅保存在此设备上。",
+      "privateTooltip": "只有你能看到这里的文件夹和笔记。",
       "newSpace": "新建 Teamspace",
       "nameAndIconLabel": "名称和图标",
       "changeEmoji": "更改表情符号",
@@ -3491,7 +3490,7 @@
       "moveToWorkspacePrivate": "移动到 {{workspace}} › 私密",
       "workspacePrivate": "{{workspace}} › 私密",
       "confirmCopyTitle": "复制到私密？",
-      "confirmCopy": "笔记仍保留在 {{space}} 中。副本为私密内容，仅保存在此设备上。",
+      "confirmCopy": "笔记仍保留在 {{space}} 中。",
       "copiedToPrivate": "已复制到“私密”",
       "couldNotCopyNote": "无法复制笔记",
       "openCopy": "打开",
@@ -3550,7 +3549,7 @@
       "description": "OpenWhispr 将个人想法与协作内容分开，让合适的人看到合适的笔记。",
       "personal": {
         "title": "私密",
-        "description": "只有你可以看到这些笔记。它们仅保存在此设备上。"
+        "description": "只有你能看到这里的文件夹和笔记。"
       },
       "workspace": {
         "title": "工作区",
@@ -4082,9 +4081,6 @@
       "loading": "正在加载笔记…",
       "retry": "无法加载笔记。重试",
       "results": "{{count}} / {{total}} 篇笔记"
-    },
-    "privateOnDevice": {
-      "switched": "私密笔记现在仅保存在此设备上。其云端副本将于 {{date}} 删除。"
     }
   },
   "dictionary": {
@@ -5763,10 +5759,10 @@
         "noTeamspaces": "暂无可移入的 Teamspace。",
         "openTeamspaces": "打开 Teamspace",
         "cantMoveToShare": "只有笔记所有者才能将其移到 Teamspace 进行分享。",
-        "legacySharedBanner": "这条私密笔记已被分享，因此仍会同步。将其移到 Teamspace 或停止分享，即可只保存在此设备上。",
+        "legacySharedBanner": "此笔记已共享，即使关闭云备份也会同步。",
         "stopSharing": {
           "title": "停止分享？",
-          "description": "移除 {{name}} 后将停止分享。这条笔记将只保存在此设备上。"
+          "description": "移除 {{name}} 后将停止分享。"
         },
         "visibility": {
           "label": "可见性",
@@ -6043,7 +6039,7 @@
       "leave": {
         "title": "退出 {{name}}？",
         "body": "你将失去对此工作区、其团队和 Teamspace 的访问权限。工作区所有者或管理员可以重新邀请你。",
-        "privateNotes": "你在此工作区中的私密笔记将在此设备上移至 {{workspace}}。",
+        "privateNotes": "你在此工作区中的私密笔记将移至 {{workspace}}。",
         "failed": "无法退出 {{name}}。请检查网络连接后重试。"
       },
       "left": {
@@ -6053,7 +6049,7 @@
       "delete": {
         "title": "删除 {{name}}？",
         "body": "这将为所有人永久删除该工作区及其笔记、文件、团队和 Teamspace，且无法撤销。",
-        "privateNotes": "你在此工作区中的私密笔记将在此设备上移至 {{workspace}}。"
+        "privateNotes": "你在此工作区中的私密笔记将移至 {{workspace}}。"
       },
       "deleting": {
         "title": "正在删除 {{name}}…",
@@ -6158,7 +6154,7 @@
     "intro": {
       "workspace": {
         "title": "工作区是你的大本营",
-        "body": "公司里的每个人都在这里工作。你的私密笔记仅保存在你的设备上。"
+        "body": "公司里的每个人都在这里工作。你的私人笔记在你分享之前始终保持私密。"
       },
       "teamspaces": {
         "title": "在 Teamspace 中共享笔记",

@@ -159,6 +159,40 @@ test("meeting auto-end listener strips the event and can unsubscribe", () => {
   assert.equal(listeners.has("meeting-auto-end-requested"), false);
 });
 
+test("note and folder sync receipts forward their originating sign-in", async () => {
+  const { api, invocations } = loadPreloadApi();
+  const snapshot = { id: 1 };
+  await api.markNoteCreatesAttempted(["client-note"], 9);
+  await api.acknowledgeNoteCreate(1, snapshot, "cloud-note", null, "owner", {
+    expectedAuthGeneration: 9,
+  });
+  await api.markNoteSyncedIfUnchanged(1, snapshot, "cloud-note", null, "owner", 2, null, 9);
+  await api.markFolderSyncedIfUnchanged(2, snapshot, "cloud-folder", 9);
+  await api.hardDeleteNote(1, 9);
+  await api.hardDeleteFolder(2, 9);
+  const candidates = { notes: ["client-note"], folders: [] };
+  await api.getPrivatePlacementBackupCandidates(9);
+  await api.queuePrivatePlacementBackup(9, candidates);
+  assert.deepEqual(invocations, [
+    ["db-mark-note-creates-attempted", ["client-note"], 9],
+    [
+      "db-acknowledge-note-create",
+      1,
+      snapshot,
+      "cloud-note",
+      null,
+      "owner",
+      { expectedAuthGeneration: 9 },
+    ],
+    ["db-mark-note-synced-if-unchanged", 1, snapshot, "cloud-note", null, "owner", 2, null, 9],
+    ["db-mark-folder-synced-if-unchanged", 2, snapshot, "cloud-folder", 9],
+    ["db-hard-delete-note", 1, 9],
+    ["db-hard-delete-folder", 2, 9],
+    ["db-get-private-placement-backup-candidates", 9],
+    ["db-queue-private-placement-backup", 9, candidates],
+  ]);
+});
+
 test("dictation lifecycle reports reach main", async () => {
   const { api, invocations } = loadPreloadApi();
 
@@ -296,6 +330,8 @@ test("private-space workspace calls reach their channels", async () => {
   await api.setActiveWorkspaceScope(scope);
   await api.getPrivateSpaceId("w2");
   await api.getPrivateSpaceId();
+  await api.getPrivateSpaceId("w2", 9);
+  await api.getDefaultPrivateSpaceId(9);
   await api.bindDefaultPrivateSpace("w1", "account-a");
   await api.copyNoteToSpace(7, 3, 12);
   await api.copyNoteToSpace(7, 3);
@@ -303,8 +339,10 @@ test("private-space workspace calls reach their channels", async () => {
 
   assert.deepEqual(invocations, [
     ["set-active-workspace-scope", scope],
-    ["get-private-space-id", "w2"],
-    ["get-private-space-id", undefined],
+    ["get-private-space-id", "w2", undefined],
+    ["get-private-space-id", undefined, undefined],
+    ["get-private-space-id", "w2", 9],
+    ["get-default-private-space-id", 9],
     ["bind-default-private-space", "w1", "account-a"],
     ["copy-note-to-space", 7, 3, 12],
     ["copy-note-to-space", 7, 3, undefined],

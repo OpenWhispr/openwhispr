@@ -2,8 +2,11 @@ import {
   cloudGet,
   cloudGetForAuthGeneration,
   cloudPost,
+  cloudPostForAuthGeneration,
   cloudPatch,
+  cloudPatchForAuthGeneration,
   cloudDelete,
+  cloudDeleteForAuthGeneration,
 } from "./cloudApi.js";
 
 interface FolderInput {
@@ -11,6 +14,7 @@ interface FolderInput {
   client_folder_id?: string;
   is_default?: boolean;
   sort_order?: number;
+  private_workspace_id?: string | null;
   workspace_id?: string | null;
   space_id?: string | null;
 }
@@ -21,6 +25,7 @@ interface CloudFolder {
   name: string;
   is_default: boolean;
   sort_order: number;
+  private_workspace_id?: string | null;
   workspace_id: string | null;
   space_id: string | null;
   previous_space_id?: string | null;
@@ -32,33 +37,51 @@ interface CloudFolder {
   updated_at: string;
 }
 
-async function create(folder: FolderInput): Promise<CloudFolder> {
-  return cloudPost<CloudFolder>("/api/folders/create", folder);
+async function create(folder: FolderInput, authGeneration?: number): Promise<CloudFolder> {
+  return authGeneration === undefined
+    ? cloudPost<CloudFolder>("/api/folders/create", folder)
+    : cloudPostForAuthGeneration<CloudFolder>("/api/folders/create", folder, authGeneration);
 }
 
-// Folders the server left out of a batch, with why: personal folders of an
-// account that keeps private notes on its devices (personal_notes_on_device).
-// Absent from APIs that predate it.
+// Per-row refusals are optional on older batch endpoints.
 export interface RefusedFolder {
   client_folder_id: string | null;
   code: string;
 }
 
 async function batchCreate(
-  folders: FolderInput[]
+  folders: FolderInput[],
+  authGeneration?: number
 ): Promise<{ created: CloudFolder[]; refused?: RefusedFolder[] }> {
-  return cloudPost<{ created: CloudFolder[]; refused?: RefusedFolder[] }>(
-    "/api/folders/batch-create",
-    { folders }
-  );
+  return authGeneration === undefined
+    ? cloudPost<{ created: CloudFolder[]; refused?: RefusedFolder[] }>(
+        "/api/folders/batch-create",
+        { folders }
+      )
+    : cloudPostForAuthGeneration<{ created: CloudFolder[]; refused?: RefusedFolder[] }>(
+        "/api/folders/batch-create",
+        { folders },
+        authGeneration
+      );
 }
 
-async function update(id: string, updates: Partial<FolderInput>): Promise<CloudFolder> {
-  return cloudPatch<CloudFolder>("/api/folders/update", { id, ...updates });
+async function update(
+  id: string,
+  updates: Partial<FolderInput>,
+  authGeneration?: number
+): Promise<CloudFolder> {
+  return authGeneration === undefined
+    ? cloudPatch<CloudFolder>("/api/folders/update", { id, ...updates })
+    : cloudPatchForAuthGeneration<CloudFolder>(
+        "/api/folders/update",
+        { id, ...updates },
+        authGeneration
+      );
 }
 
-async function deleteFolder(id: string): Promise<void> {
-  await cloudDelete("/api/folders/delete", { id });
+async function deleteFolder(id: string, authGeneration?: number): Promise<void> {
+  if (authGeneration === undefined) await cloudDelete("/api/folders/delete", { id });
+  else await cloudDeleteForAuthGeneration("/api/folders/delete", { id }, authGeneration);
 }
 
 // Given an auth generation, the request is pinned to that sign-in: refused
@@ -66,7 +89,8 @@ async function deleteFolder(id: string): Promise<void> {
 async function list(
   since?: string,
   scope?: "all",
-  authGeneration?: number
+  authGeneration?: number,
+  cache?: "no-store"
 ): Promise<{ folders: CloudFolder[] }> {
   const params = new URLSearchParams();
   if (since !== undefined) params.set("since", since);
@@ -74,8 +98,8 @@ async function list(
   const query = params.toString();
   const path = `/api/folders/list${query ? `?${query}` : ""}`;
   return authGeneration === undefined
-    ? cloudGet<{ folders: CloudFolder[] }>(path)
-    : cloudGetForAuthGeneration<{ folders: CloudFolder[] }>(path, authGeneration);
+    ? cloudGet<{ folders: CloudFolder[] }>(path, cache)
+    : cloudGetForAuthGeneration<{ folders: CloudFolder[] }>(path, authGeneration, cache);
 }
 
 export { create, batchCreate, update, deleteFolder, list };

@@ -200,9 +200,7 @@ test("getImportedClientNoteIds reports only rows already in the table", (t) => {
   db.db.close();
 });
 
-// A note moved into a teamspace takes a new client id (D39), so the re-import finds it by the
-// source key it stored instead.
-test("a re-import skips a note that moved into a teamspace under a new client id", (t) => {
+test("a re-import skips a note that moved into a teamspace while retaining its client id", (t) => {
   const db = createDb(t);
   if (!db) return;
 
@@ -224,7 +222,7 @@ test("a re-import skips a note that moved into a teamspace under a new client id
     .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, 'account-1')")
     .run(teamId);
   assert.ok(db.updateNote(noteId, { space_id: teamId, folder_id: null }).success);
-  assert.notEqual(db.getNote(noteId).client_note_id, row.clientNoteId);
+  assert.equal(db.getNote(noteId).client_note_id, row.clientNoteId);
 
   assert.deepEqual(db.getImportedClientNoteIds([row]), [row.clientNoteId]);
   const rerun = db.importNotes([row]);

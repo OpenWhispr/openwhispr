@@ -23,3 +23,14 @@ export function getTeamSpacesCapability(): boolean | null {
 export function setTeamSpacesCapability(capable: boolean): void {
   notesRepository.setSyncState(KEY, capable ? 'true' : 'false');
 }
+
+// Stored with the account's other sync state and cleared by its existing wipe.
+const DEFAULT_PRIVATE_WORKSPACE_KEY = 'private_default_workspace_id';
+
+export function getDefaultPrivateWorkspaceId(): string | null {
+  return notesRepository.getSyncState(DEFAULT_PRIVATE_WORKSPACE_KEY) || null;
+}
+
+export function setDefaultPrivateWorkspaceId(workspaceId: string | null): void {
+  notesRepository.setSyncState(DEFAULT_PRIVATE_WORKSPACE_KEY, workspaceId ?? '');
+}

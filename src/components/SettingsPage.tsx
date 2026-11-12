@@ -4355,11 +4355,6 @@ EOF`,
                       </div>
                     </div>
                   )}
-                  {!migration && cloudBackupEnabled && isSignedIn && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("settingsPage.privacy.cloudNotesMigrationDone")}
-                    </p>
-                  )}
                   {cloudBackupEnabled &&
                     isSignedIn &&
                     (() => {

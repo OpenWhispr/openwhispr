@@ -115,7 +115,7 @@ export default function ShareNoteDialog({
   // A note synced from this dialog: the create acknowledgement doesn't
   // broadcast, so the note prop can lag behind the local DB until the next
   // note-updated event. The id holds only for the note's identity (a fork or
-  // a move into a teamspace gives it a new key) in the space it was made for,
+  // a fork gives it a new key) in the space it was made for,
   // and a change of the note's real space ends it too.
   const [syncedFor, setSyncedFor] = useState<{
     noteId: number;
@@ -145,12 +145,10 @@ export default function ShareNoteDialog({
     syncedFor?.noteId === note.id &&
     syncedFor.clientNoteId === (note.client_note_id ?? null) &&
     syncedFor.spaceId === spaceId;
-  // While the prop lags the dialog's move, its cloud id is the private note's
-  // old Backup copy, which the move dropped (D32): never the one to share from.
+  // Wait for the move to sync its team scope before exposing sharing controls.
   const knownCloudId =
     (propLagsMove ? null : note.cloud_id) ?? (syncedHere ? syncedFor.cloudId : null);
-  // A private note that isn't shared has nothing to share from: a cloud id on
-  // it is the old Backup's copy, and sharing that would start syncing it again.
+  // New shares require a teamspace even when Backup already holds a personal copy.
   const cloudId = shareState === "team" || shareState === "legacyShared" ? knownCloudId : null;
   const cached = useShareCacheEntry(cloudId);
 
@@ -476,7 +474,7 @@ export default function ShareNoteDialog({
 
   // A shared private note syncs only while its share lasts. Once removing
   // someone leaves nobody but the owner, ending the share keeps the note on
-  // this device: the server confirms it private and the local flag follows.
+  // the owner: the server confirms it private and the local flag follows.
   // Only a removal the user confirmed as stopping sharing ends it.
   const endLegacyShareIfUnreachable = useCallback(
     async (state: ShareStateResponse | null): Promise<void> => {

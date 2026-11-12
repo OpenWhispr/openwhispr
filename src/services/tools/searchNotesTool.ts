@@ -97,11 +97,9 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
       const searchSpaceIds = spacesToSearch(space, spaces, scopeSpaceIds, !!fixedScope);
       const folderId = fixedScope?.folderId ?? null;
 
-      // Fallback chain: local semantic (hybrid RRF) → FTS5 keyword → cloud. Everything in scope
-      // is on this device, so the cloud is asked only when nothing local matched, and only for
-      // teamspaces: private notes never leave the device, and the personal rows the cloud may
-      // still hold are stale copies of them. Folder scoping is local-only: the cloud API has no
-      // folder filter.
+      // Search local content first. Cloud fallback is limited to teamspaces because
+      // the cloud search API cannot filter by Private workspace placement.
+      // Folder scoping is also local-only: the cloud API has no folder filter.
       const cloudSpaces = spaces.filter(
         (s) => s.kind === "team" && !!s.cloud_space_id && searchSpaceIds.includes(s.id)
       );

@@ -85,11 +85,12 @@ function cloudUpsertHandler(db, broadcast, notifyVectorChanges) {
     /ipcMain\.handle\(\s*"db-upsert-note-from-cloud",\s*(\([\s\S]*?\n {6}\})\n {4}\);/
   );
   assert.ok(registration, "the cloud-note IPC callback must be present");
-  return new Function("broadcastToWindows", "setImmediate", `return (${registration[1]});`).call(
-    { databaseManager: db, notifyVectorChanges },
-    broadcast,
-    setImmediate
-  );
+  return new Function(
+    "broadcastToWindows",
+    "setImmediate",
+    "isStaleSyncAck",
+    `return (${registration[1]});`
+  ).call({ databaseManager: db, notifyVectorChanges }, broadcast, setImmediate, () => false);
 }
 
 // Keep the real Zustand state, listeners, and container routing. The unrelated
@@ -182,9 +183,7 @@ for (const collision of collisions) {
     const expectedProtectedId = collision.accountId === "account-a" ? protectedRow.id : null;
     assert.equal(store.getNoteFromStore(protectedRow.id)?.id ?? null, expectedProtectedId);
 
-    // Personal rows apply only through the one-time import of cloud private
-    // notes (includePersonal), the pull these collisions can reach.
-    const complete = await service.pullNotes(false, false, false, { includePersonal: true });
+    const complete = await service.pullNotes(false, false, false);
     await new Promise(setImmediate);
     const accepted = db.getNoteByClientId(validCloudNote.client_note_id);
     assert.ok(accepted, "the valid row after the collision must persist");
@@ -200,7 +199,7 @@ for (const collision of collisions) {
         validRendererContent: store.getNoteFromStore(accepted.id)?.content ?? null,
       },
       {
-        complete: true,
+        complete: false,
         results: [null, accepted.id],
         events: [["note-synced", accepted.id]],
         vectorChanges: 1,
@@ -208,9 +207,10 @@ for (const collision of collisions) {
         validRendererContent: "Visible to the active account",
       }
     );
-    assert.ok(
+    assert.equal(
       localStorage.getItem("lastSyncedAt.notes"),
-      "a skipped collision must not stall the cursor"
+      null,
+      "a row that was not stored must remain eligible for recovery"
     );
     assert.deepEqual(
       db.db.prepare("SELECT * FROM notes WHERE id = ?").get(protectedRow.id),
@@ -259,66 +259,3 @@ test("cloud pulls still adopt an unattributed note and move it between private a
   db.setActiveAccountId("account-b");
   assert.equal(db.getNote(original.id), null);
 });
-
-for (const deletion of ["soft", "physical"]) {
-  test(`import acknowledgement after ${deletion} deletion does not reach the note store`, async (t) => {
-    const db = createDb(t);
-    if (!db) return;
-    db.setActiveAccountId("account-a");
-    db.setActiveWorkspaceScope({
-      activeWorkspaceId: "workspace-a",
-      defaultWorkspaceId: "workspace-a",
-    });
-    db.bindDefaultPrivateSpace("workspace-a");
-    const privateId = db.getDefaultPrivateSpaceId();
-    const local = db.upsertNoteFromCloud(PRIVATE_NOTE, null, privateId);
-    const team = db.upsertSpaceFromCloud({
-      id: "team-cloud",
-      name: "Team",
-      workspace_id: "workspace-a",
-    });
-    assert.equal(db.updateNote(local.id, { space_id: team.id }).success, true);
-    if (deletion === "soft") {
-      db.db.prepare("UPDATE notes SET cloud_create_attempted = 1 WHERE id = ?").run(local.id);
-      db.deleteNote(local.id);
-      assert.ok(
-        db.db.prepare("SELECT deleted_at FROM notes WHERE id = ?").get(local.id)?.deleted_at
-      );
-    } else {
-      db.hardDeleteNote(local.id);
-    }
-    resetBrowserGlobals();
-    installBrowserGlobals();
-    const events = [];
-    let onNoteSynced;
-    const handler = cloudUpsertHandler(
-      db,
-      (channel, note) => {
-        events.push([channel, note]);
-        if (channel === "note-synced") onNoteSynced(note);
-      },
-      () => {}
-    );
-    window.electronAPI = {
-      ...createElectronApi(db, { cloud: createFakeCloud() }),
-      getNotes: async (...args) => db.getNotes(...args),
-      getFolderNoteCounts: async () => db.getFolderNoteCounts(),
-      onNoteSynced: (callback) => {
-        onNoteSynced = callback;
-        return () => {};
-      },
-    };
-    t.after(() => resetBrowserGlobals());
-    const store = loadNoteStore();
-    await store.initializeNotes();
-    await store.loadSpaces();
-    await store.loadContainerNotes(store.spaceContainerKey(privateId));
-    await store.loadContainerNotes(store.spaceContainerKey(team.id));
-    assert.equal(store.getNoteFromStore(local.id), null);
-    const result = handler(null, PRIVATE_NOTE, null, privateId, undefined, { newKeyIfTaken: true });
-    await new Promise(setImmediate);
-    assert.deepEqual(result, { imported: true });
-    assert.deepEqual(events, []);
-    assert.equal(store.getNoteFromStore(local.id), null);
-  });
-}

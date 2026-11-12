@@ -2279,10 +2279,9 @@
     },
     "privacy": {
       "cloudBackup": "Backup na nuvem",
-      "cloudBackupDescription": "Salve suas transcrições, chats, dicionário e snippets na nuvem para acesso contínuo em todos os dispositivos.",
-      "cloudBackupTeamCaveat": "Notas privadas sempre ficam neste dispositivo. Notas em teamspaces são sempre sincronizadas.",
+      "cloudBackupDescription": "Salve suas transcrições e notas na nuvem para acesso contínuo em todos os dispositivos.",
+      "cloudBackupTeamCaveat": "Notas em teamspaces e notas que você compartilhou são sempre sincronizadas, independentemente desta configuração. Chats que usam conteúdo privado ficam neste dispositivo. Chats de versões anteriores e chats restaurados de um backup também são excluídos.",
       "cloudNotesMigration": "Fazendo backup das notas… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "Todas as notas salvas na nuvem",
       "description": "Controle quais dados saem do seu dispositivo. Tudo está desativado por padrão.",
       "title": "Privacidade",
       "insightsSync": "Sincronizar Estatísticas pessoais",
@@ -3471,7 +3470,7 @@
       "privateSpaces": "Privado",
       "teamSpaces": "Teamspaces",
       "personal": "Privado",
-      "privateTooltip": "Somente você pode ver estas notas. Elas ficam neste dispositivo.",
+      "privateTooltip": "Somente você pode ver as pastas e notas deste espaço.",
       "newSpace": "Novo teamspace",
       "nameAndIconLabel": "Nome e ícone",
       "changeEmoji": "Alterar emoji",
@@ -3497,7 +3496,7 @@
       "moveToWorkspacePrivate": "Mover para {{workspace}} › Privado",
       "workspacePrivate": "{{workspace}} › Privado",
       "confirmCopyTitle": "Copiar para Privado?",
-      "confirmCopy": "A nota permanece em {{space}}. A cópia é privada e fica neste dispositivo.",
+      "confirmCopy": "A nota permanece em {{space}}.",
       "copiedToPrivate": "Copiada para Privado",
       "couldNotCopyNote": "Não foi possível copiar a nota",
       "openCopy": "Abrir",
@@ -3556,7 +3555,7 @@
       "description": "O OpenWhispr separa pensamentos privados do trabalho compartilhado para que as pessoas certas vejam as notas certas.",
       "personal": {
         "title": "Privado",
-        "description": "Somente você pode ver estas notas. Elas ficam neste dispositivo."
+        "description": "Somente você pode ver as pastas e notas deste espaço."
       },
       "workspace": {
         "title": "Espaço de trabalho",
@@ -4088,9 +4087,6 @@
       "loading": "Carregando notas…",
       "retry": "Não foi possível carregar as notas. Tentar novamente",
       "results": "{{count}} de {{total}} notas"
-    },
-    "privateOnDevice": {
-      "switched": "As notas privadas agora ficam neste dispositivo. As cópias na nuvem serão excluídas em {{date}}."
     }
   },
   "dictionary": {
@@ -5790,10 +5786,10 @@
         "noTeamspaces": "Ainda não há nenhum teamspace para onde movê-la.",
         "openTeamspaces": "Abrir Teamspaces",
         "cantMoveToShare": "Apenas o proprietário da nota pode movê-la para um teamspace para compartilhá-la.",
-        "legacySharedBanner": "Esta nota privada está compartilhada, por isso continua sincronizando. Mova-a para um teamspace ou pare de compartilhá-la para mantê-la neste dispositivo.",
+        "legacySharedBanner": "Esta nota é compartilhada e sincronizada mesmo quando o backup na nuvem está desativado.",
         "stopSharing": {
           "title": "Parar de compartilhar?",
-          "description": "Remover {{name}} interrompe o compartilhamento. A nota ficará neste dispositivo."
+          "description": "Remover {{name}} interrompe o compartilhamento."
         },
         "visibility": {
           "label": "Visibilidade",
@@ -6070,7 +6066,7 @@
       "leave": {
         "title": "Sair de {{name}}?",
         "body": "Você perderá o acesso a este espaço de trabalho, às equipes e aos teamspaces dele. O proprietário ou um administrador do espaço de trabalho pode convidar você de volta.",
-        "privateNotes": "Suas notas privadas neste espaço de trabalho serão movidas para {{workspace}} neste dispositivo.",
+        "privateNotes": "Suas notas privadas neste espaço de trabalho serão movidas para {{workspace}}.",
         "failed": "Não foi possível sair de {{name}}. Verifique sua conexão e tente novamente."
       },
       "left": {
@@ -6080,7 +6076,7 @@
       "delete": {
         "title": "Excluir {{name}}?",
         "body": "Isso exclui permanentemente o espaço de trabalho, as notas, os arquivos, as equipes e os teamspaces dele para todos. Não é possível desfazer.",
-        "privateNotes": "Suas notas privadas neste espaço de trabalho serão movidas para {{workspace}} neste dispositivo."
+        "privateNotes": "Suas notas privadas neste espaço de trabalho serão movidas para {{workspace}}."
       },
       "deleting": {
         "title": "Excluindo {{name}}…",
@@ -6185,7 +6181,7 @@
     "intro": {
       "workspace": {
         "title": "Seu espaço de trabalho é a sua base",
-        "body": "Todos na sua empresa trabalham aqui. Suas notas privadas ficam no seu dispositivo."
+        "body": "Todos na sua empresa trabalham aqui. Suas notas privadas continuam privadas até você compartilhá-las."
       },
       "teamspaces": {
         "title": "Compartilhe notas em teamspaces",

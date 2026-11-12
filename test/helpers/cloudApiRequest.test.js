@@ -15,6 +15,24 @@ function createHandler(state, proxyFetch) {
   });
 }
 
+test("migration snapshot requests bypass the HTTP cache without changing ordinary requests", async () => {
+  const state = { current: { token: "token-a", generation: 1 } };
+  const options = [];
+  const handler = createHandler(state, async (_url, init) => {
+    options.push(init);
+    return new Response("{}");
+  });
+  for (const cache of [undefined, "no-store"]) {
+    assert.equal(
+      (await handler({ method: "GET", path: "/api/notes/list", expectedAuthGeneration: 1, cache }))
+        .success,
+      true
+    );
+  }
+  assert.equal(options[0].cache, undefined);
+  assert.equal(options[1].cache, "no-store");
+});
+
 test("an unvalidated or stale generation never reaches the network", async () => {
   const state = { current: { token: "token-b", generation: 2 } };
   let fetchCalls = 0;

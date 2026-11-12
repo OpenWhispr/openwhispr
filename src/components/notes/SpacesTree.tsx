@@ -1504,7 +1504,7 @@ export default function SpacesTree({
   };
 
   // Asks before something reaches another audience: a move into a teamspace, or a copy of a team
-  // note into Private (the team keeps its note). A move between Privates stays on this device and
+  // note into Private (the team keeps its note). A move between Privates keeps ownership and
   // asks nothing.
   const confirmTransfer = (
     fromSpaceId: number,

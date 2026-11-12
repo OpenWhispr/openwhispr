@@ -1,3 +1,4 @@
+import { getDefaultPrivateWorkspaceId } from './teamSpacesCapability';
 import { SyncCancelledError, uncheckedSync, type SyncCheckpoint } from './syncContext';
 import * as Sentry from '@sentry/react-native';
 import { notesRepository, spacesRepository } from '@/data';
@@ -174,9 +175,14 @@ export async function pushFolders(
   const getPrivateFoldersByName = (): Map<string, Folder> => {
     if (privateFoldersByName === null) {
       const privateSpaceId = spacesRepository.getPrivateSpace().id;
+      const defaultWorkspaceId = getDefaultPrivateWorkspaceId();
       privateFoldersByName = new Map();
       for (const existing of notesRepository.getFolders()) {
-        if (existing.spaceId === privateSpaceId && existing.remoteId) {
+        if (
+          existing.spaceId === privateSpaceId &&
+          existing.remoteId &&
+          (!existing.privateWorkspaceId || existing.privateWorkspaceId === defaultWorkspaceId)
+        ) {
           privateFoldersByName.set(existing.name.toLowerCase(), existing);
         }
       }
@@ -270,8 +276,9 @@ export async function pushFolders(
       const chunk = scopedCreates.slice(i, i + PUSH_BATCH_SIZE);
       try {
         checkpoint(true);
-        const created = await batchCreateFolders(chunk.map((c) => c.payload));
+        const { created, refused = [] } = await batchCreateFolders(chunk.map((c) => c.payload));
         checkpoint();
+        const refusedIds = new Set(refused.map((row) => row.client_folder_id));
         // Match by client_folder_id first — batch responses aren't guaranteed to
         // preserve request order (or to include every row on a partial rejection).
         // Fall back to positional index only when a response row carries no
@@ -289,9 +296,16 @@ export async function pushFolders(
         let unmatched = 0;
         for (let j = 0; j < chunk.length; j += 1) {
           const create = chunk[j];
+          if (
+            refusedIds.has(create.payload.client_folder_id) &&
+            !byClientId.has(create.payload.client_folder_id)
+          ) {
+            unmatched += 1;
+            continue;
+          }
           const server =
             byClientId.get(create.payload.client_folder_id) ??
-            (!created[j]?.client_folder_id ? created[j] : undefined);
+            (refused.length === 0 && !created[j]?.client_folder_id ? created[j] : undefined);
           if (server?.id) {
             notesRepository.markFolderPushed(
               create.localId,
@@ -309,6 +323,7 @@ export async function pushFolders(
           unmatched += 1;
         }
         if (unmatched > 0) {
+          failed += 1;
           Sentry.captureMessage(
             `pushFolders: ${unmatched}/${chunk.length} create rows had no matching server response`,
             'warning',

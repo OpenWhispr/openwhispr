@@ -1,8 +1,7 @@
 // Folder half of the SyncService orchestration: real SyncService over the real
 // cloudApi/FoldersService stack, a real DatabaseManager, and the fake cloud.
 // Assertions are on the wire (cloud.log) as well as on the resulting rows.
-// Private folders stay on the device (D2), so the folder sync machinery runs on
-// a teamspace's folders; the last tests pin that private ones never move.
+// Team folders sync independently of Backup; personal folders follow consent.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -146,33 +145,45 @@ test("pulled notes map cloud folder ids back to local ids and park the row when 
   );
 });
 
-test("a device's private default folders never push or adopt the cloud's", async (t) => {
-  const ctx = await setup(t);
-  if (!ctx) return;
-  const { db, cloud } = ctx;
+test("private default folders follow Backup consent and reuse an existing cloud default", async (t) => {
+  for (const backup of [true, false]) {
+    await t.test(backup ? "Backup on" : "Backup off", async (st) => {
+      const ctx = await setup(st);
+      if (!ctx) return;
+      const { db, cloud } = ctx;
+      browserLocalStorage.setItem("cloudBackupEnabled", String(backup));
+      const remote = cloud.seedFolder({
+        client_folder_id: "cf-personal",
+        name: "Personal",
+        is_default: true,
+        sort_order: 0,
+        space_id: null,
+        workspace_id: null,
+      });
+      db.saveNote("Private", "body");
+      const privateSpaceId = db.getPrivateSpaceId();
+      const project = db.createFolder("Private projects", privateSpaceId).folder;
+      const before = allFolders(db).filter((folder) => folder.space_id === privateSpaceId);
+      assert.ok(before.some((folder) => folder.name === "Personal" && folder.is_default));
 
-  // What Backup left in the cloud before Private stayed on the device.
-  cloud.seedFolder({
-    client_folder_id: "cf-personal",
-    name: "Personal",
-    is_default: true,
-    sort_order: 0,
-    space_id: null,
-  });
-  db.saveNote("Private", "body");
-  const before = allFolders(db).filter((folder) => folder.space_id !== ctx.team.id);
-  assert.ok(before.some((folder) => folder.name === "Personal" && folder.is_default));
+      await (await newSyncService(st)).syncAll(true);
 
-  await (await newSyncService(t)).syncAll(true);
-
-  assert.equal(cloud.logFor("/api/folders/batch-create").length, 0);
-  assert.equal(cloud.logFor("/api/folders/create").length, 0);
-  assert.equal(cloud.folders().length, 1);
-  assert.deepEqual(
-    allFolders(db).filter((folder) => folder.space_id !== ctx.team.id),
-    before,
-    "no private folder took the cloud's identity or was marked synced"
-  );
+      const after = allFolders(db).filter((folder) => folder.space_id === privateSpaceId);
+      if (backup) {
+        assert.equal(after.find((folder) => folder.name === "Personal").cloud_id, remote.id);
+        assert.equal(cloud.folders().filter((folder) => folder.name === "Personal").length, 1);
+        assert.equal(after.find((folder) => folder.name === "Personal").sync_status, "synced");
+        const uploaded = after.find((folder) => folder.id === project.id);
+        assert.ok(uploaded.cloud_id);
+        assert.equal(uploaded.sync_status, "synced");
+      } else {
+        assert.equal(cloud.logFor("/api/folders/batch-create").length, 0);
+        assert.equal(cloud.logFor("/api/folders/create").length, 0);
+        assert.equal(cloud.folders().length, 1);
+        assert.deepEqual(after, before);
+      }
+    });
+  }
 });
 
 test("pushPendingFolders sends name/client_folder_id/is_default/sort_order in row order and links each folder on ack", async (t) => {
@@ -400,7 +411,7 @@ test("pullFolders keeps a local folder whose same-day cloud copy is older and ac
   );
 });
 
-test("a failed folder list leaves lastSyncedAt.folders unstamped so the next pass re-pulls from scratch", async (t) => {
+test("a failed folder list retains the initial recovery cursor so the next pass replays history", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { cloud } = ctx;
@@ -410,7 +421,7 @@ test("a failed folder list leaves lastSyncedAt.folders unstamped so the next pas
 
   assert.equal(
     browserLocalStorage.getItem("lastSyncedAt.folders"),
-    null,
+    "1970-01-01T00:00:00.000Z",
     "stamping a failed pull would silently skip every folder change in that window"
   );
 
@@ -420,8 +431,8 @@ test("a failed folder list leaves lastSyncedAt.folders unstamped so the next pas
   const lists = cloud.logFor("/api/folders/list");
   assert.equal(
     lists[lists.length - 1].path,
-    "/api/folders/list?scope=all",
-    "with no stamp the recovery pass must ask for the full snapshot"
+    "/api/folders/list?since=1970-01-01T00%3A00%3A00.000Z&scope=all",
+    "the recovery pass must include history and its tombstones"
   );
   assert.ok(browserLocalStorage.getItem("lastSyncedAt.folders"), "a clean pull must stamp");
 });

@@ -3054,10 +3054,9 @@
     },
     "privacy": {
       "cloudBackup": "Cloud-Backup",
-      "cloudBackupDescription": "Sichern Sie Ihre Transkriptionen, Chats, Ihr Wörterbuch und Ihre Snippets in der Cloud für nahtlosen Zugriff auf allen Geräten.",
-      "cloudBackupTeamCaveat": "Private Notizen bleiben immer auf diesem Gerät. Notizen in Teamspaces werden immer synchronisiert.",
+      "cloudBackupDescription": "Sichern Sie Ihre Transkriptionen und Notizen in der Cloud für nahtlosen Zugriff auf allen Geräten.",
+      "cloudBackupTeamCaveat": "Notizen in Teamspaces und geteilte Notizen werden unabhängig von dieser Einstellung immer synchronisiert. Chats, die private Inhalte verwenden, bleiben auf diesem Gerät. Chats aus früheren Versionen und aus einem Backup wiederhergestellte Chats sind ebenfalls ausgeschlossen.",
       "cloudNotesMigration": "Notizen werden gesichert… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "Alle Notizen gesichert",
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
       "title": "Datenschutz",
       "insightsSync": "Persönliche Statistiken synchronisieren",
@@ -3755,7 +3754,7 @@
       "leave": {
         "title": "{{name}} verlassen?",
         "body": "Sie verlieren den Zugriff auf diesen Workspace, seine Teams und seine Teamspaces. Der Workspace-Inhaber oder ein Admin kann Sie wieder einladen.",
-        "privateNotes": "Ihre privaten Notizen in diesem Workspace werden auf diesem Gerät nach {{workspace}} verschoben.",
+        "privateNotes": "Ihre privaten Notizen in diesem Workspace werden nach {{workspace}} verschoben.",
         "failed": "{{name}} konnte nicht verlassen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
       },
       "left": {
@@ -3765,7 +3764,7 @@
       "delete": {
         "title": "{{name}} löschen?",
         "body": "Dadurch werden der Workspace, seine Notizen, Dateien, Teams und Teamspaces für alle dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.",
-        "privateNotes": "Ihre privaten Notizen in diesem Workspace werden auf diesem Gerät nach {{workspace}} verschoben."
+        "privateNotes": "Ihre privaten Notizen in diesem Workspace werden nach {{workspace}} verschoben."
       },
       "deleting": {
         "title": "{{name}} wird gelöscht…",
@@ -3870,7 +3869,7 @@
     "intro": {
       "workspace": {
         "title": "Ihr Workspace ist Ihre Basis",
-        "body": "Alle in Ihrem Unternehmen arbeiten hier. Ihre privaten Notizen bleiben auf Ihrem Gerät."
+        "body": "Alle in Ihrem Unternehmen arbeiten hier. Ihre privaten Notizen bleiben privat, bis Sie sie teilen."
       },
       "teamspaces": {
         "title": "Notizen in Teamspaces teilen",
@@ -4024,7 +4023,7 @@
       "privateSpaces": "Privat",
       "teamSpaces": "Teamspaces",
       "personal": "Privat",
-      "privateTooltip": "Nur du kannst diese Notizen sehen. Sie bleiben auf diesem Gerät.",
+      "privateTooltip": "Nur Sie können die Ordner und Notizen hier sehen.",
       "newSpace": "Neuer Teamspace",
       "nameAndIconLabel": "Name und Symbol",
       "changeEmoji": "Emoji ändern",
@@ -4050,7 +4049,7 @@
       "moveToWorkspacePrivate": "Nach {{workspace}} › Privat verschieben",
       "workspacePrivate": "{{workspace}} › Privat",
       "confirmCopyTitle": "Nach Privat kopieren?",
-      "confirmCopy": "Die Notiz bleibt in {{space}}. Die Kopie ist privat und bleibt auf diesem Gerät.",
+      "confirmCopy": "Die Notiz bleibt in {{space}}.",
       "copiedToPrivate": "Nach „Privat“ kopiert",
       "couldNotCopyNote": "Notiz konnte nicht kopiert werden",
       "openCopy": "Öffnen",
@@ -4109,7 +4108,7 @@
       "description": "OpenWhispr trennt private Gedanken von gemeinsamer Arbeit, damit nur die richtigen Personen Ihre Notizen sehen.",
       "personal": {
         "title": "Privat",
-        "description": "Nur Sie können diese Notizen sehen; sie bleiben auf diesem Gerät."
+        "description": "Nur Sie können die Ordner und Notizen hier sehen."
       },
       "workspace": {
         "title": "Workspace",
@@ -4641,9 +4640,6 @@
       "loading": "Notizen werden geladen…",
       "retry": "Notizen konnten nicht geladen werden. Erneut versuchen",
       "results": "{{count}} von {{total}} Notizen"
-    },
-    "privateOnDevice": {
-      "switched": "Private Notizen bleiben jetzt auf diesem Gerät. Ihre Cloud-Kopien werden am {{date}} gelöscht."
     }
   },
   "dictionary": {
@@ -6081,10 +6077,10 @@
         "noTeamspaces": "Es gibt noch keinen Teamspace, in den du sie verschieben kannst.",
         "openTeamspaces": "Teamspaces öffnen",
         "cantMoveToShare": "Nur der Besitzer der Notiz kann sie zum Teilen in einen Teamspace verschieben.",
-        "legacySharedBanner": "Diese private Notiz ist geteilt und wird deshalb weiter synchronisiert. Verschiebe sie in einen Teamspace oder beende das Teilen, damit sie auf diesem Gerät bleibt.",
+        "legacySharedBanner": "Diese Notiz ist geteilt und wird auch bei ausgeschaltetem Cloud-Backup synchronisiert.",
         "stopSharing": {
           "title": "Teilen beenden?",
-          "description": "Wenn du {{name}} entfernst, wird die Notiz nicht mehr geteilt. Sie bleibt auf diesem Gerät."
+          "description": "Wenn du {{name}} entfernst, wird die Notiz nicht mehr geteilt."
         },
         "visibility": {
           "label": "Sichtbarkeit",

@@ -144,6 +144,121 @@ function setup(t) {
 
 const invoke = (channel, ...args) => handlers.get(channel)({}, ...args);
 
+test("full Backup queues include personal notes and folders only for the active account", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const folder = db.createFolder("Backup folder", db.getDefaultPrivateSpaceId()).folder;
+  const note = db.saveNote("Private", "Backup content", "personal", null, null, folder.id).note;
+  assert.ok((await invoke("db-get-pending-notes")).some((row) => row.id === note.id));
+  assert.ok((await invoke("db-get-pending-folders")).some((row) => row.id === folder.id));
+  assert.deepEqual(await invoke("db-get-pending-notes", "syncable"), []);
+  assert.deepEqual(await invoke("db-get-pending-folders", "team"), []);
+
+  db.setActiveAccountId("account-b");
+  assert.equal(
+    (await invoke("db-get-pending-notes")).some((row) => row.id === note.id),
+    false
+  );
+  assert.equal(
+    (await invoke("db-get-pending-folders")).some((row) => row.id === folder.id),
+    false
+  );
+});
+
+test("note and folder sync receipts cannot mutate rows under a replaced sign-in", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const generation = tokenState.generation;
+  await invoke("set-active-account-scope", "account-a", generation);
+  const folder = db.createFolder("Pending folder").folder;
+  const note = db.saveNote("Pending note", "private body", "personal", null, null, folder.id).note;
+  const staleGeneration = generation - 1;
+  assert.deepEqual(
+    await invoke("db-mark-note-creates-attempted", [note.client_note_id], staleGeneration),
+    []
+  );
+  const results = await Promise.all([
+    invoke("db-acknowledge-note-create", note.id, note, "cloud-note", null, "account-a", {
+      expectedAuthGeneration: staleGeneration,
+    }),
+    invoke(
+      "db-mark-note-synced-if-unchanged",
+      note.id,
+      note,
+      null,
+      null,
+      null,
+      null,
+      null,
+      staleGeneration
+    ),
+    invoke("db-mark-folder-synced-if-unchanged", folder.id, folder, null, staleGeneration),
+    invoke("db-hard-delete-note", note.id, staleGeneration),
+    invoke("db-hard-delete-folder", folder.id, staleGeneration),
+  ]);
+  assert.ok(results.every((result) => result.stale === true));
+  assert.deepEqual(db.getNote(note.id), note);
+  assert.deepEqual(db.getFolderByClientId(folder.client_folder_id), folder);
+  assert.deepEqual(
+    await invoke("db-mark-note-creates-attempted", [note.client_note_id], generation),
+    [note.client_note_id]
+  );
+  assert.equal((await invoke("db-hard-delete-folder", folder.id, generation)).success, true);
+});
+
+test("placement backfill and tombstone recovery reject stale sign-ins before changing rows", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const generation = tokenState.generation;
+  await invoke("set-active-account-scope", "account-a", generation);
+  db.bindDefaultPrivateSpace("workspace-a");
+  const personal = db.saveNote("Backup", "private body").note;
+  db.markNoteSynced(personal.id, "personal-cloud");
+  const team = db.upsertSpaceFromCloud({
+    id: "cloud-space",
+    name: "Team",
+    workspace_id: "workspace-a",
+  });
+  const note = db.saveNote("Publish", "body", "personal", null, null, null, team.id).note;
+  db.markNoteSynced(note.id, "deleted-personal-cloud");
+  const renew = (under) =>
+    invoke(
+      "db-renew-note-cloud-identity",
+      note.id,
+      note.client_note_id,
+      "deleted-personal-cloud",
+      team.id,
+      under
+    );
+
+  assert.equal((await renew(generation - 1)).stale, true);
+  assert.equal((await invoke("db-queue-private-placement-backup", generation - 1)).stale, true);
+  assert.equal(
+    (await invoke("db-get-private-placement-backup-candidates", generation - 1)).stale,
+    true
+  );
+  const candidates = await invoke("db-get-private-placement-backup-candidates", generation);
+  assert.ok(candidates.notes.includes(personal.client_note_id));
+  const spacesBefore = db.db.prepare("SELECT COUNT(*) AS count FROM spaces").get().count;
+  assert.equal(await invoke("get-private-space-id", "stale-workspace", generation - 1), null);
+  assert.equal(await invoke("get-default-private-space-id", generation - 1), null);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM spaces").get().count, spacesBefore);
+  assert.equal(db.getNote(personal.id).sync_status, "synced");
+  assert.equal(db.getNote(note.id).cloud_id, "deleted-personal-cloud");
+  assert.equal(
+    (await invoke("db-queue-private-placement-backup", generation, candidates)).success,
+    true
+  );
+  assert.equal(db.getNote(personal.id).sync_status, "pending");
+  const renewed = await renew(generation);
+  assert.equal(renewed.success, true);
+  assert.equal(renewed.note.cloud_id, null);
+  assert.notEqual(renewed.note.client_note_id, note.client_note_id);
+  await invoke("set-active-account-scope", null, generation);
+  assert.equal((await renew(generation)).success, false);
+});
+
 test("a queued transcription addition is broadcast only while its account can see it", async (t) => {
   const db = setup(t);
   if (!db) return;

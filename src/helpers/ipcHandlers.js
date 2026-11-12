@@ -124,7 +124,7 @@ function syncSenderAccount(accountId, authGeneration) {
 }
 // A workspace id from the renderer: a non-empty string, or null for none.
 // The note queues a sync pass reads (DatabaseManager.getPendingNotes).
-const SYNC_NOTE_QUEUES = new Set(["team", "syncable"]);
+const SYNC_NOTE_QUEUES = new Set([null, undefined, "private", "team", "syncable"]);
 
 function isWorkspaceIdArgument(value) {
   return value === null || (typeof value === "string" && value.trim().length > 0);
@@ -3094,16 +3094,20 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("get-private-space-id", (_event, workspaceId = null) => {
+    ipcMain.handle("get-private-space-id", (_event, workspaceId = null, expectedAuthGeneration) => {
       if (!isWorkspaceIdArgument(workspaceId)) return null;
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return null;
       return this.databaseManager.getPrivateSpaceId(workspaceId);
     });
 
-    // Where sync files a personal cloud row it applies (D14): the account's
+    // Personal cloud rows without recorded placement fall back to the account's
     // default Private, never the active workspace's.
-    ipcMain.handle("get-default-private-space-id", () =>
-      this.databaseManager.getDefaultPrivateSpaceId()
-    );
+    ipcMain.handle("get-default-private-space-id", (_event, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return null;
+      return this.databaseManager.getDefaultPrivateSpaceId();
+    });
 
     ipcMain.handle("bind-default-private-space", (_event, defaultWorkspaceId, accountId) => {
       if (typeof defaultWorkspaceId !== "string" || !defaultWorkspaceId.trim()) {
@@ -3617,8 +3621,7 @@ class IPCHandlers {
     );
 
     // Notes sync
-    // Only the upload queues sync reads: the renderer never gets a queue with
-    // private rows in it (D2). The whole queue stays a main-process read.
+    // Full Backup reads personal rows too; SyncService applies the current consent.
     ipcMain.handle("db-get-pending-notes", (_, scope) =>
       SYNC_NOTE_QUEUES.has(scope) ? this.databaseManager.getPendingNotes(scope) : []
     );
@@ -3631,9 +3634,7 @@ class IPCHandlers {
     ipcMain.handle("db-get-note-for-cloud-row", (_, clientNoteId, cloudId) =>
       this.databaseManager.getNoteForCloudRow(clientNoteId, cloudId)
     );
-    // A pull pinned to a sign-in (the cloud private notes import) passes its
-    // generation, and its writes are refused once that sign-in is replaced.
-    // The import also asks for a key of its own where the cloud row's is taken.
+    // A pull passes its sign-in generation so replacement accounts cannot accept its rows.
     ipcMain.handle(
       "db-upsert-note-from-cloud",
       (_, cloudNote, localFolderId, localSpaceId, expectedAuthGeneration, options) => {
@@ -3646,19 +3647,56 @@ class IPCHandlers {
           localSpaceId,
           { newKeyIfTaken: options?.newKeyIfTaken === true }
         );
-        if (note && !note.imported) {
+        if (note) {
           setImmediate(() => broadcastToWindows("note-synced", note));
           this.notifyVectorChanges();
         }
         return note;
       }
     );
-    ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds) =>
-      this.databaseManager.markNoteCreatesAttempted(clientNoteIds)
+    ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) return [];
+      return this.databaseManager.markNoteCreatesAttempted(clientNoteIds);
+    });
+    ipcMain.handle(
+      "db-renew-note-cloud-identity",
+      (_, id, clientNoteId, cloudId, spaceId, expectedAuthGeneration) => {
+        if (
+          !Number.isSafeInteger(expectedAuthGeneration) ||
+          isStaleSyncAck(expectedAuthGeneration)
+        ) {
+          return STALE_SYNC_ACK;
+        }
+        const result = this.databaseManager.renewNoteCloudIdentity(
+          id,
+          clientNoteId,
+          cloudId,
+          spaceId
+        );
+        if (result.note) setImmediate(() => broadcastToWindows("note-synced", result.note));
+        return result;
+      }
     );
+    ipcMain.handle("db-get-private-placement-backup-candidates", (_, expectedAuthGeneration) => {
+      if (!Number.isSafeInteger(expectedAuthGeneration) || isStaleSyncAck(expectedAuthGeneration)) {
+        return STALE_SYNC_ACK;
+      }
+      return this.databaseManager.getPrivatePlacementBackupCandidates();
+    });
+    ipcMain.handle("db-queue-private-placement-backup", (_, expectedAuthGeneration, candidates) => {
+      if (!Number.isSafeInteger(expectedAuthGeneration) || isStaleSyncAck(expectedAuthGeneration)) {
+        return STALE_SYNC_ACK;
+      }
+      return this.databaseManager.queuePrivatePlacementBackup(candidates);
+    });
     ipcMain.handle(
       "db-acknowledge-note-create",
       (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
+        if (
+          options?.expectedAuthGeneration !== undefined &&
+          isStaleSyncAck(options.expectedAuthGeneration)
+        )
+          return STALE_SYNC_ACK;
         const result = this.databaseManager.acknowledgeNoteCreate(
           id,
           snapshot,
@@ -3676,7 +3714,19 @@ class IPCHandlers {
     );
     ipcMain.handle(
       "db-mark-note-synced-if-unchanged",
-      (_, id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId, cloudRevision, cloudNote) => {
+      (
+        _,
+        id,
+        snapshot,
+        expectedCloudId,
+        cloudUpdatedAt,
+        ownerUserId,
+        cloudRevision,
+        cloudNote,
+        expectedAuthGeneration
+      ) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+          return STALE_SYNC_ACK;
         const result = this.databaseManager.markNoteSyncedIfUnchanged(
           id,
           snapshot,
@@ -3712,7 +3762,9 @@ class IPCHandlers {
     ipcMain.handle("db-restore-note-after-denied-delete", (_, id) =>
       this.databaseManager.restoreNoteAfterDeniedDelete(id)
     );
-    ipcMain.handle("db-hard-delete-note", (_, id) => {
+    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return STALE_SYNC_ACK;
       const result = this.databaseManager.hardDeleteNote(id);
       if (result?.success) {
         this.notifyVectorChanges();
@@ -3724,7 +3776,9 @@ class IPCHandlers {
 
     // Folders sync
     ipcMain.handle("db-get-pending-folders", (_, scope) =>
-      scope === "team" ? this.databaseManager.getPendingFolders(scope) : []
+      scope == null || scope === "private" || scope === "team"
+        ? this.databaseManager.getPendingFolders(scope)
+        : []
     );
     ipcMain.handle("db-get-folder-by-client-id", (_, clientFolderId) =>
       this.databaseManager.getFolderByClientId(clientFolderId)
@@ -3773,8 +3827,13 @@ class IPCHandlers {
         );
       }
     );
-    ipcMain.handle("db-mark-folder-synced-if-unchanged", (_, id, snapshot, expectedCloudId) =>
-      this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId)
+    ipcMain.handle(
+      "db-mark-folder-synced-if-unchanged",
+      (_, id, snapshot, expectedCloudId, expectedAuthGeneration) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+          return STALE_SYNC_ACK;
+        return this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId);
+      }
     );
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
     ipcMain.handle("db-get-pending-folder-deletes", () =>
@@ -3796,7 +3855,9 @@ class IPCHandlers {
       }
       return result;
     });
-    ipcMain.handle("db-hard-delete-folder", (_, id) => {
+    ipcMain.handle("db-hard-delete-folder", (_, id, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return STALE_SYNC_ACK;
       const result = this.databaseManager.hardDeleteFolder(id);
       if (result?.success) {
         this.notifyVectorChanges();
