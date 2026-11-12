@@ -163,7 +163,11 @@ function createWorkspacePolicyManager({
   function requiresManagedPolicy(identity) {
     if (managedPolicyRequired.has(identityKey(identity))) return true;
     const cached = rawCachedData(identity);
-    return cached?.managed === false && cached.requiresManagedPolicy === true;
+    if (cached?.managed === false && cached.requiresManagedPolicy === true) return true;
+    return (
+      readAccountPolicyCache(cachePath, identity)?.requiresManagedPolicy === true &&
+      (!isValidatedAccount(identity) || !cached || cached.endpointSupported === false)
+    );
   }
 
   // Whether the account's last validated verdict requires managed policy. A
@@ -219,6 +223,16 @@ function createWorkspacePolicyManager({
   }
 
   function publicSnapshot(identity, data, status, snapshotRevision) {
+    if (
+      !data.managed &&
+      accountWasManaged(identity.accountId) &&
+      (data.endpointSupported === false || !isValidatedAccount(identity))
+    )
+      return errorSnapshot(
+        identity,
+        requiresManagedPolicy(identity) ? "POLICY_UNRESOLVABLE" : "POLICY_UNAVAILABLE",
+        "Organization policy was previously required"
+      );
     // A policy can arrive before its bearer is bound. Its first validated
     // read must replace the account's older restrictive evidence too.
     if (
@@ -411,15 +425,11 @@ function createWorkspacePolicyManager({
       return publicSnapshot(identity, current.data, "current", current.revision);
     }
     if (inFlight.has(key)) {
-      return inFlight.get(key).then((result) =>
-        result.success
-          ? {
-              ...result,
-              accountId: identity.accountId,
-              authGeneration: identity.authGeneration,
-            }
-          : result
-      );
+      return inFlight
+        .get(key)
+        .then((result) =>
+          result.success ? publicSnapshot(identity, result, result.status, result.revision) : result
+        );
     }
     const lastAttempt = lastAttempts.get(key);
     const attemptAge = lastAttempt === undefined ? null : now() - lastAttempt;

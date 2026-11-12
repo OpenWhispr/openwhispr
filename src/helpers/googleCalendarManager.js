@@ -37,27 +37,32 @@ class GoogleCalendarManager {
     this.oauth = new GoogleCalendarOAuth(databaseManager);
     this.accounts = new Map();
     this.primaryOnly = true;
-    this.syncRunner = new CalendarSyncInterval(
-      () => this.syncEvents().then(() => this.reminderScheduler.scheduleNextMeeting()),
-      { intervalMs: 2 * 60 * 1000, maxIntervalMs: 30 * 60 * 1000, logScope: "gcal" }
-    );
+    this._syncAbort = new AbortController();
+    this.syncRunner = new CalendarSyncInterval(() => this.syncEvents(), {
+      intervalMs: 2 * 60 * 1000,
+      maxIntervalMs: 30 * 60 * 1000,
+      logScope: "gcal",
+    });
   }
 
   start() {
+    const signal = this._syncAbort.signal;
     this._loadAccounts();
     if (this.accounts.size === 0) return;
 
-    this.fetchCalendars()
-      .then(() => this.syncEvents())
-      .then(() => this.reminderScheduler.scheduleNextMeeting())
-      .catch((err) =>
-        debugLogger.error("Initial calendar sync failed", { error: err.message }, "gcal")
-      );
+    this.fetchCalendars(null, signal)
+      .then(() => this.syncEvents(signal))
+      .catch((err) => {
+        if (!signal.aborted)
+          debugLogger.error("Initial calendar sync failed", { error: err.message }, "gcal");
+      });
 
     this.syncRunner.start();
   }
 
   stop() {
+    this._syncAbort.abort();
+    this._syncAbort = new AbortController();
     this.syncRunner.stop();
   }
 
@@ -82,17 +87,23 @@ class GoogleCalendarManager {
   }
 
   async startOAuth({ signal } = {}) {
+    const syncSignal = this._syncAbort.signal;
     const result = await this.oauth.startOAuthFlow({ signal });
     signal?.throwIfAborted();
     this.addAccount(result.email);
 
-    await this.fetchCalendars(result.email);
-    if (signal?.aborted) return result;
-    await this.syncEvents();
-    if (signal?.aborted) return result;
-    this.reminderScheduler.scheduleNextMeeting();
-    this.syncRunner.start();
-    this._broadcastAccountsChanged();
+    const followupSignal = signal ? AbortSignal.any([signal, syncSignal]) : syncSignal;
+    try {
+      await this.fetchCalendars(result.email, followupSignal);
+      followupSignal.throwIfAborted();
+      await this.syncEvents(followupSignal);
+      followupSignal.throwIfAborted();
+      this.reminderScheduler.scheduleNextMeeting();
+      this.syncRunner.start();
+      this._broadcastAccountsChanged();
+    } catch (error) {
+      if (!followupSignal.aborted) throw error;
+    }
 
     return result;
   }
@@ -134,13 +145,14 @@ class GoogleCalendarManager {
     return this.databaseManager.getGoogleAccounts();
   }
 
-  async fetchCalendars(accountEmail = null) {
+  async fetchCalendars(accountEmail = null, signal = this._syncAbort.signal) {
     const emails = accountEmail ? [accountEmail] : this._getAccountEmails();
     const allCalendars = [];
 
     for (const email of emails) {
       try {
-        const data = await this._apiGet("/users/me/calendarList", email);
+        const data = await this._apiGet("/users/me/calendarList", email, signal);
+        signal.throwIfAborted();
         const calendars = (data.items || []).map((item) => ({
           id: item.id,
           summary: item.summary,
@@ -151,23 +163,27 @@ class GoogleCalendarManager {
         this.databaseManager.saveGoogleCalendars(calendars, email);
         allCalendars.push(...calendars);
       } catch (err) {
+        signal.throwIfAborted();
         debugLogger.error("Error fetching calendars", { email, error: err.message }, "gcal");
       }
     }
 
+    signal.throwIfAborted();
     this.databaseManager.applyPrimaryOnlyToSelection(this.primaryOnly);
     this.databaseManager.removeEventsFromDeselectedCalendars("google");
     return allCalendars;
   }
 
-  async syncEvents() {
+  async syncEvents(signal = this._syncAbort.signal) {
+    signal.throwIfAborted();
     const selectedCalendars = this.databaseManager.getSelectedCalendars();
-    if (selectedCalendars.length === 0) return;
+    if (selectedCalendars.length === 0) return this.reminderScheduler.scheduleNextMeeting();
 
     for (const calendar of selectedCalendars) {
       try {
-        await this._syncCalendar(calendar);
+        await this._syncCalendar(calendar, signal);
       } catch (err) {
+        signal.throwIfAborted();
         debugLogger.error(
           "Error syncing calendar",
           { calendarId: calendar.id, error: err.message },
@@ -176,11 +192,12 @@ class GoogleCalendarManager {
       }
     }
 
+    signal.throwIfAborted();
     broadcastToWindows("gcal-events-synced", {});
     this.reminderScheduler.scheduleNextMeeting();
   }
 
-  async _syncCalendar(calendar) {
+  async _syncCalendar(calendar, signal = this._syncAbort.signal) {
     const accountEmail = calendar.account_email;
 
     const buildFullParams = () =>
@@ -218,9 +235,12 @@ class GoogleCalendarManager {
       try {
         data = await this._apiGet(
           `/calendars/${encodeURIComponent(calendar.id)}/events?${params.toString()}`,
-          accountEmail
+          accountEmail,
+          signal
         );
+        signal.throwIfAborted();
       } catch (err) {
+        signal.throwIfAborted();
         // 410 Gone means syncToken is invalid; fall back to full sync
         if (err.statusCode === 410 && !pageToken && !isFullSync) {
           isFullSync = true;
@@ -330,9 +350,15 @@ class GoogleCalendarManager {
 
   onWakeFromSleep() {
     if (!this.syncRunner.timer) return;
-    this.syncEvents()
-      .then(() => this.syncRunner.notifySuccess())
-      .catch((err) => debugLogger.error("Post-wake sync failed", { error: err.message }, "gcal"));
+    const signal = this._syncAbort.signal;
+    this.syncEvents(signal)
+      .then(() => {
+        if (!signal.aborted) this.syncRunner.notifySuccess();
+      })
+      .catch((err) => {
+        if (!signal.aborted)
+          debugLogger.error("Post-wake sync failed", { error: err.message }, "gcal");
+      });
   }
 
   syncOnFocus() {
@@ -345,20 +371,25 @@ class GoogleCalendarManager {
   }
 
   async setCalendarSelection(calendarId, isSelected) {
+    const signal = this._syncAbort.signal;
     this.databaseManager.updateCalendarSelection(calendarId, isSelected);
-    await this.syncEvents();
+    await this.syncEvents(signal);
+    signal.throwIfAborted();
     this.syncRunner.notifySuccess();
     this.reminderScheduler.scheduleNextMeeting();
   }
 
   async setPrimaryOnly(value) {
+    const signal = this._syncAbort.signal;
     if (this.primaryOnly === value) return;
     this.primaryOnly = value;
     if (!this.isConnected()) return;
 
-    await this.fetchCalendars();
+    await this.fetchCalendars(null, signal);
+    signal.throwIfAborted();
     this.reminderScheduler.reset("google");
-    await this.syncEvents();
+    await this.syncEvents(signal);
+    signal.throwIfAborted();
     this.reminderScheduler.scheduleNextMeeting();
     broadcastToWindows("gcal-events-synced", {});
   }
@@ -384,17 +415,20 @@ class GoogleCalendarManager {
     broadcastToWindows("gcal-connection-changed", { accounts });
   }
 
-  async _apiGet(path, accountEmail = null) {
+  async _apiGet(path, accountEmail = null, signal = this._syncAbort.signal) {
+    signal.throwIfAborted();
     const accessToken = await this.oauth.getValidAccessToken(accountEmail);
+    signal.throwIfAborted();
     const urlString = path.startsWith("http") ? path : `${CALENDAR_API_BASE}${path}`;
 
     const response = await net.fetch(urlString, {
       method: "GET",
       headers: { Authorization: `Bearer ${accessToken}` },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
       useSessionCookies: false,
     });
     const text = await response.text();
+    signal.throwIfAborted();
     let parsed = null;
     try {
       parsed = JSON.parse(text);

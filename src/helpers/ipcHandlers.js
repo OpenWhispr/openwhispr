@@ -1996,6 +1996,9 @@ class IPCHandlers {
   setupHandlers() {
     this._remoteStreamPolicies = new Map();
     this._retireAccountProductStreams = (accountId) => {
+      this.googleCalendarManager?.stop();
+      this.microsoftCalendarManager?.stop();
+      this._remoteCalendarsStarted = false;
       for (const [property, operation] of this._remoteStreamPolicies) {
         if (operation.accountId !== accountId) continue;
         if (operation.pending) {

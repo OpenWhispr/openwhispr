@@ -2117,3 +2117,290 @@ test("calendar product retirement blocks focus and wake until policy resumes aut
     assert.notEqual(manager.syncRunner.timer, null);
   }
 });
+
+async function calendarPolicyScenario(t, provider, stage) {
+  const prototype = useProductLifecycle(t);
+  const { deferred } = require("./harness/deferred");
+  const {
+    normalizeDeviceValues,
+    defaultDevicePolicy,
+  } = require("../../src/helpers/managedDevicePolicy");
+  const Manager = require(`../../src/helpers/${provider}CalendarManager`);
+  const calendars = [
+    {
+      id: "saved-calendar",
+      account_email: "saved@example.test",
+      sync_token:
+        provider === "google" ? "saved-cursor" : "https://graph.microsoft.com/v1.0/saved-cursor",
+      sync_token_expires_at: Date.now() + 60_000,
+    },
+  ];
+  const writes = [],
+    requests = [];
+  const accounts = [{ email: "saved@example.test" }];
+  const db = new Proxy(
+    {
+      getSelectedCalendars: () => calendars,
+      getSelectedMicrosoftCalendars: () => calendars,
+      getGoogleAccounts: () => accounts,
+      getMicrosoftAccounts: () => accounts,
+      getMicrosoftOwnAddresses: () => [],
+    },
+    { get: (value, key) => (key in value ? value[key] : (...args) => writes.push([key, ...args])) }
+  );
+  const reminders = [];
+  const scheduler = {
+    scheduleNextMeeting: () => reminders.push("scheduled"),
+    reset: () => reminders.push("reset"),
+  };
+  const manager =
+    provider === "google" ? new Manager(db, {}, scheduler) : new Manager(db, scheduler);
+  const previous = {
+    googleCalendarManager: fakeThis.googleCalendarManager,
+    microsoftCalendarManager: fakeThis.microsoftCalendarManager,
+    _remoteCalendarsReady: fakeThis._remoteCalendarsReady,
+    _remoteCalendarsStarted: fakeThis._remoteCalendarsStarted,
+  };
+  fakeThis[`${provider}CalendarManager`] = manager;
+  fakeThis._remoteCalendarsReady = false;
+  fakeThis._remoteCalendarsStarted = false;
+  let device = normalizeDeviceValues({}),
+    held = false,
+    requestSignal;
+  const entered = deferred(),
+    finish = deferred();
+  t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () => device);
+  manager.oauth.getValidAccessToken = async () => {
+    if (stage === "token" && !held) {
+      held = true;
+      entered.resolve();
+      await finish.promise;
+    }
+    return "saved-calendar-credential";
+  };
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    if (String(url).endsWith("/api/workspace-policy"))
+      return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+    requests.push(String(url));
+    const list = String(url).includes("calendarList") || String(url).includes("/me/calendars?");
+    const address = String(url).includes("/me?");
+    const master = String(url).includes("/events/master");
+    const event = !list && !address && !master;
+    if (stage === "offline") return Response.json({}, { status: 503 });
+    const shouldHold =
+      !held &&
+      ((stage === "calendar" && list) ||
+        (stage === "calendar page" && list) ||
+        (stage === "address" && address) ||
+        (stage === "backfill" && master) ||
+        (["event page", "retry", "event body"].includes(stage) && event));
+    if (shouldHold) {
+      held = true;
+      requestSignal = init.signal;
+      if (stage === "event body")
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              entered.resolve();
+              void finish.promise.then(() => {
+                controller.enqueue(
+                  new TextEncoder().encode(JSON.stringify({ items: [], value: [] }))
+                );
+                controller.close();
+              });
+            },
+          })
+        );
+      entered.resolve();
+      await finish.promise;
+      if (stage === "retry") return Response.json({}, { status: 410 });
+      if (stage === "calendar page")
+        return Response.json({
+          value: [],
+          "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/calendars?page=2",
+        });
+      if (stage === "event page")
+        return Response.json({
+          items: [],
+          value: [],
+          nextPageToken: "next-page",
+          "@odata.nextLink": "https://graph.microsoft.com/v1.0/events?page=2",
+        });
+    }
+    if (stage === "backfill" && event && !held)
+      return Response.json({
+        value: ["master-one", "master-two"].map((seriesMasterId, index) => ({
+          id: `occurrence-${index}`,
+          seriesMasterId,
+        })),
+      });
+    return Response.json({ items: [], value: [], mail: accounts[0].email });
+  });
+  t.after(() => {
+    finish.resolve();
+    manager.stop();
+    Object.assign(fakeThis, previous);
+  });
+  handleAuthTokenChange({
+    token: `calendar-${provider}-${stage}-token`,
+    generation: tokenState.generation + 1,
+  });
+  await setScope("calendar-lifecycle-owner", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  return {
+    manager,
+    calendars,
+    writes,
+    requests,
+    reminders,
+    entered,
+    finish,
+    signal: () => requestSignal,
+    start: () => prototype.startPolicyCalendars.call(fakeThis),
+    async boundary(kind) {
+      if (kind === "policy revocation") {
+        const policy = defaultDevicePolicy();
+        policy.features.connectorsEnabled = false;
+        device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
+        fakeThis.effectivePolicyManager.getCurrent();
+      } else if (kind === "stop") manager.stop();
+      else {
+        handleAuthTokenChange({
+          token: kind === "sign-out" ? null : `calendar-${kind}-replacement`,
+          generation: tokenState.generation + 1,
+        });
+        if (kind !== "sign-out")
+          await setScope(
+            kind === "same-account rotation" ? "calendar-lifecycle-owner" : "calendar-next-owner",
+            tokenState.generation
+          );
+        await fakeThis.refreshEffectivePolicy();
+      }
+    },
+    resume(kind) {
+      if (kind === "policy revocation") {
+        device = normalizeDeviceValues({});
+        fakeThis.effectivePolicyManager.getCurrent();
+      } else if (kind === "stop") manager.start();
+    },
+  };
+}
+
+for (const provider of ["google", "microsoft"]) {
+  const stages = [
+    "token",
+    "calendar",
+    "event page",
+    "retry",
+    "event body",
+    ...(provider === "microsoft" ? ["calendar page", "address", "backfill"] : []),
+  ];
+  for (const stage of stages) {
+    test(`retired ${provider} ${stage} cannot continue or disturb a resumed calendar runner`, async (t) => {
+      const context = await calendarPolicyScenario(t, provider, stage);
+      context.start();
+      await context.entered.promise;
+      await context.boundary("stop");
+      if (context.signal()) assert.equal(context.signal().aborted, true);
+      context.resume("stop");
+      await new Promise(setImmediate);
+      const timer = context.manager.syncRunner.timer;
+      context.manager.syncRunner._consecutiveFailures = 2;
+      const before = [context.requests.length, context.writes.length, context.reminders.length];
+      context.finish.resolve();
+      await new Promise(setImmediate);
+      assert.deepEqual(
+        [context.requests.length, context.writes.length, context.reminders.length],
+        before
+      );
+      assert.equal(context.manager.syncRunner.timer, timer);
+      assert.equal(context.manager.syncRunner._consecutiveFailures, 2);
+      context.manager.stop();
+      const requests = context.requests.length;
+      await context.manager.syncEvents();
+      assert.ok(
+        context.requests.length > requests,
+        "fresh manual synchronization remains permitted"
+      );
+      assert.equal(context.manager.syncRunner.timer, null);
+    });
+  }
+  for (const boundary of [
+    "policy revocation",
+    "account departure",
+    "sign-out",
+    "same-account rotation",
+  ]) {
+    test(`${provider} pending startup follows ${boundary} without reviving retired work`, async (t) => {
+      const context = await calendarPolicyScenario(t, provider, "calendar");
+      context.start();
+      const originalTimer = context.manager.syncRunner.timer;
+      await context.entered.promise;
+      await context.boundary(boundary);
+      const retired = boundary !== "same-account rotation";
+      assert.equal(context.signal().aborted, retired);
+      if (boundary === "policy revocation") assert.equal(context.manager.syncRunner.timer, null);
+      context.resume(boundary);
+      await new Promise(setImmediate);
+      const before = [context.requests.length, context.writes.length, context.reminders.length];
+      const timer = context.manager.syncRunner.timer;
+      context.finish.resolve();
+      await new Promise(setImmediate);
+      if (retired)
+        assert.deepEqual(
+          [context.requests.length, context.writes.length, context.reminders.length],
+          before
+        );
+      else {
+        assert.ok(context.requests.length > before[0]);
+        assert.ok(context.reminders.length > before[2]);
+        assert.equal(timer, originalTimer);
+      }
+      assert.equal(context.manager.syncRunner.timer, timer);
+      assert.notEqual(timer, null);
+    });
+  }
+  for (const selected of [false, true]) {
+    test(`permitted offline ${provider} startup schedules cached reminders, selected=${selected}`, async (t) => {
+      const context = await calendarPolicyScenario(t, provider, "offline");
+      if (!selected) context.calendars.length = 0;
+      context.start();
+      await new Promise(setImmediate);
+      assert.ok(context.requests.length > 0);
+      assert.equal(context.reminders.length, 1);
+      assert.notEqual(context.manager.syncRunner.timer, null);
+    });
+  }
+}
+
+for (const provider of ["google", "microsoft"]) {
+  for (const operation of ["wake", "primary selection"]) {
+    test(`retired ${provider} ${operation} cannot finalize into a resumed calendar runner`, async (t) => {
+      const context = await calendarPolicyScenario(t, provider, "event body");
+      context.manager.addAccount("saved@example.test");
+      context.manager.syncRunner.start();
+      const pending =
+        operation === "wake"
+          ? context.manager.onWakeFromSleep()
+          : context.manager.setPrimaryOnly(false);
+      const settled = Promise.allSettled([pending]);
+      await context.entered.promise;
+      context.manager.stop();
+      assert.equal(context.signal().aborted, true);
+      context.manager.start();
+      await new Promise(setImmediate);
+      context.manager.syncRunner._consecutiveFailures = 2;
+      const timer = context.manager.syncRunner.timer;
+      const before = [context.requests.length, context.writes.length, context.reminders.length];
+      context.finish.resolve();
+      await settled;
+      await new Promise(setImmediate);
+      assert.deepEqual(
+        [context.requests.length, context.writes.length, context.reminders.length],
+        before
+      );
+      assert.equal(context.manager.syncRunner.timer, timer);
+      assert.equal(context.manager.syncRunner._consecutiveFailures, 2);
+    });
+  }
+}
