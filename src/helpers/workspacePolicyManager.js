@@ -5,14 +5,15 @@ const crypto = require("crypto");
 // logic stays local here, but the error taxonomy is shared.
 const { AuthContextError } = require("./cloudApiRequest");
 const { isValidPolicyShape } = require("./policyValidation");
-const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
+const {
+  WORKSPACE_REMOVAL_CAPABILITY,
+  withPolicyRequestHeaders,
+} = require("./policyRequestHeaders");
 const {
   readWorkspacePolicyCache,
   readAccountPolicyCache,
   writeWorkspacePolicyCache,
 } = require("./workspacePolicyCache");
-
-const WORKSPACE_REMOVAL_CAPABILITY = "workspace-removal-v1";
 
 function unresolvablePolicyError(message) {
   return Object.assign(new Error(message), { code: "POLICY_UNRESOLVABLE" });
@@ -310,15 +311,11 @@ function createWorkspacePolicyManager({
         // This manager keeps its own freshness window; a Chromium-cached copy
         // (the endpoint allows max-age=300) would answer a refresh after a
         // server refusal with the verdict the server just contradicted.
-        const headers = withPolicyRequestHeaders(identity.authHeaders, getAppVersion());
         const response = await proxyFetch(`${identity.apiUrl}/api/workspace-policy`, {
           method: "GET",
-          // #3030: only this lookup asks for the removal signal, so every other
-          // request's 401 stays the session expiry its caller maps to sign-in.
-          headers: {
-            ...headers,
-            "x-openwhispr-capabilities": `${headers["x-openwhispr-capabilities"]},${WORKSPACE_REMOVAL_CAPABILITY}`,
-          },
+          headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion(), [
+            WORKSPACE_REMOVAL_CAPABILITY,
+          ]),
           cache: "no-store",
           signal: controller.signal,
         });
