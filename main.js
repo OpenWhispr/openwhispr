@@ -1343,6 +1343,18 @@ async function startApp() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
+  // The idle timeout frees the cleanup model between dictations; reload it as
+  // each dictation starts so the load overlaps speech, not the paste. Set before
+  // the main window exists: its dictation hotkey works from that moment.
+  windowManager.onDictationStart = () => {
+    const modelManager = require("./src/helpers/modelManagerBridge").default;
+    prewarmLocalCleanup(modelManager).catch((err) => {
+      debugLogger.debug("llama-server dictation pre-warm error (non-fatal)", {
+        error: err.message,
+      });
+    });
+  };
+
   // Create windows FIRST so the user sees UI as soon as possible.
   // A login launch goes to the tray whatever the preference says: the user asked
   // the OS to start us, not to put a window in front of them at every login.
@@ -1543,17 +1555,6 @@ async function startApp() {
       });
     });
   }
-
-  // The idle timeout frees the cleanup model between dictations; reload it as
-  // each dictation starts so the load overlaps speech, not the paste.
-  windowManager.onDictationStart = () => {
-    const modelManager = require("./src/helpers/modelManagerBridge").default;
-    prewarmLocalCleanup(modelManager).catch((err) => {
-      debugLogger.debug("llama-server dictation pre-warm error (non-fatal)", {
-        error: err.message,
-      });
-    });
-  };
 
   // Auto-download diarization models if binary is available
   if (
