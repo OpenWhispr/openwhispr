@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const WS = require("ws");
+const { setTimeout: delay } = require("node:timers/promises");
 
 const load = () => import("../../src/helpers/tinfoilRealtimeStreaming.js");
 const COMPLETED_EVENT = "conversation.item.input_audio_transcription.completed";
@@ -64,6 +65,25 @@ async function makeConnected() {
   return streaming;
 }
 
+for (const committed of [false, true]) {
+  test(`policy cancellation drops ${committed ? "committed" : "buffered"} audio without another commit`, async (t) => {
+    const streaming = await makeConnected();
+    t.after(() => streaming.cleanup());
+    streaming.sendAudio(speechPcm());
+    if (committed) streaming._sendCommit();
+    const priorCommits = sentEvents(streaming.ws, "input_audio_buffer.commit").length;
+    const socket = streaming.ws;
+    const stopped = streaming.disconnect({ commit: false });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(sentEvents(socket, "input_audio_buffer.commit").length, priorCommits);
+    assert.equal(
+      await Promise.race([stopped.then(() => true), delay(100).then(() => false)]),
+      true
+    );
+    assert.equal(socket.readyState, WS.CLOSED);
+  });
+}
+
 async function finishConnect(streaming, socket, preconfigured = false) {
   await new Promise((resolve) => setImmediate(resolve));
   socket.readyState = WS.OPEN;
@@ -73,11 +93,12 @@ async function finishConnect(streaming, socket, preconfigured = false) {
   }
 }
 
-test("connect uses only the attested socket factory with the selected model and key", async () => {
+test("connect uses only the attested socket factory with the selected model and key", async (t) => {
   const { TinfoilRealtimeStreaming } = await load();
   const socket = makeFakeSocket(WS.CONNECTING);
   const { factory, calls } = makeRecordingFactory(socket);
   const streaming = new TinfoilRealtimeStreaming(factory);
+  t.after(() => streaming.cleanup());
   let rogueCalled = false;
 
   const connected = streaming.connect({
@@ -92,7 +113,11 @@ test("connect uses only the attested socket factory with the selected model and 
   await connected;
 
   assert.equal(rogueCalled, false);
-  assert.deepEqual(calls, [{ model: "custom-rt-model", apiKey: "tk-secret" }]);
+  assert.deepEqual(
+    calls.map(({ model, apiKey }) => ({ model, apiKey })),
+    [{ model: "custom-rt-model", apiKey: "tk-secret" }]
+  );
+  assert.ok(calls[0].signal instanceof AbortSignal);
   streaming.cleanup();
 });
 
@@ -179,7 +204,9 @@ test("every fresh instance invokes the attested factory", async () => {
   }
 
   assert.equal(calls.length, 2);
-  assert.deepEqual(calls[0], calls[1]);
+  assert.equal(calls[0].model, calls[1].model);
+  assert.equal(calls[0].apiKey, calls[1].apiKey);
+  assert.notEqual(calls[0].signal, calls[1].signal);
 });
 
 test("meeting sessions declare the 24kHz PCM input format", async () => {

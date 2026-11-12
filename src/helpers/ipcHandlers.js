@@ -21,6 +21,7 @@ const fs = require("fs");
 const os = require("os");
 const { isRestorablePasteTarget } = require("./windowsPasteTarget");
 const crypto = require("crypto");
+const { AsyncLocalStorage } = require("node:async_hooks");
 const debugLogger = require("./debugLogger");
 const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
@@ -44,6 +45,14 @@ const {
   isScreenContextBlocked,
 } = require("./workspacePolicyManager");
 const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager");
+const { createEffectivePolicyManager } = require("./effectivePolicyManager");
+const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
+const {
+  productOperationAllowed,
+  productPolicyState,
+  realtimeSelection,
+  runningOperationAllowed,
+} = require("./productPolicy");
 const { createCloudConfigRequestHandler } = require("./cloudConfigRequest");
 const { extractAnthropicText, describeMissingAnthropicText } = require("./anthropicResponse");
 const {
@@ -67,6 +76,7 @@ const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
   createConnectorAuthLookup,
+  POLICY_TIMEOUT_MS,
 } = require("./connectors/connectorIpc");
 const { createNoteAttendeesLookup, searchContacts } = require("./connectors/contactSearch");
 // The renderer's ModelRegistry is not main-loadable; the route resolver only
@@ -134,6 +144,12 @@ function localTranscriptionFailure(result) {
   }
   return error;
 }
+// The answer product work gets when the policy refuses or retires it.
+const policyBlockedFailure = () => ({
+  success: false,
+  code: "DEVICE_POLICY_BLOCKED",
+  error: i18nMain.t("common.policyUnresolved"),
+});
 // Which diarization dialect a resolved endpoint speaks, for Custom endpoints
 // that front a known provider. Null when the host offers no known dialect.
 const diarizationHost = (endpoint) => {
@@ -388,11 +404,6 @@ function approveAudioPath(filePath) {
 
 // __Secure-openwhispr.session_token in production, and the names older builds used.
 const SESSION_COOKIE_PATTERN = /(?:^|;\s*)[^=;]*session_token=/;
-
-// Signed out, nothing restricts audio: guests keep every feature.
-function guestAudioPolicy(authGeneration) {
-  return { success: true, managed: false, authGeneration };
-}
 
 // Recordings save-temp-audio wrote for the chat voice draft, until deleted.
 const voiceDraftAudioPaths = new Set();
@@ -713,6 +724,52 @@ const {
   meetingDestinationContext,
 } = require("./meetingNotificationDestination");
 
+// A replaced or revoked session must go quiet and drop what it holds: a commit
+// would send its audio on, and a late final or socket error would land in the
+// renderer as if it came from the live session.
+function retireStreaming(streaming) {
+  if (!streaming) return;
+  streaming.onPartialTranscript = null;
+  streaming.onFinalTranscript = null;
+  streaming.onError = null;
+  streaming.onSessionEnd = null;
+  if (streaming.cleanupAll) streaming.cleanupAll();
+  else streaming.cleanupWarmConnection?.();
+  streaming.disconnect({ commit: false }).catch(() => {});
+}
+
+// The dictation's renderer hears of the revocation at once and falls back,
+// rather than streaming into a closed session behind a frozen preview.
+function retireProductStream(handlers, property) {
+  handlers[property]?.onError?.(new Error(i18nMain.t("common.policyTranscriptionRestricted")));
+  retireStreaming(handlers[property]);
+  handlers[property] = null;
+  handlers._remoteStreamPolicies.delete(property);
+}
+
+function cancelWindowRequests(registry) {
+  for (const win of BrowserWindow.getAllWindows()) registry.cancelSender(win.webContents.id);
+}
+
+// What both policy retirements end: a disallowed preview, product request or
+// cloud request. `remoteStopped` also ends every request that leaves the device.
+function abortDisallowedRequests(handlers, snapshot, remoteStopped = false) {
+  const allowed = (channel, args) =>
+    productOperationAllowed(snapshot, app.getVersion(), channel, args);
+  if (!allowed("start-dictation-preview")) handlers._stopLocalDictationPreview?.();
+  for (const [controller, operation] of handlers._productRequests ?? []) {
+    if ((remoteStopped && operation.remote) || !allowed(operation.channel, operation.args))
+      controller.abort();
+  }
+  for (const [channel, registry] of [
+    ["cloud-agent-stream-start", handlers._agentStreamRequests],
+    ["cloud-reason", handlers._cloudReasonRequests],
+    ["cloud-transcribe", handlers._cloudTranscriptionRequests],
+  ]) {
+    if (remoteStopped || !allowed(channel)) cancelWindowRequests(registry);
+  }
+}
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -737,6 +794,10 @@ class IPCHandlers {
     this.microsoftCalendarManager = managers.microsoftCalendarManager;
     this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
+    this.managedMeetingPolicy = managers.managedMeetingPolicy;
+    this.managedDevicePolicy = managers.managedDevicePolicy;
+    this.meetingAuditLog = managers.meetingAuditLog;
+    this._remoteProductRetirement = new AbortController();
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.windowsLoopbackAudioManager = managers.windowsLoopbackAudioManager;
@@ -774,7 +835,6 @@ class IPCHandlers {
     this._dictionaryHotwordHints = null;
     this.parakeetManager.setDictionaryProvider(() => this._getDictionaryHotwords());
     this._textEditHandler = null;
-    this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
     this.skillLibrary = new SkillLibrary({
@@ -987,8 +1047,10 @@ class IPCHandlers {
       ],
     ];
     this._localModelPolicy = createLocalModelPolicyGate({
-      getPolicy: (options) => this._getMainModelPolicy?.({}, options) ?? { success: false },
-      getHeldPolicy: () => this._getMainModelPolicy?.({}, { held: true }) ?? { success: false },
+      getPolicy: (options) =>
+        this.refreshEffectivePolicy?.(undefined, options) ?? { success: false },
+      getHeldPolicy: () =>
+        this.refreshEffectivePolicy?.(undefined, { held: true }) ?? { success: false },
       getIdentity: () => tokenStore.getState().generation,
       getAppVersion: () => app.getVersion(),
       isSnapshotCurrent: (snapshot) =>
@@ -1068,8 +1130,7 @@ class IPCHandlers {
       this._audioFeaturePolicy?.invalidate();
     } else {
       if (!provenGuest) this._localModelPolicy?.cancelJobs();
-      this._localModelPolicy?.invalidate(guestAudioPolicy(generation));
-      this._audioFeaturePolicy?.invalidate(guestAudioPolicy(generation));
+      this._audioFeaturePolicy?.invalidate();
       if (!provenGuest) {
         this._audioFeaturePolicy?.cancelJobs();
         this._stopMeetingForPolicy?.("accountChanged");
@@ -1079,6 +1140,7 @@ class IPCHandlers {
     // Like the jobs above, enterprise audio outlives a token rotation; a
     // different account or workspace retires it once it is learned.
     if (!token) {
+      if (!provenGuest) this._retireAccountProductStreams?.(this.databaseManager.activeAccountId);
       this._retireEnterpriseAudio?.(false, "accountChanged");
       this._enterpriseAudioOwner = null;
     }
@@ -1097,6 +1159,12 @@ class IPCHandlers {
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
     }
+    this.updateManager?.invalidatePolicy();
+    const effectivePolicy = this.effectivePolicyManager?.invalidate();
+    // Signed out is a guest, whose verdict (the device's policy, if any) is known.
+    if (!token) this._localModelPolicy?.invalidate(effectivePolicy);
+    void this.updateManager?.refreshPolicy();
+    void this.refreshEffectivePolicy?.();
     broadcastToWindows("auth-token-state-changed", {
       generation,
       hasToken: Boolean(token),
@@ -1273,14 +1341,41 @@ class IPCHandlers {
   // Shared by the upload IPC handler and the CLI bridge. `filePath` must
   // already have passed resolveAllowedAudioPath (or approveAudioPath).
   async transcribeLocalFile(filePath, options = {}) {
-    const audioBuffer = fs.readFileSync(filePath);
-    if (isSherpaLocalProvider(options.provider)) {
-      return this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
-    }
-    return this.whisperManager.transcribeLocalWhisper(audioBuffer, {
-      ...options,
-      ...this._resolveWhisperVadOptions("noteRecording"),
+    void this.refreshEffectivePolicy();
+    if (
+      !productOperationAllowed(
+        this.effectivePolicyManager.getCurrent(),
+        app.getVersion(),
+        "transcribe-audio-file"
+      )
+    )
+      return policyBlockedFailure();
+    const controller = new AbortController();
+    this._productRequests.set(controller, {
+      channel: "transcribe-audio-file",
+      args: [],
+      remote: false,
     });
+    const signal = options.signal
+      ? AbortSignal.any([options.signal, controller.signal])
+      : controller.signal;
+    try {
+      signal.throwIfAborted();
+      const audioBuffer = fs.readFileSync(filePath);
+      const result = isSherpaLocalProvider(options.provider)
+        ? await this.parakeetManager.transcribeLocalParakeet(audioBuffer, { ...options, signal })
+        : await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
+            ...options,
+            ...this._resolveWhisperVadOptions("noteRecording"),
+            signal,
+          });
+      return controller.signal.aborted ? policyBlockedFailure() : result;
+    } catch (error) {
+      if (controller.signal.aborted) return policyBlockedFailure();
+      throw error;
+    } finally {
+      this._productRequests.delete(controller);
+    }
   }
 
   approveAudioPath(filePath) {
@@ -1826,7 +1921,248 @@ class IPCHandlers {
     return { token, environment, tenant };
   }
 
+  _stopRemoteProductWork() {
+    this._remoteProductRetirement?.abort();
+    this._remoteProductRetirement = new AbortController();
+    for (const controller of this.enterpriseStreamAborts?.values() ?? []) controller.abort();
+    for (const controller of this.activeUrlDownloads?.values() ?? []) controller.abort();
+    this._remoteCalendarsStarted = false;
+    abortDisallowedRequests(this, this.effectivePolicyManager.getCurrent(), true);
+    cancelWindowRequests(this._enterpriseReasoningRequests);
+    if (this._meetingMicStreaming || this._meetingSystemStreaming)
+      this._stopMeetingForPolicy?.("policyRestricted");
+    for (const key of [
+      "assemblyAiStreaming",
+      "deepgramStreaming",
+      "geminiStreaming",
+      "cortiStreaming",
+      "_dictationStreaming",
+    ])
+      retireProductStream(this, key);
+    // The meeting stop above already told the meeting's renderer.
+    for (const key of ["_meetingMicStreaming", "_meetingSystemStreaming"]) {
+      retireStreaming(this[key]);
+      this[key] = null;
+    }
+    this.googleCalendarManager?.stop();
+    this.microsoftCalendarManager?.stop();
+  }
+
+  _retireDisallowedProductWork(snapshot) {
+    abortDisallowedRequests(this, snapshot);
+    for (const [property, operation] of this._remoteStreamPolicies) {
+      if (!productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
+        retireProductStream(this, property);
+    }
+    for (const [streamId, provider] of this._enterpriseStreamProviders) {
+      if (
+        !productOperationAllowed(snapshot, app.getVersion(), "enterprise-stream-start", [
+          { provider },
+        ])
+      )
+        this.enterpriseStreamAborts.get(streamId)?.abort();
+    }
+    const meetingOptions = this.getMeetingTranscriptionOptions?.();
+    if (
+      meetingOptions &&
+      !productOperationAllowed(snapshot, app.getVersion(), "meeting-transcription", [
+        meetingOptions,
+      ])
+    )
+      this._stopMeetingForPolicy?.("policyRestricted");
+    if (!productOperationAllowed(snapshot, app.getVersion(), "gcal-start-oauth")) {
+      this.googleCalendarManager?.stop();
+      this.microsoftCalendarManager?.stop();
+      this._remoteCalendarsStarted = false;
+    }
+  }
+
+  _startRemoteProductWork() {
+    if (!this._remoteCalendarsReady || this._remoteCalendarsStarted) return;
+    if (
+      !productOperationAllowed(
+        this.effectivePolicyManager.getCurrent(),
+        app.getVersion(),
+        "gcal-start-oauth"
+      )
+    )
+      return;
+    this._remoteCalendarsStarted = true;
+    this.googleCalendarManager?.start();
+    this.microsoftCalendarManager?.start();
+  }
+
+  startPolicyCalendars() {
+    this._remoteCalendarsReady = true;
+    const snapshot = this.effectivePolicyManager.getCurrent();
+    if (snapshot.success && !snapshot.localOnly) this._startRemoteProductWork();
+  }
+
   setupHandlers() {
+    this._remoteStreamPolicies = new Map();
+    this._retireAccountProductStreams = (accountId) => {
+      for (const [property, operation] of this._remoteStreamPolicies) {
+        // A start still owns its marker until its late-socket check completes.
+        if (operation.accountId === accountId && !operation.pending)
+          retireProductStream(this, property);
+      }
+    };
+    this._productRequests = new Map();
+    this._productRequestContext = new AsyncLocalStorage();
+    this._enterpriseStreamProviders = new Map();
+    // Work that leaves the device doesn't start on a verdict still on its way,
+    // and waits for one: a held verdict answers at once, the network only as
+    // long as a policy decision may take.
+    const awaitVerdict = async (event) => {
+      await this.refreshEffectivePolicy(event, { held: true });
+      if (this.effectivePolicyManager.getCurrent().status !== "loading") return;
+      let timer;
+      await Promise.race([
+        this.refreshEffectivePolicy(event),
+        new Promise((resolve) => {
+          timer = setTimeout(resolve, POLICY_TIMEOUT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+    };
+    const mayStart = (operation) => {
+      const policy = this.effectivePolicyManager.getCurrent();
+      return (
+        (!operation.remote || (!policy.localOnly && policy.status !== "loading")) &&
+        productOperationAllowed(policy, app.getVersion(), operation.channel, operation.args)
+      );
+    };
+    const handleProduct = (channel, handler, remote = false) =>
+      ipcMain.handle(channel, async (event, ...args) => {
+        const operation = { channel, args, remote };
+        if (channel === "cloud-api-request")
+          operation.args = [
+            args[0],
+            {
+              resolvingShareVisibility:
+                args[0]?.method?.toUpperCase() === "POST" &&
+                /^\/api\/notes\/[^/?#]+\/share\/rotate-token\/?(?:[?#]|$)/.test(args[0]?.path),
+            },
+          ];
+        void this.refreshEffectivePolicy(event);
+        if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading")
+          await awaitVerdict(event);
+        if (!mayStart(operation)) return policyBlockedFailure();
+        const startedPolicy = this.effectivePolicyManager.getCurrent();
+        operation.accountId = startedPolicy.accountId;
+        operation.guestLocalDictation =
+          startedPolicy.workspaceRequired === false &&
+          operation.accountId === null &&
+          ["transcribe-local-whisper", "transcribe-local-parakeet"].includes(channel);
+        operation.preserveCreateReceipt =
+          channel === "cloud-api-request" &&
+          !args[0]?.public &&
+          args[0]?.method?.toUpperCase() === "POST" &&
+          args[0]?.path === "/api/conversations/create";
+        const streamProperty = channel.startsWith("dictation-realtime-")
+          ? "_dictationStreaming"
+          : /^(assemblyai|deepgram|gemini|corti)-streaming-(start|warmup)$/.test(channel)
+            ? {
+                assemblyai: "assemblyAiStreaming",
+                deepgram: "deepgramStreaming",
+                gemini: "geminiStreaming",
+                corti: "cortiStreaming",
+              }[channel.split("-")[0]]
+            : null;
+        const streamPolicy = { channel, args, accountId: operation.accountId, pending: true };
+        if (streamProperty) this._remoteStreamPolicies.set(streamProperty, streamPolicy);
+        const controller = new AbortController();
+        operation.signal = controller.signal;
+        this._productRequests.set(controller, operation);
+        try {
+          const result = await this._productRequestContext.run(operation, () =>
+            handler(event, ...args)
+          );
+          // The sender-bound acknowledgement must learn which cloud copy now exists.
+          if (operation.preserveCreateReceipt && result?.success) return result;
+          let snapshot = this.effectivePolicyManager.getCurrent();
+          if (
+            !controller.signal.aborted &&
+            snapshot.status === "loading" &&
+            snapshot.deviceReady &&
+            snapshot.accountId === operation.accountId &&
+            snapshot.authGeneration !== startedPolicy.authGeneration
+          ) {
+            await this.refreshEffectivePolicy(event);
+            snapshot = this.effectivePolicyManager.getCurrent();
+          }
+          if (snapshot.accountId !== operation.accountId) {
+            // A stream this start opened, unless a later start replaced it,
+            // belongs to the account that left.
+            if (streamProperty && this._remoteStreamPolicies.get(streamProperty) === streamPolicy) {
+              retireStreaming(this[streamProperty]);
+              this[streamProperty] = null;
+              this._remoteStreamPolicies.delete(streamProperty);
+            }
+            return {
+              success: false,
+              code: "AUTH_CONTEXT_CHANGED",
+              error: "Authentication context changed during the request",
+            };
+          }
+          if (controller.signal.aborted) return policyBlockedFailure();
+          if (
+            (!operation.remote || !snapshot.localOnly) &&
+            runningOperationAllowed(
+              snapshot,
+              operation.accountId,
+              app.getVersion(),
+              operation.channel,
+              operation.args
+            )
+          )
+            return result;
+          if ((!snapshot.success && snapshot.status !== "loading") || snapshot.localOnly)
+            this._stopRemoteProductWork();
+          else if (snapshot.success) this._retireDisallowedProductWork(snapshot);
+          return policyBlockedFailure();
+        } finally {
+          this._productRequests.delete(controller);
+          streamPolicy.pending = false;
+        }
+      });
+    const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
+    // Work that turns remote here starts remote work, under new remote work's rules.
+    const trackTranscriptionRoute = async (route, selectedMode) => {
+      const operation = this._productRequestContext.getStore();
+      if (route.transport === "error") return operation.signal;
+      const mode =
+        route.transport === "local"
+          ? "local"
+          : route.transport === "managed"
+            ? "enterprise"
+            : route.transport === "cloud"
+              ? "openwhispr"
+              : route.provider === "self-hosted" || selectedMode === "self-hosted"
+                ? "self-hosted"
+                : "providers";
+      const turnsRemote = !operation.remote && mode !== "local";
+      operation.channel = "batch-transcription";
+      operation.args = [{ mode, provider: route.provider ?? "" }];
+      operation.remote = mode !== "local";
+      if (turnsRemote) {
+        if (this.effectivePolicyManager.getCurrent().status === "loading") await awaitVerdict();
+        if (!mayStart(operation)) {
+          const unsettled = this.effectivePolicyManager.getCurrent().status === "loading";
+          throw Object.assign(
+            new Error(
+              i18nMain.t(unsettled ? "common.policyUnresolved" : "common.managedPolicyConflict")
+            ),
+            { code: "DEVICE_POLICY_BLOCKED" }
+          );
+        }
+      }
+      return operation.signal;
+    };
+    const handleProviderTranscription = (channel, handler) =>
+      handleRemoteProduct(channel, (event, options) =>
+        handler(event, options, this._productRequestContext.getStore().signal)
+      );
     // A push is acked only under the sign-in that sent it. After an account switch
     // the ack would hand an unattributed row to the new account although the cloud
     // copy is the old one's, so it is dropped and the row stays pending. A pulled
@@ -1839,15 +2175,28 @@ class IPCHandlers {
       scopedAccountByGeneration.get(expectedAuthGeneration) !==
         this.databaseManager.activeAccountId;
     // Each handler takes at most one renderer argument, so the job's signal
-    // always lands after it and can't be supplied by the renderer.
-    const handleAudioFeature = (channel, purpose, handler) =>
+    // always lands after it and can't be supplied by the renderer. onRefused
+    // hears a refusal of work that did not go ahead, with that argument.
+    const handleAudioFeature = (channel, purpose, handler, onRefused) =>
       ipcMain.handle(channel, (event, options) =>
-        this._audioFeaturePolicy.run(event, purpose, (signal) => handler(event, options, signal))
+        this._audioFeaturePolicy.run(event, purpose, (signal) => handler(event, options, signal), {
+          onRefused: onRefused && ((failure) => onRefused(failure, options)),
+        })
       );
+    const auditMeetingRefusal = ({ code }, trigger, noteId) =>
+      this.meetingAuditLog?.recordingRefused({ noteId, trigger, reason: code });
     // Runs a job under the audio policy and the caller's own cancellation
     // ({ signal, release }); the handler gets one signal for both.
     const runAudioJob = (event, purpose, { signal, release }, handler) =>
-      this._audioFeaturePolicy.run(event, purpose, handler, { signal }).finally(release);
+      this._audioFeaturePolicy
+        .run(event, purpose, handler, {
+          signal: this._productRequestContext.getStore()?.signal
+            ? AbortSignal.any(
+                [signal, this._productRequestContext.getStore().signal].filter(Boolean)
+              )
+            : signal,
+        })
+        .finally(release);
     ipcMain.handle("onboarding-set-window-mode", (_event, mode) =>
       this.windowManager.setOnboardingWindowMode(mode)
     );
@@ -2002,9 +2351,9 @@ class IPCHandlers {
           return describeCortiTokenFailure(error);
         }
       }
-      return testProviderConnection(config, fetch, runPaidKeyCheck);
+      return testProviderConnection(config, proxyFetch, runPaidKeyCheck);
     };
-    ipcMain.handle("test-provider-connection", (_event, config) =>
+    handleRemoteProduct("test-provider-connection", (_event, config) =>
       cachedConnectionCheck(config, () => checkProviderConnection(config))
     );
 
@@ -3034,20 +3383,27 @@ class IPCHandlers {
         binding: accountScopeBinding.read(),
       });
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
-      const guestPolicy =
-        accountId === null && !state.token ? guestAudioPolicy(state.generation) : null;
+      const guest = accountId === null && !state.token;
       const scopeChanged =
         accountChanged || (accountId !== null && previousScope?.accountId !== accountId);
       // Work a guest started needs no account's leave to go on: the new verdict
       // decides it when it lands. Leaving an account does end its work.
       const leftAccount =
         accountChanged && typeof this.databaseManager.activeAccountId === "string";
+      if (accountChanged && !leftAccount && accountId !== null) {
+        for (const operation of this._productRequests.values()) {
+          if (operation.guestLocalDictation && operation.accountId === null)
+            operation.accountId = accountId;
+        }
+      }
       if (leftAccount) this._localModelPolicy?.cancelJobs();
+      if (leftAccount) this._retireAccountProductStreams?.(this.databaseManager.activeAccountId);
       // A rotated bearer no longer matches the stored binding, so this also
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
       if (scopeChanged) {
-        this._audioFeaturePolicy?.invalidate(guestPolicy);
+        this.updateManager?.invalidatePolicy();
+        this._audioFeaturePolicy?.invalidate();
         if (leftAccount) {
           this._audioFeaturePolicy?.cancelJobs();
           this._stopMeetingForPolicy?.("accountChanged");
@@ -3058,8 +3414,6 @@ class IPCHandlers {
         }
         this.windowManager.retireMeetingNotificationScope();
         this._cancelCalendarAuthorizations();
-      } else if (guestPolicy) {
-        this._audioFeaturePolicy?.update(guestPolicy);
       }
       this.databaseManager.setActiveAccountId(accountId);
       this.databaseManager.claimSignedOutLocalRows();
@@ -3077,8 +3431,14 @@ class IPCHandlers {
       } else accountScopeBinding.clear();
       // After the scope moved: the verdict this fetches is stamped with the
       // account and cached under the binding, so neither may still be the old one.
-      if (scopeChanged) this._localModelPolicy?.invalidate(guestPolicy);
-      else if (guestPolicy) this._localModelPolicy?.update(guestPolicy);
+      if (scopeChanged) {
+        this._localModelPolicy?.invalidate(
+          guest ? this.effectivePolicyManager.getCurrent() : undefined
+        );
+        this.effectivePolicyManager.invalidate();
+      } else if (guest) this._localModelPolicy?.update(this.effectivePolicyManager.getCurrent());
+      void this.updateManager?.refreshPolicy();
+      void this.refreshEffectivePolicy();
       broadcastToWindows(
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
@@ -3864,12 +4224,13 @@ class IPCHandlers {
     });
 
     const activeUrlDownloads = new Map();
+    this.activeUrlDownloads = activeUrlDownloads;
     let urlDownloadSeq = 0;
 
     // Sweep ow-url-*/ow-diarize-* orphans from crashes or windows closed mid-download.
     require("./urlAudioDownloader").sweepStaleTempArtifacts();
 
-    ipcMain.handle("download-url-audio", async (event, url, downloadId) => {
+    handleRemoteProduct("download-url-audio", async (event, url, downloadId) => {
       const id =
         typeof downloadId === "string" && downloadId ? downloadId : `dl-${++urlDownloadSeq}`;
       const abortController = new AbortController();
@@ -4215,7 +4576,7 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("transcribe-local-whisper", async (_event, audioBlob, options = {}) => {
+    handleProduct("transcribe-local-whisper", async (_event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-whisper called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -4232,6 +4593,7 @@ class IPCHandlers {
         const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, {
           ...requestOptions,
           ...vadOptions,
+          signal: this._productRequestContext.getStore().signal,
         });
 
         debugLogger.log("Whisper result", {
@@ -4608,7 +4970,7 @@ class IPCHandlers {
       return this.whisperManager.checkFFmpegAvailability();
     });
 
-    ipcMain.handle("transcribe-local-parakeet", async (_event, audioBlob, options = {}) => {
+    handleProduct("transcribe-local-parakeet", async (_event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-parakeet called", {
         audioBlobType: typeof audioBlob,
         audioBlobSize: audioBlob?.byteLength || audioBlob?.length || 0,
@@ -4616,7 +4978,10 @@ class IPCHandlers {
       });
 
       try {
-        const result = await this.parakeetManager.transcribeLocalParakeet(audioBlob, options);
+        const result = await this.parakeetManager.transcribeLocalParakeet(audioBlob, {
+          ...options,
+          signal: this._productRequestContext.getStore().signal,
+        });
 
         debugLogger.log("Parakeet result", {
           success: result.success,
@@ -4950,9 +5315,10 @@ class IPCHandlers {
       // Once Squirrel.Mac holds a downloaded update it installs it on this quit regardless
       // of any flag, so the updater owns that restart instead of racing app.relaunch().
       if (this.updateManager.hasStagedUpdate()) {
-        const { success } = await this.updateManager
-          .installUpdate()
-          .catch(() => ({ success: false }));
+        const { success } = await this.updateManager.restartIntoStagedUpdate().catch((error) => {
+          debugLogger.error("Restart into staged update failed", { error: error.message });
+          return { success: false };
+        });
         if (success) return;
       }
       this.updateManager.deferInstallOnQuit();
@@ -5686,9 +6052,9 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle(
+    handleProviderTranscription(
       "proxy-xai-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, keyterms }) => {
+      serializeIpcError(async (event, { audioBuffer, language, keyterms }, signal) => {
         const apiKey = this.environmentManager.getXaiKey();
         if (!apiKey) {
           throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
@@ -5712,6 +6078,7 @@ class IPCHandlers {
         }
 
         const response = await proxyFetch(XAI_STT_URL, {
+          signal,
           method: "POST",
           headers: { Authorization: `Bearer ${apiKey}` },
           body: formData,
@@ -5736,9 +6103,9 @@ class IPCHandlers {
       })
     );
 
-    ipcMain.handle(
+    handleProviderTranscription(
       "proxy-mistral-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
+      serializeIpcError(async (event, { audioBuffer, model, language, contextBias }, signal) => {
         const apiKey = this.environmentManager.getMistralKey();
         if (!apiKey) {
           throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
@@ -5762,6 +6129,7 @@ class IPCHandlers {
         }
 
         const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
+          signal,
           method: "POST",
           headers: {
             "x-api-key": apiKey,
@@ -5807,9 +6175,9 @@ class IPCHandlers {
       saveSecretKey("getCortiClientSecret", "saveCortiClientSecret", "cortiClientSecret")
     );
 
-    ipcMain.handle(
+    handleProviderTranscription(
       "proxy-corti-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, environment, tenant }) => {
+      serializeIpcError(async (event, { audioBuffer, language, environment, tenant }, signal) => {
         const clientId = this.environmentManager.getCortiClientId();
         const clientSecret = this.environmentManager.getCortiClientSecret();
         if (!clientId || !clientSecret) {
@@ -5821,6 +6189,7 @@ class IPCHandlers {
 
         const { transcribeAudio } = require("./cortiTranscription");
         return await transcribeAudio({
+          signal,
           environment,
           tenant,
           clientId,
@@ -5831,15 +6200,16 @@ class IPCHandlers {
       })
     );
 
-    ipcMain.handle("get-tinfoil-chat-models", async () => {
-      return getTinfoilChatModels();
+    handleRemoteProduct("get-tinfoil-chat-models", async () => {
+      return getTinfoilChatModels(this._productRequestContext.getStore().signal);
     });
 
     // Enclave attestation is Node-only, so batch transcription is proxied through main.
-    ipcMain.handle(
+    handleProviderTranscription(
       "proxy-tinfoil-transcription",
-      serializeIpcError(async (event, { audioBuffer, language, prompt }) => {
+      serializeIpcError(async (event, { audioBuffer, language, prompt }, signal) => {
         return await transcribeWithTinfoil({
+          signal,
           audioBuffer: Buffer.from(audioBuffer),
           fileName: "audio.webm",
           contentType: "audio/webm",
@@ -5852,10 +6222,11 @@ class IPCHandlers {
 
     // Gemini's Interactions API takes JSON with inline base64 audio, not
     // OpenAI-compatible multipart, so batch transcription is proxied through main.
-    ipcMain.handle(
+    handleProviderTranscription(
       "proxy-gemini-transcription",
-      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }) => {
+      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }, signal) => {
         return await transcribeWithGemini({
+          signal,
           audioBuffer: Buffer.from(audioBuffer),
           model,
           contentType: "audio/webm",
@@ -5972,19 +6343,20 @@ class IPCHandlers {
     );
 
     // Enterprise provider test connection
-    ipcMain.handle("test-enterprise-connection", async (event, provider, config) => {
+    handleRemoteProduct("test-enterprise-connection", async (event, provider, config) => {
       const {
         mapEnterpriseError,
         runAbortableOperation,
         runBedrockRequest,
         validateEnterpriseEndpoint,
       } = require("./enterpriseProviderErrors");
+      const signal = this._productRequestContext.getStore().signal;
       let runtime;
       try {
         const { generateText } = require("ai");
         const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
 
-        const resolveModel = (abortSignal) =>
+        const resolveModel = (abortSignal = signal) =>
           runAbortableOperation(async () => {
             runtime = await resolveEnterpriseRuntime(
               event,
@@ -6003,23 +6375,30 @@ class IPCHandlers {
           }, abortSignal);
 
         if (provider === "bedrock") {
-          await runBedrockRequest(async () => {
-            const abortSignal = AbortSignal.timeout(config?.timeoutMs || 30_000);
-            const model = await resolveModel(abortSignal);
-            return generateText({
-              model,
-              prompt: "Say hello in one word.",
-              maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
-              abortSignal,
-              maxRetries: 0,
-            });
-          });
+          await runBedrockRequest(
+            async () => {
+              const abortSignal = AbortSignal.any([
+                signal,
+                AbortSignal.timeout(config?.timeoutMs || 30_000),
+              ]);
+              const model = await resolveModel(abortSignal);
+              return generateText({
+                model,
+                prompt: "Say hello in one word.",
+                maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
+                abortSignal,
+                maxRetries: 0,
+              });
+            },
+            { signal }
+          );
         } else {
           const model = await resolveModel();
           await generateText({
             model,
             prompt: "Say hello in one word.",
             maxOutputTokens: CONNECTION_TEST_MAX_OUTPUT_TOKENS,
+            abortSignal: signal,
           });
         }
 
@@ -6044,7 +6423,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle(
+    handleRemoteProduct(
       "process-enterprise-reasoning",
       async (event, text, modelId, _agentName, config) => {
         const {
@@ -6087,6 +6466,7 @@ class IPCHandlers {
               runAbortableOperation(async () => {
                 runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
                 abortSignal?.throwIfAborted();
+                this._productRequestContext.getStore().signal.throwIfAborted();
                 if (!runtime.model) throw new Error("No model specified for enterprise reasoning");
                 validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
                 return getEnterpriseAIModel(
@@ -6103,7 +6483,13 @@ class IPCHandlers {
                 prompt: text,
                 maxOutputTokens: config?.maxTokens || 4096,
                 ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
-                abortSignal,
+                abortSignal: AbortSignal.any(
+                  [
+                    abortSignal,
+                    this._productRequestContext.getStore()?.signal,
+                    this._remoteProductRetirement.signal,
+                  ].filter(Boolean)
+                ),
                 ...(disableNestedRetries ? { maxRetries: 0 } : {}),
               });
             };
@@ -6173,7 +6559,7 @@ class IPCHandlers {
     // Runs doStream for the renderer's enterprise chat model shim; parts are
     // relayed verbatim over enterprise-stream-part, ending with {done}/{error}.
     this.enterpriseStreamAborts = new Map();
-    ipcMain.handle("enterprise-stream-start", async (event, payload) => {
+    handleRemoteProduct("enterprise-stream-start", async (event, payload) => {
       const {
         isEnterpriseProvider,
         mapEnterpriseError,
@@ -6188,6 +6574,7 @@ class IPCHandlers {
       };
       const abortController = new AbortController();
       this.enterpriseStreamAborts.set(streamId, abortController);
+      this._enterpriseStreamProviders.set(streamId, provider);
       // isDestroyed() stays false across reload/navigation, which wipes the
       // renderer listeners — abort so the provider request isn't billed for
       // a generation nobody receives.
@@ -6212,6 +6599,7 @@ class IPCHandlers {
           runtime.apiKey,
           runtime.enterprise
         );
+        abortController.signal.throwIfAborted();
 
         const { stream } = await model.doStream({
           ...options,
@@ -6221,6 +6609,7 @@ class IPCHandlers {
         try {
           for (;;) {
             const { done, value } = await reader.read();
+            abortController.signal.throwIfAborted();
             if (done) break;
             if (event.sender.isDestroyed()) {
               abortController.abort();
@@ -6244,6 +6633,7 @@ class IPCHandlers {
         return { success: false, error: mapped.message };
       } finally {
         this.enterpriseStreamAborts.delete(streamId);
+        this._enterpriseStreamProviders.delete(streamId);
         if (!event.sender.isDestroyed()) {
           event.sender.removeListener("did-start-navigation", abortOnGone);
           event.sender.removeListener("destroyed", abortOnDestroyed);
@@ -6254,12 +6644,14 @@ class IPCHandlers {
     ipcMain.handle("enterprise-stream-cancel", async (event, streamId) => {
       this.enterpriseStreamAborts.get(streamId)?.abort();
       this.enterpriseStreamAborts.delete(streamId);
+      this._enterpriseStreamProviders.delete(streamId);
     });
 
     // Lists the text models the account serves in the selected region,
     // resolved to invocable IDs (bare on-demand or geo-scoped profile IDs).
-    ipcMain.handle("bedrock-list-models", async (event, config) => {
+    handleRemoteProduct("bedrock-list-models", async (event, config) => {
       const { mapEnterpriseError } = require("./enterpriseProviderErrors");
+      const signal = this._productRequestContext.getStore().signal;
       try {
         const runtime = await resolveEnterpriseRuntime(
           event,
@@ -6267,6 +6659,7 @@ class IPCHandlers {
           config?.model || "test",
           config
         );
+        signal.throwIfAborted();
         const {
           BedrockClient,
           ListFoundationModelsCommand,
@@ -6294,12 +6687,15 @@ class IPCHandlers {
         const client = new BedrockClient({ region, ...(credentials ? { credentials } : {}) });
 
         const [foundationModels, profileSummaries] = await Promise.all([
-          client.send(new ListFoundationModelsCommand({ byOutputModality: "TEXT" })),
+          client.send(new ListFoundationModelsCommand({ byOutputModality: "TEXT" }), {
+            abortSignal: signal,
+          }),
           (async () => {
             const summaries = [];
             const paginator = paginateListInferenceProfiles(
               { client },
-              { typeEquals: "SYSTEM_DEFINED" }
+              { typeEquals: "SYSTEM_DEFINED" },
+              { abortSignal: signal }
             );
             for await (const page of paginator) {
               summaries.push(...(page.inferenceProfileSummaries || []));
@@ -6459,10 +6855,20 @@ class IPCHandlers {
       this._syncStartupEnv(setVars, clearVars);
     });
 
-    ipcMain.handle("process-local-reasoning", async (event, text, modelId, _agentName, config) => {
+    handleProduct("process-local-reasoning", async (event, text, modelId, _agentName, config) => {
+      const LocalReasoningService = require("../services/localReasoningBridge").default;
+      const signal = this._productRequestContext.getStore().signal;
+      const requestId = config?.requestId ?? crypto.randomUUID();
+      const cancel = () => LocalReasoningService.cancel(requestId);
+      signal.addEventListener("abort", cancel, { once: true });
       try {
-        const LocalReasoningService = require("../services/localReasoningBridge").default;
-        const result = await LocalReasoningService.processText(text, modelId, config);
+        signal.throwIfAborted();
+        const result = await LocalReasoningService.processText(text, modelId, {
+          ...config,
+          requestId,
+          signal,
+        });
+        signal.throwIfAborted();
         return { success: true, text: result };
       } catch (error) {
         // code/details carry the machine-readable failure across to the
@@ -6474,6 +6880,8 @@ class IPCHandlers {
           code: error.code,
           details: error.details,
         };
+      } finally {
+        signal.removeEventListener("abort", cancel);
       }
     });
 
@@ -6501,7 +6909,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle(
+    handleRemoteProduct(
       "process-anthropic-reasoning",
       async (event, text, modelId, _agentName, config) => {
         try {
@@ -6885,6 +7293,9 @@ class IPCHandlers {
     ipcMain.handle("open-login-items-settings", () => openSystemSettings("loginItems"));
 
     ipcMain.handle("capture-screen-context", async (event) => {
+      // A verdict still on its way is waited for below.
+      const held = this.effectivePolicyManager.getCurrent();
+      if (held.status === "error" || isScreenContextBlocked(held)) return null;
       const panel = this.windowManager.controlPanelWindow;
       const hidePanel = isFromWindow(event, panel) && panel.isVisible() && !panel.isMinimized();
       const focused = hidePanel && panel.isFocused();
@@ -6901,9 +7312,8 @@ class IPCHandlers {
         if (hidePanel) await new Promise((resolve) => setTimeout(resolve, 80));
         // Outside the Control Panel, capture immediately at the invocation moment;
         // the policy verdict resolves concurrently and decides whether to
-        // return it. A signed-out user has no workspace and no policy; managed
-        // users are gated even if a stale renderer asks. null matches capture's
-        // contract — a screenshot must never break the dictation it accompanies.
+        // return it. null matches capture's contract — a screenshot must never
+        // break the dictation it accompanies.
         // The target's window rect picks the display it is on rather than the one
         // under the cursor, and the panel reposition has normally cached it already.
         // A failed rect read falls back to the cursor rather than rejecting: the
@@ -6916,29 +7326,20 @@ class IPCHandlers {
         )
           .catch(() => null)
           .then((targetBounds) => screenContextCapture.captureActiveDisplay(targetBounds));
-        const authHeaders = await getAuthHeader(event);
-        if (authHeaders.Authorization || authHeaders.Cookie) {
-          // Bound the verdict wait: a lapsed policy TTL on a degraded network
-          // must not stall an allowed user's capture past the renderer's 3s
-          // consume race. The renderer gate already fails closed while policy
-          // is unresolved, so this defense-in-depth gate lets an unresolved
-          // verdict through while the refresh completes in flight — a resolved
-          // denial (cached or fresh) still blocks.
+        let timer;
+        try {
           const snapshot = await Promise.race([
-            workspacePolicyManager.getPolicy({
-              expectedAuthGeneration: tokenStore.getState().generation,
-              authHeaders,
+            this.refreshEffectivePolicy(event),
+            new Promise((resolve) => {
+              timer = setTimeout(
+                () => resolve(this.effectivePolicyManager.getCurrent()),
+                POLICY_TIMEOUT_MS
+              );
             }),
-            new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
           ]);
-          if (snapshot && isScreenContextBlocked(snapshot)) {
-            debugLogger.warn(
-              "Screen context capture blocked by org policy",
-              { code: snapshot.code ?? null },
-              "screenContext"
-            );
-            return null;
-          }
+          if (!snapshot.success || isScreenContextBlocked(snapshot)) return null;
+        } finally {
+          clearTimeout(timer);
         }
         return await capturePromise;
       } finally {
@@ -7150,10 +7551,15 @@ class IPCHandlers {
           this.metaActivation?.close(),
           new Promise((resolve) => setTimeout(resolve, 1500)),
         ]).catch(() => {});
-        const tokenState = tokenStore.clear();
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) {
-          await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+        let tokenState;
+        try {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          if (win) {
+            await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+          }
+        } finally {
+          // Retire cookie-authorized requests after cookie storage has settled.
+          tokenState = tokenStore.clear();
         }
         return {
           success: tokenState.success,
@@ -7276,7 +7682,43 @@ class IPCHandlers {
 
     // Honors system proxy via Electron's net stack. useSessionCookies:false so
     // Electron doesn't auto-attach jar cookies on top of our explicit headers.
-    const proxyFetch = (url, init = {}) => net.fetch(url, { ...init, useSessionCookies: false });
+    const controlOrigins = () =>
+      [getApiUrl(), getAuthUrl()].filter(Boolean).map((url) => new URL(url).origin);
+    const networkAllowed = (url) =>
+      devicePolicyNetworkAllowed(this.effectivePolicyManager.getCurrent(), url, controlOrigins());
+    this.isProductNetworkAllowed = networkAllowed;
+    const proxyFetch = async (url, init = {}) => {
+      const operation = this._productRequestContext.getStore();
+      const assertAllowed = () => {
+        if (
+          !networkAllowed(url) ||
+          (operation &&
+            !runningOperationAllowed(
+              this.effectivePolicyManager.getCurrent(),
+              operation.accountId,
+              app.getVersion(),
+              operation.channel,
+              operation.args
+            ))
+        )
+          throw Object.assign(new Error("Blocked by device policy"), {
+            code: "DEVICE_POLICY_BLOCKED",
+          });
+      };
+      assertAllowed();
+      const signals = [
+        init.signal,
+        operation?.signal,
+        this._remoteProductRetirement?.signal,
+      ].filter(Boolean);
+      const response = await net.fetch(url, {
+        ...init,
+        useSessionCookies: false,
+        signal: signals.length ? AbortSignal.any(signals) : undefined,
+      });
+      if (!operation?.preserveCreateReceipt || !response.ok) assertAllowed();
+      return response;
+    };
     const withPolicyHeaders = (headers) => withPolicyRequestHeaders(headers, app.getVersion());
     const handleCloudApiRequest = createCloudApiRequestHandler({
       getApiUrl,
@@ -7341,65 +7783,130 @@ class IPCHandlers {
           ...tokenStore.getState(),
           binding: accountScopeBinding.read(),
         })?.accountId ?? null,
-      broadcast: (snapshot) => {
-        if (snapshot.authGeneration === tokenStore.getState().generation) {
-          this._audioFeaturePolicy?.update(snapshot);
-          this._localModelPolicy?.update(snapshot);
-        }
-        broadcastToWindows("workspace-policy-changed", snapshot);
-      },
+      broadcast: (snapshot) => this.effectivePolicyManager?.updateWorkspace(snapshot),
       logger: debugLogger,
     });
-    const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
-    const getMainPolicy = async (event = {}, { refresh = false, held = false } = {}) => {
-      const generation = tokenStore.getState().generation;
-      const authHeaders = event.sender
-        ? await getAuthHeader(event)
-        : await getAuthHeaderFromWindow(
-            [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
-              (win) => win && !win.isDestroyed()
-            ) ??
-              // With no window yet, no bearer doesn't prove a guest: a cookie
-              // session may still be waiting for its bearer migration.
-              (session.defaultSession && { webContents: { session: session.defaultSession } })
-          );
-      if (generation !== tokenStore.getState().generation) return { success: false };
-      // Other cookies in the jar say nothing about who this is.
-      if (!authHeaders.Authorization && !SESSION_COOKIE_PATTERN.test(authHeaders.Cookie ?? "")) {
-        return typeof this.databaseManager.activeAccountId === "string"
-          ? { success: false }
-          : guestAudioPolicy(generation);
-      }
-      if (held) {
-        return (
-          workspacePolicyManager.heldPolicy({
-            accountId: this.databaseManager.activeAccountId,
-            expectedAuthGeneration: generation,
-            authHeaders,
-          }) ?? { success: false }
-        );
-      }
-      const policy = await workspacePolicyManager.getPolicy({
-        accountId: this.databaseManager.activeAccountId,
-        expectedAuthGeneration: generation,
-        authHeaders,
-        refresh,
+    let cookieGeneration = null;
+    // The credential generation whose session was last read. Until it is, no
+    // bearer doesn't prove a guest: a cookie session may await its migration.
+    let credentialsGeneration = null;
+    const getScope = () => {
+      const state = tokenStore.getState();
+      const active = accountScopeBinding.resolveActiveAccountScope({
+        ...state,
+        binding: accountScopeBinding.read(),
       });
-      // A session cookie the API rejects has expired: with no bearer and no
-      // account this is a guest, not an identity waiting on its policy.
-      const isExpiredSession =
-        !authHeaders.Authorization &&
-        typeof this.databaseManager.activeAccountId !== "string" &&
-        policy.httpStatus === 401;
-      return isExpiredSession ? guestAudioPolicy(generation) : policy;
+      return {
+        // A binding the credential doesn't match names no account (see
+        // accountScopeBinding), so a guest or cookie session has none.
+        accountId:
+          active?.accountId ??
+          (typeof this.databaseManager.activeAccountId === "string"
+            ? this.databaseManager.activeAccountId
+            : null),
+        authGeneration: state.generation,
+        authenticated:
+          Boolean(state.token) ||
+          typeof this.databaseManager.activeAccountId === "string" ||
+          cookieGeneration === state.generation,
+      };
     };
-    this._getMainModelPolicy = getMainPolicy;
+    this.effectivePolicyManager = createEffectivePolicyManager({
+      devicePolicy: this.managedDevicePolicy,
+      workspacePolicyManager: {
+        heldPolicy: (request) => workspacePolicyManager.heldPolicy(request),
+        // A session cookie the API rejects has expired: with no bearer and no
+        // account this is a guest, not an identity waiting on its policy.
+        getPolicy: async (request) => {
+          const policy = await workspacePolicyManager.getPolicy(request);
+          if (
+            !request.authHeaders?.Authorization &&
+            typeof this.databaseManager.activeAccountId !== "string" &&
+            policy.httpStatus === 401
+          )
+            cookieGeneration = null;
+          return policy;
+        },
+      },
+      getScope,
+      broadcast: (snapshot, updatePolicy) => {
+        // A workspace verdict still loading changes nothing for the audio controls.
+        if (snapshot.status !== "loading" || !snapshot.deviceReady)
+          this._audioFeaturePolicy?.update(snapshot);
+        if (snapshot.workspaceRequired || snapshot.authGeneration === credentialsGeneration)
+          this._localModelPolicy?.update(snapshot);
+        // The updater would take a verdict still loading for a failed lookup.
+        if (updatePolicy.status !== "loading") this.updateManager?.updatePolicy?.(updatePolicy);
+        if (
+          !snapshot.deviceReady ||
+          snapshot.localOnly ||
+          (snapshot.status === "error" && snapshot.managed)
+        )
+          this._stopRemoteProductWork();
+        else if (snapshot.success) {
+          this._retireDisallowedProductWork(snapshot);
+          this._startRemoteProductWork();
+        }
+        broadcastToWindows("effective-policy-changed", snapshot);
+      },
+    });
+    this.refreshEffectivePolicy = async (event, { refresh = false, held = false } = {}) => {
+      const scope = getScope();
+      if (this.managedDevicePolicy.getSnapshot().status === "loading")
+        return this.effectivePolicyManager.getCurrent();
+      let authHeaders;
+      try {
+        authHeaders = event?.sender
+          ? await getAuthHeader(event)
+          : await getAuthHeaderFromWindow(
+              [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
+                (win) => win && !win.isDestroyed()
+              ) ??
+                // With no window yet, a cookie session is in the default session.
+                (session.defaultSession && { webContents: { session: session.defaultSession } })
+            );
+      } catch (error) {
+        debugLogger.warn("Policy credentials could not be read", { error: error.message });
+        if (scope.authGeneration !== tokenStore.getState().generation)
+          return this.effectivePolicyManager.getCurrent();
+        cookieGeneration = scope.authGeneration;
+        credentialsGeneration = scope.authGeneration;
+        // Not the server's verdict: only an account last seen managed fails closed.
+        this.effectivePolicyManager.updateWorkspace({
+          success: false,
+          code: "POLICY_CREDENTIALS_UNREADABLE",
+          accountId: scope.accountId,
+          authGeneration: scope.authGeneration,
+          managed: workspacePolicyManager.accountWasManaged(scope.accountId),
+        });
+        return this.effectivePolicyManager.getCurrent();
+      }
+      if (scope.authGeneration !== tokenStore.getState().generation)
+        return this.effectivePolicyManager.getCurrent();
+      // Other cookies in the jar say nothing about who this is, so none is sent.
+      const sessionCookie = SESSION_COOKIE_PATTERN.test(authHeaders.Cookie ?? "");
+      cookieGeneration = sessionCookie ? scope.authGeneration : null;
+      credentialsGeneration = scope.authGeneration;
+      const currentScope = getScope();
+      return this.effectivePolicyManager.getPolicy({
+        accountId: currentScope.accountId,
+        expectedAuthGeneration: scope.authGeneration,
+        authHeaders: authHeaders.Authorization || sessionCookie ? authHeaders : {},
+        refresh,
+        held,
+      });
+    };
+    this.getUpdatePolicy = async (options) => {
+      await this.refreshEffectivePolicy(undefined, options);
+      return this.effectivePolicyManager.getUpdatePolicy();
+    };
+    const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
     // CLI and tray-only sessions also refresh while a native server stays loaded.
     this._localModelPolicyRefreshTimer = this._localModelPolicy?.startPeriodicRefresh(
       5 * 60 * 1000
     );
     this._audioFeaturePolicy = createAudioFeaturePolicy({
-      getPolicy: getMainPolicy,
+      getPolicy: (event, options) => this.refreshEffectivePolicy(event, options),
       onBlocked: (purpose, code) => {
         if (purpose === "meeting") this._stopMeetingForPolicy?.(code);
       },
@@ -7414,8 +7921,7 @@ class IPCHandlers {
     // Signed in, load the policy now (from cache when offline): an app started
     // to the tray has no control panel to fetch it, and the tray item, the
     // meeting hotkey, and calendar reminders all read this snapshot.
-    if (!tokenStore.get()) this._audioFeaturePolicy.update(guestAudioPolicy());
-    else void this._audioFeaturePolicy.resolve("meeting");
+    this._audioFeaturePolicy.update(this.effectivePolicyManager.getCurrent());
 
     registerProductHelpIpc({
       ipcMain,
@@ -7426,8 +7932,10 @@ class IPCHandlers {
           windowFor: (event) => BrowserWindow.fromWebContents(event.sender),
           authHeaderFor: getAuthHeaderFromWindow,
         }),
-        getPolicy: (options) => workspacePolicyManager.getPolicy(options),
-        peekPolicy: (options) => workspacePolicyManager.peekPolicy(options),
+        getPolicy: (options) =>
+          this.effectivePolicyManager.getPolicy({ ...options, accountId: getScope().accountId }),
+        peekPolicy: (options) =>
+          this.effectivePolicyManager.peekPolicy({ ...options, accountId: getScope().accountId }),
         getAuthGeneration: () => tokenStore.getState().generation,
         classifySnapshot: (snapshot) => remoteHelpPolicyState(snapshot, app.getVersion()),
         fallbackOnUnavailable: true,
@@ -7462,8 +7970,10 @@ class IPCHandlers {
             windowFor: (event) => BrowserWindow.fromWebContents(event.sender),
             authHeaderFor: getAuthHeaderFromWindow,
           }),
-          getPolicy: (options) => workspacePolicyManager.getPolicy(options),
-          peekPolicy: (options) => workspacePolicyManager.peekPolicy(options),
+          getPolicy: (options) =>
+            this.effectivePolicyManager.getPolicy({ ...options, accountId: getScope().accountId }),
+          peekPolicy: (options) =>
+            this.effectivePolicyManager.peekPolicy({ ...options, accountId: getScope().accountId }),
           getAuthGeneration: () => tokenStore.getState().generation,
         }),
         // The account bound to the credential in use, the same binding
@@ -7637,7 +8147,7 @@ class IPCHandlers {
       resolveProvider: async (request) => {
         const resolved = await this.enterpriseIdentityManager.resolveProvider(request);
         if (!resolved.managed) return resolved;
-        const snapshot = await workspacePolicyManager.getPolicy(request);
+        const snapshot = await this.effectivePolicyManager.getPolicy(request);
         if (!snapshot.success || (snapshot.managed && !snapshot.policy))
           throw Object.assign(new Error(i18nMain.t("common.policyUnresolved")), {
             code: "POLICY_UNRESOLVABLE",
@@ -7827,7 +8337,7 @@ class IPCHandlers {
       };
     };
 
-    ipcMain.handle(
+    handleRemoteProduct(
       "managed-transcribe",
       serializeIpcError(
         async (event, { audioBuffer, fileName, mimeType, language, prompt, managed }) => {
@@ -7839,6 +8349,10 @@ class IPCHandlers {
               fileName: fileName || "audio.webm",
               contentType: mimeType || "audio/webm",
               prompt,
+              signal: await trackTranscriptionRoute({
+                transport: "managed",
+                provider: managed.provider,
+              }),
             }
           );
         }
@@ -7861,7 +8375,7 @@ class IPCHandlers {
       configPath: "note-recording-config",
     });
 
-    ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
+    handleRemoteProduct("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       const sender = event.sender;
       const senderId = sender.id;
       const requestId = crypto.randomUUID();
@@ -7984,7 +8498,7 @@ class IPCHandlers {
       this._cloudTranscriptionRequests.cancelSender(event.sender.id);
     });
 
-    ipcMain.handle("cloud-health-check", async () => {
+    handleRemoteProduct("cloud-health-check", async () => {
       const apiUrl = getApiUrl();
       if (!apiUrl) {
         return {
@@ -8013,7 +8527,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("retry-transcription", async (event, id, settings) => {
+    handleProduct("retry-transcription", async (event, id, settings) => {
       // The account, not its token: a rotated token is the same owner, and a
       // local retry needs no sign-in at all.
       const accountId = this.databaseManager.activeAccountId;
@@ -8048,10 +8562,20 @@ class IPCHandlers {
         // whatever is selected NOW.
         const route = resolveTranscriptionRoute({
           settings: settings || {},
+          policy: productPolicyState(this.effectivePolicyManager.getCurrent(), app.getVersion()),
           providers: transcriptionProviderBaseUrls(),
           managed: settings?.managed,
           request: { effectiveLanguage: language },
         });
+        const usesCloud =
+          route.transport !== "managed" &&
+          route.transport !== "local" &&
+          route.provider !== "self-hosted" &&
+          settings?.cloudTranscriptionMode === "openwhispr";
+        const signal = await trackTranscriptionRoute(
+          usesCloud ? { transport: "cloud" } : route,
+          settings?.transcriptionMode
+        );
 
         // An error route is fatal unless OpenWhispr cloud is selected — a
         // leftover BYOK misconfiguration must not block the cloud pipeline.
@@ -8084,6 +8608,7 @@ class IPCHandlers {
 
         if (route.transport === "managed") {
           const transcription = await transcribeManagedAudio(event, route, {
+            signal,
             audioBuffer: buffer,
             fileName: "audio.webm",
             contentType: "audio/webm",
@@ -8137,6 +8662,7 @@ class IPCHandlers {
             result = await this.parakeetManager.transcribeLocalParakeet(buffer, {
               model,
               language,
+              signal,
             });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
             const vadOptions = this._resolveWhisperVadOptions("noteRecording");
@@ -8144,9 +8670,10 @@ class IPCHandlers {
               model: settings.whisperModel,
               language,
               ...vadOptions,
+              signal,
             });
           }
-        } else if (settings?.cloudTranscriptionMode === "openwhispr") {
+        } else if (usesCloud) {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
             const authHeader = await getAuthHeaderFromWindow(win);
@@ -8163,6 +8690,7 @@ class IPCHandlers {
                 };
                 if (buffer.length > CLOUD_INLINE_LIMIT) {
                   const { text, warning } = await chunkedCloudTranscribe({
+                    signal,
                     buffer,
                     apiUrl,
                     policyHeaders: withPolicyHeaders(authHeader),
@@ -8183,7 +8711,9 @@ class IPCHandlers {
                     boundary,
                     withPolicyHeaders(authHeader),
                     {
-                      signal: AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS),
+                      signal: AbortSignal.any(
+                        [signal, AbortSignal.timeout(CLOUD_UPLOAD_TIMEOUT_MS)].filter(Boolean)
+                      ),
                       session: getInlineCloudUploadSession(),
                     }
                   );
@@ -8200,6 +8730,7 @@ class IPCHandlers {
         } else if (route.transport === "proxied" && route.provider === "tinfoil") {
           // Attested transport, so this can't reuse the generic fetch below.
           const { text, model } = await transcribeWithTinfoil({
+            signal,
             audioBuffer: buffer,
             fileName: "audio.webm",
             contentType: "audio/webm",
@@ -8220,6 +8751,7 @@ class IPCHandlers {
           }
           const { transcribeAudio } = require("./cortiTranscription");
           const { text } = await transcribeAudio({
+            signal,
             environment: route.cortiEnvironment,
             tenant: route.cortiTenant,
             clientId,
@@ -8233,6 +8765,7 @@ class IPCHandlers {
             throw new Error(byokSizeCapError(route.sizeCapBytes));
           }
           const { text } = await transcribeWithGemini({
+            signal,
             audioBuffer: buffer,
             model: route.model,
             contentType: "audio/webm",
@@ -8279,7 +8812,7 @@ class IPCHandlers {
           let uploadName = "audio.webm";
           if (provider === "custom" && buffer.length && !isWavFormat(buffer)) {
             try {
-              const wavBuffer = await convertBufferToWav(buffer);
+              const wavBuffer = await convertBufferToWav(buffer, { signal });
               // Match fresh dictation: PCM expansion must not break an upload
               // that the endpoint could accept in its original container.
               if (wavBuffer.length <= route.sizeCapBytes) {
@@ -8356,6 +8889,19 @@ class IPCHandlers {
           });
         }
 
+        const operation = this._productRequestContext.getStore();
+        operation.signal.throwIfAborted();
+        // A token rotated mid-decode leaves the verdict loading until its own lands.
+        let snapshot = this.effectivePolicyManager.getCurrent();
+        if (snapshot.status === "loading") {
+          snapshot = await this.refreshEffectivePolicy(event);
+          operation.signal.throwIfAborted();
+          assertRetryCurrent();
+        }
+        if (!productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
+          throw Object.assign(new Error("Blocked by device policy"), {
+            code: "DEVICE_POLICY_BLOCKED",
+          });
         this.databaseManager.updateTranscriptionText(id, result.text, result.text);
         this.databaseManager.updateTranscriptionStatus(id, "completed");
         const providerName = result.source || "local";
@@ -9093,6 +9639,28 @@ class IPCHandlers {
     };
 
     const resolveEnterpriseMeetingOptions = async (event, options) => {
+      const policy = this.effectivePolicyManager.getCurrent();
+      const state = productPolicyState(policy, app.getVersion());
+      if (state.status === "error" || (policy.localOnly && options.provider !== "local")) {
+        throw Object.assign(new Error(i18nMain.t("common.policyUnresolved")), {
+          code: "DEVICE_POLICY_BLOCKED",
+        });
+      }
+      const {
+        isTranscriptionSelectionAllowed,
+        isModeAllowedByPolicy,
+      } = require("../stores/policyRules.ts");
+      const selection = realtimeSelection(options);
+      // The local model gate checks a local meeting's model.
+      const allowed =
+        selection.mode === "enterprise" || selection.mode === "local"
+          ? isModeAllowedByPolicy(state, "transcription", selection.mode)
+          : isTranscriptionSelectionAllowed(state, selection);
+      if (!allowed)
+        throw Object.assign(new Error(i18nMain.t("common.managedPolicyConflict")), {
+          code: "DEVICE_POLICY_BLOCKED",
+        });
+      if (policy.localOnly) return options;
       const request = await getEnterpriseAudioRequest(
         event,
         options.managedContext ?? options.enterpriseIdentity,
@@ -9193,6 +9761,14 @@ class IPCHandlers {
         this._audioFeaturePolicy.refreshOnRefusal(event, error);
         throw error;
       });
+      const effective = this.effectivePolicyManager.getCurrent();
+      if (
+        effective.localOnly ||
+        !productOperationAllowed(effective, app.getVersion(), "meeting-transcription", [options])
+      )
+        throw Object.assign(new Error(i18nMain.t("common.policyUnresolved")), {
+          code: "DEVICE_POLICY_BLOCKED",
+        });
       if (options.purpose === "meeting") assertMeetingAllowed();
       return token;
     };
@@ -9254,6 +9830,7 @@ class IPCHandlers {
       }
       this._meetingMicStreaming = null;
       this._meetingSystemStreaming = null;
+      meetingConnectionOptions = options;
       const win = BrowserWindow.fromWebContents(event.sender);
 
       const connectOpts = {
@@ -9382,6 +9959,7 @@ class IPCHandlers {
     let meetingReconnectCount = 0;
     const MAX_MEETING_RECONNECTS = 5;
     let meetingConnectionOptions = null;
+    this.getMeetingTranscriptionOptions = () => meetingConnectionOptions;
     let meetingConnectionWin = null;
     let meetingConnectionKey = null;
     let policyMeetingStop = null;
@@ -10148,6 +10726,12 @@ class IPCHandlers {
       dictationPreviewDisplay = true;
     };
 
+    this._stopLocalDictationPreview = () => {
+      if (!dictationPreviewMode) return;
+      resetDictationPreviewState();
+      this.windowManager.hideTranscriptionPreview();
+    };
+
     const stopDictationPreviewForPolicy = (error) => {
       resetDictationPreviewState();
       dictationPreviewPolicyError = error;
@@ -10355,7 +10939,7 @@ class IPCHandlers {
     const setupDictationCallbacks = (streaming, event) => {
       const isOrukeet = streaming instanceof OrukeetStreaming;
       const canNotify = () =>
-        !isOrukeet || (this._dictationStreaming === streaming && !event.sender.isDestroyed?.());
+        !event.sender.isDestroyed?.() && (!isOrukeet || this._dictationStreaming === streaming);
       if (isOrukeet) {
         const ownerGone = () => {
           streaming.disconnect().catch(() => {});
@@ -10385,16 +10969,6 @@ class IPCHandlers {
         event.sender.send("dictation-realtime-session-end", data || {});
         if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
       };
-    };
-
-    // A session being replaced must go quiet: a late final or socket error from
-    // it would land in the renderer as if it came from the live session.
-    const retireDictationStreaming = (streaming) => {
-      streaming.onPartialTranscript = null;
-      streaming.onFinalTranscript = null;
-      streaming.onError = null;
-      streaming.onSessionEnd = null;
-      streaming.disconnect({ commit: false }).catch(() => {});
     };
 
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -10485,7 +11059,7 @@ class IPCHandlers {
       // commit would only surface its head as a final from the wrong session.
       // Frames that reached the old session before the start are dropped with it.
       if (this._dictationStreaming) {
-        retireDictationStreaming(this._dictationStreaming);
+        retireStreaming(this._dictationStreaming);
         this._dictationStreaming = null;
       }
 
@@ -10543,7 +11117,7 @@ class IPCHandlers {
               model,
               // The capture worklet emits 16kHz PCM; declare the true rate.
               inputRate: 16000,
-              createSocket: () => createTinfoilRealtimeSocket({ model, apiKey }),
+              createSocket: (signal) => createTinfoilRealtimeSocket({ model, apiKey, signal }),
             });
           } else {
             await streaming.connect({
@@ -10675,7 +11249,6 @@ class IPCHandlers {
       // Stop captures and clears the segments, but a stop that fails partway
       // (the audio tap won't stop) never gets there.
       meetingDiarizationSegments = [];
-      meetingConnectionOptions = options;
       meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
       meetingReconnectCount = 0;
       meetingFatalErrorSent = false;
@@ -10742,6 +11315,7 @@ class IPCHandlers {
           meetingConnectionKey === requestedConnectionKey
         ) {
           debugLogger.debug("Meeting transcription start: reusing warm connections");
+          meetingConnectionOptions = options;
           const win = BrowserWindow.fromWebContents(event.sender);
           attachMeetingStreamingHandlers(this._meetingMicStreaming, win, "mic");
           if (systemAudioMode !== "unsupported") {
@@ -10764,6 +11338,10 @@ class IPCHandlers {
         }
 
         if (options.provider === "local") {
+          await disconnectMeetingStreaming();
+          // The reset clears the options and window this start already chose.
+          meetingConnectionOptions = options;
+          meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalMode = true;
           meetingLocalProvider = options.localProvider || "whisper";
           meetingLocalModel = options.localModel || null;
@@ -10828,7 +11406,15 @@ class IPCHandlers {
     };
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
-      if (this._audioFeaturePolicy.activeFailure("meeting")) return;
+      const effective = this.effectivePolicyManager.getCurrent();
+      if (
+        this._audioFeaturePolicy.activeFailure("meeting") ||
+        (effective.success &&
+          !productOperationAllowed(effective, app.getVersion(), "meeting-transcription", [
+            meetingConnectionOptions ?? {},
+          ]))
+      )
+        return;
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
@@ -11126,7 +11712,10 @@ class IPCHandlers {
         meetingLocalTimer = null;
       }
       if (wasActive) broadcastToWindows("meeting-transcription-error", reason);
-      const stopped = meetingTranscriptionLifecycle.stopSession();
+      const stopped = meetingTranscriptionLifecycle.stopSession(
+        undefined,
+        reason === "accountChanged" || reason === "workspaceChanged" ? "account-change" : "policy"
+      );
       // The renderer still needs this result after its capture cleanup to bind
       // diarization to the resumed note's seed rows.
       if (policyMeetingStop && !policyMeetingStop.promise) policyMeetingStop.promise = stopped;
@@ -11246,7 +11835,7 @@ class IPCHandlers {
     };
 
     const meetingTranscriptionLifecycle = createMeetingTranscriptionLifecycle({
-      start: ({
+      start: async ({
         sessionId,
         ownerWebContents,
         options: { transcriptionOptions, authGeneration },
@@ -11257,12 +11846,22 @@ class IPCHandlers {
           authGeneration,
           promise: null,
         };
-        return startMeetingTranscription(
+        const result = await startMeetingTranscription(
           { sender: ownerWebContents },
           { ...transcriptionOptions, sessionId }
         );
+        if (result?.success)
+          this.meetingAuditLog?.recordingStarted({
+            sessionId,
+            noteId: transcriptionOptions.noteId,
+            trigger: transcriptionOptions.startSource,
+          });
+        return result;
       },
-      stop: (sessionId) => stopMeetingTranscription(sessionId),
+      stop: (sessionId, reason) => {
+        this.meetingAuditLog?.recordingStopped({ sessionId, reason });
+        return stopMeetingTranscription(sessionId);
+      },
       onError: (error, sessionId) => {
         debugLogger.error(
           "Meeting transcription owner-loss teardown failed",
@@ -11272,22 +11871,36 @@ class IPCHandlers {
       },
     });
 
-    handleAudioFeature("meeting-transcription-start", "meeting", (event, options = {}) => {
-      const sessionId =
-        typeof options.sessionId === "string" && options.sessionId.length > 0
-          ? options.sessionId
-          : crypto.randomUUID();
-      return meetingTranscriptionLifecycle.startSession({
-        sessionId,
-        ownerWebContents: event.sender,
-        options: {
-          transcriptionOptions: options,
-          authGeneration: tokenStore.getState().generation,
-        },
-      });
+    ipcMain.handle("is-meeting-recording-disabled", () =>
+      this.managedMeetingPolicy.isMeetingRecordingDisabled()
+    );
+
+    handleAudioFeature(
+      "meeting-transcription-start",
+      "meeting",
+      (event, options = {}) => {
+        const sessionId =
+          typeof options.sessionId === "string" && options.sessionId.length > 0
+            ? options.sessionId
+            : crypto.randomUUID();
+        return meetingTranscriptionLifecycle.startSession({
+          sessionId,
+          ownerWebContents: event.sender,
+          options: {
+            transcriptionOptions: options,
+            authGeneration: tokenStore.getState().generation,
+          },
+        });
+      },
+      (failure, options = {}) => auditMeetingRefusal(failure, options.startSource, options.noteId)
+    );
+
+    // The renderer refuses some starts itself, before asking main.
+    ipcMain.handle("meeting-recording-refused", (_event, { noteId, startSource, reason } = {}) => {
+      this.meetingAuditLog?.recordingRefused({ noteId, trigger: startSource, reason });
     });
 
-    ipcMain.handle("meeting-transcription-stop", async (event, expectedSessionId) => {
+    ipcMain.handle("meeting-transcription-stop", async (event, expectedSessionId, reason) => {
       const stopped = policyMeetingStop;
       if (stopped?.promise && stopped.sessionId === expectedSessionId) {
         if (
@@ -11300,7 +11913,7 @@ class IPCHandlers {
           ? result
           : { success: false, reason: "stale-session" };
       }
-      return meetingTranscriptionLifecycle.stopSession(expectedSessionId);
+      return meetingTranscriptionLifecycle.stopSession(expectedSessionId, reason);
     });
 
     ipcMain.handle(
@@ -11347,7 +11960,7 @@ class IPCHandlers {
     };
 
     let dictationWarmupQueue = Promise.resolve();
-    ipcMain.handle("dictation-realtime-warmup", (event, options = {}) => {
+    handleRemoteProduct("dictation-realtime-warmup", (event, options = {}) => {
       const warmup = dictationWarmupQueue
         .then(() => warmupDictationStreaming(event, options))
         .catch(streamingStartFailure);
@@ -11355,7 +11968,7 @@ class IPCHandlers {
       return warmup;
     });
 
-    ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+    handleRemoteProduct("dictation-realtime-start", async (event, options = {}) => {
       const managedOrukeet = options.provider === "orukeet" && options.mode !== "byok";
       const stopGeneration = dictationStopGeneration;
       if (managedOrukeet) {
@@ -11405,10 +12018,10 @@ class IPCHandlers {
       dictationStopGeneration += 1;
       dictationRecordingActive = false;
       clearDictationIdleTimer();
-      if (!this._dictationStreaming) {
-        return { success: true, text: "" };
-      }
-      const result = await this._dictationStreaming.disconnect().catch(() => ({ text: "" }));
+      // A policy retirement may already have taken the stream; its preview is still up.
+      const result = this._dictationStreaming
+        ? await this._dictationStreaming.disconnect().catch(() => ({ text: "" }))
+        : { text: "" };
       this._dictationStreaming = null;
       if (this._dictationPreviewEnabled) {
         this.windowManager.hideTranscriptionPreview();
@@ -11417,7 +12030,7 @@ class IPCHandlers {
       return { success: true, ...result, text: result.text || "" };
     });
 
-    ipcMain.handle(
+    handleProduct(
       "start-dictation-preview",
       async (_event, { provider, model, language, display = true }) => {
         resetDictationPreviewState();
@@ -11629,7 +12242,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("cloud-reason", async (event, text, opts = {}) => {
+    handleRemoteProduct("cloud-reason", async (event, text, opts = {}) => {
       const sender = event.sender;
       const senderId = sender.id;
       const requestId = crypto.randomUUID();
@@ -11762,12 +12375,32 @@ class IPCHandlers {
       sender.once("destroyed", cancelSenderRequests);
 
       try {
+        const operation = { channel: "cloud-agent-stream-start", args: [], remote: true };
+        const restricted = () =>
+          Object.assign(new Error(i18nMain.t("common.policyAiProcessingRestricted")), {
+            code: "DEVICE_POLICY_BLOCKED",
+          });
+        if (this.effectivePolicyManager.getCurrent().status === "loading")
+          await awaitVerdict(event);
+        if (!mayStart(operation)) throw restricted();
+        const { accountId } = this.effectivePolicyManager.getCurrent();
+        const assertAllowed = () => {
+          const policy = this.effectivePolicyManager.getCurrent();
+          if (
+            policy.localOnly ||
+            !runningOperationAllowed(policy, accountId, app.getVersion(), operation.channel)
+          )
+            throw restricted();
+          controller.signal.throwIfAborted();
+        };
+        assertAllowed();
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
+        assertAllowed();
         const response = await proxyFetch(`${apiUrl}/api/agent/stream`, {
           method: "POST",
           headers: withPolicyHeaders({
@@ -11804,6 +12437,7 @@ class IPCHandlers {
         try {
           while (true) {
             const { done, value } = await reader.read();
+            assertAllowed();
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
@@ -11872,7 +12506,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("agent-web-search", async (event, query, numResults = 5) => {
+    handleRemoteProduct("agent-web-search", async (event, query, numResults = 5) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -11974,7 +12608,7 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("cloud-usage", async (event) => {
+    handleRemoteProduct("cloud-usage", async (event) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -12048,15 +12682,15 @@ class IPCHandlers {
       }
     };
 
-    ipcMain.handle("cloud-checkout", (event, opts) =>
+    handleRemoteProduct("cloud-checkout", (event, opts) =>
       fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error", opts || undefined)
     );
 
-    ipcMain.handle("cloud-billing-portal", (event) =>
+    handleRemoteProduct("cloud-billing-portal", (event) =>
       fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
     );
 
-    ipcMain.handle("cloud-switch-plan", async (event, opts) => {
+    handleRemoteProduct("cloud-switch-plan", async (event, opts) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -12088,7 +12722,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("cloud-preview-switch", async (event, opts) => {
+    handleRemoteProduct("cloud-preview-switch", async (event, opts) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -12120,24 +12754,42 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("cloud-api-request", (_event, opts) => handleCloudApiRequest(opts));
+    handleRemoteProduct("cloud-api-request", async (_event, opts) => {
+      const operation = this._productRequestContext.getStore();
+      if (operation.args[1]?.resolvingShareVisibility) {
+        const path = new URL(opts.path, "https://api.example.test").pathname.replace(
+          /\/rotate-token\/?$/,
+          ""
+        );
+        const current = await handleCloudApiRequest({
+          ...opts,
+          path,
+          method: "GET",
+          body: undefined,
+        });
+        if (!current.success) return current;
+        const data = current.data?.data ?? current.data;
+        operation.args = [opts, { shareVisibility: data?.share?.visibility }];
+        if (
+          !productOperationAllowed(
+            this.effectivePolicyManager.getCurrent(),
+            app.getVersion(),
+            operation.channel,
+            operation.args
+          )
+        )
+          return policyBlockedFailure();
+      }
+      return handleCloudApiRequest(opts);
+    });
 
     ipcMain.handle("get-stt-config", handleSttConfigRequest);
 
-    ipcMain.handle("get-workspace-policy", async (event, accountId, expectedAuthGeneration) => {
-      const authHeaders = await getAuthHeader(event);
-      const snapshot = await workspacePolicyManager.getPolicy({
-        accountId,
-        expectedAuthGeneration,
-        authHeaders,
-      });
-      // A verdict served from memory is never broadcast; main's audio gate
-      // takes it here too, as it takes every broadcast.
-      if (snapshot.success && snapshot.authGeneration === tokenStore.getState().generation) {
-        this._audioFeaturePolicy.update(snapshot);
-        this._localModelPolicy?.update(snapshot);
-      }
-      return snapshot;
+    // Answers at once: only the device read gates a window, and the
+    // workspace verdict arrives by broadcast.
+    ipcMain.handle("get-effective-policy", (event) => {
+      void this.refreshEffectivePolicy(event);
+      return this.effectivePolicyManager.getCurrent();
     });
 
     ipcMain.handle(
@@ -12213,7 +12865,7 @@ class IPCHandlers {
 
     ipcMain.handle("get-note-recording-config", handleNoteRecordingConfigRequest);
 
-    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
+    handleRemoteProduct("transcribe-audio-file-cloud", async (event, filePath, opts = {}) => {
       const requestId = typeof opts?.requestId === "string" ? opts.requestId : null;
       const purpose = audioFilePurpose(filePath, opts.purpose);
       const cancel = this._uploadCancelRegistry.register(requestId);
@@ -12300,7 +12952,7 @@ class IPCHandlers {
       return { success: this._uploadCancelRegistry.cancel(requestId) > 0 };
     });
 
-    ipcMain.handle(
+    handleRemoteProduct(
       "transcribe-audio-file-byok",
       async (
         event,
@@ -12339,6 +12991,10 @@ class IPCHandlers {
             const { resolveTranscriptionRoute, batchTranscriptionHttpError, uploadsInChunks } =
               await import("./transcriptionRoute.ts");
             const route = resolveTranscriptionRoute({
+              policy: productPolicyState(
+                this.effectivePolicyManager.getCurrent(),
+                app.getVersion()
+              ),
               settings: {
                 transcriptionMode,
                 remoteTranscriptionUrl,
@@ -12363,6 +13019,8 @@ class IPCHandlers {
                 messageKey: route.messageKey,
               };
             }
+
+            await trackTranscriptionRoute(route, transcriptionMode);
 
             if (route.transport === "managed") {
               const result = await transcribeManagedAudio(event, route, {
@@ -12440,6 +13098,7 @@ class IPCHandlers {
 
             const upload = await prepareProviderUpload(sourcePath, { signal });
             cleanupUpload = upload.cleanup;
+            signal.throwIfAborted();
             const realByok = upload.path;
             providerErrorContext = byokErrorContext;
 
@@ -12976,7 +13635,7 @@ class IPCHandlers {
       if (streaming.hasWarmConnection()) dropStaleWarmConnection(streaming);
     };
 
-    ipcMain.handle("assemblyai-streaming-warmup", async (event, options = {}) => {
+    handleRemoteProduct("assemblyai-streaming-warmup", async (event, options = {}) => {
       try {
         const byok = options.mode === "byok";
         if (!byok && !getApiUrl()) {
@@ -13018,7 +13677,7 @@ class IPCHandlers {
 
     let streamingStartInProgress = false;
 
-    ipcMain.handle("assemblyai-streaming-start", async (event, options = {}) => {
+    handleRemoteProduct("assemblyai-streaming-start", async (event, options = {}) => {
       if (streamingStartInProgress) {
         debugLogger.debug("Streaming start already in progress, ignoring", {}, "streaming");
         return { success: false, error: "Operation in progress" };
@@ -13045,7 +13704,7 @@ class IPCHandlers {
             {},
             "streaming"
           );
-          await this.assemblyAiStreaming.disconnect(false);
+          await this.assemblyAiStreaming.disconnect({ commit: false });
         }
 
         const hasWarm = this.assemblyAiStreaming.hasWarmConnection();
@@ -13132,7 +13791,7 @@ class IPCHandlers {
       try {
         let result = { text: "" };
         if (this.assemblyAiStreaming) {
-          result = await this.assemblyAiStreaming.disconnect(true);
+          result = await this.assemblyAiStreaming.disconnect();
           this.assemblyAiStreaming.cleanupAll();
           this.assemblyAiStreaming = null;
         }
@@ -13242,7 +13901,7 @@ class IPCHandlers {
       });
     };
 
-    ipcMain.handle("deepgram-streaming-warmup", async (event, options = {}) => {
+    handleRemoteProduct("deepgram-streaming-warmup", async (event, options = {}) => {
       try {
         const byok = options.mode === "byok";
         if (!byok && !getApiUrl()) {
@@ -13295,7 +13954,7 @@ class IPCHandlers {
     let deepgramStreamingStartInProgress = false;
     let sendDropCount = 0;
 
-    ipcMain.handle("deepgram-streaming-start", async (event, options = {}) => {
+    handleRemoteProduct("deepgram-streaming-start", async (event, options = {}) => {
       if (deepgramStreamingStartInProgress) {
         debugLogger.debug(
           "Deepgram streaming start already in progress, ignoring",
@@ -13327,7 +13986,7 @@ class IPCHandlers {
 
         if (this.deepgramStreaming.isConnected) {
           debugLogger.debug("Deepgram cleaning up stale connection before start", {}, "streaming");
-          await this.deepgramStreaming.disconnect(false);
+          await this.deepgramStreaming.disconnect({ commit: false });
         }
 
         const hasWarm = this.deepgramStreaming.hasWarmConnection();
@@ -13440,7 +14099,7 @@ class IPCHandlers {
         const audioBytesSent = this.deepgramStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.deepgramStreaming) {
-          result = await this.deepgramStreaming.disconnect(true);
+          result = await this.deepgramStreaming.disconnect();
         }
 
         return { success: true, text: result?.text || "", model, audioBytesSent };
@@ -13526,7 +14185,7 @@ class IPCHandlers {
       return geminiConnectInFlight;
     };
 
-    ipcMain.handle("gemini-streaming-warmup", async (event, options = {}) => {
+    handleRemoteProduct("gemini-streaming-warmup", async (event, options = {}) => {
       try {
         if (this.geminiStreaming?.isConnected) {
           ensureGeminiStreaming(event);
@@ -13541,7 +14200,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("gemini-streaming-start", async (event, options = {}) => {
+    handleRemoteProduct("gemini-streaming-start", async (event, options = {}) => {
       if (geminiStreamingStartInProgress) {
         debugLogger.debug("Gemini streaming start already in progress, ignoring", {}, "streaming");
         return { success: false, error: "Operation in progress" };
@@ -13558,7 +14217,7 @@ class IPCHandlers {
           !options.forceNew &&
           streaming.connectionKey === geminiConnectionKey(options);
         if (!usedWarmConnection) {
-          if (streaming.isConnected) await streaming.disconnect(false);
+          if (streaming.isConnected) await streaming.disconnect({ commit: false });
           await connectGeminiStreaming(event, options);
         }
         for (const buffer of geminiStartAudio) streaming.sendAudio(buffer);
@@ -13635,7 +14294,7 @@ class IPCHandlers {
         const audioBytesSent = this.geminiStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.geminiStreaming) {
-          result = await this.geminiStreaming.disconnect(true);
+          result = await this.geminiStreaming.disconnect();
         }
 
         return { success: true, text: result?.text || "", model, audioBytesSent };
@@ -13652,7 +14311,7 @@ class IPCHandlers {
       return this.geminiStreaming.getStatus();
     });
 
-    ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
+    handleRemoteProduct("corti-streaming-warmup", async (_event, options = {}) => {
       try {
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
@@ -13677,13 +14336,13 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("corti-streaming-start", async (event, options = {}) => {
+    handleRemoteProduct("corti-streaming-start", async (event, options = {}) => {
       try {
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
         }
         if (this.cortiStreaming.isConnected) {
-          await this.cortiStreaming.disconnect(false);
+          await this.cortiStreaming.disconnect({ commit: false });
         }
 
         // Buffer before the token mint (a network round trip unless cached) so
@@ -13736,7 +14395,7 @@ class IPCHandlers {
         const audioBytesSent = this.cortiStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.cortiStreaming) {
-          result = await this.cortiStreaming.disconnect(true);
+          result = await this.cortiStreaming.disconnect();
         }
         return { success: true, text: result?.text || "", model, audioBytesSent };
       } catch (error) {
@@ -13819,21 +14478,6 @@ class IPCHandlers {
       return this.environmentManager.getTranslationKey?.() || "";
     });
 
-    ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {
-      if (this._activeRecordingPipeline && this._activeRecordingPipeline !== pipeline) {
-        return { success: false, holder: this._activeRecordingPipeline };
-      }
-      this._activeRecordingPipeline = pipeline;
-      return { success: true };
-    });
-
-    ipcMain.handle("release-recording-lock", async (_event, pipeline) => {
-      if (this._activeRecordingPipeline === pipeline) {
-        this._activeRecordingPipeline = null;
-      }
-      return { success: true };
-    });
-
     // Provider-neutral availability over the shared calendar cache.
     ipcMain.handle("calendar-get-availability", async (_event, request) => {
       try {
@@ -13867,6 +14511,9 @@ class IPCHandlers {
       const requests = this._calendarAuthorizationRequests;
       const controller = requests.begin(event.sender.id, requestId);
       const abort = () => controller.abort();
+      const policySignal = this._productRequestContext.getStore()?.signal;
+      policySignal?.addEventListener("abort", abort, { once: true });
+      if (policySignal?.aborted) abort();
       event.sender.once("destroyed", abort);
       try {
         // A cancel after the account was saved doesn't undo it, so report what happened.
@@ -13878,6 +14525,7 @@ class IPCHandlers {
         return { success: false, error: error.message };
       } finally {
         event.sender.removeListener("destroyed", abort);
+        policySignal?.removeEventListener("abort", abort);
         requests.complete(event.sender.id, requestId, controller);
       }
     };
@@ -13886,7 +14534,7 @@ class IPCHandlers {
     );
 
     // Google Calendar
-    ipcMain.handle("gcal-start-oauth", (event, requestId) =>
+    handleRemoteProduct("gcal-start-oauth", (event, requestId) =>
       authorizeCalendar(event, requestId, (signal) =>
         this.googleCalendarManager.startOAuth({ signal })
       )
@@ -13922,7 +14570,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("gcal-set-calendar-selection", async (_event, calendarId, isSelected) => {
+    handleRemoteProduct("gcal-set-calendar-selection", async (_event, calendarId, isSelected) => {
       try {
         await this.googleCalendarManager.setCalendarSelection(calendarId, isSelected);
         return { success: true };
@@ -13931,7 +14579,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("gcal-set-primary-only", async (_event, value) => {
+    handleRemoteProduct("gcal-set-primary-only", async (_event, value) => {
       try {
         await this.googleCalendarManager.setPrimaryOnly(value);
         return { success: true };
@@ -13940,7 +14588,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("gcal-sync-events", async () => {
+    handleRemoteProduct("gcal-sync-events", async () => {
       try {
         await this.googleCalendarManager.syncEvents();
         return { success: true };
@@ -13989,7 +14637,7 @@ class IPCHandlers {
     });
 
     // Microsoft Calendar
-    ipcMain.handle("mcal-start-oauth", (event, requestId) =>
+    handleRemoteProduct("mcal-start-oauth", (event, requestId) =>
       authorizeCalendar(event, requestId, (signal) =>
         this.microsoftCalendarManager.startOAuth({ signal })
       )
@@ -14022,7 +14670,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("mcal-set-primary-only", async (_event, value) => {
+    handleRemoteProduct("mcal-set-primary-only", async (_event, value) => {
       try {
         await this.microsoftCalendarManager.setPrimaryOnly(value);
         return { success: true };
@@ -14228,7 +14876,9 @@ class IPCHandlers {
       // Join opens the meeting even when the org refuses to let it be recorded;
       // only the recording is subject to the policy.
       if (action === "join") this.meetingDetectionEngine.openNotificationJoinUrl(owner);
-      return this._audioFeaturePolicy.run(event, "meeting", respond);
+      return this._audioFeaturePolicy.run(event, "meeting", respond, {
+        onRefused: (failure) => auditMeetingRefusal(failure, "prompt"),
+      });
     });
     ipcMain.handle("confirm-meeting-note-navigation", (event, navigationId, status) =>
       this.windowManager.confirmMeetingNoteNavigation(event.sender, navigationId, status)
@@ -14257,7 +14907,7 @@ class IPCHandlers {
         const refusal = await this.meetingDetectionEngine.joinCalendarMeeting(
           eventId,
           "calendar-join",
-          { activate: false }
+          { activate: false, startSource: "calendar-join" }
         );
         return refusal ?? { success: true };
       } catch (error) {
@@ -14265,8 +14915,12 @@ class IPCHandlers {
       }
     });
 
-    handleAudioFeature("start-manual-meeting", "meeting", () =>
-      this.windowManager.startManualMeeting()
+    // The pill's menu is the only renderer that starts a meeting by hand.
+    handleAudioFeature(
+      "start-manual-meeting",
+      "meeting",
+      () => this.windowManager.startManualMeeting({ startSource: "pill" }),
+      (failure) => auditMeetingRefusal(failure, "pill")
     );
 
     ipcMain.handle("get-meeting-notification-data", async (event) => {

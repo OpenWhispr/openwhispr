@@ -216,7 +216,13 @@
     "managedConfigUnavailable": "托管企业访问不可用。请重新登录或联系管理员。",
     "managedConfigAmbiguous": "您组织的托管设置不一致。请联系管理员。",
     "managedPolicyConflict": "托管访问已被您工作区的策略阻止。请联系管理员。",
-    "resizePanel": "调整面板大小"
+    "resizePanel": "调整面板大小",
+    "managedDevice": "受管理的设备",
+    "managedDeviceAndWorkspace": "受管理的设备和工作区",
+    "deviceLocalOnly": "此设备仅使用本地处理。云端功能不可用，已登录过的账户也不例外。",
+    "deviceSignInRequired": "你的组织要求在此设备上登录。",
+    "devicePolicyInvalid": "无法读取设备策略，或策略无效。请联系管理员。策略修正前，受管理的操作将被阻止。",
+    "deviceWorkspaceUnavailable": "此设备要求本地处理，但已保存账户的工作区策略不可用。请退出登录以不使用该账户继续，或联系管理员。"
   },
   "onboarding": {
     "rehaul": {
@@ -655,7 +661,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "需要更新",
-      "description": "您的组织要求使用 OpenWhispr {{version}} 或更高版本。请更新应用。"
+      "description": "您的组织要求使用 OpenWhispr {{version}} 或更高版本。请更新应用。",
+      "contactIT": "你的组织要求使用 OpenWhispr {{version}} 或更高版本。请联系 IT 部门安装经过批准的版本。"
     },
     "update": {
       "readyTitle": "更新已准备就绪",
@@ -1235,7 +1242,8 @@
       "failedUserCheck": "检查用户账户失败",
       "generic": "出了点问题，请重试。",
       "invalidCredentials": "邮箱或密码无效",
-      "invalidEmail": "请输入有效的邮箱地址"
+      "invalidEmail": "请输入有效的邮箱地址",
+      "signInDisabledByDevice": "您的组织已在此设备上关闭登录。"
     },
     "getStarted": "开始使用",
     "legal": {
@@ -2266,7 +2274,14 @@
         "restarting": "正在重启...",
         "title": "更新",
         "versionPlaceholder": "—",
-        "whatsNew": "v{{version}} 更新内容"
+        "whatsNew": "v{{version}} 更新内容",
+        "managedByOrganization": "由你的组织管理。",
+        "itManaged": "更新由你的组织管理。",
+        "policyLoading": "正在加载更新设置…",
+        "policyUnavailable": "无法加载更新设置。请检查更新以重试。",
+        "policyChanged": "更新策略已更改。请再次检查更新。",
+        "managedBadge": "受管理",
+        "stagedBeforePolicy": "在此策略生效前已有更新准备就绪，可能会在退出应用时安装。退出或重启前请联系 IT 部门。"
       },
       "translationHotkey": {
         "title": "翻译快捷键",

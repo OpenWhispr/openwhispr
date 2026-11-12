@@ -475,3 +475,86 @@ test("a managed-setup error reaches the meeting start result with its translatio
     );
   }
 });
+
+// #3029: a refusal made before anything started is reported for the audit log,
+// whether the policy was already loaded or landed while the start waited for it.
+test("onRefused hears a refusal made before the handler ran", async () => {
+  let allowed = false;
+  const guard = createAudioFeaturePolicy({ getPolicy: async () => policy(allowed) });
+  const refused = [];
+  const onRefused = (failure) => refused.push(failure.code);
+  const runs = [];
+  const start = () => {
+    runs.push("start");
+    return { success: true };
+  };
+
+  const firstLoad = await guard.run({}, "meeting", start, { onRefused });
+  allowed = true;
+  guard.update(policy(true, true, 2));
+  const allowedRun = await guard.run({}, "meeting", start, { onRefused });
+  allowed = false;
+  guard.update(policy(false, true, 3));
+  const loaded = await guard.run({}, "meeting", start, { onRefused });
+
+  assert.equal(firstLoad.code, "POLICY_MEETING_RECORDING_DISABLED");
+  assert.deepEqual(allowedRun, { success: true });
+  assert.equal(loaded.code, "POLICY_MEETING_RECORDING_DISABLED");
+  assert.deepEqual(runs, ["start"]);
+  assert.deepEqual(refused, Array(2).fill("POLICY_MEETING_RECORDING_DISABLED"));
+});
+
+// #3029: a policy that turns recording off while a start is under way refuses it
+// too; only work that did not go ahead is reported, so a start that succeeded
+// (and is then stopped by the policy) is not also logged as refused.
+test("onRefused hears a refusal that lands while the handler runs only if it did not go ahead", async () => {
+  const guard = createAudioFeaturePolicy({ getPolicy: async () => policy(true, true, 1) });
+  guard.update(policy(true, true, 1));
+  const refused = [];
+  let revision = 1;
+  const runUnderFlip = (outcome) =>
+    guard.run(
+      {},
+      "meeting",
+      async () => {
+        guard.update(policy(false, true, ++revision));
+        if (outcome instanceof Error) throw outcome;
+        return outcome;
+      },
+      { onRefused: (failure) => refused.push(failure.code) }
+    );
+  const restore = () => guard.update(policy(true, true, ++revision));
+
+  for (const [label, outcome] of [
+    ["failed", { success: false, error: "Start canceled", reason: "canceled" }],
+    ["threw", new Error("meeting recording is disabled")],
+    ["succeeded", { success: true }],
+    ["handled itself", undefined],
+  ]) {
+    const result = await runUnderFlip(outcome);
+    assert.equal(result.code, "POLICY_MEETING_RECORDING_DISABLED", label);
+    restore();
+  }
+  const failedWithoutPolicy = await guard.run({}, "meeting", async () => ({
+    success: false,
+    code: "STREAM_FAILED",
+  }));
+
+  assert.equal(failedWithoutPolicy.code, "STREAM_FAILED");
+  assert.deepEqual(refused, Array(2).fill("POLICY_MEETING_RECORDING_DISABLED"));
+});
+
+// #3029: main's local-model gate refuses a local meeting start with its own codes.
+test("onRefused hears a local-model refusal of a start that did not go ahead", async () => {
+  const guard = createAudioFeaturePolicy({ getPolicy: async () => policy(true) });
+  guard.update(policy(true));
+  const refused = [];
+  const result = await guard.run(
+    {},
+    "meeting",
+    async () => ({ success: false, code: "POLICY_MODEL_BLOCKED", error: "blocked" }),
+    { onRefused: (failure) => refused.push(failure.code) }
+  );
+  assert.equal(result.code, "POLICY_MODEL_BLOCKED");
+  assert.deepEqual(refused, ["POLICY_MODEL_BLOCKED"]);
+});

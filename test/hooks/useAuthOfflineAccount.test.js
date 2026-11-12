@@ -29,7 +29,7 @@ async function mountUseAuth(t, { initialStorage }) {
   });
   const calls = {
     chatPrepared: [],
-    fetchPolicy: [],
+    policyRefreshes: 0,
     setActiveAccountScope: [],
     purge: 0,
     workspaceRefresh: 0,
@@ -98,11 +98,10 @@ async function mountUseAuth(t, { initialStorage }) {
       `,
       "/stores/policyStore": `
         const calls = globalThis.__authTest.calls;
-        export const usePolicyStore = { getState: () => ({
-          fetchPolicy: async (accountId, generation) => calls.fetchPolicy.push([accountId, generation]),
-          suspendPolicy() {},
-          clearPolicy() {},
-        }) };
+        export const usePolicyStore = { getState: () => ({}) };
+        export const refreshEffectivePolicy = async () => {
+          calls.policyRefreshes += 1;
+        };
       `,
       "/stores/enterpriseIdentityStore":
         "export const useEnterpriseIdentityStore = { getState: () => ({ clear() {} }) };",
@@ -274,7 +273,7 @@ test("an offline launch presents the last validated account read-only", async (t
   assert.equal(result.user.id, "user-a");
   assert.equal(result.user.email, "ada@example.com");
   // Policy, managed config and the workspace list are requested for user-a…
-  assert.deepEqual(auth.calls.fetchPolicy, [["user-a", 5]]);
+  assert.equal(auth.calls.policyRefreshes, 1);
   assert.equal(auth.calls.workspaceRefresh, 1);
   // …while reconciliation and sync stay fenced until a real get-session.
   assert.deepEqual(auth.calls.setActiveAccountScope, []);
@@ -302,7 +301,7 @@ test("an offline launch never presents a scope reconciled for another account", 
 
   assert.equal(auth.result().isSignedIn, false);
   assert.equal(auth.result().user, null);
-  assert.deepEqual(auth.calls.fetchPolicy, []);
+  assert.equal(auth.calls.policyRefreshes, 0);
   assert.equal(auth.calls.workspaceRefresh, 0);
 });
 
@@ -313,7 +312,7 @@ test("an offline launch with a pending purge stays a guest", async (t) => {
   await auth.goOffline();
 
   assert.equal(auth.result().isSignedIn, false);
-  assert.deepEqual(auth.calls.fetchPolicy, []);
+  assert.equal(auth.calls.policyRefreshes, 0);
 });
 
 test("back online, the same account is confirmed without a purge", async (t) => {

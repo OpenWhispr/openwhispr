@@ -21,7 +21,7 @@ import {
   getLlmStreamingFirstByteTimeoutSeconds,
   llmRequestTimeoutError,
 } from "../helpers/llmRequestTimeout.js";
-import { streamText, stepCountIs } from "ai";
+import { streamText, stepCountIs, type LanguageModel } from "ai";
 import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
 import { localServerFetch, startLocalServer } from "./ai/localServerFetch";
@@ -48,7 +48,14 @@ import {
   detectEndpointDialect,
   geminiCatalogThinkingFloor,
 } from "./ai/thinkingSuppressionDialects";
-import { abortOnCancel, isRequestCancelled, requestCancelledError } from "./ai/requestCancellation";
+import {
+  abortOnCancel,
+  cancelRequest,
+  isRequestCancelled,
+  requestCancelledError,
+  requestSignal,
+  trackRequest,
+} from "./ai/requestCancellation";
 import { openCodeSessionHeaders } from "./ai/openCodeSession";
 import { createStreamingThinkFilter } from "./ai/streamingThinkFilter";
 import { extractApiErrorMessage } from "./ai/apiErrorMessage";
@@ -61,7 +68,12 @@ import {
 } from "../helpers/providerHttpErrors.js";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 import { resolveChatRoute } from "../helpers/chatRouting";
-import { assertAgentAllowedByPolicy, assertReasoningAllowedByPolicy } from "./reasoningPolicy";
+import {
+  assertAgentAllowedByPolicy,
+  assertReasoningAllowedByPolicy,
+  onPolicyRestriction,
+  runningPolicyCheck,
+} from "./reasoningPolicy";
 import type { InferenceMode } from "../types/electron";
 import { usePolicyStore } from "../stores/policyStore";
 import i18n from "../i18n";
@@ -182,8 +194,7 @@ function createAgentStreamPolicyCheck(
   let running = false;
   const assertAllowed = (): void => {
     const state = usePolicyStore.getState();
-    const unresolved =
-      state.status === "error" || state.status === "loading" || state.status === "idle";
+    const unresolved = state.status === "loading" || state.status === "idle";
     // By account, not credential: a rotated token keeps the account's verdict.
     // A suspended policy blanks the account without naming another one, and a
     // guest who signs in had no account to lose: its verdict decides from here.
@@ -194,7 +205,8 @@ function createAgentStreamPolicyCheck(
         messageKey: "common.policyAccountChanged",
       });
     }
-    // An unresolved verdict says nothing new about work already running.
+    // An unresolved verdict says nothing new about work already running; a
+    // settled error, as in runningPolicyCheck, is a denial.
     if (running && unresolved) return;
     assertAgentSessionAllowedByPolicy(provider, mode, model);
     running = true;
@@ -640,12 +652,15 @@ class ReasoningService extends BaseReasoningService {
     if (!providerId) {
       throw new Error("No reasoning provider selected");
     }
-    if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
-    assertReasoningAllowedByPolicy(
-      providerId,
-      resolveLlmDispatchMode(providerId, dispatchConfig),
-      trimmedModel
-    );
+    const assertAllowed = () => {
+      if (dispatchConfig.requiresAgent) assertAgentAllowedByPolicy();
+      assertReasoningAllowedByPolicy(
+        providerId,
+        resolveLlmDispatchMode(providerId, dispatchConfig),
+        trimmedModel
+      );
+    };
+    assertAllowed();
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");
@@ -665,24 +680,21 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const startTime = Date.now();
+    const requestId = dispatchConfig.requestId ?? crypto.randomUUID();
+    const release = requestSignal(requestId) ? () => {} : trackRequest(requestId);
+    const assertStillAllowed = runningPolicyCheck(assertAllowed);
+    const unsubscribe = onPolicyRestriction(assertStillAllowed, () => cancelRequest(requestId));
     try {
       const result = await handler.call({
         text,
         // A saved selection the catalog has retired must not reach the provider.
         model: resolveRetiredCloudModel(providerId, trimmedModel),
         agentName,
-        config: dispatchConfig,
+        config: { ...dispatchConfig, requestId },
         ctx: this.providerContext,
       });
-
-      // An unresolved verdict says nothing new about an answer that has finished.
-      if (usePolicyStore.getState().status === "managed") {
-        assertReasoningAllowedByPolicy(
-          providerId,
-          resolveLlmDispatchMode(providerId, dispatchConfig),
-          trimmedModel
-        );
-      }
+      assertStillAllowed();
+      if (isRequestCancelled(requestId)) throw requestCancelledError();
       if (validateCleanup) assertValidCleanupOutput(text, result);
 
       logger.logReasoning("PROVIDER_SUCCESS", {
@@ -700,6 +712,9 @@ class ReasoningService extends BaseReasoningService {
         error: (error as Error).message,
       });
       throw error;
+    } finally {
+      unsubscribe();
+      release();
     }
   }
 
@@ -758,6 +773,31 @@ class ReasoningService extends BaseReasoningService {
       abortController
     );
     assertStreamAllowed();
+    const unsubscribe = onPolicyRestriction(assertStreamAllowed, () => abortController.abort());
+    try {
+      yield* this.streamTextFromEndpoint(
+        messages,
+        model,
+        provider,
+        config,
+        abortController,
+        route,
+        assertStreamAllowed
+      );
+    } finally {
+      unsubscribe();
+    }
+  }
+
+  private async *streamTextFromEndpoint(
+    messages: Array<{ role: string; content: string }>,
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string },
+    abortController: AbortController,
+    route: ReturnType<typeof resolveChatRoute>,
+    assertStreamAllowed: () => void
+  ): AsyncGenerator<string, void, unknown> {
     const isLocalProvider = route.kind === "local";
     const isLanChat = route.kind === "self-hosted";
 
@@ -1113,16 +1153,27 @@ class ReasoningService extends BaseReasoningService {
       // No Tinfoil model offers a level, so this needn't wait for the registry refresh below.
       const reasoningEffort = chosenReasoningEffort(aiProvider, model, config, baseURL);
       // Resolving a Tinfoil model refreshes the registry, so read model config after it.
-      const aiModel = isEnterprise
-        ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
-        : await resolveStreamSetup(
-            getAIModel(aiProvider, model, apiKey, baseURL, {
-              disableThinking: openrouterDisableThinking,
-              reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
-              ...(isLocalProvider ? { fetch: localServerFetch(model) } : {}),
-            }),
-            assertStreamAllowed
-          );
+      let aiModel: LanguageModel;
+      try {
+        aiModel = isEnterprise
+          ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
+          : await resolveStreamSetup(
+              getAIModel(aiProvider, model, apiKey, baseURL, {
+                mode,
+                signal: abortController.signal,
+                requiresAgent: true,
+                disableThinking: openrouterDisableThinking,
+                reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+                ...(isLocalProvider ? { fetch: localServerFetch(model) } : {}),
+              }),
+              assertStreamAllowed
+            );
+      } catch (error) {
+        assertStreamAllowed();
+        if (!abortController.signal.aborted) throw error;
+        yield { type: "done", finishReason: "abort" };
+        return;
+      }
 
       assertStreamAllowed();
       if (abortController.signal.aborted) {

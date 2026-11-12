@@ -22,9 +22,9 @@ const MOCKS = {
       globalThis.__createNoteCheck = canAutoStart;
       return { createNote() {}, createNoteIn() {} };
     };
-    export const startRecordingForNote = async (note, _recorderName, canAutoStart) => {
+    export const startRecordingForNote = async (note, _recorderName, startSource, canAutoStart) => {
       if (canAutoStart && !canAutoStart()) return false;
-      globalThis.__starts.push(note.id);
+      globalThis.__starts.push([note.id, startSource]);
       return true;
     };`,
   "/ui/useToast": `
@@ -176,7 +176,7 @@ const NOTIFICATION = {
 test("a meeting prompt records under automatic policy", async (t) => {
   const calls = await mount(t, NOTIFICATION, "automatic");
   await until(() => globalThis.__starts.length > 0);
-  assert.deepEqual(globalThis.__starts, [9]);
+  assert.deepEqual(globalThis.__starts, [[9, "prompt"]]);
   assert.equal(globalThis.__createNoteCheck(), true, "New note follows the policy too");
   assert.deepEqual(calls.noteOnly, []);
 });

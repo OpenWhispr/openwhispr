@@ -3,9 +3,18 @@ import { createGroq } from "@ai-sdk/groq";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
+import type { LanguageModelV3 } from "@ai-sdk/provider";
+import type { InferenceMode } from "../../types/electron";
 import { getTinfoilLanguageModel } from "./tinfoilClient";
 import { API_ENDPOINTS } from "../../config/constants";
 import { openCodeSessionHeaders } from "./openCodeSession";
+import {
+  assertAgentAllowedByPolicy,
+  assertReasoningAllowedByPolicy,
+  onPolicyRestriction,
+  runningPolicyCheck,
+} from "../reasoningPolicy";
+import { guardLanguageModel } from "./policyModel";
 
 // Renderer-side AI SDK factory. Cloud + local only — enterprise providers
 // (bedrock/azure/vertex) run in the main process via the
@@ -28,12 +37,19 @@ const withReasoning =
     return fetch(input, init);
   };
 
-export async function getAIModel(
+async function createAIModel(
   provider: string,
   model: string,
   apiKey: string,
   baseURL?: string,
-  opts?: { disableThinking?: boolean; reasoningEffort?: string; fetch?: typeof fetch }
+  opts?: {
+    disableThinking?: boolean;
+    reasoningEffort?: string;
+    fetch?: typeof fetch;
+    mode?: InferenceMode;
+    requiresAgent?: boolean;
+    signal?: AbortSignal;
+  }
 ): Promise<LanguageModel> {
   switch (provider) {
     case "openai":
@@ -51,7 +67,7 @@ export async function getAIModel(
     case "gemini":
       return createGoogleGenerativeAI({ apiKey })(model);
     case "tinfoil":
-      return getTinfoilLanguageModel(apiKey, model);
+      return getTinfoilLanguageModel(apiKey, model, opts?.signal);
     case "corti":
       // Corti's gateway is Chat Completions-compatible, not the OpenAI Responses API.
       return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CORTI_MODELS_BASE }).chat(model);
@@ -84,5 +100,31 @@ export async function getAIModel(
       }).chat(model);
     default:
       throw new Error(`Unsupported AI SDK provider for renderer: ${provider}`);
+  }
+}
+
+export async function getAIModel(
+  ...args: Parameters<typeof createAIModel>
+): Promise<LanguageModel> {
+  const [provider, model, apiKey, baseURL, opts] = args;
+  const mode = opts?.mode ?? (provider === "local" ? "local" : "providers");
+  const assertAllowed = () => {
+    assertReasoningAllowedByPolicy(provider, mode, model);
+    if (opts?.requiresAgent) assertAgentAllowedByPolicy();
+  };
+  assertAllowed();
+  const assertStillAllowed = runningPolicyCheck(assertAllowed);
+  const controller = new AbortController();
+  const unsubscribe = onPolicyRestriction(assertStillAllowed, (error) => controller.abort(error));
+  const signal = opts?.signal
+    ? AbortSignal.any([opts.signal, controller.signal])
+    : controller.signal;
+  try {
+    const resolved = await createAIModel(provider, model, apiKey, baseURL, { ...opts, signal });
+    signal.throwIfAborted();
+    assertStillAllowed();
+    return guardLanguageModel(resolved as LanguageModelV3, assertStillAllowed);
+  } finally {
+    unsubscribe();
   }
 }

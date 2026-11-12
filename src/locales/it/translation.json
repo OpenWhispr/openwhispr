@@ -216,7 +216,13 @@
     "managedConfigUnavailable": "L'accesso aziendale gestito non è disponibile. Accedi di nuovo o contatta l'amministratore.",
     "managedConfigAmbiguous": "La configurazione gestita della tua organizzazione non è coerente. Contatta l'amministratore.",
     "managedPolicyConflict": "L'accesso gestito è bloccato dai criteri del tuo spazio di lavoro. Contatta l'amministratore.",
-    "resizePanel": "Ridimensiona il pannello"
+    "resizePanel": "Ridimensiona il pannello",
+    "managedDevice": "Dispositivo gestito",
+    "managedDeviceAndWorkspace": "Dispositivo e spazio di lavoro gestiti",
+    "deviceLocalOnly": "Questo dispositivo usa solo elaborazione locale. Le funzioni cloud non sono disponibili, anche per gli account già connessi.",
+    "deviceSignInRequired": "La tua organizzazione richiede l’accesso su questo dispositivo.",
+    "devicePolicyInvalid": "La policy del dispositivo non è leggibile o non è valida. Contatta l’amministratore. Le azioni gestite restano bloccate finché la policy non viene corretta.",
+    "deviceWorkspaceUnavailable": "Questo dispositivo richiede elaborazione locale, ma la policy dello spazio di lavoro dell’account salvato non è disponibile. Esci per continuare senza quell’account o contatta l’amministratore."
   },
   "onboarding": {
     "rehaul": {
@@ -655,7 +661,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Aggiornamento richiesto",
-      "description": "La tua organizzazione richiede OpenWhispr {{version}} o versioni successive. Aggiorna l'app."
+      "description": "La tua organizzazione richiede OpenWhispr {{version}} o versioni successive. Aggiorna l'app.",
+      "contactIT": "La tua organizzazione richiede OpenWhispr {{version}} o successivo. Contatta il reparto IT per installare una versione approvata."
     },
     "update": {
       "readyTitle": "Aggiornamento pronto da installare",
@@ -1237,7 +1244,8 @@
       "failedUserCheck": "Verifica dell'account utente non riuscita",
       "generic": "Qualcosa è andato storto. Riprova.",
       "invalidCredentials": "E-mail o password non valide",
-      "invalidEmail": "Inserisci un indirizzo email valido"
+      "invalidEmail": "Inserisci un indirizzo email valido",
+      "signInDisabledByDevice": "La tua organizzazione ha disattivato l'accesso su questo dispositivo."
     },
     "getStarted": "Inizia",
     "legal": {
@@ -2266,7 +2274,14 @@
         "restarting": "Riavvio...",
         "title": "Aggiornamenti",
         "versionPlaceholder": "—",
-        "whatsNew": "Novità nella v{{version}}"
+        "whatsNew": "Novità nella v{{version}}",
+        "managedByOrganization": "Gestito dalla tua organizzazione.",
+        "itManaged": "La tua organizzazione gestisce gli aggiornamenti.",
+        "policyLoading": "Caricamento delle impostazioni di aggiornamento…",
+        "policyUnavailable": "Impossibile caricare le impostazioni di aggiornamento. Controlla gli aggiornamenti per riprovare.",
+        "policyChanged": "La politica di aggiornamento è cambiata. Controlla di nuovo gli aggiornamenti.",
+        "managedBadge": "Gestito",
+        "stagedBeforePolicy": "Un aggiornamento è stato preparato prima dell’applicazione di questa politica e potrebbe essere installato alla chiusura dell’app. Contatta il reparto IT prima di chiudere o riavviare."
       },
       "translationHotkey": {
         "title": "Hotkey Traduzione",

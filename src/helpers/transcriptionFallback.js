@@ -22,8 +22,9 @@ const USER_ACTIONABLE_START_FAILURES = new Set([
   "LIMIT_REACHED",
 ]);
 
+// A device policy's refusal is as final as a workspace's.
 export function isTranscriptionPolicyRefusal(error) {
-  return typeof error?.code === "string" && error.code.startsWith("POLICY_");
+  return typeof error?.code === "string" && /^(DEVICE_)?POLICY_/.test(error.code);
 }
 
 // Orukeet over OpenWhispr Cloud sessions, as opposed to a self-hosted server.

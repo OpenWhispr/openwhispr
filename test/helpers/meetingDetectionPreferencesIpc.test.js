@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -78,9 +79,11 @@ test.before(() => {
     meetingDetectionEngine: { setPreferences: (prefs) => applied.push(prefs) },
   };
   Ctor.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
 });
 
@@ -158,7 +161,7 @@ test("disabled audio features refuse direct IPC calls before native, network or 
   }
 });
 
-test("a refused notification Join still opens the meeting and refuses only the recording", async () => {
+test("a refused notification Join still opens the meeting and refuses only the recording", async (t) => {
   const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
   target._audioFeaturePolicy = createAudioFeaturePolicy({
     getPolicy: async () => ({
@@ -169,6 +172,10 @@ test("a refused notification Join still opens the meeting and refuses only the r
   });
   const owner = { prompt: { detectionId: "calendar:event" } };
   const calls = [];
+  target.meetingAuditLog = { recordingRefused: (entry) => calls.push(["refused", entry]) };
+  t.after(() => {
+    delete target.meetingAuditLog;
+  });
   target.windowManager.captureMeetingNotificationOwner = () => owner;
   target.meetingDetectionEngine = {
     setPreferences: (prefs) => applied.push(prefs),
@@ -183,7 +190,13 @@ test("a refused notification Join still opens the meeting and refuses only the r
 
   const joined = await respond("join");
   assert.equal(joined.code, "POLICY_MEETING_RECORDING_DISABLED");
-  assert.deepEqual(calls, [["open", owner]]);
+  assert.deepEqual(calls, [
+    ["open", owner],
+    [
+      "refused",
+      { noteId: undefined, trigger: "prompt", reason: "POLICY_MEETING_RECORDING_DISABLED" },
+    ],
+  ]);
 
   // A join-only card's Join records nothing, so the policy has no say in it.
   calls.length = 0;

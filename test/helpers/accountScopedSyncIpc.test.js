@@ -13,6 +13,7 @@ const Module = require("node:module");
 // First: its electron stub is what DatabaseManager loads against.
 const { createDb } = require("./harness/db.js");
 const { call } = require("./harness/cliBridge.js");
+const { withDevicePolicy } = require("./harness/devicePolicy");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -103,7 +104,8 @@ const audioStorageStub = {
 };
 const target = {
   sessionId: "test-session",
-  databaseManager: null,
+  // Signed out until a test's database replaces it; setup reads the account scope.
+  databaseManager: { activeAccountId: null },
   audioStorageManager: audioStorageStub,
 };
 let handleAuthTokenChange;
@@ -117,7 +119,7 @@ test.before(() => {
   const fakeThis = new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
-  Ctor.prototype.setupHandlers.call(fakeThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
   handleAuthTokenChange = (state) => Ctor.prototype._handleAuthTokenChange.call(fakeThis, state);
 });
 
@@ -140,6 +142,197 @@ function setup(t) {
 }
 
 const invoke = (channel, ...args) => handlers.get(channel)({}, ...args);
+
+for (const stage of ["before headers", "response body"]) {
+  for (const boundary of ["account switch", "sign-out"]) {
+    for (const row of ["unattributed", "reassigned", "deleted"]) {
+      test(`chat create receipt survives ${boundary} during ${stage}: ${row}`, async (t) => {
+        const db = setup(t);
+        if (!db) return;
+        const { deferred } = require("./harness/deferred");
+        const entered = deferred(),
+          finish = deferred(),
+          policyReady = deferred();
+        const apiUrl = process.env.OPENWHISPR_API_URL;
+        process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+        t.after(() => {
+          finish.resolve();
+          policyReady.resolve();
+          if (apiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+          else process.env.OPENWHISPR_API_URL = apiUrl;
+        });
+        t.mock.method(electronStub.net, "fetch", async (url, init) => {
+          if (url.endsWith("/api/workspace-policy")) {
+            if (init.headers.Authorization === "Bearer token-b") await policyReady.promise;
+            return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+          }
+          assert.equal(url, "https://api.openwhispr.test/api/conversations/create");
+          assert.equal(init.headers.Authorization, "Bearer token-a");
+          if (stage === "before headers") {
+            entered.resolve();
+            await finish.promise;
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => {
+              if (stage === "response body") {
+                entered.resolve();
+                await finish.promise;
+              }
+              return { id: "cloud-a" };
+            },
+          };
+        });
+        const chat = db.createAgentConversation("Guest chat");
+        const snapshot = {
+          client_conversation_id: chat.client_conversation_id,
+          title: chat.title,
+          updated_at: chat.updated_at,
+          message_count: 0,
+        };
+        await invoke("set-active-account-scope", "account-a", 3);
+        await target.refreshEffectivePolicy();
+        const pending = invoke("cloud-api-request", {
+          path: "/api/conversations/create",
+          method: "POST",
+          expectedAuthGeneration: 3,
+          body: { client_conversation_id: chat.client_conversation_id, messages: [] },
+        });
+        await entered.promise;
+        tokenState = { token: boundary === "sign-out" ? null : "token-b", generation: 4 };
+        handleAuthTokenChange(tokenState);
+        if (boundary === "account switch") await invoke("set-active-account-scope", "account-b", 4);
+        if (row === "reassigned")
+          db.db.prepare("UPDATE agent_conversations SET account_id = 'account-b'").run();
+        if (row === "deleted") db.db.prepare("DELETE FROM agent_conversations").run();
+        if (stage === "response body") {
+          policyReady.resolve();
+          await target.refreshEffectivePolicy();
+        }
+        finish.resolve();
+        const result = await pending;
+        assert.deepEqual(result, { success: true, data: { id: "cloud-a" } });
+        const ack = await invoke(
+          "db-acknowledge-conversation-create",
+          chat.id,
+          snapshot,
+          result.data.id,
+          "account-a",
+          3
+        );
+        assert.equal(ack.outcome, row === "unattributed" ? "synced" : "orphaned");
+        if (row === "unattributed")
+          assert.deepEqual(
+            {
+              ...db.db
+                .prepare("SELECT account_id, cloud_id FROM agent_conversations WHERE id = ?")
+                .get(chat.id),
+            },
+            { account_id: "account-a", cloud_id: "cloud-a" }
+          );
+        policyReady.resolve();
+        await target.refreshEffectivePolicy();
+      });
+    }
+  }
+}
+
+for (const [path, status, isPublic] of [
+  ["/api/conversations/create", 401, false],
+  ["/api/conversations/create", 409, false],
+  ["/api/conversations/create", 503, false],
+  ["/api/conversations/list", 200, false],
+  ["/api/conversations/create", 200, true],
+]) {
+  test(`chat receipt exception keeps the fence for ${status} ${path}, public=${isPublic}`, async (t) => {
+    const db = setup(t);
+    if (!db) return;
+    const apiUrl = process.env.OPENWHISPR_API_URL;
+    process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+    t.after(() => {
+      if (apiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+      else process.env.OPENWHISPR_API_URL = apiUrl;
+    });
+    t.mock.method(electronStub.net, "fetch", async (url) => {
+      if (url.endsWith("/api/workspace-policy"))
+        return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+      if (new URL(url).pathname !== path) return Response.json({});
+      tokenState = { token: null, generation: 4 };
+      handleAuthTokenChange(tokenState);
+      return Response.json({ id: "cloud-a" }, { status });
+    });
+    await invoke("set-active-account-scope", "account-a", 3);
+    await target.refreshEffectivePolicy();
+    const result = await invoke("cloud-api-request", {
+      path,
+      method: "POST",
+      expectedAuthGeneration: 3,
+      public: isPublic,
+    });
+    assert.equal(result.success, false);
+    assert.equal(result.code, "AUTH_CONTEXT_CHANGED");
+    assert.equal(result.data, undefined);
+  });
+}
+
+for (const stage of ["admission", "active request"]) {
+  test(`chat receipt exception still enforces backup policy at ${stage}`, async (t) => {
+    const db = setup(t);
+    if (!db) return;
+    const { deferred } = require("./harness/deferred");
+    const entered = deferred();
+    const policy = require("../../src/helpers/managedDevicePolicy").defaultDevicePolicy();
+    const { normalizeDeviceValues } = require("../../src/helpers/managedDevicePolicy");
+    policy.dataRetention.cloudBackupAllowed = stage !== "admission";
+    const apiUrl = process.env.OPENWHISPR_API_URL;
+    const retire = target._retireDisallowedProductWork;
+    const readDevice = target.managedDevicePolicy.getSnapshot;
+    process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+    target._retireDisallowedProductWork =
+      require(handlersModulePath).prototype._retireDisallowedProductWork.bind(target);
+    t.after(() => {
+      if (apiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+      else process.env.OPENWHISPR_API_URL = apiUrl;
+      if (retire === undefined) delete target._retireDisallowedProductWork;
+      else target._retireDisallowedProductWork = retire;
+      target.managedDevicePolicy.getSnapshot = readDevice;
+      target.effectivePolicyManager.getCurrent();
+    });
+    let createCalls = 0,
+      requestSignal;
+    t.mock.method(electronStub.net, "fetch", async (url, init) => {
+      if (url.endsWith("/api/workspace-policy"))
+        return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+      if (!url.endsWith("/api/conversations/create")) return Response.json({});
+      createCalls++;
+      requestSignal = init.signal;
+      entered.resolve();
+      return new Promise((_resolve, reject) =>
+        init.signal.addEventListener("abort", () => reject(init.signal.reason), { once: true })
+      );
+    });
+    await invoke("set-active-account-scope", "account-a", 3);
+    await target.refreshEffectivePolicy();
+    target.managedDevicePolicy.getSnapshot = () =>
+      normalizeDeviceValues({ Policy: JSON.stringify(policy) });
+    target.effectivePolicyManager.getCurrent();
+    const pending = invoke("cloud-api-request", {
+      path: "/api/conversations/create",
+      method: "POST",
+      expectedAuthGeneration: 3,
+    });
+    if (stage === "active request") {
+      await entered.promise;
+      policy.dataRetention.cloudBackupAllowed = false;
+      target.effectivePolicyManager.getCurrent();
+    }
+    const result = await pending;
+    assert.equal(result.code, "DEVICE_POLICY_BLOCKED");
+    assert.equal(createCalls, stage === "admission" ? 0 : 1);
+    if (requestSignal) assert.equal(requestSignal.aborted, true);
+  });
+}
 
 test("a queued transcription addition is broadcast only while its account can see it", async (t) => {
   const db = setup(t);

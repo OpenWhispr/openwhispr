@@ -15,6 +15,7 @@ import { useSignOut } from "../hooks/useSignOut";
 import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
+import { updatePolicyMessageKey } from "../utils/updatePolicyMessage";
 import { useSettings } from "../hooks/useSettings";
 import { recordingRecorderName } from "../utils/noteRecorder";
 import { useAuth } from "../hooks/useAuth";
@@ -115,6 +116,7 @@ import {
 } from "../utils/pendingInvitationToken";
 import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
 import type { SourceNote } from "./chat/useSourceNote";
+import type { MeetingStartSource } from "../types/electron";
 
 const platform = getCachedPlatform();
 
@@ -197,6 +199,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     noteId: number;
     folderId: number | null;
     event: any;
+    startSource?: MeetingStartSource;
     trigger?: string;
     noteSessionId?: string;
   } | null>(null);
@@ -508,6 +511,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 startRecordingForNote(
                   note,
                   recordingRecorderName(note, recordingUser, translate),
+                  "prompt",
                   args.canAutoStart
                 ),
               restoreFromMeetingMode: () => window.electronAPI?.restoreFromMeetingMode?.(),
@@ -541,6 +545,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
+        startSource: data.startSource,
         trigger: data.trigger,
         noteSessionId: data.noteSessionId,
       });
@@ -1026,6 +1031,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           try {
             await installUpdate();
           } catch (error) {
+            const policyMessage = updatePolicyMessageKey(error);
+            if (policyMessage) {
+              toast({ title: t(policyMessage) });
+              return;
+            }
             toast({
               title: t("controlPanel.update.couldNotInstallTitle"),
               description: t("controlPanel.update.couldNotInstallDescription"),
@@ -1038,6 +1048,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       try {
         await downloadUpdate();
       } catch (error) {
+        const policyMessage = updatePolicyMessageKey(error);
+        if (policyMessage) {
+          toast({ title: t(policyMessage) });
+          return;
+        }
         toast({
           title: t("controlPanel.update.couldNotDownloadTitle"),
           description: t("controlPanel.update.couldNotDownloadDescription"),
@@ -1224,6 +1239,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             // The side-panel layout (a meeting, or a narrow window with a note open) has no room for it.
             workspaceIntroAllowed={!showSettings && !isSidePanelLayout}
             updateAction={
+              updateStatus.updateMode !== "it_managed" &&
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
                 updateStatus.updateDownloaded ||
@@ -1291,9 +1307,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                         </p>
                         <p className="text-xs text-amber-700 dark:text-amber-300/80">
                           <BidiInterpolatedText
-                            text={t("controlPanel.updateRequiredByOrg.description", {
-                              version: BIDI_VALUE_TOKEN,
-                            })}
+                            text={t(
+                              updateStatus.updateMode === "it_managed"
+                                ? "controlPanel.updateRequiredByOrg.contactIT"
+                                : "controlPanel.updateRequiredByOrg.description",
+                              {
+                                version: BIDI_VALUE_TOKEN,
+                              }
+                            )}
                             value={policyMinAppVersion}
                           />
                         </p>

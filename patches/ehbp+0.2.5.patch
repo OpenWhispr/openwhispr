@@ -1,0 +1,64 @@
+diff --git a/node_modules/ehbp/dist/cjs/client.js b/node_modules/ehbp/dist/cjs/client.js
+index c42ca45..fb3f851 100644
+--- a/node_modules/ehbp/dist/cjs/client.js
++++ b/node_modules/ehbp/dist/cjs/client.js
+@@ -124,6 +124,7 @@ class Transport {
+             method,
+             headers,
+             body: requestBody,
++            signal: init?.signal ?? (input instanceof Request ? input.signal : undefined),
+             duplex: 'half',
+         });
+         // Encrypt request (returns context for response decryption)
+diff --git a/node_modules/ehbp/dist/cjs/identity.js b/node_modules/ehbp/dist/cjs/identity.js
+index e89f6d7..b15b218 100644
+--- a/node_modules/ehbp/dist/cjs/identity.js
++++ b/node_modules/ehbp/dist/cjs/identity.js
+@@ -195,6 +195,7 @@ class Identity {
+                     method: request.method,
+                     headers: request.headers,
+                     body: null,
++                    signal: request.signal,
+                 }),
+                 context: null,
+             };
+@@ -225,6 +226,7 @@ class Identity {
+                 method: request.method,
+                 headers,
+                 body: chunkedData,
++                signal: request.signal,
+                 duplex: 'half',
+             }),
+             context,
+diff --git a/node_modules/ehbp/dist/esm/client.js b/node_modules/ehbp/dist/esm/client.js
+index dcf9ff3..bc3dbf0 100644
+--- a/node_modules/ehbp/dist/esm/client.js
++++ b/node_modules/ehbp/dist/esm/client.js
+@@ -120,6 +120,7 @@ export class Transport {
+             method,
+             headers,
+             body: requestBody,
++            signal: init?.signal ?? (input instanceof Request ? input.signal : undefined),
+             duplex: 'half',
+         });
+         // Encrypt request (returns context for response decryption)
+diff --git a/node_modules/ehbp/dist/esm/identity.js b/node_modules/ehbp/dist/esm/identity.js
+index 36d649a..dd0828c 100644
+--- a/node_modules/ehbp/dist/esm/identity.js
++++ b/node_modules/ehbp/dist/esm/identity.js
+@@ -188,6 +188,7 @@ export class Identity {
+                     method: request.method,
+                     headers: request.headers,
+                     body: null,
++                    signal: request.signal,
+                 }),
+                 context: null,
+             };
+@@ -218,6 +219,7 @@ export class Identity {
+                 method: request.method,
+                 headers,
+                 body: chunkedData,
++                signal: request.signal,
+                 duplex: 'half',
+             }),
+             context,

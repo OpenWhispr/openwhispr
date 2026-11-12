@@ -15,6 +15,8 @@ import { useControlPanelWindowDrag } from "./hooks/useControlPanelWindowDrag";
 import { useTheme } from "./hooks/useTheme";
 import { mirrorActiveAccountScope } from "./lib/accountScopeMirror";
 import { usePolicyStore } from "./stores/policyStore";
+import { signOut } from "./lib/auth";
+import { Button } from "./components/ui/button";
 import { resolveSettledControlPanelWindowMode } from "./utils/controlPanelWindowMode.ts";
 import { resolveMacAccessibilityReadiness } from "./utils/macAccessibilityReadiness.ts";
 import { isAgentWindow, isControlPanelWindow } from "./utils/windowContext.ts";
@@ -31,6 +33,42 @@ const AgentWindow = React.lazy(() => import("./components/agent/AgentWindow.tsx"
 
 export default function AppRouter() {
   useTheme();
+  const { t } = useTranslation();
+  const deviceReady = usePolicyStore((state) => state.deviceReady);
+  const policyCode = usePolicyStore((state) => state.code);
+  const policyStatus = usePolicyStore((state) => state.status);
+  const localOnly = usePolicyStore((state) => state.localOnly);
+  const workspaceRequired = usePolicyStore((state) => state.workspaceRequired);
+  useEffect(() => {
+    void usePolicyStore.getState().bootstrap();
+  }, []);
+  useEffect(() => {
+    if (
+      deviceReady &&
+      isControlPanelWindow() &&
+      (policyCode === "DEVICE_POLICY_INVALID" || (localOnly && policyStatus === "error"))
+    )
+      void window.electronAPI?.setOnboardingWindowMode?.("restore");
+  }, [deviceReady, policyCode, localOnly, policyStatus]);
+  if (!deviceReady) return <LoadingFallback />;
+  if (policyCode === "DEVICE_POLICY_INVALID") {
+    return <LoadingFallback message={t("common.devicePolicyInvalid")} error />;
+  }
+  if (localOnly && policyStatus === "error") {
+    return (
+      <LoadingFallback
+        error
+        message={t(
+          workspaceRequired ? "common.deviceWorkspaceUnavailable" : "common.managedPolicyConflict"
+        )}
+        action={
+          workspaceRequired ? (
+            <Button onClick={() => void signOut()}>{t("common.logout")}</Button>
+          ) : undefined
+        }
+      />
+    );
+  }
   const params = window.location.search;
 
   if (params.includes("permission-guide=true")) return <PermissionGuideOverlay />;
@@ -55,12 +93,14 @@ export default function AppRouter() {
 function MainApp() {
   const { isSignedIn, isGracePeriodOnly, isLoaded: authLoaded } = useAuth();
   const policyStatus = usePolicyStore((state) => state.status);
+  const localOnly = usePolicyStore((state) => state.localOnly);
+  const requireSignIn = usePolicyStore((state) => state.requireSignIn);
   const policyResolved =
     !isSignedIn ||
     policyStatus === "managed" ||
     policyStatus === "unmanaged" ||
     policyStatus === "error";
-  const autoSyncReady = authLoaded && policyResolved;
+  const autoSyncReady = authLoaded && policyResolved && !localOnly;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const policyAccountId = usePolicyStore((state) => state.accountId);
@@ -133,8 +173,10 @@ function MainApp() {
     if (isControlPanel) {
       if (!resolved) {
         setShowOnboarding(true);
-      } else if (!isSignedIn && !authSkipped) {
+      } else if (!isSignedIn && !localOnly && (requireSignIn || !authSkipped)) {
         setNeedsReauth(true);
+      } else {
+        setNeedsReauth(false);
       }
     }
 
@@ -145,7 +187,15 @@ function MainApp() {
     }
 
     setIsLoading(false);
-  }, [authLoaded, isControlPanel, isDictationPanel, isGracePeriodOnly, isSignedIn]);
+  }, [
+    authLoaded,
+    isControlPanel,
+    isDictationPanel,
+    isGracePeriodOnly,
+    isSignedIn,
+    localOnly,
+    requireSignIn,
+  ]);
 
   useEffect(() => {
     if (!isControlPanel || !authLoaded) return;
@@ -225,6 +275,10 @@ function MainApp() {
     return <LoadingFallback />;
   }
 
+  if (isControlPanel && requireSignIn && !isSignedIn) {
+    return <ReauthenticationScreen requiredByDevice onAuthComplete={() => setNeedsReauth(false)} />;
+  }
+
   if (isControlPanel && showOnboarding) {
     return (
       <Suspense fallback={<LoadingFallback />}>
@@ -257,7 +311,7 @@ function MainApp() {
   );
 }
 
-function LoadingFallback({ message }) {
+function LoadingFallback({ message, error = false, action }) {
   const { t } = useTranslation();
   const fallbackMessage = message || t("common.loading");
 
@@ -275,12 +329,15 @@ function LoadingFallback({ message }) {
           <path d="M627 457V568" stroke="white" strokeWidth="74" strokeLinecap="round" />
           <path d="M397 457V568" stroke="white" strokeWidth="74" strokeLinecap="round" />
         </svg>
-        <div className="w-7 h-7 rounded-full border-[2.5px] border-transparent border-t-primary animate-[spinner-rotate_0.8s_cubic-bezier(0.4,0,0.2,1)_infinite] motion-reduce:animate-none motion-reduce:border-t-muted-foreground motion-reduce:opacity-50" />
+        {!error && (
+          <div className="w-7 h-7 rounded-full border-[2.5px] border-transparent border-t-primary animate-[spinner-rotate_0.8s_cubic-bezier(0.4,0,0.2,1)_infinite] motion-reduce:animate-none motion-reduce:border-t-muted-foreground motion-reduce:opacity-50" />
+        )}
         {fallbackMessage && (
           <p className="text-[13px] font-medium text-muted-foreground dark:text-foreground/60 tracking-[-0.01em]">
             {fallbackMessage}
           </p>
         )}
+        {action}
       </div>
     </div>
   );

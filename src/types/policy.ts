@@ -9,6 +9,7 @@ import type { InferenceMode } from "./electron";
  * `allowedByokProviders`) so the server enum can grow ahead of this build.
  */
 
+export type UpdateMode = "user_choice" | "always_on" | "it_managed";
 export type LocalHistoryMode = "user_choice" | "always_on" | "always_off";
 export type ExternalSharingMode = "allowed" | "domain_only" | "disabled";
 
@@ -70,8 +71,28 @@ export interface OrgPolicy {
    * policy — unknown ids are filtered at enforcement time.
    */
   requiredLocalModels?: string[];
+  /** Optional for older servers; unknown future strings behave as user_choice. */
+  updates?: { mode?: string };
   minAppVersion: string | null;
 }
 
 /** Which allowlist a mode/provider check applies to. */
 export type PolicyScope = "transcription" | "llm";
+
+export interface EffectivePolicySnapshot {
+  success: boolean;
+  status: "loading" | "managed" | "unmanaged" | "error";
+  revision: number;
+  accountId: string | null;
+  authGeneration: number;
+  managed: boolean;
+  policy: OrgPolicy | null;
+  deviceReady: boolean;
+  deviceManaged: boolean;
+  workspaceManaged: boolean;
+  workspaceRequired: boolean;
+  localOnly: boolean;
+  requireSignIn: boolean;
+  code?: string;
+  policyUpdatedAt?: string | null;
+}

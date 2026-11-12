@@ -4,7 +4,7 @@ import type { PermissionGuideState, PermissionGuideAction } from "./permissionGu
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
-import type { OrgPolicy } from "./policy";
+import type { EffectivePolicySnapshot } from "./policy";
 import type { SplitLiveSpeakers } from "../utils/transcriptSpeakerState";
 import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
@@ -1199,6 +1199,11 @@ export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
 export type SystemAudioStrategy =
   "native" | "loopback" | "pipewire-loopback" | "wasapi-loopback" | "unsupported";
 
+// Where a meeting recording started from and why it stopped, for the local audit log.
+export type MeetingStartSource =
+  "hotkey" | "tray" | "pill" | "prompt" | "calendar-join" | "record-button" | "new-note";
+export type MeetingStopReason = "user" | "auto-end" | "policy" | "account-change" | "error";
+
 export interface MeetingSystemAudioInterruption {
   systemAudioStrategy: SystemAudioStrategy;
   reason: "no_audio_delivered" | "device_invalidated" | "gone_quiet" | "loopback_takeover_failed";
@@ -1275,6 +1280,7 @@ export interface ScreenContextImage {
 }
 
 export interface UpdateCheckResult {
+  code?: string;
   updateAvailable: boolean;
   version?: string;
   releaseDate?: string;
@@ -1284,6 +1290,13 @@ export interface UpdateCheckResult {
 }
 
 export interface UpdateStatusResult {
+  /** null while no verdict allows updates. */
+  updateMode?: import("./policy").UpdateMode | null;
+  policyReady?: boolean;
+  /** The policy lookup failed with no verdict held; a check retries it. */
+  policyUnavailable?: boolean;
+  effectiveAutoUpdatesEnabled?: boolean;
+  stagedUpdate?: boolean;
   updateAvailable: boolean;
   updateDownloaded: boolean;
   isDevelopment: boolean;
@@ -1298,6 +1311,7 @@ export interface UpdateInfoResult {
 }
 
 export interface UpdateResult {
+  code?: string;
   success: boolean;
   message: string;
 }
@@ -1802,47 +1816,9 @@ declare global {
       >;
 
       // Org policy (see src/types/policy.ts)
-      getWorkspacePolicy?: (
-        accountId?: string,
-        expectedAuthGeneration?: number
-      ) => Promise<{
-        success: boolean;
-        status?: "network" | "cached" | "current" | "unsupported" | "restricted" | "error";
-        revision?: number;
-        accountId?: string | null;
-        authGeneration?: number | null;
-        managed?: boolean;
-        policy?: OrgPolicy | null;
-        policyUpdatedAt?: string | null;
-        endpointSupported?: boolean;
-        code?: string;
-        error?: string;
-        enforcementRequired?: boolean;
-      }>;
-      onWorkspacePolicyChanged?: (
-        callback: (
-          snapshot:
-            | {
-                success: true;
-                status: "network" | "cached" | "current" | "unsupported";
-                revision: number;
-                accountId: string | null;
-                authGeneration: number;
-                managed: boolean;
-                policy: OrgPolicy | null;
-                policyUpdatedAt: string | null;
-                endpointSupported: boolean;
-              }
-            | {
-                success: false;
-                status: "error";
-                revision: number;
-                accountId: string | null;
-                authGeneration: number;
-                code: "POLICY_UNRESOLVABLE";
-                error: string;
-              }
-        ) => void
+      getEffectivePolicy?: () => Promise<EffectivePolicySnapshot>;
+      onEffectivePolicyChanged?: (
+        callback: (snapshot: EffectivePolicySnapshot) => void
       ) => () => void;
 
       getNoteRecordingConfig?: () => Promise<NoteRecordingConfigResult | null>;
@@ -2679,6 +2655,7 @@ declare global {
       setAutoUpdatesEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
 
       // Update event listeners
+      onUpdateStatusChanged?: (callback: (status: UpdateStatusResult) => void) => () => void;
       onUpdateAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateNotAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateDownloaded: (callback: (event: any, info: any) => void) => () => void;
@@ -3721,6 +3698,7 @@ declare global {
         autoEndEligible: boolean;
         aecEnabled?: boolean;
         speakerIndexBase?: number;
+        startSource?: MeetingStartSource;
       }) => Promise<
         {
           success: boolean;
@@ -3732,6 +3710,12 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
+      isMeetingRecordingDisabled?: () => Promise<boolean>;
+      meetingRecordingRefused?: (details: {
+        noteId: number | null;
+        startSource?: MeetingStartSource;
+        reason: string;
+      }) => Promise<void>;
       meetingTranscriptionSend?: (
         buffer: ArrayBuffer,
         source: "mic" | "system",
@@ -3741,7 +3725,10 @@ declare global {
         sessionId: string,
         available: boolean
       ) => Promise<{ success: boolean; reason?: "stale-session" }>;
-      meetingTranscriptionStop?: (expectedSessionId?: string) => Promise<{
+      meetingTranscriptionStop?: (
+        expectedSessionId?: string,
+        reason?: MeetingStopReason
+      ) => Promise<{
         success: boolean;
         transcript?: string;
         diarizationSessionId?: string;
@@ -4041,6 +4028,7 @@ declare global {
         folderId: number | null;
         event: any;
         trigger?: "hotkey" | "manual" | "calendar-join";
+        startSource?: MeetingStartSource;
       } | null>;
       onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
       meetingNoteOpenedWithoutRecording?: (noteSessionId: string) => Promise<void>;

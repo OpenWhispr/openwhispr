@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -26,6 +27,7 @@ const electron = {
   },
   BrowserWindow: { getAllWindows: () => [], fromWebContents: () => null },
   screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
+  session: {},
 };
 test.before(() => {
   Module._load = function (request, parent, isMain) {
@@ -36,12 +38,21 @@ test.before(() => {
       return { get: () => token, getState: () => ({ generation: 1 }) };
     if (parent?.filename === handlersPath && request === "./workspacePolicyManager")
       return {
-        createWorkspacePolicyManager: () => ({ getPolicy: async () => ({}) }),
+        createWorkspacePolicyManager: () => ({
+          getPolicy: async () => ({}),
+          heldPolicy: () => null,
+        }),
         isScreenContextBlocked: () => policyBlocked,
       };
     if (
       parent?.filename === handlersPath &&
-      !["./ipcSender", "./agentStreamRequestRegistry"].includes(request) &&
+      ![
+        "./ipcSender",
+        "./agentStreamRequestRegistry",
+        "./effectivePolicyManager",
+        "./productPolicy",
+        "./devicePolicyNetwork",
+      ].includes(request) &&
       (request.startsWith("./") || request.startsWith("../"))
     )
       return anything();
@@ -57,9 +68,11 @@ test.before(() => {
   target._cancelCalendarAuthorizations = () =>
     IPCHandlers.prototype._cancelCalendarAuthorizations?.call(target);
   IPCHandlers.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
 });
 test.after(() => {
@@ -179,9 +192,15 @@ test("Control Panel capture hides only its caller and restores its prior visibil
     const result = await handlers.get("capture-screen-context")(
       event(outcome === "other" ? sender(3) : contents)
     );
-    assert.equal(visibleDuringCapture, outcome === "other", outcome);
+    // A denial held before the capture neither hides the panel nor takes a screenshot.
+    const captured = outcome !== "blocked";
+    assert.equal(visibleDuringCapture, captured ? outcome === "other" : undefined, outcome);
     assert.equal(panel.visible, outcome !== "closed", outcome);
-    assert.equal(panel.focusedAgain, !["closed", "unfocused", "other"].includes(outcome), outcome);
+    assert.equal(
+      panel.focusedAgain,
+      captured && !["closed", "unfocused", "other"].includes(outcome),
+      outcome
+    );
     assert.equal(result === null, outcome === "failure" || outcome === "blocked", outcome);
   }
 });

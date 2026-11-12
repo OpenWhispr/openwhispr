@@ -48,8 +48,12 @@ class MeetingDetectionEngine {
       now = Date.now,
       setInterval = global.setInterval,
       clearInterval = global.clearInterval,
+      isMeetingRecordingDisabled = () => false,
+      onStartRefused = () => {},
     } = {}
   ) {
+    this._isMeetingRecordingDisabled = isMeetingRecordingDisabled;
+    this._onStartRefused = onStartRefused;
     this.reminderScheduler = reminderScheduler;
     this.meetingProcessDetector = meetingProcessDetector;
     this.audioActivityDetector = audioActivityDetector;
@@ -173,6 +177,10 @@ class MeetingDetectionEngine {
   }
 
   _syncAudioActivityDetector() {
+    if (this._isMeetingRecordingDisabled()) {
+      this.audioActivityDetector.stop();
+      return undefined;
+    }
     if (this.preferences.audioDetection || this._isAutoEndWanted()) {
       return this.audioActivityDetector.start();
     }
@@ -184,6 +192,10 @@ class MeetingDetectionEngine {
   // The process-exit fast path needs the detector even when the user has turned
   // process detection off for meeting prompts.
   _syncMeetingProcessDetector() {
+    if (this._isMeetingRecordingDisabled()) {
+      this.meetingProcessDetector.stop();
+      return;
+    }
     if (this.preferences.processDetection || this._isAutoEndWanted()) {
       this.meetingProcessDetector.start();
       return;
@@ -345,6 +357,15 @@ class MeetingDetectionEngine {
 
   _handleDetection(source, key, data) {
     const detectionId = `${source}:${key}`;
+
+    if (this._isMeetingRecordingDisabled()) {
+      debugLogger.info(
+        "Meeting recording disabled by administrator, ignoring",
+        { detectionId },
+        "meeting"
+      );
+      return;
+    }
 
     if (source === "audio" && !this.preferences.audioDetection) {
       debugLogger.debug("Audio detection disabled, ignoring", { detectionId }, "meeting");
@@ -578,15 +599,22 @@ class MeetingDetectionEngine {
 
   // Both manual starts record into the note they create, so a start the org
   // refuses must end before that note exists.
-  async _meetingStartRefusal() {
+  async _meetingStartRefusal(startSource) {
     const refusal = await this.windowManager.resolveMeetingRecordingRefusal?.();
-    if (refusal)
+    if (refusal) {
       debugLogger.info("Meeting start refused by policy", { code: refusal.code }, "meeting");
+      this._onStartRefused(refusal.code, startSource);
+    }
     return refusal;
   }
 
   async startManualMeeting(options) {
-    const refusal = await this._meetingStartRefusal();
+    if (this._isMeetingRecordingDisabled()) {
+      debugLogger.info("Manual meeting ignored — disabled by administrator", {}, "meeting");
+      this._onStartRefused("POLICY_MEETING_RECORDING_DISABLED", options?.startSource);
+      return;
+    }
+    const refusal = await this._meetingStartRefusal(options?.startSource);
     if (refusal) {
       this.windowManager.sendMeetingStartRefused(refusal.code);
       return;
@@ -633,6 +661,7 @@ class MeetingDetectionEngine {
         folderId: meetingsFolder.id,
         event,
         trigger: "hotkey",
+        startSource: options?.startSource,
       },
       options
     );
@@ -654,6 +683,7 @@ class MeetingDetectionEngine {
         folderId: existingNote.folder_id ?? this.databaseManager.getMeetingsFolder()?.id,
         event,
         trigger,
+        startSource: options?.startSource,
       },
       options
     );
@@ -662,7 +692,16 @@ class MeetingDetectionEngine {
 
   // Resolves with the org's refusal, if any, for the caller to explain.
   async joinCalendarMeeting(eventId, trigger = "calendar-join", options) {
-    const refusal = await this._meetingStartRefusal();
+    if (this._isMeetingRecordingDisabled()) {
+      debugLogger.info(
+        "Calendar meeting join ignored — disabled by administrator",
+        { eventId },
+        "meeting"
+      );
+      this._onStartRefused("POLICY_MEETING_RECORDING_DISABLED", options?.startSource);
+      return;
+    }
+    const refusal = await this._meetingStartRefusal(options?.startSource);
     if (refusal) return refusal;
     this._meetingModeActive = true;
     debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
@@ -707,6 +746,7 @@ class MeetingDetectionEngine {
         folderId: meetingsFolder.id,
         event: calEvent,
         trigger,
+        startSource: options?.startSource,
       },
       options
     );

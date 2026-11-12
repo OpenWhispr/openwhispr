@@ -166,6 +166,20 @@ function createWorkspacePolicyManager({
     return cached?.managed === false && cached.requiresManagedPolicy === true;
   }
 
+  // Whether the account's last validated verdict was managed. A failed lookup
+  // carries it, so a credential that can't inherit that verdict yet (a rotated
+  // token before its binding) still fails closed. It never grants anything,
+  // so a renderer's account label is enough to read it by.
+  function accountWasManaged(accountId) {
+    const apiUrl = getApiUrl();
+    return Boolean(
+      accountId &&
+      URL.canParse(apiUrl) &&
+      readAccountPolicyCache(cachePath, { apiOrigin: new URL(apiUrl).origin, accountId })
+        ?.managed === true
+    );
+  }
+
   function errorSnapshot(identity, code, error, httpStatus) {
     const current = snapshots.get(identityKey(identity));
     return {
@@ -174,6 +188,7 @@ function createWorkspacePolicyManager({
       revision: current?.revision ?? revision,
       accountId: identity.accountId,
       authGeneration: identity.authGeneration,
+      managed: accountWasManaged(identity.accountId),
       code,
       error,
       httpStatus,
@@ -352,12 +367,14 @@ function createWorkspacePolicyManager({
     try {
       identity = captureIdentity(request ?? {});
     } catch (error) {
+      const accountId = normalizeAccountId(request?.accountId);
       return {
         success: false,
         status: "error",
         revision,
-        accountId: normalizeAccountId(request?.accountId),
+        accountId,
         authGeneration: tokenStore.getState()?.generation ?? null,
+        managed: accountWasManaged(accountId),
         code: error.code || "POLICY_UNAVAILABLE",
         error: error.message,
       };
@@ -453,7 +470,7 @@ function createWorkspacePolicyManager({
     return cached && (!managedOnly || cached.managed) ? accept(identity, cached, "cached") : null;
   }
 
-  return { getPolicy, peekPolicy, heldPolicy };
+  return { getPolicy, peekPolicy, heldPolicy, accountWasManaged };
 }
 
 // Main-process capture gate: block an explicit managed denial or an
