@@ -475,8 +475,8 @@ let isRecordingFlag = false;
 let isStartingFlag = false;
 let activeRecordingSessionId: string | null = null;
 const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator();
-// Why the last stop cancelled a start still in progress, for its teardown.
-let startCancelReason: MeetingStopReason = "user";
+// Why the first stop cancelled a start still in progress, for its teardown.
+let startCancelReason: MeetingStopReason | null = null;
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
@@ -984,6 +984,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     }
     isStartingFlag = true;
     activeRecordingSessionId = sessionId;
+    startCancelReason = null;
     const isCurrentStart = () =>
       startOperation.isCurrent() && activeRecordingSessionId === sessionId;
     let captureStarted = false;
@@ -1089,7 +1090,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         await window.electronAPI
           ?.meetingTranscriptionStop?.(
             sessionId,
-            startOperation.isCurrent() ? "error" : startCancelReason
+            startOperation.isCurrent() ? "error" : (startCancelReason ?? "user")
           )
           .catch(() => undefined);
       });
@@ -1894,7 +1895,7 @@ export async function stopRecording(
 ): Promise<StopRecordingResult> {
   const canceledStart = meetingRecordingStartCoordinator.cancelActiveStart(expectedSessionId);
   if (canceledStart) {
-    startCancelReason = reason;
+    startCancelReason ??= reason;
     isRecordingFlag = false;
     isStartingFlag = false;
     useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
