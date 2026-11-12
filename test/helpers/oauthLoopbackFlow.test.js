@@ -7,11 +7,23 @@ const Module = require("node:module");
 const loopbackModulePath = require.resolve("../../src/helpers/oauthLoopbackFlow.js");
 const originalLoad = Module._load;
 
-function loadLoopback() {
+function loadLoopback(openedUrls) {
   delete require.cache[loopbackModulePath];
   Module._load = function loadWithElectronMock(request, parent, isMain) {
     if (request === "electron") {
-      return { shell: { openExternal() {} } };
+      return {
+        shell: {
+          openExternal() {
+            throw new Error("Unexpected shell.openExternal; mock externalUrlOpener instead");
+          },
+        },
+      };
+    }
+    if (request === "./externalUrlOpener") {
+      return { openExternalUrl: async (url) => openedUrls.push(url) };
+    }
+    if (request === "child_process" || request === "node:child_process") {
+      throw new Error("Unexpected child_process import; mock externalUrlOpener instead");
     }
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -23,7 +35,8 @@ function loadLoopback() {
 }
 
 function startFlow(handleCallback = async () => ({ ok: true }), options = {}) {
-  const { runOAuthLoopbackFlow } = loadLoopback();
+  const openedUrls = [];
+  const { runOAuthLoopbackFlow } = loadLoopback(openedUrls);
   let redirectUri;
   let state;
   let authUrlCalls = 0;
@@ -52,6 +65,7 @@ function startFlow(handleCallback = async () => ({ ok: true }), options = {}) {
       getRedirectUri: () => redirectUri,
       getState: () => state,
       getAuthUrlCalls: () => authUrlCalls,
+      getOpenedUrls: () => openedUrls,
     };
   } finally {
     http.createServer = originalCreateServer;
@@ -201,8 +215,9 @@ async function parkPartialRequest(redirectUri, server) {
 }
 
 test("a callback with a code and the wrong state rejects immediately", async () => {
-  const { flow, getRedirectUri } = startFlow();
+  const { flow, getRedirectUri, getOpenedUrls } = startFlow();
   const redirectUri = await waitForListen(getRedirectUri);
+  assert.deepEqual(getOpenedUrls(), ["https://example.test/auth"]);
   const started = Date.now();
   const rejected = assert.rejects(flow, /OAuth state mismatch/);
 
