@@ -148,6 +148,7 @@ class GnomeGlobalShortcutsPortal {
     await this.unregisterKeybinding();
     this.callback = callback;
     this.keyRepeat = this.readKeyRepeat();
+    this.repeatsObserved = false;
 
     try {
       const sessionToken = this._newToken();
@@ -268,8 +269,9 @@ class GnomeGlobalShortcutsPortal {
   // its modifiers are still down. Letting go of Ctrl before D (the usual way)
   // sends nothing, so Hold never stops. The repeated Activated signals do stop
   // at that moment, so a hold that goes quiet past its next expected repeat is
-  // released. This waits until repeats have been seen once, so a GNOME that
-  // doesn't repeat them keeps waiting for Deactivated.
+  // released. This waits until the registered shortcut has repeated once, so a
+  // GNOME that doesn't repeat them, or a key that never repeats (Pause, Scroll
+  // Lock), keeps waiting for Deactivated.
   _onActivated() {
     const isRepeat = this.hold !== null;
     if (isRepeat) this.repeatsObserved = true;

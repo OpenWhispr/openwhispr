@@ -244,3 +244,28 @@ test("with key repeat off a hold waits for Deactivated", async () => {
   assert.deepEqual(phases, ["down", "down"]);
   await portal.unregisterKeybinding();
 });
+
+test("a new registration waits for its own shortcut to repeat", async () => {
+  const keyRepeat = { delayMs: 20, intervalMs: 5 };
+  const { portal, phases, emit } = await listeningPortal({ keyRepeat });
+  emit("Activated");
+  emit("Activated");
+  emit("Deactivated");
+
+  portal.init = async () => true;
+  portal.readKeyRepeat = () => keyRepeat;
+  portal._request = async (member) =>
+    member === "CreateSession"
+      ? [["session_handle", ["o", [SESSION]]]]
+      : [["shortcuts", ["a(sa{sv})", [[["dictation", []]]]]]];
+  assert.equal(
+    await portal.registerKeybinding("Pause", (_hotkey, phase) => phases.push(phase)),
+    true
+  );
+
+  // Pause doesn't auto-repeat, so a held press must not be released early.
+  emit("Activated");
+  await sleep(60);
+  assert.deepEqual(phases.slice(3), ["down"]);
+  await portal.unregisterKeybinding();
+});
