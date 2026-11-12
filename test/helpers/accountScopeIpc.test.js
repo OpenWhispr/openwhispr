@@ -303,16 +303,20 @@ function scopedDatabase(activeAccountId) {
   );
 }
 
-// Development mode keeps electron-updater out; the policy runs for real.
+// Skip native updater setup; an AppImage keeps policy checks supported on Linux.
 function createUpdater() {
   const previousEnvironment = process.env.NODE_ENV;
+  const previousAppImage = process.env.APPIMAGE;
   try {
     process.env.NODE_ENV = "development";
+    if (process.platform === "linux") process.env.APPIMAGE = "/tmp/OpenWhispr.AppImage";
     const UpdateManager = require("../../src/updater");
     return new UpdateManager({ getPolicy: (options) => fakeThis.getUpdatePolicy(options) });
   } finally {
     if (previousEnvironment === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previousEnvironment;
+    if (previousAppImage === undefined) delete process.env.APPIMAGE;
+    else process.env.APPIMAGE = previousAppImage;
   }
 }
 
