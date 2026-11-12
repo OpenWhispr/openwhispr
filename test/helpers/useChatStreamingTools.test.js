@@ -1754,3 +1754,77 @@ for (const supportsTools of [true, false]) {
     assert.equal(offeredTools[0].includes("search_notes"), supportsTools);
   });
 }
+
+test("an answer typed at another app's caret asks for plain text as the last instruction", async (t) => {
+  const { captured, reasoningService } = await renderChatStreaming(t, {
+    inferenceScope: "dictationAgent",
+    allowInteractions: true,
+  });
+  const configs = [];
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) => {
+    configs.push(config);
+    return (async function* () {
+      yield { type: "content", text: "Thanks, team!" };
+      yield { type: "done", finishReason: "stop" };
+    })();
+  });
+  await captured.sendToAI("Write a thank-you note", [], { plainTextResponse: true });
+  await captured.sendToAI("Write a thank-you note", []);
+
+  const { systemPrompt } = configs[0];
+  assert.match(
+    systemPrompt,
+    /OUTPUT FORMAT: Your answer will be inserted as plain text[^]*own line with no marker\.$/
+  );
+  assert.doesNotMatch(configs[1].systemPrompt, /OUTPUT FORMAT:/);
+});
+
+for (const [tool, onlyRead] of [
+  [null, true],
+  ["search_notes", true],
+  ["create_note", false],
+]) {
+  test(`a finished voice answer reports onlyRead ${onlyRead} after ${tool ?? "no tools"}`, async (t) => {
+    const { captured, reasoningService } = await renderChatStreaming(t, {
+      inferenceScope: "dictationAgent",
+      allowInteractions: true,
+    });
+    reasoningService.processTextStreamingCloud.mock.mockImplementation(() =>
+      (async function* () {
+        if (tool) {
+          yield { type: "tool_calls", calls: [{ id: "c1", name: tool, arguments: "{}" }] };
+          yield { type: "tool_result", callId: "c1", toolName: tool, displayText: "Done" };
+        }
+        yield { type: "content", text: "Here it is." };
+        yield { type: "done", finishReason: "stop" };
+      })()
+    );
+    const completed = [];
+    await captured.sendToAI("Do it", [], { onComplete: (result) => completed.push(result) });
+
+    assert.equal(completed.length, 1);
+    assert.equal(completed[0].content, "Here it is.");
+    assert.equal(completed[0].onlyRead, onlyRead);
+  });
+}
+
+test("an answer typed at another app's caret names nothing to connect", async (t) => {
+  const { captured, reasoningService } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent", allowInteractions: true, allowConnectors: true },
+    { subscribed: false }
+  );
+  const configs = [];
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) => {
+    configs.push(config);
+    return (async function* () {
+      yield { type: "content", text: "Monday works." };
+      yield { type: "done", finishReason: "stop" };
+    })();
+  });
+  await captured.sendToAI("Reply to this email", [], { plainTextResponse: true });
+  await captured.sendToAI("Reply to this email", []);
+
+  assert.doesNotMatch(configs[0].systemPrompt, /how they can have you send it/);
+  assert.match(configs[1].systemPrompt, /how they can have you send it/);
+});

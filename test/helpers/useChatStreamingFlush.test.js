@@ -354,7 +354,10 @@ test("paced tokens flush during the stream, rearm the timer, and persist the fin
       toolCalls: undefined,
     },
   ]);
-  assert.deepEqual(harness.delivered, harness.persisted);
+  assert.deepEqual(
+    harness.delivered,
+    harness.persisted.map((saved) => ({ ...saved, onlyRead: true }))
+  );
   await assertNoLateWrites(harness);
 });
 
@@ -459,7 +462,10 @@ for (const withContent of [true, false]) {
     assert.deepEqual(harness.persisted, [
       { assistantId: assistant.id, content: assistant.content, toolCalls },
     ]);
-    assert.deepEqual(harness.delivered, withContent ? harness.persisted : []);
+    assert.deepEqual(
+      harness.delivered,
+      withContent ? harness.persisted.map((saved) => ({ ...saved, onlyRead: true })) : []
+    );
     await assertNoLateWrites(harness);
   });
 }

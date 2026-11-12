@@ -41,6 +41,7 @@ import {
 } from "../../stores/connectorStatusStore";
 import {
   appendDictionarySuffix,
+  appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   buildMessageContext,
   getAgentSystemPrompt,
@@ -332,11 +333,15 @@ export interface SendToAIOptions {
   removedSkills?: string[];
   /** The app picked a skill for a model without tools; the surface shows its chip. */
   onSkillPicked?: (skill: { name: string; displayName: string }) => void;
+  /** The answer is typed at the user's caret in another app: ask for plain prose. */
+  plainTextResponse?: boolean;
   /** Per-request completion hook used to deliver a finished voice response. */
   onComplete?: (result: {
     assistantId: string;
     content: string;
     toolCalls?: ToolCallInfo[];
+    /** No question to the user and no tool that writes or sends: the reply is the whole result. */
+    onlyRead: boolean;
   }) => void | Promise<void>;
   /**
    * Regenerates this reply in place (same message, same saved row) instead of
@@ -869,7 +874,9 @@ export function createChatTurnEngine(
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
         getAgentSystemPrompt(offeredTools, {
-          unavailable: nameUnavailableCapabilities ? unavailable : [],
+          // An answer typed into another app carries no hint about what to connect.
+          unavailable:
+            nameUnavailableCapabilities && !options?.plainTextResponse ? unavailable : [],
           ...(toolHistory !== "none" ? { toolHistory } : {}),
           openNote: openNoteContext || undefined,
           openNoteTranscriptPreview: currentNote.transcriptPreview,
@@ -946,6 +953,7 @@ export function createChatTurnEngine(
         // pairs the suffix with an attached image.
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
       }
+      if (options?.plainTextResponse) systemPrompt = appendPlainTextResponseSuffix(systemPrompt);
       if (attachment) {
         transformLastUserMessage(history, (message) => ({
           role: "user",
@@ -1447,10 +1455,16 @@ export function createChatTurnEngine(
 
         saveReply();
         if (hasDeliverableContent) {
+          const calls = currentToolCalls();
           await options?.onComplete?.({
             assistantId,
             content: fullContent,
-            toolCalls: currentToolCalls(),
+            toolCalls: calls,
+            onlyRead: (calls ?? []).every(
+              (call) =>
+                !call.interaction &&
+                offeredTools?.some((tool) => tool.name === call.name && tool.readOnly)
+            ),
           });
         }
       } catch (error) {
