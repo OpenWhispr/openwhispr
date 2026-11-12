@@ -272,6 +272,7 @@ class SelectionManager {
         this.sessions.set(sessionId, {
           kind: "caret",
           target: capture.target,
+          windowTitle: await this._macWindowTitle(capture.target),
           expiresAt: this.now() + SESSION_TTL_MS,
         });
         return { status: "editable", sessionId };
@@ -382,6 +383,20 @@ class SelectionManager {
           probeCode: current.code ?? null,
         });
       }
+      // A macOS target is the app, so another of its windows (a document, a
+      // tab) would pass the probe; and the agent window, a non-activating
+      // panel, can hold the keys while the app stays in front, so ⌘V would
+      // land there.
+      if (
+        (await this._macWindowTitle(session.target)) !== session.windowTitle ||
+        options.webContents?.isFocused()
+      ) {
+        return this._declineAssistantPaste("target_changed", {
+          sessionFound: true,
+          sessionKind: "caret",
+          probeStatus: "editable",
+        });
+      }
 
       try {
         const pasteResult = await this.clipboardManager._pasteText(text, {
@@ -403,6 +418,12 @@ class SelectionManager {
         return { success: false, code: "paste_failed", error: error.message };
       }
     });
+  }
+
+  // The focused window's title for a macOS target; undefined for other targets.
+  async _macWindowTitle(target) {
+    if (target?.kind !== "mac-pid") return undefined;
+    return (await this.textEditMonitor.getAppContext?.(target.pid))?.windowTitle;
   }
 
   // One line per refusal: the renderer keeps the answer in the window either

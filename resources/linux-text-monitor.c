@@ -11,7 +11,7 @@
  *   CHANGED:<text>        - Text field value after a change
  *   CHANGED_B64:<base64>  - Text field value after a change (multiline)
  *   EDITABLE              - Focused element in the active window of <pid> is
- *                           writable with no live selection (--probe-editable <pid>)
+ *                           writable and empty (--probe-editable <pid>)
  *   NOT_EDITABLE          - Focused element is not safely writable
  *   NO_ELEMENT            - Could not get focused element (with --probe-editable,
  *                           also a missing or invalid pid, or no accessible app for it)
@@ -328,6 +328,19 @@ int main(int argc, char **argv) {
                         editable = 0;
                     }
                     if (selection) g_free(selection);
+                }
+                /* An answer is typed only into an empty field, never into
+                 * existing text; whitespace alone counts as empty. */
+                if (editable) {
+                    GError *text_error = NULL;
+                    gchar *contents = atspi_text_get_text(probe_text, 0, -1, &text_error);
+                    if (text_error) {
+                        g_error_free(text_error);
+                        editable = 0;
+                    } else {
+                        editable = contents && *g_strstrip(contents) == '\0';
+                    }
+                    g_free(contents);
                 }
                 g_object_unref(probe_text);
             } else {

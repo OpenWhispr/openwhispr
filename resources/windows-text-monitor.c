@@ -10,7 +10,7 @@
  *   INITIAL_VALUE_B64:<base64> - Initial text field value (multiline)
  *   CHANGED:<text>        - Text field value after a change
  *   CHANGED_B64:<base64>  - Text field value after a change (multiline)
- *   EDITABLE              - Focused element is writable with no live selection (--probe-editable)
+ *   EDITABLE              - Focused element is writable and empty (--probe-editable)
  *   NOT_EDITABLE          - Focused element is not safely writable
  *   NO_ELEMENT            - Could not get focused element
  *   NO_VALUE              - Focused element has no text value
@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <wctype.h>
 
 #define COBJMACROS
 #include <windows.h>
@@ -117,6 +118,15 @@ static BSTR read_text_pattern_value(IUIAutomationTextPattern *tp) {
     IUIAutomationTextRange_Release(range);
     if (FAILED(hr)) { SysFreeString(text); return NULL; }
     return text;
+}
+
+/* An answer is typed only into an empty field, never into existing text;
+ * whitespace alone counts as empty. */
+static int is_blank(const WCHAR *text) {
+    for (; text && *text; text++) {
+        if (!iswspace(*text)) return 0;
+    }
+    return 1;
 }
 
 static int text_pattern_is_writable(IUIAutomationTextPattern *tp) {
@@ -247,9 +257,13 @@ int main(int argc, char **argv) {
             valuePattern,
             &isReadOnly
         );
+        BSTR value = NULL;
         int editable = isEnabled && isKeyboardFocusable && !isPassword &&
             SUCCEEDED(readOnlyResult) && !isReadOnly &&
+            SUCCEEDED(IUIAutomationValuePattern_get_CurrentValue(valuePattern, &value)) &&
+            is_blank(value) &&
             !focused_has_selection(focused);
+        SysFreeString(value);
         printf("%s\n", editable ? "EDITABLE" : "NOT_EDITABLE");
         fflush(stdout);
         IUIAutomationValuePattern_Release(valuePattern);
@@ -285,11 +299,14 @@ int main(int argc, char **argv) {
             if (probe_editable) {
                 CONTROLTYPEID controlType = 0;
                 IUIAutomationElement_get_CurrentControlType(focused, &controlType);
+                BSTR text = read_text_pattern_value(textPattern);
                 int editable = isEnabled && isKeyboardFocusable && !isPassword &&
                     text_pattern_is_writable(textPattern) &&
+                    text && is_blank(text) &&
                     !text_pattern_has_selection(textPattern) &&
                     (controlType == UIA_EditControlTypeId ||
                      controlType == UIA_DocumentControlTypeId);
+                SysFreeString(text);
                 printf("%s\n", editable ? "EDITABLE" : "NOT_EDITABLE");
                 fflush(stdout);
                 IUIAutomationTextPattern_Release(textPattern);

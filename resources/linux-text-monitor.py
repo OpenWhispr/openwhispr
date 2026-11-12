@@ -12,7 +12,7 @@ Protocol (stdout):
   CHANGED:<text>        - Text field value after a change
   CHANGED_B64:<base64>  - Text field value after a change (multiline)
   EDITABLE              - Focused element in the active window of <pid> is
-                          writable with no live selection (--probe-editable <pid>)
+                          writable and empty (--probe-editable <pid>)
   NOT_EDITABLE          - Focused element is not safely writable
   NO_ELEMENT            - Could not get focused element (with --probe-editable,
                           also a missing or invalid pid, or no accessible app for it)
@@ -198,6 +198,10 @@ def main():
                         if selection and selection.end_offset > selection.start_offset:
                             editable = False
                             break
+                    # An answer is typed only into an empty field, never into
+                    # existing text; whitespace alone counts as empty.
+                    if editable and Atspi.Text.get_text(text_iface, 0, -1).strip():
+                        editable = False
                 else:
                     editable = False
             except Exception:

@@ -1808,6 +1808,41 @@ for (const [tool, onlyRead] of [
   });
 }
 
+// ask_user is a read-only tool, so only its interaction keeps the turn from
+// counting as one that only read.
+test("a finished voice answer after asking the user reports onlyRead false", async (t) => {
+  const { captured, reasoningService, vite } = await renderChatStreaming(t, {
+    inferenceScope: "dictationAgent",
+    allowInteractions: true,
+  });
+  const interactions = await vite.ssrLoadModule("/stores/agentInteractionStore.ts");
+  const args = JSON.stringify({
+    questions: [{ id: "tone", kind: "text", prompt: "Which tone?" }],
+  });
+  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) =>
+    (async function* () {
+      yield { type: "tool_calls", calls: [{ id: "c1", name: "ask_user", arguments: args }] };
+      const running = config.executeToolCall("ask_user", args, "c1");
+      let entry;
+      while (
+        !(entry = Object.values(interactions.useAgentInteractionStore.getState().entries)[0])
+      ) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      interactions.cancelInteraction(entry.key);
+      await running;
+      yield { type: "tool_result", callId: "c1", toolName: "ask_user", displayText: "Cancelled" };
+      yield { type: "content", text: "Here it is." };
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  const completed = [];
+  await captured.sendToAI("Do it", [], { onComplete: (result) => completed.push(result) });
+
+  assert.equal(completed.length, 1);
+  assert.equal(completed[0].onlyRead, false);
+});
+
 test("an answer typed at another app's caret names nothing to connect", async (t) => {
   const { captured, reasoningService } = await renderChatStreaming(
     t,

@@ -17,10 +17,8 @@ SELECTION EDITING MODE:
 - Never repeat the assistant wake name or spoken command in the output.`;
 
 // Ends on the full nonce: models can drop decorative closing underscores.
-const COMPLETION_MARKER_STEM = "__OPENWHISPR_SELECTION_COMPLETE_";
-
 export function createSelectionCompletionMarker() {
-  return `${COMPLETION_MARKER_STEM}${crypto.randomUUID()}`;
+  return `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}`;
 }
 
 export function buildSelectionEditSystemPrompt(basePrompt, completionMarker = "") {
@@ -141,7 +139,8 @@ export function getSelectionCaptureDisposition(capture) {
 // markerOptional: OpenWhispr Cloud already refuses a rewrite cut off at the
 // length limit (OUTPUT_TRUNCATED) or left blank, so a Cloud answer that leaves
 // off the marker is still complete; its vision model often does. Any trace of
-// a marker must still be the exact one at the end, or it would be pasted.
+// a marker, damaged or decorated, must still be the exact one at the end, or it
+// would be pasted.
 export function extractSelectionEditReplacement(
   result,
   completionMarker,
@@ -149,7 +148,7 @@ export function extractSelectionEditReplacement(
 ) {
   if (typeof result !== "string") throw invalidResponse();
   const marked = Boolean(completionMarker) && result.endsWith(completionMarker);
-  if (completionMarker && !marked && (!markerOptional || result.includes(COMPLETION_MARKER_STEM))) {
+  if (completionMarker && !marked && (!markerOptional || result.includes("OPENWHISPR_SELECTION"))) {
     throw invalidResponse();
   }
 

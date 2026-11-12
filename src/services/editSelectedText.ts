@@ -132,7 +132,9 @@ export async function editSelectedText(
     return local
       ? extractLocalSelectionEditReplacement(result)
       : extractSelectionEditReplacement(result, marker, {
-          markerOptional: provider === "openwhispr",
+          // Only Cloud's vision chain leaves the marker off; text-only Cloud
+          // keeps it, so an unmarked answer there is prose, not a rewrite.
+          markerOptional: provider === "openwhispr" && Boolean(config.screenContext),
         });
   } finally {
     signal.removeEventListener("abort", cancel);

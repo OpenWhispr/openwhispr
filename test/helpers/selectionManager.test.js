@@ -176,6 +176,40 @@ test("a terminal-flagged target is refused as a caret destination without probin
   assert.equal(probes.length, 1);
 });
 
+// The Windows copy reports only the HWND; the press-time probe's exe name and
+// terminal flag must survive onto the target the caret check and session see.
+test("a Windows caret read keeps the press-time identity the copy doesn't report", async () => {
+  const probes = [];
+  const manager = new SelectionManager({
+    clipboardManager: {
+      resolveWindowsFastPasteBinary: () => "windows-fast-paste.exe",
+      isTerminalSignature: (signature) => signature.toLowerCase().includes("terminal"),
+    },
+    textEditMonitor: {
+      isFocusedEditable: async (target) => {
+        probes.push(target);
+        return "editable";
+      },
+    },
+    platform: "win32",
+    now: () => 1000,
+  });
+  manager._captureViaClipboard = async () => ({
+    status: "none",
+    target: { kind: "win-hwnd", id: "1A" },
+  });
+  const read = (expectedTarget) =>
+    manager._readWindowsSelection(expectedTarget, { probeEditable: true });
+
+  const terminal = await read({ kind: "win-hwnd", id: "1A", isTerminal: true });
+  assert.equal(terminal.status, "none");
+  assert.equal(probes.length, 0);
+
+  const editor = await read({ kind: "win-hwnd", id: "1A", exeName: "notepad.exe" });
+  assert.equal(editor.status, "editable");
+  assert.equal(editor.target.exeName, "notepad.exe");
+});
+
 // AT-SPI targets carry only a pid — no window class or exe name for the
 // signature check — so the executable name must be resolved before a Wayland
 // terminal's empty prompt can read as a writable caret.
@@ -1389,6 +1423,42 @@ test("does not paste an assistant response after the captured caret target chang
     success: false,
     code: "target_changed",
   });
+  assert.equal(pastes.length, 0);
+});
+
+test("an answer is not pasted into another window of the same macOS app", async () => {
+  const { manager, pastes } = makeHarness({
+    selections: [
+      { state: "none", editable: true },
+      { state: "none", editable: true },
+    ],
+  });
+  const titles = ["a.txt", "b.txt"];
+  manager.textEditMonitor.getAppContext = async () => ({ windowTitle: titles.shift() });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+
+  assert.deepEqual(await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response"), {
+    success: false,
+    code: "target_changed",
+  });
+  assert.equal(pastes.length, 0);
+});
+
+test("an answer is not pasted while the agent window holds the keys", async () => {
+  const { manager, pastes } = makeHarness({
+    selections: [
+      { state: "none", editable: true },
+      { state: "none", editable: true },
+    ],
+  });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+
+  assert.deepEqual(
+    await manager.pasteAtCapturedTarget(capture.sessionId, "Agent response", {
+      webContents: { isFocused: () => true },
+    }),
+    { success: false, code: "target_changed" }
+  );
   assert.equal(pastes.length, 0);
 });
 

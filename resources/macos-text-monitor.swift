@@ -42,7 +42,7 @@ func elementRole(_ element: AXUIElement) -> String? {
     return roleValue as? String
 }
 
-func isEditableTextElement(_ element: AXUIElement) -> Bool {
+func isEmptyEditableTextElement(_ element: AXUIElement) -> Bool {
     // A live selection means an editable verdict would let generated text
     // paste over the user's highlighted text (--editable-target mode probes
     // an element whose selection state the caller could not read itself).
@@ -75,6 +75,16 @@ func isEditableTextElement(_ element: AXUIElement) -> Bool {
 
     guard let role = elementRole(element),
           ["AXTextField", "AXTextArea", "AXComboBox"].contains(role)
+    else {
+        return false
+    }
+
+    // An answer is typed only into an empty field, never into existing text;
+    // whitespace alone counts as empty.
+    var value: AnyObject?
+    guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
+          let text = value as? String,
+          text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     else {
         return false
     }
@@ -271,7 +281,7 @@ if editableTargetMode {
         writeOutput("UNKNOWN")
         exit(0)
     }
-    if isEditableTextElement(element) {
+    if isEmptyEditableTextElement(element) {
         writeOutput("EDITABLE")
     } else {
         writeOutput(elementRole(element) == "AXWindow" ? "UNKNOWN" : "NOT_EDITABLE")
@@ -297,7 +307,7 @@ if selectionReadMode {
 
     if selectionResult == .success, let selection = selectionValue as? String {
         if selection.isEmpty {
-            writeOutput(isEditableTextElement(resolvedElement) ? "EDITABLE_NONE:" : "NONE:")
+            writeOutput(isEmptyEditableTextElement(resolvedElement) ? "EDITABLE_NONE:" : "NONE:")
         } else {
             writeTextOutput("SELECTED", selection)
         }

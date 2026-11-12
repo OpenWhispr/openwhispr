@@ -68,18 +68,22 @@ test("the completion marker's instruction stays last, after the screen-context b
   assert.ok(withScreen.indexOf("SCREEN CONTEXT:") < withScreen.indexOf("SELECTION EDITING MODE:"));
 });
 
-test("a Cloud edit without the marker is applied; the same answer over BYOK is not", async (t) => {
+test("a Cloud screenshot edit without the marker is applied; text-only or BYOK is not", async (t) => {
   const cloud = await editor(t, { dictationAgentMode: "openwhispr", isSignedIn: true });
   t.mock.method(cloud.service, "processText", async () => "Revised paragraph.");
   const signal = new AbortController().signal;
+  const attachment = { image: "fixture-image", mediaType: "image/jpeg" };
   assert.equal(
-    await cloud.editSelectedText("Elaborate this", "Short.", { signal }),
+    await cloud.editSelectedText("Elaborate this", "Short.", { attachment, signal }),
     "Revised paragraph."
   );
+  await assert.rejects(cloud.editSelectedText("Elaborate this", "Short.", { signal }), {
+    code: "SELECTION_EDIT_INVALID_RESPONSE",
+  });
 
   const byok = await editor(t);
   t.mock.method(byok.service, "processText", async () => "Revised paragraph.");
-  await assert.rejects(byok.editSelectedText("Elaborate this", "Short.", { signal }), {
+  await assert.rejects(byok.editSelectedText("Elaborate this", "Short.", { attachment, signal }), {
     code: "SELECTION_EDIT_INVALID_RESPONSE",
   });
 });
