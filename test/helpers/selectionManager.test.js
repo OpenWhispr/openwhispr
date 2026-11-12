@@ -1106,7 +1106,6 @@ test("a terminal target reads as no selection", async () => {
   };
   const manager = new SelectionManager({
     clipboardManager,
-    textEditMonitor: { isFocusedEditable: async () => "editable" },
     platform: "linux",
     now: () => 1000,
   });

@@ -310,9 +310,9 @@ class TextEditMonitor extends EventEmitter {
 
   // Resolves "editable" | "not_editable" | "unknown". "unknown" is macOS-only:
   // the dormant-Chromium signature, where accessibility cannot inspect the
-  // focused field at all. The default timeout reuses SELECTED_TEXT_TIMEOUT_MS
-  // because a dormant tree's verdict only arrives after the same retry ladder.
-  async isFocusedEditable(target, timeoutMs = SELECTED_TEXT_TIMEOUT_MS) {
+  // focused field at all. The timeout reuses SELECTED_TEXT_TIMEOUT_MS because
+  // a dormant tree's verdict only arrives after the same retry ladder.
+  async isFocusedEditable(target) {
     const resolved = this.resolveBinary();
     if (!resolved) return "not_editable";
 
@@ -352,7 +352,7 @@ class TextEditMonitor extends EventEmitter {
         } catch {}
         resolve(verdict);
       };
-      const timer = setTimeout(() => settle("not_editable"), timeoutMs);
+      const timer = setTimeout(() => settle("not_editable"), SELECTED_TEXT_TIMEOUT_MS);
       child.stdin.on("error", () => {});
       child.stdin.end();
       child.stdout.on("data", (data) => {
