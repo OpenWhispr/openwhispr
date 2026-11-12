@@ -112,9 +112,8 @@ function normalizeDeviceValues(input) {
       throw new Error("Invalid device boolean");
   }
   for (const key of ["AuditLogPath", "WipeLocalDataOnLaunch"]) {
-    if (values[key] !== undefined && (typeof values[key] !== "string" || !values[key].trim())) {
+    if (values[key] !== undefined && (typeof values[key] !== "string" || !values[key].trim()))
       throw new Error("Invalid device string");
-    }
   }
   const hasPolicy = Object.hasOwn(values, "Policy");
   let policy = defaultDevicePolicy();
@@ -137,7 +136,9 @@ function normalizeDeviceValues(input) {
     policy,
     requireSignIn: values.RequireSignIn ?? hasPolicy,
     localOnly: values.RequireSignIn === false,
+    // Where the meeting audit log is written (meetingAuditLog.js).
     auditLogPath: values.AuditLogPath ?? null,
+    // The offboarding wipe's token and whether it takes models (localDataWipe.js).
     wipeLocalDataOnLaunch: values.WipeLocalDataOnLaunch ?? null,
     wipeLocalDataIncludesModels: values.WipeLocalDataIncludesModels ?? false,
   };
@@ -279,7 +280,7 @@ async function hasPolicyEvidence({
     files.map((file) =>
       fileSystem.lstat(file).then(
         () => true,
-        () => false
+        (error) => platform === "linux" && ["EACCES", "EPERM"].includes(error.code)
       )
     )
   );
