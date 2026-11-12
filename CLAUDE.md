@@ -107,6 +107,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Converts Electron hotkey format to GNOME keysym format
   - Only active on Linux + Wayland + GNOME desktop
   - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
+  - Hold goes through the Global Shortcuts portal (`gnomeGlobalShortcutsPortal.js`). Mutter sends `Deactivated` only when the shortcut's own key is released while its modifiers are still down, so letting go of a modifier first sends nothing. It does repeat `Activated` at the user's key-repeat rate (`org.gnome.desktop.peripherals.keyboard`) while the whole shortcut is held, so a hold that goes quiet for its next expected repeat plus 300 ms is released. That only applies once repeats have been seen in the session, and never with key repeat off, so a GNOME that doesn't repeat still waits for `Deactivated`
 - **hyprlandShortcut.js**: Hyprland Wayland global shortcut integration
   - Uses D-Bus service to receive hotkey toggle commands (same `com.openwhispr.App` service)
   - Registers shortcuts via `hyprctl keyword bind` (runtime keybinding)
