@@ -401,6 +401,7 @@ function YourUsage({
     () =>
       subscribeToInsightsCacheInvalidation((scope) => {
         if (scope !== "all") return;
+        requestIdRef.current += 1;
         setSummary(null);
         setCacheInvalidationRevision((revision) => revision + 1);
       }),

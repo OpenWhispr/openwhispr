@@ -53,8 +53,13 @@ async function loadUsage(
   return { vite, YourUsage };
 }
 
-for (const unmount of [false, true]) {
-  test(`a late summary cannot restore cleared history ${unmount ? "after unmount" : "while mounted"}`, async (t) => {
+for (const { unmount, rejectionTicks } of [
+  { unmount: false },
+  { unmount: true },
+  { unmount: false, rejectionTicks: 3 },
+  { unmount: false, rejectionTicks: 4 },
+]) {
+  test(`a late summary cannot restore cleared history ${unmount ? "after unmount" : rejectionTicks ? `during rejection at tick ${rejectionTicks}` : "while mounted"}`, async (t) => {
     let root;
     t.after(() => act(() => root?.unmount()));
     const pending = Promise.withResolvers();
@@ -70,11 +75,17 @@ for (const unmount of [false, true]) {
     };
     const empty = { ...summary, totalWords: 0, totalDictations: 0 };
     let reads = 0;
+    let localReads = 0;
+    const replacementLocal = Promise.withResolvers();
     installBrowserGlobals(t, {
       window: {
         clearInterval() {},
         electronAPI: {
-          getAnalyticsSummary: async () => empty,
+          getAnalyticsSummary: async () => {
+            localReads += 1;
+            if (!rejectionTicks) return empty;
+            return localReads === 1 ? summary : replacementLocal.promise;
+          },
           onAnalyticsChanged: () => () => {},
           cloudApiRequest: async () =>
             ++reads === 1 ? pending.promise : { success: true, data: empty },
@@ -98,6 +109,18 @@ for (const unmount of [false, true]) {
       )
     );
     assert.equal(reads, 1);
+    if (rejectionTicks) {
+      await act(async () => {
+        pending.reject(new Error("Network failed as history was cleared"));
+        for (let tick = 0; tick < rejectionTicks; tick += 1) await Promise.resolve();
+        cache.clearInsightsCache();
+      });
+      assert.equal(localReads, 2, "invalidation starts a replacement local read");
+      assert.ok(!container.textContent.includes("999"), "the old local fallback stays retired");
+      await act(async () => replacementLocal.resolve(empty));
+      assert.equal(container.textContent, "empty");
+      return;
+    }
     if (unmount) {
       await act(() => root.unmount());
       root = null;
