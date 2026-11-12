@@ -2,8 +2,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   canSelfServeEnterprise,
+  businessDowngradeAction,
   canUpgradeWorkspaceToEnterprise,
+  enterpriseManageAction,
   enterpriseTileCta,
+  entitledWorkspacePlans,
   hasActiveWorkspaceSubscription,
   hasSharedDictionaryPlan,
   hasSubscription,
@@ -133,6 +136,80 @@ test("enterpriseTileCta: eligible owners get the dialog, first-timers get create
   });
 });
 
+test("entitledWorkspacePlans: the paid plans of entitled workspaces only", () => {
+  assert.deepEqual(
+    [
+      ...entitledWorkspacePlans([
+        workspace({ plan: "enterprise" }),
+        workspace({ plan: "enterprise", status: "trialing" }),
+        workspace({ plan: "business", status: "canceled" }),
+        workspace({ plan: "free" }),
+      ]),
+    ],
+    ["enterprise"]
+  );
+  assert.equal(entitledWorkspacePlans([]).size, 0);
+});
+
+test("enterpriseManageAction: Stripe for a Stripe-billed owner, console for owners and admins, nothing for members", () => {
+  const ent = (id, role, overrides = {}) =>
+    workspace({ id, role, plan: "enterprise", status: "active", ...overrides });
+
+  assert.deepEqual(
+    enterpriseManageAction([ent("a", "owner", { stripe_subscription_id: "sub_1" })], null),
+    {
+      kind: "stripePortal",
+      workspaceId: "a",
+    }
+  );
+  // A provisioned plan has no Stripe portal: the owner manages it in the console.
+  assert.deepEqual(enterpriseManageAction([ent("a", "owner")], null), { kind: "console" });
+  assert.deepEqual(
+    enterpriseManageAction([ent("a", "admin", { stripe_subscription_id: "sub_1" })], null),
+    {
+      kind: "console",
+    }
+  );
+  assert.equal(enterpriseManageAction([ent("a", "member")], null), null);
+  // A lapsed Enterprise plan or a Business plan has nothing to manage here.
+  assert.equal(enterpriseManageAction([ent("a", "owner", { status: "canceled" })], null), null);
+  assert.equal(enterpriseManageAction([workspace({ id: "a", plan: "business" })], null), null);
+  // The active workspace decides first.
+  assert.deepEqual(
+    enterpriseManageAction(
+      [ent("a", "owner", { stripe_subscription_id: "sub_1" }), ent("b", "admin")],
+      "b"
+    ),
+    { kind: "console" }
+  );
+});
+
+test("businessDowngradeAction: Stripe for a Stripe-billed Enterprise owner, sales for provisioned, nothing otherwise", () => {
+  const ent = (id, role, overrides = {}) =>
+    workspace({ id, role, plan: "enterprise", status: "active", ...overrides });
+
+  assert.deepEqual(
+    businessDowngradeAction(
+      [ent("a", "owner"), ent("b", "owner", { stripe_subscription_id: "sub_1" })],
+      "a"
+    ),
+    { kind: "contactSales" }
+  );
+  assert.deepEqual(businessDowngradeAction([ent("a", "owner")], null), { kind: "contactSales" });
+  assert.equal(
+    businessDowngradeAction([ent("a", "admin", { stripe_subscription_id: "sub_1" })], null),
+    null
+  );
+  assert.equal(
+    businessDowngradeAction(
+      [workspace({ id: "a", plan: "business", stripe_subscription_id: "sub_1" })],
+      null
+    ),
+    null
+  );
+  assert.equal(businessDowngradeAction([], null), null);
+});
+
 test("hasSharedDictionaryPlan: Business or Enterprise while entitled, nothing else", () => {
   for (const plan of ["business", "enterprise"]) {
     assert.equal(hasSharedDictionaryPlan({ plan, status: "active" }), true);
@@ -200,5 +277,55 @@ test("an owner of a manually provisioned plan stays sales-led", () => {
   assert.deepEqual(enterpriseTileCta([{ id: "a", ...manual }], null), {
     action: "contactSales",
     ownerName: null,
+  });
+});
+
+test("businessDowngradeAction: active eligible billing workspace wins before billing method", () => {
+  const provisioned = workspace({ id: "provisioned", plan: "enterprise" });
+  const stripe = workspace({ id: "stripe", plan: "enterprise", stripe_subscription_id: "sub_1" });
+  const workspaces = [provisioned, stripe];
+  assert.deepEqual(businessDowngradeAction(workspaces, "provisioned"), { kind: "contactSales" });
+  assert.deepEqual(businessDowngradeAction(workspaces, "stripe"), {
+    kind: "stripePortal",
+    workspaceId: "stripe",
+  });
+  for (const activeWorkspaceId of [null, "missing"]) {
+    assert.deepEqual(businessDowngradeAction(workspaces, activeWorkspaceId), {
+      kind: "contactSales",
+    });
+  }
+});
+
+test("businessDowngradeAction: skips ineligible active workspaces and respects billing capabilities", () => {
+  const fallback = workspace({ id: "fallback", plan: "enterprise" });
+  for (const overrides of [
+    { status: "past_due" },
+    { status: "canceled" },
+    { plan: "business" },
+    { role: "member" },
+    { capabilities: { manage_billing: false } },
+  ]) {
+    const active = workspace({
+      id: "active",
+      plan: "enterprise",
+      stripe_subscription_id: "sub_1",
+      ...overrides,
+    });
+    assert.deepEqual(businessDowngradeAction([active, fallback], "active"), {
+      kind: "contactSales",
+    });
+    assert.equal(businessDowngradeAction([active], "active"), null);
+  }
+  const delegated = workspace({
+    id: "delegated",
+    plan: "enterprise",
+    role: "member",
+    status: "trialing",
+    capabilities: { manage_billing: true },
+    stripe_subscription_id: "sub_delegated",
+  });
+  assert.deepEqual(businessDowngradeAction([fallback, delegated], "delegated"), {
+    kind: "stripePortal",
+    workspaceId: "delegated",
   });
 });

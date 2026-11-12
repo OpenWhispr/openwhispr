@@ -2290,6 +2290,7 @@
         "nextInvoice": "Next invoice",
         "manageStripe": "Manage in Stripe",
         "startSubscription": "Start subscription",
+        "provisionedPlan": "Set up by OpenWhispr. Contact sales to change the plan or seats.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -2570,6 +2571,9 @@
           "askOwner": "Ask {{name}} to upgrade your workspace."
         },
         "currentPlan": "Current plan",
+        "yourPersonalPlan": "Your personal plan",
+        "yourWorkspacePlan": "Your workspace's plan",
+        "manage": "Manage",
         "coveredByWorkspace": "Included with your workspace plan",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",

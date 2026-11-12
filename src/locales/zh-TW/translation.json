@@ -1832,6 +1832,9 @@
           "askOwner": "請 {{name}} 升級您的工作區。"
         },
         "currentPlan": "目前方案",
+        "yourPersonalPlan": "你的個人方案",
+        "yourWorkspacePlan": "你的工作區方案",
+        "manage": "管理",
         "coveredByWorkspace": "已包含在您的工作區方案中",
         "upgrade": "升級",
         "downgrade": "降級",
@@ -3029,6 +3032,7 @@
         "nextInvoice": "下期帳單",
         "manageStripe": "在 Stripe 中管理",
         "startSubscription": "開始訂閱",
+        "provisionedPlan": "由 OpenWhispr 設定。如需變更方案或席位，請聯絡銷售團隊。",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",

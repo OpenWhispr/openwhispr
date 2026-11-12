@@ -29,6 +29,20 @@ export function hasActiveWorkspaceSubscription(
   return PAID_PLANS.has(workspace.plan) && ENTITLED_STATUSES.has(workspace.status);
 }
 
+/**
+ * The paid plans the user's workspaces are currently on, so the Plans grid can
+ * mark the tiers a workspace provides, not only the personal plan.
+ */
+export function entitledWorkspacePlans(
+  workspaces: Array<Pick<Workspace, "plan" | "status">>
+): Set<string> {
+  return new Set(
+    workspaces
+      .filter((workspace) => hasActiveWorkspaceSubscription(workspace))
+      .map((workspace) => workspace.plan)
+  );
+}
+
 /** The shared team dictionary is a Business feature: Business or Enterprise, currently entitled. */
 export function hasSharedDictionaryPlan(
   workspace: Pick<Workspace, "plan" | "status"> | null | undefined
@@ -62,6 +76,64 @@ export function isEnterpriseConsoleAvailable(
     ENTITLED_STATUSES.has(workspace.status) &&
     workspaceCan(workspace, "manage_settings")
   );
+}
+
+/** Where a Plans grid button for a workspace's plan leads. */
+export type WorkspacePlanAction =
+  { kind: "stripePortal"; workspaceId: string } | { kind: "console" } | { kind: "contactSales" };
+
+type PlanCardWorkspace = Pick<Workspace, "id"> & WorkspaceBillingState;
+
+/** Entitled Enterprise workspaces, the active one first. */
+function entitledEnterpriseWorkspaces(
+  workspaces: PlanCardWorkspace[],
+  activeWorkspaceId: string | null
+): PlanCardWorkspace[] {
+  return workspaces
+    .filter(
+      (workspace) => workspace.plan === "enterprise" && hasActiveWorkspaceSubscription(workspace)
+    )
+    .sort((a, b) => Number(b.id === activeWorkspaceId) - Number(a.id === activeWorkspaceId));
+}
+
+/** The Stripe portal changes the plan only for the billing owner of a Stripe-billed plan. */
+function billsThroughStripe(workspace: PlanCardWorkspace): boolean {
+  return workspaceCan(workspace, "manage_billing") && Boolean(workspace.stripe_subscription_id);
+}
+
+/**
+ * The Enterprise card's Manage button: Stripe billing for the billing owner of
+ * a Stripe-billed plan, the admin console for owners and admins otherwise
+ * (a provisioned plan has no Stripe portal), nothing for members.
+ */
+export function enterpriseManageAction(
+  workspaces: PlanCardWorkspace[],
+  activeWorkspaceId: string | null
+): WorkspacePlanAction | null {
+  for (const workspace of entitledEnterpriseWorkspaces(workspaces, activeWorkspaceId)) {
+    if (billsThroughStripe(workspace)) return { kind: "stripePortal", workspaceId: workspace.id };
+    if (isEnterpriseConsoleAvailable(workspace)) return { kind: "console" };
+  }
+  return null;
+}
+
+/**
+ * The Business card's button for someone on Enterprise: Downgrade through the
+ * Stripe portal when they bill a Stripe-billed Enterprise plan, contact sales
+ * when they bill a provisioned plan, nothing when someone else bills.
+ * The active eligible billing workspace takes priority over the billing method.
+ */
+export function businessDowngradeAction(
+  workspaces: PlanCardWorkspace[],
+  activeWorkspaceId: string | null
+): WorkspacePlanAction | null {
+  const workspace = entitledEnterpriseWorkspaces(workspaces, activeWorkspaceId).find((workspace) =>
+    workspaceCan(workspace, "manage_billing")
+  );
+  if (!workspace) return null;
+  return billsThroughStripe(workspace)
+    ? { kind: "stripePortal", workspaceId: workspace.id }
+    : { kind: "contactSales" };
 }
 
 /**

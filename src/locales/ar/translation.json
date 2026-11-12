@@ -4746,6 +4746,7 @@
         "nextInvoice": "الفاتورة القادمة",
         "manageStripe": "إدارة في Stripe",
         "startSubscription": "بدء الاشتراك",
+        "provisionedPlan": "تم إعدادها بواسطة OpenWhispr. تواصل مع فريق المبيعات لتغيير الخطة أو المقاعد.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -5058,6 +5059,9 @@
           "askOwner": "اطلب من {{name}} ترقية مساحة العمل الخاصة بك."
         },
         "currentPlan": "الخطة الحالية",
+        "yourPersonalPlan": "خطتك الشخصية",
+        "yourWorkspacePlan": "خطة مساحة العمل الخاصة بك",
+        "manage": "إدارة",
         "coveredByWorkspace": "مضمنة في خطة مساحة العمل الخاصة بك",
         "upgrade": "ترقية",
         "downgrade": "تخفيض الخطة",

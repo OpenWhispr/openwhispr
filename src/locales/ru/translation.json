@@ -1836,6 +1836,9 @@
           "askOwner": "Попросите {{name}} обновить план вашего рабочего пространства."
         },
         "currentPlan": "Текущий тариф",
+        "yourPersonalPlan": "Ваш личный тариф",
+        "yourWorkspacePlan": "Тариф вашего рабочего пространства",
+        "manage": "Управлять",
         "coveredByWorkspace": "Включено в тариф вашего рабочего пространства",
         "upgrade": "Улучшить план",
         "downgrade": "Понизить план",
@@ -3107,6 +3110,7 @@
         "nextInvoice": "Следующий счёт",
         "manageStripe": "Управлять в Stripe",
         "startSubscription": "Оформить подписку",
+        "provisionedPlan": "Настроен OpenWhispr. Чтобы изменить тариф или число мест, свяжитесь с отделом продаж.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",

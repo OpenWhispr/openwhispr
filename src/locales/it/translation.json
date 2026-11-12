@@ -1832,6 +1832,9 @@
           "askOwner": "Chiedi a {{name}} di eseguire l'upgrade del tuo spazio di lavoro."
         },
         "currentPlan": "Piano attuale",
+        "yourPersonalPlan": "Il tuo piano personale",
+        "yourWorkspacePlan": "Il piano del tuo workspace",
+        "manage": "Gestisci",
         "coveredByWorkspace": "Incluso nel piano della tua area di lavoro",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",
@@ -3029,6 +3032,7 @@
         "nextInvoice": "Prossima fattura",
         "manageStripe": "Gestisci in Stripe",
         "startSubscription": "Avvia abbonamento",
+        "provisionedPlan": "Configurato da OpenWhispr. Contatta le vendite per modificare il piano o i posti.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",

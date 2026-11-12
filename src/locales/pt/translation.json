@@ -1811,6 +1811,9 @@
           "askOwner": "Peça a {{name}} para fazer o upgrade do seu workspace."
         },
         "currentPlan": "Plano atual",
+        "yourPersonalPlan": "Seu plano pessoal",
+        "yourWorkspacePlan": "O plano do seu espaço de trabalho",
+        "manage": "Gerenciar",
         "coveredByWorkspace": "Incluído no plano do seu workspace",
         "upgrade": "Fazer upgrade",
         "downgrade": "Fazer downgrade",
@@ -3008,6 +3011,7 @@
         "nextInvoice": "Próxima fatura",
         "manageStripe": "Gerenciar no Stripe",
         "startSubscription": "Iniciar assinatura",
+        "provisionedPlan": "Configurado pela OpenWhispr. Fale com vendas para alterar o plano ou os assentos.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
