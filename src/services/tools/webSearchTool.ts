@@ -27,6 +27,8 @@ export const webSearchTool: ToolDefinition = {
 
     try {
       const raw = await window.electronAPI.agentWebSearch!(query, numResults);
+      // Main answers a failed search (the weekly limit, an expired session) instead of throwing.
+      if (raw?.success === false) throw new Error(raw.error);
 
       const results = Array.isArray(raw?.results)
         ? raw.results.map(

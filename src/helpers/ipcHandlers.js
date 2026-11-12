@@ -11909,6 +11909,9 @@ class IPCHandlers {
           if (response.status === 503) {
             return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
           }
+          if (response.status === 429) {
+            return { success: false, error: "Weekly Cloud limit reached", code: "LIMIT_REACHED" };
+          }
           const error = await readPolicyResponseError(response, `API error: ${response.status}`);
           return toPolicyFailure(error);
         }
