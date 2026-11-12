@@ -128,8 +128,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cancelSelectionEdit: (sessionId) => ipcRenderer.invoke("cancel-selection-edit", sessionId),
   replaceSelectedText: (sessionId, text, options) =>
     ipcRenderer.invoke("replace-selected-text", sessionId, text, options),
-  pasteAtCapturedTarget: (sessionId, text, options) =>
-    ipcRenderer.invoke("paste-at-captured-target", sessionId, text, options),
+  pasteAtCapturedTarget: (sessionId, text) =>
+    ipcRenderer.invoke("paste-at-captured-target", sessionId, text),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
   openSettingsSection: (section) => ipcRenderer.invoke("open-settings-section", section),

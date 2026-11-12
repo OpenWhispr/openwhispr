@@ -4011,13 +4011,11 @@ class IPCHandlers {
       });
     });
 
-    ipcMain.handle("paste-at-captured-target", async (event, sessionId, text, options = {}) => {
+    ipcMain.handle("paste-at-captured-target", async (event, sessionId, text) => {
       if (!this.selectionManager) {
         return { success: false, code: "selection_manager_unavailable" };
       }
       return this.selectionManager.pasteAtCapturedTarget(sessionId, text, {
-        restoreClipboard: options.restoreClipboard !== false,
-        allowClipboardFallback: options.allowClipboardFallback === true,
         webContents: event.sender,
       });
     });

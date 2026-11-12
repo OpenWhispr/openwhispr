@@ -1636,9 +1636,7 @@ test("a voice answer for another app's empty field is typed there as plain text"
 
   assert.deepEqual(probes, [{ probeEditable: true }]);
   assert.equal(options.plainTextResponse, true);
-  assert.deepEqual(pastes, [
-    ["caret-1", "Thanks, team!", { restoreClipboard: true, allowClipboardFallback: false }],
-  ]);
+  assert.deepEqual(pastes, [["caret-1", "Thanks, team!"]]);
   assert.deepEqual(released, []);
   assert.equal(hides(), 1, "the window steps aside once the answer is in the field");
   assert.equal(globalThis.__chat.newChats, 0, "the chat stays for a follow-up");

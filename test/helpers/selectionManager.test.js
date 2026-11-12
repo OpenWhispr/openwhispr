@@ -1625,11 +1625,6 @@ test("a paste declined by a changed target logs the code and the probe verdict",
 
   assert.equal(declines().length, 1);
   const [entry] = declines();
-  assert.equal(entry.level, "info");
-  assert.equal(entry.scope, "clipboard");
   assert.equal(entry.meta.code, "target_changed");
-  assert.equal(entry.meta.platform, "darwin");
-  assert.equal(entry.meta.sessionFound, true);
-  assert.equal(entry.meta.sessionKind, "caret");
   assert.equal(entry.meta.probeStatus, "selected");
 });

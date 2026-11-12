@@ -377,8 +377,6 @@ class SelectionManager {
       const current = await this._readCurrentSelection(session.target, { probeEditable: true });
       if (current.status !== "editable") {
         return this._declineAssistantPaste(heldBackCode("target_changed", current), {
-          sessionFound: true,
-          sessionKind: "caret",
           probeStatus: current.status,
           probeCode: current.code ?? null,
         });
@@ -391,11 +389,7 @@ class SelectionManager {
         (await this._macWindowTitle(session.target)) !== session.windowTitle ||
         options.webContents?.isFocused()
       ) {
-        return this._declineAssistantPaste("target_changed", {
-          sessionFound: true,
-          sessionKind: "caret",
-          probeStatus: "editable",
-        });
+        return this._declineAssistantPaste("target_changed");
       }
 
       try {
@@ -406,11 +400,7 @@ class SelectionManager {
         });
         await pasteResult?.restoreComplete;
         if (pasteResult?.pasted === false) {
-          return this._declineAssistantPaste(heldBackCode("paste_failed", pasteResult), {
-            sessionFound: true,
-            sessionKind: "caret",
-            probeStatus: "editable",
-          });
+          return this._declineAssistantPaste(heldBackCode("paste_failed", pasteResult));
         }
         return { success: true };
       } catch (error) {

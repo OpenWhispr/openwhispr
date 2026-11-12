@@ -318,9 +318,8 @@ class TextEditMonitor extends EventEmitter {
 
     let args;
     if (process.platform === "darwin") {
-      const pid = target?.kind === "mac-pid" ? target.pid : this.lastTargetPid;
-      if (!pid) return "not_editable";
-      args = [...resolved.args, "--editable-target", String(pid)];
+      if (!target?.pid) return "not_editable";
+      args = [...resolved.args, "--editable-target", String(target.pid)];
     } else if (process.platform === "linux") {
       // The probe answers only for the target process's active window, so a
       // target whose process can't be resolved is never a caret.

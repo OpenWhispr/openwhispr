@@ -1771,8 +1771,7 @@ declare global {
       }>;
       pasteAtCapturedTarget?: (
         sessionId: string,
-        text: string,
-        options?: { restoreClipboard?: boolean; allowClipboardFallback?: boolean }
+        text: string
       ) => Promise<{ success: boolean; code?: string }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;

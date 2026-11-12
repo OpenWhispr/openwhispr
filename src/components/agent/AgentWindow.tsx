@@ -430,10 +430,7 @@ export default function AgentWindow() {
           return;
         }
         const result = await window.electronAPI
-          ?.pasteAtCapturedTarget?.(caretSessionId, markdownToPlainText(content) || content, {
-            restoreClipboard: true,
-            allowClipboardFallback: false,
-          })
+          ?.pasteAtCapturedTarget?.(caretSessionId, markdownToPlainText(content) || content)
           .catch(() => null);
         if (result?.success && press === pressRef.current) hideKeepingChatRef.current();
       };
