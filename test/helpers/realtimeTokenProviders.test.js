@@ -489,3 +489,17 @@ test("ElevenLabs credentials are read only for a meeting", async () => {
   }
   assert.equal(reads, 0);
 });
+
+test("elevenlabs never sends a leftover $VAR reference as the key", async () => {
+  const { fetchRealtimeTokenForProvider } = await load();
+  for (const ref of ["$ELEVENLABS_API_KEY", "${OPENAI_API_KEY}"]) {
+    await assert.rejects(
+      fetchRealtimeTokenForProvider(
+        "elevenlabs-realtime",
+        deps({ environmentManager: { getElevenlabsKey: () => ref } }),
+        { mode: "byok", purpose: "meeting" }
+      ),
+      /No ElevenLabs API key configured/
+    );
+  }
+});

@@ -418,7 +418,8 @@
           "timeout": "Le test de connexion a expiré.",
           "network": "Le fournisseur est injoignable.",
           "invalidHeaders": "En-tête HTTP invalide. Vérifiez le nom et la valeur ; Content-Type et les en-têtes de transport ne peuvent pas être modifiés.",
-          "redirected": "Le serveur a redirigé la requête. Saisissez l’adresse vers laquelle il redirige."
+          "redirected": "Le serveur a redirigé la requête. Saisissez l’adresse vers laquelle il redirige.",
+          "secretRefUnset": "La variable d’environnement indiquée dans ce champ n’est pas définie."
         }
       },
       "local": {
@@ -805,7 +806,7 @@
       "ollama": "(Ollama)",
       "localAi": "(LocalAI)",
       "apiKeyOptional": "Clé API (optionnelle)",
-      "apiKeyHelp": "Optionnelle. Envoyée comme token Bearer pour l'authentification. Séparée de votre clé API OpenAI.",
+      "apiKeyHelp": "Facultatif. Laissez vide pour utiliser la variable d'environnement, ou saisissez $OPENAI_API_KEY. Les exports du shell (ex. ~/.zshrc) sont lus au démarrage.",
       "applyAndRefresh": "Appliquer et actualiser",
       "queryPrefix": "Nous interrogerons",
       "querySuffix": "pour les modèles disponibles.",
@@ -982,7 +983,8 @@
     },
     "elevenlabs": {
       "keytermsNote": "OpenWhispr envoie à ElevenLabs les termes de votre dictionnaire qui respectent ses critères. ElevenLabs facture 20 % de plus lorsque ces termes sont inclus."
-    }
+    },
+    "apiKeyEnvHelp": "Facultatif. Laissez vide pour CUSTOM_TRANSCRIPTION_API_KEY, ou saisissez $OPENAI_API_KEY. Les exports du shell (ex. ~/.zshrc) sont lus au démarrage."
   },
   "hooks": {
     "audioRecording": {
@@ -5104,14 +5106,16 @@
     "remindLater": "Me le rappeler plus tard"
   },
   "apiKeyInput": {
-    "placeholder": "Collez votre clé API",
+    "placeholder": "Collez la clé API ou $ENV_VAR",
     "label": "Clé API",
     "save": "Enregistrer la clé API",
     "cancelEdit": "Annuler la modification",
     "edit": "Modifier la clé API",
     "add": "Ajouter une clé API",
     "editButton": "modifier",
-    "addButton": "ajouter"
+    "addButton": "ajouter",
+    "selfReference": "Use a different variable name here, or leave this field empty.",
+    "unknownRef": "Only OpenWhispr secret names can be referenced (for example $OPENAI_API_KEY)."
   },
   "gpu": {
     "transcriptionBanner": "Accélérez la transcription avec le GPU",

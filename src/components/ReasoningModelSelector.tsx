@@ -26,6 +26,7 @@ import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
 import { ProviderCheckField } from "./ui/ProviderCheckField";
+import SecretRefErrorText from "./ui/SecretRefErrorText";
 import { usePanelVisible } from "./ui/usePanelVisible";
 import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
 import { useCredentialDraft } from "../hooks/useCredentialDraft";
@@ -713,6 +714,7 @@ export default function ReasoningModelSelector({
                         autoComplete="off"
                         spellCheck={false}
                       />
+                      <SecretRefErrorText code={keyDraft.error(displayedCloudProvider)} />
                     </div>
                   )}
 

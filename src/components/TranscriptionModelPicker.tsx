@@ -9,6 +9,7 @@ import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
+import SecretRefErrorText from "./ui/SecretRefErrorText";
 import { LocalModelPolicyNotice } from "./ui/LocalModelPolicyNotice";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -1729,6 +1730,7 @@ export default function TranscriptionModelPicker({
                       autoComplete="off"
                       spellCheck={false}
                     />
+                    <SecretRefErrorText code={keyDraft.error("customTranscriptionApiKey")} />
                   </div>
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-foreground">
