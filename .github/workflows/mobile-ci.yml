@@ -58,6 +58,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The Android isolation check compares against the pull request's base.
+          fetch-depth: ${{ matrix.check == 'bundles' && 0 || 1 }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: openwhispr-mobile/.nvmrc
@@ -69,6 +71,9 @@ jobs:
         run: node_modules/.bin/patch-package --error-on-fail
       - name: Verify dependency security regressions
         run: npm run test:security
+      - name: Test the Android isolation check
+        if: matrix.check == 'static'
+        run: npm run test:android-ui-isolation
       - name: Check formatting
         if: matrix.check == 'static'
         run: npm run format
@@ -94,9 +99,16 @@ jobs:
         run: npm run test --ignore-scripts -- --ci --runInBand
       - name: Bundle iOS
         if: matrix.check == 'bundles'
-        run: node_modules/.bin/expo export --platform ios --max-workers 2 --output-dir "$RUNNER_TEMP/mobile-export"
+        run: node_modules/.bin/expo export --platform ios --source-maps --max-workers 2 --output-dir "$RUNNER_TEMP/mobile-export"
         env:
           OPENWHISPR_APP_ENV: production
+      # Android UI must never change iOS: a pull request that changes Android-only
+      # files may not also change a file the iOS bundle above loaded.
+      - name: Keep Android changes out of files iOS loads
+        if: matrix.check == 'bundles' && github.event_name == 'pull_request'
+        run: node scripts/check-android-ui-isolation.mjs --base "$BASE_SHA" --export-dir "$RUNNER_TEMP/mobile-export"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
 
   native-transport:
     name: Mobile native Swift tests
