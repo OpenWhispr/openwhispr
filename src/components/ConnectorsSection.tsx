@@ -7,7 +7,8 @@ import { ConnectorLoginRow } from "./connectors/ConnectorLoginRow";
 import { CONNECTOR_ROWS } from "./connectors/connectorRows";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useConnectorStatusStore } from "../stores/connectorStatusStore";
-import { useConnectorAccess } from "../hooks/useConnectorAccess";
+import { usePolicyStore } from "../stores/policyStore";
+import { isConnectorsAllowed, isConnectorsBlockedByOrg } from "../stores/policyRules";
 import {
   EMAIL_DRAFT_TARGET_SETTINGS,
   gmailSendStatus,
@@ -17,7 +18,8 @@ import {
 
 export function ConnectorsSection(): ReactElement {
   const { t } = useTranslation();
-  const { blockedByOrg, connectorsAllowed } = useConnectorAccess();
+  const blockedByOrg = usePolicyStore(isConnectorsBlockedByOrg);
+  const connectorsAllowed = usePolicyStore(isConnectorsAllowed);
   const emailDraftTarget = useSettingsStore((state) => state.emailDraftTarget);
   const setEmailDraftTarget = useSettingsStore((state) => state.setEmailDraftTarget);
   const gcalConnected = useSettingsStore((state) => state.gcalConnected);

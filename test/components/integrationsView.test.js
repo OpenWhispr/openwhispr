@@ -21,11 +21,6 @@ const MOCKS = {
       });
     }
   `,
-  "/hooks/useConnectorAccess": `
-    export function useConnectorAccess() {
-      return globalThis.__connectorAccess;
-    }
-  `,
   "/stores/connectorStatusStore": `
     export function useConnectorStatusStore(selector) {
       return selector({ statuses: globalThis.__connectorStatuses ?? {} });
@@ -121,14 +116,7 @@ const buttonWithText = (container, text) =>
 
 async function renderView(
   t,
-  {
-    isPaid = true,
-    section = "connectors",
-    statuses = {},
-    gcalAccounts = [],
-    connectorAccess = { blockedByOrg: false, connectorsAllowed: true },
-    skillsProps = {},
-  } = {}
+  { isPaid = true, section = "connectors", statuses = {}, gcalAccounts = [], skillsProps = {} } = {}
 ) {
   let root = null;
   t.after(async () => {
@@ -147,12 +135,10 @@ async function renderView(
   });
   globalThis.__connectorStatuses = statuses;
   globalThis.__gcalAccounts = gcalAccounts;
-  globalThis.__connectorAccess = connectorAccess;
   globalThis.__connectorsMounts = 0;
   t.after(() => {
     delete globalThis.__connectorStatuses;
     delete globalThis.__gcalAccounts;
-    delete globalThis.__connectorAccess;
     delete globalThis.__connectorsMounts;
     delete globalThis.__skillsPaneProps;
   });

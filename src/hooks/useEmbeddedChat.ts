@@ -116,7 +116,7 @@ export function useEmbeddedChat({
   );
 
   // A meeting note's chat drafts follow-ups to its attendees, so it offers
-  // the connector tools (still subject to plan, sign-in and policy).
+  // the connector tools (still subject to sign-in and policy).
   const streaming = useChatStreaming({
     setMessages: persistence.setMessages,
     openNote,

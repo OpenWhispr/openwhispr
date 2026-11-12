@@ -5,7 +5,8 @@ import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { useSettingsStore } from "../stores/settingsStore";
 import { ensureConnectorStatus, useConnectorStatusStore } from "../stores/connectorStatusStore";
-import { useConnectorAccess } from "../hooks/useConnectorAccess";
+import { usePolicyStore } from "../stores/policyStore";
+import { isConnectorsBlockedByOrg } from "../stores/policyRules";
 import ApiKeysSection from "./ApiKeysSection";
 import { ConnectorsSection } from "./ConnectorsSection";
 import { BetaBadge } from "./connectors/BetaBadge";
@@ -50,7 +51,7 @@ export default function IntegrationsView({
 }: IntegrationsViewProps): ReactElement {
   const { t } = useTranslation();
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
-  const { blockedByOrg } = useConnectorAccess();
+  const blockedByOrg = usePolicyStore(isConnectorsBlockedByOrg);
   const readyConnectors = useConnectorStatusStore(
     (state) =>
       CONNECTOR_ROWS.filter((row) => {

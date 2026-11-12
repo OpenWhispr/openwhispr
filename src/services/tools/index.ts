@@ -44,7 +44,7 @@ interface ToolRegistrySettings {
   webSearchEnabled: boolean;
   /** Live dictionary and snippet access; enables the vocabulary tools. */
   vocabulary?: DictionaryActions & SnippetActions;
-  /** Present only when connectors are available (signed in, paid, policy allows). */
+  /** Present only when connectors are available (signed in, policy allows). */
   connectors?: ConnectorToolSettings;
   /** Leaves out update_note, for a turn that must not change any note. */
   keepNotesUnchanged?: boolean;
