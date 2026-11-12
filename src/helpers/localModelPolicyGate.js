@@ -81,6 +81,7 @@ function createLocalModelPolicyGate({
 
   // Work already running keeps the verdict it started under until a newer one lands.
   const activeVerdict = () => (isResolvedVerdict(snapshot) ? snapshot : retained);
+  const activeFailure = (scope, modelId) => verdictFailure(activeVerdict(), scope, modelId);
 
   function runWarmUpsAwaitingVerdict() {
     const warmUps = warmUpsAwaitingVerdict;
@@ -93,13 +94,13 @@ function createLocalModelPolicyGate({
   }
 
   function applyVerdict() {
-    if (!hasCurrentVerdict()) return;
+    if (!isResolvedVerdict(activeVerdict())) return;
     for (const lease of leases) {
-      const denied = failure(lease.scope, lease.modelId);
+      const denied = activeFailure(lease.scope, lease.modelId);
       if (denied) lease.controller.abort(denied);
     }
     onChange();
-    runWarmUpsAwaitingVerdict();
+    if (hasCurrentVerdict()) runWarmUpsAwaitingVerdict();
   }
 
   function update(next) {
@@ -113,6 +114,14 @@ function createLocalModelPolicyGate({
     )
       return;
     if (!isResolvedVerdict(next)) {
+      if (next?.status === "loading" && isValidPolicyShape(next.policy)) {
+        retained = { ...next, success: true };
+        snapshot = next;
+        snapshotIdentity = identity;
+        if (rules) applyVerdict();
+        else loadRules().then(applyVerdict, () => {});
+        return;
+      }
       // A failed lookup says nothing new about the policy. The server calling
       // it unresolvable does refuse new work, but it names no model to stop.
       if (next?.success || next?.code === "POLICY_UNRESOLVABLE") {
@@ -197,6 +206,7 @@ function createLocalModelPolicyGate({
 
   return {
     failure,
+    activeFailure,
     update,
     assertCurrent,
     authorizeCached,

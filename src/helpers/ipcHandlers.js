@@ -754,11 +754,14 @@ function cancelWindowRequests(registry) {
 // What both policy retirements end: a disallowed preview, product request or
 // cloud request. `remoteStopped` also ends every request that leaves the device.
 function abortDisallowedRequests(handlers, snapshot, remoteStopped = false) {
-  const allowed = (channel, args) =>
-    productOperationAllowed(snapshot, app.getVersion(), channel, args);
+  const allowed = (channel, args, accountId = snapshot.accountId) =>
+    runningOperationAllowed(snapshot, accountId, app.getVersion(), channel, args);
   if (!allowed("start-dictation-preview")) handlers._stopLocalDictationPreview?.();
   for (const [controller, operation] of handlers._productRequests ?? []) {
-    if ((remoteStopped && operation.remote) || !allowed(operation.channel, operation.args))
+    if (
+      (remoteStopped && operation.remote) ||
+      !allowed(operation.channel, operation.args, operation.accountId)
+    )
       controller.abort();
   }
   for (const [channel, registry] of [
@@ -1058,7 +1061,7 @@ class IPCHandlers {
       onChange: () => {
         for (const [scope, server, modelId] of localServers) {
           if (server.isRemote || !modelId()) continue;
-          const denied = this._localModelPolicy.failure(scope, modelId());
+          const denied = this._localModelPolicy.activeFailure(scope, modelId());
           if (denied) {
             void server.stop().catch((error) =>
               debugLogger.warn("Could not stop policy-blocked local server", {
@@ -1949,27 +1952,20 @@ class IPCHandlers {
 
   _retireDisallowedProductWork(snapshot) {
     abortDisallowedRequests(this, snapshot);
+    const allowed = (channel, args, accountId = snapshot.accountId) =>
+      runningOperationAllowed(snapshot, accountId, app.getVersion(), channel, args);
     for (const [property, operation] of this._remoteStreamPolicies) {
-      if (!productOperationAllowed(snapshot, app.getVersion(), operation.channel, operation.args))
+      if (!allowed(operation.channel, operation.args, operation.accountId))
         retireProductStream(this, property);
     }
     for (const [streamId, provider] of this._enterpriseStreamProviders) {
-      if (
-        !productOperationAllowed(snapshot, app.getVersion(), "enterprise-stream-start", [
-          { provider },
-        ])
-      )
+      if (!allowed("enterprise-stream-start", [{ provider }]))
         this.enterpriseStreamAborts.get(streamId)?.abort();
     }
     const meetingOptions = this.getMeetingTranscriptionOptions?.();
-    if (
-      meetingOptions &&
-      !productOperationAllowed(snapshot, app.getVersion(), "meeting-transcription", [
-        meetingOptions,
-      ])
-    )
+    if (meetingOptions && !allowed("meeting-transcription", [meetingOptions]))
       this._stopMeetingForPolicy?.("policyRestricted");
-    if (!productOperationAllowed(snapshot, app.getVersion(), "gcal-start-oauth")) {
+    if (!allowed("gcal-start-oauth")) {
       this.googleCalendarManager?.stop();
       this.microsoftCalendarManager?.stop();
       this._remoteCalendarsStarted = false;
@@ -2001,9 +1997,16 @@ class IPCHandlers {
     this._remoteStreamPolicies = new Map();
     this._retireAccountProductStreams = (accountId) => {
       for (const [property, operation] of this._remoteStreamPolicies) {
-        // A start still owns its marker until its late-socket check completes.
-        if (operation.accountId === accountId && !operation.pending)
-          retireProductStream(this, property);
+        if (operation.accountId !== accountId) continue;
+        if (operation.pending) {
+          // Drop held audio before a late handshake can flush it. The pending
+          // marker stays until its owners finish and check their own clients.
+          retireStreaming(operation.streaming);
+          if (this[property] === operation.streaming) this[property] = null;
+        } else retireProductStream(this, property);
+      }
+      for (const [controller, operation] of this._productRequests) {
+        if (operation.streamPolicy?.accountId === accountId) controller.abort();
       }
     };
     this._productRequests = new Map();
@@ -2068,8 +2071,17 @@ class IPCHandlers {
                 corti: "cortiStreaming",
               }[channel.split("-")[0]]
             : null;
-        const streamPolicy = { channel, args, accountId: operation.accountId, pending: true };
-        if (streamProperty) this._remoteStreamPolicies.set(streamProperty, streamPolicy);
+        const previousStreamPolicy = this._remoteStreamPolicies.get(streamProperty);
+        if (previousStreamPolicy?.pending && previousStreamPolicy.accountId !== operation.accountId)
+          return { success: false, error: "Operation in progress" };
+        const streamPolicy = previousStreamPolicy?.pending
+          ? previousStreamPolicy
+          : { channel, args, accountId: operation.accountId, pending: 0 };
+        if (streamProperty) {
+          streamPolicy.pending += 1;
+          this._remoteStreamPolicies.set(streamProperty, streamPolicy);
+          operation.streamPolicy = streamPolicy;
+        }
         const controller = new AbortController();
         operation.signal = controller.signal;
         this._productRequests.set(controller, operation);
@@ -2091,13 +2103,6 @@ class IPCHandlers {
             snapshot = this.effectivePolicyManager.getCurrent();
           }
           if (snapshot.accountId !== operation.accountId) {
-            // A stream this start opened, unless a later start replaced it,
-            // belongs to the account that left.
-            if (streamProperty && this._remoteStreamPolicies.get(streamProperty) === streamPolicy) {
-              retireStreaming(this[streamProperty]);
-              this[streamProperty] = null;
-              this._remoteStreamPolicies.delete(streamProperty);
-            }
             return {
               success: false,
               code: "AUTH_CONTEXT_CHANGED",
@@ -2122,10 +2127,53 @@ class IPCHandlers {
           return policyBlockedFailure();
         } finally {
           this._productRequests.delete(controller);
-          streamPolicy.pending = false;
+          if (streamProperty) {
+            streamPolicy.pending -= 1;
+            const snapshot = this.effectivePolicyManager.getCurrent();
+            if (
+              operation.streaming &&
+              (controller.signal.aborted ||
+                !runningOperationAllowed(
+                  snapshot,
+                  operation.accountId,
+                  app.getVersion(),
+                  channel,
+                  args
+                ))
+            ) {
+              retireStreaming(operation.streaming);
+              if (this[streamProperty] === operation.streaming) this[streamProperty] = null;
+            }
+            if (
+              this._remoteStreamPolicies.get(streamProperty) === streamPolicy &&
+              !streamPolicy.pending &&
+              (!this[streamProperty] || !streamPolicy.streaming)
+            )
+              this._remoteStreamPolicies.delete(streamProperty);
+          }
         }
       });
     const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
+    const ownProductStream = (streaming) => {
+      const operation = this._productRequestContext.getStore();
+      if (!operation?.streamPolicy) return streaming;
+      if (this.effectivePolicyManager.getCurrent().accountId !== operation.accountId)
+        throw Object.assign(new Error("Authentication context changed during the request"), {
+          code: "AUTH_CONTEXT_CHANGED",
+        });
+      operation.signal.throwIfAborted();
+      if (!streaming) return streaming;
+      operation.streaming = streaming;
+      operation.streamPolicy.streaming = streaming;
+      if (
+        operation.channel.endsWith("-start") ||
+        !operation.streamPolicy.channel.endsWith("-start")
+      ) {
+        operation.streamPolicy.channel = operation.channel;
+        operation.streamPolicy.args = operation.args;
+      }
+      return streaming;
+    };
     // Work that turns remote here starts remote work, under new remote work's rules.
     const trackTranscriptionRoute = async (route, selectedMode) => {
       const operation = this._productRequestContext.getStore();
@@ -7824,8 +7872,8 @@ class IPCHandlers {
       },
       getScope,
       broadcast: (snapshot, updatePolicy) => {
-        // A workspace verdict still loading changes nothing for the audio controls.
-        if (snapshot.status !== "loading" || !snapshot.deviceReady)
+        // Known restrictions still apply while the workspace decision is pending.
+        if (snapshot.status !== "loading" || !snapshot.deviceReady || snapshot.policy)
           this._audioFeaturePolicy?.update(snapshot);
         if (snapshot.workspaceRequired || snapshot.authGeneration === credentialsGeneration)
           this._localModelPolicy?.update(snapshot);
@@ -7837,9 +7885,9 @@ class IPCHandlers {
           (snapshot.status === "error" && snapshot.managed)
         )
           this._stopRemoteProductWork();
-        else if (snapshot.success) {
+        else if (snapshot.success || snapshot.policy) {
           this._retireDisallowedProductWork(snapshot);
-          this._startRemoteProductWork();
+          if (snapshot.success) this._startRemoteProductWork();
         }
         broadcastToWindows("effective-policy-changed", snapshot);
       },
@@ -11043,6 +11091,7 @@ class IPCHandlers {
       if (this._dictationConnectPromise) {
         await this._dictationConnectPromise.catch(() => {});
       }
+      ownProductStream(this._dictationStreaming);
 
       clearDictationIdleTimer();
       this._dictationPreviewEnabled = !!options.preview;
@@ -11077,6 +11126,7 @@ class IPCHandlers {
         streaming.beginConnecting();
         streaming.connectionKey = dictationConnectionKey(options);
         this._dictationStreaming = streaming;
+        ownProductStream(streaming);
         try {
           if (provider === "orukeet") {
             if (isCloud) {
@@ -11104,6 +11154,7 @@ class IPCHandlers {
             // the server also owns the managed model, so only the language is sent.
             language: OpenAIRealtimeStreaming.normalizeLanguage(options.language) ?? undefined,
           });
+          ownProductStream(streaming);
           if (provider === "tinfoil-realtime") {
             const model = options.model || TINFOIL_REALTIME_MODEL;
             await streaming.connect({
@@ -11920,12 +11971,16 @@ class IPCHandlers {
 
     const warmupDictationStreaming = async (event, options) => {
       await this._dictationConnectPromise?.catch(() => {});
-      if (dictationRecordingActive) return { success: true, alreadyWarm: true };
+      if (dictationRecordingActive) {
+        ownProductStream(this._dictationStreaming);
+        return { success: true, alreadyWarm: true };
+      }
       if (!isUnusedOrukeetConnection(this._dictationStreaming, options)) {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
         return { success: true };
       }
+      ownProductStream(this._dictationStreaming);
       startDictationIdleTimer();
       return { success: true, alreadyWarm: true };
     };
@@ -11963,6 +12018,7 @@ class IPCHandlers {
         ) {
           await connectDictationStreaming(event, options);
         }
+        ownProductStream(this._dictationStreaming);
         return { success: true };
       } catch (err) {
         dictationRecordingActive = false;
@@ -13616,23 +13672,25 @@ class IPCHandlers {
         if (!this.assemblyAiStreaming) {
           this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
-        this.assemblyAiStreaming.adoptMode(options);
-        if (byok) dropStaleReadyWarmConnection(this.assemblyAiStreaming);
+        const streaming = ownProductStream(this.assemblyAiStreaming);
+        streaming.adoptMode(options);
+        if (byok) dropStaleReadyWarmConnection(streaming);
 
-        if (this.assemblyAiStreaming.hasWarmConnection()) {
+        if (streaming.hasWarmConnection()) {
           debugLogger.debug("AssemblyAI connection already warm", {}, "streaming");
           return { success: true, alreadyWarm: true };
         }
 
         // Read before the key is, so a save during the mint marks this socket stale.
         const generation = credentialGeneration;
-        let token = byok ? null : this.assemblyAiStreaming.getCachedToken();
+        let token = byok ? null : streaming.getCachedToken();
         if (!token) {
           debugLogger.debug("Fetching new streaming token for warmup", { byok }, "streaming");
           token = await fetchAssemblyAiToken(event, byok);
         }
 
-        await this.assemblyAiStreaming.warmup({
+        ownProductStream(streaming);
+        await streaming.warmup({
           ...options,
           token,
           credentialGeneration: generation,
@@ -13655,6 +13713,7 @@ class IPCHandlers {
       }
 
       streamingStartInProgress = true;
+      let streaming;
       try {
         const byok = options.mode === "byok";
         if (!byok && !getApiUrl()) {
@@ -13666,19 +13725,21 @@ class IPCHandlers {
         if (!this.assemblyAiStreaming) {
           this.assemblyAiStreaming = new AssemblyAiStreaming();
         }
-        this.assemblyAiStreaming.adoptMode(options);
+        streaming = ownProductStream(this.assemblyAiStreaming);
+        streaming.adoptMode(options);
 
         // Clean up any stale active connection (shouldn't happen normally)
-        if (this.assemblyAiStreaming.isConnected) {
+        if (streaming.isConnected) {
           debugLogger.debug(
             "AssemblyAI cleaning up stale connection before start",
             {},
             "streaming"
           );
-          await this.assemblyAiStreaming.disconnect({ commit: false });
+          await streaming.disconnect({ commit: false });
+          ownProductStream(streaming);
         }
 
-        const hasWarm = this.assemblyAiStreaming.hasWarmConnection();
+        const hasWarm = streaming.hasWarmConnection();
         debugLogger.debug(
           "AssemblyAI streaming start",
           { hasWarmConnection: hasWarm },
@@ -13688,53 +13749,55 @@ class IPCHandlers {
         // Buffer before the token fetch (a network round trip for BYOK, even when
         // a warm socket will carry the session) so assemblyai-streaming-send has
         // somewhere to put the first frames.
-        this.assemblyAiStreaming.beginConnecting();
-        let token = byok ? null : this.assemblyAiStreaming.getCachedToken();
+        streaming.beginConnecting();
+        let token = byok ? null : streaming.getCachedToken();
         if (!token) {
           debugLogger.debug("Fetching streaming token", { byok }, "streaming");
           token = await fetchAssemblyAiToken(event, byok);
-          if (!byok) this.assemblyAiStreaming.cacheToken(token);
+          ownProductStream(streaming);
+          if (!byok) streaming.cacheToken(token);
         } else {
           debugLogger.debug("Using cached streaming token", {}, "streaming");
         }
 
         // Set up callbacks to forward events to renderer
-        this.assemblyAiStreaming.onPartialTranscript = (text) => {
+        streaming.onPartialTranscript = (text) => {
           if (win && !win.isDestroyed()) {
             win.webContents.send("assemblyai-partial-transcript", text);
           }
         };
 
-        this.assemblyAiStreaming.onFinalTranscript = (text) => {
+        streaming.onFinalTranscript = (text) => {
           if (win && !win.isDestroyed()) {
             win.webContents.send("assemblyai-final-transcript", text);
           }
         };
 
-        this.assemblyAiStreaming.onError = (error) => {
+        streaming.onError = (error) => {
           if (win && !win.isDestroyed()) {
             win.webContents.send("assemblyai-error", error.message);
           }
         };
 
-        this.assemblyAiStreaming.onSessionEnd = (data) => {
+        streaming.onSessionEnd = (data) => {
           if (win && !win.isDestroyed()) {
             win.webContents.send("assemblyai-session-end", data);
           }
         };
 
-        if (byok) dropStaleWarmConnection(this.assemblyAiStreaming);
-        await this.assemblyAiStreaming.connect({ ...options, token });
+        if (byok) dropStaleWarmConnection(streaming);
+        await streaming.connect({ ...options, token });
+        ownProductStream(streaming);
         debugLogger.debug("AssemblyAI streaming started", {}, "streaming");
 
         return {
           success: true,
-          usedWarmConnection: this.assemblyAiStreaming.hasWarmConnection() === false,
+          usedWarmConnection: streaming.hasWarmConnection() === false,
         };
       } catch (error) {
         debugLogger.error("AssemblyAI streaming start error", { error: error.message });
         // Nothing is in flight after a failed start, so its held audio goes too.
-        this.assemblyAiStreaming?.cleanup();
+        streaming?.cleanup();
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
         }
@@ -13887,18 +13950,19 @@ class IPCHandlers {
         if (!this.deepgramStreaming) {
           this.deepgramStreaming = new DeepgramStreaming();
         }
-        this.deepgramStreaming.adoptMode(options);
+        const streaming = ownProductStream(this.deepgramStreaming);
+        streaming.adoptMode(options);
 
         setDeepgramTokenRefreshFn(event, byok);
-        if (byok) dropStaleReadyWarmConnection(this.deepgramStreaming);
+        if (byok) dropStaleReadyWarmConnection(streaming);
 
-        if (this.deepgramStreaming.hasWarmConnection()) {
+        if (streaming.hasWarmConnection()) {
           debugLogger.debug("Deepgram connection already warm", {}, "streaming");
           return { success: true, alreadyWarm: true };
         }
 
         const generation = credentialGeneration;
-        let token = byok ? null : this.deepgramStreaming.getCachedToken();
+        let token = byok ? null : streaming.getCachedToken();
         if (!token) {
           debugLogger.debug(
             "Fetching new Deepgram streaming token for warmup",
@@ -13908,7 +13972,8 @@ class IPCHandlers {
           token = await fetchDeepgramToken(event, byok);
         }
 
-        await this.deepgramStreaming.warmup({
+        ownProductStream(streaming);
+        await streaming.warmup({
           ...options,
           token,
           credentialGeneration: generation,
@@ -13950,60 +14015,64 @@ class IPCHandlers {
         if (!this.deepgramStreaming) {
           this.deepgramStreaming = new DeepgramStreaming();
         }
-        this.deepgramStreaming.adoptMode(options);
-        if (byok) dropStaleWarmConnection(this.deepgramStreaming);
+        const streaming = ownProductStream(this.deepgramStreaming);
+        streaming.adoptMode(options);
+        if (byok) dropStaleWarmConnection(streaming);
 
         setDeepgramTokenRefreshFn(event, byok);
 
-        if (this.deepgramStreaming.isConnected) {
+        if (streaming.isConnected) {
           debugLogger.debug("Deepgram cleaning up stale connection before start", {}, "streaming");
-          await this.deepgramStreaming.disconnect({ commit: false });
+          await streaming.disconnect({ commit: false });
+          ownProductStream(streaming);
         }
 
-        const hasWarm = this.deepgramStreaming.hasWarmConnection();
+        const hasWarm = streaming.hasWarmConnection();
         debugLogger.debug("Deepgram streaming start", { hasWarmConnection: hasWarm }, "streaming");
 
-        let token = byok ? null : this.deepgramStreaming.getCachedToken();
+        let token = byok ? null : streaming.getCachedToken();
         if (!token) {
           debugLogger.debug("Fetching Deepgram streaming token", { byok }, "streaming");
           token = await fetchDeepgramToken(event, byok);
-          if (!byok) this.deepgramStreaming.cacheToken(token);
+          ownProductStream(streaming);
+          if (!byok) streaming.cacheToken(token);
         } else {
           debugLogger.debug("Using cached Deepgram streaming token", {}, "streaming");
         }
 
-        this.deepgramStreaming.onPartialTranscript = (text) => {
+        streaming.onPartialTranscript = (text) => {
           if (win && !win.isDestroyed()) {
             win.webContents.send("deepgram-partial-transcript", text);
           }
         };
 
-        this.deepgramStreaming.onFinalTranscript = (text) => {
+        streaming.onFinalTranscript = (text) => {
           if (win && !win.isDestroyed()) {
             win.webContents.send("deepgram-final-transcript", text);
           }
         };
 
-        this.deepgramStreaming.onError = (error) => {
+        streaming.onError = (error) => {
           if (win && !win.isDestroyed()) {
             win.webContents.send("deepgram-error", error.message);
           }
         };
 
-        this.deepgramStreaming.onSessionEnd = (data) => {
+        streaming.onSessionEnd = (data) => {
           if (win && !win.isDestroyed()) {
             win.webContents.send("deepgram-session-end", data);
           }
         };
 
         sendDropCount = 0;
-        await this.deepgramStreaming.connect({ ...options, token });
+        await streaming.connect({ ...options, token });
+        ownProductStream(streaming);
         debugLogger.debug(
           "Deepgram streaming started",
           {
-            isConnected: this.deepgramStreaming.isConnected,
-            hasWs: !!this.deepgramStreaming.ws,
-            wsReadyState: this.deepgramStreaming.ws?.readyState,
+            isConnected: streaming.isConnected,
+            hasWs: !!streaming.ws,
+            wsReadyState: streaming.ws?.readyState,
             forceNew: !!options.forceNew,
           },
           "streaming"
@@ -14103,14 +14172,15 @@ class IPCHandlers {
     // Re-bound on every warmup/start so a warm socket promoted by a different
     // window can never emit into the window that opened it.
     const ensureGeminiStreaming = (event) => {
+      let streaming = ownProductStream(this.geminiStreaming);
       if (!this.geminiStreaming) {
-        this.geminiStreaming = new GeminiLiveStreaming();
+        streaming = ownProductStream(new GeminiLiveStreaming());
+        this.geminiStreaming = streaming;
       }
       const win = BrowserWindow.fromWebContents(event.sender);
       const emit = (channel, payload) => {
         if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
       };
-      const streaming = this.geminiStreaming;
       streaming.onPartialTranscript = (text) => emit("gemini-partial-transcript", text);
       streaming.onFinalTranscript = (text) => emit("gemini-final-transcript", text);
       streaming.onError = (error) => emit("gemini-error", error.message);
@@ -14144,6 +14214,7 @@ class IPCHandlers {
         streaming.beginConnecting();
         streaming.connectionKey = geminiConnectionKey(options);
         const token = await fetchRealtimeToken(event, tokenOptions);
+        ownProductStream(streaming);
         await streaming.connect({
           ...options,
           model: geminiConnectionModel(options),
@@ -14158,7 +14229,7 @@ class IPCHandlers {
 
     handleRemoteProduct("gemini-streaming-warmup", async (event, options = {}) => {
       try {
-        if (this.geminiStreaming?.isConnected) {
+        if (ownProductStream(this.geminiStreaming)?.isConnected) {
           ensureGeminiStreaming(event);
           debugLogger.debug("Gemini Live connection already warm", {}, "streaming");
           return { success: true, alreadyWarm: true };
@@ -14183,6 +14254,7 @@ class IPCHandlers {
       try {
         const streaming = ensureGeminiStreaming(event);
         if (geminiConnectInFlight) await geminiConnectInFlight;
+        ownProductStream(streaming);
         const usedWarmConnection =
           streaming.isConnected &&
           !options.forceNew &&
@@ -14287,13 +14359,15 @@ class IPCHandlers {
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
         }
-        dropStaleReadyWarmConnection(this.cortiStreaming);
-        if (this.cortiStreaming.hasWarmConnection() || this.cortiStreaming.isConnected) {
+        const streaming = ownProductStream(this.cortiStreaming);
+        dropStaleReadyWarmConnection(streaming);
+        if (streaming.hasWarmConnection() || streaming.isConnected) {
           return { success: true, alreadyWarm: true };
         }
         const generation = credentialGeneration;
         const { token, environment, tenant } = await this._mintStoredCortiToken(options);
-        await this.cortiStreaming.warmup({
+        ownProductStream(streaming);
+        await streaming.warmup({
           token,
           environment,
           tenant,
@@ -14308,35 +14382,39 @@ class IPCHandlers {
     });
 
     handleRemoteProduct("corti-streaming-start", async (event, options = {}) => {
+      let streaming;
       try {
         if (!this.cortiStreaming) {
           this.cortiStreaming = new CortiStreaming();
         }
-        if (this.cortiStreaming.isConnected) {
-          await this.cortiStreaming.disconnect({ commit: false });
+        streaming = ownProductStream(this.cortiStreaming);
+        if (streaming.isConnected) {
+          await streaming.disconnect({ commit: false });
+          ownProductStream(streaming);
         }
 
         // Buffer before the token mint (a network round trip unless cached) so
         // corti-streaming-send has somewhere to put the first frames.
-        this.cortiStreaming.beginConnecting();
+        streaming.beginConnecting();
         const { token, environment, tenant } = await this._mintStoredCortiToken(options);
+        ownProductStream(streaming);
         const win = BrowserWindow.fromWebContents(event.sender);
 
-        this.cortiStreaming.onPartialTranscript = (text) => {
+        streaming.onPartialTranscript = (text) => {
           if (win && !win.isDestroyed()) win.webContents.send("corti-partial-transcript", text);
         };
-        this.cortiStreaming.onFinalTranscript = (text) => {
+        streaming.onFinalTranscript = (text) => {
           if (win && !win.isDestroyed()) win.webContents.send("corti-final-transcript", text);
         };
-        this.cortiStreaming.onError = (error) => {
+        streaming.onError = (error) => {
           if (win && !win.isDestroyed()) win.webContents.send("corti-error", error.message);
         };
-        this.cortiStreaming.onSessionEnd = (data) => {
+        streaming.onSessionEnd = (data) => {
           if (win && !win.isDestroyed()) win.webContents.send("corti-session-end", data);
         };
 
         dropStaleWarmConnection(this.cortiStreaming);
-        await this.cortiStreaming.connect({
+        await streaming.connect({
           token,
           environment,
           tenant,
@@ -14347,7 +14425,7 @@ class IPCHandlers {
       } catch (error) {
         debugLogger.error("Corti streaming start error", { error: error.message }, "streaming");
         // Nothing is in flight after a failed start, so its held audio goes too.
-        this.cortiStreaming?.cleanup();
+        streaming?.cleanup();
         return { success: false, error: error.message, code: error.code };
       }
     });

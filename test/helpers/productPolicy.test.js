@@ -152,3 +152,25 @@ test("agent-only revocation gates IPC agent work without disabling ordinary clea
     true
   );
 });
+
+test("known pending restrictions selectively revoke running work without admitting new remote work", () => {
+  const { runningOperationAllowed } = require("../../src/helpers/productPolicy");
+  const policy = defaultDevicePolicy();
+  policy.llm.allowedModes = ["local"];
+  const pending = {
+    accountId: "member",
+    success: false,
+    status: "loading",
+    deviceReady: true,
+    managed: true,
+    policy,
+  };
+  const allowed = (snapshot, accountId, channel) =>
+    runningOperationAllowed(snapshot, accountId, "1.11.2", channel);
+  assert.equal(allowed(pending, "member", "cloud-reason"), false);
+  assert.equal(allowed(pending, "member", "process-local-reasoning"), true);
+  assert.equal(allowed(pending, "member", "cloud-transcribe"), true);
+  assert.equal(allowed({ ...pending, policy: null }, "member", "cloud-reason"), true);
+  assert.equal(allowed(pending, "other-member", "process-local-reasoning"), false);
+  assert.equal(productOperationAllowed(pending, "1.11.2", "cloud-transcribe"), false);
+});

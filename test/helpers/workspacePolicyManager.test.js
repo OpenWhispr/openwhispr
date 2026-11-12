@@ -1260,3 +1260,18 @@ test("nothing is held for an identity that never fetched a policy", () => {
 
   assert.equal(manager.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 1 }), null);
 });
+
+test("known pending screen-context denial blocks capture before the workspace settles", () => {
+  const { isScreenContextBlocked } = require("../../src/helpers/workspacePolicyManager");
+  const snapshot = {
+    success: false,
+    status: "loading",
+    managed: true,
+    policy: { features: { screenContextEnabled: false } },
+  };
+  assert.equal(isScreenContextBlocked(snapshot), true);
+  assert.equal(
+    isScreenContextBlocked({ ...snapshot, policy: { features: { screenContextEnabled: true } } }),
+    false
+  );
+});

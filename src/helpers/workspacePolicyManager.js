@@ -478,11 +478,7 @@ function createWorkspacePolicyManager({
 function isScreenContextBlocked(snapshot) {
   return (
     snapshot.code === "POLICY_UNRESOLVABLE" ||
-    Boolean(
-      snapshot.success &&
-      snapshot.managed &&
-      snapshot.policy?.features?.screenContextEnabled === false
-    )
+    Boolean(snapshot.managed && snapshot.policy?.features?.screenContextEnabled === false)
   );
 }
 

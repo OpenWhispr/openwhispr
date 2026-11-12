@@ -163,12 +163,16 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
   return true;
 }
 
-// Work already running ends only on a settled denial: a verdict still on its
-// way for the account the work started under says nothing new about it.
+// A pending workspace verdict doesn't revoke work, but the device can already
+// name restrictions. The manager intersects those with the account's held policy.
 function runningOperationAllowed(snapshot, accountId, appVersion, channel, args) {
-  return snapshot.status === "loading"
-    ? snapshot.accountId === accountId
-    : productOperationAllowed(snapshot, appVersion, channel, args);
+  if (snapshot.accountId !== accountId) return false;
+  if (snapshot.status !== "loading")
+    return productOperationAllowed(snapshot, appVersion, channel, args);
+  return (
+    !snapshot.policy ||
+    productOperationAllowed({ ...snapshot, success: true }, appVersion, channel, args)
+  );
 }
 
 module.exports = {

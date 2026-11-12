@@ -1434,3 +1434,173 @@ test("sign-out during a connecting stream preserves its late-socket cleanup", as
   assert.equal(connected, false);
   assert.equal(fakeThis.geminiStreaming, null);
 });
+
+for (const overlap of ["before account switch", "after account switch"]) {
+  test(
+    `a rejected overlapping start ${overlap} cannot retain the old account's real socket`,
+    { timeout: 5000 },
+    async (t) => {
+      const { WebSocketServer } = require("ws");
+      const AssemblyAiStreaming = require("../../src/helpers/assemblyAiStreaming");
+      const { deferred } = require("./harness/deferred");
+      const previous = {
+        stream: fakeThis.assemblyAiStreaming,
+        account: databaseManager.activeAccountId,
+        tokenState,
+        api: process.env.OPENWHISPR_API_URL,
+      };
+      const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+      await new Promise((resolve) => server.once("listening", resolve));
+      const connected = deferred();
+      const closed = deferred();
+      const frames = [];
+      let peer;
+      server.once("connection", (socket) => {
+        peer = socket;
+        socket.on("message", (data, binary) =>
+          frames.push(binary ? "audio" : JSON.parse(data.toString()))
+        );
+        socket.once("close", closed.resolve);
+        connected.resolve();
+      });
+      const streaming = new AssemblyAiStreaming();
+      streaming.cacheToken("loopback-test-token");
+      streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+      const disconnect = t.mock.method(streaming, "disconnect");
+      let first;
+      t.after(async () => {
+        streaming.cleanupAll();
+        for (const client of server.clients) client.terminate();
+        await new Promise((resolve) => server.close(resolve));
+        await first;
+        fakeThis.assemblyAiStreaming = previous.stream;
+        databaseManager.activeAccountId = previous.account;
+        tokenState = previous.tokenState;
+        fakeThis._remoteStreamPolicies.delete("assemblyAiStreaming");
+        if (previous.api === undefined) delete process.env.OPENWHISPR_API_URL;
+        else process.env.OPENWHISPR_API_URL = previous.api;
+      });
+      process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+      tokenState = { token: "socket-owner-token", generation: tokenState.generation + 1 };
+      await setScope("socket-owner", tokenState.generation);
+      await fakeThis.refreshEffectivePolicy();
+      fakeThis.assemblyAiStreaming = streaming;
+      first = handlers.get("assemblyai-streaming-start")({ sender: {} }, {});
+      streaming.sendAudio(Buffer.alloc(3200, 1));
+      assert.equal(streaming.pendingAudioBytes, 3200);
+      await connected.promise;
+      if (streaming.ws.readyState !== streaming.ws.OPEN)
+        await new Promise((resolve) => streaming.ws.once("open", resolve));
+      assert.equal(streaming.pendingAudioBytes, 3200);
+      const duplicate = () => handlers.get("assemblyai-streaming-start")({ sender: {} }, {});
+      if (overlap === "before account switch")
+        assert.deepEqual(await duplicate(), { success: false, error: "Operation in progress" });
+      handleAuthTokenChange({ token: "next-owner-token", generation: tokenState.generation + 1 });
+      await setScope("next-owner", tokenState.generation);
+      await fakeThis.refreshEffectivePolicy();
+      assert.equal(
+        streaming.pendingAudioBytes,
+        0,
+        "account retirement drops held audio immediately"
+      );
+      if (overlap === "after account switch")
+        assert.deepEqual(await duplicate(), { success: false, error: "Operation in progress" });
+      if (peer.readyState === peer.OPEN)
+        peer.send(JSON.stringify({ type: "Begin", id: "old-owner-session" }));
+      assert.equal((await first).code, "AUTH_CONTEXT_CHANGED");
+      assert.equal(streaming.isConnected, false);
+      await closed.promise;
+      assert.ok(disconnect.mock.callCount() > 0);
+      assert.ok(disconnect.mock.calls.every((call) => call.arguments[0].commit === false));
+      assert.equal(frames.includes("audio"), false, "held audio cannot leave after its account");
+      assert.equal(
+        frames.some((frame) => frame.type === "Terminate"),
+        false
+      );
+      assert.equal(streaming.onPartialTranscript, null);
+      assert.equal(streaming.onFinalTranscript, null);
+      assert.equal(streaming.onError, null);
+      assert.equal(streaming.onSessionEnd, null);
+      assert.equal(fakeThis.assemblyAiStreaming, null);
+    }
+  );
+}
+
+for (const replaced of [false, true]) {
+  test(`overlapping warmup and start retain account ownership${replaced ? " without retiring a replacement" : ""}`, async (t) => {
+    const { deferred } = require("./harness/deferred");
+    const previous = {
+      stream: fakeThis.geminiStreaming,
+      account: databaseManager.activeAccountId,
+      tokenState,
+      environment: Object.getOwnPropertyDescriptor(fakeThis, "environmentManager"),
+    };
+    const entered = deferred();
+    const finish = deferred();
+    const disconnects = [];
+    const pending = [];
+    const streaming = {
+      isConnected: false,
+      beginConnecting() {},
+      cleanupWarmConnection() {},
+      connect: async () => {
+        entered.resolve();
+        await finish.promise;
+        streaming.isConnected = true;
+      },
+      disconnect: async (options) => {
+        disconnects.push(options);
+        streaming.isConnected = false;
+      },
+      sendAudio() {},
+    };
+    const replacement = { isConnected: true };
+    t.after(async () => {
+      finish.resolve();
+      await Promise.allSettled(pending);
+      fakeThis.geminiStreaming = previous.stream;
+      databaseManager.activeAccountId = previous.account;
+      tokenState = previous.tokenState;
+      fakeThis._remoteStreamPolicies.delete("geminiStreaming");
+      if (previous.environment)
+        Object.defineProperty(fakeThis, "environmentManager", previous.environment);
+      else delete fakeThis.environmentManager;
+    });
+    tokenState = { token: "warmup-owner-token", generation: tokenState.generation + 1 };
+    await setScope("warmup-owner", tokenState.generation);
+    await fakeThis.refreshEffectivePolicy();
+    fakeThis.environmentManager = { getGeminiKey: () => "saved-key" };
+    fakeThis.geminiStreaming = streaming;
+    const warmup = handlers.get("gemini-streaming-warmup")({ sender: {} }, { mode: "byok" });
+    pending.push(warmup);
+    await entered.promise;
+    const start = handlers.get("gemini-streaming-start")({ sender: {} }, { mode: "byok" });
+    pending.push(start);
+    await new Promise(setImmediate);
+    assert.equal(streaming.isConnected, false, "same-account promotion waits for its warmup");
+    handleAuthTokenChange({ token: "next-warmup-token", generation: tokenState.generation + 1 });
+    await setScope("next-warmup-owner", tokenState.generation);
+    await fakeThis.refreshEffectivePolicy();
+    const overlap = handlers.get("gemini-streaming-warmup")({ sender: {} }, { mode: "byok" });
+    pending.push(overlap);
+    assert.deepEqual(await Promise.race([overlap, new Promise(setImmediate)]), {
+      success: false,
+      error: "Operation in progress",
+    });
+    if (replaced) {
+      fakeThis.geminiStreaming = replacement;
+      fakeThis._remoteStreamPolicies.set("geminiStreaming", {
+        channel: "gemini-streaming-start",
+        args: [{ mode: "byok" }],
+        accountId: "next-warmup-owner",
+      });
+    }
+    finish.resolve();
+    assert.equal((await warmup).code, "AUTH_CONTEXT_CHANGED");
+    assert.equal((await start).code, "AUTH_CONTEXT_CHANGED");
+    assert.equal(streaming.isConnected, false);
+    assert.ok(disconnects.length > 0);
+    assert.ok(disconnects.every((options) => options.commit === false));
+    assert.equal(fakeThis.geminiStreaming, replaced ? replacement : null);
+  });
+}

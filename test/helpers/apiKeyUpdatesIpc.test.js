@@ -98,6 +98,9 @@ class FakeStreaming {
   cleanupAll() {
     this.cleanupWarmConnection();
   }
+  cleanup() {
+    this.isConnected = false;
+  }
   async warmup(options) {
     if (this.warmToken !== null) return;
     this.warmToken = options.token;
@@ -1278,6 +1281,64 @@ const setWorkspacePolicy = (snapshot) => {
   };
   target.effectivePolicyManager.updateWorkspace(workspacePolicy);
 };
+
+test("a pending workspace decision applies new device denials selectively to main requests and sockets", (t) => {
+  const previousWorkspace = workspacePolicy;
+  const denied = new AbortController();
+  const allowed = new AbortController();
+  const blockedStream = new FakeStreaming();
+  const allowedStream = new FakeStreaming();
+  blockedStream.isConnected = true;
+  allowedStream.isConnected = true;
+  t.after(() => {
+    target._productRequests.delete(denied);
+    target._productRequests.delete(allowed);
+    target.assemblyAiStreaming = null;
+    target.deepgramStreaming = null;
+    target._remoteStreamPolicies.delete("assemblyAiStreaming");
+    target._remoteStreamPolicies.delete("deepgramStreaming");
+    workspacePolicy = previousWorkspace;
+    target.effectivePolicyManager.updateWorkspace(previousWorkspace);
+  });
+  target._productRequests.set(denied, {
+    channel: "cloud-reason",
+    args: [],
+    accountId: "personal-account",
+    remote: true,
+  });
+  target._productRequests.set(allowed, {
+    channel: "cloud-transcribe",
+    args: [],
+    accountId: "personal-account",
+    remote: true,
+  });
+  for (const [property, streaming, channel] of [
+    ["assemblyAiStreaming", blockedStream, "assemblyai-streaming-start"],
+    ["deepgramStreaming", allowedStream, "deepgram-streaming-start"],
+  ]) {
+    target[property] = streaming;
+    target._remoteStreamPolicies.set(property, {
+      channel,
+      args: [{ mode: "byok" }],
+      accountId: "personal-account",
+    });
+  }
+  workspacePolicy = null;
+  target.effectivePolicyManager.invalidate();
+  assert.equal(denied.signal.aborted, false);
+  assert.equal(allowed.signal.aborted, false);
+  const policy = defaultDevicePolicy();
+  policy.llm.allowedModes = ["local"];
+  policy.transcription.allowedByokProviders = ["deepgram"];
+  setDeviceValues({ Policy: JSON.stringify(policy) });
+  assert.equal(target.effectivePolicyManager.getCurrent().status, "loading");
+  assert.equal(denied.signal.aborted, true);
+  assert.equal(allowed.signal.aborted, false);
+  assert.equal(blockedStream.isConnected, false);
+  assert.equal(target.assemblyAiStreaming, null);
+  assert.equal(allowedStream.isConnected, true);
+  assert.equal(target.deepgramStreaming, allowedStream);
+});
 const REVOKED_MEETINGS = {
   success: true,
   managed: true,
