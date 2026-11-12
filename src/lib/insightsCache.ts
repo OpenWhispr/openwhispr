@@ -22,10 +22,21 @@ interface AccountInsights {
 }
 
 let current: AccountInsights | null = null;
+let insightsCacheVersion = 0;
 let leaderboardCacheVersion = 0;
+type CacheInvalidation = "all" | "leaderboards";
+const invalidationListeners = new Set<(scope: CacheInvalidation) => void>();
+
+export function subscribeToInsightsCacheInvalidation(listener: (scope: CacheInvalidation) => void) {
+  invalidationListeners.add(listener);
+  return () => {
+    invalidationListeners.delete(listener);
+  };
+}
 
 function forAccount(accountId: string): AccountInsights {
   if (current?.accountId !== accountId) {
+    insightsCacheVersion += 1;
     leaderboardCacheVersion += 1;
     current = {
       accountId,
@@ -36,6 +47,15 @@ function forAccount(accountId: string): AccountInsights {
     };
   }
   return current;
+}
+
+export function getInsightsCacheVersion(accountId: string): number {
+  forAccount(accountId);
+  return insightsCacheVersion;
+}
+
+export function isInsightsCacheCurrent(accountId: string, version: number): boolean {
+  return current?.accountId === accountId && insightsCacheVersion === version;
 }
 
 export function getLeaderboardCacheVersion(accountId: string): number {
@@ -99,15 +119,22 @@ export function cachedLeaderboardWeekStarts(accountId: string) {
  * boards the account sees: joining or leaving the leaderboard, creating,
  * joining, leaving or deleting a workspace, and a join request.
  */
-export function clearCachedLeaderboards(): void {
+export function clearCachedLeaderboards({
+  revalidate = true,
+}: { revalidate?: boolean } = {}): void {
   leaderboardCacheVersion += 1;
-  if (!current) return;
-  current.access = null;
-  current.leaderboards.clear();
-  current.weekStarts.clear();
+  if (current) {
+    current.access = null;
+    current.leaderboards.clear();
+    current.weekStarts.clear();
+  }
+  // A refusal already chooses its recovery UI; external changes need a new read.
+  if (revalidate) invalidationListeners.forEach((listener) => listener("leaderboards"));
 }
 
 export function clearInsightsCache(): void {
+  insightsCacheVersion += 1;
   leaderboardCacheVersion += 1;
   current = null;
+  invalidationListeners.forEach((listener) => listener("all"));
 }

@@ -26,12 +26,14 @@ test("the leaderboard paints a kept board first and never keeps one a gate refus
   assert.ok(load.includes("cacheLeaderboard(accountId, responseRequestKey, nextLeaderboard)"));
   assert.ok(
     load.includes(
-      "loadError.status >= 400 && loadError.status < 500)\n        clearCachedLeaderboards();"
+      "loadError.status >= 400 && loadError.status < 500)\n        clearCachedLeaderboards({ revalidate: false });"
     ),
     "a refused board clears every kept board and access answer"
   );
   assert.ok(
-    section.includes("clearCachedLeaderboards();\n                  void load();"),
+    section.includes(
+      "clearCachedLeaderboards({ revalidate: false });\n                  void load();"
+    ),
     "Refresh asks the cloud rather than the kept board"
   );
   assert.ok(section.includes("cacheLeaderboardAccess(accountId, response);"));
@@ -59,9 +61,11 @@ test("Your usage skips only a check for remote changes while its summary is fres
   const view = read("src/components/InsightsView.tsx");
 
   assert.ok(
-    view.includes(
-      "!dataChanged &&\n          !accountReadFailedRef.current &&\n          accountId &&\n          isInsightFresh(readCachedInsightsSummary(accountId))"
-    ),
+    view
+      .replace(/\s+/g, " ")
+      .includes(
+        "!dataChanged && !accountReadFailedRef.current && accountId && isInsightFresh(readCachedInsightsSummary(accountId))"
+      ),
     "a dictation always reloads; focus and the interval wait out a fresh summary, not a failure"
   );
   assert.ok(view.includes("if (accountId) cacheInsightsSummary(accountId, account);"));
