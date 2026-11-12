@@ -209,6 +209,116 @@ test("renaming a mirrored note cleans up both stale files and reveals the note",
   assert.match(fs.readFileSync(notePath, "utf-8"), /Updated notes$/);
 });
 
+function uploadNote(overrides = {}) {
+  return {
+    id: 42,
+    title: "Uploaded audio",
+    note_type: "upload",
+    content: "",
+    enhanced_content: "",
+    created_at: "2026-07-21T12:00:00Z",
+    updated_at: "2026-07-21T12:00:00Z",
+    transcript: JSON.stringify([{ text: "A recorded transcript." }]),
+    ...overrides,
+  };
+}
+
+function mirrorUpload(t) {
+  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
+  markdownMirror.init(basePath);
+  return {
+    basePath,
+    notePath: path.join(basePath, "Personal", "42-uploaded-audio.md"),
+    transcriptPath: path.join(basePath, "Personal", "42-uploaded-audio-transcript.md"),
+  };
+}
+
+test("a transcript-only upload mirrors only its transcript and reveals it", (t) => {
+  const { basePath, notePath, transcriptPath } = mirrorUpload(t);
+  const note = uploadNote({ content: " \n", enhanced_content: "  " });
+  markdownMirror.rebuildAll([note], {}, {});
+  assert.equal(fs.existsSync(notePath), false);
+  assert.match(fs.readFileSync(transcriptPath, "utf8"), /A recorded transcript\./);
+  assert.equal(markdownMirror.getNotePath(note.id), transcriptPath);
+  markdownMirror.rebuildAll([{ ...note, title: "Renamed", folder_id: 1 }], { 1: "Archive" }, {});
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Personal")), []);
+  assert.equal(
+    markdownMirror.getNotePath(note.id),
+    path.join(basePath, "Archive", "42-renamed-transcript.md")
+  );
+});
+
+test("upload summaries and notes retain their main file; blank drafts and meetings are unchanged", (t) => {
+  const { notePath, transcriptPath } = mirrorUpload(t);
+  for (const fields of [
+    { content: "Notes", enhanced_content: "" },
+    { content: "", enhanced_content: "Summary" },
+    { content: "Notes", enhanced_content: "  " },
+    { note_type: "personal", content: "", enhanced_content: "" },
+    { transcript: null, content: "", enhanced_content: "" },
+  ]) {
+    const note = uploadNote(fields);
+    markdownMirror.writeNote(note, "Personal");
+    assert.equal(fs.existsSync(notePath), true, JSON.stringify(fields));
+    if (fields.enhanced_content?.trim())
+      assert.match(fs.readFileSync(notePath, "utf8"), /Summary$/);
+    else if (fields.content?.trim()) assert.match(fs.readFileSync(notePath, "utf8"), /Notes$/);
+    fs.unlinkSync(notePath);
+  }
+  assert.equal(fs.existsSync(transcriptPath), false);
+});
+
+test("clearing an upload summary removes the unchanged companion but preserves edits", (t) => {
+  const { notePath } = mirrorUpload(t);
+  const note = uploadNote();
+  markdownMirror.writeNote({ ...note, enhanced_content: "Summary" }, "Personal");
+  markdownMirror.writeNote(note, "Personal");
+  markdownMirror.writeTranscript(note, "Personal", {});
+  assert.equal(fs.existsSync(notePath), false);
+
+  for (const edit of [
+    (s) => `${s}\nExternal text`,
+    (s) => s.replace("\n---\n\n", "\ntags: [mine]\n---\n\n"),
+  ]) {
+    markdownMirror.writeNote({ ...note, enhanced_content: "Summary" }, "Personal");
+    const edited = edit(fs.readFileSync(notePath, "utf8"));
+    fs.writeFileSync(notePath, edited);
+    markdownMirror.writeNote(note, "Personal");
+    markdownMirror.writeTranscript(note, "Personal", {});
+    assert.equal(fs.readFileSync(notePath, "utf8"), edited);
+  }
+});
+
+test("cleanup removes an unchanged companion after the upload's metadata changes", (t) => {
+  const { notePath } = mirrorUpload(t);
+  const note = uploadNote();
+  markdownMirror.writeNote({ ...note, transcript: null }, "Personal");
+  markdownMirror.init(path.dirname(path.dirname(notePath)));
+  const renamed = { ...note, title: "Renamed", updated_at: "2026-07-22T12:00:00Z" };
+  markdownMirror.writeNote(renamed, "Personal");
+  markdownMirror.writeTranscript(renamed, "Personal", {});
+  assert.equal(fs.existsSync(notePath), false);
+});
+
+test("legacy metadata-only companions are removed only when their metadata matches", (t) => {
+  const { notePath } = mirrorUpload(t);
+  const note = uploadNote();
+  markdownMirror.writeNote({ ...note, transcript: null }, "Personal");
+  const legacy = fs
+    .readFileSync(notePath, "utf8")
+    .replace(/\n# openwhispr-mirror: [a-f0-9]{64}/, "");
+  fs.writeFileSync(notePath, legacy);
+  markdownMirror.writeTranscript({ ...note, updated_at: "2026-07-22T12:00:00Z" }, "Personal", {});
+  assert.equal(fs.readFileSync(notePath, "utf8"), legacy);
+  markdownMirror.writeTranscript(note, "Personal", {});
+  assert.equal(fs.existsSync(notePath), false);
+
+  fs.writeFileSync(notePath, `${legacy}Earlier summary`);
+  markdownMirror.writeTranscript(note, "Personal", {});
+  assert.match(fs.readFileSync(notePath, "utf8"), /Earlier summary$/);
+});
+
 function readFrontmatter(fileContent) {
   const match = fileContent.match(/^---\n([\s\S]*?)\n---\n/);
   assert.ok(match, "file should start with a --- fenced frontmatter block");

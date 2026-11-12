@@ -141,9 +141,22 @@ class MarkdownMirror {
     return lines.join("\n");
   }
 
+  _isTranscriptOnlyUpload(note, segments) {
+    if (note.note_type !== "upload" || note.content?.trim() || note.enhanced_content?.trim()) {
+      return false;
+    }
+    try {
+      const transcript = segments || JSON.parse(note.transcript || "[]");
+      return Array.isArray(transcript) && transcript.some((segment) => segment?.text?.trim());
+    } catch {
+      return false;
+    }
+  }
+
   writeNote(note, folderName) {
     if (!this._baseRealPath) return;
     try {
+      if (this._isTranscriptOnlyUpload(note)) return;
       const dirPath = this._resolveFolderPath(folderName, { create: true });
       if (!dirPath) return;
 
@@ -162,8 +175,17 @@ class MarkdownMirror {
       }
 
       const frontmatter = this._buildFrontmatter(note, folderName || "Personal");
-      const body = note.enhanced_content || note.content || "";
-      fs.writeFileSync(newFilePath, `${frontmatter}\n\n${body}`, "utf-8");
+      const body =
+        note.note_type === "upload" && !note.enhanced_content?.trim()
+          ? note.content || ""
+          : note.enhanced_content || note.content || "";
+      let contents = `${frontmatter}\n\n${body}`;
+      if (note.note_type === "upload") {
+        // A YAML comment lets cleanup recognize unedited output across restarts.
+        const hash = crypto.createHash("sha256").update(contents).digest("hex");
+        contents = contents.replace(/\n---\n\n/, `\n# openwhispr-mirror: ${hash}\n---\n\n`);
+      }
+      fs.writeFileSync(newFilePath, contents, "utf-8");
     } catch (err) {
       debugLogger.error(
         "Failed to write note file",
@@ -188,6 +210,9 @@ class MarkdownMirror {
       this._assertWritableFilePath(newFilePath);
 
       const stale = this._globTranscriptFiles(note.id);
+      const { formatMd } = require("./transcriptFormatter");
+      fs.writeFileSync(newFilePath, formatMd(note, segments, speakerMappings || {}), "utf-8");
+
       for (const existing of stale) {
         if (existing !== newFilePath) {
           try {
@@ -195,9 +220,34 @@ class MarkdownMirror {
           } catch {}
         }
       }
-
-      const { formatMd } = require("./transcriptFormatter");
-      fs.writeFileSync(newFilePath, formatMd(note, segments, speakerMappings || {}), "utf-8");
+      if (this._isTranscriptOnlyUpload(note, segments)) {
+        const expected =
+          note.created_at && note.updated_at
+            ? `${this._buildFrontmatter(note, folderName || "Personal")}\n\n`
+            : null;
+        for (const file of this._globNoteFiles(note.id)) {
+          try {
+            const contents = fs.readFileSync(file, "utf8");
+            const marker = contents.match(/\n# openwhispr-mirror: ([a-f0-9]{64})\n---\n\n/);
+            const original = marker ? contents.replace(marker[0], "\n---\n\n") : null;
+            const unchanged =
+              original?.startsWith(`---\nid: ${note.id}\n`) &&
+              crypto.createHash("sha256").update(original).digest("hex") === marker[1];
+            if (
+              unchanged ||
+              (expected && contents.startsWith(expected) && !contents.slice(expected.length).trim())
+            ) {
+              fs.unlinkSync(file);
+            }
+          } catch (err) {
+            debugLogger.error(
+              "Failed to remove empty upload companion",
+              { noteId: note.id, file, error: err.message },
+              "note-files"
+            );
+          }
+        }
+      }
     } catch (err) {
       debugLogger.error(
         "Failed to write transcript file",
@@ -294,7 +344,9 @@ class MarkdownMirror {
   getNotePath(noteId) {
     if (!this._baseRealPath) return null;
     const files = this._globNoteFiles(noteId);
-    return files.length > 0 ? this._displayPath(files[0]) : null;
+    if (files.length > 0) return this._displayPath(files[0]);
+    const transcripts = this._globTranscriptFiles(noteId);
+    return transcripts.length > 0 ? this._displayPath(transcripts[0]) : null;
   }
 
   getFolderPath(folderName) {
