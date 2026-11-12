@@ -34,6 +34,12 @@ The wipe runs only when the app reads a valid device policy. A policy that can't
 
 The app can't revoke tokens at Google, Microsoft or connector providers during the wipe; it deletes its local copies. Revoke the account at your identity provider as part of offboarding.
 
+## Removal from the workspace
+
+When an admin removes someone from a workspace with a policy (one at a time or in bulk), or your identity provider deprovisions them through directory sync, every device that workspace managed for them wipes the same data at its next check-in. It then opens as a fresh install and shows "Your organization removed this device's OpenWhispr data." The audit log records it with `trigger: "workspace-removal"`.
+
+Nothing is wiped when a member leaves the workspace on their own, signs out, or their session expires, when the directory moves an account to a new email address, or on a device that workspace never managed. A device keeps downloaded models unless it also has `WipeLocalDataIncludesModels`.
+
 ## Scripts (app closed)
 
 Both scripts quit OpenWhispr first, then remove the in-app wipe's files for every user on the device, or only for the homes or profiles you name. They keep the audit log and `local-data-wipe.json` too. Since they run as root or SYSTEM, they never follow a symbolic link or junction out of a user's home, and they clean a Markdown notes folder only when it is inside that home. A file they can't remove is reported, the rest is still removed, and the script exits with an error so your MDM tool shows the device as failed.

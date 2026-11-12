@@ -1577,9 +1577,7 @@ class IPCHandlers {
     const { requestWorkspaceRemovalWipe } = require("./localDataWipe");
     if (!requestWorkspaceRemovalWipe(app.getPath("userData"), removal)) return;
     this._workspaceRemovalWipeRequested = true;
-    // Like Reset app data, a development build quits instead of relaunching.
-    if (process.env.NODE_ENV !== "development") autoStart.scheduleRelaunch(this.oauthProtocol);
-    app.quit();
+    void this.relaunchApp();
   }
 
   _initMirror(basePath) {
@@ -4962,13 +4960,14 @@ class IPCHandlers {
       return { success: true, deletedCount };
     });
 
-    // One-time "GPU pack needs re-downloading" notice recorded before any
-    // window existed (#1606). Only the window that shows it can take it.
+    // The workspace removal wipe's one-time notice (#3030), for the control panel.
     ipcMain.handle("take-local-data-wipe-notice", (event) => {
       if (event.sender !== this.windowManager.controlPanelWindow?.webContents) return null;
       return require("./localDataWipe").takeWipeNotice(app.getPath("userData"));
     });
 
+    // One-time "GPU pack needs re-downloading" notice recorded before any
+    // window existed (#1606). Only the window that shows it can take it.
     ipcMain.handle("take-gpu-pack-migration-notice", (event) => {
       if (event.sender !== this._gpuPackNoticeWindow()?.webContents) return null;
       return require("./gpuPackMigrationNotice").take();
@@ -5331,7 +5330,8 @@ class IPCHandlers {
 
     // Under `npm run dev` the Vite server dies with Electron, so a relaunched dev
     // instance would have no renderer: just quit there.
-    ipcMain.handle("relaunch-app", async () => {
+    // After Reset app data, and after recording a workspace removal's wipe (#3030).
+    this.relaunchApp = async () => {
       if (process.env.NODE_ENV === "development") return app.quit();
       // Once Squirrel.Mac holds a downloaded update it installs it on this quit regardless
       // of any flag, so the updater owns that restart instead of racing app.relaunch().
@@ -5345,7 +5345,8 @@ class IPCHandlers {
       this.updateManager.deferInstallOnQuit();
       autoStart.scheduleRelaunch(this.oauthProtocol);
       app.quit();
-    });
+    };
+    ipcMain.handle("relaunch-app", () => this.relaunchApp());
 
     ipcMain.handle("cleanup-app", async (event) => {
       const errors = [];

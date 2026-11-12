@@ -1265,17 +1265,28 @@ test("nothing is held for an identity that never fetched a policy", () => {
 const removal = { workspaceId: "workspace-1", removedAt: "2026-11-12T10:00:00.000Z" };
 const unmanagedWith = (extra) =>
   response(200, { data: { managed: false, policy: null, policyUpdatedAt: null, ...extra } });
+const managedBy =
+  (...workspaceIds) =>
+  () =>
+    response(200, { data: { ...validPolicy().data, managedBy: workspaceIds } });
 
 function removalSetup(responses) {
   const removals = [];
+  const requests = [];
   let call = 0;
-  const context = setup(async () => responses[Math.min(call++, responses.length - 1)](), {
-    getValidatedAccountId: () => "account-a",
-    onWorkspaceRemoval: (reported) => removals.push(reported),
-  });
-  const lookup = () =>
-    context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
-  return { ...context, removals, lookup };
+  const context = setup(
+    async (_url, init) => {
+      requests.push(init.headers);
+      return responses[Math.min(call++, responses.length - 1)]();
+    },
+    {
+      getValidatedAccountId: () => "account-a",
+      onWorkspaceRemoval: (reported) => removals.push(reported),
+    }
+  );
+  const lookup = (accountId = "account-a") =>
+    context.manager.getPolicy({ accountId, expectedAuthGeneration: 1 });
+  return { ...context, removals, requests, lookup };
 }
 
 test("a device the workspace managed hears its removal, signed in or not", async (t) => {
@@ -1290,25 +1301,43 @@ test("a device the workspace managed hears its removal, signed in or not", async
     // Directory deprovisioning kept it signed in.
     () => unmanagedWith({ workspaceRemoval: removal }),
   ]) {
-    const context = removalSetup([() => response(200, validPolicy()), removed]);
+    const context = removalSetup([managedBy("workspace-1", "workspace-2"), removed]);
     t.after(context.cleanup);
     await context.lookup();
     assert.deepEqual(context.removals, []);
     await context.lookup();
     assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+    // Only this lookup asks for the signal.
+    assert.match(context.requests[0]["x-openwhispr-capabilities"], /,workspace-removal-v1$/);
   }
+});
+
+// A rejected session clears the account label before the next policy refresh.
+test("the revoked session's own verdict still hears its removal without an account label", async (t) => {
+  const context = removalSetup([
+    managedBy("workspace-1"),
+    () => response(401, { code: "WORKSPACE_MEMBER_REMOVED", ...removal }),
+  ]);
+  t.after(context.cleanup);
+  await context.lookup();
+  await context.lookup(null);
+  assert.deepEqual(context.removals, [{ accountId: null, ...removal }]);
 });
 
 test("a removal never reaches a device the workspace didn't manage, nor an ordinary 401", async (t) => {
   for (const responses of [
     // A sign-in on another device: this one never saw the account managed.
     [() => unmanagedWith({ workspaceRemoval: removal })],
-    [() => response(200, validPolicy()), () => response(401, { error: "Invalid session" })],
+    [managedBy("workspace-1"), () => response(401, { error: "Invalid session" })],
     [
-      () => response(200, validPolicy()),
+      managedBy("workspace-1"),
       () => response(401, { code: "WORKSPACE_MEMBER_REMOVED", workspaceId: 7 }),
     ],
-    [() => response(200, validPolicy()), () => unmanagedWith({})],
+    [managedBy("workspace-1"), () => unmanagedWith({})],
+    // Managed by another workspace: an old removal from this one changes nothing.
+    [managedBy("workspace-2"), () => unmanagedWith({ workspaceRemoval: removal })],
+    // A verdict cached before managedBy existed names no workspace.
+    [() => response(200, validPolicy()), () => unmanagedWith({ workspaceRemoval: removal })],
   ]) {
     const context = removalSetup(responses);
     t.after(context.cleanup);

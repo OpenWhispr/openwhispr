@@ -2413,7 +2413,7 @@ declare global {
 
       // One-time "GPU pack needs re-downloading" notice, taken by the window that shows it
       takeGpuPackMigrationNotice: () => Promise<{ packs: string[] } | null>;
-      takeLocalDataWipeNotice?: () => Promise<"workspace-removal" | null>;
+      takeLocalDataWipeNotice: () => Promise<"workspace-removal" | null>;
       onGpuPackMigrationNoticeReady: (callback: () => void) => () => void;
 
       // Parakeet operations (NVIDIA via sherpa-onnx)

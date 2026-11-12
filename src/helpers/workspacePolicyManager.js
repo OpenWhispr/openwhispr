@@ -12,6 +12,8 @@ const {
   writeWorkspacePolicyCache,
 } = require("./workspacePolicyCache");
 
+const WORKSPACE_REMOVAL_CAPABILITY = "workspace-removal-v1";
+
 function unresolvablePolicyError(message) {
   return Object.assign(new Error(message), { code: "POLICY_UNRESOLVABLE" });
 }
@@ -181,12 +183,25 @@ function createWorkspacePolicyManager({
     );
   }
 
-  // #3030: the server says this account was removed from a workspace that
-  // managed it. Only a device whose last verdict for the account was managed
-  // acts on that, so a sign-in on some other device never wipes anything.
+  // #3030: the server says this account was removed from a managed workspace.
+  // Only a device whose last managed verdict for this credential (or account)
+  // named that workspace acts on it: a removal from some other workspace, or a
+  // sign-in on another device, wipes nothing. The credential's own verdict
+  // still counts once a rejected session has cleared the account label.
   function reportRemoval(identity, removal) {
     if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
-    if (!accountWasManaged(identity.accountId)) return;
+    const verdicts = [
+      readWorkspacePolicyCache(cachePath, cacheIdentity(identity)),
+      identity.accountId &&
+        readAccountPolicyCache(cachePath, {
+          apiOrigin: identity.apiOrigin,
+          accountId: identity.accountId,
+        }),
+    ];
+    const managedBy = verdicts.flatMap((verdict) =>
+      verdict?.managed && Array.isArray(verdict.managedBy) ? verdict.managedBy : []
+    );
+    if (!managedBy.includes(removal.workspaceId)) return;
     onWorkspaceRemoval({
       accountId: identity.accountId,
       workspaceId: removal.workspaceId,
@@ -295,9 +310,15 @@ function createWorkspacePolicyManager({
         // This manager keeps its own freshness window; a Chromium-cached copy
         // (the endpoint allows max-age=300) would answer a refresh after a
         // server refusal with the verdict the server just contradicted.
+        const headers = withPolicyRequestHeaders(identity.authHeaders, getAppVersion());
         const response = await proxyFetch(`${identity.apiUrl}/api/workspace-policy`, {
           method: "GET",
-          headers: withPolicyRequestHeaders(identity.authHeaders, getAppVersion()),
+          // #3030: only this lookup asks for the removal signal, so every other
+          // request's 401 stays the session expiry its caller maps to sign-in.
+          headers: {
+            ...headers,
+            "x-openwhispr-capabilities": `${headers["x-openwhispr-capabilities"]},${WORKSPACE_REMOVAL_CAPABILITY}`,
+          },
           cache: "no-store",
           signal: controller.signal,
         });

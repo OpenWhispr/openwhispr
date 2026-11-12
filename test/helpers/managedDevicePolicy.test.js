@@ -207,6 +207,23 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
   );
 });
 
+// The macOS helper returns only the keys it lists, so a key missing there is
+// silently never read (b855b63e2 dropped two).
+test("the macOS reader asks for every device key this build reads", () => {
+  const swift = fs.readFileSync(
+    path.join(__dirname, "../../resources/macos-managed-policy.swift"),
+    "utf8"
+  );
+  assert.deepEqual(JSON.parse(/^let keys = (\[.*\])$/m.exec(swift)[1]), [
+    "Policy",
+    "RequireSignIn",
+    "AuditLogPath",
+    "WipeLocalDataOnLaunch",
+    "WipeLocalDataIncludesModels",
+    "DisableMeetingRecording",
+  ]);
+});
+
 // #3030: the offboarding wipe keeps downloaded models unless this key asks.
 test("WipeLocalDataIncludesModels is a strict boolean that defaults to keeping models", async () => {
   const wipe = { WipeLocalDataOnLaunch: "offboard-1" };
