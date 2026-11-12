@@ -32,6 +32,8 @@ class WavRecorder internal constructor(
 
   companion object { private val microphoneInUse = AtomicBoolean(false) }
   private var ownsMicrophone = false
+  /** Loudness from 0 to 1 for each buffer read, on the recording thread. */
+  @Volatile var onLevel: ((Float) -> Unit)? = null
   private val executor = Executors.newSingleThreadExecutor()
   @Volatile private var recording = false
   private var recorder: PcmInput? = null
@@ -74,6 +76,7 @@ class WavRecorder internal constructor(
               if (count < 0 && !recording) break
               check(count >= 0) { "Microphone interrupted ($count)." }
               if (count == 0) continue
+              onLevel?.invoke(BubblePolicy.level(buffer, count))
               val bytes = ByteBuffer.allocate(count * 2).order(ByteOrder.LITTLE_ENDIAN)
               for (i in 0 until count) { bytes.putShort(buffer[i]); peak = maxOf(peak, abs(buffer[i].toInt())) }
               val data = bytes.array()

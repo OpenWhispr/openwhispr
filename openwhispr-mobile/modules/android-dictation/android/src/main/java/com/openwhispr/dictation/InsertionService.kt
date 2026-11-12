@@ -1,11 +1,13 @@
 package com.openwhispr.dictation
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 
 class InsertionService : AccessibilityService() {
   companion object { var instance: InsertionService? = null; private set }
@@ -21,10 +23,24 @@ class InsertionService : AccessibilityService() {
     return if (text.isEmpty() && start == -1 && end == -1) 0 to 0 else start to end
   }
 
-  override fun onServiceConnected() { instance = this; DictationService.emit?.invoke("onStatusChange", emptyMap()) }
-  override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* Read only on explicit dictation. */ }
+  override fun onServiceConnected() { instance = this; refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
+  // Focus and window changes only decide whether the bubble shows. They check whether the focused
+  // field takes text and isn't a password; the field's text is read only when dictation starts.
+  override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+    handler.removeCallbacks(typingCheck); handler.postDelayed(typingCheck, 120)
+  }
+  private val typingCheck = Runnable { refreshTyping() }
+  fun refreshTyping() {
+    val service = DictationService.instance ?: return
+    val keyboard = runCatching { windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD } }.getOrNull()
+    val top = keyboard?.let { Rect().also(it::getBoundsInScreen).top }
+    val field = if (keyboard == null) null else runCatching { focusedField() }.getOrNull()
+    val typing = field != null && BubblePolicy.canDictate(field.isEditable, field.isPassword)
+    field?.recycle()
+    service.onTyping(typing, top)
+  }
   override fun onInterrupt() { clearTarget() }
-  override fun onDestroy() { clearTarget(); instance = null; DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
+  override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
   fun clearTarget() { target?.node?.recycle(); target = null }
   private fun focusedField(): AccessibilityNodeInfo? {
     val root = rootInActiveWindow ?: return null

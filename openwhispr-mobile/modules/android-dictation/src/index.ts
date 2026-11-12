@@ -38,15 +38,19 @@ export interface DeviceProfile {
   thermalStatus: number | null;
   emulator: boolean;
 }
+export type BubbleStatusValue = 'processing' | 'success' | 'retry' | 'retry-kept' | 'recover';
 interface NativeDictation {
   getDeviceProfile(): DeviceProfile;
   getLocale(): string;
   getStatus(): BubbleStatus;
   openSettings(kind: 'overlay' | 'accessibility' | 'battery' | 'app'): void;
   setEnabled(enabled: boolean, size: number): void;
-  setPractice(visible: boolean, mode: string): Promise<void>;
-  setStatus(status: string): Promise<void>;
-  setBubbleOptions(options: Record<string, string>): Promise<void>;
+  setPractice(visible: boolean): Promise<void>;
+  /**
+   * processing · success · retry (nothing kept: Retry listens again) · retry-kept (the recording
+   * is kept: Retry sends onRetry) · recover (the text is kept in the app: the bubble offers to open it)
+   */
+  setStatus(status: BubbleStatusValue): Promise<void>;
   insert(text: string): Promise<boolean>;
   startRecording(): Promise<void>;
   stopRecording(cancel: boolean): Promise<Recording>;
@@ -89,11 +93,10 @@ export const AndroidDictation =
   Platform.OS === 'android' ? requireNativeModule<NativeDictation>('AndroidDictation') : null;
 export const dictationEvents = AndroidDictation
   ? new EventEmitter<{
-      onStart: (event: {
-        selection: string;
-        mode: 'dictate' | 'translate' | 'write' | 'edit';
-      }) => void;
+      onStart: (event: { selection: string }) => void;
       onRecording: (event: Recording) => void;
+      onRetry: (event: { selection: string }) => void;
+      onDismiss: () => void;
       onError: (event: { message: string }) => void;
       onCancel: () => void;
       onOpenResult: () => void;

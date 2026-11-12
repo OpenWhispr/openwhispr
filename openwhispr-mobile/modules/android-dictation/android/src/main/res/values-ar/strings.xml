@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr · إدراج النص</string>
-  <string name="ow_insertion_description">تتيح إمكانية الوصول لـ OpenWhispr قراءة الحقل النشط عند الإملاء وإدراج النتيجة. لا يرسل رسائل ولا يقرأ حقول كلمات المرور.</string>
+  <string name="ow_insertion_description">تتيح إمكانية الوصول لـ OpenWhispr قراءة الحقل النشط عند الإملاء وإدراج النتيجة. لا يرسل رسائل ولا يقرأ حقول كلمات المرور. كما يتحقق مما إذا كان مربع نص نشطًا، لكي تظهر الفقاعة أثناء الكتابة فقط.</string>
   <string name="ow_bubble_ready">OpenWhispr جاهز</string>
   <string name="ow_bubble_recording">OpenWhispr · جاري الاستماع...</string>
   <string name="ow_bubble_notice">اضغط للفتح. يمكنك تعطيل الزر العائم من الحساب.</string>
@@ -9,4 +9,17 @@
   <string name="ow_meeting_notice">جارٍ تسجيل صوت الاجتماع.</string>
   <string name="ow_meeting_stop">إيقاف</string>
   <string name="ow_meeting_stopped">توقف التسجيل. تم حفظ الصوت.</string>
+  <string name="ow_bubble_writing">جارٍ الكتابة…</string>
+  <string name="ow_bubble_failed">لم أفهم ذلك</string>
+  <string name="ow_bubble_saved">تم الحفظ في OpenWhispr</string>
+  <string name="ow_bubble_hide_target">إخفاء لمدة ساعة</string>
+  <string name="ow_bubble_hidden">الفقاعة مخفية لمدة ساعة</string>
+  <string name="ow_bubble_hidden_notice">اضغط لإظهارها مجددًا</string>
+  <string name="ow_bubble_talk">OpenWhispr: اضغط أو اضغط مطولًا للتحدث</string>
+  <string name="ow_bubble_cancel">إلغاء</string>
+  <string name="ow_bubble_stop">إيقاف وإدراج</string>
+  <string name="ow_bubble_retry">إعادة المحاولة</string>
+  <string name="ow_bubble_open">افتح OpenWhispr لرؤية النص</string>
+  <string name="ow_bubble_dismiss">إغلاق</string>
+  <string name="ow_bubble_listening">جارٍ الاستماع</string>
 </resources>

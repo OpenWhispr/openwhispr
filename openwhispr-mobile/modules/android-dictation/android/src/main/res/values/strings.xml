@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr text insertion</string>
-  <string name="ow_insertion_description">Inserts your dictation into the field you focused. Only the selected field is read when you activate dictation. Password fields are excluded. OpenWhispr does not send messages, tap buttons, or monitor your screen.</string>
+  <string name="ow_insertion_description">Inserts your dictation into the field you focused. Only the selected field is read when you activate dictation. Password fields are excluded. OpenWhispr does not send messages, tap buttons, or monitor your screen. It also checks whether a text box is focused, so the bubble only shows while you type.</string>
   <string name="ow_bubble_ready">OpenWhispr is ready</string>
   <string name="ow_bubble_recording">OpenWhispr is recording</string>
   <string name="ow_bubble_notice">Tap to open. Turn off the bubble in Account.</string>
@@ -9,4 +9,17 @@
   <string name="ow_meeting_notice">Meeting audio is being recorded.</string>
   <string name="ow_meeting_stop">Stop</string>
   <string name="ow_meeting_stopped">Recording stopped. Your audio is saved.</string>
+  <string name="ow_bubble_writing">Writing it up…</string>
+  <string name="ow_bubble_failed">Didn’t catch that</string>
+  <string name="ow_bubble_saved">Saved in OpenWhispr</string>
+  <string name="ow_bubble_hide_target">Hide for 1 hour</string>
+  <string name="ow_bubble_hidden">Bubble hidden for an hour</string>
+  <string name="ow_bubble_hidden_notice">Tap to show it again</string>
+  <string name="ow_bubble_talk">OpenWhispr: tap or hold to talk</string>
+  <string name="ow_bubble_cancel">Cancel</string>
+  <string name="ow_bubble_stop">Stop and insert</string>
+  <string name="ow_bubble_retry">Try again</string>
+  <string name="ow_bubble_open">Open OpenWhispr to see your text</string>
+  <string name="ow_bubble_dismiss">Dismiss</string>
+  <string name="ow_bubble_listening">Listening</string>
 </resources>

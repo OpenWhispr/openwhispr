@@ -21,7 +21,7 @@ export default function AndroidTabs() {
   const insets = useSafeAreaInsets();
   const segments = useSegments() as string[];
   const detail =
-    ((segments.includes('(notes)') || segments.includes('(chat)')) && segments.at(-1) === '[id]') ||
+    (segments.includes('(notes)') && segments.at(-1) === '[id]') ||
     (segments.includes('(notes)') &&
       (segments.at(-1) === 'meeting-record' || segments.at(-1) === 'import-audio'));
   return (
@@ -80,20 +80,8 @@ export default function AndroidTabs() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="(chat)"
-        options={{
-          title: t('chat'),
-          tabBarIcon: ({ color }) => (
-            <SystemIcon
-              name="bubble.left.and.bubble.right"
-              mdName="MessagesSquare"
-              size={23}
-              color={color}
-            />
-          ),
-        }}
-      />
+      {/* Chat isn't part of the Android beta. The route stays registered for iOS, so hide it. */}
+      <Tabs.Screen name="(chat)" options={{ href: null }} />
       <Tabs.Screen
         name="(dictionary)"
         options={{
