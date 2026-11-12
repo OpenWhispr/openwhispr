@@ -84,6 +84,31 @@ test("selection completion nonce survives omitted decoration and stays strict", 
     });
   }
 
+  // Cloud refuses a rewrite cut off at the length limit itself, so its answer
+  // without the marker is complete; a partial, wrong or misplaced one still isn't.
+  const runCloud = (manager) =>
+    manager.processAgentCommand(instruction, "synthetic-model", "Assistant", {
+      provider: "openwhispr",
+      systemPrompt: "Synthetic editing prompt",
+      selectionEditReachable: true,
+    });
+  await t.test("Cloud accepts a complete rewrite without the marker", async () => {
+    const manager = managerFor(() => replacement);
+    assert.equal(await runCloud(manager), replacement);
+    assert.deepEqual(manager.pendingSelectionEdit, { sessionId: "synthetic-selection" });
+  });
+  for (const [name, response] of [
+    ["partial UUID", (marker) => `${replacement}${marker.slice(0, -1)}`],
+    ["trailing content", (marker) => `${replacement}${marker} explanation`],
+    ["duplicate marker", (marker) => `${replacement}${marker}${marker}`],
+  ]) {
+    await t.test(`Cloud still rejects ${name}`, async () => {
+      const manager = managerFor(response);
+      await assert.rejects(runCloud(manager), { code: "SELECTION_EDIT_INVALID_RESPONSE" });
+      assert.ok(!manager.pendingSelectionEdit);
+    });
+  }
+
   await t.test("an empty replacement cannot arm an edit", async () => {
     const manager = managerFor((marker) => marker);
     await assert.rejects(run(manager), { code: "SELECTION_EDIT_EMPTY_RESPONSE" });

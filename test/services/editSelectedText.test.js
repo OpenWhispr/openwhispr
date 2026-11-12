@@ -47,6 +47,43 @@ test("selection edits send the screenshot on their first call and validate compl
   assert.equal(calls[0][3].requireCompleteOutput, true);
 });
 
+test("the completion marker's instruction stays last, after the screen-context block", async (t) => {
+  const { service, editSelectedText } = await editor(t);
+  const configs = [];
+  t.mock.method(service, "processText", async (...args) => {
+    configs.push(args[3]);
+    if (configs.length === 1) throw new Error("image rejected");
+    return `Revised.${args[3].systemPrompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/)[0]}`;
+  });
+  await editSelectedText("Elaborate this", "Short.", {
+    attachment: { image: "fixture-image", mediaType: "image/jpeg" },
+    signal: new AbortController().signal,
+  });
+  assert.equal(configs.length, 2);
+  for (const { systemPrompt } of configs) {
+    const lastLine = systemPrompt.trimEnd().split("\n").at(-1);
+    assert.match(lastLine, /append this exact completion marker.*__OPENWHISPR_SELECTION_COMPLETE_/);
+  }
+  const withScreen = configs[0].systemPrompt;
+  assert.ok(withScreen.indexOf("SCREEN CONTEXT:") < withScreen.indexOf("SELECTION EDITING MODE:"));
+});
+
+test("a Cloud edit without the marker is applied; the same answer over BYOK is not", async (t) => {
+  const cloud = await editor(t, { dictationAgentMode: "openwhispr", isSignedIn: true });
+  t.mock.method(cloud.service, "processText", async () => "Revised paragraph.");
+  const signal = new AbortController().signal;
+  assert.equal(
+    await cloud.editSelectedText("Elaborate this", "Short.", { signal }),
+    "Revised paragraph."
+  );
+
+  const byok = await editor(t);
+  t.mock.method(byok.service, "processText", async () => "Revised paragraph.");
+  await assert.rejects(byok.editSelectedText("Elaborate this", "Short.", { signal }), {
+    code: "SELECTION_EDIT_INVALID_RESPONSE",
+  });
+});
+
 test("a screenshot the model refuses costs the edit nothing: it runs once more without it", async (t) => {
   const { service, editSelectedText } = await editor(t);
   const configs = [];

@@ -17,8 +17,10 @@ SELECTION EDITING MODE:
 - Never repeat the assistant wake name or spoken command in the output.`;
 
 // Ends on the full nonce: models can drop decorative closing underscores.
+const COMPLETION_MARKER_STEM = "__OPENWHISPR_SELECTION_COMPLETE_";
+
 export function createSelectionCompletionMarker() {
-  return `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}`;
+  return `${COMPLETION_MARKER_STEM}${crypto.randomUUID()}`;
 }
 
 export function buildSelectionEditSystemPrompt(basePrompt, completionMarker = "") {
@@ -136,12 +138,22 @@ export function getSelectionCaptureDisposition(capture) {
   return capture.status === "target_changed" ? "changed" : "unavailable";
 }
 
-export function extractSelectionEditReplacement(result, completionMarker) {
-  if (typeof result !== "string" || (completionMarker && !result.endsWith(completionMarker))) {
+// markerOptional: OpenWhispr Cloud already refuses a rewrite cut off at the
+// length limit (OUTPUT_TRUNCATED) or left blank, so a Cloud answer that leaves
+// off the marker is still complete; its vision model often does. Any trace of
+// a marker must still be the exact one at the end, or it would be pasted.
+export function extractSelectionEditReplacement(
+  result,
+  completionMarker,
+  { markerOptional = false } = {}
+) {
+  if (typeof result !== "string") throw invalidResponse();
+  const marked = Boolean(completionMarker) && result.endsWith(completionMarker);
+  if (completionMarker && !marked && (!markerOptional || result.includes(COMPLETION_MARKER_STEM))) {
     throw invalidResponse();
   }
 
-  const replacement = completionMarker ? result.slice(0, -completionMarker.length) : result;
+  const replacement = marked ? result.slice(0, -completionMarker.length) : result;
   if (completionMarker && replacement.includes(completionMarker)) throw invalidResponse();
   return requireReplacement(replacement);
 }
