@@ -4524,7 +4524,7 @@ EOF`,
                       disabled={!effectiveDataRetentionEnabled}
                       onChange={(e) => {
                         setTranscriptRetentionDays(parseInt(e.target.value, 10));
-                        // A shorter period deletes Insights counters while Insights is unmounted.
+                        // Retention can remove counters while Settings overlays Insights.
                         clearInsightsCache();
                       }}
                       className={RETENTION_SELECT_CLASS}
