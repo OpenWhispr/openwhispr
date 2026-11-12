@@ -238,3 +238,53 @@ test("two accounts' folders differing only in case get their own directories", (
   assert.equal(dirOf(10, 1), dirOf(12, 1), "the very same name still shares");
   assert.notEqual(dirOf(50, 5).toLowerCase(), dirOf(60, 6).toLowerCase());
 });
+
+test("a later same-named workspace keeps the existing workspace's directory", () => {
+  const workspaceNames = { "w-zeta-1111": "Acme", "w-alpha-2222": "Acme" };
+  const existing = team(10, "Engineering", "w-zeta-1111");
+  const before = placements({ spaces: [existing], workspaceNames });
+  assert.equal(before.forNote({ space_id: 10 }).segments[1], "Acme");
+
+  const after = placements({
+    spaces: [team(30, "Design", "w-zeta-1111"), team(20, "Engineering", "w-alpha-2222"), existing],
+    workspaceNames,
+  });
+  assert.equal(after.forNote({ space_id: 10 }).segments[1], "Acme");
+  assert.equal(after.forNote({ space_id: 30 }).segments[1], "Acme");
+  assert.equal(after.forNote({ space_id: 20 }).segments[1], "Acme (w-alph)");
+});
+
+for (const [firstName, secondName] of [
+  ["Straße", "STRASSE"],
+  ["STRAẞE", "STRASSE"],
+  ["ΟΣ", "οσ"],
+  ["ﬀ", "FF"],
+  ["Café", "Cafe\u0301"],
+  ["\u03b1\u0345\u0301", "\u03b1\u0301\u0345"],
+]) {
+  test(`Unicode-equivalent container names stay apart: ${firstName} / ${secondName}`, () => {
+    const result = placements({
+      workspaceNames: { "w-acme-1111": firstName, "w-beta-2222": secondName },
+      spaces: [team(2, firstName), team(3, secondName), team(4, "Engineering", "w-beta-2222")],
+      folders: [folder(10, firstName, 2), folder(11, secondName, 2)],
+    });
+
+    assert.equal(result.forNote({ space_id: 2 }).segments[1], firstName);
+    assert.equal(result.forNote({ space_id: 4 }).segments[1], `${secondName} (w-beta)`);
+    assert.equal(result.forNote({ space_id: 2 }).segments[3], firstName);
+    assert.equal(result.forNote({ space_id: 3 }).segments[3], `${secondName} (3)`);
+    assert.equal(result.folderLocation(10).segments.at(-1), firstName);
+    assert.equal(result.folderLocation(11).segments.at(-1), `${secondName} (11)`);
+    assert.equal(result.folderLocation(11).folder, secondName);
+  });
+}
+
+test("a Unicode collision suffix cannot take another container's literal name", () => {
+  const result = placements({
+    spaces: [team(2, "Straße"), team(3, "STRASSE"), team(4, "STRASSE (3)")],
+  });
+
+  assert.equal(result.forNote({ space_id: 2 }).segments.at(-1), "Straße");
+  assert.equal(result.forNote({ space_id: 3 }).segments.at(-1), "STRASSE (3)");
+  assert.equal(result.forNote({ space_id: 4 }).segments.at(-1), "STRASSE (3) (4)");
+});

@@ -110,7 +110,7 @@ class MarkdownMirror {
     this._vacatedDirs = new Set();
     // Old-layout files by note id, read once and kept until the mirror moves.
     this._oldLayoutIndex = null;
-    this._oldFolderNames = new Set();
+    this._oldFolderNames = new Set(["Personal"]);
   }
 
   // { files(basePath, ownerId?), record(basePath, entry), forget(basePath, relPath) },
@@ -126,7 +126,7 @@ class MarkdownMirror {
     this._ledgerBasePath = null;
     this._vacatedDirs.clear();
     this._oldLayoutIndex = null;
-    this._oldFolderNames.clear();
+    this._oldFolderNames = new Set(["Personal"]);
     try {
       fs.mkdirSync(basePath, { recursive: true });
       // Keep existing ledger keys while using native spelling for filesystem safety.
@@ -278,8 +278,8 @@ class MarkdownMirror {
       `id: ${note.id}`,
       `title: ${escYaml(note.title)}`,
       `type: ${note.note_type || "personal"}`,
-      ...(location.workspace ? [`workspace: ${escYaml(location.workspace)}`] : []),
-      ...(location.space ? [`space: ${escYaml(location.space)}`] : []),
+      ...(location.workspace ? [`workspace: ${JSON.stringify(location.workspace)}`] : []),
+      ...(location.space ? [`space: ${JSON.stringify(location.space)}`] : []),
       ...(location.folder ? [`folder: ${escYaml(location.folder)}`] : []),
       `created: ${note.created_at || new Date().toISOString()}`,
       `updated: ${note.updated_at || new Date().toISOString()}`,
@@ -351,8 +351,14 @@ class MarkdownMirror {
   // the mirror owns, or none, is written here. One that fails partway gets its previous
   // content back, or goes if that fails too, rather than being kept aside as an edit.
   _writeInPlace(filePath, content, previousContent) {
-    const { O_WRONLY, O_CREAT, O_TRUNC, O_NOFOLLOW = 0 } = fs.constants;
-    const descriptor = fs.openSync(filePath, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0o666);
+    const { O_WRONLY, O_CREAT, O_TRUNC, O_EXCL, O_NOFOLLOW = 0 } = fs.constants;
+    // Another process can recreate the path after an edited file was kept aside.
+    const creationFlags = previousContent === null ? O_EXCL : O_TRUNC;
+    const descriptor = fs.openSync(
+      filePath,
+      O_WRONLY | O_CREAT | creationFlags | O_NOFOLLOW,
+      0o666
+    );
     let failure = null;
     try {
       fs.writeFileSync(descriptor, content, "utf-8");
@@ -392,7 +398,7 @@ class MarkdownMirror {
     const dirPath = path.dirname(filePath);
     const name = path.basename(filePath);
     let keptPath = path.join(dirPath, `edited-${name}`);
-    for (let copy = 2; fs.existsSync(keptPath); copy++) {
+    for (let copy = 2; fs.lstatSync(keptPath, { throwIfNoEntry: false }); copy++) {
       keptPath = path.join(dirPath, `edited-${copy}-${name}`);
     }
     renameWithRetry(filePath, keptPath);
@@ -451,12 +457,16 @@ class MarkdownMirror {
         current = fs.readFileSync(filePath, "utf-8");
       } catch {}
       unchanged = current === content;
-      const ownsIt = ownFiles.some(
-        (entry) =>
-          (entry.relPath === relPath ||
-            this._isSameFile(this._absolutePath(entry.relPath), filePath)) &&
-          this._isPristine(entry)
-      );
+      const ownsIt = this._ledger
+        .files(this._ledgerBasePath, noteId)
+        .some(
+          (entry) =>
+            entry.ownerId === noteId &&
+            entry.kind !== "dir" &&
+            (entry.relPath === relPath ||
+              this._isSameFile(this._absolutePath(entry.relPath), filePath)) &&
+            this._isPristine(entry)
+        );
       if (!unchanged && !ownsIt) {
         this._keepAside(filePath);
         current = null;
@@ -710,16 +720,20 @@ class MarkdownMirror {
   legacyNoteIds(folderNames = []) {
     if (!this._baseRealPath) return new Set();
     this._oldFolderNames = new Set(
-      folderNames.map((name) => {
-        const folderName = this._safeFolderName(name);
-        try {
-          return path.basename(
-            this._resolveExistingFolderPath(path.join(this._baseRealPath, folderName))
-          );
-        } catch {
-          return folderName;
-        }
-      })
+      ["Personal", ...folderNames]
+        .flatMap((name) => [
+          this._safeFolderName(name),
+          `__ow-${crypto.createHash("sha256").update(name, "utf8").digest("hex")}`,
+        ])
+        .map((folderName) => {
+          try {
+            return path.basename(
+              this._resolveExistingFolderPath(path.join(this._baseRealPath, folderName))
+            );
+          } catch {
+            return folderName;
+          }
+        })
     );
     this._oldLayoutIndex = this._scanOldLayout();
     const ids = new Set();
@@ -768,39 +782,33 @@ class MarkdownMirror {
     }
   }
 
-  // The old mirror wrote `id: <note id>` first in every note's frontmatter, so a
-  // file without it, whatever its name, is the user's.
+  // An id alone is common in a user's vault. Require the old mirror's metadata,
+  // and exclude copies of the new layout, which always name their space.
   _namesItsNote(filePath, noteId) {
-    let fd;
     try {
-      fd = fs.openSync(filePath, "r");
-      const head = Buffer.alloc(1024);
-      const bytesRead = fs.readSync(fd, head, 0, head.length, 0);
-      const parsed = parseFrontmatter(head.toString("utf8", 0, bytesRead));
-      return parsed?.values.get("id") === noteId;
+      const parsed = parseFrontmatter(fs.readFileSync(filePath, "utf8"));
+      return (
+        parsed?.values.keys().next().value === "id" &&
+        parsed.values.get("id") === noteId &&
+        ["title", "type", "folder"].every((key) => parsed.values.has(key)) &&
+        !parsed.values.has("space") &&
+        !parsed.values.has("workspace")
+      );
     } catch {
       return false;
-    } finally {
-      if (fd !== undefined) fs.closeSync(fd);
     }
   }
 
   // A transcript opens as transcriptFormatter wrote it: "# <title>" then the
   // date in Markdown, or the title, the date and a rule line in text.
   _looksLikeTranscript(filePath) {
-    let fd;
     try {
-      fd = fs.openSync(filePath, "r");
-      const head = Buffer.alloc(1024);
-      const bytesRead = fs.readSync(fd, head, 0, head.length, 0);
-      const lines = normalizeLineEndings(head.toString("utf8", 0, bytesRead)).split("\n");
+      const lines = normalizeLineEndings(fs.readFileSync(filePath, "utf8")).split("\n", 6);
       return filePath.endsWith(".md")
         ? lines[0].startsWith("# ") && lines[2]?.startsWith("**")
-        : lines.slice(0, 6).some((line) => /^─{10,}$/.test(line));
+        : lines.some((line) => /^─{10,}$/.test(line));
     } catch {
       return false;
-    } finally {
-      if (fd !== undefined) fs.closeSync(fd);
     }
   }
 
@@ -817,7 +825,8 @@ class MarkdownMirror {
     }
     const isMarkdownNote = file.endsWith(".md") && this._isNoteMarkdownFile(filePath);
     if (file.endsWith("-transcript.txt") || (file.endsWith("-transcript.md") && !isMarkdownNote)) {
-      return this._looksLikeTranscript(filePath) ? "transcript" : null;
+      const knownFolder = this._oldFolderNames.has(path.basename(path.dirname(filePath)));
+      return knownFolder && this._looksLikeTranscript(filePath) ? "transcript" : null;
     }
     return isMarkdownNote && this._namesItsNote(filePath, noteId) ? "note" : null;
   }
@@ -842,6 +851,15 @@ class MarkdownMirror {
           const noteId = file.match(/^(\d+)-/)?.[1];
           const filePath = path.join(dirPath, file);
           if (!noteId || recorded.has(this._relPath(filePath))) continue;
+          // A folder renamed while the mirror was off is no longer in the database.
+          // Its legacy note header also identifies where its transcript companions lived.
+          if (
+            file.endsWith(".md") &&
+            this._isNoteMarkdownFile(filePath) &&
+            this._namesItsNote(filePath, noteId)
+          ) {
+            this._oldFolderNames.add(entry.name);
+          }
           if (!index.has(noteId)) index.set(noteId, []);
           index.get(noteId).push(filePath);
         }

@@ -622,6 +622,7 @@ test("an old .txt transcript is dropped only when it says what the note's transc
     `${formatTxt(edited, JSON.parse(edited.transcript), {})}\nmy own notes on the call`
   );
 
+  markdownMirror.legacyNoteIds(["General"]);
   markdownMirror.writeTranscript(note, placement("Private notes"), {});
   markdownMirror.writeTranscript(edited, placement("Private notes"), {});
 
@@ -792,6 +793,7 @@ test("deleting a note drops its unchanged old transcript that names speakers", (
     formatMd(note, JSON.parse(note.transcript), mappings)
   );
 
+  markdownMirror.legacyNoteIds(["General"]);
   markdownMirror.deleteNote(87, note, mappings);
 
   assert.deepEqual(fs.readdirSync(dir), []);
@@ -1238,6 +1240,7 @@ test("an old transcript saved before its speakers were named still counts as unc
   );
 
   const mappings = { speaker_0: "Ada", speaker_1: "Grace" };
+  markdownMirror.legacyNoteIds(["General"]);
   markdownMirror.writeTranscript(note, placement("Private notes"), mappings);
   markdownMirror.writeTranscript(partlyNamed, placement("Private notes"), mappings);
 
@@ -1253,6 +1256,7 @@ test("an old transcript with a speaker renamed by hand is kept", (t) => {
   const handEdited = formatMd(note, JSON.parse(note.transcript), { speaker_0: "Bob" });
   fs.writeFileSync(path.join(dir, "95-call-transcript.md"), handEdited);
 
+  markdownMirror.legacyNoteIds(["General"]);
   markdownMirror.writeTranscript(note, placement("Private notes"), { speaker_0: "Ada" });
 
   assert.equal(fs.readFileSync(path.join(dir, "edited-95-call-transcript.md"), "utf8"), handEdited);
@@ -1305,6 +1309,7 @@ test("an old transcript saved before its speakers were identified counts as unch
     ),
   };
 
+  markdownMirror.legacyNoteIds(["General"]);
   markdownMirror.writeTranscript(identified, placement("Private notes"), {});
 
   assert.deepEqual(fs.readdirSync(dir), []);
@@ -1355,3 +1360,206 @@ test("a dangling link at a note's path is refused even where links can be follow
 
   assert.equal(fs.existsSync(outsideTarget), false);
 });
+
+for (const name of ["- Design", "true", "null", "2026-11-12", "123", "line\u0001one"]) {
+  test(`workspace and space metadata round-trip as YAML strings: ${JSON.stringify(name)}`, (t) => {
+    tempMirror(t);
+    const note = { id: 920, title: "Meeting", content: "Body" };
+    markdownMirror.writeNote(note, {
+      segments: ["Workspaces", name, "Teamspaces", name],
+      workspace: name,
+      space: name,
+    });
+    const text = fs.readFileSync(markdownMirror.getNotePath(note.id), "utf8");
+    const header = text.match(/^---\n([\s\S]*?)\n---/)[1];
+    const metadata = require("js-yaml").load(header);
+    assert.equal(metadata.workspace, name);
+    assert.equal(metadata.space, name);
+  });
+}
+
+for (const title of ["A".repeat(1000), "界".repeat(400)]) {
+  test(`legacy headers over 1 KB migrate and delete (${Buffer.byteLength(title)} title bytes)`, (t) => {
+    const basePath = tempMirror(t);
+    const note = { id: 921, title, content: "Body", created_at: "x" };
+    const oldDir = path.join(basePath, "General");
+    fs.mkdirSync(oldDir);
+    const oldFile = path.join(oldDir, "921-old.md");
+    fs.writeFileSync(
+      oldFile,
+      `---\nid: 921\ntitle: ${title}\ntype: personal\nfolder: General\ncreated: x\nupdated: y\n---\n\nBody`
+    );
+    assert.deepEqual([...markdownMirror.legacyNoteIds(["General"])], [note.id]);
+    write(note, "Private notes");
+    assert.equal(fs.existsSync(oldFile), false);
+    const newFile = markdownMirror.getNotePath(note.id);
+    assert.ok(newFile);
+    markdownMirror.deleteNote(note.id, note);
+    assert.equal(fs.existsSync(newFile), false);
+    assert.equal(fs.existsSync(oldFile), false);
+  });
+}
+
+for (const operation of ["save", "delete"]) {
+  test(`preserving an external edit on ${operation} keeps dangling symlinks`, (t) => {
+    const basePath = tempMirror(t);
+    const note = { id: 922, title: "Plan", content: "Body" };
+    write(note, "Private notes");
+    const notePath = markdownMirror.getNotePath(note.id);
+    fs.appendFileSync(notePath, "\nmy external edit");
+    const keptPath = path.join(basePath, "Private notes", "edited-922-plan.md");
+    fs.symlinkSync("unavailable.md", keptPath, "file");
+    if (operation === "save") write({ ...note, content: "Updated" }, "Private notes");
+    else markdownMirror.deleteNote(note.id, note);
+    assert.equal(fs.lstatSync(keptPath).isSymbolicLink(), true);
+    assert.equal(fs.readlinkSync(keptPath), "unavailable.md");
+    assert.match(
+      fs.readFileSync(path.join(basePath, "Private notes", "edited-2-922-plan.md"), "utf8"),
+      /my external edit$/
+    );
+  });
+}
+
+test("retitling a note onto its own unchanged transcript keeps only the new pair", (t) => {
+  const basePath = tempMirror(t);
+  const note = callNote(923);
+  write(note, "Private notes");
+  markdownMirror.writeTranscript(note, placement("Private notes"), {});
+  const renamed = { ...note, title: "Call transcript" };
+  write(renamed, "Private notes");
+  markdownMirror.writeTranscript(renamed, placement("Private notes"), {});
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")).sort(), [
+    "923-call-transcript-transcript.md",
+    "923-call-transcript.md",
+  ]);
+  markdownMirror.deleteNote(note.id, renamed);
+  assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), []);
+});
+
+test("retitling onto an externally edited transcript preserves its changes", (t) => {
+  const basePath = tempMirror(t);
+  const note = callNote(924);
+  write(note, "Private notes");
+  markdownMirror.writeTranscript(note, placement("Private notes"), {});
+  fs.appendFileSync(path.join(basePath, "Private notes", "924-call-transcript.md"), "\nmy edit");
+  const renamed = { ...note, title: "Call transcript" };
+  write(renamed, "Private notes");
+  markdownMirror.writeTranscript(renamed, placement("Private notes"), {});
+  markdownMirror.deleteNote(note.id, renamed);
+  const dir = path.join(basePath, "Private notes");
+  assert.deepEqual(fs.readdirSync(dir), ["edited-924-call-transcript.md"]);
+  assert.match(
+    fs.readFileSync(path.join(dir, "edited-924-call-transcript.md"), "utf8"),
+    /my edit$/
+  );
+});
+
+test("legacy migration leaves unrelated note IDs and transcript-shaped user files alone", (t) => {
+  const basePath = tempMirror(t);
+  const fixtures = [
+    ["Reading", "5-reading-list.md", "---\nid: 5\ntags: [books]\n---\n\nMy reading list"],
+    ["Meetings", "2024-03-12-standup-transcript.md", "# Standup\n\n**2024-03-12**\n\nMy meeting"],
+  ];
+  for (const [folder, name, content] of fixtures) {
+    fs.mkdirSync(path.join(basePath, folder));
+    fs.writeFileSync(path.join(basePath, folder, name), content);
+  }
+  assert.deepEqual([...markdownMirror.legacyNoteIds(["General"])], []);
+  for (const id of [5, 2024]) {
+    const note = callNote(id);
+    write(note, "Private notes");
+    markdownMirror.writeTranscript(note, placement("Private notes"), {});
+    markdownMirror.deleteNote(id, note);
+  }
+  for (const [folder, name, content] of fixtures) {
+    assert.deepEqual(fs.readdirSync(path.join(basePath, folder)), [name]);
+    assert.equal(fs.readFileSync(path.join(basePath, folder, name), "utf8"), content);
+  }
+});
+
+test("copies of new-layout private notes are not legacy files", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 925, title: "Plan", content: "Body" };
+  markdownMirror.writeNote(note, { segments: ["Private notes"], space: "Private" });
+  const filePath = markdownMirror.getNotePath(note.id);
+  const copy = path.join(basePath, "Private notes", "925-plan copy.md");
+  fs.copyFileSync(filePath, copy);
+  markdownMirror.legacyNoteIds(["General"]);
+  markdownMirror.deleteNote(note.id, note);
+  assert.equal(fs.readFileSync(copy, "utf8").endsWith("Body"), true);
+  assert.deepEqual(fs.readdirSync(path.dirname(copy)), ["925-plan copy.md"]);
+});
+
+test("legacy note headers discover folders renamed while mirroring was disabled", (t) => {
+  const basePath = tempMirror(t);
+  const oldDir = path.join(basePath, "Before rename");
+  fs.mkdirSync(oldDir);
+  const note = callNote(926);
+  fs.writeFileSync(
+    path.join(oldDir, "926-call.md"),
+    `---\nid: 926\ntitle: Call\ntype: personal\nfolder: Before rename\ncreated: ${note.created_at}\nupdated: y\n---\n\nBody`
+  );
+  fs.writeFileSync(
+    path.join(oldDir, "926-call-transcript.md"),
+    require("../../src/helpers/transcriptFormatter").formatMd(note, JSON.parse(note.transcript), {})
+  );
+  assert.deepEqual([...markdownMirror.legacyNoteIds(["After rename"])], [note.id]);
+  write(note, "Private notes", "After rename");
+  markdownMirror.writeTranscript(note, placement("Private notes", "After rename"), {});
+  assert.deepEqual(fs.readdirSync(oldDir), []);
+});
+
+test("creating a replacement never truncates a file that appeared after the ownership check", (t) => {
+  const basePath = tempMirror(t);
+  const note = { id: 927, title: "Plan", content: "Body" };
+  write(note, "Private notes");
+  const filePath = markdownMirror.getNotePath(note.id);
+  fs.appendFileSync(filePath, "\nmy original external edit");
+  const canonicalPath = fs.realpathSync.native(filePath);
+  const open = fs.openSync;
+  let inserted = false;
+  t.mock.method(fs, "openSync", (target, flags, mode) => {
+    if (
+      target === canonicalPath &&
+      typeof flags === "number" &&
+      (flags & fs.constants.O_WRONLY) !== 0 &&
+      !inserted
+    ) {
+      inserted = true;
+      fs.writeFileSync(filePath, "a file created by another process");
+    }
+    return open(target, flags, mode);
+  });
+  write({ ...note, content: "Updated" }, "Private notes");
+  fs.openSync.mock.restore();
+  assert.equal(inserted, true);
+  assert.equal(fs.readFileSync(filePath, "utf8"), "a file created by another process");
+  assert.match(
+    fs.readFileSync(path.join(basePath, "Private notes", "edited-927-plan.md"), "utf8"),
+    /my original external edit$/
+  );
+});
+
+for (const title of ["A".repeat(1500), "界".repeat(500)]) {
+  test(`long legacy transcript titles migrate with their note (${Buffer.byteLength(title)} bytes)`, (t) => {
+    const basePath = tempMirror(t);
+    const note = { ...callNote(928), title };
+    const oldDir = path.join(basePath, "General");
+    fs.mkdirSync(oldDir);
+    const transcriptFile = path.join(oldDir, "928-call-transcript.md");
+    fs.writeFileSync(
+      transcriptFile,
+      require("../../src/helpers/transcriptFormatter").formatMd(
+        note,
+        JSON.parse(note.transcript),
+        {}
+      )
+    );
+    assert.deepEqual([...markdownMirror.legacyNoteIds(["General"])], [note.id]);
+    write(note, "Private notes");
+    markdownMirror.writeTranscript(note, placement("Private notes"), {});
+    assert.equal(fs.existsSync(transcriptFile), false);
+    markdownMirror.deleteNote(note.id, note);
+    assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), []);
+  });
+}

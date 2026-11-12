@@ -30,6 +30,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
   let generation = 0;
   const queuedNoteIds = new Set();
   let noteBatchTimer = null;
+  let noteBatchPromise = null;
   let reconcileTimer = null;
   const pendingWrites = new Set();
   let reconcilePromise = null;
@@ -95,15 +96,19 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
   // Scope changes and update quits cannot wait for another event-loop turn.
   const flushSync = () => {
     for (const run of [...pendingWrites.values()]) run();
-    flushQueuedNotes();
-  };
-
-  const flushQueuedNotes = () => {
     clearTimeout(noteBatchTimer);
     noteBatchTimer = null;
+    writeQueuedNotes();
+  };
+
+  const writeQueuedNotes = (limit = queuedNoteIds.size) => {
     if (!enabled || queuedNoteIds.size === 0) return;
-    const noteIds = [...queuedNoteIds];
-    queuedNoteIds.clear();
+    const noteIds = [];
+    for (const noteId of queuedNoteIds) {
+      noteIds.push(noteId);
+      queuedNoteIds.delete(noteId);
+      if (noteIds.length >= limit) break;
+    }
     guarded("Failed to write pulled note files", () => {
       const placements = loadPlacements();
       for (const note of database().getNotesForMirror(noteIds)) {
@@ -111,6 +116,25 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
         else writeOne(note, placements);
       }
     });
+  };
+
+  const flushQueuedNotes = () => {
+    clearTimeout(noteBatchTimer);
+    noteBatchTimer = null;
+    if (noteBatchPromise || !enabled || queuedNoteIds.size === 0) return noteBatchPromise;
+    const startedGeneration = generation;
+    noteBatchPromise = (async () => {
+      while (enabled && startedGeneration === generation && queuedNoteIds.size > 0) {
+        writeQueuedNotes(NOTES_PER_TURN);
+        await yieldToEventLoop();
+      }
+    })().finally(() => {
+      noteBatchPromise = null;
+      if (enabled && queuedNoteIds.size > 0) {
+        noteBatchTimer ??= setTimeout(flushQueuedNotes, NOTE_BATCH_DELAY_MS);
+      }
+    });
+    return noteBatchPromise;
   };
 
   // Writes misplaced notes, removes the files of deleted notes and of notes gone
@@ -280,7 +304,9 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
     queueNote(noteId) {
       if (!enabled) return;
       queuedNoteIds.add(noteId);
-      noteBatchTimer ??= setTimeout(flushQueuedNotes, NOTE_BATCH_DELAY_MS);
+      if (!noteBatchPromise) {
+        noteBatchTimer ??= setTimeout(flushQueuedNotes, NOTE_BATCH_DELAY_MS);
+      }
     },
 
     // A workspace, space or folder that may have been renamed, moved or removed.
@@ -328,6 +354,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
     // checked for being empty.
     async flush() {
       flushSync();
+      await noteBatchPromise;
       if (reconcileTimer) {
         clearTimeout(reconcileTimer);
         await scheduledReconcile();

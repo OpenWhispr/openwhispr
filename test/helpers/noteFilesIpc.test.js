@@ -288,12 +288,7 @@ const relativeDir = (file) => path.relative(basePath, path.dirname(file)).split(
 
 function frontmatterOf(file) {
   const block = fs.readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---/)[1];
-  return Object.fromEntries(
-    block.split("\n").map((line) => {
-      const colon = line.indexOf(":");
-      return [line.slice(0, colon), line.slice(colon + 2)];
-    })
-  );
+  return require("js-yaml").load(block);
 }
 
 function legacyFile(folderName, name, content) {

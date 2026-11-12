@@ -12,7 +12,10 @@ const OTHER_SPACES = "Other spaces";
 const WORKSPACE_ID_LABEL_LENGTH = 8;
 const WORKSPACE_ID_SUFFIX_LENGTH = 6;
 
-const nameKey = (name) => String(name).normalize("NFC").toLowerCase();
+// Fold both cases so expanding mappings (ß/ss) and final sigma cannot merge
+// directories on case-insensitive disks. Keep the original spelling for display.
+const nameKey = (name) =>
+  String(name).normalize("NFC").toLowerCase().toUpperCase().normalize("NFC");
 
 // The first of each same-named group keeps its name; the rest get a short id,
 // and another if that name is taken too. File systems that ignore case would
@@ -45,7 +48,16 @@ function groupBy(items, keyOf) {
 }
 
 function workspaceDirectories(spaces, workspaceNames) {
-  const ids = [...new Set(spaces.map((space) => space.workspace_id).filter(Boolean))].sort();
+  // Local space ids preserve arrival order; a later workspace must not take an
+  // existing workspace's unsuffixed directory just because its UUID sorts first.
+  const ids = [
+    ...new Set(
+      [...spaces]
+        .sort(byId)
+        .map((space) => space.workspace_id)
+        .filter(Boolean)
+    ),
+  ];
   const dirNameOf = (id) => {
     if (id === null) return OTHER_SPACES;
     return workspaceNames[id] ?? `Workspace ${id.slice(0, WORKSPACE_ID_LABEL_LENGTH)}`;
