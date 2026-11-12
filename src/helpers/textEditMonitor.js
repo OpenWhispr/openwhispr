@@ -338,7 +338,10 @@ class TextEditMonitor extends EventEmitter {
     const toVerdict = (line) =>
       line === "EDITABLE" ? "editable" : line === "UNKNOWN" ? "unknown" : "not_editable";
     return new Promise((resolve) => {
-      const child = spawn(resolved.command, args, { stdio: ["pipe", "pipe", "ignore"] });
+      const child = spawn(resolved.command, args, {
+        stdio: ["pipe", "pipe", "ignore"],
+        windowsHide: true,
+      });
       let buffered = "";
       let settled = false;
       const settle = (verdict) => {

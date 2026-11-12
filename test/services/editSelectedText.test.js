@@ -88,6 +88,27 @@ test("a Cloud screenshot edit without the marker is applied; text-only or BYOK i
   });
 });
 
+test("a Cloud edit retried without its rejected screenshot still needs the marker", async (t) => {
+  const { service, editSelectedText } = await editor(t, {
+    dictationAgentMode: "openwhispr",
+    isSignedIn: true,
+  });
+  let calls = 0;
+  t.mock.method(service, "processText", async () => {
+    calls += 1;
+    if (calls === 1) throw new Error("image rejected");
+    return "I can't see your screen, but here is a fuller version.";
+  });
+  await assert.rejects(
+    editSelectedText("Elaborate this", "Short.", {
+      attachment: { image: "fixture-image", mediaType: "image/jpeg" },
+      signal: new AbortController().signal,
+    }),
+    { code: "SELECTION_EDIT_INVALID_RESPONSE" }
+  );
+  assert.equal(calls, 2);
+});
+
 test("a screenshot the model refuses costs the edit nothing: it runs once more without it", async (t) => {
   const { service, editSelectedText } = await editor(t);
   const configs = [];

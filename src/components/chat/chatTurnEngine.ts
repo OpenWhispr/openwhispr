@@ -340,7 +340,10 @@ export interface SendToAIOptions {
     assistantId: string;
     content: string;
     toolCalls?: ToolCallInfo[];
-    /** No question to the user and no tool that writes or sends: the reply is the whole result. */
+    /**
+     * A finished turn (not paused at the step limit, no unbacked claim) with no
+     * question to the user and no tool that writes or sends: the reply is the whole result.
+     */
     onlyRead: boolean;
   }) => void | Promise<void>;
   /**
@@ -1460,11 +1463,14 @@ export function createChatTurnEngine(
             assistantId,
             content: fullContent,
             toolCalls: calls,
-            onlyRead: (calls ?? []).every(
-              (call) =>
-                !call.interaction &&
-                offeredTools?.some((tool) => tool.name === call.name && tool.readOnly)
-            ),
+            onlyRead:
+              !stepLimitReached &&
+              !unbackedClaim &&
+              (calls ?? []).every(
+                (call) =>
+                  !call.interaction &&
+                  offeredTools?.some((tool) => tool.name === call.name && tool.readOnly)
+              ),
           });
         }
       } catch (error) {

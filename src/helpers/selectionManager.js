@@ -655,7 +655,12 @@ class SelectionManager {
     // Generated text pasted into a shell executes on its embedded newlines, so
     // a terminal target never becomes a caret destination — the same rule the
     // selection paths apply.
-    if (this._isTerminalTarget(capture.target, target)) return capture;
+    if (
+      target.isTerminal === true ||
+      this.clipboardManager.isTerminalSignature?.(this._targetSignature(target))
+    ) {
+      return capture;
+    }
     // AT-SPI targets carry only a pid — nothing for the signature check above
     // to match — so resolve the executable name before a Wayland terminal's
     // empty prompt can read as a writable caret.
@@ -701,14 +706,6 @@ class SelectionManager {
     const result = await runFile(tool, ["getwindowpid", windowId], { timeout: 500 });
     const pid = result.success ? result.stdout.trim() : "";
     return /^[1-9]\d*$/.test(pid) ? pid : null;
-  }
-
-  _isTerminalTarget(...targets) {
-    return targets.some(
-      (target) =>
-        target?.isTerminal === true ||
-        this.clipboardManager.isTerminalSignature?.(this._targetSignature(target))
-    );
   }
 
   // macOS AX and Linux AT-SPI targets carry only a pid; resolve the executable

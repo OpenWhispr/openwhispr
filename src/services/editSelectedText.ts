@@ -119,13 +119,15 @@ export async function editSelectedText(
     );
   try {
     let result: string;
+    let runConfig = config;
     try {
-      result = await run(config);
+      result = await run(runConfig);
     } catch (error) {
       // As with the wake word, a screenshot the model or transport rejects
       // must not cost the edit: run it once more without the screenshot.
       if (!config.screenContext || signal.aborted) throw error;
-      result = await run({ ...config, screenContext: undefined, systemPrompt });
+      runConfig = { ...config, screenContext: undefined, systemPrompt };
+      result = await run(runConfig);
     }
     signal.throwIfAborted();
     if (isSelectionQuestionResponse(result, marker)) return null;
@@ -134,7 +136,7 @@ export async function editSelectedText(
       : extractSelectionEditReplacement(result, marker, {
           // Only Cloud's vision chain leaves the marker off; text-only Cloud
           // keeps it, so an unmarked answer there is prose, not a rewrite.
-          markerOptional: provider === "openwhispr" && Boolean(config.screenContext),
+          markerOptional: provider === "openwhispr" && Boolean(runConfig.screenContext),
         });
   } finally {
     signal.removeEventListener("abort", cancel);

@@ -1779,12 +1779,14 @@ test("an answer typed at another app's caret asks for plain text as the last ins
   assert.doesNotMatch(configs[1].systemPrompt, /OUTPUT FORMAT:/);
 });
 
-for (const [tool, onlyRead] of [
+for (const [tool, onlyRead, finishReason = "stop"] of [
   [null, true],
   ["search_notes", true],
   ["create_note", false],
+  // Paused at the step limit: the reply so far is not the whole answer.
+  ["search_notes", false, "tool-calls"],
 ]) {
-  test(`a finished voice answer reports onlyRead ${onlyRead} after ${tool ?? "no tools"}`, async (t) => {
+  test(`a voice answer ending on ${finishReason} reports onlyRead ${onlyRead} after ${tool ?? "no tools"}`, async (t) => {
     const { captured, reasoningService } = await renderChatStreaming(t, {
       inferenceScope: "dictationAgent",
       allowInteractions: true,
@@ -1796,7 +1798,7 @@ for (const [tool, onlyRead] of [
           yield { type: "tool_result", callId: "c1", toolName: tool, displayText: "Done" };
         }
         yield { type: "content", text: "Here it is." };
-        yield { type: "done", finishReason: "stop" };
+        yield { type: "done", finishReason };
       })()
     );
     const completed = [];

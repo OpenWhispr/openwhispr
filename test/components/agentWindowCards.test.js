@@ -1597,7 +1597,7 @@ for (const result of ["A fuller introduction.", null]) {
 }
 
 // A take spoken over an empty field in another app, answered with only reads.
-async function caretTake(t, { onlyRead = true } = {}) {
+async function caretTake(t, { onlyRead = true, pasted = true, beforeAnswer } = {}) {
   const view = await mountWindow(t);
   const probes = [];
   const pastes = [];
@@ -1610,7 +1610,7 @@ async function caretTake(t, { onlyRead = true } = {}) {
     },
     pasteAtCapturedTarget: async (...args) => {
       pastes.push(args);
-      return { success: true };
+      return { success: pasted };
     },
     cancelSelectionEdit: async (sessionId) => released.push(sessionId),
     agentWindowHide: async () => {
@@ -1623,6 +1623,7 @@ async function caretTake(t, { onlyRead = true } = {}) {
     globalThis.__voice.callbacks.onTranscript("Write a thank-you note to my team", "submit")
   );
   const options = globalThis.__chat.sentOptions[0];
+  if (beforeAnswer) await React.act(async () => beforeAnswer(view));
   await React.act(async () =>
     options.onComplete({ assistantId: "a1", content: "**Thanks**, team!", onlyRead })
   );
@@ -1649,6 +1650,24 @@ test("an answer whose turn asked or acted stays in the window", async (t) => {
   assert.deepEqual(pastes, []);
   assert.deepEqual(released, ["caret-1"]);
   assert.equal(hides(), 0);
+});
+
+test("an answer a newer request overtook stays in the window", async (t) => {
+  const { pastes, released, hides } = await caretTake(t, {
+    beforeAnswer: (view) => view.main.handlers.command({ text: "Another request" }),
+  });
+
+  assert.deepEqual(pastes, []);
+  assert.deepEqual(released, ["caret-1"]);
+  assert.equal(hides(), 0);
+});
+
+test("an answer the field refused stays in the window", async (t) => {
+  const { pastes, hides } = await caretTake(t, { pasted: false });
+
+  assert.equal(pastes.length, 1);
+  assert.equal(hides(), 0);
+  assert.equal(globalThis.__chat.newChats, 0);
 });
 
 test("without auto-paste the press skips the writable-field probe", async (t) => {
