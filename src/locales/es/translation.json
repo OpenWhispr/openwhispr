@@ -5500,9 +5500,7 @@
       "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud.",
       "alreadySent": "Ya se hizo para esta solicitud"
     },
-    "beta": "Beta",
-    "upsell": "Los conectores se incluyen en los planes de pago. Mejora tu plan para que el asistente trabaje en tus herramientas.",
-    "locked": "Incluido en los planes de pago"
+    "beta": "Beta"
   },
   "skills": {
     "pane": {

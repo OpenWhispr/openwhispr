@@ -51,10 +51,7 @@ const DISCONNECTED = { ...LINEAR, connected: false, accountLabel: null, workspac
 
 // The Linear entry of CONNECTOR_ROWS in the shared login row, with the real
 // status store loaded from `status`.
-async function renderLinearRow(
-  t,
-  { status, isPaid = true, blockedByOrg = false, electronAPI = {} } = {}
-) {
+async function renderLinearRow(t, { status, blockedByOrg = false, electronAPI = {} } = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -93,7 +90,7 @@ async function renderLinearRow(
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
   await React.act(async () =>
-    root.render(React.createElement(ConnectorLoginRow, { row, isPaid, blockedByOrg }))
+    root.render(React.createElement(ConnectorLoginRow, { row, blockedByOrg }))
   );
   // Let the status load from the mount effect commit.
   await React.act(async () => {});
@@ -164,17 +161,11 @@ test("a Linear login that needs reconnecting offers Reconnect and Disconnect", a
   assert.equal(hasButton(container, "connectors.linear.disconnect"), true);
 });
 
-test("a free plan can still disconnect a Linear login it has", async (t) => {
-  const connected = await renderLinearRow(t, { status: LINEAR, isPaid: false });
-  assert.equal(hasButton(connected.container, "connectors.linear.disconnect"), true);
-  assert.equal(hasButton(connected.container, "connectors.linear.connect"), false);
-});
-
-test("a free plan without a Linear login still sees what Linear does, with no button", async (t) => {
-  const { container } = await renderLinearRow(t, { status: DISCONNECTED, isPaid: false });
+test("without a Linear login, the row says what Linear does and offers Connect on any plan", async (t) => {
+  const { container } = await renderLinearRow(t, { status: DISCONNECTED });
   assert.match(container.textContent, /connectors\.linear\.description/);
+  assert.equal(hasButton(container, "connectors.linear.connect"), true);
   assert.equal(hasButton(container, "integrations.api.viewPlans"), false);
-  assert.equal(hasButton(container, "connectors.linear.connect"), false);
 });
 
 test("with connectors turned off by the org, only Disconnect remains for a Linear login", async (t) => {

@@ -75,7 +75,6 @@ test("Connect runs the browser flow once and says why it failed", async (t) => {
     root.render(
       React.createElement(ConnectorLoginRow, {
         row,
-        isPaid: true,
         blockedByOrg: false,
       })
     )
@@ -137,7 +136,6 @@ async function renderDisconnectedRow(t, { connectorConnect }) {
     root.render(
       React.createElement(ConnectorLoginRow, {
         row,
-        isPaid: true,
         blockedByOrg: false,
       })
     )
@@ -234,7 +232,6 @@ async function renderConnectedRow(t, { connectorDisconnect }) {
     root.render(
       React.createElement(ConnectorLoginRow, {
         row,
-        isPaid: true,
         blockedByOrg: false,
       })
     )

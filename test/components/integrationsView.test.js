@@ -126,7 +126,7 @@ async function renderView(
     section = "connectors",
     statuses = {},
     gcalAccounts = [],
-    connectorAccess = { isPaid, blockedByOrg: false, connectorsAllowed: true },
+    connectorAccess = { blockedByOrg: false, connectorsAllowed: true },
     skillsProps = {},
   } = {}
 ) {
@@ -181,17 +181,17 @@ async function renderView(
   return { container, upgrades, openedUrls };
 }
 
-test("sectionMeta shows counts on a paid plan and plan badges on a free one", async (t) => {
+test("sectionMeta shows counts, and plan badges only where a plan is needed", async (t) => {
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-integrations-sections-test-",
   });
   const { sectionMeta } = await vite.ssrLoadModule(
     "/components/integrations/integrationsSections.ts"
   );
-  const connectors = (isPaid, ready, blockedByOrg = false) => ({ isPaid, blockedByOrg, ready });
-  const paid = { isPaid: true, connectors: connectors(true, 2), connectedCalendars: 1 };
-  const free = { isPaid: false, connectors: connectors(false, 0), connectedCalendars: 1 };
-  const empty = { isPaid: true, connectors: connectors(true, 0), connectedCalendars: 0 };
+  const connectors = (ready, blockedByOrg = false) => ({ blockedByOrg, ready });
+  const paid = { isPaid: true, connectors: connectors(2), connectedCalendars: 1 };
+  const free = { isPaid: false, connectors: connectors(2), connectedCalendars: 1 };
+  const empty = { isPaid: true, connectors: connectors(0), connectedCalendars: 0 };
 
   assert.deepEqual(sectionMeta("connectors", paid), { kind: "count", value: 2 });
   assert.deepEqual(sectionMeta("calendars", paid), { kind: "count", value: 1 });
@@ -199,7 +199,8 @@ test("sectionMeta shows counts on a paid plan and plan badges on a free one", as
   assert.equal(sectionMeta("mcp", paid), null);
   assert.equal(sectionMeta("cli", paid), null);
 
-  assert.deepEqual(sectionMeta("connectors", free), { kind: "badge", badge: "pro" });
+  // Connectors work on every plan, so a free plan sees its count, not a badge.
+  assert.deepEqual(sectionMeta("connectors", free), { kind: "count", value: 2 });
   assert.deepEqual(sectionMeta("calendars", free), { kind: "count", value: 1 });
   assert.deepEqual(sectionMeta("api", free), { kind: "badge", badge: "pro" });
   assert.deepEqual(sectionMeta("mcp", free), { kind: "badge", badge: "pro" });
@@ -208,9 +209,9 @@ test("sectionMeta shows counts on a paid plan and plan badges on a free one", as
   assert.equal(sectionMeta("connectors", empty), null);
   assert.equal(sectionMeta("calendars", empty), null);
 
-  // The organization turned connectors off: no plan badge and no count, on any plan.
+  // The organization turned connectors off: no count, on any plan.
   for (const isPaid of [true, false]) {
-    const blocked = { ...paid, isPaid, connectors: connectors(isPaid, 2, true) };
+    const blocked = { ...paid, isPaid, connectors: connectors(2, true) };
     assert.equal(sectionMeta("connectors", blocked), null);
   }
 });
@@ -225,7 +226,7 @@ test("Skills has no nav tag on any plan", async (t) => {
   for (const isPaid of [true, false]) {
     const input = {
       isPaid,
-      connectors: { isPaid, blockedByOrg: false, ready: 2 },
+      connectors: { blockedByOrg: false, ready: 2 },
       connectedCalendars: 1,
     };
     assert.equal(sectionMeta("skills", input), null);
@@ -379,28 +380,10 @@ test("a paid plan sees how many connectors and calendars are connected", async (
   assert.equal(label(navButton(container, "api")), "integrations.nav.sections.api");
 });
 
-test("the Connectors tag follows the plan check the Connectors pane uses", async (t) => {
-  // Usage still loading: the page counts as paid, while connectors fall back to
-  // the saved subscription flag, as the pane does.
-  const { container } = await renderView(t, {
-    isPaid: true,
-    connectorAccess: { isPaid: false, blockedByOrg: false, connectorsAllowed: false },
-  });
-
-  assert.equal(
-    label(navButton(container, "connectors")),
-    "integrations.nav.sections.connectorsintegrations.plan.pro"
-  );
-  assert.equal(label(navButton(container, "api")), "integrations.nav.sections.api");
-});
-
-test("a free plan sees plan badges, the API upsell, and no key list", async (t) => {
+test("a free plan sees plan badges where a plan is needed, the API upsell, and no key list", async (t) => {
   const { container, upgrades } = await renderView(t, { isPaid: false, section: "api" });
 
-  assert.equal(
-    label(navButton(container, "connectors")),
-    "integrations.nav.sections.connectorsintegrations.plan.pro"
-  );
+  assert.equal(label(navButton(container, "connectors")), "integrations.nav.sections.connectors");
   assert.equal(
     label(navButton(container, "mcp")),
     "integrations.nav.sections.mcpintegrations.plan.pro"

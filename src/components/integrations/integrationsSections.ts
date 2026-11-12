@@ -31,8 +31,8 @@ export type SectionMeta =
 
 export interface SectionMetaInput {
   isPaid: boolean;
-  /** Connectors decide their plan and org policy as the Connectors pane does. */
-  connectors: { isPaid: boolean; blockedByOrg: boolean; ready: number };
+  /** Connectors follow org policy as the Connectors pane does. */
+  connectors: { blockedByOrg: boolean; ready: number };
   connectedCalendars: number;
 }
 
@@ -43,9 +43,8 @@ export function sectionMeta(
 ): SectionMeta | null {
   switch (section) {
     case "connectors":
-      // Turned off by the organization: no plan would change that, and no login can act.
+      // Turned off by the organization: no login can act.
       if (connectors.blockedByOrg) return null;
-      if (!connectors.isPaid) return { kind: "badge", badge: "pro" };
       return connectors.ready > 0 ? { kind: "count", value: connectors.ready } : null;
     case "calendars":
       return connectedCalendars > 0 ? { kind: "count", value: connectedCalendars } : null;

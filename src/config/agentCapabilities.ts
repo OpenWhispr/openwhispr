@@ -10,13 +10,7 @@ import { getCachedPlatform } from "../utils/platform";
  */
 
 export type UnavailableReason =
-  | "signedOut"
-  | "policyOff"
-  | "policyLoading"
-  | "planRequired"
-  | "notConnected"
-  | "needsReconnect"
-  | "modelTooSmall";
+  "signedOut" | "policyOff" | "policyLoading" | "notConnected" | "needsReconnect" | "modelTooSmall";
 
 export interface UnavailableCapability {
   name: string;
@@ -32,7 +26,6 @@ export interface UnavailableCapability {
 /** Where each fix lives, as the UI labels it (localized by the caller). */
 export interface CapabilityLocations {
   account: string;
-  plans: string;
   calendars: string;
   connectors: string;
   models: string;
@@ -52,7 +45,6 @@ export interface UnavailableCapabilityInput {
   calendarConnected: boolean;
   /** Omitted on surfaces that never offer connectors (container chat, onboarding demo). */
   connectors?: {
-    hasPlan: boolean;
     allowed: boolean;
     blockedByOrg: boolean;
     statuses: Readonly<Record<string, ConnectorAvailability>>;
@@ -156,10 +148,8 @@ export function resolveUnavailableCapabilities(
   if (!input.isSignedIn) {
     unavailableConnector(CONNECTORS_NAME, "signedOut", locations.account);
   } else if (connectors.blockedByOrg) {
-    // Before the plan: paying wouldn't help while the organization keeps them off.
+    // Before !allowed, which an org block also makes false: only the admin can undo this.
     unavailableConnector(CONNECTORS_NAME, "policyOff");
-  } else if (!connectors.hasPlan) {
-    unavailableConnector(CONNECTORS_NAME, "planRequired", locations.plans);
   } else if (!connectors.allowed) {
     unavailableConnector(CONNECTORS_NAME, "policyLoading");
   } else {
@@ -193,8 +183,6 @@ function describeOne({ name, reason, where }: UnavailableCapability): string {
       return `${name}: turned off by the user's organization; only their admin can turn it back on.`;
     case "policyLoading":
       return `${name}: not available right now; the user can try again in a moment.`;
-    case "planRequired":
-      return `${name}: needs a paid OpenWhispr plan${at}.`;
     case "notConnected":
       return `${name}: not connected; the user can connect it${at}.`;
     case "needsReconnect":

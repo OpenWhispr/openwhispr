@@ -5783,9 +5783,7 @@
       "cardLimit": "Pro Anfrage können nur {{max}} Karten vorbereitet werden.",
       "alreadySent": "Für diese Anfrage bereits erledigt"
     },
-    "beta": "Beta",
-    "upsell": "Konnektoren sind in kostenpflichtigen Tarifen enthalten. Upgrade, damit der Assistent in deinen Tools arbeiten kann.",
-    "locked": "In kostenpflichtigen Tarifen enthalten"
+    "beta": "Beta"
   },
   "skills": {
     "pane": {

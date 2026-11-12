@@ -5810,9 +5810,7 @@
       "cardLimit": "Seules {{max}} cartes peuvent être préparées par demande.",
       "alreadySent": "Déjà fait pour cette demande"
     },
-    "beta": "Bêta",
-    "upsell": "Les connecteurs sont inclus dans les forfaits payants. Passez à un forfait payant pour que l'assistant agisse dans vos outils.",
-    "locked": "Inclus dans les forfaits payants"
+    "beta": "Bêta"
   },
   "skills": {
     "pane": {

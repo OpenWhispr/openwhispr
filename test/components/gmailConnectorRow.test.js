@@ -50,10 +50,7 @@ const GMAIL = {
 const DISCONNECTED = { ...GMAIL, connected: false, accountLabel: null };
 
 // The Gmail row with the real status store, loaded from `status`.
-async function renderGmailRow(
-  t,
-  { status, isPaid = true, blockedByOrg = false, electronAPI = {} } = {}
-) {
+async function renderGmailRow(t, { status, blockedByOrg = false, electronAPI = {} } = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
@@ -91,7 +88,7 @@ async function renderGmailRow(
   const { createRoot } = require("react-dom/client");
   root = createRoot(container);
   await React.act(async () =>
-    root.render(React.createElement(ConnectorLoginRow, { row, isPaid, blockedByOrg }))
+    root.render(React.createElement(ConnectorLoginRow, { row, blockedByOrg }))
   );
   // Let the status load from the mount effect commit.
   await React.act(async () => {});
@@ -220,18 +217,11 @@ test("a disconnect that kept a grant the calendar shares says Google still lists
   assert.doesNotMatch(container.textContent, /connectors\.gmail\.grantKept/);
 });
 
-test("a free plan can still disconnect a Gmail login it has", async (t) => {
-  const container = await renderGmailRow(t, { status: GMAIL, isPaid: false });
-  assert.equal(hasButton(container, "connectors.gmail.disconnect"), true);
-  assert.equal(hasButton(container, "connectors.gmail.connect"), false);
-  assert.equal(hasButton(container, "integrations.api.viewPlans"), false);
-});
-
-test("a free plan without a login still sees what Gmail does, with no button", async (t) => {
-  const container = await renderGmailRow(t, { status: DISCONNECTED, isPaid: false });
+test("without a login, the row says what Gmail does and offers Connect on any plan", async (t) => {
+  const container = await renderGmailRow(t, { status: DISCONNECTED });
   assert.match(container.textContent, /connectors\.gmail\.description/);
+  assert.equal(hasButton(container, "connectors.gmail.connect"), true);
   assert.equal(hasButton(container, "integrations.api.viewPlans"), false);
-  assert.equal(hasButton(container, "connectors.gmail.connect"), false);
 });
 
 test("with connectors turned off by the org, only Disconnect remains, even needing a reconnect", async (t) => {
@@ -247,60 +237,4 @@ test("with connectors turned off by the org, only Disconnect remains, even needi
 test("with connectors turned off and no login, the row is hidden", async (t) => {
   const container = await renderGmailRow(t, { status: DISCONNECTED, blockedByOrg: true });
   assert.equal(container.textContent, "");
-});
-
-// Whether `node` sits inside something drawn at reduced opacity.
-function isDimmed(node) {
-  for (let current = node; current; current = current.parentNode) {
-    if (current.getAttribute?.("class")?.split(/\s+/).includes("opacity-60")) return true;
-  }
-  return false;
-}
-
-function textNode(root, text) {
-  const found = findElement(
-    root,
-    (element) => element.tagName === "P" && element.textContent === text
-  );
-  assert.ok(found, `${text} is rendered`);
-  return found;
-}
-
-const lockIcon = (root) =>
-  findElement(root, (element) => element.getAttribute?.("aria-label") === "connectors.locked");
-
-test("a free plan without a login sees Gmail dimmed, with a lock that says why", async (t) => {
-  const container = await renderGmailRow(t, { status: DISCONNECTED, isPaid: false });
-  assert.equal(isDimmed(textNode(container, "connectors.gmail.title")), true);
-  assert.equal(isDimmed(textNode(container, "connectors.gmail.description")), true);
-  assert.ok(lockIcon(container), "the lock is labelled for screen readers");
-});
-
-test("a free plan with a login sees Gmail at full contrast and unlocked", async (t) => {
-  const container = await renderGmailRow(t, { status: GMAIL, isPaid: false });
-  assert.equal(isDimmed(textNode(container, "connectors.gmail.title")), false);
-  assert.equal(isDimmed(button(container, "connectors.gmail.disconnect")), false);
-  assert.equal(lockIcon(container), null);
-});
-
-test("on a free plan, what a disconnect leaves behind isn't dimmed with the locked row", async (t) => {
-  let broadcast = null;
-  const container = await renderGmailRow(t, {
-    status: GMAIL,
-    isPaid: false,
-    electronAPI: {
-      onConnectorStatusChanged: (listener) => {
-        broadcast = listener;
-        return () => {};
-      },
-      connectorDisconnect: async () => ({ status: "disconnected", grantKept: true }),
-    },
-  });
-
-  await React.act(async () => click(button(container, "connectors.gmail.disconnect")));
-  await React.act(async () => broadcast([DISCONNECTED]));
-
-  assert.ok(lockIcon(container), "the row is locked once the login is gone");
-  assert.equal(isDimmed(textNode(container, "connectors.gmail.title")), true);
-  assert.equal(isDimmed(textNode(container, "connectors.gmail.grantKept")), false);
 });

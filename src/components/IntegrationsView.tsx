@@ -50,7 +50,7 @@ export default function IntegrationsView({
 }: IntegrationsViewProps): ReactElement {
   const { t } = useTranslation();
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
-  const connectorAccess = useConnectorAccess();
+  const { blockedByOrg } = useConnectorAccess();
   const readyConnectors = useConnectorStatusStore(
     (state) =>
       CONNECTOR_ROWS.filter((row) => {
@@ -103,7 +103,7 @@ export default function IntegrationsView({
       id,
       sectionMeta(id, {
         isPaid,
-        connectors: { ...connectorAccess, ready: readyConnectors },
+        connectors: { blockedByOrg, ready: readyConnectors },
         connectedCalendars,
       }),
     ])
@@ -117,7 +117,7 @@ export default function IntegrationsView({
         titleBadge={<BetaBadge />}
         description={t("integrations.connectors.description")}
       >
-        <ConnectorsSection onUpgrade={onUpgrade} />
+        <ConnectorsSection />
       </IntegrationsPane>
     ),
     skills: (

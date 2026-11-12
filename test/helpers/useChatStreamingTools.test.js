@@ -121,11 +121,17 @@ function offersConnectors(tools) {
   return tools.includes("email_draft") || tools.includes("find_contact");
 }
 
-test("a paid, signed-in chat offers the connector tools", async (t) => {
-  const { captured, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE);
-  await captured.sendToAI("Email Josh", []);
-  assert.ok(offeredTools[0].includes("email_draft"));
-  assert.ok(offeredTools[0].includes("find_contact"));
+test("a signed-in chat offers the connector tools on any plan", async (t) => {
+  for (const subscribed of [true, false]) {
+    await t.test(subscribed ? "paid" : "free", async (st) => {
+      const { captured, offeredTools } = await renderChatStreaming(st, CONNECTOR_SURFACE, {
+        subscribed,
+      });
+      await captured.sendToAI("Email Josh", []);
+      assert.ok(offeredTools[0].includes("email_draft"));
+      assert.ok(offeredTools[0].includes("find_contact"));
+    });
+  }
 });
 
 test("a surface that doesn't opt in (container chat) never offers them", async (t) => {
@@ -139,15 +145,6 @@ test("a surface that doesn't opt in (container chat) never offers them", async (
 test("a signed-out chat never offers them", async (t) => {
   const { captured, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     settings: { ...BYOK_SETTINGS, isSignedIn: false },
-  });
-  await captured.sendToAI("Email Josh", []);
-  assert.ok(offeredTools[0].length > 0);
-  assert.equal(offersConnectors(offeredTools[0]), false);
-});
-
-test("a free plan never offers them", async (t) => {
-  const { captured, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
-    subscribed: false,
   });
   await captured.sendToAI("Email Josh", []);
   assert.ok(offeredTools[0].length > 0);
@@ -665,14 +662,14 @@ test("a chat that offers no connector tools never looks up or lists attendees", 
   assert.match(prompts[0], /Title: Kickoff/, "the note itself is still there");
 });
 
-test("a free plan's note chat never looks up or lists attendees", async (t) => {
+test("a free plan's note chat looks up and lists attendees too", async (t) => {
   const { captured, lookups, prompts } = await renderNoteChat(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
   await captured.sendToAI("Draft a follow-up to everyone", []);
 
-  assert.deepEqual(lookups, []);
-  assert.doesNotMatch(prompts[0], /Meeting attendees/);
+  assert.equal(lookups.length, 1);
+  assert.match(prompts[0], /Meeting attendees/);
 });
 
 test("a chat that isn't about a note never looks up attendees", async (t) => {
@@ -976,17 +973,14 @@ test("signed out, the model is told to point the user at signing in", async (t) 
   );
 });
 
-test("on a free plan, the model still writes the email and then says a paid plan can send it", async (t) => {
+test("on a free plan, the prompt never says connectors need a paid plan", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
   await captured.sendToAI("Email Josh", []);
   const prompt = systemPromptOf(sentMessages[0]);
-  assert.match(
-    prompt,
-    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
-  );
-  assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
+  assert.doesNotMatch(prompt, /- Integrations \(Email, Slack, Linear, GitHub\)/);
+  assert.doesNotMatch(prompt, /paid OpenWhispr plan|Plans? & Billing/);
 });
 
 test("an org that turns web search off is named as the reason", async (t) => {
@@ -1846,11 +1840,21 @@ test("a finished voice answer after asking the user reports onlyRead false", asy
 });
 
 test("an answer typed at another app's caret names nothing to connect", async (t) => {
-  const { captured, reasoningService } = await renderChatStreaming(
-    t,
-    { inferenceScope: "dictationAgent", allowInteractions: true, allowConnectors: true },
-    { subscribed: false }
-  );
+  const { captured, reasoningService, usePolicyStore } = await renderChatStreaming(t, {
+    inferenceScope: "dictationAgent",
+    allowInteractions: true,
+    allowConnectors: true,
+  });
+  // With connectors turned off by the org, a normal answer still gets the
+  // section on having it sent.
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: {
+      ...MANAGED_POLICY,
+      features: { ...MANAGED_POLICY.features, connectorsEnabled: false },
+    },
+  });
   const configs = [];
   reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) => {
     configs.push(config);

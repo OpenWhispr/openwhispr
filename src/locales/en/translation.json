@@ -5783,9 +5783,7 @@
       "cardLimit": "Only {{max}} cards can be prepared per request.",
       "alreadySent": "Already done for this request"
     },
-    "beta": "Beta",
-    "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",
-    "locked": "Included with paid plans"
+    "beta": "Beta"
   },
   "skills": {
     "pane": {

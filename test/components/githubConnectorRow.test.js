@@ -91,7 +91,7 @@ function pendingConnect() {
 // The GitHub entry of CONNECTOR_ROWS on the real row and status store.
 async function renderGithubRow(
   t,
-  { status, isPaid = true, blockedByOrg = false, electronAPI = {}, rowId = "github" } = {}
+  { status, blockedByOrg = false, electronAPI = {}, rowId = "github" } = {}
 ) {
   let root = null;
   t.after(async () => {
@@ -179,7 +179,6 @@ async function renderGithubRow(
       root.render(
         React.createElement(ConnectorLoginRow, {
           row,
-          isPaid,
           blockedByOrg,
           ...props,
         })
@@ -799,12 +798,6 @@ test("a build without an App slug shows no repositories button", async (t) => {
 
 test("with connectors turned off by the org, only Disconnect remains", async (t) => {
   const { container } = await renderGithubRow(t, { status: GITHUB, blockedByOrg: true });
-  assert.equal(hasButton(container, "connectors.github.disconnect"), true);
-  assert.equal(hasButton(container, "connectors.github.repositories.manage"), false);
-});
-
-test("a free plan keeps Disconnect for its login but can't manage repositories", async (t) => {
-  const { container } = await renderGithubRow(t, { status: GITHUB, isPaid: false });
   assert.equal(hasButton(container, "connectors.github.disconnect"), true);
   assert.equal(hasButton(container, "connectors.github.repositories.manage"), false);
 });

@@ -5,7 +5,6 @@ const load = () => import("../../src/config/agentCapabilities.ts");
 
 const LOCATIONS = {
   account: "Settings → Profile",
-  plans: "Settings → Plans & Billing",
   calendars: "Integrations → Calendars",
   connectors: "Integrations → Connectors",
   models: "Settings → Language Models",
@@ -20,7 +19,6 @@ function input(overrides = {}) {
     webSearch: { allowed: true, blockedByOrg: false },
     calendarConnected: true,
     connectors: {
-      hasPlan: true,
       allowed: true,
       blockedByOrg: false,
       statuses: { slack: READY, linear: READY, github: READY },
@@ -86,21 +84,22 @@ test("web search off by the org reads as policy, while a loading policy is tempo
   assert.equal(loading[0].reason, "policyLoading");
 });
 
-test("connectors name the org, then the plan, then a loading policy, as one line", async () => {
-  const { resolveUnavailableCapabilities } = await load();
+test("connectors name the org, then a loading policy, as one line, and never a plan", async () => {
+  const { resolveUnavailableCapabilities, describeUnavailable } = await load();
   const connectors = input().connectors;
   const reasonFor = (overrides) =>
     resolveUnavailableCapabilities(input({ connectors: { ...connectors, ...overrides } })).map(
       (item) => item.reason
     );
 
-  // A free member of an org that turned connectors off isn't told to buy a plan.
-  assert.deepEqual(reasonFor({ hasPlan: false, allowed: false, blockedByOrg: true }), [
-    "policyOff",
-  ]);
-  assert.deepEqual(reasonFor({ hasPlan: false }), ["planRequired"]);
   assert.deepEqual(reasonFor({ allowed: false, blockedByOrg: true }), ["policyOff"]);
   assert.deepEqual(reasonFor({ allowed: false }), ["policyLoading"]);
+  for (const overrides of [{ allowed: false, blockedByOrg: true }, { allowed: false }]) {
+    const unavailable = resolveUnavailableCapabilities(
+      input({ connectors: { ...connectors, ...overrides } })
+    );
+    assert.doesNotMatch(describeUnavailable(unavailable), /plan/i);
+  }
 });
 
 test("each connector that isn't connected or needs a reconnect is named on its own", async () => {

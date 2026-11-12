@@ -5448,9 +5448,7 @@
       "cardLimit": "Si possono preparare solo {{max}} schede per richiesta.",
       "alreadySent": "Già fatto per questa richiesta"
     },
-    "beta": "Beta",
-    "upsell": "I connettori sono inclusi nei piani a pagamento. Effettua l'upgrade per far lavorare l'assistente nei tuoi strumenti.",
-    "locked": "Incluso nei piani a pagamento"
+    "beta": "Beta"
   },
   "skills": {
     "pane": {
