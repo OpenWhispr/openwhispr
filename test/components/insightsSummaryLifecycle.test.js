@@ -180,7 +180,7 @@ test("focus recovery shows uploaded totals instead of the API's older copy", asy
     },
   });
   const container = installInteractiveDom(t);
-  window.document.visibilityState = "visible";
+  globalThis.window.document.visibilityState = "visible";
   const { YourUsage } = await loadUsage(
     t,
     `
