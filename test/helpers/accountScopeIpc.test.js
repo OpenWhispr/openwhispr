@@ -1604,3 +1604,285 @@ for (const replaced of [false, true]) {
     assert.equal(fakeThis.geminiStreaming, replaced ? replacement : null);
   });
 }
+
+function useProductLifecycle(t) {
+  const prototype = require(handlersModulePath).prototype;
+  const methods = new Map();
+  for (const method of [
+    "_stopRemoteProductWork",
+    "_retireDisallowedProductWork",
+    "_startRemoteProductWork",
+  ]) {
+    methods.set(method, Object.getOwnPropertyDescriptor(fakeThis, method));
+    fakeThis[method] = prototype[method];
+  }
+  const previous = { databaseManager: fakeThis.databaseManager, tokenState };
+  fakeThis.databaseManager = scopedDatabase(null);
+  t.after(() => {
+    for (const [method, descriptor] of methods) {
+      if (descriptor) Object.defineProperty(fakeThis, method, descriptor);
+      else delete fakeThis[method];
+    }
+    fakeThis.databaseManager = previous.databaseManager;
+    tokenState = previous.tokenState;
+  });
+  useTestApi(t);
+  return prototype;
+}
+
+for (const boundary of ["another account", "away and back", "same-account rotation"]) {
+  test(`pending product admissions retain their original owner across ${boundary}`, async (t) => {
+    useProductLifecycle(t);
+    const { deferred } = require("./harness/deferred");
+    const answer = deferred();
+    const pending = [];
+    const sent = [];
+    const firstToken = `admission-${boundary}-first`;
+    const firstAccount = `admission-owner-${boundary}`;
+    const policyResponse = () =>
+      Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+    t.mock.method(electronStub.net, "fetch", async (url, init) => {
+      if (String(url).endsWith("/api/reason")) {
+        sent.push({ authorization: init.headers.Authorization, text: JSON.parse(init.body).text });
+        return Response.json({ text: "permitted answer" });
+      }
+      if (init.headers.Authorization === `Bearer ${firstToken}`) await answer.promise;
+      return policyResponse();
+    });
+    t.after(async () => {
+      answer.resolve();
+      await Promise.allSettled(pending);
+    });
+    handleAuthTokenChange({ token: firstToken, generation: tokenState.generation + 1 });
+    await setScope(firstAccount, tokenState.generation);
+    for (const text of ["first owner's private input", "another pending private input"]) {
+      const sender = new (require("node:events").EventEmitter)();
+      sender.id = pending.length + 1;
+      pending.push(handlers.get("cloud-reason")({ sender }, text));
+    }
+    await new Promise(setImmediate);
+    assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
+    assert.deepEqual(sent, []);
+    const sameAccount = boundary === "same-account rotation";
+    handleAuthTokenChange({
+      token: `admission-${boundary}-next`,
+      generation: tokenState.generation + 1,
+    });
+    await setScope(sameAccount ? firstAccount : "replacement-owner", tokenState.generation);
+    if (boundary === "away and back") {
+      handleAuthTokenChange({
+        token: `admission-${boundary}-return`,
+        generation: tokenState.generation + 1,
+      });
+      await setScope(firstAccount, tokenState.generation);
+    }
+    await fakeThis.refreshEffectivePolicy();
+    answer.resolve();
+    const results = await Promise.all(pending);
+    assert.equal(
+      sent.length,
+      sameAccount ? 2 : 0,
+      "a waiting request cannot acquire another owner"
+    );
+    assert.ok(results.every((result) => result.success === sameAccount));
+    if (sameAccount)
+      assert.ok(sent.every((request) => request.authorization === `Bearer ${tokenState.token}`));
+  });
+}
+
+for (const stage of ["startup", "streaming"]) {
+  for (const boundary of ["another account", "away and back", "same-account rotation"]) {
+    test(`enterprise product ownership during ${stage}: ${boundary}`, async (t) => {
+      useProductLifecycle(t);
+      const { deferred } = require("./harness/deferred");
+      const entered = deferred();
+      const finishSetup = deferred();
+      const messages = [];
+      let output;
+      let providerSignal;
+      let providerCalls = 0;
+      let cancelled = false;
+      const load = Module._load;
+      t.mock.method(Module, "_load", function (request, parent, isMain) {
+        if (parent?.filename === handlersModulePath && request === "./enterpriseAiProviders")
+          return {
+            getEnterpriseAIModel: async () => {
+              if (stage === "startup") {
+                entered.resolve();
+                await finishSetup.promise;
+              }
+              return {
+                doStream: async ({ abortSignal }) => {
+                  providerCalls++;
+                  providerSignal = abortSignal;
+                  const stream = new ReadableStream({
+                    start(controller) {
+                      output = controller;
+                    },
+                    cancel() {
+                      cancelled = true;
+                    },
+                  });
+                  entered.resolve();
+                  return { stream };
+                },
+              };
+            },
+          };
+        return load.call(this, request, parent, isMain);
+      });
+      handleAuthTokenChange({
+        token: `enterprise-${stage}-${boundary}-first`,
+        generation: tokenState.generation + 1,
+      });
+      await setScope("enterprise-owner", tokenState.generation);
+      await fakeThis.refreshEffectivePolicy();
+      const sender = new (require("node:events").EventEmitter)();
+      sender.id = 91;
+      sender.isDestroyed = () => false;
+      sender.send = (_channel, payload) => messages.push(payload);
+      const pending = handlers.get("enterprise-stream-start")(
+        { sender },
+        {
+          streamId: `enterprise-${stage}-${boundary}`,
+          provider: "azure",
+          modelId: "private-model",
+          config: { apiKey: "saved-key", azureEndpoint: "https://company.openai.azure.com" },
+          options: { prompt: [] },
+        }
+      );
+      t.after(async () => {
+        finishSetup.resolve();
+        if (output && !cancelled) output.close();
+        await pending;
+      });
+      await entered.promise;
+      const sameAccount = boundary === "same-account rotation";
+      handleAuthTokenChange({
+        token: `enterprise-${stage}-${boundary}-next`,
+        generation: tokenState.generation + 1,
+      });
+      await setScope(sameAccount ? "enterprise-owner" : "enterprise-next", tokenState.generation);
+      if (boundary === "away and back") {
+        handleAuthTokenChange({
+          token: `enterprise-${stage}-${boundary}-return`,
+          generation: tokenState.generation + 1,
+        });
+        await setScope("enterprise-owner", tokenState.generation);
+      }
+      await fakeThis.refreshEffectivePolicy();
+      finishSetup.resolve();
+      await new Promise(setImmediate);
+      if (output && !cancelled) {
+        output.enqueue({ type: "text-delta", id: "text-1", delta: "buffered owner content" });
+        await new Promise(setImmediate);
+        if (!cancelled) output.close();
+      }
+      const result = await pending;
+      output = null;
+      assert.equal(providerCalls, stage === "startup" && !sameAccount ? 0 : 1);
+      assert.equal(
+        messages.some((message) => message.part),
+        sameAccount
+      );
+      assert.equal(result.success, sameAccount);
+      if (stage === "streaming") {
+        assert.equal(providerSignal.aborted, !sameAccount);
+        assert.equal(
+          cancelled,
+          !sameAccount,
+          "a retired reader is cancelled despite buffered output"
+        );
+      }
+    });
+  }
+}
+
+test("calendar product retirement blocks focus and wake until policy resumes automatic synchronization", async (t) => {
+  const prototype = useProductLifecycle(t);
+  const {
+    defaultDevicePolicy,
+    normalizeDeviceValues,
+  } = require("../../src/helpers/managedDevicePolicy");
+  const GoogleCalendarManager = require("../../src/helpers/googleCalendarManager");
+  const MicrosoftCalendarManager = require("../../src/helpers/microsoftCalendarManager");
+  const calendars = [{ id: "saved-calendar", account_email: "saved@example.test" }];
+  const accounts = [{ email: "saved@example.test" }];
+  const calendarDatabase = new Proxy(
+    {
+      getSelectedCalendars: () => calendars,
+      getSelectedMicrosoftCalendars: () => calendars,
+      getGoogleAccounts: () => accounts,
+      getMicrosoftAccounts: () => accounts,
+      getMicrosoftOwnAddresses: () => [],
+    },
+    { get: (value, key) => (key in value ? value[key] : () => {}) }
+  );
+  const scheduler = { scheduleNextMeeting() {} };
+  const google = new GoogleCalendarManager(calendarDatabase, {}, scheduler);
+  const microsoft = new MicrosoftCalendarManager(calendarDatabase, scheduler);
+  const previous = {
+    googleCalendarManager: fakeThis.googleCalendarManager,
+    microsoftCalendarManager: fakeThis.microsoftCalendarManager,
+    _remoteCalendarsReady: fakeThis._remoteCalendarsReady,
+    _remoteCalendarsStarted: fakeThis._remoteCalendarsStarted,
+  };
+  Object.assign(fakeThis, { googleCalendarManager: google, microsoftCalendarManager: microsoft });
+  fakeThis._remoteCalendarsReady = false;
+  fakeThis._remoteCalendarsStarted = false;
+  let device = normalizeDeviceValues({});
+  t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () => device);
+  const requests = [];
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    if (String(url).endsWith("/api/workspace-policy"))
+      return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+    if (["www.googleapis.com", "graph.microsoft.com"].includes(new URL(url).hostname))
+      requests.push({ url, authorization: init.headers.Authorization });
+    return Response.json({ items: [], value: [] });
+  });
+  for (const manager of [google, microsoft]) {
+    manager.oauth.getValidAccessToken = async () => "saved-calendar-credential";
+    manager.oauth.startOAuthFlow = async () => ({ email: accounts[0].email });
+  }
+  t.after(() => {
+    google.stop();
+    microsoft.stop();
+    Object.assign(fakeThis, previous);
+  });
+  handleAuthTokenChange({ token: "calendar-policy-owner", generation: tokenState.generation + 1 });
+  await setScope("calendar-policy-owner", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  await google.syncEvents();
+  await microsoft.syncEvents();
+  assert.equal(requests.length, 2, "explicit synchronization does not require a running timer");
+  prototype.startPolicyCalendars.call(fakeThis);
+  await new Promise(setImmediate);
+  assert.ok(requests.length > 2, "saved accounts synchronize on startup");
+  const policy = defaultDevicePolicy();
+  policy.features.connectorsEnabled = false;
+  device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
+  fakeThis.effectivePolicyManager.getCurrent();
+  assert.equal(google.syncRunner.timer, null);
+  assert.equal(microsoft.syncRunner.timer, null);
+  const before = requests.length;
+  google.syncOnFocus();
+  microsoft.syncOnFocus();
+  google.onWakeFromSleep();
+  microsoft.onWakeFromSleep();
+  await new Promise(setImmediate);
+  assert.equal(requests.length, before, "retired calendars cannot send on focus or wake");
+  device = normalizeDeviceValues({});
+  fakeThis.effectivePolicyManager.getCurrent();
+  await new Promise(setImmediate);
+  assert.ok(requests.length > before, "policy relaxation resumes automatic synchronization");
+  for (const manager of [google, microsoft]) {
+    manager.stop();
+    const beforeOAuth = requests.length;
+    await manager.startOAuth();
+    assert.ok(
+      requests.length > beforeOAuth,
+      "permitted OAuth performs its initial synchronization"
+    );
+    assert.notEqual(manager.syncRunner.timer, null);
+  }
+});

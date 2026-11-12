@@ -371,13 +371,14 @@ class MicrosoftCalendarManager {
   }
 
   onWakeFromSleep() {
+    if (!this.syncRunner.timer) return;
     this.syncEvents()
       .then(() => this.syncRunner.notifySuccess())
       .catch((err) => debugLogger.error("Post-wake sync failed", { error: err.message }, "mcal"));
   }
 
   syncOnFocus() {
-    if (!this.isConnected()) return;
+    if (!this.isConnected() || !this.syncRunner.timer) return;
     this.syncRunner.syncOnFocus();
   }
 

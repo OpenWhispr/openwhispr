@@ -2006,7 +2006,7 @@ class IPCHandlers {
         } else retireProductStream(this, property);
       }
       for (const [controller, operation] of this._productRequests) {
-        if (operation.streamPolicy?.accountId === accountId) controller.abort();
+        if (operation.accountId === accountId) controller.abort();
       }
     };
     this._productRequests = new Map();
@@ -2036,7 +2036,8 @@ class IPCHandlers {
     };
     const handleProduct = (channel, handler, remote = false) =>
       ipcMain.handle(channel, async (event, ...args) => {
-        const operation = { channel, args, remote };
+        const startedPolicy = this.effectivePolicyManager.getCurrent();
+        const operation = { channel, args, remote, accountId: startedPolicy.accountId };
         if (channel === "cloud-api-request")
           operation.args = [
             args[0],
@@ -2046,12 +2047,6 @@ class IPCHandlers {
                 /^\/api\/notes\/[^/?#]+\/share\/rotate-token\/?(?:[?#]|$)/.test(args[0]?.path),
             },
           ];
-        void this.refreshEffectivePolicy(event);
-        if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading")
-          await awaitVerdict(event);
-        if (!mayStart(operation)) return policyBlockedFailure();
-        const startedPolicy = this.effectivePolicyManager.getCurrent();
-        operation.accountId = startedPolicy.accountId;
         operation.guestLocalDictation =
           startedPolicy.workspaceRequired === false &&
           operation.accountId === null &&
@@ -2071,21 +2066,34 @@ class IPCHandlers {
                 corti: "cortiStreaming",
               }[channel.split("-")[0]]
             : null;
-        const previousStreamPolicy = this._remoteStreamPolicies.get(streamProperty);
-        if (previousStreamPolicy?.pending && previousStreamPolicy.accountId !== operation.accountId)
-          return { success: false, error: "Operation in progress" };
-        const streamPolicy = previousStreamPolicy?.pending
-          ? previousStreamPolicy
-          : { channel, args, accountId: operation.accountId, pending: 0 };
-        if (streamProperty) {
-          streamPolicy.pending += 1;
-          this._remoteStreamPolicies.set(streamProperty, streamPolicy);
-          operation.streamPolicy = streamPolicy;
-        }
+        let streamPolicy;
         const controller = new AbortController();
         operation.signal = controller.signal;
         this._productRequests.set(controller, operation);
         try {
+          void this.refreshEffectivePolicy(event);
+          if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading")
+            await awaitVerdict(event);
+          if (
+            controller.signal.aborted ||
+            this.effectivePolicyManager.getCurrent().accountId !== operation.accountId ||
+            !mayStart(operation)
+          )
+            return policyBlockedFailure();
+          if (streamProperty) {
+            const previousStreamPolicy = this._remoteStreamPolicies.get(streamProperty);
+            if (
+              previousStreamPolicy?.pending &&
+              previousStreamPolicy.accountId !== operation.accountId
+            )
+              return { success: false, error: "Operation in progress" };
+            streamPolicy = previousStreamPolicy?.pending
+              ? previousStreamPolicy
+              : { channel, args, accountId: operation.accountId, pending: 0 };
+            streamPolicy.pending += 1;
+            this._remoteStreamPolicies.set(streamProperty, streamPolicy);
+            operation.streamPolicy = streamPolicy;
+          }
           const result = await this._productRequestContext.run(operation, () =>
             handler(event, ...args)
           );
@@ -2127,7 +2135,7 @@ class IPCHandlers {
           return policyBlockedFailure();
         } finally {
           this._productRequests.delete(controller);
-          if (streamProperty) {
+          if (streamPolicy) {
             streamPolicy.pending -= 1;
             const snapshot = this.effectivePolicyManager.getCurrent();
             if (
@@ -6609,12 +6617,16 @@ class IPCHandlers {
       } = require("./enterpriseProviderErrors");
       const { streamId, provider, modelId, config, options } = payload || {};
       let runtime;
+      const abortController = new AbortController();
+      const signal = AbortSignal.any([
+        abortController.signal,
+        this._productRequestContext.getStore().signal,
+      ]);
       const send = (message) => {
-        if (!event.sender.isDestroyed()) {
+        if (!signal.aborted && !event.sender.isDestroyed()) {
           event.sender.send("enterprise-stream-part", { streamId, ...message });
         }
       };
-      const abortController = new AbortController();
       this.enterpriseStreamAborts.set(streamId, abortController);
       this._enterpriseStreamProviders.set(streamId, provider);
       // isDestroyed() stays false across reload/navigation, which wipes the
@@ -6631,6 +6643,7 @@ class IPCHandlers {
           throw new Error(`Unsupported enterprise provider: ${provider}`);
         }
         runtime = await resolveEnterpriseRuntime(event, provider, modelId, config || {});
+        signal.throwIfAborted();
         if (!runtime.model) throw new Error("No model specified for enterprise streaming");
         validateEnterpriseEndpoint(runtime.enterprise.azureEndpoint);
 
@@ -6641,17 +6654,17 @@ class IPCHandlers {
           runtime.apiKey,
           runtime.enterprise
         );
-        abortController.signal.throwIfAborted();
+        signal.throwIfAborted();
 
         const { stream } = await model.doStream({
           ...options,
-          abortSignal: abortController.signal,
+          abortSignal: signal,
         });
         const reader = stream.getReader();
         try {
           for (;;) {
             const { done, value } = await reader.read();
-            abortController.signal.throwIfAborted();
+            signal.throwIfAborted();
             if (done) break;
             if (event.sender.isDestroyed()) {
               abortController.abort();
@@ -6660,6 +6673,7 @@ class IPCHandlers {
             send({ part: value });
           }
         } finally {
+          if (signal.aborted) await reader.cancel(signal.reason).catch(() => {});
           reader.releaseLock();
         }
         send({ done: true });

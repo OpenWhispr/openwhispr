@@ -327,13 +327,14 @@ class GoogleCalendarManager {
   }
 
   onWakeFromSleep() {
+    if (!this.syncRunner.timer) return;
     this.syncEvents()
       .then(() => this.syncRunner.notifySuccess())
       .catch((err) => debugLogger.error("Post-wake sync failed", { error: err.message }, "gcal"));
   }
 
   syncOnFocus() {
-    if (!this.isConnected()) return;
+    if (!this.isConnected() || !this.syncRunner.timer) return;
     this.syncRunner.syncOnFocus();
   }
 
