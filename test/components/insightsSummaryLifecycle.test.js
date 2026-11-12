@@ -37,7 +37,7 @@ for (const unmount of [false, true]) {
       },
     });
     const container = installInteractiveDom(t);
-    window.document.visibilityState = "visible";
+    globalThis.window.document.visibilityState = "visible";
     // Exercise the private production component's lifecycle with lightweight presentation.
     const source = readFileSync(join(__dirname, "../../src/components/InsightsView.tsx"), "utf8");
     const usage = source.slice(
