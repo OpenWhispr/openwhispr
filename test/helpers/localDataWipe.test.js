@@ -12,6 +12,8 @@ const {
   USER_DATA_ENTRIES,
   rememberNotesMirrorPath,
   removeLocalData,
+  requestWorkspaceRemovalWipe,
+  takeWipeNotice,
   wipeLocalDataOnLaunch,
 } = require("../../src/helpers/localDataWipe");
 
@@ -191,6 +193,42 @@ test("settings main loaded from .env don't follow the relaunch into the fresh in
   const env = { DICTATION_KEY: "F8", UI_LANGUAGE: "de", PATH: "/usr/bin" };
   assert.equal(await launchHarness({ snapshot: managed("offboard-1"), env }).wipe(), true);
   assert.deepEqual(env, { UI_LANGUAGE: "de", PATH: "/usr/bin" });
+});
+
+// #3030's second trigger: a running app that hears its account was removed
+// from the managing workspace records it and quits; the next launch wipes.
+test("a recorded workspace removal wipes at the next launch, once, and leaves a notice", async () => {
+  seedDevice();
+  seed(path.join(roots.userData, "local-data-wipe.json"), JSON.stringify({ token: "offboard-1" }));
+  const removal = {
+    accountId: "account-a",
+    workspaceId: "ws-1",
+    removedAt: "2026-11-12T10:00:00Z",
+  };
+  assert.equal(requestWorkspaceRemovalWipe(roots.userData, removal), true);
+
+  // The server said so: no device policy needs to be readable.
+  const unreadable = () =>
+    launchHarness({ readError: new Error("Managed policy reader unavailable") });
+  const first = unreadable();
+  assert.equal(await first.wipe(), true);
+  assert.ok(first.calls.includes("master key"));
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
+  assert.equal(exists(roots.userData, "installed-models.json"), true);
+  assert.equal(auditLines()[0].trigger, "workspace-removal");
+
+  assert.equal(await unreadable().wipe(), false);
+  // The token acted on before stays on record, so it doesn't wipe again either.
+  assert.equal(await launchHarness({ snapshot: managed("offboard-1") }).wipe(), false);
+  assert.equal(takeWipeNotice(roots.userData), "workspace-removal");
+  assert.equal(takeWipeNotice(roots.userData), null);
+});
+
+test("an MDM token wipe leaves no removal notice", async () => {
+  seedDevice();
+  assert.equal(await launchHarness({ snapshot: managed("offboard-1") }).wipe(), true);
+  assert.equal(auditLines()[0].trigger, "device-policy");
+  assert.equal(takeWipeNotice(roots.userData), null);
 });
 
 test("only a production build deletes the keyring master key every channel shares", async () => {

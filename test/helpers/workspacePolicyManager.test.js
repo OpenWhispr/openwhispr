@@ -1260,3 +1260,60 @@ test("nothing is held for an identity that never fetched a policy", () => {
 
   assert.equal(manager.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 1 }), null);
 });
+
+// #3030: a removal from the workspace that managed this device wipes it.
+const removal = { workspaceId: "workspace-1", removedAt: "2026-11-12T10:00:00.000Z" };
+const unmanagedWith = (extra) =>
+  response(200, { data: { managed: false, policy: null, policyUpdatedAt: null, ...extra } });
+
+function removalSetup(responses) {
+  const removals = [];
+  let call = 0;
+  const context = setup(async () => responses[Math.min(call++, responses.length - 1)](), {
+    getValidatedAccountId: () => "account-a",
+    onWorkspaceRemoval: (reported) => removals.push(reported),
+  });
+  const lookup = () =>
+    context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+  return { ...context, removals, lookup };
+}
+
+test("a device the workspace managed hears its removal, signed in or not", async (t) => {
+  for (const removed of [
+    // An admin removal revoked the session.
+    () =>
+      response(401, {
+        error: "Removed from the workspace",
+        code: "WORKSPACE_MEMBER_REMOVED",
+        ...removal,
+      }),
+    // Directory deprovisioning kept it signed in.
+    () => unmanagedWith({ workspaceRemoval: removal }),
+  ]) {
+    const context = removalSetup([() => response(200, validPolicy()), removed]);
+    t.after(context.cleanup);
+    await context.lookup();
+    assert.deepEqual(context.removals, []);
+    await context.lookup();
+    assert.deepEqual(context.removals, [{ accountId: "account-a", ...removal }]);
+  }
+});
+
+test("a removal never reaches a device the workspace didn't manage, nor an ordinary 401", async (t) => {
+  for (const responses of [
+    // A sign-in on another device: this one never saw the account managed.
+    [() => unmanagedWith({ workspaceRemoval: removal })],
+    [() => response(200, validPolicy()), () => response(401, { error: "Invalid session" })],
+    [
+      () => response(200, validPolicy()),
+      () => response(401, { code: "WORKSPACE_MEMBER_REMOVED", workspaceId: 7 }),
+    ],
+    [() => response(200, validPolicy()), () => unmanagedWith({})],
+  ]) {
+    const context = removalSetup(responses);
+    t.after(context.cleanup);
+    await context.lookup();
+    await context.lookup();
+    assert.deepEqual(context.removals, []);
+  }
+});

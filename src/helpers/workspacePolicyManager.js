@@ -57,6 +57,7 @@ function createWorkspacePolicyManager({
   tokenStore,
   getValidatedAccountId = () => null,
   broadcast,
+  onWorkspaceRemoval = () => {},
   logger,
   requestTimeoutMs = 10_000,
   successfulRefreshMs = 5 * 60 * 1000,
@@ -178,6 +179,19 @@ function createWorkspacePolicyManager({
       readAccountPolicyCache(cachePath, { apiOrigin: new URL(apiUrl).origin, accountId })
         ?.managed === true
     );
+  }
+
+  // #3030: the server says this account was removed from a workspace that
+  // managed it. Only a device whose last verdict for the account was managed
+  // acts on that, so a sign-in on some other device never wipes anything.
+  function reportRemoval(identity, removal) {
+    if (typeof removal?.workspaceId !== "string" || !validTimestamp(removal.removedAt)) return;
+    if (!accountWasManaged(identity.accountId)) return;
+    onWorkspaceRemoval({
+      accountId: identity.accountId,
+      workspaceId: removal.workspaceId,
+      removedAt: removal.removedAt,
+    });
   }
 
   function errorSnapshot(identity, code, error, httpStatus) {
@@ -313,6 +327,10 @@ function createWorkspacePolicyManager({
           if (errorBody?.code === "POLICY_UNRESOLVABLE") {
             throw unresolvablePolicyError(errorBody.error || "Organization policy is unresolvable");
           }
+          // An admin removal revoked this session.
+          if (response.status === 401 && errorBody?.code === "WORKSPACE_MEMBER_REMOVED") {
+            reportRemoval(identity, errorBody);
+          }
           const error = new Error(`API error: ${response.status}`);
           error.status = response.status;
           throw error;
@@ -329,6 +347,11 @@ function createWorkspacePolicyManager({
             throw unresolvablePolicyError("Managed policy response is malformed");
           }
           throw new Error("Malformed policy response");
+        }
+        // Still signed in (directory deprovisioning keeps the session); read
+        // before the unmanaged verdict replaces the managed one.
+        if (data.managed === false && data.workspaceRemoval) {
+          reportRemoval(identity, data.workspaceRemoval);
         }
         return acceptSuccessfulResponse(identity, data, "network");
       } finally {

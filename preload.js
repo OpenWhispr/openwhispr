@@ -527,6 +527,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // One-time "GPU pack needs re-downloading" notice
   takeGpuPackMigrationNotice: () => ipcRenderer.invoke("take-gpu-pack-migration-notice"),
+  takeLocalDataWipeNotice: () => ipcRenderer.invoke("take-local-data-wipe-notice"),
   onGpuPackMigrationNoticeReady: registerListener(
     "gpu-pack-migration-notice-ready",
     (callback) => () => callback()

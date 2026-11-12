@@ -4926,6 +4926,10 @@
         "title": "GPU pack needs re-downloading",
         "description": "This version can't use your earlier GPU pack ({{packs}}). Download it again in Settings to turn GPU acceleration back on."
       },
+      "localDataWiped": {
+        "title": "Your organization removed this device's OpenWhispr data",
+        "description": "You were removed from your organization's workspace, so OpenWhispr deleted what it stored on this device and started fresh."
+      },
       "cleanupFailed": {
         "title": "Cleanup failed",
         "description": "Original dictation pasted without AI cleanup."

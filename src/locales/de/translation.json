@@ -4926,6 +4926,10 @@
         "title": "GPU-Paket muss erneut heruntergeladen werden",
         "description": "Diese Version kann dein bisheriges GPU-Paket ({{packs}}) nicht verwenden. Lade es in den Einstellungen erneut herunter, um die GPU-Beschleunigung wieder einzuschalten."
       },
+      "localDataWiped": {
+        "title": "Deine Organisation hat die OpenWhispr-Daten auf diesem Gerät entfernt",
+        "description": "Du wurdest aus dem Arbeitsbereich deiner Organisation entfernt. Deshalb hat OpenWhispr alles gelöscht, was auf diesem Gerät gespeichert war, und startet neu."
+      },
       "cleanupFailed": {
         "title": "Bereinigung fehlgeschlagen",
         "description": "Dein Diktat wurde ohne KI-Bereinigung eingefügt."

@@ -1567,6 +1567,21 @@ class IPCHandlers {
     );
   }
 
+  // #3030: the account was removed from the workspace that managed this device.
+  // The next launch wipes, before anything opens a file it removes.
+  _wipeForWorkspaceRemoval(removal) {
+    if (this._workspaceRemovalWipeRequested) return;
+    debugLogger.warn("Removed from the managing workspace; wiping local data", {
+      workspaceId: removal.workspaceId,
+    });
+    const { requestWorkspaceRemovalWipe } = require("./localDataWipe");
+    if (!requestWorkspaceRemovalWipe(app.getPath("userData"), removal)) return;
+    this._workspaceRemovalWipeRequested = true;
+    // Like Reset app data, a development build quits instead of relaunching.
+    if (process.env.NODE_ENV !== "development") autoStart.scheduleRelaunch(this.oauthProtocol);
+    app.quit();
+  }
+
   _initMirror(basePath) {
     require("./markdownMirror").init(basePath);
     require("./localDataWipe").rememberNotesMirrorPath(basePath, app.getPath("userData"));
@@ -4901,6 +4916,11 @@ class IPCHandlers {
 
     // One-time "GPU pack needs re-downloading" notice recorded before any
     // window existed (#1606). Only the window that shows it can take it.
+    ipcMain.handle("take-local-data-wipe-notice", (event) => {
+      if (event.sender !== this.windowManager.controlPanelWindow?.webContents) return null;
+      return require("./localDataWipe").takeWipeNotice(app.getPath("userData"));
+    });
+
     ipcMain.handle("take-gpu-pack-migration-notice", (event) => {
       if (event.sender !== this._gpuPackNoticeWindow()?.webContents) return null;
       return require("./gpuPackMigrationNotice").take();
@@ -7640,6 +7660,7 @@ class IPCHandlers {
           binding: accountScopeBinding.read(),
         })?.accountId ?? null,
       broadcast: (snapshot) => this.effectivePolicyManager?.updateWorkspace(snapshot),
+      onWorkspaceRemoval: (removal) => this._wipeForWorkspaceRemoval(removal),
       logger: debugLogger,
     });
     let cookieGeneration = null;

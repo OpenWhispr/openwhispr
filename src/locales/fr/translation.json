@@ -4954,6 +4954,10 @@
         "title": "Le pack GPU doit être retéléchargé",
         "description": "Cette version ne peut pas utiliser votre ancien pack GPU ({{packs}}). Retéléchargez-le dans les paramètres pour réactiver l'accélération GPU."
       },
+      "localDataWiped": {
+        "title": "Votre organisation a supprimé les données OpenWhispr de cet appareil",
+        "description": "Vous avez été retiré de l'espace de travail de votre organisation : OpenWhispr a donc supprimé ce qu'il conservait sur cet appareil et repart de zéro."
+      },
       "cleanupFailed": {
         "title": "Échec du nettoyage",
         "description": "Votre dictée a été collée sans nettoyage par IA."

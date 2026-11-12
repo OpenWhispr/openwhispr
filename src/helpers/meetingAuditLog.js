@@ -41,6 +41,8 @@ const STOP_REASONS = new Set([
   "window-lost",
   "app-quit",
 ]);
+// What asked for a local data wipe (#3030).
+const WIPE_TRIGGERS = new Set(["device-policy", "workspace-removal"]);
 // Plus the renderer's own "restricted" refusal.
 const REFUSAL_REASONS = new Set([
   ...AUDIO_POLICY_REFUSAL_CODES,
@@ -304,16 +306,17 @@ function createMeetingAuditLog({
       );
     },
 
-    // #3030: the device policy's offboarding wipe, kept with the recordings it
-    // outlives. "incomplete" means some store could not be deleted.
-    localDataWiped({ incomplete }) {
+    // #3030: the offboarding wipe, kept with the recordings it outlives. The
+    // trigger is the device policy's token or a removal from the managing
+    // workspace; "incomplete" means some store could not be deleted.
+    localDataWiped({ trigger, incomplete }) {
       if (!isEnabled()) return;
       const dir = directory();
       const at = now();
       enqueue(() =>
         append(dir, at, {
           event: "local-data.wiped",
-          trigger: "device-policy",
+          trigger: allowed(WIPE_TRIGGERS, trigger),
           reason: incomplete ? "incomplete" : null,
         })
       );

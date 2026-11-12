@@ -120,28 +120,25 @@ test("a refusal records its trigger and policy code", async () => {
 });
 
 // #3030: the offboarding wipe is recorded in the same fixed shape.
-test("a local data wipe is one line, marked incomplete when a store survived", async () => {
+test("a local data wipe is one line with its trigger, marked incomplete when a store survived", async () => {
   const { log } = harness();
-  log.localDataWiped({ incomplete: false });
-  log.localDataWiped({ incomplete: true });
+  log.localDataWiped({ trigger: "device-policy", incomplete: false });
+  log.localDataWiped({ trigger: "workspace-removal", incomplete: true });
+  log.localDataWiped({ trigger: "elsewhere", incomplete: false });
   await log.flush();
-  const [complete, incomplete] = lines();
-  assert.deepEqual(Object.keys(complete), FIELDS);
+  const wipes = lines();
+  assert.deepEqual(Object.keys(wipes[0]), FIELDS);
   assert.deepEqual(
-    [complete, incomplete].map(({ event, trigger, reason, sessionId }) => ({
-      event,
-      trigger,
-      reason,
-      sessionId,
-    })),
+    wipes.map(({ event, trigger, reason, sessionId }) => ({ event, trigger, reason, sessionId })),
     [
       { event: "local-data.wiped", trigger: "device-policy", reason: null, sessionId: null },
       {
         event: "local-data.wiped",
-        trigger: "device-policy",
+        trigger: "workspace-removal",
         reason: "incomplete",
         sessionId: null,
       },
+      { event: "local-data.wiped", trigger: null, reason: null, sessionId: null },
     ]
   );
 });

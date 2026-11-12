@@ -4594,6 +4594,10 @@
         "title": "Il pacchetto GPU deve essere scaricato di nuovo",
         "description": "Questa versione non può usare il pacchetto GPU precedente ({{packs}}). Scaricalo di nuovo nelle Impostazioni per riattivare l'accelerazione GPU."
       },
+      "localDataWiped": {
+        "title": "La tua organizzazione ha rimosso i dati di OpenWhispr da questo dispositivo",
+        "description": "Sei stato rimosso dallo spazio di lavoro della tua organizzazione, quindi OpenWhispr ha eliminato ciò che conservava su questo dispositivo ed è ripartito da zero."
+      },
       "cleanupFailed": {
         "title": "Pulizia non riuscita",
         "description": "La dettatura è stata incollata senza pulizia IA."

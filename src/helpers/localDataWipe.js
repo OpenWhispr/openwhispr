@@ -177,8 +177,41 @@ async function readDeviceSnapshot() {
   return normalizeDeviceValues(await readDeviceValues());
 }
 
+// A running app that learns its account was removed from the workspace that
+// managed this device (#3030) records it here and quits; the next launch wipes,
+// before anything opens a file it removes.
+function requestWorkspaceRemovalWipe(userDataPath, removal) {
+  const statePath = path.join(userDataPath, WIPE_STATE_FILE);
+  try {
+    fs.writeFileSync(
+      statePath,
+      JSON.stringify({ ...readJson(statePath), pendingRemoval: removal })
+    );
+    return true;
+  } catch (error) {
+    require("./debugLogger").error("Could not record the workspace removal wipe", {
+      error: error.message,
+    });
+    return false;
+  }
+}
+
+// The notice a removal's wipe leaves for the fresh install, given once.
+function takeWipeNotice(userDataPath) {
+  const statePath = path.join(userDataPath, WIPE_STATE_FILE);
+  const { notice, ...state } = readJson(statePath) ?? {};
+  if (!notice) return null;
+  try {
+    fs.writeFileSync(statePath, JSON.stringify(state));
+  } catch {
+    /* Shown again next launch rather than never. */
+  }
+  return notice;
+}
+
 // Runs at launch, before the logger, database or any sidecar opens a file it
-// removes. A token wipes once: the next launch that sees it again does nothing.
+// removes. Two things ask for it: a WipeLocalDataOnLaunch token this device
+// hasn't acted on, and a recorded workspace removal. Each wipes once.
 // Resolves true when the app should relaunch into its fresh state.
 async function wipeLocalDataOnLaunch({
   userDataPath,
@@ -191,20 +224,25 @@ async function wipeLocalDataOnLaunch({
   logger = require("./debugLogger"),
   env = process.env,
 }) {
-  let snapshot;
-  try {
-    snapshot = await readDevicePolicy();
-  } catch (error) {
-    // Only a deployment this build reads and accepts can ask for a wipe.
-    logger.warn("Device policy unreadable; no local data wipe", { error: error.message });
-    return false;
-  }
-  const token = snapshot.status === "valid" ? snapshot.wipeLocalDataOnLaunch : null;
   const statePath = path.join(userDataPath, WIPE_STATE_FILE);
-  if (!token || readJson(statePath)?.token === token) return false;
+  const state = readJson(statePath) ?? {};
+  // Only a deployment this build reads and accepts can ask for a wipe or say
+  // how one goes; a recorded removal wipes whatever the device policy says.
+  let device = null;
+  try {
+    const snapshot = await readDevicePolicy();
+    if (snapshot.status === "valid") device = snapshot;
+  } catch (error) {
+    logger.warn("Device policy unreadable", { error: error.message });
+  }
+  const token = device?.wipeLocalDataOnLaunch ?? null;
+  const newToken = token !== null && state.token !== token;
+  const removal = state.pendingRemoval ?? null;
+  if (!newToken && !removal) return false;
 
-  const includeModels = snapshot.wipeLocalDataIncludesModels;
-  logger.warn("Wiping local data at the device policy's request", { includeModels });
+  const trigger = removal ? "workspace-removal" : "device-policy";
+  const includeModels = device?.wipeLocalDataIncludesModels ?? false;
+  logger.warn("Wiping local data", { trigger, includeModels });
   // main.js loaded .env into this process, and the relaunch inherits its
   // environment: what came from the file goes with the file.
   let loaded = {};
@@ -235,19 +273,26 @@ async function wipeLocalDataOnLaunch({
   const { createMeetingAuditLog } = require("./meetingAuditLog");
   const audit = createMeetingAuditLog({
     isEnabled: () => true,
-    getConfiguredPath: () => snapshot.auditLogPath,
+    getConfiguredPath: () => device?.auditLogPath ?? null,
     userDataPath,
     appVersion,
     logger,
   });
-  audit.localDataWiped({ incomplete: errors.length > 0 });
+  audit.localDataWiped({ trigger, incomplete: errors.length > 0 });
   await audit.flush();
   if (errors.length > 0) logger.warn("Local data wipe incomplete", { errors });
 
-  // Without the token on record a relaunch would wipe again; this launch
-  // carries on instead, and the next one retries.
+  // Without this on record a relaunch would wipe again; this launch carries on
+  // instead, and the next one retries. A removal leaves the fresh install its
+  // notice.
   try {
-    fs.writeFileSync(statePath, JSON.stringify({ token }));
+    fs.writeFileSync(
+      statePath,
+      JSON.stringify({
+        token: newToken ? token : state.token,
+        notice: removal ? "workspace-removal" : state.notice,
+      })
+    );
   } catch (error) {
     logger.error("Could not record the local data wipe", { error: error.message });
     return false;
@@ -264,5 +309,7 @@ module.exports = {
   USER_DATA_ENTRIES,
   rememberNotesMirrorPath,
   removeLocalData,
+  requestWorkspaceRemovalWipe,
+  takeWipeNotice,
   wipeLocalDataOnLaunch,
 };

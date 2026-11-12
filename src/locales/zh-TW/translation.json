@@ -4573,6 +4573,10 @@
         "title": "需要重新下載 GPU 加速包",
         "description": "此版本無法使用先前的 GPU 加速包（{{packs}}）。請在設定中重新下載以重新啟用 GPU 加速。"
       },
+      "localDataWiped": {
+        "title": "你的組織已刪除此裝置上的 OpenWhispr 資料",
+        "description": "你已被移出組織的工作區，因此 OpenWhispr 已刪除先前儲存在此裝置上的內容，並重新開始。"
+      },
       "cleanupFailed": {
         "title": "清理失敗",
         "description": "你的聽寫已直接貼上，未經 AI 清理。"

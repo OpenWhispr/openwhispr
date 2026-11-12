@@ -4646,6 +4646,10 @@
         "title": "Es necesario volver a descargar el paquete GPU",
         "description": "Esta versión no puede usar tu paquete GPU anterior ({{packs}}). Vuelve a descargarlo en Configuración para volver a activar la aceleración GPU."
       },
+      "localDataWiped": {
+        "title": "Tu organización eliminó los datos de OpenWhispr de este dispositivo",
+        "description": "Te retiraron del espacio de trabajo de tu organización, así que OpenWhispr borró lo que guardaba en este dispositivo y empezó de cero."
+      },
       "cleanupFailed": {
         "title": "Limpieza fallida",
         "description": "Tu dictado se pegó sin limpieza con IA."
