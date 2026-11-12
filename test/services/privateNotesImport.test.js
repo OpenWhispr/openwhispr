@@ -867,3 +867,122 @@ test("an import that changes nothing lets team-only passes back off", async (t) 
     "the second pass moved nothing but the import's snapshot, and counts as empty"
   );
 });
+
+test("import recognizes a backed-up note moved into its teamspace", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  device.db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-a",
+    defaultWorkspaceId: "workspace-a",
+  });
+  device.db.bindDefaultPrivateSpace("workspace-a");
+  const [remote] = seedPersonalNotes(cloud, 1);
+  const privateId = device.db.getDefaultPrivateSpaceId();
+  const local = device.db.upsertNoteFromCloud(remote, null, privateId);
+  const teamId = Number(
+    device.db.db
+      .prepare(
+        "INSERT INTO spaces (client_space_id, kind, name, workspace_id) VALUES (?, 'team', ?, ?)"
+      )
+      .run("import-team", "Team", "workspace-a").lastInsertRowid
+  );
+  device.db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(teamId, ACCOUNT_A);
+  assert.equal(device.db.updateNote(local.id, { space_id: teamId }).success, true);
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+  assert.deepEqual(
+    liveNotes(device.db).map((note) => note.space_id),
+    [teamId]
+  );
+});
+
+test("import recognizes a moved note whose create receipt was lost", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  device.db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-a",
+    defaultWorkspaceId: "workspace-a",
+  });
+  device.db.bindDefaultPrivateSpace("workspace-a");
+  const [remote] = seedPersonalNotes(cloud, 1);
+  const local = device.db.upsertNoteFromCloud(remote, null, device.db.getDefaultPrivateSpaceId());
+  device.db.updateNote(local.id, { cloud_id: null });
+  const teamId = Number(
+    device.db.db
+      .prepare(
+        "INSERT INTO spaces (client_space_id, kind, name, workspace_id) VALUES (?, 'team', ?, ?)"
+      )
+      .run("lost-receipt-team", "Team", "workspace-a").lastInsertRowid
+  );
+  device.db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(teamId, ACCOUNT_A);
+  assert.equal(device.db.updateNote(local.id, { space_id: teamId }).success, true);
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+  assert.deepEqual(
+    liveNotes(device.db).map((note) => note.space_id),
+    [teamId]
+  );
+});
+
+test("import does not restore a moved folder's deleted note", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  device.db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-a",
+    defaultWorkspaceId: "workspace-a",
+  });
+  device.db.bindDefaultPrivateSpace("workspace-a");
+  const [remote] = seedPersonalNotes(cloud, 1);
+  const privateId = device.db.getDefaultPrivateSpaceId();
+  const folder = device.db.createFolder("Private folder", privateId).folder;
+  const local = device.db.upsertNoteFromCloud(remote, folder.id, privateId);
+  const teamId = Number(
+    device.db.db
+      .prepare(
+        "INSERT INTO spaces (client_space_id, kind, name, workspace_id) VALUES (?, 'team', ?, ?)"
+      )
+      .run("folder-import-team", "Team", "workspace-a").lastInsertRowid
+  );
+  device.db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(teamId, ACCOUNT_A);
+  assert.equal(device.db.moveFolderToSpace(folder.id, teamId).success, true);
+  device.db.deleteNote(local.id);
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_A), "switched");
+  assert.equal(liveNotes(device.db).length, 0);
+});
+
+test("another account's colliding cloud key is not suppressed by move history", async (t) => {
+  const setup = await signedInDevice(t);
+  if (!setup) return;
+  const { device, cloud } = setup;
+  device.db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-a",
+    defaultWorkspaceId: "workspace-a",
+  });
+  device.db.bindDefaultPrivateSpace("workspace-a");
+  const [remote] = seedPersonalNotes(cloud, 1);
+  const local = device.db.upsertNoteFromCloud(remote, null, device.db.getDefaultPrivateSpaceId());
+  const teamId = Number(
+    device.db.db
+      .prepare(
+        "INSERT INTO spaces (client_space_id, kind, name, workspace_id) VALUES (?, 'team', ?, ?)"
+      )
+      .run("account-team", "Team", "workspace-a").lastInsertRowid
+  );
+  device.db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(teamId, ACCOUNT_A);
+  assert.equal(device.db.updateNote(local.id, { space_id: teamId }).success, true);
+  const cloudB = createAccountCloud({ privateNotesRoutes: true });
+  serverClockBehind(cloudB);
+  seedPersonalNotes(cloudB, 1);
+  await device.signIn(ACCOUNT_B, cloudB);
+  assert.equal(await device.service.importCloudPrivateNotes(ACCOUNT_B), "switched");
+  assert.equal(liveNotes(device.db).filter((note) => note.account_id === ACCOUNT_B).length, 1);
+});

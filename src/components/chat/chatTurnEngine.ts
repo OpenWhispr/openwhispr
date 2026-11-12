@@ -1,3 +1,4 @@
+import type { NoteItem, NoteWriteGuard } from "../../types/electron";
 import i18n from "../../i18n";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
 import {
@@ -112,6 +113,8 @@ import {
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
 
+class ConversationPrivacyError extends Error {}
+
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
@@ -203,7 +206,8 @@ async function buildNoteAttendeesContext(
 async function buildRAGContext(
   userText: string,
   scopeSpaceIds: number[],
-  scope?: ContainerScope
+  scope: ContainerScope | undefined,
+  protectNotes: (notes: ReadonlyArray<Pick<NoteItem, "id" | "space_id">>) => Promise<void>
 ): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
   try {
@@ -220,6 +224,7 @@ async function buildRAGContext(
       results.map(async (r: { id: number; title: string; score?: number }) => {
         const note = await window.electronAPI.getNote(r.id);
         if (!note || !scopeSpaceIds.includes(note.space_id)) return null;
+        await protectNotes([note]);
         const content = [
           note.enhanced_content?.slice(0, RAG_NOTE_SNIPPET_LENGTH),
           note.content?.slice(0, RAG_NOTE_SNIPPET_LENGTH),
@@ -231,7 +236,8 @@ async function buildRAGContext(
     );
 
     return snippets.filter(Boolean).join("\n\n");
-  } catch {
+  } catch (error) {
+    if (error instanceof ConversationPrivacyError) throw error;
     return "";
   }
 }
@@ -437,7 +443,9 @@ export function createChatTurnEngine(
     cancel({ explicit: true });
     const sendNumber = ++latestSend;
     const stopsAtStart = stops;
-    const { claimConversation } = getOptions();
+    const turnOptions = getOptions();
+    const pendingWriteGuard = window.electronAPI.getNoteWriteGuard?.().catch(() => null);
+    const { claimConversation } = turnOptions;
     const claim =
       options?.conversationId != null && claimConversation
         ? await claimConversation(options.conversationId)
@@ -544,7 +552,39 @@ export function createChatTurnEngine(
       skillsEnabled = false,
       onStreamComplete,
       onTurnCheckpoint,
-    } = getOptions();
+    } = turnOptions;
+    // Capture the account before any note reads. Every exposure rechecks main's
+    // ownership; a cancelled or switched conversation never receives the result.
+    const accountScope =
+      options?.conversationId != null
+        ? window.electronAPI.getDatabaseAccountScope?.().catch(() => undefined)
+        : undefined;
+    const getWriteGuard = async (): Promise<NoteWriteGuard | undefined> => {
+      const guard = await pendingWriteGuard;
+      if (cancelled() || (!guard && (pendingWriteGuard || options?.conversationId != null))) {
+        throw new Error("Note write account could not be verified");
+      }
+      return guard ?? undefined;
+    };
+    const protectNotes = async (
+      notes: ReadonlyArray<Pick<NoteItem, "id" | "space_id">>,
+      deviceOnly = false
+    ): Promise<void> => {
+      if (options?.conversationId == null || (!notes.length && !deviceOnly)) return;
+      const expected = await accountScope;
+      if (cancelled() || !expected)
+        throw new ConversationPrivacyError("Conversation privacy could not be verified");
+      const result = await window.electronAPI
+        .protectConversation?.(
+          options.conversationId,
+          notes.map(({ id, space_id }) => ({ id, space_id })),
+          deviceOnly,
+          expected.accountId
+        )
+        .catch(() => undefined);
+      if (!result?.success || cancelled())
+        throw new ConversationPrivacyError("Conversation privacy could not be saved");
+    };
     const t = i18n.t.bind(i18n);
     let carriedSkillNames: ReadonlySet<string> = new Set();
     try {
@@ -570,7 +610,7 @@ export function createChatTurnEngine(
           },
         ]);
       };
-      const currentOpenNote = getOptions().openNote;
+      const currentOpenNote = turnOptions.openNote;
       const settings = getSettings();
       const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
         inferenceScope,
@@ -664,12 +704,12 @@ export function createChatTurnEngine(
         offeredSkills = usableSkills.filter((skill) => !removedSkills.has(skill.name));
       }
 
-      const scope = getOptions().searchScope;
+      const scope = turnOptions.searchScope;
       // The spaces this turn may read, for its tools and its library context alike.
       const noteScope = await resolveAssistantNoteScope();
       const scopeSpaceIds = noteScope.spaceIds;
       if (cancelled()) return;
-      const { openNoteSpaceId, sourceNoteId } = getOptions();
+      const { openNoteSpaceId, sourceNoteId } = turnOptions;
       if (sourceNoteId != null) {
         const note = await window.electronAPI.getNote?.(sourceNoteId);
         if (cancelled()) return;
@@ -742,9 +782,11 @@ export function createChatTurnEngine(
           calendarConnected,
           searchScope: scope,
           scopeSpaceIds,
+          protectNotes,
+          getWriteGuard,
           privateWorkspaceId: noteScope.privateWorkspaceId,
           privateCreationAllowed: noteScope.privateCreationAllowed,
-          openNoteId: getOptions().openNoteId,
+          openNoteId: turnOptions.openNoteId,
           webSearchEnabled,
           productHelpEnabled,
           vocabulary: {
@@ -873,11 +915,26 @@ export function createChatTurnEngine(
         options?.onSkillPicked?.({ name: picked.name, displayName: picked.displayName });
       }
 
+      if (groundingNote) {
+        const noteId = turnOptions.openNoteId ?? turnOptions.sourceNoteId;
+        if (noteId != null) {
+          const note = await window.electronAPI.getNote(noteId);
+          if (!note) throw new Error("Conversation source note is unavailable");
+          await protectNotes([note]);
+        } else {
+          // A caller providing raw local context without its source cannot prove
+          // it is team content. Demos without a persisted conversation are exempt.
+          await protectNotes([], true);
+        }
+      }
+      if (turnOptions.noteContext) await protectNotes([], true);
+      if (cancelled()) return;
+
       // A note's chat is about its note: other notes up front would compete with
       // it, and search_notes still reaches them when it doesn't answer.
       const [ragContext, attendeesContext] = await Promise.all([
-        groundingNote ? "" : buildRAGContext(userText, scopeSpaceIds, scope),
-        connectorsOffered ? buildNoteAttendeesContext(getOptions().noteMeeting) : "",
+        groundingNote ? "" : buildRAGContext(userText, scopeSpaceIds, scope, protectNotes),
+        connectorsOffered ? buildNoteAttendeesContext(turnOptions.noteMeeting) : "",
       ]);
       if (cancelled()) return;
       // A transcript too long for the model is read through get_note, except
@@ -896,7 +953,7 @@ export function createChatTurnEngine(
         .filter(Boolean)
         .join("\n\n");
       const libraryContext = [
-        withoutAttendeesFence(getOptions().noteContext ?? ""),
+        withoutAttendeesFence(turnOptions.noteContext ?? ""),
         withoutAttendeesFence(ragContext),
       ]
         .filter(Boolean)
@@ -939,7 +996,7 @@ export function createChatTurnEngine(
           ...(toolHistory !== "none" ? { toolHistory } : {}),
           openNote: openNoteContext || undefined,
           openNoteTranscriptPreview: currentNote.transcriptPreview,
-          userName: getOptions().userName,
+          userName: turnOptions.userName,
           writingStyle: settings.toneStyleEnabled ? { tones: settings.toneStyles } : undefined,
           skillCatalog: registry?.get("load_skill")
             ? buildSkillCatalog(offeredSkills, SKILL_CATALOG_MAX_TOKENS[contextTier])

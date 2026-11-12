@@ -168,11 +168,17 @@ setActiveWorkspaceYieldGuard(({ activeWorkspaceId, workspaces, defaultWorkspaceI
     space != null &&
     !isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces, defaultWorkspaceId);
   const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
-  const ownNote = activeNote != null && state.activeNoteId !== pickedNoteId;
+  const ownNote = state.activeNoteId != null && state.activeNoteId !== pickedNoteId;
   const ownContext = state.activeContext != null && state.activeContext !== pickedContext;
   return (
-    (ownNote && hides(spaceById(activeNote.space_id))) ||
-    (ownContext && state.activeContext != null && hides(spaceById(state.activeContext.spaceId)))
+    (ownNote &&
+      (activeNote == null ||
+        spaceById(activeNote.space_id) == null ||
+        hides(spaceById(activeNote.space_id)))) ||
+    (ownContext &&
+      state.activeContext != null &&
+      (spaceById(state.activeContext.spaceId) == null ||
+        hides(spaceById(state.activeContext.spaceId))))
   );
 });
 

@@ -8,6 +8,8 @@ import type { SettingsWorkspaceState } from "./useSettingsWorkspace";
 interface Props {
   state: SettingsWorkspaceState;
   children: (workspace: Workspace) => React.ReactNode;
+  /** The page takes the settings column's height and scrolls inside itself (see SidebarModal). */
+  fill?: boolean;
 }
 
 /**
@@ -17,6 +19,7 @@ interface Props {
 export default function SettingsWorkspaceFrame({
   state,
   children,
+  fill = false,
 }: Props): React.ReactElement | null {
   const { t } = useTranslation();
   const { status, workspace, retry, loading, stale, signedOut } = state;
@@ -67,12 +70,15 @@ export default function SettingsWorkspaceFrame({
   }
 
   return (
-    <div className="space-y-4">
+    <div
+      data-settings-fill={fill ? "" : undefined}
+      className={fill ? "flex min-h-0 flex-1 flex-col" : "space-y-4"}
+    >
       {/* The last refresh failed, so this is the list from memory or the cache. */}
       {stale && (
         <div
           role="status"
-          className="flex items-center gap-3 rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-3 py-2"
+          className={`flex items-center gap-3 rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-3 py-2${fill ? " mb-4 shrink-0" : ""}`}
         >
           <p className="flex-1 text-xs text-muted-foreground">
             {t("settingsPage.workspace.staleList")}

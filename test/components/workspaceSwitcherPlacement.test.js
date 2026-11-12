@@ -1,4 +1,5 @@
 const test = require("node:test");
+const { Window } = require("happy-dom");
 const assert = require("node:assert/strict");
 const { createElement } = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
@@ -109,10 +110,15 @@ async function loadSwitcher(t) {
 }
 
 // The text of each menu row, in order.
-const menuItems = (html) =>
-  [...html.matchAll(/<div data-menu-item="">(.*?)<\/div>/gs)].map(([, row]) =>
-    row.replace(/<[^>]+>/g, "")
-  );
+const menuItems = (html) => {
+  const window = new Window();
+  try {
+    window.document.body.innerHTML = html;
+    return [...window.document.querySelectorAll("[data-menu-item]")].map((row) => row.textContent);
+  } finally {
+    window.happyDOM.abort();
+  }
+};
 
 test("settings placement opens the menu below", async (t) => {
   const render = await loadSwitcher(t);
@@ -229,7 +235,7 @@ test("the switcher has no Personal item and lists the default first", async (t) 
 
   assert.doesNotMatch(html, /notes\.spaces\.personal/);
   const workspaceRows = menuItems(html).filter((row) => row !== "workspaces.switcher.add");
-  assert.deepEqual(workspaceRows, ["CWChad&#x27;s workspace", "ASAcme Studio", "BLBeta Labs"]);
+  assert.deepEqual(workspaceRows, ["CWChad's workspace", "ASAcme Studio", "BLBeta Labs"]);
 });
 
 test("an empty list never hides Private behind a spinner", async (t) => {

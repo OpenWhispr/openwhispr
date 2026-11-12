@@ -102,6 +102,8 @@ export function createGetNoteTool(scope: NoteScope): ToolDefinition {
           return failure(`Note with ID ${id} not found`);
         }
 
+        await scope.protectNotes?.([note]);
+
         // Saved names only relabel speakers; without them the transcript still reads.
         const mappings = await window.electronAPI.getSpeakerMappings?.(id).catch(() => []);
         const transcript = readableTranscript(

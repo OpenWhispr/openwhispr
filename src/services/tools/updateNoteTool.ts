@@ -1,6 +1,6 @@
 import type { ToolDefinition, ToolExecutionContext, ToolResult } from "./ToolRegistry";
 import { resolveFolderId } from "./utils";
-import { noteScopeCheck, type NoteScope } from "./noteScope";
+import { captureNoteWriteGuard, noteScopeCheck, type NoteScope } from "./noteScope";
 import { syncService } from "../SyncService.js";
 
 // The AI SDK runs a step's tool calls concurrently. Edits of one note take
@@ -132,6 +132,14 @@ export function createUpdateNoteTool(scope: NoteScope): ToolDefinition {
         };
       }
 
+      const writeGuard = await captureNoteWriteGuard(scope).catch(() => null);
+      if (writeGuard === null)
+        return {
+          success: false,
+          data: null,
+          displayText: "Note write account could not be verified",
+        };
+      if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
       const unlock = await lockNote(id);
       try {
         const note = await window.electronAPI.getNote(id);
@@ -143,13 +151,16 @@ export function createUpdateNoteTool(scope: NoteScope): ToolDefinition {
           return { success: false, data: null, displayText: `Note with ID ${id} is in the trash` };
         }
 
+        await scope.protectNotes?.([note]);
+        if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
+
         let folderCreated = false;
         if (folderName) {
           // Folder resolution stays within the note's space so a move by name
           // never drags the note into another space.
           const resolved = await resolveFolderId(
             folderName,
-            { createIfMissing: true },
+            { createIfMissing: true, writeGuard, signal: context?.signal },
             note.space_id
           );
           if (resolved.error) {
@@ -174,6 +185,7 @@ export function createUpdateNoteTool(scope: NoteScope): ToolDefinition {
             undoable: true,
             expected: note,
             turn: context?.messageId,
+            ...(writeGuard ? { writeGuard } : {}),
           }
         );
 

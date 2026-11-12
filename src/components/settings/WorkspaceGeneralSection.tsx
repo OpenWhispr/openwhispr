@@ -17,6 +17,7 @@ import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
 import MemberAvatar from "../MemberAvatar";
 import EnterpriseConsoleRow from "./EnterpriseConsoleRow";
 import SettingsWorkspaceFrame from "./SettingsWorkspaceFrame";
+import { PAGE_DESCRIPTION, PAGE_TITLE } from "./tableTokens";
 import { useSettingsWorkspace } from "./useSettingsWorkspace";
 import type { SettingsSectionType } from "../../lib/settingsNav";
 import type { Workspace } from "../../types/electron";
@@ -164,10 +165,8 @@ function GeneralPage({
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-sm font-semibold text-foreground">
-          {t("settingsPage.workspace.general.title")}
-        </h2>
-        <p className="text-xs text-muted-foreground/80 mt-0.5">
+        <h2 className={PAGE_TITLE}>{t("settingsPage.workspace.general.title")}</h2>
+        <p className={PAGE_DESCRIPTION}>
           {canEdit
             ? t("settingsPage.workspace.general.subtitleManage")
             : t("settingsPage.workspace.general.subtitleView")}

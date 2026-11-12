@@ -185,7 +185,11 @@ export function ContainerOverview({
             <ContainerIcon space={space} folder={folder} size={20} />
           </div>
           <h1 className="text-xl font-semibold text-foreground tracking-tight">
-            {folder ? defaultFolderDisplayName(folder, t) : space.name}
+            {folder
+              ? defaultFolderDisplayName(folder, t)
+              : space.kind === "private"
+                ? t("meetingNotification.folders.private")
+                : space.name}
           </h1>
           <p className="text-[13px] text-foreground/50 dark:text-foreground/45">
             {t(`notes.overview.subtitle.${space.kind === "team" ? "team" : "private"}`)}

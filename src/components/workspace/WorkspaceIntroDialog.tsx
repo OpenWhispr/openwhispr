@@ -1,11 +1,11 @@
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Building2, Check, ChevronDown, Plus, User, Users } from "../icons";
+import { ArrowRight, Building2, Check, ChevronDown, Plus, User } from "../icons";
 import { cn } from "../lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import workspaceImage from "../../assets/workspace-intro-workspace.webp";
 import teamspacesImage from "../../assets/workspace-intro-teamspaces.webp";
-import teamsImage from "../../assets/workspace-intro-teams.webp";
+import teamsImage from "../../assets/workspace-intro-teams.png";
 
 type IntroStepId = "workspace" | "teamspaces" | "teams";
 
@@ -94,25 +94,6 @@ function TeamspacesMock({ workspaceName }: { workspaceName: string }): ReactElem
   );
 }
 
-function TeamsMock(): ReactElement {
-  const avatar =
-    "-me-1.5 flex size-[22px] items-center justify-center rounded-full border border-surface-1";
-  return (
-    <div className="absolute left-1/2 top-[132px] flex h-[54px] -translate-x-1/2 items-center gap-3 rounded-[20px] border border-primary/60 bg-gradient-to-b from-surface-1 to-primary/10 px-5 shadow-[0_5px_12px_rgba(0,0,0,0.12)]">
-      <span className="flex items-center">
-        <span className={cn(avatar, "bg-primary/20 text-primary")}>
-          <User size={12} />
-        </span>
-        <span className={cn(avatar, "bg-primary/35 text-primary")}>
-          <User size={12} />
-        </span>
-        <span className={cn(avatar, "bg-surface-3 text-[10px] font-medium text-primary")}>+2</span>
-      </span>
-      <Users size={22} className="text-primary" />
-    </div>
-  );
-}
-
 export interface WorkspaceIntroCardProps {
   step: number;
   workspaceName: string;
@@ -148,7 +129,6 @@ export function WorkspaceIntroCard({
         <div aria-hidden="true">
           {id === "workspace" && <WorkspaceMock workspaceName={workspaceName} />}
           {id === "teamspaces" && <TeamspacesMock workspaceName={workspaceName} />}
-          {id === "teams" && <TeamsMock />}
         </div>
       </div>
 

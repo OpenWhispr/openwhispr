@@ -24,6 +24,12 @@
 // /api/me/private-notes/on-device answer as the API does (the switch refuses
 // a pulled_through that personal rows changed after); without it they answer
 // 404, as an API before them does.
+// Two more model the current server and are off unless a test asks for them:
+//   revisionGuard      note writes advance `revision`, and a PATCH whose
+//                      base_revision isn't the stored one gets the server's
+//                      409 note_version_conflict with the current row
+//   serverDate         every answer carries the server clock as an HTTP Date
+//                      header would (whole seconds), read from setClock
 
 // The server compares timestamps itself; it must not borrow the client's guard,
 // or a client-side regression would be invisible here.
@@ -43,10 +49,11 @@ function compare(a, b) {
 }
 
 class HttpError extends Error {
-  constructor(status, message, code) {
+  constructor(status, message, code, details) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -127,6 +134,8 @@ function createFakeCloud(config = {}) {
     coalesceOnConflict: true,
     staleWriteGuard: true,
     updatedAtClamp: true,
+    revisionGuard: false,
+    serverDate: false,
     ...config,
   };
 
@@ -213,6 +222,7 @@ function createFakeCloud(config = {}) {
 
     Object.assign(row, next);
     row.updated_at = bump(row, incoming.updated_at);
+    if (cfg.revisionGuard && collection === noteCollection) row.revision = (row.revision ?? 0) + 1;
     return row;
   }
 
@@ -244,6 +254,7 @@ function createFakeCloud(config = {}) {
       }
       if (ownerId && collection === noteCollection) row.user_id = ownerId;
     }
+    if (cfg.revisionGuard && collection === noteCollection) row.revision = 0;
     collection.store.set(row.id, row);
     return row;
   }
@@ -574,6 +585,18 @@ function createFakeCloud(config = {}) {
         const { id, ...updates } = body ?? {};
         const row = requireLive(noteCollection, id);
         if (refusesPersonalWrite(noteCollection, row, updates)) throw personalWriteError();
+        if (
+          cfg.revisionGuard &&
+          updates.base_revision !== undefined &&
+          updates.base_revision !== row.revision
+        ) {
+          throw new HttpError(
+            409,
+            "Note was modified since it was last fetched",
+            "note_version_conflict",
+            { note: structuredClone(row) }
+          );
+        }
         return applyWrite(noteCollection, row, updates);
       }
       case "DELETE /api/notes/delete":
@@ -764,6 +787,12 @@ function createFakeCloud(config = {}) {
     return entry.failure;
   }
 
+  // An HTTP Date header carries whole seconds, so the client can only ever
+  // learn the server clock to the second.
+  function serverDateField() {
+    return cfg.serverDate ? { serverDate: new Date(clock()).toUTCString() } : {};
+  }
+
   async function request(opts) {
     const method = String(opts?.method ?? "GET").toUpperCase();
     const path = String(opts?.path ?? "");
@@ -785,10 +814,17 @@ function createFakeCloud(config = {}) {
     const [pathname, rawQuery] = path.split("?");
     try {
       const data = handle(method, pathname, new URLSearchParams(rawQuery ?? ""), body);
-      return { success: true, data: structuredClone(data) };
+      return { success: true, data: structuredClone(data), ...serverDateField() };
     } catch (err) {
       if (err instanceof HttpError) {
-        return { success: false, error: err.message, status: err.status, code: err.code };
+        return {
+          success: false,
+          error: err.message,
+          status: err.status,
+          code: err.code,
+          details: err.details,
+          ...serverDateField(),
+        };
       }
       throw err;
     }

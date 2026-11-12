@@ -23,6 +23,12 @@ export function createListFoldersTool(scope: NoteScope): ToolDefinition {
         ]);
         const folders = allFolders.filter((folder) => spaceIds.has(folder.space_id));
         const spaces = allSpaces.filter((space) => spaceIds.has(space.id));
+        const privateSpaces = new Set(
+          spaces.filter((space) => space.kind === "private").map((space) => space.id)
+        );
+        if (folders.some((folder) => privateSpaces.has(folder.space_id))) {
+          await scope.protectNotes?.([], true);
+        }
         const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]));
         const data = folders.map((f) => ({
           id: f.id,

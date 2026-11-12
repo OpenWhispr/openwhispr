@@ -207,12 +207,17 @@ test("a re-import skips a note that moved into a teamspace under a new client id
   if (!db) return;
 
   db.setActiveAccountId("account-1");
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-1",
+    defaultWorkspaceId: "workspace-1",
+  });
+  db.bindDefaultPrivateSpace("workspace-1");
   const row = granolaRow("a");
   const first = db.importNotes([row]);
   const noteId = first.noteIds[0];
   const teamId = db.db
     .prepare(
-      "INSERT INTO spaces (client_space_id, kind, name, sort_order) VALUES ('team-1', 'team', 'Design', 9)"
+      "INSERT INTO spaces (client_space_id, kind, name, sort_order, workspace_id) VALUES ('team-1', 'team', 'Design', 9, 'workspace-1')"
     )
     .run().lastInsertRowid;
   db.db

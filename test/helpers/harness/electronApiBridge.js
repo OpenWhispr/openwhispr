@@ -263,6 +263,12 @@ function createElectronApi(db, options = {}) {
     },
 
     // Conversations
+    protectConversation: async (...args) => db.protectConversation(...args),
+    getNoteWriteGuard: async () => ({
+      accountId: db.activeAccountId,
+      authGeneration: authState.generation,
+    }),
+    getDatabaseAccountScope: async () => db.getAccountScope(),
     getAgentConversation: async (id) => db.getAgentConversation(id),
     getPendingConversations: async () => db.getPendingConversations(),
     getPendingConversationDeletes: async () => db.getPendingConversationDeletes(),
@@ -303,7 +309,9 @@ function createElectronApi(db, options = {}) {
       return db.replaceConversationClientId(id, expectedClientId, sender);
     },
     hardDeleteConversation: async (id, expectedAuthGeneration) =>
-      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteConversation(id),
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.hardDeleteConversation(id, true),
 
     // Transcriptions
     getTranscriptionById: async (id) => db.getTranscriptionById(id),

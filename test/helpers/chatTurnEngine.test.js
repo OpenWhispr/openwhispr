@@ -272,3 +272,79 @@ for (const inScope of [false, true]) {
     assert.equal(requests, inScope ? 1 : 0);
   });
 }
+
+for (const source of ["rag", "open-note", "container"]) {
+  for (const verdict of ["allow", "refuse", "cancel", "account-switch"]) {
+    test(`${source} protects a persisted chat before checkpoints and model exposure: ${verdict}`, async (t) => {
+      const note = {
+        id: 7,
+        space_id: 1,
+        title: "Private canary",
+        content: "PRIVATE_ENGINE_CANARY",
+      };
+      const events = [];
+      let release;
+      let markStarted;
+      const marking = new Promise((resolve) => {
+        markStarted = resolve;
+      });
+      const pending = new Promise((resolve) => {
+        release = resolve;
+      });
+      const fixture = await setup(t, {
+        electronAPI: {
+          getSpaces: async () => [{ id: 1, kind: "private", workspace_id: null }],
+          getPrivateSpaceId: async () => 1,
+          getDatabaseAccountScope: async () => ({ accountId: "owner", visibleAccountId: "owner" }),
+          getNote: async () => note,
+          semanticSearchNotes: async () => (source === "rag" ? [note] : []),
+          protectConversation: async (id, references, deviceOnly, accountId) => {
+            assert.equal(id, 42);
+            assert.equal(accountId, "owner");
+            if (source !== "container") assert.deepEqual(references, [{ id: 7, space_id: 1 }]);
+            else assert.equal(deviceOnly, true);
+            events.push("mark-start");
+            markStarted();
+            await pending;
+            events.push("mark-end");
+            return { success: verdict !== "refuse" };
+          },
+        },
+        options: {
+          ...(source === "open-note" ? { openNoteId: 7, openNote: note.content } : {}),
+          ...(source === "container" ? { noteContext: note.content } : {}),
+          onTurnCheckpoint: () => {
+            events.push("checkpoint");
+          },
+        },
+      });
+      const requests = [];
+      t.mock.method(fixture.service, "processTextStreamingAI", async function* (...args) {
+        events.push("request");
+        requests.push(JSON.stringify(args.slice(0, 4)));
+        yield { type: "content", text: "Answer" };
+      });
+      const send = fixture.engine.send(
+        "Question",
+        [{ id: "user", role: "user", content: "Question" }],
+        { conversationId: 42 }
+      );
+      const settled = send.catch((error) => error);
+      await marking;
+      assert.deepEqual(events, ["mark-start"]);
+      if (verdict === "cancel") fixture.engine.cancel({ explicit: true });
+      if (verdict === "account-switch") fixture.invalidate();
+      release();
+      const result = await settled;
+      if (verdict === "allow") {
+        assert.equal(result, undefined);
+        assert.match(requests[0], /PRIVATE_ENGINE_CANARY/);
+        assert.deepEqual(events.slice(0, 4), ["mark-start", "mark-end", "checkpoint", "request"]);
+      } else {
+        assert.ok(result instanceof Error);
+        assert.equal(requests.length, 0);
+        assert.deepEqual(events, ["mark-start", "mark-end"]);
+      }
+    });
+  }
+}

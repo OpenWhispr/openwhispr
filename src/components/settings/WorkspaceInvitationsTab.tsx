@@ -1,7 +1,7 @@
 import React, { useEffect, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { create } from "zustand";
-import { Loader2, MoreHorizontal, Trash2 } from "../icons";
+import { ChevronDown, Loader2, Mail, UserMinus } from "../icons";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -31,7 +31,7 @@ import { CancelInvitationsDialog } from "../workspace/CancelInvitationsDialog";
 import { RowCheckbox } from "../dictionary/RowCheckbox";
 import { SelectionBar } from "../workspace/SelectionBar";
 import type { WorkspaceInvitationsState } from "./useWorkspaceInvitations";
-import { HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
+import { COLUMN_DIVIDER, HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
 
 interface WorkspaceInvitationsTabProps {
   workspace: Workspace;
@@ -343,11 +343,12 @@ export default function WorkspaceInvitationsTab({
       )}
 
       {rows.length === 0 && invitations.status === "ready" && (
-        <div className={cn(TABLE_FRAME, "px-4 py-8 text-center")}>
-          <p className="text-xs font-medium text-foreground">
+        // No frame: the design sets the message straight on the page.
+        <div className="flex flex-col items-center gap-1.5 px-4 py-16 text-center">
+          <p className="text-lg font-medium leading-[1.4] text-foreground">
             {t("settingsPage.workspace.people.invitations.emptyTitle")}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground">
             {t("settingsPage.workspace.people.invitations.emptyBody")}
           </p>
         </div>
@@ -380,23 +381,43 @@ export default function WorkspaceInvitationsTab({
                     }
                   />
                 </th>
-                <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-3 text-start")}>
+                <th scope="col" className={cn(HEADER_CELL, COLUMN_DIVIDER, "ps-3 pe-3 text-start")}>
                   {t("settingsPage.workspace.people.columns.email")}
                 </th>
                 <th
                   scope="col"
-                  className={cn(HEADER_CELL, WIDE_ONLY, "px-3 text-start whitespace-nowrap")}
+                  className={cn(
+                    HEADER_CELL,
+                    COLUMN_DIVIDER,
+                    WIDE_ONLY,
+                    "px-3 text-start whitespace-nowrap"
+                  )}
                 >
                   {t("settingsPage.workspace.people.columns.role")}
                 </th>
                 <th
                   scope="col"
-                  className={cn(HEADER_CELL, WIDE_ONLY, "px-3 text-start whitespace-nowrap")}
+                  className={cn(
+                    HEADER_CELL,
+                    COLUMN_DIVIDER,
+                    WIDE_ONLY,
+                    "px-3 text-start whitespace-nowrap"
+                  )}
                 >
                   {t("settingsPage.workspace.people.columns.status")}
                 </th>
-                <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-end whitespace-nowrap")}>
-                  {t("settingsPage.workspace.people.columns.actions")}
+                <th
+                  scope="col"
+                  className={cn(
+                    HEADER_CELL,
+                    COLUMN_DIVIDER,
+                    "ps-3 pe-4 text-end whitespace-nowrap"
+                  )}
+                >
+                  {/* The design leaves this header blank; the name stays for screen readers. */}
+                  <span className="sr-only">
+                    {t("settingsPage.workspace.people.columns.actions")}
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -405,8 +426,12 @@ export default function WorkspaceInvitationsTab({
                 const expired = invitationStatus(invitation, now) === "expired";
                 const resending = resendingIds.has(invitation.id);
                 const role = t(`settingsPage.workspace.role.${invitation.workspace_role}`);
+                // The cell reads just Pending or Expired; how long is left sits in its tooltip.
                 const status = expired
                   ? t("settingsPage.workspace.people.invitations.expired")
+                  : t("settingsPage.workspace.people.invitations.statusPending");
+                const statusTitle = expired
+                  ? undefined
                   : t("settingsPage.workspace.people.invitations.pending", {
                       count: invitationDaysLeft(invitation, now),
                     });
@@ -426,33 +451,46 @@ export default function WorkspaceInvitationsTab({
                       />
                     </td>
                     {/* max-w-0 keeps the email from widening the column in an auto-layout table. */}
-                    <td className="ps-3 pe-3 py-2 @xl:py-0 w-full max-w-0">
+                    <td className={cn(COLUMN_DIVIDER, "ps-3 pe-3 py-2 @xl:py-0 w-full max-w-0")}>
                       <p className="text-xs font-medium text-foreground break-all @xl:truncate">
                         <bdi dir="ltr">{invitation.email}</bdi>
                       </p>
                       <p className="@xl:hidden mt-0.5 text-xs text-muted-foreground">
                         {role} ·{" "}
-                        <span className={expired ? "text-destructive" : undefined}>{status}</span>
+                        <span
+                          title={statusTitle}
+                          className={expired ? "text-destructive" : undefined}
+                        >
+                          {status}
+                        </span>
                       </p>
                     </td>
-                    <td className={cn(WIDE_ONLY, "px-3 whitespace-nowrap text-xs text-foreground")}>
+                    <td
+                      className={cn(
+                        COLUMN_DIVIDER,
+                        WIDE_ONLY,
+                        "px-3 whitespace-nowrap text-xs text-foreground"
+                      )}
+                    >
                       {role}
                     </td>
                     <td
                       className={cn(
+                        COLUMN_DIVIDER,
                         WIDE_ONLY,
                         "px-3 whitespace-nowrap text-xs",
                         expired ? "text-destructive" : "text-muted-foreground"
                       )}
+                      title={statusTitle}
                     >
                       {status}
                     </td>
-                    <td className="ps-3 pe-4 w-px whitespace-nowrap text-end">
+                    <td className={cn(COLUMN_DIVIDER, "ps-3 pe-4 w-px whitespace-nowrap text-end")}>
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           disabled={resending || bulkResending}
                           aria-label={t("common.actions")}
-                          className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 active:bg-foreground/8 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-foreground/5 dark:hover:bg-white/5"
+                          className="inline-flex h-7 items-center justify-center gap-1 rounded-lg px-1.5 text-sm text-foreground outline-none transition-colors hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-primary/30 active:bg-foreground/8 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-foreground/5 dark:hover:bg-white/5"
                         >
                           {resending ? (
                             <>
@@ -460,7 +498,13 @@ export default function WorkspaceInvitationsTab({
                               {t("settingsPage.workspace.invites.resending")}
                             </>
                           ) : (
-                            <MoreHorizontal className="size-4" aria-hidden="true" />
+                            <>
+                              {t("common.actions")}
+                              <ChevronDown
+                                className="size-4 text-muted-foreground"
+                                aria-hidden="true"
+                              />
+                            </>
                           )}
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44">
@@ -468,13 +512,14 @@ export default function WorkspaceInvitationsTab({
                             className="text-xs"
                             onSelect={() => void handleResend(invitation)}
                           >
+                            <Mail className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
                             {t("settingsPage.workspace.people.invitations.resend")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-xs text-destructive focus:text-destructive"
                             onSelect={() => dispatchCancel({ type: "open", subject: invitation })}
                           >
-                            <Trash2 className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                            <UserMinus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
                             {t("settingsPage.workspace.people.invitations.cancel")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -499,6 +544,7 @@ export default function WorkspaceInvitationsTab({
               `settingsPage.workspace.people.invitations.${oneSelected ? "cancel" : "cancelSelected"}`
             ),
             tone: "destructive",
+            icon: UserMinus,
             onClick: () =>
               oneSelected
                 ? dispatchCancel({ type: "open", subject: selectedInvitations[0] })
@@ -513,6 +559,7 @@ export default function WorkspaceInvitationsTab({
                     `settingsPage.workspace.people.invitations.${oneSelected ? "resend" : "resendSelected"}`
                   ),
             busy: bulkResending || resendingIds.size > 0,
+            icon: Mail,
             onClick: () => void handleResendSelected(),
           },
         ]}

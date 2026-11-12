@@ -520,3 +520,65 @@ test("the Chat list rows name the space their note sits in", (t) => {
   assert.equal(list.find((c) => c.id === chat.id).note_space_id, note.space_id);
   assert.equal(list.find((c) => c.id === plain.id).note_space_id, null);
 });
+
+test("privacy survives forks, acknowledgements, source removal and account changes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("owner");
+  const { conversation, rows } = seedConversation(db);
+  const note = db.saveNote("private", "secret", "personal").note;
+  assert.deepEqual(db.protectConversation(conversation.id, [note], false, "other"), {
+    success: false,
+  });
+  assert.equal(db.protectConversation(conversation.id, [note], false, "owner").success, true);
+  const before = db.getAgentConversation(conversation.id);
+  db.markConversationSynced(conversation.id, "old-cloud");
+  assert.equal(db.getAgentConversation(conversation.id).device_only, 1);
+  assert.equal(db.forkAgentConversation(conversation.id, rows[1].id).device_only, 1);
+  db.db.prepare("DELETE FROM notes WHERE id = ?").run(note.id);
+  assert.equal(
+    db.getPendingConversations().some((row) => row.id === conversation.id),
+    false
+  );
+  db.setActiveAccountId("other");
+  assert.deepEqual(db.protectConversation(conversation.id, [], true, "owner"), { success: false });
+  db.setActiveAccountId("owner");
+  assert.equal(db.getAgentConversation(before.id).device_only, 1);
+  const ordinary = db.createAgentConversation("ordinary new root");
+  db.addAgentMessage(ordinary.id, "user", "hello");
+  assert.equal(
+    db.getPendingConversations().some((row) => row.id === ordinary.id),
+    true
+  );
+});
+
+test("historical root privacy migration runs once and survives reopen", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { conversation } = seedConversation(db);
+  const empty = db.createAgentConversation("empty old chat");
+  // Recreate the pre-migration schema without replacing its saved history.
+  for (const trigger of [
+    "private_note_conversations_after_move",
+    "private_note_conversations_before_delete",
+    "private_conversation_after_insert",
+    "private_conversation_after_move",
+  ]) {
+    db.db.exec(`DROP TRIGGER ${trigger}`);
+  }
+  db.db.exec("ALTER TABLE agent_conversations DROP COLUMN device_only");
+  db.db.close();
+  db.initDatabase();
+  assert.equal(db.getAgentConversation(conversation.id).device_only, 1);
+  assert.equal(db.getAgentConversation(empty.id).device_only, 1);
+  const newer = seedConversation(db, "new root").conversation;
+  assert.equal(db.getAgentConversation(newer.id).device_only, 0);
+  db.db.close();
+  db.initDatabase();
+  assert.equal(db.getAgentConversation(conversation.id).device_only, 1);
+  assert.equal(db.getAgentConversation(newer.id).device_only, 0);
+  assert.equal(
+    db.getPendingConversations().some((row) => row.id === newer.id),
+    true
+  );
+});

@@ -98,7 +98,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none transition-colors focus:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     checked={checked}
@@ -109,7 +109,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
     <span
       aria-hidden="true"
       className={cn(
-        "absolute start-2 flex size-3.5 items-center justify-center rounded-[4px] border",
+        "absolute start-1.5 flex size-4 items-center justify-center rounded-[4px] border",
         checked
           ? "border-primary bg-primary text-primary-foreground"
           : "border-foreground/30 dark:border-white/35"
@@ -117,9 +117,9 @@ const DropdownMenuCheckboxItem = React.forwardRef<
     >
       <DropdownMenuPrimitive.ItemIndicator>
         {checked === "indeterminate" ? (
-          <Minus className="size-3" strokeWidth={2.5} />
+          <Minus className="size-2.5" strokeWidth={2.5} />
         ) : (
-          <Check className="size-3" strokeWidth={2.5} />
+          <Check className="size-2.5" strokeWidth={2.5} />
         )}
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
@@ -135,7 +135,7 @@ const DropdownMenuRadioItem = React.forwardRef<
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none transition-colors focus:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}

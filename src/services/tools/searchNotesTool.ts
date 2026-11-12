@@ -1,20 +1,22 @@
+import type { NoteScope } from "./noteScope";
 import type { SpaceItem } from "../../types/electron";
 import type { ContainerScope } from "../../types/chat";
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import type { ToolDefinition, ToolExecutionContext, ToolResult } from "./ToolRegistry";
 import { resolveLocalNoteId, resolveSpace } from "./utils";
 import { withoutAttendeesFence } from "../../utils/noteAttendees";
+import { getValidatedAuthGeneration } from "../../lib/authRequestContext";
 
 export const MAX_CONTENT_LENGTH = 500;
 
 // The most the cloud search endpoint returns at once; it refuses a larger limit.
 const MAX_SEARCH_LIMIT = 50;
-// Teamspaces the cloud is asked about one by one. Each request names its space, so the server
-// sends that space's rows and no personal ones; past this many, one request for every accessible
-// space is filtered here instead, where personal rows can take some of its slots.
+// Bound concurrent requests while keeping every request scoped on the server.
 const MAX_CLOUD_SPACE_REQUESTS = 10;
+const CANCELLED_SEARCH: ToolResult = { success: false, data: null, displayText: "" };
 
 interface SearchToolOptions {
   useCloudSearch: boolean;
+  protectNotes?: NoteScope["protectNotes"];
   /** Pins every search to this container; the LLM's space arg is dropped. */
   fixedScope?: ContainerScope;
   /**
@@ -61,7 +63,15 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
     },
     readOnly: true,
 
-    async execute(args: Record<string, unknown>): Promise<ToolResult> {
+    async execute(
+      args: Record<string, unknown>,
+      context?: ToolExecutionContext
+    ): Promise<ToolResult> {
+      // Capture before local reads: a delayed cloud fallback belongs to this sign-in too.
+      const authGeneration = getValidatedAuthGeneration();
+      const isCurrent = (): boolean =>
+        !context?.signal.aborted && getValidatedAuthGeneration() === authGeneration;
+      if (!isCurrent()) return CANCELLED_SEARCH;
       const query = args.query as string;
       const limit =
         typeof args.limit === "number" && Number.isFinite(args.limit)
@@ -73,6 +83,7 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
       const spaces = ((await window.electronAPI.getSpaces?.()) ?? []).filter((s) =>
         scopeSpaceIds.has(s.id)
       );
+      if (!isCurrent()) return CANCELLED_SEARCH;
       let space: SpaceItem | undefined;
       if (fixedScope) {
         space = spaces.find((s) => s.id === fixedScope.spaceId);
@@ -95,20 +106,55 @@ export function createSearchNotesTool(options: SearchToolOptions): ToolDefinitio
         (s) => s.kind === "team" && !!s.cloud_space_id && searchSpaceIds.includes(s.id)
       );
       const strategies: Array<() => Promise<ToolResult>> = [
-        () => executeLocalSearch(query, limit, true, space, spaces, searchSpaceIds, folderId),
-        () => executeLocalSearch(query, limit, false, space, spaces, searchSpaceIds, folderId),
+        () =>
+          executeLocalSearch(
+            query,
+            limit,
+            true,
+            space,
+            spaces,
+            searchSpaceIds,
+            folderId,
+            isCurrent,
+            options.protectNotes
+          ),
+        () =>
+          executeLocalSearch(
+            query,
+            limit,
+            false,
+            space,
+            spaces,
+            searchSpaceIds,
+            folderId,
+            isCurrent,
+            options.protectNotes
+          ),
       ];
       if (useCloudSearch && cloudSpaces.length > 0 && folderId == null) {
-        strategies.push(() => executeCloudSearch(query, limit, space, cloudSpaces, searchSpaceIds));
+        strategies.push(() =>
+          executeCloudSearch(
+            query,
+            limit,
+            space,
+            cloudSpaces,
+            searchSpaceIds,
+            authGeneration,
+            isCurrent
+          )
+        );
       }
 
       for (let i = 0; i < strategies.length; i++) {
+        if (!isCurrent()) return CANCELLED_SEARCH;
         try {
           const result = await strategies[i]();
+          if (!isCurrent()) return CANCELLED_SEARCH;
           if (Array.isArray(result.data) && result.data.length === 0 && i < strategies.length - 1)
             continue;
           return result;
         } catch (error) {
+          if (!isCurrent()) return CANCELLED_SEARCH;
           if (i === strategies.length - 1) {
             return {
               success: false,
@@ -158,15 +204,20 @@ async function executeLocalSearch(
   space: SpaceItem | undefined,
   spaces: SpaceItem[],
   spaceIds: number[],
-  folderId: number | null
+  folderId: number | null,
+  isCurrent: () => boolean,
+  protectNotes?: NoteScope["protectNotes"]
 ): Promise<ToolResult> {
   const notes = semantic
     ? await window.electronAPI.semanticSearchNotes(query, limit, null, folderId, spaceIds)
     : await window.electronAPI.searchNotes(query, limit, null, folderId, spaceIds);
 
+  if (!isCurrent()) return CANCELLED_SEARCH;
   const spaceNameById = new Map(spaces.map((s) => [s.id, s.name]));
   // Main already searched these spaces only; a note it returns from anywhere else is dropped.
   const inScope = notes.filter((note) => spaceIds.includes(note.space_id));
+  await protectNotes?.(inScope);
+  if (!isCurrent()) return CANCELLED_SEARCH;
   const results = inScope.map((note) => ({
     id: note.id,
     title: withoutAttendeesFence(note.title),
@@ -190,17 +241,28 @@ async function executeCloudSearch(
   limit: number,
   space: SpaceItem | undefined,
   cloudSpaces: SpaceItem[],
-  spaceIds: number[]
+  spaceIds: number[],
+  authGeneration: number | null,
+  isCurrent: () => boolean
 ): Promise<ToolResult> {
+  if (authGeneration == null) throw new Error("Cloud note search requires a verified account");
   const { NotesService } = await import("../../services/NotesService.js");
   const cloudIds = cloudSpaces.flatMap((s) => (s.cloud_space_id ? [s.cloud_space_id] : []));
   const spaceByCloudId = new Map(cloudSpaces.map((s) => [s.cloud_space_id, s]));
   // Membership is server-enforced; one request per teamspace keeps personal rows out entirely.
-  const requests =
-    cloudIds.length <= MAX_CLOUD_SPACE_REQUESTS
-      ? cloudIds.map((cloudId) => NotesService.search(query, limit, undefined, cloudId))
-      : [NotesService.search(query, Math.min(limit * 4, MAX_SEARCH_LIMIT), "all")];
-  const answers = await Promise.allSettled(requests);
+  const answers: PromiseSettledResult<Awaited<ReturnType<typeof NotesService.search>>>[] = [];
+  for (let offset = 0; offset < cloudIds.length; offset += MAX_CLOUD_SPACE_REQUESTS) {
+    if (!isCurrent()) return CANCELLED_SEARCH;
+    const batch = cloudIds.slice(offset, offset + MAX_CLOUD_SPACE_REQUESTS);
+    answers.push(
+      ...(await Promise.allSettled(
+        batch.map((cloudId) =>
+          NotesService.search(query, limit, undefined, cloudId, authGeneration)
+        )
+      ))
+    );
+    if (!isCurrent()) return CANCELLED_SEARCH;
+  }
   const answered = answers.flatMap((answer) =>
     answer.status === "fulfilled" ? [answer.value.notes] : []
   );
@@ -224,10 +286,11 @@ async function executeCloudSearch(
   const results = await Promise.all(
     inScope.map(async ({ cn, spaceName }) => ({
       id: await resolveLocalNoteId(cn.client_note_id ?? cn.id, async () => {
+        if (!isCurrent()) return null;
         const local =
           (await window.electronAPI.getNoteForCloudRow?.(cn.client_note_id, cn.id)) ?? null;
         // The local copy may have moved out of scope since: no id leads to it.
-        return local && spaceIds.includes(local.space_id) ? local : null;
+        return isCurrent() && local && spaceIds.includes(local.space_id) ? local : null;
       }),
       title: cn.title && withoutAttendeesFence(cn.title),
       date: cn.created_at,
@@ -240,6 +303,7 @@ async function executeCloudSearch(
     }))
   );
 
+  if (!isCurrent()) return CANCELLED_SEARCH;
   return {
     success: true,
     data: results,

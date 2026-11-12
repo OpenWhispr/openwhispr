@@ -27,6 +27,13 @@ function createDatabaseManager() {
       is_default_private INTEGER NOT NULL DEFAULT 0,
       deleted_at TEXT
     );
+    CREATE TABLE private_note_import_history (
+      account_id TEXT NOT NULL,
+      client_note_id TEXT NOT NULL,
+      cloud_id TEXT,
+      note_id INTEGER NOT NULL,
+      PRIMARY KEY (account_id, client_note_id)
+    );
     CREATE TABLE space_accounts (
       space_id INTEGER NOT NULL,
       account_id TEXT NOT NULL,
@@ -277,11 +284,20 @@ test("deleting one account removes only its personal rows and dependent private 
     INSERT INTO note_speaker_embeddings (note_id) VALUES (2);
     INSERT INTO optimistic_folder_delete_rows (folder_id, entity_type, entity_id)
     VALUES (2, 'note', 2);
+    INSERT INTO private_note_import_history (account_id, client_note_id, note_id) VALUES
+      ('account-a', 'note-a', 2), ('account-b', 'note-b', 3);
   `);
   manager.setActiveAccountId("account-a");
 
   const result = manager.deleteAccountData("account-a");
 
+  assert.deepEqual(
+    sqlite
+      .prepare("SELECT account_id FROM private_note_import_history ORDER BY account_id")
+      .all()
+      .map((row) => row.account_id),
+    ["account-b"]
+  );
   assert.deepEqual(result.deletedNoteIds, [2]);
   assert.deepEqual(result.deletedFolderIds, [2]);
   assert.deepEqual(result.deletedTranscriptionIds, [2]);

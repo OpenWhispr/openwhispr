@@ -255,7 +255,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
-  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId, transcript) =>
+  saveNote: (
+    title,
+    content,
+    noteType,
+    sourceFile,
+    audioDuration,
+    folderId,
+    spaceId,
+    transcript,
+    writeGuard
+  ) =>
     ipcRenderer.invoke(
       "db-save-note",
       title,
@@ -265,7 +275,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       audioDuration,
       folderId,
       spaceId,
-      transcript
+      transcript,
+      writeGuard
     ),
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
   getNotes: (noteType, limit, folderId, spaceId, spaceIds) =>
@@ -289,7 +300,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Folder functions
   getFolders: (spaceId) => ipcRenderer.invoke("db-get-folders", spaceId),
-  createFolder: (name, spaceId) => ipcRenderer.invoke("db-create-folder", name, spaceId),
+  createFolder: (name, spaceId, writeGuard) =>
+    ipcRenderer.invoke("db-create-folder", name, spaceId, writeGuard),
   deleteFolder: (id) => ipcRenderer.invoke("db-delete-folder", id),
   renameFolder: (id, name) => ipcRenderer.invoke("db-rename-folder", id, name),
   moveFolderToSpace: (id, spaceId) => ipcRenderer.invoke("db-move-folder-to-space", id, spaceId),
@@ -305,7 +317,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getDefaultPrivateSpaceId: () => ipcRenderer.invoke("get-default-private-space-id"),
   bindDefaultPrivateSpace: (defaultWorkspaceId, accountId) =>
     ipcRenderer.invoke("bind-default-private-space", defaultWorkspaceId, accountId),
-  claimSignedOutPrivateNotes: () => ipcRenderer.invoke("claim-signed-out-private-notes"),
   copyNoteToSpace: (noteId, targetSpaceId, folderId) =>
     ipcRenderer.invoke("copy-note-to-space", noteId, targetSpaceId, folderId),
   relocatePrivateSpace: (fromWorkspaceId, toWorkspaceId, accountId) =>
@@ -313,6 +324,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
   getActiveAccountScope: () => ipcRenderer.invoke("get-active-account-scope"),
+  recordProductEventAppSession: (context) =>
+    ipcRenderer.invoke("product-events-record-app-session", context),
+  recordOnboardingCompleted: (completion) =>
+    ipcRenderer.invoke("product-events-record-onboarding-completed", completion),
+  getNoteWriteGuard: () => ipcRenderer.invoke("get-note-write-guard"),
   getDatabaseAccountScope: () => ipcRenderer.invoke("get-database-account-scope"),
   onDatabaseAccountScopeChanged: registerListener(
     "database-account-scope-changed",
@@ -1238,6 +1254,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   createAgentConversation: (title, noteId, spaceId, folderId) =>
     ipcRenderer.invoke("db-create-agent-conversation", title, noteId, spaceId, folderId),
   getAgentConversations: (limit) => ipcRenderer.invoke("db-get-agent-conversations", limit),
+  protectConversation: (id, notes, deviceOnly, expectedAccountId) =>
+    ipcRenderer.invoke("db-protect-conversation", id, notes, deviceOnly, expectedAccountId),
   getAgentConversation: (id) => ipcRenderer.invoke("db-get-agent-conversation", id),
   deleteAgentConversation: (id) => ipcRenderer.invoke("db-delete-agent-conversation", id),
   updateAgentConversationTitle: (id, title) =>
@@ -1490,7 +1508,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-shared-dictionary-clear", workspaceId),
   pruneSharedDictionary: (keepWorkspaceIds) =>
     ipcRenderer.invoke("db-shared-dictionary-prune", keepWorkspaceIds),
-  setSharedDictionaryHints: (hints) => ipcRenderer.invoke("dictionary-set-shared-hints", hints),
+  setSharedDictionaryHints: (promptHints, hotwordHints) =>
+    ipcRenderer.invoke("dictionary-set-shared-hints", promptHints, hotwordHints),
 
   getPendingSnippets: () => ipcRenderer.invoke("db-get-pending-snippets"),
   getPendingSnippetDeletes: () => ipcRenderer.invoke("db-get-pending-snippet-deletes"),

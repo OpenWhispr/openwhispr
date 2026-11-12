@@ -61,7 +61,7 @@ import type {
   SharedDictionaryMeta,
   SharedDictionarySnapshot,
 } from "./sharedDictionary";
-import type { SharedHintWords } from "../utils/sharedDictionaryHints";
+import type { ScopedSharedHintWords, SharedHintWords } from "../utils/sharedDictionaryHints";
 
 export type { SharedDictionarySnapshot } from "./sharedDictionary";
 
@@ -300,6 +300,11 @@ export interface AuthTokenMutationResult extends AuthTokenState {
 /** The validated account scope the main process holds, as seen by any window. */
 export interface ActiveAccountScope {
   accountId: string;
+  authGeneration: number;
+}
+
+export interface NoteWriteGuard {
+  accountId: string | null;
   authGeneration: number;
 }
 
@@ -1538,6 +1543,7 @@ export type LocalLLMDownloadProgressEvent =
     };
 
 export interface ConversationPreview {
+  device_only?: number;
   id: number;
   account_id?: string | null;
   title: string;
@@ -1573,6 +1579,9 @@ export interface AgentMessageRow {
 }
 
 export interface AgentConversationWithMessages {
+  device_only?: number;
+  space_id?: number | null;
+  folder_id?: number | null;
   note_space_id?: number | null;
   note_deleted_at?: string | null;
   id: number;
@@ -1609,6 +1618,10 @@ export interface ConversationCreateAckResult {
   success: boolean;
   outcome: "synced" | "changed" | "already-linked" | "delete-pending" | "orphaned" | "unresolved";
   cloud_id?: string | null;
+}
+
+export interface PrivateNoteImportAcknowledgement {
+  imported: true;
 }
 
 export interface CloudRowWriteOptions {
@@ -2082,7 +2095,8 @@ declare global {
         audioDuration?: number | null,
         folderId?: number | null,
         spaceId?: number | null,
-        transcript?: string | null
+        transcript?: string | null,
+        writeGuard?: NoteWriteGuard
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       getNote: (id: number) => Promise<NoteItem | null>;
       getNotes: (
@@ -2117,7 +2131,7 @@ declare global {
           updated_by_user_id?: string | null;
           left_team?: number;
         },
-        options?: { undoable: true; expected: NoteItem; turn?: string }
+        options?: { undoable: true; expected: NoteItem; turn?: string; writeGuard?: NoteWriteGuard }
       ) => Promise<NoteMutationResult>;
       getNoteUndos: () => Promise<Array<{ token: string; noteId: number; title: string }>>;
       claimNoteUndo: (token: string) => Promise<boolean>;
@@ -2160,7 +2174,8 @@ declare global {
       getFolders: (spaceId?: number | null) => Promise<FolderItem[]>;
       createFolder: (
         name: string,
-        spaceId?: number | null
+        spaceId?: number | null,
+        writeGuard?: NoteWriteGuard
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
       renameFolder: (
@@ -2201,7 +2216,6 @@ declare global {
         defaultWorkspaceId: string,
         accountId?: string | null
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
-      claimSignedOutPrivateNotes?: () => Promise<{ notes: number; folders: number }>;
       // Copy to Private: a new local note in one of the account's private
       // spaces (in the folder given, else where a new note of its type goes).
       // The source keeps its cloud identity and sharing; the copy has neither.
@@ -2234,6 +2248,14 @@ declare global {
       finishActivationCapture?: (id: string, words: number) => Promise<void>;
       cancelActivationCapture?: (id: string) => Promise<void>;
       getActiveAccountScope?: () => Promise<ActiveAccountScope | null>;
+      /** Dashboard funnel: binds a session the renderer just validated (app sign-in). */
+      recordProductEventAppSession?: (context: AnalyticsSyncContext) => Promise<void>;
+      /** Dashboard funnel: the final onboarding completion was persisted. */
+      recordOnboardingCompleted?: (completion: {
+        setupMode: string | null;
+        flowVersion: string;
+      }) => Promise<void>;
+      getNoteWriteGuard?: () => Promise<NoteWriteGuard>;
       getDatabaseAccountScope?: () => Promise<DatabaseAccountScope>;
       onDatabaseAccountScopeChanged?: (
         callback: (scope: DatabaseAccountScope) => void
@@ -3287,6 +3309,7 @@ declare global {
         {
           success: boolean;
           data?: unknown;
+          serverDate?: string;
         } & PolicyFailureMetadata
       >;
 
@@ -3493,6 +3516,12 @@ declare global {
       onAgentConversationReleased?: (
         callback: (event: { conversationId: number }) => void
       ) => () => void;
+      protectConversation?: (
+        id: number,
+        notes: ReadonlyArray<Pick<NoteItem, "id" | "space_id">>,
+        deviceOnly: boolean,
+        expectedAccountId: string | null
+      ) => Promise<{ success: boolean }>;
       getAgentConversation?: (id: number) => Promise<AgentConversationWithMessages | null>;
       deleteAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       updateAgentConversationTitle?: (id: number, title: string) => Promise<{ success: boolean }>;
@@ -4187,7 +4216,7 @@ declare global {
           localSpaceId: number | null | undefined,
           expectedAuthGeneration: number | undefined,
           options?: CloudRowWriteOptions
-        ): Promise<NoteItem | StaleSyncWrite | null>;
+        ): Promise<NoteItem | PrivateNoteImportAcknowledgement | StaleSyncWrite | null>;
       };
       markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
       acknowledgeNoteCreate?: (
@@ -4422,8 +4451,11 @@ declare global {
       clearSharedDictionary?: (workspaceId?: string) => Promise<{ changed: number }>;
       /** Clears every workspace's shared words except these workspaces'. */
       pruneSharedDictionary?: (keepWorkspaceIds: string[]) => Promise<{ changed: number }>;
-      /** Tells main which shared words apply, so auto-learn skips them. */
-      setSharedDictionaryHints?: (hints: SharedHintWords) => Promise<void>;
+      /** Sends capped prompt hints for auto-learn and eligible shared hints for local hotwords. */
+      setSharedDictionaryHints?: (
+        promptHints: SharedHintWords,
+        hotwordHints: ScopedSharedHintWords
+      ) => Promise<void>;
 
       getPendingSnippets?: () => Promise<SnippetEntryItem[]>;
       getPendingSnippetDeletes?: () => Promise<SnippetEntryItem[]>;

@@ -25,6 +25,7 @@ const DOM_GLOBALS = [
 ];
 
 const MOCKS = {
+  "/stores/noteStore": `export const markNoteEdited = (id) => globalThis.__participantEdits.push(id);`,
   "/stores/settingsStore": `
     export function useSettingsStore(selector) {
       return selector({ gcalConnected: true, mcalConnected: false, appleCalendarConnected: false });
@@ -77,10 +78,19 @@ const STANDUP = {
 async function mount(t, props, { events = [STANDUP] } = {}) {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const calls = { updateNote: [], openExternal: [], joinCalendarMeeting: 0 };
+  globalThis.__participantEdits = [];
+  t.after(() => delete globalThis.__participantEdits);
   happyWindow.electronAPI = {
     searchContacts: async () => ({ success: true, contacts: [] }),
     upsertContact: () => {},
-    updateNote: (...args) => calls.updateNote.push(args),
+    updateNote: (...args) => {
+      assert.equal(
+        globalThis.__participantEdits.at(-1),
+        args[0],
+        "participant edit adopts the note before IPC"
+      );
+      return calls.updateNote.push(args);
+    },
     openExternal: (url) => calls.openExternal.push(url),
     joinCalendarMeeting: () => {
       calls.joinCalendarMeeting += 1;

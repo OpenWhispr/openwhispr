@@ -1799,7 +1799,7 @@
         },
         "roleMenuLabel": "Change {{name}}'s role",
         "roleDescription": {
-          "member": "Can view and edit notes.",
+          "member": "Uses the workspace.",
           "admin": "Manages members, invites, teams, and settings."
         },
         "roleFailed": "Couldn't change {{name}}'s role. Check your connection and try again.",
@@ -1836,7 +1836,8 @@
           "resentNoEmailMany_one": "{{count}} invitation was updated, but its email couldn't be delivered and the old link no longer works. It's still selected, so you can resend it.",
           "resentNoEmailMany_other": "{{count}} invitations were updated, but the emails couldn't be delivered and the old links no longer work. They're still selected, so you can resend them.",
           "resendUnrenewable_one": "Couldn't renew {{count}} expired invitation. Cancel it and invite that person again.",
-          "resendUnrenewable_other": "Couldn't renew {{count}} expired invitations. Cancel them and invite those people again."
+          "resendUnrenewable_other": "Couldn't renew {{count}} expired invitations. Cancel them and invite those people again.",
+          "statusPending": "Pending"
         },
         "selection": {
           "count_one": "{{count}} selected",
@@ -1857,6 +1858,10 @@
           "invite": "Invite people",
           "createTeam": "Create team",
           "label": "More ways to add"
+        },
+        "roleMenu": {
+          "member": "Workspace Member",
+          "admin": "Workspace Admin"
         }
       },
       "teamspaces": {
@@ -1945,6 +1950,12 @@
           "roleMemberBody": "Can view and edit notes",
           "roleAdmin": "Teamspace Admin",
           "roleAdminBody": "Manages this teamspace and its assigned teams.",
+          "teamAccessMember": "Everyone is a member",
+          "teamAccessMemberBody": "Everyone on the team can view and edit notes.",
+          "teamAccessAdmin": "Team admins are admins",
+          "teamAccessAdminBody": "The team's admins also manage this teamspace. Everyone else on the team is a member.",
+          "teamAccessMemberShort": "Members",
+          "teamAccessAdminShort": "Team admins",
           "removeItem": "Remove from teamspace",
           "removeTitle": "Remove {{name}} from {{space}}?",
           "removeBody": "This removes {{name}}'s direct membership. Access through a team will remain. They'll stay in the workspace.",
@@ -2204,7 +2215,7 @@
           "noSpacesBody": "A teamspace is a shared area for a team's notes. Add people or teams, and everyone in it can read and edit.",
           "placeholder": "Find teamspaces to add",
           "searchPlaceholder": "Find teamspaces",
-          "add": "Add teamspaces",
+          "add": "Add to teamspace",
           "adding": "Adding…",
           "selectedTitle_one": "{{count}} teamspace selected",
           "selectedTitle_other": "{{count}} teamspaces selected",
@@ -2273,6 +2284,7 @@
         "nextInvoice": "Next invoice",
         "manageStripe": "Manage in Stripe",
         "startSubscription": "Start subscription",
+        "provisionedPlan": "Set up by OpenWhispr. Contact sales to change the plan or seats.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -2372,9 +2384,7 @@
         "invite": {
           "title_one": "Invite {{count}} guest to {{workspace}}",
           "title_other": "Invite {{count}} guests to {{workspace}}",
-          "description": "They'll get an email link to join {{workspace}}.",
-          "sent_one": "Sent {{count}} invite to join {{workspace}}",
-          "sent_other": "Sent {{count}} invites to join {{workspace}}"
+          "description": "They'll get an email link to join {{workspace}}."
         },
         "remove": {
           "titleOne": "Remove {{name}} from {{workspace}}?",
@@ -2555,6 +2565,9 @@
           "askOwner": "Ask {{name}} to upgrade your workspace."
         },
         "currentPlan": "Current plan",
+        "yourPersonalPlan": "Your personal plan",
+        "yourWorkspacePlan": "Your workspace's plan",
+        "manage": "Manage",
         "coveredByWorkspace": "Included with your workspace plan",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",
@@ -3643,11 +3656,9 @@
       "seatCostMany_other": "If all are accepted, adds {{count}} seats to your plan · estimated prorated charge {{amount}}.",
       "seatCostManyUnpriced_one": "If all are accepted, adds {{count}} seat to your plan.",
       "seatCostManyUnpriced_other": "If all are accepted, adds {{count}} seats to your plan.",
-      "submitOne": "Send invite",
+      "submitOne": "Send invitation",
       "submit_one": "Send {{count}} invite",
       "submit_other": "Send {{count}} invites",
-      "submitting_one": "Inviting {{count}}…",
-      "submitting_other": "Inviting {{count}}…",
       "sentTitle_one": "{{count}} invitation sent",
       "sentTitle_other": "{{count}} invitations sent",
       "attachedTitle_one": "{{count}} invitation updated",
@@ -3690,7 +3701,7 @@
       },
       "roleDescription": {
         "admin": "Manages members, invites, teams, and settings.",
-        "member": "Can view and edit notes."
+        "member": "Uses the workspace."
       },
       "errors": {
         "invalid": "{{email}} isn't a valid email",
@@ -3704,7 +3715,8 @@
         "rateLimited": "Too many invitations right now. Try again later.",
         "requestFailed": "Couldn't invite {{email}}. Check your connection and try again.",
         "refused": "Couldn't invite {{email}}: {{reason}}"
-      }
+      },
+      "sending": "Inviting…"
     },
     "join": {
       "title": "Join your team",
@@ -3742,7 +3754,7 @@
     "exit": {
       "leave": {
         "title": "Leave {{name}}?",
-        "body": "You'll lose access to this workspace, its teams, and its teamspaces. A workspace admin can invite you back.",
+        "body": "You'll lose access to this workspace, its teams, and its teamspaces. The workspace Owner or an Admin can invite you back.",
         "privateNotes": "Your private notes in this workspace will move to {{workspace}} on this device.",
         "failed": "Couldn't leave {{name}}. Check your connection and try again."
       },
@@ -3773,9 +3785,9 @@
       "body": "They'll lose access to every teamspace and team in this workspace. You can invite them again anytime.",
       "confirm": "Remove",
       "removing": "Removing…",
-      "failed": "Couldn't confirm that {{name}} was removed. Check your connection and try again.",
       "notAllowed": "You no longer have permission to remove people from {{workspace}}.",
-      "alreadyRemoved": "{{name}} was already removed"
+      "alreadyRemoved": "{{name}} was already removed",
+      "failedTitle": "Couldn't remove {{name}}"
     },
     "removeMembers": {
       "title_one": "Remove {{count}} member from {{workspace}}?",
@@ -3783,9 +3795,7 @@
       "confirm_one": "Remove {{count}} member",
       "confirm_other": "Remove {{count}} members",
       "checking": "Checking…",
-      "failed_one": "Couldn't confirm that {{count}} member was removed. Check your connection and try again.",
-      "failed_other": "Couldn't confirm that {{count}} members were removed. Check your connection and try again.",
-      "body": "These people will lose access to every teamspace and team in this workspace. You can invite them again anytime.",
+      "body": "They'll lose access to every teamspace and team in this workspace. You can invite them again anytime.",
       "ownerOne": "{{name}} owns notes or teamspaces in this workspace.",
       "owners_one": "{{count}} of them owns notes or teamspaces.",
       "owners_other": "{{count}} of them own notes or teamspaces.",
@@ -3795,24 +3805,31 @@
       "directoryManagedOneOthers": "{{name}} is assigned by your identity provider. Remove them there, or untick them to remove the others.",
       "directoryManagedOthers_one": "{{count}} of them is assigned by your identity provider. Remove them there, or untick them to remove the others.",
       "directoryManagedOthers_other": "{{count}} of them are assigned by your identity provider. Remove them there, or untick them to remove the others.",
-      "transferLabel": "Transfer to",
-      "transferBody": "Their notes and teamspaces will move to the new owner. They'll lose access to this workspace.",
+      "transferLabel": "Reassign to",
       "transferBodyLimited": "Their notes and teamspaces will move to {{name}}, except notes in teamspaces {{name}} can't access, which stay in those teamspaces. They'll lose access to this workspace.",
       "you": "{{name}} (you)",
-      "transferConfirm": "Transfer and remove",
+      "transferConfirm": "Reassign and remove",
       "transferring": "Transferring…",
-      "transferFailed": "Couldn't confirm the transfer and removal. Check your connection and try again.",
+      "transferFailed": "Couldn't reassign content. No members were removed. Try again.",
+      "transferUnconfirmed": "Couldn't confirm the reassignment and removal. Check your connection and try again.",
       "invalidTarget": "{{name}} can't receive ownership anymore. Choose someone else.",
       "cannotRemoveOwner": "The workspace owner can't be removed.",
       "cannotRemoveSelf": "You can't remove yourself. Leave the workspace from General.",
       "done_one": "Removed {{count}} member",
       "done_other": "Removed {{count}} members",
-      "transferDone_one": "Moved their notes and teamspaces to {{name}} and removed {{count}} member.",
-      "transferDone_other": "Moved their notes and teamspaces to {{name}} and removed {{count}} members.",
       "transferPartial_one": "{{count}} note stayed in a teamspace {{name}} can't access. Everything else moved to them.",
       "transferPartial_other": "{{count}} notes stayed in teamspaces {{name}} can't access. Everything else moved to them.",
       "alreadyRemoved_one": "{{count}} member was already removed",
-      "alreadyRemoved_other": "{{count}} members were already removed"
+      "alreadyRemoved_other": "{{count}} members were already removed",
+      "failedBody": "Their workspace access is unchanged. Check your connection and try again.",
+      "unconfirmedTitle": "Couldn't confirm the removal",
+      "unconfirmedBody": "They may already have been removed. Check your connection and try again.",
+      "reassignBody": "Transfer their notes and assign a teamspace Admin before removing them.",
+      "ownersAll": "They own notes or manage teamspaces.",
+      "failedTitle_one": "Couldn't remove {{count}} member",
+      "failedTitle_other": "Couldn't remove {{count}} members",
+      "transferDone_one": "Reassigned content and teamspace Admin access to {{name}}. Removed {{count}} member.",
+      "transferDone_other": "Reassigned content and teamspace Admin access to {{name}}. Removed {{count}} members."
     },
     "cancelInvitation": {
       "title": "Cancel the invitation for {{email}}?",
@@ -3840,7 +3857,6 @@
       "body": "Choose an existing workspace member. You'll become an Admin after the transfer.",
       "newOwner": "New Owner",
       "placeholder": "Choose a workspace member",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "Transfer ownership to {{name}}?",
       "confirmBody": "{{name}} will become the Owner of {{workspace}}. You'll become an Admin.",
       "submit": "Transfer ownership",
@@ -4643,6 +4659,8 @@
     "wordsReady_other": "{{count}} words ready",
     "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models read only the last few hundred characters of it, so a shorter list works better there. Other models get the full list.",
     "openRouterIgnoredNotice": "OpenRouter doesn't pass your dictionary to its speech models, so these words won't guide transcription while it's selected for dictation.",
+    "localModelIgnoredNotice": "{{model}} can't use your dictionary, so these words won't guide transcription while it's selected for dictation. AI cleanup still applies them when it's on.",
+    "localModelHotwordsLimitNotice": "{{model}} uses up to {{limit}} dictionary entries as transcription hints. Personal entries come first, followed by entries from your teamspaces, then your workspace.",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
     "editWord": "Edit {{word}}",

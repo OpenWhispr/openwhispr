@@ -55,12 +55,22 @@ async function requestLock(name, optionsOrCallback, maybeCallback) {
     throw new TypeError("navigator.locks.request requires a callback");
   }
 
+  if (options.signal?.aborted) throw options.signal.reason;
   if (held.has(String(name))) {
     // ifAvailable hands the caller a null lock instead of queueing, which is how
     // an ambient sync pass bows out while another window holds the lock.
     if (options.ifAvailable) return callback(null);
     return new Promise((resolve, reject) => {
-      queueFor(String(name)).push(() => holdAndRun(String(name), callback).then(resolve, reject));
+      const queue = queueFor(String(name));
+      const waiter = () => holdAndRun(String(name), callback).then(resolve, reject);
+      queue.push(waiter);
+      // As in the browser, an abort drops a request that is still waiting.
+      options.signal?.addEventListener("abort", () => {
+        const index = queue.indexOf(waiter);
+        if (index === -1) return;
+        queue.splice(index, 1);
+        reject(options.signal.reason);
+      });
     });
   }
   return holdAndRun(String(name), callback);

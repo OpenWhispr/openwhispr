@@ -2,6 +2,7 @@ import {
   cloudGet,
   cloudGetForAuthGeneration,
   cloudPost,
+  cloudPostForAuthGeneration,
   cloudPatch,
   cloudDelete,
 } from "./cloudApi.js";
@@ -148,14 +149,22 @@ async function search(
   query: string,
   limit?: number,
   scope?: "all",
-  spaceId?: string
+  spaceId?: string,
+  authGeneration?: number
 ): Promise<{ notes: SearchResult[] }> {
-  return cloudPost<{ notes: SearchResult[] }>("/api/notes/search", {
+  const body = {
     query,
     ...(limit !== undefined ? { limit } : {}),
     ...(scope !== undefined ? { scope } : {}),
     ...(spaceId !== undefined ? { space_id: spaceId } : {}),
-  });
+  };
+  return authGeneration === undefined
+    ? cloudPost<{ notes: SearchResult[] }>("/api/notes/search", body)
+    : cloudPostForAuthGeneration<{ notes: SearchResult[] }>(
+        "/api/notes/search",
+        body,
+        authGeneration
+      );
 }
 
 export { create, batchCreate, update, deleteNote, deleteAll, list, search };

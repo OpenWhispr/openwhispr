@@ -84,7 +84,7 @@ function dropLegacyPersonalChoice(): void {
 // - "provisional": the app, from a list without it (a first sign-in reads the list before the
 //   server makes the default). Only this one yields to the default, in whichever session first
 //   lists it, and then settles (D45, D46).
-// An id saved by a build that recorded no source counts as the user's, so an update moves nobody.
+// Older builds saved automatic ids without a source; those migrate like provisional picks.
 export const ACTIVE_WORKSPACE_SOURCE_KEY = "activeWorkspaceSource";
 type ActiveWorkspaceSource = "user" | "auto" | "provisional";
 
@@ -122,7 +122,7 @@ function writeActiveWorkspaceId(id: string | null, source: ActiveWorkspaceSource
 export function adoptActiveWorkspaceChoice(workspaceId: string): void {
   if (readActiveWorkspaceId() !== workspaceId) return;
   const source = readActiveWorkspaceSource();
-  if (source !== "auto" && source !== "provisional") return;
+  if (source === "user") return;
   localStorage.setItem(ACTIVE_WORKSPACE_SOURCE_KEY, "user");
   if (useWorkspaceStore.getState().activeWorkspaceId === workspaceId) {
     useWorkspaceStore.setState({ activeWorkspaceProvisional: false });
@@ -254,6 +254,14 @@ let membersRequestSeq = 0;
 let latestMembersRead: { seq: number; workspaceId: string; done: Promise<void> } | null = null;
 let accountGeneration = 0;
 
+/** Keep an async workspace operation within the account session that started it. */
+export function captureWorkspaceAccountGuard(): () => boolean {
+  const generation = accountGeneration;
+  const accountId = usePolicyStore.getState().accountId;
+  return () =>
+    generation === accountGeneration && accountId === usePolicyStore.getState().accountId;
+}
+
 function newerMembersRead(workspaceId: string, seq: number): Promise<void> | null {
   const latest = latestMembersRead;
   return latest && latest.seq > seq && latest.workspaceId === workspaceId ? latest.done : null;
@@ -345,9 +353,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   refresh: ({ fresh = false } = {}) => {
     if (fresh) listEpoch += 1;
     if (refreshPromise && refreshPromiseEpoch === listEpoch) return refreshPromise;
-    const generation = accountGeneration;
+    const accountCurrent = captureWorkspaceAccountGuard();
+    const accountId = usePolicyStore.getState().accountId;
     const epoch = listEpoch;
-    const superseded = (): boolean => generation !== accountGeneration || epoch !== listEpoch;
+    const current = (): boolean => accountCurrent() && epoch === listEpoch;
     set({ loading: true });
     let request!: Promise<void>;
     request = (async () => {
@@ -358,8 +367,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         null;
       try {
         const answer = await WorkspacesService.list();
-        if (superseded()) return;
-        const accountId = usePolicyStore.getState().accountId;
+        if (!current()) return;
         const previousDefaultId = get().defaultWorkspaceId;
         if (previousDefaultId && !answer.some((w) => w.id === previousDefaultId)) {
           askForDefaultAgain();
@@ -387,7 +395,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         let keepsSaved = Boolean(stillValid);
         // A provisional pick is made again once a list holds the account's own default (D45),
         // unless that would hide what the user has open: then it becomes their choice (D46).
-        if (stillValid && source === "provisional" && workspaces.some(isOwnDefault)) {
+        if (
+          stillValid &&
+          (source === "provisional" || source === null) &&
+          workspaces.some(isOwnDefault)
+        ) {
           const next = defaultActiveWorkspaceId(workspaces);
           const keepsUsersWork =
             next !== savedActiveId &&
@@ -399,6 +411,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           } else {
             keepsSaved = false;
           }
+        }
+        if (keepsSaved && source === null) {
+          source = "provisional";
+          writeActiveWorkspaceId(savedActiveId, source);
         }
         const resolvedActiveId = keepsSaved ? savedActiveId : defaultActiveWorkspaceId(workspaces);
         const activeChanged = resolvedActiveId !== activeId;
@@ -427,7 +443,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         }
         refreshForWorkspace(resolvedActiveId);
       } catch (error) {
-        if (superseded()) return;
+        if (!current()) return;
         logger.error(
           "Failed to load workspaces",
           { error: (error as Error).message },
@@ -450,17 +466,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           loaded: true,
           error: true,
         });
-      } finally {
-        if (refreshPromise === request) refreshPromise = null;
       }
-      // After the new list is in place, so main is told its active workspace first. Not skipped
-      // for a newer request: the cache already holds this list, so no later answer would find
-      // these missing (main's rows would, on the next list). Main refuses the move if another
-      // account has signed in since.
-      const orphaned = rowCheck ? await orphanedPrivateWorkspaces(rowCheck) : [];
+      // A newer successful list scans main's rows again, including previously failed moves.
+      if (!current()) return;
+      const orphaned = rowCheck ? await orphanedPrivateWorkspaces(rowCheck, current) : [];
+      if (!current()) return;
       const toRelocate = [...new Set([...lost, ...orphaned])];
-      if (toRelocate.length > 0) await relocateLostWorkspaces(toRelocate);
-    })();
+      if (toRelocate.length > 0) await relocateLostWorkspaces(toRelocate, current);
+    })().finally(() => {
+      if (refreshPromise === request) refreshPromise = null;
+    });
     refreshPromise = request;
     refreshPromiseEpoch = epoch;
     return request;
@@ -549,7 +564,10 @@ export function onWorkspaceScopePublished(
  * Private and existing ones to the default's. Named for the account whose list chose them: main
  * refuses a scope that arrives after another account signed in. True once main took it.
  */
-export async function publishWorkspaceScope(): Promise<boolean> {
+export async function publishWorkspaceScope(
+  isCurrent: () => boolean = () => true
+): Promise<boolean> {
+  if (!isCurrent()) return false;
   const api = typeof window !== "undefined" ? window.electronAPI : undefined;
   if (!api?.setActiveWorkspaceScope) return false;
   const { activeWorkspaceId, activeWorkspaceProvisional, defaultWorkspaceId, listAccountId } =
@@ -568,7 +586,7 @@ export async function publishWorkspaceScope(): Promise<boolean> {
   };
   try {
     const result = await api.setActiveWorkspaceScope(scope);
-    if (result?.success !== true) return false;
+    if (!isCurrent() || result?.success !== true) return false;
     for (const listener of scopePublishedListeners) {
       try {
         listener(scope);
@@ -596,27 +614,31 @@ export async function publishWorkspaceScope(): Promise<boolean> {
  * list can't find them all: signing out or another account's sign-in clears it, and a move that
  * failed is gone from it by the next answer. The default's own row never counts.
  */
-async function orphanedPrivateWorkspaces({
-  listed,
-  accountId,
-  defaultWorkspaceId,
-}: {
-  listed: Workspace[];
-  accountId: string;
-  defaultWorkspaceId: string;
-}): Promise<string[]> {
+async function orphanedPrivateWorkspaces(
+  {
+    listed,
+    accountId,
+    defaultWorkspaceId,
+  }: {
+    listed: Workspace[];
+    accountId: string;
+    defaultWorkspaceId: string;
+  },
+  isCurrent: () => boolean
+): Promise<string[]> {
   const api = typeof window !== "undefined" ? window.electronAPI : undefined;
   if (!api?.getSpaces) return [];
   // Reading the spaces makes the active workspace's Private when it has none, so main has to
   // hear which workspace is active first. A refused scope means another account signed in.
-  if (!(await publishWorkspaceScope())) return [];
+  if (!(await publishWorkspaceScope(isCurrent)) || !isCurrent()) return [];
   let spaces: SpaceItem[];
   try {
     // Bound first, whatever the bridge has sent: a Private that was the default until now (an
     // Enterprise workspace that stood in) keeps its mark until then, and main never moves one.
     const bound = await api.bindDefaultPrivateSpace?.(defaultWorkspaceId, accountId);
-    if (bound && !bound.success) return [];
+    if (!isCurrent() || (bound && !bound.success)) return [];
     spaces = await api.getSpaces();
+    if (!isCurrent()) return [];
   } catch (error) {
     logger.warn(
       "Failed to read private spaces for lost workspaces",
@@ -641,23 +663,37 @@ async function orphanedPrivateWorkspaces({
  * first: while it still names a lost one, the next read of the spaces makes that workspace a new,
  * empty Private.
  */
-export async function relocateLostWorkspaces(workspaceIds: string[]): Promise<void> {
+export async function relocateLostWorkspaces(
+  workspaceIds: string[],
+  isCurrent: () => boolean = captureWorkspaceAccountGuard()
+): Promise<void> {
   const api = typeof window !== "undefined" ? window.electronAPI : undefined;
   if (!api?.relocatePrivateSpace) return;
   const store = useWorkspaceStore.getState();
   const accountId = store.listAccountId;
-  // With no list of its own, the store can't say whose workspaces these are.
-  if (!accountId) return;
-  // Everything lost lands in the default's Private, which never moves itself.
-  const lost = workspaceIds.filter((id) => id !== store.defaultWorkspaceId);
+  // Recheck membership per move: a newer list may have restored access while main answered.
+  const canRelocate = (id: string): boolean => {
+    const latest = useWorkspaceStore.getState();
+    return (
+      isCurrent() &&
+      accountId != null &&
+      usePolicyStore.getState().accountId === accountId &&
+      latest.listAccountId === accountId &&
+      id !== latest.defaultWorkspaceId &&
+      !latest.workspaces.some((workspace) => workspace.id === id)
+    );
+  };
+  const lost = workspaceIds.filter(canRelocate);
   if (lost.length === 0) return;
   if (store.activeWorkspaceId && lost.includes(store.activeWorkspaceId)) {
-    const remaining = store.workspaces.filter((w) => !lost.includes(w.id));
-    selectActiveWorkspace(defaultActiveWorkspaceId(remaining), autoPickSource(remaining));
+    selectActiveWorkspace(
+      defaultActiveWorkspaceId(store.workspaces),
+      autoPickSource(store.workspaces)
+    );
   }
-  // A scope main refused (another account signed in) or never got means nothing moves.
-  if (!(await publishWorkspaceScope())) return;
+  if (!(await publishWorkspaceScope(isCurrent))) return;
   for (const workspaceId of lost) {
+    if (!canRelocate(workspaceId)) continue;
     try {
       const result = await api.relocatePrivateSpace(workspaceId, null, accountId);
       if (result?.success) continue;

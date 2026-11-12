@@ -832,3 +832,43 @@ test("an earlier assistant target load cannot cancel a newer chat selection", as
   assert.equal(opened, true);
   assert.equal(chat.conversationId, 8);
 });
+
+test("a new main chat creates its persisted identity before private RAG and checkpoints", async (t) => {
+  const note = { id: 7, space_id: 1, title: "Private", content: "MAIN_CHAT_CANARY" };
+  const events = [];
+  const fixture = await setupChatTurns(t, {
+    createAgentConversation: async () => {
+      events.push("create");
+      return { id: 88, messages: [] };
+    },
+    getDatabaseAccountScope: async () => ({ accountId: null, visibleAccountId: null }),
+    getSpaces: async () => [{ id: 1, kind: "private", workspace_id: null }],
+    getPrivateSpaceId: async () => 1,
+    semanticSearchNotes: async () => [note],
+    getNote: async () => note,
+    protectConversation: async (id, notes) => {
+      assert.equal(id, 88);
+      assert.deepEqual(notes, [{ id: 7, space_id: 1 }]);
+      assert.deepEqual(events, ["create"]);
+      assert.equal(
+        fixture.writes.some((row) => row.role === "assistant"),
+        false
+      );
+      events.push("protected");
+      return { success: true };
+    },
+  });
+  const mounted = await mountSession(t, fixture);
+  await React.act(async () => {
+    assert.equal(await mounted.session().send("Question"), true);
+  });
+  await React.act(async () => {
+    await until(() => fixture.streams.length === 1);
+  });
+  assert.deepEqual(events, ["create", "protected"]);
+  assert.match(JSON.stringify(fixture.streams[0].messages), /MAIN_CHAT_CANARY/);
+  await React.act(async () => {
+    fixture.streams[0].resolve("Private answer");
+    await until(() => !fixture.state().entries["conversation:88"]?.running);
+  });
+});

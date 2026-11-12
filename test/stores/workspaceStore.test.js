@@ -245,10 +245,6 @@ async function loadPrivateNotesStore(
       calls.push(["spaces"]);
       return globalThis.__ws.spaces;
     },
-    claimSignedOutPrivateNotes: async () => {
-      calls.push(["claim"]);
-      return { notes: 0, folders: 0 };
-    },
   };
   const api = {
     ...fakeMain,
@@ -615,7 +611,7 @@ test("a workspace lost while signed out is relocated on the first list after sig
   // Signing out cleared the cached list, so only main's rows remember the workspace.
   const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
     list: async () => [OWN, TEAM],
-    storage: { activeWorkspaceId: "team" },
+    storage: { activeWorkspaceId: "team", activeWorkspaceSource: "user" },
     spaces: [
       privateRow(1, null, { account_id: null }),
       privateRow(2, "own", { is_default_private: 1 }),
@@ -1030,8 +1026,8 @@ test("a switch the user made before the default arrived is kept", async (t) => {
 
 for (const { label, source, expected } of [
   { label: "a choice the user saved in an earlier session", source: "user", expected: "team" },
-  // Saved by a build that recorded no source: counted as the user's, so nobody moves.
-  { label: "a choice an older build saved without a source", source: null, expected: "team" },
+  // Older automatic choices migrate once when the own default becomes known.
+  { label: "a choice an older build saved without a source", source: null, expected: "own" },
   // Picked while the default didn't exist yet (ensure kept failing that session): yields once.
   { label: "a provisional pick from an earlier session", source: "provisional", expected: "own" },
   // Picked with the default listed: settled, kept as before.
@@ -1048,7 +1044,8 @@ for (const { label, source, expected } of [
     assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "own");
     assert.equal(useWorkspaceStore.getState().activeWorkspaceId, expected);
     assert.equal(storage.getItem("activeWorkspaceId"), expected);
-    if (source === "provisional") assert.equal(storage.getItem(SOURCE_KEY), "auto", "settled");
+    if (source === "provisional" || source === null)
+      assert.equal(storage.getItem(SOURCE_KEY), "auto", "settled");
   });
 }
 
@@ -1208,6 +1205,7 @@ for (const { label, listed, expected, source } of [
     });
     await useWorkspaceStore.getState().refresh();
 
+    useWorkspaceStore.getState().forgetWorkspace("team");
     await relocateLostWorkspaces(["team"]);
 
     assert.equal(useWorkspaceStore.getState().activeWorkspaceId, expected);
@@ -1312,4 +1310,169 @@ test("a provisional pick that is the stand-in default is published as is", async
     "scope",
     { activeWorkspaceId: "corp", defaultWorkspaceId: "corp", accountId: "acct-1" },
   ]);
+});
+
+for (const step of ["scope", "bind", "spaces"]) {
+  test(`a superseded orphan scan stops after its awaited ${step}`, async (t) => {
+    let release;
+    let entered;
+    const waiting = new Promise((resolve) => {
+      entered = resolve;
+    });
+    const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+      list: async () => [OWN],
+      storage: { workspaceListCache: cacheFor("acct-1", [OWN, TEAM]) },
+      spaces: [{ id: 4, kind: "private", workspace_id: "team", account_id: "acct-1" }],
+    });
+    const api = globalThis.window.electronAPI;
+    const method = {
+      scope: "setActiveWorkspaceScope",
+      bind: "bindDefaultPrivateSpace",
+      spaces: "getSpaces",
+    }[step];
+    const original = api[method];
+    api[method] = async (...args) => {
+      api[method] = original;
+      entered();
+      await new Promise((resolve) => {
+        release = resolve;
+      });
+      return original(...args);
+    };
+    const old = useWorkspaceStore.getState().refresh();
+    await waiting;
+    assert.equal(
+      useWorkspaceStore.getState().refresh(),
+      old,
+      "normal refresh joins the whole scan"
+    );
+    globalThis.__ws.list = async () => [OWN, TEAM];
+    await useWorkspaceStore.getState().refresh({ fresh: true });
+    calls.length = 0;
+    release();
+    await old;
+    assert.deepEqual(relocationsOf(calls), []);
+    if (step === "scope") assert.equal(names(calls).includes("bind"), false);
+    if (step === "bind") assert.equal(names(calls).includes("spaces"), false);
+  });
+}
+
+test("a legacy choice remains provisional until default discovery and can be adopted", async (t) => {
+  const { useWorkspaceStore, adoptActiveWorkspaceChoice, storage } = await loadPrivateNotesStore(
+    t,
+    {
+      list: async () => [TEAM],
+      storage: { activeWorkspaceId: "team" },
+    }
+  );
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(storage.getItem(SOURCE_KEY), "provisional");
+  adoptActiveWorkspaceChoice("team");
+  globalThis.__ws.list = async () => [TEAM, OWN];
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+  assert.equal(storage.getItem(SOURCE_KEY), "user");
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+});
+
+for (const changeAccount of [false, true]) {
+  test(`relocation rechecks membership and account after each move (${changeAccount})`, async (t) => {
+    let release;
+    let entered;
+    const waiting = new Promise((resolve) => {
+      entered = resolve;
+    });
+    const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+      list: async () => [OWN],
+      storage: { workspaceListCache: cacheFor("acct-1", [OWN, TEAM, OTHER_TEAM]) },
+    });
+    globalThis.window.electronAPI.relocatePrivateSpace = async (...args) => {
+      calls.push(["relocate", ...args]);
+      entered();
+      await new Promise((resolve) => {
+        release = resolve;
+      });
+      return { success: true };
+    };
+    const old = useWorkspaceStore.getState().refresh();
+    await waiting;
+    if (changeAccount) {
+      useWorkspaceStore.getState().resetForAccountChange();
+      globalThis.__ws.accountId = "acct-2";
+    }
+    globalThis.__ws.list = async () => [OWN, TEAM, OTHER_TEAM];
+    await useWorkspaceStore.getState().refresh({ fresh: true });
+    release();
+    await old;
+    assert.deepEqual(relocationsOf(calls), [["relocate", "team", null, "acct-1"]]);
+  });
+}
+
+for (const step of ["scope", "bind", "spaces"]) {
+  test(`an account change fences an orphan scan awaiting ${step}`, async (t) => {
+    let release;
+    let entered;
+    const waiting = new Promise((resolve) => {
+      entered = resolve;
+    });
+    const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+      list: async () => [OWN],
+      storage: { workspaceListCache: cacheFor("acct-1", [OWN, TEAM]) },
+    });
+    const api = globalThis.window.electronAPI;
+    const method = {
+      scope: "setActiveWorkspaceScope",
+      bind: "bindDefaultPrivateSpace",
+      spaces: "getSpaces",
+    }[step];
+    const original = api[method];
+    api[method] = async (...args) => {
+      api[method] = original;
+      entered();
+      await new Promise((resolve) => {
+        release = resolve;
+      });
+      return original(...args);
+    };
+    const old = useWorkspaceStore.getState().refresh();
+    await waiting;
+    useWorkspaceStore.getState().resetForAccountChange();
+    globalThis.__ws.accountId = "acct-2";
+    globalThis.__ws.list = async () => [OWN, TEAM];
+    await useWorkspaceStore.getState().refresh({ fresh: true });
+    useWorkspaceStore.getState().setActiveWorkspaceId("team");
+    calls.length = 0;
+    release();
+    await old;
+    assert.deepEqual(relocationsOf(calls), []);
+    assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+    if (step === "scope") assert.equal(names(calls).includes("bind"), false);
+    if (step === "bind") assert.equal(names(calls).includes("spaces"), false);
+  });
+}
+
+test("legacy migration retains Enterprise precedence and settles even when its id is unchanged", async (t) => {
+  const { useWorkspaceStore, storage } = await loadPrivateNotesStore(t, {
+    list: async () => [TEAM, ENTERPRISE, OWN],
+    storage: { activeWorkspaceId: "team" },
+  });
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "corp");
+  assert.equal(storage.getItem(SOURCE_KEY), "auto");
+  storage.removeItem(SOURCE_KEY);
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+  assert.equal(storage.getItem(SOURCE_KEY), "auto");
+});
+
+test("opening work adopts a sourceless choice even before its first list", async (t) => {
+  const { useWorkspaceStore, adoptActiveWorkspaceChoice, storage } = await loadPrivateNotesStore(
+    t,
+    {
+      list: async () => [TEAM, OWN],
+      storage: { activeWorkspaceId: "team" },
+    }
+  );
+  adoptActiveWorkspaceChoice("team");
+  await useWorkspaceStore.getState().refresh();
+  assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "team");
+  assert.equal(storage.getItem(SOURCE_KEY), "user");
 });

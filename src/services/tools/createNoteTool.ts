@@ -1,11 +1,11 @@
-import type { ToolDefinition, ToolResult } from "./ToolRegistry";
+import type { ToolDefinition, ToolExecutionContext, ToolResult } from "./ToolRegistry";
 import { resolveFolderId, resolveSpace } from "./utils";
 import { syncService } from "../SyncService.js";
 import { readActiveWorkspaceId } from "../../stores/workspaceStore";
 import { listedDefaultWorkspaceId } from "../../lib/assistantNoteScope";
 import { knownDefaultWorkspaceId } from "../../lib/workspaceSelection";
 import i18n from "../../i18n";
-import type { NoteScope } from "./noteScope";
+import { captureNoteWriteGuard, type NoteScope } from "./noteScope";
 
 // "Personal" (the name older builds gave it), "Private" or the UI language's name for it.
 function namesPrivate(spaceName: string): boolean {
@@ -60,7 +60,7 @@ export function createCreateNoteTool(scope: NoteScope): ToolDefinition {
   return {
     name: "create_note",
     description:
-      "Always call list_folders first. Reuse an existing folder whenever one is a reasonable semantic fit for the note's topic (e.g. a story goes into an existing 'Stories' folder), even if the user didn't name it. Only pass a new folder name when nothing existing fits. Creates a note with title, content, optional folder (auto-created if missing), and optional space. When space is omitted, the note AND its folder always stay in the user's private space — folder names never match team folders. To file a note into a team space (visible to its members), you must pass space explicitly.",
+      "Always call list_folders first. Reuse an existing folder whenever one is a reasonable semantic fit for the note's topic (e.g. a story goes into an existing 'Stories' folder), even if the user didn't name it. Only pass a new folder name when nothing existing fits. Creates a note with title, content, optional folder (auto-created if missing), and optional space. When space is omitted, the note AND its folder always stay in the user's private space — folder names never match team folders. Omit space for Private. Explicit names refer to scoped teamspaces (visible to their members), including teamspaces named Private or Personal; an unmatched Private alias uses Private.",
     parameters: {
       type: "object",
       properties: {
@@ -80,7 +80,7 @@ export function createCreateNoteTool(scope: NoteScope): ToolDefinition {
         space: {
           type: "string",
           description:
-            "Space name to create the note in. Omit for the user's personal space — required when filing into a team space.",
+            "Omit for Private. Explicit names select scoped teamspaces, even those named Private or Personal.",
         },
       },
       required: ["title", "content"],
@@ -88,26 +88,32 @@ export function createCreateNoteTool(scope: NoteScope): ToolDefinition {
     },
     readOnly: false,
 
-    async execute(args: Record<string, unknown>): Promise<ToolResult> {
+    async execute(
+      args: Record<string, unknown>,
+      context?: ToolExecutionContext
+    ): Promise<ToolResult> {
       const title = args.title as string;
       const content = args.content as string;
       const folderName = args.folder as string | undefined;
       const spaceName = args.space as string | undefined;
 
       try {
+        const writeGuard = await captureNoteWriteGuard(scope);
+        if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
         let spaceId: number | null = null;
-        if (spaceName && !namesPrivate(spaceName)) {
+        if (spaceName?.trim()) {
           const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
           const teamspaces = spaces.filter(
             (space) => space.kind === "team" && scopeSpaceIds.has(space.id)
           );
           const resolved = resolveSpace(teamspaces, spaceName);
-          if (resolved.error) {
+          if (!resolved.error) spaceId = resolved.space.id;
+          else if (!namesPrivate(spaceName)) {
             return { success: false, data: null, displayText: resolved.error };
           }
-          spaceId = resolved.space.id;
-        } else {
-          // No space argument, or Private by name, means the active workspace's
+        }
+        if (spaceId == null) {
+          // No space argument, or an unmatched Private alias, means the active workspace's
           // Private: folder resolution must never match a team folder, or the note
           // would silently inherit the team audience (D2 derives space from folder).
           spaceId = await activePrivateSpaceId(
@@ -127,7 +133,11 @@ export function createCreateNoteTool(scope: NoteScope): ToolDefinition {
         let folderCreated = false;
 
         if (folderName) {
-          const resolved = await resolveFolderId(folderName, { createIfMissing: true }, spaceId);
+          const resolved = await resolveFolderId(
+            folderName,
+            { createIfMissing: true, writeGuard, signal: context?.signal },
+            spaceId
+          );
           if (resolved.error) {
             return { success: false, data: null, displayText: resolved.error };
           }
@@ -135,20 +145,27 @@ export function createCreateNoteTool(scope: NoteScope): ToolDefinition {
           folderCreated = resolved.created;
         }
 
-        const result = await window.electronAPI.saveNote(
+        if (context?.signal.aborted) return { success: false, data: null, displayText: "" };
+        const noteArgs: Parameters<typeof window.electronAPI.saveNote> = [
           title,
           content,
           "personal",
           null,
           null,
           folderId,
-          spaceId
-        );
+          spaceId,
+        ];
+        if (writeGuard) {
+          noteArgs[7] = null;
+          noteArgs[8] = writeGuard;
+        }
+        const result = await window.electronAPI.saveNote(...noteArgs);
 
         if (!result.success || !result.note) {
           return { success: false, data: null, displayText: "Failed to create note" };
         }
 
+        await scope.protectNotes?.([result.note]);
         syncService.debouncedPush("note", result.note.id);
 
         const suffix = folderCreated ? ` in new folder "${folderName}"` : "";

@@ -200,3 +200,29 @@ test("PATCH /v1/notes/:id clears a provided blank text field so the clear syncs"
     { code: "VALIDATION" }
   );
 });
+
+test("PATCH refuses a folder in another workspace", (t) => {
+  const ctx = createBridge(t);
+  if (!ctx) return;
+  const { db, bridge } = ctx;
+  db.setActiveAccountId("test-account");
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "one", defaultWorkspaceId: "one" });
+  db.bindDefaultPrivateSpace("one");
+  const note = db.saveNote("Private", "body").note;
+  const team = Number(
+    db.db
+      .prepare(
+        "INSERT INTO spaces (client_space_id, kind, name, workspace_id) VALUES (?, 'team', ?, ?)"
+      )
+      .run("cli-team", "Other team", "two").lastInsertRowid
+  );
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+    .run(team, "test-account");
+  const folder = db.createFolder("Other folder", team).folder;
+  assert.throws(() => call(bridge, "PATCH", `/v1/notes/${note.id}`, { folder_id: folder.id }), {
+    code: "VALIDATION",
+    message: "Cannot move between workspaces",
+  });
+  assert.equal(db.getNote(note.id).space_id, note.space_id);
+});

@@ -301,7 +301,10 @@ test("a note given a new identity after a sync pass read it is not sent under th
 test("deleting a never-synced note removes it with its chats, speaker names and search words", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const note = db.saveNote(
+  const team = joinTeamSpace(db);
+  const note = saveNoteIn(
+    db,
+    team.id,
     "Board meeting zebracorn",
     "Confidential zebracorn plan",
     "meeting"
@@ -313,7 +316,7 @@ test("deleting a never-synced note removes it with its chats, speaker names and 
   const localChat = db.createAgentConversation("Local chat", note.id);
   db.addAgentMessage(localChat.id, "user", "zebracorn?");
   const syncedChat = db.createAgentConversation("Synced chat", note.id);
-  db.markConversationSynced(syncedChat.id, "cloud-conv-synced");
+  assert.equal(db.markConversationSynced(syncedChat.id, "cloud-conv-synced").success, true);
   db.addAgentMessage(syncedChat.id, "user", "synced zebracorn");
 
   assert.deepEqual(db.deleteNote(note.id), { success: true, id: note.id });
@@ -629,4 +632,26 @@ test("the legacy upload Backup starts never sends a private note", async (t) => 
   assert.deepEqual(cloud.log, []);
   assert.equal(db.getNote(note.id).cloud_id, null);
   assert.equal(attempted(db, "notes", note.id), 0);
+});
+
+test("deleting a private note queues deletion of its historical chat backup", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveAccountId("user-harness");
+  const note = db.saveNote("Private note", "private body").note;
+  const chat = db.createAgentConversation("Private chat", note.id);
+  db.addAgentMessage(chat.id, "user", "private message");
+  assert.equal(db.getAgentConversation(chat.id).device_only, 1);
+  assert.equal(db.markConversationSynced(chat.id, "must-not-upload").success, false);
+  // This cloud link predates the private-chat protection.
+  db.db
+    .prepare("UPDATE agent_conversations SET cloud_id = ?, sync_status = 'synced' WHERE id = ?")
+    .run("historical-backup", chat.id);
+
+  assert.equal(db.deleteNote(note.id).success, true);
+  const queued = db.getPendingConversationDeletes().find((row) => row.id === chat.id);
+  assert.equal(queued?.cloud_id, "historical-backup");
+  assert.equal(queued.device_only, 1);
+  assert.ok(queued.deleted_at);
+  assert.deepEqual(db.getAgentMessages(chat.id), []);
 });

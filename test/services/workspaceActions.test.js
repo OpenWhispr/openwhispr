@@ -27,6 +27,7 @@ function makeHarness({
     if (lost[name]) throw lost[name];
   };
   const deps = {
+    captureAccountGuard: () => () => true,
     api: {
       removeMember: async (workspaceId, userId) =>
         call("removeMember", [workspaceId, userId], () => {
@@ -358,3 +359,23 @@ test("a removal succeeds even when the refreshes fail", async () => {
   assert.deepEqual(result.removed, ["user-2"]);
   assert.deepEqual(names(calls), ["removeMembers", "refreshMembers", "refresh"]);
 });
+
+for (const action of ["leaveWorkspace", "deleteWorkspace"]) {
+  for (const rejected of [false, true]) {
+    test(`${action} stops local effects when the account changes during the server action (${rejected})`, async () => {
+      const { createWorkspaceActions } = await load();
+      const { deps, calls } = makeHarness();
+      let current = true;
+      deps.captureAccountGuard = () => () => current;
+      const method = action === "leaveWorkspace" ? "removeMember" : "remove";
+      deps.api[method] = async () => {
+        current = false;
+        if (rejected) throw new Error("offline");
+      };
+      const result = createWorkspaceActions(deps)[action]("ws-1", "user-1");
+      if (rejected) await assert.rejects(result, /offline/);
+      else await result;
+      assert.deepEqual(calls, []);
+    });
+  }
+}

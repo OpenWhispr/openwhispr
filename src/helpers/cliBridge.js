@@ -106,9 +106,6 @@ function unwrapMutationResult(result, label) {
   return result[label];
 }
 
-// The public v1 contract: a provided blank content or enhanced_content clears
-// that field. updateNote treats a bare blank as unconfirmed (never synced as a
-// clear), so the bridge states the intent; updateNote still validates it.
 // What a CLI edit may change: a note's own content and its folder. Its space,
 // identity and sync state belong to sync and main's move rules (D31, D39), which
 // a raw cloud_id or client_note_id from a local caller would get around. Those
@@ -171,6 +168,9 @@ function cliNoteEdit(body, note) {
   return withProvidedBlanksCleared(edit);
 }
 
+// The public v1 contract: a provided blank content or enhanced_content clears
+// that field. updateNote treats a bare blank as unconfirmed (never synced as a
+// clear), so the bridge states the intent; updateNote still validates it.
 function withProvidedBlanksCleared(body) {
   const blanks = NOTE_TEXT_FIELDS.filter(
     (field) =>

@@ -84,7 +84,7 @@ const bars = (markup) =>
 const drafts = (count) => Array.from({ length: count }, (_, index) => chip(`p${index}@x.com`));
 const primaryButton = (markup) =>
   markup.match(
-    /<button[^>]*>(?:(?!<\/button>)[\s\S])*workspaces\.invite\.(?:submit|done)[\s\S]*?<\/button>/
+    /<button[^>]*>(?:(?!<\/button>)[\s\S])*workspaces\.invite\.(?:submit|done|sending)[\s\S]*?<\/button>/
   )?.[0] ?? "";
 
 test("empty field shows the hint and a disabled send", async (t) => {
@@ -168,7 +168,7 @@ test("sending is busy and can't be dismissed", async (t) => {
   });
 
   assert.doesNotMatch(markup, /common\.cancel/);
-  assert.match(primaryButton(markup), /workspaces\.invite\.submitting\|\{&quot;count&quot;:1\}/);
+  assert.match(primaryButton(markup), /workspaces\.invite\.sending/);
   assert.match(primaryButton(markup), /disabled=""/);
   assert.match(primaryButton(markup), /animate-spin/);
 });
@@ -267,12 +267,14 @@ test("the workspace name is isolated inside the description", async (t) => {
     markup,
     /workspaces\.invite\.description\|\{&quot;workspace&quot;:&quot;\u2068Acme\u2069&quot;\}/
   );
+  // The Done screen, which a run with an updated invitation still ends on.
   const done = render({
     phase: "done",
     sent: [
       { email: "a@x.com", emailSent: true },
       { email: "b@x.com", emailSent: true },
     ],
+    attached: ["c@x.com"],
   });
   assert.match(
     done,
@@ -312,7 +314,7 @@ test("the field points at the error that's about it", async (t) => {
   assert.ok(describedBy.includes(alert[1]));
 });
 
-test("done shows the sent count and Done", async (t) => {
+test("a clean run keeps the form with Send turned into its confirmation", async (t) => {
   const { render } = await loadView(t);
 
   const markup = render({
@@ -321,6 +323,27 @@ test("done shows the sent count and Done", async (t) => {
       { email: "a@x.com", emailSent: true },
       { email: "b@x.com", emailSent: true },
     ],
+  });
+
+  // The host closes the dialog after a moment; until then the button says what happened.
+  const [button] = markup.match(/<button[^>]*bg-success[^>]*>[\s\S]*?<\/button>/) ?? [""];
+  assert.match(button, /workspaces\.invite\.sentTitle\|\{&quot;count&quot;:2\}/);
+  assert.match(button, /disabled=""/);
+  assert.doesNotMatch(markup, /common\.cancel/);
+  assert.match(markup, /workspaces\.invite\.emailLabel/);
+});
+
+test("done shows the sent count and Done", async (t) => {
+  const { render } = await loadView(t);
+
+  // An updated invitation beside the sent ones keeps the Done screen, which says so.
+  const markup = render({
+    phase: "done",
+    sent: [
+      { email: "a@x.com", emailSent: true },
+      { email: "b@x.com", emailSent: true },
+    ],
+    attached: ["c@x.com"],
   });
 
   assert.match(markup, /workspaces\.invite\.sentTitle\|\{&quot;count&quot;:2\}/);
@@ -670,9 +693,9 @@ test("a partial send says what went out while chips still need attention", async
     recipients: [chip("c@x.com", { status: "invalid" })],
   });
 
-  assert.match(markup, /role="status"[^>]*>workspaces\.invite\.sentTitle\|\{&quot;count&quot;:2\}/);
+  // What went out is the host's toast now; the form keeps only what still needs attention.
+  assert.doesNotMatch(markup, /role="status"/);
   assert.ok(bars(markup).some((bar) => /workspaces\.invite\.noEmail/.test(bar.body)));
-  assert.doesNotMatch(render(), /role="status"/);
 });
 
 test("a send that's too big offers to remove the excess", async (t) => {
@@ -738,7 +761,8 @@ test("the field holds a hundred chips and scrolls", async (t) => {
 
   const markup = render({ recipients: drafts(100) });
 
-  assert.match(markup, /class="[^"]*max-h-40[^"]*overflow-y-auto/);
+  // Three rows of chips, as the design caps the field.
+  assert.match(markup, /class="[^"]*max-h-\[104px\][^"]*overflow-y-auto/);
   assert.equal(bars(markup).length, 0);
   assert.match(primaryButton(markup), /workspaces\.invite\.submit\|\{&quot;count&quot;:100\}/);
   assert.match(

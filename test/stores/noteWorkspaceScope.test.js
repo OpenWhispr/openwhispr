@@ -857,3 +857,19 @@ test("relocating a cloud-held folder repairs the default folder it replaced", as
   await f.settle();
   assert.equal(f.context().folderId, 40);
 });
+
+for (const kind of ["note", "container"]) {
+  test(`default discovery preserves a pending user-opened ${kind} before its data arrives`, async (t) => {
+    const f = await provisionalBFixture(t);
+    // Simulate an older build's persisted automatic selection on this launch.
+    localStorage.removeItem("activeWorkspaceSource");
+    if (kind === "note") f.store.setActiveNoteId(999);
+    else f.store.setActiveContext(999, null);
+    globalThis.__workspaceList = B_AND_DEFAULT;
+    await f.workspaceStore.useWorkspaceStore.getState().refresh({ fresh: true });
+    assert.equal(f.activeWorkspaceId(), "b");
+    assert.equal(localStorage.getItem("activeWorkspaceSource"), "user");
+    if (kind === "note") assert.equal(f.context().noteId, 999);
+    else assert.equal(f.context().folderId, null);
+  });
+}

@@ -15,8 +15,9 @@ const NOTE = {
   updated_at: "2026-10-01 10:00:00",
 };
 
-test.beforeEach(() => {
+test.beforeEach(async () => {
   global.window = {
+    location: { origin: "https://desktop.test" },
     electronAPI: {
       getSpaces: async () => [{ id: 1, name: "Personal", kind: "private" }],
       semanticSearchNotes: async () => [NOTE],
@@ -24,6 +25,22 @@ test.beforeEach(() => {
       getNote: async () => NOTE,
     },
   };
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  auth.resetAuthRequestContextForTests();
+  global.window.electronAPI.authGetTokenState = async () => ({
+    token: "test-token",
+    generation: 1,
+  });
+  await auth.handleAuthRequestSuccess({
+    data: { user: { id: "account-a" }, session: { id: "session" } },
+    response: new Response("{}"),
+    request: {
+      url: "https://auth.test/get-session",
+      headers: { Authorization: "Bearer test-token" },
+      openWhisprAuthGeneration: 1,
+    },
+  });
+  assert.equal(auth.commitValidatedAuthContext(1, "account-a"), true);
 });
 
 test.afterEach(() => {
@@ -228,6 +245,37 @@ test("create_note files into a teamspace of the active workspace only", async (t
     assert.equal((await create(name)).success, true, name);
     assert.equal(savedSpaceId(), 1, name);
   }
+  const initialSpaces = await globalThis.window.electronAPI.getSpaces();
+  const protectedIds = [];
+  globalThis.window.electronAPI.getFolders = async (spaceId) => {
+    assert.equal(spaceId, 1, "an omitted space resolves folders only within current Private");
+    return [{ id: 11, name: "Plans", space_id: 1 }];
+  };
+  const colliding = createCreateNoteTool({
+    spaceIds: [1, 2, 6],
+    protectNotes: async (notes) => protectedIds.push(...notes.map((note) => note.id)),
+  });
+  for (const name of ["Personal", "Private", "Privé"]) {
+    globalThis.window.electronAPI.getSpaces = async () =>
+      initialSpaces.map((space) => (space.id === 2 || space.id === 3 ? { ...space, name } : space));
+    assert.equal(
+      (await colliding.execute({ title: "Plan", content: "Ship", space: name.toLowerCase() }))
+        .success,
+      true
+    );
+    assert.equal(savedSpaceId(), 2, name);
+    assert.equal(
+      (await colliding.execute({ title: "Plan", content: "Ship", folder: "Plans" })).success,
+      true
+    );
+    assert.equal(savedSpaceId(), 1, "omission remains private despite collision");
+    assert.equal(saved.at(-1)[5], 11);
+    globalThis.window.electronAPI.getSpaces = async () =>
+      initialSpaces.map((space) => (space.id === 3 ? { ...space, name } : space));
+    assert.equal((await create(name)).success, true);
+    assert.equal(savedSpaceId(), 1, "outside-scope alias does not become destination");
+  }
+  assert.equal(protectedIds.length, 6);
 });
 
 test("create_note keeps the turn workspace when the active workspace changes", async (t) => {
@@ -267,4 +315,68 @@ test("create_note keeps the turn workspace when the active workspace changes", a
   assert.equal(saved[0][6], 1);
   assert.equal((await failedScopeTool.execute({ title: "No scope", content: "" })).success, false);
   assert.equal(saved.length, 1);
+});
+
+for (const name of ["get", "search", "update"]) {
+  test(`${name} note refuses private results and writes when conversation protection fails`, async (t) => {
+    const { createGetNoteTool } = await import("../../src/services/tools/getNoteTool.ts");
+    const { createSearchNotesTool } = await import("../../src/services/tools/searchNotesTool.ts");
+    const { createRendererServer } = require("../lib/rendererTestHarness");
+    const vite = await createRendererServer(t, {
+      mockModules: {
+        "/SyncService.js": "export const syncService = { debouncedPush() {} };",
+      },
+    });
+    const { createUpdateNoteTool } = await vite.ssrLoadModule("/services/tools/updateNoteTool.ts");
+    let writes = 0;
+    globalThis.window.electronAPI.updateNote = async () => {
+      writes++;
+      return { success: true, note: NOTE };
+    };
+    let marks = 0;
+    const protectNotes = async (notes) => {
+      assert.deepEqual(
+        notes.map((note) => note.id),
+        [NOTE.id]
+      );
+      marks++;
+      throw new Error("Conversation privacy could not be saved");
+    };
+    const scope = { spaceIds: [1], protectNotes };
+    const tool =
+      name === "get"
+        ? createGetNoteTool(scope)
+        : name === "search"
+          ? createSearchNotesTool({ scopeSpaceIds: [1], useCloudSearch: false, protectNotes })
+          : createUpdateNoteTool(scope);
+    const result = await tool.execute({ id: NOTE.id, query: "sync", content: "edit" });
+    assert.equal(result.success, false);
+    assert.equal(result.data, null);
+    assert.ok(marks > 0);
+    assert.equal(writes, 0);
+    assert.doesNotMatch(JSON.stringify(result), /CFO|Agenda/);
+  });
+}
+
+test("private folder names are protected before a tool result; team folders stay ordinary", async () => {
+  const { createListFoldersTool } = await import("../../src/services/tools/listFoldersTool.ts");
+  for (const kind of ["private", "team"]) {
+    globalThis.window.electronAPI.getSpaces = async () => [{ id: 1, kind, name: "Space" }];
+    globalThis.window.electronAPI.getFolders = async () => [
+      { id: 1, space_id: 1, name: "Sensitive client" },
+    ];
+    let marks = 0;
+    const result = await createListFoldersTool({
+      spaceIds: [1],
+      protectNotes: async (notes, deviceOnly) => {
+        marks++;
+        assert.deepEqual(notes, []);
+        assert.equal(deviceOnly, true);
+        throw new Error("Conversation privacy could not be saved");
+      },
+    }).execute();
+    assert.equal(marks, kind === "private" ? 1 : 0);
+    assert.equal(result.success, kind === "team");
+    if (kind === "private") assert.doesNotMatch(JSON.stringify(result), /Sensitive client/);
+  }
 });

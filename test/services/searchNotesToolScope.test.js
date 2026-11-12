@@ -51,9 +51,10 @@ const cloudAnswering = (rows) => async (_query, _limit, _scope, spaceId) => ({
 });
 
 let calls;
-test.beforeEach(() => {
+test.beforeEach(async () => {
   calls = { semantic: [], keyword: [] };
   global.window = {
+    location: { origin: "https://desktop.test" },
     electronAPI: {
       getSpaces: async () => SPACES,
       // Main is the scope's authority; these answer as if it applied none, the worst case.
@@ -81,6 +82,22 @@ test.beforeEach(() => {
       ],
     },
   };
+  const auth = await import("../../src/lib/authRequestContext.ts");
+  auth.resetAuthRequestContextForTests();
+  global.window.electronAPI.authGetTokenState = async () => ({
+    token: "test-token",
+    generation: 1,
+  });
+  await auth.handleAuthRequestSuccess({
+    data: { user: { id: "account-a" }, session: { id: "session" } },
+    response: new Response("{}"),
+    request: {
+      url: "https://auth.test/get-session",
+      headers: { Authorization: "Bearer test-token" },
+      openWhisprAuthGeneration: 1,
+    },
+  });
+  assert.equal(auth.commitValidatedAuthContext(1, "account-a"), true);
 });
 
 test.afterEach(() => {
@@ -206,8 +223,8 @@ test("a cloud personal row never reaches the model", async (t) => {
   assert.deepEqual(
     search.mock.calls.map((call) => call.arguments),
     [
-      ["pricing", 5, undefined, "cloud-alpha"],
-      ["pricing", 5, undefined, "cloud-legacy"],
+      ["pricing", 5, undefined, "cloud-alpha", 1],
+      ["pricing", 5, undefined, "cloud-legacy", 1],
     ]
   );
 
@@ -221,7 +238,7 @@ test("a cloud personal row never reaches the model", async (t) => {
   assert.equal(search.mock.callCount(), calls);
 });
 
-test("past ten teamspaces the cloud gets one request, filtered here", async (t) => {
+test("past ten teamspaces every request remains server scoped", async (t) => {
   const { NotesService } = await import("../../src/services/NotesService.ts");
   const teams = Array.from({ length: 11 }, (_, index) => ({
     id: 100 + index,
@@ -255,7 +272,7 @@ test("past ten teamspaces the cloud gets one request, filtered here", async (t) 
   );
   assert.deepEqual(
     search.mock.calls.map((call) => call.arguments),
-    [["pricing", 20, "all"]]
+    teams.map((team) => ["pricing", 5, undefined, team.cloud_space_id, 1])
   );
 });
 
@@ -277,7 +294,13 @@ test("a limit past the API's maximum is clamped", async (t) => {
   });
   assert.equal(calls.semantic.at(-1)[1], 50);
   assert.equal(calls.keyword.at(-1)[1], 50);
-  assert.deepEqual(search.mock.calls.at(-1).arguments, ["pricing", 50, undefined, "cloud-alpha"]);
+  assert.deepEqual(search.mock.calls.at(-1).arguments, [
+    "pricing",
+    50,
+    undefined,
+    "cloud-alpha",
+    1,
+  ]);
 });
 
 test("teamspace cloud search needs a signed-in account, not Cloud Backup", async (t) => {
@@ -378,4 +401,69 @@ test("update_note refuses another workspace's private note", async (t) => {
     (await openNoteChat.execute({ id: OTHER_PRIVATE.id, title: "Renamed" })).success,
     true
   );
+});
+
+for (const allFail of [false, true]) {
+  test(`large cloud search bounds concurrency and tolerates partial failure (${allFail})`, async (t) => {
+    const { NotesService } = await import("../../src/services/NotesService.ts");
+    const teams = Array.from({ length: 24 }, (_, index) => ({
+      id: index + 100,
+      name: `Team ${index}`,
+      kind: "team",
+      cloud_space_id: `team-${index}`,
+    }));
+    Object.assign(globalThis.window.electronAPI, {
+      getSpaces: async () => teams,
+      semanticSearchNotes: async () => [],
+      searchNotes: async () => [],
+    });
+    let active = 0;
+    let peak = 0;
+    let completed = 0;
+    t.mock.method(NotesService, "search", async (_query, limit, scope, spaceId) => {
+      assert.equal(scope, undefined);
+      assert.ok(spaceId);
+      peak = Math.max(peak, ++active);
+      await new Promise((resolve) => setImmediate(resolve));
+      active--;
+      completed++;
+      if (allFail || spaceId === "team-0") throw new Error("offline");
+      // A scope=all result would be saturated with unrelated high-score rows.
+      return {
+        notes: [
+          cloudRow(null, "Private copy", null, 100),
+          cloudRow("outsider", "Other", null, 99),
+          cloudRow(spaceId, spaceId, null, Number(spaceId.split("-")[1])),
+        ],
+      };
+    });
+    const create = await loadSearch();
+    const result = await create({
+      useCloudSearch: true,
+      scopeSpaceIds: teams.map((team) => team.id),
+    }).execute({ query: "pricing", limit: 3 });
+    assert.equal(completed, 24);
+    assert.ok(peak <= 10, `peak ${peak}`);
+    assert.equal(result.success, !allFail);
+    if (!allFail)
+      assert.deepEqual(
+        result.data.map((row) => row.title),
+        ["team-23", "team-22", "team-21"]
+      );
+  });
+}
+
+test("an empty folder-pinned team search never widens to cloud", async (t) => {
+  const { NotesService } = await import("../../src/services/NotesService.ts");
+  const search = t.mock.method(NotesService, "search", async () => ({ notes: [] }));
+  globalThis.window.electronAPI.semanticSearchNotes = async () => [];
+  globalThis.window.electronAPI.searchNotes = async () => [];
+  const create = await loadSearch();
+  const result = await create({
+    useCloudSearch: true,
+    fixedScope: { spaceId: 2, folderId: 102 },
+    scopeSpaceIds: SCOPE,
+  }).execute({ query: "pricing" });
+  assert.deepEqual(result.data, []);
+  assert.equal(search.mock.callCount(), 0);
 });

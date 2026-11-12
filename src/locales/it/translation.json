@@ -1832,6 +1832,9 @@
           "askOwner": "Chiedi a {{name}} di eseguire l'upgrade del tuo spazio di lavoro."
         },
         "currentPlan": "Piano attuale",
+        "yourPersonalPlan": "Il tuo piano personale",
+        "yourWorkspacePlan": "Il piano del tuo workspace",
+        "manage": "Gestisci",
         "coveredByWorkspace": "Incluso nel piano della tua area di lavoro",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",
@@ -2538,7 +2541,7 @@
         },
         "roleMenuLabel": "Cambia il ruolo di {{name}}",
         "roleDescription": {
-          "member": "Può visualizzare e modificare le note.",
+          "member": "Usa l'area di lavoro.",
           "admin": "Gestisce membri, inviti, team e impostazioni."
         },
         "roleFailed": "Impossibile cambiare il ruolo di {{name}}. Controlla la connessione e riprova.",
@@ -2575,7 +2578,8 @@
           "resentNoEmailMany_one": "{{count}} invito è stato aggiornato, ma non è stato possibile recapitare l'e-mail e il vecchio link non funziona più. Resta selezionato, così puoi reinviarlo.",
           "resentNoEmailMany_other": "{{count}} inviti sono stati aggiornati, ma non è stato possibile recapitare le e-mail e i vecchi link non funzionano più. Restano selezionati, così puoi reinviarli.",
           "resendUnrenewable_one": "Impossibile rinnovare {{count}} invito scaduto. Annullalo e invita di nuovo quella persona.",
-          "resendUnrenewable_other": "Impossibile rinnovare {{count}} inviti scaduti. Annullali e invita di nuovo quelle persone."
+          "resendUnrenewable_other": "Impossibile rinnovare {{count}} inviti scaduti. Annullali e invita di nuovo quelle persone.",
+          "statusPending": "In sospeso"
         },
         "selection": {
           "count_one": "{{count}} selezionato",
@@ -2596,6 +2600,10 @@
           "invite": "Invita persone",
           "createTeam": "Crea team",
           "label": "Altri modi per aggiungere"
+        },
+        "roleMenu": {
+          "member": "Membro dell'area di lavoro",
+          "admin": "Admin dell'area di lavoro"
         }
       },
       "teamspaces": {
@@ -2684,6 +2692,12 @@
           "roleMemberBody": "Può visualizzare e modificare le note",
           "roleAdmin": "Amministratore del teamspace",
           "roleAdminBody": "Gestisce questo teamspace e i suoi team assegnati.",
+          "teamAccessMember": "Tutti sono membri",
+          "teamAccessMemberBody": "Tutti nel team possono vedere e modificare le note.",
+          "teamAccessAdmin": "Gli admin del team sono admin",
+          "teamAccessAdminBody": "Gli admin del team gestiscono anche questo teamspace. Gli altri nel team sono membri.",
+          "teamAccessMemberShort": "Membri",
+          "teamAccessAdminShort": "Admin del team",
           "removeItem": "Rimuovi dal teamspace",
           "removeTitle": "Rimuovere {{name}} da {{space}}?",
           "removeBody": "Questo rimuove l'appartenenza diretta di {{name}}. L'accesso tramite un team rimarrà. La persona resterà nell'area di lavoro.",
@@ -2943,7 +2957,7 @@
           "noSpacesBody": "Un teamspace è un'area condivisa per le note di un team. Aggiungi persone o team e tutti potranno leggere e modificare.",
           "placeholder": "Cerca teamspace da aggiungere",
           "searchPlaceholder": "Cerca teamspace",
-          "add": "Aggiungi teamspace",
+          "add": "Aggiungi a un teamspace",
           "adding": "Aggiunta in corso…",
           "selectedTitle_one": "{{count}} teamspace selezionato",
           "selectedTitle_other": "{{count}} teamspace selezionati",
@@ -3012,6 +3026,7 @@
         "nextInvoice": "Prossima fattura",
         "manageStripe": "Gestisci in Stripe",
         "startSubscription": "Avvia abbonamento",
+        "provisionedPlan": "Configurato da OpenWhispr. Contatta le vendite per modificare il piano o i posti.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -3111,9 +3126,7 @@
         "invite": {
           "title_one": "Invita {{count}} ospite in {{workspace}}",
           "title_other": "Invita {{count}} ospiti in {{workspace}}",
-          "description": "Riceveranno un link via email per unirsi a {{workspace}}.",
-          "sent_one": "Inviato {{count}} invito per unirsi a {{workspace}}",
-          "sent_other": "Inviati {{count}} inviti per unirsi a {{workspace}}"
+          "description": "Riceveranno un link via email per unirsi a {{workspace}}."
         },
         "remove": {
           "titleOne": "Rimuovere {{name}} da {{workspace}}?",
@@ -4088,6 +4101,8 @@
     "wordsReady_other": "{{count}} parole pronte",
     "promptLimitNotice": "Il tuo dizionario contiene {{chars}} caratteri. I modelli Groq e Whisper ne leggono solo le ultime centinaia di caratteri, quindi lì conviene un elenco più corto. Gli altri modelli ricevono l'elenco completo.",
     "openRouterIgnoredNotice": "OpenRouter non passa il tuo dizionario ai suoi modelli vocali, quindi queste parole non guideranno la trascrizione finché è selezionato per la dettatura.",
+    "localModelIgnoredNotice": "{{model}} non può usare il tuo dizionario, quindi queste parole non guideranno la trascrizione finché è selezionato per la dettatura. La pulizia IA le applica comunque quando è attiva.",
+    "localModelHotwordsLimitNotice": "{{model}} usa fino a {{limit}} voci del dizionario per guidare la trascrizione. Hanno la precedenza le voci personali, poi quelle dei tuoi teamspace e infine quelle del tuo spazio di lavoro.",
     "exportDictionary": "Esporta dizionario",
     "exportFailed": "Esportazione non riuscita",
     "editWord": "Modifica {{word}}",
@@ -5953,8 +5968,6 @@
       "submitOne": "Invia invito",
       "submit_one": "Invia {{count}} invito",
       "submit_other": "Invia {{count}} inviti",
-      "submitting_one": "Invito di {{count}} persona in corso…",
-      "submitting_other": "Invito di {{count}} persone in corso…",
       "sentTitle_one": "{{count}} invito inviato",
       "sentTitle_other": "{{count}} inviti inviati",
       "attachedTitle_one": "{{count}} invito aggiornato",
@@ -5997,7 +6010,7 @@
       },
       "roleDescription": {
         "admin": "Gestisce membri, inviti, team e impostazioni.",
-        "member": "Può visualizzare e modificare le note."
+        "member": "Usa l'area di lavoro."
       },
       "errors": {
         "invalid": "{{email}} non è un indirizzo email valido",
@@ -6011,7 +6024,8 @@
         "rateLimited": "Troppi inviti in questo momento. Riprova più tardi.",
         "requestFailed": "Impossibile invitare {{email}}. Controlla la connessione e riprova.",
         "refused": "Impossibile invitare {{email}}: {{reason}}"
-      }
+      },
+      "sending": "Invito in corso…"
     },
     "join": {
       "title": "Unisciti al tuo team",
@@ -6049,7 +6063,7 @@
     "exit": {
       "leave": {
         "title": "Abbandonare {{name}}?",
-        "body": "Perderai l'accesso a questa area di lavoro, ai suoi team e ai suoi teamspace. Un amministratore dell'area di lavoro può invitarti di nuovo.",
+        "body": "Perderai l'accesso a questa area di lavoro, ai suoi team e ai suoi teamspace. Il proprietario o un amministratore dell'area di lavoro può invitarti di nuovo.",
         "privateNotes": "Le tue note private in questa area di lavoro verranno spostate in {{workspace}} su questo dispositivo.",
         "failed": "Impossibile abbandonare {{name}}. Controlla la connessione e riprova."
       },
@@ -6080,9 +6094,9 @@
       "body": "Perderà l'accesso a tutti i teamspace e a tutti i team di quest'area di lavoro. Puoi invitarla di nuovo in qualsiasi momento.",
       "confirm": "Rimuovi",
       "removing": "Rimozione…",
-      "failed": "Impossibile confermare la rimozione di {{name}}. Controlla la connessione e riprova.",
       "notAllowed": "Non hai più l'autorizzazione per rimuovere persone da {{workspace}}.",
-      "alreadyRemoved": "{{name}} è già stato rimosso"
+      "alreadyRemoved": "{{name}} è già stato rimosso",
+      "failedTitle": "Impossibile rimuovere {{name}}"
     },
     "removeMembers": {
       "title_one": "Rimuovere {{count}} membro da {{workspace}}?",
@@ -6090,8 +6104,6 @@
       "confirm_one": "Rimuovi {{count}} membro",
       "confirm_other": "Rimuovi {{count}} membri",
       "checking": "Verifica in corso…",
-      "failed_one": "Impossibile confermare la rimozione di {{count}} membro. Controlla la connessione e riprova.",
-      "failed_other": "Impossibile confermare la rimozione di {{count}} membri. Controlla la connessione e riprova.",
       "body": "Queste persone perderanno l'accesso a tutti i teamspace e a tutti i team di quest'area di lavoro. Puoi invitarle di nuovo in qualsiasi momento.",
       "ownerOne": "{{name}} possiede note o teamspace in quest'area di lavoro.",
       "owners_one": "{{count}} di loro possiede note o teamspace.",
@@ -6102,24 +6114,31 @@
       "directoryManagedOneOthers": "{{name}} è assegnato dal tuo provider di identità. Rimuovilo da lì o deselezionalo per rimuovere gli altri.",
       "directoryManagedOthers_one": "{{count}} di loro è assegnato dal tuo provider di identità. Rimuovilo da lì o deselezionalo per rimuovere gli altri.",
       "directoryManagedOthers_other": "{{count}} di loro sono assegnati dal tuo provider di identità. Rimuovili da lì o deselezionali per rimuovere gli altri.",
-      "transferLabel": "Trasferisci a",
-      "transferBody": "Le loro note e i loro teamspace passeranno al nuovo proprietario. Perderanno l'accesso a quest'area di lavoro.",
+      "transferLabel": "Riassegna a",
       "transferBodyLimited": "Le loro note e i loro teamspace passeranno a {{name}}, tranne le note nei teamspace a cui {{name}} non può accedere, che resteranno lì. Perderanno l'accesso a quest'area di lavoro.",
       "you": "{{name}} (tu)",
-      "transferConfirm": "Trasferisci e rimuovi",
+      "transferConfirm": "Riassegna e rimuovi",
       "transferring": "Trasferimento in corso…",
-      "transferFailed": "Impossibile confermare il trasferimento e la rimozione. Controlla la connessione e riprova.",
+      "transferFailed": "Impossibile riassegnare i contenuti. Nessun membro è stato rimosso. Riprova.",
+      "transferUnconfirmed": "Impossibile confermare la riassegnazione e la rimozione. Controlla la connessione e riprova.",
       "invalidTarget": "{{name}} non può più ricevere la proprietà. Scegli un'altra persona.",
       "cannotRemoveOwner": "Il proprietario dell'area di lavoro non può essere rimosso.",
       "cannotRemoveSelf": "Non puoi rimuovere te stesso. Esci dall'area di lavoro da Generale.",
       "done_one": "{{count}} membro rimosso",
       "done_other": "{{count}} membri rimossi",
-      "transferDone_one": "Le loro note e i loro teamspace sono stati spostati a {{name}} ed è stato rimosso {{count}} membro.",
-      "transferDone_other": "Le loro note e i loro teamspace sono stati spostati a {{name}} e sono stati rimossi {{count}} membri.",
       "transferPartial_one": "{{count}} nota è rimasta in un teamspace a cui {{name}} non può accedere. Tutto il resto è stato spostato.",
       "transferPartial_other": "{{count}} note sono rimaste in teamspace a cui {{name}} non può accedere. Tutto il resto è stato spostato.",
       "alreadyRemoved_one": "{{count}} membro era già stato rimosso",
-      "alreadyRemoved_other": "{{count}} membri erano già stati rimossi"
+      "alreadyRemoved_other": "{{count}} membri erano già stati rimossi",
+      "failedBody": "Il loro accesso all'area di lavoro non è cambiato. Controlla la connessione e riprova.",
+      "unconfirmedTitle": "Impossibile confermare la rimozione",
+      "unconfirmedBody": "Potrebbero essere già stati rimossi. Controlla la connessione e riprova.",
+      "reassignBody": "Trasferisci le loro note e assegna un admin del teamspace prima di rimuoverli.",
+      "ownersAll": "Possiedono note o gestiscono teamspace.",
+      "failedTitle_one": "Impossibile rimuovere {{count}} membro",
+      "failedTitle_other": "Impossibile rimuovere {{count}} membri",
+      "transferDone_one": "Contenuti e accesso admin del teamspace riassegnati a {{name}}. Rimosso {{count}} membro.",
+      "transferDone_other": "Contenuti e accesso admin del teamspace riassegnati a {{name}}. Rimossi {{count}} membri."
     },
     "cancelInvitation": {
       "title": "Annullare l'invito per {{email}}?",
@@ -6147,7 +6166,6 @@
       "body": "Scegli un membro esistente dell'area di lavoro. Dopo il trasferimento diventerai amministratore.",
       "newOwner": "Nuovo proprietario",
       "placeholder": "Scegli un membro dell'area di lavoro",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "Trasferire la proprietà a {{name}}?",
       "confirmBody": "{{name}} diventerà il proprietario di {{workspace}}. Tu diventerai amministratore.",
       "submit": "Trasferisci proprietà",

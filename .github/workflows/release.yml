@@ -137,7 +137,23 @@ jobs:
       - name: Install Linux build and packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config qemu-user libgtk-3-0 libnss3 libasound2
+          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config libgtk-3-0 libnss3 libasound2
+
+      - name: Install current QEMU for SQLite CPU checks
+        # Jammy's QEMU 6.2 misexecutes Electron's JavaScript. Copy only a static
+        # emulator so the app keeps the older build host's glibc baseline.
+        run: |
+          qemu_dir="$RUNNER_TEMP/sqlite-qemu"
+          mkdir -p "$qemu_dir"
+          docker run --rm -v "$qemu_dir:/output" debian:trixie-slim sh -ec '
+            apt-get update
+            cd /tmp
+            apt-get download qemu-user
+            dpkg-deb --extract qemu-user_*.deb /tmp/qemu
+            cp /tmp/qemu/usr/bin/qemu-x86_64 /output/qemu-x86_64
+          '
+          "$qemu_dir/qemu-x86_64" --version
+          echo "$qemu_dir" >> "$GITHUB_PATH"
 
       - name: Create runtime env
         run: |

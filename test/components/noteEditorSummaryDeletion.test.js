@@ -235,6 +235,7 @@ export function useSpaceRoster(cloudSpaceId) {
   globalThis.__noteEditorRosterId = cloudSpaceId;
   return globalThis.__noteEditorRoster ? new Map(globalThis.__noteEditorRoster.map(member => [member.user_id, member])) : null;
 }`,
+      ...options.mockModules,
     },
   });
 
@@ -1556,4 +1557,45 @@ test("a private note's share flag rises only when its share reaches someone", as
 
   assert.deepEqual(written, [{ id: NOTE.id, state: { is_shared: 1 } }]);
   await unmount();
+});
+
+test("speaker corrections and recording protect the open note before asynchronous work", async (t) => {
+  const edits = [];
+  globalThis.__noteUserEdits = edits;
+  t.after(() => delete globalThis.__noteUserEdits);
+  const { render, click, latest, unmount } = await loadNoteEditor(t, undefined, {
+    mockModules: {
+      "/stores/noteStore": `export * from "/stores/noteStore.ts";
+        export const markNoteEdited = (id) => globalThis.__noteUserEdits.push(id);`,
+    },
+  });
+  let release;
+  globalThis.window.electronAPI.setSpeakerMapping = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  globalThis.window.electronAPI.updateNote = async () => ({ success: true });
+  try {
+    await render(undefined, {
+      note: { ...NOTE, transcript: JSON.stringify([{ speaker: "speaker_0", text: "Hello" }]) },
+      onStartRecording: () => assert.deepEqual(edits, [NOTE.id, NOTE.id]),
+    });
+    await click("transcript");
+    let chat;
+    let recording;
+    walk(latest(), (node) => {
+      if (node.props.onMapSpeaker) chat = node;
+      if (node.props.onStart) recording = node;
+    });
+    assert.deepEqual(edits, [], "background loads do not adopt a tree pick");
+    await React.act(async () => {
+      const saving = chat.props.onMapSpeaker("speaker_0", "Dana");
+      assert.deepEqual(edits, [NOTE.id], "adopted before awaiting speaker mapping");
+      release();
+      await saving;
+    });
+    await React.act(async () => recording.props.onStart());
+  } finally {
+    await unmount();
+  }
 });

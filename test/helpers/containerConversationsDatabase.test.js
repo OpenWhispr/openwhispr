@@ -67,7 +67,7 @@ function createTestTeamSpace(db, { name, emoji = null } = {}) {
   const maxOrder = db.db.prepare("SELECT MAX(sort_order) AS max_order FROM spaces").get();
   const result = db.db
     .prepare(
-      "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order) VALUES (?, 'team', ?, ?, ?)"
+      "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order, workspace_id) VALUES (?, 'team', ?, ?, ?, 'test-workspace')"
     )
     .run(
       `test-container-space-${++nextTestTeamSpaceId}`,
@@ -640,7 +640,10 @@ test("destructive note cleanup retires chats while denied-delete cleanup preserv
 
   const doomed = db.saveNote("Doomed", "body").note;
   const syncedChat = db.createAgentConversation("Synced note chat", doomed.id);
-  db.markConversationSynced(syncedChat.id, "cloud-conv-doomed");
+  // Historical private backups still participate in an explicit local delete.
+  db.db
+    .prepare("UPDATE agent_conversations SET cloud_id = ?, sync_status = 'synced' WHERE id = ?")
+    .run("cloud-conv-doomed", syncedChat.id);
   db.addAgentMessage(syncedChat.id, "user", "remove after confirmed delete");
   const localChat = db.createAgentConversation("Local note chat", doomed.id);
   db.addAgentMessage(localChat.id, "user", "remove local chat");
@@ -658,7 +661,9 @@ test("destructive note cleanup retires chats while denied-delete cleanup preserv
   const recoverable = db.saveNote("Denied delete", "body").note;
   db.markNoteSynced(recoverable.id, "cloud-note-recoverable");
   const recoverableChat = db.createAgentConversation("Keep on denial", recoverable.id);
-  db.markConversationSynced(recoverableChat.id, "cloud-conv-recoverable");
+  db.db
+    .prepare("UPDATE agent_conversations SET cloud_id = ?, sync_status = 'synced' WHERE id = ?")
+    .run("cloud-conv-recoverable", recoverableChat.id);
   db.addAgentMessage(recoverableChat.id, "user", "restore with server note");
 
   assert.equal(db.deleteNote(recoverable.id).success, true);
@@ -1199,7 +1204,8 @@ test("relocateRevokedFolder moves or retires the folder's conversations", (t) =>
 test("the chat list and chat search say which note a chat came from", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const note = db.saveNote("Q3 planning sync", "body").note;
+  const team = createTestTeamSpace(db, { name: "Planning" }).space;
+  const note = db.saveNote("Q3 planning sync", "body", "personal", null, null, null, team.id).note;
   const fromNote = db.createAgentConversation("Onboarding decisions · Q3 planning sync", note.id);
   const plain = db.createAgentConversation("Summarize my week");
   db.addAgentMessage(fromNote.id, "user", "What did we decide?");
@@ -1226,9 +1232,10 @@ test("the chat list and chat search say which note a chat came from", (t) => {
 test("a cloud pull keeps the note a chat came from", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const note = db.saveNote("Q3 planning sync", "body").note;
+  const team = createTestTeamSpace(db, { name: "Planning" }).space;
+  const note = db.saveNote("Q3 planning sync", "body", "personal", null, null, null, team.id).note;
   const chat = db.createAgentConversation("Onboarding decisions", note.id);
-  db.markConversationSynced(chat.id, "cloud-conv-note");
+  assert.equal(db.markConversationSynced(chat.id, "cloud-conv-note").success, true);
 
   // The cloud's conversations carry no note_id.
   db.upsertConversationFromCloud(
@@ -1306,11 +1313,12 @@ test("rows held by a pending folder delete survive a repeated delete and roll ba
 test("a chat whose create was sent stays a tombstone for its late receipt when its note is removed", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const note = db.saveNote("Never synced", "body").note;
+  const team = createTestTeamSpace(db, { name: "Planning" }).space;
+  const note = db.saveNote("Never synced", "body", "personal", null, null, null, team.id).note;
   const chat = db.createAgentConversation("Chat in flight", note.id);
   db.addAgentMessage(chat.id, "user", "sent with the create");
   const sent = db.getAgentConversation(chat.id);
-  db.markConversationCreateAttempted(chat.id);
+  assert.equal(db.markConversationCreateAttempted(chat.id).success, true);
 
   assert.deepEqual(db.deleteNote(note.id), { success: true, id: note.id });
   assert.equal(db.getAgentMessages(chat.id).length, 0);

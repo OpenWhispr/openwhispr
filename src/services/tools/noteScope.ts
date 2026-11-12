@@ -1,9 +1,15 @@
-import type { NoteItem } from "../../types/electron";
+import type { NoteItem, NoteWriteGuard } from "../../types/electron";
 
 /** What the note tools may reach in one assistant turn. */
 export interface NoteScope {
   /** The active workspace's Private and its teamspaces in scope (resolveAssistantScopeSpaceIds). */
   spaceIds: readonly number[];
+  /** Persists conversation privacy before local content reaches tools or the model. */
+  protectNotes?: (
+    notes: ReadonlyArray<Pick<NoteItem, "id" | "space_id">>,
+    deviceOnly?: boolean
+  ) => Promise<void>;
+  getWriteGuard?: () => Promise<NoteWriteGuard | undefined>;
   privateWorkspaceId?: string | null;
   privateCreationAllowed?: boolean;
   /**
@@ -20,4 +26,9 @@ export function noteScopeCheck(
   const spaceIds = new Set(scope.spaceIds);
   return (note) =>
     (scope.openNoteId != null && note.id === scope.openNoteId) || spaceIds.has(note.space_id);
+}
+
+/** Pin writes before note/folder lookups; ordinary callers without the bridge remain compatible. */
+export async function captureNoteWriteGuard(scope: NoteScope): Promise<NoteWriteGuard | undefined> {
+  return scope.getWriteGuard ? scope.getWriteGuard() : window.electronAPI.getNoteWriteGuard?.();
 }

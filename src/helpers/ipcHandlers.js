@@ -31,11 +31,13 @@ const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
 const { WHISPER_GPU_FAILURE_REASON_KEYS } = require("./whisperGpuFailureReason");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
+const { dictionaryWordKey } = require("../utils/dictionaryWordKey");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { MetaActivation } = require("./metaActivation");
+const { ProductEvents, createFileStore: createProductEventsStore } = require("./productEvents");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
 const {
@@ -307,6 +309,7 @@ const { createAbortError } = require("./abortError");
 const { describeCortiTokenFailure, testProviderConnection } = require("./providerConnectionTest");
 const { createConnectionCheckCache } = require("./connectionCheckCache");
 const { PAID_KEY_CHECKS_FILE, createPaidKeyCheck } = require("./paidKeyCheck");
+const productEventsFile = () => path.join(app.getPath("userData"), "product-events.json");
 const {
   ENTERPRISE_AUDIO_DEVICE_ID_FILE,
   registerEnterpriseAudioSetup,
@@ -796,9 +799,9 @@ class IPCHandlers {
     this._autoLearnEnabled = true; // Default on, synced from renderer
     this._autoLearnDebounceTimer = null;
     this._autoLearnLatestData = null;
-    // The active workspace's applying shared words, as the renderer last sent
-    // them (dictionary-set-shared-hints). Empty until the first send.
     this._sharedDictionaryHints = { space: [], workspace: [] };
+    this._dictionaryHotwordHints = null;
+    this.parakeetManager.setDictionaryProvider(() => this._getDictionaryHotwords());
     this._textEditHandler = null;
     this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
@@ -1115,6 +1118,7 @@ class IPCHandlers {
     if (!token) {
       const scopeChanged = this.databaseManager.activeAccountId !== null;
       this.databaseManager.setActiveAccountId(null);
+      this._clearDictionaryHotwordHints();
       accountScopeBinding.clear();
       broadcastToWindows("active-account-scope-changed", null);
       this._broadcastDatabaseAccountScope();
@@ -1537,20 +1541,36 @@ class IPCHandlers {
     return folder?.name || "Personal";
   }
 
-  // Every word that already reaches the transcription prompt: personal plus the
-  // active workspace's shared words that fit beside them. The renderer sends
-  // only those (sharedWordsReachingPrompt in settingsStore), so a team word cut
-  // from the prompt, or a hidden, paused or other workspace's word, can still
-  // be learned into Personal.
-  _getDictionarySafe() {
-    let personal;
+  _getPersonalDictionarySafe() {
     try {
-      personal = this.databaseManager.getDictionary();
+      return this.databaseManager.getDictionary();
     } catch {
-      personal = [];
+      return [];
     }
+  }
+
+  // Auto-learn excludes the personal dictionary and shared words that already
+  // reach the prompt. A shared word cut by the prompt budget can still be learned.
+  _getDictionarySafe() {
     const { space, workspace } = this._sharedDictionaryHints;
-    return [...personal, ...space, ...workspace];
+    return [...this._getPersonalDictionarySafe(), ...space, ...workspace];
+  }
+
+  _getDictionaryHotwords() {
+    const personal = this._getPersonalDictionarySafe();
+    const hints = this._dictionaryHotwordHints;
+    if (!hints || hints.accountId !== this.databaseManager.activeAccountId) return personal;
+    const { space, workspace, suppressedPersonal } = hints;
+    return [
+      ...personal.filter((word) => !suppressedPersonal.has(dictionaryWordKey(word))),
+      ...space,
+      ...workspace,
+    ];
+  }
+
+  _clearDictionaryHotwordHints() {
+    this._dictionaryHotwordHints = null;
+    this.parakeetManager.refreshHotwordsSoon();
   }
 
   _cleanupTextEditMonitor() {
@@ -1682,6 +1702,7 @@ class IPCHandlers {
         // Broadcast the post-save normalized list, not the raw input (which
         // still has case-variant dupes), so renderers don't flash ghost rows.
         broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
+        this.parakeetManager.refreshHotwordsSoon();
 
         // Show the overlay so the toast is visible (it may have been hidden after dictation)
         this.windowManager.showDictationPanel();
@@ -1861,6 +1882,13 @@ class IPCHandlers {
       tokenStore.getState().generation !== expectedAuthGeneration ||
       scopedAccountByGeneration.get(expectedAuthGeneration) !==
         this.databaseManager.activeAccountId;
+    const isStaleNoteWrite = (guard) =>
+      guard !== undefined &&
+      (!guard ||
+        !(guard.accountId === null || typeof guard.accountId === "string") ||
+        !Number.isSafeInteger(guard.authGeneration) ||
+        guard.accountId !== this.databaseManager.activeAccountId ||
+        guard.authGeneration !== tokenStore.getState().generation);
     // Each handler takes at most one renderer argument, so the job's signal
     // always lands after it and can't be supplied by the renderer.
     const handleAudioFeature = (channel, purpose, handler) =>
@@ -2475,14 +2503,18 @@ class IPCHandlers {
         throw new Error("words must be an array");
       }
       if (isListFromOtherAccount(listsAccountId)) return { success: false, stale: true };
-      return this.databaseManager.setDictionary(words);
+      const result = this.databaseManager.setDictionary(words);
+      this.parakeetManager.refreshHotwordsSoon();
+      return result;
     });
 
     ipcMain.handle("db-seed-dictionary", async (_event, words) => {
       if (!Array.isArray(words)) {
         throw new Error("words must be an array");
       }
-      return this.databaseManager.seedDictionary(words);
+      const result = this.databaseManager.seedDictionary(words);
+      if (result.seeded) this.parakeetManager.refreshHotwordsSoon();
+      return result;
     });
 
     ipcMain.handle("db-apply-dictionary-changes", async (_event, changes, listsAccountId) => {
@@ -2496,7 +2528,9 @@ class IPCHandlers {
       if (isListFromOtherAccount(listsAccountId)) {
         return { success: false, added: 0, removed: 0, stale: true };
       }
-      return this.databaseManager.applyDictionaryChanges({ add, remove });
+      const result = this.databaseManager.applyDictionaryChanges({ add, remove });
+      this.parakeetManager.refreshHotwordsSoon();
+      return result;
     });
 
     ipcMain.handle("db-get-pending-dictionary", async () => {
@@ -2650,11 +2684,37 @@ class IPCHandlers {
       return this.databaseManager.pruneSharedDictionary(keepWorkspaceIds);
     });
 
-    ipcMain.handle("dictionary-set-shared-hints", async (_event, hints) => {
+    ipcMain.handle("dictionary-set-shared-hints", async (_event, promptHints, hotwordHints) => {
       const isWordList = (value) =>
         Array.isArray(value) && value.every((word) => typeof word === "string");
-      if (!isWordList(hints?.space) || !isWordList(hints?.workspace)) return;
-      this._sharedDictionaryHints = { space: [...hints.space], workspace: [...hints.workspace] };
+      const isHints = (value) => isWordList(value?.space) && isWordList(value?.workspace);
+      if (!isHints(promptHints)) return;
+      this._sharedDictionaryHints = {
+        space: [...promptHints.space],
+        workspace: [...promptHints.workspace],
+      };
+
+      const suppressed = hotwordHints?.suppressedPersonal;
+      const accountId = hotwordHints?.accountId ?? null;
+      if (
+        !isHints(hotwordHints) ||
+        (suppressed !== undefined && !isWordList(suppressed)) ||
+        (accountId !== null && (typeof accountId !== "string" || !accountId))
+      ) {
+        this._clearDictionaryHotwordHints();
+        return;
+      }
+      const activeAccountId = this.databaseManager.activeAccountId;
+      // A saved snapshot can arrive before startup validates its owner. Once
+      // bound, ignore late snapshots from another account.
+      if (!accountId || (activeAccountId !== null && accountId !== activeAccountId)) return;
+      this._dictionaryHotwordHints = {
+        accountId,
+        space: [...hotwordHints.space],
+        workspace: [...hotwordHints.workspace],
+        suppressedPersonal: new Set((suppressed ?? []).map(dictionaryWordKey)),
+      };
+      this.parakeetManager.refreshHotwordsSoon();
     });
 
     ipcMain.handle("db-broadcast-dictionary-updated", async () => {
@@ -2662,6 +2722,7 @@ class IPCHandlers {
       // post-dedupe truth, never a caller-supplied payload.
       const words = this.databaseManager.getDictionary();
       broadcastToWindows("dictionary-updated", words);
+      this.parakeetManager.refreshHotwordsSoon();
       return { success: true };
     });
 
@@ -2768,6 +2829,7 @@ class IPCHandlers {
           return { success: false };
         }
         broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
+        this.parakeetManager.refreshHotwordsSoon();
         debugLogger.debug("[AutoLearn] Undo: removed words", { words: validWords });
         return { success: true };
       } catch (err) {
@@ -2787,8 +2849,10 @@ class IPCHandlers {
         audioDuration,
         folderId,
         spaceId,
-        transcript
+        transcript,
+        writeGuard
       ) => {
+        if (isStaleNoteWrite(writeGuard)) return { success: false, error: "Account changed" };
         const result = this.databaseManager.saveNote(
           title,
           content,
@@ -2838,6 +2902,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-update-note", async (event, id, updates, options) => {
+      if (isStaleNoteWrite(options?.writeGuard))
+        return { success: false, error: "Account changed" };
       const result = this.databaseManager.updateNote(id, updates, options);
       if (result?.success && result?.note) {
         setImmediate(() => broadcastToWindows("note-updated", result.note));
@@ -2949,8 +3015,10 @@ class IPCHandlers {
       return this.databaseManager.getFolders(spaceId);
     });
 
-    ipcMain.handle("db-create-folder", (_event, name, spaceId) =>
-      this.createFolderWithEffects(name, spaceId)
+    ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard) =>
+      isStaleNoteWrite(writeGuard)
+        ? { success: false, error: "Account changed" }
+        : this.createFolderWithEffects(name, spaceId)
     );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
@@ -3057,12 +3125,6 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("claim-signed-out-private-notes", () => {
-      const claimed = this.databaseManager.claimSignedOutPrivateNotes();
-      if (claimed.notes > 0 || claimed.folders > 0) this.notifyVectorChanges();
-      return claimed;
-    });
-
     ipcMain.handle("copy-note-to-space", (_event, noteId, targetSpaceId, folderId = null) => {
       if (
         !isRowIdArgument(noteId) ||
@@ -3166,6 +3228,13 @@ class IPCHandlers {
       // After those two: they give the account the signed-out chats this moves
       // out of the stand-in along with the notes.
       this._claimSignedOutPrivateNotes();
+      if (accountChanged) {
+        if (this._dictionaryHotwordHints?.accountId === accountId) {
+          this.parakeetManager.refreshHotwordsSoon();
+        } else {
+          this._clearDictionaryHotwordHints();
+        }
+      }
       if (accountId !== null) {
         accountScopeBinding.persist(accountId, state.token);
         scopedAccountByGeneration.set(state.generation, accountId);
@@ -3183,6 +3252,7 @@ class IPCHandlers {
       this.connectorManager?.accountChanged();
       void this.connectorManager?.notifyStatusChanged();
       void this.metaActivation?.flush();
+      void this.productEvents?.flush();
       return { success: true };
     });
 
@@ -3192,6 +3262,12 @@ class IPCHandlers {
         binding: accountScopeBinding.read(),
       })
     );
+
+    // A tool can wait on folder lookup or a lock before writing; keep its original account.
+    ipcMain.handle("get-note-write-guard", () => ({
+      accountId: this.databaseManager.activeAccountId,
+      authGeneration: tokenStore.getState().generation,
+    }));
 
     // The binding above stops matching as soon as the token rotates, while the
     // database keeps the account until the renderer re-scopes it, so a window
@@ -3223,6 +3299,12 @@ class IPCHandlers {
             erasingDevice: options?.erasingDevice === true,
           });
           const result = this.databaseManager.deleteAccountData(accountId);
+          let productEventsFailure;
+          try {
+            this.productEvents?.purge(accountId);
+          } catch (error) {
+            productEventsFailure = error;
+          }
           this.audioStorageManager.deleteAudioForTranscriptions(result.deletedTranscriptionIds);
           this.metaActivation?.purge(accountId);
           this.notifyVectorChanges();
@@ -3238,6 +3320,7 @@ class IPCHandlers {
               error: error.message,
             });
           }
+          if (productEventsFailure) throw productEventsFailure;
           return { success: true, ...result };
         } catch (error) {
           return { success: false, code: "LOCAL_ACCOUNT_CLEANUP_FAILED", error: error.message };
@@ -3388,6 +3471,10 @@ class IPCHandlers {
       async (event, spaceId, folderId, limit) => {
         return this.databaseManager.getConversationsForContainer(spaceId, folderId, limit);
       }
+    );
+
+    ipcMain.handle("db-protect-conversation", (_, id, notes, deviceOnly, expectedAccountId) =>
+      this.databaseManager.protectConversation(id, notes, deviceOnly, expectedAccountId)
     );
 
     ipcMain.handle("db-get-agent-conversations", async (event, limit) => {
@@ -3559,7 +3646,7 @@ class IPCHandlers {
           localSpaceId,
           { newKeyIfTaken: options?.newKeyIfTaken === true }
         );
-        if (note) {
+        if (note && !note.imported) {
           setImmediate(() => broadcastToWindows("note-synced", note));
           this.notifyVectorChanges();
         }
@@ -3849,7 +3936,7 @@ class IPCHandlers {
     );
     ipcMain.handle("db-hard-delete-conversation", (_, id, expectedAuthGeneration) => {
       if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
-      const result = this.databaseManager.hardDeleteConversation(id);
+      const result = this.databaseManager.hardDeleteConversation(id, true);
       if (result?.success) {
         setImmediate(() => broadcastToWindows("conversation-deleted", { id }));
       }
@@ -5219,6 +5306,13 @@ class IPCHandlers {
           fs.rmSync(activationPath + suffix, { force: true });
       } catch (e) {
         errors.push(`Activation data cleanup: ${e.message}`);
+      }
+      try {
+        this.productEvents?.dispose();
+        this.productEvents = null;
+        createProductEventsStore(productEventsFile()).erase();
+      } catch (e) {
+        errors.push(`Product events cleanup: ${e.message}`);
       }
 
       // Close DB connection before deleting the file
@@ -7481,6 +7575,36 @@ class IPCHandlers {
       // Marketing bookkeeping must never prevent ordinary dictation/startup.
       debugLogger.warn("Activation storage unavailable");
     }
+    // Dashboard funnel milestones (app sign-in, onboarding completion). Like
+    // activation, it must never stand in the way of dictation or startup.
+    try {
+      this.productEvents = new ProductEvents({
+        store: createProductEventsStore(productEventsFile()),
+        getScope: () =>
+          accountScopeBinding.resolveActiveAccountScope({
+            ...tokenStore.getState(),
+            binding: accountScopeBinding.read(),
+          }),
+        request: createCloudApiRequestHandler({
+          getApiUrl,
+          getAppVersion: () => app.getVersion(),
+          tokenStore,
+          proxyFetch: (url, init) =>
+            proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
+        }),
+        getAppVersion: () => app.getVersion(),
+        logger: debugLogger,
+      });
+      void this.productEvents.flush();
+    } catch {
+      debugLogger.warn("Product events storage unavailable");
+    }
+    ipcMain.handle("product-events-record-app-session", (_event, context) =>
+      this.productEvents?.recordAppSession(context)
+    );
+    ipcMain.handle("product-events-record-onboarding-completed", (_event, completion) =>
+      this.productEvents?.recordOnboardingCompleted(completion)
+    );
     ipcMain.handle("activation-close", async () => {
       await Promise.race([
         this.metaActivation?.close(),

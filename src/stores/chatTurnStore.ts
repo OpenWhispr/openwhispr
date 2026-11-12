@@ -418,6 +418,7 @@ export function startChatSend(input: StartChatSendInput): boolean {
       );
       await operation.engine.send(input.text, entry.messages, {
         ...input.options,
+        conversationId: boundId,
         attachedSkill: input.options?.attachedSkill ?? input.skills.attached?.ref,
         allowSkillPick: input.options?.allowSkillPick ?? !input.skills.pickOff,
         removedSkills: input.options?.removedSkills ?? input.skills.removed,

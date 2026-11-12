@@ -630,18 +630,17 @@ test("signing out and back in as the same account keeps its cursors for deletes 
   installBrowserGlobals();
   enableSync();
 
-  // A chat stands in for any backed-up row: private notes no longer sync (D2).
+  // A known local chat remains Backup eligible; newly restored history is device-only.
   const cloud = createAccountCloud();
-  const seeded = cloud.seedConversation({
-    client_conversation_id: "a-chat",
-    title: "A's chat",
-    created_at: "2026-01-05T09:00:00.000Z",
-    updated_at: "2026-01-05T09:00:00.000Z",
-    messages: [{ role: "user", content: "hello", created_at: "2026-01-05T09:00:00.000Z" }],
-  });
   const firstSession = await signInAs(t, db, cloud, "account-a");
+  const local = db.createAgentConversation("A's chat");
+  db.addAgentMessage(local.id, "user", "hello");
+  const clientId = db.getAgentConversation(local.id).client_conversation_id;
+  assert.equal(db.getAgentConversation(local.id).device_only, 0);
   await firstSession.syncAll(true);
-  assert.equal(db.getConversationByClientId("a-chat")?.title, "A's chat");
+  assert.equal(db.getConversationByClientId(clientId)?.title, "A's chat");
+  const seeded = cloud.conversation(clientId);
+  assert.ok(seeded, "the local chat was backed up before signing out");
 
   await firstSession.purgeTeamSpacesForSignOut();
   await new Promise((resolve) => setTimeout(resolve, 5));
@@ -652,7 +651,7 @@ test("signing out and back in as the same account keeps its cursors for deletes 
   const secondSession = await signInAs(t, db, cloud, "account-a");
   await secondSession.syncAll(true);
   assert.equal(
-    db.getConversationByClientId("a-chat"),
+    db.getConversationByClientId(clientId),
     null,
     "a chat deleted elsewhere while signed out must leave this device"
   );
@@ -935,6 +934,11 @@ test("a private note with a Backup cloud id moves into a teamspace as a full cre
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: TEAM_SPACE.workspace_id,
+    defaultWorkspaceId: TEAM_SPACE.workspace_id,
+  });
+  db.bindDefaultPrivateSpace(TEAM_SPACE.workspace_id);
   const note = db.saveNote("Roadmap", "the body on this device", "personal").note;
   const backup = cloud.seedNote({
     client_note_id: note.client_note_id,
@@ -971,6 +975,11 @@ test("a private note whose Backup copy was purged is created fresh in the teamsp
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: TEAM_SPACE.workspace_id,
+    defaultWorkspaceId: TEAM_SPACE.workspace_id,
+  });
+  db.bindDefaultPrivateSpace(TEAM_SPACE.workspace_id);
   const note = db.saveNote("Roadmap", "the body on this device", "personal").note;
   db.markNoteSynced(note.id, "purged-backup-copy", "2026-06-01T10:00:00.000Z", "user-harness");
 
@@ -992,6 +1001,11 @@ test("a private note whose Backup copy was deleted elsewhere stays live once mov
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: TEAM_SPACE.workspace_id,
+    defaultWorkspaceId: TEAM_SPACE.workspace_id,
+  });
+  db.bindDefaultPrivateSpace(TEAM_SPACE.workspace_id);
   const note = db.saveNote("Roadmap", "the body on this device", "personal").note;
   const backup = cloud.seedNote({
     client_note_id: note.client_note_id,
@@ -1029,6 +1043,11 @@ test("a never-sent Granola note whose key was deleted elsewhere stays live once 
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: TEAM_SPACE.workspace_id,
+    defaultWorkspaceId: TEAM_SPACE.workspace_id,
+  });
+  db.bindDefaultPrivateSpace(TEAM_SPACE.workspace_id);
   const { deterministicUuid } = await import("../../src/helpers/granolaImport.js");
   const clientNoteId = deterministicUuid("granola-doc-1");
   const imported = db.importNotes([
@@ -3197,4 +3216,29 @@ test("the upload queues hold teamspace rows and legacy shared private notes only
   );
   assert.ok(!db.getPendingNotes("syncable").some((note) => note.id === forked.id));
   assert.deepEqual(ids(db.getPendingFolders("team")), [teamFolder.id]);
+});
+
+test("merging legacy share metadata does not upload unchanged content", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const remote = cloud.seedNote({ client_note_id: "share-key", title: "Copy", content: "body" });
+  const clean = db.upsertNoteFromCloud(remote, null);
+  insertCloudCopy(db, {
+    client_note_id: "share-copy",
+    cloud_id: remote.id,
+    is_shared: 1,
+    share_token: "legacy-token",
+    cloud_updated_at: "2020-01-01T00:00:00Z",
+  });
+  db.mergeDuplicateCloudNotes();
+  assert.equal(db.getNote(clean.id).sync_status, "synced");
+  const before = cloud.log.length;
+  await service.pushPendingNotes(false);
+  assert.equal(
+    cloud.log
+      .slice(before)
+      .filter((call) => call.method === "PATCH" && call.path === "/api/notes/update").length,
+    0
+  );
 });

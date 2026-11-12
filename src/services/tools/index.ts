@@ -46,6 +46,8 @@ interface ToolRegistrySettings {
    * its teamspaces in scope (resolveAssistantScopeSpaceIds). Nothing elsewhere reaches the model.
    */
   scopeSpaceIds: number[];
+  protectNotes?: NoteScope["protectNotes"];
+  getWriteGuard?: NoteScope["getWriteGuard"];
   privateWorkspaceId?: string | null;
   privateCreationAllowed?: boolean;
   /** The note a note's chat is about, which that chat's tools reach wherever it is. */
@@ -72,6 +74,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   const useCloudSearch = settings.isSignedIn;
   const noteScope: NoteScope = {
     spaceIds: settings.scopeSpaceIds,
+    protectNotes: settings.protectNotes,
+    getWriteGuard: settings.getWriteGuard,
     privateWorkspaceId: settings.privateWorkspaceId,
     privateCreationAllowed: settings.privateCreationAllowed,
     openNoteId: settings.openNoteId,
@@ -81,6 +85,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
       useCloudSearch,
       fixedScope: settings.searchScope,
       scopeSpaceIds: noteScope.spaceIds,
+      protectNotes: settings.protectNotes,
     })
   );
   registry.register(createGetNoteTool(noteScope));

@@ -193,6 +193,21 @@ async function mountUseAuth(t, { initialStorage }) {
       isPending: false,
       error: null,
     });
+    if (user) {
+      // Reconciliation loads modules asynchronously; timer ticks alone do not
+      // establish the validated session the next test action depends on.
+      const deadline = performance.now() + 5000;
+      while (
+        authContext.getValidatedAuthGeneration() !== token.generation ||
+        result?.user?.id !== user.id ||
+        result?.isOfflineAccount !== false
+      ) {
+        assert.ok(performance.now() < deadline, "session reconciliation did not finish");
+        await settle();
+      }
+      // Committing validation notifies both useAuth consumers and reruns their effects.
+      await settle();
+    }
   };
   const reject = async () => {
     await React.act(() =>

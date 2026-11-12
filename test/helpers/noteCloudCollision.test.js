@@ -259,3 +259,66 @@ test("cloud pulls still adopt an unattributed note and move it between private a
   db.setActiveAccountId("account-b");
   assert.equal(db.getNote(original.id), null);
 });
+
+for (const deletion of ["soft", "physical"]) {
+  test(`import acknowledgement after ${deletion} deletion does not reach the note store`, async (t) => {
+    const db = createDb(t);
+    if (!db) return;
+    db.setActiveAccountId("account-a");
+    db.setActiveWorkspaceScope({
+      activeWorkspaceId: "workspace-a",
+      defaultWorkspaceId: "workspace-a",
+    });
+    db.bindDefaultPrivateSpace("workspace-a");
+    const privateId = db.getDefaultPrivateSpaceId();
+    const local = db.upsertNoteFromCloud(PRIVATE_NOTE, null, privateId);
+    const team = db.upsertSpaceFromCloud({
+      id: "team-cloud",
+      name: "Team",
+      workspace_id: "workspace-a",
+    });
+    assert.equal(db.updateNote(local.id, { space_id: team.id }).success, true);
+    if (deletion === "soft") {
+      db.db.prepare("UPDATE notes SET cloud_create_attempted = 1 WHERE id = ?").run(local.id);
+      db.deleteNote(local.id);
+      assert.ok(
+        db.db.prepare("SELECT deleted_at FROM notes WHERE id = ?").get(local.id)?.deleted_at
+      );
+    } else {
+      db.hardDeleteNote(local.id);
+    }
+    resetBrowserGlobals();
+    installBrowserGlobals();
+    const events = [];
+    let onNoteSynced;
+    const handler = cloudUpsertHandler(
+      db,
+      (channel, note) => {
+        events.push([channel, note]);
+        if (channel === "note-synced") onNoteSynced(note);
+      },
+      () => {}
+    );
+    window.electronAPI = {
+      ...createElectronApi(db, { cloud: createFakeCloud() }),
+      getNotes: async (...args) => db.getNotes(...args),
+      getFolderNoteCounts: async () => db.getFolderNoteCounts(),
+      onNoteSynced: (callback) => {
+        onNoteSynced = callback;
+        return () => {};
+      },
+    };
+    t.after(() => resetBrowserGlobals());
+    const store = loadNoteStore();
+    await store.initializeNotes();
+    await store.loadSpaces();
+    await store.loadContainerNotes(store.spaceContainerKey(privateId));
+    await store.loadContainerNotes(store.spaceContainerKey(team.id));
+    assert.equal(store.getNoteFromStore(local.id), null);
+    const result = handler(null, PRIVATE_NOTE, null, privateId, undefined, { newKeyIfTaken: true });
+    await new Promise(setImmediate);
+    assert.deepEqual(result, { imported: true });
+    assert.deepEqual(events, []);
+    assert.equal(store.getNoteFromStore(local.id), null);
+  });
+}

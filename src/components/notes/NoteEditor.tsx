@@ -32,6 +32,7 @@ import {
 import { canChangeSpaceNoteScope, ownsNote } from "../../lib/spacePermissions";
 import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
+  markNoteEdited,
   useShareCacheEntry,
   useNoteConflict,
   useSpaces,
@@ -305,6 +306,10 @@ export default function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const locale = useUiLocale();
+  const handleStartRecording = (): void => {
+    markNoteEdited(note.id);
+    onStartRecording();
+  };
   const recordingRefusal = meetingRecordingRefusal(usePolicySnapshot());
   const recordingChoiceRefusal = useTranscriptionChoiceRefusal("meeting");
   // An upload's transcription lives in its transcript, so until the user writes
@@ -749,7 +754,8 @@ export default function NoteEditor({
       profileId?: number | null,
       recorderName?: string,
       profileName = displayName
-    ) => {
+    ): Promise<void> => {
+      markNoteEdited(note.id);
       const segments = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
       const hasOtherRecorders = segments.some((segment) => segment.recorderName);
       const scopeSelfSpeaker = speakerId === "you" && hasOtherRecorders;
@@ -828,7 +834,8 @@ export default function NoteEditor({
   );
 
   const handleDismissSuggestion = useCallback(
-    async (speakerId: string) => {
+    async (speakerId: string): Promise<void> => {
+      markNoteEdited(note.id);
       const currentSegments = displaySegments.map((s) =>
         s.speaker === speakerId
           ? applyTranscriptSpeakerPatch(s, {
@@ -839,7 +846,7 @@ export default function NoteEditor({
       );
       await persistDisplaySegments(currentSegments, !!diarizedSegments || !isRecording);
     },
-    [displaySegments, diarizedSegments, isRecording, persistDisplaySegments]
+    [note.id, displaySegments, diarizedSegments, isRecording, persistDisplaySegments]
   );
 
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
@@ -874,6 +881,7 @@ export default function NoteEditor({
   const handleBulkAssignName = useCallback(
     async (displayName: string, _email?: string | null, profileId?: number) => {
       if (!selectedSegmentIds.size) return;
+      markNoteEdited(note.id);
       displayName = resolveSpeakerAssignmentName(
         displayName,
         user,
@@ -896,6 +904,7 @@ export default function NoteEditor({
     [
       displaySegments,
       selectedSegmentIds,
+      note.id,
       persistDisplaySegments,
       handleClearSelection,
       user,
@@ -1409,7 +1418,7 @@ export default function NoteEditor({
                     recordingChoiceRefusal?.messageKey ??
                       MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal]
                   )}
-                  onStart={onStartRecording}
+                  onStart={handleStartRecording}
                   onStop={onStopRecording}
                 />
               )}
@@ -1577,7 +1586,7 @@ export default function NoteEditor({
                 {canEditNote && recordingAllowed && (
                   <Button
                     className="mt-6 rounded-full px-5 font-medium"
-                    onClick={onStartRecording}
+                    onClick={handleStartRecording}
                     disabled={isProcessing}
                   >
                     {t("notes.editor.startRecording")}

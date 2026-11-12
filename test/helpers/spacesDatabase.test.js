@@ -69,7 +69,7 @@ function createTestTeamSpace(db, { name, emoji = null } = {}) {
   const maxOrder = db.db.prepare("SELECT MAX(sort_order) AS max_order FROM spaces").get();
   const result = db.db
     .prepare(
-      "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order) VALUES (?, 'team', ?, ?, ?)"
+      "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order, workspace_id) VALUES (?, 'team', ?, ?, ?, 'test-workspace')"
     )
     .run(`test-team-space-${++nextTestTeamSpaceId}`, name, emoji, (maxOrder?.max_order ?? 0) + 1);
   db.db
@@ -879,6 +879,11 @@ test("folder names are unique per space, not globally", (t) => {
 test("updateNote forces space_id to follow folder_id (D2)", (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Eng" }).space;
   const teamFolder = db.createFolder("Docs", team.id).folder;
@@ -1189,6 +1194,11 @@ test("saveNote resolves default folders within the target space", (t) => {
 test("moveFolderToSpace moves the folder and its live notes in one transaction", (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Growth" }).space;
   const folder = db.createFolder("Campaigns").folder;
@@ -1553,6 +1563,11 @@ function assertNoCloudIdentity(note, oldClientNoteId) {
 test("a private note's Backup cloud id doesn't follow it into a teamspace", (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Design" }).space;
   const teamFolder = db.createFolder("Specs", team.id).folder;
@@ -1579,6 +1594,11 @@ test("a private note's Backup cloud id doesn't follow it into a teamspace", (t) 
 test("a private note whose create may have reached the server takes a new key into a teamspace", (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Design" }).space;
   const note = db.saveNote("Plan", "body", "personal", null, null, null, privateId).note;
@@ -1593,6 +1613,11 @@ test("a private note whose create may have reached the server takes a new key in
 test("a private note the server never heard of from this device still takes a new key into a teamspace", (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Design" }).space;
   const note = db.saveNote("Plan", "body", "personal", null, null, null, privateId).note;
@@ -1605,6 +1630,11 @@ test("a private note the server never heard of from this device still takes a ne
 test("a never-sent private note moved with its folder into a teamspace takes a new key", (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Design" }).space;
   const folder = db.createFolder("Imported calls", privateId).folder;
@@ -1621,6 +1651,11 @@ test("a never-sent private note moved with its folder into a teamspace takes a n
 test("a shared private note keeps its cloud id when it moves into a teamspace", (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Design" }).space;
   const note = db.saveNote("Shared", "body", "personal", null, null, null, privateId).note;
@@ -1638,6 +1673,11 @@ test("a shared private note keeps its cloud id when it moves into a teamspace", 
 test("a private folder moved into a teamspace drops its and its notes' Backup cloud ids", (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Design" }).space;
   const folder = db.createFolder("Research", privateId).folder;
@@ -2477,6 +2517,11 @@ test("purgeSpace preserves dirty cloud-backed notes with forked identities", (t)
 test("purgeSpace survives tombstones in other spaces referencing its folders", (t) => {
   const db = createDb(t);
   if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
   const privateId = db.getPrivateSpaceId();
   const team = createTestTeamSpace(db, { name: "Movers" }).space;
 
@@ -4353,4 +4398,67 @@ test("a cloud personal row lands in the default private space", (t) => {
     sort_order: 4,
   });
   assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("note and folder moves reject a team in another workspace", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-a",
+    defaultWorkspaceId: "workspace-a",
+  });
+  db.bindDefaultPrivateSpace("workspace-a");
+  const source = db.getDefaultPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Other workspace" }).space;
+  db.db.prepare("UPDATE spaces SET workspace_id = ? WHERE id = ?").run("workspace-b", team.id);
+  const target = db.createFolder("Target", team.id).folder;
+  const note = db.saveNote("Private", "body", "personal", null, null, null, source).note;
+  const folder = db.createFolder("Source", source).folder;
+  assert.equal(db.updateNote(note.id, { space_id: team.id }).success, false);
+  assert.equal(db.updateNote(note.id, { folder_id: target.id }).success, false);
+  assert.equal(db.moveFolderToSpace(folder.id, team.id).success, false);
+  assert.equal(db.getNote(note.id).space_id, source);
+});
+
+test("pending Private cannot move to a team before the default workspace is known", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const privateId = db.getDefaultPrivateSpaceId();
+  const team = createTestTeamSpace(db, { name: "Team" }).space;
+  const note = db.saveNote("Pending", "body", "personal", null, null, null, privateId).note;
+  assert.equal(db.updateNote(note.id, { space_id: team.id }).success, false);
+  db.setActiveWorkspaceScope({ defaultWorkspaceId: "test-workspace" });
+  assert.equal(db.updateNote(note.id, { space_id: team.id }).success, true);
+});
+
+test("private import move history survives database reopen", (t) => {
+  let db = createDb(t);
+  if (!db) return;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: "test-workspace",
+    defaultWorkspaceId: "test-workspace",
+  });
+  db.bindDefaultPrivateSpace("test-workspace");
+  const privateId = db.getDefaultPrivateSpaceId();
+  const remote = {
+    id: "old-cloud",
+    client_note_id: "old-client",
+    title: "Private",
+    content: "body",
+  };
+  const note = db.upsertNoteFromCloud(remote, null, privateId);
+  const team = createTestTeamSpace(db, { name: "Team" }).space;
+  assert.equal(db.updateNote(note.id, { space_id: team.id }).success, true);
+  db.db.close();
+  db = new DatabaseManager();
+  t.after(() => db.db.close());
+  db.setActiveAccountId("test-account");
+  assert.deepEqual(db.upsertNoteFromCloud(remote, null, privateId, { newKeyIfTaken: true }), {
+    imported: true,
+  });
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS count FROM notes WHERE deleted_at IS NULL").get().count,
+    1
+  );
+  assert.equal(db.getNote(note.id).space_id, team.id);
 });

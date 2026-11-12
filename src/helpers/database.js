@@ -2179,6 +2179,16 @@ class DatabaseManager {
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_team_id ON spaces(cloud_team_id) WHERE cloud_team_id IS NOT NULL"
       );
 
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS private_note_import_history (
+          account_id TEXT NOT NULL,
+          client_note_id TEXT NOT NULL,
+          cloud_id TEXT,
+          note_id INTEGER NOT NULL,
+          PRIMARY KEY (account_id, client_note_id)
+        )
+      `);
+
       // First-class spaces: a space mirrors a cloud space with one or more
       // assigned teams. cloud_team_id survives only so pre-spaces rows can be
       // adopted by upsertSpaceFromCloud (matched via the space's single
@@ -2355,6 +2365,46 @@ class DatabaseManager {
           );
         }
       }
+
+      // Historical root chats predate note provenance. Keep their saved history
+      // on this device once; newly created root chats remain backupable.
+      this.db.transaction(() => {
+        const columns = this.db.pragma("table_info(agent_conversations)");
+        if (!columns.some((column) => column.name === "device_only")) {
+          this.db.exec(
+            "ALTER TABLE agent_conversations ADD COLUMN device_only INTEGER NOT NULL DEFAULT 0"
+          );
+          this.db.exec(`UPDATE agent_conversations SET device_only = 1
+            WHERE note_id IS NULL AND space_id IS NULL AND folder_id IS NULL`);
+        }
+        this.db.exec(`UPDATE agent_conversations SET device_only = 1
+          WHERE space_id IN (SELECT id FROM spaces WHERE kind = 'private')
+            OR note_id IN (SELECT notes.id FROM notes JOIN spaces ON spaces.id = notes.space_id WHERE spaces.kind = 'private')
+            OR folder_id IN (SELECT folders.id FROM folders JOIN spaces ON spaces.id = folders.space_id WHERE spaces.kind = 'private')`);
+        // A move or deletion must not erase the provenance of an existing chat.
+        this.db.exec(`
+          CREATE TRIGGER IF NOT EXISTS private_conversation_after_insert
+          AFTER INSERT ON agent_conversations
+          WHEN EXISTS (SELECT 1 FROM spaces WHERE kind = 'private' AND
+            (id = NEW.space_id OR id = (SELECT space_id FROM notes WHERE id = NEW.note_id)
+              OR id = (SELECT space_id FROM folders WHERE id = NEW.folder_id)))
+          BEGIN UPDATE agent_conversations SET device_only = 1 WHERE id = NEW.id; END;
+          CREATE TRIGGER IF NOT EXISTS private_conversation_after_move
+          AFTER UPDATE OF note_id, space_id, folder_id ON agent_conversations
+          WHEN EXISTS (SELECT 1 FROM spaces WHERE kind = 'private' AND
+            (id = NEW.space_id OR id = (SELECT space_id FROM notes WHERE id = NEW.note_id)
+              OR id = (SELECT space_id FROM folders WHERE id = NEW.folder_id)))
+          BEGIN UPDATE agent_conversations SET device_only = 1 WHERE id = NEW.id; END;
+          CREATE TRIGGER IF NOT EXISTS private_note_conversations_after_move
+          AFTER UPDATE OF space_id ON notes
+          WHEN EXISTS (SELECT 1 FROM spaces WHERE id IN (OLD.space_id, NEW.space_id) AND kind = 'private')
+          BEGIN UPDATE agent_conversations SET device_only = 1 WHERE note_id = NEW.id; END;
+          CREATE TRIGGER IF NOT EXISTS private_note_conversations_before_delete
+          BEFORE DELETE ON notes
+          WHEN EXISTS (SELECT 1 FROM spaces WHERE id = OLD.space_id AND kind = 'private')
+          BEGIN UPDATE agent_conversations SET device_only = 1 WHERE note_id = OLD.id; END;
+        `);
+      })();
 
       // A cloud space is workspace-owned, while visibility is account-specific.
       // Keep the many-to-many membership separate so signing out one local
@@ -5408,6 +5458,13 @@ class DatabaseManager {
           )
           .get(id);
         if (current && current.space_id !== updates.space_id) {
+          const targetSpace = this.getSpace(updates.space_id);
+          if (
+            targetSpace.kind === "team" &&
+            !this._sameWorkspaceForTeamMove(current.space_id, targetSpace)
+          ) {
+            return { success: false, error: "Cannot move between workspaces" };
+          }
           const newKind = this.db
             .prepare("SELECT kind FROM spaces WHERE id = ?")
             .get(updates.space_id)?.kind;
@@ -5508,7 +5565,18 @@ class DatabaseManager {
       const stmt = this.db.prepare(
         `UPDATE notes SET ${fields.join(", ")} WHERE id = ? AND ${accountScope.sql}`
       );
-      const result = stmt.run(...values, ...accountScope.params);
+      const result = this.db.transaction(() => {
+        if (
+          updates.client_note_id !== undefined &&
+          updates.client_note_id !== previous.client_note_id &&
+          updates.space_id !== undefined &&
+          this.getSpace(previous.space_id)?.kind === "private" &&
+          this.getSpace(updates.space_id)?.kind === "team"
+        ) {
+          this._rememberPrivateNoteImport(previous);
+        }
+        return stmt.run(...values, ...accountScope.params);
+      })();
       if (result.changes === 0) return { success: false, error: "Note not found" };
       const fetchStmt = this.db.prepare("SELECT * FROM notes WHERE id = ?");
       const note = fetchStmt.get(id);
@@ -5704,6 +5772,9 @@ class DatabaseManager {
         .run(accountId);
       this.db.prepare("DELETE FROM connector_actions WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM space_accounts WHERE account_id = ?").run(accountId);
+      this.db
+        .prepare("DELETE FROM private_note_import_history WHERE account_id = ?")
+        .run(accountId);
       this.db.prepare("DELETE FROM device_accounts WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM account_workspace_scopes WHERE account_id = ?").run(accountId);
     };
@@ -5897,6 +5968,9 @@ class DatabaseManager {
         )
         .get(folder.name, spaceId, id, ...folderScope.params);
       if (existing) return { success: false, error: "A folder with that name already exists" };
+      if (space.kind === "team" && !this._sameWorkspaceForTeamMove(folder.space_id, space)) {
+        return { success: false, error: "Cannot move between workspaces" };
+      }
       const oldKind = this.db
         .prepare("SELECT kind FROM spaces WHERE id = ?")
         .get(folder.space_id)?.kind;
@@ -5950,7 +6024,12 @@ class DatabaseManager {
               )
               .pluck()
               .all(id);
-            for (const noteId of unshared) rekey.run(randomUUID(), noteId);
+            for (const noteId of unshared) {
+              this._rememberPrivateNoteImport(
+                this.db.prepare("SELECT * FROM notes WHERE id = ?").get(noteId)
+              );
+              rekey.run(randomUUID(), noteId);
+            }
           }
           this.db
             .prepare(
@@ -6085,6 +6164,25 @@ class DatabaseManager {
     const existing =
       ownerId != null && workspace != null ? this._findPrivateSpace(ownerId, workspace) : null;
     return existing ?? this._forkPrivateSpaceId(workspace, ownerId);
+  }
+
+  _sameWorkspaceForTeamMove(sourceId, target) {
+    const source = this.getSpace(sourceId);
+    if (!source) return false;
+    const sourceWorkspace =
+      source.workspace_id ?? (source.kind === "private" ? this.defaultWorkspaceId : null);
+    return Boolean(
+      sourceWorkspace && target.workspace_id && sourceWorkspace === target.workspace_id
+    );
+  }
+
+  _rememberPrivateNoteImport(note) {
+    if (!note?.account_id || !note.client_note_id) return;
+    this.db
+      .prepare(
+        "INSERT OR IGNORE INTO private_note_import_history (account_id, client_note_id, cloud_id, note_id) VALUES (?, ?, ?, ?)"
+      )
+      .run(note.account_id, note.client_note_id, note.cloud_id, note.id);
   }
 
   // Every one of these is a live private space of the signed-in account.
@@ -7807,8 +7905,8 @@ class DatabaseManager {
             `INSERT INTO agent_conversations
                (title, note_id, space_id, folder_id, client_conversation_id,
                 parent_conversation_id, parent_client_conversation_id,
-                fork_message_count, fork_context, account_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                fork_message_count, fork_context, account_id, device_only)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .run(
             source.title,
@@ -7823,7 +7921,8 @@ class DatabaseManager {
             // A fork copies its source's messages, so it stays with the source's
             // account: signed out, an unattributed copy would show them to the
             // next account to sign in.
-            source.account_id ?? this.activeAccountId
+            source.account_id ?? this.activeAccountId,
+            source.device_only
           );
         this.db
           .prepare(
@@ -9781,6 +9880,22 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const requestedFolderId = localFolderId;
+      const importSpace = localSpaceId == null ? null : this.getSpace(localSpaceId);
+      if (
+        newKeyIfTaken &&
+        this.activeAccountId &&
+        cloudNote.id &&
+        importSpace?.kind === "private" &&
+        importSpace.account_id === this.activeAccountId
+      ) {
+        const remembered = this.db
+          .prepare(
+            `SELECT note_id FROM private_note_import_history WHERE account_id = ?
+           AND (cloud_id = ? OR (client_note_id = ? AND cloud_id IS NULL))`
+          )
+          .get(this.activeAccountId, cloudNote.id, cloudNote.client_note_id ?? null);
+        if (remembered) return { imported: true };
+      }
       // A cloud row with no space is a personal note: the default's Private.
       let spaceId = localSpaceId ?? this.getDefaultPrivateSpaceId();
       const existing =
@@ -11321,6 +11436,44 @@ class DatabaseManager {
     }
   }
 
+  // Main validates ownership and note kind; renderer-supplied names never decide privacy.
+  protectConversation(id, notes, deviceOnly, expectedAccountId) {
+    if (
+      !Number.isSafeInteger(id) ||
+      id <= 0 ||
+      !Array.isArray(notes) ||
+      typeof deviceOnly !== "boolean" ||
+      !(expectedAccountId === null || typeof expectedAccountId === "string") ||
+      notes.some(
+        (reference) =>
+          !reference ||
+          !Number.isSafeInteger(reference.id) ||
+          reference.id <= 0 ||
+          !Number.isSafeInteger(reference.space_id) ||
+          reference.space_id <= 0
+      )
+    )
+      return { success: false };
+    return this.db.transaction(() => {
+      if (expectedAccountId !== this.activeAccountId) return { success: false };
+      const conversation = this._getOwnedConversation(id);
+      if (!conversation || conversation.deleted_at) return { success: false };
+      let privateContent = deviceOnly === true;
+      for (const reference of notes) {
+        const note = this.getNote(reference.id);
+        if (!note || note.deleted_at) return { success: false };
+        // Include the pinned placement of the content just read, even if it moved meanwhile.
+        const spaces = [note.space_id, reference.space_id].map((spaceId) => this.getSpace(spaceId));
+        if (spaces.some((space) => !space)) return { success: false };
+        if (spaces.some((space) => space.kind === "private")) privateContent = true;
+      }
+      if (privateContent) {
+        this.db.prepare("UPDATE agent_conversations SET device_only = 1 WHERE id = ?").run(id);
+      }
+      return { success: true };
+    })();
+  }
+
   getPendingConversations() {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -11331,14 +11484,15 @@ class DatabaseManager {
       // now would upload them with this account's token.
       // A note's chat goes only where its note does: a chat on a private note
       // stays on the device (D11), even when that note is a legacy shared one,
-      // since guests never see the owner's chats. Root chats still sync. The
+      // since guests never see the owner's chats. Root chats sync only until
+      // they consume Private content. The
       // note's teamspace must be one the account is in, as getSpaces lists
       // them (SyncService's isTeamRow); any other note's chat stays too.
       const scope = this._syncRowScope("agent_conversations");
       return this.db
         .prepare(
           `SELECT * FROM agent_conversations
-           WHERE sync_status = 'pending' AND deleted_at IS NULL
+           WHERE sync_status = 'pending' AND deleted_at IS NULL AND device_only = 0
              AND space_id IS NULL AND folder_id IS NULL
              AND (note_id IS NULL OR EXISTS (
                SELECT 1 FROM notes chat_note
@@ -11483,7 +11637,7 @@ class DatabaseManager {
         // A local tombstone represents an unacknowledged delete. A newer live
         // cloud revision must not cancel that intent or restore message bodies
         // while the delete retries.
-        if (existing?.deleted_at) return existing;
+        if (existing?.deleted_at || existing?.device_only) return existing;
 
         // The renderer's lookup can go stale while this IPC waits behind a local
         // save. Check the same snapshot inside the transaction that replaces messages.
@@ -11503,13 +11657,15 @@ class DatabaseManager {
           return existing;
         }
 
+        // A newly restored chat has no trustworthy Private-content provenance.
+        // Its device-only flag is insert-only: known local chats keep their own classification.
         // A fork's origin never changes, so a cloud copy without it (from an
         // API or app that predates it) keeps the one this device has. The copied
         // count follows the messages written here, when the copy carries one.
         const convStmt = this.db.prepare(`
           INSERT INTO agent_conversations (client_conversation_id, cloud_id, title, note_id, sync_status, created_at, updated_at,
-            account_id, parent_client_conversation_id, fork_message_count, fork_context)
-          VALUES (?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?, ?)
+            account_id, parent_client_conversation_id, fork_message_count, fork_context, device_only)
+          VALUES (?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?, ?, 1)
           ON CONFLICT(client_conversation_id) DO UPDATE SET
             account_id = COALESCE(excluded.account_id, account_id),
             cloud_id = excluded.cloud_id,
@@ -11637,6 +11793,7 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db.transaction(() => {
+        if (this._conversationWithMessageCount(id)?.device_only) return { success: false };
         if (snapshot) {
           const current = this._conversationWithMessageCount(id);
           if (
@@ -11674,7 +11831,7 @@ class DatabaseManager {
       const scope = this._syncRowScope("agent_conversations");
       const result = this.db
         .prepare(
-          `UPDATE agent_conversations SET cloud_create_attempted = 1 WHERE id = ? AND ${scope.sql}`
+          `UPDATE agent_conversations SET cloud_create_attempted = 1 WHERE id = ? AND device_only = 0 AND ${scope.sql}`
         )
         .run(id, ...scope.params);
       return { success: result.changes > 0 };
@@ -11765,11 +11922,20 @@ class DatabaseManager {
           };
         }
 
+        const claim = this._claimUnattributedSql("agent_conversations", { accountId });
+        if (current.device_only && !current.deleted_at) {
+          this.db
+            .prepare(
+              `UPDATE agent_conversations SET cloud_id = COALESCE(cloud_id, ?), sync_status = 'pending', ${claim.sql} WHERE id = ?`
+            )
+            .run(cloudId, ...claim.params, id);
+          return { success: true, outcome: "changed", cloud_id: current.cloud_id ?? cloudId };
+        }
+
         if (current.cloud_id) {
           return { success: true, outcome: "already-linked", cloud_id: current.cloud_id };
         }
 
-        const claim = this._claimUnattributedSql("agent_conversations", { accountId });
         // Linked at once, so a failure from here on can't lead to a second create,
         // which would insert this request's messages again. Still pending until
         // the cloud has the rest, or the delete goes through.
@@ -11807,12 +11973,13 @@ class DatabaseManager {
     }
   }
 
-  hardDeleteConversation(id) {
+  hardDeleteConversation(id, fromCloud = false) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const scope = this._ownedRowScope("agent_conversations");
+      const cloudGuard = fromCloud ? "AND (device_only = 0 OR deleted_at IS NOT NULL)" : "";
       const owned = this.db
-        .prepare(`SELECT 1 FROM agent_conversations WHERE id = ? AND ${scope.sql}`)
+        .prepare(`SELECT 1 FROM agent_conversations WHERE id = ? ${cloudGuard} AND ${scope.sql}`)
         .get(id, ...scope.params);
       if (!owned) return { success: false };
       this.db.prepare("DELETE FROM agent_messages WHERE conversation_id = ?").run(id);
