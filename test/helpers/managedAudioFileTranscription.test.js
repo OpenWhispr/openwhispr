@@ -125,7 +125,7 @@ test("the IPC job retains its original profile lifetime during preparation and b
   const ipcPath = path.join(__dirname, "../../src/helpers/ipcHandlers.js");
   const source = fs.readFileSync(ipcPath, "utf8");
   const start = source.indexOf("const transcribeManagedAudio = async");
-  const end = source.indexOf("\n    ipcMain.handle(", start);
+  const end = source.indexOf("\n    handleRemoteProduct(", start);
   assert.ok(start >= 0 && end > start);
   for (const rotationPoint of ["splitting", "between-chunks"]) {
     const before = temporaryFiles();

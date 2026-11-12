@@ -1018,6 +1018,115 @@ test("a rotated credential inherits its validated account's verdict offline", as
   assert.equal(inherited.authGeneration, 2);
 });
 
+test("a failed lookup for an account last seen managed says so, whatever the credential", async (t) => {
+  const context = rotationSetup();
+  t.after(context.cleanup);
+  await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
+
+  // A rotated bearer its binding doesn't vouch for yet, then no credential.
+  context.network.online = false;
+  context.rotate("token-b", 2);
+  context.validated.accountId = null;
+  const unbound = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 2,
+  });
+  context.rotate(null, 3);
+  const uncredentialed = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 3,
+  });
+  for (const failed of [unbound, uncredentialed]) {
+    assert.equal(failed.success, false);
+    assert.equal(failed.managed, true);
+  }
+  assert.equal(uncredentialed.code, "AUTH_CONTEXT_UNVALIDATED");
+});
+
+test("unbound rotations retain account policy markers and permitted recovery stays clear offline", async (t) => {
+  const { resolveEffectivePolicy } = require("../../src/helpers/effectivePolicyManager");
+  let phase = "unresolvable";
+  const context = rotationSetup({
+    successfulRefreshMs: 5 * 60 * 1000,
+    proxyFetch: async () => {
+      if (phase === "offline") throw new Error("offline");
+      if (phase === "unsupported") return response(404, {});
+      return phase === "unresolvable"
+        ? response(403, { code: "POLICY_UNRESOLVABLE" })
+        : response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } });
+    },
+  });
+  t.after(context.cleanup);
+  const read = (accountId) =>
+    context.manager.getPolicy({ accountId, expectedAuthGeneration: context.tokenState.generation });
+  const effective = (snapshot) =>
+    resolveEffectivePolicy({ status: "absent", managed: false, policy: null }, snapshot, {
+      accountId: snapshot.accountId,
+      authGeneration: snapshot.authGeneration,
+      authenticated: true,
+    });
+  assert.equal((await read("account-a")).code, "POLICY_UNRESOLVABLE");
+  context.validated.accountId = null;
+  phase = "offline";
+  for (const generation of [2, 3]) {
+    context.rotate(`unbound-${generation}`, generation);
+    const restricted = await read("account-a");
+    assert.equal(restricted.managed, true);
+    assert.equal(effective(restricted).success, false);
+  }
+  context.rotate("unsupported-before-binding", 4);
+  phase = "unsupported";
+  assert.equal(effective(await read("account-a")).success, false);
+  context.validated.accountId = "account-a";
+  await read("account-a");
+  assert.equal(
+    context.manager.accountWasManaged("account-a"),
+    true,
+    "an unsupported endpoint is not an authoritative recovery"
+  );
+  context.validated.accountId = null;
+  phase = "offline";
+  context.rotate("other-account", 5);
+  assert.equal(effective(await read("account-b")).status, "unmanaged");
+  phase = "permitted";
+  assert.equal((await read("account-b")).managed, false);
+  context.validated.accountId = "account-b";
+  await read("account-b");
+  assert.equal(
+    context.manager.accountWasManaged("account-a"),
+    true,
+    "another account's recovery cannot clear the marker"
+  );
+  context.validated.accountId = null;
+  context.rotate("permitted-recovery", 6);
+  assert.equal(effective(await read("account-a")).success, false);
+  assert.equal(
+    context.manager.accountWasManaged("account-a"),
+    true,
+    "an unbound reply cannot clear account evidence"
+  );
+  // The policy answer can precede session validation of this new bearer.
+  context.validated.accountId = "account-a";
+  assert.equal((await read("account-a")).status, "current");
+  phase = "offline";
+  context.validated.accountId = null;
+  context.rotate("after-recovery", 7);
+  assert.equal(effective(await read("account-a")).status, "unmanaged");
+});
+
+test("a malformed API URL still answers a lookup that names an account", async (t) => {
+  const context = setup(async () => response(200, validPolicy()), {
+    getApiUrl: () => "not a url",
+  });
+  t.after(context.cleanup);
+  const failed = await context.manager.getPolicy({
+    accountId: "account-a",
+    expectedAuthGeneration: 1,
+  });
+  assert.equal(failed.success, false);
+  assert.equal(failed.managed, false);
+});
+
 test("a rotated credential keeps inheriting across another rotation and a restart", async (t) => {
   const context = rotationSetup();
   t.after(context.cleanup);
@@ -1222,3 +1331,126 @@ test("nothing is held for an identity that never fetched a policy", () => {
 
   assert.equal(manager.heldPolicy({ accountId: "account-a", expectedAuthGeneration: 1 }), null);
 });
+
+test("known pending screen-context denial blocks capture before the workspace settles", () => {
+  const { isScreenContextBlocked } = require("../../src/helpers/workspacePolicyManager");
+  const snapshot = {
+    success: false,
+    status: "loading",
+    managed: true,
+    policy: { features: { screenContextEnabled: false } },
+  };
+  assert.equal(isScreenContextBlocked(snapshot), true);
+  assert.equal(
+    isScreenContextBlocked({ ...snapshot, policy: { features: { screenContextEnabled: true } } }),
+    false
+  );
+});
+
+for (const status of [404, 501]) {
+  for (const source of ["live", "cached", "joined"]) {
+    for (const bound of [false, true]) {
+      test(`required account rejects ${source} HTTP ${status} ${bound ? "after" : "before"} binding through effective admission until validated recovery`, async (t) => {
+        const { resolveEffectivePolicy } = require("../../src/helpers/effectivePolicyManager");
+        const { productOperationAllowed } = require("../../src/helpers/productPolicy");
+        const { deferred } = require("./harness/deferred");
+        const entered = deferred(),
+          finish = deferred();
+        let phase = "required";
+        const context = rotationSetup({
+          successfulRefreshMs: 5 * 60 * 1000,
+          proxyFetch: async () => {
+            if (phase === "required") return response(403, { code: "POLICY_UNRESOLVABLE" });
+            if (phase === "offline") throw new Error("offline");
+            if (phase === "permitted")
+              return response(200, {
+                data: { managed: false, policy: null, policyUpdatedAt: null },
+              });
+            if (source === "joined") {
+              entered.resolve();
+              await finish.promise;
+            }
+            return response(status, {});
+          },
+        });
+        t.after(() => {
+          finish.resolve();
+          context.cleanup();
+        });
+        const request = (accountId = "account-a") => ({
+          accountId,
+          expectedAuthGeneration: context.tokenState.generation,
+        });
+        const admitted = (snapshot) => {
+          const effective = resolveEffectivePolicy(
+            { status: "absent", managed: false, policy: null },
+            snapshot,
+            {
+              accountId: snapshot.accountId,
+              authGeneration: snapshot.authGeneration,
+              authenticated: true,
+            }
+          );
+          return (
+            effective.success &&
+            productOperationAllowed(effective, "1.11.2", "transcribe-local-whisper")
+          );
+        };
+        assert.equal(admitted(await context.manager.getPolicy(request())), false);
+        context.validated.accountId = bound ? "account-a" : null;
+        context.rotate("unsupported-rotated-token", 2);
+        phase = "unsupported";
+        if (source !== "live") {
+          const other = context.manager.getPolicy(request("other-account"));
+          if (source === "joined") {
+            await entered.promise;
+            const joined = context.manager.getPolicy(request());
+            finish.resolve();
+            assert.equal(admitted(await joined), false, "joined results retain account evidence");
+          }
+          assert.equal(
+            admitted(await other),
+            true,
+            "unmanaged unsupported callers remain permitted"
+          );
+        }
+        for (const validated of [false, true]) {
+          context.validated.accountId = validated ? "account-a" : null;
+          assert.equal(admitted(await context.manager.getPolicy(request())), false);
+          assert.equal(context.manager.peekPolicy(request()), null);
+          assert.equal(context.manager.heldPolicy(request()), null);
+        }
+        phase = "offline";
+        assert.equal(
+          admitted(await context.manager.getPolicy({ ...request(), refresh: true })),
+          false
+        );
+        assert.equal(context.manager.accountWasManaged("account-a"), true);
+
+        phase = "permitted";
+        context.validated.accountId = "other-account";
+        context.rotate("other-permitted-token", 3);
+        assert.equal(admitted(await context.manager.getPolicy(request("other-account"))), true);
+        assert.equal(
+          context.manager.accountWasManaged("account-a"),
+          true,
+          "recovery is account-scoped"
+        );
+        context.validated.accountId = null;
+        context.rotate("supported-recovery-token", 4);
+        assert.equal(
+          admitted(await context.manager.getPolicy(request())),
+          false,
+          "a supported answer still awaits its account binding"
+        );
+        context.validated.accountId = "account-a";
+        assert.equal(admitted(await context.manager.getPolicy(request())), true);
+        assert.equal(context.manager.accountWasManaged("account-a"), false);
+        phase = "offline";
+        context.validated.accountId = null;
+        context.rotate("recovered-offline-token", 5);
+        assert.equal(admitted(await context.manager.getPolicy(request())), true);
+      });
+    }
+  }
+}

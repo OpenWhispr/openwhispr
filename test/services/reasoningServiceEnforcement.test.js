@@ -92,9 +92,11 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
         systemPrompt: "s",
       });
     };
-    for (const status of ["loading", "error"]) {
-      assert.equal(await finishUnder({ status, policy: null }), "answer");
-    }
+    assert.equal(await finishUnder({ status: "loading", policy: null }), "answer");
+    // An error is settled, as in main: a managed policy that can't be resolved.
+    await assert.rejects(finishUnder({ status: "error", policy: null }), {
+      code: "POLICY_UNRESOLVABLE",
+    });
     const denied = buildPolicy({ llmModes: ["local"] });
     denied.llm.allowedLocalModels = [];
     await assert.rejects(finishUnder({ policy: denied }), { code: "POLICY_MODEL_BLOCKED" });

@@ -257,7 +257,11 @@ class CliBridge {
       return;
     }
     // The cloud /v1 API answers every organization policy denial this way.
-    if (isAudioPolicyRefusal(err) || isLocalModelPolicyRefusal(err)) {
+    if (
+      isAudioPolicyRefusal(err) ||
+      isLocalModelPolicyRefusal(err) ||
+      err.code === "DEVICE_POLICY_BLOCKED"
+    ) {
       sendV1Error(res, 403, "forbidden", err.message);
       return;
     }

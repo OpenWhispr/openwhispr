@@ -475,3 +475,36 @@ test("a managed-setup error reaches the meeting start result with its translatio
     );
   }
 });
+
+test("known pending audio restrictions retire only denied jobs and keep new work unresolved", async () => {
+  const entered = [deferred(), deferred()];
+  const finish = deferred();
+  const guard = createAudioFeaturePolicy({ getPolicy: () => new Promise(() => {}) });
+  guard.update(policy());
+  const signals = [];
+  const running = ["meeting", "upload"].map((purpose, index) =>
+    guard.run({}, purpose, async (signal) => {
+      signals[index] = signal;
+      entered[index].resolve();
+      await finish.promise;
+      return { success: true };
+    })
+  );
+  await Promise.all(entered.map((entry) => entry.promise));
+  guard.invalidate();
+  guard.update({ ...policy(true, true, 2), success: false, status: "loading" });
+  assert.equal(signals[0].aborted, false);
+  assert.equal(signals[1].aborted, false);
+  guard.update({ ...policy(false, true, 3), success: false, status: "loading" });
+  assert.equal(signals[0].reason?.code, "POLICY_MEETING_RECORDING_DISABLED");
+  assert.equal(signals[1].aborted, false);
+  assert.equal(guard.failure("upload").code, "POLICY_UNRESOLVABLE");
+  assert.equal(guard.activeFailure("upload"), null);
+  guard.invalidate();
+  assert.equal(guard.activeFailure("upload"), null, "another rotation retains known permissions");
+  finish.resolve();
+  assert.equal((await running[0]).code, "POLICY_MEETING_RECORDING_DISABLED");
+  assert.deepEqual(await running[1], { success: true });
+  guard.update(policy(true, true, 4));
+  assert.equal(guard.failure("upload"), null);
+});

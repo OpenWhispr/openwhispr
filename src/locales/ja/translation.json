@@ -216,7 +216,13 @@
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
     "managedConfigAmbiguous": "組織のマネージド設定に矛盾があります。管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。",
-    "resizePanel": "パネルのサイズを変更"
+    "resizePanel": "パネルのサイズを変更",
+    "managedDevice": "管理対象デバイス",
+    "managedDeviceAndWorkspace": "管理対象デバイスとワークスペース",
+    "deviceLocalOnly": "このデバイスではローカル処理のみを使用します。以前ログインしたアカウントでもクラウド機能は利用できません。",
+    "deviceSignInRequired": "組織により、このデバイスではログインが必要です。",
+    "devicePolicyInvalid": "デバイスポリシーを読み取れないか、無効です。管理者にお問い合わせください。修正されるまで管理対象の操作はブロックされます。",
+    "deviceWorkspaceUnavailable": "このデバイスではローカル処理が必要ですが、保存されたアカウントのワークスペースポリシーを取得できません。ログアウトしてそのアカウントを使わずに続行するか、管理者にお問い合わせください。"
   },
   "onboarding": {
     "rehaul": {
@@ -655,7 +661,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "アップデートが必要です",
-      "description": "組織では OpenWhispr {{version}} 以降が必要です。アプリを更新してください。"
+      "description": "組織では OpenWhispr {{version}} 以降が必要です。アプリを更新してください。",
+      "contactIT": "組織では OpenWhispr {{version}} 以降が必要です。承認済みのバージョンのインストールについて IT 部門にお問い合わせください。"
     },
     "update": {
       "readyTitle": "アップデートの準備完了",
@@ -1237,7 +1244,8 @@
       "failedUserCheck": "ユーザーアカウントの確認に失敗しました",
       "generic": "問題が発生しました。もう一度お試しください。",
       "invalidCredentials": "メールアドレスまたはパスワードが正しくありません",
-      "invalidEmail": "有効なメールアドレスを入力してください"
+      "invalidEmail": "有効なメールアドレスを入力してください",
+      "signInDisabledByDevice": "組織により、このデバイスでのサインインは無効になっています。"
     },
     "getStarted": "はじめる",
     "legal": {
@@ -2266,7 +2274,14 @@
         "restarting": "再起動中...",
         "title": "アップデート",
         "versionPlaceholder": "—",
-        "whatsNew": "v{{version}} の新機能"
+        "whatsNew": "v{{version}} の新機能",
+        "managedByOrganization": "組織によって管理されています。",
+        "itManaged": "更新は組織によって管理されています。",
+        "policyLoading": "更新設定を読み込み中…",
+        "policyUnavailable": "更新設定を読み込めませんでした。アップデートを確認して再試行してください。",
+        "policyChanged": "更新ポリシーが変更されました。もう一度アップデートを確認してください。",
+        "managedBadge": "管理対象",
+        "stagedBeforePolicy": "このポリシーの適用前に更新の準備が完了しており、アプリの終了時にインストールされる可能性があります。終了または再起動する前に IT 部門にお問い合わせください。"
       },
       "translationHotkey": {
         "title": "翻訳ホットキー",

@@ -163,7 +163,25 @@ function createWorkspacePolicyManager({
   function requiresManagedPolicy(identity) {
     if (managedPolicyRequired.has(identityKey(identity))) return true;
     const cached = rawCachedData(identity);
-    return cached?.managed === false && cached.requiresManagedPolicy === true;
+    if (cached?.managed === false && cached.requiresManagedPolicy === true) return true;
+    return (
+      readAccountPolicyCache(cachePath, identity)?.requiresManagedPolicy === true &&
+      (!isValidatedAccount(identity) || !cached || cached.endpointSupported === false)
+    );
+  }
+
+  // Whether the account's last validated verdict requires managed policy. A
+  // failed lookup carries it, so a credential that can't inherit it yet (a rotated
+  // token before its binding) still fails closed. It never grants anything,
+  // so a renderer's account label is enough to read it by.
+  function accountWasManaged(accountId) {
+    const apiUrl = getApiUrl();
+    if (!accountId || !URL.canParse(apiUrl)) return false;
+    const cached = readAccountPolicyCache(cachePath, {
+      apiOrigin: new URL(apiUrl).origin,
+      accountId,
+    });
+    return cached?.managed === true || cached?.requiresManagedPolicy === true;
   }
 
   function errorSnapshot(identity, code, error, httpStatus) {
@@ -174,6 +192,7 @@ function createWorkspacePolicyManager({
       revision: current?.revision ?? revision,
       accountId: identity.accountId,
       authGeneration: identity.authGeneration,
+      managed: accountWasManaged(identity.accountId),
       code,
       error,
       httpStatus,
@@ -204,6 +223,30 @@ function createWorkspacePolicyManager({
   }
 
   function publicSnapshot(identity, data, status, snapshotRevision) {
+    if (
+      !data.managed &&
+      accountWasManaged(identity.accountId) &&
+      (data.endpointSupported === false || !isValidatedAccount(identity))
+    )
+      return errorSnapshot(
+        identity,
+        requiresManagedPolicy(identity) ? "POLICY_UNRESOLVABLE" : "POLICY_UNAVAILABLE",
+        "Organization policy was previously required"
+      );
+    // A policy can arrive before its bearer is bound. Its first validated
+    // read must replace the account's older restrictive evidence too.
+    if (
+      !data.managed &&
+      data.endpointSupported !== false &&
+      isValidatedAccount(identity) &&
+      accountWasManaged(identity.accountId)
+    ) {
+      try {
+        writeWorkspacePolicyCache(cachePath, cacheIdentity(identity), data);
+      } catch (error) {
+        logger?.error?.("Policy cache write failed", error);
+      }
+    }
     return {
       success: true,
       status,
@@ -352,12 +395,14 @@ function createWorkspacePolicyManager({
     try {
       identity = captureIdentity(request ?? {});
     } catch (error) {
+      const accountId = normalizeAccountId(request?.accountId);
       return {
         success: false,
         status: "error",
         revision,
-        accountId: normalizeAccountId(request?.accountId),
+        accountId,
         authGeneration: tokenStore.getState()?.generation ?? null,
+        managed: accountWasManaged(accountId),
         code: error.code || "POLICY_UNAVAILABLE",
         error: error.message,
       };
@@ -380,15 +425,11 @@ function createWorkspacePolicyManager({
       return publicSnapshot(identity, current.data, "current", current.revision);
     }
     if (inFlight.has(key)) {
-      return inFlight.get(key).then((result) =>
-        result.success
-          ? {
-              ...result,
-              accountId: identity.accountId,
-              authGeneration: identity.authGeneration,
-            }
-          : result
-      );
+      return inFlight
+        .get(key)
+        .then((result) =>
+          result.success ? publicSnapshot(identity, result, result.status, result.revision) : result
+        );
     }
     const lastAttempt = lastAttempts.get(key);
     const attemptAge = lastAttempt === undefined ? null : now() - lastAttempt;
@@ -453,7 +494,7 @@ function createWorkspacePolicyManager({
     return cached && (!managedOnly || cached.managed) ? accept(identity, cached, "cached") : null;
   }
 
-  return { getPolicy, peekPolicy, heldPolicy };
+  return { getPolicy, peekPolicy, heldPolicy, accountWasManaged };
 }
 
 // Main-process capture gate: block an explicit managed denial or an
@@ -461,11 +502,7 @@ function createWorkspacePolicyManager({
 function isScreenContextBlocked(snapshot) {
   return (
     snapshot.code === "POLICY_UNRESOLVABLE" ||
-    Boolean(
-      snapshot.success &&
-      snapshot.managed &&
-      snapshot.policy?.features?.screenContextEnabled === false
-    )
+    Boolean(snapshot.managed && snapshot.policy?.features?.screenContextEnabled === false)
   );
 }
 

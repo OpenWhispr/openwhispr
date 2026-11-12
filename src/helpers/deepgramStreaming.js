@@ -895,7 +895,7 @@ class DeepgramStreaming {
     return true;
   }
 
-  async disconnect(closeStream = true) {
+  async disconnect({ commit = true } = {}) {
     this._generation++;
     clearTimeout(this.livenessTimer);
     this.livenessTimer = null;
@@ -910,7 +910,7 @@ class DeepgramStreaming {
 
     this.isDisconnecting = true;
 
-    if (closeStream && this.ws.readyState === WebSocket.OPEN) {
+    if (commit && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "CloseStream" }));
 
       let timeoutId;

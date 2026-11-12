@@ -947,8 +947,16 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
   const sessionId = createMeetingRecordingSessionId();
   let automaticStartSuppressed = false;
   let automaticStartCancelled = false;
+  let recordingDisabled = false;
   await meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
     if (isRecordingFlag || isStartingFlag) return;
+    // Asked inside the start, so a stop during the lookup still cancels it.
+    if (await window.electronAPI?.isMeetingRecordingDisabled?.()) {
+      logger.warn("Meeting recording disabled by administrator", {}, "meeting");
+      reportMeetingError("policyRestricted");
+      recordingDisabled = true;
+      return;
+    }
 
     await meetingRecordingStopBarrier.waitForPendingStop();
     if (!startOperation.isCurrent()) {
@@ -1815,6 +1823,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       await teardownStart();
     }
   });
+  if (recordingDisabled) return false;
   return automaticStartCancelled ? "cancelled" : !automaticStartSuppressed;
 }
 

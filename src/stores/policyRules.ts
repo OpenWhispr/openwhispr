@@ -17,6 +17,7 @@ export interface PolicyDecisionSnapshot {
   status: PolicyStatus;
   policy: OrgPolicy | null;
   appVersion: string | null;
+  workspaceManaged?: boolean;
 }
 
 function managedPolicy(state: PolicyDecisionSnapshot): OrgPolicy | null {
@@ -211,7 +212,7 @@ export function isTranscriptionEnterpriseProviderAllowed(
  * fail-closed guard.
  */
 export function isEnterpriseTranscriptionOfferable(state: PolicyDecisionSnapshot): boolean {
-  return state.status === "managed";
+  return state.status === "managed" && state.workspaceManaged !== false;
 }
 
 /** Whether the AI agent (dictation, voice, and chat) is allowed. */

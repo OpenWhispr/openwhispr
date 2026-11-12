@@ -25,6 +25,10 @@ function harness() {
   const events = [];
   const handlers = {};
   const context = {
+    effectivePolicyManager: { getCurrent: () => ({ success: true, managed: false }) },
+    app: { getVersion: () => "1.11.1" },
+    productOperationAllowed: require("../../src/helpers/productPolicy").productOperationAllowed,
+    meetingConnectionOptions: null,
     Buffer,
     Date,
     path,

@@ -443,3 +443,30 @@ test("bytes that fail verification keep no ETag, so the next check downloads aga
   await x.loader.refresh();
   assert.equal(x.requests[1].headers["If-None-Match"], undefined);
 });
+
+test("by default the catalog loads through the guard-exempt asset session", async (t) => {
+  const downloadUtilsPath = require.resolve("../../src/helpers/downloadUtils");
+  const original = require.cache[downloadUtilsPath];
+  t.after(() => {
+    if (original) require.cache[downloadUtilsPath] = original;
+    else delete require.cache[downloadUtilsPath];
+  });
+  const requested = [];
+  require.cache[downloadUtilsPath] = {
+    id: downloadUtilsPath,
+    filename: downloadUtilsPath,
+    loaded: true,
+    exports: {
+      getAssetDownloadSession: () => ({
+        fetch: async (url) => {
+          requested.push(url);
+          return new Response(signed(2));
+        },
+      }),
+    },
+  };
+  const x = setup(t, { fetch: undefined });
+  await x.loader.refresh();
+  assert.equal(requested.length, 1);
+  assert.equal(x.applied.at(-1).manifestVersion, 2);
+});

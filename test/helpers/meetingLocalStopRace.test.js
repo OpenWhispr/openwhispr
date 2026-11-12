@@ -44,6 +44,7 @@ function harness({
   const diarizations = [];
   const chunkGates = [];
   const lateStreamingFinals = [];
+  const systemAudioWarningWindows = [];
   const win = {
     isDestroyed: () => false,
     webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
@@ -55,9 +56,16 @@ function harness({
   };
   const context = {
     events,
+    require: require("node:module").createRequire(
+      path.join(__dirname, "../../src/helpers/ipcHandlers.js")
+    ),
+    app: { getVersion: () => "1.11.1" },
+    effectivePolicyManager: { getCurrent: () => ({ success: true, managed: false }) },
+    ...require("../../src/helpers/productPolicy"),
     _audioFeaturePolicy: { failure: () => null, activeFailure: () => null },
     chunkGates,
     lateStreamingFinals,
+    systemAudioWarningWindows,
     win,
     plannedSystemAudio,
     startedStrategy,
@@ -101,13 +109,22 @@ function harness({
     let meetingTranscriptionStartInProgress = false;
     let meetingOneOnOneAttendee = null;
     let meetingOneOnOneProfileBound = false;
+    let meetingSendCounts = { mic: 0, system: 0 };
+    let meetingMicStatsLogCount = 0;
+    let meetingLiveSpeakerStartedAt = null;
+    let meetingPendingMicChunks = [];
+    let meetingSystemChunkReceivedAt = null;
+    let meetingAecEnabled = false;
+    let meetingReconnectPromise = null;
 
     const noop = () => {};
     const asyncNoop = async () => {};
     const clearMeetingSystemAudioSilenceTimer = noop;
     const stopMeetingSystemAudioWatchdog = noop;
-    const armMeetingSystemAudioSilenceTimer = noop;
-    const startMeetingSystemAudioWatchdog = noop;
+    const armMeetingSystemAudioSilenceTimer = (target) => systemAudioWarningWindows.push(target);
+    const startMeetingSystemAudioWatchdog = (target) => systemAudioWarningWindows.push(target);
+    const resetPendingMicFinals = noop;
+    const resetMeetingReconnectAudio = noop;
     const flushPendingMeetingMicChunks = noop;
     const setMeetingSystemAudioStrategy = (strategy) => events.push("strategy:" + strategy);
     const flushPendingMicFinals = () => events.push("flush");
@@ -146,11 +163,14 @@ function harness({
       }
     };
 
+    ${sliceBetween("const resetMeetingStreamingState =", "const disconnectMeetingStreaming =")}
+
     const disconnectMeetingStreaming = async () => {
       events.push("disconnect");
       for (const text of lateStreamingFinals) {
         meetingDiarizationSegments.push({ text, source: "system", timestamp: 2 });
       }
+      resetMeetingStreamingState();
       return [{ text: "" }, { text: "" }];
     };
 
@@ -217,6 +237,8 @@ function harness({
     diarizations,
     holdChunk,
     lateStreamingFinals,
+    systemAudioWarningWindows,
+    win,
   };
 }
 
@@ -367,6 +389,17 @@ function chunkHarness() {
   return { context, decode, finals };
 }
 
+test("a local start warns about silent system audio in the meeting window", async () => {
+  const { api, systemAudioWarningWindows, win } = harness({
+    plannedSystemAudio: { mode: "loopback", strategy: "wasapi-loopback" },
+  });
+
+  const result = await api.start({ provider: "local", sessionId: "session-1" });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(systemAudioWarningWindows, [win, win]);
+});
+
 test("local meeting admission authorizes its selected model before capturing or loading", async () => {
   const { api, context, events } = harness();
   context._localModelPolicy = {
@@ -437,7 +470,7 @@ test("model policy refresh stops only the active local meeting selection before 
         : [["transcription", { stop: async () => {}, isRemote: false }, () => "small"]],
       _activeLocalMeetingLease: activeModel ? { modelId: activeModel } : null,
       _localModelPolicy: {
-        failure: () => ({ code: "POLICY_MODEL_BLOCKED" }),
+        activeFailure: () => ({ code: "POLICY_MODEL_BLOCKED" }),
         assertCurrent: () => {
           throw Object.assign(new Error("blocked"), { code: "POLICY_MODEL_BLOCKED" });
         },

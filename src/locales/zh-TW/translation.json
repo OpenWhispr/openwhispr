@@ -216,7 +216,13 @@
     "managedConfigUnavailable": "託管企業存取無法使用。請重新登入或聯絡管理員。",
     "managedConfigAmbiguous": "您組織的託管設定不一致。請聯絡管理員。",
     "managedPolicyConflict": "託管存取已被您工作區的政策封鎖。請聯絡管理員。",
-    "resizePanel": "調整面板大小"
+    "resizePanel": "調整面板大小",
+    "managedDevice": "受管理的裝置",
+    "managedDeviceAndWorkspace": "受管理的裝置與工作區",
+    "deviceLocalOnly": "此裝置僅使用本機處理。雲端功能無法使用，先前登入過的帳戶亦然。",
+    "deviceSignInRequired": "你的組織要求在此裝置上登入。",
+    "devicePolicyInvalid": "無法讀取裝置原則，或原則無效。請聯絡管理員。原則修正前，受管理的操作將遭到封鎖。",
+    "deviceWorkspaceUnavailable": "此裝置要求本機處理，但已儲存帳戶的工作區原則無法使用。請登出以不使用該帳戶繼續，或聯絡管理員。"
   },
   "onboarding": {
     "rehaul": {
@@ -655,7 +661,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "需要更新",
-      "description": "您的組織要求使用 OpenWhispr {{version}} 或更新版本。請更新應用程式。"
+      "description": "您的組織要求使用 OpenWhispr {{version}} 或更新版本。請更新應用程式。",
+      "contactIT": "你的組織要求使用 OpenWhispr {{version}} 或更新版本。請聯絡 IT 部門安裝經核准的版本。"
     },
     "update": {
       "readyTitle": "更新已準備就緒",
@@ -1235,7 +1242,8 @@
       "failedUserCheck": "無法檢查使用者帳號",
       "generic": "發生錯誤，請再試一次。",
       "invalidCredentials": "電子郵件或密碼不正確",
-      "invalidEmail": "請輸入有效的電子郵件地址"
+      "invalidEmail": "請輸入有效的電子郵件地址",
+      "signInDisabledByDevice": "您的組織已在此裝置上關閉登入。"
     },
     "getStarted": "開始使用",
     "legal": {
@@ -2266,7 +2274,14 @@
         "restarting": "重新啟動中...",
         "title": "更新",
         "versionPlaceholder": "—",
-        "whatsNew": "v{{version}} 的新功能"
+        "whatsNew": "v{{version}} 的新功能",
+        "managedByOrganization": "由你的組織管理。",
+        "itManaged": "更新由你的組織管理。",
+        "policyLoading": "正在載入更新設定…",
+        "policyUnavailable": "無法載入更新設定。請檢查更新以重試。",
+        "policyChanged": "更新原則已變更。請再次檢查更新。",
+        "managedBadge": "受管理",
+        "stagedBeforePolicy": "在此原則生效前已有更新準備就緒，可能會在結束應用程式時安裝。結束或重新啟動前請聯絡 IT 部門。"
       },
       "translationHotkey": {
         "title": "翻譯快捷鍵",

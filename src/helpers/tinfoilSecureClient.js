@@ -15,11 +15,12 @@ function getSecureClient() {
   return clientPromise;
 }
 
-async function createTinfoilRealtimeSocket({ model, apiKey }) {
+async function createTinfoilRealtimeSocket({ model, apiKey, signal }) {
+  signal?.throwIfAborted();
   const client = await getSecureClient();
   const path = `/v1/realtime?model=${encodeURIComponent(model)}&intent=transcription`;
   return client.createWebSocket(path, {
-    wsOptions: { headers: { Authorization: `Bearer ${apiKey}` } },
+    wsOptions: { headers: { Authorization: `Bearer ${apiKey}` }, signal },
   });
 }
 

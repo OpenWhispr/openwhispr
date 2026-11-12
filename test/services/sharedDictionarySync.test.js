@@ -1403,6 +1403,38 @@ for (const outcome of ["success", "shared failure", "personal failure"]) {
   });
 }
 
+test("a backup revocation during a full pass leaves later work in team-only scope", async (t) => {
+  const ctx = await setupPersonal(t);
+  const { usePolicyStore } = require("../../src/stores/policyStore.ts");
+  const { defaultDevicePolicy } = require("../../src/helpers/managedDevicePolicy");
+  const previous = usePolicyStore.getState();
+  usePolicyStore.setState({ status: "unmanaged", policy: null });
+  t.after(() => usePolicyStore.setState(previous));
+  t.mock.method(ctx.service, "syncSpaces", async () => true);
+  t.mock.method(ctx.service, "backfillUnownedCursors", async () => {});
+  ctx.cloud.add(W1, ["Team word"]);
+  t.mock.method(ctx.service, "syncFolders", async () => {
+    const policy = defaultDevicePolicy();
+    policy.dataRetention.cloudBackupAllowed = false;
+    usePolicyStore.setState({ status: "managed", policy, appVersion: "1.11.2" });
+  });
+  const notes = t.mock.method(ctx.service, "syncNotes", async () => {});
+  const privatePhases = [
+    "syncConversations",
+    "syncTranscriptions",
+    "syncDictionary",
+    "syncSnippets",
+  ].map((name) => t.mock.method(ctx.service, name, async () => {}));
+  t.mock.method(ctx.service, "syncAnalytics", async () => {});
+  await ctx.service.syncAll(true);
+  assert.deepEqual(
+    notes.mock.calls.map((call) => call.arguments),
+    [[true]]
+  );
+  for (const phase of privatePhases) assert.equal(phase.mock.callCount(), 0);
+  assert.deepEqual(ctx.hints().workspace, ["Team word"]);
+});
+
 test("manual shared sync distinguishes success, failure, and skipped work", async (t) => {
   const ctx = await setup(t);
   t.mock.method(console, "error", () => {});
