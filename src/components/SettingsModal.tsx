@@ -17,7 +17,7 @@ import {
   SquareSparkle,
   Settings,
   Key,
-  FolderRounded,
+  Office,
 } from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage from "./SettingsPage";
@@ -42,7 +42,7 @@ const SECTION_ICONS: Record<SettingsSectionType, React.ComponentType<{ className
   plansBilling: CreditCard,
   workspaceGeneral: Settings,
   workspacePeople: Users,
-  workspaceTeamspaces: FolderRounded,
+  workspaceTeamspaces: Office,
   workspaceDeveloper: Key,
   speechToText: Mic,
   llms: Brain,

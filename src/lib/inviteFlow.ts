@@ -401,6 +401,17 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
   };
 }
 
+/**
+ * A run that went out cleanly: every invitation was sent and delivered, and nothing was skipped or
+ * only added to an invitation that existed. Then there is nothing to read, so the dialog confirms
+ * with a toast and closes; any other ending keeps its screen, which says what needs attention.
+ */
+export function inviteConfirmed(state: InviteFlowState): boolean {
+  if (state.phase !== "done" || state.sent.length === 0 || state.attached.length > 0) return false;
+  const summary = inviteSummary(state);
+  return summary.noEmailCount === 0 && summary.skipped.length === 0;
+}
+
 export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): InviteFlowState {
   if (state.phase === "sending" && event.type !== "seats") {
     if (event.type === "result") return resolveResult(state, event.email, event.outcome);

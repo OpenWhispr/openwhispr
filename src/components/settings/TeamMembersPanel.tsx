@@ -12,7 +12,7 @@ import {
 import type { TFunction } from "i18next";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { Mail } from "../icons";
+import { EnvelopePlus } from "../icons";
 import { cn } from "../lib/utils";
 import MemberAvatar from "../MemberAvatar";
 import { Button } from "../ui/button";
@@ -694,7 +694,7 @@ export default function TeamMembersPanel({
       disabled={
         adding || !peopleReady || picked.length === 0 || summary.hasInvalid || tooManyInvites
       }
-      className="h-10 shrink-0 rounded-lg px-4"
+      className="h-10 shrink-0 px-4 text-xs"
     >
       {adding ? t(`${MEMBERS}.adding`) : needsRetry ? t(`${COPY}.retry`) : t(`${MEMBERS}.add`)}
     </Button>
@@ -1057,7 +1057,7 @@ function PendingInvitations({
               aria-hidden="true"
               className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/5 text-muted-foreground dark:bg-white/6"
             >
-              <Mail className="size-3" aria-hidden="true" />
+              <EnvelopePlus className="size-3" aria-hidden="true" />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-xs font-medium text-foreground">

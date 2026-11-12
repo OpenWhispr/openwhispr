@@ -2547,7 +2547,7 @@
         },
         "roleMenuLabel": "{{name}} のロールを変更",
         "roleDescription": {
-          "member": "ノートを閲覧・編集できます。",
+          "member": "ワークスペースを利用します。",
           "admin": "メンバー、招待、チーム、設定を管理します。"
         },
         "roleFailed": "{{name}} のロールを変更できませんでした。接続を確認して、もう一度お試しください。",
@@ -2584,7 +2584,8 @@
           "resentNoEmailMany_one": "{{count}} 件の招待は更新されましたが、メールを配信できず、以前のリンクは使用できなくなりました。選択したままなので、再送信できます。",
           "resentNoEmailMany_other": "{{count}} 件の招待は更新されましたが、メールを配信できず、以前のリンクは使用できなくなりました。選択したままなので、再送信できます。",
           "resendUnrenewable_one": "期限切れの招待 {{count}} 件を更新できませんでした。キャンセルしてから、もう一度招待してください。",
-          "resendUnrenewable_other": "期限切れの招待 {{count}} 件を更新できませんでした。キャンセルしてから、もう一度招待してください。"
+          "resendUnrenewable_other": "期限切れの招待 {{count}} 件を更新できませんでした。キャンセルしてから、もう一度招待してください。",
+          "statusPending": "保留中"
         },
         "selection": {
           "count_one": "{{count}} 件を選択中",
@@ -2605,6 +2606,10 @@
           "invite": "メンバーを招待",
           "createTeam": "チームを作成",
           "label": "その他の追加方法"
+        },
+        "roleMenu": {
+          "member": "ワークスペースメンバー",
+          "admin": "ワークスペース管理者"
         }
       },
       "teamspaces": {
@@ -2693,6 +2698,12 @@
           "roleMemberBody": "ノートを閲覧・編集できます",
           "roleAdmin": "Teamspace 管理者",
           "roleAdminBody": "この Teamspace と割り当てられたチームを管理します。",
+          "teamAccessMember": "全員がメンバー",
+          "teamAccessMemberBody": "チームの全員がノートを閲覧・編集できます。",
+          "teamAccessAdmin": "チームの管理者が管理者",
+          "teamAccessAdminBody": "チームの管理者がこの Teamspace も管理します。チームのほかの人はメンバーです。",
+          "teamAccessMemberShort": "メンバー",
+          "teamAccessAdminShort": "チームの管理者",
           "removeItem": "Teamspace から外す",
           "removeTitle": "{{name}} を {{space}} から外しますか？",
           "removeBody": "{{name}} の直接のメンバーシップを終了します。チーム経由のアクセスは維持されます。ワークスペースには残ります。",
@@ -2952,7 +2963,7 @@
           "noSpacesBody": "Teamspace はチームのノートを共有する場所です。ユーザーやチームを追加すると、全員が閲覧・編集できます。",
           "placeholder": "追加する Teamspace を検索",
           "searchPlaceholder": "Teamspace を検索",
-          "add": "Teamspace を追加",
+          "add": "Teamspace に追加",
           "adding": "追加中…",
           "selectedTitle_one": "{{count}} 個の Teamspace を選択中",
           "selectedTitle_other": "{{count}} 個の Teamspace を選択中",
@@ -3121,9 +3132,7 @@
         "invite": {
           "title_one": "{{count}} 人のゲストを {{workspace}} に招待",
           "title_other": "{{count}} 人のゲストを {{workspace}} に招待",
-          "description": "{{workspace}} に参加するためのリンクがメールで届きます。",
-          "sent_one": "{{workspace}} への招待を {{count}} 件送信しました",
-          "sent_other": "{{workspace}} への招待を {{count}} 件送信しました"
+          "description": "{{workspace}} に参加するためのリンクがメールで届きます。"
         },
         "remove": {
           "titleOne": "{{name}} を {{workspace}} から削除しますか？",
@@ -5918,8 +5927,6 @@
       "submitOne": "招待を送信",
       "submit_one": "{{count}} 件の招待を送信",
       "submit_other": "{{count}} 件の招待を送信",
-      "submitting_one": "{{count}} 人を招待しています…",
-      "submitting_other": "{{count}} 人を招待しています…",
       "sentTitle_one": "{{count}} 件の招待を送信しました",
       "sentTitle_other": "{{count}} 件の招待を送信しました",
       "attachedTitle_one": "{{count}} 件の招待を更新しました",
@@ -5962,7 +5969,7 @@
       },
       "roleDescription": {
         "admin": "メンバー、招待、チーム、設定を管理します。",
-        "member": "ノートを閲覧・編集できます。"
+        "member": "ワークスペースを利用します。"
       },
       "errors": {
         "invalid": "{{email}} は有効なメールアドレスではありません",
@@ -5976,7 +5983,8 @@
         "rateLimited": "現在、招待が多すぎます。しばらくしてからもう一度お試しください。",
         "requestFailed": "{{email}} を招待できませんでした。接続を確認してもう一度お試しください。",
         "refused": "{{email}} を招待できませんでした：{{reason}}"
-      }
+      },
+      "sending": "招待中…"
     },
     "join": {
       "title": "チームに参加",
@@ -6014,7 +6022,7 @@
     "exit": {
       "leave": {
         "title": "{{name}} から退出しますか？",
-        "body": "このワークスペースと、そのチームおよび Teamspace にアクセスできなくなります。ワークスペースの管理者があなたを再び招待できます。",
+        "body": "このワークスペースと、そのチームおよび Teamspace にアクセスできなくなります。ワークスペースのオーナーまたは管理者があなたを再び招待できます。",
         "failed": "{{name}} から退出できませんでした。接続を確認して、もう一度お試しください。"
       },
       "left": {
@@ -6044,9 +6052,9 @@
       "body": "この人は、このワークスペース内のすべての Teamspace とチームにアクセスできなくなります。いつでももう一度招待できます。",
       "confirm": "削除",
       "removing": "削除中…",
-      "failed": "{{name}} の削除を確認できませんでした。接続を確認して、もう一度お試しください。",
       "notAllowed": "{{workspace}} からユーザーを削除する権限がなくなりました。",
-      "alreadyRemoved": "{{name}} はすでに削除されています"
+      "alreadyRemoved": "{{name}} はすでに削除されています",
+      "failedTitle": "{{name}} を削除できませんでした"
     },
     "removeMembers": {
       "title_one": "{{count}} 人のメンバーを {{workspace}} から削除しますか？",
@@ -6054,8 +6062,6 @@
       "confirm_one": "{{count}} 人のメンバーを削除",
       "confirm_other": "{{count}} 人のメンバーを削除",
       "checking": "確認中…",
-      "failed_one": "{{count}} 人のメンバーの削除を確認できませんでした。接続を確認して、もう一度お試しください。",
-      "failed_other": "{{count}} 人のメンバーの削除を確認できませんでした。接続を確認して、もう一度お試しください。",
       "body": "これらのメンバーは、このワークスペースのすべての Teamspace とチームにアクセスできなくなります。いつでも再度招待できます。",
       "ownerOne": "{{name}} はこのワークスペースでノートまたは Teamspace を所有しています。",
       "owners_one": "そのうち {{count}} 人がノートまたは Teamspace を所有しています。",
@@ -6066,24 +6072,31 @@
       "directoryManagedOneOthers": "{{name}} は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
       "directoryManagedOthers_one": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
       "directoryManagedOthers_other": "そのうち {{count}} 人は ID プロバイダーによって割り当てられています。ID プロバイダー側で削除するか、チェックを外して他のメンバーを削除してください。",
-      "transferLabel": "譲渡先",
-      "transferBody": "ノートと Teamspace は新しいオーナーに移動します。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
+      "transferLabel": "引き継ぎ先",
       "transferBodyLimited": "ノートと Teamspace は {{name}} に移動します。ただし、{{name}} がアクセスできない Teamspace 内のノートはそのまま残ります。削除されたメンバーはこのワークスペースにアクセスできなくなります。",
       "you": "{{name}}（あなた）",
-      "transferConfirm": "譲渡して削除",
+      "transferConfirm": "引き継いで削除",
       "transferring": "譲渡中…",
-      "transferFailed": "譲渡と削除を確認できませんでした。接続を確認して、もう一度お試しください。",
+      "transferFailed": "コンテンツを引き継げませんでした。メンバーは削除されていません。もう一度お試しください。",
+      "transferUnconfirmed": "コンテンツの引き継ぎと削除を確認できませんでした。接続を確認して、もう一度お試しください。",
       "invalidTarget": "{{name}} はオーナー権限を受け取れなくなりました。別の人を選択してください。",
       "cannotRemoveOwner": "ワークスペースのオーナーは削除できません。",
       "cannotRemoveSelf": "自分自身は削除できません。「一般」からワークスペースを退出してください。",
       "done_one": "{{count}} 人のメンバーを削除しました",
       "done_other": "{{count}} 人のメンバーを削除しました",
-      "transferDone_one": "ノートと Teamspace を {{name}} に移動し、{{count}} 人のメンバーを削除しました。",
-      "transferDone_other": "ノートと Teamspace を {{name}} に移動し、{{count}} 人のメンバーを削除しました。",
       "transferPartial_one": "{{count}} 件のノートは、{{name}} がアクセスできない Teamspace に残りました。それ以外はすべて移動しました。",
       "transferPartial_other": "{{count}} 件のノートは、{{name}} がアクセスできない Teamspace に残りました。それ以外はすべて移動しました。",
       "alreadyRemoved_one": "{{count}} 人のメンバーはすでに削除されています",
-      "alreadyRemoved_other": "{{count}} 人のメンバーはすでに削除されています"
+      "alreadyRemoved_other": "{{count}} 人のメンバーはすでに削除されています",
+      "failedBody": "ワークスペースへのアクセスは変更されていません。接続を確認して、もう一度お試しください。",
+      "unconfirmedTitle": "削除を確認できませんでした",
+      "unconfirmedBody": "すでに削除されている可能性があります。接続を確認して、もう一度お試しください。",
+      "reassignBody": "削除する前に、ノートを引き継ぎ、Teamspace の管理者を割り当ててください。",
+      "ownersAll": "ノートを所有しているか、Teamspace を管理しています。",
+      "failedTitle_one": "{{count}} 人のメンバーを削除できませんでした",
+      "failedTitle_other": "{{count}} 人のメンバーを削除できませんでした",
+      "transferDone_one": "コンテンツと Teamspace 管理者権限を {{name}} に引き継ぎました。{{count}} 人のメンバーを削除しました。",
+      "transferDone_other": "コンテンツと Teamspace 管理者権限を {{name}} に引き継ぎました。{{count}} 人のメンバーを削除しました。"
     },
     "cancelInvitation": {
       "title": "{{email}} への招待を取り消しますか？",
@@ -6111,7 +6124,6 @@
       "body": "既存のワークスペースメンバーを選んでください。譲渡後、あなたは管理者になります。",
       "newOwner": "新しいオーナー",
       "placeholder": "ワークスペースのメンバーを選択",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "{{name}} にオーナー権限を譲渡しますか？",
       "confirmBody": "{{name}} が {{workspace}} のオーナーになり、あなたは管理者になります。",
       "submit": "オーナー権限を譲渡",

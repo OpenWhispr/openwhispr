@@ -318,7 +318,7 @@ test("invite opens the dialog with the guest's address and the guest heading", a
   assert.match(props.heading.description, new RegExp(`${KEY}\\.invite\\.description`));
 });
 
-test("a send reloads the list and closing toasts the sent count", async (t) => {
+test("a send reloads the list and closing leaves the toast to the dialog", async (t) => {
   let refreshed = 0;
   const { item } = await mountTab(t, {
     guests: [JIN],
@@ -330,7 +330,8 @@ test("a send reloads the list and closing toasts the sent count", async (t) => {
   assert.equal(refreshed, 1);
   await React.act(async () => globalThis.__inviteProps.onInvited(["jin@x.com"]));
   await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
-  assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.invite\\.sent\\|count=1`));
+  // The dialog toasts its own sends; a second toast here would repeat it.
+  assert.equal(globalThis.__toasts.length, 0);
 });
 
 test("closing the invite without sending doesn't toast", async (t) => {
@@ -571,13 +572,13 @@ test("invite opens with every selected address", async (t) => {
   assert.match(props.heading.title, new RegExp(`${KEY}\\.invite\\.title\\|count=2`));
 });
 
-test("a send clears the selection and toasts the sent count", async (t) => {
+test("a send clears the selection without a second toast", async (t) => {
   const view = await mountSelectable(t, { guests: [JIN, RAVI] });
   await view.click(view.headerBox());
   await view.click(view.barButton("invite"));
   await React.act(async () => globalThis.__inviteProps.onInvited(["jin@x.com", "ravi@x.com"]));
   await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
-  assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.invite\\.sent\\|count=2`));
+  assert.equal(globalThis.__toasts.length, 0);
   assert.equal(view.barButton("invite"), null);
 });
 
@@ -664,7 +665,7 @@ test("select-all selects the listed guests only", async (t) => {
   );
 });
 
-test("inviting the last listed guests keeps the dialog until it closes, then toasts", async (t) => {
+test("inviting the last listed guests keeps the dialog until it closes", async (t) => {
   const { item, rerender } = await mountTab(t, { guests: [JIN] });
   await React.act(async () => propsOf(item(`${KEY}.menu.invite`)).onSelect());
   assert.equal(globalThis.__inviteMounted, true);
@@ -676,7 +677,6 @@ test("inviting the last listed guests keeps the dialog until it closes, then toa
   // A remount would reset the dialog to its form; mounted once means its Sent state survived.
   assert.equal(globalThis.__inviteMounts, 1);
   await React.act(async () => globalThis.__inviteProps.onOpenChange(false));
-  assert.match(globalThis.__toasts[0].title, new RegExp(`${KEY}\\.invite\\.sent\\|count=1`));
   assert.equal(globalThis.__inviteMounted, false);
 });
 

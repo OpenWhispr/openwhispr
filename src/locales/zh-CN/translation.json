@@ -2547,7 +2547,7 @@
         },
         "roleMenuLabel": "更改 {{name}} 的角色",
         "roleDescription": {
-          "member": "可以查看和编辑笔记。",
+          "member": "使用工作区。",
           "admin": "管理成员、邀请、团队和设置。"
         },
         "roleFailed": "无法更改 {{name}} 的角色。请检查网络连接后重试。",
@@ -2584,7 +2584,8 @@
           "resentNoEmailMany_one": "{{count}} 封邀请已更新，但邮件无法送达，旧链接也已失效。它们仍处于选中状态，你可以重新发送。",
           "resentNoEmailMany_other": "{{count}} 封邀请已更新，但邮件无法送达，旧链接也已失效。它们仍处于选中状态，你可以重新发送。",
           "resendUnrenewable_one": "无法续订 {{count}} 封已过期的邀请。请取消后重新邀请。",
-          "resendUnrenewable_other": "无法续订 {{count}} 封已过期的邀请。请取消后重新邀请。"
+          "resendUnrenewable_other": "无法续订 {{count}} 封已过期的邀请。请取消后重新邀请。",
+          "statusPending": "待处理"
         },
         "selection": {
           "count_one": "已选择 {{count}} 项",
@@ -2605,6 +2606,10 @@
           "invite": "邀请成员",
           "createTeam": "创建团队",
           "label": "更多添加方式"
+        },
+        "roleMenu": {
+          "member": "工作区成员",
+          "admin": "工作区管理员"
         }
       },
       "teamspaces": {
@@ -2693,6 +2698,12 @@
           "roleMemberBody": "可以查看和编辑笔记",
           "roleAdmin": "Teamspace 管理员",
           "roleAdminBody": "管理此 Teamspace 及其已分配的团队。",
+          "teamAccessMember": "所有人都是成员",
+          "teamAccessMemberBody": "团队中的所有人都可以查看和编辑笔记。",
+          "teamAccessAdmin": "团队管理员即管理员",
+          "teamAccessAdminBody": "团队的管理员也管理此 Teamspace。团队中的其他人是成员。",
+          "teamAccessMemberShort": "成员",
+          "teamAccessAdminShort": "团队管理员",
           "removeItem": "从 Teamspace 中移除",
           "removeTitle": "要将 {{name}} 从 {{space}} 中移除吗？",
           "removeBody": "这将结束 {{name}} 的直接成员身份。通过团队获得的访问权限将保留。对方仍留在工作区中。",
@@ -2952,7 +2963,7 @@
           "noSpacesBody": "Teamspace 是团队共享笔记的空间。添加成员或团队后，所有人都可以阅读和编辑。",
           "placeholder": "查找要添加的 Teamspace",
           "searchPlaceholder": "查找 Teamspace",
-          "add": "添加 Teamspace",
+          "add": "添加到 Teamspace",
           "adding": "正在添加…",
           "selectedTitle_one": "已选择 {{count}} 个 Teamspace",
           "selectedTitle_other": "已选择 {{count}} 个 Teamspace",
@@ -3121,9 +3132,7 @@
         "invite": {
           "title_one": "邀请 {{count}} 位访客加入 {{workspace}}",
           "title_other": "邀请 {{count}} 位访客加入 {{workspace}}",
-          "description": "他们将收到一封电子邮件，通过其中的链接加入 {{workspace}}。",
-          "sent_one": "已发送 {{count}} 份邀请，邀请加入 {{workspace}}",
-          "sent_other": "已发送 {{count}} 份邀请，邀请加入 {{workspace}}"
+          "description": "他们将收到一封电子邮件，通过其中的链接加入 {{workspace}}。"
         },
         "remove": {
           "titleOne": "要将 {{name}} 从 {{workspace}} 移除吗？",
@@ -5918,8 +5927,6 @@
       "submitOne": "发送邀请",
       "submit_one": "发送 {{count}} 份邀请",
       "submit_other": "发送 {{count}} 份邀请",
-      "submitting_one": "正在邀请 {{count}} 人…",
-      "submitting_other": "正在邀请 {{count}} 人…",
       "sentTitle_one": "已发送 {{count}} 份邀请",
       "sentTitle_other": "已发送 {{count}} 份邀请",
       "attachedTitle_one": "已更新 {{count}} 个邀请",
@@ -5962,7 +5969,7 @@
       },
       "roleDescription": {
         "admin": "管理成员、邀请、团队和设置。",
-        "member": "可以查看和编辑笔记。"
+        "member": "使用工作区。"
       },
       "errors": {
         "invalid": "{{email}} 不是有效的电子邮件地址",
@@ -5976,7 +5983,8 @@
         "rateLimited": "当前邀请过多，请稍后再试。",
         "requestFailed": "无法邀请 {{email}}。请检查网络连接后重试。",
         "refused": "无法邀请 {{email}}：{{reason}}"
-      }
+      },
+      "sending": "正在邀请…"
     },
     "join": {
       "title": "加入你的团队",
@@ -6014,7 +6022,7 @@
     "exit": {
       "leave": {
         "title": "退出 {{name}}？",
-        "body": "你将失去对此工作区、其团队和 Teamspace 的访问权限。工作区管理员可以重新邀请你。",
+        "body": "你将失去对此工作区、其团队和 Teamspace 的访问权限。工作区所有者或管理员可以重新邀请你。",
         "failed": "无法退出 {{name}}。请检查网络连接后重试。"
       },
       "left": {
@@ -6044,9 +6052,9 @@
       "body": "对方将失去此工作区中所有 Teamspace 和团队的访问权限。你可以随时再次邀请对方。",
       "confirm": "移除",
       "removing": "正在移除…",
-      "failed": "无法确认已移除 {{name}}。请检查网络连接后重试。",
       "notAllowed": "你已无权从 {{workspace}} 中移除成员。",
-      "alreadyRemoved": "{{name}} 已被移除"
+      "alreadyRemoved": "{{name}} 已被移除",
+      "failedTitle": "无法移除 {{name}}"
     },
     "removeMembers": {
       "title_one": "要将 {{count}} 名成员从 {{workspace}} 移除吗？",
@@ -6054,8 +6062,6 @@
       "confirm_one": "移除 {{count}} 名成员",
       "confirm_other": "移除 {{count}} 名成员",
       "checking": "正在检查…",
-      "failed_one": "无法确认已移除 {{count}} 名成员。请检查网络连接后重试。",
-      "failed_other": "无法确认已移除 {{count}} 名成员。请检查网络连接后重试。",
       "body": "这些人将失去此工作区中所有 Teamspace 和团队的访问权限。你可以随时再次邀请他们。",
       "ownerOne": "{{name}} 在此工作区中拥有笔记或 Teamspace。",
       "owners_one": "其中 {{count}} 人拥有笔记或 Teamspace。",
@@ -6066,24 +6072,31 @@
       "directoryManagedOneOthers": "{{name}} 由身份提供商分配。请在身份提供商中移除，或取消勾选以移除其他人。",
       "directoryManagedOthers_one": "其中 {{count}} 人由身份提供商分配。请在身份提供商中移除，或取消勾选以移除其他人。",
       "directoryManagedOthers_other": "其中 {{count}} 人由身份提供商分配。请在身份提供商中移除，或取消勾选以移除其他人。",
-      "transferLabel": "转让给",
-      "transferBody": "他们的笔记和 Teamspace 将转给新所有者。他们将失去此工作区的访问权限。",
+      "transferLabel": "重新分配给",
       "transferBodyLimited": "他们的笔记和 Teamspace 将转给 {{name}}，但 {{name}} 无法访问的 Teamspace 中的笔记会留在原处。他们将失去此工作区的访问权限。",
       "you": "{{name}}（你）",
-      "transferConfirm": "转让并移除",
+      "transferConfirm": "重新分配并移除",
       "transferring": "正在转让…",
-      "transferFailed": "无法确认转移和移除是否完成。请检查网络连接后重试。",
+      "transferFailed": "无法重新分配内容。未移除任何成员。请重试。",
+      "transferUnconfirmed": "无法确认内容重新分配和移除是否完成。请检查网络连接后重试。",
       "invalidTarget": "{{name}} 已无法接收所有权。请选择其他人。",
       "cannotRemoveOwner": "无法移除工作区所有者。",
       "cannotRemoveSelf": "你不能移除自己。请在“常规”中退出工作区。",
       "done_one": "已移除 {{count}} 名成员",
       "done_other": "已移除 {{count}} 名成员",
-      "transferDone_one": "已将他们的笔记和 Teamspace 移至 {{name}}，并移除了 {{count}} 名成员。",
-      "transferDone_other": "已将他们的笔记和 Teamspace 移至 {{name}}，并移除了 {{count}} 名成员。",
       "transferPartial_one": "{{count}} 条笔记留在了 {{name}} 无法访问的 Teamspace 中。其余内容已全部移动。",
       "transferPartial_other": "{{count}} 条笔记留在了 {{name}} 无法访问的 Teamspace 中。其余内容已全部移动。",
       "alreadyRemoved_one": "{{count}} 名成员已被移除",
-      "alreadyRemoved_other": "{{count}} 名成员已被移除"
+      "alreadyRemoved_other": "{{count}} 名成员已被移除",
+      "failedBody": "他们对工作区的访问权限未变。请检查网络连接后重试。",
+      "unconfirmedTitle": "无法确认是否已移除",
+      "unconfirmedBody": "他们可能已被移除。请检查网络连接后重试。",
+      "reassignBody": "移除前，请转移他们的笔记并指定 Teamspace 管理员。",
+      "ownersAll": "他们拥有笔记或管理 Teamspace。",
+      "failedTitle_one": "无法移除 {{count}} 位成员",
+      "failedTitle_other": "无法移除 {{count}} 位成员",
+      "transferDone_one": "已将内容和 Teamspace 管理权限重新分配给 {{name}}。已移除 {{count}} 位成员。",
+      "transferDone_other": "已将内容和 Teamspace 管理权限重新分配给 {{name}}。已移除 {{count}} 位成员。"
     },
     "cancelInvitation": {
       "title": "取消发给 {{email}} 的邀请？",
@@ -6111,7 +6124,6 @@
       "body": "选择一位现有的工作区成员。转让后你将成为管理员。",
       "newOwner": "新所有者",
       "placeholder": "选择工作区成员",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "将所有权转让给 {{name}}？",
       "confirmBody": "{{name}} 将成为 {{workspace}} 的所有者，你将成为管理员。",
       "submit": "转让所有权",

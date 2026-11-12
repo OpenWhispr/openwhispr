@@ -17,7 +17,8 @@ import type {
   WorkspaceMember,
 } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
-import { ChevronDown } from "../icons";
+import { cn } from "../lib/utils";
+import { ChevronsUpDown } from "../icons";
 import MemberAvatar from "../MemberAvatar";
 import {
   DropdownMenu,
@@ -27,6 +28,7 @@ import {
 } from "../ui/dropdown-menu";
 import { useToast } from "../ui/useToast";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
+import { PICKER_TRIGGER } from "./dialogButtons";
 
 interface RemoveMembersDialogProps {
   workspace: Workspace;
@@ -204,31 +206,60 @@ export function RemoveMembersDialog({
             })
           : t("workspaces.removeMembers.directoryManagedOthers", { count: managed.length });
       }
+      // A refused request changed nothing. Any other failure may have landed before the reply
+      // was lost, so it only says the outcome is unknown.
+      case "rateLimited":
+        return transferring
+          ? t("workspaces.removeMembers.transferFailed")
+          : t("workspaces.removeMembers.failedBody");
       // The API reports people already gone in `already_removed`, never as `gone`, and the
       // reducer turns `transferRequired` into the picker; both read as a plain failure.
       case "gone":
       case "transferRequired":
-      case "rateLimited":
       case "failed":
-        if (transferring) return t("workspaces.removeMembers.transferFailed");
-        return count === 1
-          ? t("workspaces.removeMember.failed", { name: firstName })
-          : t("workspaces.removeMembers.failed", { count });
+        // Without a transfer these show as the dialog's failure state, not as a line under it.
+        return transferring
+          ? t("workspaces.removeMembers.transferUnconfirmed")
+          : t("workspaces.removeMembers.unconfirmedBody");
     }
   };
 
-  const title =
+  // A plain failure replaces the dialog's question, as the design draws it, and the person can try
+  // again or leave. Failures with a reason of their own keep the question and say the reason
+  // under it.
+  const plainFailure =
+    !transferring &&
+    state.kind === "failed" &&
+    state.error !== undefined &&
+    (state.error.kind === "failed" ||
+      state.error.kind === "gone" ||
+      state.error.kind === "rateLimited" ||
+      state.error.kind === "transferRequired");
+
+  let title =
     count === 1
       ? t("workspaces.removeMember.title", { name: firstName, workspace: workspaceName })
       : t("workspaces.removeMembers.title", { count, workspace: workspaceName });
 
   let body = count === 1 ? t("workspaces.removeMember.body") : t("workspaces.removeMembers.body");
-  if (transferring) {
-    body =
+  if (transferring) body = t("workspaces.removeMembers.reassignBody");
+  if (plainFailure && state.error?.kind === "rateLimited") {
+    title =
       count === 1
-        ? t("workspaces.removeMembers.ownerOne", { name: firstName })
-        : t("workspaces.removeMembers.owners", { count: owners.length });
+        ? t("workspaces.removeMember.failedTitle", { name: firstName })
+        : t("workspaces.removeMembers.failedTitle", { count });
+    body = t("workspaces.removeMembers.failedBody");
+  } else if (plainFailure) {
+    title = t("workspaces.removeMembers.unconfirmedTitle");
+    body = t("workspaces.removeMembers.unconfirmedBody");
   }
+  // Who owns what, said once the picker asks for someone to hand it to.
+  const ownerNote =
+    count === 1
+      ? t("workspaces.removeMembers.ownerOne", { name: firstName })
+      : owners.length === count
+        ? t("workspaces.removeMembers.ownersAll")
+        : t("workspaces.removeMembers.owners", { count: owners.length });
 
   const primaryLabel = (): string => {
     if (checking) return t("workspaces.removeMembers.checking");
@@ -237,8 +268,9 @@ export function RemoveMembersDialog({
         ? t("workspaces.removeMembers.transferring")
         : t("workspaces.removeMember.removing");
     }
-    if (state.kind === "failed" && !managedRefusal) return t("workspaces.exit.tryAgain");
+    // A failed reassignment keeps its button: nothing was removed, and the same action retries.
     if (transferring) return t("workspaces.removeMembers.transferConfirm");
+    if (state.kind === "failed" && !managedRefusal) return t("workspaces.exit.tryAgain");
     return count === 1
       ? t("workspaces.removeMember.confirm")
       : t("workspaces.removeMembers.confirm", { count });
@@ -250,7 +282,9 @@ export function RemoveMembersDialog({
       icon="trash"
       title={title}
       body={body}
-      error={state.kind === "failed" && state.error ? errorLine(state.error) : null}
+      error={
+        state.kind === "failed" && state.error && !plainFailure ? errorLine(state.error) : null
+      }
       primary={{
         label: primaryLabel(),
         onClick: () => void run(),
@@ -268,73 +302,84 @@ export function RemoveMembersDialog({
         </p>
       ) : null}
       {transferring ? (
-        <div className="flex flex-col gap-2">
-          <span id={pickerLabelId} className="text-xs font-medium text-muted-foreground">
-            {t("workspaces.removeMembers.transferLabel")}
-          </span>
-          <DropdownMenu>
-            {/* Named by the label and the chosen owner, so both are announced. */}
-            <DropdownMenuTrigger
-              aria-labelledby={`${pickerLabelId} ${pickerValueId}`}
-              disabled={busy || managedRefusal}
-              className="flex h-10 w-full items-center gap-2 rounded-full border border-border/70 bg-surface-1 px-4 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {newOwner ? (
-                <MemberAvatar
-                  name={newOwner.name}
-                  email={newOwner.email}
-                  image={newOwner.image}
-                  size="sm"
-                />
-              ) : null}
-              <span id={pickerValueId} className="flex-1 truncate text-start">
-                {newOwner ? ownerLabel(newOwner) : ""}
-              </span>
-              <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
-            </DropdownMenuTrigger>
-            {/* Opens upward, over the title, and never flips: below the picker sit the dialog's
-                buttons, so the second click of a double-click would land on Transfer and
-                remove before the choice was read. */}
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              avoidCollisions={false}
-              className="max-h-[min(16rem,var(--radix-dropdown-menu-content-available-height))] w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
-            >
-              {candidates.map((member) => (
-                <DropdownMenuItem
-                  key={member.user_id}
-                  // Typeahead matches from the first character, which the label's isolate would be.
-                  textValue={memberName(member)}
-                  onSelect={() => dispatch({ type: "pickOwner", userId: member.user_id })}
-                  className="gap-2.5"
-                >
+        // The note, the label and the picker sit on one inset card, as the design draws them.
+        <div className="flex flex-col gap-3 rounded-xl bg-surface-1 p-3 ring-1 ring-inset ring-black/[0.06] dark:bg-surface-window dark:ring-0">
+          <p className="text-sm text-muted-foreground">{ownerNote}</p>
+          <div className="flex flex-col gap-2">
+            <span id={pickerLabelId} className="text-sm font-medium text-muted-foreground">
+              {t("workspaces.removeMembers.transferLabel")}
+            </span>
+            <DropdownMenu>
+              {/* Named by the label and the chosen owner, so both are announced. */}
+              <DropdownMenuTrigger
+                aria-labelledby={`${pickerLabelId} ${pickerValueId}`}
+                disabled={busy || managedRefusal}
+                className={cn(
+                  PICKER_TRIGGER,
+                  "bg-black/[0.04] dark:bg-surface-1 dark:hover:bg-surface-2"
+                )}
+              >
+                {newOwner ? (
                   <MemberAvatar
-                    name={member.name}
-                    email={member.email}
-                    image={member.image}
-                    size="sm"
+                    name={newOwner.name}
+                    email={newOwner.email}
+                    image={newOwner.image}
+                    size="row"
                   />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm">{ownerLabel(member)}</p>
-                    {member.name ? (
-                      <p className="truncate text-xs text-muted-foreground">
-                        <bdi dir="ltr">{member.email}</bdi>
-                      </p>
-                    ) : null}
-                  </div>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <p className="text-xs text-muted-foreground">
-            {/* An admin reaches every teamspace; a member only those they belong to. */}
-            {newOwner?.role === "member"
-              ? t("workspaces.removeMembers.transferBodyLimited", {
-                  name: isolate(memberName(newOwner)),
-                })
-              : t("workspaces.removeMembers.transferBody")}
-          </p>
+                ) : null}
+                <span id={pickerValueId} className="min-w-0 flex-1 truncate text-start">
+                  {newOwner ? ownerLabel(newOwner) : ""}
+                </span>
+                <ChevronsUpDown
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </DropdownMenuTrigger>
+              {/* Opens upward, over the title, and never flips: below the picker sit the dialog's
+                  buttons, so the second click of a double-click would land on Reassign and
+                  remove before the choice was read. */}
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                avoidCollisions={false}
+                className="max-h-[min(16rem,var(--radix-dropdown-menu-content-available-height))] w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto"
+              >
+                {candidates.map((member) => (
+                  <DropdownMenuItem
+                    key={member.user_id}
+                    // Typeahead matches from the first character, which the label's isolate would be.
+                    textValue={memberName(member)}
+                    onSelect={() => dispatch({ type: "pickOwner", userId: member.user_id })}
+                    className="gap-2.5"
+                  >
+                    <MemberAvatar
+                      name={member.name}
+                      email={member.email}
+                      image={member.image}
+                      size="row"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm">{ownerLabel(member)}</p>
+                      {member.name ? (
+                        <p className="truncate text-xs text-muted-foreground">
+                          <bdi dir="ltr">{member.email}</bdi>
+                        </p>
+                      ) : null}
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          {/* A member reaches only the teamspaces they belong to, which the design doesn't draw;
+              it stays because some notes then stay where they are. */}
+          {newOwner?.role === "member" ? (
+            <p className="text-xs text-muted-foreground">
+              {t("workspaces.removeMembers.transferBodyLimited", {
+                name: isolate(memberName(newOwner)),
+              })}
+            </p>
+          ) : null}
         </div>
       ) : null}
       {managedSubjects.length > 1 ? (

@@ -2599,7 +2599,7 @@
         },
         "roleMenuLabel": "Cambiar el rol de {{name}}",
         "roleDescription": {
-          "member": "Puede ver y editar notas.",
+          "member": "Usa el espacio de trabajo.",
           "admin": "Gestiona miembros, invitaciones, equipos y ajustes."
         },
         "roleFailed": "No se pudo cambiar el rol de {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
@@ -2636,7 +2636,8 @@
           "resentNoEmailMany_one": "{{count}} invitación se actualizó, pero no se pudo entregar el correo y el enlace anterior ya no funciona. Sigue seleccionada para que puedas reenviarla.",
           "resentNoEmailMany_other": "{{count}} invitaciones se actualizaron, pero no se pudieron entregar los correos y los enlaces anteriores ya no funcionan. Siguen seleccionadas para que puedas reenviarlas.",
           "resendUnrenewable_one": "No se pudo renovar {{count}} invitación caducada. Cancélala e invita a esa persona de nuevo.",
-          "resendUnrenewable_other": "No se pudieron renovar {{count}} invitaciones caducadas. Cancélalas e invita a esas personas de nuevo."
+          "resendUnrenewable_other": "No se pudieron renovar {{count}} invitaciones caducadas. Cancélalas e invita a esas personas de nuevo.",
+          "statusPending": "Pendiente"
         },
         "selection": {
           "count_one": "{{count}} seleccionado",
@@ -2657,6 +2658,10 @@
           "invite": "Invitar personas",
           "createTeam": "Crear equipo",
           "label": "Más formas de añadir"
+        },
+        "roleMenu": {
+          "member": "Miembro del espacio de trabajo",
+          "admin": "Administrador del espacio de trabajo"
         }
       },
       "teamspaces": {
@@ -2745,6 +2750,12 @@
           "roleMemberBody": "Puede ver y editar notas",
           "roleAdmin": "Administrador del teamspace",
           "roleAdminBody": "Gestiona este teamspace y sus equipos asignados.",
+          "teamAccessMember": "Todos son miembros",
+          "teamAccessMemberBody": "Todos en el equipo pueden ver y editar notas.",
+          "teamAccessAdmin": "Los administradores del equipo son administradores",
+          "teamAccessAdminBody": "Los administradores del equipo también gestionan este teamspace. El resto del equipo son miembros.",
+          "teamAccessMemberShort": "Miembros",
+          "teamAccessAdminShort": "Admins del equipo",
           "removeItem": "Quitar del teamspace",
           "removeTitle": "¿Quitar a {{name}} de {{space}}?",
           "removeBody": "Esto elimina la membresía directa de {{name}}. El acceso a través de un equipo se mantendrá. Seguirá en el espacio de trabajo.",
@@ -3004,7 +3015,7 @@
           "noSpacesBody": "Un teamspace es un área compartida para las notas de un equipo. Añade personas o equipos y todos podrán leer y editar.",
           "placeholder": "Buscar teamspaces para añadir",
           "searchPlaceholder": "Buscar teamspaces",
-          "add": "Añadir teamspaces",
+          "add": "Añadir a un teamspace",
           "adding": "Añadiendo…",
           "selectedTitle_one": "{{count}} teamspace seleccionado",
           "selectedTitle_other": "{{count}} teamspaces seleccionados",
@@ -3173,9 +3184,7 @@
         "invite": {
           "title_one": "Invitar a {{count}} invitado a {{workspace}}",
           "title_other": "Invitar a {{count}} invitados a {{workspace}}",
-          "description": "Recibirán un enlace por correo para unirse a {{workspace}}.",
-          "sent_one": "Se envió {{count}} invitación para unirse a {{workspace}}",
-          "sent_other": "Se enviaron {{count}} invitaciones para unirse a {{workspace}}"
+          "description": "Recibirán un enlace por correo para unirse a {{workspace}}."
         },
         "remove": {
           "titleOne": "¿Quitar a {{name}} de {{workspace}}?",
@@ -5939,8 +5948,6 @@
       "submitOne": "Enviar invitación",
       "submit_one": "Enviar {{count}} invitación",
       "submit_other": "Enviar {{count}} invitaciones",
-      "submitting_one": "Invitando a {{count}} persona…",
-      "submitting_other": "Invitando a {{count}} personas…",
       "sentTitle_one": "{{count}} invitación enviada",
       "sentTitle_other": "{{count}} invitaciones enviadas",
       "attachedTitle_one": "{{count}} invitación actualizada",
@@ -5983,7 +5990,7 @@
       },
       "roleDescription": {
         "admin": "Gestiona miembros, invitaciones, equipos y ajustes.",
-        "member": "Puede ver y editar notas."
+        "member": "Usa el espacio de trabajo."
       },
       "errors": {
         "invalid": "{{email}} no es un correo válido",
@@ -5997,7 +6004,8 @@
         "rateLimited": "Hay demasiadas invitaciones en este momento. Inténtalo de nuevo más tarde.",
         "requestFailed": "No se pudo invitar a {{email}}. Revisa tu conexión e inténtalo de nuevo.",
         "refused": "No se pudo invitar a {{email}}: {{reason}}"
-      }
+      },
+      "sending": "Invitando…"
     },
     "join": {
       "title": "Únete a tu equipo",
@@ -6035,7 +6043,7 @@
     "exit": {
       "leave": {
         "title": "¿Salir de {{name}}?",
-        "body": "Perderás el acceso a este espacio de trabajo, a sus equipos y a sus teamspaces. Un administrador del espacio de trabajo puede volver a invitarte.",
+        "body": "Perderás el acceso a este espacio de trabajo, a sus equipos y a sus teamspaces. El propietario o un administrador del espacio de trabajo puede volver a invitarte.",
         "failed": "No se pudo salir de {{name}}. Comprueba tu conexión e inténtalo de nuevo."
       },
       "left": {
@@ -6065,9 +6073,9 @@
       "body": "Perderá el acceso a todos los teamspaces y equipos de este espacio de trabajo. Puedes volver a invitarle cuando quieras.",
       "confirm": "Quitar",
       "removing": "Quitando…",
-      "failed": "No se pudo confirmar que se quitó a {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
       "notAllowed": "Ya no tienes permiso para quitar personas de {{workspace}}.",
-      "alreadyRemoved": "{{name}} ya había sido quitado"
+      "alreadyRemoved": "{{name}} ya había sido quitado",
+      "failedTitle": "No se pudo eliminar a {{name}}"
     },
     "removeMembers": {
       "title_one": "¿Quitar {{count}} miembro de {{workspace}}?",
@@ -6075,8 +6083,6 @@
       "confirm_one": "Quitar {{count}} miembro",
       "confirm_other": "Quitar {{count}} miembros",
       "checking": "Comprobando…",
-      "failed_one": "No se pudo confirmar que se quitó {{count}} miembro. Comprueba tu conexión e inténtalo de nuevo.",
-      "failed_other": "No se pudo confirmar que se quitaron {{count}} miembros. Comprueba tu conexión e inténtalo de nuevo.",
       "body": "Estas personas perderán el acceso a todos los teamspaces y equipos de este espacio de trabajo. Puedes volver a invitarlas cuando quieras.",
       "ownerOne": "{{name}} es propietario de notas o teamspaces en este espacio de trabajo.",
       "owners_one": "{{count}} de ellos es propietario de notas o teamspaces.",
@@ -6087,24 +6093,31 @@
       "directoryManagedOneOthers": "{{name}} está asignado por tu proveedor de identidad. Quítalo allí o desmárcalo para quitar a los demás.",
       "directoryManagedOthers_one": "{{count}} de ellos está asignado por tu proveedor de identidad. Quítalo allí o desmárcalo para quitar a los demás.",
       "directoryManagedOthers_other": "{{count}} de ellos están asignados por tu proveedor de identidad. Quítalos allí o desmárcalos para quitar a los demás.",
-      "transferLabel": "Transferir a",
-      "transferBody": "Sus notas y teamspaces pasarán al nuevo propietario. Perderán el acceso a este espacio de trabajo.",
+      "transferLabel": "Reasignar a",
       "transferBodyLimited": "Sus notas y teamspaces pasarán a {{name}}, excepto las notas de teamspaces a los que {{name}} no puede acceder, que se quedarán allí. Perderán el acceso a este espacio de trabajo.",
       "you": "{{name}} (tú)",
-      "transferConfirm": "Transferir y quitar",
+      "transferConfirm": "Reasignar y eliminar",
       "transferring": "Transfiriendo…",
-      "transferFailed": "No se pudo confirmar la transferencia y la eliminación. Comprueba tu conexión e inténtalo de nuevo.",
+      "transferFailed": "No se pudo reasignar el contenido. No se eliminó a ningún miembro. Inténtalo de nuevo.",
+      "transferUnconfirmed": "No se pudo confirmar la reasignación y la eliminación. Comprueba tu conexión e inténtalo de nuevo.",
       "invalidTarget": "{{name}} ya no puede recibir la propiedad. Elige a otra persona.",
       "cannotRemoveOwner": "No se puede quitar al propietario del espacio de trabajo.",
       "cannotRemoveSelf": "No puedes quitarte a ti mismo. Sal del espacio de trabajo desde General.",
       "done_one": "{{count}} miembro quitado",
       "done_other": "{{count}} miembros quitados",
-      "transferDone_one": "Sus notas y teamspaces se movieron a {{name}} y se quitó {{count}} miembro.",
-      "transferDone_other": "Sus notas y teamspaces se movieron a {{name}} y se quitaron {{count}} miembros.",
       "transferPartial_one": "{{count}} nota se quedó en un teamspace al que {{name}} no puede acceder. Todo lo demás se movió.",
       "transferPartial_other": "{{count}} notas se quedaron en teamspaces a los que {{name}} no puede acceder. Todo lo demás se movió.",
       "alreadyRemoved_one": "{{count}} miembro ya había sido quitado",
-      "alreadyRemoved_other": "{{count}} miembros ya habían sido quitados"
+      "alreadyRemoved_other": "{{count}} miembros ya habían sido quitados",
+      "failedBody": "Su acceso al espacio de trabajo no ha cambiado. Comprueba tu conexión e inténtalo de nuevo.",
+      "unconfirmedTitle": "No se pudo confirmar la eliminación",
+      "unconfirmedBody": "Es posible que ya se hayan eliminado. Comprueba tu conexión e inténtalo de nuevo.",
+      "reassignBody": "Transfiere sus notas y asigna un administrador de teamspace antes de eliminarlos.",
+      "ownersAll": "Son propietarios de notas o administran teamspaces.",
+      "failedTitle_one": "No se pudo eliminar a {{count}} miembro",
+      "failedTitle_other": "No se pudo eliminar a {{count}} miembros",
+      "transferDone_one": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembro.",
+      "transferDone_other": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembros."
     },
     "cancelInvitation": {
       "title": "¿Cancelar la invitación para {{email}}?",
@@ -6132,7 +6145,6 @@
       "body": "Elige a un miembro existente del espacio de trabajo. Pasarás a ser administrador tras la transferencia.",
       "newOwner": "Nuevo propietario",
       "placeholder": "Elige a un miembro del espacio de trabajo",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "¿Transferir la propiedad a {{name}}?",
       "confirmBody": "{{name}} será el propietario de {{workspace}}. Tú pasarás a ser administrador.",
       "submit": "Transferir propiedad",
