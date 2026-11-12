@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { act, createElement } = require("react");
 const { createRoot } = require("react-dom/client");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
-const { installInteractiveDom } = require("../lib/interactiveDom");
+const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
 
 const cases = [
   { name: "a roster change", invalidate: "clearCachedLeaderboards" },
@@ -19,6 +19,9 @@ const cases = [
     invalidate: "clearCachedLeaderboards",
     reject: true,
   },
+  { name: "a successful join request", requestJoin: true },
+  { name: "an access authentication refusal", accessExpired: true },
+  { name: "an expired credential without an HTTP response", accessExpired: true, accessStatus: 0 },
 ];
 
 for (const scenario of cases) {
@@ -28,20 +31,22 @@ for (const scenario of cases) {
     installBrowserGlobals(t, { window: { clearInterval() {} } });
     const container = installInteractiveDom(t);
     const scope = {
-      key: "workspace:removed",
-      kind: "workspace",
-      id: "removed",
+      key: scenario.requestJoin ? "domain:example.com" : "workspace:removed",
+      kind: scenario.requestJoin ? "domain" : "workspace",
+      id: scenario.requestJoin ? "example.com" : "removed",
       name: "Removed workspace",
       memberCount: 2,
-      state: "ready",
+      state: scenario.accessExpired ? "invite" : "ready",
       role: "member",
     };
     const access = {
-      state: "ready",
+      state: scenario.requestJoin ? "request_join" : "ready",
       domain: null,
       colleagueCount: 2,
       invitation: null,
-      joinableWorkspace: null,
+      joinableWorkspace: scenario.requestJoin
+        ? { id: "join-me", name: "Another workspace", memberCount: 3, requestState: "none" }
+        : null,
       scopes: [scope],
     };
     const currentAccess = { ...access, state: "create", scopes: [] };
@@ -106,6 +111,9 @@ for (const scenario of cases) {
           };
         `,
         "/ui/useToast": "export const useToast = () => ({ toast() {} });",
+        "/services/WorkspacesService": `
+          export const WorkspacesService = { requestJoin: async () => {} };
+        `,
         "/ui/select": `
           import { createElement } from 'react';
           const Wrapper = ({children}) => createElement('div', null, children);
@@ -146,8 +154,40 @@ for (const scenario of cases) {
     root = createRoot(container);
     await act(async () => root.render(createElement(Section, props)));
     assert.equal(state.accessReads, 1);
+    if (scenario.accessExpired) {
+      await act(async () =>
+        state.access.reject(
+          new CloudApiError("Expired", scenario.accessStatus ?? 401, "AUTH_EXPIRED")
+        )
+      );
+      assert.ok(container.textContent.includes("Sign in"), "an access 401 overrides cached setup");
+      assert.equal(cache.readCachedLeaderboardAccess("user-a"), null);
+      assert.equal(state.boardReads, 0);
+      return;
+    }
     assert.equal(state.boardReads, 1);
 
+    if (scenario.requestJoin) {
+      state.currentBoard = {
+        ...board,
+        members: [{ ...member, name: "Current coworker" }],
+        leaders: [{ ...member, name: "Current coworker" }],
+      };
+      const request = findElement(
+        container,
+        (node) => node.tagName === "BUTTON" && node.textContent === "Request to join"
+      );
+      assert.ok(request);
+      await act(async () => request.dispatchEvent({ type: "click", bubbles: true }));
+      await act(async () => {
+        state.access.resolve(access);
+        state.board.resolve(board);
+      });
+      assert.equal(state.boardReads, 2, "invalidation starts a replacement board read");
+      assert.ok(container.textContent.includes("Current coworker"));
+      assert.ok(!container.textContent.includes(member.name), "the superseded reply stays retired");
+      return;
+    }
     if (scenario.unmount) {
       await act(() => root.unmount());
       root = null;
