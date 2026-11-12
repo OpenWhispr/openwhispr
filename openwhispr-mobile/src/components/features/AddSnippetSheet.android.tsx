@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { TextInput } from 'react-native';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { confirmDestructive } from '@/lib/alerts';
-import { createAddSnippetSheet } from './AddSnippetSheetCore';
+import { createAddSnippetSheet } from './AddSnippetSheetCore.android';
 
 export const AddSnippetSheet = createAddSnippetSheet(function useSnippetPresentation() {
   const { copy } = useAndroidCopy();

@@ -112,6 +112,6 @@ it('retains default creation copy and does not replace an iOS draft with Android
   expect(mockFormProps).toMatchObject({ title: 'New Folder', submitLabel: 'Create Folder' });
   expect(screen.getByPlaceholderText('Folder name').props.value).toBe('');
   fireEvent.changeText(screen.getByPlaceholderText('Folder name'), 'User draft');
-  screen.rerender(<NewFolderSheet {...props} initialName="Other folder" />);
+  screen.rerender(<NewFolderSheet {...{ ...props, initialName: 'Other folder' }} />);
   expect(screen.getByPlaceholderText('Folder name').props.value).toBe('User draft');
 });

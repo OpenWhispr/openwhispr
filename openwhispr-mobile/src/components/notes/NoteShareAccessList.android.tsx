@@ -1,8 +1,8 @@
 import { View } from 'react-native';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { usePrincipalLabels } from './NoteSharePrincipal.android';
-import { noteShareMenuActions } from './noteShareMenuActions';
-import { createNoteShareAccessList } from './NoteShareAccessListCore';
+import { noteShareMenuActions } from './noteShareMenuActions.android';
+import { createNoteShareAccessList } from './NoteShareAccessListCore.android';
 
 export const NoteShareAccessList = createNoteShareAccessList({
   useCopy: useAndroidCopy,

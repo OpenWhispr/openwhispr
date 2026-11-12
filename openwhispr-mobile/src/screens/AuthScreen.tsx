@@ -143,7 +143,6 @@ export default function AuthScreen({
   const nameRef = useRef<TextInputType>(null);
 
   useEffect(() => {
-    if (Platform.OS !== 'ios') return;
     AppleAuthentication.isAvailableAsync()
       .then(setIsAppleAvailable)
       .catch(() => setIsAppleAvailable(false));
@@ -249,7 +248,7 @@ export default function AuthScreen({
           {onClose ? (
             <Pressable
               onPress={onClose}
-              style={[styles.closeButton, Platform.OS === 'android' && { top: insets.top + 18 }]}
+              style={styles.closeButton}
               accessibilityRole="button"
               accessibilityLabel="Close sign in"
               hitSlop={8}
@@ -286,7 +285,7 @@ export default function AuthScreen({
           <View>
             {!authMode && (
               <View style={styles.formGroup}>
-                {Platform.OS === 'ios' && isAppleAvailable ? (
+                {isAppleAvailable ? (
                   <ProviderButton
                     provider="apple"
                     label="Continue with Apple"

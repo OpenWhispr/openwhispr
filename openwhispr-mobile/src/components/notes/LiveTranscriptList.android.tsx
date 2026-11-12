@@ -1,4 +1,7 @@
-import { LiveTranscriptListView, type LiveTranscriptListProps } from './LiveTranscriptListView';
+import {
+  LiveTranscriptListView,
+  type LiveTranscriptListProps,
+} from './LiveTranscriptListView.android';
 
 export function LiveTranscriptList({
   utterances,

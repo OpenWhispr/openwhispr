@@ -1,7 +1,7 @@
 import { useMeetingCalendar } from '@/hooks/useMeetingCalendar';
 import { useMeetingElapsedTime } from '@/hooks/useMeetingElapsedTime';
 import { useMeetingDraft } from '@/hooks/useMeetingDraft';
-import { LocalMeetingRecording } from '@/components/notes/LocalMeetingRecording';
+import { LocalMeetingRecording } from '@/components/notes/LocalMeetingRecording.android';
 import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type React from 'react';

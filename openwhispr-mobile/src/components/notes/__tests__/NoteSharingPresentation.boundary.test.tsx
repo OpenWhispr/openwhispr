@@ -5,7 +5,7 @@ import { NoteShareAccessList } from '../NoteShareAccessList';
 import { NoteShareInviteField } from '../NoteShareInviteField';
 import { confirmDestructive } from '@/lib/alerts';
 import { isCloudBackupEnabled } from '@/lib/cloudBackup';
-import { noteShareMenuActions } from '../noteShareMenuActions';
+import { noteShareMenuActions } from '../noteShareMenuActions.android';
 
 let mockCopyCalls = 0;
 const mockOwner = {
@@ -53,7 +53,7 @@ jest.mock('@/hooks/useAndroidCopy', () => ({
 jest.mock('@/lib/cloudBackup', () => ({
   isCloudBackupEnabled: jest.fn((config) => config?.cloudBackupEnabled ?? true),
 }));
-jest.mock('../noteShareMenuActions', () => ({
+jest.mock('../noteShareMenuActions.android', () => ({
   noteShareMenuActions: jest.fn((actions) => actions),
 }));
 jest.mock('@/hooks/useNoteSharing', () => ({

@@ -7,9 +7,9 @@ import {
   createMoveToFolderSheet,
   type MoveFolderPresentation,
   type MoveFolderPresentationProps,
-} from './MoveToFolderSheetCore';
+} from './MoveToFolderSheetCore.android';
 
-export type { MoveToFolderSheetProps } from './MoveToFolderSheetCore';
+export type { MoveToFolderSheetProps } from './MoveToFolderSheetCore.android';
 
 function useAndroidMoveFolderPresentation({
   visible,

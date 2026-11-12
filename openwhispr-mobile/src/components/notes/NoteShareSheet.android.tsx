@@ -1,9 +1,9 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { isCloudBackupEnabled } from '@/lib/cloudBackup';
-import { noteShareMenuActions } from './noteShareMenuActions';
-import { createNoteShareSheet } from './NoteShareSheetCore';
+import { noteShareMenuActions } from './noteShareMenuActions.android';
+import { createNoteShareSheet } from './NoteShareSheetCore.android';
 
-export type { NoteShareSheetProps } from './NoteShareSheetCore';
+export type { NoteShareSheetProps } from './NoteShareSheetCore.android';
 export const NoteShareSheet = createNoteShareSheet({
   useCopy: useAndroidCopy,
   cloudBackupEnabled: isCloudBackupEnabled,

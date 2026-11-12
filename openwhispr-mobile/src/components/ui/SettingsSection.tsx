@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   View,
-  Platform,
   Pressable,
   StyleSheet,
   TextInput,
@@ -50,7 +49,6 @@ export function SettingsRow({
   descriptionAccessory,
   disabled = false,
 }: SettingsRowProps) {
-  const android = Platform.OS === 'android';
   const isLine = iconStyle === 'line';
   const dimmed = disabled ? 'opacity-40' : '';
   return (
@@ -90,9 +88,9 @@ export function SettingsRow({
           </View>
         )}
 
-        <View className={android ? 'min-w-0 flex-1' : 'flex-1'}>
+        <View className="flex-1">
           <Text
-            numberOfLines={android ? undefined : 1}
+            numberOfLines={1}
             className={`${destructive ? 'text-[17px] text-systemRed' : 'text-[17px] text-label'} ${dimmed}`}
           >
             {title}
@@ -105,12 +103,9 @@ export function SettingsRow({
           ) : description ? (
             <Text className="mt-0.5 text-[13px] text-secondaryLabel">{description}</Text>
           ) : null}
-          {android && subtitle && !rightElement ? (
-            <Text className="mt-0.5 text-[15px] text-secondaryLabel">{subtitle}</Text>
-          ) : null}
         </View>
 
-        {!android && subtitle && !rightElement ? (
+        {subtitle && !rightElement ? (
           <Text numberOfLines={1} className="text-[15px] text-secondaryLabel">
             {subtitle}
           </Text>
@@ -143,27 +138,6 @@ export function SettingsTextFieldRow({
   style,
   ...inputProps
 }: SettingsTextFieldRowProps) {
-  if (Platform.OS === 'android') {
-    return (
-      <View className="min-h-[50px] flex-row items-center gap-4 px-4 py-3">
-        <View className="h-6 w-6 items-center justify-center">
-          <SystemIcon name={icon} mdName={mdIcon} size={22} color="label" />
-        </View>
-        <View className="min-w-0 flex-1">
-          {label ? <Text className="text-[15px] text-secondaryLabel">{label}</Text> : null}
-          <TextInput
-            placeholderTextColor={iosColor('tertiaryLabel')}
-            autoCorrect={false}
-            editable={editable}
-            className={`min-h-[48px] py-2 text-[17px] text-label ${editable ? '' : 'opacity-40'}`}
-            style={[{ fontFamily: AppFont.regular }, style]}
-            {...inputProps}
-          />
-          {trailing}
-        </View>
-      </View>
-    );
-  }
   return (
     <View className="min-h-[50px] flex-row items-center gap-4 px-4">
       <View className="h-6 w-6 items-center justify-center">

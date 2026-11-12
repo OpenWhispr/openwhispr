@@ -10,10 +10,6 @@ import { confirmDestructive } from '@/lib/alerts';
 import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
 import { AppFont } from '@/lib/fonts';
-import {
-  supportsVoiceEnrollment,
-  VOICE_ENROLLMENT_UNAVAILABLE,
-} from '@/lib/voiceEnrollmentCapability';
 
 const formatDate = (value: string | null): string => {
   if (!value) return 'On this device';
@@ -125,7 +121,7 @@ export default function VoiceProfileDetailScreen() {
   }, [email, profile, updateVoiceProfile]);
 
   const retrain = useCallback(() => {
-    if (!profile || !supportsVoiceEnrollment()) return;
+    if (!profile) return;
     router.push(`/(tabs)/(notes)/voice-enrollment?profileId=${profile.id}`);
   }, [profile, router]);
 
@@ -205,22 +201,18 @@ export default function VoiceProfileDetailScreen() {
               {formatDate(profile.createdAt)}
             </Text>
           </View>
-          {supportsVoiceEnrollment() ? (
-            <GroupedList.Row
-              onPress={retrain}
-              accessibilityRole="button"
-              accessibilityLabel="Retrain Voice"
-              testID="voice-profile-reenroll"
-              contentInsetLeft={16}
-            >
-              <Text className="text-[17px] font-medium text-brand">Retrain Voice</Text>
-            </GroupedList.Row>
-          ) : null}
+          <GroupedList.Row
+            onPress={retrain}
+            accessibilityRole="button"
+            accessibilityLabel="Retrain Voice"
+            testID="voice-profile-reenroll"
+            contentInsetLeft={16}
+          >
+            <Text className="text-[17px] font-medium text-brand">Retrain Voice</Text>
+          </GroupedList.Row>
         </GroupedList>
         <Text className="mt-2 px-4 text-[13px] leading-5 text-secondaryLabel">
-          {supportsVoiceEnrollment()
-            ? 'Retraining replaces this voice sample. Past transcripts keep their existing labels.'
-            : VOICE_ENROLLMENT_UNAVAILABLE}
+          Retraining replaces this voice sample. Past transcripts keep their existing labels.
         </Text>
 
         <View className="mt-6">

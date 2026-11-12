@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import type { NoteEditorPlatform, EditorCopy, EditorLifecycle } from './NoteEditorPlatform';
+import type { NoteEditorPlatform, EditorCopy, EditorLifecycle } from './NoteEditorPlatform.android';
 import {
   View,
   TextInput,

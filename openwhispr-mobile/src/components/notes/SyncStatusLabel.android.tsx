@@ -1,6 +1,6 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { formatLibraryTime } from '@/android/libraryTime';
-import { createSyncStatusLabel } from './SyncStatusLabelCore';
+import { createSyncStatusLabel } from './SyncStatusLabelCore.android';
 
 export const SyncStatusLabel = createSyncStatusLabel(function useStatusPresentation() {
   const { copy, language } = useAndroidCopy();

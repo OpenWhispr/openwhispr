@@ -3,7 +3,7 @@ import {
   useDefaultLibraryBuckets,
   useDefaultLibraryFocus,
   type NotesListPlatform,
-} from './libraryScreenPlatform';
+} from './libraryScreenPlatform.android';
 import { useEffect, useCallback, useMemo, useState } from 'react';
 import { View, ScrollView, Pressable, RefreshControl, Alert, ActionSheetIOS } from 'react-native';
 import { Text } from '@/components/ui/Text';

@@ -1,11 +1,11 @@
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { SegmentedControl } from '@/components/ui/SegmentedControl.android';
 import { AccountButton } from '@/android/ui';
 import { formatLibraryTime } from '@/android/libraryTime';
 import { confirmDestructive } from '@/lib/alerts';
-import { createDictionaryScreen } from './DictionaryScreenCore';
+import { createDictionaryScreen } from './DictionaryScreenCore.android';
 
 const DictionaryScreen = createDictionaryScreen({
   useCopy: useAndroidCopy,

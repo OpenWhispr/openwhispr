@@ -26,7 +26,7 @@ const mockRemoveWord = jest.fn();
 let mockLanguage = 'en';
 
 jest.mock('@/android/ui', () => ({ AccountButton: () => null }));
-jest.mock('@/components/ui/SegmentedControl', () => ({ SegmentedControl: () => null }));
+jest.mock('@/components/ui/SegmentedControl.android', () => ({ SegmentedControl: () => null }));
 jest.mock('@/android/libraryTime', () => ({ formatLibraryTime: () => 'today' }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({

@@ -1,10 +1,6 @@
-import { useMeetingCalendar } from '@/hooks/useMeetingCalendar';
-import { useMeetingElapsedTime } from '@/hooks/useMeetingElapsedTime';
-import { useMeetingDraft } from '@/hooks/useMeetingDraft';
-import { LocalMeetingRecording } from '@/components/notes/LocalMeetingRecording';
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,11 +10,16 @@ import { Button } from '@/components/ui/Button';
 import { ProcessingWaveform } from '@/components/features/WaveformVisualizer';
 import { CalendarEventPicker } from '@/components/notes/CalendarEventPicker';
 import { SpeakerCountPrompt } from '@/components/notes/SpeakerCountPrompt';
-import { BRAND } from '@/config/colors';
+import { BRAND, iosColor } from '@/config/colors';
+import { calendarRepository } from '@/data/calendarRepository';
 import type { Note } from '@/data/types';
+import type { GoogleCalendarEvent } from '@/data/calendarTypes';
 import { useAudioRecording } from '@/hooks/useAudioRecording';
 import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { buildCalendarMeetingContext } from '@/lib/calendar/meetingContext';
+import { getMeetingCalendarEventSuggestions } from '@/lib/calendar/meetingSuggestions';
 import { getPreferredTranscriptionLanguage } from '@/lib/transcriptionLanguage';
+import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -41,18 +42,30 @@ type Phase =
   | 'cloud-recording'
   | 'processing';
 
+const formatClock = (seconds: number): string =>
+  `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+
 export const MeetingRecordScreen = (): React.JSX.Element => {
   const [phase, setPhase] = useState<Phase>('prompt');
   const [noteId, setNoteId] = useState<number | null>(null);
   const [count, setCount] = useState<number | undefined>(undefined);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   // Wall-clock start of the current meeting (local or cloud), for the Live Activity timer.
   // recordingStartedAtRef is local-only and is cleared as soon as processing starts.
   const [meetingStartedAt, setMeetingStartedAt] = useState<number | null>(null);
+  const [rawNotes, setRawNotes] = useState('');
+  const [calendarEvents, setCalendarEvents] = useState<GoogleCalendarEvent[]>([]);
+  const [selectedCalendarEventId, setSelectedCalendarEventId] = useState<number | null>(null);
+  const lastSavedRawNotesRef = useRef('');
+  const recordingStartedAtRef = useRef<number | null>(null);
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   // Only the recording phase has a notes field to keep above the keyboard.
   const keyboardHeight = useKeyboardHeight(phase === 'recording');
+  const googleCalendarAccounts = useGoogleCalendarStore((s) => s.accounts);
+  const loadGoogleCalendars = useGoogleCalendarStore((s) => s.load);
   const createMeetingNote = useNotesStore((s) => s.createMeetingNote);
+  const updateNote = useNotesStore((s) => s.updateNote);
   const transitionStatus = useNotesStore((s) => s.transitionStatus);
   const runMeetingPipeline = useNotesStore((s) => s.runMeetingPipeline);
   const finalizeCloudMeeting = useNotesStore((s) => s.finalizeCloudMeeting);
@@ -77,20 +90,88 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     language: getPreferredTranscriptionLanguage(),
   });
 
-  const {
-    calendarEvents,
-    selectedCalendarEventId,
-    setSelectedCalendarEventId,
-    accountsById,
-    selectedMeetingContext,
-  } = useMeetingCalendar(phase);
-
-  const { elapsedSeconds, recordingStartedAtRef } = useMeetingElapsedTime(phase);
-
-  const { rawNotes, setRawNotes, lastSavedRawNotesRef, saveRawNotesNow } = useMeetingDraft(
-    phase,
-    noteId,
+  const accountsById = useMemo(
+    () => new Map(googleCalendarAccounts.map((account) => [account.id, account])),
+    [googleCalendarAccounts],
   );
+  const selectedCalendarEvent = useMemo(
+    () => calendarEvents.find((event) => event.id === selectedCalendarEventId) ?? null,
+    [calendarEvents, selectedCalendarEventId],
+  );
+  const selectedMeetingContext = useMemo(() => {
+    if (!selectedCalendarEvent) return null;
+    try {
+      return buildCalendarMeetingContext(
+        selectedCalendarEvent,
+        accountsById.get(selectedCalendarEvent.accountId),
+      );
+    } catch (error) {
+      Sentry.captureException(error, {
+        tags: { feature: 'meeting-calendar-context', calendar_context_operation: 'build' },
+      });
+      return null;
+    }
+  }, [accountsById, selectedCalendarEvent]);
+
+  useEffect(() => {
+    if (phase !== 'prompt') return;
+    loadGoogleCalendars().catch((error) => {
+      Sentry.captureException(error, { tags: { feature: 'meeting-calendar-suggestions' } });
+    });
+  }, [loadGoogleCalendars, phase]);
+
+  useEffect(() => {
+    if (phase !== 'prompt') return;
+    try {
+      const events = getMeetingCalendarEventSuggestions(googleCalendarAccounts, calendarRepository);
+      setCalendarEvents(events);
+      setSelectedCalendarEventId((current) =>
+        current != null && !events.some((event) => event.id === current) ? null : current,
+      );
+    } catch (error) {
+      setCalendarEvents([]);
+      setSelectedCalendarEventId(null);
+      Sentry.captureException(error, { tags: { feature: 'meeting-calendar-suggestions' } });
+    }
+  }, [googleCalendarAccounts, phase]);
+
+  useEffect(() => {
+    if (phase !== 'recording') {
+      setElapsedSeconds(0);
+      recordingStartedAtRef.current = null;
+      return;
+    }
+    const updateElapsed = () => {
+      const startedAt = recordingStartedAtRef.current;
+      if (startedAt == null) return;
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    };
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
+
+  useEffect(() => {
+    if (
+      (phase !== 'recording' && phase !== 'cloud-recording') ||
+      noteId == null ||
+      rawNotes === lastSavedRawNotesRef.current
+    ) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      updateNote(noteId, { content: rawNotes });
+      lastSavedRawNotesRef.current = rawNotes;
+    }, 800);
+    return () => clearTimeout(timeout);
+  }, [noteId, phase, rawNotes, updateNote]);
+
+  const saveRawNotesNow = useCallback((): void => {
+    if (noteId == null || rawNotes === lastSavedRawNotesRef.current) return;
+    updateNote(noteId, { content: rawNotes });
+    lastSavedRawNotesRef.current = rawNotes;
+  }, [noteId, rawNotes, updateNote]);
 
   // Mark an in-flight note failed when we abandon a recording (guarded: skip if already terminal,
   // since processMeeting may have set 'failed' directly).
@@ -356,17 +437,71 @@ export const MeetingRecordScreen = (): React.JSX.Element => {
     );
   }
   if (phase === 'recording') {
+    const countLabel =
+      count != null ? `${count} ${count === 1 ? 'person' : 'people'}` : 'Auto-detecting';
+    // The view fills the screen, so the keyboard covers the home-indicator inset too.
+    const footerBottomPadding =
+      keyboardHeight > 0 ? keyboardHeight + 12 : Math.max(insets.bottom + 32, 56);
     return (
-      <LocalMeetingRecording
-        count={count}
-        elapsedSeconds={elapsedSeconds}
-        keyboardHeight={keyboardHeight}
-        bottomInset={insets.bottom}
-        headerHeight={headerHeight}
-        rawNotes={rawNotes}
-        setRawNotes={setRawNotes}
-        onStop={finish}
-      />
+      <View className="flex-1 bg-systemBackground px-6" style={{ paddingTop: headerHeight }}>
+        <View className="items-center pb-2 pt-4">
+          <View className="mb-3 flex-row items-center gap-2">
+            <View className="h-2 w-2 rounded-full bg-systemRed" />
+            <Text className="text-[14px] font-medium text-secondaryLabel">Recording</Text>
+          </View>
+          <Text
+            className="text-[60px] font-semibold leading-none tracking-tight text-label"
+            style={{ fontVariant: ['tabular-nums'] }}
+          >
+            {formatClock(elapsedSeconds)}
+          </Text>
+          <View className="mt-5 flex-row gap-2">
+            <View
+              className="rounded-full border border-separator bg-secondarySystemGroupedBackground px-3 py-1.5"
+              style={{ borderCurve: 'continuous' }}
+            >
+              <Text className="text-[12px] font-semibold text-secondaryLabel">{countLabel}</Text>
+            </View>
+            <View
+              className="rounded-full border border-separator bg-secondarySystemGroupedBackground px-3 py-1.5"
+              style={{ borderCurve: 'continuous' }}
+            >
+              <Text className="text-[12px] font-semibold text-secondaryLabel">On-device</Text>
+            </View>
+          </View>
+        </View>
+        <View
+          className="mb-4 mt-6 flex-1 rounded-[22px] border border-separator bg-secondarySystemGroupedBackground p-4 shadow-sm"
+          style={{ borderCurve: 'continuous' }}
+        >
+          <View className="mb-2 flex-row items-center justify-between">
+            <Text className="text-[15px] font-semibold text-label">Meeting notes</Text>
+            <Text className="text-[12px] font-medium text-tertiaryLabel">Draft</Text>
+          </View>
+          <TextInput
+            testID="meeting-raw-notes"
+            value={rawNotes}
+            onChangeText={setRawNotes}
+            placeholder="Jot decisions, follow-ups, or context while recording..."
+            placeholderTextColor={iosColor('tertiaryLabel')}
+            multiline
+            textAlignVertical="top"
+            className="flex-1 text-[16px] leading-6 text-label"
+          />
+        </View>
+        <View style={{ paddingBottom: footerBottomPadding }}>
+          <Button
+            testID="meeting-stop"
+            variant="destructive"
+            size="lg"
+            onPress={() => {
+              finish().catch(Sentry.captureException);
+            }}
+          >
+            Stop
+          </Button>
+        </View>
+      </View>
     );
   }
 

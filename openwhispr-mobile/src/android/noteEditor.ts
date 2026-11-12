@@ -15,7 +15,7 @@ import type {
   EditorCopy,
   EditorLifecycle,
   NoteEditorPlatform,
-} from '@/screens/NoteEditorPlatform';
+} from '@/screens/NoteEditorPlatform.android';
 
 function usePresentation() {
   const { t } = useTranslation('android');

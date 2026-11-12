@@ -1,6 +1,6 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
 import { usePrincipalLabels } from './NoteSharePrincipal.android';
-import { createNoteShareInviteField } from './NoteShareInviteFieldCore';
+import { createNoteShareInviteField } from './NoteShareInviteFieldCore.android';
 
 export const NoteShareInviteField = createNoteShareInviteField({
   useCopy: useAndroidCopy,

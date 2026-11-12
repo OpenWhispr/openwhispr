@@ -1,5 +1,5 @@
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { createFolderRow } from './FolderRowCore';
+import { createFolderRow } from './FolderRowCore.android';
 
 export const FolderRow = createFolderRow(function useFolderRowPresentation(count) {
   const { copy } = useAndroidCopy();

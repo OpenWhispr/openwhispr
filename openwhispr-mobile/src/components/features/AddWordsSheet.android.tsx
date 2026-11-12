@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { createAddWordsSheet } from './AddWordsSheetCore';
+import { createAddWordsSheet } from './AddWordsSheetCore.android';
 
 export const AddWordsSheet = createAddWordsSheet(function useWordsPresentation() {
   const { copy } = useAndroidCopy();

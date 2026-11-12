@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { createSpacesSection, groupByWorkspace } from './SpacesSectionCore';
+import { createSpacesSection, groupByWorkspace } from './SpacesSectionCore.android';
 
 export const SpacesSection = createSpacesSection(function useWorkspaceGroups(spaces) {
   const { copy } = useAndroidCopy();

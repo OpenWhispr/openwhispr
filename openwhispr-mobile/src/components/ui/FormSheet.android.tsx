@@ -1,6 +1,6 @@
 import { KeyboardAvoidingView } from 'react-native';
 import { useAndroidCopy } from '@/hooks/useAndroidCopy';
-import { createFormSheet } from './FormSheetCore';
+import { createFormSheet } from './FormSheetCore.android';
 
 export const FormSheet = createFormSheet(function useFormPresentation() {
   const { copy } = useAndroidCopy();

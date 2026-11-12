@@ -17,7 +17,7 @@ import {
 } from '@/lib/notes/noteShareAccess';
 import { GroupedList } from './GroupedList';
 import { PRINCIPAL_LABEL, PrincipalAvatar } from './NoteSharePrincipal';
-import type { NoteShareCopy } from './NoteSharePrincipalCore';
+import type { NoteShareCopy } from './NoteSharePrincipalCore.android';
 
 type Permission = NoteAccessGrant['permission'];
 
