@@ -71,7 +71,33 @@ typedef struct {
     guint            signal_id;
     paste_mode_t     mode;
     int              copy_mode;
+    int              cancel_on_stdin_close;
 } PortalData;
+
+/* The parent closes stdin to cancel a guarded request. Never interrupt a
+ * chord once it starts: all pressed modifiers must still be released. */
+static int portal_input_cancelled(const PortalData *app)
+{
+    if (!app->cancel_on_stdin_close) return 0;
+    struct pollfd input = { .fd = STDIN_FILENO, .events = POLLIN | POLLHUP };
+    if (poll(&input, 1, 0) <= 0) return 0;
+    if (input.revents & (POLLHUP | POLLERR | POLLNVAL)) return 1;
+    if (input.revents & POLLIN) {
+        char ignored;
+        return read(STDIN_FILENO, &ignored, 1) == 0;
+    }
+    return 0;
+}
+
+static gboolean on_portal_cancelled(gpointer user_data)
+{
+    PortalData *app = user_data;
+    if (portal_input_cancelled(app)) {
+        portal_exit_code = 7;
+        g_main_loop_quit(app->loop);
+    }
+    return G_SOURCE_CONTINUE;
+}
 
 static char *get_sender_path(GDBusConnection *conn)
 {
@@ -180,6 +206,11 @@ static void on_start_response(GDBusConnection *conn, const char *sender,
     }
 
     g_variant_unref(results);
+    if (portal_input_cancelled(app)) {
+        portal_exit_code = 7;
+        g_main_loop_quit(app->loop);
+        return;
+    }
     portal_send_paste(app);
 }
 
@@ -303,11 +334,13 @@ static gboolean on_portal_timeout(gpointer user_data)
     return G_SOURCE_REMOVE;
 }
 
-static int paste_via_portal(paste_mode_t mode, const char *restore_token, int copy_mode)
+static int paste_via_portal(paste_mode_t mode, const char *restore_token, int copy_mode,
+                            int cancel_on_stdin_close)
 {
     PortalData app = { 0 };
     app.mode = mode;
     app.copy_mode = copy_mode;
+    app.cancel_on_stdin_close = cancel_on_stdin_close;
     if (restore_token) app.restore_token = g_strdup(restore_token);
 
     GError *err = NULL;
@@ -320,6 +353,7 @@ static int paste_via_portal(paste_mode_t mode, const char *restore_token, int co
     }
 
     app.loop = g_main_loop_new(NULL, FALSE);
+    guint cancel_source = cancel_on_stdin_close ? g_timeout_add(25, on_portal_cancelled, &app) : 0;
     g_timeout_add_seconds(10, on_portal_timeout, &app);
 
     char *sender_path = get_sender_path(app.conn);
@@ -347,6 +381,7 @@ static int paste_via_portal(paste_mode_t mode, const char *restore_token, int co
     if (err) {
         fprintf(stderr, "CreateSession failed: %s\n", err->message);
         g_error_free(err);
+        if (cancel_source) g_source_remove(cancel_source);
         g_main_loop_unref(app.loop);
         g_free(app.restore_token);
         g_object_unref(app.conn);
@@ -354,6 +389,7 @@ static int paste_via_portal(paste_mode_t mode, const char *restore_token, int co
     }
 
     g_main_loop_run(app.loop);
+    if (cancel_source) g_source_remove(cancel_source);
 
     g_main_loop_unref(app.loop);
     g_free(app.session_handle);
@@ -1074,6 +1110,7 @@ int main(int argc, char *argv[]) {
     int force_shift_insert = 0;
     int use_uinput = 0;
     int use_portal = 0;
+    int cancel_on_stdin_close = 0;
     int media_play_pause = 0;
     int copy_mode = 0;
     int capabilities_only = 0;
@@ -1093,6 +1130,8 @@ int main(int argc, char *argv[]) {
             use_uinput = 1;
         } else if (strcmp(argv[i], "--portal") == 0) {
             use_portal = 1;
+        } else if (strcmp(argv[i], "--cancel-on-stdin-close") == 0) {
+            cancel_on_stdin_close = 1;
         } else if (strcmp(argv[i], "--media-play-pause") == 0) {
             media_play_pause = 1;
         } else if (strcmp(argv[i], "--copy") == 0) {
@@ -1129,7 +1168,7 @@ int main(int argc, char *argv[]) {
     if (capabilities_only) {
         printf("paste-v1 selection-copy-v1 target-window-v1 modifier-wait-v1");
 #ifdef HAVE_GIO
-        printf(" portal-keysym-v1");
+        printf(" portal-keysym-v1 portal-cancel-v1");
 #endif
 #ifdef HAVE_ATSPI
         printf(" atspi-selection-v1");
@@ -1161,7 +1200,7 @@ int main(int argc, char *argv[]) {
     if (use_portal) {
 #ifdef HAVE_GIO
         paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
-        return paste_via_portal(mode, restore_token, copy_mode);
+        return paste_via_portal(mode, restore_token, copy_mode, cancel_on_stdin_close);
 #else
         fprintf(stderr, "portal support not compiled in\n");
         return 5;

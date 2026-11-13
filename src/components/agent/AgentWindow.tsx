@@ -175,16 +175,26 @@ export default function AgentWindow() {
   chatBusyRef.current = chatBusy;
   const editTargetRef = useRef<SelectionEditTarget | null>(null);
   const caretRef = useRef<{ press: number; sessionId: string } | null>(null);
+  const caretDeliveryRef = useRef<string | null>(null);
+  const cancelCaretDelivery = useCallback((): void => {
+    const sessionIds = new Set([caretRef.current?.sessionId, caretDeliveryRef.current]);
+    caretRef.current = null;
+    caretDeliveryRef.current = null;
+    for (const sessionId of sessionIds) {
+      if (sessionId) void window.electronAPI?.cancelSelectionEdit?.(sessionId).catch(() => {});
+    }
+  }, []);
   // Set once the surface exists, below: a pasted answer hides the window and keeps the chat.
   const hideKeepingChatRef = useRef<() => void>(() => {});
   const selectionEditRef = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
       pressRef.current += 1;
+      cancelCaretDelivery();
       selectionEditRef.current?.abort();
       selectionEditRef.current = null;
     },
-    []
+    [cancelCaretDelivery]
   );
   // A new function every render; read through a ref so callbacks stay stable.
   const sendRef = useRef(chat.send);
@@ -376,6 +386,7 @@ export default function AgentWindow() {
   const submit = useCallback(
     (text: string, typed: boolean, extras?: RequestExtras) => {
       if (refuseIfRestricted()) return;
+      cancelCaretDelivery();
       pressRef.current += 1;
       pressCaptureRef.current = null;
       const current = stateRef.current;
@@ -402,6 +413,7 @@ export default function AgentWindow() {
       const press = pressRef.current;
       const restoreUnsent = () => {
         if (press !== pressRef.current) return;
+        cancelCaretDelivery();
         busyRef.current = false;
         const latest = stateRef.current;
         if (latest.draft === (typed ? "" : current.draft)) {
@@ -415,6 +427,7 @@ export default function AgentWindow() {
         dispatch({ type: "notice", notice: "chat.sendNotStarted" });
       };
       const caretSessionId = extras?.caretSessionId;
+      caretDeliveryRef.current = caretSessionId ?? null;
       // An answer that only read is typed into the field the take was spoken
       // over; one that asked or acted, or that a newer take overtook, stays here.
       const deliverToCaret = async ({
@@ -423,15 +436,17 @@ export default function AgentWindow() {
       }: {
         content: string;
         onlyRead: boolean;
-      }) => {
-        if (!caretSessionId) return;
+      }): Promise<void> => {
+        if (!caretSessionId || caretDeliveryRef.current !== caretSessionId) return;
         if (!onlyRead || press !== pressRef.current) {
-          void window.electronAPI?.cancelSelectionEdit?.(caretSessionId).catch(() => {});
+          cancelCaretDelivery();
           return;
         }
         const result = await window.electronAPI
           ?.pasteAtCapturedTarget?.(caretSessionId, markdownToPlainText(content) || content)
           .catch(() => null);
+        if (caretDeliveryRef.current !== caretSessionId) return;
+        caretDeliveryRef.current = null;
         if (result?.success && press === pressRef.current) hideKeepingChatRef.current();
       };
       void (async () => {
@@ -451,7 +466,7 @@ export default function AgentWindow() {
         if (!sent) restoreUnsent();
       }, restoreUnsent);
     },
-    [dispatch, refuseIfRestricted, stopReading]
+    [cancelCaretDelivery, dispatch, refuseIfRestricted, stopReading]
   );
 
   const handleTranscript = useCallback(
@@ -634,7 +649,7 @@ export default function AgentWindow() {
       const press = ++pressRef.current;
       const isCurrent = () => press === pressRef.current;
       editTargetRef.current = card;
-      caretRef.current = null;
+      cancelCaretDelivery();
       if (external) dispatch({ type: "setContext", context: null });
       dispatch({ type: "setAttachment", attachment: null });
       const selection = Promise.resolve(
@@ -666,6 +681,7 @@ export default function AgentWindow() {
             }
           } else if (capture?.status === "editable") {
             if (isCurrent()) caretRef.current = { press, sessionId: capture.sessionId };
+            else void window.electronAPI?.cancelSelectionEdit?.(capture.sessionId).catch(() => {});
           } else if (
             isCurrent() &&
             capture &&
@@ -692,7 +708,7 @@ export default function AgentWindow() {
       });
       pressCaptureRef.current = Promise.all([selection, screenshot]);
     },
-    [dispatch]
+    [cancelCaretDelivery, dispatch]
   );
 
   const startListening = useCallback(
@@ -720,6 +736,7 @@ export default function AgentWindow() {
   const { cancel: cancelTake } = voice;
   // The take belongs to the chat it was spoken in: opening another drops it.
   const dropTake = useCallback(() => {
+    cancelCaretDelivery();
     selectionEditRef.current?.abort();
     selectionEditRef.current = null;
     editTargetRef.current = null;
@@ -731,11 +748,12 @@ export default function AgentWindow() {
     dispatch({ type: "setAttachment", attachment: null });
     dispatch({ type: "setContext", context: null });
     cancelTake();
-  }, [cancelTake, dispatch]);
+  }, [cancelCaretDelivery, cancelTake, dispatch]);
   const stopRequest = useCallback(() => {
+    cancelCaretDelivery();
     if (selectionEditRef.current) dropTake();
     else cancelTurn();
-  }, [cancelTurn, dropTake]);
+  }, [cancelCaretDelivery, cancelTurn, dropTake]);
   useEffect(
     () =>
       subscribeAuthBoundary(() => {

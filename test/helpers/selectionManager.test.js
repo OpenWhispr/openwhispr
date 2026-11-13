@@ -1402,6 +1402,72 @@ test("pastes an assistant response only while the captured caret target is still
   assert.equal(pastes[0].text, "Agent response");
 });
 
+for (const pendingCheck of ["selection", "window title"]) {
+  test(`cancelling caret delivery during the ${pendingCheck} check prevents its paste`, async () => {
+    const { manager, pastes } = makeHarness({
+      selections: [
+        { state: "none", editable: true },
+        { state: "none", editable: true },
+      ],
+    });
+    const capture = await manager.captureSelectedText({ probeEditable: true });
+    let finishCheck;
+    const pending = new Promise((resolve) => (finishCheck = resolve));
+    if (pendingCheck === "selection") manager._readCurrentSelection = () => pending;
+    else manager.textEditMonitor.getAppContext = () => pending;
+
+    const delivery = manager.pasteAtCapturedTarget(capture.sessionId, "Late answer");
+    await new Promise((resolve) => setImmediate(resolve));
+    manager.cancelSelectionEdit(capture.sessionId);
+    finishCheck(pendingCheck === "selection" ? { status: "editable" } : null);
+
+    assert.deepEqual(await delivery, { success: false, code: "cancelled" });
+    assert.deepEqual(pastes, []);
+  });
+}
+
+test("concurrent delivery requests consume a caret session only once", async () => {
+  const { manager, pastes } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+  let finishRead;
+  const pending = new Promise((resolve) => (finishRead = resolve));
+  manager._readCurrentSelection = () => pending;
+  const first = manager.pasteAtCapturedTarget(capture.sessionId, "First answer");
+  const duplicate = manager.pasteAtCapturedTarget(capture.sessionId, "Duplicate answer");
+  finishRead({ status: "editable" });
+
+  assert.deepEqual(await first, { success: true });
+  assert.equal((await duplicate).success, false);
+  assert.deepEqual(
+    pastes.map(({ text }) => text),
+    ["First answer"]
+  );
+});
+
+test("a second caret delivery cannot invalidate the first while clipboard dispatch waits", async () => {
+  const { manager } = makeHarness({ selections: [{ state: "none", editable: true }] });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+  manager._readCurrentSelection = async () => ({ status: "editable" });
+  let finishDispatch;
+  let isCancelled;
+  manager.clipboardManager._pasteText = async (_text, options) => {
+    isCancelled = options.isCancelled;
+    await new Promise((resolve) => (finishDispatch = resolve));
+    return { pasted: !isCancelled(), reason: "cancelled" };
+  };
+  const first = manager.pasteAtCapturedTarget(capture.sessionId, "First answer");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(
+    (await manager.pasteAtCapturedTarget(capture.sessionId, "Duplicate")).success,
+    false
+  );
+  assert.equal(isCancelled(), false, "declining a duplicate leaves the active session intact");
+  manager.cancelSelectionEdit(capture.sessionId);
+  assert.equal(isCancelled(), true);
+  finishDispatch();
+  assert.deepEqual(await first, { success: false, code: "cancelled" });
+});
+
 test("does not paste an assistant response after the captured caret target changes", async () => {
   const { manager, pastes } = makeHarness({
     selections: [
@@ -1416,6 +1482,27 @@ test("does not paste an assistant response after the captured caret target chang
     code: "target_changed",
   });
   assert.equal(pastes.length, 0);
+});
+
+test("expiring a caret session aborts a portal delivery still waiting to dispatch", async () => {
+  let now = 1000;
+  const { manager } = makeHarness({
+    selections: [{ state: "none", editable: true }],
+    now: () => now,
+  });
+  const capture = await manager.captureSelectedText({ probeEditable: true });
+  manager._readCurrentSelection = async () => ({ status: "editable" });
+  manager.clipboardManager._pasteText = (_text, { signal }) =>
+    new Promise((resolve) => {
+      signal.addEventListener("abort", () => resolve({ pasted: false, reason: "cancelled" }), {
+        once: true,
+      });
+    });
+  const pending = manager.pasteAtCapturedTarget(capture.sessionId, "Expired answer");
+  await new Promise((resolve) => setImmediate(resolve));
+  now += require("../../src/helpers/selectionManager").SESSION_TTL_MS;
+  manager._pruneSessions();
+  assert.deepEqual(await pending, { success: false, code: "cancelled" });
 });
 
 test("an answer is not pasted into another window of the same macOS app", async () => {
