@@ -228,3 +228,33 @@ it('a recording after the account changed ends on Retry instead of hanging', asy
   expect(native.setStatus).toHaveBeenLastCalledWith('retry');
   expect(FileSystem.deleteAsync).toHaveBeenCalledWith(audio.uri, { idempotent: true });
 });
+
+it('a dictation cut off by an account change mid-processing still ends on Retry', async () => {
+  let finish!: (text: string) => void;
+  jest
+    .mocked(processAndroidAudio)
+    .mockImplementationOnce(() => new Promise<string>((resolve) => (finish = resolve)));
+  mockListeners.onStart({ selection: '' });
+  mockListeners.onRecording(audio);
+  await flush();
+  mockScopeChange(); // signed into another account while it was being written up
+  finish('Too late.');
+  await flush();
+  expect(native.insert).not.toHaveBeenCalled();
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry');
+});
+
+it('a cancelled dictation does not report Retry', async () => {
+  let finish!: (text: string) => void;
+  jest
+    .mocked(processAndroidAudio)
+    .mockImplementationOnce(() => new Promise<string>((resolve) => (finish = resolve)));
+  mockListeners.onStart({ selection: '' });
+  mockListeners.onRecording(audio);
+  await flush();
+  mockListeners.onCancel();
+  finish('Cancelled.');
+  await flush();
+  expect(native.insert).not.toHaveBeenCalled();
+  expect(native.setStatus).not.toHaveBeenCalledWith('retry');
+});

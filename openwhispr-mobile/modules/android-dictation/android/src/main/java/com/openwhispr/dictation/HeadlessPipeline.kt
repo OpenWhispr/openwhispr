@@ -31,16 +31,18 @@ object HeadlessPipeline {
     if (host == null) { Log.w(TAG, "No React host to run the bubble pipeline"); return }
     val running = host.currentReactContext
     if (running != null && running.hasActiveReactInstance()) { startTask(running); return }
-    if (waiting != null) return
-    val listener = object : ReactInstanceEventListener {
-      override fun onReactContextInitialized(context: ReactContext) {
-        host.removeReactInstanceEventListener(this)
-        waiting = null
-        if (wanted) startTask(context)
+    if (waiting == null) {
+      val listener = object : ReactInstanceEventListener {
+        override fun onReactContextInitialized(context: ReactContext) {
+          host.removeReactInstanceEventListener(this)
+          waiting = null
+          if (wanted) startTask(context)
+        }
       }
+      waiting = listener
+      host.addReactInstanceEventListener(listener)
     }
-    waiting = listener
-    host.addReactInstanceEventListener(listener)
+    // Safe to call again: it joins a start in progress, and tries again after one that failed.
     host.start()
   }
 

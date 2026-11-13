@@ -5,6 +5,7 @@ import { useDictionaryStore } from '@/store/useDictionaryStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
 
 let booting: Promise<void> | null = null;
+let settled = false;
 
 async function load(): Promise<void> {
   await useConfigStore.getState().loadConfig();
@@ -21,11 +22,30 @@ async function load(): Promise<void> {
  * and the bubble's headless pipeline share one load; a failed load runs again on the next call.
  */
 export function bootAppData(): Promise<void> {
-  booting ??= load().catch((error: unknown) => {
-    booting = null;
-    throw error;
-  });
-  return booting;
+  if (booting) return booting;
+  settled = false;
+  const current: Promise<void> = load().then(
+    () => {
+      if (booting === current) settled = true;
+    },
+    (error: unknown) => {
+      // A newer load (the app's Retry) is not undone by an older one failing.
+      if (booting === current) booting = null;
+      throw error;
+    },
+  );
+  booting = current;
+  return current;
+}
+
+/**
+ * The app opening: joins a load still in progress, otherwise loads again, so a session restored
+ * earlier by the bubble's headless pipeline (perhaps offline) is checked again as at any launch.
+ */
+export function refreshAppData(): Promise<void> {
+  if (booting && !settled) return booting;
+  booting = null;
+  return bootAppData();
 }
 
 /** The app's Retry: the next bootAppData() loads everything again. */

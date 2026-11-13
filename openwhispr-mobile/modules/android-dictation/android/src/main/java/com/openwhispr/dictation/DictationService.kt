@@ -144,7 +144,9 @@ class DictationService : Service() {
     if (appVisible && !practiceVisible) {
       if (state == BubbleState.LISTENING) finish(true)
       if (state == BubbleState.PROCESSING) { deliver("onCancel"); setState(BubbleState.READY) }
-      if (state == BubbleState.RETRY || state == BubbleState.RECOVER) setState(BubbleState.READY)
+      // Dismiss, so a recording the bubble parked for Retry is deleted rather than left behind.
+      if (state == BubbleState.RETRY) dismiss()
+      if (state == BubbleState.RECOVER) setState(BubbleState.READY)
     }
     val visible = BubblePolicy.visible(appVisible, practiceVisible, InsertionService.instance != null, typing, hidden, busy)
     if (!visible && dragging) endDrag()
@@ -488,6 +490,8 @@ class DictationService : Service() {
    */
   private fun deliver(event: String, data: Map<String, Any> = emptyMap()) {
     val listening = HeadlessPipeline.ready && emit != null
+    // A new dictation, cancel or dismiss replaces whatever waited, and with it the wait's timeout.
+    if (event in setOf("onStart", "onRetry", "onCancel", "onDismiss")) handler.removeCallbacks(pipelineTimeout)
     val accepted = pending.accept(event, data, listening)
     accepted.emit.forEach { (name, payload) -> emit?.invoke(name, payload) }
     accepted.dropped.forEach { uri -> Uri.parse(uri).path?.let { File(it).delete() } }

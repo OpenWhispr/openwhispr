@@ -54,6 +54,12 @@ export function startBubblePipeline(): void {
     discard(kept);
     kept = null;
   };
+  // A dictation the account change cut off: it must still settle, or the bubble keeps "Writing".
+  let abandoned: AbortController | null = null;
+  const stopped = (current: AbortController) => {
+    if (current.signal.aborted && current === abandoned) void native.setStatus('retry');
+    return current.signal.aborted;
+  };
   const prepare = (selection: string) => {
     controller?.abort();
     controller = new AbortController();
@@ -73,13 +79,13 @@ export function startBubblePipeline(): void {
     let keep = false;
     try {
       const prepared = await pending;
-      if (current.signal.aborted) return;
+      if (stopped(current)) return;
       const text = await processAndroidAudio(audio, prepared, current.signal, () =>
         native.setStatus('processing'),
       );
-      if (current.signal.aborted) return;
+      if (stopped(current)) return;
       const inserted = await native.insert(text);
-      if (current.signal.aborted) return;
+      if (stopped(current)) return;
       if (!inserted) {
         // The words are safe in Home; the bubble offers to open them.
         useBubbleResult.getState().setResult(text, i18n.t('insertionFailed'));
@@ -90,7 +96,7 @@ export function startBubblePipeline(): void {
         void native.setStatus('success');
       }
     } catch (error) {
-      if (current.signal.aborted) return;
+      if (stopped(current)) return;
       if (error instanceof AndroidCleanupError) {
         useBubbleResult.getState().setResult(error.transcript, i18n.t('cleanupRecovery'));
         void native.setStatus('recover');
@@ -113,6 +119,7 @@ export function startBubblePipeline(): void {
     // Account data loading for the first time (while a dictation from a restored bubble waits
     // on it) changes nothing a job holds: no job can capture a scope before there is an owner.
     if (!previous) return;
+    abandoned = controller;
     controller?.abort();
     job = null;
     dropKept();
