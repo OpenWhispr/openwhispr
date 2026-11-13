@@ -247,8 +247,8 @@ export function describeUnavailable(unavailable: ReadonlyArray<UnavailableCapabi
           ? 'on how they can have you send it for them (for example: "Connect Slack and I can ' +
             'post this for you.")'
           : "on what sending it needs, as its line below says, never on connecting it, which " +
-            "they can't do yet (for example: \"Sending Slack messages needs a paid OpenWhispr " +
-            "plan, so I've written it here for you to copy.\")") +
+            "they can't do yet (on a free plan, for example: \"Sending Slack messages needs a " +
+            "paid OpenWhispr plan, so I've written it here for you to copy.\")") +
         "; leave that sentence out when only their admin can turn it on. For anything else, " +
         "briefly tell them how to enable it:\n" +
         describeList(delivering)
