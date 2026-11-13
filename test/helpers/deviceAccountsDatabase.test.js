@@ -461,3 +461,27 @@ test("only an account that left counts as a change since a recording started", a
     null
   );
 });
+
+test("a failed dictation spoken signed out that lands after the sign-in joins the account", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+  await tick();
+  const signedOut = new Date().toISOString();
+  await tick();
+  // The sign-in's claim runs once, before the dictation lands. It never syncs, so nothing
+  // else would give it an account, and the next account to sign in would see it.
+  db.setActiveAccountId(A);
+  db.claimSignedOutLocalRows();
+
+  const failed = db.saveTranscription("", null, {
+    status: "failed",
+    analyticsOccurredAt: signedOut,
+  }).transcription;
+  assert.equal(failed.account_id, A);
+  // A completed one still waits to join the account when it syncs.
+  const completed = db.saveTranscription("spoken signed out", null, {
+    analyticsOccurredAt: signedOut,
+  }).transcription;
+  assert.equal(completed.account_id, null);
+});

@@ -2,6 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
+// The window these stores run in, unless a test says otherwise: only the control panel publishes
+// the workspace scope and relocates lost workspaces' notes.
+const CONTROL_PANEL_LOCATION = { search: "?panel=true" };
+
 for (const { name, saved, expected } of [
   {
     name: "refresh selects and persists Enterprise first when no workspace is saved",
@@ -22,6 +26,7 @@ for (const { name, saved, expected } of [
   test(name, async (t) => {
     const { storage } = installBrowserGlobals(t, {
       initialStorage: saved ? { activeWorkspaceId: saved } : {},
+      window: { location: CONTROL_PANEL_LOCATION },
     });
     const vite = await createRendererServer(t, {
       cachePrefix: "openwhispr-workspace-store-",
@@ -76,7 +81,10 @@ for (const { name, saved, expected } of [
 }
 
 test("workspace names reach the note-file mirror, and an emptied list sends nothing", async (t) => {
-  installBrowserGlobals(t, { initialStorage: {} });
+  installBrowserGlobals(t, {
+    initialStorage: {},
+    window: { location: CONTROL_PANEL_LOCATION },
+  });
   const sent = [];
   globalThis.window.electronAPI.noteFilesSetWorkspaceNames = (workspaces) => sent.push(workspaces);
   const vite = await createRendererServer(t, {
@@ -107,7 +115,10 @@ test("workspace names reach the note-file mirror, and an emptied list sends noth
 });
 
 async function loadStoreWithDeferredMembers(t) {
-  installBrowserGlobals(t, { initialStorage: { activeWorkspaceId: "A" } });
+  installBrowserGlobals(t, {
+    initialStorage: { activeWorkspaceId: "A" },
+    window: { location: CONTROL_PANEL_LOCATION },
+  });
   // Each listMembers call waits until the test answers it, so requests can interleave.
   globalThis.__memberRequests = [];
   t.after(() => {
@@ -251,6 +262,7 @@ async function loadPrivateNotesStore(
     spaces = [],
     // Main's workspace calls, in place of the recording fakes (a real database, say).
     main = null,
+    windowLocation = CONTROL_PANEL_LOCATION,
   }
 ) {
   const calls = [];
@@ -287,7 +299,7 @@ async function loadPrivateNotesStore(
   };
   const { storage } = installBrowserGlobals(t, {
     initialStorage,
-    window: { electronAPI: api },
+    window: { electronAPI: api, location: windowLocation },
   });
   globalThis.__ws = {
     list,
@@ -575,6 +587,33 @@ test("a successful list missing a workspace relocates its Private to the default
   ]);
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "own");
 });
+
+for (const [windowName, search] of [
+  ["dictation", ""],
+  ["agent", "?agent=true"],
+]) {
+  test(`the ${windowName} window's list tells main nothing and moves nothing`, async (t) => {
+    const { useWorkspaceStore, relocateLostWorkspaces, publishWorkspaceScope, calls } =
+      await loadPrivateNotesStore(t, {
+        list: async () => [TEAM, OWN],
+        windowLocation: { search },
+        spaces: [privateRow(2, "gone")],
+        storage: {
+          activeWorkspaceId: "lost",
+          [LIST_CACHE_KEY]: cacheFor("acct-1", [OWN, TEAM, LOST]),
+        },
+      });
+
+    await useWorkspaceStore.getState().refresh();
+    await relocateLostWorkspaces(["lost"]);
+
+    // Every window refreshes its list after each account-scope pass. A scope or bind each one
+    // sent reached main, and the account-scope calls multiplied with them.
+    assert.equal(await publishWorkspaceScope(), false);
+    assert.deepEqual(calls, []);
+    assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "own");
+  });
+}
 
 test("losing the active workspace sends the default's scope before its Private moves", async (t) => {
   const { useWorkspaceStore, relocateLostWorkspaces, calls } = await loadPrivateNotesStore(t, {

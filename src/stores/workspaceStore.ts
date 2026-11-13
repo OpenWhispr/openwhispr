@@ -10,6 +10,7 @@ import {
   resolveDefaultWorkspaceId,
   withDefaultFirst,
 } from "../lib/workspaceSwitcher";
+import { isControlPanelWindow } from "../utils/windowContext";
 
 interface WorkspaceState {
   workspaces: Workspace[];
@@ -468,7 +469,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         });
       }
       // A newer successful list scans main's rows again, including previously failed moves.
-      if (!current()) return;
+      // Only in the control panel, the one window that tells main the workspace scope: the scan
+      // and the moves start by publishing it. A loss another window's list saw first is still
+      // found there, by the scan of main's rows.
+      if (!current() || !isControlPanelWindow()) return;
       const orphaned = rowCheck ? await orphanedPrivateWorkspaces(rowCheck, current) : [];
       if (!current()) return;
       const toRelocate = await confirmedLost([...new Set([...lost, ...orphaned])]);
@@ -564,13 +568,16 @@ export function onWorkspaceScopePublished(
  * Tells main the active and default workspace, so new private notes go to the active workspace's
  * Private and existing ones to the default's. Named for the account whose list chose them: main
  * refuses a scope that arrives after another account signed in. True once main took it.
+ *
+ * Only the control panel sends it, since it owns the workspace choice; another window's store may
+ * not have loaded its list and would send main an empty scope.
  */
 export async function publishWorkspaceScope(
   isCurrent: () => boolean = () => true
 ): Promise<boolean> {
   if (!isCurrent()) return false;
   const api = typeof window !== "undefined" ? window.electronAPI : undefined;
-  if (!api?.setActiveWorkspaceScope) return false;
+  if (!api?.setActiveWorkspaceScope || !isControlPanelWindow()) return false;
   const { activeWorkspaceId, activeWorkspaceProvisional, defaultWorkspaceId, listAccountId } =
     useWorkspaceStore.getState();
   // A provisional pick isn't final (D46): main files unattended notes into the default's Private

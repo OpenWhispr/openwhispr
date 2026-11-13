@@ -9,6 +9,7 @@ import {
   isAccountScopeRetryWaiting,
   markAccountScopePurgeRequired,
   reconcileAccountScope,
+  requestActiveAccountScope,
   resetAccountScopeRetry,
   scheduleAccountScopeRetry,
   shouldBlockAccountScope,
@@ -213,10 +214,7 @@ export function useAuth() {
         await loadAccountDependencies();
       if (getAuthRequestContextSnapshot().observedGeneration !== boundGeneration) return;
       prepareChatAccountScope(resolvedUserId);
-      const scopeResult = await window.electronAPI?.setActiveAccountScope?.(
-        resolvedUserId,
-        boundGeneration
-      );
+      const scopeResult = await requestActiveAccountScope(resolvedUserId, boundGeneration);
       if (!scopeResult?.success) {
         throw new Error(scopeResult?.error ?? "Could not establish the local account scope");
       }
