@@ -409,7 +409,8 @@
           "modelNotFound": "Le modèle sélectionné n’est pas disponible auprès de ce fournisseur.",
           "providerStatus": "Le fournisseur a renvoyé le statut {{status}}.",
           "timeout": "Le test de connexion a expiré.",
-          "network": "Le fournisseur est injoignable."
+          "network": "Le fournisseur est injoignable.",
+          "invalidHeaders": "En-tête HTTP invalide. Vérifiez le nom et la valeur ; Content-Type et les en-têtes de transport ne peuvent pas être modifiés."
         }
       },
       "local": {
@@ -3254,7 +3255,13 @@
     "selfHosted": {
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
-      "apiKeyOptional": "Clé API (facultative)"
+      "apiKeyOptional": "Clé API (facultative)",
+      "headers": "En-têtes HTTP",
+      "headersHelp": "Partagés entre les serveurs de transcription auto-hébergés. L’authentification existante est prioritaire. Content-Type et les en-têtes de transport ne peuvent pas être modifiés.",
+      "headerName": "Nom de l’en-tête",
+      "headerValue": "Valeur de l’en-tête",
+      "removeHeader": "Supprimer",
+      "addHeader": "Ajouter un en-tête"
     },
     "enterpriseCheckout": {
       "title": "Passer à Enterprise",

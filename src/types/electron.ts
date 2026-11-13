@@ -144,6 +144,7 @@ export interface DictationRealtimeSessionOptions {
   baseUrl?: string;
   model?: string;
   mode?: "byok" | "openwhispr";
+  transcriptionMode?: string;
   language?: string;
   sampleRate?: number;
   keyterms?: string[];
@@ -1692,6 +1693,7 @@ declare global {
         scope: "transcription" | "reasoning";
         provider: string;
         apiKey?: string;
+        headers?: { name: string; value: string }[];
         baseUrl?: string;
         model?: string;
         clientId?: string;
@@ -2815,6 +2817,8 @@ declare global {
       saveAssemblyAIKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
+      getSelfHostedSttHeaders?: () => Promise<string | null>;
+      saveSelfHostedSttHeaders?: (value: string) => Promise<void>;
       getCustomTranscriptionKey?: () => Promise<string | null>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
       getCleanupCustomKey?: () => Promise<string | null>;

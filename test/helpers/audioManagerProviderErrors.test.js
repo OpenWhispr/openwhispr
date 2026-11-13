@@ -57,7 +57,7 @@ test("a self-hosted 404 blames the user's server, not OpenAI", async (t) => {
   assert.doesNotMatch(error.message, /OpenAI/);
 });
 
-test("a direct-fetch \"Failed to fetch\" asks to check the key and connection", async (t) => {
+test('a direct-fetch "Failed to fetch" asks to check the key and connection', async (t) => {
   const manager = await loadManager(t, { cloudTranscriptionProvider: "groq" });
   t.mock.method(globalThis, "fetch", async () => {
     throw new TypeError("Failed to fetch");
@@ -122,4 +122,43 @@ test("a proxied provider's already-classified failure passes through unchanged",
   assert.equal(error.code, "PROVIDER_AUTH_FAILED");
   assert.equal(error.status, 401);
   assert.equal(error.settingsTarget, "speechToText");
+});
+
+test("self-hosted batch dictation sends custom headers and preserves auth without leaking to OpenAI", async (t) => {
+  const calls = [];
+  const manager = await loadManager(t, {
+    ...selfHostedSettings,
+    selfHostedSttHeaders: [{ name: "X-API-Key", value: "local-test-key" }],
+  });
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    calls.push(init);
+    return new Response(JSON.stringify({ text: "test" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  await manager.processWithOpenAIAPI(recording());
+  assert.equal(calls[0].redirect, "error");
+  assert.equal(calls[0].headers["x-api-key"], "local-test-key");
+  assert.equal(calls[0].headers.authorization, "Bearer test-key");
+  assert.equal(new Headers(calls[0].headers).has("content-type"), false);
+  const other = await loadManager(t, {
+    cloudTranscriptionProvider: "openai",
+    selfHostedSttHeaders: [{ name: "X-API-Key", value: "local-test-key" }],
+  });
+  await other.processWithOpenAIAPI(recording());
+  assert.equal(new Headers(calls.at(-1).headers).has("x-api-key"), false);
+});
+
+test("self-hosted dictation with no effective custom headers keeps redirect follow", async (t) => {
+  const manager = await loadManager(t, {
+    ...selfHostedSettings,
+    selfHostedSttHeaders: [{ name: "", value: "" }],
+  });
+  t.mock.method(globalThis, "fetch", async (_url, init) => {
+    assert.equal(init.redirect, "follow");
+    return new Response(JSON.stringify({ text: "test" }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+  await manager.processWithOpenAIAPI(recording());
 });

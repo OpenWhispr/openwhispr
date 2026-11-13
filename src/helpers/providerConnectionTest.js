@@ -1,3 +1,4 @@
+const { mergeSelfHostedSttHeaders } = require("./selfHostedSttHeaders.js");
 const ENDPOINTS = {
   openai: "https://api.openai.com/v1/models",
   groq: "https://api.groq.com/openai/v1/models",
@@ -258,8 +259,16 @@ function resolveProviderRequest(config) {
   return {
     endpoint: endpoints[0],
     endpoints,
-    headers,
-    redirect,
+    headers:
+      provider === "custom" && scope === "transcription"
+        ? mergeSelfHostedSttHeaders(config.headers, headers)
+        : headers,
+    redirect:
+      provider === "custom" &&
+      scope === "transcription" &&
+      config.headers?.some((row) => row.name || row.value)
+        ? "error"
+        : redirect,
     transcriptionEndpoint,
     checksOpenRouterKey,
   };

@@ -409,7 +409,8 @@
           "modelNotFound": "El modelo seleccionado no está disponible en este proveedor.",
           "providerStatus": "El proveedor devolvió el estado {{status}}.",
           "timeout": "La prueba de conexión agotó el tiempo de espera.",
-          "network": "No se pudo contactar con el proveedor."
+          "network": "No se pudo contactar con el proveedor.",
+          "invalidHeaders": "Cabecera HTTP no válida. Revisa el nombre y el valor; Content-Type y las cabeceras de transporte no son personalizables."
         }
       },
       "local": {
@@ -2540,7 +2541,13 @@
     "selfHosted": {
       "endpointUrl": "URL del endpoint",
       "serverUrl": "URL del servidor",
-      "apiKeyOptional": "API Key (opcional)"
+      "apiKeyOptional": "API Key (opcional)",
+      "headers": "Cabeceras HTTP",
+      "headersHelp": "Se comparten entre los servidores de transcripción autoalojados. La autenticación existente tiene prioridad. No se pueden personalizar Content-Type ni las cabeceras de transporte.",
+      "headerName": "Nombre de cabecera",
+      "headerValue": "Valor de cabecera",
+      "removeHeader": "Eliminar",
+      "addHeader": "Añadir cabecera"
     },
     "workspace": {
       "title": "Espacio de trabajo",

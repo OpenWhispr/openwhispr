@@ -224,3 +224,27 @@ test("unknown settings cannot invoke getters, and refresh errors cannot log secr
     "old-customTranscriptionApiKey"
   );
 });
+
+test("self-hosted headers hydrate, save securely and refresh across windows without localStorage", async (t) => {
+  let stored = JSON.stringify([{ name: "X-API-Key", value: "local-test-key" }]);
+  let saves = 0;
+  const context = await loadSettings(t, {
+    getSelfHostedSttHeaders: async () => stored,
+    saveSelfHostedSttHeaders: async (value) => {
+      stored = value;
+      saves++;
+    },
+  });
+  await context.initializeSettings();
+  assert.equal(context.useSettingsStore.getState().selfHostedSttHeaders[0].value, "local-test-key");
+  context.useSettingsStore
+    .getState()
+    .setSelfHostedSttHeaders([{ name: "X-API-Key", value: "edited" }]);
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  assert.equal(saves, 1);
+  assert.equal(JSON.parse(stored)[0].value, "edited");
+  assert.equal(context.storage.getItem("selfHostedSttHeaders"), null);
+  stored = "[]";
+  await context.update("selfHostedSttHeaders");
+  assert.deepEqual(context.useSettingsStore.getState().selfHostedSttHeaders, []);
+});

@@ -3823,7 +3823,8 @@
           "modelNotFound": "النموذج المحدد غير متوفر من هذا المزود.",
           "providerStatus": "أعاد المزود رمز الحالة {{status}}.",
           "timeout": "انتهت مهلة اختبار الاتصال.",
-          "network": "تعذر الوصول إلى المزود."
+          "network": "تعذر الوصول إلى المزود.",
+          "invalidHeaders": "ترويسة HTTP غير صالحة. تحقق من الاسم والقيمة؛ لا يمكن تخصيص Content-Type وترويسات النقل."
         }
       },
       "local": {
@@ -5758,7 +5759,13 @@
     "selfHosted": {
       "endpointUrl": "عنوان URL لنقطة النهاية",
       "serverUrl": "عنوان URL للخادم",
-      "apiKeyOptional": "مفتاح API (اختياري)"
+      "apiKeyOptional": "مفتاح API (اختياري)",
+      "headers": "ترويسات HTTP",
+      "headersHelp": "مشتركة بين خوادم تحويل الكلام إلى نص ذاتية الاستضافة. للمصادقة الحالية الأولوية. لا يمكن تخصيص Content-Type وترويسات النقل.",
+      "headerName": "اسم الترويسة",
+      "headerValue": "قيمة الترويسة",
+      "removeHeader": "إزالة",
+      "addHeader": "إضافة ترويسة"
     },
     "enterpriseCheckout": {
       "title": "الترقية إلى Enterprise",

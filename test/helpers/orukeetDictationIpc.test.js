@@ -118,8 +118,8 @@ Module._load = function loadWithMocks(request, parent, isMain) {
                     : cloudSession.websocketUrl
                 );
                 assert.equal(
-                  options.headers.Authorization,
-                  protocols ? undefined : "Bearer test-key"
+                  new Headers(options.headers).get("authorization"),
+                  protocols ? null : "Bearer test-key"
                 );
                 opened++;
                 return new WebSocket(`ws://127.0.0.1:${server.address().port}`, protocols, options);
@@ -874,4 +874,43 @@ test("self-hosted Orukeet: a warmup still replaces a socket that carried audio",
 
   assert.equal(warmup.alreadyWarm, undefined);
   assert.notEqual(target._dictationStreaming, used);
+});
+
+test("custom Orukeet excludes self-hosted headers; self-hosted mode includes them with one Bearer auth", async (t) => {
+  const requests = [];
+  const capture = (_socket, request) => requests.push(request);
+  server.on("connection", capture);
+  target.environmentManager = {
+    getCustomTranscriptionKey: () => "test-key",
+    getSelfHostedSttHeaders: () =>
+      JSON.stringify([
+        { name: "X-API-Key", value: "self-hosted-only" },
+        { name: "authorization", value: "must-not-override" },
+      ]),
+  };
+  t.after(async () => {
+    server.off("connection", capture);
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+  for (const transcriptionMode of ["providers", "self-hosted"]) {
+    await handlers.get("dictation-realtime-stop")();
+    const result = await handlers.get("dictation-realtime-start")(event, {
+      ...managedOptions,
+      mode: "byok",
+      baseUrl: cloudSession.baseUrl,
+      transcriptionMode,
+    });
+    assert.equal(result.success, true);
+    const request = requests.at(-1);
+    assert.equal(
+      request.headers["x-api-key"],
+      transcriptionMode === "self-hosted" ? "self-hosted-only" : undefined
+    );
+    assert.equal(request.headers.authorization, "Bearer test-key");
+    assert.equal(
+      request.rawHeaders.filter((value) => value.toLowerCase() === "authorization").length,
+      1
+    );
+  }
 });

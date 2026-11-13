@@ -89,3 +89,30 @@ test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
   const bridgeCount = (block[1].match(/base:/g) || []).length;
   assert.equal(bridgeCount, BYOK_API_KEYS.length, "no extra/missing preload bridges");
 });
+
+test("self-hosted header JSON round-trips through the existing plaintext fallback without dotenv truncation", async () => {
+  const serialized = JSON.stringify([
+    { name: "X-API-Key", value: "secret#with'quotes\"and\\slashes" },
+    { name: "", value: "" },
+  ]);
+  const previous = process.env.SELF_HOSTED_STT_HEADERS;
+  try {
+    const env = new EnvironmentManager();
+    env.saveSelfHostedSttHeaders(serialized);
+    await env.saveAllKeysToEnvFile();
+    const saved = require("dotenv").parse(fs.readFileSync(path.join(tmpUserData, ".env")));
+    assert.ok(saved.SELF_HOSTED_STT_HEADERS.startsWith("base64:"));
+    process.env.SELF_HOSTED_STT_HEADERS = saved.SELF_HOSTED_STT_HEADERS;
+    assert.equal(new EnvironmentManager().getSelfHostedSttHeaders(), serialized);
+    await env.saveAllKeysToEnvFile();
+    const resaved = require("dotenv").parse(fs.readFileSync(path.join(tmpUserData, ".env")));
+    assert.equal(
+      resaved.SELF_HOSTED_STT_HEADERS,
+      saved.SELF_HOSTED_STT_HEADERS,
+      "no double encoding"
+    );
+  } finally {
+    if (previous === undefined) delete process.env.SELF_HOSTED_STT_HEADERS;
+    else process.env.SELF_HOSTED_STT_HEADERS = previous;
+  }
+});

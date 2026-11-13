@@ -409,7 +409,8 @@
           "modelNotFound": "The selected model is not available from this provider.",
           "providerStatus": "The provider returned status {{status}}.",
           "timeout": "The connection test timed out.",
-          "network": "The provider could not be reached."
+          "network": "The provider could not be reached.",
+          "invalidHeaders": "Invalid HTTP header. Check the name and value; Content-Type and transport headers cannot be customized."
         }
       },
       "local": {
@@ -3248,7 +3249,13 @@
     "selfHosted": {
       "endpointUrl": "Endpoint URL",
       "serverUrl": "Server URL",
-      "apiKeyOptional": "API Key (optional)"
+      "apiKeyOptional": "API Key (optional)",
+      "headers": "HTTP headers",
+      "headersHelp": "Shared by self-hosted speech-to-text servers. Existing authentication takes priority. Content-Type and transport headers cannot be customized.",
+      "headerName": "Header name",
+      "headerValue": "Header value",
+      "removeHeader": "Remove",
+      "addHeader": "Add header"
     },
     "enterpriseCheckout": {
       "title": "Upgrade to Enterprise",

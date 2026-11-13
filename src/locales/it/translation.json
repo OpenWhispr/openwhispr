@@ -409,7 +409,8 @@
           "modelNotFound": "Il modello selezionato non è disponibile presso questo provider.",
           "providerStatus": "Il provider ha restituito lo stato {{status}}.",
           "timeout": "Il test di connessione è scaduto.",
-          "network": "Impossibile raggiungere il provider."
+          "network": "Impossibile raggiungere il provider.",
+          "invalidHeaders": "Intestazione HTTP non valida. Controlla nome e valore; Content-Type e le intestazioni di trasporto non sono personalizzabili."
         }
       },
       "local": {
@@ -2488,7 +2489,13 @@
     "selfHosted": {
       "endpointUrl": "URL endpoint",
       "serverUrl": "URL server",
-      "apiKeyOptional": "API Key (opzionale)"
+      "apiKeyOptional": "API Key (opzionale)",
+      "headers": "Intestazioni HTTP",
+      "headersHelp": "Condivise tra i server di trascrizione self-hosted. L’autenticazione esistente ha la precedenza. Content-Type e le intestazioni di trasporto non sono personalizzabili.",
+      "headerName": "Nome intestazione",
+      "headerValue": "Valore intestazione",
+      "removeHeader": "Rimuovi",
+      "addHeader": "Aggiungi intestazione"
     },
     "workspace": {
       "title": "Area di lavoro",
