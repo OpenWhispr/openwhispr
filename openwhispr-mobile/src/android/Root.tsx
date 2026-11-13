@@ -1,7 +1,7 @@
 import { observeAndroidLanguage } from './strings';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -13,11 +13,7 @@ import {
   SpaceGrotesk_700Bold,
 } from '@expo-google-fonts/space-grotesk';
 import * as SplashScreen from 'expo-splash-screen';
-import { useAuthStore } from '@/store/useAuthStore';
-import { useConfigStore } from '@/store/useConfigStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
-import { useDictionaryStore } from '@/store/useDictionaryStore';
-import { useSnippetsStore } from '@/store/useSnippetsStore';
 import { useNotesStore } from '@/store/useNotesStore';
 import { startMeetingRecoveryOnce } from '@/lib/meetingRecovery';
 import { initSyncTriggers } from '@/sync/syncEngine';
@@ -29,7 +25,9 @@ import { Button, styles, palette } from './ui';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
 import { observeAndroidPurchaseUpdates } from './billing';
-import { useBubblePipeline } from './useBubblePipeline';
+import { startBubblePipeline } from './bubblePipeline';
+import { bootAppData, forgetAppData } from './appData';
+import { dictationEvents } from '../../modules/android-dictation/src';
 import { useAccountData } from './accountData';
 import { observeBubbleRestore } from './bubbleRestore';
 
@@ -47,20 +45,21 @@ export default function AndroidRoot() {
     SpaceGrotesk_600SemiBold,
     SpaceGrotesk_700Bold,
   });
-  useBubblePipeline();
+  useEffect(() => startBubblePipeline(), []);
+  useEffect(() => {
+    // The bubble's "open" on a kept result; a cold launch lands on the record tab anyway.
+    const subscription = dictationEvents?.addListener('onOpenResult', () =>
+      router.navigate('/(tabs)/(record)'),
+    );
+    return () => subscription?.remove();
+  }, []);
   useRevenueCatIdentity();
   useEffect(() => observeAndroidPurchaseUpdates(), []);
   useEffect(() => observeAndroidLanguage(), []);
   useEffect(() => observeBubbleRestore(), []);
   useEffect(() => {
     async function initialize() {
-      await useConfigStore.getState().loadConfig();
-      await useAuthStore.getState().initialize();
-      await Promise.all([
-        useTranscriptStore.getState().loadTranscripts(),
-        useDictionaryStore.getState().load(),
-        useSnippetsStore.getState().load(),
-      ]);
+      await bootAppData();
       // A cold deep link can skip Home, which also initializes app data. Recover
       // interrupted meetings here so every entry route makes their audio retryable.
       useNotesStore.getState().initialize();
@@ -94,6 +93,7 @@ export default function AndroidRoot() {
               <Button
                 label={t('retry')}
                 onPress={() => {
+                  forgetAppData();
                   setBootError('');
                   setAttempt((value) => value + 1);
                 }}
