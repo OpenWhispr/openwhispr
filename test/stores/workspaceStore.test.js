@@ -264,6 +264,8 @@ async function loadPrivateNotesStore(
     accountId,
     spaces,
     relocateThrows: 0,
+    // The workspace's own read: the account is no longer in a workspace a test asks about.
+    isLost: async () => true,
     ensureCalls: [],
     listCalls: 0,
   };
@@ -283,6 +285,7 @@ async function loadPrivateNotesStore(
             globalThis.__ws.ensureCalls.push(name);
             return globalThis.__ws.ensureDefault(name);
           },
+          isLost: (workspaceId) => globalThis.__ws.isLost(workspaceId),
         };
       `,
       "/policyStore": `
@@ -665,6 +668,26 @@ test("a relocation that threw is retried on the next successful list", async (t)
     ["relocate", "lost", null, "acct-1"],
     ["relocate", "lost", null, "acct-1"],
   ]);
+});
+
+test("a list that leaves out a workspace the account still has relocates nothing", async (t) => {
+  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+    list: async () => [OWN, TEAM],
+    storage: { [LIST_CACHE_KEY]: cacheFor("acct-1", [OWN, TEAM, LOST]) },
+    spaces: [privateRow(2, "own", { is_default_private: 1 }), privateRow(4, "lost")],
+  });
+  // A stale answer: the workspace's own read still finds the account in it.
+  globalThis.__ws.isLost = async () => false;
+  await useWorkspaceStore.getState().refresh();
+  globalThis.__ws.isLost = async () => {
+    throw new Error("offline");
+  };
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+  assert.deepEqual(relocationsOf(calls), []);
+
+  globalThis.__ws.isLost = async (workspaceId) => workspaceId === "lost";
+  await useWorkspaceStore.getState().refresh({ fresh: true });
+  assert.deepEqual(relocationsOf(calls), [["relocate", "lost", null, "acct-1"]]);
 });
 
 test("a failed or empty load relocates nothing, whatever rows main holds", async (t) => {

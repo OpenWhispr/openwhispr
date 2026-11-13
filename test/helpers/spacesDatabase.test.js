@@ -561,6 +561,16 @@ test("migration 6 gives each account its own copy of a folder they share", (t) =
     });
   }
   assertEveryRowInItsFolderSpace(after);
+
+  // The copy holds a's note, so a's next backup uploads it.
+  migrated.setActiveAccountId("a");
+  assert.equal(migrated.queueUnlinkedPrivateFolders(), 1);
+  assert.equal(
+    after
+      .prepare("SELECT sync_status FROM folders WHERE space_id = ? AND name = 'Meetings'")
+      .get(pendingRowId(after, "a")).sync_status,
+    "pending"
+  );
 });
 
 test("migration 6 moves soft-deleted rows and private root chats with their account", (t) => {
@@ -1404,6 +1414,65 @@ test("upsertFolderFromCloud converges on a same-space name collision", (t) => {
   assert.notEqual(forked.client_folder_id, "cf-remote");
   assert.equal(forked.cloud_id, null);
   assert.equal(forked.sync_status, "pending");
+});
+
+test("upsertFolderFromCloud never takes over a namesake that is another cloud folder", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  signIn(db, "a", W1_ACTIVE);
+  db.bindDefaultPrivateSpace("w1");
+  const home = db.getDefaultPrivateSpaceId();
+  const placed = db.upsertFolderFromCloud(
+    {
+      id: "cloud-placed",
+      client_folder_id: "cf-placed",
+      name: "Projects",
+      sort_order: 1,
+      private_workspace_id: "w1",
+      created_at: "2026-11-01T00:00:00.000Z",
+      updated_at: "2026-11-01T00:00:00.000Z",
+    },
+    home
+  );
+  const note = db.saveNote("Filed", "body", "personal", null, null, placed.id, home).note;
+  // Backed up before placement, beside it on the server.
+  const legacy = db.upsertFolderFromCloud(
+    {
+      id: "cloud-legacy",
+      client_folder_id: "cf-legacy",
+      name: "Projects",
+      sort_order: 2,
+      private_workspace_id: null,
+      created_at: "2026-11-02T00:00:00.000Z",
+      updated_at: "2026-11-02T00:00:00.000Z",
+    },
+    null
+  );
+  assert.notEqual(legacy.id, placed.id);
+  assert.equal(legacy.cloud_id, "cloud-legacy");
+  assert.equal(legacy.name, "Projects (2)");
+  assert.deepEqual(
+    { cloud_id: folderRow(db.db, placed.id).cloud_id, name: folderRow(db.db, placed.id).name },
+    { cloud_id: "cloud-placed", name: "Projects" }
+  );
+  assert.equal(db.getNote(note.id).folder_id, placed.id);
+
+  // Pulled again, it keeps the name it has here.
+  const again = db.upsertFolderFromCloud(
+    {
+      id: "cloud-legacy",
+      client_folder_id: "cf-legacy",
+      name: "Projects",
+      sort_order: 3,
+      private_workspace_id: null,
+      created_at: "2026-11-02T00:00:00.000Z",
+      updated_at: "2026-11-03T00:00:00.000Z",
+    },
+    null
+  );
+  assert.equal(again.id, legacy.id);
+  assert.equal(again.name, "Projects (2)");
+  assert.equal(folderRow(db.db, placed.id).cloud_id, "cloud-placed");
 });
 
 test("pending vector purges persist across relaunches until cleared", (t) => {
@@ -3673,6 +3742,16 @@ test("a folder delete the split left in the stand-in still finishes or rolls bac
 
   assert.equal(db.restoreFolderAfterDeniedDelete(denied.folder).success, true);
   assert.equal(folderRow(sqlite, denied.folder).deleted_at, null);
+  // a's note comes back in its own copy of the folder, where a can see it, as the split files it.
+  const [legacyNote, aNote] = denied.notes;
+  assert.equal(noteRow(sqlite, legacyNote).folder_id, denied.folder);
+  const restoredNote = db.getNote(aNote);
+  assert.equal(restoredNote.deleted_at, null);
+  assert.equal(restoredNote.space_id, db.getDefaultPrivateSpaceId());
+  assert.deepEqual(
+    db.getFolders().find((folder) => folder.id === restoredNote.folder_id)?.name,
+    folderRow(sqlite, denied.folder).name
+  );
   assert.equal(
     sqlite.prepare("SELECT COUNT(*) AS count FROM optimistic_folder_delete_rows").get().count,
     0
@@ -4232,7 +4311,7 @@ test("explicit cloud placement moves personal notes and folders, including back 
   assert.equal(db.getNote(localNote.id).cloud_id, note.id);
 });
 
-test("placement backfill queues only the active account's clean Private rows and keeps conflict bases", (t) => {
+test("placement backfill reads only the active account's clean Private rows and changes none", (t) => {
   const db = createFreshDeviceDb(t);
   if (!db) return;
   const { home, w2 } = defaultAndW2(db);
@@ -4268,17 +4347,25 @@ test("placement backfill queues only the active account's clean Private rows and
     },
     home
   );
-  const result = db.queuePrivatePlacementBackup(candidates);
+  const result = db.getPrivatePlacementBackupRows(candidates);
   assert.equal(result.success, true);
-  assert.equal(result.queuedNotes, 1);
-  assert.ok(result.queuedFolders >= 1);
-  assert.deepEqual(db.getNote(note.id), { ...before, sync_status: "pending" });
-  assert.equal(folderRow(db.db, folder.id).sync_status, "pending");
+  assert.deepEqual(result.notes, [
+    { id: note.id, cloud_id: "cloud-note", client_id: note.client_note_id, workspace_id: "w2" },
+  ]);
+  assert.ok(
+    result.folders.some(
+      (row) => row.id === folder.id && row.cloud_id === "cloud-folder" && row.workspace_id === "w2"
+    )
+  );
+  assert.equal(
+    result.folders.some((row) => row.id === restoredFolder.id),
+    false
+  );
+  assert.deepEqual(db.getNote(note.id), before);
+  assert.equal(folderRow(db.db, folder.id).sync_status, "synced");
   assert.equal(noteRow(db.db, foreign.id).sync_status, "synced");
   assert.equal(db.getNote(restored.id).sync_status, "synced");
-  assert.equal(folderRow(db.db, restoredFolder.id).sync_status, "synced");
   assert.equal(db.getDefaultPrivateSpaceId(), home);
-  assert.equal(db.queuePrivatePlacementBackup(candidates).queuedNotes, 0);
 });
 
 test("placement backfill waits for the default Private row to bind after workspace scope arrives", (t) => {
@@ -4291,14 +4378,14 @@ test("placement backfill waits for the default Private row to bind after workspa
   const candidates = db.getPrivatePlacementBackupCandidates();
 
   db.setActiveWorkspaceScope(W1_ACTIVE);
-  assert.equal(db.queuePrivatePlacementBackup(candidates).success, false);
+  assert.equal(db.getPrivatePlacementBackupRows(candidates).success, false);
   assert.deepEqual(db.getNote(note.id), before);
 
   db.bindDefaultPrivateSpace("w1");
-  const result = db.queuePrivatePlacementBackup(candidates);
+  const result = db.getPrivatePlacementBackupRows(candidates);
   assert.equal(result.success, true);
-  assert.equal(result.queuedNotes, 1);
-  assert.equal(db.getNote(note.id).sync_status, "pending");
+  // The default's own rows need none: the server reads no placement as the default.
+  assert.deepEqual(result.notes, []);
   assert.equal(db.getSpace(db.getNote(note.id).space_id).workspace_id, "w1");
 });
 

@@ -53,6 +53,13 @@ function silenceConsoleErrors(t) {
   t.mock.method(console, "error", () => {});
 }
 
+// A Private's default folder waits for a full pass to upload it; this one already has.
+function linkNoteFolder(device, cloud, note) {
+  const folder = device.db.getFolders().find((row) => row.id === note.folder_id);
+  const remote = cloud.seedFolder({ client_folder_id: folder.client_folder_id, name: folder.name });
+  device.db.markFolderSynced(folder.id, remote.id);
+}
+
 function attempted(db, table, id) {
   return db.db.prepare(`SELECT cloud_create_attempted AS flag FROM ${table} WHERE id = ?`).get(id)
     .flag;
@@ -790,6 +797,7 @@ for (const mode of ["normal pass", "isolated push", "Backup enable sweep"]) {
     await device.signIn("source-account", source);
     device.db.bindDefaultPrivateSpace("source-workspace");
     const note = device.db.saveNote("Source private", "Source content").note;
+    linkNoteFolder(device, source, note);
     device.api.getNotes = async () => [device.db.getNote(note.id)];
     const record = device.api.markNoteCreatesAttempted;
     device.api.markNoteCreatesAttempted = async (...args) => {
@@ -887,6 +895,7 @@ test("a note create response cannot acknowledge into a replacement account", asy
   await device.signIn("source-account", source);
   device.db.bindDefaultPrivateSpace("source-workspace");
   const note = device.db.saveNote("Source note", "Retain pending").note;
+  linkNoteFolder(device, source, note);
   const acknowledge = device.api.acknowledgeNoteCreate;
   device.api.acknowledgeNoteCreate = async (...args) => {
     await device.signIn("replacement-account", replacement);

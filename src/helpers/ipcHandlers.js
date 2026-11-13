@@ -3683,11 +3683,23 @@ class IPCHandlers {
       }
       return this.databaseManager.getPrivatePlacementBackupCandidates();
     });
-    ipcMain.handle("db-queue-private-placement-backup", (_, expectedAuthGeneration, candidates) => {
+    ipcMain.handle(
+      "db-get-private-placement-backup-rows",
+      (_, expectedAuthGeneration, candidates) => {
+        if (
+          !Number.isSafeInteger(expectedAuthGeneration) ||
+          isStaleSyncAck(expectedAuthGeneration)
+        ) {
+          return STALE_SYNC_ACK;
+        }
+        return this.databaseManager.getPrivatePlacementBackupRows(candidates);
+      }
+    );
+    ipcMain.handle("db-queue-unlinked-private-folders", (_, expectedAuthGeneration) => {
       if (!Number.isSafeInteger(expectedAuthGeneration) || isStaleSyncAck(expectedAuthGeneration)) {
         return STALE_SYNC_ACK;
       }
-      return this.databaseManager.queuePrivatePlacementBackup(candidates);
+      return this.databaseManager.queueUnlinkedPrivateFolders();
     });
     ipcMain.handle(
       "db-acknowledge-note-create",
@@ -3841,19 +3853,21 @@ class IPCHandlers {
     );
     ipcMain.handle("db-restore-folder-after-denied-delete", (_, id) => {
       const result = this.databaseManager.restoreFolderAfterDeniedDelete(id);
-      if (result?.success) {
-        this.notifyVectorChanges();
-        for (const note of result.notes ?? []) {
-          this._asyncMirrorWrite(note);
-        }
-        setImmediate(() => {
-          if (result.folder) broadcastToWindows("folder-synced", result.folder);
-          for (const note of result.notes ?? []) {
-            broadcastToWindows("note-synced", note);
-          }
-        });
+      if (!result?.success) return result;
+      this.notifyVectorChanges();
+      for (const note of result.notes ?? []) {
+        this._asyncMirrorWrite(note);
       }
-      return result;
+      // A stand-in folder also brings back the signed-out notes it holds; only
+      // the account's own reach its windows.
+      const notes = (result.notes ?? []).filter((note) => this.databaseManager.getNote(note.id));
+      setImmediate(() => {
+        if (result.folder) broadcastToWindows("folder-synced", result.folder);
+        for (const note of notes) {
+          broadcastToWindows("note-synced", note);
+        }
+      });
+      return { ...result, notes };
     });
     ipcMain.handle("db-hard-delete-folder", (_, id, expectedAuthGeneration) => {
       if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))

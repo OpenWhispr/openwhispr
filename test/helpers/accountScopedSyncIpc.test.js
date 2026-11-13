@@ -233,7 +233,8 @@ test("placement backfill and tombstone recovery reject stale sign-ins before cha
     );
 
   assert.equal((await renew(generation - 1)).stale, true);
-  assert.equal((await invoke("db-queue-private-placement-backup", generation - 1)).stale, true);
+  assert.equal((await invoke("db-get-private-placement-backup-rows", generation - 1)).stale, true);
+  assert.equal((await invoke("db-queue-unlinked-private-folders", generation - 1)).stale, true);
   assert.equal(
     (await invoke("db-get-private-placement-backup-candidates", generation - 1)).stale,
     true
@@ -246,11 +247,13 @@ test("placement backfill and tombstone recovery reject stale sign-ins before cha
   assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM spaces").get().count, spacesBefore);
   assert.equal(db.getNote(personal.id).sync_status, "synced");
   assert.equal(db.getNote(note.id).cloud_id, "deleted-personal-cloud");
-  assert.equal(
-    (await invoke("db-queue-private-placement-backup", generation, candidates)).success,
-    true
+  const placementRows = await invoke(
+    "db-get-private-placement-backup-rows",
+    generation,
+    candidates
   );
-  assert.equal(db.getNote(personal.id).sync_status, "pending");
+  assert.equal(placementRows.success, true);
+  assert.equal(db.getNote(personal.id).sync_status, "synced");
   const renewed = await renew(generation);
   assert.equal(renewed.success, true);
   assert.equal(renewed.note.cloud_id, null);

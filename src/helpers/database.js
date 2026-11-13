@@ -2119,11 +2119,12 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_snippets_pending_sync ON snippets(sync_status) WHERE sync_status = 'pending'"
       );
 
-      // A team space mirrors a cloud space. A private space never leaves the
-      // device: there is one per account and workspace (account_id and
-      // workspace_id, added below). The private row with neither is the
-      // signed-out stand-in; an account's row with no workspace holds its
-      // notes until its default workspace is known.
+      // A team space mirrors a cloud space. A private space has no cloud row
+      // (its notes back up with their workspace as placement): there is one
+      // per account and workspace (account_id and workspace_id, added below).
+      // The private row with neither is the signed-out stand-in; an account's
+      // row with no workspace holds its notes until its default workspace is
+      // known.
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS spaces (
           id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -6180,7 +6181,8 @@ class DatabaseManager {
   // Gives a private space its own Personal and Meetings folders, the first
   // time a note needs one. A folder already holding the name (a default the
   // split moved or copied there, or one the user made) is kept as it is.
-  // Empty unlinked defaults need no upload; a contained note queues them.
+  // Empty unlinked defaults need no upload; a contained note queues them
+  // (queueUnlinkedPrivateFolders).
   ensureDefaultFolders(spaceId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -9036,18 +9038,27 @@ class DatabaseManager {
   }
 
   getConversationIdsInScope(spaceIds = null) {
-    const scope = this._ownedRowScope("agent_conversations", "c");
-    const noteScope = this._accountScopeCondition("n");
-    const list = this._conversationNoteScope(spaceIds);
-    return this.db
-      .prepare(
-        `SELECT c.id FROM agent_conversations c
-      LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
-      WHERE c.deleted_at IS NULL AND c.archived_at IS NULL
-        AND c.space_id IS NULL AND c.folder_id IS NULL AND ${scope.sql} AND ${list.sql}`
-      )
-      .all(...noteScope.params, ...scope.params, ...list.params)
-      .map((row) => row.id);
+    try {
+      const scope = this._ownedRowScope("agent_conversations", "c");
+      const noteScope = this._accountScopeCondition("n");
+      const list = this._conversationNoteScope(spaceIds);
+      return this.db
+        .prepare(
+          `SELECT c.id FROM agent_conversations c
+        LEFT JOIN notes n ON n.id = c.note_id AND ${noteScope.sql}
+        WHERE c.deleted_at IS NULL AND c.archived_at IS NULL
+          AND c.space_id IS NULL AND c.folder_id IS NULL AND ${scope.sql} AND ${list.sql}`
+        )
+        .all(...noteScope.params, ...scope.params, ...list.params)
+        .map((row) => row.id);
+    } catch (error) {
+      debugLogger.error(
+        "Error getting conversation ids in scope",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
   }
 
   getAgentConversationsWithPreview(
@@ -10040,37 +10051,49 @@ class DatabaseManager {
   }
 
   getPrivatePlacementBackupCandidates() {
-    if (!this.db) throw new Error("Database not initialized");
-    if (!this.activeAccountId) return { notes: [], folders: [] };
-    const candidates = (table, key) =>
-      this.db
-        .prepare(
-          `SELECT ${key} FROM ${table} WHERE account_id = ?
-        AND deleted_at IS NULL AND sync_status = 'synced' AND cloud_id IS NOT NULL
-        AND space_id IN (SELECT id FROM spaces WHERE kind = 'private'
-          AND account_id = ? AND deleted_at IS NULL)`
-        )
-        .pluck()
-        .all(this.activeAccountId, this.activeAccountId);
-    return {
-      notes: candidates("notes", "client_note_id"),
-      folders: candidates("folders", "client_folder_id"),
-    };
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId) return { notes: [], folders: [] };
+      const candidates = (table, key) =>
+        this.db
+          .prepare(
+            `SELECT ${key} FROM ${table} WHERE account_id = ?
+          AND deleted_at IS NULL AND sync_status = 'synced' AND cloud_id IS NOT NULL
+          AND space_id IN (SELECT id FROM spaces WHERE kind = 'private'
+            AND account_id = ? AND deleted_at IS NULL)`
+          )
+          .pluck()
+          .all(this.activeAccountId, this.activeAccountId);
+      return {
+        notes: candidates("notes", "client_note_id"),
+        folders: candidates("folders", "client_folder_id"),
+      };
+    } catch (error) {
+      debugLogger.error(
+        "Error getting private placement backup candidates",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
   }
 
+  // The clean cloud rows among the candidates filed in a Private other than
+  // the default's, with that Private's workspace: the server reads no
+  // placement as the default, so only these can need one written.
   // Only pre-pull rows know their original placement. Newly restored legacy
   // rows must not publish the default fallback over another device's filing.
-  queuePrivatePlacementBackup(candidates) {
-    if (!this.db) throw new Error("Database not initialized");
-    if (!this.activeAccountId || !this.defaultWorkspaceId) return { success: false };
-    if (
-      ![candidates?.notes, candidates?.folders].every(
-        (ids) => Array.isArray(ids) && ids.every((id) => typeof id === "string" && id.length > 0)
+  getPrivatePlacementBackupRows(candidates) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId || !this.defaultWorkspaceId) return { success: false };
+      if (
+        ![candidates?.notes, candidates?.folders].every(
+          (ids) => Array.isArray(ids) && ids.every((id) => typeof id === "string" && id.length > 0)
+        )
       )
-    )
-      return { success: false };
-    return this.db.transaction(() => {
-      // Workspace scope arrives before binding can finish. Completing now would
+        return { success: false };
+      // Workspace scope arrives before binding can finish. Answering now would
       // skip clean rows still in the pending default and never retry them.
       const boundDefault = this.db
         .prepare(
@@ -10080,64 +10103,110 @@ class DatabaseManager {
         .get(this.activeAccountId, this.defaultWorkspaceId);
       if (!boundDefault || this._findPrivateSpace(this.activeAccountId, null) != null)
         return { success: false };
-      const queue = (table, key, ids) =>
+      const rows = (table, key, ids) =>
         this.db
           .prepare(
-            `UPDATE ${table} SET sync_status = 'pending'
-         WHERE account_id = ? AND deleted_at IS NULL AND sync_status = 'synced'
-           AND ${key} IN (SELECT value FROM json_each(?))
-           AND space_id IN (SELECT id FROM spaces WHERE kind = 'private'
-             AND account_id = ? AND workspace_id IS NOT NULL AND deleted_at IS NULL)`
+            `SELECT t.id, t.cloud_id, t.${key} AS client_id, s.workspace_id FROM ${table} t
+             JOIN spaces s ON s.id = t.space_id
+             WHERE t.account_id = ? AND t.deleted_at IS NULL AND t.sync_status = 'synced'
+               AND t.cloud_id IS NOT NULL AND t.${key} IN (SELECT value FROM json_each(?))
+               AND s.kind = 'private' AND s.account_id = ? AND s.workspace_id IS NOT NULL
+               AND s.workspace_id IS NOT ? AND s.deleted_at IS NULL`
           )
-          .run(this.activeAccountId, JSON.stringify(ids), this.activeAccountId).changes;
+          .all(
+            this.activeAccountId,
+            JSON.stringify(ids),
+            this.activeAccountId,
+            this.defaultWorkspaceId
+          );
       return {
         success: true,
-        queuedNotes: queue("notes", "client_note_id", candidates.notes),
-        queuedFolders: queue("folders", "client_folder_id", candidates.folders),
+        notes: rows("notes", "client_note_id", candidates.notes),
+        folders: rows("folders", "client_folder_id", candidates.folders),
       };
-    })();
+    } catch (error) {
+      debugLogger.error(
+        "Error reading private placement backup rows",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // Private folders made on this device (a Private's default folders, an
+  // account's copy of a shared folder) wait for a pull to link them to a cloud
+  // namesake. One that holds a note and still has no cloud copy is uploaded.
+  queueUnlinkedPrivateFolders() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this.activeAccountId) return 0;
+      return this.db
+        .prepare(
+          `UPDATE folders SET sync_status = 'pending'
+           WHERE account_id = ? AND cloud_id IS NULL AND sync_status = 'synced'
+             AND deleted_at IS NULL
+             AND space_id IN (SELECT id FROM spaces WHERE kind = 'private'
+               AND account_id = ? AND deleted_at IS NULL)
+             AND EXISTS (SELECT 1 FROM notes
+               WHERE notes.folder_id = folders.id AND notes.deleted_at IS NULL)`
+        )
+        .run(this.activeAccountId, this.activeAccountId).changes;
+    } catch (error) {
+      debugLogger.error(
+        "Error queueing unlinked private folders",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
   }
 
   // A positively identified personal tombstone cannot receive an explicit
   // team publication. Renew only the identity the response describes, keeping
   // edits made while it was in flight and refusing newer moves or deletions.
   renewNoteCloudIdentity(id, expectedClientNoteId, expectedCloudId, expectedSpaceId) {
-    if (!this.db) throw new Error("Database not initialized");
-    if (
-      !this.activeAccountId ||
-      !expectedClientNoteId ||
-      !(expectedCloudId === null || typeof expectedCloudId === "string") ||
-      !this.getNote(id)
-    ) {
-      return { success: false };
-    }
-    return this.db.transaction(() => {
-      const note = this.db
-        .prepare(`SELECT n.*, ${NOTE_FOLDER_DELETE_PENDING_SQL} FROM notes n WHERE n.id = ?`)
-        .get(id);
+    try {
+      if (!this.db) throw new Error("Database not initialized");
       if (
-        !note ||
-        note.deleted_at ||
-        note.folder_delete_pending ||
-        note.client_note_id !== expectedClientNoteId ||
-        note.cloud_id !== expectedCloudId ||
-        note.space_id !== expectedSpaceId ||
-        this.getSpace(note.space_id)?.kind !== "team"
+        !this.activeAccountId ||
+        !expectedClientNoteId ||
+        !(expectedCloudId === null || typeof expectedCloudId === "string") ||
+        !this.getNote(id)
       ) {
         return { success: false };
       }
-      this.db
-        .prepare(
-          `UPDATE notes SET client_note_id = ?, cloud_id = NULL,
-             cloud_updated_at = NULL, cloud_revision = NULL,
-             cloud_create_rejected = 0, cloud_create_pending = NULL, cloud_create_attempted = 0,
-             owner_user_id = NULL, updated_by_user_id = NULL,
-             is_shared = 0, share_token = NULL, left_team = 0,
-             sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-        )
-        .run(randomUUID(), id);
-      return { success: true, note: this.getNote(id) };
-    })();
+      return this.db.transaction(() => {
+        const note = this.db
+          .prepare(`SELECT n.*, ${NOTE_FOLDER_DELETE_PENDING_SQL} FROM notes n WHERE n.id = ?`)
+          .get(id);
+        if (
+          !note ||
+          note.deleted_at ||
+          note.folder_delete_pending ||
+          note.client_note_id !== expectedClientNoteId ||
+          note.cloud_id !== expectedCloudId ||
+          note.space_id !== expectedSpaceId ||
+          this.getSpace(note.space_id)?.kind !== "team"
+        ) {
+          return { success: false };
+        }
+        this.db
+          .prepare(
+            `UPDATE notes SET client_note_id = ?, cloud_id = NULL,
+               cloud_updated_at = NULL, cloud_revision = NULL,
+               cloud_create_rejected = 0, cloud_create_pending = NULL, cloud_create_attempted = 0,
+               owner_user_id = NULL, updated_by_user_id = NULL,
+               is_shared = 0, share_token = NULL, left_team = 0,
+               sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+          )
+          .run(randomUUID(), id);
+        return { success: true, note: this.getNote(id) };
+      })();
+    } catch (error) {
+      debugLogger.error("Error renewing note cloud identity", { error: error.message }, "database");
+      throw error;
+    }
   }
 
   // A create response arrives after an arbitrary network delay. Adopt it only
@@ -10533,18 +10602,16 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const accountScope = this._accountScopeCondition("n");
-      const kind = spaceKind === "syncable" ? "team" : spaceKind;
-      const shared = spaceKind === "syncable" ? ` OR ${LEGACY_SHARED_PRIVATE_NOTE_SQL}` : "";
       const row = this.db
         .prepare(
           `SELECT COUNT(*) AS count FROM notes n
              JOIN spaces s ON s.id = n.space_id
             WHERE n.sync_status = 'synced' AND n.deleted_at IS NULL
               AND n.cloud_id IS NOT NULL AND n.cloud_revision IS NULL
-              AND (? IS NULL OR s.kind = ?${shared})
+              AND (? IS NULL OR s.kind = ?)
               AND ${accountScope.sql}`
         )
-        .get(kind, kind, ...accountScope.params);
+        .get(spaceKind, spaceKind, ...accountScope.params);
       return row?.count ?? 0;
     } catch (error) {
       debugLogger.error(
@@ -10900,6 +10967,36 @@ class DatabaseManager {
           );
         }
 
+        // A stand-in folder comes back for the signed-out notes it holds. The
+        // account's own rows in it go to its folder of that name at home, as
+        // the per-account split files them, or it could no longer see them.
+        if (folder.account_id == null && !this._getFolderInAccountScope(id)) {
+          const home = this.getDefaultPrivateSpaceId();
+          const target =
+            this._privateFolderNamed(home, this.activeAccountId, restoredName) ??
+            Number(
+              this.db
+                .prepare(
+                  "INSERT INTO folders (name, is_default, sort_order, client_folder_id, sync_status, space_id, account_id) VALUES (?, ?, ?, ?, 'synced', ?, ?)"
+                )
+                .run(
+                  restoredName,
+                  folder.is_default,
+                  folder.sort_order,
+                  randomUUID(),
+                  home,
+                  this.activeAccountId
+                ).lastInsertRowid
+            );
+          for (const table of ["notes", "agent_conversations"]) {
+            this.db
+              .prepare(
+                `UPDATE ${table} SET space_id = ?, folder_id = ? WHERE folder_id = ? AND account_id = ?`
+              )
+              .run(home, target, id, this.activeAccountId);
+          }
+        }
+
         this.db.prepare("DELETE FROM optimistic_folder_delete_rows WHERE folder_id = ?").run(id);
         const getNote = this.db.prepare("SELECT * FROM notes WHERE id = ?");
         return {
@@ -11207,30 +11304,51 @@ class DatabaseManager {
         }
         const existing = this.db
           .prepare(
-            "SELECT id FROM folders WHERE space_id = ? AND name = ? AND account_id IS ? AND deleted_at IS NULL"
+            "SELECT id, cloud_id FROM folders WHERE space_id = ? AND name = ? AND account_id IS ? AND deleted_at IS NULL"
           )
           .get(spaceId, cloudFolder.name, accountId);
         if (!existing) throw err;
-        this.db.transaction(() => {
+        if (existing.cloud_id && existing.cloud_id !== cloudFolder.id) {
+          // The namesake is another cloud folder (one backed up before
+          // placement beside a placed one, or a rename that hasn't synced):
+          // taking its identity would move its notes. This one keeps a name of
+          // its own here instead.
           const holder = this.db
-            .prepare("SELECT id FROM folders WHERE client_folder_id = ? AND id != ?")
-            .get(cloudFolder.client_folder_id, existing.id);
-          // A different local row already tracked this cloud folder (rename
-          // collision via the DO UPDATE branch) — fork it so the winner can
-          // take the cloud identity without violating the client id index.
-          if (holder) this.forkFolderIdentity(holder.id);
-          this.db
-            .prepare(
-              "UPDATE folders SET client_folder_id = ?, cloud_id = ?, sort_order = ?, sync_status = 'synced', left_team = 0, updated_at = ? WHERE id = ?"
-            )
-            .run(
-              cloudFolder.client_folder_id,
-              cloudFolder.id,
-              cloudFolder.sort_order || 0,
-              updatedAt,
-              existing.id
-            );
-        })();
+            .prepare("SELECT id FROM folders WHERE client_folder_id = ?")
+            .get(cloudFolder.client_folder_id);
+          stmt.run(
+            cloudFolder.client_folder_id,
+            cloudFolder.id,
+            this._uniqueFolderName(spaceId, accountId, cloudFolder.name, holder?.id ?? null),
+            cloudFolder.is_default ? 1 : 0,
+            cloudFolder.sort_order || 0,
+            spaceId,
+            accountId,
+            cloudFolder.created_at,
+            updatedAt
+          );
+        } else {
+          this.db.transaction(() => {
+            const holder = this.db
+              .prepare("SELECT id FROM folders WHERE client_folder_id = ? AND id != ?")
+              .get(cloudFolder.client_folder_id, existing.id);
+            // A different local row already tracked this cloud folder (rename
+            // collision via the DO UPDATE branch) — fork it so the winner can
+            // take the cloud identity without violating the client id index.
+            if (holder) this.forkFolderIdentity(holder.id);
+            this.db
+              .prepare(
+                "UPDATE folders SET client_folder_id = ?, cloud_id = ?, sort_order = ?, sync_status = 'synced', left_team = 0, updated_at = ? WHERE id = ?"
+              )
+              .run(
+                cloudFolder.client_folder_id,
+                cloudFolder.id,
+                cloudFolder.sort_order || 0,
+                updatedAt,
+                existing.id
+              );
+          })();
+        }
       }
       const folder = this.db
         .prepare("SELECT * FROM folders WHERE client_folder_id = ?")
@@ -11436,40 +11554,47 @@ class DatabaseManager {
 
   // Main validates ownership and note kind; renderer-supplied names never decide privacy.
   protectConversation(id, notes, deviceOnly, expectedAccountId) {
-    if (
-      !Number.isSafeInteger(id) ||
-      id <= 0 ||
-      !Array.isArray(notes) ||
-      typeof deviceOnly !== "boolean" ||
-      !(expectedAccountId === null || typeof expectedAccountId === "string") ||
-      notes.some(
-        (reference) =>
-          !reference ||
-          !Number.isSafeInteger(reference.id) ||
-          reference.id <= 0 ||
-          !Number.isSafeInteger(reference.space_id) ||
-          reference.space_id <= 0
+    try {
+      if (
+        !Number.isSafeInteger(id) ||
+        id <= 0 ||
+        !Array.isArray(notes) ||
+        typeof deviceOnly !== "boolean" ||
+        !(expectedAccountId === null || typeof expectedAccountId === "string") ||
+        notes.some(
+          (reference) =>
+            !reference ||
+            !Number.isSafeInteger(reference.id) ||
+            reference.id <= 0 ||
+            !Number.isSafeInteger(reference.space_id) ||
+            reference.space_id <= 0
+        )
       )
-    )
-      return { success: false };
-    return this.db.transaction(() => {
-      if (expectedAccountId !== this.activeAccountId) return { success: false };
-      const conversation = this._getOwnedConversation(id);
-      if (!conversation || conversation.deleted_at) return { success: false };
-      let privateContent = deviceOnly === true;
-      for (const reference of notes) {
-        const note = this.getNote(reference.id);
-        if (!note || note.deleted_at) return { success: false };
-        // Include the pinned placement of the content just read, even if it moved meanwhile.
-        const spaces = [note.space_id, reference.space_id].map((spaceId) => this.getSpace(spaceId));
-        if (spaces.some((space) => !space)) return { success: false };
-        if (spaces.some((space) => space.kind === "private")) privateContent = true;
-      }
-      if (privateContent) {
-        this.db.prepare("UPDATE agent_conversations SET device_only = 1 WHERE id = ?").run(id);
-      }
-      return { success: true };
-    })();
+        return { success: false };
+      return this.db.transaction(() => {
+        if (expectedAccountId !== this.activeAccountId) return { success: false };
+        const conversation = this._getOwnedConversation(id);
+        if (!conversation || conversation.deleted_at) return { success: false };
+        let privateContent = deviceOnly === true;
+        for (const reference of notes) {
+          const note = this.getNote(reference.id);
+          if (!note || note.deleted_at) return { success: false };
+          // Include the pinned placement of the content just read, even if it moved meanwhile.
+          const spaces = [note.space_id, reference.space_id].map((spaceId) =>
+            this.getSpace(spaceId)
+          );
+          if (spaces.some((space) => !space)) return { success: false };
+          if (spaces.some((space) => space.kind === "private")) privateContent = true;
+        }
+        if (privateContent) {
+          this.db.prepare("UPDATE agent_conversations SET device_only = 1 WHERE id = ?").run(id);
+        }
+        return { success: true };
+      })();
+    } catch (error) {
+      debugLogger.error("Error protecting conversation", { error: error.message }, "database");
+      throw error;
+    }
   }
 
   getPendingConversations() {

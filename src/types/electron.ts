@@ -1638,6 +1638,13 @@ export interface PrivatePlacementBackupCandidates {
   folders: string[];
 }
 
+export interface PrivatePlacementBackupRow {
+  id: number;
+  cloud_id: string;
+  client_id: string;
+  workspace_id: string;
+}
+
 export type OnboardingDemoKind = "dictation" | "assistant";
 /**
  * "partial" streams the transcript, "processing" carries the final transcript,
@@ -4241,10 +4248,17 @@ declare global {
       getPrivatePlacementBackupCandidates?: (
         expectedAuthGeneration: number
       ) => Promise<PrivatePlacementBackupCandidates | StaleSyncWrite>;
-      queuePrivatePlacementBackup?: (
+      getPrivatePlacementBackupRows?: (
         expectedAuthGeneration: number,
         candidates: PrivatePlacementBackupCandidates
-      ) => Promise<{ success: boolean; queuedNotes?: number; queuedFolders?: number }>;
+      ) => Promise<{
+        success: boolean;
+        notes?: PrivatePlacementBackupRow[];
+        folders?: PrivatePlacementBackupRow[];
+      }>;
+      queueUnlinkedPrivateFolders?: (
+        expectedAuthGeneration: number
+      ) => Promise<number | StaleSyncWrite>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
@@ -4271,9 +4285,7 @@ declare global {
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       setNoteOwnerFromCloud?: (id: number, ownerUserId: string) => Promise<void>;
       countTeamNotesMissingOwner?: () => Promise<number>;
-      countNotesMissingRevision?: (
-        scope?: "private" | "team" | "syncable" | null
-      ) => Promise<number>;
+      countNotesMissingRevision?: (scope?: "private" | "team" | null) => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;
       restoreNoteAfterDeniedDelete?: (id: number) => Promise<{ success: boolean; id: number }>;
       hardDeleteNote?: (

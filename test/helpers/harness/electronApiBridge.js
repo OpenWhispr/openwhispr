@@ -169,8 +169,10 @@ function createElectronApi(db, options = {}) {
         : db.renewNoteCloudIdentity(id, clientId, cloudId, spaceId),
     getPrivatePlacementBackupCandidates: async (generation) =>
       authState.isStale(generation) ? STALE_SYNC_ACK : db.getPrivatePlacementBackupCandidates(),
-    queuePrivatePlacementBackup: async (generation, candidates) =>
-      authState.isStale(generation) ? STALE_SYNC_ACK : db.queuePrivatePlacementBackup(candidates),
+    getPrivatePlacementBackupRows: async (generation, candidates) =>
+      authState.isStale(generation) ? STALE_SYNC_ACK : db.getPrivatePlacementBackupRows(candidates),
+    queueUnlinkedPrivateFolders: async (generation) =>
+      authState.isStale(generation) ? STALE_SYNC_ACK : db.queueUnlinkedPrivateFolders(),
     markNoteCreatesAttempted: async (clientNoteIds, generation) =>
       generation !== undefined && authState.isStale(generation)
         ? []

@@ -35,6 +35,7 @@ async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } 
           listMembers: (id) => globalThis.__workspaceCacheTest.listMembers(id),
           removeMember: (id, userId) => globalThis.__workspaceCacheTest.remove(id, userId),
           remove: (id) => globalThis.__workspaceCacheTest.remove(id),
+          isLost: async () => true,
         };
       `,
       "/SyncService": `export const syncService = { requestSyncAll() {} };`,

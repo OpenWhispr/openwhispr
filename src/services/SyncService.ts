@@ -14,6 +14,7 @@ import type {
   ConversationCreateSnapshot,
   StaleSyncWrite,
   PrivatePlacementBackupCandidates,
+  PrivatePlacementBackupRow,
 } from "../types/electron";
 import { NotesService, type CloudNote } from "./NotesService.js";
 import { ConversationsService, type CloudConversation } from "./ConversationsService.js";
@@ -59,7 +60,6 @@ import {
 import {
   ACTIVE_WORKSPACE_SOURCE_KEY,
   readActiveWorkspaceId,
-  relocateLostWorkspaces,
   useWorkspaceStore,
   WORKSPACE_LIST_CACHE_KEY,
 } from "../stores/workspaceStore";
@@ -145,6 +145,38 @@ function conflictCloudNote(err: unknown): CloudNote | null {
   return details?.note ?? null;
 }
 
+// Sent with every note push without being part of what the note holds.
+const NOTE_PUSH_BASE_FIELDS = new Set([
+  "client_note_id",
+  "updated_at",
+  "base_updated_at",
+  "base_revision",
+  "field_updates",
+]);
+
+// The cloud copy behind a 409 matches everything the push sends: only its timestamp and revision
+// moved, as when a folder given a new placement moves (and bumps) its notes on the server.
+// Compared as text, since the server returns numeric columns as strings.
+function onlyMovedSince(payload: object, cloudNote: CloudNote): boolean {
+  const cloud = cloudNote as unknown as Record<string, unknown>;
+  return Object.entries(payload).every(
+    ([field, value]) =>
+      value === undefined ||
+      NOTE_PUSH_BASE_FIELDS.has(field) ||
+      String(value ?? "") === String(cloud[field] ?? "")
+  );
+}
+
+type PlacementBackfillWrite = {
+  kind: "folder" | "note";
+  id: number;
+  cloudId: string;
+  clientId: string;
+  workspaceId: string;
+};
+
+const PLACEMENT_BACKFILL_RETRY_MS = 10 * 60 * 1000;
+
 // Extra fields pushed with note/folder payloads so the server files rows into
 // the right space scope; `null` scope means the row must not push at all.
 type PushScopeFields = {
@@ -172,6 +204,41 @@ function isTeamRow(row: { space_id: number }, ctx: SpaceSyncContext): boolean {
 function pushedFolderId(note: NoteItem, localToCloud: Map<number, string>): string | null {
   if (!note.folder_id) return null;
   return localToCloud.get(note.folder_id) ?? null;
+}
+
+// A clean local row in another Private than the one its cloud copy names: another device moved
+// it without this one seeing a newer copy (a Keep after a conflict takes the server's timestamp).
+function misplacedPrivateRow(
+  cloud: { space_id?: string | null; private_workspace_id?: string | null },
+  local: { space_id: number; sync_status?: string | null },
+  space: SpaceItem
+): boolean {
+  return (
+    !cloud.space_id &&
+    !!cloud.private_workspace_id &&
+    local.sync_status === "synced" &&
+    space.id !== local.space_id
+  );
+}
+
+// A note in a folder of the default Private takes that folder's placement rather than naming
+// it: a folder backed up before placement is unassigned on the server, which reads that as the
+// default but refuses it beside an explicit default.
+function folderPlacedNoteScope(
+  note: NoteItem,
+  scope: PushScopeFields,
+  cloudFolderId: string | null,
+  ctx: SpaceSyncContext
+): PushScopeFields {
+  const space = ctx.byId.get(note.space_id);
+  if (
+    !cloudFolderId ||
+    space?.kind !== "private" ||
+    (space.workspace_id && !space.is_default_private)
+  )
+    return scope;
+  const { private_workspace_id: _placement, ...folderPlaced } = scope;
+  return folderPlaced;
 }
 
 const PUSH_DEBOUNCE_MS = 2000;
@@ -674,6 +741,16 @@ export async function upsertCloudSpaces(cloudSpaces: MySpace[]): Promise<number[
 export class SyncService {
   private syncing = false;
   private syncAllPending = false;
+  // Filled by the placement backfill's pre-pull: each personal cloud row's placement and folder.
+  private pulledPlacements: Map<
+    string,
+    { private_workspace_id: string | null; folder_id: string | null }
+  > | null = null;
+  private placementBackfillRetry: {
+    accountId: string;
+    at: number;
+    writes: PlacementBackfillWrite[];
+  } | null = null;
   private autoSyncStarted = false;
   private dictionaryDirty = false;
   private snippetsDirty = false;
@@ -1244,9 +1321,10 @@ export class SyncService {
       this.syncing = false;
       this.passGeneration = null;
     }
+    // Work this pass deferred is owed, so it waits for a lock another window took meanwhile.
     if (this.syncAllPending) {
       this.syncAllPending = false;
-      await this.syncAll();
+      await this.syncAll(true);
     }
   }
 
@@ -1331,7 +1409,7 @@ export class SyncService {
   private async runDeferredSyncAll(): Promise<void> {
     if (!this.syncAllPending) return;
     this.syncAllPending = false;
-    await this.syncAll();
+    await this.syncAll(true);
   }
 
   // The Dictionary page's Sync button. Waits for the sync lock rather than
@@ -1593,28 +1671,26 @@ export class SyncService {
       return false;
     }
 
-    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
+    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap(ctx);
     const sharingPrivate = !!sharedNote && !isTeamRow(note, ctx);
     const folderBlocked = !!note.folder_id && blockedFolderIds.has(note.folder_id);
     if (folderBlocked && !sharingPrivate) {
       // The folder's own changes haven't landed (e.g. a cross-space move that
-      // 409'd on a name conflict): the server would reject this note's
-      // folder_id as out of scope. Stay pending; the note retries after the
-      // folder settles.
+      // 409'd on a name conflict, or a Private folder not uploaded yet): the
+      // note retries in the full pass that settles the folder.
+      this.requestSyncAll("interval");
       return false;
     }
-    const scope = this.resolvePushScope("note", note, ctx, sharingPrivate);
-    if (!scope) return false;
+    const resolvedScope = this.resolvePushScope("note", note, ctx, sharingPrivate);
+    if (!resolvedScope) return false;
     // One-note sharing does not consent to uploading or relocating its local folder.
     const cloudFolderId = folderBlocked ? null : pushedFolderId(note, localToCloud);
+    const scope = folderPlacedNoteScope(note, resolvedScope, cloudFolderId, ctx);
 
+    const payload = this.notePushPayload(note, cloudFolderId, scope);
     try {
       if (note.cloud_id) {
-        const cloud = await NotesService.update(
-          note.cloud_id,
-          this.notePushPayload(note, cloudFolderId, scope),
-          authGeneration
-        );
+        const cloud = await NotesService.update(note.cloud_id, payload, authGeneration);
         // Settle only if the row wasn't edited while the PATCH was in flight;
         // a blind settle would leave the delivered snapshot pending and let a
         // later pass re-PATCH it over a teammate's newer edit.
@@ -1636,7 +1712,11 @@ export class SyncService {
         // Another device wrote first. The row stays pending and the banner
         // asks the user to Refresh or Keep; no requestSyncAll echo.
         const cloudNote = conflictCloudNote(err);
-        if (cloudNote) await this.surfaceNoteConflict(note.client_note_id, cloudNote);
+        if (
+          cloudNote &&
+          !(note.cloud_id && (await this.pushAgainIfOnlyMoved(note, payload, cloudNote)))
+        )
+          await this.surfaceNoteConflict(note.client_note_id, cloudNote);
         return false;
       }
       if (isPermissionDenialError(err)) {
@@ -2196,21 +2276,144 @@ export class SyncService {
       !this.canSync()
     )
       return;
-    const candidates = await this.privatePlacementCandidates(authGeneration);
-    if (!candidates || this.placementBackfillComplete()) return;
-    // Read current cloud text before queueing clean local rows for metadata-only writes.
-    if (!(await this.pullFolders(false, true)) || !(await this.pullNotes(false, true))) return;
+    const retry =
+      this.placementBackfillRetry?.accountId === accountId ? this.placementBackfillRetry : null;
+    if (retry && Date.now() < retry.at) return;
+    const writes = retry?.writes ?? (await this.placementBackfillWrites(authGeneration));
+    if (!writes) return;
+    const failed: PlacementBackfillWrite[] = [];
+    for (const write of writes) {
+      if (!(await this.writeBackfillPlacement(write, authGeneration))) failed.push(write);
+    }
     if (!this.canSync()) return;
-    await assertAuthGenerationCurrent(authGeneration);
-    const queued = await window.electronAPI.queuePrivatePlacementBackup?.(
-      authGeneration,
-      candidates
-    );
-    await assertAuthGenerationCurrent(authGeneration);
-    if (queued?.success && this.canSync()) {
+    if (failed.length === 0) {
+      this.placementBackfillRetry = null;
       localStorage.setItem(`syncCursors.privatePlacement:${accountId}`, "1");
       localStorage.removeItem(`syncCursors.privatePlacementCandidates:${accountId}`);
+      return;
     }
+    // Only the writes that may still succeed, after a while, and without another pre-pull.
+    this.placementBackfillRetry = {
+      accountId,
+      at: Date.now() + PLACEMENT_BACKFILL_RETRY_MS,
+      writes: failed,
+    };
+    const candidatesOf = (kind: PlacementBackfillWrite["kind"]): string[] =>
+      failed.filter((write) => write.kind === kind).map((write) => write.clientId);
+    localStorage.setItem(
+      `syncCursors.privatePlacementCandidates:${accountId}`,
+      JSON.stringify({ notes: candidatesOf("note"), folders: candidatesOf("folder") })
+    );
+  }
+
+  // The placements to write: rows this device filed in a Private other than the default's (the
+  // server reads no placement as the default), whose cloud copy, just pulled, has none. Notes
+  // only at the cloud's root: one in a folder takes its folder's placement on the server.
+  private async placementBackfillWrites(
+    authGeneration: number
+  ): Promise<PlacementBackfillWrite[] | null> {
+    const candidates = await this.privatePlacementCandidates(authGeneration);
+    if (!candidates || this.placementBackfillComplete()) return null;
+    this.pulledPlacements = new Map();
+    try {
+      if (!(await this.pullFolders(false, true)) || !(await this.pullNotes(false, true)))
+        return null;
+      if (!this.canSync()) return null;
+      await assertAuthGenerationCurrent(authGeneration);
+      const rows = await window.electronAPI.getPrivatePlacementBackupRows?.(
+        authGeneration,
+        candidates
+      );
+      await assertAuthGenerationCurrent(authGeneration);
+      if (!rows?.success) return null;
+      const pulled = this.pulledPlacements;
+      const unplaced = (row: PrivatePlacementBackupRow, kind: PlacementBackfillWrite["kind"]) => {
+        const cloud = pulled.get(row.cloud_id);
+        return (
+          !!cloud &&
+          cloud.private_workspace_id === null &&
+          (kind === "folder" || cloud.folder_id === null)
+        );
+      };
+      const toWrite = (kind: PlacementBackfillWrite["kind"], rows: PrivatePlacementBackupRow[]) =>
+        rows
+          .filter((row) => unplaced(row, kind))
+          .map((row) => ({
+            kind,
+            id: row.id,
+            cloudId: row.cloud_id,
+            clientId: row.client_id,
+            workspaceId: row.workspace_id,
+          }));
+      return [...toWrite("folder", rows.folders ?? []), ...toWrite("note", rows.notes ?? [])];
+    } finally {
+      this.pulledPlacements = null;
+    }
+  }
+
+  // False when the write may succeed on a later pass (offline, a server error). A refusal is
+  // final. A placement the server already had is kept, and this device follows it.
+  private async writeBackfillPlacement(
+    write: PlacementBackfillWrite,
+    authGeneration: number
+  ): Promise<boolean> {
+    const body = { private_workspace_id: write.workspaceId, placement_backfill: true } as const;
+    try {
+      const cloud =
+        write.kind === "folder"
+          ? await FoldersService.update(write.cloudId, body, authGeneration)
+          : await NotesService.update(write.cloudId, body, authGeneration);
+      if (cloud.private_workspace_id && cloud.private_workspace_id !== write.workspaceId) {
+        await this.followCloudPlacement(write, cloud, authGeneration);
+      }
+      return true;
+    } catch (err) {
+      if (isAuthContextError(err)) throw err;
+      if (!(err instanceof CloudApiError) || err.status < 400 || err.status >= 500) return false;
+      console.warn(
+        `Placement backfill refused for ${write.kind} ${write.id}:`,
+        err.status,
+        err.code
+      );
+      return true;
+    }
+  }
+
+  // Files the local copy in the Private of the workspace the cloud copy names, as a pull would.
+  // A copy edited since it was read is left to the pull, which raises the conflict.
+  private async followCloudPlacement(
+    write: PlacementBackfillWrite,
+    cloud: CloudNote | Awaited<ReturnType<typeof FoldersService.update>>,
+    authGeneration: number
+  ): Promise<void> {
+    const local =
+      write.kind === "folder"
+        ? await window.electronAPI.getFolderByClientId?.(write.clientId)
+        : await window.electronAPI.getNote?.(write.id);
+    if (!local || local.sync_status !== "synced" || local.deleted_at) return;
+    const ctx = await this.buildSpaceContext();
+    const space = await this.personalSpaceForCloudRow(cloud, undefined, ctx, authGeneration);
+    if (!space) return;
+    if (write.kind === "folder") {
+      stopIfPullStale(
+        await window.electronAPI.upsertFolderFromCloud?.(
+          cloud as unknown as Record<string, unknown>,
+          space.id,
+          authGeneration
+        )
+      );
+      return;
+    }
+    const note = cloud as CloudNote;
+    const { cloudToLocal, personalFolderIn } = await this.buildCloudToLocalFolderMap();
+    stopIfPullStale(
+      await window.electronAPI.upsertNoteFromCloud?.(
+        note as unknown as Record<string, unknown>,
+        resolvePulledNoteFolderId(note, space.id, cloudToLocal, personalFolderIn(space.id)),
+        space.id,
+        authGeneration
+      )
+    );
   }
 
   private async relocatePulledPrivateWorkspaces(
@@ -2218,7 +2421,14 @@ export class SyncService {
     authGeneration: number
   ): Promise<void> {
     const state = useWorkspaceStore.getState();
-    if (!state.loaded || state.error || state.listAccountId !== accountId || !this.canSync())
+    // Every account has a default workspace, so an empty list is a faulty answer.
+    if (
+      !state.loaded ||
+      state.error ||
+      state.workspaces.length === 0 ||
+      state.listAccountId !== accountId ||
+      !this.canSync()
+    )
       return;
     const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
     await assertAuthGenerationCurrent(authGeneration);
@@ -2231,16 +2441,15 @@ export class SyncService {
         !space.is_default_private &&
         !state.workspaces.some((workspace) => workspace.id === space.workspace_id)
     );
-    await relocateLostWorkspaces(
-      lost.map((space) => space.workspace_id!),
-      () => this.canSync() && getValidatedAuthGeneration() === authGeneration
-    );
-    if (lost.length > 0) {
-      const remaining = (await window.electronAPI.getSpaces?.()) ?? [];
-      await assertAuthGenerationCurrent(authGeneration);
-      if (lost.some((space) => !remaining.some((current) => current.id === space.id)))
-        this.syncAllPending = true;
-    }
+    if (lost.length === 0) return;
+    // The list may predate a workspace made or joined on another device. A fresh one moves only
+    // the Privates of workspaces the account is confirmed to be out of.
+    await useWorkspaceStore.getState().refresh({ fresh: true });
+    await assertAuthGenerationCurrent(authGeneration);
+    const remaining = (await window.electronAPI.getSpaces?.()) ?? [];
+    await assertAuthGenerationCurrent(authGeneration);
+    if (lost.some((space) => !remaining.some((current) => current.id === space.id)))
+      this.syncAllPending = true;
   }
 
   private async personalSpaceForCloudRow(
@@ -2597,6 +2806,25 @@ export class SyncService {
     this.emitSyncUiEvent("folder-name-taken", { name });
   }
 
+  // A 409 whose cloud copy only moved (onlyMovedSince) holds nothing for the user to choose:
+  // the note takes that copy's base and pushes again. Returns whether it will.
+  private async pushAgainIfOnlyMoved(
+    note: NoteItem,
+    payload: object,
+    cloudNote: CloudNote
+  ): Promise<boolean> {
+    if (!onlyMovedSince(payload, cloudNote)) return false;
+    const result = await window.electronAPI.setNoteCloudBase?.(
+      note.id,
+      cloudNote.updated_at,
+      cloudNote.revision ?? null
+    );
+    if (!result?.success) return false;
+    if (this.syncing) this.syncAllPending = true;
+    else this.requestSyncAll("retry");
+    return true;
+  }
+
   // Conflicts land in this window's store (the pull may run here) AND
   // rebroadcast, so the editor window's banner shows no matter which window
   // detected them.
@@ -2674,6 +2902,12 @@ export class SyncService {
       if (!this.passIsCurrent()) return;
     }
     await this.pullFolders(teamOnly);
+    if (teamOnly || !this.passIsCurrent()) return;
+    // After the pull, so a cloud namesake links a Private's folder before it is uploaded.
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    const queued = await window.electronAPI.queueUnlinkedPrivateFolders?.(authGeneration);
+    if (typeof queued === "number" && queued > 0) await this.pushPendingFolders();
   }
 
   private async pushFolderDeletes(teamOnly = false): Promise<void> {
@@ -2966,6 +3200,12 @@ export class SyncService {
             continue;
           }
 
+          if (!cloudFolder.space_id) {
+            this.pulledPlacements?.set(cloudFolder.id, {
+              private_workspace_id: cloudFolder.private_workspace_id ?? null,
+              folder_id: null,
+            });
+          }
           const space = !cloudFolder.space_id
             ? await this.personalSpaceForCloudRow(cloudFolder, local?.space_id, ctx, authGeneration)
             : await this.resolveSpaceForCloudRow(cloudFolder.space_id, ctx);
@@ -3029,7 +3269,8 @@ export class SyncService {
           if (
             !local ||
             (local.sync_status !== "pending" &&
-              isCloudEntryNewer(cloudFolder.updated_at, local.updated_at))
+              (isCloudEntryNewer(cloudFolder.updated_at, local.updated_at) ||
+                misplacedPrivateRow(cloudFolder, local, space)))
           ) {
             const stored = await window.electronAPI.upsertFolderFromCloud?.(
               cloudFolder as unknown as Record<string, unknown>,
@@ -3213,7 +3454,8 @@ export class SyncService {
     const authGeneration = getValidatedAuthGeneration();
     if (authGeneration == null) return;
     await this.ensurePrivatePlacementCapability();
-    const queue = teamOnly ? "team" : undefined;
+    // Without Backup, shared Private notes still sync, so their failed pushes retry too.
+    const queue = teamOnly ? "syncable" : undefined;
     let pending = (await window.electronAPI.getPendingNotes?.(queue)) ?? [];
     // A conflict this device's own write left behind is no conflict: settle it
     // first, so the note pushes in this pass (see isStaleNoteConflict).
@@ -3241,8 +3483,8 @@ export class SyncService {
     if (pending.length === 0) return;
     this.teamPassMovedWork = true;
 
-    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const ctx = await this.buildSpaceContext();
+    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap(ctx);
     const pushable = pending.filter((note) =>
       this.stillPushable(note, note.cloud_id, blockedFolderIds, ctx)
     );
@@ -3260,19 +3502,21 @@ export class SyncService {
           ? this.stillPushable(note, queued.cloud_id, blockedFolderIds, ctx)
           : null;
         if (!note || !scope) return;
+        // Carry the full content: a pending row may hold edits that never
+        // reached the server (offline debounced pushes fail silently), and
+        // this PATCH marks the row synced — settling it without content
+        // would strand the edit locally and hand the next pull a stale-but-
+        // newer cloud copy to overwrite it with.
+        const cloudFolderId = pushedFolderId(note, localToCloud);
+        const payload = this.notePushPayload(
+          note,
+          cloudFolderId,
+          folderPlacedNoteScope(note, scope, cloudFolderId, ctx)
+        );
         try {
-          // Carry the full content: a pending row may hold edits that never
-          // reached the server (offline debounced pushes fail silently), and
-          // this PATCH marks the row synced — settling it without content
-          // would strand the edit locally and hand the next pull a stale-but-
-          // newer cloud copy to overwrite it with.
-          const cloudFolderId = pushedFolderId(note, localToCloud);
           const cloud = await NotesService.update(
             note.cloud_id!,
-            {
-              client_note_id: note.client_note_id,
-              ...this.notePushPayload(note, cloudFolderId, scope),
-            },
+            { client_note_id: note.client_note_id, ...payload },
             authGeneration
           );
           // Settle only if the row wasn't edited while the PATCH was in flight.
@@ -3295,7 +3539,8 @@ export class SyncService {
             // row on later passes so the 409 doesn't repeat. A 409 also proves
             // the note is still accessible, so reset any prior 404 streak.
             const cloudNote = conflictCloudNote(err);
-            if (cloudNote) await this.surfaceNoteConflict(note.client_note_id, cloudNote);
+            if (cloudNote && !(await this.pushAgainIfOnlyMoved(note, payload, cloudNote)))
+              await this.surfaceNoteConflict(note.client_note_id, cloudNote);
             this.clear404(NOTE_UPDATE_404_KEY, note.client_note_id);
           } else if (isPermissionDenialError(err)) {
             await this.handleDeniedNoteUpdate(note, ctx);
@@ -3327,7 +3572,10 @@ export class SyncService {
               ? this.stillPushable(note, queued.cloud_id, blockedFolderIds, ctx)
               : null;
             if (note && scope) {
-              unsent.push({ note, scope });
+              unsent.push({
+                note,
+                scope: folderPlacedNoteScope(note, scope, pushedFolderId(note, localToCloud), ctx),
+              });
             }
           }
           const recorded = await recordNoteCreateAttempts(
@@ -3538,6 +3786,12 @@ export class SyncService {
             }
 
             const personalRow = !cloudNote.space_id && !cloudNote.access_removed;
+            if (personalRow) {
+              this.pulledPlacements?.set(cloudNote.id, {
+                private_workspace_id: cloudNote.private_workspace_id ?? null,
+                folder_id: cloudNote.folder_id ?? null,
+              });
+            }
             const teamCopy = !!local && isTeamRow(local, ctx);
             const sharedPersonal = personalRow && !!local && isLegacySharedPrivateNote(local);
 
@@ -3731,7 +3985,12 @@ export class SyncService {
             // on, so a clear made elsewhere while this device ran a release that
             // kept the text would never arrive.
             const cleanPreRevision = preRevision && local.sync_status === "synced";
-            if (!local || cleanPreRevision || isCloudNoteNewer(cloudNote, local)) {
+            if (
+              !local ||
+              cleanPreRevision ||
+              isCloudNoteNewer(cloudNote, local) ||
+              misplacedPrivateRow(cloudNote, local, space)
+            ) {
               if (local && local.sync_status !== "synced") {
                 // A newer cloud copy over unpushed local edits ('pending' or
                 // 'error'): surface the conflict to the editor banner instead
@@ -5087,19 +5346,28 @@ export class SyncService {
     }
   }
 
-  private async buildLocalToCloudFolderMap(): Promise<{
+  private async buildLocalToCloudFolderMap(ctx: SpaceSyncContext): Promise<{
     localToCloud: Map<number, string>;
     // Cloud-backed folders with unpushed changes: their migration PATCH
     // failed or hasn't run yet (folders push before notes in a pass), so
     // pushing a child note's folder_id + scope now could be rejected as out
-    // of scope. Those notes defer and stay pending.
+    // of scope. With Backup on, a Private folder with no cloud copy yet too:
+    // a full pass uploads it, and a note pushed before then would land
+    // unfiled. Those notes defer and stay pending.
     blockedFolderIds: Set<number>;
   }> {
     const folders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
+    const backup = this.canSync();
     return {
       localToCloud: new Map(folders.filter((f) => f.cloud_id).map((f) => [f.id, f.cloud_id!])),
       blockedFolderIds: new Set(
-        folders.filter((f) => f.cloud_id && f.sync_status === "pending").map((f) => f.id)
+        folders
+          .filter((f) =>
+            f.cloud_id
+              ? f.sync_status === "pending"
+              : backup && ctx.byId.get(f.space_id)?.kind === "private"
+          )
+          .map((f) => f.id)
       ),
     };
   }

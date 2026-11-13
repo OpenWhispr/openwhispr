@@ -471,7 +471,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       if (!current()) return;
       const orphaned = rowCheck ? await orphanedPrivateWorkspaces(rowCheck, current) : [];
       if (!current()) return;
-      const toRelocate = [...new Set([...lost, ...orphaned])];
+      const toRelocate = await confirmedLost([...new Set([...lost, ...orphaned])]);
+      if (!current()) return;
       if (toRelocate.length > 0) await relocateLostWorkspaces(toRelocate, current);
     })().finally(() => {
       if (refreshPromise === request) refreshPromise = null;
@@ -607,6 +608,15 @@ export async function publishWorkspaceScope(
     );
     return false;
   }
+}
+
+// The ones the account is confirmed to be out of. One that can't be checked now waits for the
+// next list.
+async function confirmedLost(workspaceIds: string[]): Promise<string[]> {
+  const lost = await Promise.all(
+    workspaceIds.map((id) => WorkspacesService.isLost(id).catch(() => false))
+  );
+  return workspaceIds.filter((_, index) => lost[index]);
 }
 
 /**

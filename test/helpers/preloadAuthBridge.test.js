@@ -172,7 +172,8 @@ test("note and folder sync receipts forward their originating sign-in", async ()
   await api.hardDeleteFolder(2, 9);
   const candidates = { notes: ["client-note"], folders: [] };
   await api.getPrivatePlacementBackupCandidates(9);
-  await api.queuePrivatePlacementBackup(9, candidates);
+  await api.getPrivatePlacementBackupRows(9, candidates);
+  await api.queueUnlinkedPrivateFolders(9);
   assert.deepEqual(invocations, [
     ["db-mark-note-creates-attempted", ["client-note"], 9],
     [
@@ -189,7 +190,8 @@ test("note and folder sync receipts forward their originating sign-in", async ()
     ["db-hard-delete-note", 1, 9],
     ["db-hard-delete-folder", 2, 9],
     ["db-get-private-placement-backup-candidates", 9],
-    ["db-queue-private-placement-backup", 9, candidates],
+    ["db-get-private-placement-backup-rows", 9, candidates],
+    ["db-queue-unlinked-private-folders", 9],
   ]);
 });
 

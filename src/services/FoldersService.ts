@@ -15,6 +15,8 @@ interface FolderInput {
   is_default?: boolean;
   sort_order?: number;
   private_workspace_id?: string | null;
+  // Sets the placement only where the server has none (sent with the id and placement alone).
+  placement_backfill?: true;
   workspace_id?: string | null;
   space_id?: string | null;
 }

@@ -1318,8 +1318,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ),
   getPrivatePlacementBackupCandidates: (authGeneration) =>
     ipcRenderer.invoke("db-get-private-placement-backup-candidates", authGeneration),
-  queuePrivatePlacementBackup: (authGeneration, candidates) =>
-    ipcRenderer.invoke("db-queue-private-placement-backup", authGeneration, candidates),
+  getPrivatePlacementBackupRows: (authGeneration, candidates) =>
+    ipcRenderer.invoke("db-get-private-placement-backup-rows", authGeneration, candidates),
+  queueUnlinkedPrivateFolders: (authGeneration) =>
+    ipcRenderer.invoke("db-queue-unlinked-private-folders", authGeneration),
   acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",

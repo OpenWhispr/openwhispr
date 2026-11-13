@@ -14,6 +14,8 @@ import type { CloudNoteCreateResult } from "./noteCreateAck";
 interface NoteInput {
   client_note_id?: string;
   private_workspace_id?: string | null;
+  // Sets the placement only where the server has none (sent with the id and placement alone).
+  placement_backfill?: true;
   workspace_id?: string | null;
   space_id?: string | null;
   title?: string | null;
