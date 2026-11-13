@@ -358,7 +358,8 @@ class DictationService : Service() {
     val holder = FrameLayout(this).apply {
       clipChildren = false; visibility = View.GONE
       val column = LinearLayout(this@DictationService).apply {
-        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; clipChildren = false
+        // The circle grows 18% under the bubble, into this padding, so the padding must not clip it.
+        orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL; clipChildren = false; clipToPadding = false
         val pad = dp(12f).toInt(); setPadding(0, pad, 0, pad)
         addView(circle, LinearLayout.LayoutParams(dp(64f).toInt(), dp(64f).toInt()))
         addView(caption, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10f).toInt() })

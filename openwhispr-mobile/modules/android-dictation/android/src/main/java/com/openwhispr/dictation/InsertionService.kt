@@ -65,17 +65,16 @@ class InsertionService : AccessibilityService() {
     if (!current.isEditable || current.isPassword) { current.recycle(); clearTarget(); return complete(false) }
     val currentText = fieldText(current)
     val (start, end) = selection(current, currentText)
-    if (current != captured.node ||
-      currentText != captured.text || start != captured.start || end != captured.end) {
-      current.recycle(); clearTarget(); return complete(false)
-    }
-    val result = captured.text.substring(0, captured.start) + text + captured.text.substring(captured.end)
+    val plan = if (current != captured.node) null
+      else InsertionPlan.plan(captured.text, captured.start, captured.end, currentText, start, end, text)
+    if (plan == null) { current.recycle(); clearTarget(); return complete(false) }
+    val result = plan.text
     val inserted = current.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
       putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, result)
     })
     if (inserted) current.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, Bundle().apply {
-      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, captured.start + text.length)
-      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, captured.start + text.length)
+      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, plan.cursor)
+      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, plan.cursor)
     })
     clearTarget()
     if (!inserted) { current.recycle(); return complete(false) }

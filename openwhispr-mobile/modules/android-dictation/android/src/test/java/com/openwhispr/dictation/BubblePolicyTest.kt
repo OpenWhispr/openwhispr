@@ -66,6 +66,14 @@ class BubblePolicyTest {
     assertTrue(loud <= 1f)
   }
 
+  @Test fun normalSpeechFillsAboutHalfTheBarAndRoomNoiseStaysFlat() {
+    // 0.01 of full scale is -40 dBFS, about where normal speech lands on the speech-recognition microphone.
+    val speech = BubblePolicy.level(ShortArray(160) { if (it % 2 == 0) 328 else -328 }, 160)
+    assertEquals(0.5f, speech, 0.02f)
+    val roomNoise = BubblePolicy.level(ShortArray(160) { if (it % 2 == 0) 20 else -20 }, 160)
+    assertEquals(0f, roomNoise, 0f)
+  }
+
   @Test fun waveformHasSevenBarsTallestInTheMiddleAndNeverFlat() {
     val bars = BubblePolicy.bars(1f, 0f)
     assertEquals(7, bars.size)

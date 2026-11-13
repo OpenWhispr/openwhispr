@@ -49,15 +49,21 @@ object BubblePolicy {
     return top.coerceIn(minTop, maxOf(minTop, screenHeight - height))
   }
 
-  /** Microphone loudness from 0 (silence) to 1 (loud speech), on a decibel scale like the iOS meter. */
+  /**
+   * Microphone loudness from 0 (silence) to 1 (loud speech), on a decibel scale like the iOS meter. The
+   * speech-recognition microphone has no automatic gain, so normal speech sits around -40 dBFS: that fills
+   * about half the bar, -20 dBFS fills it, and room noise below -60 dBFS stays flat.
+   */
   fun level(samples: ShortArray, count: Int): Float {
     if (count <= 0) return 0f
     var sum = 0.0
     for (i in 0 until count) { val value = samples[i] / 32768.0; sum += value * value }
     val rms = sqrt(sum / count)
     if (rms <= 0.0) return 0f
-    return ((20 * log10(rms) + 50) / 40).toFloat().coerceIn(0f, 1f)
+    return ((20 * log10(rms) - FLOOR_DB) / (CEILING_DB - FLOOR_DB)).toFloat().coerceIn(0f, 1f)
   }
+  private const val FLOOR_DB = -60.0
+  private const val CEILING_DB = -20.0
 
   private val barShape = floatArrayOf(0.45f, 0.7f, 0.9f, 1f, 0.9f, 0.7f, 0.45f)
   const val BARS = 7
