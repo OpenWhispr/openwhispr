@@ -192,7 +192,7 @@ export default function WorkspaceSwitcher({
           aria-label={compact ? triggerLabel : undefined}
         >
           {current ? (
-            <MemberAvatar name={current.name} email={null} />
+            <MemberAvatar name={current.name} email={null} image={current.icon_url} />
           ) : (
             <UserCircle size={24} className="w-7 shrink-0 text-foreground/50" />
           )}
@@ -218,7 +218,7 @@ export default function WorkspaceSwitcher({
           {current && (
             <>
               <div className="flex items-center gap-3 px-2 pt-1.5 pb-2.5">
-                <MemberAvatar name={current.name} email={null} />
+                <MemberAvatar name={current.name} email={null} image={current.icon_url} />
                 <div className="min-w-0">
                   <p dir="auto" className="truncate text-sm font-medium text-foreground">
                     {current.name}
@@ -283,7 +283,7 @@ export default function WorkspaceSwitcher({
               onSelect={() => setActive(workspace.id)}
               className={itemClass}
             >
-              <MemberAvatar name={workspace.name} email={null} />
+              <MemberAvatar name={workspace.name} email={null} image={workspace.icon_url} />
               <span dir="auto" className="flex-1 min-w-0 truncate">
                 {workspace.name}
               </span>
