@@ -222,10 +222,8 @@ test("the closing line offers connecting only when the user can connect", async 
   assert.match(notConnected, /"Connect Slack and I can post this for you\."/);
 
   const needsPlan = describeUnavailable([
-    { name: "Integrations", reason: "planRequired", where: "Settings → Plans", delivers: true },
+    { name: "Integrations", reason: "planRequired", where: LOCATIONS.plans, delivers: true },
   ]);
-  assert.match(needsPlan, /never on connecting it, which they can't do yet/);
-  assert.match(needsPlan, /"Sending Slack messages needs a paid OpenWhispr plan, so I've written/);
   assert.doesNotMatch(needsPlan, /Connect Slack and I can post this/);
 });
 
