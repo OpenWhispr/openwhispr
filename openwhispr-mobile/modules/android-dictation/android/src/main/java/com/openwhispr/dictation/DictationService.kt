@@ -365,10 +365,13 @@ class DictationService : Service() {
       }
       addView(column, FrameLayout.LayoutParams(dp(200f).toInt(), FrameLayout.LayoutParams.WRAP_CONTENT))
     }
+    // Not FLAG_NOT_TOUCHABLE: Android caps such overlays at 80% opacity, which left the target see-through over
+    // the keyboard. It takes no touches anyway: it has no size while hidden and only shows during a drag, whose
+    // touches stay with the bubble's window.
     val params = WindowManager.LayoutParams(dp(200f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT,
       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT).apply {
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+      PixelFormat.TRANSLUCENT).apply {
       gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; y = (targetCenter().second - dp(44f)).toInt()
     }
     windows.addView(holder, params); target = holder; targetCircle = circle; targetLayout = params
