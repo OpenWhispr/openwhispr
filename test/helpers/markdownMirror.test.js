@@ -1563,3 +1563,282 @@ for (const title of ["A".repeat(1500), "界".repeat(500)]) {
     assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), []);
   });
 }
+
+for (const value of [
+  "- Design",
+  "true",
+  "null",
+  "123",
+  "2026-11-12",
+  "yes",
+  "line\u0001one",
+  " path ",
+  "literal\\npath",
+]) {
+  test(`title and folder metadata round-trip as YAML strings: ${JSON.stringify(value)}`, (t) => {
+    tempMirror(t);
+    const note = { id: 930, title: value, content: "![Figure](figure.png)" };
+    markdownMirror.writeNote(note, {
+      segments: ["Workspaces", "Acme", "Teamspaces", "Engineering", value],
+      workspace: "Acme",
+      space: "Engineering",
+      folder: value,
+    });
+    const text = fs.readFileSync(markdownMirror.getNotePath(note.id), "utf8");
+    const header = text.match(/^---\n([\s\S]*?)\n---/)[1];
+    const metadata = require("js-yaml").load(header);
+    assert.equal(metadata.title, value);
+    assert.equal(metadata.folder, value);
+    assert.equal(metadata.workspace, "Acme");
+    assert.equal(metadata.space, "Engineering");
+    assert.ok(text.endsWith(note.content));
+  });
+}
+
+for (const title of ["- Design", "true", "123", "2026-11-12"]) {
+  test(`YAML output changes still recognize the legacy title ${title}`, (t) => {
+    const basePath = tempMirror(t);
+    const note = { id: 931, title, content: "Body", created_at: "x" };
+    const oldDir = path.join(basePath, "General");
+    fs.mkdirSync(oldDir);
+    const oldPath = path.join(oldDir, "931-old.md");
+    fs.writeFileSync(
+      oldPath,
+      `---\nid: 931\ntitle: ${title}\ntype: personal\nfolder: General\ncreated: x\nupdated: y\n---\n\nBody`
+    );
+    markdownMirror.legacyNoteIds(["General"]);
+    write(note, "Private notes");
+    assert.equal(fs.existsSync(oldPath), false);
+    assert.deepEqual(fs.readdirSync(oldDir), []);
+    markdownMirror.deleteNote(note.id, note);
+    assert.deepEqual(fs.readdirSync(path.join(basePath, "Private notes")), []);
+  });
+}
+
+function emulateCaseAlias(t, actualPath, desiredPath) {
+  const exists = fs.existsSync;
+  const lstat = fs.lstatSync;
+  const stat = fs.statSync;
+  const realpath = fs.realpathSync.native;
+  const alias = (target) => (target === desiredPath && !exists(desiredPath) ? actualPath : target);
+  t.mock.method(fs, "existsSync", (target) => exists(alias(target)));
+  t.mock.method(fs, "lstatSync", (target, options) => lstat(alias(target), options));
+  t.mock.method(fs, "statSync", (target, options) => stat(alias(target), options));
+  t.mock.method(fs.realpathSync, "native", (target, options) => realpath(alias(target), options));
+}
+
+for (const code of ["EBUSY", "EPERM", "EACCES"]) {
+  test(`a busy case rename keeps writes responsive and retries after unlocking (${code})`, (t) => {
+    const basePath = tempMirror(t);
+    const before = placement("Private notes", "LOCKED CASE");
+    const after = { ...placement("Private notes", "Locked Case"), folder: "Locked Case" };
+    markdownMirror.ensureFolder(before, 940);
+    const actualPath = fs.realpathSync.native(path.join(basePath, ...before.segments));
+    const desiredPath = path.join(path.dirname(actualPath), "Locked Case");
+    emulateCaseAlias(t, actualPath, desiredPath);
+    const notes = Array.from({ length: 20 }, (_, index) => ({
+      ...callNote(950 + index),
+      title: `Note ${index}`,
+      content: "Before",
+    }));
+    for (const note of notes) {
+      markdownMirror.writeNote(note, before);
+      if (note.id % 2 === 0) markdownMirror.writeTranscript(note, before, {});
+    }
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    t.after(() => Object.defineProperty(process, "platform", platform));
+    const wait = t.mock.method(Atomics, "wait", () => "timed-out");
+    let now = 1000;
+    t.mock.method(Date, "now", () => now);
+    const rename = fs.renameSync;
+    let attempts = 0;
+    let locked = true;
+    t.mock.method(fs, "renameSync", (from, to) => {
+      if (from === actualPath && to === desiredPath) {
+        attempts++;
+        if (locked) throw Object.assign(new Error("held by another application"), { code });
+      }
+      return rename(from, to);
+    });
+    for (const note of notes) {
+      markdownMirror.writeNote({ ...note, content: "Latest" }, after);
+      if (note.id % 2 === 0) markdownMirror.writeTranscript(note, after, {});
+    }
+    markdownMirror.moveFolderDir("Private notes/LOCKED CASE", after, 940);
+    assert.equal(wait.mock.calls.length, 0, "case normalization must never block the main thread");
+    assert.equal(attempts, 1, "a held directory is attempted once across the batch");
+    for (const note of notes) {
+      const text = fs.readFileSync(markdownMirror.getNotePath(note.id), "utf8");
+      assert.ok(text.endsWith("Latest"));
+      assert.equal(require("js-yaml").load(text.split("---")[1]).folder, "Locked Case");
+    }
+    assert.ok(
+      markdownMirror
+        .recordedFiles()
+        .some((entry) => entry.kind === "dir" && entry.relPath === "Private notes/LOCKED CASE")
+    );
+    assert.equal(
+      fs.readdirSync(actualPath).some((name) => name.startsWith("edited-")),
+      false
+    );
+    locked = false;
+    now += 1001;
+    markdownMirror.writeNote({ ...notes[0], content: "Unlocked" }, after);
+    assert.equal(attempts, 2);
+    assert.deepEqual(fs.readdirSync(path.dirname(desiredPath)), ["Locked Case"]);
+    assert.ok(
+      markdownMirror
+        .recordedFiles()
+        .every((entry) => entry.relPath.startsWith("Private notes/Locked Case"))
+    );
+    assert.ok(fs.readFileSync(markdownMirror.getNotePath(notes[19].id), "utf8").endsWith("Latest"));
+  });
+}
+
+test("a deferred case rename preserves an empty current folder during cleanup", (t) => {
+  const basePath = tempMirror(t);
+  const before = placement("Private notes", "GENERAL");
+  const after = placement("Private notes", "General");
+  markdownMirror.ensureFolder(before, 980);
+  const actualPath = fs.realpathSync.native(path.join(basePath, ...before.segments));
+  const desiredPath = path.join(path.dirname(actualPath), "General");
+  emulateCaseAlias(t, actualPath, desiredPath);
+  const note = { id: 981, title: "Plan", content: "Body" };
+  markdownMirror.writeNote(note, before);
+  const rename = fs.renameSync;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (from === actualPath && to === desiredPath)
+      throw Object.assign(new Error("held"), { code: "EBUSY" });
+    return rename(from, to);
+  });
+  markdownMirror.moveFolderDir("Private notes/GENERAL", after, 980);
+  markdownMirror.writeNote(note, placement("Private notes"));
+  markdownMirror.removeVacatedDirs(new Set(["Private notes/General"]));
+  assert.equal(fs.existsSync(actualPath), true);
+  assert.deepEqual(fs.readdirSync(actualPath), []);
+  assert.ok(
+    markdownMirror.recordedFiles().some((entry) => entry.ownerId === 980 && entry.kind === "dir")
+  );
+});
+
+test("a relocated folder retains ownership and refreshes metadata after interruption", (t) => {
+  const basePath = tempMirror(t);
+  const before = { ...placement("Private notes", "General"), folder: "General" };
+  const after = { ...placement("Private notes", "Archive"), folder: "Archive" };
+  const note = callNote(990);
+  markdownMirror.ensureFolder(before, 991);
+  markdownMirror.writeNote(note, before);
+  markdownMirror.writeTranscript(note, before, {});
+  const oldDir = path.join(basePath, ...before.segments);
+  fs.writeFileSync(path.join(oldDir, "figure.png"), "image");
+  assert.equal(markdownMirror.relocateFolderDir("Private notes/General", after, 991), true);
+  markdownMirror.init(basePath);
+  assert.equal(fs.existsSync(oldDir), false);
+  assert.ok(markdownMirror.getNotePath(note.id).includes("Archive"));
+  assert.equal(
+    markdownMirror.recordedFiles().filter((entry) => entry.ownerId === note.id).length,
+    4
+  );
+  markdownMirror.writeNote(note, after);
+  markdownMirror.writeTranscript(note, after, {});
+  const text = fs.readFileSync(markdownMirror.getNotePath(note.id), "utf8");
+  assert.equal(require("js-yaml").load(text.split("---")[1]).folder, "Archive");
+  assert.equal(
+    markdownMirror.recordedFiles().filter((entry) => entry.ownerId === note.id).length,
+    2
+  );
+  assert.equal(
+    fs
+      .readdirSync(path.join(basePath, ...after.segments))
+      .some((file) => file.startsWith("edited-")),
+    false
+  );
+  assert.equal(
+    fs.readFileSync(path.join(basePath, ...after.segments, "figure.png"), "utf8"),
+    "image"
+  );
+});
+
+for (const destination of ["file", "symlink"]) {
+  test(`a whole-folder move refuses a ${destination} destination`, (t) => {
+    const basePath = tempMirror(t);
+    const note = { id: 992, title: "Plan", content: "Body" };
+    const before = placement("Private notes", "General");
+    const after = placement("Private notes", "Archive");
+    markdownMirror.writeNote(note, before);
+    const target = path.join(basePath, ...after.segments);
+    if (destination === "file") fs.writeFileSync(target, "user file");
+    else fs.symlinkSync("unavailable", target, "dir");
+    assert.equal(markdownMirror.relocateFolderDir("Private notes/General", after, 993), false);
+    assert.ok(fs.readFileSync(markdownMirror.getNotePath(note.id), "utf8").endsWith("Body"));
+    if (destination === "file") assert.equal(fs.readFileSync(target, "utf8"), "user file");
+    else assert.equal(fs.readlinkSync(target), "unavailable");
+  });
+}
+
+test("a file recreated at a relocated note's old path is preserved during metadata refresh", (t) => {
+  const basePath = tempMirror(t);
+  const before = { ...placement("Private notes", "General"), folder: "General" };
+  const after = { ...placement("Private notes", "Archive"), folder: "Archive" };
+  const note = { id: 994, title: "Plan", content: "Body" };
+  markdownMirror.writeNote(note, before);
+  const oldFile = markdownMirror.getNotePath(note.id);
+  const original = fs.readFileSync(oldFile, "utf8");
+  assert.equal(markdownMirror.relocateFolderDir("Private notes/General", after, 995), true);
+  fs.mkdirSync(path.dirname(oldFile));
+  fs.writeFileSync(oldFile, original);
+  assert.equal(
+    markdownMirror.getNotePath(note.id),
+    path.join(basePath, "Private notes", "Archive", path.basename(oldFile))
+  );
+  markdownMirror.writeNote(note, after);
+  const kept = path.join(path.dirname(oldFile), `edited-${path.basename(oldFile)}`);
+  assert.equal(fs.readFileSync(kept, "utf8"), original);
+  assert.ok(fs.readFileSync(markdownMirror.getNotePath(note.id), "utf8").endsWith("Body"));
+});
+
+for (const failure of ["after rename", "after new ledger row"]) {
+  test(`an interrupted relocation cannot reclaim a restored old file (${failure})`, (t) => {
+    const basePath = tempMirror(t);
+    const before = { ...placement("Private notes", "General"), folder: "General" };
+    const after = { ...placement("Private notes", "Archive"), folder: "Archive" };
+    const note = { id: 996, title: "Plan", content: "Body" };
+    markdownMirror.writeNote(note, before);
+    const oldFile = markdownMirror.getNotePath(note.id);
+    const original = fs.readFileSync(oldFile, "utf8");
+    const ledger = markdownMirror._ledger;
+    const record = ledger.record;
+    const rename = fs.renameSync;
+    let interrupted = false;
+    if (failure === "after rename") {
+      t.mock.method(fs, "renameSync", (from, to) => {
+        rename(from, to);
+        interrupted = true;
+        throw Object.assign(new Error("interrupted after filesystem change"), { code: "EIO" });
+      });
+    } else {
+      t.mock.method(ledger, "record", (base, entry) => {
+        record(base, entry);
+        if (entry.kind === "note" && entry.relPath.startsWith("Private notes/Archive/")) {
+          interrupted = true;
+          throw new Error("ledger update interrupted");
+        }
+      });
+    }
+    assert.equal(markdownMirror.relocateFolderDir("Private notes/General", after, 997), false);
+    assert.equal(interrupted, true);
+    t.mock.restoreAll();
+    fs.mkdirSync(path.dirname(oldFile));
+    fs.writeFileSync(oldFile, original);
+    markdownMirror.init(basePath);
+    markdownMirror.writeNote(note, after);
+    const kept = path.join(path.dirname(oldFile), `edited-${path.basename(oldFile)}`);
+    assert.equal(fs.readFileSync(kept, "utf8"), original);
+    assert.ok(fs.readFileSync(markdownMirror.getNotePath(note.id), "utf8").endsWith("Body"));
+    assert.equal(
+      markdownMirror.recordedFiles().filter((entry) => entry.ownerId === note.id).length,
+      1
+    );
+  });
+}

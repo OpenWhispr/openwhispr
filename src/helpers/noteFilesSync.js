@@ -1,3 +1,4 @@
+const path = require("path");
 const debugLogger = require("./debugLogger");
 const defaultMirror = require("./markdownMirror");
 const { buildNotePlacements } = require("./notePlacement");
@@ -38,11 +39,119 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
   // What placement depends on, as last reconciled. A sync pass upserts every
   // space and folder, and most passes change none of them.
   let reconciledContainers = null;
+  let placementSnapshot = null;
   let reconcileForced = false;
 
   const database = () => getDatabase();
   const containersSignature = () => JSON.stringify(database().getMirrorContainers());
-  const loadPlacements = () => buildNotePlacements(database().getMirrorContainers());
+  // A save or Show in folder can beat the debounced reconcile. Move safe folders
+  // first, while their attachments still share the notes' original directory.
+  const preparePlacements = () => {
+    const containers = database().getMirrorContainers();
+    const signature = JSON.stringify(containers);
+    const placements = buildNotePlacements(containers);
+    if (enabled && placementSnapshot && signature !== placementSnapshot) {
+      const previous = JSON.parse(placementSnapshot);
+      const oldPlacements = buildNotePlacements(previous);
+      const existingPath = (location) => {
+        const absolutePath = mirror.getFolderPath(location);
+        return absolutePath === null
+          ? null
+          : path.relative(mirror.getBasePath(), absolutePath).split(path.sep).join("/");
+      };
+      const folderPaths = (snapshot, layout, resolvePath) => {
+        const paths = new Map();
+        for (const folder of snapshot.folders) {
+          const location = layout.folderLocation(folder.id);
+          const relPath = location && resolvePath(location);
+          if (!relPath) continue;
+          if (!paths.has(relPath)) paths.set(relPath, []);
+          paths.get(relPath).push(folder.id);
+        }
+        return paths;
+      };
+      const newPaths = folderPaths(containers, placements, (location) =>
+        mirror.relPathFor(null, location, "dir")
+      );
+      const oldPaths = folderPaths(previous, oldPlacements, existingPath);
+      const occupiedPaths = folderPaths(containers, placements, existingPath);
+      const previousSources = new Map();
+      for (const [relPath, owners] of oldPaths) {
+        for (const owner of owners) previousSources.set(owner, relPath);
+      }
+      const summaries = new Map(
+        database()
+          .getMirrorNoteSummaries()
+          .map((note) => [note.id, note])
+      );
+      const recorded = mirror.recordedFiles();
+      const pendingMoves = [];
+      for (const folder of previous.folders) {
+        const before = oldPlacements.folderLocation(folder.id);
+        const after = placements.folderLocation(folder.id);
+        if (!before || !after) continue;
+        const oldPath = mirror.relPathFor(null, before, "dir");
+        const newPath = mirror.relPathFor(null, after, "dir");
+        // A deferred case rename leaves the ledger at the actual on-disk spelling.
+        const actualOldPath = previousSources.get(folder.id);
+        if (
+          oldPath === newPath ||
+          !actualOldPath ||
+          oldPaths.get(actualOldPath)?.length !== 1 ||
+          newPaths.get(newPath)?.length !== 1
+        )
+          continue;
+        const claimants = [
+          ...(newPaths.get(oldPath) ?? []),
+          ...(occupiedPaths.get(actualOldPath) ?? []),
+        ];
+        if (
+          claimants.some(
+            (id) =>
+              id !== folder.id &&
+              (!previousSources.has(id) || previousSources.get(id) === actualOldPath)
+          )
+        )
+          continue;
+        const descendants = recorded.filter(
+          (entry) =>
+            entry.relPath === actualOldPath || entry.relPath.startsWith(`${actualOldPath}/`)
+        );
+        if (
+          descendants.length === 0 ||
+          !descendants.every((entry) => {
+            if (entry.kind === "dir")
+              return entry.ownerId === folder.id && entry.relPath === actualOldPath;
+            const note = summaries.get(entry.ownerId);
+            if (!note) return false;
+            const expectedDir = mirror.relPathFor(null, placements.forNote(note), "dir");
+            const previousDir = entry.relPath.slice(0, entry.relPath.lastIndexOf("/"));
+            return expectedDir === newPath + previousDir.slice(actualOldPath.length);
+          })
+        )
+          continue;
+        pendingMoves.push({ before, after, folderId: folder.id });
+      }
+      // A sibling may take a vacated name after disambiguation changes. Free its
+      // destination first, independently of database order; leave cycles alone.
+      let madeProgress = true;
+      while (madeProgress && pendingMoves.length > 0) {
+        madeProgress = false;
+        for (let index = 0; index < pendingMoves.length;) {
+          const { before, after, folderId } = pendingMoves[index];
+          if (mirror.getFolderPath(after)) {
+            index++;
+            continue;
+          }
+          pendingMoves.splice(index, 1);
+          const source = existingPath(before);
+          if (source && mirror.relocateFolderDir(source, after, folderId)) madeProgress = true;
+        }
+      }
+    }
+    if (enabled) placementSnapshot = signature;
+    return placements;
+  };
 
   const useDatabaseLedger = () =>
     mirror.setLedger({
@@ -110,7 +219,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
       if (noteIds.length >= limit) break;
     }
     guarded("Failed to write pulled note files", () => {
-      const placements = loadPlacements();
+      const placements = preparePlacements();
       for (const note of database().getNotesForMirror(noteIds)) {
         if (note.deleted_at) mirror.deleteNote(note.id, note, getSpeakerMappings(note.id));
         else writeOne(note, placements);
@@ -146,7 +255,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
     const db = database();
     reconciledContainers = containersSignature();
     reconcileForced = false;
-    let placements = loadPlacements();
+    let placements = preparePlacements();
     const recorded = mirror.recordedFiles();
     const filesByNote = groupByNote(recorded.filter((entry) => entry.kind !== "dir"));
     const legacy = mirror.legacyNoteIds(db.getLegacyMirrorFolderNames());
@@ -167,7 +276,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
         if (!note.deleted_at) writeOne(note, placements);
       }
       await yieldToEventLoop();
-      placements = loadPlacements();
+      placements = preparePlacements();
     }
     if (!stillCurrent()) return;
 
@@ -237,13 +346,16 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
   };
 
   const start = (basePath) => {
-    if (mirror.getBasePath() !== basePath) generation++;
+    if (mirror.getBasePath() !== basePath) {
+      generation++;
+      placementSnapshot = null;
+    }
     useDatabaseLedger();
     mirror.init(basePath);
   };
 
   const rebuild = async () => {
-    const placements = loadPlacements();
+    const placements = preparePlacements();
     const notes = database().getNotes(null, ALL_NOTES_LIMIT);
     for (const note of notes) writeOne(note, placements);
     debugLogger.info("Markdown mirror rebuild complete", { count: notes.length }, "note-files");
@@ -287,7 +399,7 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
     },
 
     writeNote(note) {
-      whenEnabled(() => writeOne(note, loadPlacements()));
+      whenEnabled(() => writeOne(note, preparePlacements()));
     },
 
     // The row, while there is one, lets old-layout files be checked against it.
@@ -325,14 +437,14 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
 
     ensureFolder(folderId) {
       whenEnabled(() => {
-        const location = loadPlacements().folderLocation(folderId);
+        const location = preparePlacements().folderLocation(folderId);
         if (location) mirror.ensureFolder(location, folderId);
       });
     },
 
     // A folder with no notes may have no directory yet, so it's made here.
     folderPath(folderId) {
-      const location = loadPlacements().folderLocation(folderId);
+      const location = preparePlacements().folderLocation(folderId);
       if (!location) return null;
       if (enabled) mirror.ensureFolder(location, folderId);
       return mirror.getFolderPath(location);

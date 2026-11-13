@@ -16,6 +16,9 @@ const SAFE_NAME_SUFFIX = / \([0-9a-f]{8}\)$/i;
 // temporary file's suffix.
 const MAX_SLUG_BYTES = 150;
 
+const CASE_RENAME_RETRY_MS = 1000;
+const BUSY_DIRECTORY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+
 const SYSTEM_LEFTOVERS = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
 const OLD_FRONTMATTER_LINE = /^(id|title|type|folder|created|updated):/;
 
@@ -28,11 +31,8 @@ const normalizeText = (text) =>
 const normalizeLineEndings = (text) => text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
 const hashOf = (content) => crypto.createHash("sha256").update(content, "utf8").digest("hex");
 
-// A control character (newline, carriage return, tab) in a title splits the
-// mapping onto a bare line and makes the whole frontmatter block unparseable,
-// so force quoting and escape them like `"` and `\` — keeping the value on one
-// line and round-tripping back to the original when parsed.
-function escYaml(str) {
+// Keep the old serializer for recognizing legacy exports; new metadata uses JSON quoting.
+function legacyYaml(str) {
   if (!str) return '""';
   if (
     /[:#{}[\],&*?|>!%@`]/.test(str) ||
@@ -72,7 +72,7 @@ function isUnchangedNoteFile(text, note) {
   if (!parsed) return false;
   const expected = new Map([
     ["id", String(note.id)],
-    ["title", escYaml(note.title)],
+    ["title", legacyYaml(note.title)],
     ["type", note.note_type || "personal"],
   ]);
   if (note.created_at) expected.set("created", note.created_at);
@@ -108,6 +108,7 @@ class MarkdownMirror {
     this._ledgerBasePath = null;
     this._ledger = createMemoryLedger();
     this._vacatedDirs = new Set();
+    this._deferredCaseRenames = new Map();
     // Old-layout files by note id, read once and kept until the mirror moves.
     this._oldLayoutIndex = null;
     this._oldFolderNames = new Set(["Personal"]);
@@ -125,6 +126,7 @@ class MarkdownMirror {
     this._baseRealPath = null;
     this._ledgerBasePath = null;
     this._vacatedDirs.clear();
+    this._deferredCaseRenames.clear();
     this._oldLayoutIndex = null;
     this._oldFolderNames = new Set(["Personal"]);
     try {
@@ -227,8 +229,22 @@ class MarkdownMirror {
       }
       current = this._resolveExistingFolderPath(candidatePath);
       if (create && path.basename(current) !== path.basename(candidatePath)) {
+        const deferred = this._deferredCaseRenames.get(current);
+        if (deferred?.target === candidatePath && Date.now() < deferred.retryAt) continue;
         const oldRelPath = this._relPath(current);
-        renameWithRetry(current, candidatePath);
+        try {
+          // Spelling is cosmetic: a held Windows directory must not stall every note write.
+          fs.renameSync(current, candidatePath);
+        } catch (error) {
+          if (!BUSY_DIRECTORY_CODES.has(error.code)) throw error;
+          this._deferredCaseRenames.set(current, {
+            target: candidatePath,
+            retryAt: Date.now() + CASE_RENAME_RETRY_MS,
+          });
+          current = this._resolveExistingFolderPath(current);
+          continue;
+        }
+        this._deferredCaseRenames.delete(current);
         current = candidatePath;
         const newRelPath = this._relPath(current);
         for (const entry of this.recordedFiles()) {
@@ -276,11 +292,11 @@ class MarkdownMirror {
     const lines = [
       "---",
       `id: ${note.id}`,
-      `title: ${escYaml(note.title)}`,
+      `title: ${JSON.stringify(note.title || "")}`,
       `type: ${note.note_type || "personal"}`,
       ...(location.workspace ? [`workspace: ${JSON.stringify(location.workspace)}`] : []),
       ...(location.space ? [`space: ${JSON.stringify(location.space)}`] : []),
-      ...(location.folder ? [`folder: ${escYaml(location.folder)}`] : []),
+      ...(location.folder ? [`folder: ${JSON.stringify(location.folder)}`] : []),
       `created: ${note.created_at || new Date().toISOString()}`,
       `updated: ${note.updated_at || new Date().toISOString()}`,
       "---",
@@ -626,8 +642,87 @@ class MarkdownMirror {
           hash: null,
         });
       }
+      return dirPath;
     } catch (err) {
       debugLogger.error("Failed to ensure folder", { error: err.message }, "note-files");
+    }
+  }
+
+  // The coordinator proves exclusive ownership before moving a whole folder.
+  // Keep old file records until their metadata is refreshed, including after a restart.
+  relocateFolderDir(oldRelPath, location, folderId) {
+    if (!this._baseRealPath) return false;
+    let revokedFiles = [];
+    let oldPath;
+    let newPath;
+    let sourceIdentity;
+    try {
+      oldPath = this._resolveExistingFolderPath(this._absolutePath(oldRelPath));
+      const desiredRelPath = this.relPathFor(null, location, "dir");
+      if (
+        desiredRelPath === oldRelPath ||
+        desiredRelPath.startsWith(`${oldRelPath}/`) ||
+        oldRelPath.startsWith(`${desiredRelPath}/`) ||
+        fs.lstatSync(this._absolutePath(desiredRelPath), { throwIfNoEntry: false })
+      )
+        return false;
+      const parent = this._resolveFolderPath(
+        { segments: location.segments.slice(0, -1) },
+        { create: true }
+      );
+      newPath = path.join(parent, this._safeFolderName(location.segments.at(-1)));
+      if (fs.lstatSync(newPath, { throwIfNoEntry: false })) return false;
+      // Resolving the parent can recase an ancestor and rebase its ledger rows.
+      oldPath = this._resolveExistingFolderPath(oldPath);
+      oldRelPath = this._relPath(oldPath);
+      const entries = this.recordedFiles().filter(
+        (entry) => entry.relPath === oldRelPath || entry.relPath.startsWith(`${oldRelPath}/`)
+      );
+      if (entries.length === 0) return false;
+      sourceIdentity = fs.statSync(oldPath, { bigint: true });
+      revokedFiles = entries.filter((entry) => entry.kind !== "dir");
+      // Revoke before moving: an interruption must never leave ownership of vacated paths.
+      for (const entry of revokedFiles) {
+        this._ledger.record(this._ledgerBasePath, { ...entry, hash: null });
+      }
+      fs.renameSync(oldPath, newPath);
+      const newRelPath = this._relPath(newPath);
+      for (const entry of entries) {
+        this._ledger.record(this._ledgerBasePath, {
+          ...entry,
+          relPath: newRelPath + entry.relPath.slice(oldRelPath.length),
+        });
+        if (entry.kind === "dir") this._ledger.forget(this._ledgerBasePath, entry.relPath);
+      }
+      this._ledger.record(this._ledgerBasePath, {
+        relPath: newRelPath,
+        ownerId: folderId,
+        kind: "dir",
+        hash: null,
+      });
+      this._vacatedDirs.add(path.dirname(oldPath));
+      return true;
+    } catch (error) {
+      try {
+        const remaining =
+          sourceIdentity && fs.lstatSync(oldPath, { bigint: true, throwIfNoEntry: false });
+        if (
+          remaining &&
+          remaining.isDirectory() &&
+          sourceIdentity.ino !== 0n &&
+          remaining.dev === sourceIdentity.dev &&
+          remaining.ino === sourceIdentity.ino &&
+          !fs.lstatSync(newPath, { throwIfNoEntry: false })
+        ) {
+          for (const entry of revokedFiles) this._ledger.record(this._ledgerBasePath, entry);
+        }
+      } catch {}
+      debugLogger.debug(
+        "Failed to finish a folder relocation",
+        { error: error.message },
+        "note-files"
+      );
+      return false;
     }
   }
 
@@ -643,9 +738,8 @@ class MarkdownMirror {
       );
       if (fs.existsSync(oldPath) && this._isSameFile(oldPath, newPath)) {
         this._resolveExistingFolderPath(oldPath);
-        this._resolveFolderPath(location, { create: true });
-        this.ensureFolder(location, folderId);
-        if (oldRelPath !== this.relPathFor(null, location, "dir")) {
+        const resolved = this.ensureFolder(location, folderId);
+        if (resolved && oldRelPath !== this._relPath(resolved)) {
           this._ledger.forget(this._ledgerBasePath, oldRelPath);
         }
         return;
@@ -684,6 +778,15 @@ class MarkdownMirror {
     if (!this._baseRealPath) return;
     const vacated = [...this._vacatedDirs];
     this._vacatedDirs.clear();
+    keepRelPaths = new Set(
+      [...keepRelPaths].map((relPath) => {
+        try {
+          return this._relPath(this._resolveExistingFolderPath(this._absolutePath(relPath)));
+        } catch {
+          return relPath;
+        }
+      })
+    );
     for (const dirPath of vacated) {
       let relPath = this._relPath(dirPath);
       while (relPath && !relPath.startsWith("..") && !keepRelPaths.has(relPath)) {
@@ -745,8 +848,8 @@ class MarkdownMirror {
 
   getNotePath(noteId) {
     if (!this._baseRealPath) return null;
-    const recorded = this._recorded(noteId, "note").find((entry) =>
-      fs.existsSync(this._absolutePath(entry.relPath))
+    const recorded = this._recorded(noteId, "note").find(
+      (entry) => entry.hash !== null && fs.existsSync(this._absolutePath(entry.relPath))
     );
     if (recorded) return this._displayPath(this._absolutePath(recorded.relPath));
     const [oldPath] = this._oldLayoutFiles(noteId, "note");

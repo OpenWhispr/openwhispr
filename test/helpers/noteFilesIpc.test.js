@@ -746,7 +746,10 @@ test("an edit made outside the app survives its folder being renamed", async () 
   await settle();
 
   assert.match(
-    fs.readFileSync(path.join(path.dirname(original), `edited-${path.basename(original)}`), "utf8"),
+    fs.readFileSync(
+      path.join(path.dirname(fileOf(100)), `edited-${path.basename(original)}`),
+      "utf8"
+    ),
     /mine$/
   );
   assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/Archive");
@@ -1166,3 +1169,307 @@ test("real local folder deletion cleans unmigrated tombstones omitted from live 
   assert.equal(fs.existsSync(editedPath), false);
   assert.equal(fs.existsSync(path.join(basePath, "Archive", `edited-${gone.id}-copy.md`)), true);
 });
+
+for (const action of [
+  "rename",
+  "move",
+  "workspace",
+  "space",
+  "case-parent",
+  "rebuild",
+  "show",
+  "save",
+  "pull",
+]) {
+  test(`exclusive folder relocation preserves attachments before ${action}`, async () => {
+    const db = target.databaseManager;
+    const note = db.state.notes.find((row) => row.id === 100);
+    note.content = "![Figure](figure.png) [Details](assets/details.txt)";
+    db.state.spaces.push({
+      id: 4,
+      kind: "team",
+      name: "Operations",
+      workspace_id: "w-beta-2222",
+      deleted_at: null,
+    });
+    await enableMirror();
+    const oldFile = fileOf(100);
+    const oldDir = path.dirname(oldFile);
+    const otherFile = fileOf(101);
+    const noteInode = fs.statSync(oldFile).ino;
+    fs.writeFileSync(path.join(oldDir, "figure.png"), "image bytes");
+    fs.mkdirSync(path.join(oldDir, "assets"));
+    fs.writeFileSync(path.join(oldDir, "assets", "details.txt"), "details");
+    fs.writeFileSync(path.join(oldDir, "edited-personal.md"), "outside edit");
+    const assetInode = fs.statSync(path.join(oldDir, "figure.png")).ino;
+
+    if (action === "move") await invoke("db-move-folder-to-space", 10, 4);
+    else if (action === "workspace")
+      await invoke("note-files-set-workspace-names", [{ id: "w-acme-1111", name: "Acme Renamed" }]);
+    else if (action === "space") await invoke("db-update-space", 2, { name: "Platform" });
+    else await invoke("db-rename-folder", 10, "Archive");
+    if (action === "case-parent")
+      await invoke("note-files-set-workspace-names", [{ id: "w-acme-1111", name: "acme" }]);
+    if (action === "rebuild") await invoke("note-files-rebuild");
+    if (action === "show") await invoke("show-folder-in-explorer", 10);
+    if (action === "save") target.noteFiles.writeNote(note);
+    if (action === "pull") target.noteFiles.queueNote(note.id);
+    await settle();
+
+    const newFile = fileOf(100);
+    const newDir = path.dirname(newFile);
+    assert.notEqual(newDir, oldDir);
+    assert.equal(fs.existsSync(oldDir), false);
+    assert.equal(fs.readFileSync(path.join(newDir, "figure.png"), "utf8"), "image bytes");
+    assert.equal(fs.statSync(path.join(newDir, "figure.png")).ino, assetInode);
+    assert.equal(fs.statSync(newFile).ino, noteInode);
+    assert.equal(fs.readFileSync(path.join(newDir, "assets", "details.txt"), "utf8"), "details");
+    assert.equal(fs.readFileSync(path.join(newDir, "edited-personal.md"), "utf8"), "outside edit");
+    assert.ok(fs.readFileSync(newFile, "utf8").endsWith(note.content));
+    const metadata = frontmatterOf(newFile);
+    assert.equal(
+      metadata.folder,
+      ["move", "workspace", "space"].includes(action) ? "General" : "Archive"
+    );
+    assert.equal(
+      metadata.space,
+      action === "move" ? "Operations" : action === "space" ? "Platform" : "Engineering"
+    );
+    assert.equal(
+      metadata.workspace,
+      action === "move"
+        ? "Beta"
+        : action === "workspace"
+          ? "Acme Renamed"
+          : action === "case-parent"
+            ? "acme"
+            : "Acme"
+    );
+    assert.equal(fileOf(101), otherFile);
+    assert.equal(
+      [...db.state.mirrorFiles.values()].filter(
+        (entry) => entry.ownerId === 100 && entry.kind === "note"
+      ).length,
+      1
+    );
+  });
+}
+
+for (const otherOwner of ["empty folder", "inactive note"]) {
+  test(`a shared private folder keeps other owners' files when one folder is renamed (${otherOwner})`, async () => {
+    const db = target.databaseManager;
+    db.state.folders.push({
+      id: 20,
+      name: "General",
+      space_id: 1,
+      account_id: "a2",
+      deleted_at: null,
+    });
+    if (otherOwner === "inactive note")
+      db.state.notes.push({
+        id: 104,
+        title: "Theirs",
+        content: "Their body",
+        folder_id: 20,
+        space_id: 1,
+        account_id: "a2",
+        deleted_at: null,
+      });
+    await enableMirror();
+    const oldDir = path.dirname(fileOf(102));
+    fs.writeFileSync(path.join(oldDir, "shared.png"), "shared asset");
+    db.state.outOfScopeNoteIds.add(104);
+    await invoke("db-rename-folder", 12, "Archive");
+    await settle();
+    assert.equal(fs.readFileSync(path.join(oldDir, "shared.png"), "utf8"), "shared asset");
+    assert.equal(fs.existsSync(path.join(path.dirname(fileOf(102)), "shared.png")), false);
+    if (otherOwner === "inactive note") assert.equal(path.dirname(fileOf(104)), oldDir);
+  });
+}
+
+for (const destination of ["empty", "occupied"]) {
+  test(`relocation never replaces a user's ${destination} destination directory`, async () => {
+    await enableMirror();
+    const oldDir = path.dirname(fileOf(100));
+    const newDir = path.join(path.dirname(oldDir), "Archive");
+    fs.mkdirSync(newDir);
+    const destinationInode = fs.statSync(newDir).ino;
+    if (destination === "occupied")
+      fs.writeFileSync(path.join(newDir, "figure.png"), "destination image");
+    fs.writeFileSync(path.join(oldDir, "figure.png"), "source image");
+    await invoke("db-rename-folder", 10, "Archive");
+    await settle();
+    assert.equal(fs.statSync(newDir).ino, destinationInode);
+    assert.equal(fs.readFileSync(path.join(oldDir, "figure.png"), "utf8"), "source image");
+    if (destination === "occupied")
+      assert.equal(fs.readFileSync(path.join(newDir, "figure.png"), "utf8"), "destination image");
+    else assert.equal(fs.existsSync(path.join(newDir, "figure.png")), false);
+  });
+}
+
+test("an empty recorded folder carries its user files through a rename", async () => {
+  const db = target.databaseManager;
+  db.state.folders.push({ id: 20, name: "Empty", space_id: 2, account_id: null, deleted_at: null });
+  await enableMirror();
+  await invoke("show-folder-in-explorer", 20);
+  const oldDir = openedPaths.at(-1);
+  fs.writeFileSync(path.join(oldDir, "draft.txt"), "user draft");
+  await invoke("db-rename-folder", 20, "Renamed");
+  await settle();
+  assert.equal(fs.existsSync(oldDir), false);
+  assert.equal(
+    fs.readFileSync(path.join(path.dirname(oldDir), "Renamed", "draft.txt"), "utf8"),
+    "user draft"
+  );
+});
+
+for (const excluded of ["moved", "deleted", "inactive"]) {
+  test(`a ${excluded} note prevents unrelated files hitching a ride with a folder`, async () => {
+    const db = target.databaseManager;
+    db.state.notes.push({
+      id: 104,
+      title: "Separate",
+      content: "Separate body",
+      folder_id: 10,
+      space_id: 2,
+      account_id: null,
+      deleted_at: null,
+    });
+    await enableMirror();
+    const oldDir = path.dirname(fileOf(100));
+    fs.writeFileSync(path.join(oldDir, "shared.png"), "unassigned image");
+    const other = db.state.notes.find((row) => row.id === 104);
+    if (excluded === "moved") other.folder_id = null;
+    if (excluded === "deleted") other.deleted_at = "now";
+    if (excluded === "inactive") db.state.outOfScopeNoteIds.add(104);
+    await invoke("db-rename-folder", 10, "Archive");
+    await settle();
+    assert.equal(fs.readFileSync(path.join(oldDir, "shared.png"), "utf8"), "unassigned image");
+    assert.equal(fs.existsSync(path.join(path.dirname(fileOf(100)), "shared.png")), false);
+    if (excluded === "inactive") assert.equal(path.dirname(fileOf(104)), oldDir);
+    if (excluded === "moved")
+      assert.equal(relativeDir(fileOf(104)), "Workspaces/Acme/Teamspaces/Engineering");
+  });
+}
+
+test("a folder rename while disabled retains attachments when the same mirror restarts", async () => {
+  await enableMirror();
+  const oldDir = path.dirname(fileOf(100));
+  fs.writeFileSync(path.join(oldDir, "figure.png"), "image");
+  await invoke("note-files-set-enabled", false);
+  await invoke("db-rename-folder", 10, "Archive");
+  await enableMirror({ skipRebuild: true });
+  assert.equal(fs.existsSync(oldDir), false);
+  assert.equal(
+    fs.readFileSync(path.join(path.dirname(fileOf(100)), "figure.png"), "utf8"),
+    "image"
+  );
+});
+
+test("a new mirror path cannot use the previous path's folder ownership", async () => {
+  await enableMirror();
+  const oldDir = path.dirname(fileOf(100));
+  fs.writeFileSync(path.join(oldDir, "figure.png"), "original image");
+  const otherBase = path.join(basePath, "other-mirror");
+  const userDir = path.join(otherBase, "Workspaces/Acme/Teamspaces/Engineering/General");
+  fs.mkdirSync(userDir, { recursive: true });
+  fs.writeFileSync(path.join(userDir, "figure.png"), "user image");
+  target.databaseManager.state.folders.find((row) => row.id === 10).name = "Archive";
+  await invoke("note-files-set-path", otherBase);
+  await settle();
+  assert.equal(fs.readFileSync(path.join(userDir, "figure.png"), "utf8"), "user image");
+  assert.equal(fs.readFileSync(path.join(oldDir, "figure.png"), "utf8"), "original image");
+});
+
+test("a normal rename after a refused case rename carries attachments from the actual folder", async (t) => {
+  const db = target.databaseManager;
+  db.state.folders.find((folder) => folder.id === 10).name = "GENERAL";
+  await enableMirror();
+  const actualPath = fs.realpathSync.native(path.dirname(fileOf(100)));
+  const desiredPath = path.join(path.dirname(actualPath), "General");
+  fs.writeFileSync(path.join(actualPath, "figure.png"), "image bytes");
+  const exists = fs.existsSync;
+  const lstat = fs.lstatSync;
+  const stat = fs.statSync;
+  const realpath = fs.realpathSync.native;
+  const alias = (value) => (value === desiredPath && !exists(desiredPath) ? actualPath : value);
+  t.mock.method(fs, "existsSync", (value) => exists(alias(value)));
+  t.mock.method(fs, "lstatSync", (value, options) => lstat(alias(value), options));
+  t.mock.method(fs, "statSync", (value, options) => stat(alias(value), options));
+  t.mock.method(fs.realpathSync, "native", (value, options) => realpath(alias(value), options));
+  const rename = fs.renameSync;
+  let locked = true;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (locked && from === actualPath && to === desiredPath)
+      throw Object.assign(new Error("held folder"), { code: "EPERM" });
+    return rename(from, to);
+  });
+  await invoke("db-rename-folder", 10, "General");
+  await settle();
+  assert.equal(path.basename(path.dirname(fileOf(100))), "GENERAL");
+  locked = false;
+  await invoke("db-rename-folder", 10, "Archive");
+  await settle();
+  assert.equal(
+    fs.readFileSync(path.join(path.dirname(fileOf(100)), "figure.png"), "utf8"),
+    "image bytes"
+  );
+  assert.equal(fs.existsSync(actualPath), false);
+  assert.equal(frontmatterOf(fileOf(100)).folder, "Archive");
+});
+
+for (const [firstName, secondName] of [
+  ["Work", "work"],
+  ["Straße", "STRASSE"],
+  ["\u03b1\u0345\u0301", "\u03b1\u0301\u0345"],
+]) {
+  test(`sibling path reassignment keeps both folders' attachments (${firstName} / ${secondName})`, async (t) => {
+    const db = target.databaseManager;
+    db.state.folders.find((folder) => folder.id === 10).name = firstName;
+    db.state.folders.push({
+      id: 20,
+      name: secondName,
+      space_id: 2,
+      account_id: null,
+      deleted_at: null,
+    });
+    db.state.notes.push({
+      id: 104,
+      title: "Sibling",
+      content: "Sibling body",
+      folder_id: 20,
+      space_id: 2,
+      account_id: null,
+      deleted_at: null,
+    });
+    db.state.folders.reverse();
+    await enableMirror();
+    const firstDir = fs.realpathSync.native(path.dirname(fileOf(100)));
+    const secondDir = path.dirname(fileOf(104));
+    const releasedPath = path.join(path.dirname(firstDir), secondName);
+    fs.writeFileSync(path.join(firstDir, "figure.png"), "first image");
+    fs.writeFileSync(path.join(secondDir, "figure.png"), "second image");
+    const exists = fs.existsSync;
+    const lstat = fs.lstatSync;
+    const stat = fs.statSync;
+    const realpath = fs.realpathSync.native;
+    const alias = (value) => (value === releasedPath && !exists(releasedPath) ? firstDir : value);
+    t.mock.method(fs, "existsSync", (value) => exists(alias(value)));
+    t.mock.method(fs, "lstatSync", (value, options) => lstat(alias(value), options));
+    t.mock.method(fs, "statSync", (value, options) => stat(alias(value), options));
+    t.mock.method(fs.realpathSync, "native", (value, options) => realpath(alias(value), options));
+    await invoke("db-rename-folder", 10, "Archive");
+    await settle();
+    assert.equal(path.basename(path.dirname(fileOf(100))), "Archive");
+    assert.equal(path.basename(path.dirname(fileOf(104))), secondName);
+    assert.equal(
+      fs.readFileSync(path.join(path.dirname(fileOf(100)), "figure.png"), "utf8"),
+      "first image"
+    );
+    assert.equal(
+      fs.readFileSync(path.join(path.dirname(fileOf(104)), "figure.png"), "utf8"),
+      "second image"
+    );
+    assert.equal(fs.existsSync(secondDir), false);
+  });
+}
