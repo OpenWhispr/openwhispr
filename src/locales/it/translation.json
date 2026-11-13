@@ -934,6 +934,10 @@
     }
   },
   "transcription": {
+    "unloadWhenIdle": {
+      "label": "Scarica il modello quando inattivo",
+      "help": "Libera la memoria della GPU e la RAM dopo 5 minuti di inattività, così la GPU di un portatile può spegnersi. La dettatura successiva ricarica il modello in pochi secondi."
+    },
     "modelCard": "Scheda del modello",
     "deleteModel": {
       "title": "Elimina modello",

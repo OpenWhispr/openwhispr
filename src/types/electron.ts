@@ -2355,6 +2355,7 @@ declare global {
           model?: string;
           language?: string;
           keepLocalModelLoaded: boolean;
+          unloadTranscriptionModelWhenIdle?: boolean;
           policySettled: boolean;
         }
       ) => Promise<void>;

@@ -172,6 +172,23 @@ test("Keep model loaded applies before the workspace policy settles", async () =
   assert.equal(modelManager.serverManager.keepResident, false, "missing means off");
 });
 
+test("Unload transcription model when idle reaches the whisper-server", async (t) => {
+  const whisperServer = {
+    unloadWhenIdle: null,
+    setUnloadWhenIdle(enabled) {
+      this.unloadWhenIdle = enabled;
+    },
+  };
+  target.whisperManager = { serverManager: whisperServer, stopServer: async () => {} };
+  t.after(() => delete target.whisperManager);
+
+  await sync({ loaded: MODEL, unloadTranscriptionModelWhenIdle: true });
+  assert.equal(whisperServer.unloadWhenIdle, true);
+
+  await sync({ loaded: MODEL });
+  assert.equal(whisperServer.unloadWhenIdle, false, "missing means off");
+});
+
 test("a downloaded GPU binary requests an idle stop that preferences cannot cancel", async (t) => {
   const previousEnabled = process.env.LLAMA_VULKAN_ENABLED;
   const previousBackend = process.env.LLAMA_GPU_BACKEND;
