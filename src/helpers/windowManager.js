@@ -33,6 +33,7 @@ const {
 } = require("./dictationLifecycle");
 const { DEV_SERVER_PORT } = DevServerManager;
 const DRAG_MOVE_TOLERANCE_PX = 2;
+const WIN32_HIT_TEST_INTERVAL_MS = 30;
 const ERR_ABORTED = -3;
 const {
   MAIN_WINDOW_CONFIG,
@@ -234,7 +235,9 @@ class WindowManager {
 
     if (process.platform === "win32") {
       // Windows click-through forwarding is unreliable for this floating panel.
+      // The renderer drives click-through with setMainWindowInputRegion instead.
       this.mainWindow.setIgnoreMouseEvents(false);
+      if (this._win32HitRegion) this._win32HitRegion.capturing = true;
       return;
     }
 
@@ -259,6 +262,7 @@ class WindowManager {
 
   async setMainWindowInputRegion(region) {
     const win = this.mainWindow;
+    if (process.platform === "win32") return this._setWin32MainWindowHitRegion(region);
     if (process.platform !== "linux" || !win || win.isDestroyed()) return false;
     try {
       await this._mainWindowInputRegion().set(region);
@@ -269,6 +273,65 @@ class WindowManager {
       if (!win.isDestroyed()) win.setIgnoreMouseEvents(false);
       throw error;
     }
+  }
+
+  // Windows has no input shape for a transparent window, and forwarded
+  // click-through was unreliable for this panel, so the whole 208x120+ window
+  // used to swallow clicks around a 40px pill. Main hit-tests the cursor
+  // against the region the renderer reports instead, and captures only inside
+  // it. A null region (menu, toast, panel or drag) captures the whole window.
+  _setWin32MainWindowHitRegion(region) {
+    const win = this.mainWindow;
+    if (!win || win.isDestroyed()) return false;
+    if (this._win32HitRegion?.window !== win) {
+      this._stopWin32HitTest();
+      this._win32HitRegion = { window: win, region: null, capturing: null, timer: null };
+    }
+    const state = this._win32HitRegion;
+    state.region = region;
+    if (region && !state.timer) {
+      state.timer = setInterval(() => this._applyWin32HitTest(), WIN32_HIT_TEST_INTERVAL_MS);
+    } else if (!region && state.timer) {
+      clearInterval(state.timer);
+      state.timer = null;
+    }
+    this._applyWin32HitTest();
+    return win.isVisible() && !win.isMinimized();
+  }
+
+  _applyWin32HitTest() {
+    const state = this._win32HitRegion;
+    const win = state?.window;
+    if (!win || win.isDestroyed()) {
+      this._stopWin32HitTest();
+      return;
+    }
+    if (!win.isVisible()) return;
+    let capture = true;
+    const { region } = state;
+    if (region) {
+      const bounds = win.getContentBounds();
+      // Region coordinates are CSS pixels; scale them if the page is zoomed.
+      const scale = region.viewportWidth > 0 ? bounds.width / region.viewportWidth : 1;
+      const cursor = screen.getCursorScreenPoint();
+      const x = (cursor.x - bounds.x) / scale;
+      const y = (cursor.y - bounds.y) / scale;
+      capture =
+        region.width > 0 &&
+        region.height > 0 &&
+        x >= region.x &&
+        x < region.x + region.width &&
+        y >= region.y &&
+        y < region.y + region.height;
+    }
+    if (capture === state.capturing) return;
+    state.capturing = capture;
+    win.setIgnoreMouseEvents(!capture);
+  }
+
+  _stopWin32HitTest() {
+    if (this._win32HitRegion?.timer) clearInterval(this._win32HitRegion.timer);
+    this._win32HitRegion = null;
   }
 
   // Every token or account change retires the prompt first, so only the
@@ -1934,10 +1997,10 @@ class WindowManager {
       return;
     }
 
-    if (process.platform === "linux") {
+    if (process.platform === "linux" || process.platform === "win32") {
       const win = this.mainWindow;
       // backgroundThrottling:false keeps document.visibilityState visible even
-      // after hide(). Native visibility owns the Linux input-region updates.
+      // after hide(). Native visibility owns the input-region updates.
       for (const event of ["show", "hide", "minimize", "restore"]) {
         win.on(event, () => {
           win.webContents.send(
@@ -1977,6 +2040,7 @@ class WindowManager {
 
     this.mainWindow.on("closed", () => {
       this.dragManager.cleanup();
+      this._stopWin32HitTest();
       this.mainWindow = null;
     });
   }
