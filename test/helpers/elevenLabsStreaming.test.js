@@ -30,7 +30,7 @@ async function withScribeServer(run, { refuse = null } = {}) {
           JSON.stringify({
             message_type: "session_started",
             session_id: "s-1",
-            config: { model_id: "scribe_v2_realtime" },
+            config: { model_id: "scribe_v3_live" },
           })
         );
       }
@@ -66,7 +66,7 @@ test("the socket URL asks for 24 kHz PCM, VAD commits and word timestamps", () =
     `${url.origin}${url.pathname}`,
     "wss://api.elevenlabs.io/v1/speech-to-text/realtime"
   );
-  assert.equal(url.searchParams.get("model_id"), "scribe_v2_realtime");
+  assert.equal(url.searchParams.get("model_id"), "scribe_v3_live");
   assert.equal(url.searchParams.get("audio_format"), "pcm_24000");
   assert.equal(url.searchParams.get("commit_strategy"), "vad");
   assert.equal(url.searchParams.get("include_timestamps"), "true");

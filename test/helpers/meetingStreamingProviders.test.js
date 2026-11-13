@@ -190,12 +190,12 @@ test("elevenlabs-realtime resolves to the ElevenLabs client and Note Recording o
   const meeting = getMeetingStreamingTranscriptionProviders().find((p) => p.id === "elevenlabs");
   assert.deepEqual(
     meeting?.models.map((m) => m.id),
-    ["scribe_v2_realtime"]
+    ["scribe_v3_live"]
   );
   const dictation = getDictationTranscriptionProviders().find((p) => p.id === "elevenlabs");
   assert.deepEqual(
     dictation?.models.map((m) => m.id),
-    ["scribe_v2"],
+    ["scribe_v3", "scribe_v2"],
     "the realtime model has nothing to run outside Note Recording"
   );
 

@@ -27,7 +27,7 @@ const byokProviders = [
     id: "assemblyai",
     models: [{ id: "universal-streaming-english", default: true }],
   },
-  { id: "elevenlabs", models: [{ id: "scribe_v2_realtime" }] },
+  { id: "elevenlabs", models: [{ id: "scribe_v3_live" }] },
 ];
 
 const baseOptions = {
@@ -284,7 +284,7 @@ test("BYOK ElevenLabs streams Scribe Realtime with the dictionary as keyterms", 
     }),
     {
       provider: "elevenlabs-realtime",
-      model: "scribe_v2_realtime",
+      model: "scribe_v3_live",
       mode: "byok",
       language: "en",
       keyterms: ["OpenWhispr"],

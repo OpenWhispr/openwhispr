@@ -138,7 +138,7 @@ test("proxied providers carry their quirks as route data", async () => {
   const elevenlabs = await resolve({ cloudTranscriptionProvider: "elevenlabs" });
   assert.equal(elevenlabs.transport, "proxied");
   assert.equal(elevenlabs.provider, "elevenlabs");
-  assert.equal(elevenlabs.model, "scribe_v2");
+  assert.equal(elevenlabs.model, "scribe_v3");
   assert.equal(elevenlabs.sizeCapBytes, 25 * 1024 * 1024);
   assert.equal("endpoint" in elevenlabs, false, "the key never reaches an OpenAI-shaped endpoint");
 });

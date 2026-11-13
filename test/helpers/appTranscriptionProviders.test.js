@@ -40,11 +40,11 @@ test("ElevenLabs survives a live catalog that does not list it", () => {
 
   assert.deepEqual(
     elevenLabs(applied).models.map((model) => model.id),
-    ["scribe_v2", "scribe_v2_realtime"]
+    ["scribe_v3", "scribe_v2", "scribe_v3_live"]
   );
-  assert.equal(elevenLabs(applied).defaultModel, "scribe_v2");
-  assert.equal(elevenLabs(applied).batchModel, "scribe_v2");
-  const realtime = elevenLabs(applied).models.find((model) => model.id === "scribe_v2_realtime");
+  assert.equal(elevenLabs(applied).defaultModel, "scribe_v3");
+  assert.equal(elevenLabs(applied).batchModel, "scribe_v3");
+  const realtime = elevenLabs(applied).models.find((model) => model.id === "scribe_v3_live");
   assert.equal(realtime.streaming, true);
   assert.equal(realtime.noteRecordingOnly, true, "the realtime model stays out of batch pickers");
 });

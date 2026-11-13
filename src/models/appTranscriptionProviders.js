@@ -66,10 +66,16 @@ const APP_TRANSCRIPTION_PROVIDERS = [
     id: "elevenlabs",
     name: "ElevenLabs",
     baseUrl: "https://api.elevenlabs.io/v1",
-    defaultModel: "scribe_v2",
+    defaultModel: "scribe_v3",
     // Upload and Retry use this in place of the Note Recording-only realtime model.
-    batchModel: "scribe_v2",
+    batchModel: "scribe_v3",
     models: [
+      {
+        id: "scribe_v3",
+        name: "Scribe v3",
+        description: "Most accurate multilingual transcription",
+        descriptionKey: "models.descriptions.transcription.elevenlabs_scribe_v3",
+      },
       {
         id: "scribe_v2",
         name: "Scribe v2",
@@ -77,10 +83,10 @@ const APP_TRANSCRIPTION_PROVIDERS = [
         descriptionKey: "models.descriptions.transcription.elevenlabs_scribe_v2",
       },
       {
-        id: "scribe_v2_realtime",
-        name: "Scribe v2 Realtime",
+        id: "scribe_v3_live",
+        name: "Scribe v3 Live",
         description: "Live transcription for note recording",
-        descriptionKey: "models.descriptions.transcription.elevenlabs_scribe_v2_realtime",
+        descriptionKey: "models.descriptions.transcription.elevenlabs_scribe_v3_live",
         streaming: true,
         noteRecordingOnly: true,
       },

@@ -3,7 +3,7 @@ const debugLogger = require("./debugLogger");
 const { sanitizeKeyterms } = require("./elevenLabsTranscription");
 
 const REALTIME_URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime";
-const REALTIME_MODEL = "scribe_v2_realtime";
+const REALTIME_MODEL = "scribe_v3_live";
 const SAMPLE_RATE = 24000;
 const WEBSOCKET_TIMEOUT_MS = 30000;
 // The final commit's transcript; a stop must not hang on a server that never sends it.
@@ -71,7 +71,7 @@ function describeHandshakeError(error) {
   return error;
 }
 
-// Scribe v2 Realtime over WSS: xi-api-key header, base64 PCM inside JSON
+// Scribe v3 Live over WSS: xi-api-key header, base64 PCM inside JSON
 // input_audio_chunk messages, and server-side VAD commits. Mirrors the
 // Corti/Deepgram streaming classes the meeting pipeline drives.
 class ElevenLabsStreaming {

@@ -244,10 +244,11 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
-      // The realtime model has no batch endpoint; resolving it falls back to scribe_v2.
+      // The realtime models have no batch endpoint; resolving one falls back to scribe_v3.
       (provider === "elevenlabs" &&
         trimmed.startsWith("scribe_") &&
-        !trimmed.endsWith("_realtime")) ||
+        !trimmed.endsWith("_realtime") &&
+        !trimmed.endsWith("_live")) ||
       (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
       (provider === "assemblyai" &&
         (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));
@@ -258,7 +259,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
-  if (provider === "elevenlabs") return "scribe_v2";
+  if (provider === "elevenlabs") return "scribe_v3";
   if (provider === "deepgram") return "nova-3";
   if (provider === "assemblyai") return "universal-3-6-pro";
   if (provider === "openrouter") return "mistralai/voxtral-mini-transcribe-3-0";
