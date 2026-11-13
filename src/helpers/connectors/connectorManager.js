@@ -582,7 +582,7 @@ function createConnectorManager({
     abortConnects((flowAccountId) => flowAccountId !== String(accountId));
   }
 
-  // Removing access is always allowed: no policy or plan check.
+  // Removing access is always allowed: no policy check.
   // `erasingDevice` (Delete account with device erase) revokes a grant the
   // connector would otherwise keep because another login shares it.
   // `removingAll` (account deletion, Reset app data) tells a connector that

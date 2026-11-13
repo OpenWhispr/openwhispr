@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Dictation no longer waits for the default microphone lookup.** On Windows, when that lookup failed (PowerShell blocked by policy, or slower than its 3-second limit), a dictation started 30 seconds or more after the last attempt waited a second or more before the microphone opened. A dictation started right after an audio device change waited too. The microphone now opens right away and the lookup finishes in the background. (#2765)
 - **Tinfoil GLM-5.3 Flash selections now move to GLM-5.3.** Flash is removed from saved and live model lists, and existing selections recover even offline. Your own Tinfoil key remains in use. GLM-5.3 has higher provider API prices and is text-only; choose another available model in AI Models settings if preferred. Tinfoil screenshot input remains unsupported in OpenWhispr.
+- **A failed web search no longer reads as "Found web results".** The assistant now says the search failed and why, such as the weekly Cloud limit or an expired session.
+- **Chat names the weekly Cloud limit.** Instead of "OpenWhispr returned an unexpected error", chat, note chat and the voice assistant say you've reached your weekly Cloud limit, with Open settings to AI Models to use your own API key.
 
 ## [1.11.0] - 2026-10-29
 

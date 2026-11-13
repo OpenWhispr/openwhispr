@@ -17,7 +17,6 @@ const MOCKS = {
   `,
   "/stores/settingsStore": `
     const state = {
-      isSignedIn: true,
       emailDraftTarget: globalThis.__emailDraftTarget ?? "auto",
       setEmailDraftTarget() {},
       gcalConnected: false,

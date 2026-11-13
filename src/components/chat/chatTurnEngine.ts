@@ -1508,24 +1508,29 @@ export function createChatTurnEngine(
             surface: "llm",
             selfHosted: isLanAgent || isCustomAgent,
           };
-          const classified = asProviderError(error, errorContext);
           // The weekly Cloud limit: Open settings leads to AI Models, where a key keeps the chat going.
-          const failure: ProviderErrorDescription =
-            (error as { code?: unknown } | null)?.code === "LIMIT_REACHED"
-              ? { description: t("agentMode.chat.cloudLimitReached"), settingsTarget: "llms" }
-              : describeProviderError(
-                  classified?.messageKey
-                    ? classified
-                    : providerError(PROVIDER_ERROR_CODES.ERROR, {
-                        ...errorContext,
-                        technicalDetails: {
-                          underlyingError: redactProviderBody(
-                            error instanceof Error ? error.message : error
-                          ),
-                        },
-                      }),
-                  t
-                );
+          let failure: ProviderErrorDescription;
+          if ((error as { code?: unknown } | null)?.code === "LIMIT_REACHED") {
+            failure = {
+              description: t("agentMode.chat.cloudLimitReached"),
+              settingsTarget: "llms",
+            };
+          } else {
+            const classified = asProviderError(error, errorContext);
+            failure = describeProviderError(
+              classified?.messageKey
+                ? classified
+                : providerError(PROVIDER_ERROR_CODES.ERROR, {
+                    ...errorContext,
+                    technicalDetails: {
+                      underlyingError: redactProviderBody(
+                        error instanceof Error ? error.message : error
+                      ),
+                    },
+                  }),
+              t
+            );
+          }
           // Set on every failed reply: the chat then knows the failure is on screen.
           const messageError: MessageError = {
             ...(failure.technicalDetails ? { technicalDetails: failure.technicalDetails } : {}),

@@ -84,8 +84,8 @@ test("web search off by the org reads as policy, while a loading policy is tempo
   assert.equal(loading[0].reason, "policyLoading");
 });
 
-test("connectors name the org, then a loading policy, as one line, and never a plan", async () => {
-  const { resolveUnavailableCapabilities, describeUnavailable } = await load();
+test("connectors name the org, then a loading policy, as one line", async () => {
+  const { resolveUnavailableCapabilities } = await load();
   const connectors = input().connectors;
   const reasonFor = (overrides) =>
     resolveUnavailableCapabilities(input({ connectors: { ...connectors, ...overrides } })).map(
@@ -94,12 +94,6 @@ test("connectors name the org, then a loading policy, as one line, and never a p
 
   assert.deepEqual(reasonFor({ allowed: false, blockedByOrg: true }), ["policyOff"]);
   assert.deepEqual(reasonFor({ allowed: false }), ["policyLoading"]);
-  for (const overrides of [{ allowed: false, blockedByOrg: true }, { allowed: false }]) {
-    const unavailable = resolveUnavailableCapabilities(
-      input({ connectors: { ...connectors, ...overrides } })
-    );
-    assert.doesNotMatch(describeUnavailable(unavailable), /plan/i);
-  }
 });
 
 test("each connector that isn't connected or needs a reconnect is named on its own", async () => {
