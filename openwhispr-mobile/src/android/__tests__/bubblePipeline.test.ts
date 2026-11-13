@@ -25,10 +25,16 @@ jest.mock('../../../modules/android-dictation/src', () => ({
 jest.mock('expo-file-system/legacy', () => ({ deleteAsync: jest.fn(async () => {}) }));
 jest.mock('../appData', () => ({ bootAppData: jest.fn(async () => {}) }));
 jest.mock('../accountData', () => ({
-  useAccountData: { getState: jest.fn(() => ({ error: null, blocked: false })) },
+  useAccountData: { getState: jest.fn(() => ({ owner: 'user-1', error: null, blocked: false })) },
 }));
 jest.mock('../headlessStartup', () => ({ runHeadlessStartup: jest.fn() }));
-jest.mock('@/lib/transcriptScope', () => ({ observeTranscriptScope: () => () => {} }));
+let mockScopeChange: () => void = () => {};
+jest.mock('@/lib/transcriptScope', () => ({
+  observeTranscriptScope: (change: () => void) => {
+    mockScopeChange = change;
+    return () => {};
+  },
+}));
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: {} }) },
 }));
@@ -194,4 +200,31 @@ it('the headless task runs startup, reuses the pipeline and never settles', asyn
 
 it('leaves opening a kept result to the app', () => {
   expect(mockListeners.onOpenResult).toBeUndefined();
+});
+
+it('keeps a dictation that started before account data first loaded', async () => {
+  const accountState = jest.mocked(useAccountData.getState);
+  let loaded!: () => void;
+  jest.mocked(bootAppData).mockReturnValueOnce(new Promise<void>((resolve) => (loaded = resolve)));
+  jest.mocked(processAndroidAudio).mockResolvedValueOnce('First words.');
+  accountState.mockReturnValue({ owner: '', error: null, blocked: false } as never);
+  mockScopeChange(); // the pipeline now remembers "no owner yet"
+  mockListeners.onStart({ selection: '' });
+  mockListeners.onRecording(audio);
+  accountState.mockReturnValue({ owner: 'user-1', error: null, blocked: false } as never);
+  mockScopeChange(); // auth loads the owner during the boot
+  loaded();
+  await flush();
+  expect(native.insert).toHaveBeenCalledWith('First words.');
+  expect(native.setStatus).toHaveBeenLastCalledWith('success');
+});
+
+it('a recording after the account changed ends on Retry instead of hanging', async () => {
+  mockListeners.onStart({ selection: '' });
+  mockScopeChange(); // signed into another account mid-dictation
+  mockListeners.onRecording(audio);
+  await flush();
+  expect(processAndroidAudio).not.toHaveBeenCalled();
+  expect(native.setStatus).toHaveBeenLastCalledWith('retry');
+  expect(FileSystem.deleteAsync).toHaveBeenCalledWith(audio.uri, { idempotent: true });
 });

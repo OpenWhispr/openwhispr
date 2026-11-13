@@ -65,7 +65,9 @@ export function startBubblePipeline(): void {
     const current = controller;
     const pending = job;
     if (!current || !pending) {
+      // The account changed after this dictation started; there is nothing to write it into.
       discard(audio);
+      void native.setStatus('retry');
       return;
     }
     let keep = false;
@@ -104,7 +106,13 @@ export function startBubblePipeline(): void {
       else discard(audio);
     }
   };
+  let owner = useAccountData.getState().owner;
   observeTranscriptScope(() => {
+    const previous = owner;
+    owner = useAccountData.getState().owner;
+    // Account data loading for the first time (while a dictation from a restored bubble waits
+    // on it) changes nothing a job holds: no job can capture a scope before there is an owner.
+    if (!previous) return;
     controller?.abort();
     job = null;
     dropKept();

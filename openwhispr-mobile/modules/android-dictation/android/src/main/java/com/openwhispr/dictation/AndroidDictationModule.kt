@@ -68,6 +68,7 @@ class AndroidDictationModule : Module() {
     // The bubble pipeline listens, in the app or in a headless task: send what the bubble held.
     AsyncFunction("pipelineReady") {
       HeadlessPipeline.ready = true
+      android.util.Log.i("OpenWhisprBubble", "Pipeline ready")
       DictationService.instance?.pipelineReady()
     }.runOnQueue(Queues.MAIN)
     OnActivityEntersForeground {
