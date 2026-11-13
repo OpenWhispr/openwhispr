@@ -29,7 +29,7 @@ class DictationService : Service() {
     var emit: ((String, Map<String, Any>) -> Unit)? = null
     var appVisible = true
     var practiceVisible = false
-    private const val PREFERENCES = "bubble"
+    const val PREFERENCES = "bubble"
     private const val ERROR_TIMEOUT_MS = 15000L
   }
   private val handler = Handler(Looper.getMainLooper())
@@ -100,8 +100,8 @@ class DictationService : Service() {
       "stop" -> { stopSelf(); return START_NOT_STICKY }
       "show" -> unhide()
       else -> {
-        val size = intent?.getIntExtra("size", 64) ?: 64
-        scale = size.coerceIn(48, 88) / 64f
+        val size = intent?.getIntExtra("size", BubblePolicy.DEFAULT_SIZE) ?: BubblePolicy.DEFAULT_SIZE
+        scale = BubblePolicy.restoredSize(size) / 64f
         if (root == null) createWindow() else render()
       }
     }
