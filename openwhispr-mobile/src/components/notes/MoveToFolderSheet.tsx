@@ -8,6 +8,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GlassIconButton } from '@/components/ui/GlassIconButton';
 import { safeHaptics } from '@/lib/utils';
 import type { Folder, Space } from '@/data';
+import type { PrivateFolderGroup } from '@/lib/privateWorkspaces';
 
 export type MoveToFolderSheetProps = {
   visible: boolean;
@@ -20,6 +21,10 @@ export type MoveToFolderSheetProps = {
   onClose: () => void;
   onPickFolder: (folderId: number) => void;
   onCreateAndPick: (name: string) => void;
+  /** The account's other workspaces' Private folders, one group per workspace (see useMoveNote).
+   * Only personal content gets them, and only once the API keeps a Private per workspace: a
+   * note moved there leaves its workspace, so each is listed under that workspace's name. */
+  privateGroups?: PrivateFolderGroup<Folder>[];
   /** The spaces this note may move to, already filtered by the caller (see canMoveBetweenSpaces):
    * team content never leaves its workspace and never returns to the private space, so a team
    * note is only ever offered its workspace's other spaces. Omitted/empty (the default) renders
@@ -39,6 +44,7 @@ export function MoveToFolderSheet({
   onClose,
   onPickFolder,
   onCreateAndPick,
+  privateGroups = [],
   spaces = [],
   activeSpaceId = null,
   onPickSpace,
@@ -119,6 +125,26 @@ export function MoveToFolderSheet({
               ))}
             </GroupedList>
           )}
+
+          {privateGroups.map((group) => (
+            <View key={group.workspaceId ?? 'unassigned-private'} className="gap-2">
+              <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
+                {`${group.name} · Private`}
+              </Text>
+              <GroupedList>
+                {group.folders.map((folder) => (
+                  <FolderRow
+                    key={folder.id}
+                    sfName="folder"
+                    mdName="Folder"
+                    label={folder.name}
+                    count={folderCounts[folder.id] ?? 0}
+                    onPress={() => handlePick(folder.id)}
+                  />
+                ))}
+              </GroupedList>
+            </View>
+          ))}
 
           {spaces.length > 0 && (
             <View className="gap-2">

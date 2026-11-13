@@ -1,4 +1,8 @@
-import { getDefaultPrivateWorkspaceId } from './teamSpacesCapability';
+import {
+  getPrivateWorkspacePlacement,
+  getResolvedDefaultPrivateWorkspaceId,
+} from './teamSpacesCapability';
+import { privateWorkspaceOf } from '@/lib/privateWorkspaces';
 import { SyncCancelledError, uncheckedSync, type SyncCheckpoint } from './syncContext';
 import * as Sentry from '@sentry/react-native';
 import { notesRepository, spacesRepository } from '@/data';
@@ -99,6 +103,11 @@ function reportTerminalFolderPush(operation: 'create' | 'update', detail: string
   });
 }
 
+// Folder names are unique per Private, so a name only identifies a folder within one workspace.
+function privateNameKey(folder: Folder, defaultWorkspaceId: string | null): string {
+  return `${privateWorkspaceOf(folder, defaultWorkspaceId) ?? ''}\u0000${folder.name.toLowerCase()}`;
+}
+
 /**
  * Finds an already-synced duplicate of a pending default-folder create, so
  * the caller can adopt instead of push a create the server would reject with
@@ -111,11 +120,14 @@ function reportTerminalFolderPush(operation: 'create' | 'update', detail: string
  * matched only by client/remote id, never by name (see applyRemoteFolder) —
  * leaving two local "Personal" rows, one of them permanently unpushable.
  *
- * Scoped to the private space, same as initialBackfill's own name match
- * (Requirement 2) — a team folder is identified by cloud id only.
+ * Scoped to the candidate's own Private, as initialBackfill's name match is
+ * (Requirement 2): every workspace's Private has its own "Personal", so a match
+ * across workspaces would file this one's notes in another's. A team folder is
+ * identified by cloud id only.
  */
 function findDuplicateDefaultFolder(
   candidate: Folder,
+  defaultWorkspaceId: string | null,
   // A getter, not the map itself: JS evaluates call arguments eagerly, so
   // passing an already-built map would defeat the laziness getPrivateFoldersByName
   // exists for — every row would pay for the getFolders() read, not just
@@ -123,7 +135,7 @@ function findDuplicateDefaultFolder(
   getPrivateFoldersByName: () => Map<string, Folder>,
 ): Folder | null {
   if ((candidate.isDefault ?? 0) !== 1) return null;
-  const match = getPrivateFoldersByName().get(candidate.name.toLowerCase());
+  const match = getPrivateFoldersByName().get(privateNameKey(candidate, defaultWorkspaceId));
   return match && match.id !== candidate.id ? match : null;
 }
 
@@ -172,18 +184,17 @@ export async function pushFolders(
   // Lazily built (and only once): a duplicate default folder is a rare
   // recovery case, so most passes never pay for the extra getFolders() read.
   let privateFoldersByName: Map<string, Folder> | null = null;
+  const defaultWorkspaceId = getResolvedDefaultPrivateWorkspaceId();
+  // Only an API that keeps a Private per workspace takes a folder's placement.
+  const sendsPlacement = getPrivateWorkspacePlacement();
   const getPrivateFoldersByName = (): Map<string, Folder> => {
     if (privateFoldersByName === null) {
       const privateSpaceId = spacesRepository.getPrivateSpace().id;
-      const defaultWorkspaceId = getDefaultPrivateWorkspaceId();
       privateFoldersByName = new Map();
       for (const existing of notesRepository.getFolders()) {
-        if (
-          existing.spaceId === privateSpaceId &&
-          existing.remoteId &&
-          (!existing.privateWorkspaceId || existing.privateWorkspaceId === defaultWorkspaceId)
-        ) {
-          privateFoldersByName.set(existing.name.toLowerCase(), existing);
+        if (existing.spaceId === privateSpaceId && existing.remoteId) {
+          const key = privateNameKey(existing, defaultWorkspaceId);
+          if (!privateFoldersByName.has(key)) privateFoldersByName.set(key, existing);
         }
       }
     }
@@ -211,7 +222,7 @@ export async function pushFolders(
         Sentry.captureMessage('pushFolders: missing clientFolderId', 'warning');
         continue;
       }
-      const duplicate = findDuplicateDefaultFolder(f, getPrivateFoldersByName);
+      const duplicate = findDuplicateDefaultFolder(f, defaultWorkspaceId, getPrivateFoldersByName);
       if (duplicate) {
         // duplicate.remoteId is guaranteed non-null: only rows with one are
         // ever added to privateFoldersByName.
@@ -237,6 +248,11 @@ export async function pushFolders(
           is_default: (f.isDefault ?? 0) === 1,
           sort_order: f.sortOrder ?? 0,
           ...scope,
+          // A personal folder names the workspace whose Private it is in. Unplaced ones are
+          // left to the server, which files them in the default's.
+          ...(sendsPlacement && scope.space_id == null && f.privateWorkspaceId
+            ? { private_workspace_id: f.privateWorkspaceId }
+            : {}),
         },
       };
       const scopeKey = scope.space_id ?? PERSONAL_SCOPE_KEY;
@@ -272,6 +288,12 @@ export async function pushFolders(
   // rejection is attributable to exactly the space whose rows were in flight.
   for (const [scopeKey, scopedCreates] of createsByScope) {
     const personalScope = scopeKey === PERSONAL_SCOPE_KEY;
+    const responseNameKey = (
+      folder: Pick<FolderPushInput, 'name' | 'private_workspace_id'>,
+    ): string =>
+      personalScope
+        ? `${folder.private_workspace_id ?? defaultWorkspaceId ?? ''}\u0000${folder.name}`
+        : folder.name;
     for (let i = 0; i < scopedCreates.length; i += PUSH_BATCH_SIZE) {
       const chunk = scopedCreates.slice(i, i + PUSH_BATCH_SIZE);
       try {
@@ -292,7 +314,7 @@ export async function pushFolders(
         // with another client's client_folder_id (another member's, or this device's own
         // same-named folder earlier in the chunk). Matched by name, it gets a cloud id;
         // otherwise it would retry forever and the notes filed in it never upload.
-        const byName = new Map(created.map((server) => [server.name, server]));
+        const byName = new Map(created.map((server) => [responseNameKey(server), server]));
         let unmatched = 0;
         for (let j = 0; j < chunk.length; j += 1) {
           const create = chunk[j];
@@ -303,9 +325,18 @@ export async function pushFolders(
             unmatched += 1;
             continue;
           }
+          const positional = created[j];
+          // A personal batch can span several Private workspaces. An older receipt without
+          // a client id must not attach this folder to another workspace's same-named row.
+          const matchesPlacement =
+            !personalScope ||
+            (positional?.private_workspace_id ?? defaultWorkspaceId) ===
+              (create.payload.private_workspace_id ?? defaultWorkspaceId);
           const server =
             byClientId.get(create.payload.client_folder_id) ??
-            (refused.length === 0 && !created[j]?.client_folder_id ? created[j] : undefined);
+            (refused.length === 0 && !positional?.client_folder_id && matchesPlacement
+              ? positional
+              : undefined);
           if (server?.id) {
             notesRepository.markFolderPushed(
               create.localId,
@@ -315,7 +346,7 @@ export async function pushFolders(
             );
             continue;
           }
-          const existing = byName.get(create.payload.name);
+          const existing = byName.get(responseNameKey(create.payload));
           if (existing?.id) {
             adoptExistingServerFolder(create, existing);
             continue;

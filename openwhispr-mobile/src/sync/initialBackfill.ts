@@ -1,7 +1,7 @@
 import { uncheckedSync, type SyncCheckpoint } from './syncContext';
 import { notesRepository, spacesRepository } from '@/data';
 import { fetchFolders } from '@/data/remote/notesApi';
-import { getDefaultPrivateWorkspaceId } from './teamSpacesCapability';
+import { getResolvedDefaultPrivateWorkspaceId } from './teamSpacesCapability';
 import { randomUUID } from '@/lib/uuid';
 
 const FLAG_PREFIX = 'initial_backfill_done.';
@@ -31,7 +31,7 @@ export async function runInitialBackfillIfNeeded(
   checkpoint();
   const remoteFolders = await fetchFolders(null);
   checkpoint();
-  const defaultWorkspaceId = getDefaultPrivateWorkspaceId();
+  const defaultWorkspaceId = getResolvedDefaultPrivateWorkspaceId();
   const remoteByName = new Map(
     remoteFolders
       .filter((f) => !f.private_workspace_id || f.private_workspace_id === defaultWorkspaceId)

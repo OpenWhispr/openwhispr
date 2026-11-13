@@ -14,6 +14,7 @@ import type { RestoreRow } from '@/components/ui/SwipeableCard';
 import { SectionHeader } from '@/components/notes/SectionHeader';
 import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
 import { SpacesSection } from '@/components/notes/SpacesSection';
+import { PrivateWorkspaceSwitcher } from '@/components/notes/PrivateWorkspaceSwitcher';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { groupNotesByDate } from '@/lib/groupNotesByDate';
 import { safeHaptics } from '@/lib/utils';
@@ -33,6 +34,11 @@ export default function FoldersScreen() {
     folders,
     folderCounts,
     spaces,
+    privateWorkspaces,
+    activePrivateWorkspaceId,
+    defaultPrivateWorkspaceId,
+    setActivePrivateWorkspace,
+    getPrivateNoteFolderId,
     initialize,
     isInitialized,
     setActiveFolderId,
@@ -64,7 +70,17 @@ export default function FoldersScreen() {
     if (!isInitialized) initialize();
   }, [isInitialized, initialize]);
 
-  const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === 'team'), [spaces]);
+  // With a Private per workspace the screen shows one workspace at a time, as desktop does:
+  // its Private above and its team spaces below.
+  const teamSpaces = useMemo(
+    () =>
+      spaces.filter(
+        (s) =>
+          s.kind === 'team' &&
+          (privateWorkspaces.length === 0 || s.workspaceId === activePrivateWorkspaceId),
+      ),
+    [spaces, privateWorkspaces, activePrivateWorkspaceId],
+  );
 
   const { refreshing, onRefresh } = useManualSyncRefresh();
 
@@ -87,11 +103,9 @@ export default function FoldersScreen() {
   );
 
   const handleCompose = useCallback(() => {
-    const defaultFolder = folders.find((f) => f.isDefault) ?? folders[0];
-    if (!defaultFolder) return;
-    const note = createNote(undefined, undefined, defaultFolder.id);
+    const note = createNote(undefined, undefined, getPrivateNoteFolderId());
     router.push(`/(tabs)/(notes)/${note.id}`);
-  }, [folders, createNote]);
+  }, [createNote, getPrivateNoteFolderId]);
 
   const handleNotePress = useCallback(
     (id: number) => {
@@ -233,6 +247,12 @@ export default function FoldersScreen() {
           )
         ) : (
           <>
+            <PrivateWorkspaceSwitcher
+              workspaces={privateWorkspaces}
+              activeId={activePrivateWorkspaceId}
+              defaultId={defaultPrivateWorkspaceId}
+              onSelect={setActivePrivateWorkspace}
+            />
             <SectionHeader label="Private Space" />
             <GroupedList>
               {folders.map((folder) => (

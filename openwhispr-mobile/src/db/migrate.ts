@@ -367,6 +367,8 @@ export function runMigrations(): void {
   // rows, our repository writes updated_at explicitly on every insert/update.
   addColumnIfMissing('folders', 'updated_at', 'TEXT');
 
+  const needsPrivateNotePlacement = !columnExists('notes', 'private_workspace_id');
+  addColumnIfMissing('notes', 'private_workspace_id', 'TEXT');
   addColumnIfMissing('notes', 'client_note_id', 'TEXT');
   addColumnIfMissing('notes', 'remote_id', 'TEXT');
   addColumnIfMissing('notes', 'deleted_at', 'TEXT');
@@ -453,6 +455,12 @@ export function runMigrations(): void {
   // Refresh metadata before any default-folder name adoption on the next consented sync.
   if (needsPrivateFolderPlacement)
     rawDb.runSync("DELETE FROM sync_state WHERE key = 'folders.last_sync_at'");
+  // This build asks the API for every workspace's Private (private-workspace-placement). Rows
+  // an older build's cursors passed while the API hid them come back on the next personal pull.
+  if (needsPrivateNotePlacement)
+    rawDb.runSync(
+      "DELETE FROM sync_state WHERE key IN ('folders.last_sync_at', 'notes.last_sync_at')",
+    );
   tryAlter(
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_client_space_id ON spaces(client_space_id)',
   );

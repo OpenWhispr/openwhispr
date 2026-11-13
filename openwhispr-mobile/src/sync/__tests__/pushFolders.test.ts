@@ -1280,3 +1280,95 @@ test('adopts a same-named folder carrying the current default workspace UUID', a
   );
   expect(mockBatchCreateFolders).not.toHaveBeenCalled();
 });
+
+describe('pushFolders per-workspace Private', () => {
+  const syncState = (entries: Record<string, string>) => (key: string) => entries[key] ?? null;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetPrivateSpace.mockReturnValue({ id: PRIVATE_SPACE.id } as Space);
+    mockListSpaces.mockReturnValue([PRIVATE_SPACE]);
+    mockBatchCreateFolders.mockResolvedValue({ created: [] });
+  });
+
+  it('adopts only the same workspace’s synced default folder', async () => {
+    mockNotesRepository.getSyncState.mockImplementation(
+      syncState({
+        private_default_workspace_id: 'workspace-default',
+        private_workspace_placement: 'true',
+      }),
+    );
+    const local = folder({
+      id: 1,
+      name: 'Personal',
+      isDefault: 1,
+      privateWorkspaceId: 'workspace-beta',
+      spaceId: PRIVATE_SPACE.id,
+    });
+    mockNotesRepository.getPendingFolders.mockReturnValue([local]);
+    // Sorted as getFolders sorts them: the default's Personal comes first.
+    mockNotesRepository.getFolders.mockReturnValue([
+      folder({
+        id: 5,
+        name: 'Personal',
+        isDefault: 1,
+        remoteId: 'default-personal',
+        privateWorkspaceId: null,
+        spaceId: PRIVATE_SPACE.id,
+      }),
+      local,
+      folder({
+        id: 7,
+        name: 'Personal',
+        isDefault: 1,
+        remoteId: 'beta-personal',
+        privateWorkspaceId: 'workspace-beta',
+        spaceId: PRIVATE_SPACE.id,
+      }),
+    ]);
+    await pushFolders();
+    expect(mockNotesRepository.adoptDuplicateFolder).toHaveBeenCalledTimes(1);
+    expect(mockNotesRepository.adoptDuplicateFolder).toHaveBeenCalledWith(
+      1,
+      7,
+      'beta-personal',
+      expect.any(String),
+    );
+  });
+
+  it('sends a new folder’s Private placement once the API keeps one per workspace', async () => {
+    const local = folder({
+      id: 1,
+      name: 'Ideas',
+      privateWorkspaceId: 'workspace-beta',
+      spaceId: PRIVATE_SPACE.id,
+    });
+    mockNotesRepository.getPendingFolders.mockReturnValue([local]);
+    mockNotesRepository.getFolders.mockReturnValue([local]);
+
+    mockNotesRepository.getSyncState.mockImplementation(
+      syncState({ private_workspace_placement: 'true' }),
+    );
+    await pushFolders();
+    expect(mockBatchCreateFolders.mock.calls[0][0][0]).toMatchObject({
+      name: 'Ideas',
+      private_workspace_id: 'workspace-beta',
+    });
+
+    // An API without placement would refuse or ignore it; the folder goes up as before.
+    mockNotesRepository.getSyncState.mockImplementation(syncState({}));
+    await pushFolders();
+    expect(mockBatchCreateFolders.mock.calls[1][0][0]).not.toHaveProperty('private_workspace_id');
+  });
+
+  it('leaves an unplaced folder’s placement to the server', async () => {
+    mockNotesRepository.getSyncState.mockImplementation(
+      syncState({ private_workspace_placement: 'true' }),
+    );
+    const local = folder({ id: 1, name: 'Ideas', spaceId: PRIVATE_SPACE.id });
+    mockNotesRepository.getPendingFolders.mockReturnValue([local]);
+    mockNotesRepository.getFolders.mockReturnValue([local]);
+    await pushFolders();
+    expect(mockBatchCreateFolders.mock.calls[0][0][0]).not.toHaveProperty('private_workspace_id');
+  });
+});

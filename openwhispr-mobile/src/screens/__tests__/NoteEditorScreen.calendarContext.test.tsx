@@ -10,6 +10,7 @@ import { makeContentHash } from '@/lib/utils';
 import { clearLocalReasoningReadinessCache, LocalReasoningError } from '@/lib/localReasoning';
 import { extractCorrections } from '@/lib/correctionLearner';
 import type { Action, Note, Segment, Speaker, SpeakerProfile } from '@/data/types';
+import type { PrivateWorkspace } from '@/lib/privateWorkspaces';
 import type { Folder, Space } from '@/data';
 import type { UserConfig } from '@/types';
 
@@ -58,6 +59,10 @@ const mockNotesState = {
   moveNoteToSpace: jest.fn(),
   createFolder: jest.fn(),
   getSpaceFolders: jest.fn(() => [] as Folder[]),
+  getAllPrivateFolders: jest.fn((): Folder[] => mockNotesState.folders),
+  privateWorkspaces: [] as PrivateWorkspace[],
+  activePrivateWorkspaceId: null as string | null,
+  defaultPrivateWorkspaceId: null as string | null,
   voiceProfiles: [] as SpeakerProfile[],
   meetingSpeakerEmbeddingsByNoteId: {} as Record<number, Record<string, number[]>>,
   claimSpeakerAsMe: mockClaimSpeakerAsMe,
@@ -376,10 +381,14 @@ jest.mock('@/components/notes/TranscriptSheet', () => ({
 }));
 
 jest.mock('@/components/notes/MoveToFolderSheet', () => ({
-  MoveToFolderSheet: ({ visible }: { visible: boolean }) =>
+  MoveToFolderSheet: ({ visible, folders }: { visible: boolean; folders: { name: string }[] }) =>
     (() => {
       const { Text: MockText } = require('react-native');
-      return visible ? <MockText testID="move-sheet">move-sheet</MockText> : null;
+      return visible ? (
+        <MockText testID="move-sheet" accessibilityHint={folders.map((f) => f.name).join('|')}>
+          move-sheet
+        </MockText>
+      ) : null;
     })(),
 }));
 
@@ -1579,6 +1588,63 @@ describe('NoteEditorScreen meta row', () => {
     const { queryByTestId } = render(<NoteEditorScreen />);
     expect(queryByTestId('note-meta-attendees')).toBeNull();
   });
+
+  it('names a note’s folder in another workspace’s Private than the one on screen', () => {
+    const roadmap = {
+      ...mockNotesState.folders[0],
+      id: 5,
+      name: 'Roadmap',
+      privateWorkspaceId: 'workspace-acme',
+    } as Folder;
+    mockNotesState.getAllPrivateFolders.mockReturnValue([...mockNotesState.folders, roadmap]);
+    mockNote = note({ folderId: 5 });
+    mockNotesState.notes = [mockNote];
+    try {
+      const { getByText, queryByText } = render(<NoteEditorScreen />);
+      expect(getByText('Roadmap')).toBeTruthy();
+      expect(queryByText('Meetings')).toBeNull();
+    } finally {
+      mockNotesState.getAllPrivateFolders.mockImplementation(
+        (): Folder[] => mockNotesState.folders,
+      );
+    }
+  });
+
+  it.each(['workspace-own', null])(
+    'labels departed folders but only offers current Private targets with default %s',
+    (defaultId): void => {
+      const lost = {
+        ...mockNotesState.folders[0],
+        id: 6,
+        name: 'Old team notes',
+        privateWorkspaceId: 'workspace-gone',
+      } as Folder;
+      const lostSibling = { ...lost, id: 7, name: 'Old sibling folder' };
+      mockNotesState.privateWorkspaces = defaultId
+        ? [{ id: defaultId, name: 'Mine', is_default: true }]
+        : [];
+      mockNotesState.defaultPrivateWorkspaceId = defaultId;
+      mockNotesState.getAllPrivateFolders.mockReturnValue([
+        ...mockNotesState.folders,
+        lost,
+        lostSibling,
+      ]);
+      mockNote = note({ folderId: 6 });
+      mockNotesState.notes = [mockNote];
+      try {
+        const { getByText, getByTestId } = render(<NoteEditorScreen />);
+        expect(getByText('Old team notes')).toBeTruthy();
+        fireEvent.press(getByTestId('note-meta-folder'));
+        expect(getByTestId('move-sheet').props.accessibilityHint).toBe('Meetings');
+      } finally {
+        mockNotesState.privateWorkspaces = [];
+        mockNotesState.defaultPrivateWorkspaceId = null;
+        mockNotesState.getAllPrivateFolders.mockImplementation(
+          (): Folder[] => mockNotesState.folders,
+        );
+      }
+    },
+  );
 
   it('offers no folders for a note whose Space is not on this device', () => {
     mockNote = note({ spaceId: 99 });

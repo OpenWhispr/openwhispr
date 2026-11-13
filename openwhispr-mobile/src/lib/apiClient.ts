@@ -23,10 +23,17 @@ export function getAuthHeaders(): Record<string, string> {
 const POLICY_VERSION_HEADER = 'x-openwhispr-policy-version';
 const POLICY_VERSION = '1';
 
+// Features this client handles that the API holds back from clients that don't say so.
+// private-workspace-placement: every workspace's Private, not just the default's, since the
+// notes screens keep each workspace's Private folders apart (see lib/privateWorkspaces.ts).
+const CAPABILITIES_HEADER = 'x-openwhispr-capabilities';
+const CAPABILITIES = ['private-workspace-placement'];
+
 /**
  * Returns the client identification headers sent on every request: the app
- * version (omitted when unknown), mobile platform, and policy-awareness opt-in.
- * The platform keeps mobile releases out of the desktop minimum-version gate.
+ * version (omitted when unknown), mobile platform, policy-awareness opt-in, and
+ * the capabilities this build supports. The platform keeps mobile releases out
+ * of the desktop minimum-version gate.
  */
 export function getClientVersionHeader(): Record<string, string> {
   const version = Constants.expoConfig?.version;
@@ -34,6 +41,7 @@ export function getClientVersionHeader(): Record<string, string> {
     ...(version ? { 'x-openwhispr-version': version } : {}),
     'x-openwhispr-platform': 'mobile',
     [POLICY_VERSION_HEADER]: POLICY_VERSION,
+    [CAPABILITIES_HEADER]: CAPABILITIES.join(','),
   };
 }
 

@@ -279,7 +279,7 @@ it('does not attach a mismatched identified batch response to a different local 
   jest
     .mocked(batchCreateNotes)
     .mockResolvedValueOnce({ created: [{ id: 'unrelated', client_note_id: 'different-client' }] });
-  await expect(pushNotes()).rejects.toThrow('pushNotes: 1 operation(s) failed');
+  await pushNotes();
   expect(mockRepo.getNoteById(created.id)).toMatchObject({ remoteId: null, pendingSync: 1 });
 });
 

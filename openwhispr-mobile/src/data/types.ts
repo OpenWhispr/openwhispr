@@ -172,6 +172,12 @@ export interface ChatCandidateOptions {
   window?: ChatNoteWindow;
 }
 
+export interface CreateFolderOptions {
+  privateWorkspaceId?: string | null;
+  isDefault?: boolean;
+  sortOrder?: number;
+}
+
 export interface NotesRepository {
   // Existing methods
   getFolders(): Folder[];
@@ -194,8 +200,12 @@ export interface NotesRepository {
   /** Folders belonging to one space — the private space's own list is getPrivateFolders(). */
   getFoldersBySpace(spaceId: number): Folder[];
   getFolderCounts(): Record<number, number>;
-  /** Defaults to the private space; pass `spaceId` to create the folder inside a team space. */
-  createFolder(name: string, spaceId?: number): Folder;
+  /**
+   * Defaults to the private space; pass `spaceId` to create the folder inside a team space.
+   * A private folder takes `options.privateWorkspaceId`, the workspace whose Private it is in
+   * (null: the default workspace's).
+   */
+  createFolder(name: string, spaceId?: number, options?: CreateFolderOptions): Folder;
   renameFolder(id: number, name: string): void;
   deleteFolder(id: number): void;
   getNotesByFolder(folderId: number): Note[];

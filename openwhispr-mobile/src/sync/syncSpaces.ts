@@ -4,7 +4,12 @@ import type { Space } from '@/data/spacesTypes';
 import { fetchMySpaces } from '@/data/remote/spacesApi';
 import { fetchMyWorkspaces, type RemoteWorkspace } from '@/data/remote/workspacesApi';
 import { ApiError } from '@/lib/apiClient';
-import { setDefaultPrivateWorkspaceId, setTeamSpacesCapability } from './teamSpacesCapability';
+import {
+  setDefaultPrivateWorkspaceId,
+  setPrivateWorkspacePlacement,
+  setPrivateWorkspaces,
+  setTeamSpacesCapability,
+} from './teamSpacesCapability';
 
 // Mirrors syncEngine.ts's isEndpointUnavailable: a missing/undeployed route
 // answers with 404 (not found), 405 (method not allowed behind a catch-all),
@@ -62,6 +67,7 @@ export async function syncSpaces(
       // Backend predates team spaces: not an error, just the probe result.
       setTeamSpacesCapability(false);
       setDefaultPrivateWorkspaceId(null);
+      setPrivateWorkspacePlacement(false);
       return { capable: false, activeSpaces: [], workspaces: null };
     }
     throw err;
@@ -69,12 +75,15 @@ export async function syncSpaces(
 
   setTeamSpacesCapability(true);
   setDefaultPrivateWorkspaceId(remote.default_workspace_id ?? null);
+  setPrivateWorkspacePlacement(remote.private_workspace_placement === true);
 
   // Only reached once team spaces are known to exist, so accounts without them
   // never pay for this request.
   checkpoint();
   const workspaces = await fetchWorkspaces(checkpoint);
   checkpoint();
+  // A failed read keeps the last list, so the switcher still works offline.
+  if (workspaces) setPrivateWorkspaces(workspaces);
   const workspaceNames = new Map((workspaces ?? []).map((ws) => [ws.id, ws.name]));
 
   const remoteIds = new Set(remote.data.map((s) => s.id));
