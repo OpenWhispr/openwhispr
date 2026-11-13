@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const WhisperManager = require("../../src/helpers/whisper.js");
 const ParakeetManager = require("../../src/helpers/parakeet.js");
+const { parseSrtResponse } = require("../../src/helpers/whisperServer.js");
 
 // "No audio detected" must mean exactly that: the engine decoded the recording
 // and found silence. A malformed or error response is an engine failure and has
@@ -33,6 +34,51 @@ test("whisper: real text passes through with normalized whitespace", () => {
   assert.deepEqual(whisper.parseWhisperResult({ text: "hello\nworld " }), {
     success: true,
     text: "hello world",
+  });
+});
+
+test("whisper: segments keep their times and drop blank markers", () => {
+  const result = whisper.parseWhisperResult({
+    text: " Hallo, hier ist Lars.\n Ich habe hier eine Testdatei.",
+    segments: [
+      { id: 0, start: 1.83, end: 5.51, text: " Hallo, hier ist Lars.", words: [] },
+      { id: 1, start: 6.6, end: 15.24, text: " Ich habe hier eine Testdatei.", words: [] },
+      { id: 2, start: 15.3, end: 16, text: " [BLANK_AUDIO]", words: [] },
+    ],
+  });
+  assert.deepEqual(result, {
+    success: true,
+    text: "Hallo, hier ist Lars. Ich habe hier eine Testdatei.",
+    segments: [
+      { start: 1.83, end: 5.51, text: "Hallo, hier ist Lars." },
+      { start: 6.6, end: 15.24, text: "Ich habe hier eine Testdatei." },
+    ],
+  });
+});
+
+test("whisper-server srt becomes text plus timed segments", () => {
+  // As the bundled server answers a 15 s meeting chunk.
+  const srt =
+    "1\n00:00:00,030 --> 00:00:07,980\n consulting. Ich habe hier eine Testdatei.\n\n" +
+    "2\n00:00:07,980 --> 00:01:15,010\n Wie gesagt,\n mein Name ist Lars.\n\n";
+  assert.deepEqual(parseSrtResponse(srt), {
+    text: " consulting. Ich habe hier eine Testdatei. Wie gesagt,  mein Name ist Lars.",
+    segments: [
+      { start: 0.03, end: 7.98, text: " consulting. Ich habe hier eine Testdatei." },
+      { start: 7.98, end: 75.01, text: " Wie gesagt,  mein Name ist Lars." },
+    ],
+  });
+  assert.deepEqual(whisper.parseWhisperResult(parseSrtResponse(srt)).segments[1], {
+    start: 7.98,
+    end: 75.01,
+    text: "Wie gesagt, mein Name ist Lars.",
+  });
+});
+
+test("whisper-server srt for silence is no audio, not an engine failure", () => {
+  assert.deepEqual(whisper.parseWhisperResult(parseSrtResponse("\n")), {
+    success: false,
+    message: "No audio detected",
   });
 });
 
