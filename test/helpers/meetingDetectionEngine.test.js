@@ -12,7 +12,19 @@ function loadEngine() {
 
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron") {
-      return { shell: { openExternal: async (url) => openedUrls.push(url) } };
+      return {
+        shell: {
+          openExternal() {
+            throw new Error("Unexpected shell.openExternal; mock externalUrlOpener instead");
+          },
+        },
+      };
+    }
+    if (request === "./externalUrlOpener") {
+      return { openExternalUrl: async (url) => openedUrls.push(url) };
+    }
+    if (request === "child_process" || request === "node:child_process") {
+      throw new Error("Unexpected child_process import; mock externalUrlOpener instead");
     }
     if (request === "./debugLogger") {
       return { info() {}, warn() {}, debug() {}, error() {} };
