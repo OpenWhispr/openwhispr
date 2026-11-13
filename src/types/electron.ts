@@ -2764,6 +2764,12 @@ declare global {
         language?: string;
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
+      proxyElevenlabsTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult>;
 
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
@@ -2815,6 +2821,8 @@ declare global {
       saveDeepgramKey?: (key: string) => Promise<void>;
       getAssemblyAIKey?: () => Promise<string | null>;
       saveAssemblyAIKey?: (key: string) => Promise<void>;
+      getElevenlabsKey?: () => Promise<string | null>;
+      saveElevenlabsKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
