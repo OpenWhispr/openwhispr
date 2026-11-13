@@ -111,12 +111,13 @@ test("the marker contract is exact, unique, and never demonstrated with a traili
   }
 });
 
-test("an unmarked Cloud edit is applied only when no marker trace is left in it", async () => {
+test("an unmarked edit is rejected even with the former optional-marker option", async () => {
   const { SELECTION_QUESTION_MARKER, extractSelectionEditReplacement } = await load();
   const marker = "__OPENWHISPR_SELECTION_COMPLETE_test";
   const cloud = { markerOptional: true };
-  assert.equal(extractSelectionEditReplacement("edit", marker, cloud), "edit");
   for (const output of [
+    "edit",
+    '{"replacement":"unfinished',
     "edit__OPENWHISPR_SELECTION_COMPL",
     `edit${marker.slice(2)}`,
     `${SELECTION_QUESTION_MARKER}.`,

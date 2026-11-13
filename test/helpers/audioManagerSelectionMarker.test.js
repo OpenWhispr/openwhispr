@@ -20,7 +20,7 @@ function requestMarker(config) {
 
 // Only the provider response is scripted; processAgentCommand generates the
 // nonce, builds the real request and invokes the real strict response parser.
-test("selection completion nonce survives omitted decoration and stays strict", async (t) => {
+test("selection edits validate the nonce or complete Cloud screenshot JSON", async (t) => {
   const { createManager } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-selection-marker-test-",
     settingsKey: "__selectionMarkerSettings",
@@ -84,18 +84,26 @@ test("selection completion nonce survives omitted decoration and stays strict", 
     });
   }
 
-  // Cloud refuses a rewrite cut off at the length limit itself, so its vision
-  // chain's answer without the marker is complete; a partial, wrong or
-  // misplaced one still isn't, and text-only Cloud keeps the marker.
   const runCloud = (manager, screenContext = { data: "img", mediaType: "image/jpeg" }) =>
     manager.processAgentCommand(instruction, "synthetic-model", "Assistant", {
       provider: "openwhispr",
       systemPrompt: "Synthetic editing prompt",
+      textOnlySystemPrompt: "Synthetic editing prompt",
       selectionEditReachable: true,
       ...(screenContext ? { screenContext } : {}),
     });
-  await t.test("Cloud accepts a complete screenshot rewrite without the marker", async () => {
-    const manager = managerFor(() => replacement);
+  function cloudManagerFor(response) {
+    const manager = managerFor();
+    manager.processWithReasoningModel = async (text, _model, _agent, config) => {
+      assert.ok(text.includes(JSON.stringify(selectedText)));
+      assert.ok(text.includes(instruction));
+      assert.match(config.systemPrompt, /Return exactly one JSON object/);
+      return response;
+    };
+    return manager;
+  }
+  await t.test("Cloud accepts a complete JSON screenshot rewrite without a nonce", async () => {
+    const manager = cloudManagerFor(JSON.stringify({ replacement }));
     assert.equal(await runCloud(manager), replacement);
     assert.deepEqual(manager.pendingSelectionEdit, { sessionId: "synthetic-selection" });
   });
@@ -105,16 +113,23 @@ test("selection completion nonce survives omitted decoration and stays strict", 
     assert.ok(!manager.pendingSelectionEdit);
   });
   for (const [name, response] of [
-    ["partial UUID", (marker) => `${replacement}${marker.slice(0, -1)}`],
-    ["trailing content", (marker) => `${replacement}${marker} explanation`],
-    ["duplicate marker", (marker) => `${replacement}${marker}${marker}`],
+    ["raw prose", replacement],
+    ["unfinished JSON string", '{"replacement":"Only the first paragraph'],
+    ["missing closing brace", '{"replacement":"Only the first paragraph"'],
+    ["JSON with trailing prose", '{"replacement":"edited"} explanation'],
   ]) {
-    await t.test(`Cloud still rejects ${name}`, async () => {
-      const manager = managerFor(response);
+    await t.test(`Cloud rejects ${name} without arming a screenshot edit`, async () => {
+      const manager = cloudManagerFor(response);
       await assert.rejects(runCloud(manager), { code: "SELECTION_EDIT_INVALID_RESPONSE" });
       assert.ok(!manager.pendingSelectionEdit);
     });
   }
+  await t.test("a Cloud JSON question verdict goes to the panel", async () => {
+    const manager = cloudManagerFor('{"replacement":"__OPENWHISPR_SELECTION_QUESTION__"}');
+    assert.equal(await runCloud(manager), instruction);
+    assert.ok(!manager.pendingSelectionEdit);
+    assert.equal(manager.pendingAssistantConversation.selectedContext.text, selectedText);
+  });
 
   await t.test("an empty replacement cannot arm an edit", async () => {
     const manager = managerFor((marker) => marker);
