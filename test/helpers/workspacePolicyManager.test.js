@@ -935,6 +935,62 @@ test("throttled errors carry the snapshot identity fields", async (t) => {
   assert.equal(throttled.authGeneration, 1);
 });
 
+test("throttled failures retain only the latest attempt's HTTP status", async (t) => {
+  let currentTime = 0;
+  let httpStatus = 401;
+  let requests = 0;
+  const context = setup(
+    async () => {
+      requests++;
+      if (httpStatus === undefined) throw new Error("offline");
+      return response(httpStatus, {});
+    },
+    { minimumAttemptIntervalMs: 5_000, now: () => currentTime }
+  );
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+
+  for (const [index, status] of [401, 403, 503, undefined].entries()) {
+    currentTime = index * 5_000;
+    httpStatus = status;
+    const failed = await context.manager.getPolicy(request);
+    assert.equal(failed.success, false);
+    assert.equal(failed.httpStatus, status);
+    const throttled = await context.manager.getPolicy(request);
+    assert.equal(throttled.code, "POLICY_RETRY_THROTTLED");
+    assert.equal(throttled.httpStatus, status);
+    assert.equal(requests, index + 1);
+  }
+});
+
+test("throttled HTTP status stays with its credential and current auth generation", async (t) => {
+  let requests = 0;
+  const context = setup(
+    async (_url, init) => {
+      requests++;
+      return response(init.headers.Authorization === "Bearer token-a" ? 401 : 503, {});
+    },
+    { minimumAttemptIntervalMs: 5_000, now: () => 0 }
+  );
+  t.after(context.cleanup);
+  const request = { accountId: "account-a", expectedAuthGeneration: 1 };
+  await context.manager.getPolicy(request);
+  context.tokenState.token = "token-b";
+  context.tokenState.generation = 2;
+  const otherRequest = { accountId: "account-b", expectedAuthGeneration: 2 };
+  assert.equal((await context.manager.getPolicy(otherRequest)).httpStatus, 503);
+  assert.equal((await context.manager.getPolicy(otherRequest)).httpStatus, 503);
+
+  context.tokenState.token = "token-a";
+  context.tokenState.generation = 3;
+  const throttled = await context.manager.getPolicy({ ...request, expectedAuthGeneration: 3 });
+  assert.equal(throttled.code, "POLICY_RETRY_THROTTLED");
+  assert.equal(throttled.httpStatus, 401);
+  assert.equal(throttled.accountId, "account-a");
+  assert.equal(throttled.authGeneration, 3);
+  assert.equal(requests, 2);
+});
+
 test("screen-context capture blocks on managed denial or an unresolved managed policy", async (t) => {
   const denyingPolicy = () => {
     const body = validPolicy();

@@ -681,7 +681,9 @@ function initializeCoreManagers() {
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
-  updateManager = new UpdateManager();
+  updateManager = new UpdateManager({
+    getPolicy: (options) => ipcHandlers?.getUpdatePolicy?.(options) ?? { success: false },
+  });
   updateManager.setWindowManager(windowManager);
   windowsKeyManager = new WindowsKeyManager();
   linuxKeyManager = new LinuxKeyManager();
@@ -1283,6 +1285,7 @@ async function startApp() {
 
   await migrateCookieToBearerToken();
   ipcHandlers.loadLocalModelPolicy();
+  void updateManager.refreshPolicy();
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 

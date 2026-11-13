@@ -48,7 +48,10 @@ function createUpdateManager(autoUpdater) {
   delete require.cache[updaterModulePath];
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron-updater") return { autoUpdater };
-    if (request === "electron") return { autoUpdater: { on() {}, removeListener() {} } };
+    if (request === "electron") {
+      const emitter = { on() {}, removeListener() {} };
+      return { autoUpdater: emitter, app: emitter };
+    }
     if (request === "child_process") return { execSync: () => "0" };
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -86,7 +89,7 @@ afterEach(() => {
   else process.env.APPIMAGE = originalAppImage;
 });
 
-test("startup and periodic checks run whether or not automatic updates are on", (t) => {
+test("startup and periodic checks run whether or not automatic updates are on", async (t) => {
   for (const enabled of [true, false, null]) {
     t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
     const autoUpdater = makeAutoUpdater();
@@ -96,8 +99,10 @@ test("startup and periodic checks run whether or not automatic updates are on", 
     manager.checkForUpdatesOnStartup();
     t.mock.timers.tick(STARTUP_DELAY_MS);
     assert.equal(autoUpdater.calls, 1, `startup check with preference ${enabled}`);
+    await new Promise(setImmediate);
     t.mock.timers.tick(PERIODIC_INTERVAL_MS);
     assert.equal(autoUpdater.calls, 2, `periodic check with preference ${enabled}`);
+    await new Promise(setImmediate);
 
     manager.cleanup();
     t.mock.timers.reset();

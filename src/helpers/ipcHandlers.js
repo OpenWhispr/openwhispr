@@ -1098,6 +1098,8 @@ class IPCHandlers {
       // As set-active-account-scope does: a connect can't outlive its account.
       this.connectorManager?.accountChanged();
     }
+    this.updateManager?.invalidatePolicy();
+    void this.updateManager?.refreshPolicy();
     broadcastToWindows("auth-token-state-changed", {
       generation,
       hasToken: Boolean(token),
@@ -3016,6 +3018,7 @@ class IPCHandlers {
       // holds for the same account: that only re-scopes the policy, and only a
       // different account ends the work and meeting already running.
       if (scopeChanged) {
+        this.updateManager?.invalidatePolicy();
         this._audioFeaturePolicy?.invalidate(guestPolicy);
         if (leftAccount) {
           this._audioFeaturePolicy?.cancelJobs();
@@ -3051,6 +3054,7 @@ class IPCHandlers {
       // account and cached under the binding, so neither may still be the old one.
       if (scopeChanged) this._localModelPolicy?.invalidate(guestPolicy);
       else if (guestPolicy) this._localModelPolicy?.update(guestPolicy);
+      void this.updateManager?.refreshPolicy();
       broadcastToWindows(
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
@@ -4936,9 +4940,10 @@ class IPCHandlers {
       // Once Squirrel.Mac holds a downloaded update it installs it on this quit regardless
       // of any flag, so the updater owns that restart instead of racing app.relaunch().
       if (this.updateManager.hasStagedUpdate()) {
-        const { success } = await this.updateManager
-          .installUpdate()
-          .catch(() => ({ success: false }));
+        const { success } = await this.updateManager.restartIntoStagedUpdate().catch((error) => {
+          debugLogger.error("Restart into staged update failed", { error: error.message });
+          return { success: false };
+        });
         if (success) return;
       }
       this.updateManager.deferInstallOnQuit();
@@ -7143,10 +7148,15 @@ class IPCHandlers {
           this.metaActivation?.close(),
           new Promise((resolve) => setTimeout(resolve, 1500)),
         ]).catch(() => {});
-        const tokenState = tokenStore.clear();
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) {
-          await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+        let tokenState;
+        try {
+          const win = BrowserWindow.fromWebContents(event.sender);
+          if (win) {
+            await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+          }
+        } finally {
+          // Retire cookie-authorized requests after cookie storage has settled.
+          tokenState = tokenStore.clear();
         }
         return {
           success: tokenState.success,
@@ -7368,6 +7378,7 @@ class IPCHandlers {
         if (snapshot.authGeneration === tokenStore.getState().generation) {
           this._audioFeaturePolicy?.update(snapshot);
           this._localModelPolicy?.update(snapshot);
+          this.updateManager?.updatePolicy(snapshot);
         }
         broadcastToWindows("workspace-policy-changed", snapshot);
       },
@@ -7413,10 +7424,22 @@ class IPCHandlers {
       const isExpiredSession =
         !authHeaders.Authorization &&
         typeof this.databaseManager.activeAccountId !== "string" &&
+        policy.code !== "POLICY_UNRESOLVABLE" &&
         policy.httpStatus === 401;
       return isExpiredSession ? guestAudioPolicy(generation) : policy;
     };
     this._getMainModelPolicy = getMainPolicy;
+    // The policy manager answers a refused request with any verdict it holds,
+    // a managed one included, so a 401 reaches here only for a session that
+    // ended with nothing held: its owner updates as a guest. The renderer keeps
+    // the account scope after a 401, so this can't wait for the account to
+    // clear the way isExpiredSession does.
+    this.getUpdatePolicy = async (options) => {
+      const policy = await getMainPolicy({}, options);
+      return policy.httpStatus === 401 && policy.code !== "POLICY_UNRESOLVABLE"
+        ? guestAudioPolicy(policy.authGeneration)
+        : policy;
+    };
     // CLI and tray-only sessions also refresh while a native server stays loaded.
     this._localModelPolicyRefreshTimer = this._localModelPolicy?.startPeriodicRefresh(
       5 * 60 * 1000
@@ -12159,6 +12182,7 @@ class IPCHandlers {
       if (snapshot.success && snapshot.authGeneration === tokenStore.getState().generation) {
         this._audioFeaturePolicy.update(snapshot);
         this._localModelPolicy?.update(snapshot);
+        this.updateManager?.updatePolicy(snapshot);
       }
       return snapshot;
     });
