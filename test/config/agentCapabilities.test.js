@@ -214,6 +214,21 @@ test("a connector that can't send still gets the text written, with a pitch at t
   assert.match(delivering, /^- Integrations: turned off by the user's organization/m);
 });
 
+test("the closing line offers connecting only when the user can connect", async () => {
+  const { describeUnavailable } = await load();
+  const notConnected = describeUnavailable([
+    { name: "Slack", reason: "notConnected", where: LOCATIONS.connectors, delivers: true },
+  ]);
+  assert.match(notConnected, /"Connect Slack and I can post this for you\."/);
+
+  const needsPlan = describeUnavailable([
+    { name: "Integrations", reason: "planRequired", where: "Settings → Plans", delivers: true },
+  ]);
+  assert.match(needsPlan, /never on connecting it, which they can't do yet/);
+  assert.match(needsPlan, /"Sending Slack messages needs a paid OpenWhispr plan, so I've written/);
+  assert.doesNotMatch(needsPlan, /Connect Slack and I can post this/);
+});
+
 test("a model too small for tools may still use the prompt's notes and write text", async () => {
   const { describeUnavailable } = await load();
   const text = describeUnavailable([

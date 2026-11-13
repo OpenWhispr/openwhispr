@@ -976,7 +976,7 @@ test("signed out, the model is told to point the user at signing in", async (t) 
   );
 });
 
-test("on a free plan, the model still writes the email and then says a paid plan can send it", async (t) => {
+test("on a free plan, the model still writes the email and says sending it needs a paid plan, not to connect", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
@@ -984,8 +984,9 @@ test("on a free plan, the model still writes the email and then says a paid plan
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
+    /still write it in full in your reply, then end with one short sentence on what sending it needs, as its line below says, never on connecting it[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
   );
+  assert.doesNotMatch(prompt, /Connect Slack and I can post this/);
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
 });
 
@@ -1862,6 +1863,6 @@ test("an answer typed at another app's caret names nothing to connect", async (t
   await captured.sendToAI("Reply to this email", [], { plainTextResponse: true });
   await captured.sendToAI("Reply to this email", []);
 
-  assert.doesNotMatch(configs[0].systemPrompt, /how they can have you send it/);
-  assert.match(configs[1].systemPrompt, /how they can have you send it/);
+  assert.doesNotMatch(configs[0].systemPrompt, /still write it in full in your reply/);
+  assert.match(configs[1].systemPrompt, /still write it in full in your reply/);
 });
