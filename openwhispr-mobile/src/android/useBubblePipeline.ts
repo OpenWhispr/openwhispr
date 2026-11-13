@@ -3,7 +3,11 @@ import i18n from './strings';
 import { useBubbleResult } from './bubbleResult';
 import { useEffect } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
-import { AndroidDictation, dictationEvents } from '../../modules/android-dictation/src';
+import {
+  AndroidDictation,
+  dictationEvents,
+  type Recording,
+} from '../../modules/android-dictation/src';
 import {
   AndroidCleanupError,
   createAndroidJob,
@@ -11,60 +15,53 @@ import {
   type AndroidJob,
 } from './pipeline';
 import { useConfigStore } from '@/store/useConfigStore';
-import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
 import { usePracticeSession } from './practiceSession';
 
+const discard = (audio: Recording | null) => {
+  if (audio) void FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => undefined);
+};
+
+/** The bubble dictates only: talking over highlighted text replaces it. */
+function dictationJob(selection: string): AndroidJob {
+  return createAndroidJob(
+    'dictate',
+    useConfigStore.getState().config?.androidTranslationTarget?.label ?? 'Spanish',
+    selection,
+  );
+}
+
 export function useBubblePipeline() {
-  const { t } = useTranslation();
-  const target = useConfigStore((s) => s.config?.androidTranslationTarget?.label ?? 'Spanish');
-  useEffect(() => {
-    AndroidDictation?.setBubbleOptions({
-      dictate: t('dictate'),
-      translate: t('translateInto', { language: target }),
-      write: t('write'),
-      edit: t('editSelection'),
-      hold: t('bubbleHold'),
-      chooseAction: t('chooseAction'),
-      cancelOrClose: t('cancelOrClose'),
-      recover: t('recoverDictation'),
-      processing: t('processing'),
-      success: t('inserted'),
-      selectToEdit: t('selectToEdit'),
-    }).catch(() => undefined);
-  }, [target, t]);
   useEffect(() => {
     if (!dictationEvents || !AndroidDictation) return;
     const native = AndroidDictation;
     let job: AndroidJob | null = null;
     let jobError = '';
     let controller: AbortController | null = null;
-    const stopObserving = observeTranscriptScope(() => {
-      controller?.abort();
-      job = null;
-      useBubbleResult.getState().dismiss();
-    });
-    const start = dictationEvents.addListener('onStart', ({ selection, mode }) => {
+    // A recording whose transcription failed, kept so the bubble's Retry can send it again.
+    let kept: Recording | null = null;
+    const dropKept = () => {
+      discard(kept);
+      kept = null;
+    };
+    const prepare = (selection: string) => {
       controller?.abort();
       controller = new AbortController();
       job = null;
       jobError = '';
       try {
-        job = createAndroidJob(
-          mode,
-          useConfigStore.getState().config?.androidTranslationTarget?.label ?? 'Spanish',
-          selection,
-        );
+        job = dictationJob(selection);
       } catch (error) {
         jobError = (error as Error).message;
       }
-    });
-    const recording = dictationEvents.addListener('onRecording', async (audio) => {
+    };
+    const run = async (audio: Recording) => {
       const current = controller;
       if (!current) {
-        await FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => undefined);
+        discard(audio);
         return;
       }
+      let keep = false;
       try {
         if (!job) throw new Error(jobError);
         const text = await processAndroidAudio(audio, job, current.signal, () =>
@@ -73,40 +70,74 @@ export function useBubblePipeline() {
         if (current.signal.aborted) return;
         const inserted = await native.insert(text);
         if (current.signal.aborted) return;
-        if (!inserted) useBubbleResult.getState().setResult(text, i18n.t('insertionFailed'));
-        else {
+        if (!inserted) {
+          // The words are safe in Home; the bubble offers to open them.
+          useBubbleResult.getState().setResult(text, i18n.t('insertionFailed'));
+          void native.setStatus('recover');
+        } else {
           useBubbleResult.setState({ error: '' });
           usePracticeSession.getState().complete(job.mode);
+          void native.setStatus('success');
         }
-        void native.setStatus(inserted ? 'success' : 'error');
       } catch (error) {
-        if (!current.signal.aborted) {
-          useBubbleResult
-            .getState()
-            .setResult(
-              error instanceof AndroidCleanupError ? error.transcript : '',
-              error instanceof AndroidCleanupError
-                ? i18n.t('cleanupRecovery')
-                : (error as Error).message,
-            );
-          void native.setStatus('error');
+        if (current.signal.aborted) return;
+        if (error instanceof AndroidCleanupError) {
+          useBubbleResult.getState().setResult(error.transcript, i18n.t('cleanupRecovery'));
+          void native.setStatus('recover');
+          return;
         }
+        const message = (error as Error).message;
+        useBubbleResult.getState().setResult('', message);
+        // Silence has nothing worth sending again; anything else keeps the recording for Retry.
+        keep = !audio.noSpeech && message !== i18n.t('noSpeech');
+        void native.setStatus(keep ? 'retry-kept' : 'retry');
       } finally {
-        await FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => undefined);
+        if (keep) kept = audio;
+        else discard(audio);
       }
+    };
+    const stopObserving = observeTranscriptScope(() => {
+      controller?.abort();
+      job = null;
+      dropKept();
+      useBubbleResult.getState().dismiss();
     });
+    const start = dictationEvents.addListener('onStart', ({ selection }) => {
+      dropKept();
+      prepare(selection);
+    });
+    const recording = dictationEvents.addListener('onRecording', (audio) => {
+      void run(audio);
+    });
+    const retry = dictationEvents.addListener('onRetry', ({ selection }) => {
+      const audio = kept;
+      kept = null;
+      if (!audio) {
+        void native.setStatus('retry');
+        return;
+      }
+      prepare(selection);
+      void run(audio);
+    });
+    const dismiss = dictationEvents.addListener('onDismiss', dropKept);
     const failure = dictationEvents.addListener('onError', ({ message }) => {
       useBubbleResult.getState().setResult('', message);
     });
-    const cancel = dictationEvents.addListener('onCancel', () => controller?.abort());
+    const cancel = dictationEvents.addListener('onCancel', () => {
+      controller?.abort();
+      dropKept();
+    });
     const recover = dictationEvents.addListener('onOpenResult', () =>
       router.navigate('/(tabs)/(record)'),
     );
     return () => {
       stopObserving();
       controller?.abort();
+      dropKept();
       start.remove();
       recording.remove();
+      retry.remove();
+      dismiss.remove();
       cancel.remove();
       failure.remove();
       recover.remove();

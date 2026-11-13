@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr · 插入文字</string>
-  <string name="ow_insertion_description">無障礙功能允許 OpenWhispr 在聽寫時讀取目前欄位並插入結果。它不會傳送訊息或讀取密碼欄位。</string>
+  <string name="ow_insertion_description">無障礙功能允許 OpenWhispr 在聽寫時讀取目前欄位並插入結果。它不會傳送訊息或讀取密碼欄位。它也會檢查是否有文字欄位處於焦點，只在你輸入時顯示浮動球。</string>
   <string name="ow_bubble_ready">OpenWhispr 已就緒</string>
   <string name="ow_bubble_recording">OpenWhispr · 正在聆聽…</string>
   <string name="ow_bubble_notice">點按開啟。在「帳戶」中關閉浮動按鈕。</string>
@@ -9,4 +9,17 @@
   <string name="ow_meeting_notice">正在錄製會議音訊。</string>
   <string name="ow_meeting_stop">停止</string>
   <string name="ow_meeting_stopped">錄音已停止。音訊已儲存。</string>
+  <string name="ow_bubble_writing">正在整理…</string>
+  <string name="ow_bubble_failed">沒聽清楚</string>
+  <string name="ow_bubble_saved">已儲存到 OpenWhispr</string>
+  <string name="ow_bubble_hide_target">隱藏 1 小時</string>
+  <string name="ow_bubble_hidden">浮動球已隱藏一小時</string>
+  <string name="ow_bubble_hidden_notice">點按即可重新顯示</string>
+  <string name="ow_bubble_talk">OpenWhispr：點按或按住說話</string>
+  <string name="ow_bubble_cancel">取消</string>
+  <string name="ow_bubble_stop">停止並插入</string>
+  <string name="ow_bubble_retry">重試</string>
+  <string name="ow_bubble_open">開啟 OpenWhispr 查看文字</string>
+  <string name="ow_bubble_dismiss">關閉</string>
+  <string name="ow_bubble_listening">正在聆聽</string>
 </resources>

@@ -5,12 +5,10 @@ import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { AndroidDictation, dictationEvents } from '../../modules/android-dictation/src';
 import { Page, Card, Button, Row, styles } from './ui';
-import { LanguageSheet } from './LanguageSheet';
 export function PermissionsContent() {
   const { t } = useTranslation();
   const [status, setStatus] = useState(AndroidDictation!.getStatus());
   const config = useConfigStore((s) => s.config);
-  const [choosingTarget, setChoosingTarget] = useState(false);
   const [enabling, setEnabling] = useState(false);
   useEffect(() => {
     const service = dictationEvents?.addListener('onStatusChange', () =>
@@ -94,25 +92,7 @@ export function PermissionsContent() {
             />
           ))}
         </View>
-        <Button
-          secondary
-          label={t('translateInto', {
-            language: config?.androidTranslationTarget?.label ?? 'Spanish',
-          })}
-          onPress={() => setChoosingTarget(true)}
-        />
       </Card>
-      <LanguageSheet
-        visible={choosingTarget}
-        selected={config?.androidTranslationTarget?.code ?? 'es'}
-        allowAuto={false}
-        onClose={() => setChoosingTarget(false)}
-        onSelect={(code, label) => {
-          void useConfigStore
-            .getState()
-            .updateConfig({ androidTranslationTarget: { code, label } });
-        }}
-      />
       <Card>
         <Text style={styles.heading}>{t('reliability')}</Text>
         <Text style={styles.body}>{t('reliabilityBody')}</Text>
