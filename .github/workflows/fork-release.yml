@@ -1,11 +1,11 @@
 # Unsigned release builds for this fork: .deb + .AppImage (Linux x64),
 # .dmg (macOS arm64 + x64, not notarized) and .apk (Android, debug-keystore signed).
-# Trigger: push a tag like `v1.2.3-gr.1`, or run manually from the Actions tab.
+# Trigger: push a tag like `gr-v1.2.3`, or run manually from the Actions tab.
 name: Fork Release (unsigned)
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["gr-v*"]
   workflow_dispatch:
 
 permissions:
