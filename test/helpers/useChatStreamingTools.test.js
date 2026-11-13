@@ -1865,3 +1865,235 @@ test("an answer typed at another app's caret names nothing to connect", async (t
   assert.doesNotMatch(configs[0].systemPrompt, /how they can have you send it/);
   assert.match(configs[1].systemPrompt, /how they can have you send it/);
 });
+
+const SMALL_VOICE_MODEL = {
+  useDictationAgent: true,
+  dictationAgentMode: "local",
+  dictationAgentProvider: "qwen",
+  dictationAgentModel: "qwen3.5-2b-q4_k_m",
+};
+
+test("a voice model without question tools explicitly identifies a complete caret answer", async (t) => {
+  const saved = [];
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    {
+      inferenceScope: "dictationAgent",
+      allowInteractions: true,
+      onStreamComplete: (_id, content) => saved.push(content),
+    },
+    { settings: SMALL_VOICE_MODEL }
+  );
+  const cases = [
+    {
+      name: "unmarked clarification",
+      response: "What time should I propose?",
+      content: "What time should I propose?",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "explicit clarification",
+      response: "__OPENWHISPR_CARET_QUESTION__\nWhat time should I propose?",
+      content: "What time should I propose?",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "ready answer",
+      response: "__OPENWHISPR_CARET_ANSWER__\nMonday works.",
+      content: "Monday works.",
+      finishReason: "stop",
+      onlyRead: true,
+    },
+    {
+      name: "ready reply containing a question",
+      response: "__OPENWHISPR_CARET_ANSWER__\nWould Monday work for you?",
+      content: "Would Monday work for you?",
+      finishReason: "stop",
+      onlyRead: true,
+    },
+    {
+      name: "unknown disposition",
+      response: "__OPENWHISPR_CARET_OTHER__\nI need more details.",
+      content: "__OPENWHISPR_CARET_OTHER__\nI need more details.",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "conflicting dispositions",
+      response: "__OPENWHISPR_CARET_ANSWER__\n__OPENWHISPR_CARET_QUESTION__\nWhich Monday?",
+      content: "Which Monday?",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "duplicate answer disposition",
+      response: "__OPENWHISPR_CARET_ANSWER__\n__OPENWHISPR_CARET_ANSWER__\nMonday works.",
+      content: "Monday works.",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "revised disposition after reply text",
+      response:
+        "__OPENWHISPR_CARET_ANSWER__\nMonday works.\n__OPENWHISPR_CARET_QUESTION__\nWhich Monday?",
+      content: "Monday works.\n\nWhich Monday?",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    ...["length", "error", undefined].map((finishReason) => ({
+      name: `incomplete answer (${finishReason ?? "missing done"})`,
+      response: "__OPENWHISPR_CARET_ANSWER__\nMonday works.",
+      content: "Monday works.",
+      finishReason,
+      onlyRead: false,
+    })),
+  ];
+  let scenario;
+  const configs = [];
+  reasoningService.processTextStreamingAI.mock.mockImplementation(
+    (_messages, _model, _provider, config, tools) => {
+      configs.push({ config, tools });
+      return (async function* () {
+        yield { type: "content", text: scenario.response };
+        if (scenario.finishReason !== undefined)
+          yield { type: "done", finishReason: scenario.finishReason };
+      })();
+    }
+  );
+  for (scenario of cases) {
+    const completed = [];
+    await captured.sendToAI("Reply and suggest a time", [], {
+      plainTextResponse: true,
+      onComplete: (result) => completed.push(result),
+    });
+    assert.equal(configs.at(-1).tools, undefined, "the bundled 2B model has no ask_user");
+    assert.equal(completed.length, 1, scenario.name);
+    assert.equal(completed[0].onlyRead, scenario.onlyRead, scenario.name);
+    assert.match(configs.at(-1).config.systemPrompt, /__OPENWHISPR_CARET_ANSWER__/);
+    assert.equal(completed[0].content, scenario.content, scenario.name);
+    assert.equal(getMessages().at(-1).content, scenario.content, scenario.name);
+    assert.equal(saved.at(-1), scenario.content, scenario.name);
+  }
+
+  scenario = { response: "Ordinary chat reply.", finishReason: "stop" };
+  await captured.sendToAI("Hello", []);
+  assert.doesNotMatch(configs.at(-1).config.systemPrompt, /__OPENWHISPR_CARET_/);
+  assert.equal(getMessages().at(-1).content, "Ordinary chat reply.");
+});
+
+test("split caret disposition prefixes never appear in streamed or saved content", async (t) => {
+  const saved = [];
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    {
+      inferenceScope: "dictationAgent",
+      allowInteractions: true,
+      onTurnCheckpoint: (_id, content) => saved.push(content),
+      onStreamComplete: (_id, content) => saved.push(content),
+    },
+    { settings: SMALL_VOICE_MODEL }
+  );
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => t.mock.timers.reset());
+  const shown = [];
+  reasoningService.processTextStreamingAI.mock.mockImplementation(() =>
+    (async function* () {
+      for (const text of ["__OPEN", "WHISPR_CARET_", "ANSWER__", "\nMonday ", "works."]) {
+        yield { type: "content", text };
+        t.mock.timers.tick(32);
+        shown.push(getMessages().at(-1).content);
+      }
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  const completed = [];
+  await captured.sendToAI("Reply that Monday works", [], {
+    plainTextResponse: true,
+    onComplete: (result) => completed.push(result),
+  });
+  assert.deepEqual(shown, ["", "", "", "Monday ", "Monday works."]);
+  assert.equal(completed[0].onlyRead, true);
+  assert.equal(completed[0].content, "Monday works.");
+  assert.deepEqual(saved, ["", "Monday works."]);
+
+  const revisedShown = [];
+  reasoningService.processTextStreamingAI.mock.mockImplementation(() =>
+    (async function* () {
+      for (const text of [
+        "__OPENWHISPR_CARET_ANSWER__\nMonday works.\n",
+        "__OPEN",
+        "WHISPR_CARET_QUESTION__",
+        "\nWhich Monday?",
+      ]) {
+        yield { type: "content", text };
+        t.mock.timers.tick(32);
+        revisedShown.push(getMessages().at(-1).content);
+      }
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await captured.sendToAI("Reply again", [], {
+    plainTextResponse: true,
+    onComplete: (result) => completed.push(result),
+  });
+  assert.equal(completed.at(-1).onlyRead, false);
+  assert.equal(completed.at(-1).content, "Monday works.\n\nWhich Monday?");
+  assert.equal(
+    revisedShown.some((content) => content.includes("__OPEN")),
+    false
+  );
+
+  reasoningService.processTextStreamingAI.mock.mockImplementation(() =>
+    (async function* () {
+      yield { type: "content", text: "__OPENWHISPR_CARET_AN" };
+      t.mock.timers.tick(32);
+      captured.cancelStream();
+    })()
+  );
+  await captured.sendToAI("Reply again", [], { plainTextResponse: true });
+  assert.equal(getMessages().at(-1).content, "");
+  assert.equal(
+    saved.some((content) => content.includes("__OPEN")),
+    false
+  );
+});
+
+test("real local SSE completion controls whether a caret answer can be pasted", async (t) => {
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent", allowInteractions: true },
+    {
+      settings: SMALL_VOICE_MODEL,
+      electronAPI: { llamaServerStart: async () => ({ success: true, port: 11434 }) },
+    }
+  );
+  reasoningService.processTextStreamingAI.mock.restore();
+  let finishReason;
+  t.mock.method(globalThis, "fetch", async () => {
+    const chunks = [
+      { choices: [{ delta: { content: "__OPENWHISPR_CARET_ANSWER__\nMonday works." } }] },
+    ];
+    if (finishReason) chunks.push({ choices: [{ delta: {}, finish_reason: finishReason }] });
+    return new Response(
+      chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n",
+      { status: 200, headers: { "content-type": "text/event-stream" } }
+    );
+  });
+  for (const [reason, onlyRead] of [
+    ["length", false],
+    [undefined, false],
+    ["stop", true],
+  ]) {
+    finishReason = reason;
+    const completed = [];
+    await captured.sendToAI("Reply that Monday works", [], {
+      plainTextResponse: true,
+      onComplete: (result) => completed.push(result),
+    });
+    assert.equal(completed[0].onlyRead, onlyRead, `provider finish: ${reason ?? "missing"}`);
+    assert.equal(completed[0].content, "Monday works.");
+    assert.equal(getMessages().at(-1).content, "Monday works.");
+  }
+});

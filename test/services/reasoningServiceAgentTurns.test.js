@@ -70,6 +70,89 @@ const GROQ_CONFIG = { systemPrompt: "Answer the user." };
 // Tool steps a turn may take before it has to answer.
 const STEP_CAP = 20;
 
+for (const provider of ["local", "lan"]) {
+  test(`${provider} no-tools streaming reports the provider's actual completion`, async (t) => {
+    const { reasoningService } = await loadReasoningService(t, {
+      electronAPI: { llamaServerStart: async () => ({ success: true, port: 11434 }) },
+    });
+    const cases = [
+      { name: "complete", finishReason: "stop", expected: "stop", done: true },
+      { name: "truncated", finishReason: "length", expected: "length", done: true },
+      { name: "done without completion", expected: "unknown", done: true },
+      { name: "EOF without completion", expected: "unknown" },
+      { name: "text final frame at EOF", expected: "unknown", noNewline: true },
+      { name: "final frame at EOF", finishReason: "stop", expected: "stop", noNewline: true },
+      {
+        name: "truncated final frame at EOF",
+        finishReason: "length",
+        expected: "length",
+        noNewline: true,
+      },
+    ];
+    const response = (scenario) => {
+      const parts = [groqChunk({ content: "Reply" })];
+      if (scenario.finishReason) parts.push(groqChunk({}, scenario.finishReason));
+      const frames = parts.map((chunk) => `data: ${JSON.stringify(chunk)}`).join("\n\n");
+      return new Response(
+        frames + (scenario.noNewline ? "" : "\n\n") + (scenario.done ? "data: [DONE]\n\n" : ""),
+        { status: 200, headers: { "content-type": "text/event-stream" } }
+      );
+    };
+    const interrupted = response({});
+    stubFetch(t, [
+      ...[...cases, {}].map((scenario) => () => response(scenario)),
+      () => interrupted,
+    ]);
+    const config = {
+      systemPrompt: "Answer the user.",
+      ...(provider === "lan" ? { lanUrl: "http://127.0.0.1:11434/v1" } : {}),
+    };
+    for (const scenario of cases) {
+      const chunks = await collect(
+        reasoningService.processTextStreamingAI(
+          [{ role: "user", content: "Reply" }],
+          "qwen3.5-2b-q4_k_m",
+          provider,
+          config
+        )
+      );
+      assert.equal(
+        chunks
+          .filter((chunk) => chunk.type === "content")
+          .map((chunk) => chunk.text)
+          .join(""),
+        "Reply"
+      );
+      assert.deepEqual(
+        chunks.at(-1),
+        { type: "done", finishReason: scenario.expected },
+        scenario.name
+      );
+    }
+    assert.deepEqual(
+      await collect(
+        reasoningService.processTextStreaming(
+          [{ role: "user", content: "Reply" }],
+          "qwen3.5-2b-q4_k_m",
+          provider,
+          config
+        )
+      ),
+      ["Reply"],
+      "the existing text-only API still keeps streamed text without finish metadata"
+    );
+    const interruptedStream = reasoningService.processTextStreamingAI(
+      [{ role: "user", content: "Reply" }],
+      "qwen3.5-2b-q4_k_m",
+      provider,
+      config
+    );
+    assert.deepEqual((await interruptedStream.next()).value, { type: "content", text: "Reply" });
+    await interruptedStream.return();
+    assert.equal(interrupted.body.locked, false, "early consumer return still releases the reader");
+  });
+}
+
 test("Groq reasoning streams as reasoning, apart from the answer", async (t) => {
   const { reasoningService } = await loadReasoningService(t, {
     electronAPI: { getGroqKey: async () => "gsk_test" },

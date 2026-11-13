@@ -100,6 +100,7 @@ import {
   type ToolHistory,
 } from "./historyMessages";
 import { isUnbackedClaim } from "./actionClaims";
+import { readCaretResponse } from "./caretResponse";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
 import type { ConversationClaim } from "./useChatPersistence";
@@ -873,6 +874,9 @@ export function createChatTurnEngine(
             ? "text"
             : "parts";
       const offeredTools = registry?.getAll();
+      const requireCaretDisposition = Boolean(
+        options?.plainTextResponse && !registry?.get("ask_user")
+      );
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
@@ -956,7 +960,9 @@ export function createChatTurnEngine(
         // pairs the suffix with an attached image.
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
       }
-      if (options?.plainTextResponse) systemPrompt = appendPlainTextResponseSuffix(systemPrompt);
+      if (options?.plainTextResponse) {
+        systemPrompt = appendPlainTextResponseSuffix(systemPrompt, requireCaretDisposition);
+      }
       if (attachment) {
         transformLastUserMessage(history, (message) => ({
           role: "user",
@@ -980,6 +986,10 @@ export function createChatTurnEngine(
       let reasoning = "";
       let rawContent = "";
       let fullContent = "";
+      const responseContent = (): string =>
+        withoutEchoedToolTrace(
+          requireCaretDisposition ? readCaretResponse(rawContent).content : rawContent
+        );
       // A tool may report before the stream shows its call (it can ask the
       // user at once), so what it reports waits here for the call.
       const annotations = new Map<string, Partial<ToolCallInfo>>();
@@ -1182,6 +1192,7 @@ export function createChatTurnEngine(
       let afterToolCall = false;
       let reasoningAfterToolCall = false;
       let stepLimitReached = false;
+      let finishReason: string | undefined;
       // Where the text of the step now streaming starts, so an answer asked
       // again (an unbacked claim) can be withdrawn.
       let stepTextStart = 0;
@@ -1192,7 +1203,7 @@ export function createChatTurnEngine(
       const replaceAskedReply = (): void => {
         if (askedAgainFrom === null) return;
         rawContent = rawContent.slice(0, askedAgainFrom);
-        fullContent = withoutEchoedToolTrace(rawContent);
+        fullContent = responseContent();
         afterToolCall = true;
         askedAgainFrom = null;
       };
@@ -1345,7 +1356,7 @@ export function createChatTurnEngine(
             if (afterToolCall && rawContent && !/\s$/.test(rawContent)) rawContent += "\n\n";
             afterToolCall = false;
             rawContent += chunk.text;
-            fullContent = withoutEchoedToolTrace(rawContent);
+            fullContent = responseContent();
             scheduleContentFlush();
           } else if (chunk.type === "reasoning") {
             if (reasoningAfterToolCall && reasoning && !/\s$/.test(reasoning)) reasoning += "\n\n";
@@ -1415,6 +1426,7 @@ export function createChatTurnEngine(
             setAgentState("streaming");
             completeToolActivity();
           } else if (chunk.type === "done") {
+            finishReason = chunk.finishReason;
             // Ended from outside the turn: it stops, rather than counting as answered.
             if (chunk.finishReason === "abort") {
               control.controller.abort();
@@ -1466,6 +1478,9 @@ export function createChatTurnEngine(
             onlyRead:
               !stepLimitReached &&
               !unbackedClaim &&
+              (!requireCaretDisposition ||
+                (readCaretResponse(rawContent).disposition === "answer" &&
+                  finishReason === "stop")) &&
               (calls ?? []).every(
                 (call) =>
                   !call.interaction &&
