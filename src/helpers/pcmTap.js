@@ -28,6 +28,8 @@ export class PcmTap {
     this._node = null;
     this._source = null;
     this._flushResolve = null;
+    // Called with the running sample count as audio arrives (live decoding).
+    this.onSamples = null;
     this._context = new AudioContext({ sampleRate: SAMPLE_RATE });
     // Not awaited: resume() can hang when the output device is wedged.
     if (this._context.state === "suspended") this._context.resume().catch(() => {});
@@ -62,6 +64,7 @@ export class PcmTap {
       return;
     }
     this._chunks.push(chunk);
+    this.onSamples?.(this._samples);
   }
 
   // Feeds the recorder's stream, or moves the tap onto a replacement mic.
@@ -70,6 +73,28 @@ export class PcmTap {
     this._source = this._context.createMediaStreamSource(stream);
     if (this._node) this._source.connect(this._node);
     this._attachedAt ??= this._now();
+  }
+
+  // Samples captured so far; 0 once the copy is dropped, so live readers stop.
+  get sampleCount() {
+    return this._dropped ? 0 : this._samples;
+  }
+
+  // A copy of samples [start, end) captured so far, for live decoding.
+  copySamples(start, end) {
+    const out = new Int16Array(Math.max(0, end - start));
+    let offset = 0;
+    for (const chunk of this._chunks) {
+      const chunkEnd = offset + chunk.length;
+      if (chunkEnd > start && offset < end) {
+        const from = Math.max(start, offset) - offset;
+        const to = Math.min(end, chunkEnd) - offset;
+        out.set(chunk.subarray(from, to), Math.max(start, offset) - start);
+      }
+      offset = chunkEnd;
+      if (offset >= end) break;
+    }
+    return out;
   }
 
   // Resolves to the capture as a WAV blob, or null when the copy cannot stand
