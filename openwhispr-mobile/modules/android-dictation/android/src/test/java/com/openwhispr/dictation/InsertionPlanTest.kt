@@ -41,4 +41,30 @@ class InsertionPlanTest {
   @Test fun anOutOfRangeCaretIsRefused() {
     assertNull(InsertionPlan.plan("Hi", 2, 2, "Hi", 5, 5, "there"))
   }
+
+  @Test fun wordsAfterTextAtACaretGetALeadingSpace() {
+    // Seen on a Galaxy A73: "…Tishan." + "Oh," became "…Tishan.Oh,".
+    assertEquals(Insertion("Tishan. Oh,", 11), InsertionPlan.plan("Tishan.", 7, 7, "Tishan.", 7, 7, "Oh,"))
+    // Mid-text too: the space goes before the words, the caret after them.
+    assertEquals(Insertion("Hi there!", 8), InsertionPlan.plan("Hi!", 2, 2, "Hi!", 2, 2, "there"))
+    // After a closing quote.
+    assertEquals(Insertion("said \"hi\" then", 14), InsertionPlan.plan("said \"hi\"", 9, 9, "said \"hi\"", 9, 9, "then"))
+  }
+
+  @Test fun noLeadingSpaceWhereNoneBelongs() {
+    assertEquals(Insertion("Hi", 2), InsertionPlan.plan("", 0, 0, "", 0, 0, "Hi"))
+    assertEquals(Insertion("One\nTwo", 7), InsertionPlan.plan("One\n", 4, 4, "One\n", 4, 4, "Two"))
+    assertEquals(Insertion("Hi there", 8), InsertionPlan.plan("Hi ", 3, 3, "Hi ", 3, 3, "there"))
+    assertEquals(Insertion("(note", 5), InsertionPlan.plan("(", 1, 1, "(", 1, 1, "note"))
+    assertEquals(Insertion("said \"hi", 8), InsertionPlan.plan("said \"", 6, 6, "said \"", 6, 6, "hi"))
+    assertEquals(Insertion("“hi", 3), InsertionPlan.plan("“", 1, 1, "“", 1, 1, "hi"))
+    // Words that start with punctuation or a space.
+    assertEquals(Insertion("Hi, there", 9), InsertionPlan.plan("Hi", 2, 2, "Hi", 2, 2, ", there"))
+    assertEquals(Insertion("Done.", 5), InsertionPlan.plan("Done", 4, 4, "Done", 4, 4, "."))
+    assertEquals(Insertion("Hi there", 8), InsertionPlan.plan("Hi", 2, 2, "Hi", 2, 2, " there"))
+  }
+
+  @Test fun aReplacedSelectionGetsNoLeadingSpace() {
+    assertEquals(Insertion("Hifriend", 8), InsertionPlan.plan("Hiyou", 2, 5, "Hiyou", 2, 5, "friend"))
+  }
 }
