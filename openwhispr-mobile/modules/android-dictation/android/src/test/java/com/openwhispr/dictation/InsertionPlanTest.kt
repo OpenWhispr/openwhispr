@@ -25,6 +25,19 @@ class InsertionPlanTest {
     assertNull(InsertionPlan.plan("Hi ", 3, 3, "Hi you", 3, 6, "friend"))
   }
 
+  @Test fun wordsCountAsLandedWhenTheEditorTidiesSpacing() {
+    // Chrome's address bar drops the leading space typed while listening.
+    assertTrue(InsertionPlan.landed(" ", "One, two, three.", "One, two, three."))
+    // ...or adds its own suggestion after the words.
+    assertTrue(InsertionPlan.landed("", "One two.com", "One two"))
+  }
+
+  @Test fun wordsAlreadyThereOrMissingDoNotCountAsLanded() {
+    assertFalse(InsertionPlan.landed("Hello", "Hello", "Hello"))
+    assertFalse(InsertionPlan.landed("Hi ", "Hi ", "there"))
+    assertFalse(InsertionPlan.landed("Hi ", "Hi you", "there"))
+  }
+
   @Test fun anOutOfRangeCaretIsRefused() {
     assertNull(InsertionPlan.plan("Hi", 2, 2, "Hi", 5, 5, "there"))
   }

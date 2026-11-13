@@ -23,6 +23,19 @@ object InsertionPlan {
     return place(currentText, currentStart, currentEnd, dictated)
   }
 
+  /**
+   * Whether the dictated words are now in the field. Editors tidy what they're given (Chrome's address bar
+   * drops a leading space and adds its own suggestion), so this looks for the words, ignoring spacing, in a
+   * field that changed, rather than for the exact text written.
+   */
+  fun landed(before: String, after: String, dictated: String): Boolean {
+    val words = squash(dictated)
+    if (words.isEmpty()) return after == before
+    return after != before && squash(after).contains(words)
+  }
+
+  private fun squash(text: String) = text.filterNot { it.isWhitespace() }
+
   private fun place(text: String, start: Int, end: Int, dictated: String): Insertion? {
     if (start < 0 || end < start || end > text.length) return null
     return Insertion(text.substring(0, start) + dictated + text.substring(end), start + dictated.length)

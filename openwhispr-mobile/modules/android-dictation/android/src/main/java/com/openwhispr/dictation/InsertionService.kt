@@ -81,7 +81,7 @@ class InsertionService : AccessibilityService() {
     // Some editors acknowledge an action without applying it. Verify the result;
     // never retry a write because that can duplicate text in another application.
     handler.postDelayed({
-      val verified = runCatching { current.refresh() && fieldText(current) == result }.getOrDefault(false)
+      val verified = runCatching { current.refresh() && InsertionPlan.landed(currentText, fieldText(current), text) }.getOrDefault(false)
       current.recycle(); complete(verified)
     }, 150)
   }
