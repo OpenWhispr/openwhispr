@@ -7,15 +7,8 @@
     {
       "GHSA-qr28-fpjm-wq7f": {
         "active": true,
-        "expiry": "2026-11-13T00:00:00Z",
-        "notes": "decode-uri-component 0.2.2 carries the single-pass UTF-8 decoder from upstream 0.5.1 (58ed85f5adc7cfaee5e49e4d52b067f172d0bcb6), backported with patch-package while preserving the CommonJS/plus-sign API required by Expo Router's query-string 7. Upgrading directly to 0.5.1 would change its module/API contract. CI and postinstall run test:security against every locked decoder, including malformed-input timeout regressions. npm audit cannot detect this patch. Remove the patch and exception when the Expo dependency chain accepts a fixed decoder; review by 2026-11-13."
-      }
-    },
-    {
-      "GHSA-vfj7-8cjw-p6xm": {
-        "active": true,
-        "expiry": "2026-11-01T00:00:00Z",
-        "notes": "braces <=3.0.3 stack exhaustion on deeply nested patterns; no patched release exists (3.0.3 is the latest). It is reached only through build tooling (micromatch and chokidar under Metro, Jest and Tailwind) with glob patterns from the project's own config, never from app users or network input, and it is not in the app bundle. Remove this exception once a fixed braces release can be installed; review by 2026-11-01."
+        "expiry": "2026-12-13T00:00:00Z",
+        "notes": "decode-uri-component 0.2.2 carries the single-pass UTF-8 decoder from upstream 0.5.1 (58ed85f5adc7cfaee5e49e4d52b067f172d0bcb6), backported with patch-package while preserving the CommonJS/plus-sign API required by Expo Router's query-string 7. Upgrading directly to 0.5.1 would change its module/API contract. CI and postinstall run test:security against every locked decoder, including malformed-input timeout regressions. npm audit cannot detect this patch. Remove the patch and exception when the Expo dependency chain accepts a fixed decoder (npm audit names expo-router 58.0.31, part of the Expo SDK 58 upgrade); review by 2026-12-13."
       }
     }
   ]
