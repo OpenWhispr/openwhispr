@@ -43,6 +43,16 @@ async function update(workspaceId: string, patch: { name?: string }): Promise<Wo
   return res.data;
 }
 
+async function uploadIcon(workspaceId: string, data: string): Promise<Workspace> {
+  const res = await cloudPost<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}/icon`, { data });
+  return res.data;
+}
+
+async function removeIcon(workspaceId: string): Promise<Workspace> {
+  const res = await cloudDelete<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}/icon`);
+  return res.data;
+}
+
 async function remove(workspaceId: string): Promise<void> {
   await cloudDelete(`/api/workspaces/${workspaceId}`);
 }
@@ -189,6 +199,8 @@ export const WorkspacesService = {
   list,
   create,
   update,
+  uploadIcon,
+  removeIcon,
   remove,
   listMembers,
   updateMemberRole,

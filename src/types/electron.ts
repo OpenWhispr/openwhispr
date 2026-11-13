@@ -855,6 +855,8 @@ export interface Workspace {
   // Absent on API responses that predate capabilities; read through workspaceCan().
   capabilities?: WorkspaceCapabilities;
   has_subscription?: boolean;
+  // Absent on API responses that predate workspace icons.
+  icon_url?: string | null;
 }
 
 export interface OwnedMemberContent {
