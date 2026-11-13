@@ -56,6 +56,29 @@ test("standalone special keys are allowed without a modifier", async () => {
   assert.equal(validateHotkey("Esc", "linux").valid, true);
 });
 
+test("extended function keys validate and normalize on Linux", async () => {
+  const { validateHotkey, normalizeHotkey } = await load();
+
+  for (let number = 13; number <= 24; number++) {
+    const key = `F${number}`;
+    assert.equal(validateHotkey(key, "linux").valid, true, key);
+    assert.equal(validateHotkey(`Control+${key}`, "linux").valid, true, key);
+    assert.equal(normalizeHotkey(key.toLowerCase(), "linux"), key);
+    assert.equal(normalizeHotkey(`ctrl+f${number}`, "linux"), `Control+${key}`);
+  }
+});
+
+test("extended function-key tokens survive display and list serialization", async () => {
+  const { formatHotkeyLabelForPlatform, parseHotkeyList, serializeHotkeyList } =
+    await import("../../src/utils/hotkeys.ts");
+
+  assert.equal(formatHotkeyLabelForPlatform("F24", "linux"), "F24");
+  assert.equal(formatHotkeyLabelForPlatform("Control+F24", "linux"), "Ctrl+F24");
+  const list = parseHotkeyList("F13,Control+F24");
+  assert.deepEqual(list, ["F13", "Control+F24"]);
+  assert.equal(serializeHotkeyList(list), "F13,Control+F24");
+});
+
 test("mixing left and right versions of the same modifier is rejected", async () => {
   const { validateHotkey } = await load();
 
