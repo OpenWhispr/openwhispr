@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { execFileSync } = require("child_process");
 const debugLogger = require("./debugLogger");
 const { i18nMain } = require("./i18nMain");
 
@@ -11,8 +12,43 @@ const REGISTRY_INTERFACE = "org.freedesktop.host.portal.Registry";
 const APP_ID = "open-whispr";
 const DBUS_CALL_TIMEOUT_MS = 5000;
 const PORTAL_REQUEST_TIMEOUT_MS = 120000;
+const KEYBOARD_SCHEMA = "org.gnome.desktop.peripherals.keyboard";
+const GSETTINGS_TIMEOUT_MS = 2000;
+// Slack past the next expected key repeat before a silent hold counts as released.
+const RELEASE_GRACE_MS = 300;
 
 let dbus = null;
+
+function readGsetting(key) {
+  return execFileSync("gsettings", ["get", KEYBOARD_SCHEMA, key], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: GSETTINGS_TIMEOUT_MS,
+  }).trim();
+}
+
+function parseUint(value) {
+  const match = /^(?:uint32\s+)?(\d+)$/.exec(value);
+  return match ? Number(match[1]) : NaN;
+}
+
+// Mutter repeats a held shortcut's Activated signal at the user's key-repeat
+// rate. Returns null when repeat is off or the settings can't be read.
+function readGnomeKeyRepeat() {
+  try {
+    if (readGsetting("repeat") !== "true") return null;
+    const delayMs = parseUint(readGsetting("delay"));
+    const intervalMs = parseUint(readGsetting("repeat-interval"));
+    if (!(delayMs > 0) || !(intervalMs > 0)) return null;
+    return { delayMs, intervalMs };
+  } catch (err) {
+    debugLogger.log(
+      "[GnomeGlobalShortcutsPortal] Could not read key repeat settings:",
+      err.message
+    );
+    return null;
+  }
+}
 
 function getDBus() {
   if (dbus) return dbus;
@@ -41,6 +77,8 @@ class GnomeGlobalShortcutsPortal {
   constructor({
     callTimeoutMs = DBUS_CALL_TIMEOUT_MS,
     requestTimeoutMs = PORTAL_REQUEST_TIMEOUT_MS,
+    readKeyRepeat = readGnomeKeyRepeat,
+    releaseGraceMs = RELEASE_GRACE_MS,
   } = {}) {
     this.bus = null;
     this.sessionHandle = null;
@@ -50,6 +88,11 @@ class GnomeGlobalShortcutsPortal {
     this.deactivationListener = null;
     this.callTimeoutMs = callTimeoutMs;
     this.requestTimeoutMs = requestTimeoutMs;
+    this.readKeyRepeat = readKeyRepeat;
+    this.releaseGraceMs = releaseGraceMs;
+    this.keyRepeat = null;
+    this.repeatsObserved = false;
+    this.hold = null;
   }
 
   async init() {
@@ -104,6 +147,8 @@ class GnomeGlobalShortcutsPortal {
 
     await this.unregisterKeybinding();
     this.callback = callback;
+    this.keyRepeat = this.readKeyRepeat();
+    this.repeatsObserved = false;
 
     try {
       const sessionToken = this._newToken();
@@ -162,6 +207,7 @@ class GnomeGlobalShortcutsPortal {
 
   async unregisterKeybinding() {
     this._removeShortcutListeners();
+    this._endHold();
     this.callback = null;
     if (!this.sessionHandle || !this.bus) return;
 
@@ -197,11 +243,12 @@ class GnomeGlobalShortcutsPortal {
     );
     this.activationListener = ([sessionHandle, shortcutId]) => {
       if (sessionHandle === this.sessionHandle && shortcutId === "dictation") {
-        this.callback?.(undefined, "down");
+        this._onActivated();
       }
     };
     this.deactivationListener = ([sessionHandle, shortcutId]) => {
       if (sessionHandle === this.sessionHandle && shortcutId === "dictation") {
+        this._endHold();
         this.callback?.(undefined, "up");
       }
     };
@@ -216,6 +263,48 @@ class GnomeGlobalShortcutsPortal {
       this._removeShortcutListeners();
       throw err;
     }
+  }
+
+  // Mutter sends Deactivated only when the shortcut's own key is released while
+  // its modifiers are still down. Letting go of Ctrl before D (the usual way)
+  // sends nothing, so Hold never stops. The repeated Activated signals do stop
+  // at that moment, so a hold that goes quiet past its next expected repeat is
+  // released. This waits until the registered shortcut has repeated once, so a
+  // GNOME that doesn't repeat them, or a key that never repeats (Pause, Scroll
+  // Lock), keeps waiting for Deactivated.
+  _onActivated() {
+    const isRepeat = this.hold !== null;
+    if (isRepeat) this.repeatsObserved = true;
+    else this.hold = { timer: null };
+    this._armReleaseWatchdog(isRepeat);
+    this.callback?.(undefined, "down");
+  }
+
+  _armReleaseWatchdog(isRepeat) {
+    const hold = this.hold;
+    clearTimeout(hold.timer);
+    hold.timer = null;
+    if (!this.keyRepeat || !this.repeatsObserved) return;
+
+    const expectedGapMs = isRepeat ? this.keyRepeat.intervalMs : this.keyRepeat.delayMs;
+    const timer = setTimeout(() => {
+      // Timers run before pending socket reads, so after a busy event loop let
+      // queued repeat signals land before deciding the key was released.
+      setImmediate(() => {
+        if (this.hold !== hold || hold.timer !== timer) return;
+        this._endHold();
+        debugLogger.debug("[GnomeGlobalShortcutsPortal] Hold released without Deactivated");
+        this.callback?.(undefined, "up");
+      });
+    }, expectedGapMs + this.releaseGraceMs);
+    timer.unref?.();
+    hold.timer = timer;
+  }
+
+  _endHold() {
+    if (!this.hold) return;
+    clearTimeout(this.hold.timer);
+    this.hold = null;
   }
 
   _removeShortcutListeners() {
