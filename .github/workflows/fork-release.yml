@@ -77,7 +77,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
       - run: npm ci
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install --clean
