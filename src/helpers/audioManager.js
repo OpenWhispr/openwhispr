@@ -9,6 +9,7 @@ import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
+import { getWhisperLanguagePrimer, withLanguagePrimer } from "../config/whisperLanguagePrimers";
 import { convertToWav, needsWavConversion } from "../utils/audioContainer";
 import {
   applyChineseScript,
@@ -2507,8 +2508,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       const matchesAnyEchoPrompt = (text) =>
         echoPrompts.some((prompt) => matchesDictionaryPrompt(text, prompt));
-      if (dictionaryPrompt) {
-        options.initialPrompt = dictionaryPrompt;
+      const languagePrimer = getWhisperLanguagePrimer(language);
+      if (languagePrimer) echoPrompts.push(languagePrimer);
+      const initialPrompt = withLanguagePrimer(language, dictionaryPrompt);
+      if (languagePrimer && dictionaryPrompt) echoPrompts.push(initialPrompt);
+      if (initialPrompt) {
+        options.initialPrompt = initialPrompt;
       }
 
       logger.debug(

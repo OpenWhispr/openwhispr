@@ -1,0 +1,107 @@
+# Unsigned release builds for this fork: .deb + .AppImage (Linux x64),
+# .dmg (macOS arm64 + x64, not notarized) and .apk (Android, debug-keystore signed).
+# Trigger: push a tag like `gr-v1.2.3`, or run manually from the Actions tab.
+name: Fork Release (unsigned)
+
+on:
+  push:
+    tags: ["gr-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    env:
+      OPENWHISPR_VERIFY_SQLITE_BASELINE: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: System deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config libgtk-3-0 libnss3 libasound2
+      - run: npm ci
+      - run: npm run prebuild:linux
+      - name: Build .deb + .AppImage
+        run: npm run build:renderer && npx electron-builder --linux deb AppImage --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.deb
+            dist/*.AppImage
+
+  mac:
+    strategy:
+      matrix:
+        arch: [arm64, x64]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run prebuild:mac
+      - name: Build .dmg (unsigned)
+        run: npm run build:renderer && npx electron-builder --mac dmg --${{ matrix.arch }} --publish never -c.mac.identity=null -c.mac.notarize=false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-${{ matrix.arch }}
+          path: dist/*.dmg
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: openwhispr-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: openwhispr-mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: npm ci
+      - name: Expo prebuild
+        run: npx expo prebuild --platform android --no-install --clean
+      - name: Build release .apk
+        working-directory: openwhispr-mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Rename apk
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/*.apk "out/OpenWhispr-${GITHUB_REF_NAME//\//-}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: openwhispr-mobile/out/*.apk
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [linux, mac, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          files: artifacts/*

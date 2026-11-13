@@ -26,7 +26,7 @@ import { KeyboardSwitchHelpSheet } from './KeyboardSwitchHelpSheet';
 // the light-mode `label` token; in dark mode the highlight still resolves to
 // brand blue + white text (the unselected row color comes from the un-animated
 // child <Text> below via Tailwind).
-const HIGHLIGHT_BG = '#007AFF';
+const HIGHLIGHT_BG = '#2F5BEA';
 const HIGHLIGHT_TEXT = '#FFFFFF';
 const UNHIGHLIGHTED_TEXT = '#000000';
 const TRANSPARENT = 'rgba(0,0,0,0)';
