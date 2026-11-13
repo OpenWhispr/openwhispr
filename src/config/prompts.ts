@@ -14,6 +14,7 @@ export {
   getDefaultPromptText,
   appendDictionarySuffix,
   appendScreenContextSuffix,
+  appendPlainTextResponseSuffix,
   wrapCleanupTranscript,
 } from "./prompts/index";
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./prompts/registry";
@@ -109,7 +110,6 @@ const TOOL_GROUPS: Record<string, string> = {
   update_snippets: "The user's snippets and dictionary",
   update_dictionary: "The user's snippets and dictionary",
   copy_to_clipboard: "Clipboard",
-  look_at_screen: "The user's screen",
   load_skill: "The user's skills",
   propose_skill: "The user's skills",
   update_skill: "The user's skills",

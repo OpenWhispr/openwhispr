@@ -51,31 +51,38 @@ export async function editSelectedText(
     provider: target.provider,
   });
   const local = provider === "local";
-  const marker = local ? "" : createSelectionCompletionMarker();
+  const screenContext =
+    attachment && attachScreenContext && isScreenContextAllowed(usePolicyStore.getState())
+      ? { data: attachment.image, mediaType: attachment.mediaType }
+      : undefined;
+  // Cloud's vision chain can omit a nonce, and /reason does not expose its
+  // finish reason. JSON rejects interrupted strings without server finish metadata.
+  const usesJsonResponse = local || (provider === "openwhispr" && Boolean(screenContext));
+  const marker = usesJsonResponse ? "" : createSelectionCompletionMarker();
   const dictionary = getDictionaryHintWords(settings);
   const toneSentence = settings.toneStyleEnabled
     ? selectionEditToneSentence(resolveDictationToneStyle(settings.toneStyles, appCategory ?? null))
     : "";
-  const systemPrompt = local
+  const cloudBasePrompt = [
+    resolvePrompt("dictationAgent", {
+      agentName,
+      language: settings.preferredLanguage,
+      customDictionary: dictionary,
+      uiLanguage: settings.uiLanguage,
+    }),
+    toneSentence,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const systemPrompt = usesJsonResponse
     ? buildLocalSelectionEditSystemPrompt({
-        customPrompt: settings.customPrompts.dictationAgent.replaceAll("{{agentName}}", agentName),
-        dictionary,
-        toneSentence,
+        customPrompt: local
+          ? settings.customPrompts.dictationAgent.replaceAll("{{agentName}}", agentName)
+          : cloudBasePrompt,
+        dictionary: local ? dictionary : [],
+        toneSentence: local ? toneSentence : "",
       })
-    : buildSelectionEditSystemPrompt(
-        [
-          resolvePrompt("dictationAgent", {
-            agentName,
-            language: settings.preferredLanguage,
-            customDictionary: dictionary,
-            uiLanguage: settings.uiLanguage,
-          }),
-          toneSentence,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-        marker
-      );
+    : buildSelectionEditSystemPrompt(cloudBasePrompt, marker);
   const config: ReasoningConfig = {
     inferenceScope: "dictationAgent",
     requiresAgent: true,
@@ -95,18 +102,23 @@ export async function editSelectedText(
       : {}),
     requestId: crypto.randomUUID(),
   };
-  if (attachment && attachScreenContext && isScreenContextAllowed(usePolicyStore.getState())) {
-    config.screenContext = { data: attachment.image, mediaType: attachment.mediaType };
-    config.systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
+  if (screenContext) {
+    config.screenContext = screenContext;
+    const screenPrompt = appendScreenContextSuffix(cloudBasePrompt, settings.uiLanguage);
+    config.systemPrompt = local
+      ? appendScreenContextSuffix(systemPrompt, settings.uiLanguage)
+      : usesJsonResponse
+        ? buildLocalSelectionEditSystemPrompt({ customPrompt: screenPrompt })
+        : buildSelectionEditSystemPrompt(screenPrompt, marker);
   }
-  const cancel = () => {
+  const cancel = (): void => {
     if (local) void window.electronAPI?.cancelLocalReasoning?.(config.requestId);
   };
   signal.throwIfAborted();
   signal.addEventListener("abort", cancel, { once: true });
-  const run = (runConfig: ReasoningConfig) =>
+  const run = (runConfig: ReasoningConfig): Promise<string> =>
     ReasoningService.processText(
-      local
+      usesJsonResponse
         ? buildLocalSelectionEditUserPrompt(instruction, selectedText)
         : buildSelectionEditUserPrompt(instruction, selectedText),
       target.model,
@@ -125,7 +137,7 @@ export async function editSelectedText(
     }
     signal.throwIfAborted();
     if (isSelectionQuestionResponse(result, marker)) return null;
-    return local
+    return usesJsonResponse
       ? extractLocalSelectionEditReplacement(result)
       : extractSelectionEditReplacement(result, marker);
   } finally {

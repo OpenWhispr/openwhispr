@@ -743,7 +743,7 @@ class ReasoningService extends BaseReasoningService {
     provider: string,
     config: ReasoningConfig & { systemPrompt: string },
     abortController: AbortController
-  ): AsyncGenerator<string, void, unknown> {
+  ): AsyncGenerator<string, string | undefined, unknown> {
     const route = resolveChatRoute({
       provider,
       lanUrl: config.lanUrl,
@@ -930,6 +930,7 @@ class ReasoningService extends BaseReasoningService {
 
     const decoder = new TextDecoder();
     let buffer = "";
+    let finishReason: string | undefined;
     const stripThinking = (isLocalProvider || isLanChat) && config.disableThinking !== false;
     const filterThinkTags = stripThinking ? createStreamingThinkFilter() : null;
 
@@ -937,15 +938,14 @@ class ReasoningService extends BaseReasoningService {
       while (true) {
         const { done, value } = await reader.read();
         assertStreamAllowed();
-        if (done) break;
 
         // Reset on bytes, including keepalives, partial SSE frames and hidden
         // reasoning. A reply may stream for much longer than the idle timeout.
-        if (value.byteLength > 0) resetTimeout(timeoutSeconds);
+        if (!done && value.byteLength > 0) resetTimeout(timeoutSeconds);
 
-        buffer += decoder.decode(value, { stream: true });
+        buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        buffer = done ? "" : lines.pop() || "";
 
         for (const line of lines) {
           assertStreamAllowed();
@@ -957,13 +957,17 @@ class ReasoningService extends BaseReasoningService {
             const trailing = filterThinkTags?.finish();
             if (trailing) yield trailing;
             assertStreamAllowed();
-            return;
+            return finishReason;
           }
 
           let content: string | undefined;
           try {
-            const parsed = JSON.parse(data);
-            content = parsed.choices?.[0]?.delta?.content;
+            const parsed: {
+              choices?: Array<{ delta?: { content?: string }; finish_reason?: unknown }>;
+            } = JSON.parse(data);
+            const choice = parsed.choices?.[0];
+            if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
+            content = choice?.delta?.content;
           } catch {
             // skip malformed SSE chunks
             continue;
@@ -975,11 +979,13 @@ class ReasoningService extends BaseReasoningService {
           yield content;
           assertStreamAllowed();
         }
+        if (done) break;
       }
 
       const trailing = filterThinkTags?.finish();
       if (trailing) yield trailing;
       assertStreamAllowed();
+      return finishReason;
     } catch (error) {
       assertStreamAllowed();
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
@@ -1057,13 +1063,28 @@ class ReasoningService extends BaseReasoningService {
             config,
             abortController
           );
-          for await (const text of contentGen) {
-            assertStreamAllowed();
-            yield { type: "content", text };
+          let finishReason: string | undefined;
+          try {
+            while (true) {
+              const chunk = await contentGen.next();
+              if (chunk.done) {
+                finishReason = chunk.value;
+                break;
+              }
+              assertStreamAllowed();
+              yield { type: "content", text: chunk.value };
+            }
+          } finally {
+            // Manual iteration retains the final provider metadata, and must
+            // still release the reader when the consumer stops mid-response.
+            await contentGen.return(undefined);
           }
           assertStreamAllowed();
           transportComplete = true;
-          yield { type: "done", finishReason: abortController.signal.aborted ? "abort" : "stop" };
+          yield {
+            type: "done",
+            finishReason: abortController.signal.aborted ? "abort" : (finishReason ?? "unknown"),
+          };
         } catch (error) {
           if (abortController.signal.aborted && (error as Error).name === "AbortError") return;
           throw error;
@@ -1536,28 +1557,6 @@ class ReasoningService extends BaseReasoningService {
     })();
 
     return { stream: generator, wasCancelled: () => cancelled };
-  }
-
-  /** One Cloud request about a screenshot, with no tools: the vision chain's answer as text. */
-  async askAboutScreen(
-    question: string,
-    screenContext: { data: string; mediaType: string },
-    systemPrompt: string,
-    signal?: AbortSignal
-  ): Promise<string> {
-    const { controller, release } = this.createStreamOperation(signal);
-    try {
-      const { stream } = this.streamFromIPC(
-        [{ role: "user", content: question }],
-        { systemPrompt, screenContext },
-        controller.signal
-      );
-      let answer = "";
-      for await (const ev of stream) if (ev.type === "content") answer += ev.text as string;
-      return answer;
-    } finally {
-      release();
-    }
   }
 
   async *processTextStreamingCloud(

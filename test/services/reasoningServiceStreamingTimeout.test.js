@@ -95,7 +95,12 @@ async function startStream(t, provider, { holdHeaders = false, status = 200 } = 
       await flush();
     },
     finish: async (withDone = true) => {
-      if (withDone) controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+      if (withDone) {
+        const completion = { choices: [{ delta: {}, finish_reason: "stop" }] };
+        controller.enqueue(
+          new TextEncoder().encode(`data: ${JSON.stringify(completion)}\n\ndata: [DONE]\n\n`)
+        );
+      }
       controller.close();
       return outcome;
     },

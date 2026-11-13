@@ -47,6 +47,113 @@ test("selection edits send the screenshot on their first call and validate compl
   assert.equal(calls[0][3].requireCompleteOutput, true);
 });
 
+test("the completion marker's instruction stays last, after the screen-context block", async (t) => {
+  const { service, editSelectedText } = await editor(t);
+  const configs = [];
+  t.mock.method(service, "processText", async (...args) => {
+    configs.push(args[3]);
+    if (configs.length === 1) throw new Error("image rejected");
+    return `Revised.${args[3].systemPrompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/)[0]}`;
+  });
+  await editSelectedText("Elaborate this", "Short.", {
+    attachment: { image: "fixture-image", mediaType: "image/jpeg" },
+    signal: new AbortController().signal,
+  });
+  assert.equal(configs.length, 2);
+  for (const { systemPrompt } of configs) {
+    const lastLine = systemPrompt.trimEnd().split("\n").at(-1);
+    assert.match(lastLine, /append this exact completion marker.*__OPENWHISPR_SELECTION_COMPLETE_/);
+  }
+  const withScreen = configs[0].systemPrompt;
+  assert.ok(withScreen.indexOf("SCREEN CONTEXT:") < withScreen.indexOf("SELECTION EDITING MODE:"));
+});
+
+test("a Cloud screenshot edit validates its JSON envelope; text-only and BYOK require a nonce", async (t) => {
+  const cloud = await editor(t, { dictationAgentMode: "openwhispr", isSignedIn: true });
+  let response = '{"replacement":"Revised paragraph."}';
+  const calls = [];
+  t.mock.method(cloud.service, "processText", async (...args) => {
+    calls.push(args);
+    return response;
+  });
+  const signal = new AbortController().signal;
+  const attachment = { image: "fixture-image", mediaType: "image/jpeg" };
+  assert.equal(
+    await cloud.editSelectedText("Elaborate this", "Short.", { attachment, signal }),
+    "Revised paragraph."
+  );
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0][3].screenContext);
+  assert.equal(calls[0][3].responseFormat, undefined);
+  assert.match(calls[0][0], /Selected document \(JSON string\):\n"Short\."/);
+  assert.match(calls[0][3].systemPrompt, /Return exactly one JSON object/);
+  const literalDocument = '  "quoted" \\path\n```ts\nconst value = "literal";\n```\n';
+  response = JSON.stringify({ replacement: literalDocument });
+  assert.equal(
+    await cloud.editSelectedText("Rewrite this", "Short.", { attachment, signal }),
+    literalDocument
+  );
+  for (response of [
+    "Revised paragraph.",
+    '{"replacement":"Only the first paragraph',
+    '{"replacement":"Only the first paragraph"',
+    '{"replacement":""}',
+  ]) {
+    await assert.rejects(
+      cloud.editSelectedText("Elaborate this", "Short.", { attachment, signal })
+    );
+  }
+  response = '{"replacement":"Revised paragraph."}';
+  await assert.rejects(cloud.editSelectedText("Elaborate this", "Short.", { signal }), {
+    code: "SELECTION_EDIT_INVALID_RESPONSE",
+  });
+  response = '{"replacement":"__OPENWHISPR_SELECTION_QUESTION__"}';
+  assert.equal(
+    await cloud.editSelectedText("Explain this", "Short.", { attachment, signal }),
+    null
+  );
+
+  const byok = await editor(t);
+  t.mock.method(byok.service, "processText", async () => "Revised paragraph.");
+  await assert.rejects(byok.editSelectedText("Elaborate this", "Short.", { attachment, signal }), {
+    code: "SELECTION_EDIT_INVALID_RESPONSE",
+  });
+});
+
+test("a Cloud screenshot retry rejects raw prose and keeps the complete JSON contract", async (t) => {
+  const { service, editSelectedText } = await editor(t, {
+    dictationAgentMode: "openwhispr",
+    isSignedIn: true,
+  });
+  let response = "I can't see your screen, but here is a fuller version.";
+  const configs = [];
+  t.mock.method(service, "processText", async (_text, _model, _agent, config) => {
+    configs.push(config);
+    if (config.screenContext) throw new Error("image rejected");
+    return response;
+  });
+  await assert.rejects(
+    editSelectedText("Elaborate this", "Short.", {
+      attachment: { image: "fixture-image", mediaType: "image/jpeg" },
+      signal: new AbortController().signal,
+    }),
+    { code: "SELECTION_EDIT_INVALID_RESPONSE" }
+  );
+  assert.equal(configs.length, 2);
+  response = '{"replacement":"Complete fuller version."}';
+  assert.equal(
+    await editSelectedText("Elaborate this", "Short.", {
+      attachment: { image: "fixture-image", mediaType: "image/jpeg" },
+      signal: new AbortController().signal,
+    }),
+    "Complete fuller version."
+  );
+  assert.equal(configs.length, 4);
+  assert.match(configs[2].systemPrompt, /SCREEN CONTEXT:/);
+  assert.doesNotMatch(configs[3].systemPrompt, /SCREEN CONTEXT:/);
+  for (const config of configs) assert.match(config.systemPrompt, /Return exactly one JSON object/);
+});
+
 test("a screenshot the model refuses costs the edit nothing: it runs once more without it", async (t) => {
   const { service, editSelectedText } = await editor(t);
   const configs = [];
@@ -138,25 +245,33 @@ test("the local editor uses its JSON contract and drops an answer after cancella
   });
 });
 
-for (const mode of ["providers", "local"]) {
+for (const mode of ["providers", "local", "openwhispr"]) {
   test(`the ${mode} selection editor preserves the selected app's Tone & Style`, async (t) => {
     const { service, editSelectedText } = await editor(t, {
       dictationAgentMode: mode,
+      isSignedIn: mode === "openwhispr",
       toneStyleEnabled: true,
       toneStyles: { personal: "very_casual", work: "formal", email: "formal", other: "formal" },
+      customDictionary: ["ZephyrWidget"],
+      customPrompts: { dictationAgent: "Use British spelling for {{agentName}}." },
     });
     let prompt;
     t.mock.method(service, "processText", async (_text, _model, _name, config) => {
       prompt = config.systemPrompt;
       const marker = prompt.match(/__OPENWHISPR_SELECTION_COMPLETE_[0-9a-f-]+/)?.[0] ?? "";
-      return mode === "local" ? '{"replacement":"edited"}' : `edited${marker}`;
+      return mode === "providers" ? `edited${marker}` : '{"replacement":"edited"}';
     });
     await editSelectedText("Rewrite this", "Original", {
       appCategory: "personal",
+      ...(mode === "openwhispr"
+        ? { attachment: { image: "fixture-image", mediaType: "image/jpeg" } }
+        : {}),
       signal: new AbortController().signal,
     });
     assert.match(prompt, /user's personal message style/);
     assert.match(prompt, /all lowercase/);
     assert.match(prompt, /code and commands.*never restyled/);
+    assert.match(prompt, /Use British spelling/);
+    assert.match(prompt, /ZephyrWidget/);
   });
 }

@@ -45,6 +45,7 @@ export const SELECTION_EDIT_RESPONSE_FORMAT = {
   },
 };
 
+// Shared by local models and Cloud screenshot edits, whose vision chain may omit a nonce.
 export function buildLocalSelectionEditSystemPrompt({
   customPrompt = "",
   dictionary = [],

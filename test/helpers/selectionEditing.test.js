@@ -111,6 +111,24 @@ test("the marker contract is exact, unique, and never demonstrated with a traili
   }
 });
 
+test("an unmarked edit is rejected even with the former optional-marker option", async () => {
+  const { SELECTION_QUESTION_MARKER, extractSelectionEditReplacement } = await load();
+  const marker = "__OPENWHISPR_SELECTION_COMPLETE_test";
+  const cloud = { markerOptional: true };
+  for (const output of [
+    "edit",
+    '{"replacement":"unfinished',
+    "edit__OPENWHISPR_SELECTION_COMPL",
+    `edit${marker.slice(2)}`,
+    `${SELECTION_QUESTION_MARKER}.`,
+    `\`${SELECTION_QUESTION_MARKER}\``,
+  ]) {
+    assert.throws(() => extractSelectionEditReplacement(output, marker, cloud), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+  }
+});
+
 test("local JSON replacement preserves document bytes and rejects ambiguous envelopes", async () => {
   const { extractLocalSelectionEditReplacement } = await load();
   const replacement = '  "quoted" \\path\n<think>literal document</think> ☕\t\r\n';
