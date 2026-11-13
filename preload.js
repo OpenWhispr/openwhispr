@@ -742,6 +742,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   saveAllKeysToEnv: () => ipcRenderer.invoke("save-all-keys-to-env"),
   syncStartupPreferences: (prefs) => ipcRenderer.invoke("sync-startup-preferences", prefs),
+  getDictationLayoutLanguage: () => ipcRenderer.invoke("get-dictation-layout-language"),
 
   // Local reasoning
   processLocalReasoning: (text, modelId, agentName, config) =>
