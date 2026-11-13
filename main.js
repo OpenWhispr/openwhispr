@@ -2232,11 +2232,15 @@ if (gotSingleInstanceLock) {
           : undefined,
         new Promise((resolve) => setTimeout(resolve, 1500)),
       ]),
-    ]).finally(() => app.exit(0));
+    ]).finally(() => {
+      ipcHandlers?._noteFilesSync?.flushSync();
+      app.exit(0);
+    });
   });
 }
 
 function performSyncTeardown() {
+  ipcHandlers?._noteFilesSync?.flushSync();
   registryLoader?.stop();
   disposeRegistryIpc?.();
   disposeRegistryIpc = null;

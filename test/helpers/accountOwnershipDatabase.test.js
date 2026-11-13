@@ -108,6 +108,7 @@ function createDatabaseManager() {
       id TEXT PRIMARY KEY,
       account_id TEXT
     );
+    CREATE TABLE workspace_names (workspace_id TEXT PRIMARY KEY, name TEXT NOT NULL);
     INSERT INTO spaces (id, kind) VALUES (1, 'private'), (2, 'team'), (3, 'team');
     INSERT INTO space_accounts (space_id, account_id) VALUES
       (2, 'account-a'),

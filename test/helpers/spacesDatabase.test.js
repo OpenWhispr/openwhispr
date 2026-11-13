@@ -77,6 +77,167 @@ function createTestTeamSpace(db, { name, emoji = null } = {}) {
   return { success: true, space: db.getSpace(result.lastInsertRowid) };
 }
 
+test("the mirror's containers span every account and leave deleted rows out", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const { space } = createTestTeamSpace(db, { name: "Engineering" });
+  db.db.prepare("UPDATE spaces SET workspace_id = ? WHERE id = ?").run("w-1", space.id);
+  const kept = db.createFolder("General", space.id).folder;
+  const removed = db.createFolder("Old", space.id).folder;
+  db.deleteFolder(removed.id);
+  db.setActiveAccountId("another-account");
+  db.createFolder("Theirs");
+
+  const { spaces, folders, workspaceNames } = db.getMirrorContainers();
+
+  assert.deepEqual(workspaceNames, {});
+  assert.equal(spaces.find((row) => row.id === space.id).workspace_id, "w-1");
+  assert.ok(spaces.some((row) => row.kind === "private"));
+  assert.ok(folders.some((row) => row.id === kept.id));
+  assert.ok(folders.some((row) => row.name === "Theirs" && row.account_id === "another-account"));
+  assert.equal(
+    folders.some((row) => row.id === removed.id),
+    false
+  );
+});
+
+test("saving workspace names reports how many changed", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const first = [
+    { id: "w-1", name: "Acme" },
+    { id: "w-2", name: "Beta" },
+  ];
+  assert.equal(db.setWorkspaceNames(first), 2);
+  assert.equal(db.setWorkspaceNames(first), 0);
+  assert.equal(db.setWorkspaceNames([{ id: "w-1", name: "Acme Inc" }]), 1);
+  assert.deepEqual(db.getMirrorContainers().workspaceNames, { "w-1": "Acme Inc", "w-2": "Beta" });
+});
+
+test("the mirror's record of written files is kept per location", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  db.recordMirrorFile("/a", {
+    relPath: "Private notes/1-x.md",
+    ownerId: 1,
+    kind: "note",
+    hash: "h1",
+  });
+  db.recordMirrorFile("/a", {
+    relPath: "Private notes/1-x.md",
+    ownerId: 1,
+    kind: "note",
+    hash: "h2",
+  });
+  db.recordMirrorFile("/a", { relPath: "Private notes/Work", ownerId: 7, kind: "dir", hash: null });
+  db.recordMirrorFile("/b", {
+    relPath: "Private notes/1-x.md",
+    ownerId: 1,
+    kind: "note",
+    hash: "h3",
+  });
+
+  assert.deepEqual(db.getMirrorFiles("/a", 1), [
+    { relPath: "Private notes/1-x.md", ownerId: 1, kind: "note", hash: "h2" },
+  ]);
+  assert.equal(db.getMirrorFiles("/a").length, 2);
+  db.forgetMirrorFile("/a", "Private notes/1-x.md");
+  assert.deepEqual(
+    db.getMirrorFiles("/a").map((entry) => entry.kind),
+    ["dir"]
+  );
+  assert.equal(db.getMirrorFiles("/b").length, 1);
+});
+
+test("the mirror's note summaries flag a transcript without loading it", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const plain = db.saveNote("Plain", "content").note;
+  const empty = db.saveNote("Empty", "c", "personal", null, null, null, null, "[]").note;
+  const withTranscript = db.saveNote(
+    "Call",
+    "c",
+    "meeting",
+    null,
+    null,
+    null,
+    null,
+    JSON.stringify([{ text: "hi" }])
+  ).note;
+  const gone = db.saveNote("Gone", "content").note;
+  db.deleteNote(gone.id);
+  const notArrays = ["null", "{}", "[ ]", "not json"].map(
+    (transcript) => db.saveNote("Odd", "c", "personal", null, null, null, null, transcript).note
+  );
+
+  const byId = new Map(db.getMirrorNoteSummaries().map((row) => [row.id, row]));
+  assert.equal(byId.get(plain.id).has_transcript, 0);
+  assert.equal(byId.get(empty.id).has_transcript, 0);
+  assert.equal(byId.get(withTranscript.id).has_transcript, 1);
+  assert.equal(byId.get(withTranscript.id).title, "Call");
+  assert.equal(byId.has(gone.id), false);
+  for (const note of notArrays) assert.equal(byId.get(note.id).has_transcript, 0);
+  assert.equal("content" in byId.get(plain.id), false);
+});
+
+test("the mirror's existence check sees every account's notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const mine = db.saveNote("Mine", "content").note;
+  db.setActiveAccountId("another-account");
+  const theirs = db.saveNote("Theirs", "content").note;
+
+  assert.deepEqual(
+    db.getExistingNoteIds([mine.id, theirs.id, 987654]).sort((left, right) => left - right),
+    [mine.id, theirs.id].sort((left, right) => left - right)
+  );
+});
+
+test("deleting an account forgets workspace names no space on the device uses", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const { space } = createTestTeamSpace(db, { name: "Engineering" });
+  db.db.prepare("UPDATE spaces SET workspace_id = ? WHERE id = ?").run("w-used", space.id);
+  db.setWorkspaceNames([
+    { id: "w-used", name: "Kept" },
+    { id: "w-gone", name: "Forgotten" },
+  ]);
+
+  db.deleteAccountData("test-account");
+
+  assert.deepEqual(db.getMirrorContainers().workspaceNames, { "w-used": "Kept" });
+});
+
+test("the mirror's note lookup includes deleted notes but not another account's", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+
+  const mine = db.saveNote("Mine", "content").note;
+  const deleted = db.saveNote("Gone", "content").note;
+  db.deleteNote(deleted.id);
+  const soft = db.saveNote("Tombstoned", "content").note;
+  db.db.prepare("UPDATE notes SET deleted_at = datetime('now') WHERE id = ?").run(soft.id);
+  db.setActiveAccountId("another-account");
+  const theirs = db.saveNote("Theirs", "content").note;
+  db.setActiveAccountId("test-account");
+
+  const ids = db
+    .getNotesForMirror([mine.id, deleted.id, soft.id, theirs.id, 987654])
+    .map((row) => row.id)
+    .sort((left, right) => left - right);
+
+  assert.equal(ids.includes(mine.id), true);
+  assert.equal(ids.includes(soft.id), true);
+  assert.equal(ids.includes(theirs.id), false);
+  assert.equal(ids.includes(987654), false);
+});
+
 test("spaces migration is idempotent across launches", (t) => {
   const db = createDb(t);
   if (!db) return;
@@ -311,7 +472,6 @@ test("purgeSpace leaves zero residue for the space and spares the private space"
   const result = db.purgeSpace(team.id);
   assert.ok(result.success);
   assert.deepEqual(result.noteIds, [teamNote.id]);
-  assert.deepEqual(result.folderNames, ["Vault"]);
   assert.equal(result.spaceId, team.id);
 
   // Never-synced notes exist nowhere else — relocated, not destroyed.
@@ -1444,7 +1604,6 @@ test("relocateRevokedFolder preserves dirty children and hard-deletes server-own
   const result = db.relocateRevokedFolder(folder.id, privateId, false);
   assert.ok(result.success);
   assert.equal(result.folder, null);
-  assert.equal(result.folderName, "Q3 calls");
   assert.deepEqual(result.deletedNoteIds, [clean.id]);
   assert.deepEqual(
     result.relocatedNotes.map((n) => n.id).sort((a, b) => a - b),

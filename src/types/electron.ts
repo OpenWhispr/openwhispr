@@ -2191,7 +2191,6 @@ declare global {
         code?: string;
         error?: string;
         noteIds?: number[];
-        folderNames?: string[];
         spaceId?: number;
         relocatedNotes?: NoteItem[];
         relocatedCount?: number;
@@ -2214,6 +2213,9 @@ declare global {
       ) => Promise<{ success: boolean; error?: string }>;
       noteFilesSetPath?: (path: string) => Promise<{ success: boolean; error?: string }>;
       noteFilesRebuild?: () => Promise<{ success: boolean; error?: string }>;
+      noteFilesSetWorkspaceNames?: (
+        workspaces: Array<{ id: string; name: string }>
+      ) => Promise<{ success: boolean }>;
       noteFilesGetDefaultPath?: () => Promise<string>;
       noteFilesPickFolder?: () => Promise<{ canceled: boolean; path?: string }>;
       granolaImportPickAndPreview?: () => Promise<{
@@ -2242,7 +2244,7 @@ declare global {
         bytes?: Uint8Array;
       }>;
       showNoteFile?: (noteId: number) => Promise<{ success: boolean }>;
-      showFolderInExplorer?: (folderName: string) => Promise<{ success: boolean }>;
+      showFolderInExplorer?: (folderId: number) => Promise<{ success: boolean }>;
 
       // Action operations
       getActions: () => Promise<ActionItem[]>;
@@ -4163,7 +4165,6 @@ declare global {
       ) => Promise<{
         success: boolean;
         folder?: FolderItem | null;
-        folderName?: string;
         relocatedNotes?: NoteItem[];
         deletedNoteIds?: number[];
         error?: string;
