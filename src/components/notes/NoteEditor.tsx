@@ -111,6 +111,7 @@ import {
   applyTranscriptSpeakerPatch,
   isYouSpeakerName,
   lockTranscriptSpeaker,
+  nameTranscriptSpeaker,
   serializeTranscriptSegments,
 } from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
@@ -757,13 +758,7 @@ export default function NoteEditor({
 
       const currentSegments = displaySegments.map((s) =>
         s.speaker === speakerId && (!scopeSelfSpeaker || s.recorderName === recorderName)
-          ? lockTranscriptSpeaker(s, {
-              speakerName: displayName,
-              speaker: speakerId,
-              speakerIsPlaceholder: false,
-              suggestedName: undefined,
-              suggestedProfileId: undefined,
-            })
+          ? nameTranscriptSpeaker(s, speakerId, displayName)
           : s
       );
       await persistDisplaySegments(currentSegments, !!diarizedSegments || !isRecording);

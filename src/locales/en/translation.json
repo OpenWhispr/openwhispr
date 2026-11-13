@@ -4560,6 +4560,8 @@
       "deselectAll": "Deselect all",
       "confirmed": "Confirmed",
       "nameAssigned": "Name assigned",
+      "uncertain": "Unsure",
+      "uncertainHint": "This line's speaker is uncertain – select the line to reassign it",
       "state": {
         "provisional": "Provisional",
         "confirmed": "Confirmed",

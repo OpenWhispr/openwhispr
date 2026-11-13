@@ -3927,6 +3927,8 @@
       "deselectAll": "すべて選択解除",
       "confirmed": "確認済み",
       "nameAssigned": "名前を割り当てました",
+      "uncertain": "不確か",
+      "uncertainHint": "この行の話者は不確かです。行を選択して割り当て直してください",
       "state": {
         "provisional": "仮",
         "confirmed": "確認済み",

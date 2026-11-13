@@ -42,8 +42,18 @@ let voices = new Map();
 let voicesUnreadable = false;
 let embeddingModelAvailable = false;
 let profiles = [];
+// Who really speaks when, for per-line voices: [from, to, voice] in seconds.
+let lineVoices = [];
 const speakerEmbeddingsStub = {
   isAvailable: () => embeddingModelAvailable,
+  openWindowReader: () => ({
+    embed: async (start, end) => {
+      const mid = (start + end) / 2;
+      const hit = lineVoices.find(([from, to]) => mid >= from && mid < to);
+      return hit ? new Float32Array(hit[2]) : null;
+    },
+    close: () => {},
+  }),
   extractClusterCentroids: async () => {
     if (voicesUnreadable) throw new Error("ONNX worker crashed");
     return voices;
@@ -90,7 +100,13 @@ function turns(speakers, count, seconds) {
 // line per diarized turn of 2 s or more, and returns the labelled lines.
 function diarizeMeeting(
   diarizerOutput,
-  { sessionConfig = null, source = "system", liveSpeakerState = null, liveLabel = {} } = {}
+  {
+    sessionConfig = null,
+    source = "system",
+    liveSpeakerState = null,
+    liveLabel = {},
+    lines = null,
+  } = {}
 ) {
   const diarizationManager = Object.assign(new DiarizationManager(), {
     isAvailable: () => true,
@@ -106,15 +122,16 @@ function diarizeMeeting(
     speakerDiarizationEnabled: true,
     databaseManager: { getNote: () => null, getSpeakerProfiles: () => profiles },
   });
-  const transcript = diarizerOutput
-    .filter((turn) => turn.end - turn.start >= 2)
-    .map((turn, i) => ({
+  const transcript = (lines || diarizerOutput.filter((turn) => turn.end - turn.start >= 2)).map(
+    (turn, i) => ({
       id: `line-${i}`,
       text: `line ${i}`,
       source,
       timestamp: START_MS + turn.start * 1000,
+      ...(lines ? { endTimestamp: START_MS + turn.end * 1000 } : {}),
       ...liveLabel,
-    }));
+    })
+  );
 
   return new Promise((resolve) => {
     handlers._startOrSkipDiarization(
@@ -131,6 +148,7 @@ function diarizeMeeting(
   }).then((payload) => ({
     lines: payload.segments,
     splitLiveSpeakers: payload.splitLiveSpeakers,
+    speakerEmbeddings: payload.speakerEmbeddings,
   }));
 }
 
@@ -141,6 +159,63 @@ test.beforeEach(() => {
   voicesUnreadable = false;
   embeddingModelAvailable = false;
   profiles = [];
+  lineVoices = [];
+});
+
+// Per-line voices: a short reply inside the other speaker's diarized turn gets
+// its own speaker, and a close call stays provisional with its best guess.
+test("each line takes the speaker of its own voice after the call", async () => {
+  embeddingModelAvailable = true;
+  voices = new Map([
+    ["speaker_00", [1, 0]],
+    ["speaker_01", [0, 1]],
+  ]);
+  // Diarization: speaker_00 talks 0–20 s (and missed the reply at 8 s), speaker_01 20–40 s.
+  const output = [
+    { start: 0, end: 20, speaker: "speaker_00" },
+    { start: 20, end: 40, speaker: "speaker_01" },
+  ];
+  lineVoices = [
+    [0, 7.8, [1, 0]],
+    [7.8, 9, [0, 1]],
+    [9, 20, [1, 0]],
+    [20, 34, [0, 1]],
+    [34, 36, [0.72, 0.69]],
+    [36, 40, [0, 1]],
+  ];
+  const { lines, speakerEmbeddings } = await diarizeMeeting(output, {
+    lines: [
+      { start: 0, end: 7.5 },
+      { start: 8, end: 8.6 }, // "Ja."
+      { start: 9.2, end: 19 },
+      { start: 20, end: 33 },
+      { start: 34.2, end: 35.6 }, // a close call
+      { start: 36, end: 40 },
+    ],
+  });
+  const at = (s) => lines.find((line) => line.timestamp === s);
+  assert.equal(at(0).speaker, "speaker_0");
+  assert.equal(at(8).speaker, "speaker_1");
+  assert.equal(at(8).speakerIsPlaceholder, false);
+  assert.equal(at(9.2).speaker, "speaker_0");
+  assert.equal(at(34.2).speakerIsPlaceholder, true);
+  assert.equal(at(34.2).speakerStatus, "provisional");
+  assert.ok(["speaker_0", "speaker_1"].includes(at(34.2).speaker));
+  // The renderer reads endTimestamp as epoch ms; the per-line seconds stay in main.
+  assert.ok(lines.every((line) => line.endTimestamp === undefined));
+  // Profile voices come from sure lines only.
+  assert.deepEqual(speakerEmbeddings.speaker_1, [0, 1]);
+});
+
+test("without per-line voices the diarization turns decide, as before", async () => {
+  embeddingModelAvailable = true;
+  voices = new Map([
+    ["speaker_00", [1, 0]],
+    ["speaker_01", [0, 1]],
+  ]);
+  const { lines } = await diarizeMeeting(turns(["speaker_00", "speaker_01"], 10, 8));
+  assert.deepEqual(speakersOf(lines), ["speaker_0", "speaker_1"]);
+  assert.ok(lines.every((line) => !line.speakerIsPlaceholder));
 });
 
 // #2641: with the count left at its default, every remote voice ended up as
