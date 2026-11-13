@@ -759,8 +759,12 @@
     },
     "loading": "載入中...",
     "gpu": {
-      "bannerTitle": "GPU 加速可用",
-      "bannerDescription": "啟用 GPU 加速以獲得更快的效能。",
+      "bannerTitle": "語音轉錄與本機 AI 可使用 GPU 加速",
+      "bannerDescription": "在設定中為本機 Whisper 語音轉錄與本機 AI 處理啟用 GPU 加速套件。",
+      "transcriptionTitle": "語音轉錄可使用 GPU 加速",
+      "transcriptionDescription": "使用 GPU 加速本機 Whisper 語音轉錄。",
+      "intelligenceTitle": "本機 AI 可使用 GPU 加速",
+      "intelligenceDescription": "使用獨立於 Whisper 語音轉錄的 GPU 套件，加速本機 AI 處理。",
       "enableButton": "啟用 GPU",
       "dismissButton": "暫時不要"
     },

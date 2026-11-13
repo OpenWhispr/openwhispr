@@ -78,6 +78,7 @@ import ProfileMenu from "./ProfileMenu";
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { useGpuBannerAvailability } from "../hooks/useGpuBannerAvailability";
+import GpuBannerMessage from "./GpuBannerMessage";
 import { startRecordingForNote, useCreateNote } from "../hooks/useCreateNote";
 import { useSignInCloudNudge } from "../hooks/useSignInCloudNudge";
 import {
@@ -1345,12 +1346,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                           <Zap size={16} className="text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground mb-0.5">
-                            {t("controlPanel.gpu.bannerTitle")}
-                          </p>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            {t("controlPanel.gpu.bannerDescription")}
-                          </p>
+                          <GpuBannerMessage offers={gpuAccelAvailable} />
                           <div className="flex items-center gap-3">
                             <Button
                               variant="default"
