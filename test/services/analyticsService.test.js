@@ -331,6 +331,34 @@ test("account analytics requests history once per account and not on ordinary re
   );
 });
 
+// The API answers from a copy a few minutes old only when asked. A read after
+// this device changed its own data must never be answered from it.
+test("account analytics asks for the API's copy only for a check", async (t) => {
+  const requests = [];
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        cloudApiRequest: async (request) => {
+          requests.push(request);
+          return { success: true, data: { ...VALID_SUMMARY, scope: "account", timeZone: "UTC" } };
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { getAccountAnalyticsSummary } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+
+  await getAccountAnalyticsSummary("account-a");
+  await getAccountAnalyticsSummary("account-a", "allow");
+
+  assert.deepEqual(
+    requests.map((request) =>
+      new URL(request.path, "https://api.openwhispr.com").searchParams.get("cache")
+    ),
+    ["refresh", "allow"]
+  );
+});
+
 test("account analytics retries the history trigger after a failed request", async (t) => {
   const requests = [];
   installBrowserGlobals(t, {
@@ -708,6 +736,64 @@ test("analytics drops remote-only trailing work when the view becomes hidden", a
   await Promise.resolve();
   await Promise.resolve();
   assert.equal(refreshes, 1, "hidden views discard queued remote-only refreshes");
+  dispose();
+});
+
+// Your usage may wait out a fresh summary only on a check for other devices'
+// changes, so the refresh is told which kind it is.
+test("analytics refresh tells a local change apart from a check for remote changes", async (t) => {
+  const documentListeners = new Map();
+  const timeouts = new Map();
+  let nextTimeoutId = 1;
+  let localChangeListener;
+  const fakeDocument = {
+    visibilityState: "visible",
+    addEventListener: (name, listener) => documentListeners.set(name, listener),
+    removeEventListener: () => {},
+  };
+  installBrowserGlobals(t, {
+    window: {
+      document: fakeDocument,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      setInterval: () => 1,
+      clearInterval: () => {},
+      setTimeout: (callback) => {
+        const id = nextTimeoutId++;
+        timeouts.set(id, callback);
+        return id;
+      },
+      clearTimeout: (id) => timeouts.delete(id),
+      electronAPI: {
+        onAnalyticsChanged: (listener) => {
+          localChangeListener = listener;
+          return () => {};
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { subscribeToAnalyticsRefresh } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+  const refreshes = [];
+  const dispose = subscribeToAnalyticsRefresh((dataChanged) => {
+    refreshes.push(dataChanged);
+  }, true);
+  const runDebounced = () => {
+    const [[id, callback]] = timeouts.entries();
+    timeouts.delete(id);
+    callback();
+  };
+
+  assert.deepEqual(refreshes, [true], "the mounted view loads everything");
+  await Promise.resolve();
+
+  localChangeListener();
+  assert.deepEqual(refreshes, [true, true], "a dictation loads everything");
+  await Promise.resolve();
+
+  documentListeners.get("visibilitychange")();
+  runDebounced();
+  assert.deepEqual(refreshes, [true, true, false], "a plain focus only checks for remote changes");
   dispose();
 });
 

@@ -45,7 +45,11 @@ test("Insights Sync and leaderboard participation have separate owners", () => {
 
   assert.ok(settings.includes("if (enabled) void enableInsightsSync()"));
   assert.ok(settings.includes("disableInsightsSync()"));
-  assert.ok(settings.includes("useLeaderboardParticipation()"));
+  assert.ok(
+    settings.includes(
+      'useLeaderboardParticipation({ autoRefresh: activeSection === "privacyData" })'
+    )
+  );
   assert.ok(settings.includes("join: joinLeaderboard"));
   assert.ok(settings.includes("leave: leaveLeaderboard"));
   assert.ok(settings.includes("updateLeaderboardParticipation"));
@@ -186,7 +190,7 @@ test("an unknown participation answer offers retry instead of Join", () => {
     section.indexOf('if (surface === "join")'),
     section.indexOf("const number =")
   );
-  assert.ok(retrySurface.includes("onRetry={onRefreshParticipation}"));
+  assert.ok(retrySurface.includes("onRetry={() => onRefreshParticipation()}"));
   assert.equal(retrySurface.includes("onJoin"), false);
   assert.ok(joinSurface.includes("onJoin={onJoin}"));
 });

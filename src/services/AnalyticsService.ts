@@ -32,9 +32,12 @@ let historicalRetryBlockedUntil = 0;
 export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS = 250;
 const requestedHistoryBackfillAccounts = new Set<string>();
+const pendingSummaryChanges = new Map<string | null, number>();
+let summaryChangeGeneration = 0;
 
+/** `refresh` is told whether local data changed, or whether it is only checking for remote changes. */
 export function subscribeToAnalyticsRefresh(
-  refresh: () => void | Promise<void>,
+  refresh: (dataChanged: boolean) => void | Promise<void>,
   cloudInsightsActive: boolean
 ): () => void {
   let disposed = false;
@@ -53,7 +56,7 @@ export function subscribeToAnalyticsRefresh(
 
     refreshRunning = true;
     try {
-      await refresh();
+      await refresh(!remoteOnly);
     } catch (error) {
       console.error("Refreshing analytics failed:", error);
     } finally {
@@ -124,6 +127,7 @@ async function deleteFromCloud(
   body: unknown,
   context?: AnalyticsSyncContext
 ): Promise<void> {
+  pendingSummaryChanges.set(context?.accountId ?? null, ++summaryChangeGeneration);
   if (context) {
     await cloudDeleteForAuthGeneration(path, body, context.authGeneration);
     return;
@@ -136,6 +140,7 @@ async function postToCloud<T>(
   body: unknown,
   context?: AnalyticsSyncContext
 ): Promise<T> {
+  pendingSummaryChanges.set(context?.accountId ?? null, ++summaryChangeGeneration);
   return context
     ? cloudPostForAuthGeneration<T>(path, body, context.authGeneration)
     : cloudPost<T>(path, body);
@@ -344,9 +349,19 @@ function isAnalyticsSummary(value: unknown): value is AnalyticsSummary {
   );
 }
 
+/**
+ * `allow` lets the API answer from a copy a few minutes old, for a check on
+ * other devices' changes. `refresh` reads the database and updates that copy.
+ */
+export type AccountSummaryCache = "allow" | "refresh";
+
 export async function getAccountAnalyticsSummary(
-  accountId: string | null = null
+  accountId: string | null = null,
+  cache: AccountSummaryCache = "refresh"
 ): Promise<AnalyticsSummary> {
+  // A retry can send local changes during a background check. Even an uncertain
+  // write may have landed, so keep reads fresh until one acknowledges it.
+  const changeGeneration = pendingSummaryChanges.get(accountId);
   const requestHistoryBackfill = Boolean(
     accountId && !requestedHistoryBackfillAccounts.has(accountId)
   );
@@ -355,6 +370,7 @@ export async function getAccountAnalyticsSummary(
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
   });
   if (requestHistoryBackfill) params.set("backfill", "true");
+  params.set("cache", changeGeneration === undefined ? cache : "refresh");
 
   let summary: unknown;
   try {
@@ -376,6 +392,9 @@ export async function getAccountAnalyticsSummary(
   }
   if (requestHistoryBackfill && accountId && summary.historyBackfillRetryRequired === true) {
     requestedHistoryBackfillAccounts.delete(accountId);
+  }
+  if (pendingSummaryChanges.get(accountId) === changeGeneration) {
+    pendingSummaryChanges.delete(accountId);
   }
   return summary;
 }
