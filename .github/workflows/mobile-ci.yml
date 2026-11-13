@@ -78,6 +78,11 @@ jobs:
       - name: Typecheck
         if: matrix.check == 'static'
         run: npm run typecheck
+      # EAS moves "latest" to new Xcode releases silently; 1.2.4 (40) shipped on the iOS 27 SDK and
+      # could not launch on iOS 27. A new image is a reviewed edit to the script's allowlist.
+      - name: Check EAS iOS build images
+        if: matrix.check == 'static'
+        run: npm run check:eas-ios-images
       - name: Check Expo dependencies and configuration
         if: matrix.check == 'static'
         run: npm run doctor
