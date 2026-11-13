@@ -3,6 +3,7 @@ package com.openwhispr.dictation
 import android.animation.ValueAnimator
 import android.app.*
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.graphics.Color
@@ -16,6 +17,7 @@ import android.view.*
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.io.File
 import kotlin.math.abs
 
 /**
@@ -27,7 +29,8 @@ class DictationService : Service() {
   companion object {
     var instance: DictationService? = null; private set
     var emit: ((String, Map<String, Any>) -> Unit)? = null
-    var appVisible = true
+    /** Whether one of OpenWhispr's own screens is in front. A process restarted without one has none. */
+    var appVisible = false
     var practiceVisible = false
     const val PREFERENCES = "bubble"
     private const val ERROR_TIMEOUT_MS = 15000L
@@ -62,10 +65,26 @@ class DictationService : Service() {
   private val maximumRecording = Runnable { if (state == BubbleState.LISTENING) finish(false) }
   private val dismissError = Runnable { dismiss() }
   private val unhide = Runnable { unhide() }
+  /** Events waiting for the JS pipeline, which may still be starting when a dictation ends. */
+  private val pending = BubbleEventQueue()
+  private val pipelineTimeout = Runnable {
+    if (HeadlessPipeline.ready || !pending.holdsRecording) return@Runnable
+    pending.park(); retryKept = true; setState(BubbleState.RETRY)
+  }
+  private val screens = object : Application.ActivityLifecycleCallbacks {
+    override fun onActivityResumed(activity: Activity) { appVisible = true; updateVisibility() }
+    override fun onActivityPaused(activity: Activity) { appVisible = false; updateVisibility() }
+    override fun onActivityCreated(activity: Activity, state: Bundle?) {}
+    override fun onActivityStarted(activity: Activity) {}
+    override fun onActivityStopped(activity: Activity) {}
+    override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) {}
+    override fun onActivityDestroyed(activity: Activity) {}
+  }
 
   override fun onBind(intent: Intent?) = null
   override fun onCreate() {
     super.onCreate(); instance = this
+    application.registerActivityLifecycleCallbacks(screens)
     windows = getSystemService(WINDOW_SERVICE) as WindowManager
     dockRight = preferences.getBoolean("dockRight", true)
     savedTop = preferences.getInt("top", -1).takeIf { it >= 0 }
@@ -124,8 +143,10 @@ class DictationService : Service() {
     val busy = state != BubbleState.READY || stopping
     if (appVisible && !practiceVisible) {
       if (state == BubbleState.LISTENING) finish(true)
-      if (state == BubbleState.PROCESSING) { emit?.invoke("onCancel", emptyMap()); setState(BubbleState.READY) }
-      if (state == BubbleState.RETRY || state == BubbleState.RECOVER) setState(BubbleState.READY)
+      if (state == BubbleState.PROCESSING) { deliver("onCancel"); setState(BubbleState.READY) }
+      // Dismiss, so a recording the bubble parked for Retry is deleted rather than left behind.
+      if (state == BubbleState.RETRY) dismiss()
+      if (state == BubbleState.RECOVER) setState(BubbleState.READY)
     }
     val visible = BubblePolicy.visible(appVisible, practiceVisible, InsertionService.instance != null, typing, hidden, busy)
     if (!visible && dragging) endDrag()
@@ -133,7 +154,7 @@ class DictationService : Service() {
   }
   fun leavePractice() {
     if (state == BubbleState.LISTENING) finish(true)
-    if (state == BubbleState.PROCESSING) { emit?.invoke("onCancel", emptyMap()); setState(BubbleState.READY) }
+    if (state == BubbleState.PROCESSING) { deliver("onCancel"); setState(BubbleState.READY) }
   }
   /** Opening OpenWhispr brings a hidden bubble back. */
   fun unhide() {
@@ -271,7 +292,7 @@ class DictationService : Service() {
       }
       announcement?.let { root?.announceForAccessibility(getString(it)) }
     }
-    updateVisibility()
+    updateVisibility(); syncPipeline()
   }
 
   // Gestures ---------------------------------------------------------------------------------
@@ -397,7 +418,6 @@ class DictationService : Service() {
     if (state != BubbleState.READY || stopping) return
     retryKept = false
     try {
-      check(emit != null) { "Open OpenWhispr before dictating." }
       val selected = InsertionService.instance?.captureTarget().orEmpty()
       foreground(true)
       recorder = WavRecorder(this).also { recording ->
@@ -405,11 +425,11 @@ class DictationService : Service() {
         recording.start()
       }
       setState(BubbleState.LISTENING)
-      emit?.invoke("onStart", mapOf("selection" to selected, "mode" to "dictate"))
+      deliver("onStart", mapOf("selection" to selected, "mode" to "dictate"))
       handler.postDelayed(maximumRecording, 300000)
     } catch (error: Exception) {
       recorder?.close(); recorder = null; foreground(false)
-      emit?.invoke("onError", mapOf("message" to (error.message ?: "Microphone could not start.")))
+      deliver("onError", mapOf("message" to (error.message ?: "Microphone could not start.")))
       setState(BubbleState.RETRY)
     }
   }
@@ -424,14 +444,14 @@ class DictationService : Service() {
         val result = active?.stop(cancel)
         handler.post {
           stopping = false; foreground(false)
-          if (cancel || result == null) { InsertionService.instance?.clearTarget(); emit?.invoke("onCancel", emptyMap()) }
-          else emit?.invoke("onRecording", result)
-          updateVisibility()
+          if (cancel || result == null) { InsertionService.instance?.clearTarget(); deliver("onCancel") }
+          else deliver("onRecording", result)
+          updateVisibility(); syncPipeline()
         }
       } catch (error: Exception) {
         handler.post {
           stopping = false; foreground(false); setState(BubbleState.RETRY)
-          emit?.invoke("onError", mapOf("message" to (error.message ?: "Recording failed.")))
+          deliver("onError", mapOf("message" to (error.message ?: "Recording failed.")))
         }
       } finally { active?.close() }
     }.start()
@@ -439,24 +459,53 @@ class DictationService : Service() {
   /** Retry reprocesses the recording OpenWhispr kept when there is one, otherwise it listens again. */
   private fun retry() {
     if (state != BubbleState.RETRY) return
-    if (retryKept && emit != null) {
+    if (pending.parked) {
+      retryKept = false
+      pending.retryHeld(InsertionService.instance?.captureTarget().orEmpty())
+      setState(BubbleState.PROCESSING)
+      if (HeadlessPipeline.ready && emit != null) pipelineReady()
+      else handler.postDelayed(pipelineTimeout, BubblePolicy.PIPELINE_READY_TIMEOUT_MS)
+    } else if (retryKept && HeadlessPipeline.ready && emit != null) {
       retryKept = false
       val selected = InsertionService.instance?.captureTarget().orEmpty()
       setState(BubbleState.PROCESSING)
-      emit?.invoke("onRetry", mapOf("selection" to selected))
+      deliver("onRetry", mapOf("selection" to selected))
     } else { setState(BubbleState.READY); begin() }
   }
   private fun dismiss() {
     if (state != BubbleState.RETRY && state != BubbleState.RECOVER) return
     retryKept = false
     InsertionService.instance?.clearTarget()
-    emit?.invoke("onDismiss", emptyMap())
+    deliver("onDismiss")
     setState(BubbleState.READY)
   }
   private fun openResult() {
     emit?.invoke("onOpenResult", emptyMap())
     packageManager.getLaunchIntentForPackage(packageName)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     setState(BubbleState.READY)
+  }
+  /**
+   * Sends a bubble event to the JS pipeline, or holds it until the pipeline listens. A finished
+   * recording that waits too long is parked behind Retry rather than inserted late.
+   */
+  private fun deliver(event: String, data: Map<String, Any> = emptyMap()) {
+    val listening = HeadlessPipeline.ready && emit != null
+    // A new dictation, cancel or dismiss replaces whatever waited, and with it the wait's timeout.
+    if (event in setOf("onStart", "onRetry", "onCancel", "onDismiss")) handler.removeCallbacks(pipelineTimeout)
+    val accepted = pending.accept(event, data, listening)
+    accepted.emit.forEach { (name, payload) -> emit?.invoke(name, payload) }
+    accepted.dropped.forEach { uri -> Uri.parse(uri).path?.let { File(it).delete() } }
+    if (event == "onRecording" && accepted.emit.isEmpty())
+      handler.postDelayed(pipelineTimeout, BubblePolicy.PIPELINE_READY_TIMEOUT_MS)
+  }
+  /** The JS pipeline listens: send whatever waited for it. */
+  fun pipelineReady() {
+    handler.removeCallbacks(pipelineTimeout)
+    pending.ready().forEach { (name, payload) -> emit?.invoke(name, payload) }
+  }
+  /** JS timers run only while the pipeline's task runs, so it runs exactly while a dictation is in flight. */
+  private fun syncPipeline() {
+    if (BubblePolicy.keepsPipelineAwake(state, stopping)) HeadlessPipeline.start(this) else HeadlessPipeline.stop(this)
   }
   /** Set by the app: processing, success, retry (nothing kept), retry-kept (recording kept) or recover (text kept in the app). */
   fun status(value: String) {
@@ -473,7 +522,8 @@ class DictationService : Service() {
     handler.removeCallbacksAndMessages(null); snap?.cancel(); recorder?.close(); recorder = null
     target?.let { runCatching { windows.removeView(it) } }; target = null; targetCircle = null
     root?.let { runCatching { windows.removeView(it) } }; root = null; waveform = null
-    InsertionService.instance?.clearTarget(); emit?.invoke("onCancel", emptyMap())
+    InsertionService.instance?.clearTarget(); deliver("onCancel")
+    application.unregisterActivityLifecycleCallbacks(screens); HeadlessPipeline.stop(this)
     instance = null; emit?.invoke("onStatusChange", emptyMap()); super.onDestroy()
   }
 }
