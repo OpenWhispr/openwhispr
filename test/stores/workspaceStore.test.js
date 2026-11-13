@@ -80,6 +80,40 @@ for (const { name, saved, expected } of [
   });
 }
 
+test("workspace names reach the note-file mirror, and an emptied list sends nothing", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {},
+    window: { location: CONTROL_PANEL_LOCATION },
+  });
+  const sent = [];
+  globalThis.window.electronAPI.noteFilesSetWorkspaceNames = (workspaces) => sent.push(workspaces);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-workspace-store-names-",
+    mockModules: {
+      "/services/WorkspacesService": `
+        export const WorkspacesService = {
+          list: async () => [{ id: "w-1", name: "Acme", slug: "acme", plan: "business", status: "active" }],
+        };
+      `,
+      "/policyStore": `
+        export const usePolicyStore = {
+          getState: () => ({ accountId: null, authGeneration: null }),
+        };
+      `,
+      "/enterpriseIdentityStore": `
+        export const useEnterpriseIdentityStore = { getState: () => ({ clear() {} }) };
+      `,
+    },
+  });
+  const { useWorkspaceStore } = await vite.ssrLoadModule("/stores/workspaceStore.ts");
+
+  await useWorkspaceStore.getState().refresh();
+  assert.deepEqual(sent, [[{ id: "w-1", name: "Acme" }]]);
+
+  useWorkspaceStore.getState().resetForAccountChange();
+  assert.equal(sent.length, 1);
+});
+
 async function loadStoreWithDeferredMembers(t) {
   installBrowserGlobals(t, {
     initialStorage: { activeWorkspaceId: "A" },

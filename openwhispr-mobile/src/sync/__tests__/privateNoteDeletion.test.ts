@@ -11,6 +11,8 @@ jest.mock('@/data', () => ({
 }));
 jest.mock('@/store/useAuthStore', () => ({ useAuthStore: { getState: () => mockAuth } }));
 jest.mock('@/data/remote/notesApi', () => ({ deleteNote: jest.fn(), fetchNotes: jest.fn() }));
+jest.mock('@sentry/react-native', () => ({ captureMessage: jest.fn() }));
+import * as Sentry from '@sentry/react-native';
 import { deleteNote, fetchNotes } from '@/data/remote/notesApi';
 import {
   clearPrivateNoteDeletionQueue,
@@ -93,26 +95,11 @@ it('settles a lost DELETE acknowledgement when a 404 is confirmed by a tombstone
   });
 });
 
-it('stops retrying a 404 for a copy this client cannot see, keeping the note private here', async () => {
-  const note = privateNote();
-  jest.mocked(deleteNote).mockRejectedValue({ status: 404 });
-  jest.mocked(fetchNotes).mockResolvedValue({ notes: [] });
-  await deletePrivateNoteCloudCopy(note);
-  expect(mockRepo.getNoteById(note.id)).toMatchObject({
-    remoteId: null,
-    clientNoteId: null,
-    content: 'keep this',
-    isPrivate: 1,
-  });
-  await pushPrivateNoteDeletes();
-  expect(deleteNote).toHaveBeenCalledTimes(1);
-});
-
 it.each([
-  { notes: [remoteNote()] },
+  { notes: [] },
   { notes: [remoteNote({ access_removed: true })] },
   { notes: [remoteNote({ access_removed: true, deleted_at: 'deleted' })] },
-])('does not mistake a live or revoked copy for a confirmed deletion (%j)', async ({ notes }) => {
+])('does not mistake absent or revoked access for a confirmed deletion (%j)', async ({ notes }) => {
   const note = privateNote();
   jest.mocked(deleteNote).mockRejectedValue({ status: 404, code: 'space_not_found' });
   jest.mocked(fetchNotes).mockResolvedValue({ notes });
@@ -121,6 +108,53 @@ it.each([
     remoteId: 'remote',
     clientNoteId: 'client',
   });
+});
+
+it('keeps a 404 with no visible row queued with its cloud ids, retried only after its backoff', async () => {
+  const note = privateNote();
+  jest.mocked(deleteNote).mockRejectedValue({ status: 404 });
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  await pushPrivateNoteDeletes();
+  await pushPrivateNoteDeletes();
+  expect(deleteNote).toHaveBeenCalledTimes(1);
+  expect(mockRepo.getNoteById(note.id)).toMatchObject({
+    remoteId: 'remote',
+    clientNoteId: 'client',
+  });
+  clock.mockReturnValue(now + 16 * 60 * 1000);
+  await pushPrivateNoteDeletes();
+  expect(deleteNote).toHaveBeenCalledTimes(2);
+  expect(mockRepo.getNoteById(note.id)).toMatchObject({ remoteId: 'remote' });
+  expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
+  // Once the row is visible, as to a build that sends the capability, it is removed.
+  clock.mockReturnValue(now + 365 * 24 * 60 * 60 * 1000);
+  jest.mocked(deleteNote).mockResolvedValue(undefined);
+  await pushPrivateNoteDeletes();
+  expect(mockRepo.getNoteById(note.id)).toMatchObject({ remoteId: null, clientNoteId: null });
+  expect(mockRepo.getSyncState('notes.private_deletion_queue')).toBeNull();
+  clock.mockRestore();
+});
+
+it('stores the hidden-copy backoff with the queue entry, doubling up to a day', async () => {
+  privateNote();
+  jest.mocked(deleteNote).mockRejectedValue({ status: 404 });
+  const now = Date.now();
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+  const queued = (): Array<{ attempts: number; retryAt: number }> =>
+    JSON.parse(mockRepo.getSyncState('notes.private_deletion_queue')!);
+  await pushPrivateNoteDeletes();
+  expect(queued()).toEqual([
+    { remoteId: 'remote', clientNoteId: 'client', attempts: 1, retryAt: now + 15 * 60 * 1000 },
+  ]);
+  for (let attempt = 2; attempt <= 10; attempt += 1) {
+    clock.mockReturnValue(queued()[0].retryAt);
+    await pushPrivateNoteDeletes();
+  }
+  const [last] = queued();
+  expect(last.attempts).toBe(10);
+  expect(last.retryAt - Date.now()).toBe(24 * 60 * 60 * 1000);
+  clock.mockRestore();
 });
 
 it('recovers a lost create identity without importing cloud content or requiring backup', async () => {
