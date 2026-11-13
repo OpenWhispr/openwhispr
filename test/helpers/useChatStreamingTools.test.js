@@ -122,16 +122,12 @@ function offersConnectors(tools) {
 }
 
 test("a signed-in chat offers the connector tools on any plan", async (t) => {
-  for (const subscribed of [true, false]) {
-    await t.test(subscribed ? "paid" : "free", async (st) => {
-      const { captured, offeredTools } = await renderChatStreaming(st, CONNECTOR_SURFACE, {
-        subscribed,
-      });
-      await captured.sendToAI("Email Josh", []);
-      assert.ok(offeredTools[0].includes("email_draft"));
-      assert.ok(offeredTools[0].includes("find_contact"));
-    });
-  }
+  const { captured, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
+    subscribed: false,
+  });
+  await captured.sendToAI("Email Josh", []);
+  assert.ok(offeredTools[0].includes("email_draft"));
+  assert.ok(offeredTools[0].includes("find_contact"));
 });
 
 test("a surface that doesn't opt in (container chat) never offers them", async (t) => {

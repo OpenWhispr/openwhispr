@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Assistant
+### Assistant and chat
 
 - **Connectors work on every plan.** Signed in on any plan, the assistant can post to Slack, file and comment in Linear and GitHub, send from Gmail, draft email in your mail app and look up contacts. Your organization's policy still decides whether connectors are on.
 

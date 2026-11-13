@@ -4979,7 +4979,7 @@
     "chat": {
       "errorPrefix": "Error",
       "emptyResponse": "The model returned no response.",
-      "cloudLimitReached": "You have reached your weekly Cloud limit. Upgrade to Pro, or use your own API key to keep chatting."
+      "cloudLimitReached": "You've reached your weekly Cloud limit. Upgrade to Pro, or use your own API key to keep chatting."
     },
     "input": {
       "listening": "Listening...",
