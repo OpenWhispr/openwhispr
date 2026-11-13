@@ -545,7 +545,7 @@ async function testDeepgramKey(request, fetchImpl) {
 // the user's key, so it passes; transcription then reports the quota.
 async function testElevenLabsKey(request, fetchImpl) {
   const body = new FormData();
-  body.append("model_id", "scribe_v2");
+  body.append("model_id", "scribe_v3");
   const failure = await probe(
     request.endpoint,
     request,

@@ -1151,7 +1151,7 @@ test("ElevenLabs is checked by a transcription request that carries no audio", a
     const result = await testProviderConnection({ provider: "elevenlabs", apiKey: "k" }, fetchImpl);
     assert.deepEqual(result, { success: true }, String(status));
     assert.equal(calls[0].init.method, "POST");
-    assert.equal(calls[0].init.body.get("model_id"), "scribe_v2");
+    assert.equal(calls[0].init.body.get("model_id"), "scribe_v3");
     assert.equal(calls[0].init.body.has("file"), false);
   }
 });

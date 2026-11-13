@@ -66,8 +66,14 @@ const APP_TRANSCRIPTION_PROVIDERS = [
     id: "elevenlabs",
     name: "ElevenLabs",
     baseUrl: "https://api.elevenlabs.io/v1",
-    defaultModel: "scribe_v2",
+    defaultModel: "scribe_v3",
     models: [
+      {
+        id: "scribe_v3",
+        name: "Scribe v3",
+        description: "Most accurate multilingual transcription",
+        descriptionKey: "models.descriptions.transcription.elevenlabs_scribe_v3",
+      },
       {
         id: "scribe_v2",
         name: "Scribe v2",

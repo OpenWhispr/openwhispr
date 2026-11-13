@@ -40,7 +40,7 @@ test("ElevenLabs survives a live catalog that does not list it", () => {
 
   assert.deepEqual(
     elevenLabs(applied).models.map((model) => model.id),
-    ["scribe_v2"]
+    ["scribe_v3", "scribe_v2"]
   );
-  assert.equal(elevenLabs(applied).defaultModel, "scribe_v2");
+  assert.equal(elevenLabs(applied).defaultModel, "scribe_v3");
 });

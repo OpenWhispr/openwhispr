@@ -53,14 +53,14 @@ test("posts multipart audio with the xi-api-key header to the Scribe endpoint", 
   assert.deepEqual(result, { text: "hello", model: "scribe_v2" });
 });
 
-test("auto language sends no language_code, and the model defaults to scribe_v2", async () => {
+test("auto language sends no language_code, and the model defaults to scribe_v3", async () => {
   const { fetchImpl, calls } = makeFetch(200, { text: "ok" });
 
   await transcribeWithElevenLabs({ audioBuffer: AUDIO, language: "auto", apiKey: "k" }, fetchImpl);
 
   const form = calls[0].init.body;
   assert.equal(form.has("language_code"), false);
-  assert.equal(form.get("model_id"), "scribe_v2");
+  assert.equal(form.get("model_id"), "scribe_v3");
   assert.equal(form.get("file").name, "audio.webm");
   assert.equal(form.has("keyterms"), false, "no dictionary means no keyterms surcharge");
 });

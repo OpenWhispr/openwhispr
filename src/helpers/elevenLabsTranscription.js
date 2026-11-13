@@ -10,7 +10,7 @@ const {
 // Scribe's batch endpoint is not OpenAI-compatible: it authenticates with
 // xi-api-key and takes model_id / language_code, so it is proxied through main.
 const ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text";
-const DEFAULT_MODEL = "scribe_v2";
+const DEFAULT_MODEL = "scribe_v3";
 
 // ElevenLabs rejects the whole request (422) for a single keyterm outside its
 // documented limits, so terms that break them are dropped rather than sent.
