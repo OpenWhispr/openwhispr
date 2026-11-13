@@ -46,6 +46,12 @@ export function appendScreenContextSuffix(prompt: string, uiLanguage?: string): 
   return prompt + suffix;
 }
 
+// An answer typed at the user's caret in another app. Append after every other
+// suffix: trailing instructions are the ones models weight most.
+export function appendPlainTextResponseSuffix(prompt: string): string {
+  return prompt + PLAIN_TEXT_RESPONSE_SUFFIX;
+}
+
 // Teammates' words are data another person controls, so they never join the
 // user's own list: they go in a JSON array labelled as hints, the way selection
 // edits quote the whole dictionary. English in every locale, like the Tone &

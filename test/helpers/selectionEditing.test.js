@@ -111,6 +111,23 @@ test("the marker contract is exact, unique, and never demonstrated with a traili
   }
 });
 
+test("an unmarked Cloud edit is applied only when no marker trace is left in it", async () => {
+  const { SELECTION_QUESTION_MARKER, extractSelectionEditReplacement } = await load();
+  const marker = "__OPENWHISPR_SELECTION_COMPLETE_test";
+  const cloud = { markerOptional: true };
+  assert.equal(extractSelectionEditReplacement("edit", marker, cloud), "edit");
+  for (const output of [
+    "edit__OPENWHISPR_SELECTION_COMPL",
+    `edit${marker.slice(2)}`,
+    `${SELECTION_QUESTION_MARKER}.`,
+    `\`${SELECTION_QUESTION_MARKER}\``,
+  ]) {
+    assert.throws(() => extractSelectionEditReplacement(output, marker, cloud), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+  }
+});
+
 test("local JSON replacement preserves document bytes and rejects ambiguous envelopes", async () => {
   const { extractLocalSelectionEditReplacement } = await load();
   const replacement = '  "quoted" \\path\n<think>literal document</think> ☕\t\r\n';

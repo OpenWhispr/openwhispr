@@ -56,26 +56,24 @@ export async function editSelectedText(
   const toneSentence = settings.toneStyleEnabled
     ? selectionEditToneSentence(resolveDictationToneStyle(settings.toneStyles, appCategory ?? null))
     : "";
+  const cloudBasePrompt = [
+    resolvePrompt("dictationAgent", {
+      agentName,
+      language: settings.preferredLanguage,
+      customDictionary: dictionary,
+      uiLanguage: settings.uiLanguage,
+    }),
+    toneSentence,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const systemPrompt = local
     ? buildLocalSelectionEditSystemPrompt({
         customPrompt: settings.customPrompts.dictationAgent.replaceAll("{{agentName}}", agentName),
         dictionary,
         toneSentence,
       })
-    : buildSelectionEditSystemPrompt(
-        [
-          resolvePrompt("dictationAgent", {
-            agentName,
-            language: settings.preferredLanguage,
-            customDictionary: dictionary,
-            uiLanguage: settings.uiLanguage,
-          }),
-          toneSentence,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-        marker
-      );
+    : buildSelectionEditSystemPrompt(cloudBasePrompt, marker);
   const config: ReasoningConfig = {
     inferenceScope: "dictationAgent",
     requiresAgent: true,
@@ -97,7 +95,13 @@ export async function editSelectedText(
   };
   if (attachment && attachScreenContext && isScreenContextAllowed(usePolicyStore.getState())) {
     config.screenContext = { data: attachment.image, mediaType: attachment.mediaType };
-    config.systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
+    // The completion marker's instruction stays last, as in the wake-word edit.
+    config.systemPrompt = local
+      ? appendScreenContextSuffix(systemPrompt, settings.uiLanguage)
+      : buildSelectionEditSystemPrompt(
+          appendScreenContextSuffix(cloudBasePrompt, settings.uiLanguage),
+          marker
+        );
   }
   const cancel = () => {
     if (local) void window.electronAPI?.cancelLocalReasoning?.(config.requestId);
@@ -115,19 +119,25 @@ export async function editSelectedText(
     );
   try {
     let result: string;
+    let runConfig = config;
     try {
-      result = await run(config);
+      result = await run(runConfig);
     } catch (error) {
       // As with the wake word, a screenshot the model or transport rejects
       // must not cost the edit: run it once more without the screenshot.
       if (!config.screenContext || signal.aborted) throw error;
-      result = await run({ ...config, screenContext: undefined, systemPrompt });
+      runConfig = { ...config, screenContext: undefined, systemPrompt };
+      result = await run(runConfig);
     }
     signal.throwIfAborted();
     if (isSelectionQuestionResponse(result, marker)) return null;
     return local
       ? extractLocalSelectionEditReplacement(result)
-      : extractSelectionEditReplacement(result, marker);
+      : extractSelectionEditReplacement(result, marker, {
+          // Only Cloud's vision chain leaves the marker off; text-only Cloud
+          // keeps it, so an unmarked answer there is prose, not a rewrite.
+          markerOptional: provider === "openwhispr" && Boolean(runConfig.screenContext),
+        });
   } finally {
     signal.removeEventListener("abort", cancel);
   }

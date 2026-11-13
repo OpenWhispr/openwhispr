@@ -41,6 +41,7 @@ import {
 } from "../../stores/connectorStatusStore";
 import {
   appendDictionarySuffix,
+  appendPlainTextResponseSuffix,
   appendScreenContextSuffix,
   buildMessageContext,
   getAgentSystemPrompt,
@@ -69,10 +70,6 @@ import { getLlmDictionaryWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
-import {
-  createLookAtScreenTool,
-  LOOK_AT_SCREEN_PROMPT,
-} from "../../services/tools/lookAtScreenTool";
 import type { SharedDictionaryWord } from "../../services/tools/dictionaryTool";
 import { setSharedWordsHidden } from "../../services/sharedDictionaryActions";
 import { readActiveWorkspaceId } from "../../stores/workspaceStore";
@@ -336,11 +333,18 @@ export interface SendToAIOptions {
   removedSkills?: string[];
   /** The app picked a skill for a model without tools; the surface shows its chip. */
   onSkillPicked?: (skill: { name: string; displayName: string }) => void;
+  /** The answer is typed at the user's caret in another app: ask for plain prose. */
+  plainTextResponse?: boolean;
   /** Per-request completion hook used to deliver a finished voice response. */
   onComplete?: (result: {
     assistantId: string;
     content: string;
     toolCalls?: ToolCallInfo[];
+    /**
+     * A finished turn (not paused at the step limit, no unbacked claim) with no
+     * question to the user and no tool that writes or sends: the reply is the whole result.
+     */
+    onlyRead: boolean;
   }) => void | Promise<void>;
   /**
    * Regenerates this reply in place (same message, same saved row) instead of
@@ -868,33 +872,14 @@ export function createChatTurnEngine(
           : !isCloudAgent && (isLocalProvider || isLanAgent || isCustomAgent)
             ? "text"
             : "parts";
-      // In the agent window, a Cloud screenshot is read through look_at_screen
-      // instead of riding with the request: the API sends any request with an
-      // image to its vision model, so small talk would switch models and see
-      // the screen.
-      const cloudScreen =
-        requestedAttachment && isCloudAgent
-          ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
-          : null;
-      const lookAtScreen =
-        cloudScreen && registry && allowInteractions
-          ? createLookAtScreenTool((question) =>
-              ReasoningService.askAboutScreen(
-                question,
-                cloudScreen,
-                LOOK_AT_SCREEN_PROMPT,
-                toolScope.signal
-              )
-            )
-          : null;
-      const offeredTools = registry
-        ? [...registry.getAll(), ...(lookAtScreen ? [lookAtScreen] : [])]
-        : undefined;
+      const offeredTools = registry?.getAll();
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
         getAgentSystemPrompt(offeredTools, {
-          unavailable: nameUnavailableCapabilities ? unavailable : [],
+          // An answer typed into another app carries no hint about what to connect.
+          unavailable:
+            nameUnavailableCapabilities && !options?.plainTextResponse ? unavailable : [],
           ...(toolHistory !== "none" ? { toolHistory } : {}),
           openNote: openNoteContext || undefined,
           openNoteTranscriptPreview: currentNote.transcriptPreview,
@@ -956,18 +941,22 @@ export function createChatTurnEngine(
           : message
       );
 
-      // A screenshot the resolver kept rides with the command it came with:
-      // BYOK models get it as an image part, the cloud agent (outside the
-      // agent window's look_at_screen) as a dedicated field the server
-      // vision-routes. A dropped one costs nothing but the image — the
-      // command still runs.
+      // A screenshot the resolver kept rides on the first request of the
+      // command it came with, so the answer needs no extra model calls: BYOK
+      // models get it as an image part, the cloud agent as a dedicated field
+      // the server vision-routes. A dropped one costs nothing but the image —
+      // the command still runs.
       const attachment = requestedAttachment && !isCloudAgent ? requestedAttachment : null;
-      const cloudScreenContext = lookAtScreen ? null : cloudScreen;
-      if (requestedAttachment && !lookAtScreen) {
+      const cloudScreenContext =
+        requestedAttachment && isCloudAgent
+          ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
+          : null;
+      if (requestedAttachment) {
         // Either way it needs its grounding instruction, as the dictation path
         // pairs the suffix with an attached image.
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
       }
+      if (options?.plainTextResponse) systemPrompt = appendPlainTextResponseSuffix(systemPrompt);
       if (attachment) {
         transformLastUserMessage(history, (message) => ({
           role: "user",
@@ -1248,8 +1237,7 @@ export function createChatTurnEngine(
         if (isCloudAgent) {
           const executeToolCall = registry
             ? async (name: string, argsJson: string, toolCallId: string) => {
-                const tool =
-                  registry.get(name) ?? (name === lookAtScreen?.name ? lookAtScreen : undefined);
+                const tool = registry.get(name);
                 if (!tool)
                   return {
                     data: `Unknown tool: ${name}`,
@@ -1390,8 +1378,7 @@ export function createChatTurnEngine(
                 {
                   id: currentToolCallId(call.id),
                   name: call.name,
-                  // A question to look_at_screen can quote an earlier read.
-                  arguments: call.name === lookAtScreen?.name ? "{}" : call.arguments,
+                  arguments: call.arguments,
                   status: "executing",
                   startedAt: Date.now(),
                   textOffset: fullContent.length,
@@ -1471,10 +1458,19 @@ export function createChatTurnEngine(
 
         saveReply();
         if (hasDeliverableContent) {
+          const calls = currentToolCalls();
           await options?.onComplete?.({
             assistantId,
             content: fullContent,
-            toolCalls: currentToolCalls(),
+            toolCalls: calls,
+            onlyRead:
+              !stepLimitReached &&
+              !unbackedClaim &&
+              (calls ?? []).every(
+                (call) =>
+                  !call.interaction &&
+                  offeredTools?.some((tool) => tool.name === call.name && tool.readOnly)
+              ),
           });
         }
       } catch (error) {

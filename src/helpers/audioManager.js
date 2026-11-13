@@ -3218,7 +3218,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!isSelectionQuestionResponse(result, completionMarker)) {
         const replacement = isLocalSelection
           ? extractLocalSelectionEditReplacement(result)
-          : extractSelectionEditReplacement(result, completionMarker);
+          : extractSelectionEditReplacement(result, completionMarker, {
+              markerOptional:
+                config?.provider === "openwhispr" && Boolean(selectionConfig.screenContext),
+            });
         this.pendingSelectionEdit = { sessionId: capture.sessionId };
         return replacement;
       }
