@@ -52,8 +52,21 @@ async function loadSection(t, { interactions = false } = {}) {
         export const deleteWorkspace = async () => {};
         export const transferOwnership = async () => {};
       `,
-      "/services/WorkspacesService": `
-        export const WorkspacesService = globalThis.__iconTest?.service ?? {};
+      "/services/WorkspacesService": globalThis.__iconTest?.realService
+        ? 'export { WorkspacesService } from "/services/WorkspacesService.ts";'
+        : `export const WorkspacesService = globalThis.__iconTest?.service ?? {};`,
+      "/lib/authRequestContext": `
+        export const getValidatedAuthGeneration = () =>
+          globalThis.__iconTest ? globalThis.__iconTest.authGeneration : 7;
+      `,
+      "/cloudApi.js": `
+        export const cloudGet = () => {};
+        export const cloudPatch = () => {};
+        export const cloudDelete = () => {};
+        export const cloudPost = async (path, body) =>
+          globalThis.__iconTest.request(path, body, globalThis.__iconTest.authGeneration);
+        export const cloudPostForAuthGeneration = async (path, body, generation) =>
+          globalThis.__iconTest.request(path, body, generation);
       `,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = (selector) => selector({ refresh: async (options) => globalThis.__iconTest?.refresh(options) });
@@ -267,6 +280,7 @@ async function mountIconControls(t, overrides = {}) {
     calls: [],
     refreshes: [],
     toasts: [],
+    authGeneration: 7,
     encode: async () => "encoded-webp",
     ...overrides,
   };
@@ -315,7 +329,7 @@ test("upload clears the picker, disables both controls, then refreshes and annou
   assert.deepEqual(view.state.calls, []);
 
   await act(async () => finishEncoding("encoded-webp"));
-  assert.deepEqual(view.state.calls, [["upload", "w1", "encoded-webp"]]);
+  assert.deepEqual(view.state.calls, [["upload", "w1", "encoded-webp", 7]]);
   assert.deepEqual(view.state.refreshes, [{ fresh: true }]);
   assert.deepEqual(view.state.toasts, [{ title: "settingsPage.workspace.general.iconUploaded" }]);
   assert.equal(propsOf(view.button("iconChange")).disabled, false);
@@ -367,14 +381,13 @@ test("unsupported and oversized uploads stop before encoding or sending requests
   assert.deepEqual(view.state.refreshes, []);
 });
 
-for (const failure of ["decode", "upload", "remove", "refresh"]) {
+for (const failure of ["decode", "upload", "remove"]) {
   test(`${failure} failures show the error and restore icon controls`, async (t) => {
     const fail = async () => {
       throw new Error(`${failure} failed`);
     };
     const view = await mountIconControls(t, {
       ...(failure === "decode" ? { encode: fail } : {}),
-      ...(failure === "refresh" ? { refresh: fail } : {}),
       service: {
         ...(failure === "upload" ? { uploadIcon: fail } : {}),
         ...(failure === "remove" ? { removeIcon: fail } : {}),
@@ -404,8 +417,8 @@ for (const failure of ["decode", "upload", "remove", "refresh"]) {
 test("icon service calls use the workspace icon route and unwrap Workspace responses", async (t) => {
   const calls = [];
   const workspace = { ...WORKSPACE, icon_url: ICON };
-  globalThis.__iconApi = (method, path, body) => {
-    calls.push({ method, path, body });
+  globalThis.__iconApi = (method, path, body, authGeneration) => {
+    calls.push({ method, path, body, ...(authGeneration === undefined ? {} : { authGeneration }) });
     return { data: workspace };
   };
   t.after(() => {
@@ -417,16 +430,100 @@ test("icon service calls use the workspace icon route and unwrap Workspace respo
         export const cloudGet = () => {};
         export const cloudPatch = () => {};
         export const cloudPost = async (path, body) => globalThis.__iconApi("POST", path, body);
+        export const cloudPostForAuthGeneration = async (path, body, generation) =>
+          globalThis.__iconApi("POST", path, body, generation);
         export const cloudDelete = async (path) => globalThis.__iconApi("DELETE", path);
       `,
     },
   });
   const { WorkspacesService } = await vite.ssrLoadModule("/services/WorkspacesService.ts");
   assert.equal(typeof WorkspacesService.uploadIcon, "function");
-  assert.equal(await WorkspacesService.uploadIcon("w1", "encoded-webp"), workspace);
+  assert.equal(await WorkspacesService.uploadIcon("w1", "encoded-webp", 7), workspace);
   assert.equal(await WorkspacesService.removeIcon("w1"), workspace);
   assert.deepEqual(calls, [
-    { method: "POST", path: "/api/workspaces/w1/icon", body: { data: "encoded-webp" } },
+    {
+      method: "POST",
+      path: "/api/workspaces/w1/icon",
+      body: { data: "encoded-webp" },
+      authGeneration: 7,
+    },
     { method: "DELETE", path: "/api/workspaces/w1/icon", body: undefined },
   ]);
+});
+
+test("an account switch during encoding keeps the upload pinned to its initiating account", async (t) => {
+  let finishEncoding;
+  const encoding = new Promise((resolve) => {
+    finishEncoding = resolve;
+  });
+  const requests = [];
+  const mutatedAccounts = [];
+  const view = await mountIconControls(t, {
+    realService: true,
+    encode: () => encoding,
+    request: async (path, body, authGeneration) => {
+      requests.push({ path, body, authGeneration });
+      // The main process refuses a pinned request after the credential generation changes.
+      if (authGeneration !== globalThis.__iconTest.authGeneration) {
+        throw new Error("Authentication context changed");
+      }
+      mutatedAccounts.push(authGeneration);
+      return { data: WORKSPACE };
+    },
+  });
+  await act(async () =>
+    propsOf(view.input).onChange({
+      target: { files: [{ type: "image/png", size: 100 }], value: "image" },
+    })
+  );
+  assert.deepEqual(requests, []);
+  view.state.authGeneration = 8;
+  await act(async () => finishEncoding("encoded-webp"));
+
+  assert.deepEqual(requests, [
+    {
+      path: "/api/workspaces/w1/icon",
+      body: { data: "encoded-webp" },
+      authGeneration: 7,
+    },
+  ]);
+  assert.deepEqual(mutatedAccounts, []);
+  assert.deepEqual(view.state.refreshes, []);
+  assert.deepEqual(view.state.toasts, [
+    {
+      title: "common.error",
+      description: "Authentication context changed",
+      variant: "destructive",
+    },
+  ]);
+  assert.equal(propsOf(view.button("iconChange")).disabled, false);
+  assert.equal(propsOf(view.button("iconRemove")).disabled, false);
+});
+
+test("a selection without a validated account stops before encoding or uploading", async (t) => {
+  let encodes = 0;
+  const view = await mountIconControls(t, {
+    authGeneration: null,
+    encode: async () => {
+      encodes++;
+      return "encoded-webp";
+    },
+  });
+  await act(async () =>
+    propsOf(view.input).onChange({
+      target: { files: [{ type: "image/png", size: 100 }], value: "image" },
+    })
+  );
+
+  assert.equal(encodes, 0);
+  assert.deepEqual(view.state.calls, []);
+  assert.deepEqual(view.state.refreshes, []);
+  assert.deepEqual(view.state.toasts, [
+    {
+      title: "common.error",
+      description: "auth.unconfirmedSession",
+      variant: "destructive",
+    },
+  ]);
+  assert.equal(propsOf(view.button("iconChange")).disabled, false);
 });

@@ -1,4 +1,11 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete, type DataWrap } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudPost,
+  cloudPostForAuthGeneration,
+  cloudPatch,
+  cloudDelete,
+  type DataWrap,
+} from "./cloudApi.js";
 import type {
   JoinableWorkspace,
   MemberRemovalPreview,
@@ -43,8 +50,16 @@ async function update(workspaceId: string, patch: { name?: string }): Promise<Wo
   return res.data;
 }
 
-async function uploadIcon(workspaceId: string, data: string): Promise<Workspace> {
-  const res = await cloudPost<DataWrap<Workspace>>(`/api/workspaces/${workspaceId}/icon`, { data });
+async function uploadIcon(
+  workspaceId: string,
+  data: string,
+  authGeneration: number
+): Promise<Workspace> {
+  const res = await cloudPostForAuthGeneration<DataWrap<Workspace>>(
+    `/api/workspaces/${workspaceId}/icon`,
+    { data },
+    authGeneration
+  );
   return res.data;
 }
 

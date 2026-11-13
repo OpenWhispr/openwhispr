@@ -9,6 +9,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/useToast";
 import { workspaceCan } from "../../lib/capabilities";
+import { getValidatedAuthGeneration } from "../../lib/authRequestContext";
 import {
   WORKSPACE_ICON_INPUT_TYPES,
   checkWorkspaceIconFile,
@@ -183,12 +184,17 @@ function GeneralPage({
       });
       return;
     }
+    // Pin before encoding so an account switch cannot adopt the replacement session.
+    const authGeneration = getValidatedAuthGeneration();
     setIconBusy("upload");
-    await applyUpdate(
-      async (): Promise<Workspace> =>
-        WorkspacesService.uploadIcon(workspace.id, await encodeWorkspaceIcon(file)),
-      t("settingsPage.workspace.general.iconUploaded")
-    );
+    await applyUpdate(async (): Promise<Workspace> => {
+      if (authGeneration === null) throw new Error(t("auth.unconfirmedSession"));
+      return WorkspacesService.uploadIcon(
+        workspace.id,
+        await encodeWorkspaceIcon(file),
+        authGeneration
+      );
+    }, t("settingsPage.workspace.general.iconUploaded"));
     setIconBusy(null);
   }
 
