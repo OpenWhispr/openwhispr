@@ -825,3 +825,12 @@ export function handleActiveWorkspaceStorage(event: StorageEvent): void {
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   window.addEventListener("storage", handleActiveWorkspaceStorage);
 }
+
+// Workspace names come only from here, and the note-file mirror names directories
+// after them, including offline. An emptied list (signing out) forgets nothing.
+useWorkspaceStore.subscribe((state, previous) => {
+  if (state.workspaces === previous.workspaces || state.workspaces.length === 0) return;
+  void window.electronAPI?.noteFilesSetWorkspaceNames?.(
+    state.workspaces.map(({ id, name }) => ({ id, name }))
+  );
+});
