@@ -48,6 +48,8 @@ interface NativeDictation {
   setEnabled(enabled: boolean, size: number): void;
   /** Starts the bubble again when the user left it on and its permissions are still granted. */
   restoreBubble(): boolean;
+  /** The bubble pipeline is listening; the bubble sends the events it held for it. */
+  pipelineReady(): Promise<void>;
   setPractice(visible: boolean): Promise<void>;
   /**
    * processing · success · retry (nothing kept: Retry listens again) · retry-kept (the recording
