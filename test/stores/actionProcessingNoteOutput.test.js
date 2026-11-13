@@ -716,6 +716,8 @@ test("material with nothing to summarize leaves the note as it was and says so",
     "```markdown\nNOTHING_TO_SUMMARIZE\n```",
     "Only greetings were exchanged.\n\nNOTHING_TO_SUMMARIZE",
     "<think>Just hellos.</think>\nNOTHING_TO_SUMMARIZE",
+    // Gemma 4 E4B without thinking spells it this way for an empty recording.
+    "Nothing_TO_SUMMARIZE",
   ];
   for (const [index, reply] of replies.entries()) {
     const noteId = 18 + index;
