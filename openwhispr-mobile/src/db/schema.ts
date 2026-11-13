@@ -97,6 +97,9 @@ export const notes = sqliteTable('notes', {
   pendingSync: integer('pending_sync').notNull().default(0),
   isPrivate: integer('is_private').notNull().default(0),
   spaceId: integer('space_id').references(() => spaces.id),
+  // The workspace whose Private the server files this note in (CloudNote.private_workspace_id).
+  // A note in a folder follows its folder's placement; this places one that has no folder.
+  privateWorkspaceId: text('private_workspace_id'),
   // The note's owner (CloudNote.user_id) — who created it, not who last edited
   // it. NULL until a cloud pull or push response fills it.
   ownerUserId: text('owner_user_id'),

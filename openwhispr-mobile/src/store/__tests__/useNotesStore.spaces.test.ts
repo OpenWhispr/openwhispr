@@ -14,6 +14,8 @@ jest.mock('@/data', () => ({
   notesRepository: {
     getFolders: jest.fn(() => []),
     getPrivateFolders: jest.fn(() => []),
+    // No Private placement recorded: only the default's Private exists.
+    getSyncState: jest.fn(() => null),
     getFolderCounts: jest.fn(() => ({})),
     getNotesByFolder: jest.fn(() => []),
     getNotesBySpace: jest.fn(() => []),

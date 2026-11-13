@@ -237,3 +237,33 @@ describe('MoveToFolderSheet — browsing inside a team space', () => {
     expect(queryByText('Spaces')).toBeNull();
   });
 });
+
+describe('MoveToFolderSheet — other workspaces’ Private', () => {
+  it('lists each other Private under its workspace and moves the note on a pick', () => {
+    const onPickFolder = jest.fn();
+    const { getByText, getAllByText } = render(
+      <MoveToFolderSheet
+        visible
+        folders={[folder({ id: 1, name: 'Personal' })]}
+        folderCounts={{}}
+        excludeFolderId={1}
+        onClose={jest.fn()}
+        onPickFolder={onPickFolder}
+        onCreateAndPick={jest.fn()}
+        privateGroups={[
+          {
+            workspaceId: 'workspace-acme',
+            name: 'Acme',
+            folders: [folder({ id: 5, name: 'Personal', privateWorkspaceId: 'workspace-acme' })],
+          },
+        ]}
+      />,
+    );
+    expect(getByText('Acme · Private')).toBeTruthy();
+    // The note's own Personal is excluded, so the only one listed is Acme's.
+    const rows = getAllByText('Personal');
+    expect(rows).toHaveLength(1);
+    fireEvent.press(rows[0]);
+    expect(onPickFolder).toHaveBeenCalledWith(5);
+  });
+});

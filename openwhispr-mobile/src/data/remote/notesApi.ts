@@ -27,6 +27,8 @@ export interface FolderPushInput {
   // space_id leaves whatever scope the server already stored.
   workspace_id?: string | null;
   space_id?: string | null;
+  // The workspace whose Private a personal folder is in; omitted, the server keeps or defaults it.
+  private_workspace_id?: string | null;
 }
 
 export interface FolderCreateResponse {

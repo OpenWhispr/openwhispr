@@ -5,7 +5,16 @@ jest.mock('@/data', () => ({
   },
 }));
 
-import { getTeamSpacesCapability, setTeamSpacesCapability } from '../teamSpacesCapability';
+import {
+  getPrivateWorkspaces,
+  getTeamSpacesCapability,
+  readPrivateWorkspaceContext,
+  setActivePrivateWorkspaceChoice,
+  setDefaultPrivateWorkspaceId,
+  setPrivateWorkspacePlacement,
+  setPrivateWorkspaces,
+  setTeamSpacesCapability,
+} from '../teamSpacesCapability';
 import { notesRepository } from '@/data';
 
 const mockRepo = notesRepository as jest.Mocked<typeof notesRepository>;
@@ -51,5 +60,55 @@ describe('teamSpacesCapability', () => {
     setTeamSpacesCapability(false);
 
     expect(mockRepo.setSyncState).toHaveBeenCalledWith('team_spaces_capability', 'false');
+  });
+});
+
+describe('readPrivateWorkspaceContext', () => {
+  const state = new Map<string, string>();
+  beforeEach(() => {
+    state.clear();
+    mockRepo.getSyncState.mockImplementation((key: string) => state.get(key) ?? null);
+    mockRepo.setSyncState.mockImplementation((key: string, value: string) => {
+      state.set(key, value);
+    });
+  });
+
+  const workspaces = [
+    { id: 'team', name: 'Acme' },
+    { id: 'own', name: 'Mine', is_default: true },
+  ];
+
+  it('shows only the default Private until the API keeps one per workspace', () => {
+    setPrivateWorkspaces(workspaces);
+    setDefaultPrivateWorkspaceId('own');
+    setActivePrivateWorkspaceChoice('team');
+    expect(readPrivateWorkspaceContext()).toEqual({
+      placementSupported: false,
+      workspaces: [],
+      defaultId: 'own',
+      activeId: 'own',
+    });
+  });
+
+  it('follows the saved choice, else picks the default', () => {
+    setPrivateWorkspacePlacement(true);
+    setPrivateWorkspaces(workspaces);
+    expect(readPrivateWorkspaceContext()).toMatchObject({
+      placementSupported: true,
+      defaultId: 'own',
+      activeId: 'own',
+    });
+    setActivePrivateWorkspaceChoice('team');
+    expect(readPrivateWorkspaceContext().activeId).toBe('team');
+    setPrivateWorkspaces([workspaces[1]]);
+    expect(readPrivateWorkspaceContext().activeId).toBe('own');
+  });
+
+  it('reads a damaged workspace list as none', () => {
+    setPrivateWorkspacePlacement(true);
+    state.set('private_workspaces', '{not json');
+    expect(getPrivateWorkspaces()).toEqual([]);
+    state.set('private_workspaces', JSON.stringify([{ id: 'ok', name: 'Ok' }, { name: 'no id' }]));
+    expect(getPrivateWorkspaces()).toEqual([{ id: 'ok', name: 'Ok' }]);
   });
 });

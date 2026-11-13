@@ -51,6 +51,7 @@ import { NoteMetaRow } from '@/components/notes/NoteMetaRow';
 import { AttendeesSheet } from '@/components/notes/AttendeesSheet';
 import { MoveToFolderSheet } from '@/components/notes/MoveToFolderSheet';
 import { useMoveNote } from '@/hooks/useMoveNote';
+import { foldersInPrivateWorkspace, privateWorkspaceOf } from '@/lib/privateWorkspaces';
 import {
   formatAttendeeChipLabel,
   formatNoteMetaDate,
@@ -166,6 +167,9 @@ export default function NoteEditorScreen({
   const resolveConflictKeepMine = useNotesStore((s) => s.resolveConflictKeepMine);
   const resolveConflictUseServer = useNotesStore((s) => s.resolveConflictUseServer);
   const privateFolders = useNotesStore((s) => s.folders);
+  const getAllPrivateFolders = useNotesStore((s) => s.getAllPrivateFolders);
+  const defaultPrivateWorkspaceId = useNotesStore((s) => s.defaultPrivateWorkspaceId);
+  const privateWorkspaces = useNotesStore((s) => s.privateWorkspaces);
   const spaceFolders = useNotesStore((s) => s.spaceFolders);
   const spaces = useNotesStore((s) => s.spaces);
   const getSpaceFolders = useNotesStore((s) => s.getSpaceFolders);
@@ -385,18 +389,53 @@ export default function NoteEditorScreen({
   // and its notes must never be moved into private folders.
   const isSpaceUnknown = note?.spaceId != null && !noteSpace;
   const scopeSpaceId = noteSpace?.kind === 'team' ? noteSpace.id : null;
+  // A personal note opened from search may sit in another workspace's Private than the one on
+  // screen: it is offered its own Private's folders, and the others only as explicit moves.
+  const notePrivate = useMemo(() => {
+    if (scopeSpaceId != null || isSpaceUnknown) return null;
+    const all = getAllPrivateFolders();
+    const folder = all.find((f) => f.id === note?.folderId);
+    const placed = folder
+      ? privateWorkspaceOf(folder, defaultPrivateWorkspaceId)
+      : (note?.privateWorkspaceId ?? defaultPrivateWorkspaceId);
+    const listed = privateWorkspaces.map((w) => w.id);
+    // A workspace the account left shows under the default's Private, so its notes move from
+    // there too: a folder created in the lost workspace would be refused.
+    const workspaceId =
+      listed.length > 0 && placed && !listed.includes(placed) ? defaultPrivateWorkspaceId : placed;
+    return {
+      workspaceId,
+      folders: foldersInPrivateWorkspace(all, workspaceId, defaultPrivateWorkspaceId, listed),
+    };
+    // getAllPrivateFolders reads the repository; privateFolders stands in as the reload signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    defaultPrivateWorkspaceId,
+    getAllPrivateFolders,
+    isSpaceUnknown,
+    note?.folderId,
+    note?.privateWorkspaceId,
+    privateFolders,
+    privateWorkspaces,
+    scopeSpaceId,
+  ]);
   const targetFolders = useMemo(
     () =>
-      isSpaceUnknown ? [] : scopeSpaceId != null ? getSpaceFolders(scopeSpaceId) : privateFolders,
+      isSpaceUnknown
+        ? []
+        : scopeSpaceId != null
+          ? getSpaceFolders(scopeSpaceId)
+          : (notePrivate?.folders ?? privateFolders),
     // getSpaceFolders reads the repository, so the store's folder lists stand in as the signal to
     // re-read: every folder reload (create, rename, move, sync) replaces them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [getSpaceFolders, isSpaceUnknown, privateFolders, scopeSpaceId, spaceFolders],
+    [getSpaceFolders, isSpaceUnknown, notePrivate, privateFolders, scopeSpaceId, spaceFolders],
   );
   const folderName = targetFolders.find((folder) => folder.id === note?.folderId)?.name ?? null;
   const move = useMoveNote({
     scopeSpaceId,
     targetFolders,
+    ...(notePrivate ? { privateWorkspaceId: notePrivate.workspaceId } : {}),
     excludeFolderId: note?.folderId ?? null,
   });
   const closeMove = move.close;

@@ -3,6 +3,7 @@ import { randomUUID } from '@/lib/uuid';
 import { requestSync } from '@/sync/syncEngine';
 import type { TranscriptionStatus } from '@/lib/diarization/diarizer';
 import type {
+  CreateFolderOptions,
   NotesRepository,
   Note,
   Folder,
@@ -81,8 +82,8 @@ export class SyncedNotesRepository implements NotesRepository {
   }
 
   // Writes — local-first, mark pending, nudge sync
-  createFolder(name: string, spaceId?: number): Folder {
-    const folder = this.local.createFolder(name, spaceId);
+  createFolder(name: string, spaceId?: number, options?: CreateFolderOptions): Folder {
+    const folder = this.local.createFolder(name, spaceId, options);
     const updated = this.local.setFolderClientId(folder.id, randomUUID());
     requestSync('after-write');
     return updated;

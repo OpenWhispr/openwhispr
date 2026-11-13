@@ -109,7 +109,7 @@ beforeEach(() => {
 });
 
 describe('pushNotes calendar context', () => {
-  it('preserves an explicitly refused create without adopting another row’s identity', async (): Promise<void> => {
+  it('keeps a refused create pending without adopting another row’s identity or failing the pass', async (): Promise<void> => {
     mockNotesRepository.getPendingNotes.mockReturnValue([
       note({ id: 1, clientNoteId: 'refused' }),
       note({ id: 2, clientNoteId: 'accepted' }),
@@ -120,7 +120,7 @@ describe('pushNotes calendar context', () => {
       ],
       refused: [{ client_note_id: 'refused', code: 'write_refused' }],
     });
-    await expect(pushNotes()).rejects.toThrow('pushNotes: 1 operation(s) failed');
+    await expect(pushNotes()).resolves.toBeUndefined();
     expect(mockNotesRepository.markNotePushed).toHaveBeenCalledTimes(1);
     expect(mockNotesRepository.markNoteTerminal).not.toHaveBeenCalled();
   });
