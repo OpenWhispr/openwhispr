@@ -258,3 +258,18 @@ it('a cancelled dictation does not report Retry', async () => {
   expect(native.insert).not.toHaveBeenCalled();
   expect(native.setStatus).not.toHaveBeenCalledWith('retry');
 });
+
+it('an account change after a cancel does not report Retry', async () => {
+  let finish!: (text: string) => void;
+  jest
+    .mocked(processAndroidAudio)
+    .mockImplementationOnce(() => new Promise<string>((resolve) => (finish = resolve)));
+  mockListeners.onStart({ selection: '' });
+  mockListeners.onRecording(audio);
+  await flush();
+  mockListeners.onCancel();
+  mockScopeChange();
+  finish('Cancelled.');
+  await flush();
+  expect(native.setStatus).not.toHaveBeenCalledWith('retry');
+});

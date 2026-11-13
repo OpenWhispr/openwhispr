@@ -119,7 +119,8 @@ export function startBubblePipeline(): void {
     // Account data loading for the first time (while a dictation from a restored bubble waits
     // on it) changes nothing a job holds: no job can capture a scope before there is an owner.
     if (!previous) return;
-    abandoned = controller;
+    // Only a dictation still running; one the user cancelled already settled.
+    if (controller && !controller.signal.aborted) abandoned = controller;
     controller?.abort();
     job = null;
     dropKept();

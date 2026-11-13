@@ -26,7 +26,7 @@ import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
 import { observeAndroidPurchaseUpdates } from './billing';
 import { startBubblePipeline } from './bubblePipeline';
-import { forgetAppData, refreshAppData } from './appData';
+import { bootAppData, forgetAppData } from './appData';
 import { dictationEvents } from '../../modules/android-dictation/src';
 import { useAccountData } from './accountData';
 import { observeBubbleRestore } from './bubbleRestore';
@@ -59,7 +59,7 @@ export default function AndroidRoot() {
   useEffect(() => observeBubbleRestore(), []);
   useEffect(() => {
     async function initialize() {
-      await refreshAppData();
+      await bootAppData();
       // A cold deep link can skip Home, which also initializes app data. Recover
       // interrupted meetings here so every entry route makes their audio retryable.
       useNotesStore.getState().initialize();

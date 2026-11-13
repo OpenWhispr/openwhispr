@@ -25,7 +25,7 @@ jest.mock('@/store/useSnippetsStore', () => ({
   useSnippetsStore: { getState: () => ({ load: mockLoadSnippets }) },
 }));
 
-import { bootAppData, forgetAppData, refreshAppData } from '../appData';
+import { bootAppData, forgetAppData } from '../appData';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -76,15 +76,4 @@ it('an older load failing does not undo a newer one', async () => {
   await expect(old).rejects.toThrow('offline');
   await fresh;
   expect(bootAppData()).toBe(fresh);
-});
-
-it('the app opening loads again after an earlier load, but joins one in progress', async () => {
-  await bootAppData();
-  await refreshAppData();
-  expect(mockInitializeAuth).toHaveBeenCalledTimes(2);
-  forgetAppData();
-  const loading = bootAppData();
-  expect(refreshAppData()).toBe(loading);
-  await loading;
-  expect(mockInitializeAuth).toHaveBeenCalledTimes(3);
 });
