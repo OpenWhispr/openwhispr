@@ -288,6 +288,12 @@ export async function pushFolders(
   // rejection is attributable to exactly the space whose rows were in flight.
   for (const [scopeKey, scopedCreates] of createsByScope) {
     const personalScope = scopeKey === PERSONAL_SCOPE_KEY;
+    const responseNameKey = (
+      folder: Pick<FolderPushInput, 'name' | 'private_workspace_id'>,
+    ): string =>
+      personalScope
+        ? `${folder.private_workspace_id ?? defaultWorkspaceId ?? ''}\u0000${folder.name}`
+        : folder.name;
     for (let i = 0; i < scopedCreates.length; i += PUSH_BATCH_SIZE) {
       const chunk = scopedCreates.slice(i, i + PUSH_BATCH_SIZE);
       try {
@@ -308,7 +314,7 @@ export async function pushFolders(
         // with another client's client_folder_id (another member's, or this device's own
         // same-named folder earlier in the chunk). Matched by name, it gets a cloud id;
         // otherwise it would retry forever and the notes filed in it never upload.
-        const byName = new Map(created.map((server) => [server.name, server]));
+        const byName = new Map(created.map((server) => [responseNameKey(server), server]));
         let unmatched = 0;
         for (let j = 0; j < chunk.length; j += 1) {
           const create = chunk[j];
@@ -319,9 +325,18 @@ export async function pushFolders(
             unmatched += 1;
             continue;
           }
+          const positional = created[j];
+          // A personal batch can span several Private workspaces. An older receipt without
+          // a client id must not attach this folder to another workspace's same-named row.
+          const matchesPlacement =
+            !personalScope ||
+            (positional?.private_workspace_id ?? defaultWorkspaceId) ===
+              (create.payload.private_workspace_id ?? defaultWorkspaceId);
           const server =
             byClientId.get(create.payload.client_folder_id) ??
-            (refused.length === 0 && !created[j]?.client_folder_id ? created[j] : undefined);
+            (refused.length === 0 && !positional?.client_folder_id && matchesPlacement
+              ? positional
+              : undefined);
           if (server?.id) {
             notesRepository.markFolderPushed(
               create.localId,
@@ -331,7 +346,7 @@ export async function pushFolders(
             );
             continue;
           }
-          const existing = byName.get(create.payload.name);
+          const existing = byName.get(responseNameKey(create.payload));
           if (existing?.id) {
             adoptExistingServerFolder(create, existing);
             continue;

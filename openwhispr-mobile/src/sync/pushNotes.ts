@@ -11,6 +11,7 @@ import { serializeSegmentsForSync } from '@/lib/notes/remoteTranscript';
 import { isFolderAwaitingUpload } from '@/lib/notes/folderUpload';
 import { isPermissionDenialCode, isSpaceAccessCode } from './pushErrorCodes';
 import { createPushScopeResolver, createTeamSpaceFilter } from './pushScope';
+import { getPrivateWorkspacePlacement } from './teamSpacesCapability';
 import { resetTeamCursors } from './teamCursors';
 import { forgetNoteCreateAttempts, recordNoteCreateAttempts } from './noteCreateAttempts';
 import type { Note, RemoteNote } from '@/data';
@@ -270,6 +271,7 @@ export async function pushNotes(
   // mid-push. Rows queued for deletion never reach it — DELETE carries no
   // body, so scope does not apply to one.
   const resolveScope = createPushScopeResolver();
+  const sendsPlacement = getPrivateWorkspacePlacement();
   // Folders too: pushFolders has finished, and nothing below awaits before every row is
   // sorted into creates, updates and deletes.
   const foldersById = new Map(notesRepository.getFolders().map((folder) => [folder.id, folder]));
@@ -332,6 +334,11 @@ export async function pushNotes(
           audio_duration_seconds: n.audioDurationSeconds,
           folder_id: folderId,
           ...scope,
+          // Filed notes inherit their folder's placement; a fresh folderless identity must
+          // retain its own, including when a device-only note is published again.
+          ...(sendsPlacement && scope.space_id == null && folderId === null && n.privateWorkspaceId
+            ? { private_workspace_id: n.privateWorkspaceId }
+            : {}),
           ...calendarContextPayload(n),
           ...(transcript.field !== undefined ? { transcript: transcript.field } : {}),
           created_at: n.createdAt ?? undefined,

@@ -401,8 +401,7 @@ export default function NoteEditorScreen({
     const listed = privateWorkspaces.map((w) => w.id);
     // A workspace the account left shows under the default's Private, so its notes move from
     // there too: a folder created in the lost workspace would be refused.
-    const workspaceId =
-      listed.length > 0 && placed && !listed.includes(placed) ? defaultPrivateWorkspaceId : placed;
+    const workspaceId = placed && !listed.includes(placed) ? defaultPrivateWorkspaceId : placed;
     return {
       workspaceId,
       folders: foldersInPrivateWorkspace(all, workspaceId, defaultPrivateWorkspaceId, listed),

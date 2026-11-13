@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react-native';
 import type { Folder, Space } from '@/data';
-import { useMoveNote } from '@/hooks/useMoveNote';
+import { useMoveNote, type UseMoveNoteResult } from '@/hooks/useMoveNote';
 import type { PrivateWorkspace } from '@/lib/privateWorkspaces';
 
 const mockState = {
@@ -94,6 +94,25 @@ describe('useMoveNote', () => {
       useMoveNote({ scopeSpaceId: null, targetFolders: [], excludeFolderId: null }),
     );
     expect(result.current.sheetProps.spaces?.map((s) => s.id)).toEqual([2, 3, 4]);
+  });
+
+  it.each([
+    { scenario: 'before per-workspace Private is supported', defaultId: 'w2' },
+    { scenario: 'after every workspace membership is lost', defaultId: null },
+  ])('keeps unplaced move targets $scenario', ({ defaultId }): void => {
+    const unplaced = folder({ id: 12, privateWorkspaceId: null });
+    const departed = folder({ id: 31, privateWorkspaceId: 'gone' });
+    mockState.activePrivateWorkspaceId = defaultId;
+    mockState.defaultPrivateWorkspaceId = defaultId;
+    const { result } = renderHook(
+      (): UseMoveNoteResult =>
+        useMoveNote({
+          scopeSpaceId: null,
+          targetFolders: [unplaced, departed],
+          excludeFolderId: null,
+        }),
+    );
+    expect(result.current.sheetProps.folders).toEqual([unplaced]);
   });
 
   it('keeps team content inside its own workspace', () => {
@@ -191,6 +210,54 @@ describe('useMoveNote', () => {
       expect(result.current.sheetProps.privateGroups?.map((g) => g.workspaceId)).toEqual(['w1']);
       // Private→team stays inside the note's workspace.
       expect(result.current.sheetProps.spaces?.map((s) => s.id)).toEqual([4]);
+    });
+
+    it.each([undefined, 'w2'])(
+      'excludes departed folders from a browsing list with note workspace %s',
+      (privateWorkspaceId): void => {
+        const departed = folder({ id: 31, privateWorkspaceId: 'gone' });
+        mockState.activePrivateWorkspaceId = privateWorkspaceId === undefined ? 'w2' : 'w1';
+        mockState.getAllPrivateFolders.mockReturnValue([w1Personal, w2Personal, w2Ideas, departed]);
+        const { result } = renderHook(
+          (): UseMoveNoteResult =>
+            useMoveNote({
+              scopeSpaceId: null,
+              targetFolders: [w2Personal, w2Ideas, departed],
+              excludeFolderId: null,
+              privateWorkspaceId,
+            }),
+        );
+        expect(result.current.sheetProps.folders).toEqual([w2Personal, w2Ideas]);
+        expect(result.current.sheetProps.privateGroups).toEqual([
+          { workspaceId: 'w1', name: 'Acme', folders: [w1Personal] },
+        ]);
+      },
+    );
+
+    it('keeps only unplaced folders when Personal has no default workspace', (): void => {
+      const departed = folder({ id: 31, privateWorkspaceId: 'gone' });
+      mockState.privateWorkspaces = [{ id: 'w1', name: 'Acme' }];
+      mockState.activePrivateWorkspaceId = null;
+      mockState.defaultPrivateWorkspaceId = null;
+      const { result } = renderHook(
+        (): UseMoveNoteResult =>
+          useMoveNote({
+            scopeSpaceId: null,
+            targetFolders: [w2Personal, departed],
+            excludeFolderId: null,
+          }),
+      );
+      expect(result.current.sheetProps.folders).toEqual([w2Personal]);
+      expect(result.current.sheetProps.spaces).toEqual([]);
+    });
+
+    it('preserves the folders of a team space', (): void => {
+      const teamFolders = [folder({ id: 40, spaceId: 2, privateWorkspaceId: null })];
+      const { result } = renderHook(
+        (): UseMoveNoteResult =>
+          useMoveNote({ scopeSpaceId: 2, targetFolders: teamFolders, excludeFolderId: null }),
+      );
+      expect(result.current.sheetProps.folders).toEqual(teamFolders);
     });
 
     it('moves a personal note only to its own workspace’s team spaces', () => {

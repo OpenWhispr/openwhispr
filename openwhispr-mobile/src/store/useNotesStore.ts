@@ -200,6 +200,25 @@ const readPrivateSection = (): PrivateSectionState => {
   };
 };
 
+const pickActivePrivateDefaultFolder = (section: PrivateSectionState): Folder | null =>
+  pickPrivateDefaultFolder(
+    foldersInPrivateWorkspace(
+      section.folders,
+      section.activePrivateWorkspaceId,
+      section.defaultPrivateWorkspaceId,
+    ),
+  );
+
+const canFileInPrivateWorkspace = (workspaceId: string | null): boolean => {
+  const { placementSupported, workspaces, defaultId } = readPrivateWorkspaceContext();
+  return (
+    !placementSupported ||
+    workspaceId == null ||
+    workspaceId === defaultId ||
+    workspaces.some((workspace) => workspace.id === workspaceId)
+  );
+};
+
 /**
  * The folder a new note or meeting goes to in the active workspace's Private: its Meetings or
  * Personal, never another workspace's same-named folder. A Private with no folders yet gets its
@@ -240,8 +259,9 @@ const createMeetingNoteRow = (title: string, context: CreateMeetingNoteContext):
     const folder = notesRepository.getFolders().find(({ id }) => id === context.folderId);
     if (
       folder &&
-      (folder.spaceId === spacesRepository.getPrivateSpace().id ||
-        canFileInTeamSpace(folder.spaceId))
+      (folder.spaceId === spacesRepository.getPrivateSpace().id
+        ? canFileInPrivateWorkspace(folder.privateWorkspaceId)
+        : canFileInTeamSpace(folder.spaceId))
     ) {
       return notesRepository.createNote(title, '', folder.id);
     }
@@ -477,7 +497,7 @@ interface NotesStore {
   loadFolders: () => void;
   loadSpaces: () => void;
   /** Shows another workspace's Private and team spaces, and remembers the choice. */
-  setActivePrivateWorkspace: (workspaceId: string) => void;
+  setActivePrivateWorkspace: (workspaceId: string | null) => void;
   loadNotes: (folderId?: number) => void;
   setActiveNoteId: (id: number | null) => void;
   setActiveFolderId: (id: number | null) => void;
@@ -580,7 +600,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   initialize: () => {
     const section = readPrivateSection();
     const folderCounts = notesRepository.getFolderCounts();
-    const defaultFolder = pickPrivateDefaultFolder(section.folders);
+    const defaultFolder = pickActivePrivateDefaultFolder(section);
     const notes = defaultFolder ? notesRepository.getNotesByFolder(defaultFolder.id) : [];
     const voiceProfiles = notesRepository.getSpeakerProfiles();
     const spaces = spacesRepository.listSpaces();
@@ -622,7 +642,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   setActivePrivateWorkspace: (workspaceId) => {
     setActivePrivateWorkspaceChoice(workspaceId);
     const section = readPrivateSection();
-    const defaultFolder = pickPrivateDefaultFolder(section.folders);
+    const defaultFolder = pickActivePrivateDefaultFolder(section);
     set({
       ...section,
       activeFolderId: defaultFolder?.id ?? null,
@@ -695,6 +715,14 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
 
   createNote: (title = 'Untitled', content = '', folderId) => {
     const { activeFolderId, activeSpaceId } = get();
+    const requestedFolderId = folderId ?? activeFolderId;
+    const privateFolder = notesRepository
+      .getPrivateFolders()
+      .find((folder) => folder.id === requestedFolderId);
+    const targetFolderId =
+      privateFolder && !canFileInPrivateWorkspace(privateFolder.privateWorkspaceId)
+        ? null
+        : requestedFolderId;
     // Browsing a space (mutually exclusive with browsing a folder): the note
     // belongs to that space, not to the personal default folder.
     const note =
@@ -703,7 +731,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         : notesRepository.createNote(
             title,
             content,
-            folderId ?? activeFolderId ?? resolvePrivateFolderId('note'),
+            targetFolderId ?? resolvePrivateFolderId('note'),
           );
 
     if (useProcessingModeStore.getState().activeMode === 'private') {
@@ -774,7 +802,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
     const { activeFolderId } = get();
     get().loadFolders();
     if (activeFolderId === id) {
-      const defaultFolder = pickPrivateDefaultFolder(get().folders);
+      const defaultFolder = pickActivePrivateDefaultFolder(get());
       get().setActiveFolderId(defaultFolder?.id ?? null);
     } else {
       get().loadNotes();
@@ -782,13 +810,15 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
   },
 
   createFolder: (name, spaceId, options) => {
+    const { activeId } = readPrivateWorkspaceContext();
+    const requestedWorkspaceId = options ? options.privateWorkspaceId : activeId;
     const folder =
       spaceId != null
         ? notesRepository.createFolder(name, spaceId)
         : notesRepository.createFolder(name, undefined, {
-            privateWorkspaceId: options
-              ? options.privateWorkspaceId
-              : readPrivateWorkspaceContext().activeId,
+            privateWorkspaceId: canFileInPrivateWorkspace(requestedWorkspaceId)
+              ? requestedWorkspaceId
+              : activeId,
           });
     get().loadFolders();
     return folder;

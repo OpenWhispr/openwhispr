@@ -226,3 +226,118 @@ describe('where new notes and meetings go', () => {
     expect(useNotesStore.getState().activeFolderId).toBe(folderNamed('Personal', ACME).id);
   });
 });
+
+describe('Private before an account default has been provisioned', () => {
+  beforeEach(() => {
+    mockRepo.setSyncState('private_workspace_placement', 'true');
+    mockRepo.setSyncState(
+      'private_workspaces',
+      JSON.stringify([{ id: ACME, name: 'Acme', plan: 'free', is_default: false }]),
+    );
+  });
+
+  it('keeps legacy history browsable and creates notes in the same Personal folder', () => {
+    const personal = mockRepo.createFolder('Personal', undefined, { isDefault: true });
+    const historical = mockRepo.createNote('Before upgrade', 'Existing content', personal.id);
+    useNotesStore.getState().initialize();
+
+    expect(useNotesStore.getState().activePrivateWorkspaceId).toBeNull();
+    expect(useNotesStore.getState().folders.map((folder) => folder.id)).toEqual([personal.id]);
+    expect(useNotesStore.getState().notes.map((note) => note.id)).toContain(historical.id);
+    expect(useNotesStore.getState().createNote().folderId).toBe(personal.id);
+    expect(mockRepo.getFolders()).toHaveLength(1);
+  });
+
+  it('can switch to a placed Private and return to the legacy section across reloads', () => {
+    const personal = mockRepo.createFolder('Personal', undefined, { isDefault: true });
+    useNotesStore.getState().initialize();
+    useNotesStore.getState().setActivePrivateWorkspace(ACME);
+    const placedNote = useNotesStore.getState().createNote();
+    expect(mockRepo.getFolders().find((folder) => folder.id === placedNote.folderId)).toMatchObject(
+      { privateWorkspaceId: ACME },
+    );
+
+    useNotesStore.getState().setActivePrivateWorkspace(null);
+    useNotesStore.getState().initialize();
+    expect(useNotesStore.getState().activePrivateWorkspaceId).toBeNull();
+    expect(useNotesStore.getState().folders.map((folder) => folder.id)).toEqual([personal.id]);
+  });
+
+  it('follows a default provisioned later without moving legacy folders', () => {
+    const personal = mockRepo.createFolder('Personal', undefined, { isDefault: true });
+    useNotesStore.getState().initialize();
+    setPlacement();
+    useNotesStore.getState().loadFolders();
+    expect(useNotesStore.getState().activePrivateWorkspaceId).toBe(OWN);
+    expect(useNotesStore.getState().folders.map((folder) => folder.id)).toEqual([personal.id]);
+    expect(mockRepo.getFolders()[0].privateWorkspaceId).toBeNull();
+  });
+});
+
+describe('departed Private folders remain readable without accepting new content', () => {
+  beforeEach(() => {
+    seedTwoPrivates();
+    setPlacement({ active: OWN });
+    mockRepo.setSyncState(
+      'private_workspaces',
+      JSON.stringify([{ id: OWN, name: 'Mine', is_default: true }]),
+    );
+    useNotesStore.getState().initialize();
+  });
+
+  it('redirects a new note from a departed folder to the active Private', () => {
+    const departed = folderNamed('Personal', ACME);
+    expect(useNotesStore.getState().folders.map((folder) => folder.id)).toContain(departed.id);
+    useNotesStore.getState().setActiveFolderId(departed.id);
+    expect(useNotesStore.getState().createNote().folderId).toBe(folderNamed('Personal', OWN).id);
+    expect(useNotesStore.getState().createNote('Explicit', '', departed.id).folderId).toBe(
+      folderNamed('Personal', OWN).id,
+    );
+  });
+
+  it('redirects a meeting started in a departed folder to the active Meetings', () => {
+    const departed = folderNamed('Personal', ACME);
+    const meeting = useNotesStore.getState().createMeetingNote({ folderId: departed.id });
+    expect(meeting.folderId).toBe(folderNamed('Meetings', OWN).id);
+  });
+
+  it('creates a move destination in the active Private if the requested workspace was left', () => {
+    const folder = useNotesStore.getState().createFolder('Recovery', undefined, {
+      privateWorkspaceId: ACME,
+    });
+    expect(folder.privateWorkspaceId).toBe(OWN);
+  });
+
+  it('never selects a departed Personal as the default even when it sorts first', () => {
+    mockRepo.applyRemoteFolder(
+      remoteFolder({
+        id: 'acme-personal',
+        name: 'Personal',
+        sort_order: -1,
+        private_workspace_id: ACME,
+      }),
+    );
+    useNotesStore.getState().initialize();
+    expect(useNotesStore.getState().activeFolderId).toBe(folderNamed('Personal', OWN).id);
+    useNotesStore.getState().setActivePrivateWorkspace(OWN);
+    expect(useNotesStore.getState().activeFolderId).toBe(folderNamed('Personal', OWN).id);
+
+    const ideas = useNotesStore.getState().createFolder('Ideas');
+    useNotesStore.getState().setActiveFolderId(ideas.id);
+    useNotesStore.getState().deleteFolderSafe(ideas.id);
+    expect(useNotesStore.getState().activeFolderId).toBe(folderNamed('Personal', OWN).id);
+  });
+
+  it('keeps departed content reachable when the account has no remaining workspaces', () => {
+    mockRepo.setSyncState('private_default_workspace_id', '');
+    mockRepo.setSyncState('private_workspaces', '[]');
+    useNotesStore.getState().initialize();
+    expect(useNotesStore.getState().folders.map((folder) => folder.id)).toContain(
+      folderNamed('Personal', ACME).id,
+    );
+    const meeting = useNotesStore.getState().createMeetingNote({
+      folderId: folderNamed('Personal', ACME).id,
+    });
+    expect(meeting.folderId).toBe(folderNamed('Meetings', null).id);
+  });
+});

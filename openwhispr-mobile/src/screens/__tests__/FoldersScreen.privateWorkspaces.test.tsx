@@ -166,3 +166,27 @@ it('keeps today’s single Private list when the API has no per-workspace Privat
   expect(screen.queryByText('Family')).not.toBeNull();
   expect(screen.queryByText('Engineering')).not.toBeNull();
 });
+
+it('keeps legacy folders selectable beside a single workspace before a default exists', () => {
+  mockRepo.setSyncState('private_default_workspace_id', '');
+  mockRepo.setSyncState('private_workspaces', JSON.stringify([{ id: ACME, name: 'Acme' }]));
+  const screen = render(<FoldersScreen />);
+  expect(screen.getByLabelText('Workspace: Personal')).toBeTruthy();
+  expect(screen.queryByText('Groceries')).not.toBeNull();
+  expect(screen.queryByText('Roadmap notes')).toBeNull();
+
+  fireEvent.press(screen.getByTestId(`menu-${ACME}`));
+  expect(screen.getByLabelText('Workspace: Acme')).toBeTruthy();
+  expect(screen.queryByText('Roadmap notes')).not.toBeNull();
+  expect(screen.queryByText('Groceries')).toBeNull();
+  expect(screen.queryByText('Engineering')).not.toBeNull();
+
+  fireEvent.press(screen.getByTestId('menu-unassigned-private'));
+  expect(screen.getByLabelText('Workspace: Personal')).toBeTruthy();
+  expect(screen.queryByText('Groceries')).not.toBeNull();
+  fireEvent.press(screen.getByTestId('fab-note'));
+  const [note] = mockRepo.getAllNotes();
+  expect(
+    mockRepo.getFolders().find((folder) => folder.id === note.folderId)?.privateWorkspaceId,
+  ).toBeNull();
+});

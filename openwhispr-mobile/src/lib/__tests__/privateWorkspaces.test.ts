@@ -79,6 +79,15 @@ describe('resolveActivePrivateWorkspaceId', () => {
     ).toBe('own');
   });
 
+  it('keeps an unplaced Private selectable when there is no default workspace', () => {
+    expect(
+      resolveActivePrivateWorkspaceId({ workspaces: [TEAM], savedId: null, defaultId: null }),
+    ).toBeNull();
+    expect(
+      resolveActivePrivateWorkspaceId({ workspaces: [TEAM], savedId: 'team', defaultId: null }),
+    ).toBe('team');
+  });
+
   it('uses the default when no workspace list has been read', () => {
     expect(
       resolveActivePrivateWorkspaceId({ workspaces: [], savedId: 'team', defaultId: 'own' }),
@@ -183,5 +192,19 @@ describe('Private folder scoping', () => {
       defaultId: 'own',
     });
     expect(groups.flatMap((g) => g.folders.map((f) => f.id))).not.toContain(9);
+  });
+
+  it('offers unplaced folders as their own move group until a default exists', () => {
+    const groups = groupPrivateFoldersByWorkspace([defaultPersonal, teamPersonal], {
+      workspaces: [TEAM],
+      firstId: 'team',
+      defaultId: null,
+    });
+    expect(
+      groups.map((group) => [group.workspaceId, group.folders.map((entry) => entry.id)]),
+    ).toEqual([
+      ['team', [3]],
+      [null, [1]],
+    ]);
   });
 });

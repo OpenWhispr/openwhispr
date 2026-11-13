@@ -70,7 +70,24 @@ export function resolveActivePrivateWorkspaceId({
 }): string | null {
   if (workspaces.length === 0) return defaultId;
   if (savedId && workspaces.some((w) => w.id === savedId)) return savedId;
+  // Mobile-only accounts may not have provisioned a default yet. Their existing
+  // unplaced folders must remain reachable until the server gives them a home.
+  if (defaultId === null) return null;
   return defaultActiveWorkspaceId(workspaces) ?? defaultId;
+}
+
+export interface PrivateWorkspaceOption {
+  id: string | null;
+  name: string;
+}
+
+export function privateWorkspaceOptions(
+  workspaces: PrivateWorkspace[],
+  defaultId: string | null,
+): PrivateWorkspaceOption[] {
+  return defaultId === null && workspaces.length > 0
+    ? [{ id: null, name: 'Personal' }, ...workspaces]
+    : workspaces;
 }
 
 /** The workspace whose Private a folder sits in. */
@@ -92,7 +109,7 @@ export function foldersInPrivateWorkspace<F extends Pick<Folder, 'privateWorkspa
   defaultId: string | null,
   listedIds?: string[],
 ): F[] {
-  const listed = listedIds && listedIds.length > 0 ? new Set(listedIds) : null;
+  const listed = listedIds ? new Set(listedIds) : null;
   const showsLost = listed !== null && workspaceId === defaultId;
   return folders.filter((folder) => {
     const owner = privateWorkspaceOf(folder, defaultId);
@@ -122,14 +139,15 @@ export function pickPrivateMeetingsFolder<F extends Pick<Folder, 'name'>>(folder
 }
 
 export interface PrivateFolderGroup<F> {
-  workspaceId: string;
+  workspaceId: string | null;
   name: string;
   folders: F[];
 }
 
 /**
  * Private folders grouped under each listed workspace, `firstId`'s first and the rest in list
- * order. A workspace no longer listed is left out, so nothing is filed there.
+ * order, including unplaced Personal folders until a default exists. A workspace no longer
+ * listed is left out, so nothing is filed there.
  */
 export function groupPrivateFoldersByWorkspace<F extends Pick<Folder, 'privateWorkspaceId'>>(
   folders: F[],
@@ -139,13 +157,14 @@ export function groupPrivateFoldersByWorkspace<F extends Pick<Folder, 'privateWo
     defaultId,
   }: { workspaces: PrivateWorkspace[]; firstId: string | null; defaultId: string | null },
 ): PrivateFolderGroup<F>[] {
+  const options = privateWorkspaceOptions(workspaces, defaultId);
   const ordered = [
-    ...workspaces.filter((w) => w.id === firstId),
-    ...workspaces.filter((w) => w.id !== firstId),
+    ...options.filter((workspace) => workspace.id === firstId),
+    ...options.filter((workspace) => workspace.id !== firstId),
   ];
-  return ordered.map((w) => ({
-    workspaceId: w.id,
-    name: w.name,
-    folders: foldersInPrivateWorkspace(folders, w.id, defaultId),
+  return ordered.map((workspace) => ({
+    workspaceId: workspace.id,
+    name: workspace.name,
+    folders: foldersInPrivateWorkspace(folders, workspace.id, defaultId),
   }));
 }

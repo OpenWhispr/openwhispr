@@ -1,31 +1,37 @@
+import type { ReactElement } from 'react';
 import { Pressable, View } from 'react-native';
 import { MenuView, type MenuAction } from '@react-native-menu/menu';
 import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { GroupedList } from './GroupedList';
 import { safeHaptics } from '@/lib/utils';
-import type { PrivateWorkspace } from '@/lib/privateWorkspaces';
+import { privateWorkspaceOptions, type PrivateWorkspace } from '@/lib/privateWorkspaces';
 
 type PrivateWorkspaceSwitcherProps = {
   workspaces: PrivateWorkspace[];
   activeId: string | null;
-  onSelect: (workspaceId: string) => void;
+  defaultId: string | null;
+  onSelect: (workspaceId: string | null) => void;
 };
+
+const UNASSIGNED_PRIVATE_ID = 'unassigned-private';
 
 /**
  * Picks the workspace whose Private and team spaces the Folders screen shows, as desktop's
- * workspace switcher does. Renders nothing for an account with a single workspace.
+ * workspace switcher does. Renders only when there is more than one Private section.
  */
 export function PrivateWorkspaceSwitcher({
   workspaces,
   activeId,
+  defaultId,
   onSelect,
-}: PrivateWorkspaceSwitcherProps) {
-  if (workspaces.length < 2) return null;
-  const current = workspaces.find((w) => w.id === activeId) ?? workspaces[0];
+}: PrivateWorkspaceSwitcherProps): ReactElement | null {
+  const options = privateWorkspaceOptions(workspaces, defaultId);
+  if (options.length < 2) return null;
+  const current = options.find((workspace) => workspace.id === activeId) ?? options[0];
 
-  const actions: MenuAction[] = workspaces.map((workspace) => ({
-    id: workspace.id,
+  const actions: MenuAction[] = options.map((workspace) => ({
+    id: workspace.id ?? UNASSIGNED_PRIVATE_ID,
     title: workspace.name,
     state: workspace.id === current.id ? 'on' : 'off',
   }));
@@ -36,9 +42,10 @@ export function PrivateWorkspaceSwitcher({
       actions={actions}
       shouldOpenOnLongPress={false}
       onPressAction={({ nativeEvent }) => {
-        if (nativeEvent.event === current.id) return;
+        const selectedId = nativeEvent.event === UNASSIGNED_PRIVATE_ID ? null : nativeEvent.event;
+        if (selectedId === current.id) return;
         safeHaptics('selection');
-        onSelect(nativeEvent.event);
+        onSelect(selectedId);
       }}
     >
       <Pressable

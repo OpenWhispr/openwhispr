@@ -127,7 +127,7 @@ export function MoveToFolderSheet({
           )}
 
           {privateGroups.map((group) => (
-            <View key={group.workspaceId} className="gap-2">
+            <View key={group.workspaceId ?? 'unassigned-private'} className="gap-2">
               <Text className="px-1 text-[13px] uppercase tracking-wider text-secondaryLabel">
                 {`${group.name} · Private`}
               </Text>

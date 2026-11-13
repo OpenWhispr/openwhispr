@@ -36,6 +36,7 @@ export default function FoldersScreen() {
     spaces,
     privateWorkspaces,
     activePrivateWorkspaceId,
+    defaultPrivateWorkspaceId,
     setActivePrivateWorkspace,
     getPrivateNoteFolderId,
     initialize,
@@ -249,6 +250,7 @@ export default function FoldersScreen() {
             <PrivateWorkspaceSwitcher
               workspaces={privateWorkspaces}
               activeId={activePrivateWorkspaceId}
+              defaultId={defaultPrivateWorkspaceId}
               onSelect={setActivePrivateWorkspace}
             />
             <SectionHeader label="Private Space" />

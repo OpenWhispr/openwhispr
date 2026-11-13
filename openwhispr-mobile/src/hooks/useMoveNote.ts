@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { MoveToFolderSheetProps } from '@/components/notes/MoveToFolderSheet';
 import type { Folder } from '@/data';
-import { groupPrivateFoldersByWorkspace } from '@/lib/privateWorkspaces';
+import { foldersInPrivateWorkspace, groupPrivateFoldersByWorkspace } from '@/lib/privateWorkspaces';
 import { canMoveBetweenSpaces } from '@/lib/spacePermissions';
 import { safeHaptics } from '@/lib/utils';
 import { useNotesStore } from '@/store/useNotesStore';
@@ -47,6 +47,16 @@ export function useMoveNote({
     privateWorkspaceId === undefined ? activePrivateWorkspaceId : privateWorkspaceId;
   // Empty until the API keeps a Private per workspace: then every note is the default's.
   const perWorkspacePrivate = privateWorkspaces.length > 0;
+
+  // Browsing lists retain departed workspaces' folders, but new moves must stay in a current
+  // Private. Keep the source folder available to callers for its label, not as a destination.
+  const moveTargetFolders = useMemo(
+    (): Folder[] =>
+      isPersonal
+        ? foldersInPrivateWorkspace(targetFolders, noteWorkspaceId, defaultPrivateWorkspaceId)
+        : targetFolders,
+    [isPersonal, targetFolders, noteWorkspaceId, defaultPrivateWorkspaceId],
+  );
 
   // Where this note is allowed to go, by desktop's rule: team content stays inside its own
   // workspace and never returns to Private. Personal content moves to its own workspace's team
@@ -136,7 +146,7 @@ export function useMoveNote({
     close,
     sheetProps: {
       visible: movingNoteId != null,
-      folders: targetFolders,
+      folders: moveTargetFolders,
       folderCounts,
       excludeFolderId,
       onClose: close,

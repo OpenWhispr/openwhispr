@@ -1610,32 +1610,41 @@ describe('NoteEditorScreen meta row', () => {
     }
   });
 
-  it('files moves from a workspace the account left in the default’s Private', () => {
-    const lost = {
-      ...mockNotesState.folders[0],
-      id: 6,
-      name: 'Old team notes',
-      privateWorkspaceId: 'workspace-gone',
-    } as Folder;
-    mockNotesState.privateWorkspaces = [{ id: 'workspace-own', name: 'Mine', is_default: true }];
-    mockNotesState.defaultPrivateWorkspaceId = 'workspace-own';
-    mockNotesState.getAllPrivateFolders.mockReturnValue([...mockNotesState.folders, lost]);
-    mockNote = note({ folderId: 6 });
-    mockNotesState.notes = [mockNote];
-    try {
-      const { getByText, getByTestId } = render(<NoteEditorScreen />);
-      expect(getByText('Old team notes')).toBeTruthy();
-      fireEvent.press(getByTestId('note-meta-folder'));
-      // The default's folders, beside the lost workspace's it shows.
-      expect(getByTestId('move-sheet').props.accessibilityHint).toBe('Meetings|Old team notes');
-    } finally {
-      mockNotesState.privateWorkspaces = [];
-      mockNotesState.defaultPrivateWorkspaceId = null;
-      mockNotesState.getAllPrivateFolders.mockImplementation(
-        (): Folder[] => mockNotesState.folders,
-      );
-    }
-  });
+  it.each(['workspace-own', null])(
+    'labels departed folders but only offers current Private targets with default %s',
+    (defaultId): void => {
+      const lost = {
+        ...mockNotesState.folders[0],
+        id: 6,
+        name: 'Old team notes',
+        privateWorkspaceId: 'workspace-gone',
+      } as Folder;
+      const lostSibling = { ...lost, id: 7, name: 'Old sibling folder' };
+      mockNotesState.privateWorkspaces = defaultId
+        ? [{ id: defaultId, name: 'Mine', is_default: true }]
+        : [];
+      mockNotesState.defaultPrivateWorkspaceId = defaultId;
+      mockNotesState.getAllPrivateFolders.mockReturnValue([
+        ...mockNotesState.folders,
+        lost,
+        lostSibling,
+      ]);
+      mockNote = note({ folderId: 6 });
+      mockNotesState.notes = [mockNote];
+      try {
+        const { getByText, getByTestId } = render(<NoteEditorScreen />);
+        expect(getByText('Old team notes')).toBeTruthy();
+        fireEvent.press(getByTestId('note-meta-folder'));
+        expect(getByTestId('move-sheet').props.accessibilityHint).toBe('Meetings');
+      } finally {
+        mockNotesState.privateWorkspaces = [];
+        mockNotesState.defaultPrivateWorkspaceId = null;
+        mockNotesState.getAllPrivateFolders.mockImplementation(
+          (): Folder[] => mockNotesState.folders,
+        );
+      }
+    },
+  );
 
   it('offers no folders for a note whose Space is not on this device', () => {
     mockNote = note({ spaceId: 99 });
