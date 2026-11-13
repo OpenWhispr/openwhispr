@@ -38,7 +38,11 @@ async function fixture(
   let spaceSynced;
   // While held, space reads wait until the test answers them, in any order.
   let heldSpaceReads = null;
-  installBrowserGlobals(t, { initialStorage: storage });
+  installBrowserGlobals(t, {
+    initialStorage: storage,
+    // The control panel: the window that publishes the workspace scope and relocates Privates.
+    window: { location: { search: "?panel=true" } },
+  });
   globalThis.window.electronAPI = {
     getNote: async (id) => allNotes.find((note) => note.id === id) ?? null,
     onSpaceSynced: (callback) => {

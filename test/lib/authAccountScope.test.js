@@ -8,10 +8,12 @@ const {
   getAccountScopeRevision,
   markAccountScopePurgeRequired,
   reconcileAccountScope,
+  requestActiveAccountScope,
   resetAccountScopeRetry,
   scheduleAccountScopeRetry,
   shouldBlockAccountScope,
   shouldReconcileAccountScope,
+  subscribeAccountScope,
 } = require("../../src/lib/authAccountScope.ts");
 
 const decide = (overrides = {}) =>
@@ -297,4 +299,80 @@ test("a failed reconciliation schedules a new revision without a reload", (t) =>
   t.mock.timers.tick(1);
   assert.equal(getAccountScopeRevision(), before + 1);
   resetAccountScopeRetry();
+});
+
+test("every consumer asking for the same scope at once sends main one request", async (t) => {
+  const { restore } = installStorage();
+  t.after(restore);
+  const sent = [];
+  const answers = [];
+  global.window.electronAPI = {
+    setActiveAccountScope: (userId, generation) => {
+      sent.push([userId, generation]);
+      return new Promise((resolve, reject) => answers.push({ resolve, reject }));
+    },
+  };
+
+  // The consumers' effects all run on the same change.
+  const together = Array.from({ length: 30 }, () => requestActiveAccountScope("user-a", 7));
+  assert.deepEqual(sent, [["user-a", 7]]);
+  // Another identity is its own request, and doesn't wait for the first.
+  const other = requestActiveAccountScope(null, 8);
+  assert.deepEqual(sent, [
+    ["user-a", 7],
+    [null, 8],
+  ]);
+
+  answers[0].resolve({ success: true });
+  answers[1].resolve({ success: false, code: "AUTH_CONTEXT_CHANGED" });
+  for (const result of await Promise.all(together)) assert.deepEqual(result, { success: true });
+  assert.deepEqual(await other, { success: false, code: "AUTH_CONTEXT_CHANGED" });
+
+  // Once answered, a later pass asks again.
+  const later = requestActiveAccountScope("user-a", 7);
+  assert.equal(sent.length, 3);
+  answers[2].reject(new Error("IPC failed"));
+  await assert.rejects(later, /IPC failed/);
+  void requestActiveAccountScope("user-a", 7);
+  assert.equal(sent.length, 4);
+  answers[3].resolve({ success: true });
+});
+
+test("a purge already required is marked again without rerunning anyone", async (t) => {
+  const { values, restore } = installStorage({
+    "openwhispr:accountScopeUserId": "user-a",
+    "openwhispr:accountScopeValidated": "true",
+    isSignedIn: "false",
+    teamSpacesCapability: "true",
+  });
+  let releasePurge;
+  const purgeHeld = new Promise((resolve) => {
+    releasePurge = resolve;
+  });
+  let passes = 0;
+  // useAuth's pass, as each notify reruns it: mark the purge it needs, then reconcile. The
+  // purge waits (on the sync lock, in the app), and every pass meanwhile marks it again.
+  const pass = () => {
+    passes += 1;
+    if (passes > 1000) return;
+    if (accountScopeRequiresPurge("user-a")) markAccountScopePurgeRequired();
+    void reconcileAccountScope("user-a", { purge: () => purgeHeld, verify: async () => {} });
+  };
+  const unsubscribe = subscribeAccountScope(() => queueMicrotask(pass));
+  t.after(() => {
+    unsubscribe();
+    restore();
+  });
+
+  pass();
+  for (let i = 0; i < 50; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  // The first mark and the reconcile starting rerun it; a mark already in place reruns nothing.
+  assert.ok(passes < 5, `${passes} passes while one purge waited`);
+  assert.equal(values.get("openwhispr:accountScopePurgeRequired"), "true");
+
+  releasePurge();
+  for (let i = 0; i < 50; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(values.has("openwhispr:accountScopePurgeRequired"), false);
+  assert.equal(values.get("isSignedIn"), "true");
+  assert.ok(passes < 10, `${passes} passes in all`);
 });

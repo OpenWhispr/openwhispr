@@ -2500,6 +2500,7 @@ class DatabaseManager {
       // continue to sort chronologically, while the trailing Z marks this as
       // an exact client-captured instant for clear-state reconciliation.
       const occurredAt = toDbTimestamp(analyticsOccurredAt);
+      const spokenUnder = this._accountSpokenUnder(analyticsOccurredAt);
       const stmt = this.db.prepare(
         `INSERT INTO transcriptions (
            text, raw_text, status, error_message, error_code, route_kind,
@@ -2515,8 +2516,11 @@ class DatabaseManager {
         routeKind,
         clientTranscriptionId,
         occurredAt,
-        this._accountSpokenUnder(analyticsOccurredAt)
+        spokenUnder
       );
+      // Spoken signed out, landing after a sign-in: the sign-in's claim has already run, and
+      // set-active-account-scope doesn't run it again for the same account.
+      if (spokenUnder === null && this.activeAccountId) this.claimSignedOutLocalRows();
 
       const fetchStmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
       const transcription = fetchStmt.get(result.lastInsertRowid);
