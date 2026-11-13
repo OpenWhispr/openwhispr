@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react-native';
 import { notesRepository, type Note, type RemoteNote } from '@/data';
 import { deleteNote, fetchNotes } from '@/data/remote/notesApi';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -10,8 +11,13 @@ import {
 } from './noteCreateAttempts';
 
 const QUEUE_KEY = 'notes.private_deletion_queue';
+// A copy the server answers 404 for without showing a tombstone may still exist
+// where this client can't see it, so it is retried, less and less often.
+const HIDDEN_COPY_RETRY_MS = 15 * 60 * 1000;
+const HIDDEN_COPY_MAX_RETRY_MS = 24 * 60 * 60 * 1000;
 
 type CloudIdentity = Pick<Note, 'remoteId' | 'clientNoteId'>;
+type QueuedIdentity = CloudIdentity & { attempts?: number; retryAt?: number };
 type FindRemoteNote = (identity: CloudIdentity) => Promise<RemoteNote | undefined>;
 const inFlightDeletes = new Map<string, Promise<void>>();
 
@@ -20,12 +26,12 @@ function sameCloudCopy(left: CloudIdentity, right: CloudIdentity): boolean {
   return Boolean(left.clientNoteId && left.clientNoteId === right.clientNoteId);
 }
 
-function readQueue(): CloudIdentity[] {
+function readQueue(): QueuedIdentity[] {
   const stored = notesRepository.getSyncState(QUEUE_KEY);
-  return stored ? (JSON.parse(stored) as CloudIdentity[]) : [];
+  return stored ? (JSON.parse(stored) as QueuedIdentity[]) : [];
 }
 
-function writeQueue(identities: CloudIdentity[]): void {
+function writeQueue(identities: QueuedIdentity[]): void {
   if (identities.length) notesRepository.setSyncState(QUEUE_KEY, JSON.stringify(identities));
   else notesRepository.clearSyncState(QUEUE_KEY);
 }
@@ -42,6 +48,29 @@ export function queuePrivateNoteDeletion(note: CloudIdentity): void {
 export function clearPrivateNoteDeletionQueue(): void {
   notesRepository.clearSyncState(QUEUE_KEY);
   clearNoteCreateAttempts();
+}
+
+// Queues the identity (a local note's too) to be tried again after its backoff,
+// reporting it the first time only.
+function deferHiddenCopy(identity: CloudIdentity, remoteId: string): void {
+  const queue = readQueue();
+  const attempts = (queue.find((queued) => sameCloudCopy(queued, identity))?.attempts ?? 0) + 1;
+  const delay = Math.min(HIDDEN_COPY_RETRY_MS * 2 ** (attempts - 1), HIDDEN_COPY_MAX_RETRY_MS);
+  writeQueue([
+    ...queue.filter((queued) => !sameCloudCopy(queued, identity)),
+    { remoteId, clientNoteId: identity.clientNoteId, attempts, retryAt: Date.now() + delay },
+  ]);
+  if (attempts === 1) {
+    Sentry.captureMessage(
+      'privateNoteDeletion: a cloud copy answered 404 with no tombstone; retrying with backoff',
+      'warning',
+    );
+  }
+}
+
+function isDeferred(identity: CloudIdentity): boolean {
+  const retryAt = readQueue().find((queued) => sameCloudCopy(queued, identity))?.retryAt;
+  return retryAt !== undefined && retryAt > Date.now();
 }
 
 function completeIdentity(identity: CloudIdentity): void {
@@ -119,10 +148,10 @@ async function removeCloudCopy(
     checkpoint();
     if (!isNotFound(error)) throw error;
     const remote = await findRemote({ ...identity, remoteId });
-    // A tombstone proves the old copy is gone. With no row at all there is none
-    // this client can see or remove (the server hides it from this build), so
-    // retrying can't help. A revoked-access stub may hide a live copy, so it waits.
-    if (remote && (!remote.deleted_at || remote.access_removed)) throw error;
+    // Absence and revoked-access stubs cannot distinguish deletion from lost
+    // permission. Only an actual tombstone proves the old copy is gone.
+    if (!remote) deferHiddenCopy(identity, remoteId);
+    if (!remote?.deleted_at || remote.access_removed) throw error;
   }
   checkpoint();
   return remoteId;
@@ -193,12 +222,14 @@ export async function pushPrivateNoteDeletes(
   const findRemote = createRemoteLookup(checkpoint);
   let firstError: unknown;
   for (const { identity, local } of pending) {
+    if (isDeferred(identity)) continue;
     try {
       await cleanIdentity(identity, local, findRemote, checkpoint);
     } catch (error) {
       checkpoint();
       if (error instanceof SyncCancelledError) throw error;
-      firstError ??= error;
+      // Deferred just now and already reported once: not an error for every pass.
+      if (!isDeferred(identity)) firstError ??= error;
     }
   }
   if (firstError) throw firstError;
