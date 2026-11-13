@@ -711,6 +711,64 @@ test("analytics drops remote-only trailing work when the view becomes hidden", a
   dispose();
 });
 
+// Your usage may wait out a fresh summary only on a check for other devices'
+// changes, so the refresh is told which kind it is.
+test("analytics refresh tells a local change apart from a check for remote changes", async (t) => {
+  const documentListeners = new Map();
+  const timeouts = new Map();
+  let nextTimeoutId = 1;
+  let localChangeListener;
+  const fakeDocument = {
+    visibilityState: "visible",
+    addEventListener: (name, listener) => documentListeners.set(name, listener),
+    removeEventListener: () => {},
+  };
+  installBrowserGlobals(t, {
+    window: {
+      document: fakeDocument,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      setInterval: () => 1,
+      clearInterval: () => {},
+      setTimeout: (callback) => {
+        const id = nextTimeoutId++;
+        timeouts.set(id, callback);
+        return id;
+      },
+      clearTimeout: (id) => timeouts.delete(id),
+      electronAPI: {
+        onAnalyticsChanged: (listener) => {
+          localChangeListener = listener;
+          return () => {};
+        },
+      },
+    },
+  });
+  const vite = await createRendererServer(t);
+  const { subscribeToAnalyticsRefresh } = await vite.ssrLoadModule("/services/AnalyticsService.ts");
+  const refreshes = [];
+  const dispose = subscribeToAnalyticsRefresh((dataChanged) => {
+    refreshes.push(dataChanged);
+  }, true);
+  const runDebounced = () => {
+    const [[id, callback]] = timeouts.entries();
+    timeouts.delete(id);
+    callback();
+  };
+
+  assert.deepEqual(refreshes, [true], "the mounted view loads everything");
+  await Promise.resolve();
+
+  localChangeListener();
+  assert.deepEqual(refreshes, [true, true], "a dictation loads everything");
+  await Promise.resolve();
+
+  documentListeners.get("visibilitychange")();
+  runDebounced();
+  assert.deepEqual(refreshes, [true, true, false], "a plain focus only checks for remote changes");
+  dispose();
+});
+
 test("overlapping passes are serialized rather than posting the same batch twice", async (t) => {
   // InsightsView flushes on focus, on every analytics-changed broadcast and on
   // a timer, while SyncService runs passes under its own lock. The two share

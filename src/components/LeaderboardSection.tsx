@@ -36,10 +36,21 @@ import {
   shouldShowLeaderboardJumpToMe,
   selectionForRange,
   WEEKLY_METRICS,
-  type LeaderboardWeekStartsCacheEntry,
 } from "../helpers/leaderboard";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
 import { workspaceCan } from "../lib/capabilities";
+import {
+  cacheLeaderboard,
+  cacheLeaderboardAccess,
+  cachedLeaderboardWeekStarts,
+  clearCachedLeaderboards,
+  getLeaderboardCacheVersion,
+  isInsightFresh,
+  isLeaderboardCacheCurrent,
+  readCachedLeaderboard,
+  readCachedLeaderboardAccess,
+  subscribeToInsightsCacheInvalidation,
+} from "../lib/insightsCache";
 import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
 import { InvitationsService } from "../services/InvitationsService";
@@ -182,16 +193,25 @@ export default function LeaderboardSection({
   const refresh = useWorkspaceStore((state) => state.refresh);
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const [access, setAccess] = useState<LeaderboardAccess | null>(null);
-  const [accessLoading, setAccessLoading] = useState(true);
+  // Reopening Insights shows this session's last answer while the next one loads.
+  // Only a validated session gets it: an unvalidated one must reach its Sign-in card.
+  const [access, setAccess] = useState<LeaderboardAccess | null>(() =>
+    accountId && authGeneration != null && getValidatedAuthGeneration() === authGeneration
+      ? (readCachedLeaderboardAccess(accountId)?.value ?? null)
+      : null
+  );
+  const [accessLoading, setAccessLoading] = useState(access == null);
   const [accessError, setAccessError] = useState<"auth" | "generic" | null>(null);
-  const [scopeKey, setScopeKey] = useState<string | null>(null);
+  const [scopeKey, setScopeKey] = useState<string | null>(() =>
+    access ? resolveLeaderboardScopeKey(access.scopes, null) : null
+  );
   const [metric, setMetric] = useState<LeaderboardMetric>("total_words");
   const [range, setRange] = useState<LeaderboardRange>("week");
   const [weekStart, setWeekStart] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
   const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [cacheInvalidationRevision, setCacheInvalidationRevision] = useState(0);
   const [failure, setFailure] = useState<{
     kind: "auth" | "generic" | "policy" | "sso";
     requestKey: string;
@@ -215,7 +235,6 @@ export default function LeaderboardSection({
     authGeneration: number | null;
     requestKey: string;
   } | null>(null);
-  const weekStartsCacheRef = useRef(new Map<string, LeaderboardWeekStartsCacheEntry>());
   const scopes = useMemo(() => access?.scopes ?? [], [access]);
   const selectedScope = scopes.find((scope) => scope.key === scopeKey);
   // Scopes carry only the role. The workspace list carries the server's capabilities, so it
@@ -252,6 +271,25 @@ export default function LeaderboardSection({
   const visibleFailure = failure?.requestKey === selectedRequestKey ? failure.kind : null;
   const boardParticipantCount = visibleLeaderboard?.totalMembers ?? null;
 
+  useEffect(
+    () =>
+      subscribeToInsightsCacheInvalidation(() => {
+        setAccess(null);
+        setAccessLoading(true);
+        setLeaderboard(null);
+        setCacheInvalidationRevision((revision) => revision + 1);
+      }),
+    []
+  );
+
+  useEffect(
+    () => () => {
+      accessRequestIdRef.current += 1;
+      requestIdRef.current += 1;
+    },
+    []
+  );
+
   const loadAccess = useCallback(
     async (preferredScopeKey?: string) => {
       const requestId = ++accessRequestIdRef.current;
@@ -272,19 +310,32 @@ export default function LeaderboardSection({
       }
       setAccessLoading(true);
       setAccessError(null);
+      const cacheVersion = getLeaderboardCacheVersion(accountId);
       try {
         const response = await LeaderboardService.getAccess();
-        if (requestId !== accessRequestIdRef.current) return;
+        if (
+          requestId !== accessRequestIdRef.current ||
+          !isLeaderboardCacheCurrent(accountId, cacheVersion)
+        )
+          return;
+        cacheLeaderboardAccess(accountId, response);
         setAccess(response);
         setScopeKey((current) =>
           resolveLeaderboardScopeKey(response.scopes, current, preferredScopeKey)
         );
       } catch (loadError) {
-        if (requestId !== accessRequestIdRef.current) return;
+        if (
+          requestId !== accessRequestIdRef.current ||
+          !isLeaderboardCacheCurrent(accountId, cacheVersion)
+        )
+          return;
         console.error("Loading leaderboard access failed:", loadError);
         const requiresAccount =
           loadError instanceof CloudApiError &&
-          (loadError.code === "ACCOUNT_REQUIRED" || loadError.status === 401);
+          (loadError.code === "ACCOUNT_REQUIRED" ||
+            loadError.code === "AUTH_EXPIRED" ||
+            loadError.status === 401);
+        if (requiresAccount) clearCachedLeaderboards({ revalidate: false });
         setAccessError(requiresAccount ? "auth" : "generic");
       } finally {
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
@@ -328,8 +379,21 @@ export default function LeaderboardSection({
   }, [isSignedIn, loaded, refresh]);
 
   useEffect(() => {
+    const cached =
+      accountId && authGeneration != null && getValidatedAuthGeneration() === authGeneration
+        ? readCachedLeaderboardAccess(accountId)
+        : null;
+    if (cached && isInsightFresh(cached)) {
+      // The session may have validated after mount, so the answer goes on screen here too.
+      accessRequestIdRef.current += 1;
+      setAccess(cached.value);
+      setScopeKey((current) => resolveLeaderboardScopeKey(cached.value.scopes, current));
+      setAccessError(null);
+      setAccessLoading(false);
+      return;
+    }
     void loadAccess();
-  }, [loadAccess]);
+  }, [accountId, authGeneration, cacheInvalidationRevision, loadAccess]);
 
   useEffect(() => {
     requestIdRef.current += 1;
@@ -361,6 +425,7 @@ export default function LeaderboardSection({
 
   const load = useCallback(async () => {
     if (
+      !accountId ||
       !cloudAccessAllowed ||
       !selectedScope ||
       selectedScope.state !== "ready" ||
@@ -369,7 +434,21 @@ export default function LeaderboardSection({
     )
       return;
     const requestId = ++requestIdRef.current;
-    const cachedWeekStarts = weekStartsCacheRef.current.get(selectedScope.key);
+    const cachedBoard = readCachedLeaderboard(accountId, selectedRequestKey);
+    if (cachedBoard) {
+      setLeaderboard(cachedBoard.value);
+      setLoadedRequestKey(selectedRequestKey);
+      setFailure(null);
+      lastLoadedAtRef.current = cachedBoard.fetchedAt;
+      if (isInsightFresh(cachedBoard)) {
+        // This load retired any still in flight, so it settles their spinner too.
+        setLoading(false);
+        return;
+      }
+    }
+    const weekStartsCache = cachedLeaderboardWeekStarts(accountId);
+    const cacheVersion = getLeaderboardCacheVersion(accountId);
+    const cachedWeekStarts = weekStartsCache.get(selectedScope.key);
     const includeWeekStarts = shouldFetchLeaderboardWeekStarts(cachedWeekStarts);
     setLoading(true);
     setFailure(null);
@@ -381,7 +460,8 @@ export default function LeaderboardSection({
         includeWeekStarts,
         page,
       });
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current || !isLeaderboardCacheCurrent(accountId, cacheVersion))
+        return;
       const nextLeaderboard = includeWeekStarts
         ? response
         : {
@@ -392,7 +472,7 @@ export default function LeaderboardSection({
             ),
           };
       if (includeWeekStarts) {
-        weekStartsCacheRef.current.set(selectedScope.key, {
+        weekStartsCache.set(selectedScope.key, {
           values: response.availableWeekStarts,
           expiresAt: Date.now() + Math.max(60_000, response.refreshAfterSeconds * 1000),
         });
@@ -405,6 +485,7 @@ export default function LeaderboardSection({
         weekStart,
         response.page
       );
+      cacheLeaderboard(accountId, responseRequestKey, nextLeaderboard);
       setLeaderboard(nextLeaderboard);
       setLoadedRequestKey(responseRequestKey);
       if (response.page !== page) {
@@ -413,8 +494,12 @@ export default function LeaderboardSection({
       }
       lastLoadedAtRef.current = Date.now();
     } catch (loadError) {
-      if (requestId !== requestIdRef.current) return;
+      if (requestId !== requestIdRef.current || !isLeaderboardCacheCurrent(accountId, cacheVersion))
+        return;
       console.error("Loading leaderboard failed:", loadError);
+      // A refusal means a gate moved, so no board this session kept still holds.
+      if (loadError instanceof CloudApiError && loadError.status >= 400 && loadError.status < 500)
+        clearCachedLeaderboards({ revalidate: false });
       // A 403 names the gate that moved under us, and retrying the same call
       // can never clear it. Re-read exactly that gate so the surface settles on
       // the card that matches reality instead of a dead "Try again".
@@ -472,6 +557,7 @@ export default function LeaderboardSection({
       if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [
+    accountId,
     authGeneration,
     cloudAccessAllowed,
     loadAccess,
@@ -496,7 +582,7 @@ export default function LeaderboardSection({
     )
       return;
     void load();
-  }, [authGeneration, load, selectedRequestKey]);
+  }, [authGeneration, cacheInvalidationRevision, load, selectedRequestKey]);
 
   // The server owns how big a page is and how long a snapshot stays fresh; the
   // constants are only what to assume before the first response arrives.
@@ -559,6 +645,7 @@ export default function LeaderboardSection({
     setRequestingJoin(true);
     try {
       await WorkspacesService.requestJoin(target.id);
+      clearCachedLeaderboards();
       setAccess((current) =>
         current?.joinableWorkspace
           ? {
@@ -661,7 +748,7 @@ export default function LeaderboardSection({
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
   if (accessLoading && !access) return <LeaderboardSkeleton />;
-  if (accessError && (!access || accountOffline)) {
+  if (accessError && (accessError === "auth" || !access || accountOffline)) {
     return (
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
@@ -740,7 +827,7 @@ export default function LeaderboardSection({
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
         message={t("insights.leaderboard.activationError")}
-        onRetry={onRefreshParticipation}
+        onRetry={() => onRefreshParticipation()}
       />
     );
   }
@@ -968,7 +1055,10 @@ export default function LeaderboardSection({
               <DropdownMenuItem
                 className="gap-2 text-xs"
                 disabled={loading || !cloudAccessAllowed}
-                onSelect={() => void load()}
+                onSelect={() => {
+                  clearCachedLeaderboards({ revalidate: false });
+                  void load();
+                }}
               >
                 <RefreshCw size={13} className={loading ? "animate-spin" : undefined} />
                 {t("insights.leaderboard.refresh")}

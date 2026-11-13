@@ -1,4 +1,5 @@
 import { syncService } from "./SyncService";
+import { clearCachedLeaderboards } from "../lib/insightsCache";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 
 /**
@@ -7,6 +8,8 @@ import { useWorkspaceStore } from "../stores/workspaceStore";
  * neither drifts from the other.
  */
 export async function afterWorkspaceJoined(): Promise<void> {
+  // A new workspace is a new leaderboard, and the account joins every other member's.
+  clearCachedLeaderboards();
   await useWorkspaceStore.getState().refresh({ fresh: true });
   // Membership can change the caller's entitlement. Sync no longer depends on
   // it — collaboration is plan-independent — but the plan badge and word

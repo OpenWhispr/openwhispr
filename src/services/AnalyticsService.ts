@@ -33,8 +33,9 @@ export const ANALYTICS_SUMMARY_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 export const ANALYTICS_REMOTE_REFRESH_DEBOUNCE_MS = 250;
 const requestedHistoryBackfillAccounts = new Set<string>();
 
+/** `refresh` is told whether local data changed, or whether it is only checking for remote changes. */
 export function subscribeToAnalyticsRefresh(
-  refresh: () => void | Promise<void>,
+  refresh: (dataChanged: boolean) => void | Promise<void>,
   cloudInsightsActive: boolean
 ): () => void {
   let disposed = false;
@@ -53,7 +54,7 @@ export function subscribeToAnalyticsRefresh(
 
     refreshRunning = true;
     try {
-      await refresh();
+      await refresh(!remoteOnly);
     } catch (error) {
       console.error("Refreshing analytics failed:", error);
     } finally {
