@@ -251,7 +251,9 @@ test.before(async () => {
     fs.writeFileSync(path.join(archiveRoot, extractDirectory, file), "weights");
   }
   const archivePath = path.join(archiveRoot, "archive.tar.bz2");
-  execFileSync("tar", ["-cjf", archivePath, "-C", archiveRoot, extractDirectory]);
+  execFileSync("tar", ["-cjf", archivePath, "-C", archiveRoot, extractDirectory], {
+    env: { ...process.env, COPYFILE_DISABLE: "1" },
+  });
   parakeetArchive = fs.readFileSync(archivePath);
 });
 
