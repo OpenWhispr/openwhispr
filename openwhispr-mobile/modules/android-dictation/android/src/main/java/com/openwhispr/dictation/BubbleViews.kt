@@ -78,12 +78,21 @@ class GlyphButton(context: Context, private val glyph: Glyph, private val fill: 
       }
       Glyph.STOP -> { val r = 6f * unit; canvas.drawRoundRect(cx - r, cy - r, cx + r, cy + r, 2f * unit, 2f * unit, solid) }
       Glyph.RETRY -> {
+        // A clockwise arc open at the top right, ending in a filled arrowhead that points along it.
         val r = 7f * unit
-        canvas.drawArc(cx - r, cy - r, cx + r, cy + r, -60f, 300f, false, stroke)
-        // Arrow head at the arc's open end (-60°).
-        val ex = cx + r * 0.5f; val ey = cy - r * 0.866f
-        canvas.drawLine(ex, ey, ex - 4f * unit, ey - 1.5f * unit, stroke)
-        canvas.drawLine(ex, ey, ex + 0.5f * unit, ey + 4f * unit, stroke)
+        val start = -30f; val sweep = 280f
+        canvas.drawArc(cx - r, cy - r, cx + r, cy + r, start, sweep, false, stroke)
+        val end = Math.toRadians((start + sweep).toDouble())
+        val ox = kotlin.math.cos(end).toFloat(); val oy = kotlin.math.sin(end).toFloat() // outward from the centre
+        val tx = -oy; val ty = ox // clockwise along the arc
+        val px = cx + r * ox; val py = cy + r * oy
+        val head = 3.6f * unit
+        canvas.drawPath(android.graphics.Path().apply {
+          moveTo(px + tx * head * 1.2f, py + ty * head * 1.2f)
+          lineTo(px + ox * head, py + oy * head)
+          lineTo(px - ox * head, py - oy * head)
+          close()
+        }, solid)
       }
     }
   }
