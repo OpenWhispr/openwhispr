@@ -76,6 +76,7 @@ const runMainDiarization = (
     outcome = "diarized",
     diarizedSource = "system",
     diarizationSegments = [{ start: 0, end: 120, speaker: "speaker_00" }],
+    onMerge = null,
   } = {}
 ) =>
   new Promise((resolve) => {
@@ -89,6 +90,13 @@ const runMainDiarization = (
       return wavPath;
     };
     diarizationManager.diarize = async () => diarizationSegments;
+    if (onMerge) {
+      const merge = diarizationManager.mergeWithTranscript.bind(diarizationManager);
+      diarizationManager.mergeWithTranscript = (rows, ...rest) => {
+        onMerge(rows);
+        return merge(rows, ...rest);
+      };
+    }
 
     const handlers = Object.create(IPCHandlers.prototype);
     Object.assign(handlers, {
@@ -329,3 +337,39 @@ for (const outcome of ["diarized", "skipped", "failed"]) {
     );
   });
 }
+
+test("an epoch end time is normalized with its start, and never sent", async () => {
+  const payload = await runMainDiarization(
+    [
+      {
+        source: "system",
+        text: "a ranged row",
+        timestamp: START_MS + 200,
+        endTimestamp: START_MS + 4800,
+        speaker: "speaker_0",
+      },
+    ],
+    { outcome: "skipped" }
+  );
+
+  const [segment] = payload.segments;
+  assert.equal(segment.speaker, "speaker_0");
+  assert.equal("endTimestamp" in segment, false);
+});
+
+test("the merge receives a ranged row's end in seconds", async () => {
+  let mergedRows = null;
+  await runMainDiarization(
+    [
+      {
+        source: "system",
+        text: "a ranged row",
+        timestamp: START_MS + 200,
+        endTimestamp: START_MS + 4800,
+      },
+    ],
+    { onMerge: (rows) => (mergedRows = rows) }
+  );
+
+  assert.deepEqual([mergedRows[0].timestamp, mergedRows[0].endTimestamp], [0.2, 4.8]);
+});

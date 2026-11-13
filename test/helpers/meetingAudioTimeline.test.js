@@ -7,6 +7,7 @@ const { createRequire } = require("node:module");
 const createWatchdog = require("../../src/helpers/meetingSystemAudioWatchdog");
 const createMeetingSystemAudioHandover = require("../../src/helpers/meetingSystemAudioHandover");
 const micGate = require("../../src/helpers/meetingMicGate");
+const { localBufferEntry } = require("../../src/helpers/meetingLocalChunk");
 
 // Execute the real IPC closures with only their native/network boundaries replaced.
 const ipcPath = path.join(__dirname, "../../src/helpers/ipcHandlers.js");
@@ -81,6 +82,7 @@ function harness({ native = true, local = false } = {}) {
     dropMeetingMicDiarizationCapture() {},
     ...micGate,
     meetingLocalMode: local,
+    localBufferEntry,
     meetingLocalBuffers: { mic: [], system: [] },
     meetingSendCounts: { mic: 0, system: 0 },
     _meetingSystemStreaming: { sendAudio: (buffer) => streamed.push(buffer) },
@@ -388,7 +390,7 @@ test("local transcription excludes synthetic silence while diarization retains t
   run.at(10000);
   await run.restart();
   run.chunk();
-  assert.equal(bytes(run.context.meetingLocalBuffers.system), 9600);
+  assert.equal(bytes(run.context.meetingLocalBuffers.system.map(({ buffer }) => buffer)), 9600);
   assert.equal(bytes(run.pcm), 484800);
 });
 
@@ -459,4 +461,14 @@ test("a meeting restriction drops native audio before transcription, speaker ana
   assert.equal(bytes(h.pcm), 0);
   assert.equal(bytes(h.live), 0);
   assert.equal(bytes(h.observed), 0);
+});
+
+test("a local system chunk with no capture time starts at its receipt time minus its length", async () => {
+  const run = harness({ local: true });
+  run.at(5000);
+  run.rendererSend(Buffer.alloc(100 * 48, 1), "system");
+  assert.deepEqual(
+    run.context.meetingLocalBuffers.system.map(({ startAt }) => startAt),
+    [4900]
+  );
 });
