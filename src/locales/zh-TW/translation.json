@@ -409,7 +409,8 @@
           "modelNotFound": "所選模型無法從此服務商取得。",
           "providerStatus": "服務商回傳了狀態碼 {{status}}。",
           "timeout": "連線測試逾時。",
-          "network": "無法連上服務商。"
+          "network": "無法連上服務商。",
+          "invalidHeaders": "HTTP 標頭無效。請檢查名稱和值；無法自訂 Content-Type 和傳輸標頭。"
         }
       },
       "local": {
@@ -2488,7 +2489,13 @@
     "selfHosted": {
       "endpointUrl": "端點 URL",
       "serverUrl": "伺服器 URL",
-      "apiKeyOptional": "API Key（選填）"
+      "apiKeyOptional": "API Key（選填）",
+      "headers": "HTTP 標頭",
+      "headersHelp": "在自架語音轉文字伺服器之間共用。現有驗證優先。無法自訂 Content-Type 和傳輸標頭。",
+      "headerName": "標頭名稱",
+      "headerValue": "標頭值",
+      "removeHeader": "刪除",
+      "addHeader": "新增標頭"
     },
     "workspace": {
       "title": "工作區",

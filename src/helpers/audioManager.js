@@ -1,3 +1,4 @@
+import { mergeSelfHostedSttHeaders } from "./selfHostedSttHeaders.js";
 import i18n from "../i18n";
 import ReasoningService from "../services/ReasoningService";
 import {
@@ -4334,8 +4335,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       try {
         response = await fetch(endpoint, {
           method: "POST",
-          headers,
+          headers:
+            route.provider === "self-hosted"
+              ? mergeSelfHostedSttHeaders(getSettings().selfHostedSttHeaders, headers)
+              : headers,
           body: formData,
+          redirect:
+            route.provider === "self-hosted" &&
+            getSettings().selfHostedSttHeaders?.some((row) => row.name || row.value)
+              ? "error"
+              : "follow",
           signal: requestController.signal,
         });
       } catch (err) {

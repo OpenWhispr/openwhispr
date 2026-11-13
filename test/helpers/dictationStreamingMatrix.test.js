@@ -376,3 +376,35 @@ test("closure: every personal meeting provider has a token entry", async () => {
     );
   }
 });
+
+test("Orukeet options mark only a configured Self-Hosted route for custom headers", async () => {
+  const { buildStreamingSessionOptions } = await loadRouting();
+  const settings = {
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "custom",
+    cloudTranscriptionModel: "orukeet-v0.1.0",
+    cloudTranscriptionBaseUrl: "https://custom.example.com/v1",
+  };
+  for (const transcriptionMode of ["providers", "self-hosted"]) {
+    const options = buildStreamingSessionOptions({
+      providerName: "orukeet",
+      settings: { ...settings, transcriptionMode },
+      language: "auto",
+    });
+    assert.equal(
+      options.transcriptionMode,
+      undefined,
+      "a legacy custom route with no remote URL is not Self-Hosted"
+    );
+  }
+  const options = buildStreamingSessionOptions({
+    providerName: "orukeet",
+    settings: {
+      ...settings,
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "https://own.example.com/v1",
+    },
+    language: "auto",
+  });
+  assert.equal(options.transcriptionMode, "self-hosted");
+});

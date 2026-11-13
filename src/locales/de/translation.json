@@ -409,7 +409,8 @@
           "modelNotFound": "Das ausgewählte Modell ist bei diesem Anbieter nicht verfügbar.",
           "providerStatus": "Der Anbieter hat den Status {{status}} zurückgegeben.",
           "timeout": "Der Verbindungstest hat das Zeitlimit überschritten.",
-          "network": "Der Anbieter ist nicht erreichbar."
+          "network": "Der Anbieter ist nicht erreichbar.",
+          "invalidHeaders": "Ungültiger HTTP-Header. Name und Wert prüfen; Content-Type und Transport-Header können nicht angepasst werden."
         }
       },
       "local": {
@@ -3248,7 +3249,13 @@
     "selfHosted": {
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
-      "apiKeyOptional": "API-Schlüssel (optional)"
+      "apiKeyOptional": "API-Schlüssel (optional)",
+      "headers": "HTTP-Header",
+      "headersHelp": "Für selbst gehostete Transkriptionsserver gemeinsam verwendet. Bestehende Authentifizierung hat Vorrang. Content-Type und Transport-Header können nicht angepasst werden.",
+      "headerName": "Headername",
+      "headerValue": "Headerwert",
+      "removeHeader": "Entfernen",
+      "addHeader": "Header hinzufügen"
     },
     "enterpriseCheckout": {
       "title": "Auf Enterprise upgraden",

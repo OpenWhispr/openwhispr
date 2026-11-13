@@ -1,4 +1,8 @@
 const {
+  parseSelfHostedSttHeaders,
+  mergeSelfHostedSttHeaders,
+} = require("./selfHostedSttHeaders.js");
+const {
   registryData: modelRegistryData,
   getRunnableSpeechModel,
   listRunnableLocalModels,
@@ -456,7 +460,7 @@ async function postMultipart(
   body,
   boundary,
   headers = {},
-  { signal, session: fetchSession } = {}
+  { signal, session: fetchSession, redirect } = {}
 ) {
   const response = await (fetchSession ?? net).fetch(url.toString(), {
     method: "POST",
@@ -467,6 +471,7 @@ async function postMultipart(
     body,
     useSessionCookies: false,
     signal,
+    redirect,
   });
   const text = await response.text();
   try {
@@ -5859,6 +5864,18 @@ class IPCHandlers {
       })
     );
 
+    const selfHostedSttHeaders = (existing = {}) =>
+      mergeSelfHostedSttHeaders(
+        parseSelfHostedSttHeaders(this.environmentManager.getSelfHostedSttHeaders()),
+        existing
+      );
+    ipcMain.handle("get-self-hosted-stt-headers", () =>
+      this.environmentManager.getSelfHostedSttHeaders()
+    );
+    ipcMain.handle(
+      "save-self-hosted-stt-headers",
+      saveSecretKey("getSelfHostedSttHeaders", "saveSelfHostedSttHeaders", "selfHostedSttHeaders")
+    );
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -8126,8 +8143,14 @@ class IPCHandlers {
             formData.append("language", route.language);
           }
 
+          const key =
+            route.auth.keyRef === "custom"
+              ? this.environmentManager.getCustomTranscriptionKey()
+              : null;
           const response = await proxyFetch(route.endpoint, {
             method: "POST",
+            headers: selfHostedSttHeaders(key ? { Authorization: `Bearer ${key}` } : {}),
+            redirect: Object.keys(selfHostedSttHeaders()).length ? "error" : "follow",
             body: formData,
           });
           if (!response.ok) {
@@ -10478,6 +10501,7 @@ class IPCHandlers {
         options.mode,
         options.model,
         options.baseUrl,
+        provider === "orukeet" ? options.transcriptionMode : null,
         options.pipelineOptions,
         readsSavedKey ? credentialGeneration : null,
         provider === "openai-realtime"
@@ -10546,6 +10570,7 @@ class IPCHandlers {
             } else {
               await streaming.connect({
                 apiKey: this.environmentManager.getCustomTranscriptionKey(),
+                headers: options.transcriptionMode === "self-hosted" ? selfHostedSttHeaders() : {},
                 baseUrl: options.baseUrl,
               });
             }
@@ -12478,8 +12503,18 @@ class IPCHandlers {
                 new URL(route.endpoint),
                 body,
                 boundary,
-                {},
-                { signal }
+                selfHostedSttHeaders(
+                  route.auth.keyRef === "custom" &&
+                    this.environmentManager.getCustomTranscriptionKey()
+                    ? {
+                        Authorization: `Bearer ${this.environmentManager.getCustomTranscriptionKey()}`,
+                      }
+                    : {}
+                ),
+                {
+                  signal,
+                  redirect: Object.keys(selfHostedSttHeaders()).length ? "error" : "follow",
+                }
               );
               if (data.statusCode !== 200) {
                 debugLogger.warn("Self-hosted file transcription failed", {

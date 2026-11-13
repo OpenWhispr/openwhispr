@@ -232,6 +232,7 @@ function buildFakeThis() {
       getTinfoilKey: () => "tk-tinfoil",
       getOpenrouterKey: () => "ork-openrouter",
       getCustomTranscriptionKey: () => "ck-custom",
+      getSelfHostedSttHeaders: () => JSON.stringify([{ name: "X-API-Key", value: "local-test-key" }]),
       getCortiClientId: () => "corti-id",
       getCortiClientSecret: () => "corti-secret",
     },
@@ -1662,4 +1663,58 @@ test("main enterprise audio resolution honors provider and mode policy before HT
   await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, "realtime"), {
     code: "POLICY_UNRESOLVABLE",
   });
+});
+
+test("self-hosted retry and upload carry headers and keep Orukeet authentication", async () => {
+  fetches.length = 0;
+  const settings = {
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "http://127.0.0.1:8178/v1",
+    remoteTranscriptionModel: "orukeet-v0.1.0",
+    cloudTranscriptionProvider: "custom",
+  };
+  assert.equal((await invoke(settings)).success, true);
+  assert.equal(fetches[0].init.redirect, "error");
+  assert.equal(fetches[0].init.headers["x-api-key"], "local-test-key");
+  assert.equal(fetches[0].init.headers.authorization, "Bearer ck-custom");
+  fetches.length = 0;
+  assert.equal(
+    (
+      await invokeUpload({
+        ...settings,
+        provider: "custom",
+        apiKey: "",
+        baseUrl: "",
+        model: "",
+        language: "",
+      })
+    ).success,
+    true
+  );
+  assert.equal(fetches[0].init.redirect, "error");
+  assert.equal(fetches[0].init.headers["x-api-key"], "local-test-key");
+  assert.equal(fetches[0].init.headers.authorization, "Bearer ck-custom");
+  assert.match(fetches[0].init.headers["Content-Type"], /^multipart\/form-data; boundary=/);
+  fetches.length = 0;
+  assert.equal(
+    (await invoke({ cloudTranscriptionMode: "byok", cloudTranscriptionProvider: "openai" }))
+      .success,
+    true
+  );
+  assert.equal(new Headers(fetches[0].init.headers).get("x-api-key"), null);
+});
+
+
+test("self-hosted retry and upload without effective custom headers keep redirect follow", async () => {
+  const previous=fakeThis.environmentManager.getSelfHostedSttHeaders;
+  fakeThis.environmentManager.getSelfHostedSttHeaders=()=>JSON.stringify([{name:"",value:""}]);
+  try {
+    const settings={transcriptionMode:"self-hosted",remoteTranscriptionUrl:"http://127.0.0.1:8178/v1",remoteTranscriptionModel:"whisper-1",cloudTranscriptionProvider:"custom"};
+    fetches.length=0;
+    assert.equal((await invoke(settings)).success,true);
+    assert.equal(fetches[0].init.redirect,"follow");
+    fetches.length=0;
+    assert.equal((await invokeUpload({...settings,provider:"custom",apiKey:"",baseUrl:"",model:"",language:""})).success,true);
+    assert.equal(fetches[0].init.redirect,"follow");
+  } finally { fakeThis.environmentManager.getSelfHostedSttHeaders=previous; }
 });

@@ -409,7 +409,8 @@
           "modelNotFound": "所选模型无法从此服务商获得。",
           "providerStatus": "服务商返回了状态码 {{status}}。",
           "timeout": "连接测试超时。",
-          "network": "无法连接到服务商。"
+          "network": "无法连接到服务商。",
+          "invalidHeaders": "HTTP 请求头无效。请检查名称和值；无法自定义 Content-Type 和传输请求头。"
         }
       },
       "local": {
@@ -2488,7 +2489,13 @@
     "selfHosted": {
       "endpointUrl": "端点 URL",
       "serverUrl": "服务器 URL",
-      "apiKeyOptional": "API Key（可选）"
+      "apiKeyOptional": "API Key（可选）",
+      "headers": "HTTP 请求头",
+      "headersHelp": "在自托管语音转文字服务器之间共享。现有身份验证优先。无法自定义 Content-Type 和传输请求头。",
+      "headerName": "请求头名称",
+      "headerValue": "请求头值",
+      "removeHeader": "删除",
+      "addHeader": "添加请求头"
     },
     "workspace": {
       "title": "工作区",

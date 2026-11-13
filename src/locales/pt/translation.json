@@ -388,7 +388,8 @@
           "modelNotFound": "O modelo selecionado não está disponível neste provedor.",
           "providerStatus": "O provedor retornou o status {{status}}.",
           "timeout": "O teste de conexão expirou.",
-          "network": "Não foi possível contatar o provedor."
+          "network": "Não foi possível contatar o provedor.",
+          "invalidHeaders": "Cabeçalho HTTP inválido. Verifique o nome e o valor; Content-Type e cabeçalhos de transporte não podem ser personalizados."
         }
       },
       "local": {
@@ -2467,7 +2468,13 @@
     "selfHosted": {
       "endpointUrl": "URL do endpoint",
       "serverUrl": "URL do servidor",
-      "apiKeyOptional": "API Key (opcional)"
+      "apiKeyOptional": "API Key (opcional)",
+      "headers": "Cabeçalhos HTTP",
+      "headersHelp": "Compartilhados entre servidores de transcrição auto-hospedados. A autenticação existente tem prioridade. Content-Type e cabeçalhos de transporte não podem ser personalizados.",
+      "headerName": "Nome do cabeçalho",
+      "headerValue": "Valor do cabeçalho",
+      "removeHeader": "Remover",
+      "addHeader": "Adicionar cabeçalho"
     },
     "workspace": {
       "title": "Espaço de trabalho",

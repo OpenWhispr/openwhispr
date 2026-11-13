@@ -1,3 +1,5 @@
+import { useSettingsStore } from "../stores/settingsStore";
+import { Button } from "./ui/button";
 import { useTranslation } from "react-i18next";
 import { ORUKEET_MODEL } from "../helpers/dictationStreamingRouting";
 import { useConnectionAutoCheck } from "../hooks/useConnectionAutoCheck";
@@ -23,18 +25,27 @@ export default function SelfHostedPanel({
   onModelChange,
 }: SelfHostedPanelProps) {
   const { t } = useTranslation();
+  const savedHeaders = useSettingsStore((state) => state.selfHostedSttHeaders);
+  const setHeaders = useSettingsStore((state) => state.setSelfHostedSttHeaders);
+  const headers = service === "transcription" ? savedHeaders : undefined;
   const urlHold = useFocusHold();
   const editing = useFocusHold();
   const visible = usePanelVisible();
   const trimmedModel = (model ?? "").trim();
   // The address and model save as they are typed.
   const delayMs = useTypingPause({
-    typed: `${url}\n${model ?? ""}`,
+    typed: JSON.stringify([url, model, headers]),
     context: JSON.stringify([service, visible]),
     held: editing.held,
   });
   const check = useConnectionAutoCheck({
-    config: { scope: service, provider: "custom", baseUrl: url, model },
+    config: {
+      scope: service,
+      provider: "custom",
+      baseUrl: url,
+      model,
+      ...(headers?.length ? { headers } : {}),
+    },
     ready:
       Boolean(onModelChange && url.trim() && trimmedModel) &&
       // The app sends this model's server a key this panel has no field for, so a check
@@ -80,7 +91,6 @@ export default function SelfHostedPanel({
             aria-label={t("common.model")}
             check={check}
             invalidOn="modelNotFound"
-            // This server is sent no key, so a refusal means it wants one.
             failureReason={
               check.failure?.errorCode === "credentialsRejected"
                 ? t("reasoning.custom.endpointUnauthorized")
@@ -92,6 +102,63 @@ export default function SelfHostedPanel({
             autoComplete="off"
             spellCheck={false}
           />
+        </div>
+      )}
+      {service === "transcription" && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium">{t("settingsPage.selfHosted.headers")}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("settingsPage.selfHosted.headersHelp")}
+          </p>
+          {savedHeaders.map((header, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <ProviderCheckField
+                aria-label={t("settingsPage.selfHosted.headerName")}
+                placeholder={t("settingsPage.selfHosted.headerName")}
+                value={header.name}
+                onChange={(event) =>
+                  setHeaders(
+                    savedHeaders.map((row, i) =>
+                      i === index ? { ...row, name: event.target.value } : row
+                    )
+                  )
+                }
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <ProviderCheckField
+                type="password"
+                aria-label={t("settingsPage.selfHosted.headerValue")}
+                placeholder={t("settingsPage.selfHosted.headerValue")}
+                value={header.value}
+                onChange={(event) =>
+                  setHeaders(
+                    savedHeaders.map((row, i) =>
+                      i === index ? { ...row, value: event.target.value } : row
+                    )
+                  )
+                }
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setHeaders(savedHeaders.filter((_, i) => i !== index))}
+              >
+                {t("settingsPage.selfHosted.removeHeader")}
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setHeaders([...savedHeaders, { name: "", value: "" }])}
+          >
+            {t("settingsPage.selfHosted.addHeader")}
+          </Button>
         </div>
       )}
     </div>

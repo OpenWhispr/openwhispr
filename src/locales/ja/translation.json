@@ -409,7 +409,8 @@
           "modelNotFound": "選択したモデルはこのプロバイダーでは利用できません。",
           "providerStatus": "プロバイダーがステータス {{status}} を返しました。",
           "timeout": "接続テストがタイムアウトしました。",
-          "network": "プロバイダーに接続できませんでした。"
+          "network": "プロバイダーに接続できませんでした。",
+          "invalidHeaders": "HTTP ヘッダーが無効です。名前と値を確認してください。Content-Type と転送用ヘッダーは変更できません。"
         }
       },
       "local": {
@@ -2488,7 +2489,13 @@
     "selfHosted": {
       "endpointUrl": "エンドポイント URL",
       "serverUrl": "サーバー URL",
-      "apiKeyOptional": "API キー（任意）"
+      "apiKeyOptional": "API キー（任意）",
+      "headers": "HTTP ヘッダー",
+      "headersHelp": "セルフホストの音声文字起こしサーバーで共有します。既存の認証が優先されます。Content-Type と転送用ヘッダーは変更できません。",
+      "headerName": "ヘッダー名",
+      "headerValue": "ヘッダー値",
+      "removeHeader": "削除",
+      "addHeader": "ヘッダーを追加"
     },
     "workspace": {
       "title": "ワークスペース",
