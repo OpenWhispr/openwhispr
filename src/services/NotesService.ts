@@ -1,9 +1,21 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudGetForAuthGeneration,
+  cloudPost,
+  cloudPostForAuthGeneration,
+  cloudPatch,
+  cloudPatchForAuthGeneration,
+  cloudDelete,
+  cloudDeleteForAuthGeneration,
+} from "./cloudApi.js";
 import { buildNotesListPath } from "./noteListQuery";
 import type { CloudNoteCreateResult } from "./noteCreateAck";
 
 interface NoteInput {
   client_note_id?: string;
+  private_workspace_id?: string | null;
+  // Sets the placement only where the server has none (sent with the id and placement alone).
+  placement_backfill?: true;
   workspace_id?: string | null;
   space_id?: string | null;
   title?: string | null;
@@ -55,6 +67,7 @@ export interface CloudNote {
   calendar_event_id: string | null;
   diarization_enabled: number | null;
   expected_speaker_count: number | null;
+  private_workspace_id?: string | null;
   workspace_id: string | null;
   space_id: string | null;
   // The note's owner (creator), not its last editor. Absent on access_removed
@@ -77,36 +90,70 @@ interface SearchResult extends CloudNote {
   score: number;
 }
 
-async function create(note: NoteInput): Promise<CloudNote> {
-  return cloudPost<CloudNote>("/api/notes/create", note);
+async function create(note: NoteInput, authGeneration?: number): Promise<CloudNote> {
+  return authGeneration === undefined
+    ? cloudPost<CloudNote>("/api/notes/create", note)
+    : cloudPostForAuthGeneration<CloudNote>("/api/notes/create", note, authGeneration);
+}
+
+// Per-row refusals are optional on older batch endpoints.
+export interface RefusedNote {
+  client_note_id: string | null;
+  code: string;
 }
 
 interface NoteBatchCreateResult {
   created: CloudNoteCreateResult[];
+  refused?: RefusedNote[];
 }
 
-async function batchCreate(notes: NoteInput[]): Promise<NoteBatchCreateResult> {
-  return cloudPost<NoteBatchCreateResult>("/api/notes/batch-create", { notes });
+async function batchCreate(
+  notes: NoteInput[],
+  authGeneration?: number
+): Promise<NoteBatchCreateResult> {
+  return authGeneration === undefined
+    ? cloudPost<NoteBatchCreateResult>("/api/notes/batch-create", { notes })
+    : cloudPostForAuthGeneration<NoteBatchCreateResult>(
+        "/api/notes/batch-create",
+        { notes },
+        authGeneration
+      );
 }
 
-async function update(id: string, updates: Partial<NoteInput>): Promise<CloudNote> {
-  return cloudPatch<CloudNote>("/api/notes/update", { id, ...updates });
+async function update(
+  id: string,
+  updates: Partial<NoteInput>,
+  authGeneration?: number
+): Promise<CloudNote> {
+  return authGeneration === undefined
+    ? cloudPatch<CloudNote>("/api/notes/update", { id, ...updates })
+    : cloudPatchForAuthGeneration<CloudNote>(
+        "/api/notes/update",
+        { id, ...updates },
+        authGeneration
+      );
 }
 
-async function deleteNote(id: string): Promise<void> {
-  await cloudDelete("/api/notes/delete", { id });
+async function deleteNote(id: string, authGeneration?: number): Promise<void> {
+  if (authGeneration === undefined) await cloudDelete("/api/notes/delete", { id });
+  else await cloudDeleteForAuthGeneration("/api/notes/delete", { id }, authGeneration);
 }
 
+// Given an auth generation, the request is pinned to that sign-in: refused
+// once it is replaced, never sent with the next one's token.
 async function list(
   limit?: number,
   before?: string,
   since?: string,
   scope?: "all",
-  cursorId?: string
+  cursorId?: string,
+  authGeneration?: number,
+  cache?: "no-store"
 ): Promise<{ notes: CloudNote[] }> {
-  return cloudGet<{ notes: CloudNote[] }>(
-    buildNotesListPath({ limit, before, since, scope, cursorId })
-  );
+  const path = buildNotesListPath({ limit, before, since, scope, cursorId });
+  return authGeneration === undefined
+    ? cloudGet<{ notes: CloudNote[] }>(path, cache)
+    : cloudGetForAuthGeneration<{ notes: CloudNote[] }>(path, authGeneration, cache);
 }
 
 async function deleteAll(): Promise<{ deleted: number; errors: number }> {
@@ -125,18 +172,35 @@ async function deleteAll(): Promise<{ deleted: number; errors: number }> {
 
 // scope "all" opts into space results (legacy clients stay personal-only);
 // space_id narrows to a single space and takes precedence over scope.
+export interface NoteSearchScope {
+  spaceIds: string[];
+  privateWorkspaceId: string | null;
+}
+
 async function search(
   query: string,
   limit?: number,
   scope?: "all",
-  spaceId?: string
+  spaceId?: string,
+  authGeneration?: number,
+  noteScope?: NoteSearchScope
 ): Promise<{ notes: SearchResult[] }> {
-  return cloudPost<{ notes: SearchResult[] }>("/api/notes/search", {
+  const body = {
     query,
     ...(limit !== undefined ? { limit } : {}),
     ...(scope !== undefined ? { scope } : {}),
     ...(spaceId !== undefined ? { space_id: spaceId } : {}),
-  });
+    ...(noteScope !== undefined
+      ? { space_ids: noteScope.spaceIds, private_workspace_id: noteScope.privateWorkspaceId }
+      : {}),
+  };
+  return authGeneration === undefined
+    ? cloudPost<{ notes: SearchResult[] }>("/api/notes/search", body)
+    : cloudPostForAuthGeneration<{ notes: SearchResult[] }>(
+        "/api/notes/search",
+        body,
+        authGeneration
+      );
 }
 
 export { create, batchCreate, update, deleteNote, deleteAll, list, search };

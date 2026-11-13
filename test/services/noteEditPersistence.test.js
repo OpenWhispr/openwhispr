@@ -48,8 +48,14 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
   const vite = await createRendererServer(t);
   const { syncService } = await vite.ssrLoadModule("/services/SyncService.ts");
   t.mock.method(syncService, "debouncedPush", (...args) => pushes.push(args));
-  const { updateNoteTool } = await vite.ssrLoadModule("/services/tools/updateNoteTool.ts");
-  const { getNoteTool } = await vite.ssrLoadModule("/services/tools/getNoteTool.ts");
+  // The note is in the signed-out Private, the assistant's whole scope here.
+  const scope = { spaceIds: [note.space_id] };
+  const updateNoteTool = (
+    await vite.ssrLoadModule("/services/tools/updateNoteTool.ts")
+  ).createUpdateNoteTool(scope);
+  const getNoteTool = (
+    await vite.ssrLoadModule("/services/tools/getNoteTool.ts")
+  ).createGetNoteTool(scope);
   const { MAX_CONTENT_LENGTH } = await vite.ssrLoadModule("/services/tools/searchNotesTool.ts");
 
   await t.test(

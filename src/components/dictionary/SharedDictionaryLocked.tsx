@@ -33,8 +33,8 @@ const workspaceFirst = (scopes: SharedScope[]): SharedScope[] => [
 const WORKSPACE_ICON = <Building2 className="h-4 w-4 text-primary/80" aria-hidden="true" />;
 const SPACE_ICON = <Users className="h-4 w-4 text-primary/80" aria-hidden="true" />;
 
-// A sign-in, lost access or a switch out of Personal isn't fixed by a plan: no lists, no button.
-const ACCESS_BLOCKED = new Set<LockedAccessState>(["ssoRequired", "noAccess", "chooseWorkspace"]);
+// A sign-in or lost access isn't fixed by a plan: no lists, no button.
+const ACCESS_BLOCKED = new Set<LockedAccessState>(["ssoRequired", "noAccess"]);
 const LOCK_ICON = <Lock size={15} className="shrink-0 text-primary" aria-hidden="true" />;
 
 /** The upsell for a Shared list the member can't use; a member can't buy, so gets no button. */

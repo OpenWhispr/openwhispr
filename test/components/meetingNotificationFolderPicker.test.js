@@ -14,6 +14,7 @@ const contexts = () => ({
     is_default: i === 0 ? 1 : 0,
   })),
   defaultDestination: { folderId: 1, spaceId: 1 },
+  privateSpaceId: 1,
   selectedDestination: null,
   recentDestinations: [],
   existingNote: null,
@@ -191,6 +192,27 @@ test("search reaches shared folders and creation starts Private with an unmatche
   assert.equal(c.calls[0][1].spaceId, 1);
   assert.equal(c.calls[1][0], "select");
   assert.equal(c.calls.filter((x) => x[0] === "start").length, 0);
+});
+
+test("the meeting folder picker defaults to the active workspace's Private", async (t) => {
+  // Main names the active workspace's Private; another Private listed first is not it.
+  const context = {
+    ...contexts(),
+    spaces: [
+      { id: 5, kind: "private", name: "Private" },
+      { id: 2, kind: "team", name: "Team" },
+      { id: 1, kind: "private", name: "Private" },
+    ],
+  };
+  const c = await mount(t, {
+    getMeetingNotificationDestination: async () => ({ success: true, value: context }),
+  });
+  await c.click(c.byLabel("Choose meeting folder"));
+  await c.click(c.button("New folder"));
+  await c.type(c.byLabel("Name"), "Board prep");
+  await c.click(c.button("Create & select"));
+  assert.equal(c.calls[0][0], "create");
+  assert.equal(c.calls[0][1].spaceId, 1);
 });
 
 test("canceling a delayed create ignores its late selection and keeps Start disabled until settlement", async (t) => {

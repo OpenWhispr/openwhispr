@@ -178,7 +178,7 @@ test("Undo that found nothing to bring back claims nothing", async (t) => {
   assert.deepEqual(toastTitles(), ["Customer Calls was deleted."]);
 });
 
-test("after the delete, it says how many unsynced notes moved to Personal", async (t) => {
+test("after the delete, it says how many unsynced notes moved to Private", async (t) => {
   const { deleted } = await confirmDelete(t, {
     commit: async () => ({ success: true, relocatedCount: 2 }),
   });
@@ -186,10 +186,7 @@ test("after the delete, it says how many unsynced notes moved to Personal", asyn
   deleted.onSettled();
   await ui.settle();
 
-  assert.equal(
-    toastTitles().at(-1),
-    "2 notes that hadn't synced were moved to your Personal space."
-  );
+  assert.equal(toastTitles().at(-1), "2 notes that hadn't synced were moved to Private.");
 });
 
 test("Try again after another account signed in does nothing", async (t) => {

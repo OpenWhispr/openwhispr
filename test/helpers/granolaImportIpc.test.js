@@ -83,7 +83,7 @@ test.before(() => {
   const Ctor = IPCHandlers.default || IPCHandlers;
   target = {
     databaseManager: {
-      getExistingClientNoteIds: () => [],
+      getImportedClientNoteIds: () => [],
     },
   };
   Ctor.prototype.setupHandlers.call(

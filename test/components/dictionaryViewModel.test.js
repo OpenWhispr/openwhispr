@@ -654,7 +654,7 @@ test("All words groups spellings dictation treats as one word, Unicode forms inc
   );
 });
 
-test("in Personal a member is asked to choose a workspace, not to upgrade", () => {
+test("the shared dictionary never reports chooseWorkspace", () => {
   const input = {
     status: "ready",
     signedIn: true,
@@ -662,6 +662,20 @@ test("in Personal a member is asked to choose a workspace, not to upgrade", () =
     serverPaused: null,
     hasWords: false,
   };
-  assert.equal(resolveSharedAccessState({ ...input, personalSelected: true }), "chooseWorkspace");
+  // Every account works in a workspace now; a caller still passing the old Personal choice is
+  // told there's no workspace, never to choose one.
+  assert.equal(resolveSharedAccessState({ ...input, personalSelected: true }), "noWorkspace");
   assert.equal(resolveSharedAccessState(input), "noWorkspace");
+  for (const status of ["ready", "ssoRequired", "noAccess", "unavailable"]) {
+    for (const shown of [null, workspace()]) {
+      assert.notEqual(
+        resolveSharedAccessState({ ...input, status, workspace: shown }),
+        "chooseWorkspace"
+      );
+    }
+  }
+  for (const locale of ["ar", "de", "en", "es", "fr", "it", "ja", "pt", "ru", "zh-CN", "zh-TW"]) {
+    const { dictionary } = require(`../../src/locales/${locale}/translation.json`);
+    assert.equal(dictionary.shared.locked.chooseWorkspace, undefined, locale);
+  }
 });

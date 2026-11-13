@@ -5,7 +5,7 @@ const POLICY_CAPABILITY_VERSION = "1";
 // not on the version alone, so an older build that passes the version gate is
 // never handed a route it would silently reroute.
 const CLIENT_CAPABILITIES =
-  "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1";
+  "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1,private-workspace-placement";
 
 function withPolicyRequestHeaders(headers, appVersion) {
   if (!isCanonicalAppVersion(appVersion)) {

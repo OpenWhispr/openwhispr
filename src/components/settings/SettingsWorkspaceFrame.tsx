@@ -1,63 +1,30 @@
-import React, { useState } from "react";
+import React from "react";
 import { useTranslation } from "react-i18next";
-import { Users, UserPlus, Loader2 } from "../icons";
+import { Loader2 } from "../icons";
 import { Button } from "../ui/button";
-import CreateWorkspaceDialog from "../CreateWorkspaceDialog";
-import InviteTeammateDialog from "../InviteTeammateDialog";
 import type { Workspace } from "../../types/electron";
 import type { SettingsWorkspaceState } from "./useSettingsWorkspace";
 
 interface Props {
   state: SettingsWorkspaceState;
   children: (workspace: Workspace) => React.ReactNode;
-  /** Opens the Settings picker from the Personal state. */
-  onChooseWorkspace?: () => void;
   /** The page takes the settings column's height and scrolls inside itself (see SidebarModal). */
   fill?: boolean;
 }
 
 /**
- * The loading, error and empty states shared by the workspace settings pages. The page itself
- * renders only once a workspace is ready.
+ * The loading, error and unavailable states shared by the workspace settings pages. The page
+ * itself renders only once a workspace is ready.
  */
 export default function SettingsWorkspaceFrame({
   state,
   children,
-  onChooseWorkspace,
   fill = false,
 }: Props): React.ReactElement | null {
   const { t } = useTranslation();
-  const { status, workspace, workspaces, retry, loading, stale, signedOut } = state;
-  const [createOpen, setCreateOpen] = useState(false);
-  const [inviteWorkspaceId, setInviteWorkspaceId] = useState<string | null>(null);
+  const { status, workspace, retry, loading, stale, signedOut } = state;
 
   if (signedOut) return null;
-
-  // Shared by the empty and ready branches so the create→invite chain
-  // survives the branch switch when the first workspace lands in the store.
-  const inviteWorkspace = inviteWorkspaceId
-    ? (workspaces.find((w) => w.id === inviteWorkspaceId) ?? null)
-    : null;
-  const createDialog = (
-    <>
-      <CreateWorkspaceDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={setInviteWorkspaceId}
-      />
-      {inviteWorkspace && (
-        <InviteTeammateDialog
-          open
-          onOpenChange={(nextOpen) => {
-            if (!nextOpen) setInviteWorkspaceId(null);
-          }}
-          workspaceId={inviteWorkspace.id}
-          workspaceName={inviteWorkspace.name}
-          cancelLabel={t("common.skip")}
-        />
-      )}
-    </>
-  );
 
   if (status === "loading") {
     return (
@@ -76,7 +43,6 @@ export default function SettingsWorkspaceFrame({
   );
 
   if (status !== "ready" || !workspace) {
-    const personal = status === "personal";
     return (
       <div className="space-y-4">
         <div>
@@ -87,40 +53,18 @@ export default function SettingsWorkspaceFrame({
             {t("settingsPage.workspace.description")}
           </p>
         </div>
-        {status === "error" ? (
-          <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
-            <p className="text-xs font-medium text-foreground mb-1">
-              {t("settingsPage.workspace.loadError.title")}
-            </p>
-            <p className="text-xs text-muted-foreground mb-4">
-              {t("settingsPage.workspace.loadError.description")}
-            </p>
-            {retryButton}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
-            <Users className="w-5 h-5 text-muted-foreground/70 mx-auto mb-2" />
-            <p className="text-xs font-medium text-foreground mb-1">
-              {t(`settingsPage.workspace.${personal ? "personal" : "empty"}.title`)}
-            </p>
-            <p className="text-xs text-muted-foreground mb-4">
-              {t(`settingsPage.workspace.${personal ? "personal" : "empty"}.description`)}
-            </p>
-            {personal ? (
-              onChooseWorkspace && (
-                <Button size="sm" onClick={onChooseWorkspace}>
-                  {t("workspaces.exit.chooseWorkspace")}
-                </Button>
-              )
-            ) : (
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
-                <UserPlus className="me-1.5 h-3.5 w-3.5" />
-                {t("settingsPage.workspace.empty.create")}
-              </Button>
-            )}
-          </div>
-        )}
-        {createDialog}
+        {/* Unavailable: the list holds no default workspace yet; Retry asks the server for it. */}
+        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
+          <p className="text-xs font-medium text-foreground mb-1">
+            {status === "error"
+              ? t("settingsPage.workspace.loadError.title")
+              : t("workspaces.switcher.unavailable")}
+          </p>
+          <p className="text-xs text-muted-foreground mb-4">
+            {t("settingsPage.workspace.loadError.description")}
+          </p>
+          {retryButton}
+        </div>
       </div>
     );
   }
@@ -143,7 +87,6 @@ export default function SettingsWorkspaceFrame({
         </div>
       )}
       {children(workspace)}
-      {createDialog}
     </div>
   );
 }

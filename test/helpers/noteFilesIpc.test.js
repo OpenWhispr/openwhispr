@@ -299,6 +299,29 @@ function legacyFile(folderName, name, content) {
   return filePath;
 }
 
+function useRealDatabase(t) {
+  const originalGetPath = electronStub.app.getPath;
+  electronStub.app.getPath = () => basePath;
+  try {
+    const DatabaseManager = require("../../src/helpers/database");
+    const db = new DatabaseManager();
+    target.databaseManager = db;
+    return db;
+  } catch (error) {
+    if (
+      !process.env.REQUIRE_DB_TESTS &&
+      (error?.code === "ERR_DLOPEN_FAILED" ||
+        error.message.includes("Could not locate the bindings file"))
+    ) {
+      t.skip("better-sqlite3 native binding is not available for this Node runtime");
+      return null;
+    }
+    throw error;
+  } finally {
+    electronStub.app.getPath = originalGetPath;
+  }
+}
+
 const legacyNote = (id, title, folder, body) =>
   `---\nid: ${id}\ntitle: ${title}\ntype: personal\nfolder: ${folder}\ncreated: x\nupdated: y\n---\n\n${body}`;
 
@@ -727,6 +750,80 @@ test("a Private section bound to its workspace moves there, and back when reloca
   assert.equal(fs.existsSync(path.join(basePath, "Workspaces/Acme/Private")), false);
 });
 
+for (const existingPrivate of [false, true]) {
+  test(`binding Private through IPC moves real files (${existingPrivate ? "existing workspace section" : "pending section"})`, async (t) => {
+    const db = useRealDatabase(t);
+    if (!db) return;
+    db.setActiveAccountId("account-a");
+    db.setWorkspaceNames([{ id: "w-acme-1111", name: "Acme" }]);
+    const pendingId = db.getDefaultPrivateSpaceId();
+    const folder = db.createFolder("General", pendingId).folder;
+    const note = db.saveNote("Pending", "pending body", "personal", null, null, folder.id).note;
+    const root = db.saveNote("Root", "root body", "personal", null, null, null, pendingId).note;
+    db.updateNote(root.id, { folder_id: null });
+    if (existingPrivate) {
+      const destinationId = db.getPrivateSpaceId("w-acme-1111");
+      db.createFolder("General", destinationId);
+    }
+    await enableMirror();
+    assert.equal(relativeDir(fileOf(note.id)), "Private notes/General");
+    assert.equal(relativeDir(fileOf(root.id)), "Private notes");
+
+    const result = await invoke("bind-default-private-space", "w-acme-1111", "account-a");
+    await settle();
+
+    assert.equal(result.success, true);
+    assert.equal(relativeDir(fileOf(note.id)), "Workspaces/Acme/Private/General");
+    assert.equal(relativeDir(fileOf(root.id)), "Workspaces/Acme/Private");
+    assert.equal(frontmatterOf(fileOf(note.id)).workspace, "Acme");
+    assert.match(fs.readFileSync(fileOf(note.id), "utf8"), /pending body$/);
+    assert.equal(db.getNote(note.id).client_note_id, note.client_note_id);
+    assert.equal(fs.existsSync(path.join(basePath, "Private notes")), false);
+  });
+}
+
+test("relocating a lost workspace through IPC moves real Private files and attachments", async (t) => {
+  const db = useRealDatabase(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  db.setWorkspaceNames([
+    { id: "w-acme-1111", name: "Acme" },
+    { id: "w-beta-2222", name: "Beta" },
+  ]);
+  db.bindDefaultPrivateSpace("w-acme-1111");
+  const homeId = db.getDefaultPrivateSpaceId();
+  const lostId = db.getPrivateSpaceId("w-beta-2222");
+  const homeFolder = db.createFolder("General", homeId).folder;
+  const lostFolder = db.createFolder("General", lostId).folder;
+  const homeNote = db.saveNote("Home", "home body", "personal", null, null, homeFolder.id).note;
+  const lostNote = db.saveNote("Lost", "lost body", "personal", null, null, lostFolder.id).note;
+  const root = db.saveNote("Root", "root body", "personal", null, null, null, lostId).note;
+  db.updateNote(root.id, { folder_id: null });
+  await enableMirror();
+  const homeFile = fileOf(homeNote.id);
+  const sourceDirectory = path.dirname(fileOf(lostNote.id));
+  fs.writeFileSync(path.join(sourceDirectory, "diagram.txt"), "user attachment");
+  assert.equal(relativeDir(fileOf(lostNote.id)), "Workspaces/Beta/Private/General");
+
+  const result = await invoke("relocate-private-space", "w-beta-2222", null, "account-a");
+  await settle();
+
+  assert.equal(result.success, true);
+  assert.equal(result.notes, 2);
+  assert.equal(relativeDir(fileOf(lostNote.id)), "Workspaces/Acme/Private/General (2)");
+  assert.equal(relativeDir(fileOf(root.id)), "Workspaces/Acme/Private");
+  assert.equal(fileOf(homeNote.id), homeFile);
+  assert.match(fs.readFileSync(homeFile, "utf8"), /home body$/);
+  assert.match(fs.readFileSync(fileOf(lostNote.id), "utf8"), /lost body$/);
+  assert.equal(
+    fs.readFileSync(path.join(path.dirname(fileOf(lostNote.id)), "diagram.txt"), "utf8"),
+    "user attachment"
+  );
+  assert.equal(db.getNote(lostNote.id).client_note_id, lostNote.client_note_id);
+  assert.equal(db.getNote(lostNote.id).space_id, homeId);
+  assert.equal(fs.existsSync(sourceDirectory), false);
+});
+
 test("a rename made while the mirror was off is picked up when it starts", async () => {
   await enableMirror();
   await invoke("note-files-set-enabled", false);
@@ -1110,25 +1207,8 @@ for (const mode of ["normal", "update", "held delete"]) {
 }
 
 test("real local folder deletion cleans unmigrated tombstones omitted from live result IDs", async (t) => {
-  const originalGetPath = electronStub.app.getPath;
-  electronStub.app.getPath = () => basePath;
-  let db;
-  try {
-    const DatabaseManager = require("../../src/helpers/database");
-    db = new DatabaseManager();
-  } catch (error) {
-    if (
-      error?.code === "ERR_DLOPEN_FAILED" ||
-      error.message.includes("Could not locate the bindings file")
-    ) {
-      t.skip("better-sqlite3 native binding is not available for this Node runtime");
-      return;
-    }
-    throw error;
-  } finally {
-    electronStub.app.getPath = originalGetPath;
-  }
-  target.databaseManager = db;
+  const db = useRealDatabase(t);
+  if (!db) return;
   db.setActiveAccountId("account-a");
   const folder = db.createFolder("Archive").folder;
   for (let index = 0; index < 50; index++) db.saveNote(`Live ${index}`, "body", "personal");

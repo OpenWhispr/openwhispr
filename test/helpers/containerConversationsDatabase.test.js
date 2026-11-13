@@ -67,7 +67,7 @@ function createTestTeamSpace(db, { name, emoji = null } = {}) {
   const maxOrder = db.db.prepare("SELECT MAX(sort_order) AS max_order FROM spaces").get();
   const result = db.db
     .prepare(
-      "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order) VALUES (?, 'team', ?, ?, ?)"
+      "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order, workspace_id) VALUES (?, 'team', ?, ?, ?, 'test-workspace')"
     )
     .run(
       `test-container-space-${++nextTestTeamSpaceId}`,
@@ -143,12 +143,15 @@ test("getPendingConversations excludes scopes the cloud contract cannot preserve
   if (!db) return;
   const space = createTestTeamSpace(db, { name: "Eng" }).space;
   const folder = db.createFolder("Docs", space.id).folder;
-  const note = db.saveNote("Note", "body").note;
+  const note = db.saveNote("Note", "body", "personal", null, null, null, space.id).note;
+  const privateNote = db.saveNote("Private", "body").note;
 
   const global = db.createAgentConversation("Global");
   const noteScoped = db.createAgentConversation("Note chat", note.id);
   db.createAgentConversation("Space chat", null, space.id);
   db.createAgentConversation("Folder chat", null, space.id, folder.id);
+  // A private note's chat stays where the note does (D11).
+  db.createAgentConversation("Private note chat", privateNote.id);
 
   assert.deepEqual(
     db.getPendingConversations().map((conversation) => conversation.id),
@@ -195,32 +198,38 @@ test("getConversationsForContainer excludes deleted conversations", (t) => {
 test("private-space root chats are owned by the account that created them", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const privateSpaceId = db.getPrivateSpaceId();
-  // A row from before root chats carried an owner stays visible to everyone,
-  // like a legacy personal note.
-  const legacy = db.createAgentConversation("Legacy root chat", null, privateSpaceId);
-  db.db.prepare("UPDATE agent_conversations SET account_id = NULL WHERE id = ?").run(legacy.id);
+  // Each account has its own private space; a device-owned chat (a guest's)
+  // sits in the signed-out stand-in.
+  db.setActiveAccountId(null);
+  const standInId = db.getPrivateSpaceId();
+  const legacy = db.createAgentConversation("Legacy root chat", null, standInId);
+  assert.equal(legacy.account_id, null);
 
   db.setActiveAccountId("account-a");
-  const chatA = db.createAgentConversation("A root chat", null, privateSpaceId);
+  const aSpaceId = db.getPrivateSpaceId();
+  const chatA = db.createAgentConversation("A root chat", null, aSpaceId);
   db.addAgentMessage(chatA.id, "user", "private to A");
   db.setActiveAccountId("account-b");
-  const chatB = db.createAgentConversation("B root chat", null, privateSpaceId);
+  const bSpaceId = db.getPrivateSpaceId();
+  const chatB = db.createAgentConversation("B root chat", null, bSpaceId);
+  const listed = (spaceId) =>
+    db.getConversationsForContainer(spaceId, null).map((conversation) => conversation.id);
 
+  assert.deepEqual(listed(bSpaceId), [chatB.id]);
   assert.deepEqual(
-    db
-      .getConversationsForContainer(privateSpaceId, null)
-      .map((conversation) => conversation.id)
-      .sort((a, b) => a - b),
-    [legacy.id, chatB.id],
+    listed(aSpaceId),
+    [],
     "another account on the device must not list A's root chats"
   );
+  assert.deepEqual(listed(standInId), [], "nor the signed-out ones");
+  assert.equal(db.createAgentConversation("Into A's space", null, aSpaceId), null);
   db.setActiveAccountId(null);
   assert.deepEqual(
-    db.getConversationsForContainer(privateSpaceId, null).map((conversation) => conversation.id),
+    listed(standInId),
     [legacy.id],
     "signed out, only device-owned root chats are listed"
   );
+  assert.deepEqual(listed(aSpaceId), []);
 
   db.setActiveAccountId("account-a");
   db.deleteAccountData("account-a");
@@ -631,7 +640,10 @@ test("destructive note cleanup retires chats while denied-delete cleanup preserv
 
   const doomed = db.saveNote("Doomed", "body").note;
   const syncedChat = db.createAgentConversation("Synced note chat", doomed.id);
-  db.markConversationSynced(syncedChat.id, "cloud-conv-doomed");
+  // Historical private backups still participate in an explicit local delete.
+  db.db
+    .prepare("UPDATE agent_conversations SET cloud_id = ?, sync_status = 'synced' WHERE id = ?")
+    .run("cloud-conv-doomed", syncedChat.id);
   db.addAgentMessage(syncedChat.id, "user", "remove after confirmed delete");
   const localChat = db.createAgentConversation("Local note chat", doomed.id);
   db.addAgentMessage(localChat.id, "user", "remove local chat");
@@ -649,7 +661,9 @@ test("destructive note cleanup retires chats while denied-delete cleanup preserv
   const recoverable = db.saveNote("Denied delete", "body").note;
   db.markNoteSynced(recoverable.id, "cloud-note-recoverable");
   const recoverableChat = db.createAgentConversation("Keep on denial", recoverable.id);
-  db.markConversationSynced(recoverableChat.id, "cloud-conv-recoverable");
+  db.db
+    .prepare("UPDATE agent_conversations SET cloud_id = ?, sync_status = 'synced' WHERE id = ?")
+    .run("cloud-conv-recoverable", recoverableChat.id);
   db.addAgentMessage(recoverableChat.id, "user", "restore with server note");
 
   assert.equal(db.deleteNote(recoverable.id).success, true);
@@ -1190,7 +1204,8 @@ test("relocateRevokedFolder moves or retires the folder's conversations", (t) =>
 test("the chat list and chat search say which note a chat came from", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const note = db.saveNote("Q3 planning sync", "body").note;
+  const team = createTestTeamSpace(db, { name: "Planning" }).space;
+  const note = db.saveNote("Q3 planning sync", "body", "personal", null, null, null, team.id).note;
   const fromNote = db.createAgentConversation("Onboarding decisions · Q3 planning sync", note.id);
   const plain = db.createAgentConversation("Summarize my week");
   db.addAgentMessage(fromNote.id, "user", "What did we decide?");
@@ -1217,9 +1232,10 @@ test("the chat list and chat search say which note a chat came from", (t) => {
 test("a cloud pull keeps the note a chat came from", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const note = db.saveNote("Q3 planning sync", "body").note;
+  const team = createTestTeamSpace(db, { name: "Planning" }).space;
+  const note = db.saveNote("Q3 planning sync", "body", "personal", null, null, null, team.id).note;
   const chat = db.createAgentConversation("Onboarding decisions", note.id);
-  db.markConversationSynced(chat.id, "cloud-conv-note");
+  assert.equal(db.markConversationSynced(chat.id, "cloud-conv-note").success, true);
 
   // The cloud's conversations carry no note_id.
   db.upsertConversationFromCloud(
@@ -1297,11 +1313,12 @@ test("rows held by a pending folder delete survive a repeated delete and roll ba
 test("a chat whose create was sent stays a tombstone for its late receipt when its note is removed", (t) => {
   const db = createDb(t);
   if (!db) return;
-  const note = db.saveNote("Never synced", "body").note;
+  const team = createTestTeamSpace(db, { name: "Planning" }).space;
+  const note = db.saveNote("Never synced", "body", "personal", null, null, null, team.id).note;
   const chat = db.createAgentConversation("Chat in flight", note.id);
   db.addAgentMessage(chat.id, "user", "sent with the create");
   const sent = db.getAgentConversation(chat.id);
-  db.markConversationCreateAttempted(chat.id);
+  assert.equal(db.markConversationCreateAttempted(chat.id).success, true);
 
   assert.deepEqual(db.deleteNote(note.id), { success: true, id: note.id });
   assert.equal(db.getAgentMessages(chat.id).length, 0);

@@ -112,10 +112,18 @@ test("real rows land in the layout and follow renames, moves and deletes", async
   assert.equal(dirOf(basePath, acmeNote.id), "Workspaces/Acme/Teamspaces/Engineering/Archive");
   assert.equal(dirOf(basePath, betaNote.id), "Workspaces/Beta/Teamspaces/Engineering/General");
 
-  db.moveFolderToSpace(betaFolder.id, acme);
+  const rejected = db.moveFolderToSpace(betaFolder.id, acme);
+  assert.equal(rejected.success, false, "a team move cannot cross workspace boundaries");
   noteFiles.containersChanged();
   await noteFiles.flush();
-  assert.equal(dirOf(basePath, betaNote.id), "Workspaces/Acme/Teamspaces/Engineering/General");
+  assert.equal(dirOf(basePath, betaNote.id), "Workspaces/Beta/Teamspaces/Engineering/General");
+
+  const betaDesign = teamSpace(db, "Design", "w-2");
+  const moved = db.moveFolderToSpace(betaFolder.id, betaDesign);
+  assert.equal(moved.success, true);
+  noteFiles.containersChanged();
+  await noteFiles.flush();
+  assert.equal(dirOf(basePath, betaNote.id), "Workspaces/Beta/Teamspaces/Design/General");
 
   const { noteIds } = db.deleteFolder(acmeFolder.id);
   assert.deepEqual(noteIds, [acmeNote.id]);

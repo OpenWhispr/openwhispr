@@ -63,6 +63,7 @@ export const folders = sqliteTable('folders', {
   isDefault: integer('is_default').default(0),
   sortOrder: integer('sort_order').default(0),
   clientFolderId: text('client_folder_id'),
+  privateWorkspaceId: text('private_workspace_id'),
   remoteId: text('remote_id'),
   deletedAt: text('deleted_at'),
   pendingSync: integer('pending_sync').notNull().default(0),

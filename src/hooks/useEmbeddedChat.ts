@@ -120,6 +120,7 @@ export function useEmbeddedChat({
   const streaming = useChatStreaming({
     setMessages: persistence.setMessages,
     openNote,
+    openNoteId: noteId,
     allowConnectors: true,
     noteMeeting,
     onStreamComplete: persistence.saveAssistantMessage,

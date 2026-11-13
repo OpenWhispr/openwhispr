@@ -10,6 +10,7 @@ import type { CalendarAttendee, CalendarEvent, LinkableCalendarEvent } from "../
 import { getMeetingJoinUrl } from "../../helpers/meetingJoinUrl";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import { syncSessionExpectedCountFromParticipants } from "../../stores/meetingRecordingStore";
+import { markNoteEdited } from "../../stores/noteStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { parseAttendees } from "../../utils/calendarAttendees";
 import { formatEventWhen, normalizeDbDate } from "../../utils/dateFormatting";
@@ -118,7 +119,8 @@ export default function NoteParticipants({
   }, [search, open, localParticipants]);
 
   const saveParticipants = useCallback(
-    (updated: CalendarAttendee[], extra: { calendar_event_id?: string } = {}) => {
+    (updated: CalendarAttendee[], extra: { calendar_event_id?: string } = {}): void => {
+      markNoteEdited(noteId);
       syncSessionExpectedCountFromParticipants(noteId, updated);
       window.electronAPI.updateNote(noteId, {
         participants: JSON.stringify(updated),

@@ -29,11 +29,15 @@ export interface FolderPushInput {
   space_id?: string | null;
 }
 
-export async function batchCreateFolders(items: FolderPushInput[]): Promise<RemoteFolder[]> {
-  const res = await api.post<{ created: RemoteFolder[] }>('/api/folders/batch-create', {
+export interface FolderCreateResponse {
+  created: RemoteFolder[];
+  refused?: { client_folder_id: string | null; code: string }[];
+}
+
+export async function batchCreateFolders(items: FolderPushInput[]): Promise<FolderCreateResponse> {
+  return api.post<FolderCreateResponse>('/api/folders/batch-create', {
     folders: items,
   });
-  return res.created;
 }
 
 /**
@@ -119,11 +123,15 @@ export interface NotePushInput {
   base_updated_at?: string;
 }
 
-export async function batchCreateNotes(items: NotePushInput[]): Promise<RemoteNoteCreateResult[]> {
-  const res = await api.post<{ created: RemoteNoteCreateResult[] }>('/api/notes/batch-create', {
+export interface NoteCreateResponse {
+  created: RemoteNoteCreateResult[];
+  refused?: { client_note_id: string | null; code: string }[];
+}
+
+export async function batchCreateNotes(items: NotePushInput[]): Promise<NoteCreateResponse> {
+  return api.post<NoteCreateResponse>('/api/notes/batch-create', {
     notes: items,
   });
-  return res.created;
 }
 
 export async function updateNote(

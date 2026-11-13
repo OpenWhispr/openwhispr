@@ -1,6 +1,8 @@
-import { useEffect, useMemo } from "react";
-import { useWorkspaceStore } from "../stores/workspaceStore";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { ensureDefaultWorkspace, useWorkspaceStore } from "../stores/workspaceStore";
 import { spacesInWorkspaceScope } from "../lib/workspaceSelection";
+import { defaultWorkspaceName } from "../lib/workspaceSwitcher";
 import { useAuth } from "./useAuth";
 import type { SpaceItem, Workspace, WorkspaceRole } from "../types/electron";
 
@@ -14,8 +16,8 @@ interface UseWorkspaceResult {
   active: Workspace | null;
   role: WorkspaceRole | null;
   loaded: boolean;
-  personalSelected: boolean;
-  selectPersonal: () => void;
+  /** The account's default workspace, where its existing private notes live. */
+  defaultWorkspaceId: string | null;
   setActive: (id: string | null) => void;
   refresh: () => Promise<void>;
 }
@@ -28,8 +30,7 @@ export function useWorkspace(): UseWorkspaceResult {
   const error = useWorkspaceStore((s) => s.error);
   const refresh = useWorkspaceStore((s) => s.refresh);
   const setActive = useWorkspaceStore((s) => s.setActiveWorkspaceId);
-  const personalSelected = useWorkspaceStore((s) => s.personalSelected);
-  const selectPersonal = useWorkspaceStore((s) => s.selectPersonal);
+  const defaultWorkspaceId = useWorkspaceStore((s) => s.defaultWorkspaceId);
 
   useEffect(() => {
     if (isSignedIn && !loaded) {
@@ -65,17 +66,57 @@ export function useWorkspace(): UseWorkspaceResult {
     active,
     role: active?.role ?? null,
     loaded,
-    personalSelected,
-    selectPersonal,
+    defaultWorkspaceId,
     setActive,
     refresh,
   };
 }
 
 export function useSpacesInWorkspaceScope(spaces: SpaceItem[]): SpaceItem[] {
-  const { workspaces, active, personalSelected } = useWorkspace();
+  const { workspaces, defaultWorkspaceId } = useWorkspace();
+  // The saved id, not the listed workspace: before the list answers, the active workspace's own
+  // Private still shows.
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   return useMemo(
-    () => spacesInWorkspaceScope(spaces, active?.id ?? null, workspaces, personalSelected),
-    [spaces, active?.id, workspaces, personalSelected]
+    () => spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces, defaultWorkspaceId),
+    [spaces, activeWorkspaceId, workspaces, defaultWorkspaceId]
   );
+}
+
+function useDefaultWorkspaceName(): string {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  return defaultWorkspaceName(user?.name, t);
+}
+
+/**
+ * Has the server make the signed-in account's default workspace, named after the user, once a
+ * list has loaded for the account (so the session is known to work). Mounted once, in the control
+ * panel; ensureDefaultWorkspace asks once per account session, and again after a failure or once
+ * an Enterprise workspace standing in as the default is gone, which the next list change retries.
+ */
+export function useEnsureDefaultWorkspace(): void {
+  const { isSignedIn, isOfflineAccount } = useAuth();
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const listed = useWorkspaceStore((s) => s.loaded && !s.error && s.listAccountId !== null);
+  const name = useDefaultWorkspaceName();
+
+  useEffect(() => {
+    if (!isSignedIn || isOfflineAccount || !listed) return;
+    void ensureDefaultWorkspace(name);
+  }, [isSignedIn, isOfflineAccount, listed, name, workspaces]);
+}
+
+/**
+ * Retry for a list with no default workspace in it: asks the server for the default again, even
+ * when this session already has an answer.
+ */
+export function useRetryDefaultWorkspace(): { retry: () => void; retrying: boolean } {
+  const name = useDefaultWorkspaceName();
+  const [retrying, setRetrying] = useState(false);
+  const retry = useCallback(() => {
+    setRetrying(true);
+    void ensureDefaultWorkspace(name, { again: true }).finally(() => setRetrying(false));
+  }, [name]);
+  return { retry, retrying };
 }

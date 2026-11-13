@@ -44,7 +44,7 @@ async function signInAs(t, db, cloud, accountId) {
   return service;
 }
 
-function seedHistory(cloud, tag, at) {
+function seedHistory(cloud, tag, at, chatClientId = `${tag}-chat`) {
   return {
     word: cloud.seedDictionaryEntry({
       word: `${tag}Word`,
@@ -61,7 +61,7 @@ function seedHistory(cloud, tag, at) {
     }),
     chat: cloud.seedConversation({
       title: `${tag} chat`,
-      client_conversation_id: `${tag}-chat`,
+      client_conversation_id: chatClientId,
       created_at: at,
       updated_at: at,
       messages: [{ role: "user", content: `${tag} asked`, created_at: at }],
@@ -164,9 +164,16 @@ test("an account returning after another one synced gets what changed meanwhile,
   if (!db) return;
   const cloudA = createAccountCloud();
   const cloudB = createAccountCloud();
-  const seeded = seedHistory(cloudA, "a", daysAgo(5));
+  const accountA = await signInAs(t, db, cloudA, "account-a");
+  // Remote tombstones apply to known local backups, not newly restored device-only history.
+  const localChat = db.createAgentConversation("a chat");
+  db.addAgentMessage(localChat.id, "user", "a asked");
+  const chat = db.getAgentConversation(localChat.id);
+  assert.equal(chat.device_only, 0);
+  const seeded = seedHistory(cloudA, "a", daysAgo(5), chat.client_conversation_id);
 
-  await (await signInAs(t, db, cloudA, "account-a")).syncAll(true);
+  await accountA.syncAll(true);
+  assert.equal(db.getAgentConversation(localChat.id).cloud_id, seeded.chat.id);
   await (await signInAs(t, db, cloudB, "account-b")).syncAll(true);
 
   // From A's phone, while this device is on B.
@@ -731,10 +738,15 @@ test("deleting the active account preserves the returning account's remote delet
   if (!device) return;
   const { db, service } = device;
   const cloudB = createAccountCloud();
-  const seeded = seedHistory(cloudB, "b", daysAgo(5));
-
   await device.signIn("account-b", cloudB);
+  const localChat = db.createAgentConversation("b chat");
+  db.addAgentMessage(localChat.id, "user", "b asked");
+  const chat = db.getAgentConversation(localChat.id);
+  assert.equal(chat.device_only, 0, "B's known local chat remains Backup eligible");
+  const seeded = seedHistory(cloudB, "b", daysAgo(5), chat.client_conversation_id);
+
   await service.syncAll(true);
+  assert.equal(db.getAgentConversation(localChat.id).cloud_id, seeded.chat.id);
   assert.deepEqual(visible(db), {
     words: ["bWord"],
     snippets: ["btrig"],

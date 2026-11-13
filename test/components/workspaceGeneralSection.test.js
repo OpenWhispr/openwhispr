@@ -1,8 +1,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createElement } = require("react");
+const React = require("react");
+const { createElement } = React;
+const { createRoot } = require("react-dom/client");
 const { renderToStaticMarkup } = require("react-dom/server");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installHappyDom,
+} = require("../lib/rendererTestHarness");
 
 const ROLE_CAPS = {
   owner: { manage_settings: true, delete_workspace: true, transfer_ownership: true, leave: false },
@@ -17,12 +23,15 @@ const ROLE_CAPS = {
 
 const WORKSPACE = { id: "w1", name: "Acme Research", seats: 5 };
 
-async function loadSection(t) {
+// `realCapabilities` reads the workspace's own capabilities, as the app does. `dom` is for a
+// test that installed happy-dom itself, to click.
+async function loadSection(t, { realCapabilities = false, dom = false } = {}) {
   t.after(() => {
     delete globalThis.__caps;
     delete globalThis.__settingsWorkspace;
+    delete globalThis.__exitDialogProps;
   });
-  installBrowserGlobals(t);
+  if (!dom) installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-workspace-general-section-",
     noExternal: ["react-i18next"],
@@ -37,10 +46,14 @@ async function loadSection(t) {
           return state.workspace ? children(state.workspace) : null;
         }
       `,
-      "/lib/capabilities": `
-        export const workspaceCan = (workspace, capability) =>
-          globalThis.__caps?.[capability] === true;
-      `,
+      ...(realCapabilities
+        ? {}
+        : {
+            "/lib/capabilities": `
+              export const workspaceCan = (workspace, capability) =>
+                globalThis.__caps?.[capability] === true;
+            `,
+          }),
       "/services/workspaceActions": `
         export const leaveWorkspace = async () => {};
         export const deleteWorkspace = async () => {};
@@ -48,14 +61,19 @@ async function loadSection(t) {
       `,
       "/services/WorkspacesService": "export const WorkspacesService = {};",
       "/stores/workspaceStore": `
-        export const useWorkspaceStore = (selector) => selector({ refresh: async () => {} });
+        export const useWorkspaceStore = (selector) =>
+          selector({
+            refresh: async () => {},
+            workspaces: globalThis.__settingsWorkspace?.workspaces ?? [],
+          });
       `,
-      "/hooks/useAuth": "export const useAuth = () => ({ user: { id: 'u-self' } });",
+      "/hooks/useAuth": "export const useAuth = () => ({ user: { id: 'u-self', name: 'Ada' } });",
       "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
       "/EnterpriseConsoleRow": "export default function Mock() { return null; }",
       "/WorkspaceExitDialog": `
         import React from "react";
-        export function WorkspaceExitDialog() {
+        export function WorkspaceExitDialog(props) {
+          globalThis.__exitDialogProps = props;
           return React.createElement("div", { "data-exit-dialog": "" });
         }
       `,
@@ -70,8 +88,8 @@ async function loadSection(t) {
   return vite.ssrLoadModule("/components/settings/WorkspaceGeneralSection.tsx");
 }
 
-function render(module, { role, name = WORKSPACE.name, caps = ROLE_CAPS[role] }) {
-  const workspace = { ...WORKSPACE, name, role };
+function render(module, { role, name = WORKSPACE.name, caps = ROLE_CAPS[role], extra = {} }) {
+  const workspace = { ...WORKSPACE, name, role, ...extra };
   globalThis.__caps = caps;
   globalThis.__settingsWorkspace = {
     status: "ready",
@@ -79,9 +97,7 @@ function render(module, { role, name = WORKSPACE.name, caps = ROLE_CAPS[role] })
     workspaces: [workspace],
     retry: () => {},
   };
-  return renderToStaticMarkup(
-    createElement(module.default, { onNavigateToSection: () => {}, onChooseWorkspace: () => {} })
-  );
+  return renderToStaticMarkup(createElement(module.default, { onNavigateToSection: () => {} }));
 }
 
 const nameInput = (markup) => {
@@ -182,6 +198,92 @@ test("rows follow server capabilities, not the role", async (t) => {
   assert.ok(!blockedOwner.includes(ROW.delete));
   assert.ok(!blockedOwner.includes(ROW.owner));
   assert.match(nameInput(blockedOwner), /disabled=""/);
+});
+
+test("delete is unavailable for the default workspace", async (t) => {
+  const module = await loadSection(t, { realCapabilities: true });
+  const capabilities = {
+    manage_members: true,
+    manage_teams: true,
+    create_spaces: true,
+    manage_settings: true,
+    manage_billing: true,
+    transfer_ownership: true,
+    leave: false,
+  };
+
+  const own = render(module, {
+    role: "owner",
+    extra: {
+      is_default: true,
+      is_account_default: true,
+      capabilities: { ...capabilities, delete_workspace: false },
+    },
+  });
+  assert.ok(!own.includes(ROW.delete));
+  assert.ok(own.includes(ROW.owner), "the rest of the owner's page stays");
+
+  const another = render(module, {
+    role: "owner",
+    extra: {
+      is_default: false,
+      is_account_default: false,
+      capabilities: { ...capabilities, delete_workspace: true },
+    },
+  });
+  assert.ok(another.includes(ROW.delete));
+});
+
+test("the leave dialog keeps naming where private notes go while the leave runs", async (t) => {
+  let root = null;
+  t.after(async () => {
+    if (root) await React.act(async () => root.unmount());
+  });
+  const happyWindow = await installHappyDom(t);
+  const module = await loadSection(t, { dom: true });
+  const lab = { id: "mine", name: "Ada's lab", role: "owner", is_default: true };
+  const acme = { ...WORKSPACE, role: "member", is_default: false };
+  globalThis.__caps = ROLE_CAPS.member;
+  globalThis.__settingsWorkspace = {
+    status: "ready",
+    workspace: acme,
+    workspaces: [acme, lab],
+    retry: () => {},
+  };
+  const host = happyWindow.document.createElement("div");
+  happyWindow.document.body.append(host);
+  root = createRoot(host);
+  const show = () =>
+    React.act(async () =>
+      root.render(createElement(module.default, { onNavigateToSection: () => {} }))
+    );
+  const dialog = () => globalThis.__exitDialogProps;
+
+  await show();
+  const leave = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent.trim() === "settingsPage.workspace.general.leave"
+  );
+  await React.act(async () => leave.click());
+  assert.equal(dialog().state.kind, "confirmLeave");
+  assert.equal(dialog().privateNotesWorkspace, "Ada's lab");
+
+  // While it runs the store forgets Acme and lands on the default (another window switching
+  // does the same): the sentence keeps the destination it was confirmed with.
+  await React.act(async () => dialog().dispatch({ type: "confirm" }));
+  globalThis.__settingsWorkspace = {
+    status: "ready",
+    workspace: lab,
+    workspaces: [lab],
+    retry: () => {},
+  };
+  await show();
+  assert.equal(dialog().state.kind, "leaving");
+  assert.equal(dialog().privateNotesWorkspace, "Ada's lab");
+
+  // The outcome says where the user is now.
+  await React.act(async () => dialog().dispatch({ type: "succeeded" }));
+  assert.equal(dialog().state.kind, "left");
+  assert.equal(dialog().currentWorkspace, "Ada's lab");
 });
 
 test("icon shows initials and no upload control", async (t) => {

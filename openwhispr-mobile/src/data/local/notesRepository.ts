@@ -947,6 +947,7 @@ export class LocalNotesRepository implements NotesRepository {
           isDefault: remote.is_default ? 1 : 0,
           sortOrder: remote.sort_order,
           clientFolderId: remote.client_folder_id,
+          privateWorkspaceId: remote.private_workspace_id ?? null,
           remoteId: remote.id,
           deletedAt: remote.deleted_at,
           pendingSync: 0,
@@ -959,6 +960,14 @@ export class LocalNotesRepository implements NotesRepository {
       return;
     }
 
+    // Placement is remote metadata; learning it must not overwrite a pending rename.
+    if (remote.private_workspace_id !== undefined) {
+      this.database
+        .update(folders)
+        .set({ privateWorkspaceId: remote.private_workspace_id })
+        .where(eq(folders.id, local.id))
+        .run();
+    }
     if (local.pendingSync === 1) return;
 
     if (remote.deleted_at) {

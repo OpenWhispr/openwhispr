@@ -59,7 +59,8 @@ async function cloudRequest<T = unknown>(
   path: string,
   body?: unknown,
   isPublic?: boolean,
-  authGenerationOverride?: number
+  authGenerationOverride?: number,
+  cache?: "no-store"
 ): Promise<T> {
   const expectedAuthGeneration = isPublic
     ? undefined
@@ -70,6 +71,7 @@ async function cloudRequest<T = unknown>(
     body,
     public: isPublic,
     expectedAuthGeneration,
+    ...(cache ? { cache } : {}),
   })) as (CloudApiResponse<T> & { details?: unknown }) | undefined;
   recordServerDate(result?.serverDate, Date.now());
 
@@ -97,8 +99,8 @@ async function cloudRequest<T = unknown>(
   return result.data as T;
 }
 
-export async function cloudGet<T = unknown>(path: string): Promise<T> {
-  return cloudRequest<T>("GET", path);
+export async function cloudGet<T = unknown>(path: string, cache?: "no-store"): Promise<T> {
+  return cloudRequest<T>("GET", path, undefined, undefined, undefined, cache);
 }
 
 // Account-scoped work may wait behind another renderer operation. Preserve the
@@ -106,9 +108,10 @@ export async function cloudGet<T = unknown>(path: string): Promise<T> {
 // replacement account's token when it eventually reaches the main process.
 export async function cloudGetForAuthGeneration<T = unknown>(
   path: string,
-  authGeneration: number
+  authGeneration: number,
+  cache?: "no-store"
 ): Promise<T> {
-  return cloudRequest<T>("GET", path, undefined, false, authGeneration);
+  return cloudRequest<T>("GET", path, undefined, false, authGeneration, cache);
 }
 
 // Account-scope bootstrap is the only authenticated call allowed before the

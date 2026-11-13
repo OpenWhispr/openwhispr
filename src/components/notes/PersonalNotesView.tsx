@@ -13,7 +13,7 @@ import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
 import { useResizableWidth } from "../../hooks/useResizableWidth";
 import type { NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
-import type { ActionItem, ActionKind, NoteItem } from "../../types/electron";
+import type { ActionItem, ActionKind, NoteItem, NoteMutationResult } from "../../types/electron";
 import { buildNoteRunInput } from "../../helpers/templatePrompts";
 import {
   useSettingsStore,
@@ -62,7 +62,11 @@ import {
   revealContainer,
   createFolder,
   getNoteFromStore,
+  getSpacesValue,
+  markNoteEdited,
 } from "../../stores/noteStore";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
+import { isSpaceInWorkspaceScope } from "../../lib/workspaceSelection";
 import {
   useMeetingRecordingStore,
   useIsMeetingMode,
@@ -502,6 +506,7 @@ export default function PersonalNotesView({
       edits: Pick<PendingDocumentSnapshot, "contentEdited" | "clearContent">
     ) => {
       void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
+      markNoteEdited(snapshot.noteId);
       const current = pendingDocumentRef.current;
       if (current) clearTimeout(current.timer);
 
@@ -535,6 +540,7 @@ export default function PersonalNotesView({
   const scheduleEnhancedSave = useCallback(
     (snapshot: NoteEditorDraft) => {
       void window.electronAPI.discardNoteUndo?.(snapshot.noteId);
+      markNoteEdited(snapshot.noteId);
       const current = pendingEnhancedRef.current;
       if (current) clearTimeout(current.timer);
 
@@ -622,11 +628,6 @@ export default function PersonalNotesView({
 
   const { createNote, createNoteIn } = useCreateNote(canAutoStartMeeting);
 
-  const privateSpaceId = useMemo(
-    () => spaces.find((s) => s.kind === "private")?.id ?? null,
-    [spaces]
-  );
-
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
       await initializeNotes(null, 50, activeFolderId);
@@ -644,16 +645,29 @@ export default function PersonalNotesView({
     [cancelPendingSaves]
   );
 
+  // Answers with main's result: the tree tells a refused move (success false) from a done one.
   const handleMoveNote = useCallback(
-    async (noteId: number, target: NoteMoveTarget) => {
-      await window.electronAPI.updateNote(noteId, {
+    async (noteId: number, target: NoteMoveTarget): Promise<NoteMutationResult> => {
+      const result = await window.electronAPI.updateNote(noteId, {
         folder_id: target.folderId,
         space_id: target.spaceId,
       });
-      if (noteId === activeNoteId) {
+      // A refused move leaves the open note where it is.
+      if (noteId !== activeNoteId || result?.success === false) return result;
+      // The view follows the open note within the workspace. Moved to another workspace's
+      // Private, the note closes: following it there would switch workspace.
+      const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
+      const space = getSpacesValue().find((s) => s.id === target.spaceId);
+      if (
+        space &&
+        isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces, defaultWorkspaceId)
+      ) {
         setActiveContext(target.spaceId, target.folderId);
         revealContainer(target.spaceId, target.folderId);
+      } else {
+        setActiveNoteId(null);
       }
+      return result;
     },
     [activeNoteId]
   );
@@ -669,7 +683,10 @@ export default function PersonalNotesView({
 
   const handleCreateFolderAndMove = useCallback(
     async (noteId: number, folderName: string) => {
-      const spaceId = getNoteFromStore(noteId)?.space_id ?? privateSpaceId;
+      const spaceId =
+        getNoteFromStore(noteId)?.space_id ??
+        (await window.electronAPI.getPrivateSpaceId?.()) ??
+        null;
       if (spaceId == null) return;
       const result = await createFolder(folderName, spaceId);
       if (result.success && result.folder) {
@@ -682,7 +699,7 @@ export default function PersonalNotesView({
         });
       }
     },
-    [privateSpaceId, handleMoveToFolder, toast, t]
+    [handleMoveToFolder, toast, t]
   );
 
   const {
@@ -938,6 +955,7 @@ export default function PersonalNotesView({
           </div>
 
           <SpacesTree
+            onFlushPendingSaves={savePendingNow}
             onDeleteNote={handleDelete}
             onMoveNote={handleMoveNote}
             onCreateFolderAndMove={handleCreateFolderAndMove}

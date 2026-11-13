@@ -191,8 +191,6 @@ interface SettingsPageProps {
   onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
-  /** Opens the workspace picker in the Settings nav (owned by SettingsModal). */
-  onChooseWorkspace?: () => void;
   /** Takes the user to a teamspace in Notes (owned by the control panel, which closes Settings). */
   onOpenTeamspace?: (localSpaceId: number) => void;
 }
@@ -1164,7 +1162,6 @@ export default function SettingsPage({
   activeSection = "general",
   onNavigateToSection,
   initialSubTab,
-  onChooseWorkspace,
   onOpenTeamspace,
 }: SettingsPageProps) {
   const registryVersion = useRegistryVersion();
@@ -3153,12 +3150,7 @@ export default function SettingsPage({
         );
 
       case "workspaceGeneral":
-        return (
-          <WorkspaceGeneralSection
-            onNavigateToSection={onNavigateToSection}
-            onChooseWorkspace={onChooseWorkspace}
-          />
-        );
+        return <WorkspaceGeneralSection onNavigateToSection={onNavigateToSection} />;
 
       case "workspacePeople":
         return (
@@ -4362,11 +4354,6 @@ EOF`,
                         />
                       </div>
                     </div>
-                  )}
-                  {!migration && cloudBackupEnabled && isSignedIn && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("settingsPage.privacy.cloudNotesMigrationDone")}
-                    </p>
                   )}
                   {cloudBackupEnabled &&
                     isSignedIn &&

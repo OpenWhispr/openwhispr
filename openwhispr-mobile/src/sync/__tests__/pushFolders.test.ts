@@ -61,6 +61,22 @@ const folder = (overrides: Partial<Folder> = {}): Folder =>
   }) as Folder;
 
 describe('pushFolders create response matching', () => {
+  it('keeps a refused create pending without adopting another row’s identity or failing the pass', async (): Promise<void> => {
+    mockNotesRepository.getPendingFolders.mockReturnValue([
+      folder({ id: 1, clientFolderId: 'refused' }),
+      folder({ id: 2, clientFolderId: 'accepted' }),
+    ]);
+    mockBatchCreateFolders.mockResolvedValue({
+      created: [
+        { id: 'cloud-accepted', client_folder_id: 'accepted', name: 'Meetings', updated_at: 'now' },
+      ],
+      refused: [{ client_folder_id: 'refused', code: 'write_refused' }],
+    });
+    await expect(pushFolders()).resolves.toBeUndefined();
+    expect(mockNotesRepository.markFolderPushed).toHaveBeenCalledTimes(1);
+    expect(mockNotesRepository.markFolderTerminal).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockNotesRepository.getPendingFolders.mockReturnValue([]);
@@ -72,26 +88,28 @@ describe('pushFolders create response matching', () => {
       folder({ id: 2, clientFolderId: 'client-folder-2' }),
     ]);
     // Server returns folder 2's row first — a naive positional match would swap them.
-    mockBatchCreateFolders.mockResolvedValue([
-      {
-        id: 'remote-folder-2',
-        client_folder_id: 'client-folder-2',
-        name: 'Folder 2',
-        is_default: false,
-        sort_order: 0,
-        deleted_at: null,
-        updated_at: '2026-08-24T10:00:00.000Z',
-      },
-      {
-        id: 'remote-folder-1',
-        client_folder_id: 'client-folder-1',
-        name: 'Folder 1',
-        is_default: false,
-        sort_order: 0,
-        deleted_at: null,
-        updated_at: '2026-08-24T11:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateFolders.mockResolvedValue({
+      created: [
+        {
+          id: 'remote-folder-2',
+          client_folder_id: 'client-folder-2',
+          name: 'Folder 2',
+          is_default: false,
+          sort_order: 0,
+          deleted_at: null,
+          updated_at: '2026-08-24T10:00:00.000Z',
+        },
+        {
+          id: 'remote-folder-1',
+          client_folder_id: 'client-folder-1',
+          name: 'Folder 1',
+          is_default: false,
+          sort_order: 0,
+          deleted_at: null,
+          updated_at: '2026-08-24T11:00:00.000Z',
+        },
+      ],
+    });
 
     await pushFolders();
 
@@ -113,17 +131,19 @@ describe('pushFolders create response matching', () => {
     mockNotesRepository.getPendingFolders.mockReturnValue([
       folder({ id: 1, clientFolderId: 'client-folder-1' }),
     ]);
-    mockBatchCreateFolders.mockResolvedValue([
-      {
-        id: 'remote-folder-1',
-        client_folder_id: null,
-        name: 'Folder 1',
-        is_default: false,
-        sort_order: 0,
-        deleted_at: null,
-        updated_at: '2026-08-24T10:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateFolders.mockResolvedValue({
+      created: [
+        {
+          id: 'remote-folder-1',
+          client_folder_id: null,
+          name: 'Folder 1',
+          is_default: false,
+          sort_order: 0,
+          deleted_at: null,
+          updated_at: '2026-08-24T10:00:00.000Z',
+        },
+      ],
+    });
 
     await pushFolders();
 
@@ -144,17 +164,19 @@ describe('pushFolders create response matching', () => {
     // matches by client_folder_id; folder 2 has no id match and no row at its
     // positional index to fall back to, so it must be reported unmatched rather
     // than silently stealing folder 1's response.
-    mockBatchCreateFolders.mockResolvedValue([
-      {
-        id: 'remote-folder-1',
-        client_folder_id: 'client-folder-1',
-        name: 'Folder 1',
-        is_default: false,
-        sort_order: 0,
-        deleted_at: null,
-        updated_at: '2026-08-24T10:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateFolders.mockResolvedValue({
+      created: [
+        {
+          id: 'remote-folder-1',
+          client_folder_id: 'client-folder-1',
+          name: 'Folder 1',
+          is_default: false,
+          sort_order: 0,
+          deleted_at: null,
+          updated_at: '2026-08-24T10:00:00.000Z',
+        },
+      ],
+    });
 
     await pushFolders();
 
@@ -191,7 +213,7 @@ describe('pushFolders same-name create in a space that already has the folder', 
       folder({ id: 1, name: 'Standup', clientFolderId: 'client-mine' }),
     ]);
     mockNotesRepository.getFolderByRemoteId.mockReturnValue(null);
-    mockBatchCreateFolders.mockResolvedValue([existing]);
+    mockBatchCreateFolders.mockResolvedValue({ created: [existing] });
   });
 
   it('adopts the returned folder, so notes filed in it can upload', async () => {
@@ -233,7 +255,7 @@ describe('pushFolders same-name create in a space that already has the folder', 
       folder({ id: 2, name: 'Standup', clientFolderId: 'client-second' }),
     ]);
     const first = { ...existing, id: 'remote-first', client_folder_id: 'client-first' };
-    mockBatchCreateFolders.mockResolvedValue([first, first]);
+    mockBatchCreateFolders.mockResolvedValue({ created: [first, first] });
     mockNotesRepository.getFolderByRemoteId.mockReturnValue(
       folder({ id: 1, name: 'Standup', clientFolderId: 'client-first', remoteId: 'remote-first' }),
     );
@@ -257,7 +279,7 @@ describe('pushFolders same-name create in a space that already has the folder', 
   });
 
   it('never adopts a returned folder with another name', async () => {
-    mockBatchCreateFolders.mockResolvedValue([{ ...existing, name: 'Retro' }]);
+    mockBatchCreateFolders.mockResolvedValue({ created: [{ ...existing, name: 'Retro' }] });
 
     await pushFolders();
 
@@ -375,13 +397,15 @@ describe('pushFolders scope fields (Task 8)', () => {
     mockNotesRepository.getPendingFolders.mockReturnValue([]);
     mockNotesRepository.getSyncState.mockReturnValue('true');
     mockListSpaces.mockReturnValue([PRIVATE_SPACE, TEAM_SPACE, TEAM_SPACE_SKELETON]);
-    mockBatchCreateFolders.mockResolvedValue([
-      {
-        id: 'remote-folder-1',
-        client_folder_id: 'client-folder-1',
-        updated_at: '2026-08-24T10:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateFolders.mockResolvedValue({
+      created: [
+        {
+          id: 'remote-folder-1',
+          client_folder_id: 'client-folder-1',
+          updated_at: '2026-08-24T10:00:00.000Z',
+        },
+      ],
+    });
     mockUpdateFolder.mockResolvedValue({
       id: 'remote-folder-2',
       updated_at: '2026-08-24T10:00:00.000Z',
@@ -668,8 +692,8 @@ describe('pushFolders scope-grouped create batching (Task 8 fix round 2)', () =>
   // rows — and a folder marked terminal strands its notes at the cloud root.
   type CreateItem = { client_folder_id: string; space_id?: string | null };
 
-  const createdFor = async (items: CreateItem[]) =>
-    items.map((i) => ({
+  const createdFor = async (items: CreateItem[]) => ({
+    created: items.map((i) => ({
       id: `remote-${i.client_folder_id}`,
       client_folder_id: i.client_folder_id,
       name: 'Meetings',
@@ -677,7 +701,8 @@ describe('pushFolders scope-grouped create batching (Task 8 fix round 2)', () =>
       sort_order: 0,
       deleted_at: null,
       updated_at: '2026-08-24T10:00:00.000Z',
-    }));
+    })),
+  });
 
   const spaceIdsIn = (call: CreateItem[]): (string | null | undefined)[] => [
     ...new Set(call.map((i) => i.space_id)),
@@ -811,13 +836,15 @@ describe('pushFolders teamOnly filter', () => {
     jest.clearAllMocks();
     mockNotesRepository.getSyncState.mockReturnValue('true');
     mockListSpaces.mockReturnValue([PRIVATE_SPACE, TEAM_SPACE]);
-    mockBatchCreateFolders.mockResolvedValue([
-      {
-        id: 'remote-folder-2',
-        client_folder_id: 'client-folder-2',
-        updated_at: '2026-08-24T10:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateFolders.mockResolvedValue({
+      created: [
+        {
+          id: 'remote-folder-2',
+          client_folder_id: 'client-folder-2',
+          updated_at: '2026-08-24T10:00:00.000Z',
+        },
+      ],
+    });
     mockUpdateFolder.mockResolvedValue({
       id: 'remote-folder-3',
       updated_at: '2026-08-24T10:00:00.000Z',
@@ -834,13 +861,13 @@ describe('pushFolders teamOnly filter', () => {
       }),
       folder({ id: 2, remoteId: null, clientFolderId: 'client-folder-2', spaceId: TEAM_SPACE.id }),
     ]);
-    mockBatchCreateFolders.mockImplementation(async (items: { client_folder_id: string }[]) =>
-      items.map((i) => ({
+    mockBatchCreateFolders.mockImplementation(async (items: { client_folder_id: string }[]) => ({
+      created: items.map((i) => ({
         id: `remote-${i.client_folder_id}`,
         client_folder_id: i.client_folder_id,
         updated_at: '2026-08-24T10:00:00.000Z',
       })),
-    );
+    }));
 
     await pushFolders();
 
@@ -1062,13 +1089,15 @@ describe('pushFolders default-folder duplicate adoption (fix round 1, Finding 1)
     mockNotesRepository.getFolders.mockReturnValue([
       folder({ id: 1, name: 'Personal', isDefault: 1, remoteId: null, spaceId: PRIVATE_SPACE.id }),
     ]);
-    mockBatchCreateFolders.mockResolvedValue([
-      {
-        id: 'srv-1',
-        client_folder_id: 'mobile-client-1',
-        updated_at: '2026-08-24T10:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateFolders.mockResolvedValue({
+      created: [
+        {
+          id: 'srv-1',
+          client_folder_id: 'mobile-client-1',
+          updated_at: '2026-08-24T10:00:00.000Z',
+        },
+      ],
+    });
 
     await pushFolders();
 
@@ -1109,13 +1138,15 @@ describe('pushFolders default-folder duplicate adoption (fix round 1, Finding 1)
         spaceId: PRIVATE_SPACE.id,
       }),
     ]);
-    mockBatchCreateFolders.mockResolvedValue([
-      {
-        id: 'srv-new',
-        client_folder_id: 'mobile-client-1',
-        updated_at: '2026-08-24T10:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateFolders.mockResolvedValue({
+      created: [
+        {
+          id: 'srv-new',
+          client_folder_id: 'mobile-client-1',
+          updated_at: '2026-08-24T10:00:00.000Z',
+        },
+      ],
+    });
 
     await pushFolders();
 
@@ -1144,13 +1175,15 @@ describe('pushFolders default-folder duplicate adoption (fix round 1, Finding 1)
         spaceId: TEAM_SPACE.id,
       }),
     ]);
-    mockBatchCreateFolders.mockResolvedValue([
-      {
-        id: 'srv-new',
-        client_folder_id: 'mobile-client-1',
-        updated_at: '2026-08-24T10:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateFolders.mockResolvedValue({
+      created: [
+        {
+          id: 'srv-new',
+          client_folder_id: 'mobile-client-1',
+          updated_at: '2026-08-24T10:00:00.000Z',
+        },
+      ],
+    });
 
     await pushFolders();
 
@@ -1172,4 +1205,78 @@ describe('pushFolders default-folder duplicate adoption (fix round 1, Finding 1)
     expect(mockNotesRepository.getFolders).not.toHaveBeenCalled();
     expect(mockGetPrivateSpace).not.toHaveBeenCalled();
   });
+});
+
+test('does not adopt a default folder from another Private workspace', async () => {
+  jest.clearAllMocks();
+  mockNotesRepository.getSyncState.mockReturnValue(null);
+  mockGetPrivateSpace.mockReturnValue({ id: PRIVATE_SPACE.id } as Space);
+  mockListSpaces.mockReturnValue([PRIVATE_SPACE]);
+  const local = folder({
+    id: 1,
+    name: 'Personal',
+    isDefault: 1,
+    remoteId: null,
+    spaceId: PRIVATE_SPACE.id,
+  });
+  mockNotesRepository.getPendingFolders.mockReturnValue([local]);
+  mockNotesRepository.getFolders.mockReturnValue([
+    local,
+    folder({
+      id: 7,
+      name: 'Personal',
+      isDefault: 1,
+      remoteId: 'beta-personal',
+      privateWorkspaceId: 'workspace-beta',
+      spaceId: PRIVATE_SPACE.id,
+    }),
+  ]);
+  mockBatchCreateFolders.mockResolvedValue({
+    created: [
+      {
+        id: 'default-personal',
+        client_folder_id: local.clientFolderId,
+        updated_at: '2026-11-12T10:00:00.000Z',
+      },
+    ],
+  });
+  await pushFolders();
+  expect(mockNotesRepository.adoptDuplicateFolder).not.toHaveBeenCalled();
+  expect(mockBatchCreateFolders).toHaveBeenCalledTimes(1);
+});
+
+test('adopts a same-named folder carrying the current default workspace UUID', async () => {
+  jest.clearAllMocks();
+  mockNotesRepository.getSyncState.mockImplementation((key) =>
+    key === 'private_default_workspace_id' ? 'workspace-default' : null,
+  );
+  mockGetPrivateSpace.mockReturnValue({ id: PRIVATE_SPACE.id } as Space);
+  mockListSpaces.mockReturnValue([PRIVATE_SPACE]);
+  const local = folder({
+    id: 1,
+    name: 'Personal',
+    isDefault: 1,
+    remoteId: null,
+    spaceId: PRIVATE_SPACE.id,
+  });
+  mockNotesRepository.getPendingFolders.mockReturnValue([local]);
+  mockNotesRepository.getFolders.mockReturnValue([
+    local,
+    folder({
+      id: 7,
+      name: 'Personal',
+      isDefault: 1,
+      remoteId: 'default-personal',
+      privateWorkspaceId: 'workspace-default',
+      spaceId: PRIVATE_SPACE.id,
+    }),
+  ]);
+  await pushFolders();
+  expect(mockNotesRepository.adoptDuplicateFolder).toHaveBeenCalledWith(
+    1,
+    7,
+    'default-personal',
+    expect.any(String),
+  );
+  expect(mockBatchCreateFolders).not.toHaveBeenCalled();
 });

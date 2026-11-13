@@ -56,15 +56,32 @@ for (const surface of ["note chat", "agent window"]) {
           space_id: 1,
         };
         const savedMessages = [];
+        const protectedNotes = [];
+        const writeGuards = [];
+        const writeGuard = { accountId: null, authGeneration: 0 };
         const externalActions = [];
         installBrowserGlobals(t, {
           initialStorage: { isSubscribed: "true" },
           window: {
             clearInterval: noop,
             electronAPI: {
+              getDatabaseAccountScope: async () => ({ accountId: null, visibleAccountId: null }),
+              getNoteWriteGuard: async () => writeGuard,
+              protectConversation: async (id, notes, deviceOnly, accountId) => {
+                assert.equal(id, 1);
+                assert.deepEqual(notes, [{ id: stored.id, space_id: stored.space_id }]);
+                assert.equal(deviceOnly, false);
+                assert.equal(accountId, writeGuard.accountId);
+                protectedNotes.push(notes);
+                return { success: true };
+              },
+              // The note is in main's Private, all a chat reads with no workspace active.
+              getPrivateSpaceId: async () => 1,
               getNote: async () => ({ ...stored }),
               updateNote: async (_id, updates, options) => {
                 assert.equal(options.undoable, true);
+                assert.deepEqual(options.writeGuard, writeGuard);
+                writeGuards.push(options.writeGuard);
                 assert.equal(options.expected.id, stored.id);
                 Object.assign(stored, updates);
                 return { success: true };
@@ -196,6 +213,8 @@ for (const surface of ["note chat", "agent window"]) {
           if (priorEmail) await React.act(async () => agentChat.switchChat(1));
           await React.act(async () => agentChat.send(REQUEST));
         }
+        assert.ok(protectedNotes.length >= 3, "grounding/tool reads protect the persisted chat");
+        assert.equal(writeGuards.length, 2, "both note edits carry the pinned main guard");
         assert.equal(stored.enhanced_content, EDITED);
         assert.equal(stored.title, "Renamed workshop");
         assert.equal(stored.content, "Bring a notebook.");

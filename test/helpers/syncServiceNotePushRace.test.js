@@ -21,6 +21,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { deferred } = require("./harness/deferred.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 const {
@@ -38,12 +39,13 @@ async function setup(t) {
   // The revisioned server guards writes by base_revision; its client
   // updated_at is a hint, not a guard.
   const cloud = createFakeCloud({ revisionGuard: true, staleWriteGuard: false });
+  const team = joinTeamSpace(db, cloud);
   const api = createElectronApi(db, { cloud });
   windowStub.electronAPI = api;
   await establishValidatedAuth();
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
-  return { db, cloud, api, service };
+  return { db, cloud, api, service, team };
 }
 
 // The editor's save path, so the edit carries its field intent as a real one does.
@@ -89,7 +91,7 @@ async function settle(rounds = 20) {
 }
 
 async function syncedNote(ctx, content = "first line") {
-  const note = ctx.db.saveNote("Standup", content, "meeting").note;
+  const note = saveNoteIn(ctx.db, ctx.team.id, "Standup", content, "meeting").note;
   await ctx.service.syncAll(true);
   const synced = ctx.db.getNote(note.id);
   assert.ok(synced.cloud_id, "the note reaches the cloud");
@@ -222,7 +224,7 @@ test("a debounced create and a full pass create a new note once", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud, api, service } = ctx;
-  const note = db.saveNote("Standup", "first line", "meeting").note;
+  const note = saveNoteIn(db, ctx.team.id, "Standup", "first line", "meeting").note;
 
   const held = holdRequest(api, isNoteCreate);
   const debounced = service.pushNote(note.id);
@@ -423,3 +425,20 @@ for (const via of ["debounced push", "full pass"]) {
     assert.equal(db.getNoteByClientId(note.client_note_id)?.content, "first line");
   });
 }
+
+test("a queued debounced push skips a note already created by a batch", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const note = saveNoteIn(db, ctx.team.id, "Standup", "first line", "meeting").note;
+  const held = holdRequest(api, isNoteCreate);
+  const pass = service.pushPendingNotes(false);
+  await held.arrived;
+  const debounced = service.pushNote(note.id);
+  await settle();
+  held.release();
+  await Promise.all([pass, debounced]);
+  assert.equal(cloud.log.filter(isNoteCreate).length, 1);
+  assert.equal(cloud.log.filter(isNotePatch).length, 0);
+  assert.equal(db.getNote(note.id).sync_status, "synced");
+});

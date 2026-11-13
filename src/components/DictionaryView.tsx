@@ -199,7 +199,7 @@ function DictionaryPage({
       updateStoredDictionary(changes, listsOwner),
     [updateStoredDictionary, listsOwner]
   );
-  const { active: workspace, personalSelected } = useWorkspace();
+  const { active: workspace } = useWorkspace();
   const { isSignedIn, user } = useAuth();
   const workspaceId = workspace?.id ?? null;
   const workspaceName = workspace?.name ?? "";
@@ -312,7 +312,6 @@ function DictionaryPage({
     status,
     signedIn: isSignedIn,
     workspace,
-    personalSelected,
     serverPaused: snapshot?.meta?.paused ?? null,
     hasWords:
       (snapshot?.entries.length ?? 0) > 0 ||

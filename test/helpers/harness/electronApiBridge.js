@@ -145,16 +145,43 @@ function createElectronApi(db, options = {}) {
     // Notes
     getNote: async (id) => db.getNote(id),
     updateNote: async (id, updates) => db.updateNote(id, updates),
-    getPendingNotes: async (spaceKind) => db.getPendingNotes(spaceKind),
+    updateNoteShareState: async (id, state) => db.updateNoteShareState(id, state),
+    getPendingNotes: async (scope) => db.getPendingNotes(scope),
     getPendingNoteDeletes: async () => db.getPendingNoteDeletes(),
     getNoteByClientId: async (clientNoteId) => db.getNoteByClientId(clientNoteId),
     getNoteForCloudRow: async (clientNoteId, cloudId) =>
       db.getNoteForCloudRow(clientNoteId, cloudId),
-    upsertNoteFromCloud: async (cloudNote, localFolderId, localSpaceId) =>
-      db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId),
-    markNoteCreatesAttempted: async (clientNoteIds) => db.markNoteCreatesAttempted(clientNoteIds),
+    upsertNoteFromCloud: async (
+      cloudNote,
+      localFolderId,
+      localSpaceId,
+      expectedAuthGeneration,
+      options
+    ) =>
+      expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId, {
+            newKeyIfTaken: options?.newKeyIfTaken === true,
+          }),
+    renewNoteCloudIdentity: async (id, clientId, cloudId, spaceId, generation) =>
+      authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.renewNoteCloudIdentity(id, clientId, cloudId, spaceId),
+    getPrivatePlacementBackupCandidates: async (generation) =>
+      authState.isStale(generation) ? STALE_SYNC_ACK : db.getPrivatePlacementBackupCandidates(),
+    getPrivatePlacementBackupRows: async (generation, candidates) =>
+      authState.isStale(generation) ? STALE_SYNC_ACK : db.getPrivatePlacementBackupRows(candidates),
+    queueUnlinkedPrivateFolders: async (generation) =>
+      authState.isStale(generation) ? STALE_SYNC_ACK : db.queueUnlinkedPrivateFolders(),
+    markNoteCreatesAttempted: async (clientNoteIds, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? []
+        : db.markNoteCreatesAttempted(clientNoteIds),
     acknowledgeNoteCreate: async (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
-      db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
+      options?.expectedAuthGeneration !== undefined &&
+      authState.isStale(options.expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.acknowledgeNoteCreate(id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options),
     markNoteSyncedIfUnchanged: async (
       id,
       snapshot,
@@ -162,17 +189,20 @@ function createElectronApi(db, options = {}) {
       cloudUpdatedAt,
       ownerUserId,
       cloudRevision,
-      cloudNote
+      cloudNote,
+      generation
     ) =>
-      db.markNoteSyncedIfUnchanged(
-        id,
-        snapshot,
-        expectedCloudId,
-        cloudUpdatedAt,
-        ownerUserId,
-        cloudRevision,
-        cloudNote
-      ),
+      generation !== undefined && authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.markNoteSyncedIfUnchanged(
+            id,
+            snapshot,
+            expectedCloudId,
+            cloudUpdatedAt,
+            ownerUserId,
+            cloudRevision,
+            cloudNote
+          ),
     setNoteCloudBase: async (id, cloudUpdatedAt, cloudRevision, options) =>
       db.setNoteCloudBase(id, cloudUpdatedAt, cloudRevision, options),
     markNoteSyncError: async (id) => db.markNoteSyncError(id),
@@ -180,41 +210,77 @@ function createElectronApi(db, options = {}) {
     countTeamNotesMissingOwner: async () => db.countTeamNotesMissingOwner(),
     countNotesMissingRevision: async (spaceKind) => db.countNotesMissingRevision(spaceKind),
     restoreNoteAfterDeniedDelete: async (id) => db.restoreNoteAfterDeniedDelete(id),
-    hardDeleteNote: async (id) => db.hardDeleteNote(id),
+    hardDeleteNote: async (id, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.hardDeleteNote(id),
 
     // Folders
     getFolders: async (spaceId) => db.getFolders(spaceId),
-    getPendingFolders: async (spaceKind) => db.getPendingFolders(spaceKind),
+    getPendingFolders: async (scope) => db.getPendingFolders(scope),
     getPendingFolderDeletes: async () => db.getPendingFolderDeletes(),
     getFolderByClientId: async (clientFolderId) => db.getFolderByClientId(clientFolderId),
-    upsertFolderFromCloud: async (cloudFolder, localSpaceId) =>
-      db.upsertFolderFromCloud(cloudFolder, localSpaceId),
+    getFolderByCloudId: async (cloudId) => db.getFolderByCloudId(cloudId),
+    upsertFolderFromCloud: async (cloudFolder, localSpaceId, expectedAuthGeneration, options) =>
+      expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.upsertFolderFromCloud(cloudFolder, localSpaceId, {
+            newKeyIfTaken: options?.newKeyIfTaken === true,
+          }),
     acknowledgeFolderCreate: async (
       id,
       snapshot,
       expectedCloudId,
       responseClientFolderId,
       cloudId,
-      cloudUpdatedAt
+      cloudUpdatedAt,
+      expectedAuthGeneration
     ) =>
-      db.acknowledgeFolderCreate(
-        id,
-        snapshot,
-        expectedCloudId,
-        responseClientFolderId,
-        cloudId,
-        cloudUpdatedAt
-      ),
-    markFolderSyncedIfUnchanged: async (id, snapshot, expectedCloudId) =>
-      db.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId),
+      expectedAuthGeneration !== undefined && authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.acknowledgeFolderCreate(
+            id,
+            snapshot,
+            expectedCloudId,
+            responseClientFolderId,
+            cloudId,
+            cloudUpdatedAt
+          ),
+    markFolderSyncedIfUnchanged: async (id, snapshot, expectedCloudId, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId),
     restoreFolderAfterDeniedDelete: async (id) => db.restoreFolderAfterDeniedDelete(id),
     relocateRevokedFolder: async (id, privateSpaceId, preserveFolder) =>
       db.relocateRevokedFolder(id, privateSpaceId, preserveFolder),
+    forkFolderIdentity: async (id) => db.forkFolderIdentity(id),
     getFolderIdMap: async () => db.getFolderIdMap(),
-    hardDeleteFolder: async (id) => db.hardDeleteFolder(id),
+    hardDeleteFolder: async (id, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? STALE_SYNC_ACK
+        : db.hardDeleteFolder(id),
 
     // Spaces
     getSpaces: async () => db.getSpaces(),
+    // As get-private-space-id: null for anything but a workspace id or null.
+    getPrivateSpaceId: async (workspaceId = null, generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? null
+        : workspaceId === null || (typeof workspaceId === "string" && workspaceId.trim())
+          ? db.getPrivateSpaceId(workspaceId)
+          : null,
+    getDefaultPrivateSpaceId: async (generation) =>
+      generation !== undefined && authState.isStale(generation)
+        ? null
+        : db.getDefaultPrivateSpaceId(),
+    setActiveWorkspaceScope: async (scope) =>
+      scope.accountId === db.activeAccountId
+        ? { success: true, ...db.setActiveWorkspaceScope(scope) }
+        : { success: false, code: "ACCOUNT_CHANGED" },
+    relocatePrivateSpace: async (from, to, accountId) =>
+      accountId === db.activeAccountId
+        ? { success: true, ...db.relocatePrivateSpace(from, to) }
+        : { success: false, code: "ACCOUNT_CHANGED" },
     hasOtherAccountRows: async () => db.hasOtherAccountRows(),
     hasUnclaimedLegacyRows: async () => db.hasUnclaimedLegacyRows(),
     upsertSpaceFromCloud: async (cloudSpace) => db.upsertSpaceFromCloud(cloudSpace),
@@ -235,6 +301,12 @@ function createElectronApi(db, options = {}) {
     },
 
     // Conversations
+    protectConversation: async (...args) => db.protectConversation(...args),
+    getNoteWriteGuard: async () => ({
+      accountId: db.activeAccountId,
+      authGeneration: authState.generation,
+    }),
+    getDatabaseAccountScope: async () => db.getAccountScope(),
     getAgentConversation: async (id) => db.getAgentConversation(id),
     getPendingConversations: async () => db.getPendingConversations(),
     getPendingConversationDeletes: async () => db.getPendingConversationDeletes(),
@@ -275,7 +347,9 @@ function createElectronApi(db, options = {}) {
       return db.replaceConversationClientId(id, expectedClientId, sender);
     },
     hardDeleteConversation: async (id, expectedAuthGeneration) =>
-      authState.isStale(expectedAuthGeneration) ? STALE_SYNC_ACK : db.hardDeleteConversation(id),
+      authState.isStale(expectedAuthGeneration)
+        ? STALE_SYNC_ACK
+        : db.hardDeleteConversation(id, true),
 
     // Transcriptions
     getTranscriptionById: async (id) => db.getTranscriptionById(id),

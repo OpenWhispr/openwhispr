@@ -6,6 +6,12 @@ import type { RemoteSpace } from '../spacesTypes';
  * team spaces — callers treat that as the capability probe result, not an
  * error (see syncSpaces.ts).
  */
-export async function fetchMySpaces(): Promise<{ data: RemoteSpace[] }> {
-  return api.get<{ data: RemoteSpace[] }>('/api/me/spaces');
+interface MySpacesResponse {
+  data: RemoteSpace[];
+  private_workspace_placement?: boolean;
+  default_workspace_id?: string | null;
+}
+
+export async function fetchMySpaces(): Promise<MySpacesResponse> {
+  return api.get<MySpacesResponse>('/api/me/spaces');
 }

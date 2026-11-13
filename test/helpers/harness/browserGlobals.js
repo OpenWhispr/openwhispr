@@ -170,9 +170,13 @@ async function establishValidatedAuth(userId = "user-harness") {
 
 // A failed team-spaces probe schedules a real-timer retry that would fire long
 // after the test closed its database; every SyncService a test creates must be
-// swept before the test ends.
+// swept before the test ends. A teamspace push also asks for a pass of its own
+// ("team-push"), which can still be running then: once swept, a service starts
+// no further pass and schedules no retry.
 function stopSyncTimers(service) {
   if (!service) return;
+  service.requestSyncAll = () => {};
+  service.scheduleTeamSpacesRetry = () => {};
   if (service.teamSpacesRetryTimer) {
     clearTimeout(service.teamSpacesRetryTimer);
     service.teamSpacesRetryTimer = null;

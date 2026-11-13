@@ -1,4 +1,5 @@
 const test = require("node:test");
+const { Window } = require("happy-dom");
 const assert = require("node:assert/strict");
 const { createElement } = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
@@ -14,18 +15,25 @@ const MOCKS = {
   "/hooks/useWorkspace": `
     export const useWorkspace = () => ({
       workspaces: globalThis.__switcherState.workspaces,
-      personalSelected: Boolean(globalThis.__switcherState.personalSelected),
-      selectPersonal() {},
       setActive() {},
-      refresh: async () => {},
+      refresh: async () => {
+        globalThis.__switcherState.refreshes += 1;
+      },
+    });
+    export const useRetryDefaultWorkspace = () => ({
+      retry: () => {
+        globalThis.__switcherState.defaultRetries += 1;
+      },
+      retrying: false,
     });
   `,
   "/stores/workspaceStore": `
     const read = () => ({
       activeWorkspaceId: globalThis.__switcherState.activeWorkspaceId,
-      loaded: true,
+      defaultWorkspaceId: globalThis.__switcherState.defaultWorkspaceId,
+      loaded: globalThis.__switcherState.loaded,
       loading: false,
-      error: false,
+      error: globalThis.__switcherState.error,
       workspaces: globalThis.__switcherState.workspaces,
     });
     export const useWorkspaceStore = Object.assign((selector) => selector(read()), {
@@ -59,7 +67,11 @@ const MOCKS = {
       globalThis.__menu.content = { side, align };
       return React.createElement("div", null, children);
     }
-    export const DropdownMenuItem = Pass;
+    // Marks each menu item, so a test can read the menu's rows in order.
+    export function DropdownMenuItem({ children, onSelect }) {
+      globalThis.__menu.items.push({ onSelect });
+      return React.createElement("div", { "data-menu-item": "" }, children);
+    }
     export const DropdownMenuSeparator = () => null;
   `,
 };
@@ -70,11 +82,16 @@ async function loadSwitcher(t) {
     delete globalThis.__switcherState;
     delete globalThis.__intro;
   });
-  globalThis.__menu = {};
+  globalThis.__menu = { items: [] };
   globalThis.__switcherState = {
     workspaces: [{ id: "acme", name: "Acme Studio", role: "owner" }],
     activeWorkspaceId: "acme",
+    defaultWorkspaceId: null,
+    loaded: true,
+    error: false,
     accountId: "user-1",
+    refreshes: 0,
+    defaultRetries: 0,
   };
   globalThis.__intro = null;
   installBrowserGlobals(t);
@@ -86,8 +103,22 @@ async function loadSwitcher(t) {
   const { default: WorkspaceSwitcher } = await vite.ssrLoadModule(
     "/components/WorkspaceSwitcher.tsx"
   );
-  return (props) => renderToStaticMarkup(createElement(WorkspaceSwitcher, props));
+  return (props) => {
+    globalThis.__menu.items = [];
+    return renderToStaticMarkup(createElement(WorkspaceSwitcher, props));
+  };
 }
+
+// The text of each menu row, in order.
+const menuItems = (html) => {
+  const window = new Window();
+  try {
+    window.document.body.innerHTML = html;
+    return [...window.document.querySelectorAll("[data-menu-item]")].map((row) => row.textContent);
+  } finally {
+    window.happyDOM.abort();
+  }
+};
 
 test("settings placement opens the menu below", async (t) => {
   const render = await loadSwitcher(t);
@@ -191,32 +222,41 @@ test("finishing marks the workspace the intro was shown for, not the active one"
   assert.equal(globalThis.__intro.open, true, "Acme's intro still shows");
 });
 
-test("the menu lists Personal beside the workspaces", async (t) => {
-  const render = await loadSwitcher(t);
-
-  const html = render({});
-
-  assert.match(html, /notes\.spaces\.personal/);
-  assert.match(html, /Acme Studio/);
-});
-
-test("with Personal chosen the trigger names it and the workspaces stay listed", async (t) => {
-  const render = await loadSwitcher(t);
-  globalThis.__switcherState.personalSelected = true;
-  globalThis.__switcherState.activeWorkspaceId = null;
-
-  const html = render({});
-
-  assert.match(html, /notes\.spaces\.personal/);
-  assert.match(html, /Acme Studio/);
-  assert.doesNotMatch(html, /workspaces\.switcher\.invitePeople/);
-});
-
-test("an entitled Enterprise member isn't offered Personal", async (t) => {
+test("the switcher has no Personal item and lists the default first", async (t) => {
   const render = await loadSwitcher(t);
   globalThis.__switcherState.workspaces = [
-    { id: "acme", name: "Acme Studio", role: "owner", plan: "enterprise", status: "active" },
+    { id: "acme", name: "Acme Studio", role: "member", is_default: false },
+    { id: "beta", name: "Beta Labs", role: "member", is_default: false },
+    { id: "mine", name: "Chad's workspace", role: "owner", is_default: true },
   ];
+  globalThis.__switcherState.defaultWorkspaceId = "mine";
 
-  assert.doesNotMatch(render({}), /notes\.spaces\.personal/);
+  const html = render({});
+
+  assert.doesNotMatch(html, /notes\.spaces\.personal/);
+  const workspaceRows = menuItems(html).filter((row) => row !== "workspaces.switcher.add");
+  assert.deepEqual(workspaceRows, ["CWChad's workspace", "ASAcme Studio", "BLBeta Labs"]);
+});
+
+test("an empty list never hides Private behind a spinner", async (t) => {
+  const render = await loadSwitcher(t);
+  // Listed, but the default workspace isn't there yet (its creation failed or is on its way).
+  globalThis.__switcherState.workspaces = [];
+  globalThis.__switcherState.activeWorkspaceId = null;
+
+  for (const props of [{}, { placement: "settings", compact: true }]) {
+    const html = render(props);
+
+    assert.doesNotMatch(html, /animate-pulse/, "no loading placeholder");
+    const trigger = html.match(/<button[^>]*>.*?<\/button>/s)?.[0] ?? "";
+    assert.match(trigger, /notes\.spaces\.personal/, "the trigger names the account's Private");
+    assert.deepEqual(menuItems(html), [
+      "workspaces.switcher.unavailablesettingsPage.workspace.loadError.retry",
+    ]);
+  }
+
+  // Retry asks the server for the default workspace again, even after this session's answer.
+  globalThis.__menu.items[0].onSelect({ preventDefault() {} });
+  assert.equal(globalThis.__switcherState.defaultRetries, 1);
+  assert.equal(globalThis.__switcherState.refreshes, 0);
 });

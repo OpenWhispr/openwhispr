@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
 const { createRoot } = require("react-dom/client");
+const { renderToStaticMarkup } = require("react-dom/server");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -161,4 +162,43 @@ test("an invitation accepted in the side panel holds the gate until its intro ca
   await setNarrowWithNote(false);
   assert.equal(globalThis.__structureIntro.open, false);
   assert.deepEqual(gates(), []);
+});
+
+test("the structure intro shows Private inside the workspace", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-notes-structure-intro-dialog-",
+    noExternal: ["react-i18next"],
+    mockModules: {
+      "react-i18next": "export const useTranslation = () => ({ t: (key) => key });",
+      "/ui/dialog": `
+        import React from "react";
+        const Pass = ({ children }) => React.createElement("div", null, children);
+        export const Dialog = ({ open, children }) => (open ? Pass({ children }) : null);
+        export const DialogContent = Pass;
+        export const DialogHeader = Pass;
+        export const DialogFooter = Pass;
+        export const DialogTitle = ({ children }) => React.createElement("h2", null, children);
+        export const DialogDescription = ({ children }) => React.createElement("p", null, children);
+      `,
+    },
+  });
+  const { default: NotesStructureIntroDialog } = await vite.ssrLoadModule(
+    "/components/notes/NotesStructureIntroDialog.tsx"
+  );
+
+  const markup = renderToStaticMarkup(
+    React.createElement(NotesStructureIntroDialog, { open: true, onOpenChange: () => {} })
+  );
+
+  // Every workspace has its own Private beside its teamspaces; it isn't a space of its own.
+  const at = (key) => markup.indexOf(key);
+  assert.ok(at("notes.structureIntro.workspace.title") >= 0);
+  assert.ok(at("notes.structureIntro.workspace.title") < at("notes.structureIntro.personal.title"));
+  assert.ok(at("notes.structureIntro.personal.title") < at("notes.structureIntro.teamSpace.title"));
+  const { notes } = require("../../src/locales/en/translation.json");
+  assert.deepEqual(notes.structureIntro.personal, {
+    title: "Private",
+    description: "Only you can see the folders and notes here.",
+  });
 });

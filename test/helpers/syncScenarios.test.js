@@ -1,7 +1,8 @@
 // Whole-pass kill chains: the real SyncService drives the real service stack over
 // one real SQLite database per device, with the fake cloud as the only boundary.
 // Each scenario is a story a user could tell end to end, and every one of them
-// finishes on the content-regression invariant.
+// finishes on the content-regression invariant. Private notes stay on the
+// device (D2), so the stories run in a teamspace both devices are in.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -17,6 +18,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { assertNoContentRegression, snapshotNotes } = require("./harness/invariants.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 
@@ -86,7 +88,8 @@ function freshCloud(config) {
 function createDevice(t, cloud) {
   const db = createDb(t);
   if (!db) return null;
-  return { db, api: createElectronApi(db, { cloud }), storage: { ...CAN_SYNC } };
+  const team = joinTeamSpace(db, cloud);
+  return { db, team, api: createElectronApi(db, { cloud }), storage: { ...CAN_SYNC } };
 }
 
 // One app launch: the device's stored localStorage comes back, its IPC surface is
@@ -131,16 +134,14 @@ function noteCount(db) {
   return db.db.prepare("SELECT COUNT(*) AS c FROM notes").get().c;
 }
 
-function folderByName(db, name) {
-  return db.db.prepare("SELECT * FROM folders WHERE name = ?").get(name) ?? null;
-}
-
 // A local row already bound to a cloud note, exactly as an earlier pull left it.
-function linkLocalNote(db, cloudRow, title, content) {
-  const local = db.saveNote(title, content, "personal").note;
+function linkLocalNote(device, cloudRow, title, content) {
+  const { db } = device;
+  const local = saveNoteIn(db, device.team.id, title, content).note;
   return setNoteRow(db, local.id, {
     client_note_id: cloudRow.client_note_id,
     cloud_id: cloudRow.id,
+    owner_user_id: cloudRow.user_id ?? null,
     sync_status: "synced",
     created_at: cloudRow.created_at,
     updated_at: cloudRow.updated_at,
@@ -155,7 +156,7 @@ test("S1 a meeting shell that gains a large transcript survives a relaunch and r
 
   // Byte-faithful to meetingDetectionEngine.js: saveNote(eventSummary, "", "meeting").
   const eventSummary = "Weekly Product Sync";
-  const shell = db.saveNote(eventSummary, "", "meeting").note;
+  const shell = saveNoteIn(db, device.team.id, eventSummary, "", "meeting").note;
   setNoteRow(db, shell.id, { created_at: T_SHELL, updated_at: T_SHELL });
 
   await syncOnce(device);
@@ -206,7 +207,7 @@ test("S1 the same migration holds the line on a legacy cloud with a stale peer o
   if (!device) return;
   const { db } = device;
 
-  const shell = db.saveNote("Weekly Product Sync", "", "meeting").note;
+  const shell = saveNoteIn(db, device.team.id, "Weekly Product Sync", "", "meeting").note;
   setNoteRow(db, shell.id, { created_at: T_SHELL, updated_at: T_SHELL });
   await syncOnce(device);
   const cloudId = db.getNote(shell.id).cloud_id;
@@ -267,7 +268,7 @@ test("S2 two devices: an older empty shell never destroys the transcript and the
   const deviceB = createDevice(t, cloud);
   if (!deviceB) return;
 
-  const shell = deviceA.db.saveNote("Weekly Product Sync", "", "meeting").note;
+  const shell = saveNoteIn(deviceA.db, deviceA.team.id, "Weekly Product Sync", "", "meeting").note;
   setNoteRow(deviceA.db, shell.id, { created_at: F_SHELL, updated_at: F_SHELL });
   await syncOnce(deviceA);
   const clientNoteId = deviceA.db.getNote(shell.id).client_note_id;
@@ -352,7 +353,7 @@ test("S3 a delete travels to the cloud and back down to the other device", async
   const deviceB = createDevice(t, cloud);
   if (!deviceB) return;
 
-  const note = deviceA.db.saveNote("Shared note", "shared body", "personal").note;
+  const note = saveNoteIn(deviceA.db, deviceA.team.id, "Shared note", "shared body").note;
   setNoteRow(deviceA.db, note.id, { created_at: T_SHELL, updated_at: T_SHELL });
   await syncOnce(deviceA);
   const clientNoteId = deviceA.db.getNote(note.id).client_note_id;
@@ -400,7 +401,7 @@ test("S3 a delete racing an unsynced edit is won by the cloud tombstone", async 
   const deviceB = createDevice(t, cloud);
   if (!deviceB) return;
 
-  const note = deviceA.db.saveNote("Contested note", "original body", "personal").note;
+  const note = saveNoteIn(deviceA.db, deviceA.team.id, "Contested note", "original body").note;
   setNoteRow(deviceA.db, note.id, { created_at: T_SHELL, updated_at: T_SHELL });
   await syncOnce(deviceA);
   const clientNoteId = deviceA.db.getNote(note.id).client_note_id;
@@ -445,10 +446,11 @@ test("S4 a quit before the push loses nothing and the next launch uploads the no
   if (!device) return;
   const { db } = device;
 
-  const note = db.saveNote(
+  const note = saveNoteIn(
+    db,
+    device.team.id,
     "Recorded then quit",
-    "body written just before the quit",
-    "personal"
+    "body written just before the quit"
   ).note;
   setNoteRow(db, note.id, { created_at: T_SHELL, updated_at: T_SHELL });
   assert.equal(cloud.log.length, 0, "the quit happened before any request went out");
@@ -475,7 +477,12 @@ test("S4 a quit between the cloud ack and the local mark does not fork a duplica
   if (!device) return;
   const { db } = device;
 
-  const note = db.saveNote("Acked but unmarked", "body the cloud already has", "personal").note;
+  const note = saveNoteIn(
+    db,
+    device.team.id,
+    "Acked but unmarked",
+    "body the cloud already has"
+  ).note;
   setNoteRow(db, note.id, { created_at: T_SHELL, updated_at: T_SHELL });
 
   // The crash window: the cloud accepted the batch, then the process died before
@@ -525,7 +532,7 @@ test("S4 a 500 mid-batch leaves error rows that the next pass retries on its own
   const { db } = device;
 
   for (let i = 0; i < BATCH_SIZE + 3; i += 1) {
-    const saved = db.saveNote(`Note ${i}`, `body ${i}`, "personal").note;
+    const saved = saveNoteIn(db, device.team.id, `Note ${i}`, `body ${i}`).note;
     setNoteRow(db, saved.id, { created_at: T_SHELL, updated_at: T_SHELL });
   }
   const doomed = db.getPendingNotes().slice(BATCH_SIZE);
@@ -632,7 +639,7 @@ test("S5 a tombstone as the last row of a delta page still hands the next page a
   }
 
   const boundary = seeded[BATCH_SIZE - 1];
-  const local = linkLocalNote(db, boundary, "Boundary note", "local boundary body");
+  const local = linkLocalNote(device, boundary, "Boundary note", "local boundary body");
   // Pinning the server clock to the row's own stamp keeps the tombstone in the
   // last slot of page one instead of sorting it to the end of the delta.
   cloud.setClock(() => boundary.updated_at);
@@ -640,6 +647,7 @@ test("S5 a tombstone as the last row of a delta page still hands the next page a
   cloud.setClock(() => new Date().toISOString());
 
   device.storage["lastSyncedAt.notes"] = cursor;
+  device.storage["syncCursors.privateBackup:user-harness"] = "1";
   // Only the delta's pages count here, not the one-time read of the whole feed.
   device.storage["noteFeedReplay.v1"] = "3";
   const before = snapshotNotes(db);
@@ -669,22 +677,16 @@ test("S5 a tombstone as the last row of a delta page still hands the next page a
 // stall guard in pullNotes and silently skips everything past that page.
 test.todo("S5 a full delta page tied on updated_at must not abandon the rest of the pull");
 
-test("S6 a fresh device adopts the cloud's default folders and both note directions land in them", async (t) => {
+test("S6 personal and team folders keep their associations in both sync directions", async (t) => {
   const cloud = freshCloud();
   const device = createDevice(t, cloud);
   if (!device) return;
   const { db } = device;
 
-  const cloudPersonal = cloud.seedFolder({
-    client_folder_id: "cf-personal",
-    name: "Personal",
-    is_default: true,
-    sort_order: 0,
-  });
   const cloudMeetings = cloud.seedFolder({
     client_folder_id: "cf-meetings",
     name: "Meetings",
-    is_default: true,
+    is_default: false,
     sort_order: 1,
   });
   cloud.seedNote({
@@ -695,44 +697,47 @@ test("S6 a fresh device adopts the cloud's default folders and both note directi
     created_at: iso(T_SHELL),
     updated_at: iso(T_SHELL),
   });
+  // This device's own meeting stays in its Private section, with its folders.
+  const privateMeeting = db.saveNote("Private meeting", "private meeting body", "meeting").note;
+
+  await syncOnce(device);
+
+  const meetings = db.db
+    .prepare("SELECT * FROM folders WHERE name = 'Meetings' AND space_id = ?")
+    .get(device.team.id);
+  assert.equal(meetings.cloud_id, cloudMeetings.id, "the teamspace folder arrives linked");
+  assert.equal(meetings.client_folder_id, "cf-meetings");
+  assert.equal(
+    noteByClientId(db, "cn-remote").folder_id,
+    meetings.id,
+    "the pulled note must map onto the local folder"
+  );
 
   const localMeeting = db.saveNote(
     "Meeting from this device",
     "local meeting body",
-    "meeting"
+    "meeting",
+    null,
+    null,
+    meetings.id
   ).note;
   setNoteRow(db, localMeeting.id, { created_at: T_SHELL, updated_at: T_SHELL });
-
   const before = snapshotNotes(db);
   await syncOnce(device);
 
-  const meetings = folderByName(db, "Meetings");
-  assert.equal(
-    meetings.cloud_id,
+  const sent = cloud.logFor("/api/notes/batch-create").flatMap((batch) => batch.body.notes);
+  const teamPush = sent.find((note) => note.client_note_id === localMeeting.client_note_id);
+  assert.ok(teamPush, "the team note was backed up");
+  assert.equal(teamPush.folder_id, cloudMeetings.id, "the team note retains its cloud folder");
+  assert.notEqual(teamPush.folder_id, meetings.id);
+  const privatePush = sent.find((note) => note.client_note_id === privateMeeting.client_note_id);
+  assert.ok(privatePush, "ordinary personal notes follow Backup consent");
+  assert.ok(db.getNote(privateMeeting.id).cloud_id);
+  assert.notEqual(
+    privatePush.folder_id,
     cloudMeetings.id,
-    "the local default must adopt the cloud folder"
+    "personal content stays outside the team folder"
   );
-  assert.equal(meetings.client_folder_id, "cf-meetings");
-  assert.equal(folderByName(db, "Personal").cloud_id, cloudPersonal.id);
-  assert.equal(
-    cloud.folders().filter((f) => f.name === "Meetings").length,
-    1,
-    "adoption exists so a second device never forks a duplicate folder"
-  );
-
-  const [batch] = cloud.logFor("/api/notes/batch-create");
-  assert.equal(
-    batch.body.notes[0].folder_id,
-    cloudMeetings.id,
-    "the pushed note must carry the adopted cloud folder id, never the local integer"
-  );
-  assert.notEqual(batch.body.notes[0].folder_id, meetings.id);
-  assert.equal(
-    noteByClientId(db, "cn-remote").folder_id,
-    meetings.id,
-    "the pulled note must map back onto the same local folder"
-  );
-  assert.equal(noteByClientId(db, localMeeting.client_note_id).folder_id, meetings.id);
 
   assertNoContentRegression(before, snapshotNotes(db), cloud.notes());
 });
@@ -745,7 +750,7 @@ test("S6 a note in a never-synced folder pushes without one and re-pushes once t
   silenceConsoleErrors(t);
 
   cloud.failWith("POST /api/folders/batch-create", { status: 500, error: "folder push down" });
-  const folder = db.createFolder("Field Notes").folder;
+  const folder = db.createFolder("Field Notes", device.team.id).folder;
   const note = db.saveNote("Interview", "interview body", "personal", null, null, folder.id).note;
   setNoteRow(db, note.id, { created_at: T_SHELL, updated_at: T_SHELL });
 

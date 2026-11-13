@@ -1194,3 +1194,364 @@ test("a pulled chat keeps its message and list order beside local timestamps", a
     assert.equal(row.last_message_role, "user");
   }
 });
+
+for (const pauseAt of ["earlier root chat", "note chat create", "message lookup"]) {
+  test(`a note moved to Private stops chat uploads during ${pauseAt}`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, api, service } = ctx;
+    const { joinTeamSpace } = require("./harness/teamSpace.js");
+    const team = joinTeamSpace(db, cloud);
+    const root = db.createAgentConversation("Root first");
+    db.addAgentMessage(root.id, "user", "root message");
+    const note = db.saveNote("Team", "draft", "personal", null, null, null, team.id).note;
+    const chat = db.createAgentConversation("Note chat", note.id);
+    db.addAgentMessage(chat.id, "user", "team message");
+    if (pauseAt === "message lookup") {
+      const copy = cloud.seedConversation({
+        client_conversation_id: chat.client_conversation_id,
+        messages: [{ role: "user", content: "team message" }],
+      });
+      updateConversation(db, chat.id, { cloud_id: copy.id, sync_status: "synced" });
+    }
+    db.addAgentMessage(chat.id, "user", "pending team message");
+    updateConversation(db, chat.id, { sync_status: "pending" });
+    const request = api.cloudApiRequest;
+    let resume;
+    let started;
+    const gate = new Promise((resolve) => {
+      resume = resolve;
+    });
+    const waiting = new Promise((resolve) => {
+      started = resolve;
+    });
+    api.cloudApiRequest = async (options) => {
+      const isCreate =
+        options.path === "/api/conversations/create" &&
+        options.body.client_conversation_id ===
+          (pauseAt === "earlier root chat" ? root : chat).client_conversation_id;
+      if (
+        (pauseAt === "message lookup" &&
+          options.method === "GET" &&
+          options.path.startsWith("/api/conversations/messages")) ||
+        (pauseAt !== "message lookup" && isCreate)
+      ) {
+        started();
+        await gate;
+      }
+      return request(options);
+    };
+    const syncing = service.syncAll(true);
+    await waiting;
+    assert.equal(db.updateNote(note.id, { content: "edited locally" }).success, true);
+    assert.equal(db.purgeSpace(team.id).success, true);
+    assert.equal(db.getSpace(db.getNote(note.id).space_id).kind, "private");
+    db.addAgentMessage(chat.id, "user", "PRIVATE AFTER MOVE");
+    resume();
+    await syncing;
+    const uploaded = cloud.conversation(chat.client_conversation_id);
+    assert.equal(
+      uploaded?.messages.some((message) => message.content === "PRIVATE AFTER MOVE") ?? false,
+      false
+    );
+    if (pauseAt === "earlier root chat") {
+      assert.equal(uploaded, null);
+      assert.equal(db.getAgentConversation(chat.id).cloud_create_attempted, 0);
+    }
+    if (pauseAt === "message lookup")
+      assert.deepEqual(cloudContents(cloud, chat.client_conversation_id), ["team message"]);
+    assert.deepEqual(cloudContents(cloud, root.client_conversation_id), ["root message"]);
+  });
+}
+
+test("conversation lists and keywords scope before their result limit", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db } = ctx;
+  db.setActiveWorkspaceScope({ activeWorkspaceId: "a", defaultWorkspaceId: "a" });
+  const privateA = db.getPrivateSpaceId("a");
+  const privateB = db.getPrivateSpaceId("b");
+  const noteA = db.saveNote("A", "", "personal", null, null, null, privateA).note;
+  const noteB = db.saveNote("B", "", "personal", null, null, null, privateB).note;
+  const own = db.createAgentConversation("Match A", noteA.id);
+  updateConversation(db, own.id, { updated_at: LOCAL_EARLY });
+  for (let index = 0; index < 201; index++) db.createAgentConversation("Match B", noteB.id);
+  assert.deepEqual(
+    db.getAgentConversationsWithPreview(200, 0, false, [privateA]).map((row) => row.id),
+    [own.id]
+  );
+  assert.deepEqual(
+    db.searchAgentConversations("Match", 20, [privateA]).map((row) => row.id),
+    [own.id]
+  );
+  const root = db.createAgentConversation("Match root");
+  assert.deepEqual(
+    db.searchAgentConversations("Match", 20, []).map((row) => row.id),
+    [root.id]
+  );
+});
+
+for (const tombstone of [false, true]) {
+  test(`private note history ignores remote ${tombstone ? "tombstone" : "live row"}`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, service } = ctx;
+    const note = db.saveNote("Private", "", "personal").note;
+    const chat = db.createAgentConversation("Private chat", note.id);
+    db.addAgentMessage(chat.id, "user", "private history");
+    const remote = cloud.seedConversation({
+      client_conversation_id: chat.client_conversation_id,
+      title: "remote replacement",
+      updated_at: "2026-07-20T12:00:00.000Z",
+      deleted_at: tombstone ? "2026-07-20T12:00:00.000Z" : null,
+      messages: [{ role: "user", content: "remote history" }],
+    });
+    updateConversation(db, chat.id, {
+      cloud_id: remote.id,
+      sync_status: "synced",
+      updated_at: LOCAL_EARLY,
+    });
+    localStorageStub.setItem("lastSyncedAt.conversations", "2026-07-01T00:00:00.000Z");
+    await service.syncAll(true);
+    assert.deepEqual(
+      db.getAgentConversation(chat.id)?.messages.map((row) => row.content),
+      ["private history"]
+    );
+  });
+}
+
+test("get_note marks a root chat before private tool metadata is saved or backed up", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const { createGetNoteTool } = require("../../src/services/tools/getNoteTool.ts");
+  const { replyMetadata, saveReplyRow } = require("../../src/components/chat/chatPersistence.ts");
+  const note = db.saveNote("Private canary", "PRIVATE_CANARY_3167", "personal").note;
+  const chat = db.createAgentConversation("Root chat");
+  const result = await createGetNoteTool({
+    spaceIds: [note.space_id],
+    protectNotes: async (notes) => {
+      const protectedChat = await api.protectConversation(chat.id, notes, false, "user-harness");
+      assert.equal(protectedChat.success, true);
+    },
+  }).execute({ id: note.id });
+  assert.equal(result.success, true);
+  assert.equal(db.getAgentConversation(chat.id).device_only, 1);
+  const metadata = replyMetadata([
+    {
+      id: "private-call",
+      name: "get_note",
+      arguments: JSON.stringify({ id: note.id }),
+      status: "completed",
+      result: result.displayText,
+      metadata: result.data,
+    },
+  ]);
+  api.addAgentMessage = async (...args) => db.addAgentMessage(...args);
+  await saveReplyRow(chat.id, null, "PRIVATE_CANARY_3167", metadata);
+  await service.syncAll(true);
+  db.addAgentMessage(chat.id, "user", "An unrelated later turn");
+  await service.pushConversation(chat.id);
+  await service.syncAll(true);
+  assert.equal(cloud.conversation(chat.client_conversation_id), null);
+  assert.equal(
+    JSON.stringify(cloud.logFor("/api/conversations/create")).includes("PRIVATE_CANARY_3167"),
+    false
+  );
+});
+
+for (const pauseAt of ["create acknowledgement", "message lookup", "queued upload"]) {
+  test(`root privacy stops pending content during ${pauseAt}`, async (t) => {
+    const ctx = await setup(t);
+    if (!ctx) return;
+    const { db, cloud, api, service } = ctx;
+    const chat = db.createAgentConversation("Initially ordinary root");
+    db.addAgentMessage(chat.id, "user", "Before private content");
+    if (pauseAt === "message lookup") {
+      await service.pushConversation(chat.id);
+      db.addAgentMessage(chat.id, "user", "Another ordinary turn");
+      updateConversation(db, chat.id, { sync_status: "pending" });
+    }
+    const note = db.saveNote("Private", "PRIVATE_RACE_CANARY", "personal").note;
+    let resume;
+    let start;
+    const started = new Promise((resolve) => {
+      start = resolve;
+    });
+    const paused = new Promise((resolve) => {
+      resume = resolve;
+    });
+    if (pauseAt === "queued upload") {
+      const read = api.getAgentConversation;
+      let first = true;
+      api.getAgentConversation = async (id) => {
+        const row = await read(id);
+        if (first && id === chat.id) {
+          first = false;
+          start();
+          await paused;
+        }
+        return row;
+      };
+    } else {
+      const request = api.cloudApiRequest;
+      api.cloudApiRequest = async (options) => {
+        const matches =
+          pauseAt === "create acknowledgement"
+            ? options.path === "/api/conversations/create"
+            : options.method === "GET" && options.path.startsWith("/api/conversations/messages");
+        if (matches) {
+          start();
+          await paused;
+        }
+        return request(options);
+      };
+    }
+    const syncing =
+      pauseAt === "queued upload"
+        ? service.pushConversation(chat.id)
+        : service.pushPendingConversations();
+    await started;
+    assert.equal(db.protectConversation(chat.id, [note], false, "user-harness").success, true);
+    db.addAgentMessage(chat.id, "assistant", "PRIVATE_RACE_CANARY");
+    resume();
+    await syncing;
+    await service.syncAll(true);
+    const local = db.getAgentConversation(chat.id);
+    assert.equal(local.device_only, 1);
+    assert.equal(local.messages.at(-1).content, "PRIVATE_RACE_CANARY");
+    assert.equal(
+      JSON.stringify(cloud.conversation(chat.client_conversation_id)).includes(
+        "PRIVATE_RACE_CANARY"
+      ),
+      false
+    );
+    assert.equal(cloud.logFor("/api/conversations/delete").length, 0);
+    if (pauseAt === "queued upload")
+      assert.equal(cloud.conversation(chat.client_conversation_id), null);
+    else
+      assert.deepEqual(cloudContents(cloud, chat.client_conversation_id), [
+        "Before private content",
+      ]);
+  });
+}
+
+test("explicit deletion of a private conversation still deletes its old backup", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const chat = db.createAgentConversation("Ordinary root");
+  db.addAgentMessage(chat.id, "user", "Already backed up");
+  await service.pushConversation(chat.id);
+  const note = db.saveNote("Private", "secret", "personal").note;
+  db.protectConversation(chat.id, [note], false, "user-harness");
+  db.addAgentMessage(chat.id, "assistant", "Private follow-up");
+  assert.equal(db.deleteAgentConversation(chat.id).success, true);
+  await service.syncAll(true);
+  assert.equal(db.getAgentConversation(chat.id), null);
+  assert.equal(cloud.logFor("/api/conversations/delete").length, 1);
+  assert.equal(
+    JSON.stringify(cloud.logFor("/api/conversations/delete")).includes("Private follow-up"),
+    false
+  );
+});
+
+test("marking after a cloud pull lookup fences both live rows and tombstones in main", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  for (const tombstone of [false, true]) {
+    const chat = db.createAgentConversation("Root");
+    db.addAgentMessage(chat.id, "user", "Keep local history");
+    const remote = cloud.seedConversation({
+      client_conversation_id: chat.client_conversation_id,
+      title: "Remote",
+      updated_at: "2099-01-01T00:00:00.000Z",
+      deleted_at: tombstone ? "2099-01-01T00:00:00.000Z" : null,
+      messages: [{ role: "user", content: "Cloud replacement" }],
+    });
+    updateConversation(db, chat.id, {
+      cloud_id: remote.id,
+      sync_status: "synced",
+      updated_at: LOCAL_EARLY,
+    });
+    const read = api.getConversationByClientId;
+    api.getConversationByClientId = async (id) => {
+      const row = await read(id);
+      if (row?.id === chat.id) db.protectConversation(chat.id, [], true, "user-harness");
+      return row;
+    };
+    await service.pullConversations(true);
+    assert.deepEqual(
+      db.getAgentConversation(chat.id).messages.map((row) => row.content),
+      ["Keep local history"]
+    );
+  }
+});
+
+test("restored cloud history stays device-only through edits, forks, pagination and relaunch", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  for (let index = 0; index < 205; index++) {
+    cloud.seedConversation({
+      client_conversation_id: `restored-${index}`,
+      title: "Restored",
+      created_at: new Date(Date.UTC(2099, 0, 1, 0, 0, index)).toISOString(),
+      messages: [{ role: "user", content: "OLD_PRIVATE_RESTORE_CANARY" }],
+    });
+  }
+  // Even apparently future dates cannot establish provenance: cloud timestamps are client supplied.
+  await service.pullConversations(true);
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS count FROM agent_conversations WHERE device_only = 1").get()
+      .count,
+    205
+  );
+  const restored = db.getConversationByClientId("restored-0");
+  const originalMessage = db.getAgentConversation(restored.id).messages[0];
+  const fork = db.forkAgentConversation(restored.id, originalMessage.id);
+  assert.equal(fork.device_only, 1);
+  db.addAgentMessage(restored.id, "user", "PRIVATE_AFTER_RESTORE");
+  db.updateAgentConversationTitle(restored.id, "Edited restored chat");
+  db.addAgentMessage(fork.id, "user", "PRIVATE_FORK_AFTER_RESTORE");
+  const ordinary = db.createAgentConversation("New ordinary local root");
+  db.addAgentMessage(ordinary.id, "user", "Public local history");
+  db.db.close();
+  db.initDatabase();
+  assert.equal(db.getAgentConversation(restored.id).device_only, 1);
+  assert.equal(db.getAgentConversation(fork.id).device_only, 1);
+  assert.equal(db.getAgentConversation(ordinary.id).device_only, 0);
+  await service.pushConversation(restored.id);
+  await service.pushConversation(fork.id);
+  await service.pushPendingConversations();
+  assert.deepEqual(cloudContents(cloud, "restored-0"), ["OLD_PRIVATE_RESTORE_CANARY"]);
+  assert.equal(cloud.conversation(fork.client_conversation_id), null);
+  assert.deepEqual(cloudContents(cloud, ordinary.client_conversation_id), ["Public local history"]);
+  assert.equal(cloud.logFor("/api/conversations/delete").length, 0);
+});
+
+test("cloud reconciliation of a known new local chat preserves normal backup eligibility", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const local = db.createAgentConversation("Created here");
+  db.addAgentMessage(local.id, "user", "Local message");
+  cloud.seedConversation({
+    client_conversation_id: local.client_conversation_id,
+    title: "Reconciled",
+    created_at: "2000-01-01T00:00:00.000Z",
+    updated_at: "2099-01-01T00:00:00.000Z",
+    messages: [{ role: "user", content: "Cloud copy of my local message" }],
+  });
+  await service.pullConversations(true);
+  assert.equal(db.getAgentConversation(local.id).device_only, 0);
+  assert.equal(db.getAgentConversation(local.id).title, "Reconciled");
+  db.addAgentMessage(local.id, "user", "Another public turn");
+  updateConversation(db, local.id, { sync_status: "pending" });
+  await service.pushPendingConversations();
+  assert.deepEqual(cloudContents(cloud, local.client_conversation_id), [
+    "Cloud copy of my local message",
+    "Another public turn",
+  ]);
+});

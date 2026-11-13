@@ -47,6 +47,8 @@ export interface StartChatSendInput {
   /** The note this conversation was started from, bound for this turn. */
   openNote?: ChatTurnOptions["openNote"];
   sourceNoteId?: number;
+  /** Its space: the turn leaves the note out when the active workspace doesn't hold it. */
+  sourceNoteSpaceId?: number | null;
   options?: SendToAIOptions;
 }
 
@@ -400,6 +402,8 @@ export function startChatSend(input: StartChatSendInput): boolean {
                   : { text: openNote, transcriptPreview: false };
               }
             : undefined,
+          openNoteSpaceId: openNote ? (input.sourceNoteSpaceId ?? null) : undefined,
+          sourceNoteId: input.sourceNoteId,
           allowConnectors: true,
           allowInteractions: true,
           skillsEnabled: true,
@@ -414,6 +418,7 @@ export function startChatSend(input: StartChatSendInput): boolean {
       );
       await operation.engine.send(input.text, entry.messages, {
         ...input.options,
+        conversationId: boundId,
         attachedSkill: input.options?.attachedSkill ?? input.skills.attached?.ref,
         allowSkillPick: input.options?.allowSkillPick ?? !input.skills.pickOff,
         removedSkills: input.options?.removedSkills ?? input.skills.removed,

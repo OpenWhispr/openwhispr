@@ -114,6 +114,9 @@ test.before(() => {
   const Ctor = IPCHandlers.default || IPCHandlers;
   target._broadcastAccountScopedSettings = Ctor.prototype._broadcastAccountScopedSettings;
   target._broadcastDatabaseAccountScope = Ctor.prototype._broadcastDatabaseAccountScope;
+  target._claimSignedOutPrivateNotes = Ctor.prototype._claimSignedOutPrivateNotes;
+  target.createFolderWithEffects = Ctor.prototype.createFolderWithEffects;
+  target._noteFilesEnabled = false;
   const fakeThis = new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
@@ -140,6 +143,124 @@ function setup(t) {
 }
 
 const invoke = (channel, ...args) => handlers.get(channel)({}, ...args);
+
+test("full Backup queues include personal notes and folders only for the active account", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("account-a");
+  const folder = db.createFolder("Backup folder", db.getDefaultPrivateSpaceId()).folder;
+  const note = db.saveNote("Private", "Backup content", "personal", null, null, folder.id).note;
+  assert.ok((await invoke("db-get-pending-notes")).some((row) => row.id === note.id));
+  assert.ok((await invoke("db-get-pending-folders")).some((row) => row.id === folder.id));
+  assert.deepEqual(await invoke("db-get-pending-notes", "syncable"), []);
+  assert.deepEqual(await invoke("db-get-pending-folders", "team"), []);
+
+  db.setActiveAccountId("account-b");
+  assert.equal(
+    (await invoke("db-get-pending-notes")).some((row) => row.id === note.id),
+    false
+  );
+  assert.equal(
+    (await invoke("db-get-pending-folders")).some((row) => row.id === folder.id),
+    false
+  );
+});
+
+test("note and folder sync receipts cannot mutate rows under a replaced sign-in", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const generation = tokenState.generation;
+  await invoke("set-active-account-scope", "account-a", generation);
+  const folder = db.createFolder("Pending folder").folder;
+  const note = db.saveNote("Pending note", "private body", "personal", null, null, folder.id).note;
+  const staleGeneration = generation - 1;
+  assert.deepEqual(
+    await invoke("db-mark-note-creates-attempted", [note.client_note_id], staleGeneration),
+    []
+  );
+  const results = await Promise.all([
+    invoke("db-acknowledge-note-create", note.id, note, "cloud-note", null, "account-a", {
+      expectedAuthGeneration: staleGeneration,
+    }),
+    invoke(
+      "db-mark-note-synced-if-unchanged",
+      note.id,
+      note,
+      null,
+      null,
+      null,
+      null,
+      null,
+      staleGeneration
+    ),
+    invoke("db-mark-folder-synced-if-unchanged", folder.id, folder, null, staleGeneration),
+    invoke("db-hard-delete-note", note.id, staleGeneration),
+    invoke("db-hard-delete-folder", folder.id, staleGeneration),
+  ]);
+  assert.ok(results.every((result) => result.stale === true));
+  assert.deepEqual(db.getNote(note.id), note);
+  assert.deepEqual(db.getFolderByClientId(folder.client_folder_id), folder);
+  assert.deepEqual(
+    await invoke("db-mark-note-creates-attempted", [note.client_note_id], generation),
+    [note.client_note_id]
+  );
+  assert.equal((await invoke("db-hard-delete-folder", folder.id, generation)).success, true);
+});
+
+test("placement backfill and tombstone recovery reject stale sign-ins before changing rows", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const generation = tokenState.generation;
+  await invoke("set-active-account-scope", "account-a", generation);
+  db.bindDefaultPrivateSpace("workspace-a");
+  const personal = db.saveNote("Backup", "private body").note;
+  db.markNoteSynced(personal.id, "personal-cloud");
+  const team = db.upsertSpaceFromCloud({
+    id: "cloud-space",
+    name: "Team",
+    workspace_id: "workspace-a",
+  });
+  const note = db.saveNote("Publish", "body", "personal", null, null, null, team.id).note;
+  db.markNoteSynced(note.id, "deleted-personal-cloud");
+  const renew = (under) =>
+    invoke(
+      "db-renew-note-cloud-identity",
+      note.id,
+      note.client_note_id,
+      "deleted-personal-cloud",
+      team.id,
+      under
+    );
+
+  assert.equal((await renew(generation - 1)).stale, true);
+  assert.equal((await invoke("db-get-private-placement-backup-rows", generation - 1)).stale, true);
+  assert.equal((await invoke("db-queue-unlinked-private-folders", generation - 1)).stale, true);
+  assert.equal(
+    (await invoke("db-get-private-placement-backup-candidates", generation - 1)).stale,
+    true
+  );
+  const candidates = await invoke("db-get-private-placement-backup-candidates", generation);
+  assert.ok(candidates.notes.includes(personal.client_note_id));
+  const spacesBefore = db.db.prepare("SELECT COUNT(*) AS count FROM spaces").get().count;
+  assert.equal(await invoke("get-private-space-id", "stale-workspace", generation - 1), null);
+  assert.equal(await invoke("get-default-private-space-id", generation - 1), null);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM spaces").get().count, spacesBefore);
+  assert.equal(db.getNote(personal.id).sync_status, "synced");
+  assert.equal(db.getNote(note.id).cloud_id, "deleted-personal-cloud");
+  const placementRows = await invoke(
+    "db-get-private-placement-backup-rows",
+    generation,
+    candidates
+  );
+  assert.equal(placementRows.success, true);
+  assert.equal(db.getNote(personal.id).sync_status, "synced");
+  const renewed = await renew(generation);
+  assert.equal(renewed.success, true);
+  assert.equal(renewed.note.cloud_id, null);
+  assert.notEqual(renewed.note.client_note_id, note.client_note_id);
+  await invoke("set-active-account-scope", null, generation);
+  assert.equal((await renew(generation)).success, false);
+});
 
 test("a queued transcription addition is broadcast only while its account can see it", async (t) => {
   const db = setup(t);
@@ -949,4 +1070,466 @@ test("dictionary deltas remain editable signed out and across a same-account tok
     true
   );
   assert.deepEqual(db.getDictionary(), ["Rotated"]);
+});
+
+test("signing in gives the account its signed-out notes, after the chats the sign-in claims", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const note = db.saveNote("Written signed out", "").note;
+  const chat = db.createAgentConversation("Signed-out chat", null, standInId);
+  assert.equal(chat.account_id, null);
+
+  assert.equal(
+    (await invoke("set-active-account-scope", "account-a", tokenState.generation)).success,
+    true
+  );
+
+  const home = db.getDefaultPrivateSpaceId();
+  assert.notEqual(home, standInId);
+  assert.deepEqual(
+    { ...db.db.prepare("SELECT space_id, account_id FROM notes WHERE id = ?").get(note.id) },
+    { space_id: home, account_id: "account-a" }
+  );
+  assert.deepEqual(
+    {
+      ...db.db
+        .prepare("SELECT space_id, folder_id, account_id FROM agent_conversations WHERE id = ?")
+        .get(chat.id),
+    },
+    { space_id: home, folder_id: null, account_id: "account-a" },
+    "the chat #2924 attributed at sign-in left the stand-in with the notes"
+  );
+});
+
+test("the private-space IPCs check their arguments and the account they were sent for", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+
+  for (const scope of [null, "w1", ["w1"], { activeWorkspaceId: 3 }, { defaultWorkspaceId: "" }]) {
+    assert.equal((await invoke("set-active-workspace-scope", scope)).success, false);
+  }
+  assert.equal(
+    (
+      await invoke("set-active-workspace-scope", {
+        activeWorkspaceId: "w2",
+        defaultWorkspaceId: "w1",
+        accountId: "account-b",
+      })
+    ).code,
+    "ACCOUNT_CHANGED"
+  );
+  assert.equal(db.activeWorkspaceId, null, "a refused scope changes nothing");
+  assert.deepEqual(
+    await invoke("set-active-workspace-scope", {
+      activeWorkspaceId: "w2",
+      defaultWorkspaceId: "w1",
+      accountId: "account-a",
+    }),
+    { success: true }
+  );
+
+  const w2 = await invoke("get-private-space-id");
+  assert.deepEqual(
+    { ...db.db.prepare("SELECT account_id, workspace_id FROM spaces WHERE id = ?").get(w2) },
+    { account_id: "account-a", workspace_id: "w2" }
+  );
+  assert.equal(await invoke("get-private-space-id", "w2"), w2);
+  assert.equal(await invoke("get-private-space-id", 7), null);
+  assert.equal(await invoke("get-private-space-id", ""), null);
+
+  const pending = db.getDefaultPrivateSpaceId();
+  for (const id of [undefined, null, "", 42]) {
+    assert.equal((await invoke("bind-default-private-space", id)).success, false);
+  }
+  assert.equal(
+    (await invoke("bind-default-private-space", "w1", "account-b")).code,
+    "ACCOUNT_CHANGED"
+  );
+  assert.equal(
+    db.db.prepare("SELECT workspace_id FROM spaces WHERE id = ?").get(pending).workspace_id,
+    null
+  );
+  assert.deepEqual(await invoke("bind-default-private-space", "w1", "account-a"), {
+    success: true,
+  });
+  assert.equal(
+    db.db.prepare("SELECT workspace_id FROM spaces WHERE id = ?").get(pending).workspace_id,
+    "w1"
+  );
+
+  await invoke("set-active-account-scope", null, tokenState.generation);
+  assert.equal((await invoke("bind-default-private-space", "w1")).code, "SIGNED_OUT");
+  assert.equal(await invoke("get-private-space-id", "w2"), db._standInPrivateSpaceId());
+});
+
+test("copy-note-to-space copies a note into the account's Private and announces it", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  await invoke("set-active-workspace-scope", {
+    activeWorkspaceId: "w1",
+    defaultWorkspaceId: "w1",
+    accountId: "account-a",
+  });
+  const home = db.getDefaultPrivateSpaceId();
+  const team = db.db
+    .prepare("INSERT INTO spaces (client_space_id, kind, name) VALUES ('ipc-team', 'team', 'Team')")
+    .run().lastInsertRowid;
+  db.db
+    .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, 'account-a')")
+    .run(team);
+  const source = db.saveNote("Team note", "body", "personal", null, null, null, team).note;
+  db.markNoteSynced(source.id, "cloud-team-note");
+
+  for (const args of [
+    [],
+    ["7", home],
+    [source.id, "home"],
+    [source.id, home, "folder"],
+    [-1, home],
+    [source.id, 1.5],
+  ]) {
+    assert.equal(await invoke("copy-note-to-space", ...args), null);
+  }
+  assert.equal(await invoke("copy-note-to-space", source.id, team), null);
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count, 1);
+
+  broadcasts.length = 0;
+  const copy = await invoke("copy-note-to-space", source.id, home, null);
+  await new Promise(setImmediate);
+
+  assert.equal(copy.space_id, home);
+  assert.equal(copy.account_id, "account-a");
+  assert.equal(copy.cloud_id, null);
+  assert.equal(db.getNote(source.id).cloud_id, "cloud-team-note");
+  assert.deepEqual(
+    broadcasts.filter(([channel]) => channel === "note-added"),
+    [["note-added", copy]]
+  );
+});
+
+test("relocate-private-space checks its arguments and the account it was sent for", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  await invoke("set-active-workspace-scope", {
+    activeWorkspaceId: "w2",
+    defaultWorkspaceId: "w1",
+    accountId: "account-a",
+  });
+  await invoke("bind-default-private-space", "w1", "account-a");
+  const home = db.getDefaultPrivateSpaceId();
+  const note = db.saveNote("In w2", "").note;
+  const w2 = note.space_id;
+  assert.notEqual(w2, home);
+
+  for (const args of [[], [null], [""], [42], ["w2", ""], ["w2", 7]]) {
+    assert.equal((await invoke("relocate-private-space", ...args)).success, false);
+  }
+  assert.equal(
+    (await invoke("relocate-private-space", "w2", null, "account-b")).code,
+    "ACCOUNT_CHANGED"
+  );
+  assert.equal(db.getNote(note.id).space_id, w2, "a refused call moves nothing");
+
+  assert.deepEqual(await invoke("relocate-private-space", "w2", null, "account-a"), {
+    success: true,
+    notes: 1,
+    folders: 2,
+  });
+  assert.equal(db.getNote(note.id).space_id, home);
+  assert.ok(
+    broadcasts.some(([channel, space]) => channel === "space-synced" && space.id === home),
+    "relocation announces final private scope"
+  );
+  assert.deepEqual(await invoke("relocate-private-space", "w2", null), {
+    success: true,
+    notes: 0,
+    folders: 0,
+  });
+
+  await invoke("set-active-account-scope", null, tokenState.generation);
+  assert.equal((await invoke("relocate-private-space", "w1", null)).code, "SIGNED_OUT");
+});
+
+test("conversation privacy IPC refuses stale accounts, foreign rows and malformed references", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  db.setActiveAccountId("owner");
+  const chat = db.createAgentConversation("Root");
+  const note = db.saveNote("Private", "canary", "personal").note;
+  for (const references of [null, {}, [null], [{ id: note.id }]]) {
+    assert.deepEqual(await invoke("db-protect-conversation", chat.id, references, false, "owner"), {
+      success: false,
+    });
+  }
+  db.setActiveAccountId("other");
+  assert.deepEqual(await invoke("db-protect-conversation", chat.id, [note], false, "owner"), {
+    success: false,
+  });
+  assert.deepEqual(await invoke("db-protect-conversation", chat.id, [note], false, "other"), {
+    success: false,
+  });
+  db.setActiveAccountId("owner");
+  assert.deepEqual(await invoke("db-protect-conversation", chat.id, [note], false, "owner"), {
+    success: true,
+  });
+  assert.equal(db.getAgentConversation(chat.id).device_only, 1);
+});
+
+for (const operation of ["create", "update"]) {
+  for (const existingFolder of [false, true]) {
+    test(`${operation}_note cannot write after cancellation/account switch while resolving ${existingFolder ? "existing" : "new"} folder`, async (t) => {
+      const db = setup(t);
+      if (!db) return;
+      const { joinTeamSpace } = require("./harness/teamSpace");
+      const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+      const team = joinTeamSpace(db, null, { accountId: "account-a" });
+      const note = db.saveNote("Original", "original", "personal", null, null, null, team.id).note;
+      if (existingFolder) db.createFolder("Target", team.id);
+      const initialNotes = db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count;
+      const initialFolders = db.db.prepare("SELECT COUNT(*) AS count FROM folders").get().count;
+      let resume, started;
+      const gate = new Promise((resolve) => {
+        resume = resolve;
+      });
+      const waiting = new Promise((resolve) => {
+        started = resolve;
+      });
+      installBrowserGlobals(t, {
+        window: {
+          electronAPI: {
+            getNoteWriteGuard: async () => invoke("get-note-write-guard"),
+            getSpaces: async () => db.getSpaces(),
+            getNote: async (id) => db.getNote(id),
+            getFolders: async (spaceId) => {
+              const folders = db.getFolders(spaceId);
+              started();
+              await gate;
+              return folders;
+            },
+            createFolder: async (...args) => invoke("db-create-folder", ...args),
+            saveNote: async (...args) => invoke("db-save-note", ...args),
+            updateNote: async (...args) => invoke("db-update-note", ...args),
+          },
+        },
+      });
+      const vite = await createRendererServer(t, {
+        mockModules: { "/SyncService.js": "export const syncService = { debouncedPush() {} };" },
+      });
+      const module = await vite.ssrLoadModule(
+        `/services/tools/${operation === "create" ? "createNoteTool" : "updateNoteTool"}.ts`
+      );
+      const tool = (
+        operation === "create" ? module.createCreateNoteTool : module.createUpdateNoteTool
+      )({ spaceIds: [team.id] });
+      const { executeTool } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
+      const controller = new AbortController();
+      const execute = tool.execute;
+      let underlying;
+      tool.execute = (...args) => {
+        underlying = execute(...args);
+        return underlying;
+      };
+      const result = executeTool(
+        tool,
+        {
+          id: note.id,
+          title: "PRIVATE_ACCOUNT_CANARY",
+          content: "PRIVATE_ACCOUNT_CANARY",
+          space: team.name,
+          folder: "Target",
+        },
+        { signal: controller.signal }
+      );
+      await waiting;
+      controller.abort();
+      joinTeamSpace(db, null, { accountId: "account-b" });
+      resume();
+      assert.equal((await result).success, false);
+      await underlying;
+      assert.equal(db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count, initialNotes);
+      assert.equal(
+        db.db.prepare("SELECT COUNT(*) AS count FROM folders").get().count,
+        initialFolders
+      );
+      assert.equal(db.getNote(note.id).content, "original");
+      assert.equal(
+        db.db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM notes WHERE content LIKE '%PRIVATE_ACCOUNT_CANARY%'"
+          )
+          .get().count,
+        0
+      );
+    });
+  }
+}
+
+for (const operation of ["create", "update"]) {
+  for (const pauseAt of ["folder", "note"]) {
+    for (const boundary of ["account", "generation"]) {
+      test(`${operation}_note main rejects ${pauseAt} writes queued across ${boundary} changes`, async (t) => {
+        const db = setup(t);
+        if (!db) return;
+        const { joinTeamSpace } = require("./harness/teamSpace");
+        const {
+          createRendererServer,
+          installBrowserGlobals,
+        } = require("../lib/rendererTestHarness");
+        const team = joinTeamSpace(db, null, { accountId: "account-a" });
+        const note = db.saveNote(
+          "Original",
+          "original",
+          "personal",
+          null,
+          null,
+          null,
+          team.id
+        ).note;
+        const initialNotes = db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count;
+        const initialFolders = db.db.prepare("SELECT COUNT(*) AS count FROM folders").get().count;
+        const beforeWrite = async (kind, channel, args) => {
+          if (kind === pauseAt) {
+            if (boundary === "account") joinTeamSpace(db, null, { accountId: "account-b" });
+            else tokenState = { ...tokenState, generation: tokenState.generation + 1 };
+          }
+          return invoke(channel, ...args);
+        };
+        installBrowserGlobals(t, {
+          window: {
+            electronAPI: {
+              getNoteWriteGuard: async () => invoke("get-note-write-guard"),
+              getSpaces: async () => db.getSpaces(),
+              getNote: async (id) => db.getNote(id),
+              getFolders: async (spaceId) => db.getFolders(spaceId),
+              createFolder: async (...args) => beforeWrite("folder", "db-create-folder", args),
+              saveNote: async (...args) => beforeWrite("note", "db-save-note", args),
+              updateNote: async (...args) => beforeWrite("note", "db-update-note", args),
+            },
+          },
+        });
+        const vite = await createRendererServer(t, {
+          mockModules: { "/SyncService.js": "export const syncService = { debouncedPush() {} };" },
+        });
+        const module = await vite.ssrLoadModule(
+          `/services/tools/${operation === "create" ? "createNoteTool" : "updateNoteTool"}.ts`
+        );
+        const tool = (
+          operation === "create" ? module.createCreateNoteTool : module.createUpdateNoteTool
+        )({ spaceIds: [team.id] });
+        const { executeTool } = await vite.ssrLoadModule("/services/tools/ToolRegistry.ts");
+        const result = await executeTool(
+          tool,
+          {
+            id: note.id,
+            title: "PRIVATE_ACCOUNT_CANARY",
+            content: "PRIVATE_ACCOUNT_CANARY",
+            space: team.name,
+            ...(pauseAt === "folder" ? { folder: "PRIVATE_FOLDER_CANARY" } : {}),
+          },
+          { signal: new AbortController().signal }
+        );
+        assert.equal(result.success, false);
+        assert.equal(
+          db.db.prepare("SELECT COUNT(*) AS count FROM notes").get().count,
+          initialNotes
+        );
+        assert.equal(
+          db.db.prepare("SELECT COUNT(*) AS count FROM folders").get().count,
+          initialFolders
+        );
+        assert.equal(db.getNote(note.id).content, "original");
+        assert.equal(
+          db.db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM notes WHERE content LIKE '%PRIVATE_ACCOUNT_CANARY%'"
+            )
+            .get().count,
+          0
+        );
+      });
+    }
+  }
+}
+
+test("guarded note/folder writes accept the original signed-in and signed-out account only", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  for (const accountId of ["owner", null]) {
+    db.setActiveAccountId(accountId);
+    const guard = await invoke("get-note-write-guard");
+    assert.deepEqual(guard, { accountId, authGeneration: tokenState.generation });
+    const spaceId = db.getPrivateSpaceId();
+    const folder = await invoke("db-create-folder", "Guarded folder", spaceId, guard);
+    assert.equal(folder.success, true);
+    const saved = await invoke(
+      "db-save-note",
+      "Guarded note",
+      "body",
+      "personal",
+      null,
+      null,
+      folder.folder.id,
+      spaceId,
+      null,
+      guard
+    );
+    assert.equal(saved.success, true);
+    assert.equal(
+      (
+        await invoke(
+          "db-update-note",
+          saved.note.id,
+          { content: "updated" },
+          { undoable: true, expected: saved.note, writeGuard: guard }
+        )
+      ).success,
+      true
+    );
+    for (const malformed of [null, {}, { accountId }, { accountId, authGeneration: "3" }]) {
+      assert.equal(
+        (await invoke("db-create-folder", "Refused", spaceId, malformed)).success,
+        false
+      );
+    }
+  }
+});
+
+test("restored conversation privacy is account-bound and rejects late pulls after a switch", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  const cloud = {
+    id: "restore-cloud-a",
+    client_conversation_id: "restore-client-a",
+    title: "A's restored history",
+  };
+  const restored = await invoke(
+    "db-upsert-conversation-from-cloud",
+    cloud,
+    [{ role: "user", content: "A_PRIVATE_RESTORE" }],
+    null,
+    tokenState.generation
+  );
+  assert.equal(restored.device_only, 1);
+  tokenState = { token: "token-b", generation: 4 };
+  await invoke("set-active-account-scope", "account-b", tokenState.generation);
+  const refused = await invoke(
+    "db-upsert-conversation-from-cloud",
+    { ...cloud, client_conversation_id: "late-a" },
+    [{ role: "user", content: "A_PRIVATE_RESTORE" }],
+    null,
+    3
+  );
+  assert.equal(refused.stale, true);
+  assert.equal(db.getAgentConversation(restored.id), null);
+  assert.equal(
+    db.db
+      .prepare("SELECT COUNT(*) AS count FROM agent_conversations WHERE account_id = 'account-b'")
+      .get().count,
+    0
+  );
 });

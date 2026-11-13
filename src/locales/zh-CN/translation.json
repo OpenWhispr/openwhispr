@@ -2301,9 +2301,8 @@
     "privacy": {
       "cloudBackup": "云端备份",
       "cloudBackupDescription": "将转录记录和笔记备份到云端，实现跨设备无缝访问。",
-      "cloudBackupTeamCaveat": "Teamspace 中的笔记和您已分享的笔记会始终同步，不受此设置影响。",
+      "cloudBackupTeamCaveat": "Teamspace 中的笔记和您已分享的笔记会始终同步，不受此设置影响。 使用私密内容的对话仅保留在此设备上。 早期版本中的对话和从备份恢复的对话也不参与备份。",
       "cloudNotesMigration": "正在备份笔记… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "所有笔记已备份",
       "description": "控制哪些数据会离开你的设备。默认全部关闭。",
       "title": "隐私",
       "insightsSync": "同步个人统计",
@@ -2494,13 +2493,7 @@
       "title": "工作区",
       "description": "在一处与同事协作、共享笔记并管理工作区访问权限。",
       "empty": {
-        "title": "创建你的第一个工作区",
-        "description": "工作区让你与同事协作并共享笔记。",
         "create": "创建工作区"
-      },
-      "personal": {
-        "title": "你当前在“个人”中",
-        "description": "选择一个工作区以管理其设置。"
       },
       "loadError": {
         "title": "无法加载工作区",
@@ -2778,8 +2771,8 @@
           "leaveBodyLoses": "你将无法再访问 {{space}} 及其笔记。",
           "leaveBodyAdmins": "其他管理员将继续管理此 Teamspace。",
           "deleteNotAllowed": "你没有删除 {{space}} 的权限。",
-          "movedToPersonal_one": "{{count}} 条未同步的笔记已移至你的个人空间。",
-          "movedToPersonal_other": "{{count}} 条未同步的笔记已移至你的个人空间。"
+          "movedToPersonal_one": "{{count}} 条未同步的笔记已移至“私密”。",
+          "movedToPersonal_other": "{{count}} 条未同步的笔记已移至“私密”。"
         },
         "addPeople": {
           "loading": "正在加载 Teamspace…",
@@ -3459,7 +3452,7 @@
       "defaultFolderImmutable": "无法更改默认文件夹。",
       "spaceNameRequired": "请输入空间名称。",
       "spaceNotFound": "找不到该空间。",
-      "privateSpaceImmutable": "无法更改你的个人空间。",
+      "privateSpaceImmutable": "“私密”无法更改。",
       "generic": "无法完成更改，请重试。"
     },
     "sidebar": {
@@ -3468,10 +3461,10 @@
       "templatesAndActions": "模板和操作"
     },
     "spaces": {
-      "privateSpaces": "私人笔记",
+      "privateSpaces": "私密",
       "teamSpaces": "Teamspaces",
-      "personal": "个人",
-      "privateTooltip": "只有你可以看到你的个人空间",
+      "personal": "私密",
+      "privateTooltip": "只有你能看到这里的文件夹和笔记。",
       "newSpace": "新建 Teamspace",
       "nameAndIconLabel": "名称和图标",
       "changeEmoji": "更改表情符号",
@@ -3493,6 +3486,18 @@
       "noSpacesFound": "未找到空间",
       "spaceRoot": "空间根目录",
       "moveConfirm": "移动",
+      "copyToPrivate": "复制到私密",
+      "moveToWorkspacePrivate": "移动到 {{workspace}} › 私密",
+      "workspacePrivate": "{{workspace}} › 私密",
+      "confirmCopyTitle": "复制到私密？",
+      "confirmCopy": "笔记仍保留在 {{space}} 中。",
+      "copiedToPrivate": "已复制到“私密”",
+      "couldNotCopyNote": "无法复制笔记",
+      "openCopy": "打开",
+      "noteAlreadyInTeam": "“{{title}}”已在 {{space}} 中。如需保留私密副本，请使用“复制到私密”。",
+      "folderAlreadyInTeam": "“{{name}}”已在 {{space}} 中。如需保留私密副本，请对其中的笔记使用“复制到私密”。",
+      "workspacesLoading": "工作区仍在加载中，请稍后再试。",
+      "cantMoveIntoLegacy": "{{space}} 不属于任何工作区，无法将笔记移入其中。",
       "confirmMoveInTitle": "移动到 {{space}}？",
       "confirmMoveIn": "{{space}} 中的所有人都将能查看和编辑此笔记。此后笔记将无法移出 Teamspace。",
       "confirmMoveInFolder": "{{space}} 中的所有人都将能查看和编辑此文件夹及其笔记。此后文件夹及其笔记将无法移出 Teamspace。",
@@ -3510,10 +3515,10 @@
       "noteCount_other": "{{count}} 条笔记",
       "accessRevoked": "你已无法访问 {{space}}",
       "accessRevokedActiveNote": "你已无法访问 {{space}} — “{{title}}”在此设备上不再可用",
-      "movedToPersonal": "你已无法访问 {{space}}，“{{title}}”已移至你的个人空间",
-      "updateDeniedNote": "你没有权限更改“{{title}}”——未同步的编辑已作为副本保存到你的个人空间",
+      "movedToPersonal": "你已无法访问 {{space}}，“{{title}}”已移至“私密”",
+      "updateDeniedNote": "你没有权限更改“{{title}}”——未同步的编辑已作为副本保存到“私密”",
       "deleteDeniedNote": "“{{title}}”未被删除——只有笔记所有者或管理员才能删除它",
-      "updateDeniedFolder": "你没有权限更改“{{name}}”——未同步的内容已保存到你的个人空间",
+      "updateDeniedFolder": "你没有权限更改“{{name}}”——未同步的内容已保存到“私密”",
       "deleteDeniedFolder": "“{{name}}”未被删除——只有管理员才能删除空间文件夹",
       "conflictBanner": "此笔记存在更新的版本。",
       "conflictRefresh": "刷新",
@@ -3543,7 +3548,7 @@
       "title": "笔记存放在哪里",
       "description": "OpenWhispr 将个人想法与协作内容分开，让合适的人看到合适的笔记。",
       "personal": {
-        "title": "个人空间",
+        "title": "私密",
         "description": "只有你能看到这里的文件夹和笔记。"
       },
       "workspace": {
@@ -3948,7 +3953,9 @@
       "addExisting": "添加已有笔记",
       "addCount": "添加 {{count}} 条笔记",
       "noResults": "没有匹配的笔记",
-      "noNotesAvailable": "没有其他可用笔记"
+      "noNotesAvailable": "没有其他可用笔记",
+      "notAdded_one": "{{count}} 条笔记无法添加",
+      "notAdded_other": "{{count}} 条笔记无法添加"
     },
     "onboarding": {
       "llm": {
@@ -4039,7 +4046,7 @@
       "banner": {
         "title": {
           "team": "你的 Teamspace",
-          "private": "你的私人空间"
+          "private": "你的私密空间"
         },
         "body": {
           "team": "把对话变成共享知识。将用户访谈、销售通话和团队会议发布到大家都能找到的地方。",
@@ -4250,7 +4257,6 @@
       },
       "locked": {
         "noWorkspace": "共享词典包含在 Business 方案中。与所有人共享团队的行话、产品名称和缩写。",
-        "chooseWorkspace": "你当前在“个人”中。切换到一个工作区即可使用其共享词语。",
         "upgradeAdmin": "共享词典包含在 Business 方案中。升级 {{workspace}}，让每个人都使用相同的词语。",
         "upgradeMember": "共享词典包含在 Business 方案中。请让管理员升级 {{workspace}}。",
         "paused_one": "{{workspace}} 的 {{count}} 个共享词语已暂停。升级到 Business 即可在听写中再次使用。",
@@ -5890,10 +5896,13 @@
     "missingAudio": "[音频缺失 {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "{{name}} 的工作区",
+    "defaultNameFallback": "我的工作区",
     "switcher": {
       "workspaces": "工作区",
       "add": "添加工作区",
-      "invitePeople": "邀请成员"
+      "invitePeople": "邀请成员",
+      "unavailable": "工作区暂时不可用。"
     },
     "create": {
       "title": "创建工作区",
@@ -6023,16 +6032,17 @@
       "leave": {
         "title": "退出 {{name}}？",
         "body": "你将失去对此工作区、其团队和 Teamspace 的访问权限。工作区所有者或管理员可以重新邀请你。",
+        "privateNotes": "你在此工作区中的私密笔记将移至 {{workspace}}。",
         "failed": "无法退出 {{name}}。请检查网络连接后重试。"
       },
       "left": {
         "title": "你已退出 {{name}}"
       },
-      "chooseAnother": "选择另一个工作区以继续。",
-      "chooseWorkspace": "选择工作区",
+      "nowIn": "你现在位于 {{workspace}}。",
       "delete": {
         "title": "删除 {{name}}？",
-        "body": "这将为所有人永久删除该工作区及其笔记、文件、团队和 Teamspace，且无法撤销。"
+        "body": "这将为所有人永久删除该工作区及其笔记、文件、团队和 Teamspace，且无法撤销。",
+        "privateNotes": "你在此工作区中的私密笔记将移至 {{workspace}}。"
       },
       "deleting": {
         "title": "正在删除 {{name}}…",

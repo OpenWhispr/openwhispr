@@ -705,15 +705,18 @@ test("a failed attendee lookup still answers, without the block", async (t) => {
   assert.doesNotMatch(prompts[0], /Meeting attendees/);
 });
 
-// A library search that finds another note, recording what it was asked.
+// A library search that finds another note, recording what it was asked. The note is in main's
+// Private, all a chat reads with no workspace active.
 function libraryWithOneHit(searches) {
   return {
+    getPrivateSpaceId: async () => 1,
     semanticSearchNotes: async (query) => {
       searches.push(query);
       return [{ id: 3, title: "Pricing sync Sep 29" }];
     },
     getNote: async (id) => ({
       id,
+      space_id: 1,
       title: "Pricing sync Sep 29",
       content: "Testing $15 against $12",
     }),
@@ -1234,11 +1237,18 @@ test("product questions retain note, scoped search, selected text and screenshot
     {
       settings: BYOK_SETTINGS,
       electronAPI: {
+        // The container is main's Private, all a chat reads with no workspace active.
+        getPrivateSpaceId: async () => 12,
         semanticSearchNotes: async (...args) => {
           searchCalls.push(args);
           return [{ id: 7, title: "Planning" }];
         },
-        getNote: async () => ({ id: 7, title: "Planning", content: "Follow up with Alex." }),
+        getNote: async () => ({
+          id: 7,
+          space_id: 12,
+          title: "Planning",
+          content: "Follow up with Alex.",
+        }),
       },
     }
   );
@@ -1247,7 +1257,7 @@ test("product questions retain note, scoped search, selected text and screenshot
     selectedContext: { text: "Selected OpenWhispr passage", sourceMessageId: "earlier" },
     attachment: { image: "data:image/png;base64,c3ludGhldGlj", mediaType: "image/png" },
   });
-  assert.deepEqual(searchCalls, [[prompt, 5, 12, 34]]);
+  assert.deepEqual(searchCalls, [[prompt, 5, 12, 34, [12]]]);
   assert.doesNotMatch(systemPromptOf(sentMessages[0]), /next Tuesday|Follow up with Alex/);
   const content = sentMessages[0].at(-1).content;
   assert.ok(Array.isArray(content), "image-capable provider receives multimodal request");
@@ -1550,9 +1560,11 @@ test("automatic library context includes saved summaries and prioritizes private
     {},
     {
       electronAPI: {
+        getPrivateSpaceId: async () => 1,
         semanticSearchNotes: async () => [{ id: 3, title: "Pricing" }],
         getNote: async () => ({
           id: 3,
+          space_id: 1,
           title: "Pricing",
           content: "Introductory notes",
           enhanced_content: "Starter $9; Pro $19 per month",

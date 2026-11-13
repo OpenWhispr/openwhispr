@@ -35,6 +35,9 @@ async function setupChatTurns(t, electronAPI = {}, mockModules = {}, rendererOpt
   installBrowserGlobals(t, {
     window: {
       electronAPI: {
+        getNoteWriteGuard: async () => ({ accountId: null, authGeneration: 0 }),
+        getDatabaseAccountScope: async () => ({ accountId: null, visibleAccountId: null }),
+        protectConversation: async () => ({ success: true }),
         createAgentConversation: async (title) => {
           const row = { id: nextId++, title, messages: [] };
           rows.set(row.id, row);

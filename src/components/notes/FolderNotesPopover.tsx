@@ -5,7 +5,7 @@ import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { FileText, FolderOpen, MoreHorizontal, Search, X } from "../icons";
 import { defaultFolderDisplayName } from "./shared";
-import { formatRelativeTime } from "../../utils/dateFormatting";
+import { formatRelativeTime, normalizeDbDate } from "../../utils/dateFormatting";
 import { folderContainerKey, loadContainerNotes } from "../../stores/noteStore";
 import { cn } from "../lib/utils";
 import type { FolderItem, NoteItem } from "../../types/electron";
@@ -13,6 +13,8 @@ import type { RowA11yProps } from "./SpacesTree";
 
 interface Props {
   folder: FolderItem;
+  /** Every folder the row stands for, `folder` first (more than one in the Private section). */
+  folderIds?: number[];
   total: number;
   hiddenCount: number;
   activeNoteId: number | null;
@@ -26,6 +28,7 @@ interface Props {
 
 export function FolderNotesPopover({
   folder,
+  folderIds = [folder.id],
   total,
   hiddenCount,
   activeNoteId,
@@ -47,6 +50,7 @@ export function FolderNotesPopover({
   const pickedNoteRef = useRef(false);
   const titleId = useId();
   const name = defaultFolderDisplayName(folder, t);
+  const folderIdsKey = folderIds.join(",");
 
   useEffect(() => {
     if (!open) return;
@@ -56,9 +60,21 @@ export function FolderNotesPopover({
     setAllNotes(null);
     setFailed(false);
     // SQLite LIMIT -1 removes the normal 50-note container cap.
-    loadContainerNotes(folderContainerKey(folder.id), null, -1)
-      .then((items) => {
-        if (!stale) setAllNotes(items);
+    Promise.all(
+      folderIdsKey
+        .split(",")
+        .map((id) => loadContainerNotes(folderContainerKey(Number(id)), null, -1))
+    )
+      .then((lists) => {
+        if (stale) return;
+        const items = lists.flat();
+        if (lists.length > 1) {
+          items.sort(
+            (a, b) =>
+              normalizeDbDate(b.updated_at).getTime() - normalizeDbDate(a.updated_at).getTime()
+          );
+        }
+        setAllNotes(items);
       })
       .catch(() => {
         if (!stale) setFailed(true);
@@ -66,7 +82,7 @@ export function FolderNotesPopover({
     return () => {
       stale = true;
     };
-  }, [open, folder.id, reload]);
+  }, [open, folderIdsKey, reload]);
 
   const filtered = (allNotes ?? []).filter((note) =>
     note.title

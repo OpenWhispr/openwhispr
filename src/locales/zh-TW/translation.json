@@ -2301,9 +2301,8 @@
     "privacy": {
       "cloudBackup": "雲端備份",
       "cloudBackupDescription": "將轉錄記錄和筆記備份至雲端，實現跨裝置無縫存取。",
-      "cloudBackupTeamCaveat": "Teamspace 中的筆記和您已分享的筆記會始終同步，不受此設定影響。",
+      "cloudBackupTeamCaveat": "Teamspace 中的筆記和您已分享的筆記會始終同步，不受此設定影響。 使用私人內容的對話僅保留在這部裝置上。 舊版中的對話和從備份還原的對話也不納入備份。",
       "cloudNotesMigration": "正在備份筆記… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "所有筆記已備份",
       "description": "控制哪些資料會離開你的裝置。預設全部關閉。",
       "title": "隱私權",
       "insightsSync": "同步個人統計",
@@ -2494,13 +2493,7 @@
       "title": "工作區",
       "description": "與團隊成員協作、分享筆記，並在同一處管理工作區存取權限。",
       "empty": {
-        "title": "建立你的第一個工作區",
-        "description": "工作區讓你與團隊成員協作並分享筆記。",
         "create": "建立工作區"
-      },
-      "personal": {
-        "title": "你目前在「個人」中",
-        "description": "選擇一個工作區以管理其設定。"
       },
       "loadError": {
         "title": "無法載入工作區",
@@ -2778,8 +2771,8 @@
           "leaveBodyLoses": "你將無法再存取 {{space}} 及其筆記。",
           "leaveBodyAdmins": "其他管理員將繼續管理此 Teamspace。",
           "deleteNotAllowed": "你沒有刪除 {{space}} 的權限。",
-          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至你的個人空間。",
-          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至你的個人空間。"
+          "movedToPersonal_one": "{{count}} 則未同步的筆記已移至「私人」。",
+          "movedToPersonal_other": "{{count}} 則未同步的筆記已移至「私人」。"
         },
         "addPeople": {
           "loading": "正在載入 Teamspace…",
@@ -3459,7 +3452,7 @@
       "defaultFolderImmutable": "無法變更預設資料夾。",
       "spaceNameRequired": "請輸入空間名稱。",
       "spaceNotFound": "找不到該空間。",
-      "privateSpaceImmutable": "無法變更你的個人空間。",
+      "privateSpaceImmutable": "「私人」無法變更。",
       "generic": "無法完成變更，請再試一次。"
     },
     "sidebar": {
@@ -3468,10 +3461,10 @@
       "templatesAndActions": "範本與動作"
     },
     "spaces": {
-      "privateSpaces": "私人筆記",
+      "privateSpaces": "私人",
       "teamSpaces": "Teamspaces",
-      "personal": "個人",
-      "privateTooltip": "只有你可以看到你的個人空間",
+      "personal": "私人",
+      "privateTooltip": "只有你能看到這裡的資料夾和筆記。",
       "newSpace": "新增 Teamspace",
       "nameAndIconLabel": "名稱與圖示",
       "changeEmoji": "變更表情符號",
@@ -3493,6 +3486,18 @@
       "noSpacesFound": "找不到空間",
       "spaceRoot": "空間根目錄",
       "moveConfirm": "移動",
+      "copyToPrivate": "複製到私人",
+      "moveToWorkspacePrivate": "移動到 {{workspace}} › 私人",
+      "workspacePrivate": "{{workspace}} › 私人",
+      "confirmCopyTitle": "複製到私人？",
+      "confirmCopy": "筆記仍會保留在 {{space}} 中。",
+      "copiedToPrivate": "已複製到「私人」",
+      "couldNotCopyNote": "無法複製筆記",
+      "openCopy": "開啟",
+      "noteAlreadyInTeam": "「{{title}}」已在 {{space}} 中。如需保留私人副本，請使用「複製到私人」。",
+      "folderAlreadyInTeam": "「{{name}}」已在 {{space}} 中。如需保留私人副本，請對其中的筆記使用「複製到私人」。",
+      "workspacesLoading": "工作區仍在載入中，請稍後再試。",
+      "cantMoveIntoLegacy": "{{space}} 不屬於任何工作區，無法將筆記移入其中。",
       "confirmMoveInTitle": "移動到 {{space}}？",
       "confirmMoveIn": "{{space}} 中的所有人都將能檢視和編輯這則筆記。之後筆記將無法移出 Teamspace。",
       "confirmMoveInFolder": "{{space}} 中的所有人都將能檢視和編輯這個資料夾及其筆記。之後資料夾及其筆記將無法移出 Teamspace。",
@@ -3510,10 +3515,10 @@
       "noteCount_other": "{{count}} 則筆記",
       "accessRevoked": "你已無法存取 {{space}}",
       "accessRevokedActiveNote": "你已無法存取 {{space}} — 「{{title}}」在此裝置上不再可用",
-      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至你的個人空間",
-      "updateDeniedNote": "你沒有權限變更「{{title}}」——未同步的編輯已作為副本儲存到你的個人空間",
+      "movedToPersonal": "你已無法存取 {{space}}，「{{title}}」已移至「私人」",
+      "updateDeniedNote": "你沒有權限變更「{{title}}」——未同步的編輯已作為副本儲存到「私人」",
       "deleteDeniedNote": "「{{title}}」未被刪除——只有筆記擁有者或管理員才能刪除它",
-      "updateDeniedFolder": "你沒有權限變更「{{name}}」——未同步的內容已儲存到你的個人空間",
+      "updateDeniedFolder": "你沒有權限變更「{{name}}」——未同步的內容已儲存到「私人」",
       "deleteDeniedFolder": "「{{name}}」未被刪除——只有管理員才能刪除空間資料夾",
       "conflictBanner": "此筆記有更新的版本。",
       "conflictRefresh": "重新整理",
@@ -3543,7 +3548,7 @@
       "title": "筆記存放在哪裡",
       "description": "OpenWhispr 將個人想法與協作內容分開，讓合適的人看到合適的筆記。",
       "personal": {
-        "title": "個人空間",
+        "title": "私人",
         "description": "只有你能看到這裡的資料夾和筆記。"
       },
       "workspace": {
@@ -3948,7 +3953,9 @@
       "addExisting": "新增現有筆記",
       "addCount": "新增 {{count}} 則筆記",
       "noResults": "沒有符合的筆記",
-      "noNotesAvailable": "沒有其他可用的筆記"
+      "noNotesAvailable": "沒有其他可用的筆記",
+      "notAdded_one": "{{count}} 則筆記無法加入",
+      "notAdded_other": "{{count}} 則筆記無法加入"
     },
     "onboarding": {
       "llm": {
@@ -4250,7 +4257,6 @@
       },
       "locked": {
         "noWorkspace": "共享字典包含在 Business 方案中。與所有人共享團隊的術語、產品名稱和縮寫。",
-        "chooseWorkspace": "你目前在「個人」中。切換到一個工作區即可使用其共享詞語。",
         "upgradeAdmin": "共享字典包含在 Business 方案中。升級 {{workspace}}，讓每個人都使用相同的詞語。",
         "upgradeMember": "共享字典包含在 Business 方案中。請管理員升級 {{workspace}}。",
         "paused_one": "{{workspace}} 的 {{count}} 個共享詞語已暫停。升級到 Business 即可在聽寫中再次使用。",
@@ -5890,10 +5896,13 @@
     "missingAudio": "[音訊缺失 {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "{{name}} 的工作區",
+    "defaultNameFallback": "我的工作區",
     "switcher": {
       "workspaces": "工作區",
       "add": "新增工作區",
-      "invitePeople": "邀請成員"
+      "invitePeople": "邀請成員",
+      "unavailable": "工作區暫時無法使用。"
     },
     "create": {
       "title": "建立工作區",
@@ -6023,16 +6032,17 @@
       "leave": {
         "title": "離開 {{name}}？",
         "body": "你將失去此工作區、其團隊與 Teamspace 的存取權。工作區擁有者或管理員可以再次邀請你。",
+        "privateNotes": "你在此工作區中的私人筆記將移至 {{workspace}}。",
         "failed": "無法離開 {{name}}。請檢查網路連線後再試一次。"
       },
       "left": {
         "title": "你已離開 {{name}}"
       },
-      "chooseAnother": "請選擇另一個工作區以繼續。",
-      "chooseWorkspace": "選擇工作區",
+      "nowIn": "你現在位於 {{workspace}}。",
       "delete": {
         "title": "刪除 {{name}}？",
-        "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與 Teamspace，且無法復原。"
+        "body": "這將為所有人永久刪除該工作區及其筆記、檔案、團隊與 Teamspace，且無法復原。",
+        "privateNotes": "你在此工作區中的私人筆記將移至 {{workspace}}。"
       },
       "deleting": {
         "title": "正在刪除 {{name}}…",

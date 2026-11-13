@@ -60,7 +60,12 @@ function createSearchDatabase() {
       space_id INTEGER NOT NULL DEFAULT 1,
       account_id TEXT
     );
-    CREATE TABLE spaces (id INTEGER PRIMARY KEY, kind TEXT NOT NULL);
+    CREATE TABLE spaces (
+      id INTEGER PRIMARY KEY,
+      kind TEXT NOT NULL,
+      account_id TEXT,
+      workspace_id TEXT
+    );
     CREATE TABLE space_accounts (
       space_id INTEGER NOT NULL,
       account_id TEXT NOT NULL,
