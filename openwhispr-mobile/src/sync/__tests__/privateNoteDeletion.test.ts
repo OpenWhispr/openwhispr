@@ -93,11 +93,26 @@ it('settles a lost DELETE acknowledgement when a 404 is confirmed by a tombstone
   });
 });
 
+it('stops retrying a 404 for a copy this client cannot see, keeping the note private here', async () => {
+  const note = privateNote();
+  jest.mocked(deleteNote).mockRejectedValue({ status: 404 });
+  jest.mocked(fetchNotes).mockResolvedValue({ notes: [] });
+  await deletePrivateNoteCloudCopy(note);
+  expect(mockRepo.getNoteById(note.id)).toMatchObject({
+    remoteId: null,
+    clientNoteId: null,
+    content: 'keep this',
+    isPrivate: 1,
+  });
+  await pushPrivateNoteDeletes();
+  expect(deleteNote).toHaveBeenCalledTimes(1);
+});
+
 it.each([
-  { notes: [] },
+  { notes: [remoteNote()] },
   { notes: [remoteNote({ access_removed: true })] },
   { notes: [remoteNote({ access_removed: true, deleted_at: 'deleted' })] },
-])('does not mistake absent or revoked access for a confirmed deletion (%j)', async ({ notes }) => {
+])('does not mistake a live or revoked copy for a confirmed deletion (%j)', async ({ notes }) => {
   const note = privateNote();
   jest.mocked(deleteNote).mockRejectedValue({ status: 404, code: 'space_not_found' });
   jest.mocked(fetchNotes).mockResolvedValue({ notes });

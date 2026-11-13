@@ -454,7 +454,6 @@ export async function pushNotes(
           }
         }
         if (unmatched > 0) {
-          failed += 1;
           Sentry.captureMessage(
             `pushNotes: ${unmatched}/${chunk.length} create rows had no matching server response`,
             'warning',

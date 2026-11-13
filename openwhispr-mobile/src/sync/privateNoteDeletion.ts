@@ -119,9 +119,10 @@ async function removeCloudCopy(
     checkpoint();
     if (!isNotFound(error)) throw error;
     const remote = await findRemote({ ...identity, remoteId });
-    // Absence and revoked-access stubs cannot distinguish deletion from lost
-    // permission. Only an actual tombstone proves the old copy is gone.
-    if (!remote?.deleted_at || remote.access_removed) throw error;
+    // A tombstone proves the old copy is gone. With no row at all there is none
+    // this client can see or remove (the server hides it from this build), so
+    // retrying can't help. A revoked-access stub may hide a live copy, so it waits.
+    if (remote && (!remote.deleted_at || remote.access_removed)) throw error;
   }
   checkpoint();
   return remoteId;

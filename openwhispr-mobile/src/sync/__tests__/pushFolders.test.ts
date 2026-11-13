@@ -61,7 +61,7 @@ const folder = (overrides: Partial<Folder> = {}): Folder =>
   }) as Folder;
 
 describe('pushFolders create response matching', () => {
-  it('preserves an explicitly refused create without adopting another row’s identity', async (): Promise<void> => {
+  it('keeps a refused create pending without adopting another row’s identity or failing the pass', async (): Promise<void> => {
     mockNotesRepository.getPendingFolders.mockReturnValue([
       folder({ id: 1, clientFolderId: 'refused' }),
       folder({ id: 2, clientFolderId: 'accepted' }),
@@ -72,7 +72,7 @@ describe('pushFolders create response matching', () => {
       ],
       refused: [{ client_folder_id: 'refused', code: 'write_refused' }],
     });
-    await expect(pushFolders()).rejects.toThrow('pushFolders: 1 operation(s) failed');
+    await expect(pushFolders()).resolves.toBeUndefined();
     expect(mockNotesRepository.markFolderPushed).toHaveBeenCalledTimes(1);
     expect(mockNotesRepository.markFolderTerminal).not.toHaveBeenCalled();
   });
@@ -178,7 +178,7 @@ describe('pushFolders create response matching', () => {
       ],
     });
 
-    await expect(pushFolders()).rejects.toThrow('pushFolders: 1 operation(s) failed');
+    await pushFolders();
 
     expect(mockNotesRepository.markFolderPushed).toHaveBeenCalledTimes(1);
     expect(mockNotesRepository.markFolderPushed).toHaveBeenCalledWith(
@@ -281,7 +281,7 @@ describe('pushFolders same-name create in a space that already has the folder', 
   it('never adopts a returned folder with another name', async () => {
     mockBatchCreateFolders.mockResolvedValue({ created: [{ ...existing, name: 'Retro' }] });
 
-    await expect(pushFolders()).rejects.toThrow('pushFolders: 1 operation(s) failed');
+    await pushFolders();
 
     expect(mockNotesRepository.markFolderPushed).not.toHaveBeenCalled();
     expect(mockNotesRepository.adoptDuplicateFolder).not.toHaveBeenCalled();

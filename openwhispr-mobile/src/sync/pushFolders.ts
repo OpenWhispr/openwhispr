@@ -323,7 +323,6 @@ export async function pushFolders(
           unmatched += 1;
         }
         if (unmatched > 0) {
-          failed += 1;
           Sentry.captureMessage(
             `pushFolders: ${unmatched}/${chunk.length} create rows had no matching server response`,
             'warning',
