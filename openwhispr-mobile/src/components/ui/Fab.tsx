@@ -16,7 +16,7 @@ import { Glass } from '@/components/ui/Glass';
 import { TAB_BAR_CLEARANCE } from '@/components/ui/tabBarClearance';
 import { safeHaptics } from '@/lib/utils';
 
-const BRAND = '#007AFF';
+const BRAND = '#2F5BEA';
 
 const SIZE = 56;
 const MINI_SIZE = 44;

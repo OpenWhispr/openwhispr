@@ -23,7 +23,7 @@ export interface FormatTranscriptInput {
 }
 
 const SPEAKER_PALETTE = [
-  '#007AFF',
+  '#2F5BEA',
   '#34C759',
   '#FF9500',
   '#AF52DE',

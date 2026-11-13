@@ -33,7 +33,7 @@ const block = (overrides: Partial<TranscriptBlock>): TranscriptBlock => ({
   speakerId: 10,
   speakerLabel: 'SPEAKER_00',
   speakerName: 'Alice',
-  speakerColor: '#007AFF',
+  speakerColor: '#2F5BEA',
   speakerStatus: null,
   startMs: 3_000,
   endMs: 4_000,

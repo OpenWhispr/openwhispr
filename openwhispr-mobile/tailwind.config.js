@@ -1,6 +1,6 @@
 const { platformColor } = require('nativewind/theme');
 
-const BRAND = '#007AFF';
+const BRAND = '#2F5BEA';
 
 const ios = (iosName, androidFallback, web = androidFallback) =>
   platformColor(iosName, androidFallback, web);
@@ -19,7 +19,7 @@ module.exports = {
         tertiaryLabel: ios('tertiaryLabel', '#3C3C434D', '#3C3C434D'),
         quaternaryLabel: ios('quaternaryLabel', '#3C3C432E', '#3C3C432E'),
 
-        systemBackground: '#F8F6F5',
+        systemBackground: '#F7F7F9',
         secondarySystemBackground: ios('secondarySystemBackground', '#F2F2F7', '#F2F2F7'),
         secondarySystemGroupedBackground: '#FFFFFF',
         tertiarySystemFill: ios('tertiarySystemFill', '#76768014', '#76768014'),
