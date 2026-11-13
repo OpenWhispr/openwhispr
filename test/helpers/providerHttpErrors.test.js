@@ -65,7 +65,7 @@ test("402 and billing-flavoured 400/429 are quota exhaustion", async () => {
   assert.equal(anthropic.code, "PROVIDER_QUOTA_EXHAUSTED");
 });
 
-test("self-hosted quota exhaustion gets its own sentence instead of \"Your Your server account\"", async () => {
+test('self-hosted quota exhaustion gets its own sentence instead of "Your Your server account"', async () => {
   const { providerHttpError } = await load();
   const err = providerHttpError({
     provider: "self-hosted",
@@ -210,7 +210,10 @@ test("technical details carry provider, status, request id and a trimmed body", 
 });
 
 test("HTML bodies collapse to a marker", async () => {
-  const c = await classify({ status: 502, body: "<!DOCTYPE html><html><body>Bad gateway</body></html>" });
+  const c = await classify({
+    status: 502,
+    body: "<!DOCTYPE html><html><body>Bad gateway</body></html>",
+  });
   assert.equal(c.technicalDetails.underlyingError, "<HTML response>");
 });
 
@@ -219,7 +222,14 @@ test("keys echoed back in a body are redacted", async () => {
   const out = redactProviderBody(
     "Incorrect API key provided: sk-proj-ab***xyz. Also sk-ant-api03-zzzz gsk_abcd1234 AIzaSyA1234 xai-qwerty Authorization: Bearer eyJhbGciOi.abc"
   );
-  for (const leaked of ["sk-proj-ab", "sk-ant-api03", "gsk_abcd", "AIzaSy", "xai-qwerty", "eyJhbGciOi"]) {
+  for (const leaked of [
+    "sk-proj-ab",
+    "sk-ant-api03",
+    "gsk_abcd",
+    "AIzaSy",
+    "xai-qwerty",
+    "eyJhbGciOi",
+  ]) {
     assert.equal(out.includes(leaked), false, `${leaked} leaked: ${out}`);
   }
   assert.ok(out.includes("Bearer [redacted]"));
@@ -227,7 +237,12 @@ test("keys echoed back in a body are redacted", async () => {
 
 test("providerHttpError builds an Error carrying the classification and a short English message", async () => {
   const { providerHttpError } = await load();
-  const err = providerHttpError({ provider: "Mistral", status: 401, body: "{}", surface: "transcription" });
+  const err = providerHttpError({
+    provider: "Mistral",
+    status: 401,
+    body: "{}",
+    surface: "transcription",
+  });
   assert.ok(err instanceof Error);
   assert.equal(err.message, "Mistral rejected your API key.");
   assert.equal(err.code, "PROVIDER_AUTH_FAILED");
@@ -257,7 +272,11 @@ test("asProviderError classifies AI SDK APICallError and RetryError", async () =
     responseBody: '{"error":{"message":"Incorrect API key provided: sk-abcd1234"}}',
     responseHeaders: { "x-request-id": "r1" },
   });
-  const direct = asProviderError(apiCallError, { provider: "OpenAI", model: "gpt-5.5", surface: "llm" });
+  const direct = asProviderError(apiCallError, {
+    provider: "OpenAI",
+    model: "gpt-5.5",
+    surface: "llm",
+  });
   assert.equal(direct.code, "PROVIDER_AUTH_FAILED");
   assert.equal(direct.technicalDetails.requestId, "r1");
   assert.equal(direct.technicalDetails.underlyingError.includes("sk-abcd1234"), false);
@@ -266,18 +285,30 @@ test("asProviderError classifies AI SDK APICallError and RetryError", async () =
     name: "AI_RetryError",
     lastError: Object.assign(new Error("overloaded"), { statusCode: 529, responseBody: "" }),
   });
-  assert.equal(asProviderError(retryError, { provider: "Anthropic", surface: "llm" }).code, "PROVIDER_UNAVAILABLE");
+  assert.equal(
+    asProviderError(retryError, { provider: "Anthropic", surface: "llm" }).code,
+    "PROVIDER_UNAVAILABLE"
+  );
 });
 
 test("asProviderError classifies timeouts and network failures", async () => {
   const { asProviderError } = await load();
   const ctx = { provider: "Groq", surface: "llm" };
-  assert.equal(asProviderError(Object.assign(new Error("t"), { code: "LLM_REQUEST_TIMEOUT" }), ctx).code, "PROVIDER_TIMEOUT");
-  assert.equal(asProviderError(Object.assign(new Error("t"), { name: "TimeoutError" }), ctx).code, "PROVIDER_TIMEOUT");
+  assert.equal(
+    asProviderError(Object.assign(new Error("t"), { code: "LLM_REQUEST_TIMEOUT" }), ctx).code,
+    "PROVIDER_TIMEOUT"
+  );
+  assert.equal(
+    asProviderError(Object.assign(new Error("t"), { name: "TimeoutError" }), ctx).code,
+    "PROVIDER_TIMEOUT"
+  );
   const notFound = asProviderError(Object.assign(new Error("x"), { code: "ENOTFOUND" }), ctx);
   assert.equal(notFound.code, "PROVIDER_UNREACHABLE");
   assert.equal(notFound.technicalDetails.underlyingError, "ENOTFOUND");
-  const refused = asProviderError(Object.assign(new Error("x"), { cause: { code: "ECONNREFUSED" } }), ctx);
+  const refused = asProviderError(
+    Object.assign(new Error("x"), { cause: { code: "ECONNREFUSED" } }),
+    ctx
+  );
   assert.equal(refused.code, "PROVIDER_UNREACHABLE");
   assert.equal(refused.technicalDetails.underlyingError, "ECONNREFUSED");
   const fetchFailed = asProviderError(new TypeError("fetch failed"), ctx);
@@ -287,7 +318,7 @@ test("asProviderError classifies timeouts and network failures", async () => {
 
 // Chromium reports a CORS-blocked HTTP error as "Failed to fetch" too: OpenAI's
 // 401 for a bad sk- key carries no CORS header in the dictation window.
-test("an online \"Failed to fetch\" points at the key and connection; offline it stays unreachable", async (t) => {
+test('an online "Failed to fetch" points at the key and connection; offline it stays unreachable', async (t) => {
   const { asProviderError } = await load();
   const ctx = { provider: "OpenAI", surface: "transcription" };
   t.after(() => delete navigator.onLine);
@@ -295,7 +326,10 @@ test("an online \"Failed to fetch\" points at the key and connection; offline it
   Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
   const online = asProviderError(new TypeError("Failed to fetch"), ctx);
   assert.equal(online.code, "PROVIDER_NO_RESPONSE");
-  assert.equal(online.message, "Couldn't get a response from OpenAI. Check your API key and connection.");
+  assert.equal(
+    online.message,
+    "Couldn't get a response from OpenAI. Check your API key and connection."
+  );
   assert.equal(online.settingsTarget, "speechToText");
   assert.deepEqual(online.technicalDetails, { provider: "OpenAI" }, "nothing beyond the message");
 
@@ -312,7 +346,10 @@ test("rate limits name the provider on the LLM surface and keep the dictation co
   assert.equal(llm.messageKey, "providerErrors.rateLimited");
   assert.deepEqual(llm.messageParams, { provider: "Anthropic" });
   const transcription = await classify({ status: 429, body: "", surface: "transcription" });
-  assert.equal(transcription.messageKey, "hooks.audioRecording.errorDescriptions.providerRateLimited");
+  assert.equal(
+    transcription.messageKey,
+    "hooks.audioRecording.errorDescriptions.providerRateLimited"
+  );
   const { providerHttpError } = await load();
   const error = providerHttpError({ provider: "Anthropic", status: 429, body: "", surface: "llm" });
   assert.equal(error.message, en.providerErrors.rateLimited.replace("{{provider}}", "Anthropic"));
@@ -368,10 +405,20 @@ test("isProviderSettingsTarget whitelists only the model settings targets", asyn
 
 test("a 413 is a recording that's too large for transcription and a request that's too large for an AI model", async () => {
   const { providerHttpError } = await load();
-  const recording = providerHttpError({ provider: "Mistral", status: 413, body: "", surface: "transcription" });
+  const recording = providerHttpError({
+    provider: "Mistral",
+    status: 413,
+    body: "",
+    surface: "transcription",
+  });
   assert.equal(recording.messageKey, "providerErrors.payloadTooLarge");
   assert.equal(recording.message, "This recording is too large for Mistral.");
-  const request = providerHttpError({ provider: "Anthropic", status: 413, body: "", surface: "llm" });
+  const request = providerHttpError({
+    provider: "Anthropic",
+    status: 413,
+    body: "",
+    surface: "llm",
+  });
   assert.equal(request.messageKey, "providerErrors.requestTooLarge");
   assert.equal(request.message, "This request is too large for Anthropic.");
   const selfHosted = providerHttpError({
@@ -386,7 +433,8 @@ test("a 413 is a recording that's too large for transcription and a request that
 
 const en = require("../../src/locales/en/translation.json");
 const LOCALES = ["en", "es", "fr", "de", "pt", "it", "ru", "zh-CN", "zh-TW", "ja", "ar"];
-const lookup = (translation, key) => key.split(".").reduce((node, part) => node?.[part], translation);
+const lookup = (translation, key) =>
+  key.split(".").reduce((node, part) => node?.[part], translation);
 
 // Every classification a provider failure can produce, on both surfaces, named and self-hosted.
 async function everyClassification() {
@@ -398,7 +446,9 @@ async function everyClassification() {
       for (const status of [401, 403, 402, 429, 413, 400, 500, 504, 418]) {
         errors.push(providerHttpError({ ...base, status, body: "" }));
       }
-      errors.push(providerHttpError({ ...base, status: 404, body: "model_not_found", model: "m-1" }));
+      errors.push(
+        providerHttpError({ ...base, status: 404, body: "model_not_found", model: "m-1" })
+      );
       errors.push(providerHttpError({ ...base, status: 404, body: "model_not_found" }));
       for (const code of [
         C.TIMEOUT,
@@ -453,4 +503,19 @@ test("a model name is inserted literally, even with $ patterns", async () => {
     surface: "llm",
   });
   assert.equal(error.message, "OpenAI doesn't recognize the model “we$&ird-$'model”.");
+});
+
+test("ElevenLabs' 401 quota_exceeded is an exhausted quota, not a refused key", async () => {
+  const quota = await classify({
+    provider: "ElevenLabs",
+    status: 401,
+    body: { detail: { status: "quota_exceeded", message: "This request exceeds your quota." } },
+  });
+  assert.equal(quota.code, "PROVIDER_QUOTA_EXHAUSTED");
+  const invalid = await classify({
+    provider: "ElevenLabs",
+    status: 401,
+    body: { detail: { status: "invalid_api_key", message: "Invalid API key" } },
+  });
+  assert.equal(invalid.code, "PROVIDER_AUTH_FAILED");
 });

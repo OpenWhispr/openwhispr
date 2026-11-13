@@ -161,7 +161,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "gemini" | "elevenlabs";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -226,7 +226,9 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "custom") return trimmed || "whisper-1";
   if (trimmed) {
     const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
-    if (catalogProvider?.models.some((model) => model.id === trimmed)) return trimmed;
+    // A Note Recording-only model has no batch endpoint, so it falls to the rules below.
+    if (catalogProvider?.models.some((model) => model.id === trimmed && !model.noteRecordingOnly))
+      return trimmed;
     const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
     if (replacement) return replacement;
     const matchesProvider =
@@ -242,6 +244,11 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
       (provider === "corti" && trimmed.startsWith("corti-")) ||
       (provider === "gemini" && trimmed.startsWith("gemini-")) ||
+      // The realtime models have no batch endpoint; resolving one falls back to scribe_v3.
+      (provider === "elevenlabs" &&
+        trimmed.startsWith("scribe_") &&
+        !trimmed.endsWith("_realtime") &&
+        !trimmed.endsWith("_live")) ||
       (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
       (provider === "assemblyai" &&
         (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));
@@ -252,6 +259,7 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   if (provider === "gemini") return "gemini-3.5-transcribe";
+  if (provider === "elevenlabs") return "scribe_v3";
   if (provider === "deepgram") return "nova-3";
   if (provider === "assemblyai") return "universal-3-6-pro";
   if (provider === "openrouter") return "mistralai/voxtral-mini-transcribe-3-0";
@@ -404,6 +412,15 @@ export function resolveTranscriptionRoute({
       model,
       language,
       sizeCapBytes: GEMINI_FILE_SIZE_LIMIT,
+    };
+  }
+  if (provider === "elevenlabs") {
+    return {
+      transport: "proxied",
+      provider,
+      model,
+      language,
+      sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
     };
   }
   if (provider === "corti") {
