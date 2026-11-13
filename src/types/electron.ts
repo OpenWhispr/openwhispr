@@ -1737,7 +1737,7 @@ declare global {
             characterCount: number;
           }
         | {
-            /** An empty, writable field has the caret: an answer can be typed there. */
+            /** A writable field has the caret, with nothing selected: an answer can be typed there. */
             status: "editable";
             sessionId: string;
           }

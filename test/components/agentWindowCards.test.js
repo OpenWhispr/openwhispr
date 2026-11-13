@@ -1596,7 +1596,7 @@ for (const result of ["A fuller introduction.", null]) {
   });
 }
 
-// A take spoken over an empty field in another app, answered with only reads.
+// A take spoken over a writable field in another app, answered with only reads.
 async function caretTake(t, { onlyRead = true, pasted = true, beforeAnswer } = {}) {
   const view = await mountWindow(t);
   const probes = [];
@@ -1631,7 +1631,7 @@ async function caretTake(t, { onlyRead = true, pasted = true, beforeAnswer } = {
   return { options, probes, pastes, released, hides: () => hides };
 }
 
-test("a voice answer for another app's empty field is typed there as plain text", async (t) => {
+test("a voice answer for another app's writable field is typed there as plain text", async (t) => {
   const { options, probes, pastes, released, hides } = await caretTake(t);
 
   assert.deepEqual(probes, [{ probeEditable: true }]);

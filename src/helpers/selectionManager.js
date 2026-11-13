@@ -355,7 +355,7 @@ class SelectionManager {
   }
 
   // Types an answer at the caret a capture found. The field must still be
-  // empty, writable and in front, or nothing is pasted.
+  // writable, with nothing selected, and in front, or nothing is pasted.
   async pasteAtCapturedTarget(sessionId, text, options = {}) {
     if (typeof text !== "string" || text.length === 0) {
       return this._declineAssistantPaste("invalid_replacement", {

@@ -66,7 +66,7 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 interface RequestExtras {
   selectedContext?: AgentSelectionContext | null;
   attachment?: ChatImageAttachment | null;
-  /** Another app's empty, writable field from the press: the answer is typed there. */
+  /** Another app's writable field from the press, with nothing selected: the answer is typed there. */
   caretSessionId?: string;
 }
 
