@@ -95,4 +95,12 @@ class BubblePolicyTest {
     assertEquals(64, BubblePolicy.restoredSize(0))
     assertEquals(64, BubblePolicy.restoredSize(200))
   }
+
+  @Test fun keepsThePipelineAwakeOnlyWhileADictationIsInFlight() {
+    assertTrue(BubblePolicy.keepsPipelineAwake(BubbleState.LISTENING, false))
+    assertTrue(BubblePolicy.keepsPipelineAwake(BubbleState.PROCESSING, false))
+    assertTrue(BubblePolicy.keepsPipelineAwake(BubbleState.READY, true))
+    for (state in listOf(BubbleState.READY, BubbleState.RETRY, BubbleState.RECOVER))
+      assertFalse(BubblePolicy.keepsPipelineAwake(state, false))
+  }
 }

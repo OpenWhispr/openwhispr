@@ -65,6 +65,11 @@ class AndroidDictationModule : Module() {
     Name("AndroidDictation")
     Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error")
     OnCreate { DictationService.emit = { event, data -> sendEvent(event, data) } }
+    // The bubble pipeline listens, in the app or in a headless task: send what the bubble held.
+    AsyncFunction("pipelineReady") {
+      HeadlessPipeline.ready = true
+      DictationService.instance?.pipelineReady()
+    }.runOnQueue(Queues.MAIN)
     OnActivityEntersForeground {
       DictationService.appVisible = true
       DictationService.instance?.unhide()
@@ -87,7 +92,7 @@ class AndroidDictationModule : Module() {
       if (speechRuntime.isInitialized()) parakeet.close()
       if (moonshineRuntime.isInitialized()) moonshine.close()
       if (diarizationRuntime.isInitialized()) diarizationRuntime.value.close()
-      recorder?.close(); DictationService.emit = null
+      recorder?.close(); HeadlessPipeline.ready = false; DictationService.emit = null
     }
     AsyncFunction("startPCM") { sampleRate: Int, noteId: Int?, audioNamespace: String, promise: Promise ->
       startMeetingCapture(sampleRate, noteId ?: 0, false, null, audioNamespace, promise)
