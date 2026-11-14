@@ -82,6 +82,15 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
   seed(path.join(personal, "12-standup.md"), "---\nid: 12\ntitle: Standup\n---\n\nbody");
   seed(path.join(personal, "12-standup-transcript.md"), "# Standup\n");
   seed(path.join(chosen, "Work", "7-plan.md"), "\uFEFF---\r\nid: 7\r\n---\r\n");
+  // The workspace and space layout nests a note's folders, and an outside
+  // edit is kept aside under "edited-".
+  const space = path.join(chosen, "Workspaces", "Acme", "Teamspaces", "Sales");
+  seed(path.join(space, "Calls", "21-call.md"), '---\nid: 21\nspace: "Sales"\n---\n');
+  seed(path.join(space, "Calls", "21-call-transcript.md"), "# Call\n");
+  seed(path.join(space, "edited-22-brief.md"), "---\nid: 22\n---\n\nedited");
+  seed(path.join(space, "notes.txt"), "mine");
+  // A vault's tool folder isn't read.
+  seed(path.join(chosen, ".obsidian", "8-cache.md"), "---\nid: 8\n---\n");
   // The user's own files: a daily note named like a mirror file, a note whose
   // frontmatter names another id, a transcript with no mirrored note, and a
   // folder they left empty.
@@ -99,7 +108,15 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
   rememberNotesMirrorPath(chosen, roots.userData);
 
   assert.deepEqual(await removeLocalData({ includeModels: false, roots }), []);
-  assert.deepEqual(fs.readdirSync(chosen).sort(), ["Ideas", "Personal", "readme.md"]);
+  assert.deepEqual(fs.readdirSync(chosen).sort(), [
+    ".obsidian",
+    "Ideas",
+    "Personal",
+    "Workspaces",
+    "readme.md",
+  ]);
+  assert.deepEqual(fs.readdirSync(space), ["notes.txt"]);
+  assert.equal(exists(chosen, ".obsidian", "8-cache.md"), true);
   assert.deepEqual(fs.readdirSync(personal).sort(), [
     "2024-03-05.md",
     "3-copied.md",

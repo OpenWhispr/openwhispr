@@ -1,0 +1,1475 @@
+// Drives the real IPC handlers and the real mirror against a temp directory.
+// Most cases use an in-memory stand-in; deletion-result coverage also runs the
+// real SQLite database so tombstones and relocated rows follow production rules.
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const Module = require("node:module");
+
+const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
+const originalLoad = Module._load;
+const handlers = new Map();
+const openedPaths = [];
+const tokenState = { token: "test-token", generation: 1 };
+
+const electronStub = {
+  app: {
+    getPath: () => os.tmpdir(),
+    getName: () => "test",
+    getVersion: () => "0.0.0",
+    isPackaged: false,
+    on: () => {},
+    requestSingleInstanceLock: () => true,
+  },
+  ipcMain: {
+    handle: (channel, handler) => handlers.set(channel, handler),
+    on: () => {},
+    removeHandler: () => {},
+  },
+  net: { fetch: async () => ({ ok: true, status: 200, json: async () => ({}) }) },
+  BrowserWindow: class BrowserWindow {
+    static getAllWindows() {
+      return [];
+    }
+
+    static fromWebContents() {
+      return null;
+    }
+  },
+  shell: {
+    openPath: async (target) => {
+      openedPaths.push(target);
+      return "";
+    },
+    showItemInFolder: () => {},
+  },
+  dialog: {},
+  screen: { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) },
+  systemPreferences: { getMediaAccessStatus: () => "granted" },
+  session: { fromPartition: () => ({}) },
+  clipboard: {},
+  nativeImage: {},
+  globalShortcut: {},
+  utilityProcess: {},
+  MessageChannelMain: class {},
+};
+
+Module._load = function loadWithElectronStub(request, parent, isMain) {
+  if (request === "electron") return electronStub;
+  if (parent?.filename === handlersModulePath && request === "./tokenStore") {
+    return {
+      get: () => tokenState.token,
+      getState: () => ({ ...tokenState }),
+      subscribe: () => () => {},
+    };
+  }
+  if (parent?.filename === handlersModulePath && request === "./accountScopeBinding") {
+    return {
+      ...originalLoad.call(this, request, parent, isMain),
+      read: () => null,
+      persist: () => {},
+      clear: () => {},
+    };
+  }
+  if (request === "./debugLogger" || request === "../helpers/debugLogger") {
+    return new Proxy({}, { get: () => () => {} });
+  }
+  return originalLoad.call(this, request, parent, isMain);
+};
+
+function anything() {
+  return new Proxy(function () {}, {
+    get: (_target, property) => {
+      if (property === Symbol.toPrimitive || property === "toString") return () => "";
+      if (property === "then") return undefined;
+      return anything();
+    },
+    apply: () => anything(),
+  });
+}
+
+function makeDatabase() {
+  const state = {
+    spaces: [
+      { id: 1, kind: "private", name: "Personal", workspace_id: null, deleted_at: null },
+      { id: 2, kind: "team", name: "Engineering", workspace_id: "w-acme-1111", deleted_at: null },
+      { id: 3, kind: "team", name: "Engineering", workspace_id: "w-beta-2222", deleted_at: null },
+    ],
+    folders: [
+      { id: 10, name: "General", space_id: 2, account_id: null, deleted_at: null },
+      { id: 11, name: "General", space_id: 3, account_id: null, deleted_at: null },
+      { id: 12, name: "General", space_id: 1, account_id: "a1", deleted_at: null },
+    ],
+    notes: [
+      { id: 100, title: "Acme retro", content: "acme body", folder_id: 10, space_id: 2 },
+      { id: 101, title: "Beta retro", content: "beta body", folder_id: 11, space_id: 3 },
+      { id: 102, title: "Mine", content: "my body", folder_id: 12, space_id: 1 },
+      { id: 103, title: "Root note", content: "root body", folder_id: null, space_id: 2 },
+    ].map((note) => ({ deleted_at: null, account_id: null, ...note })),
+    workspaceNames: { "w-acme-1111": "Acme", "w-beta-2222": "Beta" },
+    outOfScopeNoteIds: new Set(),
+    mirrorFiles: new Map(),
+  };
+
+  const inScope = (note) => !state.outOfScopeNoteIds.has(note.id);
+  const folder = (id) => state.folders.find((row) => row.id === id);
+  const space = (id) => state.spaces.find((row) => row.id === id);
+
+  return {
+    state,
+    mergedNotes: [],
+    getMirrorContainers: () => ({
+      spaces: state.spaces.filter((row) => !row.deleted_at),
+      folders: state.folders.filter((row) => !row.deleted_at),
+      workspaceNames: { ...state.workspaceNames },
+    }),
+    setWorkspaceNames: (rows) => {
+      let changed = 0;
+      for (const { id, name } of rows) {
+        if (state.workspaceNames[id] !== name) changed++;
+        state.workspaceNames[id] = name;
+      }
+      return changed;
+    },
+    getMirrorFiles: (basePath) =>
+      [...state.mirrorFiles.values()].filter((entry) => entry.basePath === basePath),
+    recordMirrorFile: (basePath, entry) =>
+      state.mirrorFiles.set(`${basePath}\0${entry.relPath}`, { ...entry, basePath }),
+    forgetMirrorFile: (basePath, relPath) => state.mirrorFiles.delete(`${basePath}\0${relPath}`),
+    getExistingNoteIds: (ids) =>
+      state.notes.filter((note) => ids.includes(note.id)).map((note) => note.id),
+    getNotesForMirror: (ids) =>
+      state.notes.filter((note) => ids.includes(note.id) && inScope(note)),
+    getLegacyMirrorFolderNames: () => state.folders.map((row) => row.name),
+    getNotesForMirrorDeletion: (filter) =>
+      state.notes.filter(
+        (note) =>
+          inScope(note) && Object.entries(filter).every(([field, value]) => note[field] === value)
+      ),
+    deleteNote: (id) => {
+      const index = state.notes.findIndex((note) => note.id === id && inScope(note));
+      if (index < 0) return { success: false, id };
+      state.notes.splice(index, 1);
+      return { success: true, id };
+    },
+    getNote: (id) => state.notes.find((note) => note.id === id && inScope(note)) ?? null,
+    getNotes: () => state.notes.filter((note) => !note.deleted_at && inScope(note)),
+    getMirrorNoteSummaries: () => {
+      state.summaryReads = (state.summaryReads ?? 0) + 1;
+      const summaries = state.notes
+        .filter((note) => !note.deleted_at && inScope(note))
+        .map(({ id, title, folder_id, space_id, transcript }) => ({
+          id,
+          title,
+          folder_id,
+          space_id,
+          has_transcript: transcript && transcript !== "[]" ? 1 : 0,
+        }));
+      state.afterSummaries?.();
+      return summaries;
+    },
+    getFolders: () => state.folders.filter((row) => !row.deleted_at),
+    renameFolder: (id, name) => {
+      folder(id).name = name;
+      return { success: true, folder: folder(id) };
+    },
+    deleteFolder: (id) => {
+      folder(id).deleted_at = "now";
+      const deleted = state.notes.filter((note) => note.folder_id === id && !note.deleted_at);
+      for (const note of deleted) note.deleted_at = "now";
+      return { success: true, id, noteIds: deleted.map((note) => note.id), relocatedNotes: [] };
+    },
+    moveFolderToSpace: (id, spaceId) => {
+      folder(id).space_id = spaceId;
+      for (const note of state.notes) if (note.folder_id === id) note.space_id = spaceId;
+      return { success: true, folder: folder(id) };
+    },
+    updateSpace: (id, { name }) => {
+      space(id).name = name;
+      return { success: true, space: space(id) };
+    },
+    upsertFolderFromCloud: (cloudFolder) => {
+      Object.assign(folder(cloudFolder.id), cloudFolder);
+      return folder(cloudFolder.id);
+    },
+    upsertSpaceFromCloud: (cloudSpace) => {
+      Object.assign(space(cloudSpace.id), cloudSpace);
+      return space(cloudSpace.id);
+    },
+    upsertNoteFromCloud: (cloudNote) => {
+      const existing = state.notes.find((note) => note.id === cloudNote.id);
+      if (existing) Object.assign(existing, cloudNote);
+      else state.notes.push({ deleted_at: null, account_id: null, ...cloudNote });
+      return state.notes.find((note) => note.id === cloudNote.id);
+    },
+  };
+}
+
+let target;
+let basePath;
+
+test.before(() => {
+  delete require.cache[handlersModulePath];
+  const IPCHandlers = require(handlersModulePath);
+  const Ctor = IPCHandlers.default || IPCHandlers;
+  target = Object.create(Ctor.prototype);
+  target._buildSpeakerMappings = () => ({});
+  Ctor.prototype.setupHandlers.call(
+    new Proxy(target, {
+      get: (value, property) => (property in value ? value[property] : anything()),
+      set: (value, property, next) => {
+        value[property] = next;
+        return true;
+      },
+    })
+  );
+});
+
+test.after(() => {
+  Module._load = originalLoad;
+});
+
+test.beforeEach(() => {
+  basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-note-files-ipc-"));
+  target.databaseManager = makeDatabase();
+  target._noteFilesSync = undefined;
+  tokenState.token = "test-token";
+  target.windowManager = anything();
+  target._broadcastDatabaseAccountScope = () => {};
+  target._broadcastAccountScopedSettings = () => {};
+  target._cancelCalendarAuthorizations = () => {};
+  target._retireEnterpriseAudio = () => {};
+  target.enterpriseIdentityManager = anything();
+  target.audioStorageManager = anything();
+  target.parakeetManager = anything();
+  target._buildSpeakerMappings = () => ({});
+  openedPaths.length = 0;
+});
+
+test.afterEach(async () => {
+  await settle();
+  await invoke("note-files-set-enabled", false);
+  target.databaseManager.db?.close();
+  fs.rmSync(basePath, { recursive: true, force: true });
+});
+
+const invoke = (channel, ...args) => handlers.get(channel)({ sender: {} }, ...args);
+
+// Everything the handlers schedule: setImmediate work, then the batches.
+async function settle() {
+  await new Promise((resolve) => setImmediate(resolve));
+  await target._noteFilesSync?.flush();
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
+async function enableMirror(options) {
+  const result = await invoke("note-files-set-enabled", true, basePath, options);
+  assert.equal(result.success, true);
+  await settle();
+}
+
+function allFiles(dir = basePath) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(dir, entry.name);
+    return entry.isDirectory() ? allFiles(entryPath) : [entryPath];
+  });
+}
+
+function fileOf(noteId) {
+  const prefix = `${noteId}-`;
+  const matches = allFiles().filter((file) => path.basename(file).startsWith(prefix));
+  assert.equal(matches.length, 1, `note ${noteId}: expected one file, found ${matches}`);
+  return matches[0];
+}
+
+const relativeDir = (file) => path.relative(basePath, path.dirname(file)).split(path.sep).join("/");
+
+function frontmatterOf(file) {
+  const block = fs.readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---/)[1];
+  return require("js-yaml").load(block);
+}
+
+function legacyFile(folderName, name, content) {
+  const dir = path.join(basePath, folderName);
+  fs.mkdirSync(dir, { recursive: true });
+  const filePath = path.join(dir, name);
+  fs.writeFileSync(filePath, content);
+  return filePath;
+}
+
+const legacyNote = (id, title, folder, body) =>
+  `---\nid: ${id}\ntitle: ${title}\ntype: personal\nfolder: ${folder}\ncreated: x\nupdated: y\n---\n\n${body}`;
+
+test("same-named folders in different workspaces get separate directories", async () => {
+  await enableMirror();
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/General");
+  assert.equal(relativeDir(fileOf(101)), "Workspaces/Beta/Teamspaces/Engineering/General");
+  assert.equal(relativeDir(fileOf(102)), "Private notes/General");
+});
+
+test("renaming a folder leaves another workspace's same-named folder where it is", async () => {
+  await enableMirror();
+  const betaFile = fileOf(101);
+
+  await invoke("db-rename-folder", 10, "Archive");
+  await settle();
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/Archive");
+  assert.equal(fileOf(101), betaFile);
+  assert.equal(
+    fs.existsSync(path.join(basePath, "Workspaces/Acme/Teamspaces/Engineering/General")),
+    false,
+    "the emptied directory goes away"
+  );
+});
+
+test("renaming onto a name that already holds files still moves the folder's files", async () => {
+  const db = target.databaseManager;
+  db.state.folders.push({ id: 13, name: "Docs", space_id: 3, account_id: null, deleted_at: null });
+  db.state.notes.push({
+    id: 104,
+    title: "Existing doc",
+    content: "doc body",
+    folder_id: 13,
+    space_id: 3,
+    deleted_at: null,
+    account_id: null,
+  });
+  await enableMirror();
+
+  await invoke("db-rename-folder", 11, "Docs");
+  await invoke("db-delete-folder", 13);
+  await settle();
+
+  assert.equal(relativeDir(fileOf(101)), "Workspaces/Beta/Teamspaces/Engineering/Docs");
+  assert.equal(allFiles().filter((file) => path.basename(file).startsWith("104-")).length, 0);
+});
+
+test("a rename whose target directory is taken on disk merges beside what is there", async () => {
+  await enableMirror();
+  const userFile = path.join(
+    basePath,
+    "Workspaces/Beta/Teamspaces/Engineering/Archive/my-notes.txt"
+  );
+  fs.mkdirSync(path.dirname(userFile), { recursive: true });
+  fs.writeFileSync(userFile, "mine");
+
+  await invoke("db-rename-folder", 11, "Archive");
+  await settle();
+
+  assert.equal(relativeDir(fileOf(101)), "Workspaces/Beta/Teamspaces/Engineering/Archive");
+  assert.equal(fs.readFileSync(userFile, "utf8"), "mine");
+});
+
+test("deleting a folder removes its notes' files while a same-named folder stays", async () => {
+  await enableMirror();
+  const betaFile = fileOf(101);
+  const acmeFile = fileOf(100);
+
+  await invoke("db-delete-folder", 10);
+  await settle();
+
+  assert.equal(fs.existsSync(acmeFile), false, "the deleted note's file must not be orphaned");
+  assert.equal(fs.existsSync(betaFile), true);
+  assert.equal(fileOf(103).includes("Engineering"), true, "the space root's note stays");
+});
+
+test("deleting a folder keeps a file the user put in its directory", async () => {
+  await enableMirror();
+  const userFile = path.join(path.dirname(fileOf(100)), "my-notes.txt");
+  fs.writeFileSync(userFile, "mine");
+
+  await invoke("db-delete-folder", 10);
+  await settle();
+
+  assert.equal(fs.readFileSync(userFile, "utf8"), "mine");
+});
+
+test("a rebuild removes the file of a deleted note and leaves ids it doesn't know", async () => {
+  await enableMirror();
+  const acmeFile = fileOf(100);
+  target.databaseManager.state.notes.find((note) => note.id === 100).deleted_at = "now";
+  const unknownFile = path.join(path.dirname(acmeFile), "999-from-before-a-reset.md");
+  fs.writeFileSync(unknownFile, legacyNote(999, "Old", "General", "only copy"));
+
+  await invoke("note-files-rebuild");
+  await settle();
+
+  assert.equal(fs.existsSync(acmeFile), false);
+  assert.equal(fs.existsSync(unknownFile), true);
+});
+
+test("a team-space root note is not written into the Personal directory", async () => {
+  await enableMirror();
+
+  const file = fileOf(103);
+  assert.equal(relativeDir(file), "Workspaces/Acme/Teamspaces/Engineering");
+  assert.equal("folder" in frontmatterOf(file), false);
+});
+
+test("frontmatter names the note's workspace and space", async () => {
+  await enableMirror();
+
+  const team = frontmatterOf(fileOf(100));
+  assert.equal(team.workspace, "Acme");
+  assert.equal(team.space, "Engineering");
+  assert.equal(team.folder, "General");
+
+  const mine = frontmatterOf(fileOf(102));
+  assert.equal("workspace" in mine, false);
+  assert.equal(mine.space, "Private");
+  assert.equal(mine.folder, "General");
+});
+
+test("workspaces with the same name don't share a directory", async () => {
+  target.databaseManager.state.workspaceNames["w-beta-2222"] = "Acme";
+  await enableMirror();
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/General");
+  assert.equal(relativeDir(fileOf(101)), "Workspaces/Acme (w-beta)/Teamspaces/Engineering/General");
+  assert.equal(frontmatterOf(fileOf(101)).workspace, "Acme");
+});
+
+test("files move when a workspace's name arrives or changes", async () => {
+  delete target.databaseManager.state.workspaceNames["w-acme-1111"];
+  await enableMirror();
+  assert.equal(
+    relativeDir(fileOf(100)),
+    "Workspaces/Workspace w-acme-1/Teamspaces/Engineering/General"
+  );
+
+  await invoke("note-files-set-workspace-names", [{ id: "w-acme-1111", name: "Acme" }]);
+  await settle();
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/General");
+  assert.equal(relativeDir(fileOf(103)), "Workspaces/Acme/Teamspaces/Engineering");
+  assert.equal(frontmatterOf(fileOf(100)).workspace, "Acme");
+  assert.equal(fs.existsSync(path.join(basePath, "Workspaces/Workspace w-acme-1")), false);
+
+  await invoke("note-files-set-workspace-names", [{ id: "w-acme-1111", name: "Acme Inc" }]);
+  await settle();
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme Inc/Teamspaces/Engineering/General");
+  assert.equal(fs.existsSync(path.join(basePath, "Workspaces/Acme")), false);
+});
+
+test("renaming a space moves its notes, root notes included", async () => {
+  await enableMirror();
+
+  await invoke("db-update-space", 2, { name: "Platform" });
+  await settle();
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Platform/General");
+  assert.equal(relativeDir(fileOf(103)), "Workspaces/Acme/Teamspaces/Platform");
+  assert.equal(frontmatterOf(fileOf(100)).space, "Platform");
+});
+
+test("moving a folder to another space moves its notes", async () => {
+  await enableMirror();
+
+  await invoke("db-move-folder-to-space", 10, 1);
+  await settle();
+
+  assert.equal(relativeDir(fileOf(100)), "Private notes/General");
+  assert.equal("workspace" in frontmatterOf(fileOf(100)), false);
+});
+
+test("a window reloading while a rename waits doesn't lose the move", async () => {
+  await enableMirror();
+
+  await invoke("db-rename-folder", 10, "Archive");
+  await invoke("note-files-set-enabled", true, basePath, { skipRebuild: true });
+  await settle();
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/Archive");
+});
+
+test("a folder renamed on another device moves its notes when the pull arrives", async () => {
+  await enableMirror();
+
+  await invoke("db-upsert-folder-from-cloud", { id: 10, name: "Pulled" }, 2);
+  await settle();
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/Pulled");
+});
+
+test("a space renamed on another device moves its notes when the pull arrives", async () => {
+  await enableMirror();
+
+  await invoke("db-upsert-space-from-cloud", { id: 2, name: "Pulled space" });
+  await settle();
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Pulled space/General");
+});
+
+test("a note pulled from the cloud reaches its file", async () => {
+  await enableMirror();
+
+  await invoke(
+    "db-upsert-note-from-cloud",
+    { id: 100, title: "Acme retro", content: "edited by a teammate", folder_id: 10, space_id: 2 },
+    10,
+    2
+  );
+  await invoke(
+    "db-upsert-note-from-cloud",
+    { id: 105, title: "New from a teammate", content: "new body", folder_id: 10, space_id: 2 },
+    10,
+    2
+  );
+  await settle();
+
+  assert.match(fs.readFileSync(fileOf(100), "utf8"), /edited by a teammate/);
+  assert.equal(relativeDir(fileOf(105)), "Workspaces/Acme/Teamspaces/Engineering/General");
+});
+
+test("a pulled delete removes the file", async () => {
+  await enableMirror();
+  const acmeFile = fileOf(100);
+
+  await invoke("db-upsert-note-from-cloud", { id: 100, deleted_at: "now" }, 10, 2);
+  await settle();
+
+  assert.equal(fs.existsSync(acmeFile), false);
+});
+
+test("folders open from their id, not a name another workspace can share", async () => {
+  await enableMirror();
+
+  const result = await invoke("show-folder-in-explorer", 11);
+
+  assert.equal(result.success, true);
+  assert.deepEqual(
+    openedPaths.map((opened) => path.relative(basePath, opened).split(path.sep).join("/")),
+    ["Workspaces/Beta/Teamspaces/Engineering/General"]
+  );
+});
+
+test("a new folder gets its directory in its own space", async () => {
+  await enableMirror();
+  const db = target.databaseManager;
+  db.createFolder = (name, spaceId) => {
+    const folder = { id: 14, name, space_id: spaceId, account_id: null, deleted_at: null };
+    db.state.folders.push(folder);
+    return { success: true, folder };
+  };
+
+  await invoke("db-create-folder", "Fresh", 3);
+  await settle();
+
+  assert.equal(
+    fs.existsSync(path.join(basePath, "Workspaces/Beta/Teamspaces/Engineering/Fresh")),
+    true
+  );
+  assert.equal(fs.existsSync(path.join(basePath, "Fresh")), false);
+});
+
+test("mirror writes stop while the feature is off", async () => {
+  await invoke("db-rename-folder", 10, "Archive");
+  await invoke("db-upsert-note-from-cloud", { id: 100, content: "x" }, 10, 2);
+  await settle();
+
+  assert.deepEqual(allFiles(), []);
+});
+
+test("existing files move into the new layout when the mirror starts", async () => {
+  const unchanged = legacyFile(
+    "General",
+    "100-acme-retro.md",
+    legacyNote(100, "Acme retro", "General", "acme body")
+  );
+  const crlf = legacyFile(
+    "General",
+    "101-beta-retro.md",
+    `\uFEFF${legacyNote(101, "Beta retro", "General", "beta body\n")}`.replace(/\n/g, "\r\n")
+  );
+
+  await enableMirror({ skipRebuild: true });
+
+  assert.equal(fs.existsSync(unchanged), false);
+  assert.equal(fs.existsSync(crlf), false);
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/General");
+  assert.equal(relativeDir(fileOf(101)), "Workspaces/Beta/Teamspaces/Engineering/General");
+  assert.match(fs.readFileSync(fileOf(100), "utf8"), /acme body/);
+  assert.equal(fs.existsSync(path.join(basePath, "General")), false, "the emptied folder goes");
+});
+
+test("a file edited outside the app is kept beside its old location", async () => {
+  const edited = legacyNote(100, "Acme retro", "General", "my own edit");
+  legacyFile("General", "100-acme-retro.md", edited);
+
+  await enableMirror({ skipRebuild: true });
+
+  const kept = path.join(basePath, "General", "edited-100-acme-retro.md");
+  assert.equal(fs.readFileSync(kept, "utf8"), edited);
+  assert.match(fs.readFileSync(fileOf(100), "utf8"), /acme body/);
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/General");
+
+  await invoke("note-files-rebuild");
+  await settle();
+  assert.equal(fs.readFileSync(kept, "utf8"), edited, "later passes leave it alone");
+});
+
+test("frontmatter a person added counts as an edit", async () => {
+  const edited = legacyNote(100, "Acme retro", "General", "acme body").replace(
+    "\nupdated:",
+    "\ntags: [work]\nupdated:"
+  );
+  legacyFile("General", "100-acme-retro.md", edited);
+
+  await enableMirror({ skipRebuild: true });
+
+  assert.equal(
+    fs.readFileSync(path.join(basePath, "General", "edited-100-acme-retro.md"), "utf8"),
+    edited
+  );
+});
+
+test("the move leaves other accounts' notes, unknown ids and the user's files alone", async () => {
+  target.databaseManager.state.outOfScopeNoteIds.add(102);
+  const otherAccount = legacyFile(
+    "General",
+    "102-mine.md",
+    legacyNote(102, "Mine", "General", "my body")
+  );
+  const unknown = legacyFile(
+    "General",
+    "999-old.md",
+    legacyNote(999, "Old", "General", "only copy")
+  );
+  const userFile = legacyFile("General", "shopping.md", "---\nnot: ours\n---\n");
+  const userFolderFile = legacyFile("Recipes", "soup.txt", "soup");
+  const dotFile = legacyFile(".obsidian", "100-acme-retro.md", legacyNote(100, "x", "x", "x"));
+
+  await enableMirror({ skipRebuild: true });
+
+  for (const kept of [otherAccount, unknown, userFile, userFolderFile, dotFile]) {
+    assert.equal(fs.existsSync(kept), true, `${kept} must stay`);
+  }
+});
+
+test("the move drops a deleted note's old file but keeps it when edited", async () => {
+  const db = target.databaseManager;
+  db.state.notes.find((note) => note.id === 100).deleted_at = "now";
+  db.state.notes.find((note) => note.id === 101).deleted_at = "now";
+  const plain = legacyFile(
+    "General",
+    "100-acme-retro.md",
+    legacyNote(100, "Acme retro", "General", "acme body")
+  );
+  legacyFile(
+    "General",
+    "101-beta-retro.md",
+    legacyNote(101, "Beta retro", "General", "edited before deleting")
+  );
+
+  await enableMirror({ skipRebuild: true });
+
+  assert.equal(fs.existsSync(plain), false);
+  assert.equal(fs.existsSync(path.join(basePath, "General", "edited-101-beta-retro.md")), true);
+});
+
+test("the emptied old folder goes even with a Finder or Explorer leftover in it", async () => {
+  legacyFile("General", "100-acme-retro.md", legacyNote(100, "Acme retro", "General", "acme body"));
+  legacyFile("General", ".DS_Store", "x");
+
+  await enableMirror({ skipRebuild: true });
+
+  assert.equal(fs.existsSync(path.join(basePath, "General")), false);
+});
+
+test("the move runs again safely and picks up an account's notes after a switch", async () => {
+  const db = target.databaseManager;
+  db.state.outOfScopeNoteIds.add(102);
+  const otherAccount = legacyFile(
+    "General",
+    "102-mine.md",
+    legacyNote(102, "Mine", "General", "my body")
+  );
+  await enableMirror({ skipRebuild: true });
+  assert.equal(fs.existsSync(otherAccount), true);
+
+  db.state.outOfScopeNoteIds.delete(102);
+  target.noteFiles.accountChanged();
+  await settle();
+
+  assert.equal(fs.existsSync(otherAccount), false);
+  assert.equal(relativeDir(fileOf(102)), "Private notes/General");
+});
+
+test("a Private section bound to its workspace moves there, and back when relocated", async () => {
+  await enableMirror();
+  const db = target.databaseManager;
+  const privateSpace = db.state.spaces.find((space) => space.id === 1);
+
+  privateSpace.workspace_id = "w-acme-1111";
+  target.noteFiles.containersChanged();
+  await settle();
+  assert.equal(relativeDir(fileOf(102)), "Workspaces/Acme/Private/General");
+  assert.equal(frontmatterOf(fileOf(102)).workspace, "Acme");
+  assert.equal(fs.existsSync(path.join(basePath, "Private notes")), false);
+
+  // A lost workspace's Private moves into another private space by plain SQL.
+  db.state.spaces.push({
+    id: 4,
+    kind: "private",
+    name: "Personal",
+    workspace_id: "w-beta-2222",
+    deleted_at: null,
+  });
+  db.state.folders.find((folder) => folder.id === 12).space_id = 4;
+  db.state.notes.find((note) => note.id === 102).space_id = 4;
+  privateSpace.deleted_at = "now";
+  target.noteFiles.containersChanged();
+  await settle();
+  assert.equal(relativeDir(fileOf(102)), "Workspaces/Beta/Private/General");
+  assert.equal(fs.existsSync(path.join(basePath, "Workspaces/Acme/Private")), false);
+});
+
+test("a rename made while the mirror was off is picked up when it starts", async () => {
+  await enableMirror();
+  await invoke("note-files-set-enabled", false);
+  target.databaseManager.state.folders.find((folder) => folder.id === 10).name = "Renamed";
+
+  await enableMirror({ skipRebuild: true });
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/Renamed");
+});
+
+test("an edit made outside the app survives its folder being renamed", async () => {
+  await enableMirror();
+  const original = fileOf(100);
+  fs.appendFileSync(original, "\nmine");
+
+  await invoke("db-rename-folder", 10, "Archive");
+  await settle();
+
+  assert.match(
+    fs.readFileSync(
+      path.join(path.dirname(fileOf(100)), `edited-${path.basename(original)}`),
+      "utf8"
+    ),
+    /mine$/
+  );
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering/Archive");
+});
+
+test("the mirror's files of a note gone from the database go; files it didn't write stay", async () => {
+  await enableMirror();
+  const db = target.databaseManager;
+  const acmeFile = fileOf(100);
+  const userCopy = path.join(path.dirname(acmeFile), "100-my-copy.md");
+  fs.writeFileSync(userCopy, "---\nid: 100\n---\n\ncopy");
+  db.state.notes = db.state.notes.filter((note) => note.id !== 100);
+
+  await invoke("note-files-rebuild");
+  await settle();
+
+  assert.equal(fs.existsSync(acmeFile), false);
+  assert.equal(fs.readFileSync(userCopy, "utf8"), "---\nid: 100\n---\n\ncopy");
+});
+
+test("after a database reset nothing already on disk is deleted", async () => {
+  await enableMirror();
+  const before = allFiles().map((file) => [file, fs.readFileSync(file, "utf8")]);
+  target.databaseManager.state.mirrorFiles.clear();
+  for (const note of target.databaseManager.state.notes) note.content = `new ${note.id}`;
+
+  await invoke("note-files-rebuild");
+  await settle();
+
+  const contents = new Set(allFiles().map((file) => fs.readFileSync(file, "utf8")));
+  for (const [, content] of before) assert.ok(contents.has(content), "every old file survives");
+});
+
+test("a sync pass that changes no space or folder doesn't reread every note", async () => {
+  await enableMirror();
+  const db = target.databaseManager;
+  const reads = db.state.summaryReads;
+  assert.ok(reads > 0, "starting the mirror reconciles once");
+
+  await invoke("db-upsert-space-from-cloud", { id: 2, name: "Engineering" });
+  await invoke("db-upsert-folder-from-cloud", { id: 10, name: "General" }, 2);
+  await settle();
+
+  assert.equal(db.state.summaryReads, reads);
+});
+
+test("notes moved in bulk without any container changing are still moved", async () => {
+  await enableMirror();
+  target.databaseManager.state.notes.find((note) => note.id === 100).folder_id = null;
+
+  target.noteFiles.notesMoved();
+  await settle();
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering");
+});
+
+test("a reconcile writes what the note says when it writes, not when it started", async () => {
+  await enableMirror();
+  const db = target.databaseManager;
+  db.state.folders.find((folder) => folder.id === 10).name = "Moved";
+  db.state.afterSummaries = () => {
+    db.state.notes.find((note) => note.id === 100).content = "edited meanwhile";
+    db.state.afterSummaries = null;
+  };
+
+  target.noteFiles.containersChanged();
+  await settle();
+
+  assert.match(fs.readFileSync(fileOf(100), "utf8"), /edited meanwhile$/);
+});
+
+test("deleting a folder rewrites another account's notes released to the space root", async () => {
+  await enableMirror();
+  const db = target.databaseManager;
+  const released = db.state.notes.find((note) => note.id === 100);
+  db.deleteFolder = (id) => {
+    db.state.folders.find((folder) => folder.id === id).deleted_at = "now";
+    released.folder_id = null;
+    return { success: true, id, noteIds: [], relocatedNotes: [released] };
+  };
+
+  await invoke("db-delete-folder", 10);
+  await settle();
+
+  assert.equal(relativeDir(fileOf(100)), "Workspaces/Acme/Teamspaces/Engineering");
+});
+
+test("an unchanged old file of a copy merged at launch goes; an edited one stays", async () => {
+  const db = target.databaseManager;
+  const merged = (id, title) => ({ id, title, content: "dup body", note_type: "personal" });
+  db.mergedNotes.push(merged(201, "Dup"), merged(202, "Dup two"));
+  legacyFile("General", "201-dup.md", legacyNote(201, "Dup", "General", "dup body"));
+  const edited = legacyFile(
+    "General",
+    "202-dup-two.md",
+    legacyNote(202, "Dup two", "General", "my edit")
+  );
+
+  await enableMirror({ skipRebuild: true });
+
+  assert.equal(fs.existsSync(path.join(basePath, "General", "201-dup.md")), false);
+  assert.equal(fs.existsSync(edited), false);
+  assert.equal(fs.existsSync(path.join(basePath, "General", "edited-202-dup-two.md")), true);
+});
+
+test("Show in folder opens an empty folder, creating its directory", async () => {
+  const db = target.databaseManager;
+  db.state.folders.push({ id: 15, name: "Empty", space_id: 3, account_id: null, deleted_at: null });
+  await enableMirror();
+
+  const result = await invoke("show-folder-in-explorer", 15);
+
+  assert.equal(result.success, true);
+  assert.equal(
+    fs.existsSync(path.join(basePath, "Workspaces/Beta/Teamspaces/Engineering/Empty")),
+    true
+  );
+});
+
+test(
+  "a rename that only changes case keeps the note's file",
+  { skip: !caseInsensitive() && "needs a case-insensitive file system" },
+  async () => {
+    await enableMirror();
+
+    await invoke("db-rename-folder", 10, "general");
+    await settle();
+
+    assert.match(fs.readFileSync(fileOf(100), "utf8"), /acme body/);
+  }
+);
+
+function caseInsensitive() {
+  const probe = fs.mkdtempSync(path.join(os.tmpdir(), "OpenWhisprCaseProbe-"));
+  try {
+    return fs.existsSync(probe.toLowerCase()) && fs.existsSync(probe.toUpperCase());
+  } finally {
+    fs.rmSync(probe, { recursive: true, force: true });
+  }
+}
+
+// Skip-rebuild migration yields after its first 50 rows; deletes can run before
+// the final note has ever acquired a ledger entry.
+for (const channel of [
+  "db-delete-note",
+  "db-hard-delete-note",
+  "db-delete-folder",
+  "db-hard-delete-folder",
+  "db-purge-space",
+  "db-relocate-revoked-folder",
+  "delete-account-data",
+]) {
+  test(`${channel} removes unchanged legacy files during background migration`, async () => {
+    const db = target.databaseManager;
+    db.state.notes = Array.from({ length: 51 }, (_, index) => ({
+      id: index + 1,
+      title: `Note ${index + 1}`,
+      content: "original body",
+      folder_id: 10,
+      space_id: 2,
+      account_id: null,
+      deleted_at: null,
+    }));
+    db.activeAccountId = "account-a";
+    if (channel === "delete-account-data") {
+      for (const note of db.state.notes) note.account_id = "account-a";
+    }
+    const lastNote = db.state.notes.at(-1);
+    lastNote.transcript = JSON.stringify([
+      { speaker: "SPEAKER_00", text: "spoken words", start: 0, end: 1 },
+    ]);
+    const mappings = { SPEAKER_00: "Alice" };
+    target._buildSpeakerMappings = (id) =>
+      db.state.notes.some((note) => note.id === id) ? mappings : {};
+    const { formatMd } = require("../../src/helpers/transcriptFormatter");
+    const transcriptFile = legacyFile(
+      "General",
+      "51-note-51-transcript.md",
+      formatMd(lastNote, JSON.parse(lastNote.transcript), mappings)
+    );
+    const oldFile = legacyFile(
+      "General",
+      "51-note-51.md",
+      legacyNote(51, "Note 51", "General", "original body")
+    );
+    const edited = legacyFile(
+      "General",
+      "51-copy.md",
+      legacyNote(51, "Note 51", "General", "user edit")
+    );
+    db.hardDeleteNote = db.deleteNote;
+    const removeFolder = () => {
+      db.state.notes = db.state.notes.filter((note) => note.folder_id !== 10);
+      db.state.folders = db.state.folders.filter((folder) => folder.id !== 10);
+      return {
+        success: true,
+        id: 10,
+        noteIds: Array.from({ length: 51 }, (_, index) => index + 1),
+        relocatedNotes: [],
+      };
+    };
+    db.deleteAccountData = () => ({
+      deletedNoteIds: removeFolder().noteIds,
+      deletedTranscriptionIds: [],
+    });
+    db.deleteFolder = removeFolder;
+    db.hardDeleteFolder = removeFolder;
+    db.addPendingVectorPurge = () => {};
+    db.purgeSpace = () => ({ ...removeFolder(), spaceId: 2 });
+    db.relocateRevokedFolder = () => {
+      const result = removeFolder();
+      return { ...result, deletedNoteIds: result.noteIds };
+    };
+    await invoke("note-files-set-enabled", true, basePath, { skipRebuild: true });
+    if (channel === "delete-account-data")
+      await invoke(channel, "account-a", tokenState.generation);
+    else
+      await invoke(channel, channel.includes("note") ? 51 : channel === "db-purge-space" ? 2 : 10);
+    await settle();
+    assert.equal(fs.existsSync(oldFile), false);
+    assert.equal(fs.existsSync(transcriptFile), false);
+    assert.equal(
+      fs.existsSync(path.join(basePath, "General", "edited-51-note-51-transcript.md")),
+      false
+    );
+    assert.equal(fs.existsSync(edited), false);
+    assert.equal(fs.existsSync(path.join(basePath, "General", "edited-51-copy.md")), true);
+  });
+}
+
+for (const transition of ["account switch", "scope sign-out", "token sign-out"]) {
+  test(`${transition} drains queued body updates before the scoped reader changes`, async () => {
+    await enableMirror();
+    const db = target.databaseManager;
+    db.activeAccountId = "account-a";
+    db.setActiveAccountId = (accountId) => {
+      db.activeAccountId = accountId;
+      db.state.outOfScopeNoteIds.add(100);
+    };
+    db.claimSignedOutLocalRows = () => {};
+    db.claimLegacyRowsOfOnlyAccount = () => {};
+    await invoke("db-upsert-note-from-cloud", { id: 100, content: "latest cloud body" });
+    if (transition === "token sign-out") {
+      target._handleAuthTokenChange({ token: null, generation: 2 });
+    } else {
+      const result = await invoke(
+        "set-active-account-scope",
+        transition === "account switch" ? "account-b" : null,
+        tokenState.generation
+      );
+      assert.equal(result.success, true);
+    }
+    await settle();
+    assert.match(fs.readFileSync(fileOf(100), "utf8"), /latest cloud body$/);
+  });
+}
+
+for (const mode of ["normal", "update", "held delete"]) {
+  const updating = mode === "update";
+  test(`${mode} quit synchronously drains queued and deferred note writes once`, async () => {
+    await enableMirror();
+    await invoke("db-upsert-note-from-cloud", { id: 100, content: "body at quit" });
+    const db = target.databaseManager;
+    let records = 0;
+    const record = db.recordMirrorFile;
+    db.recordMirrorFile = (...args) => {
+      records++;
+      return record(...args);
+    };
+    target.noteFiles.writeNote({ ...db.getNote(101), content: "local body at quit" });
+    const source = fs.readFileSync(path.join(__dirname, "../../main.js"), "utf8");
+    const listener = source.slice(
+      source.indexOf("  let isShuttingDown = false;"),
+      source.indexOf("\n}\n\nfunction performSyncTeardown")
+    );
+    const teardown = source.slice(source.indexOf("function performSyncTeardown()"));
+    const callbacks = new Map();
+    let prevented = false;
+    let exited = false;
+    let bodyAtExit;
+    const context = {
+      app: {
+        on: (event, callback) => callbacks.set(event, callback),
+        exit: () => {
+          exited = true;
+          bodyAtExit = fs.readFileSync(fileOf(103), "utf8");
+        },
+      },
+      ipcHandlers: target,
+      sidecarRegistry: { shutdownAll: async () => {} },
+      updateManager: { isQuittingForUpdate: updating, cleanup: () => {} },
+      windowManager:
+        mode === "held delete"
+          ? {
+              controlPanelWindow: {
+                webContents: {
+                  executeJavaScript: async () => {
+                    await Promise.resolve();
+                    target.noteFiles.writeNote({
+                      ...db.getNote(103),
+                      content: "body from held delete",
+                    });
+                  },
+                },
+              },
+            }
+          : null,
+      isLiveWindow: (window) => Boolean(window),
+      setTimeout: (callback) => {
+        callback();
+      },
+      clearTimeout: () => {},
+      globalShortcut: { unregisterAll: () => {} },
+      clearPendingNoteDeepLink: () => {},
+    };
+    for (const name of [
+      "registryLoader",
+      "disposeRegistryIpc",
+      "wakeRewarmTimer",
+      "authBridgeServer",
+      "cliBridge",
+      "hotkeyManager",
+      "globeKeyManager",
+      "windowsKeyManager",
+      "linuxKeyManager",
+      "meetingDetectionEngine",
+      "googleCalendarManager",
+      "microsoftCalendarManager",
+      "appleCalendarManager",
+      "calendarReminderScheduler",
+      "audioTapManager",
+      "linuxPortalAudioManager",
+      "windowsLoopbackAudioManager",
+      "meetingAecManager",
+      "textEditMonitor",
+    ])
+      context[name] = null;
+    target._cleanupTextEditMonitor = () => {};
+    require("node:vm").runInNewContext(`${listener}\n${teardown}`, context);
+    callbacks.get("before-quit")({
+      preventDefault: () => {
+        prevented = true;
+      },
+    });
+    assert.match(fs.readFileSync(fileOf(100), "utf8"), /body at quit$/);
+    assert.match(fs.readFileSync(fileOf(101), "utf8"), /local body at quit$/);
+    const recordsAtQuit = records;
+    await settle();
+    assert.equal(
+      records,
+      recordsAtQuit + (mode === "held delete" ? 1 : 0),
+      "scheduled immediates do not write twice after the drain"
+    );
+    assert.equal(prevented, !updating);
+    assert.equal(exited, !updating);
+    if (mode === "held delete") assert.match(bodyAtExit, /body from held delete$/);
+  });
+}
+
+test("real local folder deletion cleans unmigrated tombstones omitted from live result IDs", async (t) => {
+  const originalGetPath = electronStub.app.getPath;
+  electronStub.app.getPath = () => basePath;
+  let db;
+  try {
+    const DatabaseManager = require("../../src/helpers/database");
+    db = new DatabaseManager();
+  } catch (error) {
+    if (
+      error?.code === "ERR_DLOPEN_FAILED" ||
+      error.message.includes("Could not locate the bindings file")
+    ) {
+      t.skip("better-sqlite3 native binding is not available for this Node runtime");
+      return;
+    }
+    throw error;
+  } finally {
+    electronStub.app.getPath = originalGetPath;
+  }
+  target.databaseManager = db;
+  db.setActiveAccountId("account-a");
+  const folder = db.createFolder("Archive").folder;
+  for (let index = 0; index < 50; index++) db.saveNote(`Live ${index}`, "body", "personal");
+  const gone = db.saveNote("Gone", "old body", "personal", null, null, folder.id).note;
+  db.db.prepare("UPDATE notes SET deleted_at = 'now' WHERE id = ?").run(gone.id);
+  db.setActiveAccountId("account-b");
+  const theirs = db.saveNote("Theirs", "other account body", "personal").note;
+  db.db.prepare("UPDATE notes SET folder_id = ? WHERE id = ?").run(folder.id, theirs.id);
+  db.setActiveAccountId("account-a");
+  legacyFile(
+    "Archive",
+    `${theirs.id}-theirs.md`,
+    legacyNote(theirs.id, "Theirs", "Archive", "other account body")
+  );
+  const oldPath = legacyFile(
+    "Archive",
+    `${gone.id}-gone.md`,
+    legacyNote(gone.id, "Gone", "Archive", "old body")
+  );
+  const editedPath = legacyFile(
+    "Archive",
+    `${gone.id}-copy.md`,
+    legacyNote(gone.id, "Gone", "Archive", "user edit")
+  );
+  await invoke("note-files-set-enabled", true, basePath, { skipRebuild: true });
+
+  const result = await invoke("db-delete-folder", folder.id);
+  await settle();
+
+  assert.equal(result.success, true);
+  assert.deepEqual(result.noteIds, [], "public result still reports only live notes");
+  assert.deepEqual(db.getExistingNoteIds([gone.id]), []);
+  const relocated = db.db.prepare("SELECT * FROM notes WHERE id = ?").get(theirs.id);
+  assert.equal(relocated.folder_id, null);
+  assert.equal(relocated.account_id, "account-b");
+  assert.match(fs.readFileSync(fileOf(theirs.id), "utf8"), /other account body$/);
+  assert.equal(fs.existsSync(oldPath), false);
+  assert.equal(fs.existsSync(editedPath), false);
+  assert.equal(fs.existsSync(path.join(basePath, "Archive", `edited-${gone.id}-copy.md`)), true);
+});
+
+for (const action of [
+  "rename",
+  "move",
+  "workspace",
+  "space",
+  "case-parent",
+  "rebuild",
+  "show",
+  "save",
+  "pull",
+]) {
+  test(`exclusive folder relocation preserves attachments before ${action}`, async () => {
+    const db = target.databaseManager;
+    const note = db.state.notes.find((row) => row.id === 100);
+    note.content = "![Figure](figure.png) [Details](assets/details.txt)";
+    db.state.spaces.push({
+      id: 4,
+      kind: "team",
+      name: "Operations",
+      workspace_id: "w-beta-2222",
+      deleted_at: null,
+    });
+    await enableMirror();
+    const oldFile = fileOf(100);
+    const oldDir = path.dirname(oldFile);
+    const otherFile = fileOf(101);
+    const noteInode = fs.statSync(oldFile).ino;
+    fs.writeFileSync(path.join(oldDir, "figure.png"), "image bytes");
+    fs.mkdirSync(path.join(oldDir, "assets"));
+    fs.writeFileSync(path.join(oldDir, "assets", "details.txt"), "details");
+    fs.writeFileSync(path.join(oldDir, "edited-personal.md"), "outside edit");
+    const assetInode = fs.statSync(path.join(oldDir, "figure.png")).ino;
+
+    if (action === "move") await invoke("db-move-folder-to-space", 10, 4);
+    else if (action === "workspace")
+      await invoke("note-files-set-workspace-names", [{ id: "w-acme-1111", name: "Acme Renamed" }]);
+    else if (action === "space") await invoke("db-update-space", 2, { name: "Platform" });
+    else await invoke("db-rename-folder", 10, "Archive");
+    if (action === "case-parent")
+      await invoke("note-files-set-workspace-names", [{ id: "w-acme-1111", name: "acme" }]);
+    if (action === "rebuild") await invoke("note-files-rebuild");
+    if (action === "show") await invoke("show-folder-in-explorer", 10);
+    if (action === "save") target.noteFiles.writeNote(note);
+    if (action === "pull") target.noteFiles.queueNote(note.id);
+    await settle();
+
+    const newFile = fileOf(100);
+    const newDir = path.dirname(newFile);
+    assert.notEqual(newDir, oldDir);
+    assert.equal(fs.existsSync(oldDir), false);
+    assert.equal(fs.readFileSync(path.join(newDir, "figure.png"), "utf8"), "image bytes");
+    assert.equal(fs.statSync(path.join(newDir, "figure.png")).ino, assetInode);
+    assert.equal(fs.statSync(newFile).ino, noteInode);
+    assert.equal(fs.readFileSync(path.join(newDir, "assets", "details.txt"), "utf8"), "details");
+    assert.equal(fs.readFileSync(path.join(newDir, "edited-personal.md"), "utf8"), "outside edit");
+    assert.ok(fs.readFileSync(newFile, "utf8").endsWith(note.content));
+    const metadata = frontmatterOf(newFile);
+    assert.equal(
+      metadata.folder,
+      ["move", "workspace", "space"].includes(action) ? "General" : "Archive"
+    );
+    assert.equal(
+      metadata.space,
+      action === "move" ? "Operations" : action === "space" ? "Platform" : "Engineering"
+    );
+    assert.equal(
+      metadata.workspace,
+      action === "move"
+        ? "Beta"
+        : action === "workspace"
+          ? "Acme Renamed"
+          : action === "case-parent"
+            ? "acme"
+            : "Acme"
+    );
+    assert.equal(fileOf(101), otherFile);
+    assert.equal(
+      [...db.state.mirrorFiles.values()].filter(
+        (entry) => entry.ownerId === 100 && entry.kind === "note"
+      ).length,
+      1
+    );
+  });
+}
+
+for (const otherOwner of ["empty folder", "inactive note"]) {
+  test(`a shared private folder keeps other owners' files when one folder is renamed (${otherOwner})`, async () => {
+    const db = target.databaseManager;
+    db.state.folders.push({
+      id: 20,
+      name: "General",
+      space_id: 1,
+      account_id: "a2",
+      deleted_at: null,
+    });
+    if (otherOwner === "inactive note")
+      db.state.notes.push({
+        id: 104,
+        title: "Theirs",
+        content: "Their body",
+        folder_id: 20,
+        space_id: 1,
+        account_id: "a2",
+        deleted_at: null,
+      });
+    await enableMirror();
+    const oldDir = path.dirname(fileOf(102));
+    fs.writeFileSync(path.join(oldDir, "shared.png"), "shared asset");
+    db.state.outOfScopeNoteIds.add(104);
+    await invoke("db-rename-folder", 12, "Archive");
+    await settle();
+    assert.equal(fs.readFileSync(path.join(oldDir, "shared.png"), "utf8"), "shared asset");
+    assert.equal(fs.existsSync(path.join(path.dirname(fileOf(102)), "shared.png")), false);
+    if (otherOwner === "inactive note") assert.equal(path.dirname(fileOf(104)), oldDir);
+  });
+}
+
+for (const destination of ["empty", "occupied"]) {
+  test(`relocation never replaces a user's ${destination} destination directory`, async () => {
+    await enableMirror();
+    const oldDir = path.dirname(fileOf(100));
+    const newDir = path.join(path.dirname(oldDir), "Archive");
+    fs.mkdirSync(newDir);
+    const destinationInode = fs.statSync(newDir).ino;
+    if (destination === "occupied")
+      fs.writeFileSync(path.join(newDir, "figure.png"), "destination image");
+    fs.writeFileSync(path.join(oldDir, "figure.png"), "source image");
+    await invoke("db-rename-folder", 10, "Archive");
+    await settle();
+    assert.equal(fs.statSync(newDir).ino, destinationInode);
+    assert.equal(fs.readFileSync(path.join(oldDir, "figure.png"), "utf8"), "source image");
+    if (destination === "occupied")
+      assert.equal(fs.readFileSync(path.join(newDir, "figure.png"), "utf8"), "destination image");
+    else assert.equal(fs.existsSync(path.join(newDir, "figure.png")), false);
+  });
+}
+
+test("an empty recorded folder carries its user files through a rename", async () => {
+  const db = target.databaseManager;
+  db.state.folders.push({ id: 20, name: "Empty", space_id: 2, account_id: null, deleted_at: null });
+  await enableMirror();
+  await invoke("show-folder-in-explorer", 20);
+  const oldDir = openedPaths.at(-1);
+  fs.writeFileSync(path.join(oldDir, "draft.txt"), "user draft");
+  await invoke("db-rename-folder", 20, "Renamed");
+  await settle();
+  assert.equal(fs.existsSync(oldDir), false);
+  assert.equal(
+    fs.readFileSync(path.join(path.dirname(oldDir), "Renamed", "draft.txt"), "utf8"),
+    "user draft"
+  );
+});
+
+for (const excluded of ["moved", "deleted", "inactive"]) {
+  test(`a ${excluded} note prevents unrelated files hitching a ride with a folder`, async () => {
+    const db = target.databaseManager;
+    db.state.notes.push({
+      id: 104,
+      title: "Separate",
+      content: "Separate body",
+      folder_id: 10,
+      space_id: 2,
+      account_id: null,
+      deleted_at: null,
+    });
+    await enableMirror();
+    const oldDir = path.dirname(fileOf(100));
+    fs.writeFileSync(path.join(oldDir, "shared.png"), "unassigned image");
+    const other = db.state.notes.find((row) => row.id === 104);
+    if (excluded === "moved") other.folder_id = null;
+    if (excluded === "deleted") other.deleted_at = "now";
+    if (excluded === "inactive") db.state.outOfScopeNoteIds.add(104);
+    await invoke("db-rename-folder", 10, "Archive");
+    await settle();
+    assert.equal(fs.readFileSync(path.join(oldDir, "shared.png"), "utf8"), "unassigned image");
+    assert.equal(fs.existsSync(path.join(path.dirname(fileOf(100)), "shared.png")), false);
+    if (excluded === "inactive") assert.equal(path.dirname(fileOf(104)), oldDir);
+    if (excluded === "moved")
+      assert.equal(relativeDir(fileOf(104)), "Workspaces/Acme/Teamspaces/Engineering");
+  });
+}
+
+test("a folder rename while disabled retains attachments when the same mirror restarts", async () => {
+  await enableMirror();
+  const oldDir = path.dirname(fileOf(100));
+  fs.writeFileSync(path.join(oldDir, "figure.png"), "image");
+  await invoke("note-files-set-enabled", false);
+  await invoke("db-rename-folder", 10, "Archive");
+  await enableMirror({ skipRebuild: true });
+  assert.equal(fs.existsSync(oldDir), false);
+  assert.equal(
+    fs.readFileSync(path.join(path.dirname(fileOf(100)), "figure.png"), "utf8"),
+    "image"
+  );
+});
+
+test("a new mirror path cannot use the previous path's folder ownership", async () => {
+  await enableMirror();
+  const oldDir = path.dirname(fileOf(100));
+  fs.writeFileSync(path.join(oldDir, "figure.png"), "original image");
+  const otherBase = path.join(basePath, "other-mirror");
+  const userDir = path.join(otherBase, "Workspaces/Acme/Teamspaces/Engineering/General");
+  fs.mkdirSync(userDir, { recursive: true });
+  fs.writeFileSync(path.join(userDir, "figure.png"), "user image");
+  target.databaseManager.state.folders.find((row) => row.id === 10).name = "Archive";
+  await invoke("note-files-set-path", otherBase);
+  await settle();
+  assert.equal(fs.readFileSync(path.join(userDir, "figure.png"), "utf8"), "user image");
+  assert.equal(fs.readFileSync(path.join(oldDir, "figure.png"), "utf8"), "original image");
+});
+
+test("a normal rename after a refused case rename carries attachments from the actual folder", async (t) => {
+  const db = target.databaseManager;
+  db.state.folders.find((folder) => folder.id === 10).name = "GENERAL";
+  await enableMirror();
+  const actualPath = fs.realpathSync.native(path.dirname(fileOf(100)));
+  const desiredPath = path.join(path.dirname(actualPath), "General");
+  fs.writeFileSync(path.join(actualPath, "figure.png"), "image bytes");
+  const exists = fs.existsSync;
+  const lstat = fs.lstatSync;
+  const stat = fs.statSync;
+  const realpath = fs.realpathSync.native;
+  const alias = (value) => (value === desiredPath && !exists(desiredPath) ? actualPath : value);
+  t.mock.method(fs, "existsSync", (value) => exists(alias(value)));
+  t.mock.method(fs, "lstatSync", (value, options) => lstat(alias(value), options));
+  t.mock.method(fs, "statSync", (value, options) => stat(alias(value), options));
+  t.mock.method(fs.realpathSync, "native", (value, options) => realpath(alias(value), options));
+  const rename = fs.renameSync;
+  let locked = true;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    if (locked && from === actualPath && to === desiredPath)
+      throw Object.assign(new Error("held folder"), { code: "EPERM" });
+    return rename(from, to);
+  });
+  await invoke("db-rename-folder", 10, "General");
+  await settle();
+  assert.equal(path.basename(path.dirname(fileOf(100))), "GENERAL");
+  locked = false;
+  await invoke("db-rename-folder", 10, "Archive");
+  await settle();
+  assert.equal(
+    fs.readFileSync(path.join(path.dirname(fileOf(100)), "figure.png"), "utf8"),
+    "image bytes"
+  );
+  assert.equal(fs.existsSync(actualPath), false);
+  assert.equal(frontmatterOf(fileOf(100)).folder, "Archive");
+});
+
+for (const [firstName, secondName] of [
+  ["Work", "work"],
+  ["Straße", "STRASSE"],
+  ["\u03b1\u0345\u0301", "\u03b1\u0301\u0345"],
+]) {
+  test(`sibling path reassignment keeps both folders' attachments (${firstName} / ${secondName})`, async (t) => {
+    const db = target.databaseManager;
+    db.state.folders.find((folder) => folder.id === 10).name = firstName;
+    db.state.folders.push({
+      id: 20,
+      name: secondName,
+      space_id: 2,
+      account_id: null,
+      deleted_at: null,
+    });
+    db.state.notes.push({
+      id: 104,
+      title: "Sibling",
+      content: "Sibling body",
+      folder_id: 20,
+      space_id: 2,
+      account_id: null,
+      deleted_at: null,
+    });
+    db.state.folders.reverse();
+    await enableMirror();
+    const firstDir = fs.realpathSync.native(path.dirname(fileOf(100)));
+    const secondDir = path.dirname(fileOf(104));
+    const releasedPath = path.join(path.dirname(firstDir), secondName);
+    fs.writeFileSync(path.join(firstDir, "figure.png"), "first image");
+    fs.writeFileSync(path.join(secondDir, "figure.png"), "second image");
+    const exists = fs.existsSync;
+    const lstat = fs.lstatSync;
+    const stat = fs.statSync;
+    const realpath = fs.realpathSync.native;
+    const alias = (value) => (value === releasedPath && !exists(releasedPath) ? firstDir : value);
+    t.mock.method(fs, "existsSync", (value) => exists(alias(value)));
+    t.mock.method(fs, "lstatSync", (value, options) => lstat(alias(value), options));
+    t.mock.method(fs, "statSync", (value, options) => stat(alias(value), options));
+    t.mock.method(fs.realpathSync, "native", (value, options) => realpath(alias(value), options));
+    await invoke("db-rename-folder", 10, "Archive");
+    await settle();
+    assert.equal(path.basename(path.dirname(fileOf(100))), "Archive");
+    assert.equal(path.basename(path.dirname(fileOf(104))), secondName);
+    assert.equal(
+      fs.readFileSync(path.join(path.dirname(fileOf(100)), "figure.png"), "utf8"),
+      "first image"
+    );
+    assert.equal(
+      fs.readFileSync(path.join(path.dirname(fileOf(104)), "figure.png"), "utf8"),
+      "second image"
+    );
+    assert.equal(fs.existsSync(secondDir), false);
+  });
+}

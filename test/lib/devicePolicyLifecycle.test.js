@@ -257,7 +257,9 @@ test("required-sign-in renderer can discover email without allowing unrelated AP
   t.after(installPolicyNetworkGuard());
   assert.deepEqual(
     await (
-      await globalThis.window.fetch("https://auth.openwhispr.com/api/check-user", { method: "POST" })
+      await globalThis.window.fetch("https://auth.openwhispr.com/api/check-user", {
+        method: "POST",
+      })
     ).json(),
     { exists: true }
   );
@@ -320,3 +322,93 @@ test("the renderer network guard enforces a device policy, not a workspace looku
   const response = await globalThis.window.fetch("https://api.openai.com/v1/audio/transcriptions");
   assert.deepEqual(await response.json(), { text: "transcript" });
 });
+
+for (const initiallyManaged of [false, true]) {
+  test(`pending workspace refresh applies a restrictive device ${initiallyManaged ? "change" : "arrival"} before new renderer inference`, async (t) => {
+    const {
+      defaultDevicePolicy,
+      normalizeDeviceValues,
+    } = require("../../src/helpers/managedDevicePolicy");
+    const { createEffectivePolicyManager } = require("../../src/helpers/effectivePolicyManager");
+    let scope = { accountId: "member", authGeneration: 1, authenticated: true };
+    let device = normalizeDeviceValues(initiallyManaged ? { RequireSignIn: true } : {});
+    let deviceChanged;
+    let broadcast;
+    let finishWorkspace;
+    const manager = createEffectivePolicyManager({
+      devicePolicy: {
+        getSnapshot: () => device,
+        subscribe: (listener) => {
+          deviceChanged = listener;
+          return () => {};
+        },
+      },
+      getScope: () => scope,
+      workspacePolicyManager: {
+        heldPolicy: () => null,
+        getPolicy: () => new Promise((resolve) => (finishWorkspace = resolve)),
+      },
+      broadcast: (value) => broadcast?.(value),
+    });
+    t.after(() => manager.stop());
+    manager.updateWorkspace({ ...scope, success: true, managed: false });
+    const { store, vite, emit } = await boot(t, async () => manager.getCurrent());
+    broadcast = emit;
+    const requests = [];
+    const rawFetch = async (url) => {
+      requests.push(String(url));
+      return Response.json({
+        id: "chat-1",
+        created: 1,
+        model: "chat-model",
+        choices: [
+          { index: 0, message: { role: "assistant", content: "permitted" }, finish_reason: "stop" },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1 },
+      });
+    };
+    globalThis.window.fetch = rawFetch;
+    const { installPolicyNetworkGuard } = await vite.ssrLoadModule("/lib/policyNetwork.ts");
+    t.after(installPolicyNetworkGuard());
+    t.mock.method(globalThis, "fetch", (...args) => globalThis.window.fetch(...args));
+    const { getAIModel } = await vite.ssrLoadModule("/services/ai/providers.ts");
+    const createModel = () =>
+      getAIModel("custom", "chat-model", "saved-key", "https://provider.example.test/v1");
+    const options = {
+      prompt: [{ role: "user", content: [{ type: "text", text: "private transcript" }] }],
+    };
+    scope = { ...scope, authGeneration: 2 };
+    manager.invalidate();
+    const pending = manager.getPolicy();
+    await new Promise(setImmediate);
+    await (await createModel()).doGenerate(options);
+    assert.equal(requests.length, 1, "unchanged device policy permits the held account's work");
+
+    const policy = defaultDevicePolicy();
+    policy.llm.allowedModes = ["local"];
+    policy.transcription.allowedModes = ["local"];
+    device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
+    deviceChanged();
+    await new Promise(setImmediate);
+    await assert.rejects(async () => (await createModel()).doGenerate(options));
+    assert.equal(requests.length, 1, "no new provider request leaves after the device denial");
+    const { resolveTranscriptionRoute } = await vite.ssrLoadModule(
+      "/helpers/transcriptionRoute.ts"
+    );
+    const route = resolveTranscriptionRoute({
+      settings: { transcriptionMode: "providers", cloudTranscriptionProvider: "openai" },
+      policy: store.getState(),
+      hasProviderKey: true,
+    });
+    assert.equal(route.code, "POLICY_RESTRICTED");
+    finishWorkspace({ ...scope, success: true, managed: false });
+    await pending;
+    await new Promise(setImmediate);
+    assert.equal(store.getState().status, "managed");
+    device = normalizeDeviceValues({});
+    deviceChanged();
+    await new Promise(setImmediate);
+    await (await createModel()).doGenerate(options);
+    assert.equal(requests.length, 2, "a settled policy removal restores permitted inference");
+  });
+}

@@ -463,3 +463,57 @@ test("an identity with no verdict yet answers from what it last had while the ne
   assert.equal((await refreshing).status, "unmanaged");
   manager.stop();
 });
+
+test("pending workspace decisions intersect device changes with held account restrictions", () => {
+  const { runningOperationAllowed } = require("../../src/helpers/productPolicy");
+  for (const initiallyManaged of [false, true]) {
+    let device = normalizeDeviceValues(initiallyManaged ? { RequireSignIn: true } : {});
+    let scope = member;
+    let changed;
+    const manager = createEffectivePolicyManager({
+      devicePolicy: {
+        getSnapshot: () => device,
+        subscribe: (listener) => {
+          changed = listener;
+          return () => {};
+        },
+      },
+      workspacePolicyManager: {},
+      getScope: () => scope,
+    });
+    const workspace = defaultDevicePolicy();
+    workspace.features.connectorsEnabled = false;
+    manager.updateWorkspace({ ...member, success: true, managed: true, policy: workspace });
+    scope = { ...member, authGeneration: 2 };
+    manager.invalidate();
+    const allowed = (channel, args) =>
+      runningOperationAllowed(manager.getCurrent(), "member", "1.11.2", channel, args);
+    assert.equal(allowed("cloud-reason"), true);
+    assert.equal(allowed("gcal-start-oauth"), false);
+
+    const policy = defaultDevicePolicy();
+    policy.llm.allowedModes = ["local"];
+    device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
+    changed();
+    assert.equal(manager.getCurrent().status, "loading");
+    assert.equal(manager.getCurrent().success, false);
+    assert.equal(allowed("cloud-reason"), false);
+    assert.equal(allowed("process-local-reasoning"), true);
+    assert.equal(allowed("gcal-start-oauth"), false);
+    const revision = manager.getCurrent().revision;
+    assert.equal(manager.getCurrent().revision, revision);
+
+    device = absentDevice;
+    changed();
+    assert.equal(allowed("cloud-reason"), false, "removal cannot lift a pending restriction");
+    assert.equal(allowed("gcal-start-oauth"), false);
+    assert.equal(manager.getUpdatePolicy().policy, null, "updates retain their own resolution");
+    manager.updateWorkspace({ ...scope, success: true, managed: false });
+    assert.equal(allowed("cloud-reason"), true);
+    assert.equal(allowed("gcal-start-oauth"), true);
+    manager.updateWorkspace({ ...scope, success: true, managed: true, policy: workspace });
+    scope = { ...scope, accountId: "other-member", authGeneration: 3 };
+    assert.equal(manager.invalidate().policy, null, "another account inherits no held policy");
+    manager.stop();
+  }
+});

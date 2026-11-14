@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
+const { deferred } = require("./harness/deferred");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -14,9 +15,11 @@ const originalLoad = Module._load;
 // and the binding file in a temporary userData directory, so the scope
 // handlers run against the real accountScopeBinding.
 const handlers = new Map();
+const eventHandlers = new Map();
 const broadcasts = [];
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
 let tokenState = { token: null, generation: 0 };
+const autoUpdater = { checkForUpdates: async () => null };
 
 const electronStub = {
   app: {
@@ -29,7 +32,7 @@ const electronStub = {
   },
   ipcMain: {
     handle: (channel, fn) => handlers.set(channel, fn),
-    on: () => {},
+    on: (channel, fn) => eventHandlers.set(channel, fn),
     removeHandler: () => {},
   },
   net: {
@@ -62,8 +65,18 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
-  if (request === "electron-updater") return { autoUpdater: {} };
+  if (request === "electron-updater") return { autoUpdater };
   if (parent?.filename === handlersModulePath) {
+    // Keep every cleanup target inside this harness's temporary userData.
+    if (request === "os") return { ...os, homedir: () => userDataDirectory };
+    if (request === "./autoStart") return { setAutoStartEnabled() {} };
+    if (request === "./modelDirUtils") {
+      return { getModelsDirForService: () => path.join(userDataDirectory, "models") };
+    }
+    if (request === "./modelManagerBridge") {
+      return { default: { deleteAllModels: async () => {} } };
+    }
+    if (request === "./onnxWorkerClient") return { stop: async () => {} };
     if (request === "./tokenStore") {
       return {
         get: () => tokenState.token,
@@ -157,6 +170,7 @@ test.before(() => {
 
 test.after(() => {
   fakeThis.metaActivation?.dispose?.();
+  fakeThis.productEvents?.dispose?.();
   Module._load = originalLoad;
   fs.rmSync(userDataDirectory, { recursive: true, force: true });
 });
@@ -320,16 +334,20 @@ function scopedDatabase(activeAccountId) {
   );
 }
 
-// Development mode keeps electron-updater out; the policy runs for real.
+// Skip native updater setup; an AppImage keeps policy checks supported on Linux.
 function createUpdater() {
   const previousEnvironment = process.env.NODE_ENV;
+  const previousAppImage = process.env.APPIMAGE;
   try {
     process.env.NODE_ENV = "development";
+    if (process.platform === "linux") process.env.APPIMAGE = "/tmp/OpenWhispr.AppImage";
     const UpdateManager = require("../../src/updater");
     return new UpdateManager({ getPolicy: (options) => fakeThis.getUpdatePolicy(options) });
   } finally {
     if (previousEnvironment === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previousEnvironment;
+    if (previousAppImage === undefined) delete process.env.APPIMAGE;
+    else process.env.APPIMAGE = previousAppImage;
   }
 }
 
@@ -365,19 +383,17 @@ function managedPolicy(mode) {
   };
 }
 
-// The verdict an earlier run left on disk for this bearer.
-function cachePolicyForBearer(token, data) {
+// The verdict an earlier run left on disk for this credential.
+function cachePolicyForHeaders(authHeaders, data) {
   const crypto = require("node:crypto");
   const { writeWorkspacePolicyCache } = require("../../src/helpers/workspacePolicyCache");
   const credentialHash = crypto
     .createHash("sha256")
-    .update(JSON.stringify([["Authorization", `Bearer ${token}`]]))
+    .update(JSON.stringify(Object.entries(authHeaders)))
     .digest("hex");
-  writeWorkspacePolicyCache(
-    path.join(userDataDirectory, "workspace-policy.json"),
-    { apiOrigin: TEST_API_URL, credentialHash, accountId: null },
-    data
-  );
+  const identity = { apiOrigin: TEST_API_URL, credentialHash, accountId: null };
+  writeWorkspacePolicyCache(path.join(userDataDirectory, "workspace-policy.json"), identity, data);
+  return identity;
 }
 
 async function signOutUpdater(t, generation) {
@@ -468,7 +484,7 @@ test("completed cookie sign-out discards a pending cookie-authorized updater pol
   assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
 });
 
-test("a bearer the API refuses with nothing held updates as a guest, while a held IT verdict stands", async (t) => {
+test("an earlier consumer's bearer 401 permits guest updates while a held IT verdict stands", async (t) => {
   restoreUpdaterState(t);
   useTestApi(t);
   let refusals = 0;
@@ -476,19 +492,38 @@ test("a bearer the API refuses with nothing held updates as a guest, while a hel
     refusals++;
     return { ok: false, status: 401, json: async () => ({}) };
   });
-  // A 401 leaves the renderer's account scope in place. Seeded directly, as
-  // set-active-account-scope's own policy lookups would throttle the updater's.
+  // A 401 leaves the renderer's account scope in place, and another consumer
+  // can receive it before the updater's first lookup.
   tokenState = { token: "expired-bearer", generation: 110 };
   fakeThis.databaseManager = scopedDatabase("expired-account");
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };
   require("../../src/helpers/accountScopeBinding").persist("expired-account", "expired-bearer");
   fakeThis.updateManager = createUpdater();
+  fakeThis.updateManager.httpExecutor = { resumeRequests() {}, abortRequests() {} };
+  let checks = 0;
+  t.mock.method(autoUpdater, "checkForUpdates", async () => {
+    checks++;
+    return null;
+  });
+  // Another consumer meets the 401 before the updater.
+  await fakeThis.refreshEffectivePolicy();
   await fakeThis.updateManager.refreshPolicy();
   let status = await fakeThis.updateManager.getUpdateStatus();
   assert.equal(status.policyReady, true);
   assert.equal(status.updateMode, "user_choice");
+  fakeThis.updateManager._autoCheckForUpdates("Periodic");
+  await new Promise(setImmediate);
+  assert.equal(checks, 1);
+  fakeThis.updateManager._autoCheckForUpdates("Periodic");
+  await new Promise(setImmediate);
+  assert.equal(checks, 2);
+  assert.equal((await fakeThis.updateManager.getUpdateStatus()).policyReady, true);
+  assert.equal(refusals, 1);
 
-  cachePolicyForBearer("expired-managed-bearer", managedPolicy("it_managed"));
+  cachePolicyForHeaders(
+    { Authorization: "Bearer expired-managed-bearer" },
+    managedPolicy("it_managed")
+  );
   tokenState = { token: "expired-managed-bearer", generation: 111 };
   fakeThis.updateManager.invalidatePolicy();
   const refusalsBefore = refusals;
@@ -496,7 +531,36 @@ test("a bearer the API refuses with nothing held updates as a guest, while a hel
   await new Promise(setImmediate);
   assert.equal(refusals, refusalsBefore + 1);
   status = await fakeThis.updateManager.getUpdateStatus();
+  assert.equal(status.policyReady, true);
   assert.equal(status.updateMode, "it_managed");
+});
+
+// Without evidence that anything manages the account, a failed lookup
+// restricts nothing (effectivePolicyManager.js), updates included.
+test("earlier non-401 policy failures leave a never-managed account's updates to the user", async (t) => {
+  restoreUpdaterState(t);
+  useTestApi(t);
+  fakeThis.databaseManager = scopedDatabase("unavailable-account");
+  fakeThis.windowManager = { retireMeetingNotificationScope() {} };
+  let requests = 0;
+  let httpStatus;
+  t.mock.method(electronStub.net, "fetch", async () => {
+    requests++;
+    if (httpStatus === undefined) throw new Error("offline");
+    return { ok: false, status: httpStatus, json: async () => ({}) };
+  });
+  for (const [index, status] of [403, 503, undefined].entries()) {
+    httpStatus = status;
+    tokenState = { token: `unavailable-bearer-${index}`, generation: 112 + index };
+    fakeThis.updateManager = createUpdater();
+    await fakeThis.refreshEffectivePolicy();
+    await fakeThis.updateManager.refreshPolicy();
+    const updateStatus = await fakeThis.updateManager.getUpdateStatus();
+    assert.equal(updateStatus.policyReady, true);
+    assert.equal(updateStatus.updateMode, "user_choice");
+    fakeThis.updateManager.cleanup();
+  }
+  assert.ok(requests >= 3);
 });
 
 test("a refused bearer the server called unresolvable stays fail-closed, not a guest", async (t) => {
@@ -508,12 +572,15 @@ test("a refused bearer the server called unresolvable stays fail-closed, not a g
     json: async () => ({}),
   }));
   // The fail-closed marker an earlier POLICY_UNRESOLVABLE left on disk.
-  cachePolicyForBearer("unresolved-bearer", {
-    managed: false,
-    policy: null,
-    policyUpdatedAt: null,
-    requiresManagedPolicy: true,
-  });
+  cachePolicyForHeaders(
+    { Authorization: "Bearer unresolved-bearer" },
+    {
+      managed: false,
+      policy: null,
+      policyUpdatedAt: null,
+      requiresManagedPolicy: true,
+    }
+  );
   tokenState = { token: "unresolved-bearer", generation: 115 };
   fakeThis.databaseManager = scopedDatabase(null);
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };
@@ -561,6 +628,81 @@ test("under a device policy, an outage with nothing held leaves updates unavaila
   assert.equal(status.policyUnavailable, true);
   assert.equal(status.updateMode, null);
 });
+
+for (const [index, { name, data, mode }] of [
+  {
+    name: "unresolved",
+    data: {
+      managed: false,
+      policy: null,
+      policyUpdatedAt: null,
+      requiresManagedPolicy: true,
+    },
+    mode: null,
+  },
+  { name: "IT-managed", data: managedPolicy("it_managed"), mode: "it_managed" },
+  { name: "always-on", data: managedPolicy("always_on"), mode: "always_on" },
+  { name: "unmanaged", data: null, mode: "user_choice" },
+].entries()) {
+  test(`cookie expiry preserves ${name} policy in main and updater lookups`, async (t) => {
+    restoreUpdaterState(t);
+    useTestApi(t);
+    const { readWorkspacePolicyCache } = require("../../src/helpers/workspacePolicyCache");
+    tokenState = { token: null, generation: 140 + index };
+    fakeThis.databaseManager = scopedDatabase(null);
+    let cookieValue;
+    const cookieName = "__Secure-openwhispr.session_token";
+    fakeThis.windowManager = {
+      controlPanelWindow: {
+        isDestroyed: () => false,
+        webContents: {
+          session: { cookies: { get: async () => [{ name: cookieName, value: cookieValue }] } },
+        },
+      },
+      retireMeetingNotificationScope() {},
+    };
+    let requests = 0;
+    t.mock.method(electronStub.net, "fetch", async (_url, init) => {
+      requests++;
+      assert.equal(init.headers.Cookie, `${cookieName}=${cookieValue}`);
+      return { ok: false, status: 401, json: async () => ({}) };
+    });
+    fakeThis.updateManager = createUpdater();
+    fakeThis.updateManager.setAutoUpdatesEnabled(false);
+    for (const consumer of ["main", "updater"]) {
+      cookieValue = `expired-${name}-${consumer}`;
+      const identity =
+        data && cachePolicyForHeaders({ Cookie: `${cookieName}=${cookieValue}` }, data);
+      if (consumer === "main") {
+        const snapshot = await fakeThis.refreshEffectivePolicy();
+        assert.equal(snapshot.success, mode !== null);
+        if (mode === null) assert.equal(snapshot.code, "POLICY_UNRESOLVABLE");
+        else assert.equal(snapshot.managed, data !== null);
+      } else {
+        await fakeThis.updateManager.refreshPolicy();
+        const status = await fakeThis.updateManager.getUpdateStatus();
+        assert.equal(status.policyReady, mode !== null);
+        assert.equal(status.updateMode, mode);
+        assert.equal(status.effectiveAutoUpdatesEnabled, mode === "always_on");
+        if (mode === null) {
+          assert.equal(
+            (await fakeThis.updateManager.checkForUpdates()).code,
+            "UPDATE_POLICY_UNAVAILABLE"
+          );
+        }
+        await new Promise(setImmediate);
+      }
+      if (data?.requiresManagedPolicy) {
+        assert.equal(
+          readWorkspacePolicyCache(path.join(userDataDirectory, "workspace-policy.json"), identity)
+            .requiresManagedPolicy,
+          true
+        );
+      }
+    }
+    assert.equal(requests, 2);
+  });
+}
 
 test("a stray cookie leaves a signed-out member a guest without reaching the API", async (t) => {
   restoreUpdaterState(t);
@@ -623,7 +765,7 @@ test("an offline restart adopts the cached verdict without waiting for the netwo
     () => new Promise((_resolve, reject) => (goOffline = reject))
   );
   t.after(() => goOffline?.(new Error("offline")));
-  cachePolicyForBearer("restarted-bearer", managedPolicy("always_on"));
+  cachePolicyForHeaders({ Authorization: "Bearer restarted-bearer" }, managedPolicy("always_on"));
   tokenState = { token: "restarted-bearer", generation: 130 };
   fakeThis.databaseManager = scopedDatabase(null);
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };
@@ -1433,4 +1575,1113 @@ test("sign-out during a connecting stream preserves its late-socket cleanup", as
   assert.equal((await pending).code, "AUTH_CONTEXT_CHANGED");
   assert.equal(connected, false);
   assert.equal(fakeThis.geminiStreaming, null);
+});
+
+for (const overlap of ["before account switch", "after account switch"]) {
+  test(
+    `a rejected overlapping start ${overlap} cannot retain the old account's real socket`,
+    { timeout: 5000 },
+    async (t) => {
+      const { WebSocketServer } = require("ws");
+      const AssemblyAiStreaming = require("../../src/helpers/assemblyAiStreaming");
+      const { deferred } = require("./harness/deferred");
+      const previous = {
+        stream: fakeThis.assemblyAiStreaming,
+        account: databaseManager.activeAccountId,
+        tokenState,
+        api: process.env.OPENWHISPR_API_URL,
+      };
+      const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+      await new Promise((resolve) => server.once("listening", resolve));
+      const connected = deferred();
+      const closed = deferred();
+      const frames = [];
+      let peer;
+      server.once("connection", (socket) => {
+        peer = socket;
+        socket.on("message", (data, binary) =>
+          frames.push(binary ? "audio" : JSON.parse(data.toString()))
+        );
+        socket.once("close", closed.resolve);
+        connected.resolve();
+      });
+      const streaming = new AssemblyAiStreaming();
+      streaming.cacheToken("loopback-test-token");
+      streaming.buildWebSocketUrl = () => `ws://127.0.0.1:${server.address().port}`;
+      const disconnect = t.mock.method(streaming, "disconnect");
+      let first;
+      t.after(async () => {
+        streaming.cleanupAll();
+        for (const client of server.clients) client.terminate();
+        await new Promise((resolve) => server.close(resolve));
+        await first;
+        fakeThis.assemblyAiStreaming = previous.stream;
+        databaseManager.activeAccountId = previous.account;
+        tokenState = previous.tokenState;
+        fakeThis._remoteStreamPolicies.delete("assemblyAiStreaming");
+        if (previous.api === undefined) delete process.env.OPENWHISPR_API_URL;
+        else process.env.OPENWHISPR_API_URL = previous.api;
+      });
+      process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+      tokenState = { token: "socket-owner-token", generation: tokenState.generation + 1 };
+      await setScope("socket-owner", tokenState.generation);
+      await fakeThis.refreshEffectivePolicy();
+      fakeThis.assemblyAiStreaming = streaming;
+      first = handlers.get("assemblyai-streaming-start")({ sender: {} }, {});
+      streaming.sendAudio(Buffer.alloc(3200, 1));
+      assert.equal(streaming.pendingAudioBytes, 3200);
+      await connected.promise;
+      if (streaming.ws.readyState !== streaming.ws.OPEN)
+        await new Promise((resolve) => streaming.ws.once("open", resolve));
+      assert.equal(streaming.pendingAudioBytes, 3200);
+      const duplicate = () => handlers.get("assemblyai-streaming-start")({ sender: {} }, {});
+      if (overlap === "before account switch")
+        assert.deepEqual(await duplicate(), { success: false, error: "Operation in progress" });
+      handleAuthTokenChange({ token: "next-owner-token", generation: tokenState.generation + 1 });
+      await setScope("next-owner", tokenState.generation);
+      await fakeThis.refreshEffectivePolicy();
+      assert.equal(
+        streaming.pendingAudioBytes,
+        0,
+        "account retirement drops held audio immediately"
+      );
+      if (overlap === "after account switch")
+        assert.deepEqual(await duplicate(), { success: false, error: "Operation in progress" });
+      if (peer.readyState === peer.OPEN)
+        peer.send(JSON.stringify({ type: "Begin", id: "old-owner-session" }));
+      assert.equal((await first).code, "AUTH_CONTEXT_CHANGED");
+      assert.equal(streaming.isConnected, false);
+      await closed.promise;
+      assert.ok(disconnect.mock.callCount() > 0);
+      assert.ok(disconnect.mock.calls.every((call) => call.arguments[0].commit === false));
+      assert.equal(frames.includes("audio"), false, "held audio cannot leave after its account");
+      assert.equal(
+        frames.some((frame) => frame.type === "Terminate"),
+        false
+      );
+      assert.equal(streaming.onPartialTranscript, null);
+      assert.equal(streaming.onFinalTranscript, null);
+      assert.equal(streaming.onError, null);
+      assert.equal(streaming.onSessionEnd, null);
+      assert.equal(fakeThis.assemblyAiStreaming, null);
+    }
+  );
+}
+
+for (const replaced of [false, true]) {
+  test(`overlapping warmup and start retain account ownership${replaced ? " without retiring a replacement" : ""}`, async (t) => {
+    const { deferred } = require("./harness/deferred");
+    const previous = {
+      stream: fakeThis.geminiStreaming,
+      account: databaseManager.activeAccountId,
+      tokenState,
+      environment: Object.getOwnPropertyDescriptor(fakeThis, "environmentManager"),
+    };
+    const entered = deferred();
+    const finish = deferred();
+    const disconnects = [];
+    const pending = [];
+    const streaming = {
+      isConnected: false,
+      beginConnecting() {},
+      cleanupWarmConnection() {},
+      connect: async () => {
+        entered.resolve();
+        await finish.promise;
+        streaming.isConnected = true;
+      },
+      disconnect: async (options) => {
+        disconnects.push(options);
+        streaming.isConnected = false;
+      },
+      sendAudio() {},
+    };
+    const replacement = { isConnected: true };
+    t.after(async () => {
+      finish.resolve();
+      await Promise.allSettled(pending);
+      fakeThis.geminiStreaming = previous.stream;
+      databaseManager.activeAccountId = previous.account;
+      tokenState = previous.tokenState;
+      fakeThis._remoteStreamPolicies.delete("geminiStreaming");
+      if (previous.environment)
+        Object.defineProperty(fakeThis, "environmentManager", previous.environment);
+      else delete fakeThis.environmentManager;
+    });
+    tokenState = { token: "warmup-owner-token", generation: tokenState.generation + 1 };
+    await setScope("warmup-owner", tokenState.generation);
+    await fakeThis.refreshEffectivePolicy();
+    fakeThis.environmentManager = { getGeminiKey: () => "saved-key" };
+    fakeThis.geminiStreaming = streaming;
+    const warmup = handlers.get("gemini-streaming-warmup")({ sender: {} }, { mode: "byok" });
+    pending.push(warmup);
+    await entered.promise;
+    const start = handlers.get("gemini-streaming-start")({ sender: {} }, { mode: "byok" });
+    pending.push(start);
+    await new Promise(setImmediate);
+    assert.equal(streaming.isConnected, false, "same-account promotion waits for its warmup");
+    handleAuthTokenChange({ token: "next-warmup-token", generation: tokenState.generation + 1 });
+    await setScope("next-warmup-owner", tokenState.generation);
+    await fakeThis.refreshEffectivePolicy();
+    const overlap = handlers.get("gemini-streaming-warmup")({ sender: {} }, { mode: "byok" });
+    pending.push(overlap);
+    assert.deepEqual(await Promise.race([overlap, new Promise(setImmediate)]), {
+      success: false,
+      error: "Operation in progress",
+    });
+    if (replaced) {
+      fakeThis.geminiStreaming = replacement;
+      fakeThis._remoteStreamPolicies.set("geminiStreaming", {
+        channel: "gemini-streaming-start",
+        args: [{ mode: "byok" }],
+        accountId: "next-warmup-owner",
+      });
+    }
+    finish.resolve();
+    assert.equal((await warmup).code, "AUTH_CONTEXT_CHANGED");
+    assert.equal((await start).code, "AUTH_CONTEXT_CHANGED");
+    assert.equal(streaming.isConnected, false);
+    assert.ok(disconnects.length > 0);
+    assert.ok(disconnects.every((options) => options.commit === false));
+    assert.equal(fakeThis.geminiStreaming, replaced ? replacement : null);
+  });
+}
+
+function useProductLifecycle(t) {
+  const prototype = require(handlersModulePath).prototype;
+  const methods = new Map();
+  for (const method of [
+    "_stopRemoteProductWork",
+    "_retireDisallowedProductWork",
+    "_startRemoteProductWork",
+  ]) {
+    methods.set(method, Object.getOwnPropertyDescriptor(fakeThis, method));
+    fakeThis[method] = prototype[method];
+  }
+  const previous = { databaseManager: fakeThis.databaseManager, tokenState };
+  fakeThis.databaseManager = scopedDatabase(null);
+  t.after(() => {
+    for (const [method, descriptor] of methods) {
+      if (descriptor) Object.defineProperty(fakeThis, method, descriptor);
+      else delete fakeThis[method];
+    }
+    fakeThis.databaseManager = previous.databaseManager;
+    tokenState = previous.tokenState;
+  });
+  useTestApi(t);
+  return prototype;
+}
+
+for (const stage of ["admission", "streaming"]) {
+  for (const boundary of [
+    "another account",
+    "away and back",
+    "same-account rotation",
+    "user cancellation",
+  ]) {
+    test(`cloud agent ${stage} retains ownership across ${boundary}`, async (t) => {
+      useProductLifecycle(t);
+      const { deferred } = require("./harness/deferred");
+      const verdict = deferred(),
+        entered = deferred();
+      const pending = [],
+        sent = [],
+        outputs = [],
+        messages = [];
+      const originalToken = `agent-${stage}-${boundary}-first`;
+      const owner = `agent-${stage}-${boundary}-owner`;
+      const sender = new (require("node:events").EventEmitter)();
+      sender.id = 101;
+      sender.isDestroyed = () => false;
+      sender.send = (channel, payload) => messages.push([channel, payload]);
+      t.mock.method(electronStub.net, "fetch", async (url, init) => {
+        if (String(url).endsWith("/api/agent/stream")) {
+          sent.push({
+            authorization: init.headers.Authorization,
+            signal: init.signal,
+          });
+          const output = { cancelled: false, closed: false };
+          const response =
+            stage === "admission"
+              ? new Response("")
+              : new Response(
+                  new ReadableStream({
+                    start(controller) {
+                      output.controller = controller;
+                      outputs.push(output);
+                    },
+                    cancel() {
+                      output.cancelled = true;
+                    },
+                  })
+                );
+          if (sent.length === 2) entered.resolve();
+          return response;
+        }
+        if (stage === "admission" && init.headers.Authorization === `Bearer ${originalToken}`)
+          await verdict.promise;
+        return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+      });
+      t.after(async () => {
+        verdict.resolve();
+        for (const output of outputs)
+          if (!output.cancelled && !output.closed) output.controller.close();
+        await Promise.allSettled(pending);
+      });
+      handleAuthTokenChange({ token: originalToken, generation: tokenState.generation + 1 });
+      await setScope(owner, tokenState.generation);
+      if (stage === "streaming") await fakeThis.refreshEffectivePolicy();
+      for (const requestId of ["first-agent", "second-agent"])
+        pending.push(
+          eventHandlers.get("cloud-agent-stream-start")({ sender }, requestId, [
+            { role: "user", content: requestId },
+          ])
+        );
+      if (stage === "streaming") await entered.promise;
+      await new Promise(setImmediate);
+      if (stage === "admission") assert.deepEqual(sent, []);
+      if (boundary === "user cancellation") {
+        for (const requestId of ["first-agent", "second-agent"])
+          eventHandlers.get("cloud-agent-stream-cancel")({ sender }, requestId);
+      } else {
+        handleAuthTokenChange({
+          token: `agent-${stage}-${boundary}-next`,
+          generation: tokenState.generation + 1,
+        });
+        await setScope(
+          boundary === "same-account rotation" ? owner : "agent-replacement",
+          tokenState.generation
+        );
+        if (boundary === "away and back") {
+          handleAuthTokenChange({
+            token: `agent-${stage}-${boundary}-return`,
+            generation: tokenState.generation + 1,
+          });
+          await setScope(owner, tokenState.generation);
+        }
+        await fakeThis.refreshEffectivePolicy();
+      }
+      const permitted = boundary === "same-account rotation";
+      if (stage === "streaming")
+        for (const request of sent) assert.equal(request.signal.aborted, !permitted);
+      verdict.resolve();
+      for (const output of outputs) {
+        output.controller.enqueue(
+          new TextEncoder().encode('{"type":"text","text":"late owner output"}\n')
+        );
+        if (permitted) {
+          output.controller.close();
+          output.closed = true;
+        }
+      }
+      await Promise.all(pending);
+      assert.equal(sent.length, stage === "streaming" || permitted ? 2 : 0);
+      if (stage === "admission" && permitted)
+        assert.ok(sent.every((request) => request.authorization === `Bearer ${tokenState.token}`));
+      assert.equal(
+        messages.filter(([channel]) => channel === "cloud-agent-stream-chunk").length,
+        stage === "streaming" && permitted ? 2 : 0
+      );
+      if (stage === "streaming")
+        assert.ok(outputs.every((output) => output.cancelled === !permitted));
+      assert.equal(sender.listenerCount("destroyed"), 0);
+      assert.equal(fakeThis._productRequests.size, 0);
+      assert.equal(fakeThis._agentStreamRequests.requestsBySender.size, 0);
+    });
+  }
+}
+
+test("cloud agent admission preserves typed API failures and releases ownership", async (t) => {
+  useProductLifecycle(t);
+  const messages = [];
+  t.mock.method(electronStub.net, "fetch", async (url) =>
+    String(url).endsWith("/api/agent/stream")
+      ? Response.json({}, { status: 401 })
+      : Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } })
+  );
+  handleAuthTokenChange({ token: "agent-error-token", generation: tokenState.generation + 1 });
+  await setScope("agent-error-owner", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  const sender = new (require("node:events").EventEmitter)();
+  sender.id = 102;
+  sender.isDestroyed = () => false;
+  sender.send = (channel, payload) => messages.push([channel, payload]);
+  await eventHandlers.get("cloud-agent-stream-start")({ sender }, "failed-agent", []);
+  assert.equal(messages[0][0], "cloud-agent-stream-error");
+  assert.equal(messages[0][1].code, "AUTH_EXPIRED");
+  assert.equal(sender.listenerCount("destroyed"), 0);
+  assert.equal(fakeThis._productRequests.size, 0);
+  assert.equal(fakeThis._agentStreamRequests.requestsBySender.size, 0);
+});
+
+for (const boundary of ["another account", "away and back", "same-account rotation"]) {
+  test(`pending product admissions retain their original owner across ${boundary}`, async (t) => {
+    useProductLifecycle(t);
+    const { deferred } = require("./harness/deferred");
+    const answer = deferred();
+    const pending = [];
+    const sent = [];
+    const firstToken = `admission-${boundary}-first`;
+    const firstAccount = `admission-owner-${boundary}`;
+    const policyResponse = () =>
+      Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+    t.mock.method(electronStub.net, "fetch", async (url, init) => {
+      if (String(url).endsWith("/api/reason")) {
+        sent.push({ authorization: init.headers.Authorization, text: JSON.parse(init.body).text });
+        return Response.json({ text: "permitted answer" });
+      }
+      if (init.headers.Authorization === `Bearer ${firstToken}`) await answer.promise;
+      return policyResponse();
+    });
+    t.after(async () => {
+      answer.resolve();
+      await Promise.allSettled(pending);
+    });
+    handleAuthTokenChange({ token: firstToken, generation: tokenState.generation + 1 });
+    await setScope(firstAccount, tokenState.generation);
+    for (const text of ["first owner's private input", "another pending private input"]) {
+      const sender = new (require("node:events").EventEmitter)();
+      sender.id = pending.length + 1;
+      pending.push(handlers.get("cloud-reason")({ sender }, text));
+    }
+    await new Promise(setImmediate);
+    assert.equal(fakeThis.effectivePolicyManager.getCurrent().status, "loading");
+    assert.deepEqual(sent, []);
+    const sameAccount = boundary === "same-account rotation";
+    handleAuthTokenChange({
+      token: `admission-${boundary}-next`,
+      generation: tokenState.generation + 1,
+    });
+    await setScope(sameAccount ? firstAccount : "replacement-owner", tokenState.generation);
+    if (boundary === "away and back") {
+      handleAuthTokenChange({
+        token: `admission-${boundary}-return`,
+        generation: tokenState.generation + 1,
+      });
+      await setScope(firstAccount, tokenState.generation);
+    }
+    await fakeThis.refreshEffectivePolicy();
+    answer.resolve();
+    const results = await Promise.all(pending);
+    assert.equal(
+      sent.length,
+      sameAccount ? 2 : 0,
+      "a waiting request cannot acquire another owner"
+    );
+    assert.ok(results.every((result) => result.success === sameAccount));
+    if (sameAccount)
+      assert.ok(sent.every((request) => request.authorization === `Bearer ${tokenState.token}`));
+  });
+}
+
+for (const stage of ["startup", "streaming"]) {
+  for (const boundary of ["another account", "away and back", "same-account rotation"]) {
+    test(`enterprise product ownership during ${stage}: ${boundary}`, async (t) => {
+      useProductLifecycle(t);
+      const { deferred } = require("./harness/deferred");
+      const entered = deferred();
+      const finishSetup = deferred();
+      const messages = [];
+      let output;
+      let providerSignal;
+      let providerCalls = 0;
+      let cancelled = false;
+      const load = Module._load;
+      t.mock.method(Module, "_load", function (request, parent, isMain) {
+        if (parent?.filename === handlersModulePath && request === "./enterpriseAiProviders")
+          return {
+            getEnterpriseAIModel: async () => {
+              if (stage === "startup") {
+                entered.resolve();
+                await finishSetup.promise;
+              }
+              return {
+                doStream: async ({ abortSignal }) => {
+                  providerCalls++;
+                  providerSignal = abortSignal;
+                  const stream = new ReadableStream({
+                    start(controller) {
+                      output = controller;
+                    },
+                    cancel() {
+                      cancelled = true;
+                    },
+                  });
+                  entered.resolve();
+                  return { stream };
+                },
+              };
+            },
+          };
+        return load.call(this, request, parent, isMain);
+      });
+      handleAuthTokenChange({
+        token: `enterprise-${stage}-${boundary}-first`,
+        generation: tokenState.generation + 1,
+      });
+      await setScope("enterprise-owner", tokenState.generation);
+      await fakeThis.refreshEffectivePolicy();
+      const sender = new (require("node:events").EventEmitter)();
+      sender.id = 91;
+      sender.isDestroyed = () => false;
+      sender.send = (_channel, payload) => messages.push(payload);
+      const pending = handlers.get("enterprise-stream-start")(
+        { sender },
+        {
+          streamId: `enterprise-${stage}-${boundary}`,
+          provider: "azure",
+          modelId: "private-model",
+          config: { apiKey: "saved-key", azureEndpoint: "https://company.openai.azure.com" },
+          options: { prompt: [] },
+        }
+      );
+      t.after(async () => {
+        finishSetup.resolve();
+        if (output && !cancelled) output.close();
+        await pending;
+      });
+      await entered.promise;
+      const sameAccount = boundary === "same-account rotation";
+      handleAuthTokenChange({
+        token: `enterprise-${stage}-${boundary}-next`,
+        generation: tokenState.generation + 1,
+      });
+      await setScope(sameAccount ? "enterprise-owner" : "enterprise-next", tokenState.generation);
+      if (boundary === "away and back") {
+        handleAuthTokenChange({
+          token: `enterprise-${stage}-${boundary}-return`,
+          generation: tokenState.generation + 1,
+        });
+        await setScope("enterprise-owner", tokenState.generation);
+      }
+      await fakeThis.refreshEffectivePolicy();
+      finishSetup.resolve();
+      await new Promise(setImmediate);
+      if (output && !cancelled) {
+        output.enqueue({ type: "text-delta", id: "text-1", delta: "buffered owner content" });
+        await new Promise(setImmediate);
+        if (!cancelled) output.close();
+      }
+      const result = await pending;
+      output = null;
+      assert.equal(providerCalls, stage === "startup" && !sameAccount ? 0 : 1);
+      assert.equal(
+        messages.some((message) => message.part),
+        sameAccount
+      );
+      assert.equal(result.success, sameAccount);
+      if (stage === "streaming") {
+        assert.equal(providerSignal.aborted, !sameAccount);
+        assert.equal(
+          cancelled,
+          !sameAccount,
+          "a retired reader is cancelled despite buffered output"
+        );
+      }
+    });
+  }
+}
+
+for (const provider of ["google", "microsoft"]) {
+  for (const boundary of ["policy revocation", "account departure"]) {
+    test(`${provider} calendar authorization cannot revive sync after ${boundary}`, async (t) => {
+      useProductLifecycle(t);
+      const { deferred } = require("./harness/deferred");
+      const {
+        defaultDevicePolicy,
+        normalizeDeviceValues,
+      } = require("../../src/helpers/managedDevicePolicy");
+      const Manager = require(`../../src/helpers/${provider}CalendarManager`);
+      const property = `${provider}CalendarManager`;
+      const previous = fakeThis[property];
+      const previousRequests = Object.getOwnPropertyDescriptor(
+        fakeThis,
+        "_calendarAuthorizationRequests"
+      );
+      fakeThis._calendarAuthorizationRequests =
+        new (require("../../src/helpers/agentStreamRequestRegistry"))();
+      const entered = deferred(),
+        finish = deferred();
+      const manager = provider === "google" ? new Manager({}, {}, {}) : new Manager({}, {});
+      let pending,
+        signal,
+        syncs = 0;
+      fakeThis[property] = manager;
+      t.after(async () => {
+        finish.resolve();
+        await pending;
+        manager.stop();
+        fakeThis[property] = previous;
+        if (previousRequests)
+          Object.defineProperty(fakeThis, "_calendarAuthorizationRequests", previousRequests);
+        else delete fakeThis._calendarAuthorizationRequests;
+      });
+      t.mock.method(electronStub.net, "fetch", async () =>
+        Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } })
+      );
+      handleAuthTokenChange({
+        token: `${provider}-${boundary}-token`,
+        generation: tokenState.generation + 1,
+      });
+      await setScope(`${provider}-${boundary}-owner`, tokenState.generation);
+      await fakeThis.refreshEffectivePolicy();
+      manager.oauth.startOAuthFlow = async (options) => {
+        signal = options.signal;
+        return { success: true, email: "saved-calendar@test" };
+      };
+      manager.fetchCalendars = async () => {
+        entered.resolve();
+        await finish.promise;
+      };
+      manager.syncEvents = async () => syncs++;
+      manager.reminderScheduler.scheduleNextMeeting = () => {};
+      manager._broadcastAccountsChanged = () => {};
+      const sender = new (require("node:events").EventEmitter)();
+      sender.id = 103;
+      const channel = provider === "google" ? "gcal-start-oauth" : "mcal-start-oauth";
+      pending = handlers.get(channel)({ sender }, "late-calendar");
+      await entered.promise;
+      if (boundary === "policy revocation") {
+        const policy = defaultDevicePolicy();
+        policy.features.connectorsEnabled = false;
+        t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () =>
+          normalizeDeviceValues({ Policy: JSON.stringify(policy) })
+        );
+        fakeThis.effectivePolicyManager.getCurrent();
+      } else {
+        handleAuthTokenChange({
+          token: `${provider}-replacement-token`,
+          generation: tokenState.generation + 1,
+        });
+        await setScope(`${provider}-replacement`, tokenState.generation);
+        await fakeThis.refreshEffectivePolicy();
+      }
+      assert.equal(signal.aborted, true);
+      finish.resolve();
+      const result = await pending;
+      assert.equal(
+        result.code,
+        boundary === "policy revocation" ? "DEVICE_POLICY_BLOCKED" : "AUTH_CONTEXT_CHANGED"
+      );
+      assert.equal(manager.syncRunner.timer, null);
+      assert.equal(syncs, 0);
+      assert.equal(sender.listenerCount("destroyed"), 0);
+    });
+  }
+}
+
+test("calendar product retirement blocks focus and wake until policy resumes automatic synchronization", async (t) => {
+  const prototype = useProductLifecycle(t);
+  const {
+    defaultDevicePolicy,
+    normalizeDeviceValues,
+  } = require("../../src/helpers/managedDevicePolicy");
+  const GoogleCalendarManager = require("../../src/helpers/googleCalendarManager");
+  const MicrosoftCalendarManager = require("../../src/helpers/microsoftCalendarManager");
+  const calendars = [{ id: "saved-calendar", account_email: "saved@example.test" }];
+  const accounts = [{ email: "saved@example.test" }];
+  const calendarDatabase = new Proxy(
+    {
+      getSelectedCalendars: () => calendars,
+      getSelectedMicrosoftCalendars: () => calendars,
+      getGoogleAccounts: () => accounts,
+      getMicrosoftAccounts: () => accounts,
+      getMicrosoftOwnAddresses: () => [],
+    },
+    { get: (value, key) => (key in value ? value[key] : () => {}) }
+  );
+  const scheduler = { scheduleNextMeeting() {} };
+  const google = new GoogleCalendarManager(calendarDatabase, {}, scheduler);
+  const microsoft = new MicrosoftCalendarManager(calendarDatabase, scheduler);
+  const previous = {
+    googleCalendarManager: fakeThis.googleCalendarManager,
+    microsoftCalendarManager: fakeThis.microsoftCalendarManager,
+    _remoteCalendarsReady: fakeThis._remoteCalendarsReady,
+    _remoteCalendarsStarted: fakeThis._remoteCalendarsStarted,
+  };
+  Object.assign(fakeThis, { googleCalendarManager: google, microsoftCalendarManager: microsoft });
+  fakeThis._remoteCalendarsReady = false;
+  fakeThis._remoteCalendarsStarted = false;
+  let device = normalizeDeviceValues({});
+  t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () => device);
+  const requests = [];
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    if (String(url).endsWith("/api/workspace-policy"))
+      return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+    if (["www.googleapis.com", "graph.microsoft.com"].includes(new URL(url).hostname))
+      requests.push({ url, authorization: init.headers.Authorization });
+    return Response.json({ items: [], value: [] });
+  });
+  for (const manager of [google, microsoft]) {
+    manager.oauth.getValidAccessToken = async () => "saved-calendar-credential";
+    manager.oauth.startOAuthFlow = async () => ({ email: accounts[0].email });
+  }
+  t.after(() => {
+    google.stop();
+    microsoft.stop();
+    Object.assign(fakeThis, previous);
+  });
+  handleAuthTokenChange({ token: "calendar-policy-owner", generation: tokenState.generation + 1 });
+  await setScope("calendar-policy-owner", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  await google.syncEvents();
+  await microsoft.syncEvents();
+  assert.equal(requests.length, 2, "explicit synchronization does not require a running timer");
+  prototype.startPolicyCalendars.call(fakeThis);
+  await new Promise(setImmediate);
+  assert.ok(requests.length > 2, "saved accounts synchronize on startup");
+  const policy = defaultDevicePolicy();
+  policy.features.connectorsEnabled = false;
+  device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
+  fakeThis.effectivePolicyManager.getCurrent();
+  assert.equal(google.syncRunner.timer, null);
+  assert.equal(microsoft.syncRunner.timer, null);
+  const before = requests.length;
+  google.syncOnFocus();
+  microsoft.syncOnFocus();
+  google.onWakeFromSleep();
+  microsoft.onWakeFromSleep();
+  await new Promise(setImmediate);
+  assert.equal(requests.length, before, "retired calendars cannot send on focus or wake");
+  device = normalizeDeviceValues({});
+  fakeThis.effectivePolicyManager.getCurrent();
+  await new Promise(setImmediate);
+  assert.ok(requests.length > before, "policy relaxation resumes automatic synchronization");
+  for (const manager of [google, microsoft]) {
+    manager.stop();
+    const beforeOAuth = requests.length;
+    await manager.startOAuth();
+    assert.ok(
+      requests.length > beforeOAuth,
+      "permitted OAuth performs its initial synchronization"
+    );
+    assert.notEqual(manager.syncRunner.timer, null);
+  }
+});
+
+async function calendarPolicyScenario(t, provider, stage) {
+  const prototype = useProductLifecycle(t);
+  const { deferred } = require("./harness/deferred");
+  const {
+    normalizeDeviceValues,
+    defaultDevicePolicy,
+  } = require("../../src/helpers/managedDevicePolicy");
+  const Manager = require(`../../src/helpers/${provider}CalendarManager`);
+  const calendars = [
+    {
+      id: "saved-calendar",
+      account_email: "saved@example.test",
+      sync_token:
+        provider === "google" ? "saved-cursor" : "https://graph.microsoft.com/v1.0/saved-cursor",
+      sync_token_expires_at: Date.now() + 60_000,
+    },
+  ];
+  const writes = [],
+    requests = [];
+  const accounts = [{ email: "saved@example.test" }];
+  const db = new Proxy(
+    {
+      getSelectedCalendars: () => calendars,
+      getSelectedMicrosoftCalendars: () => calendars,
+      getGoogleAccounts: () => accounts,
+      getMicrosoftAccounts: () => accounts,
+      getMicrosoftOwnAddresses: () => [],
+    },
+    { get: (value, key) => (key in value ? value[key] : (...args) => writes.push([key, ...args])) }
+  );
+  const reminders = [];
+  const scheduler = {
+    scheduleNextMeeting: () => reminders.push("scheduled"),
+    reset: () => reminders.push("reset"),
+  };
+  const manager =
+    provider === "google" ? new Manager(db, {}, scheduler) : new Manager(db, scheduler);
+  const previous = {
+    googleCalendarManager: fakeThis.googleCalendarManager,
+    microsoftCalendarManager: fakeThis.microsoftCalendarManager,
+    _remoteCalendarsReady: fakeThis._remoteCalendarsReady,
+    _remoteCalendarsStarted: fakeThis._remoteCalendarsStarted,
+  };
+  fakeThis[`${provider}CalendarManager`] = manager;
+  fakeThis._remoteCalendarsReady = false;
+  fakeThis._remoteCalendarsStarted = false;
+  let device = normalizeDeviceValues({}),
+    held = false,
+    requestSignal;
+  const entered = deferred(),
+    finish = deferred();
+  t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () => device);
+  manager.oauth.getValidAccessToken = async () => {
+    if (stage === "token" && !held) {
+      held = true;
+      entered.resolve();
+      await finish.promise;
+    }
+    return "saved-calendar-credential";
+  };
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    if (String(url).endsWith("/api/workspace-policy"))
+      return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+    requests.push(String(url));
+    const list = String(url).includes("calendarList") || String(url).includes("/me/calendars?");
+    const address = String(url).includes("/me?");
+    const master = String(url).includes("/events/master");
+    const event = !list && !address && !master;
+    if (stage === "offline") return Response.json({}, { status: 503 });
+    const shouldHold =
+      !held &&
+      ((stage === "calendar" && list) ||
+        (stage === "calendar page" && list) ||
+        (stage === "address" && address) ||
+        (stage === "backfill" && master) ||
+        (["event page", "retry", "event body"].includes(stage) && event));
+    if (shouldHold) {
+      held = true;
+      requestSignal = init.signal;
+      if (stage === "event body")
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              entered.resolve();
+              void finish.promise.then(() => {
+                controller.enqueue(
+                  new TextEncoder().encode(JSON.stringify({ items: [], value: [] }))
+                );
+                controller.close();
+              });
+            },
+          })
+        );
+      entered.resolve();
+      await finish.promise;
+      if (stage === "retry") return Response.json({}, { status: 410 });
+      if (stage === "calendar page")
+        return Response.json({
+          value: [],
+          "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/calendars?page=2",
+        });
+      if (stage === "event page")
+        return Response.json({
+          items: [],
+          value: [],
+          nextPageToken: "next-page",
+          "@odata.nextLink": "https://graph.microsoft.com/v1.0/events?page=2",
+        });
+    }
+    if (stage === "backfill" && event && !held)
+      return Response.json({
+        value: ["master-one", "master-two"].map((seriesMasterId, index) => ({
+          id: `occurrence-${index}`,
+          seriesMasterId,
+        })),
+      });
+    return Response.json({ items: [], value: [], mail: accounts[0].email });
+  });
+  t.after(() => {
+    finish.resolve();
+    manager.stop();
+    Object.assign(fakeThis, previous);
+  });
+  handleAuthTokenChange({
+    token: `calendar-${provider}-${stage}-token`,
+    generation: tokenState.generation + 1,
+  });
+  await setScope("calendar-lifecycle-owner", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  return {
+    manager,
+    calendars,
+    writes,
+    requests,
+    reminders,
+    entered,
+    finish,
+    signal: () => requestSignal,
+    start: () => prototype.startPolicyCalendars.call(fakeThis),
+    async boundary(kind) {
+      if (kind === "policy revocation") {
+        const policy = defaultDevicePolicy();
+        policy.features.connectorsEnabled = false;
+        device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
+        fakeThis.effectivePolicyManager.getCurrent();
+      } else if (kind === "stop") manager.stop();
+      else {
+        handleAuthTokenChange({
+          token: kind === "sign-out" ? null : `calendar-${kind}-replacement`,
+          generation: tokenState.generation + 1,
+        });
+        if (kind !== "sign-out")
+          await setScope(
+            kind === "same-account rotation" ? "calendar-lifecycle-owner" : "calendar-next-owner",
+            tokenState.generation
+          );
+        await fakeThis.refreshEffectivePolicy();
+      }
+    },
+    resume(kind) {
+      if (kind === "policy revocation") {
+        device = normalizeDeviceValues({});
+        fakeThis.effectivePolicyManager.getCurrent();
+      } else if (kind === "stop") manager.start();
+    },
+  };
+}
+
+for (const provider of ["google", "microsoft"]) {
+  const stages = [
+    "token",
+    "calendar",
+    "event page",
+    "retry",
+    "event body",
+    ...(provider === "microsoft" ? ["calendar page", "address", "backfill"] : []),
+  ];
+  for (const stage of stages) {
+    test(`retired ${provider} ${stage} cannot continue or disturb a resumed calendar runner`, async (t) => {
+      const context = await calendarPolicyScenario(t, provider, stage);
+      context.start();
+      await context.entered.promise;
+      await context.boundary("stop");
+      if (context.signal()) assert.equal(context.signal().aborted, true);
+      context.resume("stop");
+      await new Promise(setImmediate);
+      const timer = context.manager.syncRunner.timer;
+      context.manager.syncRunner._consecutiveFailures = 2;
+      const before = [context.requests.length, context.writes.length, context.reminders.length];
+      context.finish.resolve();
+      await new Promise(setImmediate);
+      assert.deepEqual(
+        [context.requests.length, context.writes.length, context.reminders.length],
+        before
+      );
+      assert.equal(context.manager.syncRunner.timer, timer);
+      assert.equal(context.manager.syncRunner._consecutiveFailures, 2);
+      context.manager.stop();
+      const requests = context.requests.length;
+      await context.manager.syncEvents();
+      assert.ok(
+        context.requests.length > requests,
+        "fresh manual synchronization remains permitted"
+      );
+      assert.equal(context.manager.syncRunner.timer, null);
+    });
+  }
+  for (const boundary of [
+    "policy revocation",
+    "account departure",
+    "sign-out",
+    "same-account rotation",
+  ]) {
+    test(`${provider} pending startup follows ${boundary} without reviving retired work`, async (t) => {
+      const context = await calendarPolicyScenario(t, provider, "calendar");
+      context.start();
+      const originalTimer = context.manager.syncRunner.timer;
+      await context.entered.promise;
+      await context.boundary(boundary);
+      const retired = boundary !== "same-account rotation";
+      assert.equal(context.signal().aborted, retired);
+      if (boundary === "policy revocation") assert.equal(context.manager.syncRunner.timer, null);
+      context.resume(boundary);
+      await new Promise(setImmediate);
+      const before = [context.requests.length, context.writes.length, context.reminders.length];
+      const timer = context.manager.syncRunner.timer;
+      context.finish.resolve();
+      await new Promise(setImmediate);
+      if (retired)
+        assert.deepEqual(
+          [context.requests.length, context.writes.length, context.reminders.length],
+          before
+        );
+      else {
+        assert.ok(context.requests.length > before[0]);
+        assert.ok(context.reminders.length > before[2]);
+        assert.equal(timer, originalTimer);
+      }
+      assert.equal(context.manager.syncRunner.timer, timer);
+      assert.notEqual(timer, null);
+    });
+  }
+  for (const selected of [false, true]) {
+    test(`permitted offline ${provider} startup schedules cached reminders, selected=${selected}`, async (t) => {
+      const context = await calendarPolicyScenario(t, provider, "offline");
+      if (!selected) context.calendars.length = 0;
+      context.start();
+      await new Promise(setImmediate);
+      assert.ok(context.requests.length > 0);
+      assert.equal(context.reminders.length, 1);
+      assert.notEqual(context.manager.syncRunner.timer, null);
+    });
+  }
+}
+
+for (const provider of ["google", "microsoft"]) {
+  for (const operation of ["wake", "primary selection"]) {
+    test(`retired ${provider} ${operation} cannot finalize into a resumed calendar runner`, async (t) => {
+      const context = await calendarPolicyScenario(t, provider, "event body");
+      context.manager.addAccount("saved@example.test");
+      context.manager.syncRunner.start();
+      const pending =
+        operation === "wake"
+          ? context.manager.onWakeFromSleep()
+          : context.manager.setPrimaryOnly(false);
+      const settled = Promise.allSettled([pending]);
+      await context.entered.promise;
+      context.manager.stop();
+      assert.equal(context.signal().aborted, true);
+      context.manager.start();
+      await new Promise(setImmediate);
+      context.manager.syncRunner._consecutiveFailures = 2;
+      const timer = context.manager.syncRunner.timer;
+      const before = [context.requests.length, context.writes.length, context.reminders.length];
+      context.finish.resolve();
+      await settled;
+      await new Promise(setImmediate);
+      assert.deepEqual(
+        [context.requests.length, context.writes.length, context.reminders.length],
+        before
+      );
+      assert.equal(context.manager.syncRunner.timer, timer);
+      assert.equal(context.manager.syncRunner._consecutiveFailures, 2);
+    });
+  }
+}
+
+test("account deletion still clears audio and note mirrors when product-event erasure fails", async (t) => {
+  const originalTokenState = tokenState;
+  const originals = {
+    productEvents: fakeThis.productEvents,
+    audioStorageManager: fakeThis.audioStorageManager,
+    metaActivation: fakeThis.metaActivation,
+    enterpriseAudioCredentials: fakeThis.enterpriseAudioCredentials,
+    _asyncMirrorDelete: fakeThis._asyncMirrorDelete,
+  };
+  t.after(() => {
+    Object.assign(fakeThis, originals);
+    delete connectorManager.disconnectAll;
+    delete databaseManager.deleteAccountData;
+    tokenState = originalTokenState;
+  });
+  const purged = [];
+  const audio = [];
+  const mirrored = [];
+  const credentials = [];
+  tokenState = { token: "delete-token", generation: 91 };
+  connectorManager.disconnectAll = async () => {};
+  databaseManager.deleteAccountData = () => ({
+    deletedNoteIds: [11, 12],
+    deletedTranscriptionIds: [21, 22],
+  });
+  fakeThis.productEvents = {
+    purge: (accountId) => {
+      purged.push(accountId);
+      throw new Error("product-event storage unavailable");
+    },
+  };
+  fakeThis.audioStorageManager = {
+    deleteAudioForTranscriptions: (ids) => audio.push(...ids),
+  };
+  fakeThis.metaActivation = { purge: () => {} };
+  fakeThis._asyncMirrorDelete = (noteId) => mirrored.push(noteId);
+  fakeThis.enterpriseAudioCredentials = {
+    removeAccount: async (accountId) => credentials.push(accountId),
+  };
+
+  const result = await handlers.get("delete-account-data")({}, "deleted-account", 91);
+
+  assert.deepEqual(result, {
+    success: false,
+    code: "LOCAL_ACCOUNT_CLEANUP_FAILED",
+    error: "product-event storage unavailable",
+  });
+  assert.deepEqual(purged, ["deleted-account"]);
+  assert.deepEqual(audio, [21, 22]);
+  assert.deepEqual(mirrored, [11, 12]);
+  assert.deepEqual(credentials, ["deleted-account"]);
+});
+
+test("a late product event binding cannot recreate the queue for an erased account", async (t) => {
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  const originalTokenState = tokenState;
+  t.after(() => {
+    delete connectorManager.disconnectAll;
+    delete databaseManager.deleteAccountData;
+    tokenState = originalTokenState;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  connectorManager.disconnectAll = async () => {};
+  databaseManager.deleteAccountData = () => ({ deletedNoteIds: [] });
+  const started = deferred();
+  const response = deferred();
+  t.mock.method(electronStub.net, "fetch", async (url) => {
+    if (url.endsWith("/api/product-events/app-session")) {
+      started.resolve();
+      return response.promise;
+    }
+    return { ok: false, status: 401 };
+  });
+  tokenState = { token: "erase-bearer", generation: 93 };
+  await setScope("erased-account", 93);
+  const binding = handlers.get("product-events-record-app-session")(
+    {},
+    {
+      accountId: "erased-account",
+      authGeneration: 93,
+    }
+  );
+  await started.promise;
+
+  const erased = await handlers.get("delete-account-data")({}, "erased-account", 93);
+  response.resolve({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      binding_id: "8413c2f3-a18d-4a12-9fe4-8f912f301d78",
+      authenticated_at: new Date().toISOString(),
+    }),
+  });
+  await binding;
+
+  assert.equal(erased.success, true);
+  const state = JSON.parse(
+    fs.readFileSync(path.join(userDataDirectory, "product-events.json"), "utf8")
+  );
+  assert.ok(!state.events.some((event) => event.account_id === "erased-account"));
+});
+
+test("Reset App Data erases the product event store and interrupted writes", async (t) => {
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  const originalTokenState = tokenState;
+  const collector = fakeThis.productEvents;
+  t.after(() => {
+    collector.dispose();
+    delete connectorManager.revokeAllStored;
+    tokenState = originalTokenState;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  connectorManager.revokeAllStored = async () => {};
+  t.mock.method(electronStub.net, "fetch", async () => ({ ok: false, status: 503 }));
+  tokenState = { token: "reset-bearer", generation: 94 };
+  await setScope("reset-account", 94);
+  await handlers.get("product-events-record-onboarding-completed")(
+    {},
+    {
+      setupMode: "local",
+      flowVersion: "desktop-onboarding-1",
+    }
+  );
+  await collector.flush();
+  const file = path.join(userDataDirectory, "product-events.json");
+  assert.ok(fs.existsSync(file));
+  fs.copyFileSync(file, `${file}.111.tmp`);
+
+  tokenState = { token: null, generation: 95 };
+  const result = await handlers.get("cleanup-app")({ sender: {} });
+
+  assert.equal(result.success, true);
+  assert.equal(fs.existsSync(file), false);
+  assert.equal(fs.existsSync(`${file}.111.tmp`), false);
 });

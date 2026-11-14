@@ -117,29 +117,33 @@ function resolveEffectivePolicy(device, workspace, scope) {
   // everything else. Only the first two settle the verdict.
   const settledManaged = device.managed === true || workspace?.code === "POLICY_UNRESOLVABLE";
   const managed = settledManaged || workspace?.managed === true;
-  const failure = (status, code) => ({
+  const failure = (status, code, policy = null) => ({
     ...metadata,
     success: false,
     status,
     managed,
-    policy: null,
+    policy,
     code,
   });
   if (device.status === "loading") return failure("loading", "DEVICE_POLICY_LOADING");
   if (device.status === "invalid") return failure("error", "DEVICE_POLICY_INVALID");
-  if (scope.authenticated && !workspace) return failure("loading", "POLICY_LOADING");
-  // With only the account's last verdict as evidence, this credential's own is
-  // still on its way: new work is refused, and nothing running is revoked.
-  if (scope.authenticated && !workspace.success && managed)
-    return failure(settledManaged ? "error" : "loading", workspace.code ?? "POLICY_UNRESOLVABLE");
-  if (!scope.authenticated && device.requireSignIn)
-    return failure("error", "POLICY_SIGN_IN_REQUIRED");
   try {
     let policy = mergePolicies([
       ...(device.managed ? [device.policy] : []),
-      ...(workspace?.managed ? [workspace.policy] : []),
+      ...(workspace?.success && workspace.managed ? [workspace.policy] : []),
     ]);
     if (policy && device.localOnly) policy = localOnlyPolicy(policy);
+    if (scope.authenticated && !workspace) return failure("loading", "POLICY_LOADING", policy);
+    // The device's restrictions are known even while this credential's
+    // workspace verdict is not. Only that unknown source remains pending.
+    if (scope.authenticated && !workspace.success && managed)
+      return failure(
+        settledManaged ? "error" : "loading",
+        workspace.code ?? "POLICY_UNRESOLVABLE",
+        settledManaged ? null : policy
+      );
+    if (!scope.authenticated && device.requireSignIn)
+      return failure("error", "POLICY_SIGN_IN_REQUIRED");
     return {
       ...metadata,
       success: true,
@@ -184,6 +188,18 @@ function createEffectivePolicyManager({
     const scope = getScope();
     const device = devicePolicy.getSnapshot();
     const next = resolveEffectivePolicy(device, workspaceFor(scope), scope);
+    if (
+      next.status === "loading" &&
+      next.deviceReady &&
+      next.accountId !== null &&
+      next.accountId === current?.accountId
+    ) {
+      next.policy = mergePolicies([current.policy, next.policy].filter(Boolean));
+      if (next.policy) {
+        next.managed = true;
+        next.workspaceManaged ||= current.workspaceManaged;
+      }
+    }
     const nextUpdates = resolveUpdatePolicy(device, workspaceFor(scope), scope);
     const nextSignature = JSON.stringify([next, nextUpdates]);
     if (nextSignature !== signature) {

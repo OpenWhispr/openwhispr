@@ -9,6 +9,7 @@ const path = require("node:path");
 
 const sqliteFiles = (name) => [name, `${name}-wal`, `${name}-shm`];
 const NOTES_MIRROR_FILE = "notes-mirror.json";
+const PRODUCT_EVENTS_FILE = "product-events.json";
 const WIPE_STATE_FILE = "local-data-wipe.json";
 
 const USER_DATA_ENTRIES = [
@@ -30,6 +31,7 @@ const USER_DATA_ENTRIES = [
   "model-registry.json",
   "model-registry.json.backup",
   "paid-key-checks.json",
+  PRODUCT_EVENTS_FILE,
   "enterprise-audio-keys",
   "enterprise-audio-bootstrap.json",
   "enterprise-audio-device-id",
@@ -169,6 +171,14 @@ async function removeLocalData({ includeModels, roots = defaultRoots() }) {
     remove("cli-bridge.json", roots.bridgeFile),
     ...roots.temp.map((directory) => removeTempFiles(directory, remove)),
   ]);
+  try {
+    // The queue's interrupted writes, which carry the writer's pid.
+    require("./productEvents")
+      .createFileStore(path.join(roots.userData, PRODUCT_EVENTS_FILE))
+      .erase();
+  } catch (error) {
+    errors.push(`product events: ${error.message}`);
+  }
   return errors;
 }
 
