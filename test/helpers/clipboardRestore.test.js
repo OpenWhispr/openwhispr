@@ -2543,7 +2543,7 @@ test("clipboard write failure is never classified as an Accessibility denial", a
   });
 });
 
-test("_writeClipboardWayland on KDE writes wl-copy (Wayland) and Electron's X11 clipboard", async () => {
+test("_writeClipboardWayland on KDE keeps the successful Wayland owner", async () => {
   const spawnSyncCalls = [];
   const TestClipboardManager = loadClipboardManager({
     spawnSync: createSpawnSync(spawnSyncCalls),
@@ -2560,7 +2560,7 @@ test("_writeClipboardWayland on KDE writes wl-copy (Wayland) and Electron's X11 
     spawnSyncCalls.map((call) => [call.command, call.args]),
     [["wl-copy", ["--", "dictated KDE text"]]]
   );
-  assert.equal(fakeClipboard.text, "dictated KDE text");
+  assert.deepEqual(fakeClipboard.writes, []);
 });
 
 test("_writeClipboardWayland on KDE uses renderer fallback when wl-copy is unavailable", async () => {
@@ -2588,7 +2588,7 @@ test("_writeClipboardWayland on KDE uses renderer fallback when wl-copy is unava
   assert.equal(fakeClipboard.text, "dictated KDE text");
 });
 
-test("_writePrimarySelection on KDE mirrors wl-copy to Electron's X11 selection", async () => {
+test("_writePrimarySelection on KDE keeps the successful Wayland owner", async () => {
   const spawnSyncCalls = [];
   const TestClipboardManager = loadClipboardManager({
     spawnSync: createSpawnSync(spawnSyncCalls),
@@ -2605,5 +2605,62 @@ test("_writePrimarySelection on KDE mirrors wl-copy to Electron's X11 selection"
     spawnSyncCalls.map((call) => [call.command, call.args]),
     [["wl-copy", ["--primary", "--", "selection text"]]]
   );
-  assert.deepEqual(fakeClipboard.writes, [["writeText", "selection text", "selection"]]);
+  assert.deepEqual(fakeClipboard.writes, []);
 });
+
+test("writing both KDE selections does not reclaim either owner through X11", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({ spawnSync: createSpawnSync(calls) });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "wl-copy";
+  resetClipboard();
+
+  await withWaylandEnvironment("KDE", () => {
+    assert.equal(manager._writeClipboardWayland("dictated text"), true);
+    assert.equal(manager._writePrimarySelection("dictated text"), true);
+  });
+
+  assert.deepEqual(
+    calls.map(({ command, args }) => [command, args]),
+    [
+      ["wl-copy", ["--", "dictated text"]],
+      ["wl-copy", ["--primary", "--", "dictated text"]],
+    ]
+  );
+  assert.deepEqual(fakeClipboard.writes, []);
+});
+
+test("GNOME still mirrors the Wayland clipboard through Electron", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({ spawnSync: createSpawnSync(calls) });
+  const manager = new Manager();
+  manager.commandExists = (command) => command === "wl-copy";
+  resetClipboard();
+
+  await withWaylandEnvironment("GNOME", () => {
+    assert.equal(manager._writeClipboardWayland("dictated text"), true);
+  });
+
+  assert.deepEqual(fakeClipboard.writes, [["writeText", "dictated text", undefined]]);
+});
+
+for (const status of [1, null]) {
+  test(`KDE keeps the X11 fallback when wl-copy ${status === null ? "times out" : "fails"}`, async () => {
+    const Manager = loadClipboardManager({
+      spawnSync: () => ({ status, stdout: Buffer.from("") }),
+    });
+    const manager = new Manager();
+    manager.commandExists = (command) => command === "wl-copy";
+    resetClipboard();
+
+    await withWaylandEnvironment("KDE", () => {
+      assert.equal(manager._writeClipboardWayland("dictated text"), false);
+      assert.equal(manager._writePrimarySelection("dictated text"), false);
+    });
+
+    assert.deepEqual(fakeClipboard.writes, [
+      ["writeText", "dictated text", undefined],
+      ["writeText", "dictated text", "selection"],
+    ]);
+  });
+}
