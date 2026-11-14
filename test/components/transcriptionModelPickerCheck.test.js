@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { act } = require("react");
 const { mountSettingsPanel } = require("../lib/settingsPanelHarness");
 
 const PICKER = "/components/TranscriptionModelPicker.tsx";
@@ -59,6 +60,41 @@ test("a key is checked with the panel's model, or alone under a browsed tab", as
     apiKey: "sk-saved",
     model: "",
   });
+});
+
+test("browsing meeting providers keeps the active provider visible until a model is picked", async (t) => {
+  const selectedModels = [];
+  const panel = await mount(t, {
+    settings: { meetingCloudTranscriptionProvider: "openai" },
+    overrides: {
+      transcriptionContext: "meeting",
+      streamingOnly: true,
+      selectedCloudProvider: "openai",
+      selectedCloudModel: "gpt-4o-transcribe",
+      onCloudModelSelect: (model) => selectedModels.push(model),
+    },
+  });
+  const activeLabel = () =>
+    panel.find(
+      (node) =>
+        node.type === "p" &&
+        Array.isArray(node.props.children) &&
+        node.props.children.includes("common.active")
+    )[0];
+  assert.equal(activeLabel(), undefined);
+
+  await panel.selectTab("deepgram");
+  assert.ok(activeLabel()?.props.children.includes("OpenAI"));
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "openai");
+  assert.deepEqual(selectedModels, []);
+  const modelList = panel.find((node) =>
+    node.props?.models?.some?.((model) => model.value === "nova-3")
+  )[0];
+  await act(() => modelList.props.onModelSelect("nova-3"));
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "deepgram");
+  await panel.setProps({ selectedCloudProvider: "deepgram", selectedCloudModel: "nova-3" });
+  assert.deepEqual(selectedModels, ["nova-3"]);
+  assert.equal(activeLabel(), undefined);
 });
 
 test("a hidden picker sends nothing until it is shown, then asks again", async (t) => {
