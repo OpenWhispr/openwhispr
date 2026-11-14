@@ -576,3 +576,16 @@ test("rotation counts only files this user owns", { skip: !process.getuid }, asy
   for (let offset = 1; offset <= 95; offset += 1)
     assert.ok(fs.existsSync(name(offset)), day(offset));
 });
+
+test("a session id that isn't id-shaped is logged as null", async () => {
+  const { log } = harness();
+  const long = "x".repeat(65);
+  log.recordingStarted({ sessionId: long, noteId: 1, trigger: "hotkey" });
+  log.recordingStopped({ sessionId: long, reason: "user" });
+  log.recordingStarted({ sessionId: "6f1c-ok_id", noteId: 2, trigger: "hotkey" });
+  await log.flush();
+  assert.deepEqual(
+    lines().map((line) => line.sessionId),
+    [null, null, "6f1c-ok_id"]
+  );
+});

@@ -169,7 +169,8 @@ function createMeetingAuditLog({
       `${JSON.stringify({
         ts,
         event: entry.event,
-        sessionId: entry.sessionId ?? null,
+        // The renderer names the session, so only an id-shaped value is kept.
+        sessionId: /^[\w-]{1,64}$/.test(entry.sessionId ?? "") ? entry.sessionId : null,
         noteId: entry.noteId ?? null,
         trigger: entry.trigger ?? null,
         reason: entry.reason ?? null,
