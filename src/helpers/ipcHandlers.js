@@ -5292,6 +5292,15 @@ class IPCHandlers {
           }
         }
 
+        // On KDE, KWin would deliver a registered chord (e.g. Ctrl+Meta) to OpenWhispr
+        // instead of the field. Exiting capture re-registers every slot below.
+        if (hotkeyManager.isUsingKDE() && hotkeyManager.kdeManager) {
+          for (const slot of [...hotkeyManager.kdeManager.registeredSlots]) {
+            debugLogger.log(`[IPC] Unregistering KDE keybinding (slot "${slot}") for capture mode`);
+            await hotkeyManager.kdeManager.unregisterKeybinding(slot);
+          }
+        }
+
         // On Hyprland Wayland, unregister the keybinding during capture
         if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager) {
           debugLogger.log("[IPC] Unregistering Hyprland keybinding for hotkey capture mode");
