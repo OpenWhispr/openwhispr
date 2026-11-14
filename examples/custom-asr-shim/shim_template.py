@@ -100,6 +100,10 @@ def transcribe(audio_path: str, model: str, language: str | None, prompt: str | 
 class ShimHandler(BaseHTTPRequestHandler):
     """Handles the single POST endpoint OpenWhispr calls."""
 
+    def transcribe_audio(self, audio_path, model, language, prompt):
+        """Override to share this HTTP adapter with a persistent local model."""
+        return transcribe(audio_path, model, language, prompt)
+
     def _send_json(self, status: int, payload: dict) -> None:
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
@@ -149,8 +153,10 @@ class ShimHandler(BaseHTTPRequestHandler):
             with os.fdopen(fd, "wb") as f:
                 f.write(file_bytes)
             wav_path = convert_audio(in_path)
-            text = transcribe(wav_path, model, language, prompt)
+            text = self.transcribe_audio(wav_path, model, language, prompt)
             self._send_json(200, {"text": text or "", "object": "transcription"})
+        except ValueError as exc:
+            self._send_json(400, {"error": str(exc)})
         except FileNotFoundError:
             self._send_json(500, {"error": "ffmpeg not found on PATH"})
         except subprocess.CalledProcessError:
