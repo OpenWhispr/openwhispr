@@ -11,6 +11,8 @@ export interface HotkeyModeInfo {
   isUsingHyprland: boolean;
   supportsPushToTalk: boolean;
   pushToTalkUnavailableReason: string | null;
+  /** Which row refuses Hold, when the slot holds more than one shortcut. */
+  holdBlockingHotkey: string | null;
   /** Linux only: the evdev listener cannot read /dev/input, which Hold needs. */
   linuxInputAccessDenied: boolean;
   hyprlandConfigStatus: HyprlandConfigStatus | null;
@@ -23,6 +25,7 @@ const DEFAULT_INFO: HotkeyModeInfo = {
   isUsingHyprland: false,
   supportsPushToTalk: true,
   pushToTalkUnavailableReason: null,
+  holdBlockingHotkey: null,
   linuxInputAccessDenied: false,
   hyprlandConfigStatus: null,
   loaded: false,
@@ -51,6 +54,7 @@ export function useHotkeyModeInfo(scope: string, hotkey?: string): HotkeyModeInf
           isUsingHyprland: info.isUsingHyprland,
           supportsPushToTalk: info.supportsPushToTalk,
           pushToTalkUnavailableReason: info.pushToTalkUnavailableReason,
+          holdBlockingHotkey: info.blockingHotkey ?? null,
           linuxInputAccessDenied: info.linuxInputAccessDenied ?? false,
           hyprlandConfigStatus,
           loaded: true,

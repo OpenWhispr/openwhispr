@@ -16,8 +16,9 @@ function fixture(
 ) {
   const timers = [];
   const registrations = [];
-  const register = async (hotkey, push) => {
-    registrations.push({ hotkey, push });
+  const released = [];
+  const register = async (hotkey, push, bindingId = "dictation") => {
+    registrations.push({ hotkey, push, bindingId });
     return registrationResult;
   };
   class Hyprland {
@@ -53,6 +54,10 @@ function fixture(
     "./kdeShortcut": { isKDE: () => backend === "KDE" },
     "./i18nMain": { i18nMain: { t: (key) => key } },
     "./hotkeyList": require("../../src/helpers/hotkeyList"),
+    // Pure helpers: the real ones, so canonical comparison and binding ids
+    // behave exactly as they do in the app.
+    "./hotkeyCanonical": require("../../src/helpers/hotkeyCanonical"),
+    "./hotkeyBindingId": require("../../src/helpers/hotkeyBindingId"),
     "./hotkeyRepeatGate": require("../../src/helpers/hotkeyRepeatGate"),
   };
   const context = {
@@ -74,10 +79,24 @@ function fixture(
   // Only the portal and gsettings are faked: gsettings refuses what GNOME refuses.
   const gnome = {
     supportsPushToTalk: () => true,
-    registerPushToTalk: (hotkey) => register(hotkey, true),
-    unregisterPushToTalk: async () => {},
-    registerKeybinding: async (shortcut) =>
-      GnomeShortcutManager.isValidShortcut(shortcut) && register(shortcut, false),
+    registerPushToTalk: (hotkey, _callback, bindingId) => register(hotkey, true, bindingId),
+    // Production GNOME takes this batch path; without it the fake exercised
+    // only the per-row fallback.
+    registerPushToTalkBindings: async (rows) => {
+      for (const { hotkey, bindingId } of rows) {
+        if (!(await register(hotkey, true, bindingId))) return false;
+      }
+      return true;
+    },
+    unregisterPushToTalk: async (bindingId = null) => {
+      released.push({ bindingId, portal: true });
+    },
+    registerKeybinding: async (shortcut, bindingId = "dictation") =>
+      GnomeShortcutManager.isValidShortcut(shortcut) && register(shortcut, false, bindingId),
+    unregisterKeybinding: async (bindingId) => {
+      released.push({ bindingId, portal: false });
+      return true;
+    },
   };
   manager.initializeGnomeShortcuts = async () => {
     manager.useGnome = true;
@@ -87,7 +106,11 @@ function fixture(
   manager.initializeKDEShortcuts = async () => {
     manager.useKDE = true;
     manager.kdeManager = {
-      registerKeybinding: (hotkey, _slot, _callback, push) => register(hotkey, push),
+      registerKeybinding: (hotkey, bindingId, _callback, push) => register(hotkey, push, bindingId),
+      unregisterKeybinding: async (bindingId) => {
+        released.push({ bindingId, portal: false });
+        return true;
+      },
       close() {},
     };
     return true;
@@ -106,6 +129,7 @@ function fixture(
     cache,
     timers,
     registrations,
+    released,
     gnome,
     env: context.process.env,
     window: { isDestroyed: () => false, webContents },
@@ -191,7 +215,7 @@ for (const backend of ["Hyprland", "GNOME", "KDE"]) {
       assert.equal(f.manager.activationMode, "push");
       assert.deepEqual(notifications, []);
       assert.deepEqual(writes, []);
-      assert.deepEqual(f.registrations, [{ hotkey, push: true }]);
+      assert.deepEqual(f.registrations, [{ hotkey, push: true, bindingId: "dictation" }]);
       assert.equal(f.manager.currentHotkey, hotkey);
     });
   }
@@ -205,7 +229,9 @@ for (const backend of ["Hyprland", "GNOME", "KDE"]) {
     assert.deepEqual(writes, [], "the saved Hold is retried next launch");
     // GNOME cannot bind a modifier-only key, so it falls back to F8 in Tap.
     const registered = backend === "GNOME" ? "F8" : "Control+Alt";
-    assert.deepEqual(f.registrations, [{ hotkey: registered, push: false }]);
+    assert.deepEqual(f.registrations, [
+      { hotkey: registered, push: false, bindingId: "dictation" },
+    ]);
   });
 }
 
@@ -217,7 +243,9 @@ test(noPortal, async () => {
   assert.equal(f.cache._cachedActivationMode, "tap");
   assert.equal(notifications.length, 1);
   assert.deepEqual(writes, []);
-  assert.deepEqual(f.registrations, [{ hotkey: "Scroll_Lock", push: false }]);
+  assert.deepEqual(f.registrations, [
+    { hotkey: "Scroll_Lock", push: false, bindingId: "dictation" },
+  ]);
   assert.equal(f.manager.useGnome, true, "the GNOME binding was kept");
 });
 
@@ -241,7 +269,9 @@ for (const backend of ["GNOME", "Hyprland"]) {
     for (let i = 0; i < 5; i++) await tick();
     assert.equal(f.cache._cachedActivationMode, "tap");
     const registered = backend === "GNOME" ? "F8" : "Control+Alt";
-    assert.deepEqual(f.registrations, [{ hotkey: registered, push: false }]);
+    assert.deepEqual(f.registrations, [
+      { hotkey: registered, push: false, bindingId: "dictation" },
+    ]);
   });
 }
 
@@ -367,7 +397,7 @@ test("GNOME startup falls back to F8 when GNOME can't grab the saved key", async
   f.timers.shift().callback();
   for (let i = 0; i < 5; i++) await tick();
   assert.equal(f.manager.currentHotkey, "F8");
-  assert.deepEqual(f.registrations, [{ hotkey: "F8", push: false }]);
+  assert.deepEqual(f.registrations, [{ hotkey: "F8", push: false, bindingId: "dictation" }]);
 });
 
 // Without its evdev listener a Linux session cannot hold through globalShortcut.

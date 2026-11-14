@@ -25,6 +25,7 @@ export default class FakeAudioManager {
   }
   setVoiceAgentRequested() {}
   setTranslationRequested() {}
+  setCleanupOverride() {}
   startRecording() {
     globalThis.__forceStopStarts += 1;
     this.state.isRecording = true;

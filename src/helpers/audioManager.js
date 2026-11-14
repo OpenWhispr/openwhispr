@@ -129,6 +129,8 @@ import {
   resolveDictationRouteKind,
   resolveAgentImageTarget,
   resolveWakeWordLanguage,
+  resolveCleanupSelection,
+  isExplicitCleanupMode,
 } from "./dictationRouting";
 import {
   resolveDictationAgentInference,
@@ -313,7 +315,8 @@ function resolveReasoningRoute(
   voiceAgentRequested,
   translationRequested,
   screenContext,
-  detectedLanguage
+  detectedLanguage,
+  cleanupOverride = null
 ) {
   const wakeWordLanguage = resolveWakeWordLanguage(settings, detectedLanguage, text);
   const cleanup = selectResolvedLLMConfig(settings, "dictationCleanup");
@@ -322,8 +325,12 @@ function resolveReasoningRoute(
   // Direct Gemini owns its defaults (3: 1.0, older: 0); check mode to ignore stale providers.
   const cleanupTemperature =
     cleanup.mode === "providers" && cleanup.provider === "gemini" ? undefined : 0;
-  const cleanupReachable =
-    !!settings.useCleanupModel && (!!cleanup.model?.trim() || isCloudCleanupMode());
+  const cleanupSelection = resolveCleanupSelection({
+    cleanupOverride,
+    useCleanupPreference: settings.useCleanupModel,
+    cleanupConfigured: !!cleanup.model?.trim() || isCloudCleanupMode(),
+  });
+  const cleanupReachable = cleanupSelection.reachable;
   const agent = resolveDictationAgentInference(settings, {
     isCloudAgent: isCloudDictationAgentMode(),
   });
@@ -337,18 +344,26 @@ function resolveReasoningRoute(
     // A blocked assistant still takes its own commands, and refuses them by name
     // in the agent window: one never falls back to cleanup and gets pasted as text.
     agentReachable: agent.reachable || isAgentScopeBlocked(settings),
-    // A translation recording ignores the wake word, so skip the scan.
+    // A translation or explicit raw/cleaned recording ignores the wake word,
+    // so skip the scan.
     agentInvoked:
       !translationRequested &&
+      !isExplicitCleanupMode(cleanupOverride) &&
       !!agentName &&
       detectAgentName(text, agentName, wakeWordLanguage, settings.snippets),
     voiceAgentRequested,
     translationRequested,
     translationReachable: translation.reachable,
+    cleanupOverride,
   });
   logger.logReasoning("ROUTE_RESOLVED", {
     kind,
     voiceAgentRequested,
+    // How this recording chose cleanup, and what it chose: the evidence that an
+    // explicit raw dictation ran no cleanup request at all.
+    cleanupMode: isExplicitCleanupMode(cleanupOverride) ? cleanupOverride : "preference",
+    cleanupSelected: cleanupSelection.selected,
+    cleanupReachable,
     agentReachable: agent.reachable,
     agentMode: settings.dictationAgentMode,
     agentProvider: agent.displayProvider,
@@ -771,6 +786,12 @@ class AudioManager {
     this.voiceAgentRequested = false;
     this.translationRequested = false;
     this.translationApplied = false;
+    // The cleanup choice the next recording starts with ("raw" | "cleaned"), or
+    // null to follow the global preference. _processingCleanupOverride is the
+    // copy bound to the recording currently being transcribed; see
+    // _bindCleanupOverrideForProcessing.
+    this.cleanupOverride = null;
+    this._processingCleanupOverride = null;
     this.pendingSelectionEdit = null;
     this.pendingAssistantConversation = null;
     this.pendingCleanupFailure = null;
@@ -1103,6 +1124,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   setTranslationRequested(requested) {
     this.translationRequested = requested;
     this.translationApplied = false;
+  }
+
+  // Called on every dictation start, so an ordinary one always clears a mode
+  // left by a raw or cleaned recording.
+  setCleanupOverride(override) {
+    this.cleanupOverride = override === "raw" || override === "cleaned" ? override : null;
+  }
+
+  // Binds the starting mode to the recording that is now being transcribed.
+  // Called synchronously when finalization begins, before any await, so a mode
+  // set for a later recording can never reach this one's reasoning route — from
+  // here on `cleanupOverride` describes the next recording, not this one.
+  _bindCleanupOverrideForProcessing() {
+    this._processingCleanupOverride = this.cleanupOverride;
+    return this._processingCleanupOverride;
   }
 
   // In translation mode the STT hint is the configured source language, not
@@ -1892,6 +1928,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async _finalizeBatchRecording(finalSegment, activationCapture = null) {
+    this._bindCleanupOverrideForProcessing();
     const processingPipeline = this._startProcessingPipeline();
     processingPipeline.activationCapture = activationCapture;
     const wasCancelled = () => this._shouldAbandonProcessingPipeline(processingPipeline);
@@ -3248,8 +3285,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     const s = getSettings();
+    // The recording's own cleanup choice, not the preference: a raw dictation
+    // must not keep reasoning "available" and a cleaned one must not be refused
+    // because the preference is off. The cache below keys on this value, so an
+    // override that changes it can never be served the other mode's answer.
+    const cleanupSelected = resolveCleanupSelection({
+      cleanupOverride: this._processingCleanupOverride,
+      useCleanupPreference: s.useCleanupModel,
+      cleanupConfigured: true,
+    }).selected;
     const useReasoning =
-      !!s.useCleanupModel || dictationAgentReachable(s) || translationChainReachable(s);
+      cleanupSelected || dictationAgentReachable(s) || translationChainReachable(s);
     const now = Date.now();
     const cacheValid =
       this.reasoningAvailabilityCache &&
@@ -3273,7 +3319,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
-    if (s.useCleanupModel && isCloudCleanupMode()) {
+    if (cleanupSelected && isCloudCleanupMode()) {
       this.reasoningAvailabilityCache = {
         value: true,
         expiresAt: now + REASONING_CACHE_TTL,
@@ -3404,6 +3450,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Runs wherever a dictation's route is decided, with the reachability that
   // decision used. The notice reaches the user through the result extras.
   _noteCleanupRoute(settings, { kind, cleanupReachable }) {
+    // A shortcut pinned to Always on asked for cleanup, so it warns about a
+    // setup that cannot run it even while the global preference is off; one
+    // pinned to Always off asked for none, so it never warns.
+    const override = this._processingCleanupOverride;
     const { forget, notice } = cleanupUnconfiguredNotice(this._shownCleanupSetupKey, {
       // A translation runs its cleanup step first, so a blocked one is skipped too.
       skipped:
@@ -3411,7 +3461,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         (kind === "translation" &&
           !!settings.policyBlockedLocalScopes?.includes("dictationCleanup")),
       cleanupReachable,
-      settings,
+      settings: isExplicitCleanupMode(override)
+        ? { ...settings, useCleanupModel: override === "cleaned" }
+        : settings,
     });
     if (forget) this._shownCleanupSetupKey = null;
     if (notice && !this.pendingCleanupFailure) this.pendingCleanupFailure = notice;
@@ -3471,13 +3523,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const isCloud = isCloudCleanupMode();
     const settings = getSettings();
     const cleanupProvider = settings.cleanupProvider || "auto";
-    const cleanupReachable = !!settings.useCleanupModel && (!!cleanupModel || isCloud);
+    const cleanupOverride = this._processingCleanupOverride;
+    const cleanupSelection = resolveCleanupSelection({
+      cleanupOverride,
+      useCleanupPreference: settings.useCleanupModel,
+      cleanupConfigured: !!cleanupModel || isCloud,
+    });
+    const cleanupReachable = cleanupSelection.reachable;
     const agentReachable = dictationAgentReachable(settings);
     const agentName =
       typeof window !== "undefined" && window.localStorage ? getAgentName() : "OpenWhispr";
     const blockedAgentCommand =
       isAgentScopeBlocked(settings) &&
       !this.translationRequested &&
+      !isExplicitCleanupMode(cleanupOverride) &&
       !!agentName &&
       detectAgentName(
         normalizedText,
@@ -3487,7 +3546,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
     if (
       !cleanupReachable &&
-      !agentReachable &&
+      // An explicit raw or cleaned recording is dictation, never the wake-word
+      // agent, so an agent model alone is no reason to keep reasoning alive.
+      (!agentReachable || isExplicitCleanupMode(cleanupOverride)) &&
       !blockedAgentCommand &&
       !(this.translationRequested && translationChainReachable(settings)) &&
       // A voice-assistant command always routes: standalone commands go to the
@@ -3501,8 +3562,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return normalizedText;
     }
 
+    // A cleaned recording bypasses the availability cache the same way an
+    // assistant command does: the mode is the user's explicit instruction.
     const useReasoning =
-      this.voiceAgentRequested || blockedAgentCommand || (await this.isReasoningAvailable());
+      this.voiceAgentRequested ||
+      blockedAgentCommand ||
+      cleanupOverride === "cleaned" ||
+      (await this.isReasoningAvailable());
     if (wasCancelled()) return normalizedText;
 
     logger.logReasoning("REASONING_CHECK", {
@@ -3527,7 +3593,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           agentName,
           this.voiceAgentRequested,
           this.translationRequested,
-          screenContext
+          screenContext,
+          undefined,
+          cleanupOverride
         );
         if (this.translationRequested && route.kind !== "translation") {
           this.notifyTranslationFallback("unreachable");
@@ -3814,9 +3882,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.analyticsOccurredAt = analyticsOccurredAt.toISOString();
       opts.localDate = localDateKey(analyticsOccurredAt);
     }
+    const cleanupOverride = this._processingCleanupOverride;
     // Only cloud cleanup writes a combined STT log; translation alone does not.
-    // A voice assistant recording never runs cleanup, so this upload is its log.
-    if (settings.useCleanupModel && isCloudCleanup && !this.voiceAgentRequested) {
+    // A voice assistant recording never runs cleanup, so this upload is its log,
+    // and so is a raw one — the deferred-to cleanup request never happens, so
+    // this reads the recording's own cleanup choice, not the preference.
+    if (
+      resolveCleanupSelection({
+        cleanupOverride,
+        useCleanupPreference: settings.useCleanupModel,
+        cleanupConfigured: true,
+      }).selected &&
+      isCloudCleanup &&
+      !this.voiceAgentRequested
+    ) {
       opts.sendLogs = "false";
     }
 
@@ -3857,7 +3936,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.voiceAgentRequested,
         this.translationRequested,
         screenContext,
-        result.sttLanguage
+        result.sttLanguage,
+        cleanupOverride
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
@@ -5032,13 +5112,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       voiceAgentRequested = this.voiceAgentRequested,
       translationRequested = this.translationRequested,
       appCategory = null,
+      cleanupOverride = this.cleanupOverride,
     } = {}
   ) {
+    const cleanupSelected = resolveCleanupSelection({
+      cleanupOverride,
+      useCleanupPreference: settings.useCleanupModel,
+      cleanupConfigured: true,
+    }).selected;
     if (
       this.sttConfig?.orukeetPipeline !== "gemma12" ||
       settings.useLocalWhisper ||
       settings.cloudTranscriptionMode !== "openwhispr" ||
-      !settings.useCleanupModel ||
+      !cleanupSelected ||
       !isCloudCleanupMode() ||
       !isLlmSelectionAllowed(usePolicyStore.getState(), { mode: "openwhispr" }) ||
       voiceAgentRequested ||
@@ -5092,6 +5178,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                       voiceAgentRequested: false,
                       translationRequested: false,
                       appCategory: this.lastToneAppCategory,
+                      cleanupOverride: null,
                     }),
             })
           );
@@ -5897,6 +5984,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
+    this._bindCleanupOverrideForProcessing();
     const providerName = this.getActiveStreamingProviderName();
     const cancellationGeneration = this._streamingCancellationGeneration;
     const wasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
@@ -6234,7 +6322,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.voiceAgentRequested,
         this.translationRequested,
         screenContext,
-        streamingSttLanguage
+        streamingSttLanguage,
+        this._processingCleanupOverride
       );
       if (this.translationRequested && route.kind !== "translation") {
         this.notifyTranslationFallback("unreachable");
@@ -6620,6 +6709,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   shouldShowPreviewCleanupState() {
     const settings = getSettings();
+    const cleanupOverride = this._processingCleanupOverride;
+    // A raw recording runs no cleanup and no wake-word agent, so it must not
+    // paint a cleanup state it will never enter.
+    if (isExplicitCleanupMode(cleanupOverride)) return cleanupOverride === "cleaned";
     return (
       !!settings.useCleanupModel ||
       !!settings.useDictationAgent ||

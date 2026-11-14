@@ -265,6 +265,12 @@ export function HotkeyInput({
   const [isCapturing, setIsCapturing] = useState(false);
   const [activeModifiers, setActiveModifiers] = useState<string[]>([]);
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
+  // No chord is accepted while the desktop may still act on it: set until
+  // main CONFIRMS it released the shortcuts, and set again if it could not.
+  const captureBlockedRef = useRef(false);
+  // Identifies the focus whose release is in flight, so a late answer from an
+  // earlier focus cannot unblock (or warn about) the current one.
+  const captureFocusRef = useRef(0);
   const [isFnHeld, setIsFnHeld] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const keyDownTimeRef = useRef<number>(0);
@@ -370,6 +376,12 @@ export function HotkeyInput({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (disabled) return;
+      // The desktop may still own these keys, so a chord recorded here would
+      // be bound over a shortcut that is also still firing.
+      if (captureBlockedRef.current) {
+        e.preventDefault();
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
 
@@ -436,7 +448,7 @@ export function HotkeyInput({
 
   const handleKeyUp = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (disabled) return;
+      if (disabled || captureBlockedRef.current) return;
       e.preventDefault();
 
       const wasHoldingModifiers =
@@ -494,7 +506,7 @@ export function HotkeyInput({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (disabled) return;
+      if (disabled || captureBlockedRef.current) return;
       if (!isCapturing) {
         containerRef.current?.focus({ preventScroll: true });
         return;
@@ -515,20 +527,53 @@ export function HotkeyInput({
   // which remounts this input with autoFocus, so clearing here fired one frame
   // after the parent set the message and the rejection was never readable.
   const handleFocus = useCallback(() => {
-    if (!disabled) {
-      setIsCapturing(true);
-      setValidationWarning(null);
-      clearFnHeld();
-      window.electronAPI?.setHotkeyListeningMode?.(true);
+    if (disabled) return;
+    setIsCapturing(true);
+    setValidationWarning(null);
+    clearFnHeld();
+    // Main releases every shortcut before the field may read keys. Until that
+    // comes back confirmed, a keystroke would be one the desktop ALSO acted
+    // on — so start blocked and fail closed, rather than opening a window
+    // where both happen.
+    captureBlockedRef.current = true;
+    const focusId = (captureFocusRef.current += 1);
+    const refuse = () => {
+      captureBlockedRef.current = true;
+      setIsCapturing(false);
+      setActiveModifiers([]);
+      setValidationWarning(t("hotkeyInput.captureUnavailable"));
+    };
+    const listening = window.electronAPI?.setHotkeyListeningMode?.(true);
+    if (!listening) {
+      // No bridge at all (a browser, a harness): nothing holds the keys.
+      captureBlockedRef.current = false;
+      return;
     }
-  }, [disabled, clearFnHeld]);
+    void Promise.resolve(listening).then(
+      (result) => {
+        if (captureFocusRef.current !== focusId) return;
+        if (result && result.success === false) refuse();
+        else captureBlockedRef.current = false;
+      },
+      () => {
+        if (captureFocusRef.current === focusId) refuse();
+      }
+    );
+  }, [disabled, clearFnHeld, t]);
 
   const handleBlur = useCallback(() => {
     setIsCapturing(false);
     setActiveModifiers([]);
     setValidationWarning(null);
     clearFnHeld();
-    window.electronAPI?.setHotkeyListeningMode?.(false);
+    // Any release still in flight belongs to a focus that has ended.
+    captureFocusRef.current += 1;
+    captureBlockedRef.current = false;
+    // A restore main could not confirm is reported through
+    // onHotkeyCaptureFailed, because this field is often unmounted by the time
+    // the answer arrives (a committed row re-keys its input).
+    const restored = window.electronAPI?.setHotkeyListeningMode?.(false);
+    if (restored) void restored.catch(() => undefined);
     onBlur?.();
   }, [onBlur, clearFnHeld]);
 
@@ -589,7 +634,14 @@ export function HotkeyInput({
   useEffect(() => {
     if (!isCapturing || !isMac) return;
 
+    // Globe arrives from main's own listener rather than through the DOM, so
+    // it needs the same fail-closed guard the key handlers have: while the
+    // release is unconfirmed the desktop may still act on this key, and a
+    // press recorded here would be bound over a shortcut that is also firing.
+    // A press ignored while blocked must not be finalized by its release
+    // either, even if the confirmation lands in between.
     const disposeDown = window.electronAPI?.onGlobeKeyPressed?.(() => {
+      if (captureBlockedRef.current) return;
       setValidationWarning(null);
       setIsFnHeld(true);
       fnHeldRef.current = true;
@@ -598,6 +650,7 @@ export function HotkeyInput({
     });
 
     const disposeUp = window.electronAPI?.onGlobeKeyReleased?.(() => {
+      if (captureBlockedRef.current) return;
       if (fnHeldRef.current && !fnCapturedKeyRef.current) {
         finalizeCapture("GLOBE");
       }
@@ -890,6 +943,15 @@ export function HotkeyInput({
         ) : (
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <span className="text-sm font-medium">{t("hotkeyInput.clickToSet")}</span>
+          </div>
+        )}
+        {/* A refused capture stops the field listening, so the reason has to
+            show outside the capturing branch too — otherwise the field just
+            looks like it ignored the key. */}
+        {!isCapturing && validationWarning && (
+          <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-md bg-warning/8 border border-warning/20 dark:bg-warning/12 dark:border-warning/25">
+            <AlertTriangle className="w-3 h-3 text-warning shrink-0" />
+            <span className="text-xs text-warning dark:text-amber-400">{validationWarning}</span>
           </div>
         )}
       </div>

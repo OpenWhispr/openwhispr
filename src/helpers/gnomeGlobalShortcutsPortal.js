@@ -44,7 +44,12 @@ class GnomeGlobalShortcutsPortal {
   } = {}) {
     this.bus = null;
     this.sessionHandle = null;
-    this.callback = null;
+    // One entry per bound row. BindShortcuts takes a(sa{sv}) - an array of
+    // (id, options) - and Activated/Deactivated both report the shortcut id,
+    // so multi-binding with owner identity is protocol-native. Only the single
+    // callback field and the literal "dictation" id ever blocked it.
+    this.callbacks = new Map();
+    this.triggers = new Map();
     this.available = false;
     this.activationListener = null;
     this.deactivationListener = null;
@@ -99,11 +104,34 @@ class GnomeGlobalShortcutsPortal {
     return this.available;
   }
 
-  async registerKeybinding(preferredTrigger, callback) {
+  /**
+   * Binds every row in ONE portal session. BindShortcuts takes a(sa{sv}), so
+   * the whole set goes in a single call: registering rows one at a time tore
+   * down the previous session and left only the last row bound.
+   *
+   * `entries` is [{ bindingId, preferredTrigger, callback }].
+   */
+  async registerKeybindings(entries) {
+    if (!Array.isArray(entries) || entries.length === 0) return false;
     if (!(await this.init())) return false;
 
-    await this.unregisterKeybinding();
-    this.callback = callback;
+    // The portal has no per-shortcut unbind, so binding a new set means ending
+    // the old session first. If that Close was NOT confirmed, the old session
+    // may still be alive and holding the user's keys: opening a second session
+    // here would overwrite the only handle that can close it and report
+    // success over an unresolved native binding. Refuse instead, leaving the
+    // existing callbacks and listeners in place so the surviving session's
+    // events still reach their rows.
+    if (!(await this.unregisterKeybinding())) {
+      debugLogger.log(
+        "[GnomeGlobalShortcutsPortal] Refusing to bind: the previous session would not close"
+      );
+      return false;
+    }
+    for (const { bindingId, callback, preferredTrigger } of entries) {
+      this.callbacks.set(bindingId, callback);
+      this.triggers.set(bindingId, preferredTrigger);
+    }
 
     try {
       const sessionToken = this._newToken();
@@ -129,44 +157,70 @@ class GnomeGlobalShortcutsPortal {
         "oa(sa{sv})sa{sv}",
         [
           this.sessionHandle,
-          [
-            [
-              "dictation",
-              vardict([
-                ["description", "s", i18nMain.t("onboarding.activation.holdDescription")],
-                ["preferred_trigger", "s", preferredTrigger],
-              ]),
-            ],
-          ],
+          entries.map(({ bindingId, preferredTrigger }) => [
+            bindingId,
+            vardict([
+              ["description", "s", i18nMain.t("onboarding.activation.holdDescription")],
+              ["preferred_trigger", "s", preferredTrigger],
+            ]),
+          ]),
           "",
           vardict([["handle_token", "s", bindRequestToken]]),
         ],
         bindRequestToken
       );
       const shortcuts = readDict(result).get("shortcuts") || [];
-      if (!shortcuts.some(([id]) => id === "dictation")) {
-        throw new Error("Portal did not bind the dictation shortcut");
+      const bound = new Set(shortcuts.map(([id]) => id));
+      // All or nothing: a half-bound set would leave rows silently dead.
+      const missing = entries.filter(({ bindingId }) => !bound.has(bindingId));
+      if (missing.length > 0) {
+        throw new Error(
+          `Portal did not bind: ${missing.map((entry) => entry.bindingId).join(", ")}`
+        );
       }
 
-      debugLogger.log("[GnomeGlobalShortcutsPortal] Dictation shortcut registered");
+      debugLogger.log("[GnomeGlobalShortcutsPortal] Bound shortcuts", {
+        ids: entries.map(({ bindingId }) => bindingId),
+      });
       return true;
     } catch (err) {
-      debugLogger.log(
-        "[GnomeGlobalShortcutsPortal] Failed to register dictation shortcut:",
-        err.message
-      );
+      debugLogger.log("[GnomeGlobalShortcutsPortal] Failed to bind shortcuts:", err.message);
       await this.unregisterKeybinding();
       return false;
     }
   }
 
-  async unregisterKeybinding() {
-    this._removeShortcutListeners();
-    this.callback = null;
-    if (!this.sessionHandle || !this.bus) return;
+  async registerKeybinding(preferredTrigger, callback, bindingId = "dictation") {
+    // Rebinding one row re-binds every row this session already holds.
+    // Binding them one at a time used to recreate the session and leave only
+    // the last row alive.
+    const union = [...this.callbacks.keys()]
+      .filter((id) => id !== bindingId && this.triggers.has(id))
+      .map((id) => ({
+        bindingId: id,
+        preferredTrigger: this.triggers.get(id),
+        callback: this.callbacks.get(id),
+      }));
+    return this.registerKeybindings([...union, { bindingId, preferredTrigger, callback }]);
+  }
+
+  /**
+   * Releases one binding, or all of them when no id is given.
+   *
+   * NOTE: the portal has no per-shortcut unbind — ending the session is the
+   * only way to drop a binding, so even a single-id release closes the session
+   * and unbinds EVERY row. The callback and trigger maps keep the survivors so
+   * the usual release-all-then-register-all flow rebuilds them, but a caller
+   * that releases one binding and does NOT re-register must expect the other
+   * rows to be gone from the compositor until it does.
+   */
+  async unregisterKeybinding(bindingId = null) {
+    if (!this.sessionHandle || !this.bus) {
+      this._forgetBindings(bindingId);
+      return true;
+    }
 
     const sessionHandle = this.sessionHandle;
-    this.sessionHandle = null;
     try {
       await this._invoke({
         destination: PORTAL_SERVICE,
@@ -175,7 +229,29 @@ class GnomeGlobalShortcutsPortal {
         member: "Close",
       });
     } catch (err) {
+      // Nothing is torn down on an unconfirmed Close. The session may still be
+      // alive and holding every binding, so the handle is kept for a later
+      // attempt and the callbacks and signal listeners stay attached — a row
+      // whose key the compositor still delivers must still reach its owner,
+      // and a release in flight must still be able to stop a recording.
       debugLogger.log("[GnomeGlobalShortcutsPortal] Failed to close session:", err.message);
+      return false;
+    }
+    this.sessionHandle = null;
+    this._forgetBindings(bindingId);
+    return true;
+  }
+
+  // Drops routing state for one binding, or all of them. Only ever called once
+  // the compositor has confirmed it no longer holds the keys.
+  _forgetBindings(bindingId = null) {
+    this._removeShortcutListeners();
+    if (bindingId) {
+      this.callbacks.delete(bindingId);
+      this.triggers.delete(bindingId);
+    } else {
+      this.callbacks.clear();
+      this.triggers.clear();
     }
   }
 
@@ -185,6 +261,13 @@ class GnomeGlobalShortcutsPortal {
     this.bus = null;
     this.available = false;
     bus?.connection.end();
+    // Dropping the connection ends every session it owns, so this is the one
+    // place that may forget bindings a refused Close left behind.
+    this.sessionHandle = null;
+    this.activationListener = null;
+    this.deactivationListener = null;
+    this.callbacks.clear();
+    this.triggers.clear();
   }
 
   async _listenForShortcutEvents() {
@@ -196,14 +279,14 @@ class GnomeGlobalShortcutsPortal {
       "Deactivated"
     );
     this.activationListener = ([sessionHandle, shortcutId]) => {
-      if (sessionHandle === this.sessionHandle && shortcutId === "dictation") {
-        this.callback?.(undefined, "down");
-      }
+      if (sessionHandle !== this.sessionHandle) return;
+      this.callbacks.get(shortcutId)?.(shortcutId, "down");
     };
     this.deactivationListener = ([sessionHandle, shortcutId]) => {
-      if (sessionHandle === this.sessionHandle && shortcutId === "dictation") {
-        this.callback?.(undefined, "up");
-      }
+      if (sessionHandle !== this.sessionHandle) return;
+      // Release is never gated: the row that started a hold must always be
+      // able to end it, or the mic stays open until the safety timeout.
+      this.callbacks.get(shortcutId)?.(shortcutId, "up");
     };
     bus.signals.on(activationSignal, this.activationListener);
     bus.signals.on(deactivationSignal, this.deactivationListener);
