@@ -1,4 +1,6 @@
-import { getSettings } from "../../stores/settingsStore";
+import i18n from "../../i18n";
+import { getSettings, LLM_ENTERPRISE_POLICY_PROVIDER_IDS } from "../../stores/settingsStore";
+import { usePolicyStore } from "../../stores/policyStore";
 import type { EnterpriseProvider } from "../../models/ModelRegistry";
 import type { InferenceScope } from "../../config/inferenceScopes";
 import type { ManagedEnterpriseRequestContext } from "../../types/enterpriseIdentity";
@@ -32,6 +34,17 @@ export function getEnterpriseCallSettings(
     throw Object.assign(new Error(resolution.message), {
       code: resolution.code,
       messageKey: resolution.messageKey,
+    });
+  }
+  // A saved personal provider must not run when the managed desktop picker cannot offer it.
+  if (
+    resolution.kind !== "managed" &&
+    usePolicyStore.getState().status === "managed" &&
+    !LLM_ENTERPRISE_POLICY_PROVIDER_IDS.some((supportedId) => supportedId === provider)
+  ) {
+    throw Object.assign(new Error(i18n.t("common.policyAiProcessingRestricted")), {
+      code: "POLICY_RESTRICTED",
+      messageKey: "common.policyAiProcessingRestricted",
     });
   }
   const managedContext =
