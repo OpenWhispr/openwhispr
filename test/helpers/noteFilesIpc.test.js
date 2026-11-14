@@ -1085,6 +1085,8 @@ for (const mode of ["normal", "update", "held delete"]) {
       "windowsLoopbackAudioManager",
       "meetingAecManager",
       "textEditMonitor",
+      "managedDevicePolicy",
+      "meetingAuditLog",
     ])
       context[name] = null;
     target._cleanupTextEditMonitor = () => {};
