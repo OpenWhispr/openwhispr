@@ -275,12 +275,35 @@ export function useSpaceRoster(cloudSpaceId) {
   return { render, click, latest, unmount, resizeCallbacks, vite, events };
 }
 
-function summaryCallout(tree) {
+function calloutElement(tree) {
   let callout = null;
   walk(tree, (node) => {
     if (!callout && "onAskSubmit" in node.props) callout = node.props.callout;
   });
   return callout;
+}
+
+// The summary button; its arrow beside it opens the template menu.
+function summaryCallout(tree) {
+  let button = null;
+  const callout = calloutElement(tree);
+  if (callout) {
+    walk(callout, (node) => {
+      if (!button && node.props.onClick && node.props["aria-label"]) button = node;
+    });
+  }
+  return button;
+}
+
+function summaryCalloutPicker(tree) {
+  let picker = null;
+  const callout = calloutElement(tree);
+  if (callout) {
+    walk(callout, (node) => {
+      if (!picker && node.props.onSummaryLanguageChange) picker = node;
+    });
+  }
+  return picker;
 }
 
 const CUSTOM_TEMPLATE = {
@@ -330,6 +353,31 @@ test("summary pill follows preference changes, renames and deletion without gene
   summaryCallout(ui.latest()).props.onClick();
   assert.equal(ran.at(-1), DEFAULT_TEMPLATE);
   assert.equal(ran.length, 3);
+});
+
+test("before the first summary the button's arrow offers the templates and the summary language", async (t) => {
+  let ui;
+  t.after(() => ui?.unmount());
+  ui = await loadNoteEditor(t, undefined, { actions: [DEFAULT_TEMPLATE, CUSTOM_TEMPLATE] });
+  const { initializeSettings } = await ui.vite.ssrLoadModule("/stores/settingsStore.ts");
+  await initializeSettings();
+  const ran = [];
+  await ui.render(undefined, {
+    onRunNoteAction: (action, options) => ran.push({ action, options }),
+  });
+  const picker = summaryCalloutPicker(ui.latest());
+  assert.ok(picker, "the summary button has a template menu");
+  assert.deepEqual(picker.props.templates, [DEFAULT_TEMPLATE, CUSTOM_TEMPLATE]);
+  assert.equal(picker.props.current, DEFAULT_TEMPLATE);
+  assert.equal(picker.props.hasSummary, false);
+  assert.equal(picker.props.summaryLanguage, "auto");
+
+  await React.act(async () => picker.props.onSummaryLanguageChange("de"));
+  assert.equal(summaryCalloutPicker(ui.latest()).props.summaryLanguage, "de");
+  summaryCallout(ui.latest()).props.onClick();
+  assert.deepEqual(ran.at(-1), { action: DEFAULT_TEMPLATE, options: { summaryLanguage: "de" } });
+  summaryCalloutPicker(ui.latest()).props.onRun(CUSTOM_TEMPLATE);
+  assert.deepEqual(ran.at(-1), { action: CUSTOM_TEMPLATE, options: { summaryLanguage: "de" } });
 });
 
 for (const templateId of [TEMPLATE.client_id, null, "unavailable-template"]) {
@@ -518,10 +566,7 @@ test("a typed note without a summary offers one with the default template", asyn
   const ran = [];
 
   await render(undefined, { onRunNoteAction: (action) => ran.push(action.client_id) });
-  let callout = null;
-  walk(latest(), (node) => {
-    if (!callout && "onAskSubmit" in node.props) callout = node.props.callout;
-  });
+  const callout = summaryCallout(latest());
   assert.ok(callout, "notes with no transcript still offer a summary");
   callout.props.onClick();
   assert.deepEqual(ran, [DEFAULT_TEMPLATE.client_id]);

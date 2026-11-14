@@ -3133,7 +3133,10 @@
     },
     "noteFormatting": {
       "autoGenerateTitle": "Générer automatiquement les titres des notes",
-      "autoGenerateTitleDescription": "Utiliser l'IA pour générer un titre court pour les notes après la transcription ou l'amélioration"
+      "autoGenerateTitleDescription": "Utiliser l'IA pour générer un titre court pour les notes après la transcription ou l'amélioration",
+      "summaryLanguage": "Langue du résumé",
+      "summaryLanguageDescription": "Langue dans laquelle les résumés IA sont rédigés. Automatique reprend la langue de la réunion ou des notes, et celle de l'interface si elle n'est pas claire.",
+      "summaryLanguageAuto": "Automatique (langue de la réunion)"
     },
     "transcription": {
       "customSetup": "Configuration personnalisée",
@@ -4509,7 +4512,9 @@
       "noTemplates": "Aucun modèle pour l'instant",
       "emptyEditorTitle": "Sélectionner un modèle",
       "emptyEditorDescription": "Choisissez un modèle dans la liste ou créez-en un nouveau",
-      "outputHint": "Appliquer un modèle crée ou remplace le résumé IA à partir de vos notes et de la transcription."
+      "outputHint": "Appliquer un modèle crée ou remplace le résumé IA à partir de vos notes et de la transcription.",
+      "language": "Langue du résumé",
+      "languageAuto": "Automatique"
     },
     "onboarding": {
       "llm": {

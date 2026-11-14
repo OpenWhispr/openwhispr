@@ -1259,6 +1259,8 @@ export interface SettingsState
   voiceAgentScreenContext: boolean;
   emailDraftTarget: EmailDraftTargetSetting;
   defaultSummaryTemplateId: string;
+  /** "auto" (the material's language) or a language registry code. */
+  noteSummaryLanguage: string;
   toneStyleEnabled: boolean;
   toneStyles: ToneStyles;
   useDictationAgentVisionModel: boolean;
@@ -1296,6 +1298,7 @@ export interface SettingsState
   setToneStyles: (styles: ToneStyles) => void;
   setEmailDraftTarget: (value: EmailDraftTargetSetting) => void;
   setDefaultSummaryTemplateId: (clientId: string) => void;
+  setNoteSummaryLanguage: (value: string) => void;
   setUseDictationAgentVisionModel: (value: boolean) => void;
   setDictationAgentVisionProvider: (value: string) => void;
   setDictationAgentVisionModel: (value: string) => void;
@@ -2223,6 +2226,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   voiceAgentScreenContext: readBoolean("voiceAgentScreenContext", false),
   emailDraftTarget: normalizeEmailDraftTarget(readString("emailDraftTarget", "auto")),
   defaultSummaryTemplateId: readString("defaultSummaryTemplateId", GENERATE_NOTES_KEY),
+  noteSummaryLanguage: readString("noteSummaryLanguage", "auto"),
   toneStyleEnabled: readBoolean("toneStyleEnabled", false),
   toneStyles: normalizeToneStyles(readString("toneStyles", "")),
   useDictationAgentVisionModel: readBoolean("useDictationAgentVisionModel", false),
@@ -2271,6 +2275,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setVoiceAgentScreenContext: createBooleanSetter("voiceAgentScreenContext"),
   setEmailDraftTarget: createStringSetter("emailDraftTarget"),
   setDefaultSummaryTemplateId: createStringSetter("defaultSummaryTemplateId"),
+  setNoteSummaryLanguage: createStringSetter("noteSummaryLanguage"),
   setToneStyleEnabled: createBooleanSetter("toneStyleEnabled"),
   setToneStyles: (styles) => {
     if (isBrowser) localStorage.setItem("toneStyles", JSON.stringify(styles));

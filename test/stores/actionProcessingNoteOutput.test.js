@@ -17,9 +17,11 @@ const STORED_NOTE = {
   enhanced_at_content_hash: "the hash before the run",
 };
 
-async function loadStore(t, storedNote = STORED_NOTE) {
+async function loadStore(t, storedNote = STORED_NOTE, storage = {}) {
   const updates = [];
   installBrowserGlobals(t, {
+    // An English interface keeps the summary language line's fallback fixed.
+    initialStorage: { uiLanguage: "en", ...storage },
     window: {
       electronAPI: {
         updateNote: async (noteId, payload) => {
@@ -87,6 +89,7 @@ test("AI Summary generates from meeting or personal material with the detailed t
   const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY, LEGACY_DETAILED_NOTES } =
     await import("../../src/helpers/builtinActions.js");
   const { compileTemplatePrompt } = await import("../../src/helpers/templatePrompts.js");
+  const { noteOutputLanguageInstruction } = await import("../../src/helpers/noteOutputLanguage.js");
   const { store, calls, updates } = await loadStore(t);
   const builtin = BUILTIN_ACTIONS.find((action) => action.translationKey === GENERATE_NOTES_KEY);
   const action = {
@@ -114,7 +117,7 @@ test("AI Summary generates from meeting or personal material with the detailed t
       calls.at(-1).config.systemPrompt,
       compileTemplatePrompt(
         { ...LEGACY_DETAILED_NOTES, translation_key: LEGACY_DETAILED_NOTES.translationKey },
-        { isMeetingNote }
+        { isMeetingNote, outputLanguage: noteOutputLanguageInstruction("auto", "en") }
       )
     );
     assert.equal(updates.at(-1).payload.enhancement_template_id, GENERATE_NOTES_KEY);
@@ -590,7 +593,10 @@ test("a summary action on a note without a summary writes one from the transcrip
   );
 
   await waitFor(() => updates.length > 0, "the note to be written");
-  assert.match(calls[0].config.systemPrompt, /no AI summary yet[\s\S]*Add supported detail\.$/);
+  assert.match(
+    calls[0].config.systemPrompt,
+    /no AI summary yet[\s\S]*Add supported detail\.\n\nOUTPUT LANGUAGE: [^\n]*never translated\.$/
+  );
   assert.equal(calls[0].text, "## Meeting Transcript\nAlice: we ship Friday.");
   assert.equal(calls[0].config.requireCompleteOutput, undefined, "nothing to lose yet");
   assert.deepEqual(Object.keys(updates[0].payload), [
@@ -851,4 +857,35 @@ test("a run blocked by policy says why and where to choose, not that no model is
   assert.equal(event.messageKey, "models.policy.modelBlocked");
   assert.equal(event.settingsTarget, "noteFormatting");
   assert.equal(calls.length, 0);
+});
+
+test("a summary is written in the run's language, else the Summary language setting, else the material's", async (t) => {
+  const { noteOutputLanguageInstruction } = await import("../../src/helpers/noteOutputLanguage.js");
+  const { store, calls, updates } = await loadStore(t, STORED_NOTE, {
+    uiLanguage: "de",
+    noteSummaryLanguage: "fr",
+  });
+  const runs = [
+    [901, undefined, noteOutputLanguageInstruction("fr", "de")],
+    [902, "ja", noteOutputLanguageInstruction("ja", "de")],
+    [903, "auto", noteOutputLanguageInstruction("auto", "de")],
+  ];
+  for (const [noteId, summaryLanguage, expected] of runs) {
+    store.runBackgroundAction(
+      noteId,
+      "## Meeting Transcript\nAlice: Wir schicken das Angebot am Freitag.",
+      "hash",
+      ACTION,
+      { modelId: "gpt-4.1", isCloudMode: true, isMeetingNote: true, summaryLanguage },
+      LABELS
+    );
+    await waitFor(() => updates.some((update) => update.noteId === noteId), "summary save");
+    assert.ok(
+      calls.at(-1).config.systemPrompt.endsWith(`\n\n${expected}`),
+      String(summaryLanguage)
+    );
+    assert.equal(calls.at(-1).config.systemPrompt.split("OUTPUT LANGUAGE:").length - 1, 1);
+  }
+  assert.match(runs[0][2], /in French, including the section headings/);
+  assert.match(runs[2][2], /If the material has no clear language, write in German\./);
 });

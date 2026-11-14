@@ -2346,7 +2346,10 @@
     },
     "noteFormatting": {
       "autoGenerateTitle": "Gerar títulos de notas automaticamente",
-      "autoGenerateTitleDescription": "Usar IA para gerar um título curto para notas após transcrição ou aprimoramento"
+      "autoGenerateTitleDescription": "Usar IA para gerar um título curto para notas após transcrição ou aprimoramento",
+      "summaryLanguage": "Idioma do resumo",
+      "summaryLanguageDescription": "Idioma em que os resumos de IA são escritos. Automático usa o idioma da reunião ou das notas e, quando não estiver claro, o idioma da interface.",
+      "summaryLanguageAuto": "Automático (idioma da reunião)"
     },
     "transcription": {
       "customSetup": "Configuração personalizada",
@@ -3938,7 +3941,9 @@
       "noTemplates": "Nenhum modelo ainda",
       "emptyEditorTitle": "Selecionar modelo",
       "emptyEditorDescription": "Escolha um modelo da lista ou crie um novo",
-      "outputHint": "Aplicar um modelo cria ou substitui o resumo de IA usando suas notas e a transcrição."
+      "outputHint": "Aplicar um modelo cria ou substitui o resumo de IA usando suas notas e a transcrição.",
+      "language": "Idioma do resumo",
+      "languageAuto": "Automático"
     },
     "empty": {
       "title": "Ainda não há notas aqui",

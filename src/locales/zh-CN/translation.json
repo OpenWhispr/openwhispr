@@ -2367,7 +2367,10 @@
     },
     "noteFormatting": {
       "autoGenerateTitle": "自动生成笔记标题",
-      "autoGenerateTitleDescription": "使用 AI 在转录或增强后为笔记生成简短标题"
+      "autoGenerateTitleDescription": "使用 AI 在转录或增强后为笔记生成简短标题",
+      "summaryLanguage": "摘要语言",
+      "summaryLanguageDescription": "AI 摘要使用的语言。自动会采用会议或笔记的语言，无法判断时使用界面语言。",
+      "summaryLanguageAuto": "自动（会议语言）"
     },
     "transcription": {
       "customSetup": "自定义设置",
@@ -3932,7 +3935,9 @@
       "noTemplates": "暂无模板",
       "emptyEditorTitle": "选择模板",
       "emptyEditorDescription": "从列表中选择一个模板或创建新模板",
-      "outputHint": "应用模板会根据你的笔记和转录内容创建或替换 AI 摘要。"
+      "outputHint": "应用模板会根据你的笔记和转录内容创建或替换 AI 摘要。",
+      "language": "摘要语言",
+      "languageAuto": "自动"
     },
     "empty": {
       "title": "这里还没有笔记",

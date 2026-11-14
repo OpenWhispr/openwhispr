@@ -216,6 +216,12 @@ function LiveMeetingTranscriptChat({
   );
 }
 
+/** What a summary run takes from the editor besides its template. */
+export interface NoteRunOptions {
+  /** "auto" or a language code; unset follows the Summary language setting. */
+  summaryLanguage?: string;
+}
+
 interface NoteEditorProps {
   note: NoteItem;
   onTitleChange: (sourceNoteId: number, title: string) => void;
@@ -230,7 +236,7 @@ interface NoteEditorProps {
   onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
   enhancement?: Enhancement;
   /** Runs a template, or an action that edits the summary, on this note. */
-  onRunNoteAction?: (action: ActionItem) => void;
+  onRunNoteAction?: (action: ActionItem, options?: NoteRunOptions) => void;
   onManageActions?: (kind: ActionKind) => void;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
@@ -464,6 +470,7 @@ export default function NoteEditor({
   const segmentScrollRef = useRef<HTMLDivElement>(null);
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const summaryTabRef = useRef<HTMLDivElement>(null);
+  const summaryCalloutRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ opacity: 0 });
   const scheduleUiUpdate = useCallback((callback: () => void) => {
     const frameId = window.requestAnimationFrame(callback);
@@ -488,6 +495,14 @@ export default function NoteEditor({
   const templates = useActionsOfKind("template");
   const noteActions = useActionsOfKind("action");
   const defaultSummaryTemplateId = useSettingsStore((state) => state.defaultSummaryTemplateId);
+  // The picker's language applies to this note's next summary runs; other notes
+  // keep the Summary language setting.
+  const noteSummaryLanguage = useSettingsStore((state) => state.noteSummaryLanguage);
+  const [summaryLanguageByNote, setSummaryLanguageByNote] = useState<Record<number, string>>({});
+  const summaryLanguage = summaryLanguageByNote[note.id] ?? noteSummaryLanguage;
+  const chooseSummaryLanguage = (language: string) =>
+    setSummaryLanguageByNote((prev) => ({ ...prev, [note.id]: language }));
+  const runSummary = (template: ActionItem) => onRunNoteAction?.(template, { summaryLanguage });
   const defaultTemplate = resolveDefaultTemplate(templates, defaultSummaryTemplateId);
   const noteTemplate = resolveTemplate(templates, note.enhancement_template_id);
   const isDefaultAiSummary = defaultTemplate?.translation_key === GENERATE_NOTES_KEY;
@@ -1358,10 +1373,13 @@ export default function NoteEditor({
                       <TemplatePicker
                         templates={templates}
                         current={noteTemplate}
-                        onRun={(template) => onRunNoteAction?.(template)}
+                        onRun={runSummary}
                         onManage={() => onManageActions?.("template")}
                         disabled={isActionRunning}
                         alignTo={summaryTabRef}
+                        summaryLanguage={summaryLanguage}
+                        summaryLanguageSetting={noteSummaryLanguage}
+                        onSummaryLanguageChange={chooseSummaryLanguage}
                       >
                         <button
                           type="button"
@@ -1631,26 +1649,54 @@ export default function NoteEditor({
               showSummaryCallout &&
               defaultTemplate &&
               selectedSegmentIds.size === 0 && (
-                <Button
-                  className="h-9 max-w-full min-w-0 gap-2 px-4 text-sm"
-                  aria-label={summaryCalloutLabel}
-                  onClick={() => onRunNoteAction?.(defaultTemplate)}
-                >
-                  <AlignLeft size={16} className="shrink-0" />
-                  <span className="truncate">
-                    {isDefaultAiSummary ? (
-                      summaryCalloutLabel
-                    ) : (
-                      <BidiInterpolatedText
-                        text={t("notes.editor.generateWithTemplate", {
-                          template: BIDI_VALUE_TOKEN,
-                        })}
-                        value={getActionName(defaultTemplate, t)}
-                        dir="auto"
-                      />
+                // The arrow opens the AI Summary tab's menu, so another template and the
+                // summary language can be chosen before the first summary.
+                <div ref={summaryCalloutRef} className="flex max-w-full min-w-0">
+                  <Button
+                    className={cn(
+                      "h-9 max-w-full min-w-0 gap-2 px-4 text-sm",
+                      templates.length > 0 && "rounded-e-none pe-3"
                     )}
-                  </span>
-                </Button>
+                    aria-label={summaryCalloutLabel}
+                    onClick={() => runSummary(defaultTemplate)}
+                  >
+                    <AlignLeft size={16} className="shrink-0" />
+                    <span className="truncate">
+                      {isDefaultAiSummary ? (
+                        summaryCalloutLabel
+                      ) : (
+                        <BidiInterpolatedText
+                          text={t("notes.editor.generateWithTemplate", {
+                            template: BIDI_VALUE_TOKEN,
+                          })}
+                          value={getActionName(defaultTemplate, t)}
+                          dir="auto"
+                        />
+                      )}
+                    </span>
+                  </Button>
+                  {templates.length > 0 && (
+                    <TemplatePicker
+                      templates={templates}
+                      current={defaultTemplate}
+                      onRun={runSummary}
+                      onManage={() => onManageActions?.("template")}
+                      disabled={isActionRunning}
+                      alignTo={summaryCalloutRef}
+                      hasSummary={false}
+                      summaryLanguage={summaryLanguage}
+                      summaryLanguageSetting={noteSummaryLanguage}
+                      onSummaryLanguageChange={chooseSummaryLanguage}
+                    >
+                      <Button
+                        className="h-9 rounded-s-none border-s border-white/20 ps-2 pe-3"
+                        aria-label={t("notes.templates.select")}
+                      >
+                        <ChevronDown size={14} />
+                      </Button>
+                    </TemplatePicker>
+                  )}
+                </div>
               )
             }
             footnote={

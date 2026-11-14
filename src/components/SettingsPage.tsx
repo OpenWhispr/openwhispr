@@ -1,6 +1,6 @@
 import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { LocalOffInstalledModels } from "./settings/LocalOffInstalledModels";
 import { Button } from "./ui/button";
@@ -104,6 +104,7 @@ import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
+import languageRegistry from "../config/languageRegistry.json";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
@@ -844,6 +845,17 @@ function NoteFormattingSettings() {
   const { t } = useTranslation();
   const autoGenerateNoteTitle = useSettingsStore((s) => s.autoGenerateNoteTitle);
   const setAutoGenerateNoteTitle = useSettingsStore((s) => s.setAutoGenerateNoteTitle);
+  const noteSummaryLanguage = useSettingsStore((s) => s.noteSummaryLanguage);
+  const setNoteSummaryLanguage = useSettingsStore((s) => s.setNoteSummaryLanguage);
+  const summaryLanguageOptions = useMemo(
+    () =>
+      languageRegistry.languages.map(({ code, label, flag }) => ({
+        value: code,
+        label: code === "auto" ? t("settingsPage.noteFormatting.summaryLanguageAuto") : label,
+        flag,
+      })),
+    [t]
+  );
 
   return (
     <div className="space-y-4">
@@ -854,6 +866,19 @@ function NoteFormattingSettings() {
             description={t("settingsPage.noteFormatting.autoGenerateTitleDescription")}
           >
             <Toggle checked={autoGenerateNoteTitle} onChange={setAutoGenerateNoteTitle} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.noteFormatting.summaryLanguage")}
+            description={t("settingsPage.noteFormatting.summaryLanguageDescription")}
+          >
+            <LanguageSelector
+              value={noteSummaryLanguage}
+              onChange={setNoteSummaryLanguage}
+              options={summaryLanguageOptions}
+              className="min-w-32"
+            />
           </SettingsRow>
         </SettingsPanelRow>
       </SettingsPanel>

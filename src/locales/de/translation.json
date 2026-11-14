@@ -3127,7 +3127,10 @@
     },
     "noteFormatting": {
       "autoGenerateTitle": "Notiztitel automatisch generieren",
-      "autoGenerateTitleDescription": "KI verwenden, um nach der Transkription oder Verbesserung einen kurzen Titel für Notizen zu generieren"
+      "autoGenerateTitleDescription": "KI verwenden, um nach der Transkription oder Verbesserung einen kurzen Titel für Notizen zu generieren",
+      "summaryLanguage": "Sprache der Zusammenfassung",
+      "summaryLanguageDescription": "Sprache, in der KI-Zusammenfassungen geschrieben werden. Automatisch übernimmt die Sprache des Meetings oder der Notizen und sonst die Sprache der Oberfläche.",
+      "summaryLanguageAuto": "Automatisch (Sprache des Meetings)"
     },
     "transcription": {
       "customSetup": "Benutzerdefinierte Einrichtung",
@@ -4503,7 +4506,9 @@
       "noTemplates": "Noch keine Vorlagen",
       "emptyEditorTitle": "Vorlage auswählen",
       "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue",
-      "outputHint": "Eine Vorlage erstellt oder ersetzt die KI-Zusammenfassung anhand deiner Notizen und des Transkripts."
+      "outputHint": "Eine Vorlage erstellt oder ersetzt die KI-Zusammenfassung anhand deiner Notizen und des Transkripts.",
+      "language": "Sprache der Zusammenfassung",
+      "languageAuto": "Automatisch"
     },
     "onboarding": {
       "llm": {

@@ -1,18 +1,23 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, RefreshCw, Settings2 } from "../icons";
+import { Check, Languages, RefreshCw, Settings2 } from "../icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { Tooltip } from "../ui/tooltip";
 import { cn } from "../lib/utils";
 import { getActionName } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
+import { useUiLocale } from "../../hooks/useUiLocale";
+import { summaryLanguageChoices, summaryLanguageLabel } from "./summaryLanguageChoices";
 
 interface TemplatePickerProps {
   templates: ActionItem[];
@@ -25,6 +30,13 @@ interface TemplatePickerProps {
   alignTo: React.RefObject<HTMLElement | null>;
   /** The trigger, rendered as is. */
   children: React.ReactNode;
+  /** Without a summary yet, running the current template creates rather than regenerates it. */
+  hasSummary?: boolean;
+  /** The language the next run writes in: "auto" or a language code. */
+  summaryLanguage?: string;
+  /** The Summary language setting, offered too when it is not a UI language. */
+  summaryLanguageSetting?: string;
+  onSummaryLanguageChange?: (language: string) => void;
 }
 
 /** The templates that write a note's AI summary, opened from the AI Summary tab. */
@@ -36,8 +48,14 @@ export default function TemplatePicker({
   disabled,
   alignTo,
   children,
+  hasSummary = true,
+  summaryLanguage,
+  summaryLanguageSetting = "auto",
+  onSummaryLanguageChange,
 }: TemplatePickerProps) {
   const { t } = useTranslation();
+  const locale = useUiLocale();
+  const autoLanguageLabel = t("notes.templates.languageAuto");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [alignOffset, setAlignOffset] = useState(0);
 
@@ -80,7 +98,7 @@ export default function TemplatePicker({
               <span dir="auto" className="min-w-0 flex-1 truncate font-medium">
                 {getActionName(template, t)}
               </span>
-              {isCurrent && (
+              {isCurrent && hasSummary && (
                 <Tooltip content={t("notes.templates.regenerate")}>
                   <RefreshCw size={12} className="shrink-0 text-foreground/50" />
                 </Tooltip>
@@ -90,6 +108,38 @@ export default function TemplatePicker({
           );
         })}
         <DropdownMenuSeparator />
+        {summaryLanguage && onSummaryLanguageChange && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="gap-2.5 rounded-md px-2.5 py-1.5 text-xs">
+              <Languages size={12} className="shrink-0 text-muted-foreground/70" />
+              <span className="min-w-0 flex-1 truncate">{t("notes.templates.language")}</span>
+              <span className="shrink-0 truncate text-muted-foreground/70">
+                {summaryLanguageLabel(summaryLanguage, locale, autoLanguageLabel)}
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="max-h-80 min-w-44 overflow-y-auto">
+              {summaryLanguageChoices(summaryLanguageSetting).map((code) => (
+                <DropdownMenuItem
+                  key={code}
+                  // Choosing a language sets the next run; the menu stays open to pick a template.
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    onSummaryLanguageChange(code);
+                  }}
+                  className="gap-2.5 rounded-md px-2.5 py-1.5 text-xs"
+                >
+                  <span className="min-w-0 flex-1 truncate">
+                    {summaryLanguageLabel(code, locale, autoLanguageLabel)}
+                  </span>
+                  <Check
+                    size={12}
+                    className={cn("shrink-0 text-accent", code !== summaryLanguage && "invisible")}
+                  />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
         <DropdownMenuItem
           onClick={onManage}
           className="gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/70"

@@ -4,7 +4,7 @@ import { getSettings } from "../stores/settingsStore";
 import { sanitizeGeneratedTitle } from "./sanitizeGeneratedTitle";
 
 const TITLE_SYSTEM_PROMPT =
-  "Generate a concise 3-8 word title for these notes. Return ONLY the title text, nothing else — no quotes, no prefix, no explanation.";
+  "Generate a concise 3-8 word title for these notes. Return ONLY the title text, nothing else — no quotes, no prefix, no explanation. Write the title in the language the notes are written in.";
 
 export async function generateNoteTitle(
   text: string,
