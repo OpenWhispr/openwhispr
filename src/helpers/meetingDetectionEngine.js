@@ -599,9 +599,9 @@ class MeetingDetectionEngine {
   // refuses must end before that note exists.
   // The device's own ban refuses too, so the user hears why nothing started.
   async _meetingStartRefusal() {
-    const refusal =
-      (await this.windowManager.resolveMeetingRecordingRefusal?.()) ??
-      (this._isMeetingRecordingDisabled() ? { code: "POLICY_MEETING_RECORDING_DISABLED" } : null);
+    const refusal = this._isMeetingRecordingDisabled()
+      ? { code: "POLICY_MEETING_RECORDING_DISABLED" }
+      : await this.windowManager.resolveMeetingRecordingRefusal?.();
     if (refusal)
       debugLogger.info("Meeting start refused by policy", { code: refusal.code }, "meeting");
     return refusal;
