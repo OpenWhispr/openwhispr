@@ -336,8 +336,10 @@ function phaseCount(project: Project, targetUuid: string, isa: string) {
 
 function expectKeyboardWiring(project: Project, keyboardTarget = KEYBOARD_TARGET) {
   expect(phaseFiles(project, keyboardTarget, 'PBXSourcesBuildPhase')).toEqual([
+    'KeyboardAutocorrection.swift',
     'KeyboardCapitalization.swift',
     'KeyboardViewController.swift',
+    'TextCheckerCorrectionProvider.swift',
   ]);
   expect(phaseFiles(project, keyboardTarget, 'PBXResourcesBuildPhase')).toEqual([]);
   expect(phaseFiles(project, APP_TARGET, 'PBXSourcesBuildPhase')).toEqual([]);
@@ -345,7 +347,7 @@ function expectKeyboardWiring(project: Project, keyboardTarget = KEYBOARD_TARGET
 }
 
 describe('withKeyboardExtension helpers', () => {
-  it('wires both sources into the keyboard target only', () => {
+  it('wires sources into the keyboard target only', () => {
     const project = parseProject(FIXTURE);
     ensureExtensionFiles(project, KEYBOARD_TARGET, ensureExtensionGroup(project));
 
@@ -424,9 +426,11 @@ describe('withKeyboardExtension helpers', () => {
       .readdirSync(path.join(__dirname, '..', 'ios'))
       .filter((name) => name.endsWith('.swift'));
 
-    expect(EXTENSION_FILES.map((file: { name: string }) => file.name).sort()).toEqual(
-      swiftFiles.sort(),
-    );
+    expect(
+      EXTENSION_FILES.filter((file: { phase: string }) => file.phase === 'Sources')
+        .map((file: { name: string }) => file.name)
+        .sort(),
+    ).toEqual(swiftFiles.sort());
   });
 });
 
@@ -526,8 +530,10 @@ describe('withKeyboardExtension mods', () => {
       'B30000000000000000000002',
     ]);
     expect(groupChildNames(project, 'B30000000000000000000002')).toEqual([
+      'KeyboardAutocorrection.swift',
       'KeyboardCapitalization.swift',
       'KeyboardViewController.swift',
+      'TextCheckerCorrectionProvider.swift',
     ]);
     expect(groupChildNames(project, 'B30000000000000000000004')).toEqual([]);
   });

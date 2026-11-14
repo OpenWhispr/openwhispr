@@ -1128,6 +1128,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   private var appliedBottomRowLayout: BottomRowLayout?
   /// What the return key last drew, so a keystroke that doesn't change it skips the redraw.
   private var appliedReturnKeyState: ReturnKeyState?
+  // Manual typing only; on unless switched off in the app's Settings, and always subject
+  // to the host field’s safety gates. The languages picked there are checked together.
+  private var autocorrection = KeyboardAutocorrection()
+  /// Set only by tests; otherwise the dictionaries follow the app's language selection.
+  private var correctionProvider: KeyboardCorrectionProvider?
+  private var textCheckerProvider: TextCheckerCorrectionProvider?
+  /// Seconds of system uptime, for the backspace undo window; replaced by tests.
+  private var autocorrectionClock: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+  /// Read at each manual space, so the Settings switch applies without reopening the keyboard.
+  private var autocorrectionSwitchedOn: () -> Bool = {
+    KeyboardHandoffProvider.shared.isAutocorrectionSwitchedOn()
+  }
   /// The field the keyboard last typed into, and the last one seen reporting text.
   private var typedDocument: UUID?
   private var reportingDocument: UUID?
@@ -1298,9 +1310,16 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
     preferredContentSize = CGSize(width: view.bounds.width, height: keyboardHeight)
   }
 
+  override func textWillChange(_ textInput: UITextInput?) {
+    super.textWillChange(textInput)
+    // Block replacement until the completion report proves whether this was our insert.
+    autocorrection.hostWillChange()
+  }
+
   override func textDidChange(_ textInput: UITextInput?) {
     super.textDidChange(textInput)
     noteFieldReport()
+    autocorrection.hostDidChange(correctionContext())
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
     _ = consumePendingTranscriptIfAvailable(trigger: "textDidChange")
@@ -1310,6 +1329,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   // textDidChange when the keyboard opens: shift and the return key follow the field here.
   override func viewWillAppear(_ animated: Bool) {
     super.viewWillAppear(animated)
+    autocorrection.invalidate()
     noteFieldReport()
     syncShiftWithContextIfNeeded()
     refreshFieldAwareKeys()
@@ -1357,6 +1377,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
+    autocorrection.invalidate()
     logRecordMarker("viewWillDisappear")
     stopDeleteRepeating()
     issueResetTimer?.invalidate()
@@ -1383,7 +1404,20 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
     let insertion = layoutMode == .letters && isShiftEnabled ? output.uppercased() : output
     let text = smartQuoteSubstitution(for: insertion) ?? insertion
-    typeText(text)
+    // `?`, `!`, `.` and `,` end a word like space does, so they correct it too
+    // (`nciht?` → `nicht?`), and take back a space typed before them (`nicht ?` → `nicht?`).
+    let corrected = text != " " && KeyboardAutocorrection.delimiters.contains(text)
+      && applyManualCorrection(typing: text)
+    if !corrected && removesSpaceBeforeMark(text) {
+      autocorrection.invalidate()
+      textDocumentProxy.deleteBackward()
+      typeText(text)
+    } else if !corrected {
+      var nextCorrectionState = autocorrection
+      nextCorrectionState.manualInsertion(text, in: correctionContext())
+      typeText(text)
+      autocorrection = nextCorrectionState
+    }
     if layoutMode != .letters {
       // Apple's apostrophe returns to letters at once ("rock 'n' roll", "'90s").
       if output == "'" { returnToLetters() } else { typedOnSymbolPage = true }
@@ -1447,7 +1481,18 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   @objc private func handleBackspaceTapped() {
     playKeyClick()
-    textDocumentProxy.deleteBackward()
+    if let edit = autocorrection.takeUndo(in: correctionContext(), at: autocorrectionClock()),
+       correctionContext() == undoContext(for: edit)
+    {
+      // Remove corrected word AND its delimiter (space, ? or !); restore the original without
+      // it. The next space cannot immediately correct it again: takeUndo cleared tracking.
+      for _ in 0..<(edit.replacement.count + edit.delimiter.count) {
+        textDocumentProxy.deleteBackward()
+      }
+      typeText(edit.original)
+    } else {
+      textDocumentProxy.deleteBackward()
+    }
     // "Hello. W" ⌫ starts a sentence again.
     syncShiftWithContextIfNeeded()
     refreshAfterEdit()
@@ -1488,7 +1533,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
 
   @objc private func handleSpaceTapped() {
     playKeyClick()
-    if !applyDoubleSpacePeriod() {
+    if !applyDoubleSpacePeriod() && !applyManualSpaceCorrection() {
       typeText(" ")
     }
     if layoutMode != .letters && typedOnSymbolPage { returnToLetters() }
@@ -1515,12 +1560,98 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   @objc private func handleNextKeyboardTapped() {
+    autocorrection.invalidate()
     playKeyClick()
     advanceToNextInputMode()
   }
 
   @objc private func handleInputModeListButton(_ sender: UIButton, forEvent event: UIEvent) {
+    autocorrection.invalidate()
     handleInputModeList(from: sender, with: event)
+  }
+
+  override func selectionWillChange(_ textInput: UITextInput?) {
+    super.selectionWillChange(textInput)
+    autocorrection.hostWillChange()
+  }
+
+  override func selectionDidChange(_ textInput: UITextInput?) {
+    super.selectionDidChange(textInput)
+    noteFieldReport()
+    autocorrection.hostDidChange(correctionContext())
+  }
+
+  private func correctionContext() -> KeyboardCorrectionContext {
+    let proxy = textDocumentProxy
+    let ordinaryField: Bool
+    switch proxy.keyboardType ?? .default {
+    case .default: ordinaryField = true
+    default: ordinaryField = false
+    }
+    return KeyboardCorrectionContext.reported(
+      document: proxy.documentIdentifier, before: proxy.documentContextBeforeInput,
+      after: proxy.documentContextAfterInput, selection: proxy.selectedText,
+      allowed: ordinaryField && !fieldHidesItsText
+        && proxy.isSecureTextEntry != true && proxy.autocorrectionType != .no,
+      hasText: proxy.hasText)
+  }
+
+  private func undoContext(for edit: KeyboardAutocorrection.Edit) -> KeyboardCorrectionContext {
+    let prefix = String((edit.context.before ?? "").dropLast(edit.original.count))
+    return KeyboardCorrectionContext(
+      document: edit.context.document, before: prefix + edit.replacement + edit.delimiter,
+      after: edit.context.after, selection: edit.context.selection, allowed: edit.context.allowed)
+  }
+
+  /// Rebuilt only when the app's language selection changes, read like the switch at each space.
+  private func currentCorrectionProvider() -> KeyboardCorrectionProvider {
+    if let correctionProvider { return correctionProvider }
+    let languages = KeyboardCorrectionLanguage.selection(
+      from: KeyboardHandoffProvider.shared.autocorrectionLanguageSetting())
+    if let textCheckerProvider, textCheckerProvider.languages == languages {
+      return textCheckerProvider
+    }
+    let provider = TextCheckerCorrectionProvider(languages: languages)
+    textCheckerProvider = provider
+    return provider
+  }
+
+  private func applyManualSpaceCorrection() -> Bool {
+    applyManualCorrection(typing: " ")
+  }
+
+  /// Corrects the tracked word and types `delimiter` (space, ? or !) after it; false leaves
+  /// the delimiter to the caller.
+  private func applyManualCorrection(typing delimiter: String) -> Bool {
+    let context = correctionContext()
+    let trigger = delimiter == " " ? "space" : "punctuation"
+    // Flags only: never emit the word, surrounding text, document UUID or proposals.
+    KeyboardLog.ui.info("Autocorrection \(trigger, privacy: .public): allowed=\(context.allowed, privacy: .public) leftKnown=\(context.before != nil, privacy: .public) rightKnown=\(context.after != nil, privacy: .public) selected=\(!(context.selection ?? "").isEmpty, privacy: .public) tracked=\(self.autocorrection.hasTrackedWord, privacy: .public) awaitingReport=\(self.autocorrection.awaitingHostReport, privacy: .public)")
+    guard context.isSafe, autocorrectionSwitchedOn() else {
+      autocorrection.invalidate()
+      return false
+    }
+    guard let edit = autocorrection.correction(
+            in: context, provider: currentCorrectionProvider(), delimiter: delimiter),
+          // UITextChecker may take time. Re-read the proxy immediately before any deletion.
+          correctionContext() == edit.context else {
+      autocorrection.invalidate()
+      return false
+    }
+    KeyboardLog.ui.info("Autocorrection applying verified replacement")
+    for _ in edit.original { textDocumentProxy.deleteBackward() }
+    typeText(edit.replacement + edit.delimiter)
+    autocorrection.didCorrect(edit, at: autocorrectionClock())
+    return true
+  }
+
+  /// With autocorrection on, in a field that allows it and doesn't opt out of smart
+  /// insert/delete, a `?`, `!`, `.` or `,` replaces the single space after a word.
+  private func removesSpaceBeforeMark(_ mark: String) -> Bool {
+    guard KeyboardAutocorrection.spaceHuggingMarks.contains(mark),
+          textDocumentProxy.smartInsertDeleteType != .no,
+          autocorrectionSwitchedOn() else { return false }
+    return KeyboardAutocorrection.removesSpace(before: mark, in: correctionContext())
   }
 
   private func applyDoubleSpacePeriod() -> Bool {
@@ -2402,6 +2533,8 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func typeText(_ text: String) {
+    // All non-manual insertion paths (especially dictation/agent) abandon tracking.
+    autocorrection.invalidate()
     textDocumentProxy.insertText(text)
     typedDocument = textDocumentProxy.documentIdentifier
   }
@@ -3170,6 +3303,7 @@ final class KeyboardViewController: UIInputViewController, UIGestureRecognizerDe
   }
 
   private func startDeleteRepeating() {
+    autocorrection.invalidate()
     stopDeleteRepeating()
     deleteRepeatCount = 0
     performRepeatingDelete()
@@ -4781,6 +4915,8 @@ private struct KeyboardHandoffProvider {
   private let transcriptionStatusUpdatedAtMsKey = "keyboard_transcription_status_updated_at_ms"
   private let dictationToneKey = "keyboard_dictation_tone"
   private let toneApplicableKey = "keyboard_tone_applicable"
+  private let autocorrectionSwitchKey = "keyboard_autocorrection_enabled"
+  private let autocorrectionLanguagesKey = "keyboard_autocorrection_languages"
   // Dictation-agent mirror keys (app-written, persist across launches) and the
   // one-shot request / result channels shared with the main app.
   private let agentEnabledKey = "keyboard_agent_enabled"
@@ -4901,6 +5037,17 @@ private struct KeyboardHandoffProvider {
   func isToneApplicable() -> Bool {
     guard let defaults = UserDefaults(suiteName: appGroupId) else { return false }
     return defaults.string(forKey: toneApplicableKey) != "0"
+  }
+
+  /// Only an explicit "0" from the app's Settings switches correction off. Without Full
+  /// Access the App Group can't be read, so correction stays on as it needs no Full Access.
+  func isAutocorrectionSwitchedOn() -> Bool {
+    UserDefaults(suiteName: appGroupId)?.string(forKey: autocorrectionSwitchKey) != "0"
+  }
+
+  /// "de,en" as the app writes it; nil without Full Access, which selects the default.
+  func autocorrectionLanguageSetting() -> String? {
+    UserDefaults(suiteName: appGroupId)?.string(forKey: autocorrectionLanguagesKey)
   }
 
   // MARK: Dictation agent
