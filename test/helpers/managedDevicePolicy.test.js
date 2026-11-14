@@ -159,7 +159,7 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
     '"RequireSignIn"="0"',
     '"RequireSignIn"=dword:00000002',
     '"Policy"=dword:00000001',
-    '"Policy"=hex(2):7b,00,00,00',
+    '"Policy"=hex(7):7b,00,00,00,00,00',
   ])
     await assert.rejects(registryExport([line])(), /Invalid registry value type/);
   // One reg.exe run when no key is deployed, which is every read on most machines.
@@ -205,6 +205,24 @@ test("a Policy REG_SZ holding line breaks reads as one value", async () => {
   assert.deepEqual(JSON.parse(values.Policy), defaultDevicePolicy());
   assert.equal(values.RequireSignIn, false);
   await assert.rejects(registryExport(['"Policy"="{', '  \\"version\\": 1'])(), /Invalid registry/);
+});
+
+test("a REG_EXPAND_SZ value reads expanded, as PowerShell reads it", async (t) => {
+  process.env.OW_POLICY_TEST_DIR = "Acme IT";
+  t.after(() => delete process.env.OW_POLICY_TEST_DIR);
+  const policy = { ...defaultDevicePolicy(), note: "%OW_POLICY_TEST_DIR% %UNSET_VAR%" };
+  const hex = [...Buffer.from(`${JSON.stringify(policy)}\0`, "utf16le")]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join(",");
+  // reg.exe wraps hex data at about 80 characters, ending each line with "\".
+  const lines = hex
+    .match(/.{1,75}(,|$)/g)
+    .map(
+      (chunk, index, all) =>
+        `${index ? "  " : '"Policy"=hex(2):'}${chunk}${index < all.length - 1 ? "\\" : ""}`
+    );
+  const values = await registryExport(lines)();
+  assert.equal(JSON.parse(values.Policy).note, "Acme IT %UNSET_VAR%");
 });
 
 // reg.exe refused by a policy against registry tools, and PowerShell, which
