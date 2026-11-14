@@ -69,12 +69,14 @@ function createEngine(engineOptions) {
   const shown = [];
   const meetingNavigations = [];
   const noteNavigations = [];
+  const refusals = [];
   const windowManager = {
     notificationPrefs: {},
     showMeetingNotification: (data) => shown.push(data),
     dismissMeetingNotification: () => {},
     queueMeetingNoteNavigation: async (payload) => meetingNavigations.push(payload),
     queueNoteNavigation: async (payload) => noteNavigations.push(payload),
+    sendMeetingStartRefused: (code) => refusals.push(code),
   };
 
   const engine = new MeetingDetectionEngine(
@@ -94,6 +96,7 @@ function createEngine(engineOptions) {
     shown,
     meetingNavigations,
     noteNavigations,
+    refusals,
   };
 }
 
@@ -501,8 +504,15 @@ function applySnapshot(engine, snapshot) {
 // The bare {} databaseManager is the assertion that nothing reaches the note path.
 test("an administrator-disabled build never runs detectors, prompts, or starts a meeting", async () => {
   let disabled = true;
-  const { engine, audioDetector, processDetector, shown, meetingNavigations, noteNavigations } =
-    createEngine({ isMeetingRecordingDisabled: () => disabled });
+  const {
+    engine,
+    audioDetector,
+    processDetector,
+    shown,
+    meetingNavigations,
+    noteNavigations,
+    refusals,
+  } = createEngine({ isMeetingRecordingDisabled: () => disabled });
 
   engine.start();
   applySnapshot(engine, ENABLED_SNAPSHOT);
@@ -513,8 +523,13 @@ test("an administrator-disabled build never runs detectors, prompts, or starts a
   engine.handleCalendarReminder({ id: "event-1" });
   assert.deepEqual(shown, []);
 
+  // Both starts say why, rather than doing nothing.
   await engine.startManualMeeting();
-  await engine.joinCalendarMeeting("event-1");
+  assert.deepEqual(refusals, ["POLICY_MEETING_RECORDING_DISABLED"]);
+  assert.equal(
+    (await engine.joinCalendarMeeting("event-1"))?.code,
+    "POLICY_MEETING_RECORDING_DISABLED"
+  );
   assert.deepEqual(meetingNavigations, []);
   assert.deepEqual(noteNavigations, []);
 
