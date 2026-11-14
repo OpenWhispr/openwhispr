@@ -881,7 +881,7 @@ test("NVIDIA cleanup row size includes the graphics pack, which is never named",
     graphicsName: rtx.name,
     processorName: "AMD Ryzen 7 7700",
   });
-  // The real pack (~39 MB) rounds away inside "1.3 GB"; a bigger one shows where it lands.
+  // The real pack (~38 MB) rounds away inside "1.3 GB"; a bigger one shows where it lands.
   const s = await mount(t, {
     profile,
     spokenLanguages: ["de"],
