@@ -1086,6 +1086,7 @@ for (const mode of ["normal", "update", "held delete"]) {
       "meetingAecManager",
       "textEditMonitor",
       "managedDevicePolicy",
+      "meetingAuditLog",
     ])
       context[name] = null;
     target._cleanupTextEditMonitor = () => {};
