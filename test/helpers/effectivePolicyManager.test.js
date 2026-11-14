@@ -335,6 +335,16 @@ test("only a device policy or the server settles a failed lookup; the account's 
     ).status,
     "error"
   );
+  // The meeting alias alone doesn't need the account, so its failed lookup
+  // is an unmanaged account's: the alias still applies, nothing else closes.
+  const aliasOnly = resolveEffectivePolicy(
+    normalizeDeviceValues({ DisableMeetingRecording: true }),
+    { success: false, code: "POLICY_UNAVAILABLE" },
+    member
+  );
+  assert.equal(aliasOnly.success, true);
+  assert.equal(aliasOnly.policy.features.meetingRecordingEnabled, false);
+  assert.equal(productOperationAllowed(aliasOnly, "1.11.1", "transcribe-local-whisper"), true);
   const lastSeenManaged = failed({ code: "POLICY_UNAVAILABLE", managed: true });
   assert.equal(lastSeenManaged.status, "loading");
   assert.equal(lastSeenManaged.managed, true);
