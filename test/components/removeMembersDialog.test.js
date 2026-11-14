@@ -257,7 +257,8 @@ test("one content owner shows the picker with you chosen", async (t) => {
     text,
     new RegExp(`workspaces\\.removeMembers\\.ownerOne\\|\\{"name":"${isolated("Liam")}"\\}`)
   );
-  assert.match(text, /workspaces\.removeMembers\.transferBody/);
+  // The reassign body and the note on who owns what; the picker follows in its own card.
+  assert.match(text, /workspaces\.removeMembers\.reassignBody/);
   assert.match(text, /workspaces\.removeMembers\.transferConfirm/);
   // Named by the visible label and the chosen owner together: "Transfer to Ronnie (you)".
   const trigger = globalThis.__triggerProps;
@@ -441,8 +442,8 @@ test("a member as new owner warns that some notes may stay; an admin doesn't", a
   globalThis.__previewImpl = async () => preview([owns("u-liam")]);
   const view = await mount(opened([LIAM]));
 
-  // You, an admin, by default.
-  assert.match(view.text(), /workspaces\.removeMembers\.transferBody(?!Limited)/);
+  // You, an admin, by default: nothing is withheld, so there is no warning.
+  assert.doesNotMatch(view.text(), /workspaces\.removeMembers\.transferBodyLimited/);
 
   // Candidates: you, Bea, Alex, Zoe.
   await view.act(() => globalThis.__menuItems[3]());
@@ -536,7 +537,7 @@ test("a second click while removing sends one request", async (t) => {
   assert.equal(globalThis.__removeCalls.length, 1);
 });
 
-test("transfer failure says no members were removed", async (t) => {
+test("a lost transfer reply says the outcome is unconfirmed", async (t) => {
   const { mount, opened } = await loadDialog(t);
   globalThis.__previewImpl = async () => preview([owns("u-liam")]);
   let reject;
@@ -556,8 +557,10 @@ test("transfer failure says no members were removed", async (t) => {
   assert.deepEqual(globalThis.__removeCalls, [
     ["w1", { userIds: ["u-liam"], transferTo: "u-self" }],
   ]);
-  assert.match(view.text(), /!workspaces\.removeMembers\.transferFailed/);
-  assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.exit.tryAgain");
+  // The reply was lost, so the reassignment may have happened; the line says only that it's unknown.
+  assert.match(view.text(), /!workspaces\.removeMembers\.transferUnconfirmed/);
+  // The same action retries, so the button keeps its label.
+  assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.removeMembers.transferConfirm");
   assert.equal(globalThis.__actionDialogProps.primary.tone, "destructive");
   assert.equal(globalThis.__toasts.length, 0);
 });
@@ -570,7 +573,11 @@ test("a retry that finds everyone gone reports them removed", async (t) => {
   const view = await mount(opened([LIAM, ALEX]));
 
   await view.clickPrimary();
-  assert.match(view.text(), /!workspaces\.removeMembers\.failed\|\{"count":2\}/);
+  // A lost reply replaces the question with an unconfirmed state: the removal may have landed.
+  assert.equal(globalThis.__actionDialogProps.title, "workspaces.removeMembers.unconfirmedTitle");
+  assert.equal(globalThis.__actionDialogProps.body, "workspaces.removeMembers.unconfirmedBody");
+  assert.equal(globalThis.__actionDialogProps.error, null);
+  assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.exit.tryAgain");
 
   globalThis.__removeImpl = async () => ({
     removed: [],
@@ -646,7 +653,7 @@ test("a vanished new owner falls back to you and keeps the dialog open", async (
   );
   assert.equal(pickerText(text), `workspaces.removeMembers.you|{"name":"${isolated("Ronnie")}"}`);
   assert.deepEqual(globalThis.__refreshMembersCalls, ["w1"]);
-  assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.exit.tryAgain");
+  assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.removeMembers.transferConfirm");
 });
 
 for (const [error, line] of [
@@ -658,8 +665,6 @@ for (const [error, line] of [
   [{ kind: "refused", message: "Not today" }, "Not today"],
   [{ kind: "cannotRemove", reason: "owner" }, "workspaces.removeMembers.cannotRemoveOwner"],
   [{ kind: "cannotRemove", reason: "self" }, "workspaces.removeMembers.cannotRemoveSelf"],
-  [{ kind: "failed" }, `workspaces.removeMember.failed|{"name":"${isolated("Liam")}"}`],
-  [{ kind: "rateLimited" }, `workspaces.removeMember.failed|{"name":"${isolated("Liam")}"}`],
   [
     { kind: "directoryManaged", userIds: ["u-liam"] },
     `workspaces.removeMembers.directoryManagedOne|{"name":"${isolated("Liam")}"}`,
@@ -681,6 +686,56 @@ for (const [error, line] of [
     assert.deepEqual(globalThis.__previewCalls, []);
   });
 }
+
+const failureStates = [
+  {
+    kind: "rateLimited",
+    title: `workspaces.removeMember.failedTitle|{"name":"${isolated("Liam")}"}`,
+    body: "workspaces.removeMembers.failedBody",
+  },
+  // Any other failure may have removed them before the reply was lost.
+  {
+    kind: "failed",
+    title: "workspaces.removeMembers.unconfirmedTitle",
+    body: "workspaces.removeMembers.unconfirmedBody",
+  },
+];
+
+for (const { kind, title, body } of failureStates) {
+  test(`a ${kind} failure replaces the question with the failure state`, async (t) => {
+    const { mount } = await loadDialog(t);
+
+    await mount({
+      kind: "failed",
+      subjects: [LIAM],
+      owners: [],
+      transferTo: null,
+      defaultOwnerId: "u-self",
+      error: { kind },
+    });
+
+    const props = globalThis.__actionDialogProps;
+    assert.equal(props.title, title);
+    assert.equal(props.body, body);
+    assert.equal(props.error, null);
+    assert.equal(props.primary.label, "workspaces.exit.tryAgain");
+  });
+}
+
+test("a rate-limited transfer says no members were removed", async (t) => {
+  const { mount } = await loadDialog(t);
+
+  const view = await mount({
+    kind: "failed",
+    subjects: [LIAM],
+    owners: [LIAM],
+    transferTo: "u-self",
+    defaultOwnerId: "u-self",
+    error: { kind: "rateLimited" },
+  });
+
+  assert.match(view.text(), /!workspaces\.removeMembers\.transferFailed/);
+});
 
 const directoryManaged = (CloudApiError, details) =>
   new CloudApiError(
@@ -881,7 +936,7 @@ test("the picker stays open to changes after other failures", async (t) => {
 
   await view.clickPrimary();
 
-  assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.exit.tryAgain");
+  assert.equal(globalThis.__actionDialogProps.primary.label, "workspaces.removeMembers.transferConfirm");
   assert.equal(globalThis.__triggerProps.disabled, false);
 });
 

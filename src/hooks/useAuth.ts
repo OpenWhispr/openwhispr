@@ -258,6 +258,11 @@ export function useAuth() {
         }
         if (!cancelled) {
           logger.debug("Auth state sync", { isSignedIn: true, userId: resolvedUserId }, "auth");
+          // The app sign-in milestone, anchored by the server to this validation.
+          void window.electronAPI?.recordProductEventAppSession?.({
+            accountId: resolvedUserId,
+            authGeneration: boundGeneration,
+          });
           useSettingsStore.getState().setIsSignedIn(true);
           void usePolicyStore.getState().fetchPolicy(resolvedUserId, boundGeneration);
           void refreshManagedEnterpriseIdentity(resolvedUserId, boundGeneration);

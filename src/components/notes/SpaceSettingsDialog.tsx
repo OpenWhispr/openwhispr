@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, LogIn, LogOut, Settings, Trash2, UserCircle, UserPlus } from "../icons";
+import { DoorOpen, Loader2, Settings, Trash2, UserCircle, UserMinus, UserPlus } from "../icons";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Popover, PopoverTrigger } from "../ui/popover";
 import { EmojiPickerContent } from "../ui/EmojiPicker";
@@ -22,6 +22,8 @@ import { SettingRow } from "../workspace/SettingRow";
 import {
   INLINE_FIELD_CLASS,
   ROW_BUTTON_CLASS,
+  SETTING_ROWS,
+  TABS_LIST_CLASS,
   TAB_TRIGGER_CLASS,
 } from "../workspace/dialogButtons";
 import { isolate } from "../../utils/bidiIsolate";
@@ -307,7 +309,7 @@ export default function SpaceSettingsDialog({
         </div>
       )}
 
-      <div className="divide-y divide-border/60 overflow-hidden rounded-xl bg-surface-1">
+      <div className={SETTING_ROWS}>
         {cloudSpaceId && (
           <>
             <SettingRow
@@ -328,7 +330,7 @@ export default function SpaceSettingsDialog({
               />
             </SettingRow>
             <SettingRow
-              icon={LogIn}
+              icon={DoorOpen}
               title={t("settingsPage.workspace.teamspaces.form.openTitle")}
               body={t("settingsPage.workspace.teamspaces.form.openBody")}
             >
@@ -344,7 +346,7 @@ export default function SpaceSettingsDialog({
 
         {canLeave && (
           <SettingRow
-            icon={LogOut}
+            icon={UserMinus}
             title={t("settingsPage.workspace.teamspaces.settings.leaveTitle")}
             body={t("settingsPage.workspace.teamspaces.settings.leaveBody")}
           >
@@ -407,7 +409,7 @@ export default function SpaceSettingsDialog({
     <>
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
         <DialogContent
-          className="max-h-[85vh] max-w-md gap-5 overflow-y-auto rounded-[28px] p-5"
+          className="max-h-[85vh] w-[520px] max-w-[calc(100vw-32px)] gap-5 overflow-y-auto rounded-[28px] p-5 sm:max-w-[520px]"
           onCloseAutoFocus={(event) => {
             // Handing off to the delete confirm: leave focus in its input
             // instead of returning it to the host.
@@ -491,7 +493,7 @@ export default function SpaceSettingsDialog({
 
           {cloudSpaceId ? (
             <Tabs value={tab} onValueChange={(next) => setTab(next as SpaceSettingsTab)}>
-              <TabsList className="h-7 p-0.5 rounded-[7px]">
+              <TabsList className={TABS_LIST_CLASS}>
                 <TabsTrigger value="general" className={TAB_TRIGGER_CLASS}>
                   <Settings className="size-3" aria-hidden="true" />
                   {t("settingsPage.workspace.tab.general")}

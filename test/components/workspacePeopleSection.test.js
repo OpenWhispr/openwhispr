@@ -72,6 +72,7 @@ async function loadSection(t, { storedTab, realTeamsTab = false } = {}) {
           retry: () => {},
         });
       `,
+      "/ui/useToast": "export const useToast = () => ({ toast: () => '' });",
       "/useWorkspaceInvitations": `
         export const useWorkspaceInvitations = (workspaceId, enabled) => {
           globalThis.__invitationsArgs = { workspaceId, enabled };
@@ -226,8 +227,11 @@ function render(WorkspacePeopleSection, workspace, props = {}) {
   return renderToStaticMarkup(React.createElement(WorkspacePeopleSection, props));
 }
 
+// Each tab is an icon and its label; the label is the text after the icon.
 function tabLabels(markup) {
-  return [...markup.matchAll(/role="tab"[^>]*>([^<]*)</g)].map((match) => match[1]);
+  return [...markup.matchAll(/role="tab"[^>]*>(?:<svg[\s\S]*?<\/svg>)?([^<]*)</g)].map(
+    (match) => match[1]
+  );
 }
 
 function findNode(node, predicate) {
@@ -637,4 +641,61 @@ test("the menu is gone on the Teams tab while no team exists", async (t) => {
     null,
     "the empty state has its own Create"
   );
+});
+
+// ---- the search field, in the toolbar beside the tabs
+
+test("the search field sits in the toolbar on the Members tab, for members too", async (t) => {
+  const Section = await loadSection(t);
+  const markup = render(Section, MEMBER);
+
+  assert.match(markup, /type="search"/);
+  assert.match(markup, /placeholder="settingsPage\.workspace\.people\.search\.placeholder"/);
+  assert.doesNotMatch(markup, /aria-label="settingsPage\.workspace\.people\.search\.clear"/);
+  // An empty field lets Escape close the Settings dialog.
+  assert.doesNotMatch(markup, /data-escape-clears/);
+});
+
+test("the search field is only on the Members tab", async (t) => {
+  const Section = await loadSection(t, { storedTab: "teams" });
+  const markup = render(Section, ADMIN);
+
+  assert.doesNotMatch(markup, /type="search"/);
+});
+
+test("a query shows Clear, holds Escape, and Escape clears it", async (t) => {
+  const Section = await loadSection(t);
+  const container = await mount(t, Section, ADMIN);
+  const input = () => findNode(container, (node) => node.localName === "input");
+  const keydown = (events) => ({
+    key: "Escape",
+    preventDefault: () => events.push("preventDefault"),
+    stopPropagation: () => events.push("stopPropagation"),
+  });
+
+  // An empty field leaves Escape alone so it can still close the Settings dialog.
+  const emptyEvents = [];
+  propsOf(input()).onKeyDown(keydown(emptyEvents));
+  assert.deepEqual(emptyEvents, []);
+
+  await React.act(async () => propsOf(input()).onChange({ target: { value: "zed" } }));
+  assert.equal(globalThis.__membersProps.searchQuery, "zed");
+  assert.ok(input().hasAttribute("data-escape-clears"), "a query to clear holds Escape");
+  assert.ok(
+    findNode(
+      container,
+      (node) => node.getAttribute?.("aria-label") === "settingsPage.workspace.people.search.clear"
+    )
+  );
+
+  const filledEvents = [];
+  await React.act(async () => propsOf(input()).onKeyDown(keydown(filledEvents)));
+  assert.deepEqual(filledEvents.sort(), ["preventDefault", "stopPropagation"]);
+  assert.equal(globalThis.__membersProps.searchQuery, "");
+
+  // The Members tab clears it the same way, from its no-results state.
+  await React.act(async () => propsOf(input()).onChange({ target: { value: "abc" } }));
+  await React.act(async () => globalThis.__membersProps.onClearSearch());
+  assert.equal(globalThis.__membersProps.searchQuery, "");
+  assert.equal(globalThis.__membersProps.searchInputRef.current, input());
 });
