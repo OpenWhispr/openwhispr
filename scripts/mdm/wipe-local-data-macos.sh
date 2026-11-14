@@ -71,42 +71,51 @@ remove_all_except() {
   done
 }
 
+# A folder holding nothing but what Finder or Windows Explorer leave behind.
+remove_if_emptied() {
+  local dir="$1" entry
+  for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [[ -e "$entry" || -L "$entry" ]] || continue
+    case "$(basename "$entry")" in
+      .DS_Store | Thumbs.db | desktop.ini) ;;
+      *) return 1 ;;
+    esac
+  done
+  rm -f "$dir/.DS_Store" "$dir/Thumbs.db" "$dir/desktop.ini"
+  rmdir "$dir" 2>/dev/null
+}
+
 # In a folder of the home the user chose for the notes mirror, removes only the
-# files the mirror wrote: "<id>-<slug>.md" opening with "---" and "id: <id>",
-# their "<id>-...-transcript" companions, and folders that leaves empty. The
-# chosen folder itself stays.
+# files the mirror wrote, at any depth of its workspace, space and folder
+# layout: "<id>-<slug>.md" opening with "---" and "id: <id>" (also when kept
+# aside as "edited-<name>"), their "<id>-...-transcript" companions, and
+# folders that leaves empty. The chosen folder itself stays. Links are never
+# followed.
 remove_mirrored_files() {
-  local base="$1" folder file name id head
+  local base="$1" file name id head folder
   local ids=() emptied=()
   [[ -d "$base" ]] && inside_home "$base" || return 0
-  for folder in "$base"/*/; do
-    [[ -L "${folder%/}" ]] && continue
-    for file in "$folder"[0-9]*-*.md; do
-      [[ -f "$file" && ! -L "$file" ]] || continue
-      name="$(basename "$file")"
-      id="${name%%-*}"
-      [[ "$id" =~ ^[0-9]+$ ]] || continue
-      head="$(head -n 2 "$file" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//' | tr -d '\r')" || continue
-      if [[ "$head" == $'---\nid: '"$id" ]]; then
-        remove "$file"
-        ids+=("$id")
-        emptied+=("${folder%/}")
-      fi
-    done
-  done
-  for folder in "$base"/*/; do
-    [[ -L "${folder%/}" ]] && continue
-    for file in "$folder"[0-9]*-*-transcript.md "$folder"[0-9]*-*-transcript.txt; do
-      [[ -f "$file" && ! -L "$file" ]] || continue
-      name="$(basename "$file")"
-      if contains "${name%%-*}" "${ids[@]}"; then
-        remove "$file"
-        emptied+=("${folder%/}")
-      fi
-    done
-  done
+  while IFS= read -r -d '' file; do
+    name="$(basename "$file")"
+    head="$(head -n 2 "$file" 2>/dev/null | LC_ALL=C sed $'1s/^\xef\xbb\xbf//' | tr -d '\r')" || continue
+    [[ "$head" =~ ^---$'\n'id:\ ([0-9]+)$ ]] || continue
+    id="${BASH_REMATCH[1]}"
+    [[ "$name" =~ ^(edited-([0-9]+-)?)?${id}-.*\.md$ ]] || continue
+    remove "$file"
+    ids+=("$id")
+    emptied+=("$(dirname "$file")")
+  done < <(find "$base" -type f -name '*.md' -print0 2>/dev/null)
+  while IFS= read -r -d '' file; do
+    name="$(basename "$file")"
+    [[ "$name" =~ ^(edited-([0-9]+-)?)?([0-9]+)-.*-transcript\.(md|txt)$ ]] || continue
+    contains "${BASH_REMATCH[3]}" "${ids[@]}" || continue
+    remove "$file"
+    emptied+=("$(dirname "$file")")
+  done < <(find "$base" -type f \( -name '*-transcript.md' -o -name '*-transcript.txt' \) -print0 2>/dev/null)
   for folder in "${emptied[@]}"; do
-    rmdir "$folder" 2>/dev/null || true
+    while [[ "$folder" == "$base"/* ]] && remove_if_emptied "$folder"; do
+      folder="$(dirname "$folder")"
+    done
   done
 }
 

@@ -89,8 +89,11 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
   seed(path.join(space, "Calls", "21-call-transcript.md"), "# Call\n");
   seed(path.join(space, "edited-22-brief.md"), "---\nid: 22\n---\n\nedited");
   seed(path.join(space, "notes.txt"), "mine");
-  // A vault's tool folder isn't read.
-  seed(path.join(chosen, ".obsidian", "8-cache.md"), "---\nid: 8\n---\n");
+  // A copy kept aside a second time, of a note whose name starts with digits.
+  seed(path.join(space, "edited-2-123-2024-plan.md"), "---\nid: 123\n---\n");
+  // A space whose name starts with a dot, and a vault tool's own files.
+  seed(path.join(space, "..", ".NET Platform", "6-x.md"), "---\nid: 6\n---\n");
+  seed(path.join(chosen, ".obsidian", "workspace.json"), "{}");
   // The user's own files: a daily note named like a mirror file, a note whose
   // frontmatter names another id, a transcript with no mirrored note, and a
   // folder they left empty.
@@ -116,7 +119,8 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
     "readme.md",
   ]);
   assert.deepEqual(fs.readdirSync(space), ["notes.txt"]);
-  assert.equal(exists(chosen, ".obsidian", "8-cache.md"), true);
+  assert.equal(exists(space, "..", ".NET Platform"), false);
+  assert.equal(exists(chosen, ".obsidian", "workspace.json"), true);
   assert.deepEqual(fs.readdirSync(personal).sort(), [
     "2024-03-05.md",
     "3-copied.md",
@@ -125,6 +129,43 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
   assert.deepEqual(fs.readdirSync(earlier), []);
   assert.equal(exists(roots.userData, "notes-mirror.json"), false);
 });
+
+// Reset app data is the user's own action: a notes folder they chose keeps its files.
+test("Reset app data leaves a chosen notes folder alone", async () => {
+  const chosen = path.join(root, "Vault");
+  seed(path.join(chosen, "Personal", "1-a.md"), "---\nid: 1\n---\n");
+  fs.mkdirSync(roots.userData, { recursive: true });
+  rememberNotesMirrorPath(chosen, roots.userData);
+  assert.deepEqual(
+    await removeLocalData({ includeModels: true, keepChosenNotesFolders: true, roots }),
+    []
+  );
+  assert.equal(exists(chosen, "Personal", "1-a.md"), true);
+  assert.equal(exists(roots.userData, "notes-mirror.json"), false);
+});
+
+// One note that can't go (a folder another tool locked) doesn't keep the rest.
+test(
+  "a mirrored note that can't be removed is reported, and the others still go",
+  { skip: process.platform === "win32" || process.getuid?.() === 0 },
+  async () => {
+    const chosen = path.join(root, "Vault");
+    seed(path.join(chosen, "Locked", "1-a.md"), "---\nid: 1\n---\n");
+    seed(path.join(chosen, "Open", "2-b.md"), "---\nid: 2\n---\n");
+    fs.mkdirSync(roots.userData, { recursive: true });
+    rememberNotesMirrorPath(chosen, roots.userData);
+    fs.chmodSync(path.join(chosen, "Locked"), 0o555);
+    try {
+      const errors = await removeLocalData({ includeModels: false, roots });
+      assert.equal(errors.length, 1);
+      assert.match(errors[0], /^notes mirror: /);
+      assert.equal(exists(chosen, "Open"), false);
+      assert.equal(exists(chosen, "Locked", "1-a.md"), true);
+    } finally {
+      fs.chmodSync(path.join(chosen, "Locked"), 0o755);
+    }
+  }
+);
 
 function launchHarness({ snapshot, readError, clearBrowserData = async () => {}, env = {} } = {}) {
   const calls = [];

@@ -42,7 +42,7 @@ Nothing is wiped when a member leaves the workspace on their own, signs out, or 
 
 ## Scripts (app closed)
 
-Both scripts quit OpenWhispr first, then remove the in-app wipe's files for every user on the device, or only for the homes or profiles you name. They keep the audit log and `local-data-wipe.json` too. Since they run as root or SYSTEM, they never follow a symbolic link or junction out of a user's home, and they clean a Markdown notes folder only when it is inside that home. A file they can't remove is reported, the rest is still removed, and the script exits with an error so your MDM tool shows the device as failed.
+Both scripts quit OpenWhispr first, then remove the in-app wipe's files for every user on the device, or only for the homes or profiles you name. They keep the audit log and `local-data-wipe.json` too. Since they run as root or SYSTEM, they never follow a symbolic link or junction out of a user's home, and they clean a Markdown notes folder only when it is inside that home, removing only the files OpenWhispr wrote there, at any depth. A file they can't remove is reported, the rest is still removed, and the script exits with an error so your MDM tool shows the device as failed.
 
 **macOS** (Jamf, Kandji or Intune, as root), [`scripts/mdm/wipe-local-data-macos.sh`](../scripts/mdm/wipe-local-data-macos.sh):
 

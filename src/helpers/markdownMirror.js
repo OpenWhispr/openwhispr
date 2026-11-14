@@ -893,16 +893,19 @@ class MarkdownMirror {
   // A note file this mirror wrote: "<id>-<slug>.md" opening with its "id: <id>",
   // or such a file kept aside as "edited-<name>" after an outside edit.
   _mirroredNoteId(filePath) {
-    const id = /^(?:edited-(?:\d+-)?)?(\d+)-.*\.md$/.exec(path.basename(filePath))?.[1];
-    if (!id) return null;
+    if (!filePath.endsWith(".md")) return null;
     const head = this._readFileHead(filePath, 64) ?? "";
-    return new RegExp(`^\\uFEFF?---\\r?\\nid: ${id}\\r?\\n`).test(head) ? id : null;
+    const id = /^\uFEFF?---\r?\nid: (\d+)\r?\n/.exec(head)?.[1];
+    return id && new RegExp(`^(?:edited-(?:\\d+-)?)?${id}-.*\\.md$`).test(path.basename(filePath))
+      ? id
+      : null;
   }
 
   // Erasing local data (#3030) in a folder the user chose removes only what
   // this mirror wrote there, at any depth of its workspace, space and folder
   // layout: its note files, their transcripts, and folders that leaves empty.
-  // The chosen folder itself stays, and dot folders (a vault's tools) aren't read.
+  // The chosen folder itself stays, and links are never followed. A file that
+  // can't go doesn't stop the rest; the first failure is thrown at the end.
   removeMirroredFiles(basePath) {
     const files = [];
     const walk = (folder) => {
@@ -915,7 +918,7 @@ class MarkdownMirror {
       }
       for (const entry of entries) {
         const entryPath = path.join(folder, entry.name);
-        if (entry.isDirectory() && !entry.name.startsWith(".")) walk(entryPath);
+        if (entry.isDirectory()) walk(entryPath);
         else if (entry.isFile()) files.push(entryPath);
       }
     };
@@ -932,7 +935,14 @@ class MarkdownMirror {
       )?.[1];
       if (id && noteIds.has(id) && !owned.includes(file)) owned.push(file);
     }
-    for (const file of owned) fs.rmSync(file, { force: true });
+    let failure = null;
+    for (const file of owned) {
+      try {
+        fs.rmSync(file, { force: true });
+      } catch (error) {
+        failure ??= error;
+      }
+    }
     // Only folders this emptied, up to the chosen one: one the user left empty stays.
     for (let folder of new Set(owned.map((file) => path.dirname(file)))) {
       try {
@@ -941,6 +951,7 @@ class MarkdownMirror {
         /* Gone already, or not ours to remove. */
       }
     }
+    if (failure) throw failure;
   }
 
   // An id alone is common in a user's vault. Require the old mirror's metadata,

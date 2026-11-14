@@ -80,38 +80,58 @@ function Remove-TempFiles([string]$Dir, [string]$Root) {
     ForEach-Object { Remove-Entry $_ }
 }
 
+# Every file under a folder, never through a junction or link. A folder that
+# can't be read holds nothing the mirror could have written.
+function Get-FilesBelow([IO.DirectoryInfo]$Folder) {
+  try { $items = $Folder.GetFileSystemInfos() } catch { return }
+  foreach ($item in $items) {
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+    if ($item -is [IO.DirectoryInfo]) { Get-FilesBelow $item } else { $item }
+  }
+}
+
 # In a folder of the profile the user chose for the notes mirror, removes only
-# the files the mirror wrote: "<id>-<slug>.md" opening with "---" and "id: <id>",
-# their "<id>-...-transcript" companions, and folders that leaves empty. The
-# chosen folder itself stays.
+# the files the mirror wrote, at any depth of its workspace, space and folder
+# layout: "<id>-<slug>.md" opening with "---" and "id: <id>" (also when kept
+# aside as "edited-<name>"), their "<id>-...-transcript" companions, and
+# folders that leaves empty. The chosen folder itself stays. A file that can't
+# be read is skipped.
 function Remove-MirroredFiles([string]$Base, [string]$Root) {
   if (-not (Test-RealFolder $Base $Root)) { return }
-  $folders = Get-ChildItem -LiteralPath $Base -Directory -Force |
-    Where-Object { -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) }
+  $files = @(Get-FilesBelow (Get-Item -LiteralPath $Base -Force))
   $ids = @{}
   $emptied = @{}
-  foreach ($folder in $folders) {
-    foreach ($file in Get-ChildItem -LiteralPath $folder.FullName -File -Filter "*.md" -Force) {
-      if ($file.Name -notmatch '^(\d+)-.*\.md$') { continue }
-      $id = $Matches[1]
+  foreach ($file in $files) {
+    if ($file.Extension -ne ".md") { continue }
+    try {
       $head = (Get-Content -LiteralPath $file.FullName -TotalCount 2 -Encoding UTF8) -join "`n"
-      if ($head.TrimStart([char]0xFEFF) -eq "---`nid: $id") {
-        Remove-Entry $file
-        $ids[$id] = $true
-        $emptied[$folder.FullName] = $true
-      }
+    } catch { continue }
+    if (-not ($head.TrimStart([char]0xFEFF) -match '^---\nid: (\d+)$')) { continue }
+    $id = $Matches[1]
+    if (-not ($file.Name -match "^(edited-(\d+-)?)?$id-.*\.md$")) { continue }
+    Remove-Entry $file
+    $ids[$id] = $true
+    $emptied[$file.DirectoryName] = $true
+  }
+  foreach ($file in $files) {
+    if ($file.Name -match '^(edited-(\d+-)?)?(\d+)-.*-transcript\.(md|txt)$' -and $ids.ContainsKey($Matches[3])) {
+      Remove-Entry $file
+      $emptied[$file.DirectoryName] = $true
     }
   }
-  foreach ($folder in $folders) {
-    foreach ($file in Get-ChildItem -LiteralPath $folder.FullName -File -Force) {
-      if ($file.Name -match '^(\d+)-.*-transcript\.(md|txt)$' -and $ids.ContainsKey($Matches[1])) {
-        Remove-Entry $file
-        $emptied[$folder.FullName] = $true
+  # Up to the chosen folder, each folder left with nothing but what Explorer or
+  # Finder leave behind.
+  $top = [IO.Path]::GetFullPath($Base).TrimEnd("\")
+  foreach ($folder in @($emptied.Keys)) {
+    try {
+      $dir = Get-Item -LiteralPath $folder -Force
+      while ($dir.FullName.TrimEnd("\").Length -gt $top.Length) {
+        $left = @($dir.GetFileSystemInfos() | Where-Object { @(".DS_Store", "Thumbs.db", "desktop.ini") -notcontains $_.Name })
+        if ($left.Count) { break }
+        Remove-Entry $dir
+        $dir = $dir.Parent
       }
-    }
-  }
-  foreach ($folder in $emptied.Keys) {
-    if (-not (Get-ChildItem -LiteralPath $folder -Force)) { Remove-Entry (Get-Item -LiteralPath $folder -Force) }
+    } catch { }
   }
 }
 
@@ -149,7 +169,12 @@ foreach ($profilePath in $UserProfile) {
     }
     foreach ($basePath in $basePaths) {
       if ($basePath -is [string] -and [IO.Path]::IsPathRooted($basePath)) {
-        Remove-MirroredFiles $basePath $profilePath
+        try {
+          Remove-MirroredFiles $basePath $profilePath
+        } catch {
+          Write-Warning "Could not clear the notes folder $($basePath): $($_.Exception.Message)"
+          $script:failed = $true
+        }
       }
     }
   }
