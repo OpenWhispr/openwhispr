@@ -50,6 +50,7 @@ const { createEnterpriseIdentityManager } = require("./enterpriseIdentityManager
 const { createEffectivePolicyManager } = require("./effectivePolicyManager");
 const { devicePolicyNetworkAllowed } = require("./devicePolicyNetwork");
 const {
+  policyRefusalKey,
   productOperationAllowed,
   productPolicyState,
   realtimeSelection,
@@ -146,18 +147,8 @@ function localTranscriptionFailure(result) {
   }
   return error;
 }
-// The answer product work gets when the policy refuses or retires it: the
-// policy is still loading, or it settled on a restriction.
-const policyBlockedMessage = (snapshot) =>
-  i18nMain.t(
-    {
-      POLICY_SIGN_IN_REQUIRED: "common.deviceSignInRequired",
-      DEVICE_POLICY_INVALID: "common.devicePolicyInvalid",
-    }[snapshot?.code] ??
-      (!snapshot || snapshot.status === "loading"
-        ? "common.policyUnresolved"
-        : "common.policyBlocked")
-  );
+// The answer product work gets when the policy refuses or retires it.
+const policyBlockedMessage = (snapshot) => i18nMain.t(policyRefusalKey(snapshot));
 const policyBlockedFailure = (snapshot) => ({
   success: false,
   code: "DEVICE_POLICY_BLOCKED",
@@ -2212,11 +2203,8 @@ class IPCHandlers {
       if (turnsRemote) {
         if (this.effectivePolicyManager.getCurrent().status === "loading") await awaitVerdict();
         if (!mayStart(operation)) {
-          const unsettled = this.effectivePolicyManager.getCurrent().status === "loading";
           throw Object.assign(
-            new Error(
-              i18nMain.t(unsettled ? "common.policyUnresolved" : "common.managedPolicyConflict")
-            ),
+            new Error(policyBlockedMessage(this.effectivePolicyManager.getCurrent())),
             { code: "DEVICE_POLICY_BLOCKED" }
           );
         }
@@ -9796,7 +9784,7 @@ class IPCHandlers {
         effective.localOnly ||
         !productOperationAllowed(effective, app.getVersion(), "meeting-transcription", [options])
       )
-        throw Object.assign(new Error(i18nMain.t("common.policyUnresolved")), {
+        throw Object.assign(new Error(policyBlockedMessage(effective)), {
           code: "DEVICE_POLICY_BLOCKED",
         });
       if (options.purpose === "meeting") assertMeetingAllowed();

@@ -12,12 +12,14 @@ const { LOCAL_POLICY_CODES } = require("./localModelPolicyGate");
 
 const DAILY_FILE = /^\d{4}-\d{2}-\d{2}\.jsonl$/;
 // O_NOFOLLOW doesn't exist on Windows, so there the folder's ACLs must keep other
-// users from planting links.
+// users from planting links. O_NONBLOCK keeps a FIFO planted there from holding
+// the open, and every write queued behind it, until someone reads it.
 const APPEND_FLAGS =
   fs.constants.O_WRONLY |
   fs.constants.O_APPEND |
   fs.constants.O_CREAT |
-  (fs.constants.O_NOFOLLOW ?? 0);
+  (fs.constants.O_NOFOLLOW ?? 0) |
+  (fs.constants.O_NONBLOCK ?? 0);
 const KEEP_FILES = 90;
 const CHECKPOINT_MS = 30_000;
 // A crash marker whose stop still can't be written a week after the first
@@ -147,13 +149,13 @@ function createMeetingAuditLog({
   }
 
   // Every user of a shared AuditLogPath can create files there, so a daily file
-  // another user planted as a symlink or hard link to one of this user's files
-  // is refused rather than appended to.
+  // another user planted as a symlink or hard link to one of this user's files,
+  // or as a FIFO, is refused rather than appended to.
   async function appendLine(file, line) {
     const handle = await fs.promises.open(file, APPEND_FLAGS);
     try {
       const stat = await handle.stat();
-      if (stat.nlink !== 1 || (process.getuid && stat.uid !== process.getuid()))
+      if (!stat.isFile() || stat.nlink !== 1 || (process.getuid && stat.uid !== process.getuid()))
         throw new Error("Not this user's own audit file");
       await handle.appendFile(line);
     } finally {
@@ -170,7 +172,8 @@ function createMeetingAuditLog({
       `${JSON.stringify({
         ts,
         event: entry.event,
-        sessionId: entry.sessionId ?? null,
+        // The renderer names the session, so only an id-shaped value is kept.
+        sessionId: /^[\w-]{1,64}$/.test(entry.sessionId ?? "") ? entry.sessionId : null,
         noteId: entry.noteId ?? null,
         trigger: entry.trigger ?? null,
         reason: entry.reason ?? null,
