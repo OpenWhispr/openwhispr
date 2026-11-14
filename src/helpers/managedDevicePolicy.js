@@ -268,8 +268,9 @@ async function readRegistryWithPowerShell(run) {
   const key = quote(WINDOWS_POLICY_KEY.replace(/^HKLM\\/, "HKLM:\\"));
   const script = [
     "$ErrorActionPreference = 'Stop'",
-    `try { $json = Get-ItemProperty -LiteralPath ${key} | Select-Object -Property ${DEVICE_KEYS.join(",")} | ConvertTo-Json -Compress }`,
-    "catch [System.Management.Automation.ItemNotFoundException] { $json = 'null' }",
+    // One statement: PowerShell rejects a ";" between try and catch.
+    `try { $json = Get-ItemProperty -LiteralPath ${key} | Select-Object -Property ${DEVICE_KEYS.join(",")} | ConvertTo-Json -Compress }` +
+      " catch [System.Management.Automation.ItemNotFoundException] { $json = 'null' }",
     `Set-Content -LiteralPath ${quote(file)} -Value $json -Encoding UTF8`,
   ].join("; ");
   const powershell = path.win32.join(
