@@ -111,11 +111,15 @@ function resolveEffectivePolicy(device, workspace, scope) {
     localOnly: device.localOnly === true,
   };
   // On a failure `managed` is the evidence that something manages this
-  // identity: a device policy, a server that called its policy unresolvable,
-  // or a failed lookup for an account last seen managed. Without it a failed
-  // lookup restricts nothing: the identity is unmanaged, for updates as for
-  // everything else. Only the first two settle the verdict.
-  const settledManaged = device.managed === true || workspace?.code === "POLICY_UNRESOLVABLE";
+  // identity: a device policy that requires sign-in or can't be read, a server
+  // that called its policy unresolvable, or a failed lookup for an account last
+  // seen managed. Without it a failed lookup restricts nothing: the identity is
+  // unmanaged, for updates as for everything else, and a device policy that
+  // doesn't need the account (the meeting alias alone) still applies. Only the
+  // first two settle the verdict.
+  const settledManaged =
+    (device.managed === true && (device.requireSignIn === true || device.status === "invalid")) ||
+    workspace?.code === "POLICY_UNRESOLVABLE";
   const managed = settledManaged || workspace?.managed === true;
   const failure = (status, code, policy = null) => ({
     ...metadata,
@@ -164,7 +168,11 @@ function resolveEffectivePolicy(device, workspace, scope) {
 function resolveUpdatePolicy(device, workspace, scope) {
   const invalidDevice = device.status === "invalid";
   return resolveEffectivePolicy(
-    invalidDevice ? ABSENT_DEVICE : { ...device, requireSignIn: false },
+    invalidDevice
+      ? ABSENT_DEVICE
+      : scope.authenticated
+        ? device
+        : { ...device, requireSignIn: false },
     invalidDevice ? (workspace ?? { success: false }) : workspace,
     scope
   );

@@ -174,3 +174,29 @@ test("known pending restrictions selectively revoke running work without admitti
   assert.equal(allowed(pending, "other-member", "process-local-reasoning"), false);
   assert.equal(productOperationAllowed(pending, "1.11.2", "cloud-transcribe"), false);
 });
+
+test("a refusal's words follow the policy's state", () => {
+  const { policyRefusalKey } = require("../../src/helpers/productPolicy");
+  assert.equal(policyRefusalKey({ status: "loading" }), "common.policyUnresolved");
+  // A failed lookup isn't the organization's decision.
+  for (const code of [
+    "POLICY_UNAVAILABLE",
+    "POLICY_RETRY_THROTTLED",
+    "POLICY_CREDENTIALS_UNREADABLE",
+  ])
+    assert.equal(
+      policyRefusalKey({ success: false, status: "error", code }),
+      "common.policyUnresolved"
+    );
+  assert.equal(policyRefusalKey({ success: true, status: "managed" }), "common.policyBlocked");
+  assert.equal(policyRefusalKey({ success: true, localOnly: true }), "common.policyBlocked");
+  assert.equal(
+    policyRefusalKey({ success: false, code: "POLICY_SIGN_IN_REQUIRED" }),
+    "common.deviceSignInRequired"
+  );
+  assert.equal(
+    policyRefusalKey({ success: false, code: "DEVICE_POLICY_INVALID" }),
+    "common.devicePolicyInvalid"
+  );
+  assert.equal(policyRefusalKey(undefined), "common.policyUnresolved");
+});

@@ -217,9 +217,21 @@ function addRegistryValue(values, rawName, type, data) {
   values[name] = boolean ? data === 1 : data;
 }
 
+// A REG_EXPAND_SZ export, hex(2): UTF-16LE bytes, expanded as Windows would
+// (and as PowerShell, the fallback reader, does): an unknown %name% stays.
+function expandedRegistryString(hex) {
+  const bytes = hex.split(",").map((pair) => parseInt(pair.trim(), 16));
+  if (bytes.some(Number.isNaN)) return null;
+  return Buffer.from(bytes)
+    .toString("utf16le")
+    .replace(/\0+$/, "")
+    .replace(/%([^%]+)%/g, (whole, name) => process.env[name] ?? whole);
+}
+
 // Reads the key's own values from a .reg export, which (unlike `reg query`)
-// keeps non-ASCII text intact: REG_SZ is a quoted string, REG_DWORD is dword:.
-// A REG_SZ holding line breaks (pretty-printed JSON) runs on over several lines.
+// keeps non-ASCII text intact: REG_SZ is a quoted string, REG_DWORD is dword:,
+// REG_EXPAND_SZ is hex(2): bytes continued over lines ending in "\". A REG_SZ
+// holding line breaks (pretty-printed JSON) runs on over several lines.
 function parseRegistryExport(text) {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
   const values = {};
@@ -231,13 +243,21 @@ function parseRegistryExport(text) {
     let data = match[2];
     while (data.startsWith('"') && !REGISTRY_STRING.test(data) && index < lines.length)
       data += `\n${lines[index++]}`;
+    while (data.startsWith("hex") && data.endsWith("\\") && index < lines.length)
+      data = data.slice(0, -1) + lines[index++].trim();
     const dword = /^dword:([0-9a-f]{8})$/i.exec(data)?.[1];
-    const string = REGISTRY_STRING.exec(data)?.[1];
+    const quoted = REGISTRY_STRING.exec(data)?.[1];
+    const string =
+      quoted === undefined
+        ? /^hex\(2\):/.test(data)
+          ? expandedRegistryString(data.slice(7))
+          : null
+        : unescapeRegistryString(quoted);
     addRegistryValue(
       values,
       unescapeRegistryString(match[1]),
-      dword ? "dword" : string === undefined ? "other" : "string",
-      dword ? parseInt(dword, 16) : string === undefined ? data : unescapeRegistryString(string)
+      dword ? "dword" : string === null ? "other" : "string",
+      dword ? parseInt(dword, 16) : (string ?? data)
     );
   }
   return values;

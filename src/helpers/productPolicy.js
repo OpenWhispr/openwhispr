@@ -18,6 +18,16 @@ function productPolicyState(snapshot, appVersion) {
   };
 }
 
+// The words for a refusal: the device's own state when it decides, a settled
+// restriction, or a verdict not in yet (still loading, or a failed lookup).
+function policyRefusalKey(snapshot) {
+  if (snapshot?.code === "POLICY_SIGN_IN_REQUIRED") return "common.deviceSignInRequired";
+  if (snapshot?.code === "DEVICE_POLICY_INVALID") return "common.devicePolicyInvalid";
+  return snapshot?.success || snapshot?.localOnly
+    ? "common.policyBlocked"
+    : "common.policyUnresolved";
+}
+
 function realtimeSelection(options = {}, provider = options.provider ?? "openai-realtime") {
   if (provider === "local") return { mode: "local", provider };
   if (provider === "enterprise-realtime")
@@ -176,6 +186,7 @@ function runningOperationAllowed(snapshot, accountId, appVersion, channel, args)
 }
 
 module.exports = {
+  policyRefusalKey,
   productOperationAllowed,
   productPolicyState,
   realtimeSelection,
