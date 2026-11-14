@@ -157,6 +157,73 @@ const FolderRoundedMark = glyph(
   <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
 );
 
+// The settings sidebar's Teamspaces entry, from the design's "office" icon (16px, scaled to 24).
+const OfficeMark = glyph(
+  <>
+    <path d="M14.33 7.67H20.33C21.07 7.67 21.67 8.26 21.67 9V19.67C21.67 20.4 21.07 21 20.33 21H13V9C13 8.26 13.6 7.67 14.33 7.67Z" />
+    <path d="M3.67 11.67H7.67C8.4 11.67 9 12.26 9 13V21H3.67C2.93 21 2.33 20.4 2.33 19.67V13C2.33 12.26 2.93 11.67 3.67 11.67Z" />
+    <path d="M6.33 8.33V5.93C6.33 5.37 6.68 4.87 7.21 4.68L14.54 1.99C15.41 1.67 16.33 2.32 16.33 3.24V4.33" />
+    <path d="M9 21H13" />
+    <path d="M16.33 11.67H18.33" />
+    <path d="M16.33 15H18.33" />
+  </>
+);
+
+// The selection bar's Remove, from the design's "user-minus" icon (14px, scaled to 24).
+const UserMinusMark = glyph(
+  <>
+    <path d="M12 9.67C14.03 9.67 15.67 8.03 15.67 6C15.67 3.98 14.03 2.33 12 2.33C9.97 2.33 8.33 3.98 8.33 6C8.33 8.03 9.97 9.67 12 9.67Z" />
+    <path d="M23 19.67H16.33" />
+    <path d="M18.07 15.67C16.55 14.03 14.41 13 12 13C8.6 13 5.68 15.04 4.39 17.96C3.9 19.06 4.5 20.33 5.65 20.69C7.28 21.2 9.45 21.67 12 21.67C12.3 21.67 12.58 21.64 12.87 21.63" />
+  </>
+);
+
+// "door-open" from the design (14px, scaled to 24).
+const DoorOpenMark = glyph(
+  <>
+    <path d="M12.33 21.33V2.67C12.33 2.19 11.85 1.87 11.41 2.05L5.15 4.66C4.66 4.87 4.33 5.35 4.33 5.89V18.11C4.33 18.65 4.66 19.13 5.15 19.34L11.41 21.95C11.85 22.13 12.33 21.81 12.33 21.33L12.33 21.33Z" />
+    <path d="M16.33 4.33H18.33C19.07 4.33 19.67 4.93 19.67 5.67V18.33C19.67 19.07 19.07 19.67 18.33 19.67H16.33" />
+    <path d="M9 11.33V12.67" />
+  </>
+);
+
+// "user-xmark" from the design (14px, scaled to 24).
+const UserXmarkMark = glyph(
+  <>
+    <path d="M12 9.67C14.02 9.67 15.66 8.03 15.66 6C15.66 3.98 14.02 2.33 12 2.33C9.97 2.33 8.33 3.98 8.33 6C8.33 8.03 9.97 9.67 12 9.67Z" />
+    <path d="M16 16L21.33 21.33" />
+    <path d="M13.24 13.11C12.84 13.05 12.43 13 12 13C8.6 13 5.68 15.04 4.39 17.96C3.9 19.06 4.5 20.33 5.65 20.69C7.28 21.2 9.45 21.67 12 21.67C12.01 21.67 12.02 21.66 12.03 21.66" />
+    <path d="M21.33 16L16 21.33" />
+  </>
+);
+
+// "user-settings" from the design (14px, scaled to 24).
+const UserSettingsMark = glyph(
+  <>
+    <path d="M12 9.67C14.02 9.67 15.66 8.03 15.66 6C15.66 3.98 14.02 2.33 12 2.33C9.97 2.33 8.33 3.98 8.33 6C8.33 8.03 9.97 9.67 12 9.67Z" />
+    <path d="M18.33 14V15.34" />
+    <path d="M21.4 15.27L20.46 16.21" />
+    <path d="M22.67 18.33H21.33" />
+    <path d="M21.4 21.4L20.46 20.45" />
+    <path d="M18.33 22.67V21.33" />
+    <path d="M15.27 21.4L16.21 20.45" />
+    <path d="M14 18.33H15.34" />
+    <path d="M15.27 15.27L16.21 16.21" />
+    <path d="M11.99 13C8.59 13.01 5.68 15.04 4.39 17.96C3.9 19.06 4.5 20.33 5.65 20.69C7.13 21.15 9.06 21.56 11.31 21.63" />
+    <path d="M18.34 21C19.81 21 21 19.81 21 18.33C21 16.86 19.81 15.67 18.34 15.67C16.86 15.67 15.67 16.86 15.67 18.33C15.67 19.81 16.86 21 18.34 21Z" />
+  </>
+);
+
+// "envelope-plus" from the design (14px, scaled to 24).
+const EnvelopePlusMark = glyph(
+  <>
+    <path d="M2.33 7.67L11.36 12.64C11.76 12.87 12.24 12.87 12.64 12.64L21.67 7.67" />
+    <path d="M18.33 15V21.67" />
+    <path d="M21.67 12.83V7C21.67 5.53 20.47 4.33 19 4.33H5C3.53 4.33 2.33 5.53 2.33 7V17C2.33 18.47 3.53 19.67 5 19.67H11.24" />
+    <path d="M21.67 18.33H15" />
+  </>
+);
+
 const ListEndMark = glyph(
   <>
     <path d="M16 12H3" />
@@ -329,6 +396,7 @@ export const MessageCircleQuestion = createIcon(
   MessageCircleQuestionMark
 );
 export const Minimize = createIcon("minimize", MinimizeMark);
+export const Office = createIcon("office", OfficeMark);
 export const Italic = createIcon("italic", ItalicMark);
 export const Lightbulb = createIcon("lightbulb", LightbulbMark);
 export const List = createIcon("list", ListMark);
@@ -341,4 +409,9 @@ export const Strikethrough = createIcon("strikethrough", StrikethroughMark);
 export const Table = createIcon("table", TableMark);
 export const SquareSparkle = createIcon("square-sparkle", SquareSparkleMark);
 export const TextSelect = createIcon("text-select", TextSelectMark);
+export const UserMinus = createIcon("user-minus", UserMinusMark);
+export const DoorOpen = createIcon("door-open", DoorOpenMark);
+export const UserXmark = createIcon("user-xmark", UserXmarkMark);
+export const UserSettings = createIcon("user-settings", UserSettingsMark);
+export const EnvelopePlus = createIcon("envelope-plus", EnvelopePlusMark);
 export const Volume = createIcon("volume", VolumeMark);

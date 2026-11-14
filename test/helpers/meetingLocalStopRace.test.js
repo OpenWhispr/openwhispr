@@ -470,7 +470,7 @@ test("model policy refresh stops only the active local meeting selection before 
         : [["transcription", { stop: async () => {}, isRemote: false }, () => "small"]],
       _activeLocalMeetingLease: activeModel ? { modelId: activeModel } : null,
       _localModelPolicy: {
-        failure: () => ({ code: "POLICY_MODEL_BLOCKED" }),
+        activeFailure: () => ({ code: "POLICY_MODEL_BLOCKED" }),
         assertCurrent: () => {
           throw Object.assign(new Error("blocked"), { code: "POLICY_MODEL_BLOCKED" });
         },

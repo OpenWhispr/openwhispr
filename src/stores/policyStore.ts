@@ -68,9 +68,9 @@ function applyEffectiveSnapshot(
     ...snapshot,
     ...(keepSettled
       ? {
-          status: current.status,
-          managed: current.managed,
-          policy: current.policy,
+          status: snapshot.policy ? "managed" : current.status,
+          managed: snapshot.policy ? true : current.managed,
+          policy: snapshot.policy ?? current.policy,
           workspaceManaged: current.workspaceManaged,
           code: current.code,
         }
