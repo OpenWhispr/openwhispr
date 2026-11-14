@@ -1,5 +1,4 @@
 import { create } from "zustand";
-
 export interface RetiredModelSwitch {
   provider: string;
   /** Provider display name, for retirements published in the model catalog. */

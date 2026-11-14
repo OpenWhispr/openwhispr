@@ -10,6 +10,10 @@ const ENDPOINTS = {
   // describes the key that calls it.
   openrouter: "https://openrouter.ai/api/v1/key",
   corti: "https://ai.eu.corti.app/v1/models",
+  // Both OpenCode listings answer 200 without a key, but answer 401 when a bad
+  // key is sent, so sending the configured one vouches for it.
+  "opencode-go": "https://opencode.ai/zen/go/v1/models",
+  "opencode-zen": "https://opencode.ai/zen/v1/models",
   // Public too, so it vouches only for the model; testTinfoilKey checks the key.
   tinfoil: "https://inference.tinfoil.sh/v1/models",
   // Deepgram's model list answers without a key, so it cannot vouch for one. This is

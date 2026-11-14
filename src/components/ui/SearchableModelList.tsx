@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Search } from "../icons";
+import { RefreshCw, Search, X } from "../icons";
 import { Input } from "./input";
 import { ModelCard, type ModelCardOption } from "./ModelCardList";
 import { getRemoteProviderIcon } from "../../utils/providerIcons";
@@ -54,6 +54,9 @@ interface SearchableModelListProps {
   onModelSelect: (modelId: string) => void;
   // Models follow this ranking; larger provider groups come first.
   modelRanking?: readonly string[];
+  /** When set, a refresh button sits right of the search bar (live catalogs). */
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
 export default function SearchableModelList({
@@ -61,13 +64,21 @@ export default function SearchableModelList({
   selectedModel,
   onModelSelect,
   modelRanking,
+  onRefresh,
+  refreshing,
 }: SearchableModelListProps) {
   const { t } = useTranslation();
   const listboxId = useId();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = query.trim().toLowerCase();
+
+  const clearQuery = () => {
+    setQuery("");
+    inputRef.current?.focus();
+  };
 
   const selectedOption = useMemo(
     () => models.find((m) => m.value === selectedModel) ?? null,
@@ -207,24 +218,49 @@ export default function SearchableModelList({
 
   return (
     <div className="space-y-2">
-      <div dir="ltr" className="relative">
-        <Search
-          size={14}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none"
-        />
-        <Input
-          dir="ltr"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={t("reasoning.custom.searchPlaceholder")}
-          aria-label={t("reasoning.custom.searchPlaceholder")}
-          role="combobox"
-          aria-expanded={rows.length > 0}
-          aria-controls={listboxId}
-          aria-activedescendant={activeId}
-          className="h-9 pl-8 text-sm"
-        />
+      <div className="flex items-center gap-1.5">
+        <div dir="ltr" className="relative flex-1">
+          <Search
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none"
+          />
+          <Input
+            ref={inputRef}
+            dir="ltr"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t("reasoning.custom.searchPlaceholder")}
+            aria-label={t("reasoning.custom.searchPlaceholder")}
+            role="combobox"
+            aria-expanded={rows.length > 0}
+            aria-controls={listboxId}
+            aria-activedescendant={activeId}
+            className="h-9 pl-8 pe-8 text-sm"
+          />
+          {query && (
+            <button
+              type="button"
+              aria-label={t("reasoning.custom.clearSearch")}
+              onClick={clearQuery}
+              className="absolute end-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        {onRefresh && (
+          <button
+            type="button"
+            aria-label={t("common.refresh")}
+            title={t("common.refresh")}
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} />
+          </button>
+        )}
       </div>
 
       {rows.length > 0 && (

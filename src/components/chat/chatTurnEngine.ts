@@ -613,6 +613,8 @@ export function createChatTurnEngine(
           "tinfoil",
           "openrouter",
           "corti",
+          "opencode-go",
+          "opencode-zen",
         ].includes(llmConfig.provider);
       // The catalog's supportsTools decides; the size guess covers models without it.
       const localModelCanUseTool =

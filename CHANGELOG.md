@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **OpenCode Go and Zen as reasoning providers.** Use an OpenCode subscription for the AI agent, voice assistant and note actions: pick a model in AI Models settings with your OpenCode API key. The model list is fetched live from OpenCode so new models appear without an app update, with a built-in set covering you offline. Every paid model is served over its native protocol (Chat Completions, Responses, Messages, Generate Content), so Claude- and Gemini-based models are offered alongside GPT-style ones. A refresh button beside the model search refetches the live list on demand, past the hourly cache. If a model you picked is later removed, your selection moves to a replacement and says what changed.
+
 ### Dictionary
 
 - **Import your Dragon vocabulary.** Dictionary → Import → Import from Dragon takes the list Dragon writes from Vocabulary → Export custom word and phrase list (TXT, or the Windows XML) and adds every custom word to your dictionary after a preview of what's new. Words with a spoken form are imported by their written form; words already present are skipped rather than duplicated, and the file's formatting properties are left behind. Words that can't sync (over 100 characters, or garbled by a wrong encoding) are skipped, and an import stops at the dictionary's 5,000-word limit; the preview counts each. (#2190)

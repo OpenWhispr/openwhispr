@@ -14,7 +14,8 @@ function inferenceProviderIds() {
   );
   const block = src.match(/PROVIDER_REGISTRY[^=]*=\s*Object\.freeze\(\{([\s\S]*?)\}\)/);
   assert.ok(block, "PROVIDER_REGISTRY declared in inferenceProviders/index.ts");
-  const ids = [...block[1].matchAll(/^\s*([A-Za-z][\w-]*):/gm)].map((m) => m[1]);
+  // Optional quotes: hyphenated provider ids ("opencode-go") can't be bare keys.
+  const ids = [...block[1].matchAll(/^\s*"?([A-Za-z][\w-]*)"?:/gm)].map((m) => m[1]);
   assert.ok(ids.length > 0, "parsed at least one provider id");
   return ids;
 }

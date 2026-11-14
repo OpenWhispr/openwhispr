@@ -2,6 +2,7 @@ import type { ModelDefinition } from "../models/ModelRegistry";
 import type { ReasoningConfig } from "../services/BaseReasoningService";
 import type { PermissionGuideState, PermissionGuideAction } from "./permissionGuide";
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
+import type { CloudModelDefinition } from "../models/ModelRegistry";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
 import type { OrgPolicy } from "./policy";
@@ -2544,6 +2545,36 @@ declare global {
         config: any
       ) => Promise<{ success: boolean; text?: string } & Partial<IpcErrorFields>>;
 
+      // OpenCode reasoning (Go / Zen). Both run in main: opencode.ai does not
+      // answer the browser CORS preflight.
+      processOpencodeReasoning: (
+        provider: "opencode-go" | "opencode-zen",
+        text: string,
+        modelId: string,
+        agentName: string | null,
+        config: any
+      ) => Promise<{ success: boolean; text?: string } & Partial<IpcErrorFields>>;
+
+      // OpenCode stream proxy for the renderer's chat model shim, mirroring
+      // the enterprise one: parts are relayed verbatim.
+      opencodeStreamStart?: (payload: {
+        streamId: string;
+        sessionId?: string;
+        provider: "opencode-go" | "opencode-zen";
+        modelId: string;
+        config: Record<string, unknown>;
+        options: Record<string, unknown>;
+      }) => Promise<{ success: boolean; error?: string }>;
+      opencodeStreamCancel?: (streamId: string) => Promise<void>;
+      onOpencodeStreamPart?: (
+        callback: (payload: {
+          streamId: string;
+          part?: unknown;
+          done?: boolean;
+          error?: string;
+        }) => void
+      ) => () => void;
+
       // Enterprise reasoning (Bedrock, Azure, Vertex)
       processEnterpriseReasoning: (
         text: string,
@@ -2805,7 +2836,12 @@ declare global {
       }) => Promise<ProxyTranscriptionResult>;
       getTinfoilKey?: () => Promise<string | null>;
       saveTinfoilKey?: (key: string) => Promise<void>;
+      getOpencodeGoKey?: () => Promise<string | null>;
+      saveOpencodeGoKey?: (key: string) => Promise<void>;
+      getOpencodeZenKey?: () => Promise<string | null>;
+      saveOpencodeZenKey?: (key: string) => Promise<void>;
       getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
+      getOpencodeModels?: (providerId: string) => Promise<CloudModelDefinition[]>;
       proxyTinfoilTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language?: string;

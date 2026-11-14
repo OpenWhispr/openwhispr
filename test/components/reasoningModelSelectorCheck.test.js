@@ -345,3 +345,88 @@ test("a refused key typed again is held back before its new answer", async (t) =
   await panel.unmount();
   assert.equal(panel.state().openaiApiKey, "sk-saved");
 });
+
+const catalogModels = (count) =>
+  Array.from({ length: count }, (_, i) => ({
+    id: `model-${i}`,
+    name: `Model ${i}`,
+    description: "",
+    supportsTemperature: true,
+    tokenParam: "max_tokens",
+  }));
+
+const mountOpencode = (t, count) =>
+  mount(t, {
+    overrides: { localReasoningProvider: "opencode-go", reasoningModel: "" },
+    electronAPI: { getOpencodeModels: async () => catalogModels(count) },
+  });
+
+test("an OpenCode catalog longer than a dozen models gets the searchable list", async (t) => {
+  const panel = await mountOpencode(t, 13);
+  await panel.wait(0);
+  await panel.wait(0);
+
+  assert.equal(panel.find((node) => node.type?.name === "SearchableModelList").length, 1);
+});
+
+test("a short OpenCode catalog keeps the plain card list", async (t) => {
+  const panel = await mountOpencode(t, 4);
+  await panel.wait(0);
+  await panel.wait(0);
+
+  assert.equal(panel.find((node) => node.type?.name === "SearchableModelList").length, 0);
+  assert.equal(panel.find((node) => node.type?.name === "ModelCardList").length, 1);
+});
+
+const searchableList = (panel) =>
+  panel.find((node) => node.type?.name === "SearchableModelList")[0];
+
+test("an OpenCode catalog gets a refresh that refetches despite a fresh cache", async (t) => {
+  let calls = 0;
+  const panel = await mount(t, {
+    overrides: { localReasoningProvider: "opencode-go", reasoningModel: "" },
+    electronAPI: {
+      getOpencodeModels: async () => {
+        calls += 1;
+        return catalogModels(13);
+      },
+    },
+  });
+  await panel.wait(0);
+  await panel.wait(0);
+  assert.equal(calls, 1);
+
+  const list = searchableList(panel);
+  assert.equal(typeof list?.props.onRefresh, "function", "a refresh sits beside the search bar");
+  await list.props.onRefresh();
+  await panel.wait(0);
+  assert.equal(calls, 2, "the refresh refetches instead of serving the fresh cache");
+});
+
+test("a short OpenCode catalog has no refresh", async (t) => {
+  const panel = await mountOpencode(t, 4);
+  await panel.wait(0);
+  await panel.wait(0);
+
+  assert.equal(searchableList(panel), undefined);
+});
+
+test("a Tinfoil catalog keeps no refresh", async (t) => {
+  const panel = await mount(t, {
+    overrides: { localReasoningProvider: "tinfoil", reasoningModel: "" },
+    electronAPI: {
+      getTinfoilChatModels: async () =>
+        Array.from({ length: 13 }, (_, i) => ({
+          id: `tinfoil-model-${i}`,
+          name: `Tinfoil Model ${i}`,
+          description: "",
+          supportsThinking: false,
+        })),
+    },
+  });
+  await panel.wait(0);
+  await panel.wait(0);
+
+  assert.equal(panel.find((node) => node.type?.name === "SearchableModelList").length, 1);
+  assert.equal(searchableList(panel)?.props.onRefresh, undefined);
+});

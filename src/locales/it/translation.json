@@ -807,6 +807,7 @@
       "ownerLabel": "Proprietario: {{owner}}",
       "unableToLoadModels": "Impossibile caricare i modelli dall'endpoint.",
       "searchPlaceholder": "Cerca modelli…",
+      "clearSearch": "Cancella ricerca",
       "selectedGroup": "Selezionato",
       "otherGroup": "Altro",
       "noSearchResults": "Nessun modello corrisponde a \"{{query}}\"",
@@ -921,6 +922,9 @@
     "localModelRetiredKept": "{{from}} è stato ritirato. Continua a funzionare perché è già scaricato, ma non può essere scaricato di nuovo. Scegli un altro modello locale nelle Impostazioni.",
     "groq": {
       "modelRetired": "Groq ha ritirato {{from}}. Passato a {{to}}."
+    },
+    "opencode": {
+      "modelRetired": "OpenCode ha ritirato {{from}}. Passato a {{to}}."
     },
     "tinfoil": {
       "modelRetired": "Tinfoil ha ritirato {{from}}. Passato a {{to}}.",
