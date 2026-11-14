@@ -146,11 +146,22 @@ function localTranscriptionFailure(result) {
   }
   return error;
 }
-// The answer product work gets when the policy refuses or retires it.
-const policyBlockedFailure = () => ({
+// The answer product work gets when the policy refuses or retires it: the
+// policy is still loading, or it settled on a restriction.
+const policyBlockedMessage = (snapshot) =>
+  i18nMain.t(
+    {
+      POLICY_SIGN_IN_REQUIRED: "common.deviceSignInRequired",
+      DEVICE_POLICY_INVALID: "common.devicePolicyInvalid",
+    }[snapshot?.code] ??
+      (!snapshot || snapshot.status === "loading"
+        ? "common.policyUnresolved"
+        : "common.policyBlocked")
+  );
+const policyBlockedFailure = (snapshot) => ({
   success: false,
   code: "DEVICE_POLICY_BLOCKED",
-  error: i18nMain.t("common.policyUnresolved"),
+  error: policyBlockedMessage(snapshot),
 });
 // Which diarization dialect a resolved endpoint speaks, for Custom endpoints
 // that front a known provider. Null when the host offers no known dialect.
@@ -1353,7 +1364,7 @@ class IPCHandlers {
         "transcribe-audio-file"
       )
     )
-      return policyBlockedFailure();
+      return policyBlockedFailure(this.effectivePolicyManager.getCurrent());
     const controller = new AbortController();
     this._productRequests.set(controller, {
       channel: "transcribe-audio-file",
@@ -1373,9 +1384,12 @@ class IPCHandlers {
             ...this._resolveWhisperVadOptions("noteRecording"),
             signal,
           });
-      return controller.signal.aborted ? policyBlockedFailure() : result;
+      return controller.signal.aborted
+        ? policyBlockedFailure(this.effectivePolicyManager.getCurrent())
+        : result;
     } catch (error) {
-      if (controller.signal.aborted) return policyBlockedFailure();
+      if (controller.signal.aborted)
+        return policyBlockedFailure(this.effectivePolicyManager.getCurrent());
       throw error;
     } finally {
       this._productRequests.delete(controller);
@@ -2064,7 +2078,7 @@ class IPCHandlers {
             this.effectivePolicyManager.getCurrent().accountId !== operation.accountId ||
             !mayStart(operation)
           )
-            return policyBlockedFailure();
+            return policyBlockedFailure(this.effectivePolicyManager.getCurrent());
           if (streamProperty) {
             const previousStreamPolicy = this._remoteStreamPolicies.get(streamProperty);
             if (
@@ -2102,7 +2116,8 @@ class IPCHandlers {
               error: "Authentication context changed during the request",
             };
           }
-          if (controller.signal.aborted) return policyBlockedFailure();
+          if (controller.signal.aborted)
+            return policyBlockedFailure(this.effectivePolicyManager.getCurrent());
           if (
             (!operation.remote || !snapshot.localOnly) &&
             runningOperationAllowed(
@@ -2117,7 +2132,7 @@ class IPCHandlers {
           if ((!snapshot.success && snapshot.status !== "loading") || snapshot.localOnly)
             this._stopRemoteProductWork();
           else if (snapshot.success) this._retireDisallowedProductWork(snapshot);
-          return policyBlockedFailure();
+          return policyBlockedFailure(this.effectivePolicyManager.getCurrent());
         } finally {
           this._productRequests.delete(controller);
           if (streamPolicy) {
@@ -9731,7 +9746,7 @@ class IPCHandlers {
       const policy = this.effectivePolicyManager.getCurrent();
       const state = productPolicyState(policy, app.getVersion());
       if (state.status === "error" || (policy.localOnly && options.provider !== "local")) {
-        throw Object.assign(new Error(i18nMain.t("common.policyUnresolved")), {
+        throw Object.assign(new Error(policyBlockedMessage(policy)), {
           code: "DEVICE_POLICY_BLOCKED",
         });
       }
@@ -12888,7 +12903,7 @@ class IPCHandlers {
             operation.args
           )
         )
-          return policyBlockedFailure();
+          return policyBlockedFailure(this.effectivePolicyManager.getCurrent());
       }
       return handleCloudApiRequest(opts);
     });

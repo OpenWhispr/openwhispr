@@ -380,6 +380,20 @@ test("updates follow the user's choice after a failed lookup, and ignore an unre
   assert.equal(resolveEffectivePolicy(invalid, managedWorkspace, member).success, false);
 });
 
+test("a signed-out device that requires sign-in updates as its device policy says", () => {
+  for (const mode of ["user_choice", "always_on", "it_managed"]) {
+    const policy = defaultDevicePolicy();
+    policy.updates.mode = mode;
+    const device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
+    assert.equal(device.requireSignIn, true);
+    assert.equal(resolveEffectivePolicy(device, null, guest).code, "POLICY_SIGN_IN_REQUIRED");
+    const updates = resolveUpdatePolicy(device, null, guest);
+    assert.equal(updates.success, true, mode);
+    assert.equal(updates.managed, true, mode);
+    assert.equal(updates.policy.updates.mode, mode);
+  }
+});
+
 test("held lookups read no network, a failed lookup keeps the held verdict, and updates follow", async () => {
   let scope = member;
   const requests = [];

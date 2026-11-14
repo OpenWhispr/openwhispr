@@ -598,9 +598,12 @@ class MeetingDetectionEngine {
   }
 
   // Both manual starts record into the note they create, so a start the org
-  // refuses must end before that note exists.
+  // refuses must end before that note exists. The device's own ban refuses
+  // too, so the user hears why nothing started.
   async _meetingStartRefusal(startSource) {
-    const refusal = await this.windowManager.resolveMeetingRecordingRefusal?.();
+    const refusal = this._isMeetingRecordingDisabled()
+      ? { code: "POLICY_MEETING_RECORDING_DISABLED" }
+      : await this.windowManager.resolveMeetingRecordingRefusal?.();
     if (refusal) {
       debugLogger.info("Meeting start refused by policy", { code: refusal.code }, "meeting");
       this._onStartRefused(refusal.code, startSource);
@@ -609,11 +612,6 @@ class MeetingDetectionEngine {
   }
 
   async startManualMeeting(options) {
-    if (this._isMeetingRecordingDisabled()) {
-      debugLogger.info("Manual meeting ignored — disabled by administrator", {}, "meeting");
-      this._onStartRefused("POLICY_MEETING_RECORDING_DISABLED", options?.startSource);
-      return;
-    }
     const refusal = await this._meetingStartRefusal(options?.startSource);
     if (refusal) {
       this.windowManager.sendMeetingStartRefused(refusal.code);
@@ -692,15 +690,6 @@ class MeetingDetectionEngine {
 
   // Resolves with the org's refusal, if any, for the caller to explain.
   async joinCalendarMeeting(eventId, trigger = "calendar-join", options) {
-    if (this._isMeetingRecordingDisabled()) {
-      debugLogger.info(
-        "Calendar meeting join ignored — disabled by administrator",
-        { eventId },
-        "meeting"
-      );
-      this._onStartRefused("POLICY_MEETING_RECORDING_DISABLED", options?.startSource);
-      return;
-    }
     const refusal = await this._meetingStartRefusal(options?.startSource);
     if (refusal) return refusal;
     this._meetingModeActive = true;
