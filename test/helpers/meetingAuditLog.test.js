@@ -506,6 +506,27 @@ test(
   }
 );
 
+// A FIFO planted as the daily file would otherwise hold the open, and every
+// write queued behind it, until someone read it.
+test(
+  "a daily file planted as a FIFO is refused at once, and later writes still land",
+  { skip: process.platform === "win32" },
+  async () => {
+    const shared = path.join(userData, "shared");
+    fs.mkdirSync(shared);
+    const daily = path.join(shared, "meeting-audit-jdoe-2026-11-11.jsonl");
+    require("node:child_process").execFileSync("mkfifo", [daily]);
+    const { log, warnings, clock } = harness({ configuredPath: shared });
+    log.recordingRefused({ noteId: null, trigger: "hotkey", reason: "POLICY_UNRESOLVABLE" });
+    await log.flush();
+    assert.equal(warnings.length, 1);
+    clock.now += 24 * 60 * 60 * 1000;
+    log.recordingRefused({ noteId: null, trigger: "hotkey", reason: "POLICY_UNRESOLVABLE" });
+    await log.flush();
+    assert.equal(fs.readdirSync(shared).length, 2);
+  }
+);
+
 // The owner check needs a file another user owns; stubbing process.getuid makes
 // this user's own files read as someone else's.
 test(
