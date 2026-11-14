@@ -212,6 +212,7 @@
     "policyAccountChanged": "Tu cuenta cambió, por lo que se detuvo esta respuesta.",
     "policyTranscriptionRestricted": "La transcripción está restringida por tu organización.",
     "policyUnresolved": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento.",
+    "policyBlocked": "Tu organización no permite esto en este dispositivo.",
     "managedConfigLoading": "Comprobando la configuración gestionada de tu organización. Inténtalo de nuevo en un momento.",
     "managedConfigUnavailable": "El acceso empresarial gestionado no está disponible. Vuelve a iniciar sesión o contacta a tu administrador.",
     "managedConfigAmbiguous": "La configuración gestionada de tu organización es incoherente. Contacta a tu administrador.",
@@ -221,7 +222,7 @@
     "managedDeviceAndWorkspace": "Dispositivo y espacio de trabajo administrados",
     "deviceLocalOnly": "Este dispositivo solo usa procesamiento local. Las funciones en la nube no están disponibles, tampoco para cuentas que ya habían iniciado sesión.",
     "deviceSignInRequired": "Tu organización exige iniciar sesión en este dispositivo.",
-    "devicePolicyInvalid": "No se pudo leer la política del dispositivo o no es válida. Contacta con tu administrador. Las acciones administradas están bloqueadas hasta que se corrija la política.",
+    "devicePolicyInvalid": "No se pudo leer la política del dispositivo o no es válida. Contacta con tu administrador. OpenWhispr no se puede usar hasta que se corrija la política.",
     "deviceWorkspaceUnavailable": "Este dispositivo requiere procesamiento local, pero la política del espacio de trabajo de la cuenta guardada no está disponible. Cierra sesión para continuar sin esa cuenta o contacta con tu administrador."
   },
   "onboarding": {

@@ -159,11 +159,12 @@ function resolveEffectivePolicy(device, workspace, scope) {
 
 // What the updater obeys. A device policy that can't be read contributes
 // nothing, and as it also keeps the workspace off the network, its held
-// verdict or none decides.
+// verdict or none decides. Signing in can only add a workspace's
+// restrictions, so a device waiting for it updates as its own policy says.
 function resolveUpdatePolicy(device, workspace, scope) {
   const invalidDevice = device.status === "invalid";
   return resolveEffectivePolicy(
-    invalidDevice ? ABSENT_DEVICE : device,
+    invalidDevice ? ABSENT_DEVICE : { ...device, requireSignIn: false },
     invalidDevice ? (workspace ?? { success: false }) : workspace,
     scope
   );

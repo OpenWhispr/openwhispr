@@ -219,35 +219,94 @@ async function hasWindowsPolicyKey(run) {
 const REGISTRY_STRING = /^"((?:[^"\\]|\\.)*)"$/;
 const unescapeRegistryString = (value) => value.replace(/\\(.)/g, "$1");
 
+// A device value from either reader: REG_SZ for text, a 0 or 1 REG_DWORD for
+// a switch. Value names are case-insensitive in the registry.
+function addRegistryValue(values, rawName, type, data) {
+  const name = DEVICE_KEYS.find((key) => key.toLowerCase() === rawName.toLowerCase());
+  if (!name) return;
+  const boolean = BOOLEAN_DEVICE_KEYS.includes(name);
+  if (boolean ? type !== "dword" || (data !== 0 && data !== 1) : type !== "string")
+    throw invalidDeployment("Invalid registry value type");
+  values[name] = boolean ? data === 1 : data;
+}
+
 // Reads the key's own values from a .reg export, which (unlike `reg query`)
 // keeps non-ASCII text intact: REG_SZ is a quoted string, REG_DWORD is dword:.
+// A REG_SZ holding line breaks (pretty-printed JSON) runs on over several lines.
 function parseRegistryExport(text) {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
   const values = {};
-  for (const line of lines.slice(lines.findIndex((entry) => entry.startsWith("[")) + 1)) {
+  for (let index = lines.findIndex((entry) => entry.startsWith("[")) + 1; index < lines.length;) {
+    const line = lines[index++];
     if (line.startsWith("[")) break;
-    const [, rawName, data] = /^"((?:[^"\\]|\\.)*)"=(.*)$/.exec(line) ?? [];
-    // Value names are case-insensitive in the registry.
-    const name =
-      rawName &&
-      DEVICE_KEYS.find(
-        (key) => key.toLowerCase() === unescapeRegistryString(rawName).toLowerCase()
-      );
-    if (!name) continue;
-    const boolean = BOOLEAN_DEVICE_KEYS.includes(name);
+    const match = /^"((?:[^"\\]|\\.)*)"=(.*)$/.exec(line);
+    if (!match) continue;
+    let data = match[2];
+    while (data.startsWith('"') && !REGISTRY_STRING.test(data) && index < lines.length)
+      data += `\n${lines[index++]}`;
     const dword = /^dword:([0-9a-f]{8})$/i.exec(data)?.[1];
     const string = REGISTRY_STRING.exec(data)?.[1];
-    if (boolean ? !["00000000", "00000001"].includes(dword) : string === undefined)
-      throw invalidDeployment("Invalid registry value type");
-    values[name] = boolean ? dword === "00000001" : unescapeRegistryString(string);
+    addRegistryValue(
+      values,
+      unescapeRegistryString(match[1]),
+      dword ? "dword" : string === undefined ? "other" : "string",
+      dword ? parseInt(dword, 16) : string === undefined ? data : unescapeRegistryString(string)
+    );
   }
   return values;
+}
+
+// A policy against registry tools makes reg.exe refuse to run, while
+// PowerShell can still read the key. PowerShell takes a second to start, so
+// it reads only when reg.exe can't. It writes UTF-8 to a file because its
+// console output uses the OEM code page. Returns the key's device values by
+// name (null where unset), or null when no key is deployed.
+async function readRegistryWithPowerShell(run) {
+  const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), "openwhispr-policy-"));
+  const file = path.join(directory, "policy.json");
+  const quote = (text) => `'${text.replaceAll("'", "''")}'`;
+  const key = quote(WINDOWS_POLICY_KEY.replace(/^HKLM\\/, "HKLM:\\"));
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    `try { $json = Get-ItemProperty -LiteralPath ${key} | Select-Object -Property ${DEVICE_KEYS.join(",")} | ConvertTo-Json -Compress }`,
+    "catch [System.Management.Automation.ItemNotFoundException] { $json = 'null' }",
+    `Set-Content -LiteralPath ${quote(file)} -Value $json -Encoding UTF8`,
+  ].join("; ");
+  const powershell = path.win32.join(
+    process.env.SystemRoot || "C:\\Windows",
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe"
+  );
+  try {
+    await run(powershell, ["-NoProfile", "-NonInteractive", "-Command", script], {
+      timeout: READER_TIMEOUT_MS * 2,
+      windowsHide: true,
+    });
+    return JSON.parse((await fs.promises.readFile(file, "utf8")).replace(/^\uFEFF/, ""));
+  } finally {
+    await fs.promises.rm(directory, { recursive: true, force: true });
+  }
 }
 
 // Exports only a key that is there: an export that then fails (its file
 // can't be written) is a reader failure, and keep-last-valid applies.
 async function readWindowsValues(run = execute) {
-  if (!(await hasWindowsPolicyKey(run))) return {};
+  let deployed;
+  try {
+    deployed = await hasWindowsPolicyKey(run);
+  } catch {
+    const entries = await readRegistryWithPowerShell(run);
+    const values = {};
+    for (const [name, data] of Object.entries(entries ?? {})) {
+      if (data === null) continue;
+      const type = typeof data === "string" ? "string" : Number.isInteger(data) ? "dword" : "other";
+      addRegistryValue(values, name, type, data);
+    }
+    return values;
+  }
+  if (!deployed) return {};
   const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), "openwhispr-policy-"));
   const file = path.join(directory, "policy.reg");
   try {
@@ -265,7 +324,10 @@ async function hasPolicyEvidence({
   run = execute,
   fileSystem = fs.promises,
 } = {}) {
-  if (platform === "win32") return hasWindowsPolicyKey(run);
+  if (platform === "win32")
+    return hasWindowsPolicyKey(run).catch(
+      async () => (await readRegistryWithPowerShell(run)) !== null
+    );
   const preferences = `${MACOS_PREFERENCES_DOMAIN}.plist`;
   const files =
     platform === "linux"
