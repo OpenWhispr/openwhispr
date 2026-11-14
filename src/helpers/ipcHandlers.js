@@ -5205,11 +5205,17 @@ class IPCHandlers {
       return { success: errors.length === 0, message: "Cleanup completed", errors };
     });
 
-    ipcMain.handle("update-hotkey", async (event, hotkey) => {
-      return await this.windowManager.updateHotkey(hotkey);
-    });
+    ipcMain.handle("update-hotkey", (event, hotkey) =>
+      this.windowManager.hotkeyManager.runExclusive(() => this.windowManager.updateHotkey(hotkey))
+    );
 
-    ipcMain.handle("set-hotkey-listening-mode", async (event, enabled) => {
+    // The hotkey fields send a change and then leave capture mode without waiting.
+    const handleHotkeyChange = (channel, handler) =>
+      ipcMain.handle(channel, (...args) =>
+        this.windowManager.hotkeyManager.runExclusive(() => handler(...args))
+      );
+
+    handleHotkeyChange("set-hotkey-listening-mode", async (event, enabled) => {
       if (enabled) {
         const captureWindow = BrowserWindow.fromWebContents(event.sender);
         // Only the control panel owns editable hotkey fields. Refocusing the
@@ -5231,7 +5237,7 @@ class IPCHandlers {
       const hotkeyManager = this.windowManager.hotkeyManager;
 
       // Restore from slot state only. A freshly captured hotkey is registered by
-      // its own update IPC (invoked before this one); re-binding it here would
+      // its own update IPC (serialized with this one); re-binding it here would
       // overwrite the primary on DE backends or leak untracked registrations.
       const effectiveHotkey = hotkeyManager.getCurrentHotkey();
 
@@ -5289,6 +5295,15 @@ class IPCHandlers {
             await hotkeyManager.gnomeManager.unregisterKeybinding(slot).catch((err) => {
               debugLogger.warn(`[IPC] Failed to unregister GNOME slot "${slot}":`, err.message);
             });
+          }
+        }
+
+        // On KDE, KWin would deliver a registered chord (e.g. Ctrl+Meta) to OpenWhispr
+        // instead of the field. Exiting capture re-registers every slot below.
+        if (hotkeyManager.isUsingKDE() && hotkeyManager.kdeManager) {
+          for (const slot of [...hotkeyManager.kdeManager.registeredSlots]) {
+            debugLogger.log(`[IPC] Unregistering KDE keybinding (slot "${slot}") for capture mode`);
+            await hotkeyManager.kdeManager.unregisterKeybinding(slot);
           }
         }
 
@@ -13776,7 +13791,7 @@ class IPCHandlers {
     });
 
     // Agent mode handlers
-    ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
+    handleHotkeyChange("update-voice-agent-hotkey", async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
       if (!voiceAgentCallback) {
@@ -13809,7 +13824,7 @@ class IPCHandlers {
       return this.environmentManager.getVoiceAgentKey?.() || "";
     });
 
-    ipcMain.handle("update-translation-hotkey", async (_event, hotkey) => {
+    handleHotkeyChange("update-translation-hotkey", async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const translationCallback = this.windowManager._translationHotkeyCallback;
       if (!translationCallback) {

@@ -10,6 +10,7 @@ import {
 import { getPlatform, type Platform } from "../../utils/platform";
 import {
   hasMetModifierOnlyHoldThreshold,
+  heldModifiersAfterKeyDown,
   shouldAcceptModifierOnlyCapture,
   shouldRestoreCaptureFocus,
 } from "./hotkeyCapturePolicy";
@@ -378,12 +379,8 @@ export function HotkeyInput({
       onValidationError?.(null);
 
       // Track held modifiers for modifier-only capture
-      heldModifiersRef.current = {
-        ctrl: e.ctrlKey,
-        meta: e.metaKey,
-        alt: e.altKey,
-        shift: e.shiftKey,
-      };
+      const heldNow = heldModifiersAfterKeyDown(e.nativeEvent);
+      heldModifiersRef.current = heldNow;
 
       // Track which specific keys are pressed (for left/right detection)
       const code = e.nativeEvent.code;
@@ -407,14 +404,14 @@ export function HotkeyInput({
       const holdKind = (kind: ModifierKind) =>
         held.push(heldModifierToken(kind, codes[kind], platform));
       if (isMac) {
-        if (e.metaKey) holdKind("meta");
-        if (e.ctrlKey) holdKind("ctrl");
+        if (heldNow.meta) holdKind("meta");
+        if (heldNow.ctrl) holdKind("ctrl");
       } else {
-        if (e.ctrlKey) holdKind("ctrl");
-        if (e.metaKey) holdKind("meta");
+        if (heldNow.ctrl) holdKind("ctrl");
+        if (heldNow.meta) holdKind("meta");
       }
-      if (e.altKey) holdKind("alt");
-      if (e.shiftKey) holdKind("shift");
+      if (heldNow.alt) holdKind("alt");
+      if (heldNow.shift) holdKind("shift");
       if (fnHeldRef.current) held.push("Fn");
       setActiveModifiers(held);
 

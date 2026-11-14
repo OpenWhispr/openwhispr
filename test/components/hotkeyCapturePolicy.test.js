@@ -32,3 +32,35 @@ test("capture focus is restored only when no control owns page focus", async () 
   assert.equal(shouldRestoreCaptureFocus(body, body), true);
   assert.equal(shouldRestoreCaptureFocus(button, body), false);
 });
+
+// Keydowns as Chromium delivered them under XWayland on Plasma 6.8 (#2750).
+test("a modifier keydown counts its own key even when its flag is missing", async () => {
+  const { heldModifiersAfterKeyDown } = await load();
+  const keydown = (code, flags = {}) => ({
+    code,
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...flags,
+  });
+
+  assert.deepEqual(heldModifiersAfterKeyDown(keydown("MetaLeft", { ctrlKey: true })), {
+    ctrl: true,
+    meta: true,
+    alt: false,
+    shift: false,
+  });
+  assert.deepEqual(heldModifiersAfterKeyDown(keydown("MetaLeft")), {
+    ctrl: false,
+    meta: true,
+    alt: false,
+    shift: false,
+  });
+  assert.deepEqual(heldModifiersAfterKeyDown(keydown("KeyK", { shiftKey: true })), {
+    ctrl: false,
+    meta: false,
+    alt: false,
+    shift: true,
+  });
+});
