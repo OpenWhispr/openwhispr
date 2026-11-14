@@ -656,7 +656,7 @@
     "updateRequiredByOrg": {
       "title": "Update erforderlich",
       "description": "Ihre Organisation erfordert OpenWhispr {{version}} oder neuer. Bitte aktualisieren Sie die App.",
-      "contactIT": "Deine Organisation erfordert OpenWhispr {{version}} oder neuer. Kontaktiere die IT, um eine freigegebene Version zu installieren."
+      "contactIT": "Ihre Organisation erfordert OpenWhispr {{version}} oder neuer. Wenden Sie sich an die IT, um eine freigegebene Version zu installieren."
     },
     "update": {
       "readyTitle": "Update bereit zur Installation",
@@ -3031,13 +3031,13 @@
         "title": "Updates",
         "versionPlaceholder": "—",
         "whatsNew": "Neu in v{{version}}",
-        "managedByOrganization": "Von deiner Organisation verwaltet.",
-        "itManaged": "Deine Organisation verwaltet Updates.",
+        "managedByOrganization": "Von Ihrer Organisation verwaltet.",
+        "itManaged": "Ihre Organisation verwaltet Updates.",
         "policyLoading": "Update-Einstellungen werden geladen…",
-        "policyUnavailable": "Die Update-Einstellungen konnten nicht geladen werden. Suche nach Updates, um es erneut zu versuchen.",
-        "policyChanged": "Die Update-Richtlinie hat sich geändert. Suche erneut nach Updates.",
+        "policyUnavailable": "Die Update-Einstellungen konnten nicht geladen werden. Suchen Sie nach Updates, um es erneut zu versuchen.",
+        "policyChanged": "Die Update-Richtlinie hat sich geändert. Suchen Sie erneut nach Updates.",
         "managedBadge": "Verwaltet",
-        "stagedBeforePolicy": "Ein Update wurde vor Anwendung dieser Richtlinie bereitgestellt und kann beim Beenden der App installiert werden. Kontaktiere die IT, bevor du die App beendest oder neu startest."
+        "stagedBeforePolicy": "Ein Update wurde vor Anwendung dieser Richtlinie bereitgestellt und kann beim Beenden der App installiert werden. Wenden Sie sich an die IT, bevor Sie die App beenden oder neu starten."
       },
       "translationHotkey": {
         "title": "Übersetzungs-Hotkey",
