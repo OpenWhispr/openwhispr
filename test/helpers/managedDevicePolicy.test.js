@@ -243,6 +243,8 @@ function powershellRegistry(entries, calls = []) {
     calls.push(path.win32.basename(command));
     if (path.win32.basename(command) === "reg.exe")
       return registryWithoutPolicy({ blocked: true })();
+    // PowerShell rejects a ";" between try and catch, so the script must not have one.
+    assert.doesNotMatch(args.at(-1), /\}\s*;\s*catch/);
     const file = /Set-Content -LiteralPath '((?:[^']|'')+)'/
       .exec(args.at(-1))[1]
       .replaceAll("''", "'");
