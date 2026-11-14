@@ -13,6 +13,7 @@ export default class FakeAudioManager {
   constructor() {
     this.voiceAgentRequested = false;
     this.translationRequested = false;
+    this.pastes = [];
     globalThis.__clipboardPersistenceAudioManager = this;
   }
   getState() {
@@ -26,6 +27,10 @@ export default class FakeAudioManager {
   }
   saveTranscription(...args) {
     return globalThis.__saveClipboardPersistenceTranscription(...args);
+  }
+  async safePaste(text) {
+    this.pastes.push(text);
+    return { pasted: true };
   }
   shouldUseStreaming() {
     return false;
@@ -175,6 +180,7 @@ async function mountCompletionHarness(
     },
     logs: globalThis.__clipboardPersistenceLogs,
     navigatorWrites,
+    pastes: globalThis.__clipboardPersistenceAudioManager.pastes,
     saves,
   };
 }
@@ -211,6 +217,57 @@ test("clipboard-only rejection cannot cancel non-preview transcription persisten
     )
   );
   assert.deepEqual(harness.navigatorWrites, []);
+});
+
+test("paragraph-only output survives completion, clipboard delivery and persistence", async (t) => {
+  const harness = await mountCompletionHarness(t, { settings: { preferredLanguage: "en-GB" } });
+  await harness.complete({
+    success: true,
+    text: "\n\n",
+    rawText: "  New paragraph. \n",
+    source: "openai",
+  });
+  assert.deepEqual(harness.bridgeWrites, ["\n\n"]);
+  assert.equal(harness.saves.length, 1);
+  assert.equal(harness.saves[0][0], "\n\n");
+  assert.equal(harness.saves[0][1], "  New paragraph. \n");
+});
+
+test("explicit newlines reach automatic paste unchanged", async (t) => {
+  const harness = await mountCompletionHarness(t, {
+    settings: { preferredLanguage: "en", autoPasteEnabled: true },
+  });
+  for (const [text, rawText] of [
+    ["\n\n", "New paragraph."],
+    ["One.\n\nTwo.", "One. New paragraph. Two."],
+    ["\n\n\n\n", "New paragraph. New paragraph."],
+  ]) {
+    await harness.complete({ success: true, text, rawText, source: "openai" });
+  }
+  assert.deepEqual(harness.pastes, ["\n\n", "One.\n\nTwo.", "\n\n\n\n"]);
+  assert.deepEqual(
+    harness.saves.map((args) => args[0]),
+    harness.pastes
+  );
+});
+
+test("the paragraph exception does not deliver arbitrary blank or assistant/selection output", async (t) => {
+  const harness = await mountCompletionHarness(t, { settings: { preferredLanguage: "en" } });
+  for (const result of [
+    { text: "\n\n", rawText: "ordinary text" },
+    { text: "\n\n", rawText: '"new paragraph"' },
+    { text: "\n", rawText: "New paragraph." },
+    { text: "\n\n", rawText: "New paragraph.", selectionEdit: { sessionId: "synthetic-session" } },
+    {
+      text: "\n\n",
+      rawText: "New paragraph.",
+      assistantConversation: { transcript: "synthetic request" },
+    },
+  ])
+    await harness.complete({ success: true, source: "openai", ...result });
+  assert.deepEqual(harness.bridgeWrites, []);
+  assert.deepEqual(harness.saves, []);
+  assert.deepEqual(harness.pastes, []);
 });
 
 test("clipboard-only unsuccessful bridge response is logged without cancelling persistence", async (t) => {
