@@ -591,6 +591,35 @@ test("a refused bearer the server called unresolvable stays fail-closed, not a g
   assert.equal(status.updateMode, null);
 });
 
+test("a sign-in-required device policy deployed while signed out sets the updater's mode", async (t) => {
+  const {
+    defaultDevicePolicy,
+    normalizeDeviceValues,
+  } = require("../../src/helpers/managedDevicePolicy");
+  restoreUpdaterState(t);
+  useTestApi(t);
+  const deviceSnapshot = fakeThis.managedDevicePolicy.getSnapshot;
+  let device = normalizeDeviceValues({});
+  fakeThis.managedDevicePolicy.getSnapshot = () => device;
+  t.after(() => {
+    fakeThis.managedDevicePolicy.getSnapshot = deviceSnapshot;
+  });
+  tokenState = { token: null, generation: 118 };
+  fakeThis.databaseManager = scopedDatabase(null);
+  fakeThis.windowManager = { retireMeetingNotificationScope() {} };
+  fakeThis.updateManager = createUpdater();
+  await fakeThis.updateManager.refreshPolicy();
+  assert.equal((await fakeThis.updateManager.getUpdateStatus()).updateMode, "user_choice");
+
+  const policy = defaultDevicePolicy();
+  policy.updates.mode = "it_managed";
+  device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
+  await fakeThis.refreshEffectivePolicy();
+  const status = await fakeThis.updateManager.getUpdateStatus();
+  assert.equal(status.policyReady, true);
+  assert.equal(status.updateMode, "it_managed");
+});
+
 test("under a device policy, an outage with nothing held leaves updates unavailable once it fails", async (t) => {
   const {
     defaultDevicePolicy,
