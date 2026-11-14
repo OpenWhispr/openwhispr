@@ -2242,6 +2242,8 @@ if (gotSingleInstanceLock) {
 function performSyncTeardown() {
   ipcHandlers?._noteFilesSync?.flushSync();
   registryLoader?.stop();
+  // Restores ducked volumes and stops the call mic forward before exit.
+  require("./src/helpers/dictationAudioGuard").stopDictationAudioGuard();
   disposeRegistryIpc?.();
   disposeRegistryIpc = null;
   if (wakeRewarmTimer) {

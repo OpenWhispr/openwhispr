@@ -78,6 +78,31 @@ export interface MainWindowInputRegion {
 
 export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcribed";
 
+/** Windows dictation audio guard (src/helpers/dictationAudioGuard.js). */
+export interface DictationAudioGuardConfig {
+  duckEnabled: boolean;
+  /** Other apps' playback during dictation, as a percent of their volume (0-99). */
+  duckPercent: number;
+  callMicGateEnabled: boolean;
+  /** Capture endpoint id forwarded to calls, or "default". */
+  callMicSourceId: string;
+  /** Virtual render endpoint id calls listen to; "" picks a known virtual cable. */
+  callMicTargetId: string;
+}
+
+export interface DictationAudioGuardStatus {
+  supported: boolean;
+  forwarding: boolean;
+  forwardTargetName: string | null;
+  forwardError: string | null;
+}
+
+export interface DictationAudioDevice {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
 /** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
@@ -3021,6 +3046,16 @@ declare global {
       toggleMediaPlayback?: () => Promise<boolean>;
       pauseMediaPlayback?: () => Promise<boolean>;
       resumeMediaPlayback?: () => Promise<boolean>;
+      configureDictationAudioGuard?: (
+        config: DictationAudioGuardConfig
+      ) => Promise<DictationAudioGuardStatus>;
+      getDictationAudioGuardStatus?: () => Promise<DictationAudioGuardStatus>;
+      listDictationAudioDevices?: () => Promise<{
+        capture: DictationAudioDevice[];
+        render: DictationAudioDevice[];
+      }>;
+      beginDictationAudioGuard?: () => Promise<boolean>;
+      endDictationAudioGuard?: () => Promise<boolean>;
       getModelCacheRoot?: () => Promise<string>;
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
 
