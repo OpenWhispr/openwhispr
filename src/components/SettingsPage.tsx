@@ -1192,6 +1192,7 @@ export default function SettingsPage({
     cloudTranscriptionBaseUrl,
     useCleanupModel,
     dictationKey,
+    pasteLastKey,
     activationMode,
     setActivationMode,
     microphoneSelectionMode,
@@ -1212,6 +1213,7 @@ export default function SettingsPage({
     setCloudTranscriptionBaseUrl,
     setUseCleanupModel,
     setDictationKey,
+    setPasteLastKey,
     meetingKey,
     setMeetingKey,
     meetingHotkeyLayoutMode,
@@ -1476,6 +1478,22 @@ export default function SettingsPage({
     showAlert: showAlertDialog,
   });
 
+  const pasteLastRegisterFn = useCallback(
+    async (hotkey: string) => window.electronAPI.updatePasteLastHotkey!(hotkey),
+    []
+  );
+
+  const { registerHotkey: registerPasteLastHotkey, isRegistering: isPasteLastRegistering } =
+    useHotkeyRegistration({
+      onSuccess: (registeredHotkey) => {
+        setPasteLastKey(registeredHotkey);
+      },
+      showSuccessToast: false,
+      showErrorToast: true,
+      showAlert: showAlertDialog,
+      registerFn: pasteLastRegisterFn,
+    });
+
   const meetingRegisterFn = useCallback(async (hotkey: string) => {
     const result = await window.electronAPI?.registerMeetingHotkey?.(hotkey);
     // No `message`: useHotkeyRegistration falls back to the translated
@@ -1525,10 +1543,26 @@ export default function SettingsPage({
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
+          "settingsPage.general.pasteLastHotkey.title": pasteLastKey,
         },
         t
       ),
-    [meetingKey, voiceAgentKey, translationKey, t]
+    [meetingKey, voiceAgentKey, translationKey, pasteLastKey, t]
+  );
+
+  const validatePasteLastHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, voiceAgentKey, translationKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -1539,10 +1573,11 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
           "settingsPage.general.translationHotkey.title": translationKey,
+          "settingsPage.general.pasteLastHotkey.title": pasteLastKey,
         },
         t
       ),
-    [dictationKey, voiceAgentKey, translationKey, t]
+    [dictationKey, voiceAgentKey, translationKey, pasteLastKey, t]
   );
 
   const validateVoiceAgentHotkey = useCallback(
@@ -1553,10 +1588,11 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.translationHotkey.title": translationKey,
+          "settingsPage.general.pasteLastHotkey.title": pasteLastKey,
         },
         t
       ),
-    [dictationKey, meetingKey, translationKey, t]
+    [dictationKey, meetingKey, translationKey, pasteLastKey, t]
   );
 
   const validateTranslationHotkey = useCallback(
@@ -1567,10 +1603,11 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.pasteLastHotkey.title": pasteLastKey,
         },
         t
       ),
-    [dictationKey, meetingKey, voiceAgentKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, pasteLastKey, t]
   );
 
   const {
@@ -4226,6 +4263,39 @@ EOF`,
                     validate={validateTranslationHotkey}
                     disabled={isAgentHotkeyCommitting}
                     maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                  />
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Paste Last Transcription Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.pasteLastHotkey.title")}
+                description={t("settingsPage.general.pasteLastHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyListInput
+                    value={pasteLastKey}
+                    onChange={(list) => registerPasteLastHotkey(list)}
+                    onClear={() => setPasteLastKey("")}
+                    validate={validatePasteLastHotkey}
+                    disabled={isPasteLastRegistering}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    footerEnd={
+                      pasteLastKey && pasteLastKey !== "Alt+Shift+Z" ? (
+                        <button
+                          onClick={() => registerPasteLastHotkey("Alt+Shift+Z")}
+                          disabled={isPasteLastRegistering}
+                          className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                          {t("settingsPage.general.pasteLastHotkey.resetToDefault", {
+                            hotkey: formatHotkeyLabel("Alt+Shift+Z"),
+                          })}
+                        </button>
+                      ) : null
+                    }
                   />
                 </SettingsPanelRow>
               </SettingsPanel>
