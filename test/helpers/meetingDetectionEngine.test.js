@@ -512,6 +512,7 @@ test("an administrator-disabled build never runs detectors, prompts, or starts a
     meetingNavigations,
     noteNavigations,
     refusals,
+    windowManager,
   } = createEngine({ isMeetingRecordingDisabled: () => disabled });
 
   engine.start();
@@ -523,7 +524,9 @@ test("an administrator-disabled build never runs detectors, prompts, or starts a
   engine.handleCalendarReminder({ id: "event-1" });
   assert.deepEqual(shown, []);
 
-  // Both starts say why, rather than doing nothing.
+  // Both starts say why, rather than doing nothing, naming the device's ban even
+  // when the effective verdict has its own reason.
+  windowManager.resolveMeetingRecordingRefusal = async () => ({ code: "POLICY_UNRESOLVABLE" });
   await engine.startManualMeeting();
   assert.deepEqual(refusals, ["POLICY_MEETING_RECORDING_DISABLED"]);
   assert.equal(
