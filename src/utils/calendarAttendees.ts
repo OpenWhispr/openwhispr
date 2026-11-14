@@ -17,6 +17,7 @@ export function parseAttendees(event: CalendarEvent): CalendarAttendee[] {
  */
 export function hasOtherAttendees(event: CalendarEvent): boolean {
   const attendees = parseAttendees(event);
-  if (attendees.length > 0) return attendees.some((attendee) => !attendee.self);
+  if (attendees.length > 0)
+    return attendees.some((attendee) => !attendee.self && !attendee.resource);
   return event.attendees_count > 1;
 }

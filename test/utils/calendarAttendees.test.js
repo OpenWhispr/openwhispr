@@ -10,11 +10,12 @@ const event = (overrides) => ({
   ...overrides,
 });
 
-const attendee = (email, self = false) => ({
+const attendee = (email, self = false, resource = false) => ({
   email,
   displayName: null,
   responseStatus: "accepted",
   self,
+  resource,
 });
 
 test("hasOtherAttendees hides events with nobody invited", async () => {
@@ -52,4 +53,16 @@ test("parseAttendees returns an empty list for malformed JSON", async () => {
   const { parseAttendees } = await load();
   assert.deepEqual(parseAttendees(event({ attendees: "nope" })), []);
   assert.deepEqual(parseAttendees(event({ attendees: '{"a":1}' })), []);
+});
+
+test("hasOtherAttendees hides events where other attendees are only room resources", async () => {
+  const { hasOtherAttendees } = await load();
+  const roomBooking = event({
+    attendees: JSON.stringify([
+      attendee("me@example.com", true),
+      attendee("room-101@example.com", false, true),
+    ]),
+    attendees_count: 2,
+  });
+  assert.equal(hasOtherAttendees(roomBooking), false);
 });
