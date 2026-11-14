@@ -140,6 +140,33 @@ function baseProps(enhancement) {
   };
 }
 
+function findCopyButton(tree) {
+  let button = null;
+  walk(tree, (node) => {
+    if (!button && String(node.props["aria-label"] ?? "").startsWith("notes.editor.cop")) {
+      button = node;
+    }
+  });
+  return button;
+}
+
+function installClipboard(t) {
+  const written = [];
+  const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      userAgent: globalThis.navigator?.userAgent ?? "",
+      clipboard: { writeText: async (text) => written.push(text) },
+    },
+  });
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, "navigator", original);
+    else delete globalThis.navigator;
+  });
+  return written;
+}
+
 async function loadNoteEditor(t, permission, options = {}) {
   const events = {};
   installBrowserGlobals(t, {
@@ -148,10 +175,16 @@ async function loadNoteEditor(t, permission, options = {}) {
       addEventListener: (name, callback) => {
         events[name] = callback;
       },
+      setTimeout: () => 1,
+      clearTimeout() {},
       electronAPI: {
         getOpenAIKey: async () => "",
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
+        formatTranscript: async (noteId, format) => ({
+          success: true,
+          content: `transcript ${noteId} as ${format}`,
+        }),
         getActions: async () =>
           options.actions ?? [TEMPLATE, DEFAULT_TEMPLATE, ...(globalThis.__noteActions ?? [])],
         onActionUpdated: (callback) => {
@@ -232,6 +265,7 @@ export function useSpaceRoster(cloudSpaceId) {
   globalThis.__noteEditorRosterId = cloudSpaceId;
   return globalThis.__noteEditorRoster ? new Map(globalThis.__noteEditorRoster.map(member => [member.user_id, member])) : null;
 }`,
+      "/ui/useToast": `export const useToast = () => ({ toast() {} });`,
     },
   });
 
@@ -659,6 +693,48 @@ test("the collapsed composer keeps its send button while the note has no actions
   const { render, latest, unmount } = await loadNoteEditor(t);
   await render(ENHANCEMENT);
   assert.ok(!findBottomBar(latest()).props.actionPicker);
+  await unmount();
+});
+
+test("the copy button copies the tab that is shown", async (t) => {
+  const written = installClipboard(t);
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  const overrides = { note: { ...NOTE, transcript: '[{"text":"hello"}]' } };
+  const copy = () => React.act(async () => findCopyButton(latest()).props.onClick());
+
+  await render(ENHANCEMENT, overrides);
+  assert.equal(findCopyButton(latest()).props["aria-label"], "notes.editor.copySummary");
+  await copy();
+  assert.equal(findCopyButton(latest()).props["aria-label"], "notes.editor.copied");
+
+  await click("raw");
+  await copy();
+  await click("transcript");
+  await copy();
+
+  assert.deepEqual(written, [NOTE.enhanced_content, NOTE.content, "transcript 1 as md"]);
+  await unmount();
+});
+
+test("the copy button is off when the tab has nothing to copy", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+
+  await render(undefined);
+  await click("transcript");
+  assert.equal(findCopyButton(latest()).props.disabled, true, "no transcript yet");
+
+  await render(undefined, {
+    note: { ...NOTE, transcript: '[{"text":"hello"}]' },
+    isRecording: true,
+  });
+  assert.equal(
+    findCopyButton(latest()).props.disabled,
+    true,
+    "the stored transcript lags behind a live recording"
+  );
+
+  await click("raw");
+  assert.equal(findCopyButton(latest()).props.disabled, false);
   await unmount();
 });
 
