@@ -596,8 +596,8 @@ class MeetingDetectionEngine {
   }
 
   // Both manual starts record into the note they create, so a start the org
-  // refuses must end before that note exists.
-  // The device's own ban refuses too, so the user hears why nothing started.
+  // refuses must end before that note exists. The device's own ban refuses
+  // too, so the user hears why nothing started.
   async _meetingStartRefusal() {
     const refusal = this._isMeetingRecordingDisabled()
       ? { code: "POLICY_MEETING_RECORDING_DISABLED" }
