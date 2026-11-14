@@ -14,14 +14,17 @@ export const dismissToneStyleBanner = () => localStorage.setItem(BANNER_DISMISSE
  * Tone & Style's Home entry points, offered once the user has dictated
  * TONE_STYLE_PROMPT_MIN_WORDS words: the banner until it is set up or
  * dismissed, and the setup dialog, opened by itself the first time. The word
- * count is local history's, so with history off only Settings offers it.
+ * count is local history's, so with history off only Settings offers it. Both
+ * are about dictation, so neither is offered while a custom cleanup prompt,
+ * which takes no tone, is set.
  */
 export function useToneStylePrompt() {
   const toneStyleEnabled = useSettingsStore((s) => s.toneStyleEnabled);
+  const hasCustomCleanupPrompt = useSettingsStore((s) => !!s.customPrompts.cleanup);
   const [bannerDismissed, setBannerDismissed] = useState(() => readFlag(BANNER_DISMISSED_KEY));
   const [totalWords, setTotalWords] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const pending = !toneStyleEnabled && !bannerDismissed;
+  const pending = !toneStyleEnabled && !bannerDismissed && !hasCustomCleanupPrompt;
 
   useEffect(() => {
     if (!pending || !window.electronAPI?.getAnalyticsSummary) return;

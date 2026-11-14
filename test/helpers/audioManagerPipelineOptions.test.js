@@ -48,21 +48,28 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   );
   const manager = createManager();
   useSettingsStore.setState(good);
-  assert.deepEqual(manager.getPipelineCleanupOptions(useSettingsStore.getState()), {
+  const untoned = {
     agentName: "OpenWhispr",
     customDictionary: ["Orukeet"],
     customPrompt: good.customPrompts.cleanup,
     language: "en",
     locale: "en",
-  });
-  // Tone & Style: the tone picked for the app being dictated into.
+  };
+  assert.deepEqual(manager.getPipelineCleanupOptions(useSettingsStore.getState()), untoned);
+  // Tone & Style: the tone picked for the app being dictated into, which a
+  // custom cleanup prompt never takes.
   useSettingsStore.setState({ ...good, toneStyleEnabled: true });
+  assert.deepEqual(
+    manager.getPipelineCleanupOptions(useSettingsStore.getState(), { appCategory: "email" }),
+    untoned
+  );
+  useSettingsStore.setState({ ...good, toneStyleEnabled: true, customPrompts: { cleanup: "" } });
   assert.deepEqual(
     manager.getPipelineCleanupOptions(useSettingsStore.getState(), { appCategory: "email" }),
     {
       agentName: "OpenWhispr",
       customDictionary: ["Orukeet"],
-      customPrompt: good.customPrompts.cleanup,
+      customPrompt: undefined,
       tone: "excited",
       appCategory: "email",
       language: "en",
@@ -145,11 +152,11 @@ test("combined cleanup options honor every eligibility guard and use the actual 
   assert.ok(calls[0].pipelineOptions);
 });
 
-// An Orukeet streaming start with Tone & Style on, its app classified only
-// when the test calls classify().
+// An Orukeet streaming start with Tone & Style on and the built-in cleanup
+// prompt, its app classified only when the test calls classify().
 async function loadTonedOrukeetStart(t, cachePrefix) {
   const { window, useSettingsStore, createManager } = await load(t, cachePrefix);
-  useSettingsStore.setState({ ...good, toneStyleEnabled: true });
+  useSettingsStore.setState({ ...good, toneStyleEnabled: true, customPrompts: { cleanup: "" } });
   const classifier = {};
   window.electronAPI.captureDictationAppCategory = () =>
     new Promise((resolve) => (classifier.classify = resolve));
@@ -197,6 +204,7 @@ async function loadTonedOrukeetStart(t, cachePrefix) {
   });
   return {
     window,
+    useSettingsStore,
     manager,
     minted,
     sent,
@@ -206,6 +214,33 @@ async function loadTonedOrukeetStart(t, cachePrefix) {
 }
 
 const tick = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test("with a custom cleanup prompt, which takes no tone, a start and the next warmup mint combined cleanup with no app known", async (t) => {
+  const { window, useSettingsStore, manager, minted } = await loadTonedOrukeetStart(
+    t,
+    "orukeet-pipeline-tone-custom-"
+  );
+  useSettingsStore.setState({ customPrompts: good.customPrompts });
+
+  manager.beginToneStyleCapture();
+  const starting = manager.startStreamingRecording();
+  await tick(20);
+  assert.equal(minted.length, 1);
+  assert.equal(await starting, true);
+  assert.deepEqual(minted, [manager.getPipelineCleanupOptions(useSettingsStore.getState())]);
+
+  const warmed = [];
+  window.electronAPI.dictationRealtimeWarmup = async (options) => {
+    warmed.push(options.pipelineOptions);
+    return { success: true };
+  };
+  Object.assign(manager, {
+    shouldUseStreaming: () => true,
+    cacheMicrophoneDeviceId: async () => {},
+  });
+  await manager.warmupStreamingConnection({ warmMic: false });
+  assert.deepEqual(warmed, minted);
+});
 
 test("with Tone & Style on, a streaming start holds audio while it waits to mint combined cleanup for the app it learns in time, and the next warmup expects the same", async (t) => {
   const { window, manager, minted, sent, workletPort, classify } = await loadTonedOrukeetStart(

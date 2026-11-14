@@ -41,7 +41,9 @@ export function buildProviderPrompt(request: ReasoningRequest): ProviderPrompt {
   if (words.length) parts.push(DICTIONARY_PREFIX + words.join(', '));
   const shared = request.sharedDictionary?.map((word) => word.trim()).filter(Boolean) ?? [];
   if (shared.length) parts.push(sharedDictionaryHint(shared));
-  const tone = request.tone ? TONE_INSTRUCTIONS[request.tone] : undefined;
+  // A custom cleanup prompt is the user's own instruction, which the tone's
+  // priority sentence would override; the server skips the tone the same way.
+  const tone = !customPrompt && request.tone ? TONE_INSTRUCTIONS[request.tone] : undefined;
   if (tone) parts.push(`${tone} ${TONE_PRIORITY_INSTRUCTION}`);
   return {
     systemPrompt: parts.join('\n\n'),

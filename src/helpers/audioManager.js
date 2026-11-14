@@ -4010,6 +4010,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return getSettings().customPrompts.cleanup || undefined;
   }
 
+  // A custom cleanup prompt takes no tone, as on the server, so only the
+  // built-in prompt depends on the app being dictated into.
+  cleanupTakesTone(settings) {
+    return settings.toneStyleEnabled && !this.getCustomPrompt();
+  }
+
   getKeyterms() {
     return getKeytermDictionaryWords(getSettings());
   }
@@ -5049,7 +5055,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       agentName: getAgentName() || "",
       ...getCloudLlmDictionaryFields(settings),
       customPrompt: this.getCustomPrompt(),
-      ...(settings.toneStyleEnabled
+      ...(this.cleanupTakesTone(settings)
         ? resolveDictationToneStyle(settings.toneStyles, appCategory)
         : {}),
       language: this.getCleanupLanguage(settings) || undefined,
@@ -5083,10 +5089,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               voiceAgentRequested: this.voiceAgentRequested,
               // Warmup runs while idle, so the socket is for an ordinary
               // dictation into the app the last start learned in time (Tone &
-              // Style). With no app known, a start mints no combined cleanup,
-              // so neither does warmup.
+              // Style). With no app known, a start whose cleanup takes a tone
+              // mints no combined cleanup, so neither does warmup.
               pipelineOptions:
-                settings.toneStyleEnabled && !this.lastToneAppCategory
+                this.cleanupTakesTone(settings) && !this.lastToneAppCategory
                   ? undefined
                   : this.getPipelineCleanupOptions(settings, {
                       voiceAgentRequested: false,
@@ -5533,17 +5539,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onStateChange?.({ isRecording: true, isProcessing: false, isStreaming: true });
       await this.beginMicRecovery(stream);
 
-      // A combined cleanup's prompt is fixed when its session is minted, so with
-      // Tone & Style on the start waits briefly for the app being dictated into
-      // before minting. Audio from the wait is held until the session has
-      // started: with no warm socket main has nowhere to buffer it, and a warm
-      // one minted for another app is replaced. An app not known by then (a
-      // Wayland AT-SPI target takes about a second) gets no combined cleanup:
-      // /api/reason cleans up in its tone at stop.
+      // A combined cleanup's prompt is fixed when its session is minted, so when
+      // the cleanup takes a tone the start waits briefly for the app being
+      // dictated into before minting. Audio from the wait is held until the
+      // session has started: with no warm socket main has nowhere to buffer it,
+      // and a warm one minted for another app is replaced. An app not known by
+      // then (a Wayland AT-SPI target takes about a second) gets no combined
+      // cleanup: /api/reason cleans up in its tone at stop.
       const pipelineSettings = getSettings();
       if (
         providerName === "orukeet" &&
-        pipelineSettings.toneStyleEnabled &&
+        this.cleanupTakesTone(pipelineSettings) &&
         this.getPipelineCleanupOptions(pipelineSettings)
       ) {
         heldFrames ??= [];
@@ -5560,7 +5566,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return false;
       }
       this._activePipelineOptions =
-        pipelineSettings.toneStyleEnabled && !this.lastToneAppCategory
+        this.cleanupTakesTone(pipelineSettings) && !this.lastToneAppCategory
           ? undefined
           : this.getPipelineCleanupOptions(pipelineSettings, {
               appCategory: this.lastToneAppCategory,
