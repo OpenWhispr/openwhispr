@@ -10,6 +10,7 @@ private enum TestEnvironment {
   /// A compact vertical size class: a phone in landscape.
   static var landscape = false
   static var tablet = false
+  static var fullAccess = false
   static var proxy = TestTextProxy()
 
   static func install() {
@@ -18,6 +19,8 @@ private enum TestEnvironment {
     }
     let globeStub: @convention(block) (AnyObject) -> Bool = { _ in MainActor.assumeIsolated { globe } }
     stub(UIInputViewController.self, #selector(getter: UIInputViewController.needsInputModeSwitchKey), globeStub)
+    let fullAccessStub: @convention(block) (AnyObject) -> Bool = { _ in MainActor.assumeIsolated { fullAccess } }
+    stub(UIInputViewController.self, #selector(getter: UIInputViewController.hasFullAccess), fullAccessStub)
     let proxyStub: @convention(block) (AnyObject) -> AnyObject = { _ in MainActor.assumeIsolated { proxy } }
     stub(UIInputViewController.self, #selector(getter: UIInputViewController.textDocumentProxy), proxyStub)
     let sizeClassStub: @convention(block) (AnyObject) -> UIUserInterfaceSizeClass = { _ in
@@ -34,6 +37,7 @@ private enum TestEnvironment {
     globe = false
     landscape = false
     tablet = false
+    fullAccess = false
     proxy = TestTextProxy()
   }
 }
@@ -65,6 +69,10 @@ private enum TestPage {
   case letters, numbers, symbols
 }
 
+private extension KeyboardHandoffProvider {
+  var touchTestDefaults: UserDefaults? { UserDefaults(suiteName: appGroupId) }
+}
+
 private extension KeyboardViewController {
   static func makeTouchTestStack() -> UIStackView {
     KeyboardViewController().keyboardRowsStack
@@ -94,6 +102,168 @@ private extension KeyboardViewController {
     controller.view.frame = CGRect(x: 0, y: 0, width: width, height: height ?? fittedHeight)
     controller.view.layoutIfNeeded()
     return controller
+  }
+
+  @MainActor
+  static func checkMinimalKeyboardHeight(
+    _ checks: inout TouchChecks, width: CGFloat, globe: Bool = false, landscape: Bool = false
+  ) {
+    TestEnvironment.reset()
+    defer { TestEnvironment.reset() }
+    TestEnvironment.globe = globe
+    TestEnvironment.landscape = landscape
+    TestEnvironment.fullAccess = true
+    guard let defaults = KeyboardHandoffProvider.shared.touchTestDefaults else {
+      checks.check("minimal keyboard has an App Group store", false)
+      return
+    }
+    let keys = ["keyboard_dictation_tone", "keyboard_tone_applicable", "keyboard_minimal_enabled"]
+    let saved = keys.map { defaults.object(forKey: $0) }
+    let animationsEnabled = UIView.areAnimationsEnabled
+    UIView.setAnimationsEnabled(false)
+    defer {
+      for (key, value) in zip(keys, saved) {
+        if let value { defaults.set(value, forKey: key) }
+        else { defaults.removeObject(forKey: key) }
+      }
+      defaults.synchronize()
+      UIView.setAnimationsEnabled(animationsEnabled)
+    }
+    defaults.set("default", forKey: "keyboard_dictation_tone")
+    defaults.set("1", forKey: "keyboard_tone_applicable")
+    defaults.set("1", forKey: "keyboard_minimal_enabled")
+    defaults.synchronize()
+    let controller = makeLaidOutKeyboard(width: width)
+    // Mirror the host adopting preferredContentSize after each layout transition.
+    func layout() {
+      // The host sizes the keyboard through Auto Layout; hidden overlays must not
+      // hold it taller than the requested height.
+      let fitted = controller.view.systemLayoutSizeFitting(
+        CGSize(width: width, height: 0),
+        withHorizontalFittingPriority: .required,
+        verticalFittingPriority: .fittingSizeLevel
+      )
+      checks.check("auto layout fits the requested height",
+        abs(fitted.height - controller.preferredContentSize.height) < 0.5)
+      controller.view.frame.size.height = controller.preferredContentSize.height
+      controller.view.setNeedsLayout()
+      controller.view.layoutIfNeeded()
+    }
+    func frameInKeyboard(_ view: UIView) -> CGRect {
+      view.convert(view.bounds, to: controller.view)
+    }
+    func checkTappable(_ label: String, _ button: UIButton) {
+      let frame = frameInKeyboard(button)
+      checks.check("\(label) stays inside keyboard", controller.view.bounds.contains(frame))
+      let target = controller.view.hitTest(CGPoint(x: frame.midX, y: frame.midY), with: nil)
+      checks.check("\(label) receives touches", target === button || target?.isDescendant(of: button) == true)
+    }
+    controller.refreshMinimalKeyboardPreference()
+    let compactHeight = controller.typingLayoutHeight
+    checks.check("minimal toolbar is shorter than typing layout", compactHeight < controller.metrics.keyboardHeight)
+    checks.check("uncreated permissions panel does not reserve height",
+      !controller.didSetupFullAccessPanel && controller.keyboardHeightConstraint?.constant == compactHeight)
+    checks.check("host receives compact preferred height", controller.preferredContentSize.height == compactHeight)
+
+    controller.showFullAccessPanel(animated: false)
+    layout()
+    checks.check("visible permissions panel expands keyboard",
+      controller.view.bounds.height == controller.metrics.keyboardHeight)
+    controller.hideFullAccessPanel(animated: false)
+    layout()
+    checks.check("dismissed permissions panel restores compact height",
+      controller.view.bounds.height == compactHeight)
+    if globe { checkTappable("minimal globe", controller.minimalGlobeButton) }
+
+    controller.showRecordingCanvas()
+    layout()
+    checks.check("minimal recording frame stays compact", controller.view.bounds.height == compactHeight)
+    checkTappable("compact cancel", controller.recordingCancelButton)
+    checkTappable("compact confirm", controller.recordingConfirmButton)
+    checks.check("compact waveform uses the full-size dictation color",
+      controller.recordingWaveformBars.allSatisfy { $0.backgroundColor == Palette.accent })
+    checks.check("compact waveform stays inside its pill",
+      frameInKeyboard(controller.recordingPill).contains(frameInKeyboard(controller.recordingWaveformStack)))
+    checks.check("minimal recording keeps compact height",
+      controller.keyboardHeightConstraint?.constant == compactHeight)
+    checks.check("minimal recording shows waveform pill without caption",
+      !controller.recordingPill.isHidden && controller.recordingCaptionLabel.isHidden)
+    checks.check("minimal recording uses toolbar-aligned controls",
+      controller.compactRecordingConstraints.allSatisfy { $0.isActive }
+        && controller.regularRecordingConstraints.allSatisfy { !$0.isActive })
+    controller.isAgentRecordingActive = true
+    controller.configureRecordingLayout()
+    checks.check("compact agent waveform retains the full-size agent color",
+      controller.recordingWaveformBars.allSatisfy { $0.backgroundColor == Palette.cleanupAccent })
+    controller.isAgentRecordingActive = false
+    controller.configureRecordingLayout()
+    controller.hideRecordingCanvas()
+    layout()
+    checks.check("ending recording restores compact height",
+      controller.keyboardHeightConstraint?.constant == compactHeight)
+
+    controller.toneButton.sendActions(for: .touchUpInside)
+    layout()
+    checks.check("tone menu expands minimal keyboard",
+      controller.view.bounds.height == compactHeight + Self.compactToneMenuHeight
+        && !controller.compactToneMenu.isHidden)
+    let formal = controller.compactToneMenu.arrangedSubviews.compactMap { $0 as? UIButton }
+      .first { $0.title(for: .normal) == "Formal" }
+    checks.check("compact menu offers the formal tone", formal != nil)
+    if let formal {
+      checkTappable("formal tone", formal)
+      formal.sendActions(for: .touchUpInside)
+    }
+    layout()
+    checks.check("tone selection persists to App Group",
+      KeyboardHandoffProvider.shared.currentTone() == "formal")
+    checks.check("compact menu marks only the selected tone",
+      controller.compactToneButtons.allSatisfy {
+        $0.button.accessibilityTraits.contains(.selected) == ($0.value == "formal")
+      })
+    checks.check("tone selection collapses keyboard",
+      controller.view.bounds.height == compactHeight && controller.compactToneMenu.isHidden)
+
+    controller.toneButton.sendActions(for: .touchUpInside)
+    controller.toneButton.sendActions(for: .touchUpInside)
+    layout()
+    checks.check("tapping tone icon again collapses keyboard",
+      controller.view.bounds.height == compactHeight && controller.compactToneMenu.isHidden)
+
+    controller.toneButton.sendActions(for: .touchUpInside)
+    controller.viewWillDisappear(false)
+    // The same preference refresh runs when this controller reappears.
+    controller.refreshMinimalKeyboardPreference()
+    layout()
+    checks.check("leaving and reopening keyboard dismisses tone menu",
+      !controller.isCompactToneMenuShown && controller.compactToneMenu.isHidden
+        && controller.view.bounds.height == compactHeight)
+
+    controller.touchTestShowAgentResult()
+    layout()
+    checks.check("agent review expands compact keyboard",
+      controller.view.bounds.height == controller.metrics.keyboardHeight + Metrics.agentReviewExtraHeight)
+    checks.check("review text stays inside keyboard",
+      controller.view.bounds.contains(frameInKeyboard(controller.agentReviewTextView)))
+    controller.hideAgentReviewCard()
+    layout()
+    checks.check("dismissing review restores compact frame", controller.view.bounds.height == compactHeight)
+
+    controller.minimalKeyboardEnabled = false
+    controller.keyboardRowsStack.isHidden = false
+    controller.minimalGlobeButton.isHidden = true
+    controller.applyRootPadding()
+    controller.showRecordingCanvas()
+    layout()
+    checkTappable("regular cancel", controller.recordingCancelButton)
+    checkTappable("regular confirm", controller.recordingConfirmButton)
+    checks.check("regular waveform retains dictation color",
+      controller.recordingWaveformBars.allSatisfy { $0.backgroundColor == Palette.accent })
+    checks.check("regular recording retains full canvas",
+      controller.recordingPill.isHidden && !controller.recordingCaptionLabel.isHidden
+        && controller.regularRecordingConstraints.allSatisfy { $0.isActive })
+    checks.check("disabling minimal layout restores full height",
+      controller.keyboardHeightConstraint?.constant == controller.metrics.keyboardHeight)
   }
 
   var touchTestRows: KeyboardRowsStack { keyboardRowsStack }
@@ -191,6 +361,9 @@ private enum KeyboardTouchTests {
     }
     checkFieldAwareKeys(&checks)
     checkLayoutChanges(&checks)
+    KeyboardViewController.checkMinimalKeyboardHeight(&checks, width: 402)
+    KeyboardViewController.checkMinimalKeyboardHeight(&checks, width: 375, globe: true)
+    KeyboardViewController.checkMinimalKeyboardHeight(&checks, width: 852, landscape: true)
     checkTyping(&checks)
 
     print("Keyboard touch routing: \(checks.count - checks.failures.count)/\(checks.count) passed")
