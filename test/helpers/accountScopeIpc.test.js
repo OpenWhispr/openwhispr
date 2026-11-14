@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
+const { deferred } = require("./harness/deferred");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -18,6 +19,7 @@ const eventHandlers = new Map();
 const broadcasts = [];
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
 let tokenState = { token: null, generation: 0 };
+const autoUpdater = { checkForUpdates: async () => null };
 
 const electronStub = {
   app: {
@@ -63,8 +65,18 @@ const electronStub = {
 
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
-  if (request === "electron-updater") return { autoUpdater: {} };
+  if (request === "electron-updater") return { autoUpdater };
   if (parent?.filename === handlersModulePath) {
+    // Keep every cleanup target inside this harness's temporary userData.
+    if (request === "os") return { ...os, homedir: () => userDataDirectory };
+    if (request === "./autoStart") return { setAutoStartEnabled() {} };
+    if (request === "./modelDirUtils") {
+      return { getModelsDirForService: () => path.join(userDataDirectory, "models") };
+    }
+    if (request === "./modelManagerBridge") {
+      return { default: { deleteAllModels: async () => {} } };
+    }
+    if (request === "./onnxWorkerClient") return { stop: async () => {} };
     if (request === "./tokenStore") {
       return {
         get: () => tokenState.token,
@@ -158,6 +170,7 @@ test.before(() => {
 
 test.after(() => {
   fakeThis.metaActivation?.dispose?.();
+  fakeThis.productEvents?.dispose?.();
   Module._load = originalLoad;
   fs.rmSync(userDataDirectory, { recursive: true, force: true });
 });
@@ -321,16 +334,20 @@ function scopedDatabase(activeAccountId) {
   );
 }
 
-// Development mode keeps electron-updater out; the policy runs for real.
+// Skip native updater setup; an AppImage keeps policy checks supported on Linux.
 function createUpdater() {
   const previousEnvironment = process.env.NODE_ENV;
+  const previousAppImage = process.env.APPIMAGE;
   try {
     process.env.NODE_ENV = "development";
+    if (process.platform === "linux") process.env.APPIMAGE = "/tmp/OpenWhispr.AppImage";
     const UpdateManager = require("../../src/updater");
     return new UpdateManager({ getPolicy: (options) => fakeThis.getUpdatePolicy(options) });
   } finally {
     if (previousEnvironment === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = previousEnvironment;
+    if (previousAppImage === undefined) delete process.env.APPIMAGE;
+    else process.env.APPIMAGE = previousAppImage;
   }
 }
 
@@ -366,19 +383,17 @@ function managedPolicy(mode) {
   };
 }
 
-// The verdict an earlier run left on disk for this bearer.
-function cachePolicyForBearer(token, data) {
+// The verdict an earlier run left on disk for this credential.
+function cachePolicyForHeaders(authHeaders, data) {
   const crypto = require("node:crypto");
   const { writeWorkspacePolicyCache } = require("../../src/helpers/workspacePolicyCache");
   const credentialHash = crypto
     .createHash("sha256")
-    .update(JSON.stringify([["Authorization", `Bearer ${token}`]]))
+    .update(JSON.stringify(Object.entries(authHeaders)))
     .digest("hex");
-  writeWorkspacePolicyCache(
-    path.join(userDataDirectory, "workspace-policy.json"),
-    { apiOrigin: TEST_API_URL, credentialHash, accountId: null },
-    data
-  );
+  const identity = { apiOrigin: TEST_API_URL, credentialHash, accountId: null };
+  writeWorkspacePolicyCache(path.join(userDataDirectory, "workspace-policy.json"), identity, data);
+  return identity;
 }
 
 async function signOutUpdater(t, generation) {
@@ -469,7 +484,7 @@ test("completed cookie sign-out discards a pending cookie-authorized updater pol
   assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
 });
 
-test("a bearer the API refuses with nothing held updates as a guest, while a held IT verdict stands", async (t) => {
+test("an earlier consumer's bearer 401 permits guest updates while a held IT verdict stands", async (t) => {
   restoreUpdaterState(t);
   useTestApi(t);
   let refusals = 0;
@@ -477,19 +492,38 @@ test("a bearer the API refuses with nothing held updates as a guest, while a hel
     refusals++;
     return { ok: false, status: 401, json: async () => ({}) };
   });
-  // A 401 leaves the renderer's account scope in place. Seeded directly, as
-  // set-active-account-scope's own policy lookups would throttle the updater's.
+  // A 401 leaves the renderer's account scope in place, and another consumer
+  // can receive it before the updater's first lookup.
   tokenState = { token: "expired-bearer", generation: 110 };
   fakeThis.databaseManager = scopedDatabase("expired-account");
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };
   require("../../src/helpers/accountScopeBinding").persist("expired-account", "expired-bearer");
   fakeThis.updateManager = createUpdater();
+  fakeThis.updateManager.httpExecutor = { resumeRequests() {}, abortRequests() {} };
+  let checks = 0;
+  t.mock.method(autoUpdater, "checkForUpdates", async () => {
+    checks++;
+    return null;
+  });
+  // Another consumer meets the 401 before the updater.
+  await fakeThis.refreshEffectivePolicy();
   await fakeThis.updateManager.refreshPolicy();
   let status = await fakeThis.updateManager.getUpdateStatus();
   assert.equal(status.policyReady, true);
   assert.equal(status.updateMode, "user_choice");
+  fakeThis.updateManager._autoCheckForUpdates("Periodic");
+  await new Promise(setImmediate);
+  assert.equal(checks, 1);
+  fakeThis.updateManager._autoCheckForUpdates("Periodic");
+  await new Promise(setImmediate);
+  assert.equal(checks, 2);
+  assert.equal((await fakeThis.updateManager.getUpdateStatus()).policyReady, true);
+  assert.equal(refusals, 1);
 
-  cachePolicyForBearer("expired-managed-bearer", managedPolicy("it_managed"));
+  cachePolicyForHeaders(
+    { Authorization: "Bearer expired-managed-bearer" },
+    managedPolicy("it_managed")
+  );
   tokenState = { token: "expired-managed-bearer", generation: 111 };
   fakeThis.updateManager.invalidatePolicy();
   const refusalsBefore = refusals;
@@ -497,7 +531,36 @@ test("a bearer the API refuses with nothing held updates as a guest, while a hel
   await new Promise(setImmediate);
   assert.equal(refusals, refusalsBefore + 1);
   status = await fakeThis.updateManager.getUpdateStatus();
+  assert.equal(status.policyReady, true);
   assert.equal(status.updateMode, "it_managed");
+});
+
+// Without evidence that anything manages the account, a failed lookup
+// restricts nothing (effectivePolicyManager.js), updates included.
+test("earlier non-401 policy failures leave a never-managed account's updates to the user", async (t) => {
+  restoreUpdaterState(t);
+  useTestApi(t);
+  fakeThis.databaseManager = scopedDatabase("unavailable-account");
+  fakeThis.windowManager = { retireMeetingNotificationScope() {} };
+  let requests = 0;
+  let httpStatus;
+  t.mock.method(electronStub.net, "fetch", async () => {
+    requests++;
+    if (httpStatus === undefined) throw new Error("offline");
+    return { ok: false, status: httpStatus, json: async () => ({}) };
+  });
+  for (const [index, status] of [403, 503, undefined].entries()) {
+    httpStatus = status;
+    tokenState = { token: `unavailable-bearer-${index}`, generation: 112 + index };
+    fakeThis.updateManager = createUpdater();
+    await fakeThis.refreshEffectivePolicy();
+    await fakeThis.updateManager.refreshPolicy();
+    const updateStatus = await fakeThis.updateManager.getUpdateStatus();
+    assert.equal(updateStatus.policyReady, true);
+    assert.equal(updateStatus.updateMode, "user_choice");
+    fakeThis.updateManager.cleanup();
+  }
+  assert.ok(requests >= 3);
 });
 
 test("a refused bearer the server called unresolvable stays fail-closed, not a guest", async (t) => {
@@ -509,12 +572,15 @@ test("a refused bearer the server called unresolvable stays fail-closed, not a g
     json: async () => ({}),
   }));
   // The fail-closed marker an earlier POLICY_UNRESOLVABLE left on disk.
-  cachePolicyForBearer("unresolved-bearer", {
-    managed: false,
-    policy: null,
-    policyUpdatedAt: null,
-    requiresManagedPolicy: true,
-  });
+  cachePolicyForHeaders(
+    { Authorization: "Bearer unresolved-bearer" },
+    {
+      managed: false,
+      policy: null,
+      policyUpdatedAt: null,
+      requiresManagedPolicy: true,
+    }
+  );
   tokenState = { token: "unresolved-bearer", generation: 115 };
   fakeThis.databaseManager = scopedDatabase(null);
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };
@@ -562,6 +628,81 @@ test("under a device policy, an outage with nothing held leaves updates unavaila
   assert.equal(status.policyUnavailable, true);
   assert.equal(status.updateMode, null);
 });
+
+for (const [index, { name, data, mode }] of [
+  {
+    name: "unresolved",
+    data: {
+      managed: false,
+      policy: null,
+      policyUpdatedAt: null,
+      requiresManagedPolicy: true,
+    },
+    mode: null,
+  },
+  { name: "IT-managed", data: managedPolicy("it_managed"), mode: "it_managed" },
+  { name: "always-on", data: managedPolicy("always_on"), mode: "always_on" },
+  { name: "unmanaged", data: null, mode: "user_choice" },
+].entries()) {
+  test(`cookie expiry preserves ${name} policy in main and updater lookups`, async (t) => {
+    restoreUpdaterState(t);
+    useTestApi(t);
+    const { readWorkspacePolicyCache } = require("../../src/helpers/workspacePolicyCache");
+    tokenState = { token: null, generation: 140 + index };
+    fakeThis.databaseManager = scopedDatabase(null);
+    let cookieValue;
+    const cookieName = "__Secure-openwhispr.session_token";
+    fakeThis.windowManager = {
+      controlPanelWindow: {
+        isDestroyed: () => false,
+        webContents: {
+          session: { cookies: { get: async () => [{ name: cookieName, value: cookieValue }] } },
+        },
+      },
+      retireMeetingNotificationScope() {},
+    };
+    let requests = 0;
+    t.mock.method(electronStub.net, "fetch", async (_url, init) => {
+      requests++;
+      assert.equal(init.headers.Cookie, `${cookieName}=${cookieValue}`);
+      return { ok: false, status: 401, json: async () => ({}) };
+    });
+    fakeThis.updateManager = createUpdater();
+    fakeThis.updateManager.setAutoUpdatesEnabled(false);
+    for (const consumer of ["main", "updater"]) {
+      cookieValue = `expired-${name}-${consumer}`;
+      const identity =
+        data && cachePolicyForHeaders({ Cookie: `${cookieName}=${cookieValue}` }, data);
+      if (consumer === "main") {
+        const snapshot = await fakeThis.refreshEffectivePolicy();
+        assert.equal(snapshot.success, mode !== null);
+        if (mode === null) assert.equal(snapshot.code, "POLICY_UNRESOLVABLE");
+        else assert.equal(snapshot.managed, data !== null);
+      } else {
+        await fakeThis.updateManager.refreshPolicy();
+        const status = await fakeThis.updateManager.getUpdateStatus();
+        assert.equal(status.policyReady, mode !== null);
+        assert.equal(status.updateMode, mode);
+        assert.equal(status.effectiveAutoUpdatesEnabled, mode === "always_on");
+        if (mode === null) {
+          assert.equal(
+            (await fakeThis.updateManager.checkForUpdates()).code,
+            "UPDATE_POLICY_UNAVAILABLE"
+          );
+        }
+        await new Promise(setImmediate);
+      }
+      if (data?.requiresManagedPolicy) {
+        assert.equal(
+          readWorkspacePolicyCache(path.join(userDataDirectory, "workspace-policy.json"), identity)
+            .requiresManagedPolicy,
+          true
+        );
+      }
+    }
+    assert.equal(requests, 2);
+  });
+}
 
 test("a stray cookie leaves a signed-out member a guest without reaching the API", async (t) => {
   restoreUpdaterState(t);
@@ -624,7 +765,7 @@ test("an offline restart adopts the cached verdict without waiting for the netwo
     () => new Promise((_resolve, reject) => (goOffline = reject))
   );
   t.after(() => goOffline?.(new Error("offline")));
-  cachePolicyForBearer("restarted-bearer", managedPolicy("always_on"));
+  cachePolicyForHeaders({ Authorization: "Bearer restarted-bearer" }, managedPolicy("always_on"));
   tokenState = { token: "restarted-bearer", generation: 130 };
   fakeThis.databaseManager = scopedDatabase(null);
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };
@@ -2404,3 +2545,143 @@ for (const provider of ["google", "microsoft"]) {
     });
   }
 }
+
+test("account deletion still clears audio and note mirrors when product-event erasure fails", async (t) => {
+  const originalTokenState = tokenState;
+  const originals = {
+    productEvents: fakeThis.productEvents,
+    audioStorageManager: fakeThis.audioStorageManager,
+    metaActivation: fakeThis.metaActivation,
+    enterpriseAudioCredentials: fakeThis.enterpriseAudioCredentials,
+    _asyncMirrorDelete: fakeThis._asyncMirrorDelete,
+  };
+  t.after(() => {
+    Object.assign(fakeThis, originals);
+    delete connectorManager.disconnectAll;
+    delete databaseManager.deleteAccountData;
+    tokenState = originalTokenState;
+  });
+  const purged = [];
+  const audio = [];
+  const mirrored = [];
+  const credentials = [];
+  tokenState = { token: "delete-token", generation: 91 };
+  connectorManager.disconnectAll = async () => {};
+  databaseManager.deleteAccountData = () => ({
+    deletedNoteIds: [11, 12],
+    deletedTranscriptionIds: [21, 22],
+  });
+  fakeThis.productEvents = {
+    purge: (accountId) => {
+      purged.push(accountId);
+      throw new Error("product-event storage unavailable");
+    },
+  };
+  fakeThis.audioStorageManager = {
+    deleteAudioForTranscriptions: (ids) => audio.push(...ids),
+  };
+  fakeThis.metaActivation = { purge: () => {} };
+  fakeThis._asyncMirrorDelete = (noteId) => mirrored.push(noteId);
+  fakeThis.enterpriseAudioCredentials = {
+    removeAccount: async (accountId) => credentials.push(accountId),
+  };
+
+  const result = await handlers.get("delete-account-data")({}, "deleted-account", 91);
+
+  assert.deepEqual(result, {
+    success: false,
+    code: "LOCAL_ACCOUNT_CLEANUP_FAILED",
+    error: "product-event storage unavailable",
+  });
+  assert.deepEqual(purged, ["deleted-account"]);
+  assert.deepEqual(audio, [21, 22]);
+  assert.deepEqual(mirrored, [11, 12]);
+  assert.deepEqual(credentials, ["deleted-account"]);
+});
+
+test("a late product event binding cannot recreate the queue for an erased account", async (t) => {
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  const originalTokenState = tokenState;
+  t.after(() => {
+    delete connectorManager.disconnectAll;
+    delete databaseManager.deleteAccountData;
+    tokenState = originalTokenState;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  connectorManager.disconnectAll = async () => {};
+  databaseManager.deleteAccountData = () => ({ deletedNoteIds: [] });
+  const started = deferred();
+  const response = deferred();
+  t.mock.method(electronStub.net, "fetch", async (url) => {
+    if (url.endsWith("/api/product-events/app-session")) {
+      started.resolve();
+      return response.promise;
+    }
+    return { ok: false, status: 401 };
+  });
+  tokenState = { token: "erase-bearer", generation: 93 };
+  await setScope("erased-account", 93);
+  const binding = handlers.get("product-events-record-app-session")(
+    {},
+    {
+      accountId: "erased-account",
+      authGeneration: 93,
+    }
+  );
+  await started.promise;
+
+  const erased = await handlers.get("delete-account-data")({}, "erased-account", 93);
+  response.resolve({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      binding_id: "8413c2f3-a18d-4a12-9fe4-8f912f301d78",
+      authenticated_at: new Date().toISOString(),
+    }),
+  });
+  await binding;
+
+  assert.equal(erased.success, true);
+  const state = JSON.parse(
+    fs.readFileSync(path.join(userDataDirectory, "product-events.json"), "utf8")
+  );
+  assert.ok(!state.events.some((event) => event.account_id === "erased-account"));
+});
+
+test("Reset App Data erases the product event store and interrupted writes", async (t) => {
+  const originalApiUrl = process.env.OPENWHISPR_API_URL;
+  const originalTokenState = tokenState;
+  const collector = fakeThis.productEvents;
+  t.after(() => {
+    collector.dispose();
+    delete connectorManager.revokeAllStored;
+    tokenState = originalTokenState;
+    if (originalApiUrl === undefined) delete process.env.OPENWHISPR_API_URL;
+    else process.env.OPENWHISPR_API_URL = originalApiUrl;
+  });
+  process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
+  connectorManager.revokeAllStored = async () => {};
+  t.mock.method(electronStub.net, "fetch", async () => ({ ok: false, status: 503 }));
+  tokenState = { token: "reset-bearer", generation: 94 };
+  await setScope("reset-account", 94);
+  await handlers.get("product-events-record-onboarding-completed")(
+    {},
+    {
+      setupMode: "local",
+      flowVersion: "desktop-onboarding-1",
+    }
+  );
+  await collector.flush();
+  const file = path.join(userDataDirectory, "product-events.json");
+  assert.ok(fs.existsSync(file));
+  fs.copyFileSync(file, `${file}.111.tmp`);
+
+  tokenState = { token: null, generation: 95 };
+  const result = await handlers.get("cleanup-app")({ sender: {} });
+
+  assert.equal(result.success, true);
+  assert.equal(fs.existsSync(file), false);
+  assert.equal(fs.existsSync(`${file}.111.tmp`), false);
+});

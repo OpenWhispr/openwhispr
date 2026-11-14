@@ -4,20 +4,34 @@ import { formatList } from "../../lib/formatList";
 import type { SpaceMemberRow } from "../../lib/spaceMemberRows";
 import type { TeamRole } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
-import { Mail } from "../icons";
+import { EnvelopePlus } from "../icons";
 import { cn } from "../lib/utils";
 import MemberAvatar from "../MemberAvatar";
-import { HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "../settings/tableTokens";
+import { COLUMN_DIVIDER, HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "../settings/tableTokens";
 import { Button } from "../ui/button";
 import { TileGlyph } from "./SpaceNameField";
-import { SpaceRoleMenu } from "./SpaceRoleMenu";
+import { SpaceRoleMenu, type SpaceRoleMenuCopy } from "./SpaceRoleMenu";
 
 // Seven rows fit with the header; a longer list scrolls inside the table, and on a short window
 // the cap shrinks so the dialog around it never has to scroll as a whole.
 const ROWS_SCROLLER = "max-h-[clamp(9rem,calc(85vh-25rem),22rem)] overflow-y-auto";
-const COLUMN_DIVIDER = "border-s border-border/60 dark:border-border-subtle/50";
 const TILE =
-  "flex size-5 shrink-0 items-center justify-center overflow-hidden bg-foreground/5 dark:bg-white/6";
+  "flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-primary";
+
+const TEAM_ACCESS_TRIGGER: Record<TeamRole, string> = {
+  member: "settingsPage.workspace.teamspaces.members.teamAccessMemberShort",
+  admin: "settingsPage.workspace.teamspaces.members.teamAccessAdminShort",
+};
+
+// A team's access: Admin makes the team's own admins admins here, never everyone on the team.
+const TEAM_ACCESS_COPY: SpaceRoleMenuCopy = {
+  roleMember: "settingsPage.workspace.teamspaces.members.teamAccessMember",
+  roleMemberBody: "settingsPage.workspace.teamspaces.members.teamAccessMemberBody",
+  roleAdmin: "settingsPage.workspace.teamspaces.members.teamAccessAdmin",
+  roleAdminBody: "settingsPage.workspace.teamspaces.members.teamAccessAdminBody",
+  remove: "settingsPage.workspace.teamspaces.members.removeItem",
+  trigger: TEAM_ACCESS_TRIGGER,
+};
 
 export type SpaceMembersStatus = "loading" | "failed" | "ready";
 
@@ -161,7 +175,7 @@ function MemberRow({
     name = (
       <NameCell
         lead={
-          <MemberAvatar name={member.name} email={member.email} image={member.image} size="sm" />
+          <MemberAvatar name={member.name} email={member.email} image={member.image} size="row" />
         }
         primary={
           member.name ? <span dir="auto">{member.name}</span> : <bdi dir="ltr">{member.email}</bdi>
@@ -187,14 +201,19 @@ function MemberRow({
         />
       );
     } else if (row.kind === "inherited") {
+      // The teams are already named under the person, so the cell holds the role alone; the
+      // whole "via" line stays on hover.
       role = (
-        <span className="text-xs text-muted-foreground">
-          {t(
+        <span
+          className="text-sm text-foreground"
+          title={t(
             row.asAdmin
               ? "settingsPage.workspace.teamspaces.members.viaAdmin"
               : "settingsPage.workspace.teamspaces.members.via",
-            { team: isolate(row.teamName) }
+            { team: row.teamName }
           )}
+        >
+          {roleLabel(member.role)}
         </span>
       );
     } else if (row.editable) {
@@ -219,8 +238,8 @@ function MemberRow({
     name = (
       <NameCell
         lead={
-          <span className={cn(TILE, "rounded-full text-muted-foreground")}>
-            <Mail className="size-3" aria-hidden="true" />
+          <span className={TILE}>
+            <EnvelopePlus className="size-3" aria-hidden="true" />
           </span>
         }
         primary={<bdi dir="ltr">{row.invitation.email}</bdi>}
@@ -237,7 +256,7 @@ function MemberRow({
     name = (
       <NameCell
         lead={
-          <span className={cn(TILE, "rounded-sm [&>span]:text-xs")}>
+          <span className={cn(TILE, "[&>span]:text-xs [&>span]:text-primary")}>
             <TileGlyph emoji={teamEmoji.get(team.id) ?? null} name={team.name} />
           </span>
         }
@@ -256,14 +275,15 @@ function MemberRow({
         pending={pending}
         onRoleChange={(next) => onRoleChange(row, next)}
         onRemove={() => onRemove(row)}
+        copy={TEAM_ACCESS_COPY}
       />
     ) : (
-      <RoleText>{roleLabel(team.access)}</RoleText>
+      <RoleText>{t(TEAM_ACCESS_TRIGGER[team.access])}</RoleText>
     );
   }
 
   return (
-    <tr className={cn("h-[45px]", ROW_DIVIDER)}>
+    <tr className={cn("h-14", ROW_DIVIDER)}>
       <td className="max-w-0 ps-4 pe-3 py-1.5">{name}</td>
       <td className={cn(COLUMN_DIVIDER, "px-4")}>{role}</td>
     </tr>
@@ -271,7 +291,7 @@ function MemberRow({
 }
 
 function RoleText({ children }: { children: ReactNode }): ReactElement {
-  return <span className="text-xs text-foreground">{children}</span>;
+  return <span className="text-sm text-foreground">{children}</span>;
 }
 
 function NameCell({
@@ -289,9 +309,9 @@ function NameCell({
         {lead}
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-xs font-medium text-foreground">{primary}</span>
+        <span className="truncate text-xs text-foreground">{primary}</span>
         {secondary ? (
-          <span className="truncate text-[11px] text-muted-foreground">{secondary}</span>
+          <span className="truncate text-xs text-muted-foreground">{secondary}</span>
         ) : null}
       </span>
     </div>

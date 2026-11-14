@@ -15,6 +15,8 @@ import { SettingRow } from "../workspace/SettingRow";
 import {
   INLINE_FIELD_CLASS,
   ROW_BUTTON_CLASS,
+  SETTING_ROWS,
+  TABS_LIST_CLASS,
   TAB_TRIGGER_CLASS,
 } from "../workspace/dialogButtons";
 import DeleteTeamDialog from "./DeleteTeamDialog";
@@ -236,7 +238,7 @@ export default function TeamSettingsDialog({
 
   const general =
     canLeave || canDelete ? (
-      <div className="divide-y divide-border/60 overflow-hidden rounded-xl bg-surface-1">
+      <div className={SETTING_ROWS}>
         {canLeave && (
           <SettingRow
             icon={User}
@@ -284,7 +286,7 @@ export default function TeamSettingsDialog({
     <>
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
         <DialogContent
-          className="max-h-[85vh] max-w-md gap-5 overflow-y-auto rounded-[28px] p-5"
+          className="max-h-[85vh] w-[520px] max-w-[calc(100vw-32px)] gap-5 overflow-y-auto rounded-[28px] p-5 sm:max-w-[520px]"
           onEscapeKeyDown={(event) => escapeHandler.current(event)}
         >
           <div className="flex flex-col items-start gap-3 pe-8">
@@ -340,7 +342,7 @@ export default function TeamSettingsDialog({
           </div>
 
           <Tabs value={tab} onValueChange={(next) => setTab(next as TeamDialogTab)}>
-            <TabsList className="h-7 p-0.5 rounded-[7px]">
+            <TabsList className={TABS_LIST_CLASS}>
               <TabsTrigger value="general" className={TAB_TRIGGER_CLASS}>
                 <Settings className="size-3" aria-hidden="true" />
                 {t(`${KEY}.dialog.tabGeneral`)}

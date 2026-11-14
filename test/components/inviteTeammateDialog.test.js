@@ -24,6 +24,8 @@ async function mountDialog(t, props, { realView = false } = {}) {
       "__members",
       "__memberListCalls",
       "__settingsRequests",
+      "__toasts",
+      "__sendOutcomes",
     ]) {
       delete globalThis[key];
     }
@@ -79,13 +81,25 @@ async function mountDialog(t, props, { realView = false } = {}) {
               }
             `,
           }),
+      "/ui/useToast": `
+        export const useToast = () => ({
+          toast: (toast) => {
+            (globalThis.__toasts ??= []).push(toast);
+            return "toast";
+          },
+        });
+      `,
       "/services/invitePeople": `
         export const invitePeople = {
           async sendInvitations(input) {
             globalThis.__sendCalls.push(input);
             if (globalThis.__sendGate) await globalThis.__sendGate;
             for (const email of input.emails) {
-              input.onResult(email, globalThis.__sendOutcome ?? { ok: true, emailSent: true });
+              input.onResult(
+                email,
+                globalThis.__sendOutcomes?.shift() ??
+                  globalThis.__sendOutcome ?? { ok: true, emailSent: true }
+              );
             }
           },
         };
@@ -294,6 +308,102 @@ test("a send reports everyone it invited at once", async (t) => {
   assert.deepEqual(invited, [["a@x.com", "b@x.com"]]);
 });
 
+test("a clean run toasts what went out and closes the dialog after a moment", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const closes = [];
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: (open) => closes.push(open),
+    workspaceId: "w1",
+    workspaceName: "Acme",
+  });
+  await React.act(async () => latest().dispatch({ type: "draft", text: "a@x.com, b@x.com," }));
+  await React.act(async () => latest().onSend());
+
+  assert.equal(globalThis.__toasts.length, 1);
+  assert.match(globalThis.__toasts[0].title, /^workspaces\.invite\.sentMany\|/);
+  // Until the timer runs, the form stays up with Send showing its confirmation.
+  assert.deepEqual(closes, []);
+  await React.act(async () => t.mock.timers.tick(2000));
+  assert.deepEqual(closes, [false]);
+});
+
+test("one invitation is toasted by address", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmail: "a@x.com",
+  });
+  await React.act(async () => latest().onSend());
+
+  assert.match(globalThis.__toasts[0].title, /^workspaces\.invite\.sentOne\|/);
+  assert.match(globalThis.__toasts[0].title, /a@x\.com/);
+});
+
+test("a run whose email wasn't delivered keeps its screen and doesn't close", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  globalThis.__sendOutcome = { ok: true, emailSent: false };
+  const closes = [];
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: (open) => closes.push(open),
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmail: "a@x.com",
+  });
+  await React.act(async () => latest().onSend());
+  await React.act(async () => t.mock.timers.tick(5000));
+
+  assert.equal(latest().state.phase, "done");
+  assert.deepEqual(globalThis.__toasts ?? [], []);
+  assert.deepEqual(closes, []);
+});
+
+test("a run that left chips to fix toasts how many went out", async (t) => {
+  // The first answer succeeds and the second fails, so one went out and one still needs a retry.
+  globalThis.__sendOutcomes = [
+    { ok: true, emailSent: true },
+    { ok: false, kind: "requestFailed" },
+  ];
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: () => {},
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmails: ["a@x.com", "b@x.com"],
+  });
+  await React.act(async () => latest().onSend());
+
+  assert.equal(latest().state.phase, "editing");
+  assert.equal(globalThis.__toasts.length, 1);
+  assert.equal(globalThis.__toasts[0].title, 'workspaces.invite.sentTitle|{"count":1}');
+});
+
+test("a partial run with no delivered email reports invitations as created", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  globalThis.__sendOutcomes = [
+    { ok: true, emailSent: false },
+    { ok: false, kind: "directoryRequired" },
+  ];
+  const closes = [];
+  const { latest } = await mountDialog(t, {
+    open: true,
+    onOpenChange: (open) => closes.push(open),
+    workspaceId: "w1",
+    workspaceName: "Acme",
+    initialEmails: ["a@x.com", "b@x.com"],
+  });
+  await React.act(async () => latest().onSend());
+  await React.act(async () => t.mock.timers.tick(5000));
+
+  assert.equal(latest().state.phase, "editing");
+  assert.deepEqual(globalThis.__toasts, [{ title: 'workspaces.invite.createdTitle|{"count":1}' }]);
+  assert.deepEqual(closes, []);
+});
+
 test("closing the page mid-send stops the rest of the run", async (t) => {
   let release;
   globalThis.__sendGate = new Promise((resolve) => {
@@ -464,50 +574,6 @@ test("an older API without seat_limit has no ceiling check", async (t) => {
 
   assert.deepEqual(latest().state.seats, { purchasedLeft: 2, ceilingLeft: null });
 });
-
-test("the view learns who manages billing", async (t) => {
-  const { latest } = await mountWithWorkspace(t, {
-    ...WORKSPACE,
-    role: "admin",
-    billing_manager: "Olivia",
-  });
-
-  assert.equal(latest().canManageBilling, false);
-  assert.equal(latest().billingManager, "Olivia");
-});
-
-test("an owner can upgrade from the invite dialog", async (t) => {
-  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, role: "owner" });
-
-  assert.equal(latest().canManageBilling, true);
-  assert.equal(latest().billingManager, null);
-});
-
-// Seats all taken, so one address brings up the warning. These run the real view, so they read and
-// press what a person does, and pass nothing about billing: the caller is any entry point.
-const NO_SEATS_LEFT = {
-  ...WORKSPACE,
-  has_subscription: true,
-  seats_used: 20,
-  billing_manager: "Olivia",
-};
-const UPGRADE = "workspaces.invite.upgrade";
-
-function findNode(node, predicate) {
-  if (node.nodeType === 1 && predicate(node)) return node;
-  for (const child of node.childNodes ?? []) {
-    const found = findNode(child, predicate);
-    if (found) return found;
-  }
-  return null;
-}
-
-const findUpgrade = (container) =>
-  findNode(container, (node) => node.localName === "button" && node.textContent === UPGRADE);
-
-const propsOf = (node) => node[Object.keys(node).find((name) => name.startsWith("__reactProps$"))];
-
-const pressButton = (button) => React.act(async () => propsOf(button).onClick());
 
 test("without a roster, an existing address cannot block a valid batch near the ceiling", async (t) => {
   const { container } = await mountWithWorkspace(
@@ -954,3 +1020,47 @@ test("heading replaces the title and description", async (t) => {
   assert.match(container.textContent, /They'll get a link\./);
   assert.doesNotMatch(container.textContent, /workspaces\.invite\.title/);
 });
+
+test("the view learns who manages billing", async (t) => {
+  const { latest } = await mountWithWorkspace(t, {
+    ...WORKSPACE,
+    role: "admin",
+    billing_manager: "Olivia",
+  });
+
+  assert.equal(latest().canManageBilling, false);
+  assert.equal(latest().billingManager, "Olivia");
+});
+
+test("an owner can upgrade from the invite dialog", async (t) => {
+  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, role: "owner" });
+
+  assert.equal(latest().canManageBilling, true);
+  assert.equal(latest().billingManager, null);
+});
+
+// Seats all taken, so one address brings up the warning. These run the real view, so they read and
+// press what a person does, and pass nothing about billing: the caller is any entry point.
+const NO_SEATS_LEFT = {
+  ...WORKSPACE,
+  has_subscription: true,
+  seats_used: 20,
+  billing_manager: "Olivia",
+};
+const UPGRADE = "workspaces.invite.upgrade";
+
+function findNode(node, predicate) {
+  if (node.nodeType === 1 && predicate(node)) return node;
+  for (const child of node.childNodes ?? []) {
+    const found = findNode(child, predicate);
+    if (found) return found;
+  }
+  return null;
+}
+
+const findUpgrade = (container) =>
+  findNode(container, (node) => node.localName === "button" && node.textContent === UPGRADE);
+
+const propsOf = (node) => node[Object.keys(node).find((name) => name.startsWith("__reactProps$"))];
+
+const pressButton = (button) => React.act(async () => propsOf(button).onClick());
