@@ -5530,7 +5530,12 @@ class IPCHandlers {
       // Every store on the device, shared with the device policy's offboarding
       // wipe (#3030). The open log file is one, and Windows can't delete an open file.
       debugLogger.close();
-      errors.push(...(await require("./localDataWipe").removeLocalData({ includeModels: true })));
+      errors.push(
+        ...(await require("./localDataWipe").removeLocalData({
+          includeModels: true,
+          keepChosenNotesFolders: true,
+        }))
+      );
       try {
         autoStart.setAutoStartEnabled(false);
       } catch (e) {

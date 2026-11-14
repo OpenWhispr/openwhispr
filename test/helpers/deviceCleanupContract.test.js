@@ -32,8 +32,9 @@ test("explicit device cleanup covers models, credentials, caches, and browser se
     "clearStorageData",
     "clearCache",
     "setAutoStartEnabled(false)",
-    // #3030: the files go through the inventory the offboarding wipe shares.
-    "removeLocalData({ includeModels: true })",
+    // #3030: the files go through the inventory the offboarding wipe shares,
+    // except a notes folder the user chose.
+    "removeLocalData({\n          includeModels: true,\n          keepChosenNotesFolders: true,",
   ]) {
     assert.ok(source.includes(operation), `device cleanup includes ${operation}`);
   }

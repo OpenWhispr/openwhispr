@@ -135,8 +135,14 @@ async function removeTempFiles(directory, remove) {
   }
 }
 
-// Returns each store that could not be removed, as "<name>: <reason>".
-async function removeLocalData({ includeModels, roots = defaultRoots() }) {
+// Returns each store that could not be removed, as "<name>: <reason>". Reset
+// app data leaves a notes folder the user chose alone (keepChosenNotesFolders);
+// only the offboarding wipe clears the mirror's files there.
+async function removeLocalData({
+  includeModels,
+  keepChosenNotesFolders = false,
+  roots = defaultRoots(),
+}) {
   const errors = [];
   const remove = async (name, target) => {
     try {
@@ -147,7 +153,7 @@ async function removeLocalData({ includeModels, roots = defaultRoots() }) {
   };
 
   // Before "notes" and the record of the mirror's folders are deleted below.
-  for (const basePath of mirrorFolders(roots.userData)) {
+  for (const basePath of keepChosenNotesFolders ? [] : mirrorFolders(roots.userData)) {
     if (typeof basePath !== "string" || !path.isAbsolute(basePath)) continue;
     try {
       require("./markdownMirror").removeMirroredFiles(basePath);
