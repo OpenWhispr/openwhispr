@@ -213,3 +213,30 @@ test("still peels a deep but plausible stack of wrappers", async () => {
   assert.equal(sanitizeGeneratedTitle(wrappers + "Weekly standup" + wrappers), "Weekly standup");
   assert.equal(sanitizeGeneratedTitle(wrappers + '"Q3" vs "Q4"' + wrappers), '"Q3" vs "Q4"');
 });
+
+test("keeps balanced phrases whose closing marks look like apostrophes", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  for (const title of ["‘نعم’و‘لا’", "'Q3 recap' and Q4's 'North Star'", '"Q3 "/"Q4"']) {
+    assert.equal(sanitizeGeneratedTitle(title), title, title);
+  }
+});
+
+test("peels wrappers around inch marks and possessives", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  assert.equal(sanitizeGeneratedTitle('"6" and 8" Pipe Planning"'), '6" and 8" Pipe Planning');
+  assert.equal(
+    sanitizeGeneratedTitle("'Chris', James', and the team's plans'"),
+    "Chris', James', and the team's plans"
+  );
+  assert.equal(
+    sanitizeGeneratedTitle('"Comparing "C++"/"Rust" performance"'),
+    'Comparing "C++"/"Rust" performance'
+  );
+});
+
+test("keeps unspaced straight-quoted phrases in scripts without spaces", async () => {
+  const { sanitizeGeneratedTitle } = await load();
+  for (const title of ['"設計"と"実装"', '"نعم"و"لا"']) {
+    assert.equal(sanitizeGeneratedTitle(title), title, title);
+  }
+});
