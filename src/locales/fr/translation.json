@@ -649,6 +649,13 @@
         "timeout": "Délai réseau dépassé — VPN, portail captif ou connexion instable.",
         "tls": "Échec du handshake TLS — vérifiez l'horloge système ou un proxy d'entreprise.",
         "fallback": "Cloud injoignable — utilisation du moteur local pour cet enregistrement."
+      },
+      "mistral": {
+        "sessionAlreadyOpen": "Une session de transcription Mistral est déjà ouverte.",
+        "invalidMessage": "Mistral a renvoyé un message de transcription en temps réel invalide.",
+        "audioFormatRejected": "Mistral n’a pas accepté le format audio de la réunion.",
+        "connectionClosed": "La connexion à Mistral a été fermée. Reconnexion à la transcription de la réunion.",
+        "incompleteFinalization": "Mistral n’a pas pu terminer la transcription. Le texte reçu a été conservé ; les derniers mots peuvent manquer."
       }
     }
   },
@@ -3324,6 +3331,7 @@
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
+        "mistral_voxtral_mini_transcribe_realtime_3": "Transcription de réunions en direct avec Mistral",
         "gemini_3_5_transcribe": "Reconnaissance vocale Gemini de Google",
         "gemini_3_5_transcribe_live": "Reconnaissance vocale en streaming temps réel",
         "corti_transcribe": "Transcription médicale de qualité clinique",

@@ -6,7 +6,10 @@ import {
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
 import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
-import { isUploadOnlyTranscriptionModel } from "./appTranscriptionProviders.js";
+import {
+  isUploadOnlyTranscriptionModel,
+  isMeetingOnlyTranscriptionModel,
+} from "./appTranscriptionProviders.js";
 import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
@@ -466,7 +469,17 @@ export function getStreamingTranscriptionProviders(): TranscriptionProviderData[
 export function getDictationTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry.getTranscriptionProviders().map((p) => ({
     ...p,
-    models: p.models.filter((m) => !isUploadOnlyTranscriptionModel(p.id, m.id)),
+    models: p.models.filter(
+      (m) =>
+        !isUploadOnlyTranscriptionModel(p.id, m.id) && !isMeetingOnlyTranscriptionModel(p.id, m.id)
+    ),
+  }));
+}
+
+export function getUploadTranscriptionProviders(): TranscriptionProviderData[] {
+  return modelRegistry.getTranscriptionProviders().map((p) => ({
+    ...p,
+    models: p.models.filter((m) => !isMeetingOnlyTranscriptionModel(p.id, m.id)),
   }));
 }
 

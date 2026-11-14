@@ -649,6 +649,13 @@
         "timeout": "ネットワークがタイムアウトしました — VPN、キャプティブポータル、または不安定な接続。",
         "tls": "TLS ハンドシェイクに失敗しました — システム時計または企業プロキシを確認してください。",
         "fallback": "Cloud に接続できません — この録音にはローカルエンジンを使用します。"
+      },
+      "mistral": {
+        "sessionAlreadyOpen": "Mistral の文字起こしセッションはすでに開いています。",
+        "invalidMessage": "Mistral から無効なリアルタイムメッセージが返されました。",
+        "audioFormatRejected": "Mistral は会議の音声形式を受け付けませんでした。",
+        "connectionClosed": "Mistral の接続が切断されました。会議の文字起こしを再開するために再接続しています。",
+        "incompleteFinalization": "Mistral は文字起こしを完了できませんでした。受信したテキストは保持されていますが、最後の言葉が欠けている可能性があります。"
       }
     }
   },
@@ -3220,6 +3227,7 @@
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "mistral_voxtral_mini_transcribe_realtime_3": "Mistral による会議のリアルタイム文字起こし",
         "gemini_3_5_transcribe": "GoogleのGemini音声文字起こし",
         "gemini_3_5_transcribe_live": "リアルタイムストリーミング文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
