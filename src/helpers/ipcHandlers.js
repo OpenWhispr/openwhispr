@@ -262,6 +262,7 @@ const MEETING_SYSTEM_VAD_THRESHOLD = 0.3;
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
 const XAI_STT_URL = "https://api.x.ai/v1/stt";
+const ASSEMBLYAI_DICTATION_URL = "https://dictation.assemblyai.com/v1/transcribe";
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
@@ -5726,6 +5727,63 @@ class IPCHandlers {
         }
 
         return await response.json();
+      })
+    );
+
+    ipcMain.handle(
+      "proxy-assemblyai-transcription",
+      serializeIpcError(async (event, { audioBuffer, mimeType, language, keyterms }) => {
+        const apiKey = this.environmentManager.getAssemblyAIKey();
+        if (!apiKey) {
+          throw providerError(PROVIDER_ERROR_CODES.KEY_MISSING, {
+            provider: "AssemblyAI",
+            surface: "transcription",
+          });
+        }
+
+        const config = {};
+        const { ASSEMBLYAI_DICTATION_LANGUAGES } = await import("./transcriptionRoute.ts");
+        if (language && ASSEMBLYAI_DICTATION_LANGUAGES.has(language)) {
+          config.language_codes = [language];
+        }
+        if (keyterms && keyterms.length > 0) {
+          config.keyterms_prompt = keyterms;
+        }
+
+        const audioType = (mimeType || "audio/webm").split(";")[0];
+        const formData = new FormData();
+        formData.append("config", new Blob([JSON.stringify(config)], { type: "application/json" }));
+        formData.append(
+          "audio",
+          new Blob([Buffer.from(audioBuffer)], { type: audioType }),
+          `audio.${audioType.split("/")[1] || "webm"}`
+        );
+
+        // The API key goes in raw, with no Bearer prefix.
+        const response = await proxyFetch(ASSEMBLYAI_DICTATION_URL, {
+          method: "POST",
+          headers: { Authorization: apiKey },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          debugLogger.warn("AssemblyAI dictation failed", {
+            status: response.status,
+            body: redactProviderBody(errorText),
+          });
+          throw providerHttpError({
+            provider: "AssemblyAI",
+            status: response.status,
+            body: errorText,
+            headers: response.headers,
+            surface: "transcription",
+          });
+        }
+
+        // `text` is the verbatim transcript; `llm_response` is the cleaned-up text.
+        const result = await response.json();
+        return { text: result.text, cleanedText: result.llm_response ?? undefined };
       })
     );
 

@@ -83,9 +83,9 @@ import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
   batchTranscriptionHttpError,
   byokFileSizeLimit,
+  isStreamingOnlySelection,
   resolveByokModel,
   resolveTranscriptionRoute,
-  STREAMING_ONLY_PROVIDERS,
 } from "./transcriptionRoute.ts";
 import {
   getManagedTranscriptionResolution,
@@ -624,6 +624,19 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       if (keyterms.length > 0) payload.keyterms = keyterms;
       return payload;
     },
+    echoPrompt: ({ keyterms }) => keyterms.join(", "),
+  },
+  // Only the Dictation model reaches here: resolveBatchRoute refuses AssemblyAI's
+  // realtime models before dispatch.
+  assemblyai: {
+    displayName: "AssemblyAI",
+    ipc: () => window.electronAPI?.proxyAssemblyAiTranscription,
+    buildPayload: ({ audioBuffer, mimeType, language, keyterms }) => ({
+      audioBuffer,
+      mimeType,
+      language: language !== "auto" ? language : undefined,
+      keyterms: keyterms.length > 0 ? keyterms : undefined,
+    }),
     echoPrompt: ({ keyterms }) => keyterms.join(", "),
   },
   corti: {
@@ -3437,9 +3450,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (failure?.setupKey) this._shownCleanupSetupKey = failure.setupKey;
   }
 
-  async processTranscription(text, source, wasCancelled = neverCancelled) {
+  async processTranscription(text, source, wasCancelled = neverCancelled, options = {}) {
     try {
-      const result = await this.processTranscriptionCore(text, source, wasCancelled);
+      const result = await this.processTranscriptionCore(text, source, wasCancelled, options);
       if (wasCancelled()) return result;
       return this.finalizeChineseScript(result);
     } catch (error) {
@@ -3448,7 +3461,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async processTranscriptionCore(text, source, wasCancelled = neverCancelled) {
+  async processTranscriptionCore(
+    text,
+    source,
+    wasCancelled = neverCancelled,
+    { cleanedText } = {}
+  ) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
 
     if (!normalizedText) {
@@ -3475,9 +3493,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const agentReachable = dictationAgentReachable(settings);
     const agentName =
       typeof window !== "undefined" && window.localStorage ? getAgentName() : "OpenWhispr";
-    const blockedAgentCommand =
-      isAgentScopeBlocked(settings) &&
-      !this.translationRequested &&
+    const addressesAgent =
       !!agentName &&
       detectAgentName(
         normalizedText,
@@ -3485,6 +3501,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         resolveWakeWordLanguage(settings, undefined, normalizedText),
         settings.snippets
       );
+    const blockedAgentCommand =
+      isAgentScopeBlocked(settings) && !this.translationRequested && addressesAgent;
+
+    // A provider that cleaned the transcript itself (AssemblyAI Dictation) stands
+    // in for the cleanup step. Assistant commands and translation still take the
+    // verbatim transcript below, since cleanup can reword a wake phrase.
+    const providerCleanedText = typeof cleanedText === "string" ? cleanedText.trim() : "";
+    if (
+      providerCleanedText &&
+      settings.useCleanupModel &&
+      !this.voiceAgentRequested &&
+      !this.translationRequested &&
+      !addressesAgent
+    ) {
+      logger.logReasoning("PROVIDER_CLEANUP_USED", { source });
+      return providerCleanedText;
+    }
     if (
       !cleanupReachable &&
       !agentReachable &&
@@ -4124,7 +4157,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(proxyText, providerName, wasCancelled);
+        const text = await this.processTranscription(proxyText, providerName, wasCancelled, {
+          cleanedText: result.cleanedText,
+        });
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         const source = (await this.isReasoningAvailable())
@@ -4999,7 +5034,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // key instead of letting them fall through to the HTTP path.
     if (
       s.cloudTranscriptionMode === "byok" &&
-      STREAMING_ONLY_PROVIDERS.has(s.cloudTranscriptionProvider)
+      isStreamingOnlySelection(s.cloudTranscriptionProvider, s.cloudTranscriptionModel)
     ) {
       return Boolean(getTranscriptionApiKey(s.cloudTranscriptionProvider, s));
     }

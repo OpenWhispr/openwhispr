@@ -232,6 +232,33 @@ test("realtime-only providers report a missing key ahead of the transport limita
   assert.equal(groq.transport, "http-batch");
 });
 
+test("AssemblyAI's Dictation model batches through the proxy; its realtime models don't", async () => {
+  const { ASSEMBLYAI_DICTATION_MODEL, isStreamingOnlySelection } = await load();
+
+  const route = await resolve({
+    cloudTranscriptionProvider: "assemblyai",
+    cloudTranscriptionModel: ASSEMBLYAI_DICTATION_MODEL,
+    preferredLanguage: "es",
+  });
+  assert.equal(route.transport, "proxied");
+  assert.equal(route.provider, "assemblyai");
+  assert.equal(route.model, "dictation");
+  assert.equal(route.language, "es");
+
+  const unsupported = await resolve({
+    cloudTranscriptionProvider: "assemblyai",
+    cloudTranscriptionModel: ASSEMBLYAI_DICTATION_MODEL,
+    preferredLanguage: "yo",
+  });
+  assert.equal(unsupported.language, undefined, "the Dictation API rejects codes outside its 32");
+
+  assert.equal(isStreamingOnlySelection("assemblyai", ASSEMBLYAI_DICTATION_MODEL), false);
+  assert.equal(isStreamingOnlySelection("assemblyai", "universal-3-6-pro"), true);
+  assert.equal(isStreamingOnlySelection("assemblyai", undefined), true);
+  assert.equal(isStreamingOnlySelection("deepgram", ASSEMBLYAI_DICTATION_MODEL), true);
+  assert.equal(isStreamingOnlySelection("groq", "whisper-large-v3"), false);
+});
+
 test("a custom URL pointing at Tinfoil's host must use the attested proxy", async () => {
   const route = await resolve(
     {
