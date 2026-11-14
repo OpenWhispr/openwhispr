@@ -194,6 +194,59 @@ test("Windows reader exports the 64-bit machine key and keeps typed, Unicode val
   );
 });
 
+test("a Policy REG_SZ holding line breaks reads as one value", async () => {
+  // reg.exe exports the value's line breaks as they are, e.g. JSON written by
+  // PowerShell's ConvertTo-Json without -Compress.
+  const pretty = JSON.stringify(defaultDevicePolicy(), null, 2).replaceAll('"', '\\"');
+  const values = await registryExport([
+    `"Policy"="${pretty.split("\n").join("\r\n")}"`,
+    '"RequireSignIn"=dword:00000000',
+  ])();
+  assert.deepEqual(JSON.parse(values.Policy), defaultDevicePolicy());
+  assert.equal(values.RequireSignIn, false);
+  await assert.rejects(registryExport(['"Policy"="{', '  \\"version\\": 1'])(), /Invalid registry/);
+});
+
+// reg.exe refused by a policy against registry tools, and PowerShell, which
+// still reads the key, writing `entries` (null: no key) where it is told to.
+function powershellRegistry(entries, calls = []) {
+  return async (command, args) => {
+    calls.push(path.win32.basename(command));
+    if (path.win32.basename(command) === "reg.exe")
+      return registryWithoutPolicy({ blocked: true })();
+    const file = /Set-Content -LiteralPath '((?:[^']|'')+)'/
+      .exec(args.at(-1))[1]
+      .replaceAll("''", "'");
+    fs.writeFileSync(file, `\uFEFF${JSON.stringify(entries)}`, "utf8");
+    return { stdout: "", stderr: "" };
+  };
+}
+
+test("with reg.exe blocked, PowerShell reads the deployment and its evidence", async () => {
+  const Policy = JSON.stringify(defaultDevicePolicy());
+  const calls = [];
+  const deployed = { Policy, RequireSignIn: 0, DisableMeetingRecording: null };
+  assert.deepEqual(await readWindowsValues(powershellRegistry(deployed, calls)), {
+    Policy,
+    RequireSignIn: false,
+  });
+  assert.deepEqual(calls, ["reg.exe", "powershell.exe"]);
+  assert.equal(
+    await hasPolicyEvidence({ platform: "win32", run: powershellRegistry(deployed) }),
+    true
+  );
+  assert.deepEqual(await readWindowsValues(powershellRegistry(null)), {});
+  assert.equal(
+    await hasPolicyEvidence({ platform: "win32", run: powershellRegistry(null) }),
+    false
+  );
+  for (const entries of [{ RequireSignIn: "0" }, { Policy: 1 }, { RequireSignIn: [1] }])
+    await assert.rejects(
+      readWindowsValues(powershellRegistry(entries)),
+      /Invalid registry value type/
+    );
+});
+
 test("evidence of a deployment is the policy key or file, not the reader's success", async () => {
   const existing = (files) => ({
     lstat: async (file) => {
