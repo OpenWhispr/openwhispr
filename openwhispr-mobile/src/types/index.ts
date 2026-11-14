@@ -8,6 +8,8 @@ import type {
 export type ProcessingMode = 'cloud' | 'private' | 'providers';
 export type TranscriptionProvider = 'local' | 'cloud' | 'byok';
 export type KeyboardTone = 'default' | 'formal' | 'casual' | 'very_casual' | 'excited';
+// The iOS keyboard's letter keys. Values are what the keyboard reads from the App Group.
+export type KeyboardLetterLayout = 'en' | 'de' | 'fr_CH';
 export type InferenceMode = 'openwhispr' | 'local' | 'providers';
 
 export interface UserConfig {
@@ -44,6 +46,7 @@ export interface UserConfig {
   // the first time a hardware keyboard is attached.
   hardwareKeyboardNudgeDismissedAt?: string;
   keyboardTone?: KeyboardTone;
+  keyboardLetterLayout?: KeyboardLetterLayout;
   // Apple Foundation Models local generation for notes. Default on; users can
   // disable it from AI Models.
   appleLocalIntelligenceEnabled?: boolean;
