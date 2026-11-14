@@ -605,3 +605,65 @@ test("an unsupported Mac leaves a policy-blocked sherpa selection saved", async 
   });
   assert.deepEqual(selected, []);
 });
+
+// The harness's `t` returns the key followed by its interpolation values.
+const hint = (panel) =>
+  panel.find(
+    (node) =>
+      typeof node.props?.children === "string" &&
+      node.props.children.startsWith("transcription.browsedProviderHint")
+  )[0]?.props.children;
+
+test("a browsed tab says the saved provider stays in use until a model is picked", async (t) => {
+  const panel = await mount(t, {
+    overrides: {
+      transcriptionContext: "meeting",
+      streamingOnly: true,
+      selectedCloudProvider: "openai",
+      selectedCloudModel: "gpt-4o-mini-transcribe",
+    },
+  });
+  assert.equal(hint(panel), undefined, "the saved provider's own tab needs no hint");
+
+  await panel.selectTab("deepgram");
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"OpenAI","provider":"Deepgram"}'
+  );
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "", "browsing saves nothing");
+
+  await panel.selectTab("openai");
+  assert.equal(hint(panel), undefined, "browsing back to the saved tab clears it");
+
+  await panel.selectTab("deepgram");
+  await panel.selectModel("nova-3");
+  assert.equal(panel.state().meetingCloudTranscriptionProvider, "deepgram");
+  await panel.setProps({ selectedCloudProvider: "deepgram", selectedCloudModel: "nova-3" });
+  assert.equal(hint(panel), undefined, "a picked model saves the tab");
+});
+
+test("a saved provider this picker doesn't offer is not named", async (t) => {
+  // A batch provider the legacy settings copy carried over from dictation, which Note
+  // Recording can't stream.
+  const panel = await mount(t, {
+    overrides: {
+      transcriptionContext: "meeting",
+      streamingOnly: true,
+      selectedCloudProvider: "groq",
+      selectedCloudModel: "whisper-large-v3-turbo",
+    },
+  });
+  await panel.selectTab("deepgram");
+  assert.equal(hint(panel), 'transcription.browsedProviderHintNoCurrent {"provider":"Deepgram"}');
+});
+
+test("a browsed Custom tab says the saved provider stays in use", async (t) => {
+  const panel = await mount(t, {
+    overrides: { selectedCloudProvider: "openai", selectedCloudModel: "gpt-4o-mini-transcribe" },
+  });
+  await panel.selectTab("custom");
+  assert.equal(
+    hint(panel),
+    'transcription.browsedProviderHint {"current":"OpenAI","provider":"transcription.customProvider"}'
+  );
+});

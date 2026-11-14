@@ -1256,6 +1256,14 @@ export default function TranscriptionModelPicker({
   const visible = usePanelVisible();
   // A tab that is only being browsed has no model of this panel's: the key alone is checked.
   const panelModel = selectedCloudProvider === displayedCloudProvider ? displayedCloudModel : "";
+  // Only a model pick saves a browsed tab, so say which provider is still in use until then.
+  const browsedProviderName =
+    browsedCloudProvider && selectedCloudProvider !== displayedCloudProvider
+      ? cloudProviderTabs.find((tab) => tab.id === displayedCloudProvider)?.name
+      : undefined;
+  const selectedProviderName = cloudProviderTabs.find(
+    (tab) => tab.id === selectedCloudProvider
+  )?.name;
   const isCustom = displayedCloudProvider === "custom";
   const isCorti = displayedCloudProvider === "corti";
   const providerKey = credentialValues[providerCredentials.fields[0].key];
@@ -1584,7 +1592,7 @@ export default function TranscriptionModelPicker({
           )}
 
           {providerAllowed(displayedCloudProvider) && (
-            <div>
+            <div className="space-y-2">
               {displayedCloudProvider === "custom" ? (
                 <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
                   <div className="space-y-1.5">
@@ -1737,6 +1745,18 @@ export default function TranscriptionModelPicker({
                     )}
                   </div>
                 </div>
+              )}
+              {browsedProviderName && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedProviderName
+                    ? t("transcription.browsedProviderHint", {
+                        current: selectedProviderName,
+                        provider: browsedProviderName,
+                      })
+                    : t("transcription.browsedProviderHintNoCurrent", {
+                        provider: browsedProviderName,
+                      })}
+                </p>
               )}
             </div>
           )}

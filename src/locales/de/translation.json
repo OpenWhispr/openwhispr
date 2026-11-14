@@ -949,6 +949,8 @@
     "getKey": "Schlüssel holen ->",
     "endpointUrl": "Endpoint-URL",
     "azureHint": "Azure AI Foundry: Geben Sie Ihren Ressourcen-Endpunkt ein (z. B. https://your-resource.cognitiveservices.azure.com) und setzen Sie „Model“ auf den exakten Namen Ihrer Bereitstellung.",
+    "browsedProviderHint": "{{current}} ist weiterhin aktiv. Wähle ein Modell, um zu {{provider}} zu wechseln.",
+    "browsedProviderHintNoCurrent": "Wähle ein Modell, um {{provider}} zu verwenden.",
     "customProvider": "Benutzerdefiniert",
     "fallback": {
       "whisperModelDescription": "Modell",

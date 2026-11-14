@@ -928,6 +928,8 @@
     "getKey": "Obter chave ->",
     "endpointUrl": "URL do endpoint",
     "azureHint": "Azure AI Foundry: insira o endpoint do seu recurso (ex.: https://your-resource.cognitiveservices.azure.com) e defina Modelo com o nome exato da sua implantação.",
+    "browsedProviderHint": "{{current}} continua em uso. Escolha um modelo para mudar para {{provider}}.",
+    "browsedProviderHintNoCurrent": "Escolha um modelo para começar a usar {{provider}}.",
     "customProvider": "Personalizado",
     "fallback": {
       "whisperModelDescription": "Modelo",
