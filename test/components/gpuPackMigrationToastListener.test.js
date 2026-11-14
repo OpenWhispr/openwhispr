@@ -16,7 +16,22 @@ async function mountListener(t, { controlPanel, notice = { packs: ["CUDA whisper
     delete globalThis.__gpuToasts;
   });
   globalThis.__gpuToasts = [];
-  const calls = { takes: 0, shownDictationPanel: 0, openedSection: null, notifyReady: null };
+  const calls = {
+    takes: 0,
+    shownDictationPanel: 0,
+    openedSection: null,
+    notifyReady: null,
+    statusChanged: null,
+    dismissed: [],
+    repaired: new Set(),
+    needsUpdate: false,
+    statusError: false,
+    settingsSuccess: true,
+  };
+  globalThis.__gpuCalls = calls;
+  t.after(() => {
+    delete globalThis.__gpuCalls;
+  });
   let remaining = notice;
   installBrowserGlobals(t, {
     window: {
@@ -38,8 +53,23 @@ async function mountListener(t, { controlPanel, notice = { packs: ["CUDA whisper
         },
         openSettingsSection: async (section) => {
           calls.openedSection = section;
-          return { success: true };
+          return { success: calls.settingsSuccess };
         },
+        onWhisperGpuStatusChanged: (callback) => {
+          calls.statusChanged = callback;
+          return () => {
+            calls.statusChanged = null;
+          };
+        },
+        getCudaWhisperStatus: async () => {
+          if (calls.statusError) throw new Error("status unavailable");
+          return {
+            downloaded: calls.repaired.has("CUDA whisper"),
+            needsUpdate: calls.needsUpdate,
+          };
+        },
+        getVulkanWhisperStatus: async () => ({ downloaded: calls.repaired.has("Vulkan whisper") }),
+        getLlamaVulkanStatus: async () => ({ downloaded: calls.repaired.has("Vulkan llama") }),
       },
     },
   });
@@ -54,7 +84,12 @@ async function mountListener(t, { controlPanel, notice = { packs: ["CUDA whisper
         });
       `,
       "/ui/useToast": `
-        export const useToast = () => ({ toast: (props) => globalThis.__gpuToasts.push(props) });
+        const toast = (props) => {
+          globalThis.__gpuToasts.push(props);
+          return "gpu-notice-" + globalThis.__gpuToasts.length;
+        };
+        const dismiss = (id) => globalThis.__gpuCalls.dismissed.push(id);
+        export const useToast = () => ({ toast, dismiss });
       `,
       "/utils/windowContext": `export const isControlPanelWindow = () => ${controlPanel};`,
     },
@@ -77,14 +112,14 @@ test("the control panel takes the notice on mount and offers Settings", async (t
   assert.equal(calls.notifyReady, null, "the control panel doesn't wait to be told");
 
   assert.equal(toast.duration, 15000);
-  toast.actions[0].onClick();
+  await toast.actions[0].onClick();
   assert.equal(calls.openedSection, "speechToText");
 });
 
 test("a notice naming only the llama pack opens AI Models settings", async (t) => {
   const calls = await mountListener(t, { controlPanel: true, notice: { packs: ["Vulkan llama"] } });
 
-  globalThis.__gpuToasts[0].actions[0].onClick();
+  await globalThis.__gpuToasts[0].actions[0].onClick();
   assert.equal(calls.openedSection, "llms");
 });
 
@@ -94,7 +129,7 @@ test("a notice naming whisper and llama packs opens Speech-to-Text settings", as
     notice: { packs: ["CUDA whisper", "Vulkan llama"] },
   });
 
-  globalThis.__gpuToasts[0].actions[0].onClick();
+  await globalThis.__gpuToasts[0].actions[0].onClick();
   assert.equal(calls.openedSection, "speechToText");
 });
 
@@ -109,11 +144,57 @@ test("the dictation panel takes the notice only when main says so, then surfaces
   assert.equal(calls.takes, 1);
   assert.equal(calls.shownDictationPanel, 1, "a hidden pill is shown so the toast is seen");
   assert.equal(globalThis.__gpuToasts.length, 1);
+  assert.equal(globalThis.__gpuToasts[0].presentation, "dictation-error");
+  assert.equal(globalThis.__gpuToasts[0].dismissible, true);
   assert.equal(
     globalThis.__gpuToasts[0].duration,
     0,
     "kept until dismissed: a login may be unattended"
   );
+});
+
+test("repairing the pack in another window dismisses the stale notice", async (t) => {
+  const calls = await mountListener(t, { controlPanel: true });
+  calls.repaired.add("CUDA whisper");
+  await React.act(async () => calls.statusChanged());
+  assert.deepEqual(calls.dismissed, ["gpu-notice-1"]);
+});
+
+test("a multi-pack notice stays until all its packs are repaired", async (t) => {
+  const calls = await mountListener(t, {
+    controlPanel: true,
+    notice: { packs: ["CUDA whisper", "Vulkan llama"] },
+  });
+  calls.repaired.add("CUDA whisper");
+  await React.act(async () => calls.statusChanged());
+  assert.deepEqual(calls.dismissed, []);
+  calls.repaired.add("Vulkan llama");
+  await React.act(async () => calls.statusChanged());
+  assert.deepEqual(calls.dismissed, ["gpu-notice-1"]);
+});
+
+test("an incomplete pack or a failed status check does not dismiss the notice", async (t) => {
+  const calls = await mountListener(t, { controlPanel: true });
+  calls.repaired.add("CUDA whisper");
+  calls.needsUpdate = true;
+  await React.act(async () => calls.statusChanged());
+  assert.deepEqual(calls.dismissed, []);
+  calls.needsUpdate = false;
+  calls.statusError = true;
+  await React.act(async () => calls.statusChanged());
+  assert.deepEqual(calls.dismissed, []);
+});
+
+test("Open Settings dismisses only after navigation succeeds", async (t) => {
+  const calls = await mountListener(t, { controlPanel: true });
+  const [toast] = globalThis.__gpuToasts;
+  assert.equal(toast.actions[0].dismissOnClick, false);
+  calls.settingsSuccess = false;
+  await toast.actions[0].onClick();
+  assert.deepEqual(calls.dismissed, []);
+  calls.settingsSuccess = true;
+  await toast.actions[0].onClick();
+  assert.deepEqual(calls.dismissed, ["gpu-notice-1"]);
 });
 
 test("a notice another window already took shows nothing", async (t) => {
