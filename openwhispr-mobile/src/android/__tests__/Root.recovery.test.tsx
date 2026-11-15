@@ -96,7 +96,7 @@ jest.mock('@/android/ui', () => ({
 }));
 jest.mock('@/hooks/useRevenueCatIdentity', () => ({ useRevenueCatIdentity: () => {} }));
 jest.mock('@/android/billing', () => ({ observeAndroidPurchaseUpdates: () => () => {} }));
-jest.mock('@/android/useBubblePipeline', () => ({ useBubblePipeline: () => {} }));
+jest.mock('@/android/bubblePipeline', () => ({ startBubblePipeline: () => {} }));
 jest.mock('expo-sqlite/localStorage/install', () => ({}));
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///docs/',
@@ -118,8 +118,11 @@ jest.mock('@/lib/transcriptAudio', () => ({
 }));
 
 import AndroidRoot from '../Root';
+import { forgetAppData } from '../appData';
 
 beforeEach(() => {
+  // Each test is a fresh app launch.
+  forgetAppData();
   jest.clearAllMocks();
   mockInitializeAuth.mockReset().mockImplementation(() => mockAuth);
 });
