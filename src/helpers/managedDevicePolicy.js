@@ -298,7 +298,11 @@ async function readWindowsValues(run = execute) {
   try {
     deployed = await hasWindowsPolicyKey(run);
   } catch {
-    const entries = await readRegistryWithPowerShell(run);
+    const entries = await readRegistryWithPowerShell(run).catch((error) => {
+      // The evidence check would only run the same PowerShell read again.
+      error.evidenceUnknown = true;
+      throw error;
+    });
     const values = {};
     for (const [name, data] of Object.entries(entries ?? {})) {
       if (data === null) continue;
@@ -427,7 +431,7 @@ function createManagedDevicePolicy({
         });
         return null;
       }
-      const deployed = await hasPolicy().catch(() => null);
+      const deployed = error.evidenceUnknown ? null : await hasPolicy().catch(() => null);
       if (deployed) return INVALID_SNAPSHOT;
       logger.warn(
         deployed === false
