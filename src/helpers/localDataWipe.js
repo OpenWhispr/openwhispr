@@ -2,10 +2,10 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-// #3030: every store OpenWhispr keeps on this device, listed once. Reset app
-// data and the device policy's offboarding wipe both remove what it names, so
-// a new store is added here (or to KEPT_USER_DATA_ENTRIES, with its reason);
-// test/helpers/localDataWipe.test.js fails until it is.
+// #3030: every store OpenWhispr keeps on this device, listed once, for the
+// offboarding wipe (the WipeLocalDataOnLaunch device key, or removal from the
+// managing workspace). A new store is added here (or to KEPT_USER_DATA_ENTRIES,
+// with its reason); test/helpers/localDataWipe.test.js fails until it is.
 
 const sqliteFiles = (name) => [name, `${name}-wal`, `${name}-shm`];
 const NOTES_MIRROR_FILE = "notes-mirror.json";
@@ -135,14 +135,8 @@ async function removeTempFiles(directory, remove) {
   }
 }
 
-// Returns each store that could not be removed, as "<name>: <reason>". Reset
-// app data leaves a notes folder the user chose alone (keepChosenNotesFolders);
-// only the offboarding wipe clears the mirror's files there.
-async function removeLocalData({
-  includeModels,
-  keepChosenNotesFolders = false,
-  roots = defaultRoots(),
-}) {
+// Returns each store that could not be removed, as "<name>: <reason>".
+async function removeLocalData({ includeModels, roots = defaultRoots() }) {
   const errors = [];
   const remove = async (name, target) => {
     try {
@@ -153,7 +147,7 @@ async function removeLocalData({
   };
 
   // Before "notes" and the record of the mirror's folders are deleted below.
-  for (const basePath of keepChosenNotesFolders ? [] : mirrorFolders(roots.userData)) {
+  for (const basePath of mirrorFolders(roots.userData)) {
     if (typeof basePath !== "string" || !path.isAbsolute(basePath)) continue;
     try {
       require("./markdownMirror").removeMirroredFiles(basePath);

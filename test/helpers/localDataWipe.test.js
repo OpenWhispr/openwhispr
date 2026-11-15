@@ -17,8 +17,8 @@ const {
   wipeLocalDataOnLaunch,
 } = require("../../src/helpers/localDataWipe");
 
-// #3030: IT wipes a leaver's local OpenWhispr data through MDM. Reset app data
-// and the WipeLocalDataOnLaunch device key remove the same inventory.
+// #3030: IT wipes a leaver's local OpenWhispr data through MDM or by removing
+// them from the managing workspace; both triggers remove the same inventory.
 
 let root;
 let roots;
@@ -127,20 +127,6 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
     "9-call-transcript.md",
   ]);
   assert.deepEqual(fs.readdirSync(earlier), []);
-  assert.equal(exists(roots.userData, "notes-mirror.json"), false);
-});
-
-// Reset app data is the user's own action: a notes folder they chose keeps its files.
-test("Reset app data leaves a chosen notes folder alone", async () => {
-  const chosen = path.join(root, "Vault");
-  seed(path.join(chosen, "Personal", "1-a.md"), "---\nid: 1\n---\n");
-  fs.mkdirSync(roots.userData, { recursive: true });
-  rememberNotesMirrorPath(chosen, roots.userData);
-  assert.deepEqual(
-    await removeLocalData({ includeModels: true, keepChosenNotesFolders: true, roots }),
-    []
-  );
-  assert.equal(exists(chosen, "Personal", "1-a.md"), true);
   assert.equal(exists(roots.userData, "notes-mirror.json"), false);
 });
 
