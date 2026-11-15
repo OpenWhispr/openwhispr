@@ -484,6 +484,9 @@ test("an earlier consumer's bearer 401 permits guest updates while a held IT ver
   fakeThis.windowManager = { retireMeetingNotificationScope() {} };
   require("../../src/helpers/accountScopeBinding").persist("expired-account", "expired-bearer");
   fakeThis.updateManager = createUpdater();
+  // The updater logs its checks to stdout, which the test runner also uses for
+  // its own messages from this file's process.
+  t.mock.method(console, "log", () => {});
   let checks = 0;
   t.mock.method(autoUpdater, "checkForUpdates", async () => {
     checks++;
