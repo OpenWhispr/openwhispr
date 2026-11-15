@@ -5,19 +5,11 @@ import { refreshTinfoilModels } from "../../models/tinfoilModels";
 
 type TinfoilModule = typeof import("tinfoil");
 type TinfoilAISDKProvider = Awaited<ReturnType<TinfoilModule["createTinfoilAI"]>>;
-// One initialization per key serves every concurrent caller. Each waits on its
-// own signal, and the attestation is cancelled only once all of them have; a
-// caller arriving after that starts a fresh one.
-type SharedProvider = {
-  provider: Promise<TinfoilAISDKProvider>;
-  initialization: AbortController;
-  waiting: number;
-};
 
 let tinfoilModulePromise: Promise<TinfoilModule> | null = null;
 
 const chatClientCache = new Map<string, Promise<TinfoilAI>>();
-const aiSdkProviderCache = new Map<string, SharedProvider>();
+const aiSdkProviderCache = new Map<string, Promise<TinfoilAISDKProvider>>();
 
 function loadTinfoil(): Promise<TinfoilModule> {
   if (!tinfoilModulePromise) {
@@ -64,47 +56,27 @@ export async function getTinfoilChatClient(apiKey: string): Promise<TinfoilAI> {
   return clientPromise;
 }
 
-async function getTinfoilAISDKProvider(
-  apiKey: string,
-  signal?: AbortSignal
-): Promise<TinfoilAISDKProvider> {
-  signal?.throwIfAborted();
+async function getTinfoilAISDKProvider(apiKey: string): Promise<TinfoilAISDKProvider> {
   const key = normalizeApiKey(apiKey);
   syncTinfoilCatalog();
-  let shared = aiSdkProviderCache.get(key);
-  if (!shared) {
-    const initialization = new AbortController();
-    const provider = loadTinfoil()
-      .then(({ createTinfoilAI }) => createTinfoilAI(key, { signal: initialization.signal }))
-      .catch((error) => {
-        if (aiSdkProviderCache.get(key) === shared) aiSdkProviderCache.delete(key);
-        throw error;
-      });
-    shared = { provider, initialization, waiting: 0 };
-    aiSdkProviderCache.set(key, shared);
-  }
-  const { provider } = shared;
-  shared.waiting++;
-  try {
-    return await new Promise<TinfoilAISDKProvider>((resolve, reject) => {
-      const abort = () => reject(signal?.reason);
-      signal?.addEventListener("abort", abort, { once: true });
-      provider.then(resolve, reject).finally(() => signal?.removeEventListener("abort", abort));
+  const cached = aiSdkProviderCache.get(key);
+  if (cached) return cached;
+
+  const providerPromise = loadTinfoil()
+    .then(({ createTinfoilAI }) => createTinfoilAI(key))
+    .catch((error) => {
+      aiSdkProviderCache.delete(key);
+      throw error;
     });
-  } finally {
-    if (--shared.waiting === 0 && signal?.aborted) {
-      shared.initialization.abort(signal.reason);
-      if (aiSdkProviderCache.get(key) === shared) aiSdkProviderCache.delete(key);
-    }
-  }
+  aiSdkProviderCache.set(key, providerPromise);
+  return providerPromise;
 }
 
 export async function getTinfoilLanguageModel(
   apiKey: string,
-  model: string,
-  signal?: AbortSignal
+  model: string
 ): Promise<LanguageModel> {
-  const provider = await getTinfoilAISDKProvider(apiKey, signal);
+  const provider = await getTinfoilAISDKProvider(apiKey);
   return provider(resolveRetiredCloudModel("tinfoil", model));
 }
 

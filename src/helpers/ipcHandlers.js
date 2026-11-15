@@ -12647,7 +12647,7 @@ class IPCHandlers {
       }
     );
 
-    handleRemoteProduct("cloud-usage", async (event) => {
+    ipcMain.handle("cloud-usage", async (event) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -12721,15 +12721,15 @@ class IPCHandlers {
       }
     };
 
-    handleRemoteProduct("cloud-checkout", (event, opts) =>
+    ipcMain.handle("cloud-checkout", (event, opts) =>
       fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error", opts || undefined)
     );
 
-    handleRemoteProduct("cloud-billing-portal", (event) =>
+    ipcMain.handle("cloud-billing-portal", (event) =>
       fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
     );
 
-    handleRemoteProduct("cloud-switch-plan", async (event, opts) => {
+    ipcMain.handle("cloud-switch-plan", async (event, opts) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -12761,7 +12761,7 @@ class IPCHandlers {
       }
     });
 
-    handleRemoteProduct("cloud-preview-switch", async (event, opts) => {
+    ipcMain.handle("cloud-preview-switch", async (event, opts) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");

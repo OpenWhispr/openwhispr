@@ -1,5 +1,4 @@
 const { autoUpdater } = require("electron-updater");
-const UpdateHttpExecutor = require("./helpers/updateHttpExecutor");
 
 // electron-updater can only replace an AppImage on Linux; deb, rpm and tar.gz
 // installs are updated by the package manager instead.
@@ -58,11 +57,6 @@ class UpdateManager {
     if (process.env.NODE_ENV === "development") {
       return;
     }
-
-    this.httpExecutor = new UpdateHttpExecutor((info, callback) =>
-      autoUpdater.emit("login", info, callback)
-    );
-    autoUpdater.httpExecutor = this.httpExecutor;
 
     autoUpdater.setFeedURL({
       provider: "github",
@@ -229,7 +223,6 @@ class UpdateManager {
 
       if (this.checkPromise) return this.checkPromise;
 
-      this.httpExecutor.resumeRequests();
       const epoch = this.workEpoch;
       this.checkEpoch = epoch;
       this.checkPromise = this._checkForUpdates(epoch);
@@ -314,7 +307,6 @@ class UpdateManager {
 
       this.isDownloading = true;
       started = true;
-      this.httpExecutor.resumeRequests();
       const epoch = this.workEpoch;
       this.downloadEpoch = epoch;
       console.log("📥 Starting update download...");
@@ -512,8 +504,6 @@ class UpdateManager {
     // The next download must not start on a cancelled token.
     this.updateCancellationToken = null;
     if (this.checkPromise || this.downloadPromise) {
-      // Cancelling the updater promise alone leaves its download request open.
-      this.httpExecutor.abortRequests();
       const cleanup = Promise.allSettled([this.checkPromise, this.downloadPromise]).then(() => {
         if (this.requestCleanup === cleanup) this.requestCleanup = null;
       });
@@ -654,7 +644,6 @@ class UpdateManager {
       this.startupCheckTimeout = null;
     }
     this.updateCancellationToken?.cancel();
-    this.httpExecutor?.abortRequests();
     if (this.updateCheckInterval) {
       clearInterval(this.updateCheckInterval);
       this.updateCheckInterval = null;

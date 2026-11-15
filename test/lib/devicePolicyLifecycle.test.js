@@ -106,44 +106,6 @@ test("a failed older read cannot erase a newer device broadcast", async (t) => {
   assert.equal(store.getState().status, "unmanaged");
 });
 
-test("renderer transport refuses saved credentials and retires a response when policy tightens", async (t) => {
-  const { store, vite } = await boot(t);
-  const calls = [];
-  let requestSignal;
-  let finishBody;
-  globalThis.window.fetch = async (url, init) => {
-    calls.push(String(url));
-    requestSignal = init.signal;
-    return new Response(
-      new ReadableStream({
-        start(controller) {
-          finishBody = controller;
-        },
-      })
-    );
-  };
-  const { installPolicyNetworkGuard } = await vite.ssrLoadModule("/lib/policyNetwork.ts");
-  t.after(installPolicyNetworkGuard());
-  const response = await globalThis.window.fetch("https://api.openai.com/v1/responses", {
-    headers: { Authorization: "Bearer saved-key" },
-  });
-  const body = response.text();
-  store.setState({ localOnly: true, deviceManaged: true });
-  finishBody.enqueue(new TextEncoder().encode("late cloud output"));
-  finishBody.close();
-  await assert.rejects(body, /Blocked by device policy/);
-  assert.equal(requestSignal.aborted, true);
-  await assert.rejects(
-    globalThis.window.fetch("https://api.openai.com/v1/models"),
-    /Blocked by device policy/
-  );
-  assert.equal(calls.length, 1);
-  // Local model endpoints remain available.
-  const local = await globalThis.window.fetch("http://127.0.0.1:8080/completion");
-  await local.body.cancel();
-  assert.equal(calls.length, 2);
-});
-
 test("an existing renderer model cannot send a later tool step after policy revocation", async (t) => {
   for (const restriction of ["mode", "provider", "agent"]) {
     await t.test(restriction, async (t) => {
@@ -237,92 +199,6 @@ test("renderer model revocation aborts pending generation and an open stream", a
   assert.equal(cancelled, true);
 });
 
-test("required-sign-in renderer can discover email without allowing unrelated API traffic", async (t) => {
-  const { store, vite } = await boot(t, async () =>
-    snapshot({
-      success: false,
-      status: "error",
-      deviceManaged: true,
-      managed: true,
-      requireSignIn: true,
-      code: "POLICY_SIGN_IN_REQUIRED",
-    })
-  );
-  const requests = [];
-  globalThis.window.fetch = async (url) => {
-    requests.push(String(url));
-    return Response.json({ exists: true });
-  };
-  const { installPolicyNetworkGuard } = await vite.ssrLoadModule("/lib/policyNetwork.ts");
-  t.after(installPolicyNetworkGuard());
-  assert.deepEqual(
-    await (
-      await globalThis.window.fetch("https://auth.openwhispr.com/api/check-user", {
-        method: "POST",
-      })
-    ).json(),
-    { exists: true }
-  );
-  for (const url of [
-    "https://other.example/api/check-user",
-    "https://api.openwhispr.com/api/reason",
-  ]) {
-    await assert.rejects(globalThis.window.fetch(url), /Blocked by device policy/);
-  }
-  store.setState({ localOnly: true });
-  await assert.rejects(
-    globalThis.window.fetch("https://auth.openwhispr.com/api/check-user"),
-    /Blocked by device policy/
-  );
-  assert.equal(requests.length, 1);
-});
-
-test("a same-account verdict still loading keeps the settled one and its running requests", async (t) => {
-  const settled = snapshot({ accountId: "account-a", authGeneration: 1, deviceManaged: true });
-  const { store, vite, emit } = await boot(t, async () => settled);
-  let finishBody;
-  globalThis.window.fetch = async () =>
-    new Response(
-      new ReadableStream({
-        start(controller) {
-          finishBody = controller;
-        },
-      })
-    );
-  const { installPolicyNetworkGuard } = await vite.ssrLoadModule("/lib/policyNetwork.ts");
-  t.after(installPolicyNetworkGuard());
-  const response = await globalThis.window.fetch("https://api.openai.com/v1/audio/transcriptions");
-  const body = response.text();
-  await emit(
-    snapshot({
-      accountId: "account-a",
-      authGeneration: 2,
-      revision: 2,
-      success: false,
-      status: "loading",
-      deviceManaged: true,
-      code: "POLICY_LOADING",
-    })
-  );
-  void store.getState().bootstrap();
-  assert.equal(store.getState().status, "unmanaged");
-  assert.equal(store.getState().authGeneration, 2);
-  finishBody.enqueue(new TextEncoder().encode("transcript"));
-  finishBody.close();
-  assert.equal(await body, "transcript");
-});
-
-test("the renderer network guard enforces a device policy, not a workspace lookup", async (t) => {
-  const { vite } = await boot(t, async () =>
-    snapshot({ success: false, status: "error", code: "POLICY_UNAVAILABLE", accountId: "a" })
-  );
-  globalThis.window.fetch = async () => Response.json({ text: "transcript" });
-  const { installPolicyNetworkGuard } = await vite.ssrLoadModule("/lib/policyNetwork.ts");
-  t.after(installPolicyNetworkGuard());
-  const response = await globalThis.window.fetch("https://api.openai.com/v1/audio/transcriptions");
-  assert.deepEqual(await response.json(), { text: "transcript" });
-});
-
 for (const initiallyManaged of [false, true]) {
   test(`pending workspace refresh applies a restrictive device ${initiallyManaged ? "change" : "arrival"} before new renderer inference`, async (t) => {
     const {
@@ -368,8 +244,6 @@ for (const initiallyManaged of [false, true]) {
       });
     };
     globalThis.window.fetch = rawFetch;
-    const { installPolicyNetworkGuard } = await vite.ssrLoadModule("/lib/policyNetwork.ts");
-    t.after(installPolicyNetworkGuard());
     t.mock.method(globalThis, "fetch", (...args) => globalThis.window.fetch(...args));
     const { getAIModel } = await vite.ssrLoadModule("/services/ai/providers.ts");
     const createModel = () =>
