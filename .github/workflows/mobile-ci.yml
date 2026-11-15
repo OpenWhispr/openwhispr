@@ -58,8 +58,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          # The Android isolation check compares against the pull request's base.
-          fetch-depth: ${{ matrix.check == 'bundles' && 0 || 1 }}
+          # The Android isolation check compares against the pull request's base, so bundles needs full
+          # history. Written as != so the 0 comes last: `x && 0 || 1` is always 1, since 0 is falsy.
+          fetch-depth: ${{ matrix.check != 'bundles' && 1 || 0 }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: openwhispr-mobile/.nvmrc
