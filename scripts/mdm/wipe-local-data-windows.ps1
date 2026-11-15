@@ -92,10 +92,10 @@ function Get-FilesBelow([IO.DirectoryInfo]$Folder) {
 
 # In a folder of the profile the user chose for the notes mirror, removes only
 # the files the mirror wrote, at any depth of its workspace, space and folder
-# layout: "<id>-<slug>.md" opening with "---" and "id: <id>" (also when kept
-# aside as "edited-<name>"), their "<id>-...-transcript" companions, and
-# folders that leaves empty. The chosen folder itself stays. A file that can't
-# be read is skipped.
+# layout: "<id>-<slug>.md" with the mirror's frontmatter (also when kept aside
+# as "edited-<name>"), each note's "<id>-...-transcript" beside it, and folders
+# that leaves empty. The chosen folder itself stays. A file that can't be read
+# is skipped.
 function Remove-MirroredFiles([string]$Base, [string]$Root) {
   if (-not (Test-RealFolder $Base $Root)) { return }
   $files = @(Get-FilesBelow (Get-Item -LiteralPath $Base -Force))
@@ -109,12 +109,12 @@ function Remove-MirroredFiles([string]$Base, [string]$Root) {
     # The frontmatter the mirror writes: "---", "id: <id>", then title, type,
     # created and updated before the closing "---". An id alone is common in a
     # user's vault.
-    if ($lines.Count -lt 3 -or $lines[0].TrimStart([char]0xFEFF) -ne "---" -or -not ($lines[1] -match '^id: (\d+)$')) { continue }
+    if ($lines.Count -lt 3 -or $lines[0].TrimStart([char]0xFEFF) -ne "---" -or -not ($lines[1] -cmatch '^id: (\d+)$')) { continue }
     $id = $Matches[1]
     $close = [Array]::IndexOf($lines, "---", 2)
     if ($close -lt 0) { continue }
     $keys = @($lines[2..($close - 1)] | ForEach-Object { ($_ -split ":", 2)[0] })
-    if (@("title", "type", "created", "updated" | Where-Object { $keys -notcontains $_ }).Count) { continue }
+    if (@("title", "type", "created", "updated" | Where-Object { $keys -cnotcontains $_ }).Count) { continue }
     if (-not ($file.Name -match "^(edited-(\d+-)?)?$id-.*\.md$")) { continue }
     Remove-Entry $file
     $ids["$($file.DirectoryName)|$id"] = $true
@@ -181,11 +181,14 @@ if (-not $IncludeModels) {
 $signedIn = @(Get-CimInstance Win32_Process | ForEach-Object {
     (Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue).Sid
   })
+$fullPath = { param($Path) [IO.Path]::GetFullPath($Path).TrimEnd("\") }
 $profileSids = @{}
-Get-CimInstance Win32_UserProfile | ForEach-Object { $profileSids[$_.LocalPath] = $_.SID }
+Get-CimInstance Win32_UserProfile | Where-Object { $_.LocalPath } |
+  ForEach-Object { $profileSids[(& $fullPath $_.LocalPath)] = $_.SID }
+$someoneSignedIn = @($signedIn | Where-Object { $profileSids.Values -contains $_ }).Count -gt 0
 
 foreach ($profilePath in $UserProfile) {
-  $sid = $profileSids[$profilePath]
+  $sid = $profileSids[(& $fullPath $profilePath)]
   if ($sid -and $signedIn -contains $sid) {
     Write-Warning "Skipped $($profilePath): its user is signed in. Run again after they sign out."
     $script:failed = $true
@@ -223,11 +226,17 @@ foreach ($profilePath in $UserProfile) {
 }
 
 # The ASCII-only fallbacks the app uses when a profile path has spaces or
-# non-ASCII characters; they are shared by every user of the device.
-foreach ($root in @($env:ProgramData, "$env:SystemDrive\")) {
-  $app = Join-Path $root "OpenWhispr"
-  Remove-TempFiles (Join-Path $app "temp") $root
-  Remove-AllExcept (Join-Path $app "cache") $root $cacheKept
+# non-ASCII characters; they are shared by every user of the device, so any
+# signed-in user could swap a folder there for a junction.
+if ($someoneSignedIn) {
+  Write-Warning "Skipped the shared folders in $env:ProgramData\OpenWhispr and $env:SystemDrive\OpenWhispr while a user is signed in. Run again when no one is."
+  $script:failed = $true
+} else {
+  foreach ($root in @($env:ProgramData, "$env:SystemDrive\")) {
+    $app = Join-Path $root "OpenWhispr"
+    Remove-TempFiles (Join-Path $app "temp") $root
+    Remove-AllExcept (Join-Path $app "cache") $root $cacheKept
+  }
 }
 
 if ($failed) { exit 1 }

@@ -37,9 +37,10 @@ fi
 # the script then exits non-zero so the MDM tool shows the device as failed.
 failed=0
 # Run as root, a home's files are removed as the home's owner, so a link the
-# user swaps in mid-run can only reach what they could delete themselves.
+# user swaps in mid-run can only reach what they could delete themselves. A
+# home whose account is gone has no one left to swap links, so root cleans it.
 as_owner() {
-  if [[ $EUID -eq 0 && "$owner_uid" != 0 ]]; then sudo -u "#$owner_uid" "$@"; else "$@"; fi
+  if [[ -n "$run_as" ]]; then sudo -u "$run_as" "$@"; else "$@"; fi
 }
 
 remove() {
@@ -96,7 +97,7 @@ remove_if_emptied() {
 # a user's vault. Prints the id.
 mirrored_note_id() {
   local line key n=0 id="" keys=" "
-  while IFS= read -r line; do
+  while IFS= read -r line || [[ -n "$line" ]]; do
     n=$((n + 1))
     if ((n == 1)); then [[ "$line" == "---" ]] || return 1
     elif ((n == 2)); then [[ "$line" =~ ^id:\ ([0-9]+)$ ]] || return 1; id="${BASH_REMATCH[1]}"
@@ -191,6 +192,13 @@ fi
 for home in "${homes[@]}"; do
   home_real="$(cd -P "$home" 2>/dev/null && pwd)" || continue
   owner_uid="$(stat -f %u "$home_real")" || continue
+  run_as=""
+  if [[ $EUID -eq 0 ]]; then
+    # A root-owned folder in /Users (like /Users/Shared) is no one's home, and
+    # anyone may write in it.
+    [[ "$owner_uid" == 0 ]] && continue
+    id -un "$owner_uid" >/dev/null 2>&1 && run_as="#$owner_uid"
+  fi
   user_data="$home/Library/Application Support/OpenWhispr"
   # Every folder the mirror wrote to, from the app's record of them.
   index=0
