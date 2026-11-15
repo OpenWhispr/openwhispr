@@ -896,7 +896,7 @@ class MarkdownMirror {
   // writes. An id alone is common in a user's vault.
   _mirroredNoteId(filePath) {
     if (!filePath.endsWith(".md")) return null;
-    const head = (this._readFileHead(filePath, 4096) ?? "").replace(/^\uFEFF/, "");
+    const head = (this._readFileHead(filePath, 65536) ?? "").replace(/^\uFEFF/, "");
     const values = parseFrontmatter(head)?.values;
     const id = values?.keys().next().value === "id" ? values.get("id") : null;
     return /^\d+$/.test(id ?? "") &&
