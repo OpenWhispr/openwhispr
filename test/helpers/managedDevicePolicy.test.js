@@ -439,6 +439,18 @@ test("a reader that can't tell whether a policy is deployed reads as absent, and
   reader.manager.stop();
 });
 
+test("an invalid policy keeps its audit folder, so its refusals reach IT", async () => {
+  const reader = deviceReader();
+  reader.next = async () => ({ Policy: "{not json", AuditLogPath: "/var/log/openwhispr" });
+  await reader.manager.refresh();
+  assert.equal(reader.manager.getSnapshot().status, "invalid");
+  assert.equal(reader.manager.getSnapshot().auditLogPath, "/var/log/openwhispr");
+  reader.next = async () => ({ Policy: "{not json" });
+  await reader.manager.refresh();
+  assert.equal(reader.manager.getSnapshot().auditLogPath, undefined);
+  reader.manager.stop();
+});
+
 test("a reader that fails with a deployment present is invalid until a read succeeds", async () => {
   const reader = deviceReader({ evidence: true });
   reader.next = unreadable;

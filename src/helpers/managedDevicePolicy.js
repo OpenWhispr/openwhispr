@@ -447,7 +447,11 @@ function createManagedDevicePolicy({
     try {
       return normalizeDeviceValues(values);
     } catch {
-      return INVALID_SNAPSHOT;
+      // The refusals an invalid policy causes still go to IT's audit folder.
+      const auditLogPath = values?.AuditLogPath;
+      return typeof auditLogPath === "string" && auditLogPath.trim()
+        ? { ...INVALID_SNAPSHOT, auditLogPath }
+        : INVALID_SNAPSHOT;
     }
   }
   function refresh() {
