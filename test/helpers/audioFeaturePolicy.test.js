@@ -171,6 +171,26 @@ test("a refusal names the control that is switched off", () => {
   );
 });
 
+test("an invalid or sign-in-required device policy says so instead of still loading", () => {
+  const meeting = (snapshot) => audioFeatureFailure(snapshot, "meeting");
+  assert.equal(
+    meeting({ success: false, code: "DEVICE_POLICY_INVALID" }).error,
+    "The device policy could not be read or is invalid. Contact your administrator. OpenWhispr can't be used until the policy is corrected."
+  );
+  assert.equal(
+    meeting({ success: false, code: "POLICY_SIGN_IN_REQUIRED" }).error,
+    "Your organization requires sign-in on this device."
+  );
+  assert.equal(
+    meeting({ success: false, code: "POLICY_UNAVAILABLE" }).error,
+    "Your organization's settings haven't loaded yet. Try again in a moment."
+  );
+  assert.equal(
+    meeting({ success: false, code: "DEVICE_POLICY_INVALID" }).code,
+    "POLICY_UNRESOLVABLE"
+  );
+});
+
 test("a newly blocked purpose is reported with its refusal code", () => {
   const blocked = [];
   const guard = createAudioFeaturePolicy({
