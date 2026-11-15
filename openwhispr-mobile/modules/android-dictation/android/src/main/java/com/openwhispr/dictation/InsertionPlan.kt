@@ -38,6 +38,27 @@ object InsertionPlan {
 
   private fun place(text: String, start: Int, end: Int, dictated: String): Insertion? {
     if (start < 0 || end < start || end > text.length) return null
-    return Insertion(text.substring(0, start) + dictated + text.substring(end), start + dictated.length)
+    val words = if (start == end && needsLeadingSpace(text, start, dictated)) " $dictated" else dictated
+    return Insertion(text.substring(0, start) + words + text.substring(end), start + words.length)
   }
+
+  /**
+   * Words dictated at a caret right after other text get a space in front, as the iOS keyboard does, so
+   * "…Tishan." and "Oh," don't run together. Not at the start of a field or line, after a space or an opening
+   * bracket or quote, or when the words start with punctuation or a space. A selection is replaced as it is.
+   */
+  private fun needsLeadingSpace(text: String, caret: Int, dictated: String): Boolean {
+    if (caret == 0 || dictated.isEmpty()) return false
+    val first = dictated[0]
+    if (first.isWhitespace() || first in TRAILING_PUNCTUATION) return false
+    val before = text[caret - 1]
+    if (before.isWhitespace() || before in OPENERS) return false
+    // A straight quote opens only when nothing is right before it: `said "` vs `said "hi"`.
+    if (before in STRAIGHT_QUOTES) return caret >= 2 && !text[caret - 2].isWhitespace() && text[caret - 2] !in OPENERS
+    return true
+  }
+
+  private const val TRAILING_PUNCTUATION = ".,;:!?)]}…%"
+  private const val OPENERS = "([{“‘«¿¡"
+  private const val STRAIGHT_QUOTES = "\"'"
 }
