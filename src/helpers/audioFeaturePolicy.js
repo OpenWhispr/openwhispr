@@ -2,7 +2,6 @@ const { i18nMain } = require("./i18nMain");
 const { isAudioPolicyRefusal } = require("./audioPolicyRefusals");
 const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 const { POLICY_TIMEOUT_MS } = require("./connectors/connectorIpc");
-const { policyRefusalKey } = require("./productPolicy");
 
 const FEATURE_BY_PURPOSE = {
   meeting: "meetingRecordingEnabled",
@@ -17,8 +16,7 @@ function audioFeatureFailure(snapshot, purpose) {
     return {
       success: false,
       code: "POLICY_UNRESOLVABLE",
-      // A device policy that is invalid or needs sign-in says so, not "still loading".
-      error: i18nMain.t(snapshot?.success ? "common.policyUnresolved" : policyRefusalKey(snapshot)),
+      error: i18nMain.t("common.policyUnresolved"),
     };
   }
   if (!snapshot.managed || snapshot.policy?.features?.[FEATURE_BY_PURPOSE[purpose]] !== false) {
