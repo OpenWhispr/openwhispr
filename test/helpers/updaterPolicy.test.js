@@ -30,20 +30,12 @@ afterEach(() => {
   else process.env.APPIMAGE = originalAppImage;
 });
 
-function setup({ snapshot = managed("user_choice"), getPolicy, download, check, onAbort } = {}) {
+function setup({ snapshot = managed("user_choice"), getPolicy, download, check } = {}) {
   let current = snapshot;
   const events = [];
   const autoUpdater = new EventEmitter();
   const nativeUpdater = new EventEmitter();
   const app = new EventEmitter();
-  const httpExecutor = {
-    aborts: 0,
-    resumeRequests() {},
-    abortRequests() {
-      this.aborts++;
-      onAbort?.();
-    },
-  };
   // Each check issues its own token, as electron-updater does.
   const tokens = [];
   const newToken = () => ({
@@ -81,13 +73,6 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check, 
   delete require.cache[modulePath];
   Module._load = function (request, parent, isMain) {
     if (request === "electron-updater") return { autoUpdater };
-    if (request === "./helpers/updateHttpExecutor") {
-      return class {
-        constructor() {
-          return httpExecutor;
-        }
-      };
-    }
     if (request === "electron") return { autoUpdater: nativeUpdater, app };
     if (request === "child_process") return { execSync: () => "0" };
     return originalLoad.call(this, request, parent, isMain);
@@ -106,7 +91,6 @@ function setup({ snapshot = managed("user_choice"), getPolicy, download, check, 
     autoUpdater,
     nativeUpdater,
     app,
-    httpExecutor,
     events,
     tokens,
     setPolicy(value) {
@@ -201,7 +185,7 @@ test("policy changes cancel the active download and reject late completion event
   const pending = new Promise((done) => {
     finish = done;
   });
-  const { manager, autoUpdater, httpExecutor, tokens, events, setPolicy } = setup({
+  const { manager, autoUpdater, tokens, events, setPolicy } = setup({
     download: () => pending,
   });
   manager.setAutoUpdatesEnabled(false);
@@ -215,7 +199,6 @@ test("policy changes cancel the active download and reject late completion event
   setPolicy(managed("it_managed"));
   assert.equal(tokens[0].cancelled, true);
   await flush();
-  assert.equal(httpExecutor.aborts, 1);
   assert.equal(autoUpdater.autoInstallOnAppQuit, false);
   autoUpdater.emit("update-downloaded", { version: "99.0.0" });
   finish([]);
@@ -253,16 +236,9 @@ for (const mode of ["user_choice", "always_on"]) {
   });
 }
 
-test("idle policy changes do not abort unrelated requests", async () => {
-  const { manager, httpExecutor, setPolicy } = setup();
-  await manager.refreshPolicy();
-  setPolicy(managed("it_managed"));
-  assert.equal(httpExecutor.aborts, 0);
-});
-
 test("a downloaded event does not release an operation still preparing its native handoff", async () => {
   let finish;
-  const { manager, autoUpdater, httpExecutor, setPolicy } = setup({
+  const { manager, autoUpdater, setPolicy } = setup({
     download: () => new Promise((resolve) => (finish = resolve)),
   });
   manager.setAutoUpdatesEnabled(false);
@@ -273,7 +249,6 @@ test("a downloaded event does not release an operation still preparing its nativ
   assert.equal(manager.isDownloading, false);
   setPolicy(managed("it_managed"));
   await flush();
-  assert.equal(httpExecutor.aborts, 1);
   setPolicy(managed("user_choice"));
   const checking = manager.checkForUpdates();
   await flush();
@@ -284,26 +259,23 @@ test("a downloaded event does not release an operation still preparing its nativ
   assert.equal((await manager.getUpdateStatus()).updateAvailable, true);
 });
 
-test("an aborted manual feed check returns the new policy denial", async () => {
+test("a manual feed check that fails after IT takes over returns the policy denial", async () => {
   let rejectCheck;
-  const { manager, httpExecutor, setPolicy } = setup({
+  const { manager, setPolicy } = setup({
     check: () => new Promise((_resolve, reject) => (rejectCheck = reject)),
-    onAbort: () => rejectCheck(new Error("net::ERR_CONNECTION_CLOSED")),
   });
   const checking = manager.checkForUpdates();
   await flush();
   setPolicy(managed("it_managed"));
-  await flush();
-  assert.equal(httpExecutor.aborts, 1);
+  rejectCheck(new Error("net::ERR_CONNECTION_CLOSED"));
   assert.equal((await checking).code, "UPDATES_MANAGED_BY_ORG");
 });
 
 for (const mode of ["user_choice", "always_on"]) {
-  test(`an aborted check and its joined caller explain restored ${mode} policy`, async () => {
+  test(`a check outlived by IT management and its joined caller explain restored ${mode} policy`, async () => {
     let rejectCheck;
     const { manager, setPolicy } = setup({
       check: () => new Promise((_resolve, reject) => (rejectCheck = reject)),
-      onAbort: () => rejectCheck(new Error("cancelled")),
     });
     const checking = manager.checkForUpdates();
     await flush();
@@ -311,17 +283,17 @@ for (const mode of ["user_choice", "always_on"]) {
     await flush();
     setPolicy(managed("it_managed"));
     setPolicy(managed(mode));
+    rejectCheck(new Error("cancelled"));
     for (const result of await Promise.all([checking, joined])) {
       assert.equal(result.code, "UPDATE_POLICY_CHANGED");
       assert.equal(result.updateAvailable, false);
     }
   });
 
-  test(`an aborted download explains restored ${mode} policy`, async () => {
+  test(`a cancelled download explains restored ${mode} policy`, async () => {
     let rejectDownload;
     const { manager, setPolicy } = setup({
       download: () => new Promise((_resolve, reject) => (rejectDownload = reject)),
-      onAbort: () => rejectDownload(new Error("cancelled")),
     });
     manager.setAutoUpdatesEnabled(false);
     await manager.checkForUpdates();
@@ -329,6 +301,7 @@ for (const mode of ["user_choice", "always_on"]) {
     await flush();
     setPolicy(managed("it_managed"));
     setPolicy(managed(mode));
+    rejectDownload(new Error("cancelled"));
     assert.equal((await downloading).code, "UPDATE_POLICY_CHANGED");
   });
 }
@@ -350,7 +323,7 @@ test("an old credential's late policy lookup cannot replace the new scope", asyn
 
 test("a failed lookup leaves a held verdict and its download alone; an unresolvable one revokes", async () => {
   let finish;
-  const { manager, httpExecutor, tokens } = setup({
+  const { manager, tokens } = setup({
     download: () => new Promise((resolve) => (finish = resolve)),
   });
   manager.setAutoUpdatesEnabled(false);
@@ -360,7 +333,6 @@ test("a failed lookup leaves a held verdict and its download alone; an unresolva
   for (const code of ["POLICY_UNAVAILABLE", "POLICY_RETRY_THROTTLED"]) {
     manager.updatePolicy({ success: false, code });
   }
-  assert.equal(httpExecutor.aborts, 0);
   assert.equal(tokens[0].cancelled, false);
   assert.equal((await manager.getUpdateStatus()).policyReady, true);
   finish([]);
@@ -376,7 +348,7 @@ test("a failed lookup leaves a held verdict and its download alone; an unresolva
 
 test("a credential change lets a consumer download finish under the verdict it started with", async () => {
   let finish;
-  const { manager, httpExecutor, tokens, events } = setup({
+  const { manager, tokens, events } = setup({
     download: () => new Promise((resolve) => (finish = resolve)),
   });
   manager.setAutoUpdatesEnabled(false);
@@ -389,7 +361,6 @@ test("a credential change lets a consumer download finish under the verdict it s
   assert.equal(status.updateAvailable, true);
   manager.updatePolicy(managed("user_choice"));
   await flush();
-  assert.equal(httpExecutor.aborts, 0);
   assert.equal(tokens[0].cancelled, false);
   finish([]);
   assert.equal((await downloading).success, true);
