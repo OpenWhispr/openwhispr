@@ -14,14 +14,8 @@ class InsertionService : AccessibilityService() {
   private data class Target(val node: AccessibilityNodeInfo, val text: String, val start: Int, val end: Int)
   private var target: Target? = null
   private val handler = Handler(Looper.getMainLooper())
-  private fun fieldText(node: AccessibilityNodeInfo): String =
-    if (node.isShowingHintText) "" else node.text?.toString().orEmpty()
-  private fun selection(node: AccessibilityNodeInfo, text: String): Pair<Int, Int> {
-    val start = node.textSelectionStart
-    val end = node.textSelectionEnd
-    // Android reports -1 for both selection bounds on an empty EditText showing a hint.
-    return if (text.isEmpty() && start == -1 && end == -1) 0 to 0 else start to end
-  }
+  private fun readField(node: AccessibilityNodeInfo): Field =
+    InsertionPlan.field(node.text?.toString().orEmpty(), node.textSelectionStart, node.textSelectionEnd, node.isShowingHintText)
 
   override fun onServiceConnected() { instance = this; refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
   // Focus and window changes only decide whether the bubble shows. They check whether the focused
@@ -50,8 +44,7 @@ class InsertionService : AccessibilityService() {
     clearTarget()
     val node = focusedField() ?: return ""
     if (!node.isEditable || node.isPassword) { node.recycle(); return "" }
-    val text = fieldText(node)
-    val (start, end) = selection(node, text)
+    val (text, start, end) = readField(node)
     if (start < 0 || end < start || end > text.length) {
       node.recycle(); return ""
     }
@@ -63,8 +56,7 @@ class InsertionService : AccessibilityService() {
     val current = focusedField()
     if (current == null) { clearTarget(); return complete(false) }
     if (!current.isEditable || current.isPassword) { current.recycle(); clearTarget(); return complete(false) }
-    val currentText = fieldText(current)
-    val (start, end) = selection(current, currentText)
+    val (currentText, start, end) = readField(current)
     val plan = if (current != captured.node) null
       else InsertionPlan.plan(captured.text, captured.start, captured.end, currentText, start, end, text)
     if (plan == null) { current.recycle(); clearTarget(); return complete(false) }
@@ -81,7 +73,7 @@ class InsertionService : AccessibilityService() {
     // Some editors acknowledge an action without applying it. Verify the result;
     // never retry a write because that can duplicate text in another application.
     handler.postDelayed({
-      val verified = runCatching { current.refresh() && InsertionPlan.landed(currentText, fieldText(current), text) }.getOrDefault(false)
+      val verified = runCatching { current.refresh() && InsertionPlan.landed(currentText, readField(current).text, text) }.getOrDefault(false)
       current.recycle(); complete(verified)
     }, 150)
   }
