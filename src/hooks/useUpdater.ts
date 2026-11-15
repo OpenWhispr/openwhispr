@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 import type { UpdateStatusResult } from "../types/electron";
 
-type UpdateStatus = UpdateStatusResult;
-
 interface UpdateInfo {
   version?: string;
   releaseDate?: string;
@@ -12,7 +10,7 @@ interface UpdateInfo {
 }
 
 interface UpdateState {
-  status: UpdateStatus;
+  status: UpdateStatusResult;
   info: UpdateInfo | null;
   downloadProgress: number;
   isChecking: boolean;
@@ -49,7 +47,7 @@ function updateGlobalState(updates: Partial<UpdateState>) {
 }
 
 // Main ends running work only once no verdict allows it, not while one is pending.
-const isBlocked = (status: UpdateStatus) =>
+const isBlocked = (status: UpdateStatusResult) =>
   status.updateMode == null || status.updateMode === "it_managed";
 
 function registerEventListeners() {
