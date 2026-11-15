@@ -35,8 +35,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/android/adaptive-icon-foreground.png",
+        "backgroundImage": "./assets/android/adaptive-icon-background.png",
+        "monochromeImage": "./assets/android/adaptive-icon-monochrome.png",
+        "backgroundColor": "#0047CF"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.gizmolabs.openwhispr",
