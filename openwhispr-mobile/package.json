@@ -27,7 +27,8 @@
     "test:keyboard-capitalization": "sh scripts/test-keyboard-capitalization.sh",
     "postinstall": "patch-package --error-on-fail && npm run test:security && npm run download:brand-fonts",
     "eas-build-pre-install": "if [ \"$EAS_BUILD_PLATFORM\" = \"ios\" ]; then bundle install; elif [ \"$EAS_BUILD_PLATFORM\" = \"android\" ]; then sdkmanager \"cmake;3.22.1\"; fi",
-    "test:platform-styles": "node --test scripts/__tests__/platform-styles.test.js"
+    "test:platform-styles": "node --test scripts/__tests__/platform-styles.test.js",
+    "test:android-ui-isolation": "node --test scripts/__tests__/android-ui-isolation.test.mjs"
   },
   "engines": {
     "node": "24.x"
