@@ -21,10 +21,6 @@ const APPEND_FLAGS =
   (fs.constants.O_NONBLOCK ?? 0);
 const KEEP_FILES = 90;
 const CHECKPOINT_MS = 30_000;
-// A crash marker whose stop still can't be written a week after the first
-// failed attempt is treated as gone when a recording starts, so it stops holding
-// that recording's crash recovery hostage.
-const MARKER_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const START_SOURCES = new Set([
   "hotkey",
   "tray",
@@ -100,9 +96,6 @@ function createMeetingAuditLog({
   let lastFile = null;
   let session = null;
   let checkpointTimer = null;
-  // While a failed recovery keeps an earlier session's marker, no session may
-  // replace or remove it.
-  let markerKept = false;
 
   // A write never blocks or fails the recording; each problem is logged once.
   const warnOnce = (message, meta) => {
@@ -196,28 +189,22 @@ function createMeetingAuditLog({
     await fs.promises.rename(pending, markerPath);
   }
 
-  // A kept marker belongs to an earlier recording, which this one must not replace.
-  async function saveMarker(open) {
-    if (!markerKept) await writeMarker(open);
-  }
-
-  // Closes a recording the last launch never stopped, as of its last checkpoint.
-  // A kept marker only stands in the way of a new recording's crash recovery, so
-  // only a recording's start may drop it.
-  function recover(mayDrop) {
+  // Closes, as of its last checkpoint, a recording the last launch never
+  // stopped. Tried once: if that write fails the marker still goes, since the
+  // start line already shows the recording didn't end cleanly.
+  function recoverInterrupted() {
     enqueue(async () => {
       let text;
       try {
         text = await fs.promises.readFile(markerPath, "utf8");
       } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-        markerKept = false;
-        return;
+        if (error.code === "ENOENT") return;
+        throw error;
       }
-      const open = readMarker(text);
-      if (open) {
-        markerKept = true;
-        try {
+      try {
+        const open = readMarker(text);
+        if (!open) warnOnce("Dropped a crash marker that can't be closed", {});
+        else
           await append(open.dir, open.lastSeenAt, {
             event: "recording.stopped",
             sessionId: open.sessionId,
@@ -225,21 +212,9 @@ function createMeetingAuditLog({
             reason: "interrupted",
             durationSec: durationSec(open.startedAt, open.lastSeenAt),
           });
-        } catch (error) {
-          // Counted from the first failure, not the crash, so a late first attempt
-          // made while a share is still mounting doesn't drop the marker.
-          const failedSince = open.failedSince ?? now();
-          if (!mayDrop || now() - failedSince <= MARKER_MAX_AGE_MS) {
-            if (open.failedSince === undefined) await writeMarker({ ...open, failedSince });
-            throw error;
-          }
-          warnOnce("Dropped a crash marker that can't be closed", { error: error.message });
-        }
-      } else {
-        warnOnce("Dropped a crash marker that can't be closed", {});
+      } finally {
+        await fs.promises.rm(markerPath, { force: true });
       }
-      await fs.promises.rm(markerPath, { force: true });
-      markerKept = false;
     });
   }
 
@@ -255,15 +230,13 @@ function createMeetingAuditLog({
       lastSeenAt: startedAt,
     };
     session = open;
-    // Retries a marker a failed recovery kept, in case its folder is back.
-    recover(true);
     enqueue(async () => {
       await append(open.dir, startedAt, { event: "recording.started", ...open });
-      await saveMarker(open);
+      await writeMarker(open);
     });
     checkpointTimer = setInterval(() => {
       const checkpoint = { ...open, lastSeenAt: now() };
-      enqueue(() => saveMarker(checkpoint));
+      enqueue(() => writeMarker(checkpoint));
     }, CHECKPOINT_MS);
     checkpointTimer.unref?.();
   }
@@ -284,14 +257,14 @@ function createMeetingAuditLog({
         reason: allowed(STOP_REASONS, reason),
         durationSec: durationSec(open.startedAt, stoppedAt),
       });
-      if (!markerKept) await fs.promises.rm(markerPath, { force: true });
+      await fs.promises.rm(markerPath, { force: true });
     });
   }
 
   return {
     recordingStarted,
     recordingStopped,
-    recoverInterrupted: () => recover(false),
+    recoverInterrupted,
 
     recordingRefused({ noteId, trigger, reason }) {
       if (!isEnabled()) return;
