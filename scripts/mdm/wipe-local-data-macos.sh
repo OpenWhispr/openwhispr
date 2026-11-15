@@ -36,8 +36,14 @@ fi
 # A file that can't go (a locked one, say) is reported and the wipe carries on;
 # the script then exits non-zero so the MDM tool shows the device as failed.
 failed=0
+# Run as root, a home's files are removed as the home's owner, so a link the
+# user swaps in mid-run can only reach what they could delete themselves.
+as_owner() {
+  if [[ $EUID -eq 0 && "$owner_uid" != 0 ]]; then sudo -u "#$owner_uid" "$@"; else "$@"; fi
+}
+
 remove() {
-  rm -rf "$1" 2>/dev/null || {
+  as_owner rm -rf "$1" 2>/dev/null || {
     echo "Could not remove $1" >&2
     failed=1
   }
@@ -81,34 +87,61 @@ remove_if_emptied() {
       *) return 1 ;;
     esac
   done
-  rm -f "$dir/.DS_Store" "$dir/Thumbs.db" "$dir/desktop.ini"
-  rmdir "$dir" 2>/dev/null
+  as_owner rm -f "$dir/.DS_Store" "$dir/Thumbs.db" "$dir/desktop.ini"
+  as_owner rmdir "$dir" 2>/dev/null
+}
+
+# The frontmatter the mirror writes: "---", "id: <id>", then title, type,
+# created and updated lines before the closing "---". An id alone is common in
+# a user's vault. Prints the id.
+mirrored_note_id() {
+  local line key n=0 id="" keys=" "
+  while IFS= read -r line; do
+    n=$((n + 1))
+    if ((n == 1)); then [[ "$line" == "---" ]] || return 1
+    elif ((n == 2)); then [[ "$line" =~ ^id:\ ([0-9]+)$ ]] || return 1; id="${BASH_REMATCH[1]}"
+    elif [[ "$line" == "---" ]]; then
+      for key in title type created updated; do [[ "$keys" == *" $key "* ]] || return 1; done
+      echo "$id"
+      return 0
+    else keys+="${line%%:*} "
+    fi
+  done < <(head -n 40 "$1" 2>/dev/null | LC_ALL=C sed $'1s/^\xef\xbb\xbf//' | tr -d '\r')
+  return 1
+}
+
+# A transcript opens as the app writes it: "# <title>", a blank line and the
+# date in bold in Markdown, or a rule line of "─" in text.
+looks_like_transcript() {
+  if [[ "$1" == *.md ]]; then
+    [[ "$(sed -n 1p "$1" | tr -d '\r')" == "# "* && "$(sed -n 3p "$1" | tr -d '\r')" == "**"* ]]
+  else
+    grep -q '^──────────' "$1" 2>/dev/null
+  fi
 }
 
 # In a folder of the home the user chose for the notes mirror, removes only the
 # files the mirror wrote, at any depth of its workspace, space and folder
-# layout: "<id>-<slug>.md" opening with "---" and "id: <id>" (also when kept
-# aside as "edited-<name>"), their "<id>-...-transcript" companions, and
-# folders that leaves empty. The chosen folder itself stays. Links are never
-# followed.
+# layout: "<id>-<slug>.md" with the mirror's frontmatter (also when kept aside
+# as "edited-<name>"), each note's "<id>-...-transcript" beside it, and folders
+# that leaves empty. The chosen folder itself stays. Links are never followed.
 remove_mirrored_files() {
-  local base="$1" file name id head folder
-  local ids=() emptied=()
+  local base="$1" file name id folder
+  local notes=() emptied=()
   [[ -d "$base" ]] && inside_home "$base" || return 0
   while IFS= read -r -d '' file; do
     name="$(basename "$file")"
-    head="$(head -n 2 "$file" 2>/dev/null | LC_ALL=C sed $'1s/^\xef\xbb\xbf//' | tr -d '\r')" || continue
-    [[ "$head" =~ ^---$'\n'id:\ ([0-9]+)$ ]] || continue
-    id="${BASH_REMATCH[1]}"
+    id="$(mirrored_note_id "$file")" || continue
     [[ "$name" =~ ^(edited-([0-9]+-)?)?${id}-.*\.md$ ]] || continue
     remove "$file"
-    ids+=("$id")
+    notes+=("$(dirname "$file")/$id")
     emptied+=("$(dirname "$file")")
   done < <(find "$base" -type f -name '*.md' -print0 2>/dev/null)
   while IFS= read -r -d '' file; do
     name="$(basename "$file")"
     [[ "$name" =~ ^(edited-([0-9]+-)?)?([0-9]+)-.*-transcript\.(md|txt)$ ]] || continue
-    contains "${BASH_REMATCH[3]}" "${ids[@]}" || continue
+    contains "$(dirname "$file")/${BASH_REMATCH[3]}" "${notes[@]}" || continue
+    looks_like_transcript "$file" || continue
     remove "$file"
     emptied+=("$(dirname "$file")")
   done < <(find "$base" -type f \( -name '*-transcript.md' -o -name '*-transcript.txt' \) -print0 2>/dev/null)
@@ -157,6 +190,7 @@ fi
 
 for home in "${homes[@]}"; do
   home_real="$(cd -P "$home" 2>/dev/null && pwd)" || continue
+  owner_uid="$(stat -f %u "$home_real")" || continue
   user_data="$home/Library/Application Support/OpenWhispr"
   # Every folder the mirror wrote to, from the app's record of them.
   index=0

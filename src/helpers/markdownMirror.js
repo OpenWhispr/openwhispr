@@ -890,13 +890,18 @@ class MarkdownMirror {
     }
   }
 
-  // A note file this mirror wrote: "<id>-<slug>.md" opening with its "id: <id>",
-  // or such a file kept aside as "edited-<name>" after an outside edit.
+  // A note file this mirror wrote: "<id>-<slug>.md", or such a file kept aside
+  // as "edited-<name>" after an outside edit, whose frontmatter opens with that
+  // id and has the title, type, created and updated lines the mirror always
+  // writes. An id alone is common in a user's vault.
   _mirroredNoteId(filePath) {
     if (!filePath.endsWith(".md")) return null;
-    const head = this._readFileHead(filePath, 64) ?? "";
-    const id = /^\uFEFF?---\r?\nid: (\d+)\r?\n/.exec(head)?.[1];
-    return id && new RegExp(`^(?:edited-(?:\\d+-)?)?${id}-.*\\.md$`).test(path.basename(filePath))
+    const head = (this._readFileHead(filePath, 4096) ?? "").replace(/^\uFEFF/, "");
+    const values = parseFrontmatter(head)?.values;
+    const id = values?.keys().next().value === "id" ? values.get("id") : null;
+    return /^\d+$/.test(id ?? "") &&
+      ["title", "type", "created", "updated"].every((key) => values.has(key)) &&
+      new RegExp(`^(?:edited-(?:\\d+-)?)?${id}-.*\\.md$`).test(path.basename(filePath))
       ? id
       : null;
   }
@@ -923,17 +928,24 @@ class MarkdownMirror {
       }
     };
     walk(basePath);
-    const noteIds = new Set();
+    // A transcript goes only with its own note, beside it.
+    const notes = new Set();
     const owned = files.filter((file) => {
       const id = this._mirroredNoteId(file);
-      if (id) noteIds.add(id);
+      if (id) notes.add(path.join(path.dirname(file), id));
       return id !== null;
     });
     for (const file of files) {
       const id = /^(?:edited-(?:\d+-)?)?(\d+)-.*-transcript\.(?:md|txt)$/.exec(
         path.basename(file)
       )?.[1];
-      if (id && noteIds.has(id) && !owned.includes(file)) owned.push(file);
+      if (
+        id &&
+        notes.has(path.join(path.dirname(file), id)) &&
+        !owned.includes(file) &&
+        this._looksLikeTranscript(file)
+      )
+        owned.push(file);
     }
     let failure = null;
     for (const file of owned) {

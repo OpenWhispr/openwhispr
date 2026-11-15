@@ -76,23 +76,28 @@ test("removes every store and keeps the audit log, the wipe record and, by defau
     for (const name of MODEL_CACHE_ENTRIES) assert.equal(exists(cache, name), false, name);
 });
 
+// What the mirror writes: its note frontmatter, and a transcript's opening.
+const mirrored = (id, extra = "") =>
+  `---\nid: ${id}\ntitle: "Note ${id}"\ntype: personal\n${extra}created: 2026-11-01T00:00:00.000Z\nupdated: 2026-11-02T00:00:00.000Z\n---\n\nbody`;
+const transcriptOf = (title) => `# ${title}\n\n**2026-11-11 09:00**\n\nSpeaker 1: hello\n`;
+
 test("in a notes folder the user chose, only the mirror's own files and the folders it emptied go", async () => {
   const chosen = path.join(root, "Vault");
   const personal = path.join(chosen, "Personal");
-  seed(path.join(personal, "12-standup.md"), "---\nid: 12\ntitle: Standup\n---\n\nbody");
-  seed(path.join(personal, "12-standup-transcript.md"), "# Standup\n");
-  seed(path.join(chosen, "Work", "7-plan.md"), "\uFEFF---\r\nid: 7\r\n---\r\n");
+  seed(path.join(personal, "12-standup.md"), mirrored(12));
+  seed(path.join(personal, "12-standup-transcript.md"), transcriptOf("Standup"));
+  seed(path.join(chosen, "Work", "7-plan.md"), `\uFEFF${mirrored(7).replaceAll("\n", "\r\n")}`);
   // The workspace and space layout nests a note's folders, and an outside
   // edit is kept aside under "edited-".
   const space = path.join(chosen, "Workspaces", "Acme", "Teamspaces", "Sales");
-  seed(path.join(space, "Calls", "21-call.md"), '---\nid: 21\nspace: "Sales"\n---\n');
-  seed(path.join(space, "Calls", "21-call-transcript.md"), "# Call\n");
-  seed(path.join(space, "edited-22-brief.md"), "---\nid: 22\n---\n\nedited");
+  seed(path.join(space, "Calls", "21-call.md"), mirrored(21, 'space: "Sales"\n'));
+  seed(path.join(space, "Calls", "21-call-transcript.md"), transcriptOf("Call"));
+  seed(path.join(space, "edited-22-brief.md"), `${mirrored(22)}\n\nedited`);
   seed(path.join(space, "notes.txt"), "mine");
   // A copy kept aside a second time, of a note whose name starts with digits.
-  seed(path.join(space, "edited-2-123-2024-plan.md"), "---\nid: 123\n---\n");
+  seed(path.join(space, "edited-2-123-2024-plan.md"), mirrored(123));
   // A space whose name starts with a dot, and a vault tool's own files.
-  seed(path.join(space, "..", ".NET Platform", "6-x.md"), "---\nid: 6\n---\n");
+  seed(path.join(space, "..", ".NET Platform", "6-x.md"), mirrored(6));
   seed(path.join(chosen, ".obsidian", "workspace.json"), "{}");
   // The user's own files: a daily note named like a mirror file, a note whose
   // frontmatter names another id, a transcript with no mirrored note, and a
@@ -101,11 +106,19 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
   seed(path.join(personal, "3-copied.md"), "---\nid: 4\n---\n");
   seed(path.join(personal, "9-call-transcript.md"), "# Call\n");
   seed(path.join(chosen, "readme.md"), "mine");
+  // Notes from a Zettelkasten-style vault: "<id>-<slug>.md" opening with that
+  // id, but without the mirror's frontmatter. And a lecture file named like a
+  // mirrored note's transcript, away from that note or not a transcript.
+  const zettel = path.join(chosen, "Zettel");
+  seed(path.join(zettel, "202311151230-idea.md"), "---\nid: 202311151230\ntitle: My idea\n---\n");
+  seed(path.join(zettel, "1-reading.md"), "---\nid: 1\n---\n");
+  seed(path.join(chosen, "School", "12-lecture-transcript.md"), transcriptOf("Lecture"));
+  seed(path.join(personal, "12-own-transcript.md"), "my own notes");
   fs.mkdirSync(path.join(chosen, "Ideas"));
   // A folder the mirror wrote to before it moved to the one above.
   const earlier = path.join(root, "Old notes");
   fs.mkdirSync(roots.userData, { recursive: true });
-  seed(path.join(earlier, "Personal", "5-retro.md"), "---\nid: 5\n---\n");
+  seed(path.join(earlier, "Personal", "5-retro.md"), mirrored(5));
   rememberNotesMirrorPath(earlier, roots.userData);
   rememberNotesMirrorPath(chosen, roots.userData);
   rememberNotesMirrorPath(chosen, roots.userData);
@@ -115,13 +128,18 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
     ".obsidian",
     "Ideas",
     "Personal",
+    "School",
     "Workspaces",
+    "Zettel",
     "readme.md",
   ]);
+  assert.deepEqual(fs.readdirSync(zettel).sort(), ["1-reading.md", "202311151230-idea.md"]);
+  assert.equal(exists(chosen, "School", "12-lecture-transcript.md"), true);
   assert.deepEqual(fs.readdirSync(space), ["notes.txt"]);
   assert.equal(exists(space, "..", ".NET Platform"), false);
   assert.equal(exists(chosen, ".obsidian", "workspace.json"), true);
   assert.deepEqual(fs.readdirSync(personal).sort(), [
+    "12-own-transcript.md",
     "2024-03-05.md",
     "3-copied.md",
     "9-call-transcript.md",
@@ -144,8 +162,8 @@ test(
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
   async () => {
     const chosen = path.join(root, "Vault");
-    seed(path.join(chosen, "Locked", "1-a.md"), "---\nid: 1\n---\n");
-    seed(path.join(chosen, "Open", "2-b.md"), "---\nid: 2\n---\n");
+    seed(path.join(chosen, "Locked", "1-a.md"), mirrored(1));
+    seed(path.join(chosen, "Open", "2-b.md"), mirrored(2));
     fs.mkdirSync(roots.userData, { recursive: true });
     rememberNotesMirrorPath(chosen, roots.userData);
     fs.chmodSync(path.join(chosen, "Locked"), 0o555);
@@ -462,12 +480,17 @@ test(
     seed(path.join(home, ".openwhispr", "cli-bridge.json"));
     seed(path.join(home, ".openwhispr", "cli-config.json"));
     const vault = path.join(home, "Documents", "Vault");
-    seed(path.join(vault, "Personal", "12-standup.md"), "---\nid: 12\n---\n");
-    seed(path.join(vault, "Personal", "12-standup-transcript.md"), "# Standup\n");
+    seed(path.join(vault, "Personal", "12-standup.md"), mirrored(12));
+    seed(path.join(vault, "Personal", "12-standup-transcript.md"), transcriptOf("Standup"));
+    seed(
+      path.join(vault, "Zettel", "202311151230-idea.md"),
+      "---\nid: 202311151230\ntitle: Mine\n---\n"
+    );
+    seed(path.join(vault, "School", "12-lecture-transcript.md"), transcriptOf("Lecture"));
     seed(path.join(vault, "Personal", "2024-03-05.md"), "---\ntitle: Daily\n---\n");
     // Run as root, the script never follows a record out of the user's home.
     const outside = path.join(root, "Shared");
-    seed(path.join(outside, "Team", "3-plan.md"), "---\nid: 3\n---\n");
+    seed(path.join(outside, "Team", "3-plan.md"), mirrored(3));
     fs.rmSync(path.join(userData, "notes-mirror.json"), { recursive: true });
     seed(path.join(userData, "notes-mirror.json"), JSON.stringify({ basePaths: [vault, outside] }));
     // Never the real app: process lookups see nothing running.
@@ -493,8 +516,11 @@ test(
     assert.deepEqual(fs.readdirSync(cache).sort(), [...MODEL_CACHE_ENTRIES].sort());
     assert.deepEqual(fs.readdirSync(path.join(home, ".openwhispr")), ["cli-config.json"]);
     // The record is read with plutil, which only macOS has.
-    if (process.platform === "darwin")
+    if (process.platform === "darwin") {
       assert.deepEqual(fs.readdirSync(path.join(vault, "Personal")), ["2024-03-05.md"]);
+      assert.deepEqual(fs.readdirSync(path.join(vault, "Zettel")), ["202311151230-idea.md"]);
+      assert.deepEqual(fs.readdirSync(path.join(vault, "School")), ["12-lecture-transcript.md"]);
+    }
     assert.deepEqual(fs.readdirSync(path.join(outside, "Team")), ["3-plan.md"]);
 
     // A folder the user replaced with a symlink is not followed out of the home.
