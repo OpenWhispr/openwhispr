@@ -130,6 +130,14 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
   assert.equal(exists(roots.userData, "notes-mirror.json"), false);
 });
 
+test("a notes folder the mirror couldn't create isn't recorded", () => {
+  fs.mkdirSync(roots.userData, { recursive: true });
+  const blocker = path.join(root, "not-a-folder");
+  fs.writeFileSync(blocker, "x");
+  rememberNotesMirrorPath(path.join(blocker, "Vault"), roots.userData);
+  assert.equal(exists(roots.userData, "notes-mirror.json"), false);
+});
+
 // One note that can't go (a folder another tool locked) doesn't keep the rest.
 test(
   "a mirrored note that can't be removed is reported, and the others still go",

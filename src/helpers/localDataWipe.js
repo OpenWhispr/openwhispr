@@ -102,6 +102,9 @@ function rememberNotesMirrorPath(basePath, userDataPath) {
   const record = path.join(userDataPath, NOTES_MIRROR_FILE);
   const basePaths = mirrorFolders(userDataPath);
   if (basePaths.includes(basePath)) return;
+  // The mirror reports success even when it can't create its folder, and then
+  // writes nothing there.
+  if (!fs.statSync(basePath, { throwIfNoEntry: false })?.isDirectory()) return;
   try {
     fs.writeFileSync(record, JSON.stringify({ basePaths: [...basePaths, basePath] }));
   } catch (error) {
