@@ -2171,7 +2171,7 @@ for (const provider of ["google", "microsoft"]) {
       await entered.promise;
       if (boundary === "policy revocation") {
         const policy = defaultDevicePolicy();
-        policy.features.connectorsEnabled = false;
+        policy.minAppVersion = "99.0.0";
         t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () =>
           normalizeDeviceValues({ Policy: JSON.stringify(policy) })
         );
@@ -2259,7 +2259,7 @@ test("calendar product retirement blocks focus and wake until policy resumes aut
   await new Promise(setImmediate);
   assert.ok(requests.length > 2, "saved accounts synchronize on startup");
   const policy = defaultDevicePolicy();
-  policy.features.connectorsEnabled = false;
+  policy.minAppVersion = "99.0.0";
   device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
   fakeThis.effectivePolicyManager.getCurrent();
   assert.equal(google.syncRunner.timer, null);
@@ -2429,7 +2429,7 @@ async function calendarPolicyScenario(t, provider, stage) {
     async boundary(kind) {
       if (kind === "policy revocation") {
         const policy = defaultDevicePolicy();
-        policy.features.connectorsEnabled = false;
+        policy.minAppVersion = "99.0.0";
         device = normalizeDeviceValues({ Policy: JSON.stringify(policy) });
         fakeThis.effectivePolicyManager.getCurrent();
       } else if (kind === "stop") manager.stop();

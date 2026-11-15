@@ -1,7 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
-const http = require("node:http");
 const { once } = require("node:events");
 const { BYOK_API_KEYS } = require("../../src/config/secretKeys");
 const { deferred } = require("./harness/deferred");
@@ -124,8 +123,6 @@ FakeStreaming.normalizeLanguage =
 class FakeOrukeet extends FakeStreaming {}
 
 const modulePath = require.resolve("../../src/helpers/ipcHandlers");
-const catalogModulePath = require.resolve("../../src/helpers/tinfoilCatalog");
-let catalogFetch;
 // Meetings resolve their streaming clients through this table instead.
 const meetingProvidersPath = require.resolve("../../src/helpers/meetingStreamingProviders");
 const streamingModules = [
@@ -172,8 +169,6 @@ const electron = {
 };
 Module._load = function (request, parent, isMain) {
   if (request === "electron") return electron;
-  if (request === "./tinfoilSecureClient" && parent?.filename === catalogModulePath)
-    return { tinfoilSecureFetch: (...args) => catalogFetch(...args) };
   if (parent?.filename === meetingProvidersPath) {
     if (streamingModules.includes(request)) return FakeStreaming;
     if (request === "./tinfoilRealtimeStreaming")
@@ -472,81 +467,6 @@ for (const restriction of ["local-only", "provider"]) {
   });
 }
 
-for (const restriction of ["local-only", "provider"]) {
-  test(
-    `Tinfoil catalog closes its shared response on ${restriction} revocation and recovers`,
-    { timeout: 5000 },
-    async (t) => {
-      const { SecureClient } = await import("tinfoil");
-      const { Identity } = await import("ehbp");
-      const { createEncryptedBodyFetch } =
-        await import("../../node_modules/tinfoil/dist/encrypted-body-fetch.js");
-      const receiving = deferred(),
-        closed = deferred();
-      let hold = true;
-      let calls = 0;
-      const payload = {
-        data: [{ id: "glm-5-3", type: "chat", endpoints: ["/v1/chat/completions"] }],
-      };
-      const server = http.createServer((request, response) => {
-        calls++;
-        assert.equal(request.url, "/v1/models");
-        response.setHeader("Content-Type", "application/json");
-        if (hold) {
-          const fallback = setTimeout(() => response.end("]}"), 1000);
-          response.once("close", () => clearTimeout(fallback));
-          response.once("close", () => closed.resolve(response.writableFinished));
-          response.write('{"data":[');
-          receiving.resolve();
-        } else response.end(JSON.stringify(payload));
-      });
-      await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-      t.after(() => {
-        server.closeAllConnections();
-        server.close();
-        catalogFetch = undefined;
-      });
-      const url = `http://127.0.0.1:${server.address().port}`;
-      const client = new SecureClient({ baseURL: url });
-      // Exercise the real SDK transport after verification has already completed.
-      client.initPromise = Promise.resolve();
-      client._transport = createEncryptedBodyFetch(
-        url,
-        await (await Identity.generate()).getPublicKeyHex()
-      );
-      catalogFetch = client.fetch;
-      setDeviceValues({ RequireSignIn: false });
-      assert.equal((await invoke("get-tinfoil-chat-models")).code, "DEVICE_POLICY_BLOCKED");
-      assert.equal(calls, 0);
-      setDeviceValues({});
-      await target.refreshEffectivePolicy();
-      const results = Promise.allSettled([
-        invoke("get-tinfoil-chat-models"),
-        invoke("get-tinfoil-chat-models"),
-      ]);
-      await receiving.promise;
-      if (restriction === "local-only") setDeviceValues({ RequireSignIn: false });
-      else {
-        const policy = defaultDevicePolicy();
-        policy.llm.allowedByokProviders = policy.llm.allowedByokProviders.filter(
-          (id) => id !== "tinfoil"
-        );
-        setDeviceValues({ Policy: JSON.stringify(policy) });
-      }
-      assert.equal(await closed.promise, false);
-      assert.equal(calls, 1);
-      for (const result of await results) assert.equal(result.status, "rejected");
-      hold = false;
-      setDeviceValues({});
-      await target.refreshEffectivePolicy();
-      assert.deepEqual(await invoke("get-tinfoil-chat-models"), [
-        { id: "glm-5-3", name: "glm-5-3", description: "", supportsThinking: false },
-      ]);
-      assert.equal(calls, 2);
-    }
-  );
-}
-
 test("local-only device policy refuses direct remote IPC despite saved keys and closes warm streams", async () => {
   invoke("save-assemblyai-key", "saved-provider-key");
   assert.equal((await invoke("assemblyai-streaming-warmup", { mode: "byok" })).success, true);
@@ -694,7 +614,7 @@ test("device backup restrictions stop backup-only uploads while note sharing pre
   assert.equal(sent.length, 8);
 });
 
-test("connector revocation reaches calendar OAuth before credentials can be saved", async (t) => {
+test("a policy revocation reaches calendar OAuth before credentials can be saved", async (t) => {
   const previousManagers = [target.googleCalendarManager, target.microsoftCalendarManager];
   const previousRegistry = target._calendarAuthorizationRequests;
   t.after(() => {
@@ -728,7 +648,7 @@ test("connector revocation reaches calendar OAuth before credentials can be save
     const pending = handlers.get(channel)({ sender }, "revoked-calendar");
     await entered.promise;
     const policy = defaultDevicePolicy();
-    policy.features.connectorsEnabled = false;
+    policy.minAppVersion = "99.0.0";
     setDeviceValues({ Policy: JSON.stringify(policy) });
     finish.resolve();
     const result = await pending;

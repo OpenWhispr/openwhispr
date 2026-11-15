@@ -56,19 +56,15 @@ test("generic cloud routes enforce backup and sharing policy while permitting er
   assert.equal(allowed("/api/notes/note/share", "PATCH", { visibility: "link" }), false);
 });
 
-test("calendar connections and refreshes respect the connector setting", () => {
+test("calendars ignore the connector setting and stop only when policy blocks every action", () => {
   const policy = defaultDevicePolicy();
-  policy.features.agentEnabled = false;
-  const snapshot = { success: true, managed: true, policy };
-  assert.equal(productOperationAllowed(snapshot, "1.11.2", "gcal-start-oauth"), true);
-  assert.equal(productOperationAllowed(snapshot, "1.11.2", "mcal-start-oauth"), true);
   policy.features.connectorsEnabled = false;
-  for (const channel of [
-    "gcal-start-oauth",
-    "mcal-start-oauth",
-    "gcal-sync-events",
-    "mcal-sync-events",
-  ])
+  const snapshot = { success: true, managed: true, policy };
+  const channels = ["gcal-start-oauth", "mcal-start-oauth", "gcal-sync-events", "mcal-sync-events"];
+  for (const channel of channels)
+    assert.equal(productOperationAllowed(snapshot, "1.11.2", channel), true, channel);
+  policy.minAppVersion = "99.0.0";
+  for (const channel of channels)
     assert.equal(productOperationAllowed(snapshot, "1.11.2", channel), false, channel);
 });
 

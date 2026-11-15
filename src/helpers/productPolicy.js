@@ -116,8 +116,8 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
         operation === "cloud-reason" ? [undefined, args[0]?.body] : []
       );
   }
-  if (/^(gcal|mcal)-/.test(channel))
-    return state.status !== "managed" || state.policy.features.connectorsEnabled !== false;
+  // Calendars aren't connectors: only a policy that blocks every action stops them.
+  if (/^(gcal|mcal)-/.test(channel)) return true;
   const requiresAgent =
     channel === "enterprise-stream-start" ||
     (channel === "cloud-reason" && args[1]?.requestPurpose === "agent") ||
