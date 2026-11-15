@@ -67,7 +67,7 @@ async function createAIModel(
     case "gemini":
       return createGoogleGenerativeAI({ apiKey })(model);
     case "tinfoil":
-      return getTinfoilLanguageModel(apiKey, model, opts?.signal);
+      return getTinfoilLanguageModel(apiKey, model);
     case "corti":
       // Corti's gateway is Chat Completions-compatible, not the OpenAI Responses API.
       return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CORTI_MODELS_BASE }).chat(model);
