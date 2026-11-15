@@ -80,3 +80,15 @@ it('refuses account deletion without a stored cookie before making a request', a
   await expect(auth.deleteAccount()).rejects.toThrow('Not authenticated');
   expect(mockFetch).not.toHaveBeenCalled();
 });
+
+it('gives the social sign-in request a timeout so a dead network cannot hang it', async () => {
+  const { auth, client } = loadAuthClient();
+
+  await auth.signInWithGoogle();
+
+  expect(client.signIn.social).toHaveBeenCalledWith({
+    provider: 'google',
+    callbackURL: '/',
+    fetchOptions: { timeout: 15_000 },
+  });
+});

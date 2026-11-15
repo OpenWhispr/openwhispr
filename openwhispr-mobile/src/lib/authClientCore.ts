@@ -13,6 +13,7 @@ const ANONYMOUS_EMAIL_DOMAIN = 'anon.openwhispr.invalid';
 export const COOKIE_STORAGE_KEY = 'openwhispr_cookie';
 export const SESSION_DATA_STORAGE_KEY = 'openwhispr_session_data';
 const PRODUCTION_BUNDLE_ID = 'com.gizmolabs.openwhispr';
+const SOCIAL_SIGN_IN_REQUEST_TIMEOUT_MS = 15_000;
 
 function firstScheme(value: unknown): string | undefined {
   if (Array.isArray(value)) {
@@ -222,7 +223,14 @@ export function createAuthApi(
   async function socialSignIn(
     provider: 'google' | 'apple' | 'microsoft',
   ): Promise<SocialAuthResult> {
-    const { error } = await client.signIn.social({ provider, callbackURL: '/' });
+    // React Native's fetch has no timeout, so a request on a dead network can hang forever.
+    // better-fetch clears this once the response arrives, before Expo opens the browser,
+    // so it never cuts short the time the user spends signing in.
+    const { error } = await client.signIn.social({
+      provider,
+      callbackURL: '/',
+      fetchOptions: { timeout: SOCIAL_SIGN_IN_REQUEST_TIMEOUT_MS },
+    });
     if (error) {
       return { success: false, sessionCookie: null, error: error.message ?? 'OAuth failed' };
     }
