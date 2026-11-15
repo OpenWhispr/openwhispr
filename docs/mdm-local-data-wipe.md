@@ -62,6 +62,7 @@ Unlike the in-app wipe:
 
 - The keychain item and temporary files (macOS) are removed only for the user signed in at the console. The Windows Credential Manager entry stays when the script runs as SYSTEM. With the encrypted files gone, those keys protect nothing.
 - The Windows script always cleans the device-wide fallback folders (`%ProgramData%\OpenWhispr`, `C:\OpenWhispr`), even when you name profiles.
+- On macOS a user's files are removed as that user, so a link swapped in while the script runs can't reach anything they couldn't delete. SYSTEM can't do the same on Windows, so the Windows script skips a profile whose user is signed in, says so, and exits with an error. The app wipes itself at its next launch; run the script again once the user has signed out.
 - Launch at login is left as it is; uninstall the app, or remove its login item with your MDM tool.
 
 Neither the app nor the scripts remove the OpenWhispr CLI's own settings (`~/.openwhispr/cli-config.json`), which belong to the separately installed CLI. Revoke the account's API keys as part of offboarding.

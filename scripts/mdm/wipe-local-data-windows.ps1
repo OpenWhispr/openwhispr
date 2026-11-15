@@ -104,20 +104,38 @@ function Remove-MirroredFiles([string]$Base, [string]$Root) {
   foreach ($file in $files) {
     if ($file.Extension -ne ".md") { continue }
     try {
-      $head = (Get-Content -LiteralPath $file.FullName -TotalCount 2 -Encoding UTF8) -join "`n"
+      $lines = @(Get-Content -LiteralPath $file.FullName -TotalCount 40 -Encoding UTF8)
     } catch { continue }
-    if (-not ($head.TrimStart([char]0xFEFF) -match '^---\nid: (\d+)$')) { continue }
+    # The frontmatter the mirror writes: "---", "id: <id>", then title, type,
+    # created and updated before the closing "---". An id alone is common in a
+    # user's vault.
+    if ($lines.Count -lt 3 -or $lines[0].TrimStart([char]0xFEFF) -ne "---" -or -not ($lines[1] -match '^id: (\d+)$')) { continue }
     $id = $Matches[1]
+    $close = [Array]::IndexOf($lines, "---", 2)
+    if ($close -lt 0) { continue }
+    $keys = @($lines[2..($close - 1)] | ForEach-Object { ($_ -split ":", 2)[0] })
+    if (@("title", "type", "created", "updated" | Where-Object { $keys -notcontains $_ }).Count) { continue }
     if (-not ($file.Name -match "^(edited-(\d+-)?)?$id-.*\.md$")) { continue }
     Remove-Entry $file
-    $ids[$id] = $true
+    $ids["$($file.DirectoryName)|$id"] = $true
     $emptied[$file.DirectoryName] = $true
   }
+  # A transcript goes only with its own note, beside it, and only when it opens
+  # as the app writes one: "# <title>" then the date in bold, or a rule line.
   foreach ($file in $files) {
-    if ($file.Name -match '^(edited-(\d+-)?)?(\d+)-.*-transcript\.(md|txt)$' -and $ids.ContainsKey($Matches[3])) {
-      Remove-Entry $file
-      $emptied[$file.DirectoryName] = $true
+    if (-not ($file.Name -match '^(edited-(\d+-)?)?(\d+)-.*-transcript\.(md|txt)$')) { continue }
+    if (-not $ids.ContainsKey("$($file.DirectoryName)|$($Matches[3])")) { continue }
+    try {
+      $lines = @(Get-Content -LiteralPath $file.FullName -TotalCount 40 -Encoding UTF8)
+    } catch { continue }
+    $transcript = if ($file.Extension -eq ".md") {
+      $lines.Count -ge 3 -and $lines[0].StartsWith("# ") -and $lines[2].StartsWith("**")
+    } else {
+      @($lines | Where-Object { $_ -match '^\u2500{10,}$' }).Count -gt 0
     }
+    if (-not $transcript) { continue }
+    Remove-Entry $file
+    $emptied[$file.DirectoryName] = $true
   }
   # Up to the chosen folder, each folder left with nothing but what Explorer or
   # Finder leave behind.
@@ -157,7 +175,22 @@ if (-not $IncludeModels) {
   $cacheKept = $modelCache
 }
 
+# SYSTEM can't act as the user, so a profile whose user is signed in waits: they
+# could swap a folder for a junction mid-run and send the deletes elsewhere. The
+# app wipes itself at its next launch; run this again once they've signed out.
+$signedIn = @(Get-CimInstance Win32_Process | ForEach-Object {
+    (Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue).Sid
+  })
+$profileSids = @{}
+Get-CimInstance Win32_UserProfile | ForEach-Object { $profileSids[$_.LocalPath] = $_.SID }
+
 foreach ($profilePath in $UserProfile) {
+  $sid = $profileSids[$profilePath]
+  if ($sid -and $signedIn -contains $sid) {
+    Write-Warning "Skipped $($profilePath): its user is signed in. Run again after they sign out."
+    $script:failed = $true
+    continue
+  }
   $userData = Join-Path $profilePath "AppData\Roaming\OpenWhispr"
   # Every folder the mirror wrote to, from the app's record of them.
   $mirrorRecord = Join-Path $userData "notes-mirror.json"
