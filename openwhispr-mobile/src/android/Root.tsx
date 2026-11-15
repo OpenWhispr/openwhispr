@@ -31,6 +31,7 @@ import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
 import { observeAndroidPurchaseUpdates } from './billing';
 import { useBubblePipeline } from './useBubblePipeline';
 import { useAccountData } from './accountData';
+import { observeBubbleRestore } from './bubbleRestore';
 
 export default function AndroidRoot() {
   const { t } = useTranslation();
@@ -50,6 +51,7 @@ export default function AndroidRoot() {
   useRevenueCatIdentity();
   useEffect(() => observeAndroidPurchaseUpdates(), []);
   useEffect(() => observeAndroidLanguage(), []);
+  useEffect(() => observeBubbleRestore(), []);
   useEffect(() => {
     async function initialize() {
       await useConfigStore.getState().loadConfig();

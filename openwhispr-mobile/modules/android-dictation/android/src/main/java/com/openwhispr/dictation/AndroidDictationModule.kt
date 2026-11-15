@@ -162,9 +162,14 @@ class AndroidDictationModule : Module() {
       if (enabled) {
         check(android.os.Build.VERSION.SDK_INT >= 26) { "The floating bubble needs Android 8 or newer." }
         check(Settings.canDrawOverlays(context)) { "Allow display over other apps first." }
+        BubbleRestore.remember(context, true, size)
         context.startForegroundService(Intent(context, DictationService::class.java).putExtra("size", size))
-      } else context.stopService(Intent(context, DictationService::class.java))
+      } else {
+        BubbleRestore.remember(context, false, size)
+        context.stopService(Intent(context, DictationService::class.java))
+      }
     }
+    Function("restoreBubble") { BubbleRestore.restore(context, fromApp = true) }
     AsyncFunction("setPractice") { visible: Boolean ->
       DictationService.practiceVisible = visible
       DictationService.instance?.let { service ->

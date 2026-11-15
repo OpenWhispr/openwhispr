@@ -80,4 +80,19 @@ class BubblePolicyTest {
     assertTrue(BubblePolicy.bars(0f, 0f).all { it >= 0.15f })
     assertTrue(bars.all { it in 0.15f..1f })
   }
+
+  @Test fun restoresOnlyAChoiceTheUserLeftOnWithPermissionsStillGranted() {
+    assertTrue(BubblePolicy.shouldRestore(wanted = true, sdk = 34, overlay = true, microphone = true))
+    assertFalse(BubblePolicy.shouldRestore(wanted = false, sdk = 34, overlay = true, microphone = true))
+    assertFalse(BubblePolicy.shouldRestore(wanted = true, sdk = 34, overlay = false, microphone = true))
+    assertFalse(BubblePolicy.shouldRestore(wanted = true, sdk = 34, overlay = true, microphone = false))
+    assertFalse(BubblePolicy.shouldRestore(wanted = true, sdk = 25, overlay = true, microphone = true))
+  }
+
+  @Test fun aSavedSizeOutsideTheBubbleRangeFallsBackToMedium() {
+    assertEquals(48, BubblePolicy.restoredSize(48))
+    assertEquals(80, BubblePolicy.restoredSize(80))
+    assertEquals(64, BubblePolicy.restoredSize(0))
+    assertEquals(64, BubblePolicy.restoredSize(200))
+  }
 }
