@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr · Inserisci il testo</string>
-  <string name="ow_insertion_description">L’accessibilità permette a OpenWhispr di leggere il campo selezionato quando detti e inserire il risultato. Non invia mai messaggi e non legge campi password.</string>
+  <string name="ow_insertion_description">L’accessibilità permette a OpenWhispr di leggere il campo selezionato quando detti e inserire il risultato. Non invia mai messaggi e non legge campi password. Controlla anche se un campo di testo è attivo, così la bolla appare solo mentre scrivi.</string>
   <string name="ow_bubble_ready">OpenWhispr è pronto</string>
   <string name="ow_bubble_recording">OpenWhispr · In ascolto…</string>
   <string name="ow_bubble_notice">Tocca per aprire. Disattiva il pulsante mobile in Account.</string>
@@ -9,4 +9,17 @@
   <string name="ow_meeting_notice">Registrazione audio della riunione in corso.</string>
   <string name="ow_meeting_stop">Interrompi</string>
   <string name="ow_meeting_stopped">Registrazione interrotta. L’audio è stato salvato.</string>
+  <string name="ow_bubble_writing">Scrittura in corso…</string>
+  <string name="ow_bubble_failed">Non ho capito</string>
+  <string name="ow_bubble_saved">Salvato in OpenWhispr</string>
+  <string name="ow_bubble_hide_target">Nascondi per 1 ora</string>
+  <string name="ow_bubble_hidden">Bolla nascosta per un’ora</string>
+  <string name="ow_bubble_hidden_notice">Tocca per mostrarla di nuovo</string>
+  <string name="ow_bubble_talk">OpenWhispr: tocca o tieni premuto per parlare</string>
+  <string name="ow_bubble_cancel">Annulla</string>
+  <string name="ow_bubble_stop">Ferma e inserisci</string>
+  <string name="ow_bubble_retry">Riprova</string>
+  <string name="ow_bubble_open">Apri OpenWhispr per vedere il testo</string>
+  <string name="ow_bubble_dismiss">Chiudi</string>
+  <string name="ow_bubble_listening">In ascolto</string>
 </resources>

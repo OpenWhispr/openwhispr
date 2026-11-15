@@ -60,27 +60,27 @@ afterEach(() => {
 });
 
 it('limits native practice visibility to the foreground practice screen and releases it on exit', () => {
-  const view = render(<Practice initialMode="edit" />);
-  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(true, 'edit');
-  expect(screen.getByLabelText('messagePlaceholder').props.value).toBe('editSeed');
+  const view = render(<Practice />);
+  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(true);
+  expect(screen.getByLabelText('messagePlaceholder').props.value).toBe('');
 
   changeAppState('background');
-  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(false, 'dictate');
+  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(false);
   expect(usePracticeSession.getState().active).toBe(false);
   changeAppState('active');
-  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(true, 'edit');
+  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(true);
 
-  view.rerender(<Practice initialMode="edit" visible={false} />);
-  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(false, 'edit');
+  view.rerender(<Practice visible={false} />);
+  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(false);
   changeAppState('background');
   changeAppState('active');
-  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(false, 'edit');
+  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(false);
   expect(usePracticeSession.getState().active).toBe(false);
 
-  view.rerender(<Practice initialMode="edit" />);
-  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(true, 'edit');
+  view.rerender(<Practice />);
+  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(true);
   view.unmount();
-  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(false, 'dictate');
+  expect(AndroidDictation!.setPractice).toHaveBeenLastCalledWith(false);
   expect(usePracticeSession.getState().active).toBe(false);
   expect(mockRemoveStatus).toHaveBeenCalled();
   expect(removeAppState).toHaveBeenCalled();
@@ -99,17 +99,15 @@ it('refreshes permission guidance after system settings and permission revocatio
   expect(screen.getByText('Permission setup')).toBeTruthy();
 });
 
-it('requires a new successful insertion in the requested mode before completing practice', () => {
-  usePracticeSession.setState({ completedMode: 'edit', revision: 4 });
+it('requires a new successful dictation before completing practice', () => {
+  usePracticeSession.setState({ completedMode: 'dictate', revision: 4 });
   const onSuccess = jest.fn();
-  render(<Practice initialMode="edit" onSuccess={onSuccess} />);
-  expect(onSuccess).not.toHaveBeenCalled();
-  act(() => usePracticeSession.getState().complete('dictate'));
+  render(<Practice onSuccess={onSuccess} />);
   expect(onSuccess).not.toHaveBeenCalled();
   act(() => useBubbleResult.getState().setResult('retained text', 'Insertion failed'));
   expect(screen.getByRole('alert')).toHaveTextContent('Insertion failed');
   expect(onSuccess).not.toHaveBeenCalled();
-  act(() => usePracticeSession.getState().complete('edit'));
+  act(() => usePracticeSession.getState().complete('dictate'));
   expect(onSuccess).toHaveBeenCalledTimes(1);
   expect(screen.getByText('success')).toBeTruthy();
 });

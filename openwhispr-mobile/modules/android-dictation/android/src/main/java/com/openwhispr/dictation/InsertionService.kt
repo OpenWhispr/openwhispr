@@ -1,11 +1,13 @@
 package com.openwhispr.dictation
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 
 class InsertionService : AccessibilityService() {
   companion object { var instance: InsertionService? = null; private set }
@@ -21,10 +23,24 @@ class InsertionService : AccessibilityService() {
     return if (text.isEmpty() && start == -1 && end == -1) 0 to 0 else start to end
   }
 
-  override fun onServiceConnected() { instance = this; DictationService.emit?.invoke("onStatusChange", emptyMap()) }
-  override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* Read only on explicit dictation. */ }
+  override fun onServiceConnected() { instance = this; refreshTyping(); DictationService.emit?.invoke("onStatusChange", emptyMap()) }
+  // Focus and window changes only decide whether the bubble shows. They check whether the focused
+  // field takes text and isn't a password; the field's text is read only when dictation starts.
+  override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+    handler.removeCallbacks(typingCheck); handler.postDelayed(typingCheck, 120)
+  }
+  private val typingCheck = Runnable { refreshTyping() }
+  fun refreshTyping() {
+    val service = DictationService.instance ?: return
+    val keyboard = runCatching { windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD } }.getOrNull()
+    val top = keyboard?.let { Rect().also(it::getBoundsInScreen).top }
+    val field = if (keyboard == null) null else runCatching { focusedField() }.getOrNull()
+    val typing = field != null && BubblePolicy.canDictate(field.isEditable, field.isPassword)
+    field?.recycle()
+    service.onTyping(typing, top)
+  }
   override fun onInterrupt() { clearTarget() }
-  override fun onDestroy() { clearTarget(); instance = null; DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
+  override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }
   fun clearTarget() { target?.node?.recycle(); target = null }
   private fun focusedField(): AccessibilityNodeInfo? {
     val root = rootInActiveWindow ?: return null
@@ -49,24 +65,23 @@ class InsertionService : AccessibilityService() {
     if (!current.isEditable || current.isPassword) { current.recycle(); clearTarget(); return complete(false) }
     val currentText = fieldText(current)
     val (start, end) = selection(current, currentText)
-    if (current != captured.node ||
-      currentText != captured.text || start != captured.start || end != captured.end) {
-      current.recycle(); clearTarget(); return complete(false)
-    }
-    val result = captured.text.substring(0, captured.start) + text + captured.text.substring(captured.end)
+    val plan = if (current != captured.node) null
+      else InsertionPlan.plan(captured.text, captured.start, captured.end, currentText, start, end, text)
+    if (plan == null) { current.recycle(); clearTarget(); return complete(false) }
+    val result = plan.text
     val inserted = current.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
       putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, result)
     })
     if (inserted) current.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, Bundle().apply {
-      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, captured.start + text.length)
-      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, captured.start + text.length)
+      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, plan.cursor)
+      putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, plan.cursor)
     })
     clearTarget()
     if (!inserted) { current.recycle(); return complete(false) }
     // Some editors acknowledge an action without applying it. Verify the result;
     // never retry a write because that can duplicate text in another application.
     handler.postDelayed({
-      val verified = runCatching { current.refresh() && fieldText(current) == result }.getOrDefault(false)
+      val verified = runCatching { current.refresh() && InsertionPlan.landed(currentText, fieldText(current), text) }.getOrDefault(false)
       current.recycle(); complete(verified)
     }, 150)
   }

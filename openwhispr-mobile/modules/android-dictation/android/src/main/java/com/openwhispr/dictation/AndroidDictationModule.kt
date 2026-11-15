@@ -63,10 +63,11 @@ class AndroidDictationModule : Module() {
   }
   override fun definition() = ModuleDefinition {
     Name("AndroidDictation")
-    Events("onStart", "onRecording", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error")
+    Events("onStart", "onRecording", "onRetry", "onDismiss", "onError", "onCancel", "onOpenResult", "onStatusChange", "pcm-frame", "pcm-error", "pcm-stopped", "local-meeting-stopped", "local-meeting-error")
     OnCreate { DictationService.emit = { event, data -> sendEvent(event, data) } }
     OnActivityEntersForeground {
       DictationService.appVisible = true
+      DictationService.instance?.unhide()
       DictationService.instance?.updateVisibility()
     }
     OnActivityEntersBackground {
@@ -164,20 +165,14 @@ class AndroidDictationModule : Module() {
         context.startForegroundService(Intent(context, DictationService::class.java).putExtra("size", size))
       } else context.stopService(Intent(context, DictationService::class.java))
     }
-    AsyncFunction("setPractice") { visible: Boolean, mode: String ->
+    AsyncFunction("setPractice") { visible: Boolean ->
       DictationService.practiceVisible = visible
       DictationService.instance?.let { service ->
-        if (visible) service.setPracticeMode(mode) else service.leavePractice()
+        if (!visible) service.leavePractice()
         service.updateVisibility()
       }
     }.runOnQueue(Queues.MAIN)
     AsyncFunction("setStatus") { value: String -> DictationService.instance?.status(value) }.runOnQueue(Queues.MAIN)
-    AsyncFunction("setBubbleOptions") { options: Map<String, String> ->
-      val editor = context.getSharedPreferences("bubble", android.content.Context.MODE_PRIVATE).edit()
-      options.forEach { (key, value) -> if (key != "mode") editor.putString(key, value) }
-      editor.apply()
-      DictationService.instance?.refreshOptions()
-    }.runOnQueue(Queues.MAIN)
     AsyncFunction("insert") { text: String, promise: Promise ->
       val service = InsertionService.instance
       if (service == null) promise.resolve(false) else service.insert(text) { promise.resolve(it) }

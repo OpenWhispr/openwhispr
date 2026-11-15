@@ -15,16 +15,35 @@ import { Practice } from './Practice';
 
 export { PlanContent as ProContent } from './PlanContent';
 import { PlanContent as ProContent } from './PlanContent';
+// Steps 4–6 used to practise Translate, Write and Edit. The beta bubble dictates only, so they
+// are skipped; step numbers stay the same so a saved step still opens the right page.
+const PRACTICE_STEP = 3;
+const SKIPPED_STEPS = [4, 5, 6];
+const SHOWN_STEPS = 10 - SKIPPED_STEPS.length;
+function normalizeStep(step: number): number {
+  return SKIPPED_STEPS.includes(step) ? PRACTICE_STEP : step;
+}
+function nextStep(step: number): number {
+  return step === PRACTICE_STEP ? Math.max(...SKIPPED_STEPS) + 1 : step + 1;
+}
+function previousStep(step: number): number {
+  return normalizeStep(step - 1);
+}
+function shownStep(step: number): number {
+  return step > PRACTICE_STEP ? step + 1 - SKIPPED_STEPS.length : step + 1;
+}
 export function Onboarding({ onFinish }: { onFinish: () => void }) {
   const { t } = useTranslation();
-  const [step, setStep] = useState(Number(localStorage.getItem('android-onboarding-step') || 0));
+  const [step, setStep] = useState(() =>
+    normalizeStep(Number(localStorage.getItem('android-onboarding-step') || 0)),
+  );
   const [language, setLanguage] = useState(false);
   const [models, setModels] = useState(false);
   const [passed, setPassed] = useState(false);
   const user = useAuthStore((s) => s.user);
   const config = useConfigStore((s) => s.config);
   const advance = useCallback(() => {
-    const next = step + 1;
+    const next = nextStep(step);
     localStorage.setItem('android-onboarding-step', String(next));
     setPassed(false);
     setStep(next);
@@ -56,16 +75,24 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
         }}
       />
     );
-  const practice = step >= 3 && step <= 6;
+  const practice = step === PRACTICE_STEP;
   return (
     <SafeAreaView style={styles.page}>
       <View style={[styles.row, { padding: 24 }]}>
         <OpenWhisprMark size={28} color={palette.blue} />
         <Text style={{ fontWeight: '600' }}>OpenWhispr</Text>
-        <Text style={styles.caption}>{step + 1} / 10</Text>
+        <Text style={styles.caption}>
+          {shownStep(step)} / {SHOWN_STEPS}
+        </Text>
       </View>
       <View style={{ height: 3, marginHorizontal: 24, backgroundColor: palette.line }}>
-        <View style={{ height: 3, backgroundColor: palette.blue, width: `${(step + 1) * 10}%` }} />
+        <View
+          style={{
+            height: 3,
+            backgroundColor: palette.blue,
+            width: `${(shownStep(step) / SHOWN_STEPS) * 100}%`,
+          }}
+        />
       </View>
       <ScrollView
         contentContainerStyle={[styles.content, { flexGrow: 1, paddingTop: 32 }]}
@@ -103,12 +130,7 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
           <>
             <Text style={styles.heading}>{t('practiceTitle')}</Text>
             <Text style={styles.caption}>{t('practiceBody')}</Text>
-            <Practice
-              visible={!models && !language}
-              key={step}
-              initialMode={(['dictate', 'translate', 'write', 'edit'] as const)[step - 3]}
-              onSuccess={() => setPassed(true)}
-            />
+            <Practice visible={!models && !language} onSuccess={() => setPassed(true)} />
             <Button secondary label={t('openModels')} onPress={() => setModels(true)} />
           </>
         )}
@@ -152,8 +174,9 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
             secondary
             label={t('back')}
             onPress={() => {
-              localStorage.setItem('android-onboarding-step', String(step - 1));
-              setStep(step - 1);
+              const previous = previousStep(step);
+              localStorage.setItem('android-onboarding-step', String(previous));
+              setStep(previous);
               setPassed(false);
             }}
           />

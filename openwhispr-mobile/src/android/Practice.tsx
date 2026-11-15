@@ -6,20 +6,18 @@ import { AndroidDictation, dictationEvents } from '../../modules/android-dictati
 import { PermissionsContent } from './PermissionsScreen';
 import { usePracticeSession } from './practiceSession';
 import { useBubbleResult } from './bubbleResult';
-import type { DictationMode } from './pipeline';
 import { Card, styles, palette } from './ui';
 
+/** Practice with the real bubble in a field inside the app. The bubble dictates only. */
 export function Practice({
-  initialMode = 'dictate',
   onSuccess,
   visible = true,
 }: {
-  initialMode?: DictationMode;
   onSuccess?: () => void;
   visible?: boolean;
 }) {
   const { t } = useTranslation();
-  const [text, setText] = useState(initialMode === 'edit' ? t('editSeed') : '');
+  const [text, setText] = useState('');
   const [ready, setReady] = useState(false);
   const [passed, setPassed] = useState(false);
   const completedMode = usePracticeSession((s) => s.completedMode);
@@ -35,10 +33,10 @@ export function Practice({
     );
     const active = visible && AppState.currentState === 'active';
     usePracticeSession.setState({ active });
-    void AndroidDictation?.setPractice(active, initialMode).catch((failure: Error) =>
+    void AndroidDictation?.setPractice(active).catch((failure: Error) =>
       Alert.alert(t('errorTitle'), failure.message),
     );
-  }, [initialMode, t, visible]);
+  }, [t, visible]);
   useEffect(() => {
     usePracticeSession.setState({ completedMode: null });
     refresh();
@@ -47,26 +45,26 @@ export function Practice({
       if (state === 'active') refresh();
       else {
         usePracticeSession.setState({ active: false });
-        void AndroidDictation?.setPractice(false, 'dictate').catch(() => undefined);
+        void AndroidDictation?.setPractice(false).catch(() => undefined);
       }
     });
     return () => {
       status?.remove();
       foreground.remove();
       usePracticeSession.setState({ active: false, completedMode: null });
-      void AndroidDictation?.setPractice(false, 'dictate').catch(() => undefined);
+      void AndroidDictation?.setPractice(false).catch(() => undefined);
     };
   }, [refresh]);
   useEffect(() => {
-    if (revision > initialRevision.current && completedMode === initialMode) {
+    if (revision > initialRevision.current && completedMode === 'dictate') {
       initialRevision.current = revision;
       setPassed(true);
       success.current?.();
     }
-  }, [revision, completedMode, initialMode]);
+  }, [revision, completedMode]);
   return (
     <View style={{ gap: 20 }}>
-      <Text style={styles.body}>{t(`${initialMode}Example`)}</Text>
+      <Text style={styles.body}>{t('dictateExample')}</Text>
       <Card>
         <TextInput
           multiline

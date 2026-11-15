@@ -19,7 +19,11 @@ jest.mock('expo-router', () => {
   const Tabs = ({ screenOptions, children }: any) => (
     <View testID="tab-bar" style={screenOptions.tabBarStyle}>
       {ReactModule.Children.map(children, (child: any) =>
-        screenOptions.tabBarLabel({ color: '#000000', children: child.props.options.title }),
+        child.props.options.href === null ? null : (
+          <View testID={`tab-${child.props.name}`}>
+            {screenOptions.tabBarLabel({ color: '#000000', children: child.props.options.title })}
+          </View>
+        ),
       )}
     </View>
   );
@@ -73,4 +77,11 @@ it('drops stale large-font measurements after the display scale and width change
   ).height;
   expect(normalHeight).toBeLessThan(largeHeight);
   expect(normalHeight).toBeGreaterThanOrEqual(64 + 8);
+});
+
+it('hides the Chat tab on Android while keeping its route registered', () => {
+  render(<AndroidTabs />);
+  expect(screen.queryByTestId('tab-(chat)')).toBeNull();
+  expect(screen.getByTestId('tab-(record)')).toBeTruthy();
+  expect(screen.getByTestId('tab-(dictionary)')).toBeTruthy();
 });

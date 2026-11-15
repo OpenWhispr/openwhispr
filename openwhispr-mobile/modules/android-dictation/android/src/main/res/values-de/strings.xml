@@ -1,6 +1,6 @@
 <resources>
   <string name="ow_insertion_label">OpenWhispr · Deinen Text einfügen</string>
-  <string name="ow_insertion_description">Die Bedienungshilfe erlaubt OpenWhispr, beim Diktieren das ausgewählte Feld zu lesen und das Ergebnis einzufügen. Sie sendet keine Nachrichten und liest keine Passwortfelder.</string>
+  <string name="ow_insertion_description">Die Bedienungshilfe erlaubt OpenWhispr, beim Diktieren das ausgewählte Feld zu lesen und das Ergebnis einzufügen. Sie sendet keine Nachrichten und liest keine Passwortfelder. Sie prüft außerdem, ob ein Textfeld aktiv ist, damit die Blase nur beim Tippen erscheint.</string>
   <string name="ow_bubble_ready">OpenWhispr ist bereit</string>
   <string name="ow_bubble_recording">OpenWhispr · Höre zu…</string>
   <string name="ow_bubble_notice">Zum Öffnen tippen. Die schwebende Schaltfläche lässt sich im Konto ausschalten.</string>
@@ -9,4 +9,17 @@
   <string name="ow_meeting_notice">Besprechungsaudio wird aufgenommen.</string>
   <string name="ow_meeting_stop">Stoppen</string>
   <string name="ow_meeting_stopped">Aufnahme beendet. Dein Audio wurde gespeichert.</string>
+  <string name="ow_bubble_writing">Wird aufgeschrieben…</string>
+  <string name="ow_bubble_failed">Nicht verstanden</string>
+  <string name="ow_bubble_saved">In OpenWhispr gespeichert</string>
+  <string name="ow_bubble_hide_target">1 Stunde ausblenden</string>
+  <string name="ow_bubble_hidden">Blase für eine Stunde ausgeblendet</string>
+  <string name="ow_bubble_hidden_notice">Tippen, um sie wieder anzuzeigen</string>
+  <string name="ow_bubble_talk">OpenWhispr: tippen oder halten zum Sprechen</string>
+  <string name="ow_bubble_cancel">Abbrechen</string>
+  <string name="ow_bubble_stop">Stoppen und einfügen</string>
+  <string name="ow_bubble_retry">Erneut versuchen</string>
+  <string name="ow_bubble_open">OpenWhispr öffnen, um deinen Text zu sehen</string>
+  <string name="ow_bubble_dismiss">Schließen</string>
+  <string name="ow_bubble_listening">Hört zu</string>
 </resources>
