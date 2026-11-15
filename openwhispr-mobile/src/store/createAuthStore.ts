@@ -23,6 +23,7 @@ import { claimNoteShareTokens, clearNoteShareTokens } from '@/lib/notes/noteShar
 import { withChatHistory } from '@/lib/chat/withChatHistory';
 
 const GUEST_SESSION_KEY = 'openwhispr_guest_session';
+const SOCIAL_SIGN_IN_FAILED = 'Sign in failed. Check your connection and try again.';
 
 type SessionResult = {
   user: AuthUser | null;
@@ -122,23 +123,11 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
       await applyAuthenticatedSession(set, result, name || email.split('@')[0]);
     },
 
-    signInWithGoogle: async () => {
-      set({ isLoading: true, loadingProvider: 'google', error: null });
-      await anonymousSignInInFlight?.catch(() => undefined);
-      await applyOAuthResult(set, await signInWithGoogleApi());
-    },
+    signInWithGoogle: () => runSocialSignIn(set, 'google', signInWithGoogleApi),
 
-    signInWithApple: async () => {
-      set({ isLoading: true, loadingProvider: 'apple', error: null });
-      await anonymousSignInInFlight?.catch(() => undefined);
-      await applyOAuthResult(set, await signInWithAppleApi());
-    },
+    signInWithApple: () => runSocialSignIn(set, 'apple', signInWithAppleApi),
 
-    signInWithMicrosoft: async () => {
-      set({ isLoading: true, loadingProvider: 'microsoft', error: null });
-      await anonymousSignInInFlight?.catch(() => undefined);
-      await applyOAuthResult(set, await signInWithMicrosoftApi());
-    },
+    signInWithMicrosoft: () => runSocialSignIn(set, 'microsoft', signInWithMicrosoftApi),
 
     continueAsGuest: async () => {
       set({ isLoading: true });
@@ -281,6 +270,24 @@ export function createAuthStore(lifecycle: AuthStoreLifecycle = {}) {
       loadingProvider: null,
       error: result.error ?? null,
     });
+  }
+
+  // A sign-in that throws (offline, or a request the client timed out) must still clear its
+  // button. On Android the process outlives the auth screen, so a stuck loadingProvider
+  // would spin again every time the screen mounts.
+  async function runSocialSignIn(
+    set: SetState,
+    provider: 'google' | 'apple' | 'microsoft',
+    signIn: () => Promise<SocialAuthResult>,
+  ): Promise<void> {
+    set({ isLoading: true, loadingProvider: provider, error: null });
+    try {
+      await anonymousSignInInFlight?.catch(() => undefined);
+      await applyOAuthResult(set, await signIn());
+    } catch (error) {
+      console.warn(`[auth] ${provider} sign-in failed:`, error);
+      set({ isLoading: false, loadingProvider: null, error: SOCIAL_SIGN_IN_FAILED });
+    }
   }
 
   async function applyOAuthResult(set: SetState, result: SocialAuthResult): Promise<void> {
