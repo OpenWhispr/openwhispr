@@ -365,6 +365,29 @@ test("a marker that can't be closed is dropped, so the next recording's crash st
   }
 });
 
+test("a stop whose line can't be written is recovered with its own reason and time", async () => {
+  const first = harness();
+  first.log.recordingStarted({ sessionId: "s1", noteId: 3, trigger: "hotkey" });
+  await first.log.flush();
+  const dir = path.join(userData, "audit");
+  const [file] = fs.readdirSync(dir).filter((name) => name.endsWith(".jsonl"));
+  fs.chmodSync(path.join(dir, file), 0o444);
+  first.clock.now = START + 40_000;
+  first.log.recordingStopped({ sessionId: "s1", reason: "user" });
+  await first.log.flush();
+  fs.chmodSync(path.join(dir, file), 0o644);
+  assert.equal(lines().length, 1);
+
+  const relaunch = harness();
+  relaunch.log.recoverInterrupted();
+  await relaunch.log.flush();
+  const [, stopped] = lines();
+  assert.equal(stopped.reason, "user");
+  assert.equal(stopped.durationSec, 40);
+  assert.equal(stopped.ts, "2026-11-11T09:00:40.000Z");
+  assert.equal(fs.existsSync(marker()), false);
+});
+
 // One attempt: a stop that can't be written still drops the marker, so it never
 // holds up later recordings; the start line shows the recording didn't end cleanly.
 test("an interrupted stop the launch can't write is dropped, with a warning", async () => {

@@ -1921,6 +1921,8 @@ test("meeting starts, stops and refusals reach the audit log with their source a
   const start = (sessionId) => invoke("meeting-transcription-start", { ...options, sessionId });
   assert.equal((await start("audit-1")).success, true);
   await invoke("meeting-transcription-stop", "audit-1", "auto-end");
+  assert.equal((await start("audit-1b")).success, true);
+  await invoke("meeting-transcription-stop", "audit-1b", "app-quit");
   assert.equal((await start("audit-2")).success, true);
   setWorkspacePolicy(REVOKED_MEETINGS);
   await invoke("meeting-transcription-stop", "audit-2");
@@ -1936,6 +1938,8 @@ test("meeting starts, stops and refusals reach the audit log with their source a
   assert.deepEqual(audit, [
     ["started", { sessionId: "audit-1", noteId: 12, trigger: "record-button" }],
     ["stopped", { sessionId: "audit-1", reason: "auto-end" }],
+    ["started", { sessionId: "audit-1b", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-1b", reason: null }],
     ["started", { sessionId: "audit-2", noteId: 12, trigger: "record-button" }],
     ["stopped", { sessionId: "audit-2", reason: "policy" }],
     ["refused", { noteId: 12, trigger: "record-button", reason: disabled }],

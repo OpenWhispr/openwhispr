@@ -12013,7 +12013,9 @@ class IPCHandlers {
           ? result
           : { success: false, reason: "stale-session" };
       }
-      return meetingTranscriptionLifecycle.stopSession(expectedSessionId, reason);
+      // "window-lost" and "app-quit" are main's own findings, never the renderer's.
+      const rendererReason = ["window-lost", "app-quit"].includes(reason) ? null : reason;
+      return meetingTranscriptionLifecycle.stopSession(expectedSessionId, rendererReason);
     });
 
     ipcMain.handle(

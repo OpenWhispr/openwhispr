@@ -323,6 +323,26 @@ test("with reg.exe blocked, PowerShell reads the deployment and its evidence", a
     );
 });
 
+test("a failed PowerShell read isn't run again to look for evidence", async () => {
+  const calls = [];
+  const run = async (command) => {
+    calls.push(path.win32.basename(command));
+    if (path.win32.basename(command) === "reg.exe")
+      return registryWithoutPolicy({ blocked: true })();
+    throw new Error("powershell.exe timed out");
+  };
+  const manager = createManagedDevicePolicy({
+    platform: "win32",
+    read: () => readWindowsValues(run),
+    hasPolicy: () => hasPolicyEvidence({ platform: "win32", run }),
+    logger: { warn() {} },
+  });
+  await manager.refresh();
+  assert.equal(manager.getSnapshot().status, "absent");
+  assert.deepEqual(calls, ["reg.exe", "powershell.exe"]);
+  manager.stop();
+});
+
 test("evidence of a deployment is the policy key or file, not the reader's success", async () => {
   const existing = (files) => ({
     lstat: async (file) => {
@@ -481,6 +501,18 @@ test("a reader that can't tell whether a policy is deployed reads as absent, and
   await reader.manager.refresh();
   assert.equal(reader.manager.getSnapshot().status, "absent");
   assert.match(reader.warnings[0], /nor whether one is deployed/);
+  reader.manager.stop();
+});
+
+test("an invalid policy keeps its audit folder, so its refusals reach IT", async () => {
+  const reader = deviceReader();
+  reader.next = async () => ({ Policy: "{not json", AuditLogPath: "/var/log/openwhispr" });
+  await reader.manager.refresh();
+  assert.equal(reader.manager.getSnapshot().status, "invalid");
+  assert.equal(reader.manager.getSnapshot().auditLogPath, "/var/log/openwhispr");
+  reader.next = async () => ({ Policy: "{not json" });
+  await reader.manager.refresh();
+  assert.equal(reader.manager.getSnapshot().auditLogPath, undefined);
   reader.manager.stop();
 });
 

@@ -207,14 +207,17 @@ function createMeetingAuditLog({
       try {
         const open = readMarker(text);
         if (!open) warnOnce("Dropped a crash marker that can't be closed", {});
-        else
-          await append(open.dir, open.lastSeenAt, {
+        else {
+          // A stop whose line failed left its own time and reason.
+          const stoppedAt = Number.isFinite(open.stoppedAt) ? open.stoppedAt : open.lastSeenAt;
+          await append(open.dir, stoppedAt, {
             event: "recording.stopped",
             sessionId: open.sessionId,
             noteId: open.noteId,
-            reason: "interrupted",
-            durationSec: durationSec(open.startedAt, open.lastSeenAt),
+            reason: allowed(STOP_REASONS, open.reason) ?? "interrupted",
+            durationSec: durationSec(open.startedAt, stoppedAt),
           });
+        }
       } finally {
         await fs.promises.rm(markerPath, { force: true });
       }
@@ -252,12 +255,15 @@ function createMeetingAuditLog({
     clearInterval(checkpointTimer);
     checkpointTimer = null;
     const stoppedAt = now();
+    const stopReason = allowed(STOP_REASONS, reason);
     enqueue(async () => {
+      // If the line below fails, the next launch writes this stop, not a crash.
+      await writeMarker({ ...open, stoppedAt, reason: stopReason }).catch(() => {});
       await append(open.dir, stoppedAt, {
         event: "recording.stopped",
         sessionId,
         noteId: open.noteId,
-        reason: allowed(STOP_REASONS, reason),
+        reason: stopReason,
         durationSec: durationSec(open.startedAt, stoppedAt),
       });
       await fs.promises.rm(markerPath, { force: true });
