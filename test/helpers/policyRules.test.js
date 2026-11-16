@@ -3,6 +3,39 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/stores/policyRules.ts");
 
+test("automatic meeting start fails closed until signed-in policy resolves", async () => {
+  const { isMeetingAutoTranscriptionAllowed: allowed } = await load();
+  for (const [status, isSignedIn, expected] of [
+    ["idle", false, true],
+    ["idle", true, false],
+    ["unmanaged", true, true],
+    ["loading", true, false],
+    ["error", true, false],
+    ["managed", true, false],
+  ]) {
+    assert.equal(allowed({ status, policy: null, appVersion: null }, isSignedIn), expected);
+  }
+  for (const [meetings, expected] of [
+    [undefined, true],
+    [{}, true],
+    [{ transcriptionStart: "automatic" }, true],
+    [{ transcriptionStart: "manual" }, false],
+    [{ transcriptionStart: "future" }, false],
+  ]) {
+    const snapshot = { status: "managed", policy: { ...policy, meetings }, appVersion: "1.11.1" };
+    assert.equal(allowed(snapshot, true), expected);
+    for (const appVersion of [null, "1.10.0"]) {
+      assert.equal(
+        allowed(
+          { ...snapshot, appVersion, policy: { ...snapshot.policy, minAppVersion: "1.11.1" } },
+          true
+        ),
+        false
+      );
+    }
+  }
+});
+
 const policy = {
   version: 1,
   transcription: {
@@ -453,7 +486,14 @@ test("LLM dispatch requires an allowed mode and provider", async () => {
   const snapshot = { status: "managed", policy: noProviderPolicy, appVersion: "1.8.1" };
 
   assert.equal(isLlmSelectionAllowed(snapshot, { mode: "providers", provider: "openai" }), false);
-  assert.equal(isLlmSelectionAllowed(snapshot, { mode: "local", provider: "local" }), true);
+  assert.equal(
+    isLlmSelectionAllowed(snapshot, {
+      mode: "local",
+      provider: "local",
+      model: "qwen3.5-0.8b-q4_k_m",
+    }),
+    true
+  );
   assert.equal(isLlmSelectionAllowed(snapshot, { mode: "enterprise", provider: "bedrock" }), false);
 });
 
@@ -465,7 +505,10 @@ test("blocks transcription contexts whose stored mode is disallowed", async () =
     isTranscriptionSelectionAllowed(snapshot, { mode: "self-hosted", provider: "" }),
     false
   );
-  assert.equal(isTranscriptionSelectionAllowed(snapshot, { mode: "local", provider: "" }), true);
+  assert.equal(
+    isTranscriptionSelectionAllowed(snapshot, { mode: "local", provider: "", model: "base" }),
+    true
+  );
 });
 
 test("blocks BYOK transcription when no provider is allowed", async () => {
@@ -491,7 +534,7 @@ test("does not require a BYOK provider for local transcription", async () => {
   const snapshot = { status: "managed", policy: localOnlyPolicy, appVersion: "1.8.1" };
 
   assert.equal(
-    isTranscriptionSelectionAllowed(snapshot, { mode: "local", provider: "openai" }),
+    isTranscriptionSelectionAllowed(snapshot, { mode: "local", provider: "openai", model: "base" }),
     true
   );
 });
@@ -550,18 +593,6 @@ test("share visibility lists hide policy-denied choices", async () => {
   );
 });
 
-test("domain-only sharing is usable only when the owner can offer a domain choice", async () => {
-  const { hasUsableExternalShareVisibility } = await load();
-  const snapshot = {
-    status: "managed",
-    policy: { ...policy, sharing: { externalLinkSharing: "domain_only" } },
-    appVersion: "1.8.1",
-  };
-
-  assert.equal(hasUsableExternalShareVisibility(snapshot, true), true);
-  assert.equal(hasUsableExternalShareVisibility(snapshot, false), false);
-});
-
 test("provider fallback persistence is limited to resolved unmanaged and signed-out idle users", async () => {
   const { shouldPersistProviderFallback } = await load();
 
@@ -595,6 +626,21 @@ test("copying an existing share link follows its own visibility", async () => {
     }
     // Nothing to copy before a link exists; the dialog asks for create-link.
     assert.equal(isShareActionAllowed(snapshot, "copy-link", "private"), false);
+  }
+});
+
+test("resending an invitation needs sharing to be on", async () => {
+  const { isShareActionAllowed } = await load();
+  const unmanaged = { status: "unmanaged", policy: null, appVersion: "1.8.1" };
+  const allowed = { status: "managed", policy, appVersion: "1.8.1" };
+
+  for (const snapshot of [unmanaged, allowed]) {
+    for (const visibility of ["link", "domain", "invited"]) {
+      assert.equal(isShareActionAllowed(snapshot, "resend-invitation", visibility), true);
+    }
+    // Disabling sharing suspends invitations, so the email could not open the note.
+    assert.equal(isShareActionAllowed(snapshot, "resend-invitation", "private"), false);
+    assert.equal(isShareActionAllowed(snapshot, "revoke-invitation", "private"), true);
   }
 });
 
@@ -822,6 +868,40 @@ test("screen context is allowed unless a managed policy turns it off", async () 
   );
 });
 
+test("only a resolved managed policy reports web search as turned off by the org", async () => {
+  const { isWebSearchBlockedByOrg } = await load();
+  const managed = (features) => ({
+    status: "managed",
+    policy: { ...policy, features: { ...policy.features, ...features } },
+    appVersion: "1.8.1",
+  });
+
+  assert.equal(isWebSearchBlockedByOrg(managed({ webSearchEnabled: false })), true);
+  assert.equal(isWebSearchBlockedByOrg(managed({})), false);
+  // Still loading, or the fetch failed: web search fails closed, but nothing
+  // says an organization turned it off.
+  for (const status of ["idle", "loading", "error", "unmanaged"]) {
+    assert.equal(
+      isWebSearchBlockedByOrg({ status, policy: null, appVersion: "1.8.1" }),
+      false,
+      status
+    );
+  }
+  // An org that only requires a newer build hasn't turned web search off.
+  assert.equal(
+    isWebSearchBlockedByOrg({
+      status: "managed",
+      policy: {
+        ...policy,
+        minAppVersion: "9.9.9",
+        features: { ...policy.features, webSearchEnabled: false },
+      },
+      appVersion: "1.8.1",
+    }),
+    false
+  );
+});
+
 test("cloud-backup resume fires only on a denial-to-grant transition", async () => {
   const { cloudBackupResumed } = await load();
   const unmanaged = { status: "unmanaged", policy: null, appVersion: null };
@@ -1015,6 +1095,18 @@ test("the enterprise transcription tile is offered only to a managed policy snap
   );
 });
 
+test("a failed policy fetch is settled, but idle and loading are not", async () => {
+  const { isPolicySettled } = await load();
+  const snapshot = (status) => ({ status, policy: null, appVersion: null });
+
+  for (const status of ["managed", "unmanaged", "error"]) {
+    assert.equal(isPolicySettled(snapshot(status)), true, status);
+  }
+  for (const status of ["idle", "loading"]) {
+    assert.equal(isPolicySettled(snapshot(status)), false, status);
+  }
+});
+
 test("the local-history policy is resolved only once the fetch has settled", async () => {
   const { isLocalHistoryPolicyResolved } = await load();
   const snapshot = (status) => ({ status, policy: null, appVersion: null });
@@ -1029,4 +1121,52 @@ test("the local-history policy is resolved only once the fetch has settled", asy
   assert.equal(isLocalHistoryPolicyResolved(snapshot("idle")), false);
   assert.equal(isLocalHistoryPolicyResolved(snapshot("loading")), false);
   assert.equal(isLocalHistoryPolicyResolved(snapshot("error")), false);
+});
+
+test("audio controls independently gate every mode while leaving dictation available", async () => {
+  const { isAudioFeatureAllowed, isTranscriptionSelectionAllowed } = await load();
+  for (const meetingRecordingEnabled of [true, false]) {
+    for (const audioUploadEnabled of [true, false]) {
+      const state = {
+        status: "managed",
+        appVersion: "1.11.0",
+        policy: {
+          ...policy,
+          transcription: {
+            allowedModes: ["local", "providers", "self-hosted", "openwhispr", "enterprise"],
+            allowedByokProviders: ["openai"],
+            allowedEnterpriseProviders: ["azure"],
+          },
+          features: { ...policy.features, meetingRecordingEnabled, audioUploadEnabled },
+        },
+      };
+      assert.equal(isAudioFeatureAllowed(state, "meeting"), meetingRecordingEnabled);
+      assert.equal(isAudioFeatureAllowed(state, "upload"), audioUploadEnabled);
+      assert.equal(isAudioFeatureAllowed(state, "dictation"), true);
+      for (const [mode, provider] of [
+        ["local", "whisper"],
+        ["providers", "openai"],
+        ["self-hosted", "custom"],
+        ["openwhispr", "openai"],
+        ["enterprise", "azure"],
+      ]) {
+        assert.equal(
+          isTranscriptionSelectionAllowed(state, { mode, provider, model: "base" }),
+          true
+        );
+      }
+    }
+  }
+});
+
+test("domain-only sharing is usable only when the owner can offer a domain choice", async () => {
+  const { hasUsableExternalShareVisibility } = await load();
+  const snapshot = {
+    status: "managed",
+    policy: { ...policy, sharing: { externalLinkSharing: "domain_only" } },
+    appVersion: "1.8.1",
+  };
+
+  assert.equal(hasUsableExternalShareVisibility(snapshot, true), true);
+  assert.equal(hasUsableExternalShareVisibility(snapshot, false), false);
 });

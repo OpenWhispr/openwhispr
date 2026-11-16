@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import { ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { VoiceProfileList } from '@/components/notes/VoiceProfileList';
+import type { RestoreRow } from '@/components/ui/SwipeableCard';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { useNotesStore } from '@/store/useNotesStore';
 import { confirmDestructive } from '@/lib/alerts';
@@ -42,7 +43,7 @@ export default function VoiceProfilesScreen() {
   }, []);
 
   const deleteProfile = useCallback(
-    (profile: SpeakerProfile) => {
+    (profile: SpeakerProfile, restore: RestoreRow) => {
       confirmDestructive(
         'Delete Voice Profile',
         `${profile.displayName} will be removed from this device. Historical locked speaker labels stay readable.`,
@@ -50,6 +51,7 @@ export default function VoiceProfilesScreen() {
           deleteVoiceProfile(profile.id);
           safeHaptics('warning');
         },
+        { onCancel: restore },
       );
     },
     [deleteVoiceProfile],

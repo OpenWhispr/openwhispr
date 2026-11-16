@@ -59,7 +59,6 @@ async function mountLiveTranscript(t, initialProps = {}) {
   const { useLiveTranscriptPanel } = await vite.ssrLoadModule("/hooks/useLiveTranscriptPanel.js");
   let props = {
     resizeToContent: async () => ({ success: true }),
-    assistantOpenRef: { current: false },
     onWillOpen: () => {},
     isRecording: false,
     isProcessing: false,

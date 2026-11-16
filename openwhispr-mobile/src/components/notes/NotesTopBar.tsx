@@ -38,7 +38,11 @@ export function NotesTopBar({
 
           {title && (
             <View pointerEvents="none" className="absolute inset-0 items-center justify-center">
-              <Text numberOfLines={1} className="text-[17px] font-semibold text-label">
+              <Text
+                accessibilityRole="header"
+                numberOfLines={1}
+                className="text-[17px] font-semibold text-label"
+              >
                 {title}
               </Text>
             </View>

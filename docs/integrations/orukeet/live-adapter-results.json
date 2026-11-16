@@ -1,0 +1,46 @@
+{
+  "measuredAt": "2026-09-17T02:58:06.956Z",
+  "method": "Paced PCM16 using the PR adapter; commit-to-final excludes token/connection setup and recording",
+  "fixtureSha256": "bfc3e8cf9e2aa3f7a585a650511d7500cadac481ade9ab365048fd8e4578d4d9",
+  "results": [
+    {
+      "run": 1,
+      "region": "us-west1",
+      "tokenIssueMs": 358.778459,
+      "connectionReadyMs": 273.755834,
+      "audioSeconds": 10,
+      "commitToFinalMs": 78.86579200000051,
+      "inferenceMs": 16.448428999865428,
+      "serverMs": 18.341424001846462,
+      "queueMs": 0.05365100514609367,
+      "transcriptMatches": true,
+      "transcriptSha256": "d496d88ac77836b7f280c4611c2d790bd747e1876d8e858fb321b42586036aab"
+    },
+    {
+      "run": 2,
+      "region": "us-west1",
+      "tokenIssueMs": 194.43737499999952,
+      "connectionReadyMs": 228.62037500000042,
+      "audioSeconds": 10,
+      "commitToFinalMs": 84.90254099999947,
+      "inferenceMs": 15.746424993267283,
+      "serverMs": 17.63169700279832,
+      "queueMs": 0.0613899901509285,
+      "transcriptMatches": true,
+      "transcriptSha256": "d496d88ac77836b7f280c4611c2d790bd747e1876d8e858fb321b42586036aab"
+    },
+    {
+      "run": 3,
+      "region": "us-west1",
+      "tokenIssueMs": 150.63637500000186,
+      "connectionReadyMs": 210.51950000000215,
+      "audioSeconds": 10,
+      "commitToFinalMs": 83.63779200000135,
+      "inferenceMs": 15.235532002407126,
+      "serverMs": 17.01977899938356,
+      "queueMs": 0.05840000812895596,
+      "transcriptMatches": true,
+      "transcriptSha256": "d496d88ac77836b7f280c4611c2d790bd747e1876d8e858fb321b42586036aab"
+    }
+  ]
+}

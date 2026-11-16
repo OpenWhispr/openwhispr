@@ -1,5 +1,7 @@
 import { jsonSchema } from "ai";
-import type { Tool } from "ai";
+import type { Tool, ToolExecutionOptions } from "ai";
+import type { InteractionRecord } from "../../types/agentInteractions";
+import type { ChatImageAttachment } from "../../components/chat/types";
 
 export interface ToolResult {
   success: boolean;
@@ -7,12 +9,93 @@ export interface ToolResult {
   displayText: string;
 }
 
+export interface CompletedActionOutcome {
+  status: "sent" | "unknown" | "draft_opened";
+  url?: string;
+  reference?: string;
+}
+
+/**
+ * Per-call context from the chat turn that invoked the tool. Absent when a
+ * tool runs outside a chat turn (tests, direct calls).
+ */
+export interface ToolExecutionContext {
+  /** The assistant message the call belongs to; approval cards key on it. */
+  messageId: string;
+  toolCallId: string;
+  /** Aborts when the turn is cancelled or its conversation ends. */
+  signal: AbortSignal;
+  onApprovalRequested: () => void;
+  /**
+   * Counts one use of `key` in this turn and reports whether it stays within
+   * `limit`, so a tool can cap what one turn does (drafts opened, clipboard
+   * writes). Synchronous, so tool calls running in parallel can't overshoot.
+   */
+  claimTurnSlot: (key: string, limit: number) => boolean;
+  /** Gives back a claimed use of `key` whose action never happened. */
+  releaseTurnSlot: (key: string) => void;
+  /** Tells the chat this call now waits on the user (pending), or no longer does (settled). */
+  onInteraction: (record: InteractionRecord) => void;
+  /** Shows the model an image (a screenshot the user allowed) from its next step on. */
+  attachImage: (image: ChatImageAttachment) => void;
+  /**
+   * Claims the send with this key for this call: false when this request
+   * already made it (or may have), or the same call is running now.
+   */
+  claimAction: (actionKey: string) => boolean;
+  /** Gives back a claim; completed actions are recorded under their final key. */
+  releaseAction: (actionKey: string) => void;
+  /** Records a claimed send that happened or may have, on its tool call. */
+  recordCompletedAction: (actionKey: string, outcome?: CompletedActionOutcome) => void;
+  /** Whether an earlier request in this conversation made this send (the user may want it again). */
+  sentEarlier: (actionKey: string) => boolean;
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
   readOnly: boolean;
-  execute: (args: Record<string, unknown>) => Promise<ToolResult>;
+  /** The tool's line in the agent's system prompt; without one, TOOL_INSTRUCTIONS has it. */
+  promptInstruction?: string;
+  /** Set on every connector tool: the connector rules join the prompt when any is offered. */
+  connectorId?: string;
+  execute: (args: Record<string, unknown>, context?: ToolExecutionContext) => Promise<ToolResult>;
+}
+
+// What an aborted call returns; its turn is over, so nobody shows it.
+const ABORTED_RESULT: ToolResult = { success: false, data: null, displayText: "" };
+
+/**
+ * Runs a tool, but settles as soon as its turn is aborted: a tool that
+ * ignores the signal (a fetch with no timeout) must not keep a cancelled turn,
+ * and the chat's send lock, waiting. Its late result is kept out of the model,
+ * but onResult still observes it so committed writes can be saved to history.
+ * A call that arrives after the abort never runs.
+ */
+export function executeTool(
+  def: ToolDefinition,
+  args: Record<string, unknown>,
+  context?: ToolExecutionContext,
+  onResult?: (result: ToolResult) => void
+): Promise<ToolResult> {
+  const recordResult = (result: ToolResult): ToolResult => {
+    onResult?.(result);
+    return result;
+  };
+  const signal = context?.signal;
+  if (!signal) return def.execute(args, context).then(recordResult);
+  if (signal.aborted) return Promise.resolve(ABORTED_RESULT);
+  return new Promise((resolve, reject) => {
+    const settleAborted = () => resolve(ABORTED_RESULT);
+    signal.addEventListener("abort", settleAborted, { once: true });
+    def
+      .execute(args, context)
+      // A cancelled turn releases immediately, but an approved write may still commit.
+      .then(recordResult)
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", settleAborted));
+  });
 }
 
 export class ToolRegistry {
@@ -30,15 +113,27 @@ export class ToolRegistry {
     return Array.from(this.tools.values());
   }
 
-  toAISDKFormat(): Record<string, Tool> {
+  /**
+   * The AI SDK hands the stream only the model-facing output, so
+   * `onDisplayText` receives each call's displayText for its tool step.
+   */
+  toAISDKFormat(
+    createContext?: (toolCallId: string, abortSignal?: AbortSignal) => ToolExecutionContext,
+    onDisplayText?: (toolCallId: string, displayText: string, result: ToolResult) => void
+  ): Record<string, Tool> {
     const result: Record<string, Tool> = {};
     for (const def of this.getAll()) {
       result[def.name] = {
         description: def.description,
         inputSchema: jsonSchema(def.parameters),
-        execute: async (args: unknown) => {
+        execute: async (args: unknown, options: ToolExecutionOptions) => {
           try {
-            const toolResult = await def.execute(args as Record<string, unknown>);
+            const toolResult = await executeTool(
+              def,
+              args as Record<string, unknown>,
+              createContext?.(options.toolCallId, options.abortSignal),
+              (result) => onDisplayText?.(options.toolCallId, result.displayText, result)
+            );
             return toolResult.success ? toolResult.data : { error: toolResult.displayText };
           } catch (error) {
             return { error: (error as Error).message || "Tool execution failed" };

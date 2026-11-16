@@ -96,3 +96,301 @@ test("parallel checkout attempts share one claim operation", async (t) => {
   );
   assert.equal(s.requests.filter((r) => r[0] === "/api/affiliate/claim").length, 1);
 });
+
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+const settle = async () => {
+  for (let index = 0; index < 8; index++) await tick();
+};
+const { deferred } = require("../helpers/harness/deferred");
+async function setupLifecycle(t, { signedIn = true, initialCandidate = null } = {}) {
+  let cleanup = () => {};
+  t.after(() => cleanup());
+  const native = {
+    generation: signedIn ? 7 : 0,
+    token: signedIn ? "token-a" : null,
+    candidate: initialCandidate,
+  };
+  const calls = { status: 0, posts: [], reads: 0 };
+  let nativeRead = async () => ({
+    config: { domain: "try.openwhispr.com" },
+    generation: native.generation,
+    candidate: native.candidate && { ...native.candidate },
+  });
+  let resolveLink = async (link) => ({ link, clickId: "resolved-click" });
+  let status = async () => ({ data: { persisted: false, status: null } });
+  let linkListener;
+  const events = new Map();
+  installBrowserGlobals(t, {
+    window: {
+      location: { origin: "https://desktop.openwhispr.test", search: "?panel=true" },
+      addEventListener: (event, listener) => events.set(event, listener),
+      removeEventListener: (event) => events.delete(event),
+      electronAPI: {
+        authGetTokenState: async () => ({ token: native.token, generation: native.generation }),
+        getAffiliateCandidate: () => {
+          calls.reads++;
+          return nativeRead();
+        },
+        resolveAffiliateLink: (...args) => resolveLink(...args),
+        saveAffiliateCandidate: async (input) => {
+          assert.equal(input.generation, native.generation);
+          const previous = native.candidate ?? { link: "", clickId: null, saved: false };
+          if (
+            input.expectedCandidate &&
+            ["link", "clickId", "saved"].some(
+              (key) => input.expectedCandidate[key] !== previous[key]
+            )
+          )
+            throw new Error("REFERRAL_CONTEXT_CHANGED");
+          native.candidate = { link: input.link, clickId: input.clickId, saved: input.saved };
+        },
+        onAffiliateLink: (listener) => {
+          linkListener = listener;
+          return () => {
+            linkListener = null;
+          };
+        },
+      },
+    },
+  });
+  globalThis.__affiliateLifecycle = {
+    status: (...args) => {
+      calls.status++;
+      return status(...args);
+    },
+    post: async (...args) => {
+      calls.posts.push(args);
+      return { data: { persisted: true, status: "pending" } };
+    },
+  };
+  t.after(() => delete globalThis.__affiliateLifecycle);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "review-affiliate-life-",
+    mockModules: {
+      settingsStore: `export const useSettingsStore={getState:()=>({telemetryEnabled:true})};`,
+      "/services/cloudApi": `export const cloudGetForAuthGeneration=(...args)=>globalThis.__affiliateLifecycle.status(...args); export const cloudPostForAuthGeneration=(...args)=>globalThis.__affiliateLifecycle.post(...args);`,
+    },
+  });
+  const auth = await vite.ssrLoadModule("/lib/authRequestContext.ts");
+  const store = await vite.ssrLoadModule("/stores/affiliateStore.ts");
+  auth.resetAuthRequestContextForTests();
+  const sessionAnswer = async (user) => {
+    await auth.handleAuthRequestSuccess({
+      data: user ? { user: { id: user }, session: { id: "session" } } : null,
+      response: new Response("{}"),
+      request: {
+        url: "https://auth.openwhispr.test/api/auth/get-session",
+        headers: new Headers(native.token ? { Authorization: `Bearer ${native.token}` } : {}),
+        openWhisprAuthGeneration: native.generation,
+      },
+    });
+    if (user) assert.equal(auth.commitValidatedAuthContext(native.generation, user), true);
+  };
+  if (signedIn) await sessionAnswer("user-a");
+  return {
+    native,
+    calls,
+    auth,
+    ...store,
+    sessionAnswer,
+    startAffiliateAttribution: () => {
+      cleanup = store.startAffiliateAttribution();
+      return cleanup;
+    },
+    setRead: (value) => {
+      nativeRead = value;
+    },
+    setResolve: (value) => {
+      resolveLink = value;
+    },
+    setStatus: (value) => {
+      status = value;
+    },
+    arrival: (candidate) => {
+      native.candidate = candidate;
+      linkListener();
+    },
+    focus: () => events.get("focus")?.(),
+  };
+}
+
+test("cold signed-out startup retries a candidate read invalidated by auth observation", async (t) => {
+  const link = "https://try.openwhispr.com/creator-a";
+  const setupState = await setupLifecycle(t, {
+    signedIn: false,
+    initialCandidate: { link, clickId: null, saved: false },
+  });
+  const read = deferred();
+  setupState.setRead(() => read.promise);
+  setupState.startAffiliateAttribution();
+
+  await tick();
+  assert.equal(setupState.calls.reads, 1);
+  setupState.auth.observeAuthTokenStateEvent({ generation: 0, hasToken: false });
+  await setupState.sessionAnswer(null);
+  read.resolve({
+    config: { domain: "try.openwhispr.com" },
+    generation: 0,
+    candidate: setupState.native.candidate,
+  });
+  await settle();
+  const result = setupState.useAffiliateStore.getState();
+  assert.equal(result.enabled, true);
+  assert.equal(result.link, link);
+  assert.equal(setupState.calls.reads, 2);
+});
+
+test("a new deep link during resolution is claimed and releases the field", async (t) => {
+  const linkA = "https://try.openwhispr.com/creator-a";
+  const linkB = "https://try.openwhispr.com/creator-b";
+  const setupState = await setupLifecycle(t, {
+    initialCandidate: { link: linkA, clickId: null, saved: false },
+  });
+  const resolving = deferred();
+  const entered = deferred();
+  setupState.setResolve(() => {
+    entered.resolve();
+    return resolving.promise;
+  });
+  setupState.startAffiliateAttribution();
+  await entered.promise;
+  assert.equal(setupState.useAffiliateStore.getState().checking, true);
+  setupState.arrival({ link: linkB, clickId: "click-b", saved: false });
+  await settle();
+  resolving.resolve({ link: linkA, clickId: "click-a" });
+  await settle();
+  const result = setupState.useAffiliateStore.getState();
+  assert.equal(result.link, linkB);
+  assert.equal(result.checking, false);
+  assert.equal(result.saved, true);
+  assert.deepEqual(
+    setupState.calls.posts
+      .filter((call) => call[0].endsWith("/claim"))
+      .map((call) => call[1].clickId),
+    ["click-b"]
+  );
+});
+
+test("checkout waits for the new creator claim when a link arrives during its status check", async (t) => {
+  const setupState = await setupLifecycle(t);
+  const status = deferred();
+  const statusEntered = deferred();
+  setupState.setStatus(() => {
+    statusEntered.resolve();
+    return status.promise;
+  });
+  setupState.startAffiliateAttribution();
+  await statusEntered.promise;
+  const checkout = setupState.prepareAffiliateCheckout();
+  setupState.arrival({
+    link: "https://try.openwhispr.com/creator-b",
+    clickId: "click-b",
+    saved: false,
+  });
+  status.resolve({ data: { persisted: false, status: null } });
+  const allowed = await checkout;
+  await settle();
+  const result = setupState.useAffiliateStore.getState();
+  assert.equal(allowed, true);
+  assert.equal(result.link, setupState.native.candidate.link);
+  assert.equal(setupState.calls.posts.filter((call) => call[0].endsWith("/claim")).length, 1);
+});
+
+test("a queued resolved save preserves a newer native link and retries its claim", async (t) => {
+  const linkA = "https://try.openwhispr.com/creator-a";
+  const linkB = "https://try.openwhispr.com/creator-b";
+  const setupState = await setupLifecycle(t, {
+    initialCandidate: { link: linkA, clickId: null, saved: false },
+  });
+  const queued = deferred();
+  const delivered = deferred();
+  const originalSave = globalThis.window.electronAPI.saveAffiliateCandidate;
+  let initial = true;
+  globalThis.window.electronAPI.saveAffiliateCandidate = async (input) => {
+    if (initial) {
+      initial = false;
+      queued.resolve();
+      await delivered.promise;
+    }
+    return originalSave(input);
+  };
+  setupState.startAffiliateAttribution();
+  await queued.promise;
+  // Reads from this renderer follow its already queued save in the native IPC queue.
+  const originalRead = globalThis.window.electronAPI.getAffiliateCandidate;
+  globalThis.window.electronAPI.getAffiliateCandidate = async () => {
+    await delivered.promise;
+    return originalRead();
+  };
+  setupState.arrival({ link: linkB, clickId: "click-b", saved: false });
+  delivered.resolve();
+  await settle();
+  assert.equal(setupState.native.candidate.link, linkB);
+  assert.equal(setupState.useAffiliateStore.getState().checking, false);
+  assert.equal(setupState.useAffiliateStore.getState().saved, true);
+  assert.deepEqual(
+    setupState.calls.posts
+      .filter((call) => call[0].endsWith("/claim"))
+      .map((call) => call[1].clickId),
+    ["click-b"]
+  );
+});
+
+test("a queued guest edit cannot replace a newer native creator link", async (t) => {
+  const setupState = await setupLifecycle(t, {
+    signedIn: false,
+    initialCandidate: { link: "https://try.openwhispr.com/creator-a", clickId: null, saved: false },
+  });
+  setupState.startAffiliateAttribution();
+  await settle();
+  const queued = deferred();
+  const delivered = deferred();
+  const originalSave = globalThis.window.electronAPI.saveAffiliateCandidate;
+  globalThis.window.electronAPI.saveAffiliateCandidate = async (input) => {
+    queued.resolve();
+    await delivered.promise;
+    return originalSave(input);
+  };
+  setupState.useAffiliateStore.getState().setLink("https://try.openwhispr.com/edited-a");
+  await queued.promise;
+  const newer = { link: "https://try.openwhispr.com/creator-b", clickId: "click-b", saved: false };
+  setupState.arrival(newer);
+  delivered.resolve();
+  await settle();
+  assert.deepEqual(setupState.native.candidate, newer);
+  assert.equal(setupState.useAffiliateStore.getState().link, newer.link);
+  assert.equal(setupState.calls.posts.length, 0);
+});
+
+test("an edit made after a native arrival survives its still-pending refresh", async (t) => {
+  const setupState = await setupLifecycle(t, {
+    signedIn: false,
+    initialCandidate: { link: "https://try.openwhispr.com/creator-a", clickId: null, saved: false },
+  });
+  setupState.startAffiliateAttribution();
+  await settle();
+  const entered = deferred();
+  const pending = deferred();
+  let initial = true;
+  setupState.setRead(async () => {
+    if (initial) {
+      initial = false;
+      entered.resolve();
+      await pending.promise;
+    }
+    return {
+      config: { domain: "try.openwhispr.com" },
+      generation: 0,
+      candidate: { ...setupState.native.candidate },
+    };
+  });
+  setupState.arrival({ link: "https://try.openwhispr.com/creator-b", clickId: null, saved: false });
+  await entered.promise;
+  const latestEdit = "https://try.openwhispr.com/creator-c";
+  setupState.useAffiliateStore.getState().setLink(latestEdit);
+  await settle();
+  pending.resolve();
+  await settle();
+  assert.equal(setupState.native.candidate.link, latestEdit);
+  assert.equal(setupState.useAffiliateStore.getState().link, latestEdit);
+});

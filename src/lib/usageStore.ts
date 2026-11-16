@@ -16,6 +16,15 @@ export function highestPlan(plans: string[]): string {
   );
 }
 
+export type ProviderStore = "app_store" | "play_store";
+
+/** A subscription bought in the mobile app, billed and managed by the store. */
+export interface StoreBilling {
+  /** `null` when the API predates `providerStore`. */
+  store: ProviderStore | null;
+  status: string;
+}
+
 export interface UsageData {
   wordsUsed: number;
   wordsRemaining: number;
@@ -30,6 +39,8 @@ export interface UsageData {
   resetAt: string;
   entitlementSources: {
     personal: boolean;
+    provider: boolean;
+    providerStore: ProviderStore | null;
     workspaceIds: string[];
   };
 }
@@ -49,6 +60,8 @@ export interface UsageResponse {
   resetAt?: string;
   entitlementSources?: {
     personal: boolean;
+    provider?: boolean;
+    providerStore?: string | null;
     workspaceIds: string[];
   };
 }
@@ -121,17 +134,43 @@ export function normalizeUsage(response: UsageResponse): UsageData {
     resetAt: response.resetAt ?? "rolling",
     // Pre-unified-billing API builds have no entitlementSources; infer a
     // personal source from the plan so those clients keep working.
-    entitlementSources: response.entitlementSources ?? {
-      personal:
-        response.isTrial === true ||
-        (PAID_PLANS.has(plan) && ["active", "trialing"].includes(subscriptionStatus)),
-      workspaceIds: [],
-    },
+    entitlementSources: response.entitlementSources
+      ? {
+          personal: response.entitlementSources.personal,
+          provider: response.entitlementSources.provider ?? false,
+          providerStore: toProviderStore(response.entitlementSources.providerStore),
+          workspaceIds: response.entitlementSources.workspaceIds,
+        }
+      : {
+          personal:
+            response.isTrial === true ||
+            (PAID_PLANS.has(plan) && ["active", "trialing"].includes(subscriptionStatus)),
+          provider: false,
+          providerStore: null,
+          workspaceIds: [],
+        },
   };
 }
 
+function toProviderStore(value: string | null | undefined): ProviderStore | null {
+  return value === "app_store" || value === "play_store" ? value : null;
+}
+
+/**
+ * The API reports the store subscription's plan and status only when no Stripe
+ * subscription entitles the account, so a Stripe subscriber is never store-billed.
+ */
+export function storeBillingOf(data: UsageData): StoreBilling | null {
+  const { personal, provider, providerStore } = data.entitlementSources;
+  if (personal || !provider) return null;
+  return { store: providerStore, status: data.subscriptionStatus };
+}
+
+/** Stripe past due only: the store runs its own billing retry and tells the user itself. */
 export function isPastDueUsage(data: UsageData): boolean {
-  return PAID_PLANS.has(data.plan) && data.subscriptionStatus === "past_due";
+  return (
+    PAID_PLANS.has(data.plan) && data.subscriptionStatus === "past_due" && !storeBillingOf(data)
+  );
 }
 
 export function setUsageAccount(accountId: string | null): void {

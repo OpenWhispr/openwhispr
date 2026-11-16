@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Clock3,
   Globe2,
-  Loader2,
   LocateFixed,
   LogOut,
   MoreHorizontal,
@@ -29,6 +28,7 @@ import {
   normalizeLeaderboardSelection,
   pageCount,
   pageForRank,
+  leaderboardInviteScope,
   resolveLeaderboardScopeKey,
   resolveLeaderboardSurface,
   shouldFetchLeaderboardWeekStarts,
@@ -39,6 +39,7 @@ import {
   type LeaderboardWeekStartsCacheEntry,
 } from "../helpers/leaderboard";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
+import { workspaceCan } from "../lib/capabilities";
 import { CloudApiError } from "../services/cloudApi";
 import { LeaderboardService } from "../services/LeaderboardService";
 import { InvitationsService } from "../services/InvitationsService";
@@ -48,6 +49,7 @@ import { useWorkspaceStore } from "../stores/workspaceStore";
 import type {
   Leaderboard,
   LeaderboardAccess,
+  LeaderboardAccessScope,
   LeaderboardMember,
   LeaderboardMetric,
   LeaderboardRange,
@@ -63,6 +65,7 @@ import LeaderboardPodium from "./LeaderboardPodium";
 import LeaderboardSetupCard from "./LeaderboardSetupCard";
 import LeaderboardShareDialog from "./LeaderboardShareDialog";
 import LeaderboardSignInPreview from "./LeaderboardSignInPreview";
+import LeaderboardSkeleton, { LeaderboardBoardSkeleton } from "./LeaderboardSkeleton";
 import LeaderboardSoloEmptyState from "./LeaderboardSoloEmptyState";
 import LeaderboardWorkspaceNudge from "./LeaderboardWorkspaceNudge";
 import LeaderboardJoinPreview from "./LeaderboardJoinPreview";
@@ -76,6 +79,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Skeleton } from "./ui/skeleton";
 import { Tooltip } from "./ui/tooltip";
 import { useToast } from "./ui/useToast";
 
@@ -84,6 +88,8 @@ interface LeaderboardSectionProps {
   authGeneration: number | null;
   /** The session has settled, so a missing credential will not arrive on its own. */
   authSettled: boolean;
+  /** Presented from this device while the server can't confirm it: signing in won't help. */
+  accountOffline: boolean;
   isSignedIn: boolean;
   /** The account row says joined — what the roster and Leave hang on, not the device toggle. */
   participating: boolean;
@@ -98,6 +104,7 @@ interface LeaderboardSectionProps {
   onLeave: () => Promise<boolean>;
   onJoin: () => Promise<boolean>;
   onRefreshParticipation: () => void;
+  onSessionRefresh: () => void;
   onSignIn: () => void;
   onSsoSignIn: () => void;
   ssoActionDisabled: boolean;
@@ -150,6 +157,7 @@ export default function LeaderboardSection({
   accountId,
   authGeneration,
   authSettled,
+  accountOffline,
   isSignedIn,
   participating,
   cloudAccessAllowed,
@@ -161,6 +169,7 @@ export default function LeaderboardSection({
   onJoin,
   onLeave,
   onRefreshParticipation,
+  onSessionRefresh,
   onSignIn,
   onSsoSignIn,
   ssoActionDisabled,
@@ -171,6 +180,8 @@ export default function LeaderboardSection({
   const { toast } = useToast();
   const loaded = useWorkspaceStore((state) => state.loaded);
   const refresh = useWorkspaceStore((state) => state.refresh);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [access, setAccess] = useState<LeaderboardAccess | null>(null);
   const [accessLoading, setAccessLoading] = useState(true);
   const [accessError, setAccessError] = useState<"auth" | "generic" | null>(null);
@@ -207,6 +218,17 @@ export default function LeaderboardSection({
   const weekStartsCacheRef = useRef(new Map<string, LeaderboardWeekStartsCacheEntry>());
   const scopes = useMemo(() => access?.scopes ?? [], [access]);
   const selectedScope = scopes.find((scope) => scope.key === scopeKey);
+  // Scopes carry only the role. The workspace list carries the server's capabilities, so it
+  // decides whenever the workspace is in it.
+  const canInviteToScope = (scope: LeaderboardAccessScope): boolean => {
+    if (scope.kind !== "workspace") return false;
+    const workspace =
+      workspaces.find((candidate) => candidate.id === scope.id) ??
+      (scope.role ? { role: scope.role } : null);
+    return workspaceCan(workspace, "manage_members");
+  };
+  const canListSelectedInvites =
+    selectedScope?.state === "invite" && canInviteToScope(selectedScope);
   const selectedRequestKey = leaderboardRequestKey(
     selectedScope?.key ?? null,
     metric,
@@ -245,7 +267,7 @@ export default function LeaderboardSection({
         // presenting a session whose refetch failed, so this would otherwise
         // be a spinner with no message and no way out.
         setAccessLoading(!authSettled);
-        setAccessError(authSettled ? "auth" : null);
+        setAccessError(authSettled ? (accountOffline ? "generic" : "auth") : null);
         return;
       }
       setAccessLoading(true);
@@ -268,15 +290,11 @@ export default function LeaderboardSection({
         if (requestId === accessRequestIdRef.current) setAccessLoading(false);
       }
     },
-    [accountId, authGeneration, authSettled]
+    [accountId, accountOffline, authGeneration, authSettled]
   );
 
   useEffect(() => {
-    const canListInvites =
-      selectedScope?.kind === "workspace" &&
-      selectedScope.state === "invite" &&
-      (selectedScope.role === "owner" || selectedScope.role === "admin");
-    if (!canListInvites) {
+    if (!selectedScope || !canListSelectedInvites) {
       setPendingInvites([]);
       return;
     }
@@ -303,7 +321,7 @@ export default function LeaderboardSection({
     return () => {
       cancelled = true;
     };
-  }, [pendingInviteRevision, selectedScope]);
+  }, [canListSelectedInvites, pendingInviteRevision, selectedScope]);
 
   useEffect(() => {
     if (isSignedIn && !loaded) void refresh();
@@ -642,14 +660,8 @@ export default function LeaderboardSection({
   const funnelCardClassName = funnelScopeSelect ? "mt-4" : "mt-6";
 
   if (!isSignedIn) return <LeaderboardSignInPreview className="mt-6" onSignIn={onSignIn} />;
-  if (accessLoading && !access) {
-    return (
-      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/70 bg-card/70 text-muted-foreground dark:border-white/10">
-        <Loader2 size={18} className="animate-spin" />
-      </section>
-    );
-  }
-  if (accessError && !access) {
+  if (accessLoading && !access) return <LeaderboardSkeleton />;
+  if (accessError && (!access || accountOffline)) {
     return (
       <LeaderboardRetryCard
         className={ERROR_CARD_CHROME}
@@ -659,7 +671,13 @@ export default function LeaderboardSection({
             ? t("insights.leaderboard.signInDescription")
             : t("insights.leaderboard.accessError")
         }
-        onRetry={accessError === "auth" ? onSignIn : () => void loadAccess()}
+        onRetry={
+          accessError === "auth"
+            ? onSignIn
+            : accountOffline
+              ? onSessionRefresh
+              : () => void loadAccess()
+        }
       />
     );
   }
@@ -726,13 +744,7 @@ export default function LeaderboardSection({
       />
     );
   }
-  if (surface === "participation_loading") {
-    return (
-      <section className="mt-6 flex min-h-48 items-center justify-center rounded-2xl border border-border/70 bg-card/70 text-muted-foreground dark:border-white/10">
-        <Loader2 size={18} className="animate-spin" />
-      </section>
-    );
-  }
+  if (surface === "participation_loading") return <LeaderboardSkeleton />;
   if (surface === "join") {
     return (
       <LeaderboardJoinPreview
@@ -795,16 +807,12 @@ export default function LeaderboardSection({
   };
   const domainNeedsWorkspace =
     selectedScope.kind === "domain" && !scopes.some((scope) => scope.kind === "workspace");
-  const inviteableWorkspace =
-    selectedScope.kind === "workspace" &&
-    (selectedScope.role === "owner" || selectedScope.role === "admin")
-      ? selectedScope
-      : selectedScope.kind === "domain"
-        ? scopes.find(
-            (scope) =>
-              scope.kind === "workspace" && (scope.role === "owner" || scope.role === "admin")
-          )
-        : undefined;
+  const inviteableWorkspace = leaderboardInviteScope(
+    selectedScope,
+    scopes,
+    activeWorkspaceId,
+    canInviteToScope
+  );
   const canGrowLeaderboard = domainNeedsWorkspace || Boolean(inviteableWorkspace);
   const openLeaderboardGrowthAction = () => {
     if (domainNeedsWorkspace) {
@@ -840,6 +848,9 @@ export default function LeaderboardSection({
         workspaceName={access.joinableWorkspace.name}
       />
     ) : null;
+  // While the body below shows its skeleton, the header holds the member count
+  // and period picker a loaded board adds.
+  const boardLoading = !visibleLeaderboard && !visibleFailure && !isSoloScope && cloudAccessAllowed;
 
   return (
     <section
@@ -866,12 +877,16 @@ export default function LeaderboardSection({
               <h2 className="truncate text-sm font-semibold">{selectedScope.name}</h2>
             )}
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-              {boardParticipantCount != null && (
+              {(boardParticipantCount != null || boardLoading) && (
                 <>
-                  <span className="flex items-center gap-1">
-                    <Users size={11} />
-                    {t("workspaces.join.memberCount", { count: boardParticipantCount })}
-                  </span>
+                  {boardParticipantCount != null ? (
+                    <span className="flex items-center gap-1">
+                      <Users size={11} />
+                      {t("workspaces.join.memberCount", { count: boardParticipantCount })}
+                    </span>
+                  ) : (
+                    <Skeleton className="h-2.5 w-18" />
+                  )}
                   <span
                     aria-hidden="true"
                     className="size-0.5 rounded-full bg-muted-foreground/50"
@@ -886,7 +901,7 @@ export default function LeaderboardSection({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {visibleLeaderboard && (
+          {visibleLeaderboard ? (
             <Select
               value={range === "all" ? "all" : activeWeekStart}
               onValueChange={(value) => {
@@ -919,6 +934,8 @@ export default function LeaderboardSection({
                 ))}
               </SelectContent>
             </Select>
+          ) : (
+            boardLoading && <Skeleton className="h-8 w-44 rounded-lg" />
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1010,13 +1027,13 @@ export default function LeaderboardSection({
               ? onSsoSignIn
               : visibleFailure === "auth"
                 ? onSignIn
-                : () => void load()
+                : accountOffline
+                  ? onSessionRefresh
+                  : () => void load()
           }
         />
       ) : !visibleLeaderboard ? (
-        <div className="flex min-h-48 items-center justify-center text-muted-foreground">
-          <Loader2 size={18} className="animate-spin" />
-        </div>
+        <LeaderboardBoardSkeleton />
       ) : (
         <div
           aria-busy={leaderboardStale}

@@ -10,6 +10,7 @@ import {
   type ActionProcessingStatus,
   type RunActionOptions,
 } from "../stores/actionProcessingStore";
+import { getActionName } from "../stores/actionStore";
 
 export type ActionProcessingState = ActionProcessingStatus;
 
@@ -17,14 +18,18 @@ export type ActionProcessingState = ActionProcessingStatus;
 export function useActionProcessing(noteId: number | null) {
   const { t } = useTranslation();
 
-  const { status: state, actionName } = useActionProcessingStore(
-    useShallow((s) => selectNoteActionState(s, noteId))
-  );
+  const {
+    status: state,
+    actionName,
+    progress,
+  } = useActionProcessingStore(useShallow((s) => selectNoteActionState(s, noteId)));
 
   const runAction = useCallback(
     (action: ActionItem, noteContent: string, contentHash: string, options: RunActionOptions) => {
       if (noteId == null) return;
-      runBackgroundAction(noteId, noteContent, contentHash, action, options, {
+      // The overlay shows the run's name, so a built-in's is translated here.
+      const translated = { ...action, name: getActionName(action, t) };
+      runBackgroundAction(noteId, noteContent, contentHash, translated, options, {
         noModel: t("notes.actions.errors.noModel"),
         noEndpoint: t("notes.actions.errors.noEndpoint"),
         actionFailed: t("notes.actions.errors.actionFailed"),
@@ -37,5 +42,5 @@ export function useActionProcessing(noteId: number | null) {
     if (noteId != null) storeCancelAction(noteId);
   }, [noteId]);
 
-  return { state, actionName, runAction, cancel };
+  return { state, actionName, progress: progress ?? null, runAction, cancel };
 }

@@ -4,6 +4,30 @@ const EventEmitter = require("events");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
 
+const INPUT_DIR = "/dev/input";
+const INPUT_SYSFS_DIR = "/sys/class/input";
+// linux/input-event-codes.h
+const EV_KEY = 1n;
+const KEY_A = 30n;
+
+// is_keyboard_device() in linux-key-listener.c, read from sysfs, where the kernel
+// prints the capability bitmaps its ioctl returns: hex words, most significant
+// first, so the bits wanted here sit in the last word (BigInt, since a 64-bit
+// word overflows a double). When sysfs cannot say, as in a sandbox without /sys,
+// the node counts as a keyboard rather than refuse a hotkey it may serve.
+function couldBeKeyboard(device) {
+  const capabilities = path.join(INPUT_SYSFS_DIR, device, "device", "capabilities");
+  const hasBit = (bitmap, bit) => {
+    const words = fs.readFileSync(path.join(capabilities, bitmap), "utf8").trim().split(" ");
+    return ((BigInt(`0x${words.at(-1)}`) >> bit) & 1n) === 1n;
+  };
+  try {
+    return hasBit("ev", EV_KEY) && hasBit("key", KEY_A);
+  } catch {
+    return true;
+  }
+}
+
 // Key state comes from an evdev reader (resources/linux-key-listener.c) that reads
 // /dev/input directly, so it observes KEY_UP regardless of which window has focus
 // and cannot miss a release. The ceiling for a genuinely stuck key is
@@ -65,10 +89,12 @@ class LinuxKeyManager extends EventEmitter {
     let lineBuffer = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
+      if (this.listeners.get(key) !== entry) return;
       lineBuffer += chunk;
       const lines = lineBuffer.split(/\r?\n/);
       lineBuffer = lines.pop();
       for (const raw of lines) {
+        if (this.listeners.get(key) !== entry) return;
         const line = raw.trim();
         if (line) this.handleOutputLine(line, key);
       }
@@ -83,13 +109,17 @@ class LinuxKeyManager extends EventEmitter {
     });
 
     child.on("error", (error) => {
-      if (this.listeners.get(key) === entry) this._stopKey(key);
+      if (this.listeners.get(key) !== entry) return;
+      this._stopKey(key);
       this.reportError(error);
     });
 
-    child.on("exit", (code, signal) => {
+    // exit can precede the final KEY_UP on stdout; close waits for the pipe to drain.
+    child.on("close", (code, signal) => {
       const trailingLine = lineBuffer.trim();
-      if (trailingLine) this.handleOutputLine(trailingLine, key);
+      if (trailingLine && this.listeners.get(key) === entry) {
+        this.handleOutputLine(trailingLine, key);
+      }
 
       // wasTracked is false for intentional stops (_stopKey deletes first), so this
       // reports only unexpected exits — including signal crashes, where code is null.
@@ -131,13 +161,11 @@ class LinuxKeyManager extends EventEmitter {
     }
 
     if (line === "KEY_DOWN") {
-      debugLogger.debug("[LinuxKeyManager] KEY_DOWN detected", { key });
       this.emit("key-down", key);
       return;
     }
 
     if (line === "KEY_UP") {
-      debugLogger.debug("[LinuxKeyManager] KEY_UP detected", { key });
       this.emit("key-up", key);
       return;
     }
@@ -149,8 +177,46 @@ class LinuxKeyManager extends EventEmitter {
     for (const key of [...this.listeners.keys()]) this._stopKey(key);
   }
 
-  isAvailable() {
-    return this.resolveListenerBinary() !== null;
+  /**
+   * Whether the listener could actually run right now: binary present and a
+   * readable keyboard among the /dev/input/event* nodes. Mirrors the C
+   * listener's own rule — it keeps only keyboards and prints NO_PERMISSION only
+   * when it kept none AND at least one node returned EACCES, so an event-less
+   * /dev/input is not a failure there (it waits for hotplug) and must not be
+   * one here. Any other readable node proves nothing: systemd grants the
+   * session user every joystick.
+   * Callers ask at registration time, because a hotkey only this listener can
+   * serve must not report success when the listener cannot run.
+   * @returns {{available: true} | {available: false, reason: "binary_missing" | "input_access_denied" | "input_devices_unavailable"}}
+   */
+  checkAvailability() {
+    if (!this.resolveListenerBinary()) return { available: false, reason: "binary_missing" };
+
+    let devices;
+    try {
+      devices = fs.readdirSync(INPUT_DIR).filter((entry) => entry.startsWith("event"));
+    } catch (error) {
+      // The listener cannot watch a directory it cannot list, so it never sees a
+      // keyboard, and it reports nothing: NO_PERMISSION only covers device nodes.
+      const deniedAccess = error.code === "EACCES" || error.code === "EPERM";
+      return {
+        available: false,
+        reason: deniedAccess ? "input_access_denied" : "input_devices_unavailable",
+      };
+    }
+
+    let denied = false;
+    for (const device of devices) {
+      try {
+        fs.accessSync(path.join(INPUT_DIR, device), fs.constants.R_OK);
+      } catch {
+        denied = true;
+        continue;
+      }
+      if (couldBeKeyboard(device)) return { available: true };
+    }
+
+    return denied ? { available: false, reason: "input_access_denied" } : { available: true };
   }
 
   reportError(error) {

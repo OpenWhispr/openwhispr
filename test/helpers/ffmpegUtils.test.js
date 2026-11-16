@@ -1,8 +1,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { parseFfmpegDuration, isPcm16Mono16kWav } = require("../../src/helpers/ffmpegUtils");
-const { wavHeader } = require("./harness/wavFixtures");
+const {
+  parseFfmpegDuration,
+  parseWavFormat,
+  isPcm16Mono16kWav,
+  wavToFloat32Samples,
+  splitAudioFile,
+  getFFmpegPath,
+} = require("../../src/helpers/ffmpegUtils");
+const { wavHeader, pcm16Mono16kWav, insertWavChunk } = require("./harness/wavFixtures");
 
 test("parseFfmpegDuration reads the input duration from ffmpeg output", () => {
   const stderr = "Input #0, mp3, from 'recording.mp3':\n  Duration: 01:13:00.25, start: 0.000000";
@@ -21,3 +28,111 @@ test("isPcm16Mono16kWav accepts only what the local engines decode as-is", () =>
   assert.equal(isPcm16Mono16kWav(wavHeader({ audioFormat: 3, bitsPerSample: 32 })), false);
   assert.equal(isPcm16Mono16kWav(Buffer.from("not a wav")), false);
 });
+
+const samples = [-32768, -16384, 0, 16384, 32767];
+const wav = pcm16Mono16kWav(samples);
+for (const [name, input] of [
+  ["no metadata", wav],
+  ["zero-length metadata", insertWavChunk(wav, "JUNK", Buffer.alloc(0), 12)],
+  ["even-length metadata", insertWavChunk(wav, "JUNK", Buffer.from([1, 2]), 12)],
+  ["odd-length metadata before fmt", insertWavChunk(wav, "JUNK", Buffer.from([42]), 12)],
+  ["odd-length metadata before data", insertWavChunk(wav, "JUNK", Buffer.from([42]), 36)],
+  ["three-byte metadata", insertWavChunk(wav, "JUNK", Buffer.from([1, 2, 3]), 36)],
+  [
+    "consecutive odd-length chunks",
+    insertWavChunk(
+      insertWavChunk(wav, "JUNK", Buffer.from([42]), 12),
+      "JUNK",
+      Buffer.from([7]),
+      12
+    ),
+  ],
+]) {
+  test(`WAV chunk traversal preserves format and samples with ${name}`, () => {
+    assert.deepEqual(parseWavFormat(input), {
+      audioFormat: 1,
+      channels: 1,
+      sampleRate: 16000,
+      bitsPerSample: 16,
+    });
+    assert.equal(isPcm16Mono16kWav(input), true);
+    const decoded = wavToFloat32Samples(input);
+    assert.equal(decoded.length, samples.length * 4);
+    assert.deepEqual(
+      samples.map((_, index) => decoded.readFloatLE(index * 4)),
+      samples.map((sample) => sample / 32768)
+    );
+  });
+}
+
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
+
+const ffmpegPath = getFFmpegPath();
+
+// ffmpeg -i with no output exits non-zero; the stream listing is on stderr.
+function streamsOf(file) {
+  try {
+    execFileSync(ffmpegPath, ["-hide_banner", "-i", file], { stdio: ["ignore", "ignore", "pipe"] });
+  } catch (error) {
+    return error.stderr.toString();
+  }
+  return "";
+}
+
+// Without -vn ffmpeg maps the video track, encodes every frame to PNG and
+// embeds one in the first piece (13.4 s vs 0.36 s for 2 min of 720p WebM). It
+// also copies the file's tags into every piece: a user's titles, comments or a
+// phone video's location would ride along to the provider, and a large tag
+// makes an end-of-file sliver look like real audio.
+test(
+  "audio-only splitting keeps video frames and file tags out of every piece",
+  { skip: !ffmpegPath && "no ffmpeg binary available" },
+  async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-split-audio-only-"));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const source = path.join(dir, "screen.mp4");
+    execFileSync(ffmpegPath, [
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=duration=2.5:size=64x64:rate=10",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=440:duration=2.5",
+      "-c:v",
+      "mpeg4",
+      "-c:a",
+      "aac",
+      "-shortest",
+      "-metadata",
+      "title=Board meeting",
+      "-metadata",
+      `comment=${"x".repeat(10_000)}`,
+      "-f",
+      "mp4",
+      "-y",
+      source,
+    ]);
+    const out = path.join(dir, "pieces");
+    fs.mkdirSync(out);
+
+    const { chunkPaths } = await splitAudioFile(source, out, {
+      segmentDuration: 1,
+      audioOnly: true,
+    });
+
+    assert.ok(chunkPaths.length >= 2, `expected several pieces, got ${chunkPaths.length}`);
+    for (const piece of chunkPaths) {
+      const name = path.basename(piece);
+      const info = streamsOf(piece);
+      assert.doesNotMatch(info, /Video:/, `${name} carries a video frame`);
+      assert.doesNotMatch(info, /Board meeting/, `${name} carries the file's tags`);
+    }
+  }
+);

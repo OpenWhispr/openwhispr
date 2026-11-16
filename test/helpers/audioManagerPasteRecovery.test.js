@@ -1,0 +1,87 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { loadAudioManager } = require("./harness/audioManager");
+
+test("safePaste preserves exact final text only for confirmed permission recovery", async (t) => {
+  const { window, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-paste-recovery-",
+    settingsKey: "__pasteRecoverySettings",
+  });
+  const errors = [];
+  const manager = createManager({
+    onError: (error) => errors.push(error),
+    streamingFinalText: "raw text",
+  });
+  const text = "  Final translated text\nwith spacing  ";
+  const options = { restoreClipboard: false };
+  const calls = [];
+  window.electronAPI.pasteText = async (...args) => {
+    calls.push(args);
+    return {
+      success: false,
+      pasted: false,
+      code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+      clipboardCopied: true,
+    };
+  };
+  assert.deepEqual(await manager.safePaste(text, options), { pasted: false });
+  assert.deepEqual(calls, [[text, options]]);
+  assert.deepEqual(errors, [
+    {
+      title: "Paste Error",
+      code: "ACCESSIBILITY_PERMISSION_REQUIRED",
+      clipboardCopied: true,
+      transcript: text,
+    },
+  ]);
+
+  for (const pasted of [true, false]) {
+    errors.length = 0;
+    window.electronAPI.pasteText = async () => ({ success: true, pasted });
+    assert.deepEqual(await manager.safePaste(text), { pasted });
+    assert.deepEqual(errors, []);
+  }
+  window.electronAPI.pasteText = async () => {
+    throw new Error("accessibility in an unrelated error");
+  };
+  assert.deepEqual(await manager.safePaste(text), { pasted: false });
+  assert.deepEqual(errors, [
+    {
+      title: "Paste Error",
+      code: "PASTE_FAILED",
+      description: "accessibility in an unrelated error",
+    },
+  ]);
+
+  errors.length = 0;
+  window.electronAPI.pasteText = async () => {
+    throw new Error(
+      "Error invoking remote method 'paste-text': Error: Please install xdotool or paste manually with Ctrl+V."
+    );
+  };
+  assert.deepEqual(await manager.safePaste(text), { pasted: false });
+  assert.equal(errors[0].description, "Please install xdotool or paste manually with Ctrl+V.");
+
+  window.electronAPI.pasteText = async () => {
+    throw new Error("Error invoking remote method 'paste-text': TypeError: bad input");
+  };
+  await manager.safePaste(text);
+  assert.equal(errors[1].description, "bad input");
+});
+
+test("safePaste forwards the confirmed clipboard fallback reason without an error", async (t) => {
+  const { window, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-clipboard-fallback-",
+    settingsKey: "__clipboardFallbackSettings",
+  });
+  const manager = createManager({ onError: () => assert.fail("fallback is not an error") });
+  window.electronAPI.pasteText = async () => ({
+    success: true,
+    pasted: false,
+    reason: "accessibility-missing",
+  });
+  assert.deepEqual(await manager.safePaste("synthetic text"), {
+    pasted: false,
+    reason: "accessibility-missing",
+  });
+});

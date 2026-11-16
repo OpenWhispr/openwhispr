@@ -50,12 +50,12 @@ test("the New note menu always offers a note and an assistant chat", async (t) =
   assert.match(markup, /notes\.createMenu\.assistantChat/);
 });
 
-test("the New note menu offers a team space only when the user can create one", async (t) => {
+test("the New note menu never offers a team space, even with create permission", async (t) => {
   const withoutPermission = await renderMenu(t, { canCreateTeamSpace: false });
   assert.doesNotMatch(withoutPermission, /notes\.createMenu\.teamSpace/);
 
   const withPermission = await renderMenu(t, { canCreateTeamSpace: true });
-  assert.match(withPermission, /notes\.createMenu\.teamSpace/);
+  assert.doesNotMatch(withPermission, /notes\.createMenu\.teamSpace/);
 });
 
 // The Chat tab disappears entirely when an org turns the assistant off, so the

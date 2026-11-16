@@ -4,6 +4,8 @@ const debugLogger = require("../helpers/debugLogger");
 class LocalReasoningService {
   constructor() {
     this.isProcessing = false;
+    this.activeRequestId = null;
+    this.abortController = null;
   }
 
   async isAvailable() {
@@ -24,13 +26,20 @@ class LocalReasoningService {
     });
 
     if (this.isProcessing) {
-      throw new Error("Already processing a request");
+      // Typed so the renderer can translate it: a note summarised in parts
+      // holds this bridge for minutes, and whatever arrives meanwhile (another
+      // note's action, dictation cleanup) used to surface this text raw.
+      throw Object.assign(new Error("Already processing a request"), { code: "LOCAL_MODEL_BUSY" });
     }
 
     this.isProcessing = true;
+    this.activeRequestId = config.requestId ?? null;
+    const abortController = new AbortController();
+    this.abortController = abortController;
     const startTime = Date.now();
 
     try {
+      config.signal?.throwIfAborted();
       const inferenceConfig = {
         maxTokens: config.maxTokens ?? this.calculateMaxTokens(text.length),
         temperature: config.temperature ?? 0.7,
@@ -40,10 +49,14 @@ class LocalReasoningService {
         systemPrompt: config.systemPrompt || "",
         disableThinking: config.disableThinking !== false,
         requireCompleteOutput: config.requireCompleteOutput,
+        responseFormat: config.responseFormat,
+        refuseClippedByWindow: config.refuseClippedByWindow,
         // A minimum context window for this request. Rebuilding this object
         // field-by-field is what silently orphaned it before #2142: it was
         // declared, written by selection editing, and never forwarded.
         contextSize: config.contextSize,
+        // How long to wait for another model's answer before giving up.
+        busyWaitMs: config.busyWaitMs,
       };
 
       debugLogger.logReasoning("LOCAL_BRIDGE_INFERENCE", {
@@ -51,11 +64,22 @@ class LocalReasoningService {
         config: inferenceConfig,
       });
 
-      const result = await modelManager.runInference(modelId, text, inferenceConfig);
-      const stripThinking = config.disableThinking !== false;
-      const cleanResult = stripThinking
-        ? (await import("../helpers/stripThinking.js")).stripThinkingTags(result)
-        : result.trim();
+      const result = await modelManager.runInference(modelId, text, {
+        ...inferenceConfig,
+        signal: config.signal
+          ? AbortSignal.any([config.signal, abortController.signal])
+          : abortController.signal,
+      });
+      config.signal?.throwIfAborted();
+      let cleanResult = result;
+      // Thinking tags inside a JSON string are document data. The caller
+      // validates the complete envelope instead of stripping anything from it.
+      if (!config.responseFormat) {
+        const stripThinking = config.disableThinking !== false;
+        cleanResult = stripThinking
+          ? (await import("../helpers/stripThinking.js")).stripThinkingTags(result)
+          : result.trim();
+      }
 
       const processingTime = Date.now() - startTime;
 
@@ -80,7 +104,19 @@ class LocalReasoningService {
       throw error;
     } finally {
       this.isProcessing = false;
+      this.activeRequestId = null;
+      this.abortController = null;
     }
+  }
+
+  // Only the caller that tagged the request can abort it, so a cancelled note
+  // never kills a dictation cleanup that took the slot after it. The abort also
+  // reaches a request still waiting for the server, which would otherwise swap
+  // its model in and run anyway once the other model's answer is done.
+  cancel(requestId) {
+    if (!requestId || requestId !== this.activeRequestId) return;
+    this.abortController?.abort();
+    modelManager.cancelInference();
   }
 
   calculateMaxTokens(textLength, minTokens = 512, maxTokens = 2048, multiplier = 2) {

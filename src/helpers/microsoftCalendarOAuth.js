@@ -10,6 +10,21 @@ const MICROSOFT_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.
 const CALENDAR_SCOPE =
   "openid profile email offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Calendars.Read";
 
+function decodeIdToken(idToken) {
+  if (!idToken) return null;
+  try {
+    return JSON.parse(Buffer.from(idToken.split(".")[1], "base64url").toString());
+  } catch {
+    return null;
+  }
+}
+
+// The Entra tenant tells a personal Microsoft account from a work or school
+// one, whatever the address's domain.
+function tenantIdOf(tokenData) {
+  return decodeIdToken(tokenData.id_token)?.tid ?? null;
+}
+
 class MicrosoftCalendarOAuth {
   constructor(databaseManager) {
     this.databaseManager = databaseManager;
@@ -20,13 +35,14 @@ class MicrosoftCalendarOAuth {
     return process.env.MICROSOFT_CALENDAR_CLIENT_ID;
   }
 
-  startOAuthFlow() {
+  startOAuthFlow({ signal } = {}) {
     if (!this.getClientId()) {
       // Fail fast instead of opening the browser on a client_id=undefined URL
       // and hanging until the loopback flow times out.
       throw new Error("MICROSOFT_CALENDAR_CLIENT_ID is not configured");
     }
     return runOAuthLoopbackFlow({
+      signal,
       errorParam: "mcal_error",
       buildAuthUrl: (redirectUri, state, codeChallenge) => {
         const params = new URLSearchParams({
@@ -44,7 +60,8 @@ class MicrosoftCalendarOAuth {
         return `${MICROSOFT_AUTH_URL}?${params.toString()}`;
       },
       handleCallback: async (code, redirectUri, codeVerifier) => {
-        const tokenData = await this.exchangeCodeForTokens(code, redirectUri, codeVerifier);
+        const tokenData = await this.exchangeCodeForTokens(code, redirectUri, codeVerifier, signal);
+        signal?.throwIfAborted();
 
         if (tokenData.error) {
           throw new OAuthFlowError(
@@ -53,7 +70,8 @@ class MicrosoftCalendarOAuth {
           );
         }
 
-        const email = await this._resolveEmail(tokenData);
+        const email = await this._resolveEmail(tokenData, signal);
+        signal?.throwIfAborted();
         if (!email) {
           throw new OAuthFlowError(
             "no_email",
@@ -62,12 +80,12 @@ class MicrosoftCalendarOAuth {
         }
 
         this._saveTokens(email, tokenData);
-        return { success: true, email };
+        return { success: true, email, tenantId: tenantIdOf(tokenData) };
       },
     });
   }
 
-  async exchangeCodeForTokens(code, redirectUri, codeVerifier) {
+  async exchangeCodeForTokens(code, redirectUri, codeVerifier, signal) {
     const body = new URLSearchParams({
       code,
       client_id: this.getClientId(),
@@ -76,7 +94,7 @@ class MicrosoftCalendarOAuth {
       code_verifier: codeVerifier,
     }).toString();
 
-    return this._httpsPost(MICROSOFT_TOKEN_URL, body);
+    return this._httpsPost(MICROSOFT_TOKEN_URL, body, signal);
   }
 
   async refreshAccessToken(refreshToken) {
@@ -135,26 +153,23 @@ class MicrosoftCalendarOAuth {
       refresh_token: tokenData.refresh_token,
       expires_at: Date.now() + tokenData.expires_in * 1000,
       scope: tokenData.scope || CALENDAR_SCOPE,
+      tenant_id: tenantIdOf(tokenData),
     });
   }
 
   // Work accounts often omit the id_token "email" claim; fall back to
   // preferred_username, then Graph /me.
-  async _resolveEmail(tokenData) {
-    if (tokenData.id_token) {
-      try {
-        const payload = JSON.parse(
-          Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
-        );
-        if (payload.email) return payload.email;
-        if (payload.preferred_username?.includes("@")) return payload.preferred_username;
-      } catch {}
-    }
+  async _resolveEmail(tokenData, signal) {
+    const payload = decodeIdToken(tokenData.id_token);
+    if (payload?.email) return payload.email;
+    if (payload?.preferred_username?.includes("@")) return payload.preferred_username;
 
     try {
       const response = await net.fetch("https://graph.microsoft.com/v1.0/me", {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
-        signal: AbortSignal.timeout(10000),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
+          : AbortSignal.timeout(10000),
         useSessionCookies: false,
       });
       const me = await response.json();
@@ -164,12 +179,14 @@ class MicrosoftCalendarOAuth {
     }
   }
 
-  async _httpsPost(urlString, body) {
+  async _httpsPost(urlString, body, signal) {
     const response = await net.fetch(urlString, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
-      signal: AbortSignal.timeout(10000),
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
+        : AbortSignal.timeout(10000),
       useSessionCookies: false,
     });
     const text = await response.text();

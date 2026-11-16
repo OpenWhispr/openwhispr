@@ -2,6 +2,7 @@ import CreatorLinkField from "./CreatorLinkField";
 import { Dialog, DialogContent } from "./ui/dialog";
 import { ChevronRight } from "./icons";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "../hooks/useAuth";
 import { useUsage } from "../hooks/useUsage";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -21,7 +22,10 @@ export default function UpgradePrompt({
 }: UpgradePromptProps) {
   const { t } = useTranslation();
   const usage = useUsage();
+  const { isOfflineAccount } = useAuth();
   const { openBillingPortal } = useBillingPortal(usage);
+  // Billing needs a validated session; one shown offline can't open it.
+  const billingDisabled = usage?.checkoutLoading || isOfflineAccount;
   const isPastDue = usage?.isPastDue ?? false;
 
   return (
@@ -57,7 +61,7 @@ export default function UpgradePrompt({
               description={t("upgradePrompt.updatePaymentDescription")}
               onClick={() => void openBillingPortal()}
               highlighted
-              disabled={usage?.checkoutLoading}
+              disabled={billingDisabled}
             />
           ) : (
             <OptionCard
@@ -67,7 +71,7 @@ export default function UpgradePrompt({
                 usage?.openCheckout();
               }}
               highlighted
-              disabled={usage?.checkoutLoading}
+              disabled={billingDisabled}
             />
           )}
           <OptionCard

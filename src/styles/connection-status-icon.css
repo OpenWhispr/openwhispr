@@ -1,0 +1,105 @@
+/* Status mark for a field that checks itself (ConnectionStatusIcon.tsx). A grey arc spins
+   while checking. On success it closes into a ring, turns green, then shrinks and fades
+   while a tick draws in (about 0.6 s). On failure it closes into a red ring with "!", and
+   into an amber one when the provider gave no verdict (unverified).
+   One SVG changes state in place, so each change animates. Under reduced motion the
+   global block in index.css stops the spin and drops the dash and transform
+   transitions, so the final shapes appear at once and only colour and opacity fade.
+   The arc uses the onboarding grey (the app's muted grey elsewhere); the tick and the ring use
+   the app's success, destructive and warning colours, which keep readable contrast in light
+   mode. */
+.connection-status-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: none;
+  overflow: visible;
+  color: var(--onboarding-text-secondary, var(--color-muted-foreground));
+  transition: color 0.2s ease;
+}
+
+.connection-status-icon-spin {
+  transform-origin: 12px 12px;
+  animation: spinner-rotate 0.75s linear infinite;
+}
+
+.connection-status-icon-ring {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 26 100;
+  transform-origin: 12px 12px;
+  transition:
+    stroke-dasharray 0.2s ease,
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.connection-status-icon-tick,
+.connection-status-icon-bang {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  transition: stroke-dashoffset 0.12s ease;
+}
+
+.connection-status-icon-dot {
+  fill: currentColor;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.connection-status-icon[data-state="connected"] .connection-status-icon-spin,
+.connection-status-icon[data-state="unverified"] .connection-status-icon-spin,
+.connection-status-icon[data-state="failed"] .connection-status-icon-spin {
+  animation-play-state: paused;
+}
+
+.connection-status-icon[data-state="connected"] {
+  color: var(--color-success);
+}
+
+.connection-status-icon[data-state="connected"] .connection-status-icon-ring {
+  stroke-dasharray: 100 0;
+  opacity: 0;
+  transform: scale(0.55);
+  transition:
+    stroke-dasharray 0.24s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.22s ease 0.26s,
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.22s;
+}
+
+.connection-status-icon[data-state="connected"] .connection-status-icon-tick {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.32s cubic-bezier(0.65, 0, 0.35, 1) 0.3s;
+}
+
+.connection-status-icon[data-state="failed"] {
+  color: var(--color-destructive);
+}
+
+.connection-status-icon[data-state="unverified"] {
+  color: var(--color-warning);
+}
+
+.connection-status-icon[data-state="unverified"] .connection-status-icon-ring,
+.connection-status-icon[data-state="failed"] .connection-status-icon-ring {
+  stroke-dasharray: 100 0;
+  transition: stroke-dasharray 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.connection-status-icon[data-state="unverified"] .connection-status-icon-bang,
+.connection-status-icon[data-state="failed"] .connection-status-icon-bang {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.2s ease 0.24s;
+}
+
+.connection-status-icon[data-state="unverified"] .connection-status-icon-dot,
+.connection-status-icon[data-state="failed"] .connection-status-icon-dot {
+  opacity: 1;
+  transition: opacity 0.15s ease 0.4s;
+}

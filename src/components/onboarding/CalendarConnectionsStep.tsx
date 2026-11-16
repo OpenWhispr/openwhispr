@@ -1,22 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
-import { CircleCheck, FileSearch, Loader2, MessageCircle, UsersRound } from "../icons";
+import { CircleCheck, FileText, Loader2, MessageCircle, UsersRound } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
+import { connectCalendar, type CalendarProvider } from "../../utils/calendarConnect";
 import googleCalendarIcon from "../../assets/icons/google-calendar.svg";
 import microsoftCalendarIcon from "../../assets/icons/microsoft-calendar.webp";
 import appleCalendarIcon from "../../assets/icons/apple-calendar.webp";
 import meetingDetectedPanel from "../../assets/onboarding-notes-meeting-detected.webp";
 
-type ProviderId = "google" | "microsoft" | "apple";
+const CALENDAR_I18N_KEYS: Record<CalendarProvider, string> = {
+  google: "integrations.googleCalendar",
+  microsoft: "integrations.microsoftCalendar",
+  apple: "integrations.appleCalendar",
+};
 
 export default function CalendarConnectionsStep() {
   const { t } = useTranslation();
   const store = useSettingsStore();
   const systemAudio = useSystemAudioPermission();
-  const [connecting, setConnecting] = useState<ProviderId | null>(null);
+  const [connecting, setConnecting] = useState<CalendarProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [appleDenied, setAppleDenied] = useState(false);
   const isMac = window.electronAPI?.getPlatform?.() === "darwin";
@@ -27,7 +32,7 @@ export default function CalendarConnectionsStep() {
   }, [systemAudio]);
 
   const connect = useCallback(
-    async (provider: ProviderId) => {
+    async (provider: CalendarProvider) => {
       setConnecting(provider);
       setError(null);
       setAppleDenied(false);
@@ -38,47 +43,20 @@ export default function CalendarConnectionsStep() {
         // declined the prompt unable to connect any calendar at all.
         await ensureSystemAudio();
 
-        if (provider === "google") {
-          const result = await window.electronAPI?.gcalStartOAuth?.();
-          if (result?.success && result.email) {
-            const current = useSettingsStore.getState().gcalAccounts;
-            store.setGcalAccounts([
-              ...current.filter((account) => account.email !== result.email),
-              { email: result.email },
-            ]);
-          } else if (!result?.error?.includes("access_denied")) {
-            setError(t("integrations.googleCalendar.connectFailedDescription"));
-          }
-        } else if (provider === "microsoft") {
-          const result = await window.electronAPI?.mcalStartOAuth?.();
-          if (result?.success && result.email) {
-            const current = useSettingsStore.getState().mcalAccounts;
-            store.setMcalAccounts([
-              ...current.filter((account) => account.email !== result.email),
-              { email: result.email },
-            ]);
-          } else if (!result?.error?.includes("access_denied")) {
-            setError(t("integrations.microsoftCalendar.connectFailedDescription"));
-          }
-        } else {
-          const result = await window.electronAPI?.acalConnect?.();
-          if (result?.success) {
-            store.setAppleCalendarConnected(true);
-          } else if (result?.reason === "denied") {
-            // Same distinction IntegrationsView draws: only a real permission
-            // denial sends the user to Privacy settings; helper-missing /
-            // snapshot-failed are not permission problems.
-            setAppleDenied(true);
-            setError(t("integrations.appleCalendar.permissionDeniedDescription"));
-          } else {
-            setError(t("integrations.appleCalendar.connectFailedDescription"));
-          }
+        const result = await connectCalendar(provider);
+        if (result === "denied") {
+          // Same distinction CalendarsPane draws: only a real permission
+          // denial sends the user to Privacy settings.
+          setAppleDenied(true);
+          setError(t("integrations.appleCalendar.permissionDeniedDescription"));
+        } else if (result === "failed") {
+          setError(t(`${CALENDAR_I18N_KEYS[provider]}.connectFailedDescription`));
         }
       } finally {
         setConnecting(null);
       }
     },
-    [ensureSystemAudio, store, t]
+    [ensureSystemAudio, t]
   );
 
   useEffect(() => {
@@ -157,7 +135,7 @@ export default function CalendarConnectionsStep() {
           <ul className="flex flex-col gap-2.5">
             {[
               [MessageCircle, t("onboarding.rehaul.notes.hero.chat")],
-              [FileSearch, t("onboarding.rehaul.notes.hero.transcript")],
+              [FileText, t("onboarding.rehaul.notes.hero.transcript")],
               [UsersRound, t("onboarding.rehaul.notes.hero.speakers")],
             ].map(([Icon, label]) => (
               <li
@@ -165,7 +143,9 @@ export default function CalendarConnectionsStep() {
                 className="flex items-center gap-1.5 text-xs leading-[1.32] text-[var(--onboarding-text-primary)]"
               >
                 <span className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--onboarding-accent)_8%,transparent)] text-[var(--onboarding-accent)]">
-                  <Icon className="size-2.5" strokeWidth={0.833} />
+                  {/* Default stroke: these sit on a 24-unit grid, so Figma's pixel
+                      stroke values would scale down with the glyph and vanish. */}
+                  <Icon className="size-3" />
                 </span>
                 {String(label)}
               </li>
@@ -183,18 +163,16 @@ export default function CalendarConnectionsStep() {
         {providers.map((provider, index) => (
           <div
             key={provider.id}
-            className={`flex items-center gap-[14px] ${
+            className={`flex items-center gap-3 ${
               index === 0
                 ? "pb-2.5"
                 : "border-t border-[var(--onboarding-control-border)] py-2.5 last:pb-0"
             }`}
           >
-            {/* Frame 2147258981 — 44x44 tile, 1px surface stroke, rx 9.5, with a 24px
-                glyph inset. The stroke lives here rather than in each asset so all
-                three providers match; the 48px sources land exactly 2x at 24px.
-                No fill: the frame has stroke only, so the row's surface reads
-                through. Do not re-add bg-[var(--onboarding-surface)]. */}
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-[var(--onboarding-control-border)]">
+            {/* The logos sit straight on the row, with no tile: they carry their own
+                shapes and colour, and a framed box around each only added noise.
+                24px so the 48px sources land at exactly 2x. */}
+            <span className="flex size-7 shrink-0 items-center justify-center">
               <img
                 src={provider.icon}
                 alt=""
@@ -205,7 +183,7 @@ export default function CalendarConnectionsStep() {
                 draggable={false}
                 // contain, not cover: the Microsoft export is 51x48, so it
                 // letterboxes instead of stretching.
-                className="size-5 select-none object-contain"
+                className="size-6 select-none object-contain"
               />
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-[3px] text-start">
@@ -216,13 +194,12 @@ export default function CalendarConnectionsStep() {
                 {provider.description}
               </p>
             </div>
-            {/* Figma "Frame 25", both states: pad 6 14, radius 38, 14/140% medium
-                white. Deliberately a plain button, not the shadcn Button — that
-                default variant layers on shadow-sm, hover:shadow, a
-                border-primary/60 and font-semibold, none of which the spec has. */}
+            {/* Connected is a status, not an action, so it matches the permissions
+                step's "Enabled" pill (accent tint, accent text) rather than a solid
+                fill that read as a second primary button next to Continue. */}
             {provider.connected ? (
-              <span className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[38px] bg-[var(--onboarding-accent)] px-3 py-1.5 text-xs font-medium leading-[1.4] text-[var(--onboarding-accent-foreground)]">
-                <CircleCheck className="size-3.5 shrink-0" strokeWidth={1.167} />
+              <span className="inline-flex h-8 min-w-20 shrink-0 items-center justify-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--onboarding-accent)_12%,transparent)] px-2.5 text-xs font-normal text-[var(--onboarding-accent)]">
+                <CircleCheck className="size-3.5 shrink-0" aria-hidden="true" />
                 {t(`integrations.${provider.id}Calendar.connected`)}
               </span>
             ) : (

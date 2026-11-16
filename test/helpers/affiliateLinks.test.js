@@ -67,6 +67,33 @@ test("a candidate captured under an unresolved credential cannot bind to another
   accountId = "b";
   assert.equal(links.candidateForCurrentAccount(), null);
 });
+test("new links entered after a validated signed-out session survive signing in", () => {
+  state = { token: "expired", generation: 10 };
+  links.setAccountScope(null, 10);
+  links.saveCandidate({ link, generation: 10 });
+  state = { token: "renewed", generation: 11 };
+  accountId = "a";
+  assert.equal(links.candidateForCurrentAccount().link, link);
+  state = { token: "other", generation: 12 };
+  accountId = "b";
+  assert.equal(links.candidateForCurrentAccount(), null);
+});
+test("a new protocol link after session rejection is an unbound guest candidate", () => {
+  state = { token: "expired", generation: 20 };
+  links.setAccountScope(null, 20);
+  links.capture(arrival, "openwhispr");
+  state = { token: "renewed", generation: 21 };
+  accountId = "a";
+  assert.equal(links.candidateForCurrentAccount().link, link);
+});
+test("a signed-out verdict does not release an earlier unresolved candidate", () => {
+  state = { token: "expired", generation: 30 };
+  links.capture(arrival, "openwhispr");
+  links.setAccountScope(null, 30);
+  state = { token: "other", generation: 31 };
+  accountId = "b";
+  assert.equal(links.candidateForCurrentAccount(), null);
+});
 test("partial edits persist, stale writes fail, and a saved creator cannot be replaced", () => {
   state = { token: "a", generation: 1 };
   accountId = "a";
@@ -77,6 +104,40 @@ test("partial edits persist, stale writes fail, and a saved creator cannot be re
   links.saveCandidate({ link: `https://${domain}/other`, generation: 1 });
   links.capture(`openwhispr://affiliate?dub_id=second`, "openwhispr");
   assert.equal(links.candidateForCurrentAccount().clickId, "click");
+});
+test("a queued candidate save cannot overwrite a newer native arrival", () => {
+  links.capture(arrival, "openwhispr");
+  const expectedCandidate = links.candidateForCurrentAccount();
+  links.capture("openwhispr://affiliate?dub_id=new-click", "openwhispr");
+  assert.throws(
+    () =>
+      links.saveCandidate({
+        ...expectedCandidate,
+        clickId: "old-click",
+        generation: 0,
+        expectedCandidate,
+      }),
+    /REFERRAL_CONTEXT_CHANGED/
+  );
+  assert.equal(links.candidateForCurrentAccount().clickId, "new-click");
+  const current = links.candidateForCurrentAccount();
+  links.saveCandidate({ ...current, saved: true, generation: 0, expectedCandidate: current });
+  assert.equal(links.candidateForCurrentAccount().saved, true);
+});
+test("candidate comparison includes the resolved click and saved state", () => {
+  links.capture(arrival, "openwhispr");
+  const expectedCandidate = links.candidateForCurrentAccount();
+  links.saveCandidate({ ...expectedCandidate, clickId: "new-click", generation: 0 });
+  assert.throws(
+    () => links.saveCandidate({ ...expectedCandidate, generation: 0, expectedCandidate }),
+    /REFERRAL_CONTEXT_CHANGED/
+  );
+  const resolved = links.candidateForCurrentAccount();
+  links.saveCandidate({ ...resolved, saved: true, generation: 0 });
+  assert.throws(
+    () => links.saveCandidate({ ...resolved, generation: 0, expectedCandidate: resolved }),
+    /REFERRAL_CONTEXT_CHANGED/
+  );
 });
 test("resolution reads one redirect and never follows its target", async () => {
   state = { token: "a", generation: 1 };

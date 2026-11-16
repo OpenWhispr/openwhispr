@@ -1,5 +1,6 @@
+import { useChatTurnStore } from "../../stores/chatTurnStore";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { SquarePen, Search, Archive as ArchiveIcon } from "../icons";
+import { Plus, Search, Archive as ArchiveIcon } from "../icons";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "../lib/utils";
@@ -7,6 +8,9 @@ import { groupItemsByDate } from "../../utils/dateGrouping";
 import ConversationItem, { type ConversationPreview } from "./ConversationItem";
 import ConversationDateGroup from "./ConversationDateGroup";
 import EmptyConversationList from "./EmptyConversationList";
+import type { ConversationPreview as ConversationRow } from "../../types/electron";
+import { isConversationInScope, resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
 
 type FlatItem =
   { type: "header"; label: string } | { type: "conversation"; data: ConversationPreview };
@@ -17,6 +21,7 @@ interface ConversationListProps {
   onNewChat: () => void;
   onOpenSearch: () => void;
   onArchive: (id: number) => void;
+  onUnarchive: (id: number) => void;
   onDelete: (id: number) => void;
   refreshKey: number;
 }
@@ -63,59 +68,115 @@ export default function ConversationList({
   onNewChat,
   onOpenSearch,
   onArchive,
+  onUnarchive,
   onDelete,
   refreshKey,
 }: ConversationListProps) {
   const { t } = useTranslation();
+  const listRevision = useChatTurnStore((state) => state.listRevision);
+  const accountGeneration = useChatTurnStore((state) => state.accountGeneration);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const defaultWorkspaceId = useWorkspaceStore((state) => state.defaultWorkspaceId);
+  const requestVersion = useRef(0);
   const [conversations, setConversations] = useState<ConversationPreview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const showSkeletonTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
 
+  // A refresh of a shown list stays silent: the rows, an open menu and the scroll position stay.
+  const shownGeneration = useRef<number | null>(null);
   const loadConversations = useCallback(async () => {
+    const version = ++requestVersion.current;
+    const generation = useChatTurnStore.getState().accountGeneration;
+    const current = (): boolean =>
+      version === requestVersion.current &&
+      generation === useChatTurnStore.getState().accountGeneration;
+    setLoadError(false);
     try {
+      const scopeSpaceIds = await resolveAssistantScopeSpaceIds();
       const [active, archived] = await Promise.all([
-        window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false),
-        window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, true),
+        window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false, scopeSpaceIds),
+        window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, true, scopeSpaceIds),
       ]);
-      const toPreview = (c: {
-        id: number;
-        title: string;
-        last_message?: string;
-        created_at: string;
-        updated_at: string;
-        archived_at?: string;
-      }) => ({
+      if (!current()) return;
+      const inScope = (c: ConversationRow) => isConversationInScope(c, scopeSpaceIds);
+      const toPreview = (c: ConversationRow) => ({
         id: c.id,
         title: c.title || "Untitled",
-        preview: c.last_message,
+        preview: c.last_message ?? undefined,
         created_at: c.created_at,
         updated_at: c.updated_at,
         is_archived: !!c.archived_at,
+        is_fork: c.parent_conversation_id != null,
+        // A note that's gone entirely has no title to show; the chat reads as a plain one.
+        sourceNote:
+          c.note_id != null && c.note_title != null
+            ? { title: c.note_title, deleted: c.note_deleted_at != null }
+            : undefined,
       });
-      setConversations([...(active ?? []).map(toPreview), ...(archived ?? []).map(toPreview)]);
+      const shownArchived = (archived ?? []).filter(inScope);
+      setConversations([
+        ...(active ?? []).filter(inScope).map(toPreview),
+        ...shownArchived.map(toPreview),
+      ]);
+      // The Archived toggle hides once nothing is archived; leave that view with it.
+      if (!shownArchived.length) setShowArchived(false);
     } catch {
-      // silently fail
+      if (current()) setLoadError(true);
     } finally {
-      setIsLoading(false);
-      setShowSkeleton(false);
-      if (showSkeletonTimer.current) {
-        clearTimeout(showSkeletonTimer.current);
-        showSkeletonTimer.current = null;
+      if (current()) {
+        shownGeneration.current = generation;
+        setIsLoading(false);
+        setShowSkeleton(false);
+        if (showSkeletonTimer.current) {
+          clearTimeout(showSkeletonTimer.current);
+          showSkeletonTimer.current = null;
+        }
       }
     }
   }, []);
 
   useEffect(() => {
-    setIsLoading(true);
-    showSkeletonTimer.current = setTimeout(() => setShowSkeleton(true), 150);
+    if (shownGeneration.current !== accountGeneration) {
+      setIsLoading(true);
+      showSkeletonTimer.current = setTimeout(() => setShowSkeleton(true), 150);
+    }
     loadConversations();
     return () => {
+      requestVersion.current += 1;
       if (showSkeletonTimer.current) clearTimeout(showSkeletonTimer.current);
     };
-  }, [loadConversations, refreshKey]);
+  }, [
+    loadConversations,
+    refreshKey,
+    listRevision,
+    accountGeneration,
+    activeWorkspaceId,
+    defaultWorkspaceId,
+  ]);
+
+  useEffect(() => {
+    setConversations([]);
+    setShowArchived(false);
+  }, [accountGeneration]);
+
+  useEffect(() => {
+    const refresh = () => void loadConversations();
+    const disposers = [
+      window.electronAPI?.onNoteUpdated?.(refresh),
+      window.electronAPI?.onNoteSynced?.(refresh),
+      window.electronAPI?.onNoteDeleted?.(refresh),
+      window.electronAPI?.onSpacePurged?.(refresh),
+      window.electronAPI?.onFolderDeleted?.(refresh),
+      // The rows main returns follow its account scope, which can be set with no
+      // account generation change: the first scope of a launch that restored none.
+      window.electronAPI?.onActiveAccountScopeChanged?.(refresh),
+    ];
+    return () => disposers.forEach((dispose) => dispose?.());
+  }, [loadConversations]);
 
   const filtered = useMemo(() => {
     return showArchived
@@ -129,6 +190,10 @@ export default function ConversationList({
     count: flatItems.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => (flatItems[index].type === "header" ? 28 : 52),
+    getItemKey: (index) => {
+      const item = flatItems[index];
+      return item.type === "conversation" ? `conversation:${item.data.id}` : `header:${item.label}`;
+    },
     overscan: 5,
   });
 
@@ -187,29 +252,29 @@ export default function ConversationList({
 
   return (
     <div className="flex flex-col h-full" onKeyDown={handleKeyDown} tabIndex={-1}>
-      <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
+      <div className="shrink-0 space-y-1 px-4 pt-2 pb-1">
         <button
           onClick={onNewChat}
           className={cn(
-            "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-            "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5",
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm",
+            "text-foreground hover:bg-foreground/5",
             "transition-colors duration-150",
             "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
           )}
         >
-          <SquarePen size={14} className="shrink-0" />
+          <Plus size={16} className="shrink-0" />
           {t("chat.newChat")}
         </button>
         <button
           onClick={onOpenSearch}
           className={cn(
-            "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-            "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5",
+            "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm",
+            "text-foreground hover:bg-foreground/5",
             "transition-colors duration-150",
             "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
           )}
         >
-          <Search size={14} className="shrink-0" />
+          <Search size={16} className="shrink-0" />
           {t("chat.searchChats")}
         </button>
         {conversations.some((c) => c.is_archived) && (
@@ -230,7 +295,14 @@ export default function ConversationList({
       </div>
 
       {flatItems.length === 0 ? (
-        <EmptyConversationList onNewChat={onNewChat} />
+        <EmptyConversationList
+          state={conversations.length > 0 ? "archived" : loadError ? "error" : "active"}
+          onRetry={() => {
+            setIsLoading(true);
+            setShowSkeleton(true);
+            void loadConversations();
+          }}
+        />
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           <div
@@ -262,6 +334,7 @@ export default function ConversationList({
                       isActive={item.data.id === activeConversationId}
                       onClick={() => onSelectConversation(item.data.id)}
                       onArchive={onArchive}
+                      onUnarchive={onUnarchive}
                       onDelete={onDelete}
                     />
                   )}

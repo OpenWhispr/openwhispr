@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy, FileText, Link2, Loader2, MoreHorizontal, Users } from "../icons";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
+import { ConfirmDialog, Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -12,7 +12,15 @@ import {
 import { cn } from "../lib/utils";
 import ShareVisibilityMenu from "./ShareVisibilityMenu";
 import { notesInputClass } from "./shared";
+import {
+  canManageAccessGrant,
+  currentShareToken,
+  reconcileLocalShareState,
+  resolveShareLink,
+  type LocalShareState,
+} from "./shareNoteRules";
 import { useAuth } from "../../hooks/useAuth";
+import { getValidatedAuthGeneration } from "../../lib/authRequestContext";
 import {
   NoteSharingService,
   type AccessPrincipalSuggestion,
@@ -46,7 +54,6 @@ import type {
   ShareVisibility,
 } from "../../types/electron";
 
-const SHARE_VIEWER_BASE_URL = "https://notes.openwhispr.com";
 const SHARE_VISIBILITY_OPTIONS: Array<{ id: ShareVisibility }> = [
   { id: "private" },
   { id: "invited" },
@@ -77,7 +84,7 @@ export default function ShareNoteDialog({
   exportOptions = [],
   copyLinkOnOpen = false,
 }: ShareNoteDialogProps) {
-  const { user } = useAuth();
+  const { user, isSignedIn } = useAuth();
   const ownerName: string | null = user?.name ?? null;
   const ownerEmail: string = user?.email ?? "";
   const { t } = useTranslation();
@@ -89,17 +96,72 @@ export default function ShareNoteDialog({
   );
   const isTeamNote = space?.kind === "team";
 
-  // A note synced from this dialog: the create acknowledgement doesn't
-  // broadcast, so the note prop can lag behind the local DB until the next
-  // note-updated event.
-  const [syncedFor, setSyncedFor] = useState<{ noteId: number; cloudId: string } | null>(null);
-  const cloudId = note.cloud_id ?? (syncedFor?.noteId === note.id ? syncedFor.cloudId : null);
+  // A sync receipt belongs to the same local identity and sign-in, even if
+  // its note prop has not caught up with the database acknowledgment yet.
+  const [syncedFor, setSyncedFor] = useState<{
+    noteId: number;
+    clientNoteId: string | null;
+    spaceId: number;
+    accountId: string | null;
+    cloudId: string;
+  } | null>(null);
+  const context = useRef({
+    open,
+    noteId: note.id,
+    clientNoteId: note.client_note_id,
+    spaceId: note.space_id,
+    accountId: user?.id,
+    version: 0,
+  });
+  if (
+    context.current.open !== open ||
+    context.current.noteId !== note.id ||
+    context.current.clientNoteId !== note.client_note_id ||
+    context.current.spaceId !== note.space_id ||
+    context.current.accountId !== user?.id
+  ) {
+    context.current = {
+      open,
+      noteId: note.id,
+      clientNoteId: note.client_note_id,
+      spaceId: note.space_id,
+      accountId: user?.id,
+      version: context.current.version + 1,
+    };
+  }
+  const requestVersion = context.current.version;
+  const captureRequest = useCallback((): (() => boolean) => {
+    const generation = getValidatedAuthGeneration();
+    return () =>
+      context.current.open &&
+      context.current.version === requestVersion &&
+      getValidatedAuthGeneration() === generation;
+  }, [requestVersion]);
+  const rememberSynced = useCallback(
+    (cloudId: string): void => {
+      setSyncedFor({
+        noteId: note.id,
+        clientNoteId: note.client_note_id ?? null,
+        spaceId: note.space_id,
+        accountId: user?.id ?? null,
+        cloudId,
+      });
+    },
+    [note.id, note.client_note_id, note.space_id, user?.id]
+  );
+  const syncedHere =
+    syncedFor?.noteId === note.id &&
+    syncedFor.clientNoteId === (note.client_note_id ?? null) &&
+    syncedFor.spaceId === note.space_id &&
+    syncedFor.accountId === (user?.id ?? null);
+  const cloudId = note.cloud_id ?? (syncedHere ? syncedFor.cloudId : null);
   const cached = useShareCacheEntry(cloudId);
 
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  useEffect(() => setSyncing(false), [requestVersion]);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [linkBusy, setLinkBusy] = useState(false);
   const [emailInput, setEmailInput] = useState("");
@@ -112,13 +174,22 @@ export default function ShareNoteDialog({
   const [copied, setCopied] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [busyGrantId, setBusyGrantId] = useState<string | null>(null);
+  const [confirmingReplaceLink, setConfirmingReplaceLink] = useState(false);
+  // Copy on open waits for this: the cached share can be hours old.
+  const [refreshedCloudId, setRefreshedCloudId] = useState<string | null>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const copyTimeoutRef = useRef<number | null>(null);
-  const localIsSharedRef = useRef(Boolean(note.is_shared));
+  const localShareStateRef = useRef<LocalShareState>({
+    isShared: Boolean(note.is_shared),
+    shareToken: note.share_token ?? null,
+  });
 
   useEffect(() => {
-    localIsSharedRef.current = Boolean(note.is_shared);
-  }, [note.is_shared]);
+    localShareStateRef.current = {
+      isShared: Boolean(note.is_shared),
+      shareToken: note.share_token ?? null,
+    };
+  }, [note.is_shared, note.share_token]);
 
   const policyState = usePolicySnapshot();
 
@@ -140,7 +211,7 @@ export default function ShareNoteDialog({
     policyState,
     showDomainOption
   );
-  const canBeginSharing = canManageAccess && !sharingRestrictedByPolicy;
+  const canBeginSharing = isSignedIn && canManageAccess && !sharingRestrictedByPolicy;
   const linkActionAllowedByPolicy = shareActionAllowed(
     currentVisibility === "private" ? "create-link" : "copy-link"
   );
@@ -175,53 +246,95 @@ export default function ShareNoteDialog({
     async (
       resolveFallbackAccess?: (current: NoteAccessState | undefined) => NoteAccessState | undefined
     ): Promise<ShareStateResponse | null> => {
-      if (!cloudId) return null;
+      const stillCurrent = captureRequest();
+      if (!cloudId || !stillCurrent()) return null;
       const refreshed = await NoteSharingService.getShareSettings(cloudId);
+      if (!stillCurrent()) return null;
       updateShareCache(cloudId, (entry) => ({
         share: refreshed.share,
         invitations: refreshed.invitations,
         access: refreshed.access ?? resolveFallbackAccess?.(entry?.access) ?? entry?.access,
-        rawToken: entry?.rawToken ?? null,
+        rawToken: currentShareToken(entry?.rawToken, refreshed.share.token_prefix),
       }));
       return refreshed;
     },
-    [cloudId]
+    [cloudId, captureRequest]
   );
 
-  // The store's note can miss a cloud_id assigned by a background sync (the
-  // create acknowledgement doesn't broadcast); read the DB before offering to
-  // sync.
+  // Background Backup may already have assigned an id without broadcasting it.
+  // This read never uploads a Private note before deliberate sharing consent.
   useEffect(() => {
     if (!open || note.cloud_id) return;
     let cancelled = false;
+    const stillCurrent = captureRequest();
     window.electronAPI
       .getNote?.(note.id)
       ?.then((fresh) => {
-        if (!cancelled && fresh?.cloud_id) {
-          setSyncedFor({ noteId: note.id, cloudId: fresh.cloud_id });
+        if (
+          !cancelled &&
+          stillCurrent() &&
+          fresh?.cloud_id &&
+          fresh.client_note_id === note.client_note_id &&
+          fresh.space_id === note.space_id
+        ) {
+          rememberSynced(fresh.cloud_id);
         }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [open, note.id, note.cloud_id]);
+  }, [
+    open,
+    note.id,
+    note.cloud_id,
+    note.client_note_id,
+    note.space_id,
+    captureRequest,
+    rememberSynced,
+  ]);
+
+  // Team notes already sync independently of Backup and need no upload consent.
+  useEffect(() => {
+    if (!open || !isTeamNote || cloudId) return;
+    let cancelled = false;
+    const stillCurrent = captureRequest();
+    setLoading(true);
+    setLoadError(false);
+    syncService
+      .ensureNoteSynced(note.id)
+      .then((assignedCloudId) => {
+        if (cancelled || !stillCurrent()) return;
+        if (!assignedCloudId) throw new Error("Note sync did not assign a cloud id");
+        rememberSynced(assignedCloudId);
+      })
+      .catch((error) => {
+        if (cancelled || !stillCurrent()) return;
+        console.error("Note sync for sharing failed:", error);
+        setLoadError(true);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isTeamNote, cloudId, note.id, captureRequest, rememberSynced, loadAttempt]);
 
   // Loading also reconciles the local is_shared flag with server truth.
   useEffect(() => {
     if (!open || !cloudId) return;
     let cancelled = false;
+    const stillCurrent = captureRequest();
     setLoading(true);
     setLoadError(false);
     refreshShareCache()
       .then((res) => {
-        if (cancelled || !res) return;
-        const serverShared = res.share.visibility !== "private";
-        if (serverShared !== localIsSharedRef.current) {
-          void persistNoteShareState(
-            note.id,
-            serverShared ? { is_shared: 1 } : { is_shared: 0, share_token: null }
-          ).catch((err) => console.error("Share flag persist failed:", err));
+        if (cancelled || !stillCurrent() || !res) return;
+        setRefreshedCloudId(cloudId);
+        const update = reconcileLocalShareState(localShareStateRef.current, res.share);
+        if (update) {
+          void persistNoteShareState(note.id, update).catch((err) =>
+            console.error("Share flag persist failed:", err)
+          );
         }
       })
       .catch((err) => {
@@ -235,7 +348,7 @@ export default function ShareNoteDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, cloudId, note.id, loadAttempt, refreshShareCache]);
+  }, [open, cloudId, note.id, loadAttempt, refreshShareCache, captureRequest]);
 
   useEffect(() => {
     if (open) {
@@ -244,6 +357,8 @@ export default function ShareNoteDialog({
       setEmailInput("");
       setInputError(null);
       setCopied(false);
+      setConfirmingReplaceLink(false);
+      setRefreshedCloudId(null);
     }
   }, [open]);
 
@@ -287,7 +402,8 @@ export default function ShareNoteDialog({
 
   const applyVisibility = useCallback(
     async (next: ShareVisibility): Promise<ShareMutationResponse | null> => {
-      if (!cloudId || !canManageAccess) return null;
+      const stillCurrent = captureRequest();
+      if (!cloudId || !canManageAccess || !stillCurrent()) return null;
       const previous = getShareCacheEntry(cloudId);
       if (!previous || previous.share.visibility === next) return null;
       const action: SharePolicyAction =
@@ -318,6 +434,7 @@ export default function ShareNoteDialog({
       try {
         if (next === "private") {
           const res = await NoteSharingService.clearShare(cloudId);
+          if (!stillCurrent()) return null;
           updateShareCache(cloudId, (entry) => ({
             share: res.share,
             invitations: entry?.invitations ?? [],
@@ -335,6 +452,7 @@ export default function ShareNoteDialog({
           next,
           next === "domain" && ownerDomain ? [ownerDomain] : []
         );
+        if (!stillCurrent()) return null;
         updateShareCache(cloudId, (entry) => ({
           share: res.share,
           invitations: entry?.invitations ?? [],
@@ -346,6 +464,7 @@ export default function ShareNoteDialog({
         ).catch((err) => console.error("Share flag persist failed:", err));
         return res;
       } catch (err) {
+        if (!stillCurrent()) return null;
         console.error("Failed to update sharing:", err);
         updateShareCache(cloudId, (entry) => ({
           share: previous.share,
@@ -361,15 +480,13 @@ export default function ShareNoteDialog({
         setSavingVisibility(false);
       }
     },
-    [cloudId, canManageAccess, ownerDomain, note.id, t, toast, shareActionAllowed]
+    [cloudId, canManageAccess, ownerDomain, note.id, t, toast, shareActionAllowed, captureRequest]
   );
 
   const copyLink = useCallback(
-    async (token: string) => {
+    async (url: string) => {
       try {
-        await navigator.clipboard.writeText(
-          `${SHARE_VIEWER_BASE_URL}/n/${encodeURIComponent(token)}`
-        );
+        await navigator.clipboard.writeText(url);
         setCopied(true);
         if (copyTimeoutRef.current) window.clearTimeout(copyTimeoutRef.current);
         copyTimeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
@@ -381,47 +498,79 @@ export default function ShareNoteDialog({
     [t, toast]
   );
 
-  // Legacy shares can predate local token persistence; rotating is the only
+  // The raw token is returned only on generate or rotate, so a share made on
+  // another device, or by an invite, leaves none here; rotating is the only
   // way to recover a copyable link (the old one stops working by design).
-  const rotateAndCopy = useCallback(async () => {
-    if (!cloudId || !canManageAccess || !shareActionAllowed("rotate-link")) return;
-    try {
-      const res = await NoteSharingService.rotateToken(cloudId);
-      updateShareCache(cloudId, (entry) => ({
-        share: res.share,
-        invitations: entry?.invitations ?? [],
-        rawToken: res.raw_token,
-      }));
-      void persistNoteShareState(note.id, { is_shared: 1, share_token: res.raw_token }).catch(
-        (err) => console.error("Share flag persist failed:", err)
-      );
-      await copyLink(res.raw_token);
-    } catch (err) {
-      console.error("Share link recovery failed:", err);
-      toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
-    }
-  }, [cloudId, canManageAccess, note.id, copyLink, t, toast, shareActionAllowed]);
+  const rotateAndCopy = useCallback(
+    async (visibility: ShareVisibility) => {
+      const stillCurrent = captureRequest();
+      if (!stillCurrent()) return;
+      if (!cloudId || !canManageAccess || !shareActionAllowed("rotate-link", visibility)) {
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+        return;
+      }
+      try {
+        const res = await NoteSharingService.rotateToken(cloudId);
+        if (!stillCurrent()) return;
+        updateShareCache(cloudId, (entry) => ({
+          share: res.share,
+          invitations: entry?.invitations ?? [],
+          rawToken: res.raw_token,
+        }));
+        void persistNoteShareState(note.id, { is_shared: 1, share_token: res.raw_token }).catch(
+          (err) => console.error("Share flag persist failed:", err)
+        );
+        const link = resolveShareLink(res.share, [res.raw_token]);
+        if (link.kind !== "copy") throw new Error("Rotated share has no copyable link");
+        await copyLink(link.url);
+      } catch (err) {
+        console.error("Share link recovery failed:", err);
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+      }
+    },
+    [cloudId, canManageAccess, note.id, copyLink, t, toast, shareActionAllowed, captureRequest]
+  );
+
+  // Reads the cache rather than render state: a Create link click, or a
+  // refresh that lands while the replace confirm is open, may have changed it.
+  const copyCurrentLink = useCallback(
+    async (replaceConfirmed: boolean) => {
+      const entry = cloudId ? getShareCacheEntry(cloudId) : null;
+      if (!entry || entry.share.visibility === "private") {
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+        return;
+      }
+      const link = resolveShareLink(entry.share, [note.share_token, entry.rawToken]);
+      if (link.kind === "copy") await copyLink(link.url);
+      else if (link.needsConfirmation && !replaceConfirmed) setConfirmingReplaceLink(true);
+      else await rotateAndCopy(entry.share.visibility);
+    },
+    [cloudId, note.share_token, copyLink, rotateAndCopy, t, toast]
+  );
 
   const handleLinkButton = useCallback(async () => {
     if (!cloudId || !share || !canUseLink) return;
     setLinkBusy(true);
     try {
-      if (share.visibility === "private") {
-        // Create link: the click is the sharing consent.
-        const res = await applyVisibility("link");
-        if (!res) return;
-        const token = res.raw_token ?? note.share_token ?? getShareCacheEntry(cloudId)?.rawToken;
-        if (token) await copyLink(token);
-        else await rotateAndCopy();
-        return;
-      }
-      const known = note.share_token ?? getShareCacheEntry(cloudId)?.rawToken;
-      if (known) await copyLink(known);
-      else await rotateAndCopy();
+      // Create link: the click is the sharing consent.
+      if (share.visibility === "private" && !(await applyVisibility("link"))) return;
+      await copyCurrentLink(false);
     } finally {
       setLinkBusy(false);
     }
-  }, [cloudId, share, canUseLink, note.share_token, applyVisibility, copyLink, rotateAndCopy]);
+  }, [cloudId, share, canUseLink, applyVisibility, copyCurrentLink]);
+
+  const handleReplaceLink = useCallback(async () => {
+    // The confirm stays clickable through its exit animation, and a second
+    // rotation can leave this device holding a dead token.
+    if (linkBusy) return;
+    setLinkBusy(true);
+    try {
+      await copyCurrentLink(true);
+    } finally {
+      setLinkBusy(false);
+    }
+  }, [linkBusy, copyCurrentLink]);
 
   const copyIntentHandled = useRef(false);
   useEffect(() => {
@@ -429,11 +578,17 @@ export default function ShareNoteDialog({
       copyIntentHandled.current = false;
       return;
     }
-    if (copyLinkOnOpen && !copyIntentHandled.current && share && !loading && canUseLink) {
+    if (
+      copyLinkOnOpen &&
+      !copyIntentHandled.current &&
+      share &&
+      refreshedCloudId === cloudId &&
+      canUseLink
+    ) {
       copyIntentHandled.current = true;
       void handleLinkButton();
     }
-  }, [open, copyLinkOnOpen, share, loading, canUseLink, handleLinkButton]);
+  }, [open, copyLinkOnOpen, share, refreshedCloudId, cloudId, canUseLink, handleLinkButton]);
 
   const handleInvite = useCallback(async () => {
     if (!cloudId || !canInvite) return;
@@ -655,19 +810,23 @@ export default function ShareNoteDialog({
   );
 
   const handleSyncAndShare = useCallback(async () => {
-    if (!canBeginSharing) return;
+    if (!canBeginSharing || syncing) return;
+    const stillCurrent = captureRequest();
+    if (!stillCurrent()) return;
     setSyncing(true);
     try {
       const assignedCloudId = await syncService.ensureNoteSynced(note.id);
+      if (!stillCurrent()) return;
       if (!assignedCloudId) throw new Error("Note sync did not assign a cloud id");
-      setSyncedFor({ noteId: note.id, cloudId: assignedCloudId });
+      rememberSynced(assignedCloudId);
     } catch (err) {
+      if (!stillCurrent()) return;
       console.error("Note sync for sharing failed:", err);
       toast({ title: t("noteEditor.share.dialog.error.syncFailed"), variant: "destructive" });
     } finally {
       setSyncing(false);
     }
-  }, [canBeginSharing, note.id, t, toast]);
+  }, [canBeginSharing, syncing, note.id, captureRequest, rememberSynced, t, toast]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || (e.metaKey && e.key === "Enter")) {
@@ -681,7 +840,14 @@ export default function ShareNoteDialog({
       <DialogContent className="max-w-md gap-3 p-5">
         <DialogTitle className="text-base">{t("noteEditor.share.dialog.title")}</DialogTitle>
 
-        {!cloudId ? (
+        {!space || (isTeamNote && !cloudId && !loadError) ? (
+          <div className="flex items-center justify-center py-6">
+            <DialogDescription className="sr-only">
+              {t("noteEditor.share.dialog.description")}
+            </DialogDescription>
+            <Loader2 size={14} className="animate-spin text-foreground/45" />
+          </div>
+        ) : !cloudId && !isTeamNote ? (
           <>
             <DialogDescription className="text-xs text-foreground/50">
               {sharingRestrictedByPolicy
@@ -845,17 +1011,13 @@ export default function ShareNoteDialog({
                 <AccessGrantRow
                   key={grant.id}
                   grant={grant}
-                  canChangePermission={Boolean(
-                    access?.can_manage_access &&
-                    (!grant.inherited || access.can_manage_inherited_access) &&
-                    shareActionAllowed("change-grant")
-                  )}
+                  canChangePermission={
+                    canManageAccessGrant(access, grant) && shareActionAllowed("change-grant")
+                  }
                   showPermissionActions={shareActionAllowed("change-grant")}
-                  canRemove={Boolean(
-                    access?.can_manage_access &&
-                    (!grant.inherited || access.can_manage_inherited_access) &&
-                    shareActionAllowed("remove-grant")
-                  )}
+                  canRemove={
+                    canManageAccessGrant(access, grant) && shareActionAllowed("remove-grant")
+                  }
                   busy={busyGrantId === grant.id}
                   onPermissionChange={(permission) => void handleGrantPermission(grant, permission)}
                   onRemove={() => void handleRemoveGrant(grant)}
@@ -1007,6 +1169,17 @@ export default function ShareNoteDialog({
             </div>
           </div>
         )}
+
+        <ConfirmDialog
+          open={confirmingReplaceLink}
+          onOpenChange={setConfirmingReplaceLink}
+          title={t("noteEditor.share.dialog.replaceLink.title")}
+          description={t("noteEditor.share.dialog.replaceLink.description")}
+          confirmText={t("noteEditor.share.dialog.replaceLink.confirm")}
+          cancelText={t("common.cancel")}
+          variant="destructive"
+          onConfirm={() => void handleReplaceLink()}
+        />
       </DialogContent>
     </Dialog>
   );

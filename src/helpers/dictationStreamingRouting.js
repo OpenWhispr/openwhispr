@@ -4,20 +4,197 @@
 // call sites is what broke default dictation in 1.8.2 (#1624: the
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
+import { isOrukeetStreaming } from "./selfHostedTranscription.js";
 import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
+import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
+import bundledRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 
-export const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
+export const ORUKEET_MODEL = "orukeet-v0.1.0";
+// The languages OpenWhispr Cloud's Orukeet serves, which this build pins. Read from the
+// bundle, not the live catalog: a publication retiring the local download must not change
+// the cloud route.
+const ORUKEET_LANGUAGES = new Set(
+  bundledRegistryData.parakeetModels[ORUKEET_MODEL]?.supportedLanguages ?? []
+);
+
+// Existing default retained during the opt-in group-score rollout. Scores are
+// not calibrated probabilities; see docs/orukeet-streaming-language.md for
+// the expanded evaluation and the separate three/six-second behavior.
+const ORUKEET_LANGUAGE_FALLBACK_MIN_CONFIDENCE = 0.9;
+const ORUKEET_LANGUAGE_FALLBACK_MIN_AUDIO_SECONDS = 3;
+
+export function isOrukeetLanguage(code) {
+  if (typeof code !== "string" || !code) return false;
+  return ORUKEET_LANGUAGES.has(code.split("-")[0].toLowerCase());
+}
+
+// Auto mode only: an explicit language outside the 25 never reaches Orukeet
+// (resolveManagedOrukeetRoute), and an explicit supported one is the user's
+// statement of what they speak. Only the final estimate counts; early
+// `language` events are provisional.
+export function shouldRetranscribeOrukeetLanguage({ language, final }) {
+  if (language && language !== "auto") return false;
+  if (!final || typeof final.language !== "string" || isOrukeetLanguage(final.language)) {
+    return false;
+  }
+  return (
+    Number.isFinite(final.languageConfidence) &&
+    final.languageConfidence >= ORUKEET_LANGUAGE_FALLBACK_MIN_CONFIDENCE &&
+    Number.isFinite(final.languageAudioSeconds) &&
+    final.languageAudioSeconds >= ORUKEET_LANGUAGE_FALLBACK_MIN_AUDIO_SECONDS
+  );
+}
+
+// Opt-in, server-controlled rollout. Missing/unknown modes retain the existing
+// rule; shadow records the comparison without changing the user's result.
+const ORUKEET_LANGUAGE_ROUTING_MODES = new Set(["shadow", "supported-0.30", "supported-0.10"]);
+export const ORUKEET_EXPERIMENT_CONFIG_TTL_MS = 30000;
+export function hasOrukeetExperiment(config) {
+  return (
+    ORUKEET_LANGUAGE_ROUTING_MODES.has(config?.orukeetLanguageRouting) ||
+    config?.orukeetPipeline === "gemma12"
+  );
+}
+const validScore = (value) => Number.isFinite(value) && value >= 0 && value <= 1;
+
+export function evaluateOrukeetLanguageRouting({ language, final, mode }) {
+  const legacyFallback = shouldRetranscribeOrukeetLanguage({ language, final });
+  if (!ORUKEET_LANGUAGE_ROUTING_MODES.has(mode)) {
+    return { fallback: legacyFallback, comparison: null };
+  }
+  const auto = !language || language === "auto";
+  const seconds =
+    Number.isFinite(final?.languageAudioSeconds) && final.languageAudioSeconds > 0
+      ? final.languageAudioSeconds
+      : null;
+  const score = validScore(final?.languageSupportedScore) ? final.languageSupportedScore : null;
+  const topLanguage =
+    typeof final?.language === "string" && /^[a-z]{2}$/.test(final.language)
+      ? final.language
+      : null;
+  const topScore = validScore(final?.languageConfidence) ? final.languageConfidence : null;
+  const eligible = auto && final?.success !== false && seconds >= 6 && score !== null;
+  const candidate030 = eligible ? score <= 0.3 : null;
+  const candidate010 = eligible ? score <= 0.1 : null;
+  const candidate = mode === "supported-0.30" ? candidate030 : candidate010;
+  const fallback =
+    mode === "shadow" || candidate === null ? legacyFallback : legacyFallback || candidate;
+
+  // Explicit allowlist: never spread a final result, settings, transcript,
+  // recording, token, account identifier or arbitrary server fields into logs.
+  return {
+    fallback,
+    comparison: {
+      version: 1,
+      mode,
+      auto,
+      eligible,
+      analyzedSeconds: seconds,
+      topLanguage,
+      topScore,
+      supportedScore: score,
+      legacyFallback,
+      top05Fallback:
+        auto &&
+        final?.success !== false &&
+        seconds >= 6 &&
+        topLanguage !== null &&
+        !isOrukeetLanguage(topLanguage) &&
+        topScore !== null &&
+        topScore >= 0.5,
+      candidate030,
+      candidate010,
+      selectedFallback: fallback,
+    },
+  };
+}
+
+// Reported for every Orukeet dictation so the backend's per-user gate sees
+// what was spoken. No `language` key means an older gateway or no final:
+// nothing is reported, since "unknown" would misstate the detector.
+export function orukeetDetectedLanguageFields(final) {
+  if (!final || !("language" in final)) return {};
+  if (typeof final.language !== "string") return { sttDetectedLanguageStatus: "unknown" };
+  return {
+    sttDetectedLanguage: final.language,
+    sttDetectedLanguageConfidence: final.languageConfidence,
+    ...(Number.isFinite(final.languageAudioSeconds)
+      ? { sttDetectedLanguageAudioSeconds: final.languageAudioSeconds }
+      : {}),
+    sttDetectedLanguageStatus: "detected",
+  };
+}
+
+export function isRegistryStreamingModel(providerId, modelId) {
+  return (
+    modelRegistryData.transcriptionProviders
+      .find((provider) => provider.id === providerId)
+      ?.models.some((model) => model.id === modelId && model.streaming) ?? false
+  );
+}
+const MANAGED_REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
+export const REALTIME_MODELS = new Set();
+export function isOpenAiRealtimeSelection(settings) {
+  return settings.cloudTranscriptionMode === "byok"
+    ? (settings.cloudTranscriptionProvider || "openai") === "openai" &&
+        REALTIME_MODELS.has(settings.cloudTranscriptionModel)
+    : MANAGED_REALTIME_MODELS.has(settings.cloudTranscriptionModel);
+}
+function refreshRealtimeModels() {
+  REALTIME_MODELS.clear();
+  for (const model of modelRegistryData.transcriptionProviders.find(
+    (provider) => provider.id === "openai"
+  )?.models || []) {
+    if (model.streaming) REALTIME_MODELS.add(model.id);
+  }
+}
+refreshRealtimeModels();
+subscribeRegistry(refreshRealtimeModels);
 
 // REALTIME_MODELS is the OpenAI-only shortcut (it forces "openai-realtime"), so
 // Gemini's live model routes on its own. Keying on the model id and not the
 // provider is required: the batch model on the same provider is HTTP-only.
 export const GEMINI_LIVE_MODEL = "gemini-3.5-transcribe-live";
 
+export function isGeminiLiveSelection(settings) {
+  return (
+    settings.cloudTranscriptionProvider === "gemini" &&
+    (settings.cloudTranscriptionMode === "byok"
+      ? isRegistryStreamingModel("gemini", settings.cloudTranscriptionModel)
+      : settings.cloudTranscriptionModel === GEMINI_LIVE_MODEL)
+  );
+}
+
 export function defaultStreamingProviderName(context) {
   return context === "notes" ? "deepgram" : "openai-realtime";
 }
 
-export function resolveStreamingProviderName({ settings, context, sttConfig }) {
+// The managed Orukeet route carries no language on the wire and the model
+// covers a fixed list, so an explicitly selected language outside it stays on
+// the batch path, the one route that honors the user's language end to end.
+// "auto" (the default) uses the model's own detection, as every other
+// streaming provider does.
+export function resolveManagedOrukeetRoute({ settings, sttConfig, language }) {
+  if (
+    settings.cloudTranscriptionMode !== "openwhispr" ||
+    sttConfig?.dictation?.mode !== "streaming" ||
+    sttConfig?.streamingProvider !== "orukeet"
+  ) {
+    return null;
+  }
+  if (!language || language === "auto") return "orukeet";
+  return isOrukeetLanguage(language) ? "orukeet" : "language_unsupported";
+}
+
+export function resolveStreamingProviderName({ settings, context, sttConfig, language }) {
+  // The managed rollout must outrank a stale personal model selection. Notes
+  // keep their separate provider contract; this endpoint is for dictation.
+  if (context === "dictation") {
+    const managedOrukeet = resolveManagedOrukeetRoute({ settings, sttConfig, language });
+    if (managedOrukeet === "orukeet") return "orukeet";
+    if (managedOrukeet === "language_unsupported") return defaultStreamingProviderName(context);
+  }
+  if (isOrukeetStreaming(settings)) return "orukeet";
   if (settings.cloudTranscriptionProvider === "tinfoil") {
     return "tinfoil-realtime";
   }
@@ -27,10 +204,7 @@ export function resolveStreamingProviderName({ settings, context, sttConfig }) {
   ) {
     return "corti";
   }
-  if (
-    settings.cloudTranscriptionProvider === "gemini" &&
-    settings.cloudTranscriptionModel === GEMINI_LIVE_MODEL
-  ) {
+  if (isGeminiLiveSelection(settings)) {
     return "gemini";
   }
   // Realtime-only providers have no batch endpoint, so BYOK selection alone
@@ -43,10 +217,19 @@ export function resolveStreamingProviderName({ settings, context, sttConfig }) {
   ) {
     return settings.cloudTranscriptionProvider;
   }
-  if (REALTIME_MODELS.has(settings.cloudTranscriptionModel)) {
+  if (isOpenAiRealtimeSelection(settings)) {
     return "openai-realtime";
   }
   return sttConfig?.streamingProvider || defaultStreamingProviderName(context);
+}
+
+// Tinfoil and Corti stream on the user's own credentials in either mode (see
+// realtimeTokenProviders.js), so only the other providers' managed sessions
+// draw on the OpenWhispr Cloud word allowance.
+const OWN_CREDENTIAL_STREAMING_PROVIDERS = new Set(["tinfoil-realtime", "corti"]);
+
+export function isCloudMeteredStream({ provider, mode }) {
+  return mode === "openwhispr" && !OWN_CREDENTIAL_STREAMING_PROVIDERS.has(provider);
 }
 
 export function buildStreamingSessionOptions({
@@ -55,6 +238,7 @@ export function buildStreamingSessionOptions({
   language,
   keyterms,
   voiceAgentRequested = false,
+  pipelineOptions,
 }) {
   const options = {
     provider: providerName,
@@ -67,9 +251,16 @@ export function buildStreamingSessionOptions({
     tenant: settings.cortiTenant,
   };
   // Tinfoil realtime shows the live preview for normal dictation (#1120), but
-  // assistant voice skips it because the Assistant panel owns that surface.
+  // assistant voice skips it because the agent window owns that surface.
   if (providerName === "tinfoil-realtime" && !voiceAgentRequested) {
     options.preview = true;
+  }
+  if (providerName === "orukeet") {
+    options.model = ORUKEET_MODEL;
+    if (options.mode !== "byok" && pipelineOptions) options.pipelineOptions = pipelineOptions;
+    if (options.mode === "byok") {
+      options.baseUrl = settings.remoteTranscriptionUrl || settings.cloudTranscriptionBaseUrl;
+    }
   }
   return options;
 }

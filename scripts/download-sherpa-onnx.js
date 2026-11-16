@@ -44,10 +44,13 @@ const MACOS_ARM64_ONNXRUNTIME = {
 };
 
 // Binary configurations for each platform
-// Note: macOS uses universal2 builds that work on both arm64 and x64
+// Note: macOS uses universal2 builds that work on both arm64 and x64.
+// The -no-tts archives are built with SHERPA_ONNX_ENABLE_TTS=OFF, so nothing in
+// them links espeak-ng (GPL-3.0), which the TTS builds compile into the C API
+// library. The ASR and diarization executables are the same in both builds.
 const BINARIES = {
   "darwin-arm64": {
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared.tar.bz2`,
+    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-no-tts.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-darwin-arm64",
     onlineBinaryPath: "sherpa-onnx-online-websocket-server",
@@ -57,7 +60,7 @@ const BINARIES = {
     libPattern: "*.dylib",
   },
   "darwin-x64": {
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared.tar.bz2`,
+    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-no-tts.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-darwin-x64",
     onlineBinaryPath: "sherpa-onnx-online-websocket-server",
@@ -68,7 +71,7 @@ const BINARIES = {
   },
   "win32-x64": {
     // Since 1.13.4 the Windows assets carry an MSVC runtime/build-type suffix
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared-MD-Release.tar.bz2`,
+    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared-MD-Release-no-tts.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server.exe",
     outputName: "sherpa-onnx-ws-win32-x64.exe",
     onlineBinaryPath: "sherpa-onnx-online-websocket-server.exe",
@@ -78,7 +81,7 @@ const BINARIES = {
     libPattern: "*.dll",
   },
   "linux-x64": {
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2`,
+    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-no-tts.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-linux-x64",
     onlineBinaryPath: "sherpa-onnx-online-websocket-server",
@@ -92,6 +95,9 @@ const BINARIES = {
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
 const VERSIONED_LIB_PATTERN = /^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/;
+// The executables link only ONNX Runtime; the archive's sherpa-onnx C/C++ API
+// libraries are for embedding sherpa-onnx and nothing in the app loads them.
+const SHIPPED_LIBRARY_PATTERN = /^(lib)?onnxruntime/;
 const REQUIRED_MACOS_ARCHITECTURES = ["x86_64", "arm64"];
 
 // Both macOS targets install the same libonnxruntime file; lipo needs a macOS host.
@@ -302,6 +308,9 @@ function isCompleteInstall(markerPath, binaryPaths, { platformArch, binDir = BIN
 
   const marker = readInstallMarker(markerPath);
   if (marker?.version !== SHERPA_ONNX_VERSION || !Array.isArray(marker?.libraries)) return false;
+  // Same version from a different archive (e.g. the TTS build) must re-extract
+  // so the libraries it left behind get cleaned up.
+  if (marker.archive !== BINARIES[platformArch]?.archiveName) return false;
   if (
     marker.libraries.some(
       (library) => typeof library !== "string" || !fs.existsSync(path.join(binDir, library))
@@ -368,9 +377,23 @@ async function downloadBinary(platformArch, config, isForce = false) {
     // Copy shared libraries
     const copiedLibraries = [];
     if (config.libPattern) {
-      const libraries = findLibrariesInDir(extractDir, config.libPattern, {
+      const archiveLibraries = findLibrariesInDir(extractDir, config.libPattern, {
         ignoreReadErrors: true,
       });
+      const libraries = archiveLibraries.filter((libPath) =>
+        SHIPPED_LIBRARY_PATTERN.test(path.basename(libPath))
+      );
+
+      // Installs before v1.7.6 wrote no marker yet copied every library, so
+      // ownership alone would leave their C API library (espeak-ng) behind.
+      const unshippedNames = new Set(archiveLibraries.map((libPath) => path.basename(libPath)));
+      for (const libPath of libraries) unshippedNames.delete(path.basename(libPath));
+      for (const libName of unshippedNames) {
+        const stalePath = path.join(BIN_DIR, libName);
+        if (!fs.existsSync(stalePath)) continue;
+        fs.rmSync(stalePath, { force: true });
+        console.log(`  ${platformArch}: Removed unshipped ${libName}`);
+      }
 
       // Separate versioned and unversioned libraries to create symlinks where possible
       // e.g. libonnxruntime.dylib -> libonnxruntime.1.23.2.dylib (saves ~71MB)
@@ -438,6 +461,7 @@ async function downloadBinary(platformArch, config, isForce = false) {
       installMarkerPath,
       JSON.stringify({
         version: SHERPA_ONNX_VERSION,
+        archive: config.archiveName,
         libraries: shippedLibraries,
         ...(isWindowsTarget ? { onnxRuntime: WINDOWS_ONNXRUNTIME_PRIVATE_NAME } : {}),
         ...(isMacosHostTarget(platformArch) ? { onnxRuntime: MACOS_ARM64_ONNXRUNTIME.marker } : {}),

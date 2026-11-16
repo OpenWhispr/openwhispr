@@ -79,6 +79,7 @@ require.cache[require.resolve("../../src/helpers/downloadUtils.js")] = {
 };
 
 const GpuBinaryManager = require("../../src/helpers/gpuBinaryManager.js");
+const debugLogger = require("../../src/helpers/debugLogger.js");
 const WhisperCudaManager = require("../../src/helpers/whisperCudaManager.js");
 const LlamaVulkanManager = require("../../src/helpers/llamaVulkanManager.js");
 const WhisperVulkanManager = require("../../src/helpers/whisperVulkanManager.js");
@@ -156,21 +157,27 @@ test("CUDA: resolves its exact asset from the pinned tag and installs binary + c
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
   state.extractedFiles = {
     "whisper-server-linux-x64-cuda": "binary",
-    "libggml-cuda.so": "lib",
+    "libcudart.so.12": "cudart",
+    "libcublas.so.12": "cublas",
+    "libcublasLt.so.12": "cublasLt",
     "README.md": "doc",
   };
 
   const manager = cudaManagerWithoutDigestPin();
   await manager.download();
 
-  assert.match(state.fetchedUrls[0], /OpenWhispr\/whisper\.cpp\/releases\/tags\/0\.0\.10$/);
+  assert.match(state.fetchedUrls[0], /OpenWhispr\/whisper\.cpp\/releases\/tags\/0\.0\.11$/);
   assert.equal(state.downloads[0].url, "https://dl/whisper-server-linux-x64-cuda.zip");
 
   const binDir = path.join(userDataDir, "bin", "whisper-cuda");
   const binaryPath = path.join(binDir, "whisper-server-linux-x64-cuda");
   assert.ok(fs.existsSync(binaryPath));
-  assert.ok(fs.statSync(binaryPath).mode & 0o100, "binary is executable");
-  assert.ok(fs.existsSync(path.join(binDir, "libggml-cuda.so")), "companion lib copied");
+  if (process.env.OS !== "Windows_NT") {
+    assert.ok(fs.statSync(binaryPath).mode & 0o100, "binary is executable");
+  }
+  assert.ok(fs.existsSync(path.join(binDir, "libcudart.so.12")));
+  assert.ok(fs.existsSync(path.join(binDir, "libcublas.so.12")));
+  assert.ok(fs.existsSync(path.join(binDir, "libcublasLt.so.12")));
   assert.ok(!fs.existsSync(path.join(binDir, "README.md")), "unrelated files not copied");
   assert.equal(manager.getCudaBinaryPath(), binaryPath);
   assert.equal(manager.isDownloaded(), true);
@@ -313,7 +320,12 @@ test("guard: a second download while one is in flight throws", async () => {
     await gate;
     fs.writeFileSync(dest, state.archiveContent);
   };
-  state.extractedFiles = { "whisper-server-linux-x64-cuda": "binary" };
+  state.extractedFiles = {
+    "whisper-server-linux-x64-cuda": "binary",
+    "libcudart.so.12": "cudart",
+    "libcublas.so.12": "cublas",
+    "libcublasLt.so.12": "cublasLt",
+  };
 
   const manager = cudaManagerWithoutDigestPin();
   const first = manager.download();
@@ -336,6 +348,9 @@ test("cleanup on failure: archive and extract dir removed, next download can sta
 
   state.extractImpl = async (_archivePath, destDir) => {
     fs.writeFileSync(path.join(destDir, "whisper-server-linux-x64-cuda"), "binary");
+    fs.writeFileSync(path.join(destDir, "libcudart.so.12"), "cudart");
+    fs.writeFileSync(path.join(destDir, "libcublas.so.12"), "cublas");
+    fs.writeFileSync(path.join(destDir, "libcublasLt.so.12"), "cublasLt");
   };
   await manager.download();
   assert.equal(manager.isDownloaded(), true);
@@ -378,25 +393,33 @@ test("delete: removes only the pack's own directory; other packs untouched", asy
 
 test("install isolation: packs sharing lib names cannot clobber each other", async () => {
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
-  state.extractedFiles = { "whisper-server-linux-x64-cuda": "bin", "libggml-base.so": "cuda-ggml" };
+  state.extractedFiles = {
+    "whisper-server-linux-x64-cuda": "bin",
+    "libcudart.so.12": "cuda-cudart",
+    "libcublas.so.12": "cublas",
+    "libcublasLt.so.12": "cublasLt",
+  };
   await cudaManagerWithoutDigestPin().download();
 
   state.release = makeRelease("llama-b9763-bin-ubuntu-vulkan-x64.tar.gz");
-  state.extractedFiles = { "llama-server": "bin", "libggml-base.so": "llama-ggml" };
+  state.extractedFiles = { "llama-server": "bin", "libcudart.so.12": "llama-cudart" };
   await new LlamaVulkanManager().download();
 
   const read = (dir) =>
-    fs.readFileSync(path.join(userDataDir, "bin", dir, "libggml-base.so"), "utf8");
-  assert.equal(read("whisper-cuda"), "cuda-ggml");
-  assert.equal(read("llama-vulkan"), "llama-ggml");
+    fs.readFileSync(path.join(userDataDir, "bin", dir, "libcudart.so.12"), "utf8");
+  assert.equal(read("whisper-cuda"), "cuda-cudart");
+  assert.equal(read("llama-vulkan"), "llama-cudart");
 });
 
-test("atomic install: a failure after extraction leaves no half-installed pack", async () => {
+test("atomic install: an incomplete CUDA runtime leaves no half-installed pack", async () => {
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
-  state.extractedFiles = { "not-the-binary": "x" };
+  state.extractedFiles = { "whisper-server-linux-x64-cuda": "binary" };
 
   const manager = cudaManagerWithoutDigestPin();
-  await assert.rejects(() => manager.download(), { message: /not found in archive/ });
+  await assert.rejects(() => manager.download(), {
+    message:
+      /missing required libraries: libcudart\.so\.12, libcublas\.so\.12, libcublasLt\.so\.12/,
+  });
 
   assert.equal(manager.isDownloaded(), false);
   assert.ok(!fs.existsSync(path.join(userDataDir, "bin", "whisper-cuda")));
@@ -424,11 +447,7 @@ test("required libraries: a cached pack is incomplete when a required library is
 });
 
 test("required libraries: an incomplete archive cannot replace a working pack", async () => {
-  const packDir = seedPack("test-pack", [
-    "server-out",
-    "msvcp140.dll",
-    "vcruntime140.dll",
-  ]);
+  const packDir = seedPack("test-pack", ["server-out", "msvcp140.dll", "vcruntime140.dll"]);
   fs.writeFileSync(path.join(packDir, "server-out"), "working-binary");
 
   state.release = makeRelease("bin.zip");
@@ -468,6 +487,52 @@ test("Windows whisper GPU packs require every app-local MSVC runtime library", (
   }
 });
 
+test("needs update: a binary without the libraries this version requires is outdated, not missing", () => {
+  const manager = requiredLibrariesManager();
+  assert.equal(manager.needsUpdate(), false, "nothing on disk is a pack never downloaded");
+
+  const packDir = seedPack("test-pack", ["server-out"]);
+  assert.equal(manager.needsUpdate(), true);
+  assert.equal(manager.isDownloaded(), false);
+
+  fs.writeFileSync(path.join(packDir, "msvcp140.dll"), "runtime");
+  fs.writeFileSync(path.join(packDir, "vcruntime140.dll"), "runtime");
+  assert.equal(manager.needsUpdate(), false);
+  assert.equal(manager.isDownloaded(), true);
+});
+
+test("needs update: a 1.9.x Windows CUDA pack (whisper.cpp 0.0.9, no MSVC runtime) is outdated (#2424)", () => {
+  const manager = useWindowsAsset(new WhisperCudaManager());
+  seedPack(manager.config.dirName, [
+    "whisper-server-win32-x64-cuda.exe",
+    "cublas64_12.dll",
+    "cublasLt64_12.dll",
+    "cudart64_12.dll",
+  ]);
+  assert.equal(manager.isDownloaded(), false);
+  assert.equal(manager.needsUpdate(), true);
+});
+
+test("needs update: a whisper.cpp 0.0.10 Linux CUDA pack, which relied on a system CUDA 12, is outdated (#2168)", () => {
+  const manager = new WhisperCudaManager();
+  const packDir = seedPack(manager.config.dirName, ["whisper-server-linux-x64-cuda"]);
+  assert.equal(manager.isDownloaded(), false);
+  assert.equal(manager.needsUpdate(), true);
+
+  for (const library of ["libcudart.so.12", "libcublas.so.12", "libcublasLt.so.12"]) {
+    fs.writeFileSync(path.join(packDir, library), "runtime");
+  }
+  assert.equal(manager.isDownloaded(), true);
+  assert.equal(manager.needsUpdate(), false);
+});
+
+test("needs update: a pack with no required libraries is never outdated", () => {
+  seedPack("whisper-vulkan", ["whisper-server-linux-x64-vulkan"]);
+  const manager = new WhisperVulkanManager();
+  assert.equal(manager.isDownloaded(), true);
+  assert.equal(manager.needsUpdate(), false);
+});
+
 test("Windows whisper Vulkan installs the MSVC runtime libraries from its release archive", async () => {
   const manager = useWindowsAsset(new WhisperVulkanManager());
   manager.config.expectedDigests = undefined;
@@ -494,12 +559,19 @@ test("re-download replaces the previous install, including stale libs", async ()
   seedPack("whisper-cuda", ["whisper-server-linux-x64-cuda", "libstale.so"]);
 
   state.release = makeRelease("whisper-server-linux-x64-cuda.zip");
-  state.extractedFiles = { "whisper-server-linux-x64-cuda": "new", "libggml-cuda.so": "lib" };
+  state.extractedFiles = {
+    "whisper-server-linux-x64-cuda": "new",
+    "libcudart.so.12": "cudart",
+    "libcublas.so.12": "cublas",
+    "libcublasLt.so.12": "cublasLt",
+  };
   await cudaManagerWithoutDigestPin().download();
 
   const packDir = path.join(userDataDir, "bin", "whisper-cuda");
   assert.deepEqual(fs.readdirSync(packDir).sort(), [
-    "libggml-cuda.so",
+    "libcublas.so.12",
+    "libcublasLt.so.12",
+    "libcudart.so.12",
     "whisper-server-linux-x64-cuda",
   ]);
 });
@@ -571,7 +643,12 @@ test("orphan detection: enabled flag with no pack on disk is reported for the no
     assert.deepEqual(detectOrphanedGpuPacks(packs), ["CUDA whisper"]);
 
     // Pack present on disk — enabled but not orphaned
-    seedPack("whisper-cuda", ["whisper-server-linux-x64-cuda"]);
+    seedPack("whisper-cuda", [
+      "whisper-server-linux-x64-cuda",
+      "libcudart.so.12",
+      "libcublas.so.12",
+      "libcublasLt.so.12",
+    ]);
     assert.deepEqual(detectOrphanedGpuPacks(packs), []);
 
     process.env.WHISPER_VULKAN_ENABLED = "true";
@@ -603,6 +680,58 @@ test("orphan detection: enabled flag with no pack on disk is reported for the no
   }
 });
 
+test("outdated detection: an outdated pack is reported apart from orphans, unless opted out", () => {
+  const { detectOrphanedGpuPacks, detectOutdatedGpuPacks } = GpuBinaryManager;
+  const cuda = useWindowsAsset(new WhisperCudaManager());
+  const packs = [{ manager: cuda, enabledEnvVar: "WHISPER_CUDA_ENABLED" }];
+  seedPack(cuda.config.dirName, ["whisper-server-win32-x64-cuda.exe"]);
+
+  try {
+    process.env.WHISPER_CUDA_ENABLED = "true";
+    assert.deepEqual(detectOutdatedGpuPacks(packs), ["CUDA whisper"]);
+    assert.deepEqual(detectOrphanedGpuPacks(packs), [], "on disk, so not an orphan");
+
+    // A pack on disk is wanted even when the .env flag was lost (#1340)
+    delete process.env.WHISPER_CUDA_ENABLED;
+    assert.deepEqual(detectOutdatedGpuPacks(packs), ["CUDA whisper"]);
+
+    process.env.WHISPER_CUDA_ENABLED = "FALSE";
+    assert.deepEqual(detectOutdatedGpuPacks(packs), []);
+  } finally {
+    delete process.env.WHISPER_CUDA_ENABLED;
+  }
+});
+
+test("outdated detection: an outdated pack beside a working one for the same engine is not reported", () => {
+  const { detectOutdatedGpuPacks } = GpuBinaryManager;
+  const cuda = useWindowsAsset(new WhisperCudaManager());
+  const vulkan = useWindowsAsset(new WhisperVulkanManager());
+  const ungrouped = [
+    { manager: cuda, enabledEnvVar: "WHISPER_CUDA_ENABLED" },
+    { manager: vulkan, enabledEnvVar: "WHISPER_VULKAN_ENABLED" },
+  ];
+  const grouped = ungrouped.map((pack) => ({ ...pack, group: "whisper" }));
+
+  // CUDA re-downloaded, the Vulkan pack from 1.9.x left behind
+  seedPack(cuda.config.dirName, [
+    "whisper-server-win32-x64-cuda.exe",
+    ...WINDOWS_MSVC_RUNTIME_LIBRARIES,
+  ]);
+  seedPack(vulkan.config.dirName, ["whisper-server-win32-x64-vulkan.exe"]);
+  assert.deepEqual(detectOutdatedGpuPacks(grouped), []);
+  assert.deepEqual(detectOutdatedGpuPacks(ungrouped), ["Vulkan whisper"]);
+
+  // Both outdated: both are reported
+  fs.rmSync(path.join(cuda.binDir, "vcruntime140.dll"));
+  assert.deepEqual(detectOutdatedGpuPacks(grouped), ["CUDA whisper", "Vulkan whisper"]);
+
+  // And the mirror: Vulkan re-downloaded, CUDA left behind
+  for (const library of WINDOWS_MSVC_RUNTIME_LIBRARIES) {
+    fs.writeFileSync(path.join(vulkan.binDir, library), "x");
+  }
+  assert.deepEqual(detectOutdatedGpuPacks(grouped), []);
+});
+
 test("getStatus reflects supported/downloaded/downloading", async () => {
   const manager = new WhisperVulkanManager();
   assert.deepEqual(manager.getStatus(), {
@@ -613,4 +742,28 @@ test("getStatus reflects supported/downloaded/downloading", async () => {
 
   seedPack("whisper-vulkan", ["whisper-server-linux-x64-vulkan"]);
   assert.equal(manager.getStatus().downloaded, true);
+});
+
+test("getBinaryPath: logs warning with missing required libraries when binary exists but is incomplete", () => {
+  const cuda = useWindowsAsset(new WhisperCudaManager());
+  seedPack(cuda.config.dirName, ["whisper-server-win32-x64-cuda.exe"]);
+
+  const originalWarn = debugLogger.warn;
+  const warned = [];
+  debugLogger.warn = (...args) => warned.push(args);
+
+  try {
+    const result = cuda.getBinaryPath();
+    assert.equal(result, null);
+    assert.equal(warned.length, 1);
+    assert.equal(warned[0][0], "GPU pack binary present but missing required runtime libraries");
+    assert.equal(warned[0][1].pack, "CUDA whisper");
+    assert.deepEqual(warned[0][1].missingLibraries, WINDOWS_MSVC_RUNTIME_LIBRARIES);
+
+    // Repeated call does not spam duplicate warning
+    cuda.getBinaryPath();
+    assert.equal(warned.length, 1);
+  } finally {
+    debugLogger.warn = originalWarn;
+  }
 });

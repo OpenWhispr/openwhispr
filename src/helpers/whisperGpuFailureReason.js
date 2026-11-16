@@ -1,0 +1,129 @@
+const os = require("os");
+const { getSystemErrorName } = require("util");
+
+// When a GPU whisper-server falls back to CPU, this picks the stderr line that
+// explains why, for the settings card and bug reports (#1736).
+
+const MAX_REASON_LENGTH = 240;
+// The high bit marks an NTSTATUS warning or error; POSIX exit codes stop at 255
+const WINDOWS_STATUS_MIN = 0x80000000;
+
+// Where the reason is saved: one .env key per backend beside WHISPER_GPU_FAILED,
+// set and cleared with it.
+const WHISPER_GPU_FAILURE_REASON_KEYS = Object.freeze({
+  cuda: "WHISPER_GPU_FAILED_REASON_CUDA",
+  vulkan: "WHISPER_GPU_FAILED_REASON_VULKAN",
+});
+
+// Most specific first; the capture group is the reason. Formats are from the
+// pinned OpenWhispr/whisper.cpp tag.
+const CAUSE_PATTERNS = [
+  // src/whisper.cpp (whisper_init_with_params_no_state) catches the backend's
+  // C++ exception around model load, e.g. ggml-vulkan's createDevice throwing
+  // vk::DeviceLostError: "...: exception during model load: <what()>"
+  /exception during model load: (.+)/,
+  // ggml-vulkan's VK_CHECK and fence wait print this and exit(1), e.g.
+  // "ggml_vulkan: error ErrorDeviceLost at .../ggml-vulkan.cpp:2209"
+  /(ggml_vulkan: .*\berror Error\w+.*)/,
+  // vulkan-hpp's exception text wherever else it surfaces, e.g. the "what():"
+  // line of an exception nothing caught. \berror\b cannot see "ErrorDeviceLost".
+  /(vk::\S+: Error\w+)/,
+  // ggml-cuda.cu ggml_cuda_error: "CUDA error: <cudaGetErrorString>"
+  /(CUDA error: .+)/,
+];
+// Any other error line; the first one is the closest to the cause.
+const ERROR_LINE = /\b(?:error|failed|failure|exception|abort(?:ed)?)\b/i;
+// ggml_abort and the assert macros print "<source file>:<line>: <message>" and
+// abort, e.g. "…/ggml-vulkan.cpp:8412: Requested preallocation size is too large".
+// Often no error word, and after an error line it is only the consequence.
+const ABORT_LINE = /^(?:WHISPER_ASSERT: )?\S+\.(?:c|cpp|cu|cuh|h):\d+: /;
+// What whisper.cpp and whisper-server print after any failed load. They say
+// that loading failed, never why, so they are the answer of last resort.
+const LOAD_FAILURE_ECHO = /failed to load model|failed to initialize whisper context/;
+// Warnings the backends log and then carry on from (a CPU-side buffer instead
+// of pinned memory, a copy instead of an imported host pointer, the Vulkan
+// loader skipping one of several drivers). They carry error text, so they would
+// otherwise outrank the line that killed it. The non-pinned abort is fatal.
+const RECOVERED_WARNING =
+  /(?<!non-)pinned memory|^WARNING:|\[Loader Message\]|Failed getMemoryHostPointerPropertiesEXT|Failed ggml_vk_create_buffer/;
+
+function findCauseLine(lines) {
+  for (const pattern of CAUSE_PATTERNS) {
+    for (const line of lines) {
+      const match = line.match(pattern);
+      if (match) return match[1];
+    }
+  }
+  return (
+    lines.find((line) => ERROR_LINE.test(line) && !LOAD_FAILURE_ECHO.test(line)) ||
+    lines.find((line) => ABORT_LINE.test(line)) ||
+    lines.find((line) => LOAD_FAILURE_ECHO.test(line)) ||
+    null
+  );
+}
+
+function describeExitCode(exitCode) {
+  // Node closes a process it could not spawn (a missing or non-executable
+  // binary) with the negative error number as its exit code
+  if (exitCode < 0) return `could not launch (${getSystemErrorName(exitCode)})`;
+  // A Windows crash exits with an NTSTATUS code, e.g. 0xC0000005 for an access
+  // violation, which people look up in hex, never as 3221225477
+  if (exitCode >= WINDOWS_STATUS_MIN) return `exit code 0x${exitCode.toString(16).toUpperCase()}`;
+  return `exit code ${exitCode}`;
+}
+
+// One line that is safe to show and to save. EnvironmentManager writes .env
+// values raw (KEY=value), and dotenv reads "#" as a comment and a leading
+// quote as the start of a quoted value that can run over later keys. A trailing
+// quote can close one an earlier line left open (a backtick hotkey).
+function sanitizeReason(text, homeDir) {
+  let reason = text;
+  if (homeDir) {
+    // People screenshot this into public issues, and a home folder is often
+    // named after its owner.
+    for (const home of new Set([homeDir, homeDir.replace(/\\/g, "/")])) {
+      reason = reason.replace(new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "~");
+    }
+  }
+  reason = reason
+    .replace(/[\p{Cc}\u2028\u2029]/gu, " ")
+    .replace(/#/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^['"`\s]+|['"`\s]+$/g, "");
+  if (reason.length > MAX_REASON_LENGTH) {
+    reason = `${reason.slice(0, MAX_REASON_LENGTH - 1).trimEnd()}…`;
+  }
+  return reason || null;
+}
+
+/**
+ * The key line explaining why a GPU whisper-server failed, or how the process
+ * ended when its output names no cause. One line of at most MAX_REASON_LENGTH
+ * characters, or null when there is nothing to report.
+ */
+function extractWhisperGpuFailureReason({
+  stderr = "",
+  exitCode = null,
+  signal = null,
+  timeoutMs = null,
+  homeDir = os.homedir(),
+}) {
+  const lines = stderr
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !RECOVERED_WARNING.test(line));
+  const cause = findCauseLine(lines);
+  const reason = cause ? sanitizeReason(cause, homeDir) : null;
+  if (reason) return reason;
+  // No line names the cause (a driver crash, a missing DLL, a hang): say how it ended
+  if (signal) return `terminated by ${signal}`;
+  if (exitCode !== null && exitCode !== undefined) return describeExitCode(exitCode);
+  if (timeoutMs) return `startup timed out after ${Math.round(timeoutMs / 1000)} s`;
+  return null;
+}
+
+module.exports = {
+  WHISPER_GPU_FAILURE_REASON_KEYS,
+  extractWhisperGpuFailureReason,
+};

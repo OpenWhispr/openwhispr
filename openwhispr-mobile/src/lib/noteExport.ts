@@ -1,22 +1,26 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import type { Note } from '@/data';
+import type { NoteBodyView } from '@/lib/notes/noteBodyTabs';
 
 export interface NoteShareContentInput {
-  viewMode: 'original' | 'enhanced';
+  viewMode: NoteBodyView;
   enhancedContent: string | null;
-  usesSegmentTranscript: boolean;
   transcript: string;
   content: string;
 }
 
-// What the Share menu exports: the enhanced notes when that's the active view,
-// otherwise what the original view shows — the formatted transcript for
-// meeting notes, the note body for plain notes. Never the LLM prompt input.
+// What the Share menu exports: exactly what the active tab shows — the generated notes, the
+// formatted transcript (empty while it is still being made), or the note body. Never the LLM
+// prompt input.
 export function buildNoteShareContent(input: NoteShareContentInput): string {
-  if (input.viewMode === 'enhanced' && input.enhancedContent) {
-    return input.enhancedContent;
+  switch (input.viewMode) {
+    case 'enhanced':
+      return input.enhancedContent ?? '';
+    case 'transcript':
+      return input.transcript;
+    case 'notes':
+      return input.content;
   }
-  return input.usesSegmentTranscript ? input.transcript : input.content;
 }
 
 function sanitizeFilename(title: string): string {

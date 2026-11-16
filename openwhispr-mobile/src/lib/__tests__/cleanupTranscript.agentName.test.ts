@@ -1,9 +1,7 @@
 /**
- * Tests for agentName wiring in cleanupTranscript:
- * - agentName passed only for dictation/keyboard contexts when agent is applicable
- * - never passed for notes/meeting contexts or when context is omitted
- * - timeout bumped to 30s only when detectAgentMention hits
- * - regression: feature disabled → behavior byte-identical to disabled case
+ * Saying the assistant's name while dictating gives no command: the voice assistant is the
+ * keyboard's compose wand. Dictation cleanup is told the name only so its prompt keeps it as
+ * dictated words, and an addressed dictation is cleaned like any other.
  */
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { cleanupTranscript, CLEANUP_TIMEOUT_MS } from '@/lib/cleanupTranscript';
@@ -55,151 +53,55 @@ beforeEach(() => {
   mockActiveMode = 'cloud';
 });
 
-// ── agentName gating ─────────────────────────────────────────────────────────
+describe('cleanupTranscript agentName', () => {
+  it.each(['keyboard', 'recording'] as const)('tells %s cleanup the name', async (context) => {
+    mockConfig = { cleanupEnabled: true, defaultMode: 'cloud', dictationAgentName: 'Aria' };
 
-describe('cleanupTranscript agentName — dictation/keyboard context (applicable)', () => {
-  it('passes agentName for a keyboard context when agent is enabled (cloud)', async () => {
-    mockConfig = {
-      cleanupEnabled: true,
-      defaultMode: 'cloud',
-      dictationAgentEnabled: true,
-      dictationAgentName: 'Aria',
-    };
+    await cleanupTranscript('hello there', { context });
 
-    await cleanupTranscript('hey Aria do something', { context: 'keyboard' });
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.agentName).toBe('Aria');
+    expect((mockProcessText.mock.calls[0][0] as Record<string, unknown>).agentName).toBe('Aria');
   });
 
-  it('passes the default agent name when dictationAgentName is unset', async () => {
-    mockConfig = {
-      cleanupEnabled: true,
-      defaultMode: 'cloud',
-      dictationAgentEnabled: true,
-    };
+  it('uses the default name when none is set', async () => {
+    await cleanupTranscript('hello there', { context: 'keyboard' });
 
-    await cleanupTranscript('hey OpenWhispr draft a reply', { context: 'recording' });
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.agentName).toBe('OpenWhispr');
+    expect((mockProcessText.mock.calls[0][0] as Record<string, unknown>).agentName).toBe(
+      'OpenWhispr',
+    );
   });
 
-  it('passes agentName for a recording context when agent is enabled (cloud)', async () => {
-    mockConfig = {
-      cleanupEnabled: true,
-      defaultMode: 'cloud',
-      dictationAgentEnabled: true,
-    };
+  it.each([['notes'], ['meeting'], [undefined]] as const)(
+    'does not tell %s cleanup the name',
+    async (context) => {
+      await cleanupTranscript('hello there', { context });
 
-    await cleanupTranscript('hey OpenWhispr draft a reply', { context: 'recording' });
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.agentName).toBe('OpenWhispr');
-  });
+      expect(
+        (mockProcessText.mock.calls[0][0] as Record<string, unknown>).agentName,
+      ).toBeUndefined();
+    },
+  );
 });
 
-describe('cleanupTranscript agentName — never for notes/meetings', () => {
-  beforeEach(() => {
-    mockConfig = {
-      cleanupEnabled: true,
-      defaultMode: 'cloud',
-      dictationAgentEnabled: true,
-    };
-  });
+describe('a dictation that addresses the assistant by name', () => {
+  it.each([
+    ['in Cloud mode', 'cloud', {}],
+    // On-Device cleanup of an addressed dictation is covered in cleanupTranscript.onDevice.test.ts.
+    ['in Local Mode on a Cloud fallback', 'private', {}],
+    ['with the voice assistant switched off', 'cloud', { dictationAgentEnabled: false }],
+  ])('is cleaned, not run as a command, %s', async (_label, mode, settings) => {
+    mockActiveMode = mode;
+    mockConfig = { cleanupEnabled: true, defaultMode: mode, ...settings };
 
-  it('does not pass agentName for notes context even when agent is enabled', async () => {
-    await cleanupTranscript('some note text', { context: 'notes' });
+    await cleanupTranscript('hey OpenWhispr write an email to Sam', {
+      context: 'keyboard',
+      cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+    });
 
+    expect(mockProcessText).toHaveBeenCalledTimes(1);
     const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.agentName).toBeUndefined();
-  });
-
-  it('does not pass agentName for meeting context even when agent is enabled', async () => {
-    await cleanupTranscript('meeting transcript text', { context: 'meeting' });
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.agentName).toBeUndefined();
-  });
-
-  it('does not pass agentName when context is omitted (legacy non-dictation callers)', async () => {
-    await cleanupTranscript('some text');
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.agentName).toBeUndefined();
-  });
-});
-
-describe('cleanupTranscript agentName — feature disabled (regression guard)', () => {
-  it('does not pass agentName when agent is disabled', async () => {
-    mockConfig = {
-      cleanupEnabled: true,
-      defaultMode: 'cloud',
-      dictationAgentEnabled: false,
-    };
-
-    await cleanupTranscript('hey OpenWhispr do something', { context: 'keyboard' });
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.agentName).toBeUndefined();
-  });
-
-  it('does not pass agentName when mode is private', async () => {
-    mockActiveMode = 'private';
-    mockConfig = {
-      cleanupEnabled: true,
-      defaultMode: 'private',
-      dictationAgentEnabled: true,
-    };
-
-    await cleanupTranscript('hey OpenWhispr do something', { context: 'keyboard' });
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.agentName).toBeUndefined();
-  });
-});
-
-// ── timeout bump ─────────────────────────────────────────────────────────────
-
-const AGENT_TIMEOUT_MS = 30_000;
-
-describe('cleanupTranscript timeout bump', () => {
-  it('uses 30s timeout when agentName is applicable and mention is detected', async () => {
-    mockConfig = {
-      cleanupEnabled: true,
-      defaultMode: 'cloud',
-      dictationAgentEnabled: true,
-    };
-
-    await cleanupTranscript('hey OpenWhispr write a summary', { context: 'keyboard' });
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.timeoutMs).toBe(AGENT_TIMEOUT_MS);
-  });
-
-  it('uses the default 12s timeout when agentName is applicable but no mention detected', async () => {
-    mockConfig = {
-      cleanupEnabled: true,
-      defaultMode: 'cloud',
-      dictationAgentEnabled: true,
-    };
-
-    await cleanupTranscript('just a regular dictation without the name', { context: 'keyboard' });
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
+    expect(req.inferenceScope).toBe('cleanup');
+    expect(req.inferenceRoute).toEqual({ mode: 'openwhispr', scope: 'cleanup' });
     expect(req.timeoutMs).toBe(CLEANUP_TIMEOUT_MS);
-  });
-
-  it('uses the default 12s timeout when agent is disabled', async () => {
-    mockConfig = {
-      cleanupEnabled: true,
-      defaultMode: 'cloud',
-      dictationAgentEnabled: false,
-    };
-
-    await cleanupTranscript('hey OpenWhispr write a summary', { context: 'keyboard' });
-
-    const req = mockProcessText.mock.calls[0][0] as Record<string, unknown>;
-    expect(req.timeoutMs).toBe(CLEANUP_TIMEOUT_MS);
+    expect(req.agentName).toBe('OpenWhispr');
   });
 });

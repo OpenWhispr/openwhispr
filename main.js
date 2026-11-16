@@ -2,6 +2,7 @@
 // late — the flag has to come from a relaunch.
 const { XWAYLAND_FLAG, shouldForceXWayland } = require("./src/helpers/xwayland");
 const { createHotkeyRepeatGate } = require("./src/helpers/hotkeyRepeatGate");
+const { shouldDisableGpuCompositing } = require("./src/helpers/linuxGpuCompositing");
 
 if (shouldForceXWayland(process.argv)) {
   const { spawn } = require("child_process");
@@ -108,10 +109,16 @@ if (process.platform === "win32") {
 
 // Fix transparent window flickering on Linux: --enable-transparent-visuals requires
 // the compositor to set up an ARGB visual before any windows are created.
-// --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("gtk-version", "3");
   app.commandLine.appendSwitch("enable-transparent-visuals");
+}
+
+// Linux composites on the GPU except while an NVIDIA driver is loaded (#203). Anyone else whose
+// transparent windows flicker can add --disable-gpu-compositing to the launcher's flags file
+// (scripts/lib/linux-launcher.js).
+const gpuCompositingDisabledForNvidia = shouldDisableGpuCompositing();
+if (gpuCompositingDisabledForNvidia) {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
@@ -151,6 +158,8 @@ function getOAuthProtocol() {
 
 const OAUTH_PROTOCOL = getOAuthProtocol();
 
+const { registerLinuxUrlSchemeHandler } = require("./src/helpers/linuxUrlSchemeHandler");
+
 function shouldRegisterProtocolWithAppArg() {
   return Boolean(process.defaultApp) || isElectronBinaryExec();
 }
@@ -186,9 +195,10 @@ function restoreHtmlHandlerIfChanged(original) {
 
 // True source of truth for whether openwhispr:// resolves on Linux — the same
 // MIME database xdg-open consults. Returns true for deb/rpm/flatpak/AUR installs
-// (scheme registered via the packaged .desktop MimeType) and false for AppImage/
-// tar.gz runs where it genuinely isn't registered, so we never enable a dead-end
-// OAuth flow. Used to recover from setAsDefaultProtocolClient's KDE false negative.
+// (scheme registered via the packaged .desktop MimeType; registerLinuxUrlSchemeHandler
+// first takes it back from an AppImage/tar.gz entry) and false for AppImage/tar.gz
+// runs whose own registration failed, so we never enable a dead-end OAuth flow.
+// Used to recover from setAsDefaultProtocolClient's KDE false negative.
 function isOAuthSchemeRegistered() {
   if (process.platform !== "linux") return false;
   try {
@@ -204,17 +214,23 @@ function isOAuthSchemeRegistered() {
   }
 }
 
-// Register custom protocol for OAuth callbacks.
 // In development, always include the app path argument so macOS/Windows/Linux
 // can launch the project app instead of opening bare Electron.
+function getProtocolAppArgs() {
+  if (!shouldRegisterProtocolWithAppArg()) return [];
+  return [process.argv[1] ? path.resolve(process.argv[1]) : path.resolve(".")];
+}
+
+// Register custom protocol for OAuth callbacks.
 function registerOpenWhisprProtocol() {
   const protocol = OAUTH_PROTOCOL;
+  if (process.platform === "darwin" && app.isDefaultProtocolClient(protocol)) return true;
   const htmlHandler = process.platform === "linux" ? getDefaultHtmlHandler() : null;
+  const appArgs = getProtocolAppArgs();
 
   let result;
-  if (shouldRegisterProtocolWithAppArg()) {
-    const appArg = process.argv[1] ? path.resolve(process.argv[1]) : path.resolve(".");
-    result = app.setAsDefaultProtocolClient(protocol, process.execPath, [appArg]);
+  if (appArgs.length > 0) {
+    result = app.setAsDefaultProtocolClient(protocol, process.execPath, appArgs);
   } else {
     result = app.setAsDefaultProtocolClient(protocol);
   }
@@ -226,11 +242,18 @@ function registerOpenWhisprProtocol() {
   return result;
 }
 
-// setAsDefaultProtocolClient returns a false negative on KDE/Wayland, so on Linux
-// fall back to probing the system MIME database for an actual handler. This keeps
-// OAuth enabled where the callback can resolve (deb/rpm/flatpak/AUR) and correctly
-// gated where it can't (AppImage/tar.gz with no scheme registration).
-const protocolRegistered = registerOpenWhisprProtocol() || isOAuthSchemeRegistered();
+// On Linux, setAsDefaultProtocolClient can only name open-whispr.desktop, which
+// AppImage and tar.gz installs don't have, so those (and development) register
+// their own handler entry first and skip it. Otherwise it runs as before, and
+// since it returns a false negative on KDE/Wayland, fall back to probing the
+// system MIME database for an actual handler. This keeps OAuth enabled where the
+// callback can resolve and correctly gated where it can't.
+const linuxSchemeHandler =
+  process.platform === "linux"
+    ? registerLinuxUrlSchemeHandler(OAUTH_PROTOCOL, getProtocolAppArgs())
+    : null;
+const protocolRegistered =
+  linuxSchemeHandler?.registered || registerOpenWhisprProtocol() || isOAuthSchemeRegistered();
 if (!protocolRegistered) {
   console.warn(`[Auth] Failed to register ${OAUTH_PROTOCOL}:// protocol handler`);
 }
@@ -238,6 +261,9 @@ if (!protocolRegistered) {
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 
 if (!gotSingleInstanceLock) {
+  console.warn(
+    "[Startup] Could not acquire the single-instance lock; another OpenWhispr instance may already be running. Exiting."
+  );
   app.exit(0);
 }
 
@@ -276,6 +302,14 @@ const dockManager = require("./src/helpers/dockManager");
 const autoStart = require("./src/helpers/autoStart");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
 const CliBridge = require("./src/helpers/cliBridge");
+const { createRegistryLoader } = require("./src/helpers/registryLoader");
+const { registerRegistryIpc } = require("./src/helpers/registryIpc");
+const { replaceRegistryData, bundledRegistryData } = require("./src/models/registryData.js");
+const { configureInstalledModels, withInstalledModels } = require("./src/helpers/installedModels");
+const { withTrustedDownloads } = require("./src/helpers/registryDownloadTrust");
+const registryTrustedKeys = require("./src/models/registryTrustedKeys.json");
+let registryLoader = null;
+let disposeRegistryIpc = null;
 const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
@@ -283,9 +317,15 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
+const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
+const { AgentWindowManager } = require("./src/helpers/agentWindowManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
-const { migrateLegacyBinDir, detectOrphanedGpuPacks } = require("./src/helpers/gpuBinaryManager");
+const {
+  migrateLegacyBinDir,
+  detectOrphanedGpuPacks,
+  detectOutdatedGpuPacks,
+} = require("./src/helpers/gpuBinaryManager");
 const { resetWhisperGpuFailureOnUpgrade } = require("./src/helpers/whisperGpuUpgradeReset");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MicrosoftCalendarManager = require("./src/helpers/microsoftCalendarManager");
@@ -302,11 +342,15 @@ const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager")
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
+const { createManagedMeetingPolicy } = require("./src/helpers/managedMeetingPolicy");
+const { createManagedDevicePolicy } = require("./src/helpers/managedDevicePolicy");
+const { installManagedNetworkGuard } = require("./src/helpers/devicePolicyNetwork");
 const { applyOpenWhisprOriginHeader } = require("./src/helpers/sessionHeaders");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
 const sidecarRegistry = require("./src/helpers/sidecarRegistry");
 const { reapStaleSidecars } = require("./src/helpers/sidecarReaper");
+const { resolvePrewarmModel } = require("./src/helpers/localServerPolicy");
 
 // Manager instances - initialized after app.whenReady()
 let debugLogger = null;
@@ -315,11 +359,13 @@ let windowManager = null;
 let hotkeyManager = null;
 let databaseManager = null;
 let clipboardManager = null;
+let connectorManager = null;
 let whisperManager = null;
 let parakeetManager = null;
 let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
+let managedDevicePolicy = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let linuxKeyManager = null;
@@ -336,7 +382,7 @@ let audioTapManager = null;
 let linuxPortalAudioManager = null;
 let windowsLoopbackAudioManager = null;
 let meetingAecManager = null;
-let qdrantManager = null;
+let semanticSearch = null;
 let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
@@ -425,6 +471,31 @@ function initializeCoreManagers() {
 
   debugLogger = require("./src/helpers/debugLogger");
   debugLogger.ensureFileLogging();
+  if (process.platform === "linux") {
+    // The compositing mode is settled once the GPU process has reported its info; a GPU
+    // process crash can still drop it to software later, logged below.
+    app
+      .getGPUInfo("basic")
+      .catch(() => {})
+      .then(() => {
+        debugLogger.info("Linux GPU compositing", {
+          status: app.getGPUFeatureStatus().gpu_compositing,
+          disabledForNvidia: gpuCompositingDisabledForNvidia,
+        });
+      });
+  }
+  app.on("child-process-gone", (_event, details) => {
+    if (details.type !== "GPU") return;
+    debugLogger.warn("GPU process gone", { reason: details.reason, exitCode: details.exitCode });
+  });
+  // Registration runs before app ready, when the logger cannot write its file yet.
+  if (linuxSchemeHandler?.reason) {
+    debugLogger.warn("Could not register the Linux URL scheme handler entry", {
+      protocol: OAUTH_PROTOCOL,
+      reason: linuxSchemeHandler.reason,
+      protocolRegistered,
+    });
+  }
 
   environmentManager = new EnvironmentManager();
   const uiLanguage = environmentManager.getUiLanguage(app.getLocale());
@@ -437,14 +508,67 @@ function initializeCoreManagers() {
   // Restore the last validated account scope before any window, IPC handler,
   // or meeting flow can read or create notes. Offline launches keep the
   // account's data visible; a stale or rotated credential fails the hash
-  // check and restores nothing.
+  // check and restores nothing. This is the only call that also restores the
+  // account's last workspace scope (D43).
   const accountScopeBinding = require("./src/helpers/accountScopeBinding");
   const bootAccountId = accountScopeBinding.resolveBootAccountScope({
     token: require("./src/helpers/tokenStore").get(),
     binding: accountScopeBinding.read(),
   });
-  if (bootAccountId) databaseManager.setActiveAccountId(bootAccountId);
+  if (bootAccountId) databaseManager.setActiveAccountId(bootAccountId, { atLaunch: true });
   clipboardManager = new ClipboardManager();
+  const { createConnectorManager } = require("./src/helpers/connectors/connectorManager");
+  const { createPendingActions } = require("./src/helpers/connectors/pendingActions");
+  const { createActionLog } = require("./src/helpers/connectors/actionLog");
+  const { createCredentialStore } = require("./src/helpers/connectors/credentialStore");
+  const { createConnectorCredentials } = require("./src/helpers/connectors/connectorCredentials");
+  const { createConnectors } = require("./src/helpers/connectors/createConnectors");
+  const { runOAuthLoopbackFlow, OAuthFlowError } = require("./src/helpers/oauthLoopbackFlow");
+  const { broadcastToWindows } = require("./src/helpers/windowBroadcast");
+  const { connectorAccountIdFrom } = require("./src/helpers/connectors/connectorIpc");
+  // The same account receipts are filed under (ipcHandlers' getAccountScope):
+  // the one bound to the credential in use. databaseManager's scope doesn't
+  // move when one signed-in token replaces another.
+  const getConnectorAccountScope = () =>
+    accountScopeBinding.resolveActiveAccountScope({
+      ...require("./src/helpers/tokenStore").getState(),
+      binding: accountScopeBinding.read(),
+    });
+  const getConnectorAccountId = connectorAccountIdFrom(getConnectorAccountScope);
+  const connectorCredentials = createConnectorCredentials({
+    store: createCredentialStore({
+      dir: path.join(app.getPath("userData"), "connectors"),
+      secretCrypto: require("./src/helpers/secretCrypto"),
+      logger: debugLogger,
+    }),
+    getAccountId: getConnectorAccountId,
+  });
+  connectorManager = createConnectorManager({
+    connectors: createConnectors({
+      fetch: (url, init) => net.fetch(url, { ...init, useSessionCookies: false }),
+      i18n: i18nMain,
+      runOAuthLoopbackFlow,
+      OAuthFlowError,
+      credentials: connectorCredentials,
+      logger: debugLogger,
+      env: process.env,
+      openExternal: (url) => require("./src/helpers/externalUrlOpener").openExternalUrl(url),
+      writeClipboard: (text, webContents) => clipboardManager.writeClipboard(text, webContents),
+      // Read only when revoking a Gmail login on the calendar's Google project;
+      // the calendar manager is created below.
+      getGoogleCalendarAccounts: () => googleCalendarManager?.getAccounts() ?? [],
+      broadcast: broadcastToWindows,
+      notifyStatusChanged: () => void connectorManager?.notifyStatusChanged(),
+    }),
+    pendingActions: createPendingActions(),
+    actionLog: createActionLog(databaseManager),
+    logger: debugLogger,
+    getAccountId: getConnectorAccountId,
+    credentials: connectorCredentials,
+    onStatusChanged: (statuses) => broadcastToWindows("connector-status-changed", statuses),
+  });
+  // Pending cards expire in main even when no renderer ever answers them.
+  setInterval(() => connectorManager.sweepExpired(), 60 * 1000).unref();
   whisperManager = new WhisperManager();
   if (process.platform !== "darwin") {
     whisperCudaManager = new WhisperCudaManager();
@@ -459,21 +583,71 @@ function initializeCoreManagers() {
       llamaVulkanManager,
     ]);
     if (clearedPacks.length > 0) {
-      // No window exists yet — persist the notice; a control panel window
-      // shows it as a toast and clears it. See #1606.
+      // No window exists yet — persist the notice; the window that shows it
+      // as a toast takes it (#1606, #2554).
       require("./src/helpers/gpuPackMigrationNotice").record(clearedPacks);
     }
     // The 1.8.3 migration deleted lib-carrying packs without recording that
     // notice, leaving those users on a silent CPU fallback: an enabled flag
     // with no pack on disk only happens via such data loss. recordOnce gates
     // each pack to one notice so a dismissed toast doesn't return every launch.
-    const orphanedPacks = detectOrphanedGpuPacks([
-      { manager: whisperCudaManager, enabledEnvVar: "WHISPER_CUDA_ENABLED" },
-      { manager: whisperVulkanManager, enabledEnvVar: "WHISPER_VULKAN_ENABLED" },
+    const gpuPacks = [
+      {
+        manager: whisperCudaManager,
+        enabledEnvVar: "WHISPER_CUDA_ENABLED",
+        group: "whisper",
+        backend: "cuda",
+      },
+      {
+        manager: whisperVulkanManager,
+        enabledEnvVar: "WHISPER_VULKAN_ENABLED",
+        group: "whisper",
+        backend: "vulkan",
+      },
       { manager: llamaVulkanManager, enabledEnvVar: "LLAMA_VULKAN_ENABLED" },
-    ]);
+    ];
+    // A pack whose backend failed here and then vanished (a distro launcher
+    // deletes it, #2168) was no loss: drop its flag as a delete would, so no
+    // notice names it, even after an upgrade clears the remembered failure.
+    const failedBackends = WhisperManager.resolveFailedGpuBackends(process.env.WHISPER_GPU_FAILED);
+    for (const { manager, enabledEnvVar, backend } of gpuPacks) {
+      if (
+        failedBackends.includes(backend) &&
+        process.env[enabledEnvVar] === "true" &&
+        !manager.isDownloaded() &&
+        !manager.needsUpdate()
+      ) {
+        delete process.env[enabledEnvVar];
+        environmentManager.removeKeyFromEnvFile(enabledEnvVar).catch((err) => {
+          debugLogger.error("Failed to clear a vanished GPU pack's flag from .env", {
+            key: enabledEnvVar,
+            error: err.message,
+          });
+        });
+      }
+    }
+    const orphanedPacks = detectOrphanedGpuPacks(gpuPacks);
     if (orphanedPacks.length > 0) {
       require("./src/helpers/gpuPackMigrationNotice").recordOnce(orphanedPacks);
+    }
+    // A pack an older release installed that this version can't use (#2424)
+    // otherwise looks like a pack that was never downloaded: say so once per
+    // app version, even to a user who already saw the orphan notice for it.
+    // Only whisper packs can be outdated, so only a user on local whisper
+    // (the only mode whose Settings shows the pack) is told.
+    const outdatedPacks = detectOutdatedGpuPacks(gpuPacks);
+    if (outdatedPacks.length > 0) {
+      const whisperInUse = !!process.env.LOCAL_WHISPER_MODEL;
+      debugLogger.info("GPU packs from an older release need re-downloading", {
+        packs: outdatedPacks,
+        notified: whisperInUse,
+      });
+      if (whisperInUse) {
+        require("./src/helpers/gpuPackMigrationNotice").recordOnce(
+          outdatedPacks,
+          `outdated-${app.getVersion()}`
+        );
+      }
     }
     // Lets every server start resolve its GPU backend from installed packs
     whisperManager.setGpuBinaryManagers({ cuda: whisperCudaManager, vulkan: whisperVulkanManager });
@@ -492,6 +666,10 @@ function initializeCoreManagers() {
   );
   appleCalendarManager = new AppleCalendarManager(databaseManager, calendarReminderScheduler);
   const meetingProcessDetector = new MeetingProcessDetector();
+  managedDevicePolicy = createManagedDevicePolicy();
+  const managedMeetingPolicy = createManagedMeetingPolicy({
+    getSnapshot: () => managedDevicePolicy.getSnapshot(),
+  });
   meetingDetectionEngine = new MeetingDetectionEngine(
     calendarReminderScheduler,
     meetingProcessDetector,
@@ -508,11 +686,14 @@ function initializeCoreManagers() {
       () => meetingProcessDetector.getDetectedProcesses().length > 0
     ),
     windowManager,
-    databaseManager
+    databaseManager,
+    { isMeetingRecordingDisabled: managedMeetingPolicy.isMeetingRecordingDisabled }
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   calendarReminderScheduler.meetingDetectionEngine = meetingDetectionEngine;
-  updateManager = new UpdateManager();
+  updateManager = new UpdateManager({
+    getPolicy: (options) => ipcHandlers?.getUpdatePolicy?.(options) ?? { success: false },
+  });
   updateManager.setWindowManager(windowManager);
   windowsKeyManager = new WindowsKeyManager();
   linuxKeyManager = new LinuxKeyManager();
@@ -531,6 +712,13 @@ function initializeCoreManagers() {
   windowManager.selectionManager = selectionManager;
   windowManager.windowsKeyManager = windowsKeyManager;
   windowManager.linuxKeyManager = linuxKeyManager;
+  windowManager.permissionGuide = new PermissionGuideManager(windowManager);
+  windowManager.agentWindow = new AgentWindowManager(windowManager);
+  if (process.platform === "linux") {
+    windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
+  } else if (process.platform === "win32") {
+    windowManager.hotkeyManager.nativeListenerProbe = () => windowsKeyManager.checkAvailability();
+  }
 
   // IPC handlers must be registered before window content loads
   ipcHandlers = new IPCHandlers({
@@ -551,12 +739,15 @@ function initializeCoreManagers() {
     googleCalendarManager,
     microsoftCalendarManager,
     appleCalendarManager,
+    connectorManager,
     meetingDetectionEngine,
+    managedMeetingPolicy,
+    managedDevicePolicy,
     audioTapManager,
     linuxPortalAudioManager,
     windowsLoopbackAudioManager,
     meetingAecManager,
-    getQdrantManager: () => qdrantManager,
+    getSemanticSearch: () => semanticSearch,
     getTrayManager: () => trayManager,
     oauthProtocolRegistered: protocolRegistered,
     oauthProtocol: OAUTH_PROTOCOL,
@@ -620,10 +811,36 @@ function initializeDeferredManagers() {
     });
   }
 
-  googleCalendarManager.start();
-  microsoftCalendarManager.start();
+  ipcHandlers.startPolicyCalendars();
   appleCalendarManager.start();
   meetingDetectionEngine.start();
+}
+
+let pendingEnterpriseAudioTest = null;
+// The control panel acts on each link once, so a link it can't use never
+// reopens Settings on a later mount; Settings still reads it until consumed.
+let enterpriseAudioTestClaimed = false;
+ipcMain.handle("get-pending-enterprise-audio-test", (_event, consume = false) => {
+  const pending = pendingEnterpriseAudioTest;
+  if (consume) pendingEnterpriseAudioTest = null;
+  return pending;
+});
+ipcMain.handle("claim-enterprise-audio-test", () => {
+  if (enterpriseAudioTestClaimed) return null;
+  enterpriseAudioTestClaimed = true;
+  return pendingEnterpriseAudioTest;
+});
+function handleEnterpriseAudioLink(url) {
+  const request = require("./src/helpers/enterpriseAudioDeepLink").parseEnterpriseAudioDeepLink(
+    url,
+    OAUTH_PROTOCOL
+  );
+  if (!request) return false;
+  pendingEnterpriseAudioTest = request;
+  enterpriseAudioTestClaimed = false;
+  void windowManager?.showControlPanel();
+  windowManager?.controlPanelWindow?.webContents.send("enterprise-audio-test-requested");
+  return true;
 }
 
 app.on("open-url", (event, url) => {
@@ -635,6 +852,8 @@ app.on("open-url", (event, url) => {
     handleUpgradeDeepLink();
     return;
   }
+
+  if (handleEnterpriseAudioLink(url)) return;
 
   if (isNoteDeepLink(url)) {
     void handleNoteDeepLink(url);
@@ -648,25 +867,34 @@ app.on("open-url", (event, url) => {
 
   void handleOAuthDeepLink(url);
 
-  if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-    windowManager.controlPanelWindow.show();
-    windowManager.controlPanelWindow.focus();
-    dockManager.setControlPanelVisible(true);
-  }
+  windowManager?.showControlPanel();
 });
+
+let pendingAffiliateDeepLink = false;
+let affiliateWindowReady = false;
+
+async function flushPendingAffiliateDeepLink() {
+  if (!pendingAffiliateDeepLink || !affiliateWindowReady || !windowManager) return;
+  pendingAffiliateDeepLink = false;
+  try {
+    await windowManager.createControlPanelWindow();
+    windowManager.showControlPanel();
+    if (isLiveWindow(windowManager.controlPanelWindow)) {
+      windowManager.controlPanelWindow.webContents.send("affiliate-link");
+    }
+  } catch (error) {
+    debugLogger?.error("Creator link window could not be opened", { error: error.message });
+  }
+}
 
 function handleAffiliateDeepLink(url) {
   try {
     if (!require("./src/helpers/affiliateLinks").capture(url, OAUTH_PROTOCOL)) return false;
-    if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-      windowManager.controlPanelWindow.show();
-      windowManager.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
-      windowManager.controlPanelWindow.webContents.send("affiliate-link");
-    }
+    pendingAffiliateDeepLink = true;
+    void flushPendingAffiliateDeepLink();
     return true;
   } catch {
-    debugLogger.error("Creator link could not be saved");
+    debugLogger?.error("Creator link could not be saved");
     return false;
   }
 }
@@ -768,9 +996,7 @@ function handleInvitationDeepLink(deepLinkUrl) {
     pendingInvitationDeepLinkToken = token;
     if (!windowManager) return;
     if (isLiveWindow(windowManager.controlPanelWindow)) {
-      windowManager.controlPanelWindow.show();
-      windowManager.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      windowManager.showControlPanel();
       // Best-effort fast path — the get-pending-invitation-token pull is the reliable path.
       windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
     } else {
@@ -879,9 +1105,7 @@ async function applySessionTokenAndRefresh(token) {
       oauthProtocol: OAUTH_PROTOCOL,
     });
   }
-  windowManager.controlPanelWindow.show();
-  windowManager.controlPanelWindow.focus();
-  dockManager.setControlPanelVisible(true);
+  windowManager.showControlPanel();
 }
 
 async function handleOAuthDeepLink(deepLinkUrl) {
@@ -906,9 +1130,7 @@ function handleUpgradeDeepLink() {
     windowManager.controlPanelWindow.webContents.executeJavaScript(
       'window.dispatchEvent(new Event("upgrade-success"))'
     );
-    windowManager.controlPanelWindow.show();
-    windowManager.controlPanelWindow.focus();
-    dockManager.setControlPanelVisible(true);
+    windowManager.showControlPanel();
   }
 }
 
@@ -1001,14 +1223,101 @@ function startAuthBridgeServer() {
   });
 }
 
+// Startup restores the saved activation mode before any hotkey registers. Desktop
+// backends (GNOME, KDE, Hyprland) register the saved hotkey a moment later, in
+// this mode, so check that hotkey rather than the provisional default it
+// replaces: a supported Hold is kept and an unsupported one becomes Tap before
+// registration. Elsewhere, check the hotkey that registered. This is a runtime
+// fallback, not a change to the user's saved preference: the next launch retries it.
+async function dropUnsupportedStartupHold() {
+  if (windowManager.getActivationMode() !== "push") return;
+  const manager = windowManager.hotkeyManager;
+  const hotkey = manager.isUsingNativeShortcut()
+    ? await manager.getSavedDictationHotkey()
+    : manager.getCurrentHotkey();
+  if (!manager.supportsPushToTalk(hotkey)) {
+    const changed = await windowManager.setActivationModeCache("tap");
+    if (changed) {
+      for (const browserWindow of BrowserWindow.getAllWindows()) {
+        if (!browserWindow.isDestroyed()) {
+          browserWindow.webContents.send("setting-updated", {
+            key: "activationMode",
+            value: "tap",
+          });
+        }
+      }
+    }
+  }
+}
+
+// A desktop backend that cannot register falls back to globalShortcut after the
+// first check, and globalShortcut may still be reading the saved hotkey, so
+// check again once that registration settles.
+async function checkStartupHold() {
+  windowManager.hotkeyManager.once("hotkey-loaded", () => {
+    dropUnsupportedStartupHold().catch((err) => {
+      debugLogger.warn("[HotkeyManager] Startup activation mode recheck failed", {
+        error: err.message,
+      });
+    });
+  });
+  await dropUnsupportedStartupHold();
+}
+
 // Main application startup
 async function startApp() {
   // Await so a stale sidecar is confirmed dead before new ones can spawn and
   // contend for its port or storage lock.
   await reapStaleSidecars();
 
+  // The registry loader reports cache problems before core managers exist, so the
+  // logger starts first. Requiring it again in initializeCoreManagers is a no-op.
+  debugLogger = require("./src/helpers/debugLogger");
+  debugLogger.ensureFileLogging();
+
+  // Only local signature/cache verification is awaited. Remote refresh starts
+  // later, so offline startup and settings migrations see a usable catalog.
+  const registryMetadata = require("./src/models/registryMetadata.json");
+  configureInstalledModels(path.join(app.getPath("userData"), "installed-models.json"));
+  registryLoader = createRegistryLoader({
+    cachePath: path.join(app.getPath("userData"), "model-registry.json"),
+    bundledSnapshot: {
+      data: bundledRegistryData,
+      manifestVersion: registryMetadata.manifestVersion,
+    },
+    clientContract: registryMetadata.clientContract,
+    trustedKeys: registryTrustedKeys,
+    appVersion: app.getVersion(),
+    applySnapshot: (snapshot) =>
+      replaceRegistryData({
+        ...snapshot,
+        // Installed records pass the same download checks as the catalog.
+        data: withTrustedDownloads(
+          withInstalledModels(snapshot.data, app.getVersion()),
+          bundledRegistryData,
+          (id) => debugLogger.warn("Refused a catalog download from an untrusted source", { id })
+        ),
+      }),
+    onError: (error) =>
+      debugLogger.warn("Model registry update unavailable", { error: error.message }),
+  });
+  await registryLoader.start();
+  disposeRegistryIpc = registerRegistryIpc(ipcMain, (channel, snapshot) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) window.webContents.send(channel, snapshot);
+    }
+  });
+
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
+  installManagedNetworkGuard({
+    app,
+    session,
+    isAllowed: (url) => ipcHandlers.isProductNetworkAllowed(url),
+  });
+  await managedDevicePolicy.start();
+  const effectivePolicyReady = ipcHandlers.refreshEffectivePolicy();
+  if (managedDevicePolicy.getSnapshot().localOnly) await effectivePolicyReady;
   await environmentManager.init();
   // After any upgrade the GPU gets one fresh attempt: clear the remembered
   // failure before the whisper pre-warm below resolves its GPU backend.
@@ -1023,6 +1332,8 @@ async function startApp() {
   });
 
   await migrateCookieToBearerToken();
+  void updateManager.refreshPolicy();
+  ipcHandlers.loadLocalModelPolicy();
 
   applyOpenWhisprOriginHeader(session.defaultSession);
 
@@ -1088,30 +1399,22 @@ async function startApp() {
   const launchedHidden = wasLaunchedAtLoginHidden();
   const startMinimized = environmentManager.getStartMinimized() || launchedHidden;
   if (debugLogger) debugLogger.info("Start minimized", { enabled: startMinimized, launchedHidden });
+  windowManager.startedMinimized = startMinimized;
   await windowManager.createMainWindow();
-  // The activation mode was cached before the hotkey was registered, so a saved
-  // Hold could not be checked against its key until now.
-  if (
-    windowManager.getActivationMode() === "push" &&
-    !windowManager.hotkeyManager.supportsPushToTalk()
-  ) {
-    await windowManager.setActivationModeCache("tap");
-    environmentManager.saveActivationMode("tap");
-    for (const browserWindow of BrowserWindow.getAllWindows()) {
-      if (!browserWindow.isDestroyed()) {
-        browserWindow.webContents.send("setting-updated", { key: "activationMode", value: "tap" });
-      }
-    }
-  }
+  await checkStartupHold();
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
+  affiliateWindowReady = true;
+  await flushPendingAffiliateDeepLink();
 
   // Windows/Linux cold start delivers protocol URLs via argv (macOS uses
   // open-url); without this scan a deep link that launches the app is lost.
   const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
   if (initialProtocolUrl && handleAffiliateDeepLink(initialProtocolUrl)) {
     await flushPendingNoteDeepLink();
+  } else if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
+    // The renderer consumes the saved setup request after settings mount.
   } else if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
     await handleNoteDeepLink(initialProtocolUrl);
   } else {
@@ -1153,6 +1456,7 @@ async function startApp() {
         "hotkey"
       );
     }
+    hotkeyManager.notifyRestoreFailures(savedVoiceAgentKey, result);
   }
 
   // Set up translation hotkey (dictation cleaned up and translated into the
@@ -1178,6 +1482,7 @@ async function startApp() {
         "hotkey"
       );
     }
+    hotkeyManager.notifyRestoreFailures(savedTranslationKey, result);
   }
 
   // Set up meeting mode hotkey
@@ -1185,7 +1490,8 @@ async function startApp() {
   const meetingHotkeyCallback = () => {
     if (!isMeetingPress()) return;
     debugLogger.info("Meeting hotkey triggered", {}, "meeting");
-    windowManager.startManualMeeting();
+    // Usually pressed mid-call: an open panel updates behind the meeting app.
+    windowManager.startManualMeeting({ activate: false });
   };
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
@@ -1200,6 +1506,7 @@ async function startApp() {
       { savedMeetingKey, ...result },
       "meeting"
     );
+    hotkeyManager.notifyRestoreFailures(savedMeetingKey, result);
   }
 
   ipcMain.handle("register-meeting-hotkey", async (_event, hotkey) => {
@@ -1231,6 +1538,7 @@ async function startApp() {
   }
 
   app.on("browser-window-focus", () => {
+    managedDevicePolicy.refreshOnFocus();
     if (googleCalendarManager) googleCalendarManager.syncOnFocus();
     if (microsoftCalendarManager) microsoftCalendarManager.syncOnFocus();
     if (appleCalendarManager) appleCalendarManager.syncOnFocus();
@@ -1238,6 +1546,7 @@ async function startApp() {
 
   const { powerMonitor } = require("electron");
   powerMonitor.on("resume", () => {
+    void managedDevicePolicy.refresh();
     if (calendarReminderScheduler) calendarReminderScheduler.onWakeFromSleep();
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
@@ -1275,21 +1584,17 @@ async function startApp() {
   // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.
   const cleanupProvider = process.env.CLEANUP_PROVIDER || process.env.REASONING_PROVIDER;
   const cleanupLocalModel = process.env.LOCAL_CLEANUP_MODEL || process.env.LOCAL_REASONING_MODEL;
-  if (cleanupProvider === "local" && cleanupLocalModel) {
+  const prewarmModel = resolvePrewarmModel({
+    cleanupProvider,
+    cleanupModel: cleanupLocalModel,
+    dictationAgentProvider: process.env.DICTATION_AGENT_PROVIDER,
+    dictationAgentModel: process.env.LOCAL_DICTATION_AGENT_MODEL,
+  });
+  if (prewarmModel) {
     const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.prewarmServer(cleanupLocalModel).catch((err) => {
-      debugLogger.debug("llama-server pre-warm error (non-fatal)", { error: err.message });
-    });
-  }
-
-  if (
-    process.env.DICTATION_AGENT_PROVIDER === "local" &&
-    process.env.LOCAL_DICTATION_AGENT_MODEL &&
-    process.env.LOCAL_DICTATION_AGENT_MODEL !== cleanupLocalModel
-  ) {
-    const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.prewarmServer(process.env.LOCAL_DICTATION_AGENT_MODEL).catch((err) => {
-      debugLogger.debug("dictation-agent llama-server pre-warm error (non-fatal)", {
+    modelManager.prewarmServer(prewarmModel).catch((err) => {
+      debugLogger.debug("llama-server pre-warm error (non-fatal)", {
+        model: prewarmModel,
         error: err.message,
       });
     });
@@ -1308,43 +1613,18 @@ async function startApp() {
   }
 
   const QdrantManager = require("./src/helpers/qdrantManager");
-  qdrantManager = new QdrantManager();
-  // Must not throw: this also runs inside the unhealthy-restart path, whose
-  // catch would stop the replacement sidecar.
-  const wireVectorIndex = (port) => {
-    try {
-      const vectorIndex = require("./src/helpers/vectorIndex");
-      vectorIndex.init(port);
-      vectorIndex
-        .ensureCollection()
-        .then(() => ipcHandlers?.drainPendingVectorPurges())
-        .catch((err) => {
-          debugLogger.debug("Qdrant collection setup error (non-fatal)", { error: err.message });
-        });
-    } catch (err) {
-      debugLogger.debug("Qdrant rewire error (non-fatal)", { error: err.message });
-    }
-  };
-  // A successful unhealthy-restart can bring the sidecar back on a new port.
-  qdrantManager.on("restarted", wireVectorIndex);
-  sidecarRegistry.register("qdrant", () => qdrantManager.stop());
-  if (qdrantManager.isAvailable()) {
-    qdrantManager
-      .start()
-      .then(() => {
-        if (qdrantManager.isReady()) wireVectorIndex(qdrantManager.getPort());
-      })
-      .catch((err) => {
-        debugLogger.debug("Qdrant startup error (non-fatal)", { error: err.message });
-      });
-  }
-
+  const SemanticSearchLifecycle = require("./src/helpers/semanticSearchLifecycle");
   const localEmbeddings = require("./src/helpers/localEmbeddings");
-  if (!localEmbeddings.isAvailable()) {
-    localEmbeddings.downloadModel().catch((err) => {
-      debugLogger.debug("Embedding model download error (non-fatal)", { error: err.message });
-    });
-  }
+  const qdrantManager = new QdrantManager();
+  semanticSearch = new SemanticSearchLifecycle({
+    qdrant: qdrantManager,
+    vectorIndex: require("./src/helpers/vectorIndex"),
+    embeddings: localEmbeddings,
+    noteEmbedText: localEmbeddings.LocalEmbeddings.noteEmbedText,
+    database: databaseManager,
+    logger: debugLogger,
+  });
+  sidecarRegistry.register("qdrant", () => semanticSearch.stop());
 
   if (process.platform === "win32") {
     const nircmdStatus = clipboardManager.getNircmdStatus();
@@ -1505,6 +1785,7 @@ async function startApp() {
     let rightModActiveKey = null;
 
     globeKeyManager.on("right-modifier-down", async (modifier) => {
+      hotkeyManager.logHotkeyEvent("macos-native", "down", modifier);
       // Check voice agent slot for right-modifier
       if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
         windowManager.sendToggleVoiceAgent();
@@ -1541,6 +1822,7 @@ async function startApp() {
     });
 
     globeKeyManager.on("right-modifier-up", async (modifier) => {
+      hotkeyManager.logHotkeyEvent("macos-native", "up", modifier);
       if (hotkeyManager.slotHasHotkey("dictation", modifier)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
 
@@ -1593,6 +1875,7 @@ async function startApp() {
     globeKeyManager.on("mouse-button-down", async (button) => {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
+      hotkeyManager.logHotkeyEvent("macos-native", "down", button);
 
       if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
         windowManager.sendToggleVoiceAgent();
@@ -1632,6 +1915,7 @@ async function startApp() {
     globeKeyManager.on("mouse-button-up", async (button) => {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
+      hotkeyManager.logHotkeyEvent("macos-native", "up", button);
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
@@ -1736,6 +2020,7 @@ async function startApp() {
     // Dictation supports push-to-talk and needs the overlay window; meeting
     // drives other windows (matching their globalShortcut callbacks and macOS).
     const dispatchNativeKeyDown = (key) => {
+      hotkeyManager.logHotkeyEvent("native-listener", "down", key);
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {
@@ -1750,12 +2035,13 @@ async function startApp() {
       } else if (hotkeyManager.slotHasHotkey("translation", key)) {
         windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
-        windowManager.startManualMeeting();
+        windowManager.startManualMeeting({ activate: false });
       }
     };
 
     // Only dictation drives push-to-talk, so only its key-up matters.
     const dispatchNativeKeyUp = (key) => {
+      hotkeyManager.logHotkeyEvent("native-listener", "up", key);
       if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
       if (windowManager.winPushState?.active) {
         windowManager.handleWindowsPushKeyUp(key);
@@ -1801,14 +2087,24 @@ async function startApp() {
         debugLogger.warn(
           "[Push-to-Talk] Linux key listener has no permission to access input devices"
         );
-        if (isLiveWindow(windowManager.mainWindow)) {
-          windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
+        // GNOME, KDE and Hyprland run this listener only as a spare release
+        // source in Hold; their own shortcut still presses and releases.
+        if (!hotkeyManager.reliesOnLinuxKeyListener()) return;
+        // Settings owns the recovery (toast, Hold disabled, back to Tap) and it
+        // renders in the control panel, not the pill this event used to reach.
+        for (const browserWindow of BrowserWindow.getAllWindows()) {
+          if (!browserWindow.isDestroyed()) {
+            browserWindow.webContents.send("linux-ptt-permission-denied");
+          }
         }
       });
     }
 
-    const STARTUP_DELAY_MS = 3000;
-    setTimeout(() => windowManager.reconcileNativeKeyListeners(), STARTUP_DELAY_MS);
+    windowManager.initializeNativeKeyListeners().catch((err) => {
+      debugLogger.warn("[Push-to-Talk] Native key listener startup failed", {
+        error: err.message,
+      });
+    });
 
     ipcMain.on("hotkey-changed", () => {
       windowManager.resetWindowsPushState();
@@ -1850,12 +2146,7 @@ if (gotSingleInstanceLock) {
     }
 
     if (isLiveWindow(windowManager.controlPanelWindow)) {
-      if (windowManager.controlPanelWindow.isMinimized()) {
-        windowManager.controlPanelWindow.restore();
-      }
-      windowManager.controlPanelWindow.show();
-      windowManager.controlPanelWindow.focus();
-      dockManager.setControlPanelVisible(true);
+      windowManager.showControlPanel();
       if (windowManager.controlPanelWindow.webContents.isCrashed()) {
         windowManager.loadControlPanel();
       }
@@ -1873,6 +2164,7 @@ if (gotSingleInstanceLock) {
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
       if (handleAffiliateDeepLink(url)) return;
+      if (handleEnterpriseAudioLink(url)) return;
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
       } else if (isNoteDeepLink(url)) {
@@ -1957,12 +2249,7 @@ if (gotSingleInstanceLock) {
     } else {
       // Show control panel when dock icon is clicked (most common user action)
       if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
-        if (windowManager.controlPanelWindow.isMinimized()) {
-          windowManager.controlPanelWindow.restore();
-        }
-        windowManager.controlPanelWindow.show();
-        windowManager.controlPanelWindow.focus();
-        dockManager.setControlPanelVisible(true);
+        windowManager.showControlPanel();
       } else if (windowManager) {
         // If control panel doesn't exist, create it
         windowManager.createControlPanelWindow();
@@ -1979,6 +2266,7 @@ if (gotSingleInstanceLock) {
   app.on("before-quit", (event) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    managedDevicePolicy?.stop();
     if (updateManager && updateManager.isQuittingForUpdate) {
       // Quit must proceed for the installer to run, so no preventDefault;
       // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).
@@ -1988,11 +2276,33 @@ if (gotSingleInstanceLock) {
     }
     event.preventDefault();
     performSyncTeardown();
-    sidecarRegistry.shutdownAll().finally(() => app.exit(0));
+    Promise.allSettled([
+      sidecarRegistry.shutdownAll(),
+      Promise.race([
+        ipcHandlers?.metaActivation?.shutdown(),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
+      // A teamspace delete still in its Undo window, which the toast already reported as done.
+      Promise.race([
+        isLiveWindow(windowManager?.controlPanelWindow)
+          ? windowManager.controlPanelWindow.webContents.executeJavaScript(
+              "window.commitHeldSpaceDeletes?.()"
+            )
+          : undefined,
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]),
+    ]).finally(() => {
+      ipcHandlers?._noteFilesSync?.flushSync();
+      app.exit(0);
+    });
   });
 }
 
 function performSyncTeardown() {
+  ipcHandlers?._noteFilesSync?.flushSync();
+  registryLoader?.stop();
+  disposeRegistryIpc?.();
+  disposeRegistryIpc = null;
   if (wakeRewarmTimer) {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;

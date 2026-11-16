@@ -1,9 +1,50 @@
+import registry from '@/config/languageRegistry.json';
 import {
+  PARAKEET_V3_LANGUAGES,
   preferredEngineForLanguages,
   type LocalEngineAvailability,
 } from '@/services/transcription/localEngine';
 
 export type LocalModelKey = 'whisper-base' | 'parakeet-v2' | 'parakeet-v3';
+
+export const LOCAL_MODEL_TITLES: Record<LocalModelKey, string> = {
+  'parakeet-v2': 'Parakeet v2',
+  'parakeet-v3': 'Parakeet v3',
+  'whisper-base': 'Whisper base',
+};
+
+export interface ModelLanguage {
+  code: string;
+  label: string;
+  flag: string;
+}
+
+// The languages the app offers in Transcription Language that a model can transcribe.
+export function localModelLanguages(model: LocalModelKey): ModelLanguage[] {
+  return (registry.languages as (ModelLanguage & { whisper?: boolean })[])
+    .filter(({ code, whisper }) => {
+      if (code === 'auto') return false;
+      if (model === 'whisper-base') return !!whisper;
+      const base = code.split('-')[0];
+      return model === 'parakeet-v2' ? base === 'en' : PARAKEET_V3_LANGUAGES.has(base);
+    })
+    .map(({ code, label, flag }) => ({ code, label, flag }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+// A registry entry for a base language code; English exists only as regional variants.
+export function languageByCode(code: string): ModelLanguage {
+  const languages = registry.languages as ModelLanguage[];
+  const entry =
+    languages.find((language) => language.code === code) ??
+    languages.find((language) => language.code.startsWith(`${code}-`));
+  if (!entry) return { code, label: code, flag: '🌐' };
+  return { code, label: entry.label.replace(/ \(.*\)$/, ''), flag: entry.flag };
+}
+
+export function isLocalModelKey(value: unknown): value is LocalModelKey {
+  return typeof value === 'string' && Object.keys(LOCAL_MODEL_TITLES).includes(value);
+}
 
 /**
  * Nominal on-disk sizes shown before download (whisper from its published ggml size; Parakeet
@@ -49,7 +90,7 @@ export function getLocalModelCatalog(
     {
       key: 'parakeet-v2',
       engineName: 'Parakeet',
-      title: 'Parakeet v2',
+      title: LOCAL_MODEL_TITLES['parakeet-v2'],
       description: 'Fastest and most accurate for English dictation.',
       languagesNote: 'English only',
       sizeBytes: LOCAL_MODEL_SIZE_BYTES['parakeet-v2'],
@@ -59,7 +100,7 @@ export function getLocalModelCatalog(
     {
       key: 'parakeet-v3',
       engineName: 'Parakeet',
-      title: 'Parakeet v3',
+      title: LOCAL_MODEL_TITLES['parakeet-v3'],
       description: 'Fast transcription with automatic language detection.',
       languagesNote: '25 European languages',
       sizeBytes: LOCAL_MODEL_SIZE_BYTES['parakeet-v3'],
@@ -69,7 +110,7 @@ export function getLocalModelCatalog(
     {
       key: 'whisper-base',
       engineName: 'Whisper',
-      title: 'Whisper base',
+      title: LOCAL_MODEL_TITLES['whisper-base'],
       description: 'Broad language coverage — the fallback for everything Parakeet doesn’t cover.',
       languagesNote: '~99 languages incl. auto-detect',
       sizeBytes: LOCAL_MODEL_SIZE_BYTES['whisper-base'],

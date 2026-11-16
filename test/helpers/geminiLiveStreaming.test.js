@@ -42,6 +42,34 @@ async function withServer(run, script) {
 
 const audioFrames = (received) => received.filter((message) => message.realtimeInput?.audio);
 
+test("live registry IDs reach the Gemini setup message while managed models stay fixed", async (t) => {
+  const store = require("../../src/models/registryData.js");
+  const old = store.getRegistrySnapshot();
+  const next = structuredClone(old.data);
+  next.transcriptionProviders
+    .find((provider) => provider.id === "gemini")
+    .models.push({
+      id: "registry-google-live",
+      name: "New Google model",
+      description: "Fixture",
+      streaming: true,
+    });
+  t.after(() =>
+    store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
+  );
+  store.replaceRegistryData({ data: next, manifestVersion: old.manifestVersion + 1 });
+  await withServer(async ({ streaming, received }) => {
+    await streaming.connect({ token: "key", mode: "byok", model: "registry-google-live" });
+    assert.equal(received[0].setup.model, "models/registry-google-live");
+    assert.equal(streaming.currentModel, "registry-google-live");
+    assert.equal(
+      streaming.buildSetupMessage({ mode: "openwhispr", model: "registry-google-live" }).setup
+        .model,
+      "models/gemini-3.5-transcribe-live"
+    );
+  });
+});
+
 test("url: the two Live methods are auth-disjoint and pinned per mode", () => {
   assert.equal(
     buildGeminiLiveUrl({ mode: "byok", token: "AI-KEY" }),
@@ -65,7 +93,12 @@ test("setup: the custom dictionary always ships; a language only when chosen", (
   });
 
   assert.deepEqual(
-    streaming.buildSetupMessage({ model: "gemini-next", language: "en", keyterms: [] }),
+    streaming.buildSetupMessage({
+      mode: "byok",
+      model: "gemini-next",
+      language: "en",
+      keyterms: [],
+    }),
     {
       setup: {
         model: "models/gemini-next",
@@ -259,7 +292,7 @@ test("disconnect sends audioStreamEnd once and waits for the end of the turn", a
       assert.equal(streaming.finalize(), false, "audioStreamEnd must not be sent twice");
       await new Promise((resolve) => setTimeout(resolve, 40));
 
-      const result = await streaming.disconnect(true);
+      const result = await streaming.disconnect();
       assert.equal(result.text, "The quick brown fox.");
       assert.equal(received.filter((m) => m.realtimeInput?.audioStreamEnd).length, 1);
       // The transcript is handed over, not kept for the next session.
@@ -288,7 +321,7 @@ test("disconnect still waits for the final when finalize() already closed the tu
       // The stop sequence finalizes, then stops as soon as its own wait gives
       // up — disconnect must not treat the sent audioStreamEnd as "answered".
       assert.equal(streaming.finalize(), true);
-      const result = await streaming.disconnect(true);
+      const result = await streaming.disconnect();
 
       assert.equal(result.text, "the slow final");
       assert.equal(received.filter((m) => m.realtimeInput?.audioStreamEnd).length, 1);
@@ -320,7 +353,7 @@ test("disconnect spends only what is left of the budget since audioStreamEnd", a
       // The renderer already waited out the whole budget on its side.
       streaming._audioStreamEndSentAt -= 10000;
       const start = Date.now();
-      const result = await streaming.disconnect(true);
+      const result = await streaming.disconnect();
 
       assert.equal(result.text, "already here");
       assert.ok(Date.now() - start < 500, "must not re-spend the budget");
@@ -352,7 +385,7 @@ test("a turn the server closed before the hotkey release answers the stop immedi
       assert.equal(streaming._turnEnded, true);
 
       const startedAt = Date.now();
-      assert.deepEqual(await streaming.disconnect(true), { text: "already final" });
+      assert.deepEqual(await streaming.disconnect(), { text: "already final" });
       assert.ok(Date.now() - startedAt < 500, "must not wait out the budget for a second turn end");
       await new Promise((resolve) => setTimeout(resolve, 30));
       assert.equal(
@@ -388,7 +421,7 @@ test("speech after a closed turn reopens it, so the stop waits for the last turn
       streaming.sendAudio(LOUD_FRAME);
       assert.equal(streaming._turnEnded, false);
 
-      assert.deepEqual(await streaming.disconnect(true), { text: "first segment last words" });
+      assert.deepEqual(await streaming.disconnect(), { text: "first segment last words" });
     },
     (socket, message) => {
       if (message.setup) {
@@ -421,7 +454,7 @@ test("disconnect returns the accumulated text when the turn never ends cleanly",
 
       // No generationComplete: the socket dies instead, which must release the
       // finalization wait rather than burn its whole budget.
-      assert.deepEqual(await streaming.disconnect(true), { text: "partial turn" });
+      assert.deepEqual(await streaming.disconnect(), { text: "partial turn" });
     },
     (socket, message) => {
       if (message.setup) {
@@ -459,6 +492,66 @@ for (const [code, reason] of [
     );
   });
 }
+
+test("disconnect keeps a last turn the server never finalized", async () => {
+  await withServer(
+    async ({ streaming }) => {
+      await streaming.connect({ token: "t", mode: "byok" });
+      streaming.sendAudio(FRAME);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      assert.equal(streaming.finalize(), true);
+      streaming._audioStreamEndSentAt -= 10000;
+
+      // An earlier turn was finalized; the last one only ever had a partial.
+      assert.deepEqual(await streaming.disconnect(), {
+        text: "Turn one. Turn two is still open",
+      });
+    },
+    (socket, message) => {
+      if (message.setup) {
+        socket.send(JSON.stringify({ setupComplete: {} }));
+        return;
+      }
+      if (!message.realtimeInput?.audio) return;
+      socket.send(JSON.stringify({ serverContent: { inputTranscription: { text: "Turn one." } } }));
+      socket.send(JSON.stringify({ serverContent: { generationComplete: true } }));
+      socket.send(
+        JSON.stringify({
+          serverContent: { interimInputTranscription: { text: "Turn two is still open" } },
+        })
+      );
+    }
+  );
+});
+
+test("a partial that restates the finalized turns adds only the open turn", async () => {
+  await withServer(
+    async ({ streaming }) => {
+      await streaming.connect({ token: "t", mode: "byok" });
+      streaming.sendAudio(FRAME);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      assert.equal(streaming.getFullTranscript(), "Turn one. Turn two. Turn three");
+    },
+    (socket, message) => {
+      if (message.setup) {
+        socket.send(JSON.stringify({ setupComplete: {} }));
+        return;
+      }
+      if (!message.realtimeInput?.audio) return;
+      for (const text of ["Turn one.", "Turn two."]) {
+        socket.send(JSON.stringify({ serverContent: { inputTranscription: { text } } }));
+      }
+      // Real Live sessions sometimes repeat every finalized turn, unspaced.
+      socket.send(
+        JSON.stringify({
+          serverContent: { interimInputTranscription: { text: "Turn one.Turn two.Turn three" } },
+        })
+      );
+    }
+  );
+});
 
 test("errors: a spent managed token is re-minted once and the session survives", async () => {
   await withServer(
@@ -510,7 +603,8 @@ test("an unexpected close hands the transcript over and reports the loss once", 
       streaming.sendAudio(FRAME);
       await new Promise((resolve) => setTimeout(resolve, 60));
 
-      assert.deepEqual(sessionEnds, [{ text: "half a sentence" }]);
+      // The open turn's partial is handed over with the finalized text.
+      assert.deepEqual(sessionEnds, [{ text: "half a sentence and the rest" }]);
       // Distinct from the pre-ready failure, and without the raw server reason.
       assert.deepEqual(errors, ["Connection lost (code: 1011)"]);
       assert.equal(streaming.isConnected, false);
@@ -523,6 +617,9 @@ test("an unexpected close hands the transcript over and reports the loss once", 
       if (!message.realtimeInput?.audio) return;
       socket.send(
         JSON.stringify({ serverContent: { inputTranscription: { text: "half a sentence" } } })
+      );
+      socket.send(
+        JSON.stringify({ serverContent: { interimInputTranscription: { text: "and the rest" } } })
       );
       setTimeout(() => socket.close(1011, "Token has expired"), 10);
     }

@@ -45,10 +45,31 @@ test("existing terminals still match", () => {
   assert.equal(clipboard.isLinuxTerminalWindowClass("gnome-terminal"), true);
 });
 
+test("short names match whole words only", () => {
+  const clipboard = new ClipboardManager();
+  assert.equal(clipboard.isLinuxTerminalWindowClass("st-256color"), true);
+  assert.equal(clipboard.isLinuxTerminalWindowClass("st"), true);
+  assert.equal(clipboard.isLinuxTerminalWindowClass("stterm"), true);
+  assert.equal(clipboard.isLinuxTerminalWindowClass("xst-256color"), true);
+  assert.equal(clipboard.isLinuxTerminalWindowClass("com.system76.CosmicTerm"), true);
+  assert.equal(clipboard.isLinuxTerminalWindowClass("com.system76.CosmicEdit"), false);
+  assert.equal(clipboard.isLinuxTerminalWindowClass("com.system76.CosmicFiles"), false);
+});
+
 test("ordinary GUI apps are not terminals", () => {
   const clipboard = new ClipboardManager();
   assert.equal(clipboard.isLinuxTerminalWindowClass("Code"), false);
   assert.equal(clipboard.isLinuxTerminalWindowClass("firefox"), false);
   assert.equal(clipboard.isLinuxTerminalWindowClass(""), false);
   assert.equal(clipboard.isLinuxTerminalWindowClass(null), false);
+});
+
+test("Omarchy terminal app IDs match their prefixes case-insensitively", () => {
+  const clipboard = new ClipboardManager();
+  for (const signature of ["org.omarchy.agent", "org.omarchy.btop", "TUI.float"]) {
+    assert.equal(clipboard.isLinuxTerminalWindowClass(signature), true, signature);
+  }
+  for (const signature of ["com.example.org.omarchy.editor", "com.example.tui.editor"]) {
+    assert.equal(clipboard.isLinuxTerminalWindowClass(signature), false, signature);
+  }
 });

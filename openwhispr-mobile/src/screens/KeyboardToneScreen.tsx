@@ -37,8 +37,8 @@ export default function KeyboardToneScreen() {
           <View className="mx-4 mb-3" style={{ borderCurve: 'continuous' }}>
             <View className="rounded-[14px] border border-separator bg-secondarySystemGroupedBackground px-4 py-3">
               <Text className="text-[13px] text-secondaryLabel">
-                Tone requires Cloud mode with Dictation Cleanup turned on. Your choice is saved and
-                will apply once both are active.
+                Tone requires Cloud mode with Text Cleanup turned on. Your choice is saved and will
+                apply once both are active.
               </Text>
             </View>
           </View>

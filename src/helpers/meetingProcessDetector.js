@@ -39,13 +39,17 @@ class MeetingProcessDetector extends EventEmitter {
     this.dismissedProcesses = new Set();
     this._polling = false;
     this._subscriptionIds = [];
+    this._running = false;
+    this._startGeneration = 0;
   }
 
   start() {
-    if (this.pollInterval || this._subscriptionIds.length > 0) return;
+    if (this._running) return;
+    this._running = true;
+    const generation = ++this._startGeneration;
 
     if (process.platform === "darwin") {
-      this._startDarwin();
+      this._startDarwin(generation);
     } else {
       const apps = MEETING_APPS[process.platform] || [];
       debugLogger.info(
@@ -57,18 +61,17 @@ class MeetingProcessDetector extends EventEmitter {
         },
         "meeting"
       );
-      this._poll();
-      this.pollInterval = setInterval(() => this._poll(), POLL_INTERVAL_MS);
+      this._startPolling(generation);
     }
   }
 
-  _startDarwin() {
+  _startDarwin(generation) {
     let systemPreferences;
     try {
       systemPreferences = require("electron").systemPreferences;
     } catch {
       debugLogger.warn("systemPreferences unavailable, falling back to polling", {}, "meeting");
-      this._startPollingFallback();
+      this._startPollingFallback(generation);
       return;
     }
 
@@ -78,7 +81,7 @@ class MeetingProcessDetector extends EventEmitter {
         {},
         "meeting"
       );
-      this._startPollingFallback();
+      this._startPollingFallback(generation);
       return;
     }
 
@@ -120,12 +123,18 @@ class MeetingProcessDetector extends EventEmitter {
       "meeting"
     );
 
-    this._initialScanDarwin();
+    this._initialScanDarwin(generation);
   }
 
-  async _initialScanDarwin() {
+  // True once stop() or a newer start() has superseded the run that owns `generation`.
+  _isStale(generation) {
+    return !this._running || generation !== this._startGeneration;
+  }
+
+  async _initialScanDarwin(generation) {
     try {
       const processList = await processListCache.getProcessList();
+      if (this._isStale(generation)) return;
       const darwinProcessNames = [
         { match: "zoom.us", processKey: "zoom" },
         { match: "microsoft teams", processKey: "teams" },
@@ -144,7 +153,7 @@ class MeetingProcessDetector extends EventEmitter {
     }
   }
 
-  _startPollingFallback() {
+  _startPollingFallback(generation) {
     const apps = MEETING_APPS.linux || [];
     debugLogger.info(
       "Process detector started (polling fallback)",
@@ -155,11 +164,18 @@ class MeetingProcessDetector extends EventEmitter {
       },
       "meeting"
     );
-    this._poll();
-    this.pollInterval = setInterval(() => this._poll(), POLL_INTERVAL_MS);
+    this._startPolling(generation);
+  }
+
+  _startPolling(generation) {
+    this._poll(generation);
+    this.pollInterval = setInterval(() => this._poll(generation), POLL_INTERVAL_MS);
   }
 
   stop() {
+    if (!this._running) return;
+    this._running = false;
+
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
@@ -204,12 +220,13 @@ class MeetingProcessDetector extends EventEmitter {
     return entry ? entry.appName : processKey;
   }
 
-  async _poll() {
+  async _poll(generation) {
     if (this._polling) return;
     this._polling = true;
     try {
       const apps = MEETING_APPS[process.platform] || MEETING_APPS.linux || [];
       const processList = await processListCache.getProcessList();
+      if (this._isStale(generation)) return;
 
       for (const { processKey, appName, imageName } of apps) {
         const isRunning = processList.includes(imageName);

@@ -10,6 +10,7 @@ import { NotesTopBar } from '@/components/notes/NotesTopBar';
 import { GroupedList } from '@/components/notes/GroupedList';
 import { FolderRow } from '@/components/notes/FolderRow';
 import { NoteRow } from '@/components/notes/NoteRow';
+import type { RestoreRow } from '@/components/ui/SwipeableCard';
 import { SectionHeader } from '@/components/notes/SectionHeader';
 import { NewFolderSheet } from '@/components/notes/NewFolderSheet';
 import { SpacesSection } from '@/components/notes/SpacesSection';
@@ -18,8 +19,7 @@ import { groupNotesByDate } from '@/lib/groupNotesByDate';
 import { safeHaptics } from '@/lib/utils';
 import { confirmDestructive } from '@/lib/alerts';
 import { SyncStatusLabel } from '@/components/notes/SyncStatusLabel';
-import { useSyncStore } from '@/sync/useSyncStore';
-import { requestSync } from '@/sync/syncEngine';
+import { useManualSyncRefresh } from '@/hooks/useManualSyncRefresh';
 import { Fab, FAB_BOTTOM_PADDING, type FabAction } from '@/components/ui/Fab';
 
 const FAB_ACTIONS: FabAction[] = [
@@ -66,10 +66,7 @@ export default function FoldersScreen() {
 
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === 'team'), [spaces]);
 
-  const syncStatus = useSyncStore((s) => s.status);
-  const onRefresh = useCallback(() => {
-    requestSync('manual');
-  }, []);
+  const { refreshing, onRefresh } = useManualSyncRefresh();
 
   const goToFolder = useCallback(
     (folderId: number) => {
@@ -106,11 +103,16 @@ export default function FoldersScreen() {
   );
 
   const handleDeleteNote = useCallback(
-    (id: number) => {
-      confirmDestructive('Delete Note', 'This note will be deleted permanently.', () => {
-        safeHaptics('warning');
-        deleteNote(id);
-      });
+    (id: number, restoreRow: RestoreRow) => {
+      confirmDestructive(
+        'Delete Note',
+        'This note will be deleted permanently.',
+        () => {
+          safeHaptics('warning');
+          deleteNote(id);
+        },
+        { onCancel: restoreRow },
+      );
     },
     [deleteNote],
   );
@@ -189,9 +191,7 @@ export default function FoldersScreen() {
         }}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
-        refreshControl={
-          <RefreshControl refreshing={syncStatus === 'running'} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <SyncStatusLabel />
 
@@ -224,7 +224,7 @@ export default function FoldersScreen() {
                       bucket={bucket.key}
                       tinted
                       onPress={() => handleNotePress(note.id)}
-                      onDelete={() => handleDeleteNote(note.id)}
+                      onDelete={(restoreRow) => handleDeleteNote(note.id, restoreRow)}
                     />
                   ))}
                 </GroupedList>

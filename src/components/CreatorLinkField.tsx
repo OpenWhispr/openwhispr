@@ -1,10 +1,10 @@
-import { useId, useState } from "react";
+import { useId, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "./icons";
 import { Input } from "./ui/input";
 import { useAffiliateStore } from "../stores/affiliateStore";
 
-export default function CreatorLinkField() {
+export default function CreatorLinkField(): ReactElement | null {
   const { t } = useTranslation();
   const state = useAffiliateStore();
   const [expanded, setExpanded] = useState(false);
@@ -16,7 +16,7 @@ export default function CreatorLinkField() {
         {t(state.error === "review" ? "affiliate.review" : "affiliate.saved")}
       </p>
     );
-  const open = expanded || !!state.link || !!state.error;
+  const open = expanded || !!state.link || !!state.clickId || !!state.error;
   return (
     <div className="w-full text-start">
       <button
@@ -52,6 +52,16 @@ export default function CreatorLinkField() {
             disabled={state.checking}
             aria-describedby={state.error ? `${id}-error` : undefined}
           />
+          {(state.link || state.clickId) && (
+            <button
+              type="button"
+              onClick={() => state.setLink("")}
+              disabled={state.checking}
+              className="text-xs text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+            >
+              {t("affiliate.remove")}
+            </button>
+          )}
           {state.error && (
             <p id={`${id}-error`} role="alert" className="text-xs text-destructive">
               {t(`affiliate.${state.error}`)}

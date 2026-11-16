@@ -1,3 +1,4 @@
+import { getDefaultPrivateWorkspaceId } from './teamSpacesCapability';
 import { SyncCancelledError, uncheckedSync, type SyncCheckpoint } from './syncContext';
 import * as Sentry from '@sentry/react-native';
 import { notesRepository, spacesRepository } from '@/data';
@@ -10,7 +11,7 @@ import {
 } from '@/data/remote/notesApi';
 import { isPermissionDenialCode, isSpaceAccessCode } from './pushErrorCodes';
 import { createPushScopeResolver, createTeamSpaceFilter } from './pushScope';
-import type { Folder } from '@/data';
+import type { Folder, RemoteFolder } from '@/data';
 
 // /api/folders/batch-create rejects bodies over 50 folders (zod .max(50)),
 // the same cap the notes endpoint enforces — see pushNotes.ts.
@@ -30,6 +31,20 @@ interface FolderCreateRow {
   pushed: Folder;
   localId: number;
   payload: FolderPushInput;
+}
+
+/**
+ * Takes on a folder the server already had under this name, as its answer to a create in
+ * a scope that holds a same-named folder. When a pull has brought that folder down as a
+ * second local row, the two merge into the one being pushed.
+ */
+function adoptExistingServerFolder(create: FolderCreateRow, server: RemoteFolder): void {
+  const pulled = notesRepository.getFolderByRemoteId(server.id);
+  if (pulled) {
+    notesRepository.adoptDuplicateFolder(create.localId, pulled.id, server.id, server.updated_at);
+  } else {
+    notesRepository.markFolderPushed(create.localId, server.id, server.updated_at, create.pushed);
+  }
 }
 
 // The org turned cloud backup off (see policyBlocked in syncEngine.ts). Every
@@ -160,9 +175,14 @@ export async function pushFolders(
   const getPrivateFoldersByName = (): Map<string, Folder> => {
     if (privateFoldersByName === null) {
       const privateSpaceId = spacesRepository.getPrivateSpace().id;
+      const defaultWorkspaceId = getDefaultPrivateWorkspaceId();
       privateFoldersByName = new Map();
       for (const existing of notesRepository.getFolders()) {
-        if (existing.spaceId === privateSpaceId && existing.remoteId) {
+        if (
+          existing.spaceId === privateSpaceId &&
+          existing.remoteId &&
+          (!existing.privateWorkspaceId || existing.privateWorkspaceId === defaultWorkspaceId)
+        ) {
           privateFoldersByName.set(existing.name.toLowerCase(), existing);
         }
       }
@@ -256,8 +276,9 @@ export async function pushFolders(
       const chunk = scopedCreates.slice(i, i + PUSH_BATCH_SIZE);
       try {
         checkpoint(true);
-        const created = await batchCreateFolders(chunk.map((c) => c.payload));
+        const { created, refused = [] } = await batchCreateFolders(chunk.map((c) => c.payload));
         checkpoint();
+        const refusedIds = new Set(refused.map((row) => row.client_folder_id));
         // Match by client_folder_id first — batch responses aren't guaranteed to
         // preserve request order (or to include every row on a partial rejection).
         // Fall back to positional index only when a response row carries no
@@ -267,22 +288,39 @@ export async function pushFolders(
             .filter((server) => server.client_folder_id)
             .map((server) => [server.client_folder_id as string, server]),
         );
+        // A create whose name the scope already holds comes back as the existing folder,
+        // with another client's client_folder_id (another member's, or this device's own
+        // same-named folder earlier in the chunk). Matched by name, it gets a cloud id;
+        // otherwise it would retry forever and the notes filed in it never upload.
+        const byName = new Map(created.map((server) => [server.name, server]));
         let unmatched = 0;
         for (let j = 0; j < chunk.length; j += 1) {
           const create = chunk[j];
-          const server =
-            byClientId.get(create.payload.client_folder_id) ??
-            (!created[j]?.client_folder_id ? created[j] : undefined);
-          if (!server?.id) {
+          if (
+            refusedIds.has(create.payload.client_folder_id) &&
+            !byClientId.has(create.payload.client_folder_id)
+          ) {
             unmatched += 1;
             continue;
           }
-          notesRepository.markFolderPushed(
-            create.localId,
-            server.id,
-            server.updated_at,
-            create.pushed,
-          );
+          const server =
+            byClientId.get(create.payload.client_folder_id) ??
+            (refused.length === 0 && !created[j]?.client_folder_id ? created[j] : undefined);
+          if (server?.id) {
+            notesRepository.markFolderPushed(
+              create.localId,
+              server.id,
+              server.updated_at,
+              create.pushed,
+            );
+            continue;
+          }
+          const existing = byName.get(create.payload.name);
+          if (existing?.id) {
+            adoptExistingServerFolder(create, existing);
+            continue;
+          }
+          unmatched += 1;
         }
         if (unmatched > 0) {
           Sentry.captureMessage(

@@ -1,6 +1,11 @@
 const { isCanonicalAppVersion } = require("./appVersion");
 
 const POLICY_CAPABILITY_VERSION = "1";
+// Features this build can actually run. The server gates Orukeet on this token,
+// not on the version alone, so an older build that passes the version gate is
+// never handed a route it would silently reroute.
+const CLIENT_CAPABILITIES =
+  "orukeet,orukeet-pipeline-v2,orukeet-language-routing,enterprise-audio-v1,private-workspace-placement";
 
 function withPolicyRequestHeaders(headers, appVersion) {
   if (!isCanonicalAppVersion(appVersion)) {
@@ -10,7 +15,8 @@ function withPolicyRequestHeaders(headers, appVersion) {
     ...headers,
     "x-openwhispr-policy-version": POLICY_CAPABILITY_VERSION,
     "x-openwhispr-version": appVersion,
+    "x-openwhispr-capabilities": CLIENT_CAPABILITIES,
   };
 }
 
-module.exports = { POLICY_CAPABILITY_VERSION, withPolicyRequestHeaders };
+module.exports = { CLIENT_CAPABILITIES, POLICY_CAPABILITY_VERSION, withPolicyRequestHeaders };

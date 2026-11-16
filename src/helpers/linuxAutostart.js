@@ -209,6 +209,7 @@ function syncAutostartEntry() {
 module.exports = {
   getDesktopFilePath,
   resolveExecutablePath,
+  quoteExecPath,
   buildDesktopFileContents,
   isAutostartEnabled,
   setAutostartEnabled,

@@ -34,14 +34,20 @@ export function getPrivateModeUnavailableMessage(): string {
 
 // Private mode with no on-device model. We never upload automatically — the
 // user explicitly chooses to download the model or send this one recording to
-// the cloud.
-export function promptLocalModelFallback(onUseCloudOnce: () => void): void {
+// the cloud. onDecline runs for either choice that leaves this recording untranscribed.
+export function promptLocalModelFallback(onUseCloudOnce: () => void, onDecline?: () => void): void {
   Alert.alert(
     'On-device model unavailable',
     "The model for private dictation isn't downloaded, so this recording can't be transcribed on your device. Send it to the cloud instead?",
     [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Download Model', onPress: () => router.push('/(account)/model-download') },
+      { text: 'Cancel', style: 'cancel', onPress: onDecline },
+      {
+        text: 'Download Model',
+        onPress: () => {
+          onDecline?.();
+          router.push('/(account)/model-download');
+        },
+      },
       { text: 'Use Cloud Once', onPress: onUseCloudOnce },
     ],
   );

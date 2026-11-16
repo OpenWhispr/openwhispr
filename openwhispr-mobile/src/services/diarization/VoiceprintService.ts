@@ -132,6 +132,8 @@ export type EnrollmentQualityResult =
       code: EnrollmentQualityFailureCode;
       reason: string;
       speakerDurationsMs?: Record<number, number>;
+      /** Kept on level-based rejections so the message can tell a quiet voice from pauses. */
+      speechActivity?: SpeechActivityAnalysis;
     };
 
 export interface EnrollmentQualityInput {
@@ -159,6 +161,7 @@ export type SpeechActivityQualityResult =
       ok: false;
       code: EnrollmentQualityFailureCode;
       reason: string;
+      speechActivity?: SpeechActivityAnalysis;
     };
 
 export interface EnrollmentAudioTools {
@@ -189,6 +192,11 @@ export interface IdentifyNoteSpeakersDeps {
 
 export interface IdentifyNoteSpeakersOptions {
   preferredProfileEmails?: string[];
+  /**
+   * Only labels speakers with this profile, and only speakers not already linked to a
+   * profile that still exists, so labels the user rejected or chose stay as they are.
+   */
+  onlyProfileId?: number;
 }
 
 export interface VoiceprintSpeakerIdentificationDecision {
@@ -262,11 +270,14 @@ export const evaluateEnrollmentQuality = (
     .map(([speakerId]) => Number(speakerId));
 
   if (meaningfulSpeakerIds.length === 0) {
-    return failQuality(
-      VOICE_ENROLLMENT_NO_MEANINGFUL_SPEAKER,
-      `No speaker had at least ${meaningfulSpeakerMs}ms of attributed speech.`,
-      speakerDurationsMs,
-    );
+    return {
+      ...failQuality(
+        VOICE_ENROLLMENT_NO_MEANINGFUL_SPEAKER,
+        `No speaker had at least ${meaningfulSpeakerMs}ms of attributed speech.`,
+        speakerDurationsMs,
+      ),
+      speechActivity: speechQuality.speechActivity,
+    };
   }
   if (meaningfulSpeakerIds.length > 1) {
     return failQuality(
@@ -280,11 +291,14 @@ export const evaluateEnrollmentQuality = (
   const acceptedSpeakerMs = speakerDurationsMs[speakerId] ?? 0;
   const usableSpeechMs = Math.max(speechQuality.speechActivity.speechActivityMs, acceptedSpeakerMs);
   if (usableSpeechMs < minSpeechActivityMs) {
-    return failQuality(
-      VOICE_ENROLLMENT_SHORT_SPEECH,
-      `Detected ${Math.round(usableSpeechMs)}ms of usable speech; at least ${minSpeechActivityMs}ms is required.`,
-      speakerDurationsMs,
-    );
+    return {
+      ...failQuality(
+        VOICE_ENROLLMENT_SHORT_SPEECH,
+        `Detected ${Math.round(usableSpeechMs)}ms of usable speech; at least ${minSpeechActivityMs}ms is required.`,
+        speakerDurationsMs,
+      ),
+      speechActivity: speechQuality.speechActivity,
+    };
   }
 
   const embedding = diarization.embeddings[speakerId];
@@ -336,19 +350,25 @@ export const evaluateSpeechActivityQuality = (
     );
   }
   if (speechActivity.speechActivityMs < minSpeechActivityMs) {
-    return failQuality(
-      VOICE_ENROLLMENT_SHORT_SPEECH,
-      `Speech activity is below ${minSpeechActivityMs}ms.`,
-    );
+    return {
+      ...failQuality(
+        VOICE_ENROLLMENT_SHORT_SPEECH,
+        `Speech activity is below ${minSpeechActivityMs}ms.`,
+      ),
+      speechActivity,
+    };
   }
   if (speechActivity.speechRatio < minSpeechRatio) {
-    return failQuality(
-      VOICE_ENROLLMENT_LOW_SPEECH_RATIO,
-      `Speech ratio is below ${minSpeechRatio}.`,
-    );
+    return {
+      ...failQuality(VOICE_ENROLLMENT_LOW_SPEECH_RATIO, `Speech ratio is below ${minSpeechRatio}.`),
+      speechActivity,
+    };
   }
   if (speechActivity.peakDb - speechActivity.noiseFloorDb < minSnrDb) {
-    return failQuality(VOICE_ENROLLMENT_LOW_SNR, `SNR proxy is below ${minSnrDb}dB.`);
+    return {
+      ...failQuality(VOICE_ENROLLMENT_LOW_SNR, `SNR proxy is below ${minSnrDb}dB.`),
+      speechActivity,
+    };
   }
 
   return { ok: true, speechActivity };
@@ -593,6 +613,10 @@ const buildIdentificationPatch = (
   return {};
 };
 
+// Rewriting a speaker with the values it already has would still mark the note for sync.
+const changesSpeaker = (speaker: Speaker, patch: Partial<Speaker>): boolean =>
+  Object.entries(patch).some(([key, value]) => speaker[key as keyof Speaker] !== value);
+
 export const identifyNoteSpeakers = (
   noteId: number,
   speakerEmbeddingsByLabel: Record<string, number[]>,
@@ -617,9 +641,18 @@ export const identifyNoteSpeakers = (
   const decisions: VoiceprintSpeakerIdentificationDecision[] = [];
   const updatedSpeakerIds: number[] = [];
 
+  const { onlyProfileId } = options;
+
   speakers.forEach((speaker) => {
     const match = matchesByLabel[speaker.speakerLabel];
     if (!match) return;
+    if (
+      onlyProfileId !== undefined &&
+      (match.profileId !== onlyProfileId ||
+        (speaker.profileId !== null && profilesById.has(speaker.profileId)))
+    ) {
+      return;
+    }
 
     const profile = getMatchedProfile(match, profilesById);
     const patch = buildIdentificationPatch(speaker, profile, match.decision);
@@ -631,7 +664,7 @@ export const identifyNoteSpeakers = (
       profileId: match.profileId,
     });
 
-    if (Object.keys(patch).length === 0) return;
+    if (!changesSpeaker(speaker, patch)) return;
     deps.repo.updateSpeaker(speaker.id, patch);
     updatedSpeakerIds.push(speaker.id);
   });

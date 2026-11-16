@@ -3,6 +3,7 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { resolveBundledBinary } = require("./binaryResolver");
 const { extractMeetingUrl } = require("./meetingJoinUrl");
+const { CALENDAR_LOOKBACK_MS } = require("./calendarCacheWindow");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { FOCUS_SYNC_THROTTLE_MS } = require("./calendarSyncInterval");
 
@@ -45,16 +46,33 @@ class AppleCalendarManager {
 
   // User-initiated: spawns the helper with --request so the TCC prompt shows.
   // Resolves after the first snapshot lands (success) or access is denied.
-  connect() {
+  connect({ signal } = {}) {
     if (process.platform !== "darwin") {
       return Promise.resolve({ success: false, reason: "unsupported" });
     }
+    if (signal?.aborted) return Promise.resolve({ success: false, reason: "cancelled" });
+    this._pendingConnect?.cancel();
     this._restartAttempts = 0;
     return new Promise((resolve) => {
-      this._pendingConnect = { resolve, awaitingSnapshot: false };
+      const cancel = () => {
+        if (this._pendingConnect !== pending) return;
+        this._pendingConnect = null;
+        this.stop();
+        pending.resolve({ success: false, reason: "cancelled" });
+      };
+      const pending = {
+        resolve: (result) => {
+          signal?.removeEventListener("abort", cancel);
+          resolve(result);
+        },
+        cancel,
+        awaitingSnapshot: false,
+      };
+      this._pendingConnect = pending;
+      signal?.addEventListener("abort", cancel, { once: true });
       if (!this._spawnHelper(true)) {
         this._pendingConnect = null;
-        resolve({ success: false, reason: "helper-missing" });
+        pending.resolve({ success: false, reason: "helper-missing" });
       }
     });
   }
@@ -106,6 +124,14 @@ class AppleCalendarManager {
     }
   }
 
+  _helperArgs(requestAccess) {
+    return [
+      "--lookback-seconds",
+      String(CALENDAR_LOOKBACK_MS / 1000),
+      ...(requestAccess ? ["--request"] : []),
+    ];
+  }
+
   _spawnHelper(requestAccess) {
     if (this._restartTimer) {
       clearTimeout(this._restartTimer);
@@ -120,7 +146,7 @@ class AppleCalendarManager {
     }
 
     let command = binaryPath;
-    let args = requestAccess ? ["--request"] : [];
+    let args = this._helperArgs(requestAccess);
     if (!app.isPackaged) {
       // A terminal-launched dev app makes the terminal the helper's TCC
       // "responsible process", and its missing calendar usage strings abort
@@ -149,6 +175,7 @@ class AppleCalendarManager {
 
       let buffer = "";
       child.stdout.on("data", (data) => {
+        if (this._helperProcess !== child) return;
         buffer += data.toString();
         let newlineIdx;
         while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
@@ -274,15 +301,18 @@ class AppleCalendarManager {
       this.databaseManager.replaceAppleCalendarEvents(events.map((event) => this._mapEvent(event)));
 
       const contacts = [];
+      const notContacts = [];
       for (const event of events) {
         for (const attendee of event.attendees || []) {
-          if (attendee.email) contacts.push({ email: attendee.email, displayName: attendee.name });
+          if (!attendee.email) continue;
+          // Rooms and the user (EventKit's current user) aren't people to write to.
+          if (attendee.resource || attendee.self) notContacts.push(attendee.email);
+          else contacts.push({ email: attendee.email, displayName: attendee.name });
         }
       }
-      if (contacts.length > 0) this.databaseManager.upsertContacts(contacts);
+      this.databaseManager.syncCalendarContacts("apple", null, contacts, notContacts);
 
       broadcastToWindows("acal-events-synced", {});
-      this.reminderScheduler.reconcileProvider("apple");
       this.reminderScheduler.scheduleNextMeeting();
 
       if (this._pendingConnect?.awaitingSnapshot) {
@@ -324,7 +354,10 @@ class AppleCalendarManager {
         // Generic fallback only for the event's own URL field
         (event.url?.startsWith("https://") ? event.url : null),
       conference_data: null,
-      organizer_email: event.organizer_email || null,
+      // Dropped when the user organized it, which contact lookup (this
+      // column's only reader) can't otherwise tell: Apple has no account email
+      // to exclude, and EventKit often leaves the organizer out of attendees.
+      organizer_email: event.organizer_self ? null : event.organizer_email || null,
       attendees_count: attendees.length,
       attendees: attendees.length
         ? JSON.stringify(
@@ -333,6 +366,7 @@ class AppleCalendarManager {
               displayName: a.name || null,
               responseStatus: a.status || null,
               self: a.self || false,
+              ...(a.resource ? { resource: true } : {}),
             }))
           )
         : null,

@@ -47,12 +47,16 @@ jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { subscribe: jest.fn(() => () => {}), getState: () => mockConfigState },
 }));
 
+const mockLoadVoiceProfiles = jest.fn();
+const mockSetNotesState = jest.fn();
 jest.mock('@/store/useNotesStore', () => ({
   useNotesStore: {
+    setState: (...args: unknown[]) => mockSetNotesState(...args),
     getState: () => ({
       loadFolders: jest.fn(),
       loadSpaces: jest.fn(),
       loadNotes: jest.fn(),
+      loadVoiceProfiles: mockLoadVoiceProfiles,
     }),
   },
 }));
@@ -70,6 +74,7 @@ jest.mock('@/data', () => ({
 }));
 
 const mockFetchUsage = jest.fn();
+jest.mock('@/lib/chat/chatHistory', () => ({ clearChatHistory: jest.fn() }));
 jest.mock('@/data/remote/usageApi', () => ({
   fetchUsage: (...args: unknown[]) => mockFetchUsage(...args),
 }));
@@ -113,6 +118,20 @@ jest.mock('../pushSnippets', () => ({
   pushSnippets: (...args: unknown[]) => mockPushSnippets(...args),
 }));
 
+const mockPullSharedDictionary = jest.fn();
+jest.mock('../pullSharedDictionary', () => ({
+  pullSharedDictionary: (...args: unknown[]) => mockPullSharedDictionary(...args),
+}));
+const mockLoadSharedDictionary = jest.fn();
+const mockResetSharedDictionary = jest.fn();
+const mockLoadSharedDictionaryIfOwnedBy = jest.fn();
+jest.mock('@/store/useSharedDictionaryStore', () => ({
+  useSharedDictionaryStore: {
+    getState: () => ({ load: mockLoadSharedDictionary, reset: mockResetSharedDictionary }),
+  },
+  loadSharedDictionaryIfOwnedBy: (...args: unknown[]) => mockLoadSharedDictionaryIfOwnedBy(...args),
+}));
+
 jest.mock('@/store/useDictionaryStore', () => ({
   useDictionaryStore: { getState: () => ({ reset: jest.fn(), load: jest.fn() }) },
 }));
@@ -125,10 +144,11 @@ jest.mock('../initialBackfill', () => ({
   runInitialBackfillIfNeeded: (...args: unknown[]) => mockRunInitialBackfillIfNeeded(...args),
 }));
 
-import { requestSync } from '../syncEngine';
+import { requestSync, subscribeSyncCompletion } from '../syncEngine';
 import { pushPrivateNoteDeletes } from '../privateNoteDeletion';
 import { useSyncStore } from '../useSyncStore';
 import { ApiError } from '@/lib/apiClient';
+import { SyncStalledError } from '../syncContext';
 import { notesRepository } from '@/data';
 import * as Sentry from '@sentry/react-native';
 
@@ -147,7 +167,7 @@ beforeEach(() => {
   mockAuthState.isGuest = false;
   mockConfigState.config = { cloudBackupEnabled: true };
   mockFetchUsage.mockResolvedValue({ isSubscribed: true });
-  mockSyncSpaces.mockResolvedValue({ capable: true, activeSpaces: [] });
+  mockSyncSpaces.mockResolvedValue({ capable: true, activeSpaces: [], workspaces: null });
   mockPullFolders.mockResolvedValue(undefined);
   mockPullFoldersTeam.mockResolvedValue(undefined);
   mockPullNotes.mockResolvedValue(undefined);
@@ -159,6 +179,9 @@ beforeEach(() => {
   mockPullSnippets.mockResolvedValue(undefined);
   mockPushSnippets.mockResolvedValue(undefined);
   mockRunInitialBackfillIfNeeded.mockResolvedValue(undefined);
+  mockPullSharedDictionary.mockResolvedValue({ changed: false });
+  mockLoadSharedDictionary.mockResolvedValue(undefined);
+  mockLoadSharedDictionaryIfOwnedBy.mockResolvedValue(undefined);
   useSyncStore.setState({
     status: 'idle',
     lastError: null,
@@ -690,6 +713,9 @@ describe('subscription cache reset on account switch (fix round 1, Finding 4)', 
     requestSync('foreground');
     await flush();
     expect(notesRepository.wipeAllSyncableData).toHaveBeenCalled();
+    // The wipe removed user-1's voice profiles, so the store must drop them too.
+    expect(mockLoadVoiceProfiles).toHaveBeenCalled();
+    expect(mockSetNotesState).toHaveBeenCalledWith({ meetingSpeakerEmbeddingsByNoteId: {} });
 
     // A second foreground trigger for user-2, past the 30s foreground
     // throttle. With the cache reset during the switch run above,
@@ -734,5 +760,327 @@ describe('in-flight cancellation', () => {
     expect(mockPushNotes).not.toHaveBeenCalled();
     expect(mockPushDictionary).not.toHaveBeenCalled();
     expect(mockPushSnippets).not.toHaveBeenCalled();
+  });
+});
+
+it('notifies sync completion after a gated pass and supports unsubscription', async (): Promise<void> => {
+  const finished = jest.fn();
+  const unsubscribe = subscribeSyncCompletion(finished);
+  mockConfigState.config = { cloudBackupEnabled: false };
+  mockSyncSpaces.mockResolvedValue({ capable: false, activeSpaces: [] });
+  requestSync('manual');
+  await flush();
+  expect(finished).toHaveBeenCalledTimes(1);
+  unsubscribe();
+  requestSync('manual');
+  await flush();
+  expect(finished).toHaveBeenCalledTimes(1);
+});
+
+describe('queued runs', () => {
+  // Parks the next run on its notes pull; resolving the returned function lets it finish.
+  function holdNextRun(): () => void {
+    let release: () => void = () => {};
+    mockPullNotes.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    return () => release();
+  }
+
+  // A foreground run that just completed throttles the next foreground trigger.
+  async function throttleForeground(): Promise<void> {
+    requestSync('foreground');
+    await flush();
+    jest.clearAllMocks();
+  }
+
+  it('keeps a queued manual run when a throttled foreground trigger arrives behind it', async (): Promise<void> => {
+    await throttleForeground();
+    const finished = jest.fn();
+    const unsubscribe = subscribeSyncCompletion(finished);
+    try {
+      const release = holdNextRun();
+      requestSync('manual');
+      await flush();
+      requestSync('manual');
+      requestSync('foreground');
+      release();
+      await flush();
+    } finally {
+      unsubscribe();
+    }
+
+    // Both manual runs force a fresh subscription check.
+    expect(mockFetchUsage).toHaveBeenCalledTimes(2);
+    expect(mockPullNotes).toHaveBeenCalledTimes(2);
+    expect(finished.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it('does not report a queued foreground run the throttle will skip', async (): Promise<void> => {
+    await throttleForeground();
+    const finished = jest.fn();
+    const unsubscribe = subscribeSyncCompletion(finished);
+    try {
+      const release = holdNextRun();
+      requestSync('manual');
+      await flush();
+      requestSync('foreground');
+      release();
+      await flush();
+    } finally {
+      unsubscribe();
+    }
+
+    expect(mockPullNotes).toHaveBeenCalledTimes(1);
+    expect(finished.mock.calls).toEqual([[false]]);
+  });
+
+  it('still notifies later listeners and replays the queued run when a listener throws', async (): Promise<void> => {
+    const failure = new Error('listener failed');
+    const later = jest.fn();
+    const unsubscribeThrowing = subscribeSyncCompletion(() => {
+      throw failure;
+    });
+    const unsubscribeLater = subscribeSyncCompletion(later);
+    try {
+      const release = holdNextRun();
+      requestSync('manual');
+      await flush();
+      requestSync('manual');
+      release();
+      await flush();
+    } finally {
+      unsubscribeThrowing();
+      unsubscribeLater();
+    }
+
+    expect(mockPullNotes).toHaveBeenCalledTimes(2);
+    expect(later.mock.calls).toEqual([[true], [false]]);
+    expect(Sentry.captureException).toHaveBeenCalledWith(failure, {
+      tags: { sync: 'completionListener' },
+    });
+  });
+
+  it('settles a queued foreground request the throttle drops', async (): Promise<void> => {
+    await throttleForeground();
+    const release = holdNextRun();
+    requestSync('manual');
+    await flush();
+    let settled = false;
+    const queued = requestSync('foreground').then(() => {
+      settled = true;
+    });
+    release();
+    await queued;
+    expect(settled).toBe(true);
+    expect(mockPullNotes).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Pull-to-refresh holds its spinner on this promise, so it has to settle once the
+// run the request caused is over — including a run that was queued behind another,
+// one that failed, and a request that never started a run at all.
+describe('requestSync completion promise', () => {
+  it('resolves after the run it started has finished', async () => {
+    await requestSync('manual');
+
+    const state = useSyncStore.getState();
+    expect(state.status).toBe('idle');
+    expect(state.lastSyncAt).not.toBeNull();
+  });
+
+  it('resolves a request queued behind an in-flight run only once the queued run finishes', async () => {
+    let releaseFirstRun: () => void = () => {};
+    mockPullNotes.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (releaseFirstRun = resolve)),
+    );
+    const firstRun = requestSync('sign-in');
+    await flush();
+
+    let queuedSettled = false;
+    const queued = requestSync('manual').then(() => {
+      queuedSettled = true;
+    });
+    await flush();
+    expect(queuedSettled).toBe(false);
+
+    releaseFirstRun();
+    await firstRun;
+    await queued;
+    expect(mockPullNotes).toHaveBeenCalledTimes(2);
+  });
+
+  it('resolves without rejecting when the run fails', async () => {
+    mockPullNotes.mockRejectedValueOnce(new ApiError('server down', 500));
+
+    await expect(requestSync('manual')).resolves.toBeUndefined();
+    expect(useSyncStore.getState().status).toBe('error');
+  });
+
+  it('resolves when there is nothing to sync', async () => {
+    mockAuthState.isGuest = true;
+
+    await expect(requestSync('manual')).resolves.toBeUndefined();
+    expect(mockPullNotes).not.toHaveBeenCalled();
+  });
+});
+
+describe('shared dictionary pull', () => {
+  it('runSyncNow calls pullSharedDictionary with cloud backup off', async () => {
+    mockConfigState.config = { cloudBackupEnabled: false };
+
+    requestSync('manual');
+    await flush();
+
+    expect(mockPullSharedDictionary).toHaveBeenCalledWith(expect.any(Function), null);
+    expect(mockPullDictionary).not.toHaveBeenCalled();
+    expect(mockLoadSharedDictionary).toHaveBeenCalled();
+    expect(useSyncStore.getState().status).toBe('idle');
+  });
+
+  it('hydrates the stored words for this account before any network call', async () => {
+    requestSync('manual');
+    await flush();
+
+    expect(mockLoadSharedDictionaryIfOwnedBy).toHaveBeenCalledWith('user-1');
+    const hydratedAt = mockLoadSharedDictionaryIfOwnedBy.mock.invocationCallOrder[0];
+    expect(hydratedAt).toBeLessThan(
+      jest.mocked(pushPrivateNoteDeletes).mock.invocationCallOrder[0],
+    );
+    expect(hydratedAt).toBeLessThan(mockFetchUsage.mock.invocationCallOrder[0]);
+    expect(hydratedAt).toBeLessThan(mockSyncSpaces.mock.invocationCallOrder[0]);
+  });
+
+  it('runs on the personal path, after the spaces pass, and reloads the store after it', async () => {
+    requestSync('manual');
+    await flush();
+
+    expect(mockPullSharedDictionary).toHaveBeenCalledTimes(1);
+    expect(mockSyncSpaces.mock.invocationCallOrder[0]).toBeLessThan(
+      mockPullSharedDictionary.mock.invocationCallOrder[0],
+    );
+    expect(mockPullSharedDictionary.mock.invocationCallOrder[0]).toBeLessThan(
+      mockLoadSharedDictionary.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('runs for an unsubscribed user', async () => {
+    mockFetchUsage.mockResolvedValue({ isSubscribed: false });
+
+    requestSync('manual');
+    await flush();
+
+    expect(mockPullSharedDictionary).toHaveBeenCalledTimes(1);
+    expect(mockPullNotesTeam).toHaveBeenCalled();
+  });
+
+  it('a failed shared pull does not stop the rest of the run', async () => {
+    mockPullSharedDictionary.mockRejectedValue(new ApiError('boom', 500));
+
+    requestSync('manual');
+    await flush();
+
+    expect(mockPushNotes).toHaveBeenCalled();
+    expect(mockPullDictionary).toHaveBeenCalled();
+    expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error), {
+      tags: { sync: 'shared-dictionary' },
+    });
+    expect(useSyncStore.getState().status).toBe('idle');
+    expect(useSyncStore.getState().lastError).toBeNull();
+  });
+
+  it('does not reload the stored words when the account changed during a failed pull', async () => {
+    mockPullSharedDictionary.mockImplementation(async () => {
+      mockAuthState.user = null;
+      throw new ApiError('boom', 500);
+    });
+
+    requestSync('manual');
+    await flush();
+
+    expect(mockLoadSharedDictionary).not.toHaveBeenCalled();
+  });
+
+  it('hands the shared pull the workspaces the spaces pass read', async () => {
+    const workspaces = [{ id: 'ws-1', name: 'Acme' }];
+    mockSyncSpaces.mockResolvedValue({ capable: true, activeSpaces: [], workspaces });
+
+    requestSync('manual');
+    await flush();
+
+    expect(mockPullSharedDictionary).toHaveBeenCalledWith(expect.any(Function), workspaces);
+  });
+
+  it('reports a stalled shared pull to Sentry instead of filing it as offline', async () => {
+    const stalled = new SyncStalledError('Shared dictionary delta stopped advancing');
+    mockPullSharedDictionary.mockRejectedValue(stalled);
+
+    requestSync('manual');
+    await flush();
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(stalled, {
+      tags: { sync: 'shared-dictionary' },
+    });
+    expect(mockPushNotes).toHaveBeenCalled();
+  });
+
+  it.each([
+    ['expo/fetch', new Error('fetch failed: The Internet connection appears to be offline.')],
+    ['React Native fetch', new TypeError('Network request failed')],
+  ])('a %s network failure in the shared pull stays out of Sentry', async (_label, error) => {
+    mockPullSharedDictionary.mockRejectedValue(error);
+
+    requestSync('manual');
+    await flush();
+
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+    expect(mockPushNotes).toHaveBeenCalled();
+  });
+
+  it('reports a crash in the shared pull, such as a malformed body, without failing the run', async () => {
+    const crash = new TypeError("Cannot read properties of undefined (reading 'at')");
+    mockPullSharedDictionary.mockRejectedValue(crash);
+
+    requestSync('manual');
+    await flush();
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(crash, {
+      tags: { sync: 'shared-dictionary' },
+    });
+    expect(mockPushNotes).toHaveBeenCalled();
+    expect(mockPullDictionary).toHaveBeenCalled();
+    expect(useSyncStore.getState().status).toBe('idle');
+    expect(useSyncStore.getState().lastError).toBeNull();
+  });
+});
+
+describe('personal dictionary pass', () => {
+  it.each([
+    ['a crashed pull', new TypeError('entries is not iterable')],
+    ['a failed backfill snapshot', new ApiError('boom', 500)],
+  ])('%s is reported and the push still runs', async (_label, error) => {
+    mockPullDictionary.mockRejectedValue(error);
+
+    requestSync('manual');
+    await flush();
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(error, { tags: { sync: 'dictionary' } });
+    expect(mockPushDictionary).toHaveBeenCalled();
+    expect(mockPullSnippets).toHaveBeenCalled();
+  });
+
+  it('a policy block on the pull still stops the run before the push', async () => {
+    mockPullDictionary.mockRejectedValue(
+      new ApiError('blocked', 403, 'POLICY_CLOUD_BACKUP_BLOCKED'),
+    );
+
+    requestSync('manual');
+    await flush();
+
+    expect(mockPushDictionary).not.toHaveBeenCalled();
+    expect(useSyncStore.getState().policyBlocked).toBe(true);
   });
 });

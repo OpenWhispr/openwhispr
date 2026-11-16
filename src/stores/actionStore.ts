@@ -1,6 +1,8 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import { TFunction } from "i18next";
-import type { ActionItem } from "../types/electron";
+import type { ActionItem, ActionKind } from "../types/electron";
+import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 
 interface ActionState {
   actions: ActionItem[];
@@ -71,8 +73,32 @@ function removeActionFromStore(id: number): void {
   useActionStore.setState({ actions: next });
 }
 
-export function useActions(): ActionItem[] {
-  return useActionStore((state) => state.actions);
+export function useActionsOfKind(kind: ActionKind): ActionItem[] {
+  return useActionStore(useShallow((state) => state.actions.filter((a) => a.kind === kind)));
+}
+
+export function resolveDefaultTemplate(
+  templates: ActionItem[],
+  defaultClientId?: string | null
+): ActionItem | null {
+  const eligible = templates.filter((action) => action.kind === "template");
+  return (
+    eligible.find((action) => action.client_id === defaultClientId) ??
+    eligible.find((action) => action.translation_key === GENERATE_NOTES_KEY) ??
+    eligible[0] ??
+    null
+  );
+}
+
+// Regeneration preserves the note's template when it is still available locally.
+export function resolveTemplate(
+  templates: ActionItem[],
+  clientId: string | null | undefined
+): ActionItem | null {
+  return (
+    templates.find((action) => action.kind === "template" && action.client_id === clientId) ??
+    resolveDefaultTemplate(templates)
+  );
 }
 
 export function getActionName(
@@ -84,7 +110,7 @@ export function getActionName(
     : action.name;
 }
 
-/** Verb-form label for the ask bar button; falls back to the action name. */
+/** Verb-form label the chat shows for a running action; falls back to the action name. */
 export function getActionCta(
   action: { name: string; translation_key?: string },
   t: TFunction

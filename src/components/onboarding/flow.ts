@@ -1,4 +1,6 @@
-import { PENDING_LOCAL_MODELS_KEY } from "./pendingLocalModels";
+import { SIGN_IN_PROMPTED_AT_KEY } from "../../utils/requestSignIn";
+import { PENDING_GRAPHICS_PACK_KEY, PENDING_LOCAL_MODELS_KEY } from "./pendingLocalModels";
+import type { PermissionGuideId } from "../../types/permissionGuide";
 
 export const ONBOARDING_SESSION_KEY = "onboardingSessionV2";
 export const LEGACY_ONBOARDING_STEP_KEY = "onboardingCurrentStep";
@@ -29,14 +31,16 @@ export type OnboardingStepId =
   | "setup-choice"
   | "byok-dictation"
   | "byok-assistant"
+  /** No longer routed — the one local-setup step replaced this two-stage picker.
+      Kept so a session saved on either still parses and reconciles onto it. */
   | "local-dictation"
-  | "local-assistant";
+  | "local-assistant"
+  | "local-setup";
 
 export type OnboardingAuthPath = "account" | "guest" | null;
 export type OnboardingSetupMode = "cloud" | "byok" | "local" | null;
 export type OnboardingAuthMode = "sign-in" | "sign-up" | null;
 export type OnboardingByokStepId = "byok-dictation" | "byok-assistant";
-export type OnboardingLocalStepId = "local-dictation" | "local-assistant";
 
 export interface OnboardingSsoDiscoveryDraft {
   required: boolean;
@@ -59,11 +63,6 @@ export interface OnboardingByokDraft {
   customModel: string;
 }
 
-export interface OnboardingLocalModelDraft {
-  provider: string;
-  modelId: string;
-}
-
 export interface OnboardingResumeState {
   dictationHotkeyConfirmed: boolean;
   assistantHotkeyConfirmed: boolean;
@@ -71,7 +70,6 @@ export interface OnboardingResumeState {
   assistantDemoCompleted: boolean;
   auth: OnboardingAuthDraft;
   byok: Partial<Record<OnboardingByokStepId, OnboardingByokDraft>>;
-  localModels: Partial<Record<OnboardingLocalStepId, OnboardingLocalModelDraft>>;
 }
 
 export interface OnboardingSession {
@@ -88,6 +86,7 @@ export interface OnboardingSession {
    * dropped with the session at finalization.
    */
   screenContextRequested: boolean;
+  permissionGuide: PermissionGuideId | null;
   resume: OnboardingResumeState;
 }
 
@@ -121,7 +120,7 @@ const ACCOUNT_ROUTE: OnboardingStepId[] = [
 
 const SETUP_ROUTES: Record<Exclude<OnboardingSetupMode, null | "cloud">, OnboardingStepId[]> = {
   byok: ["byok-dictation", "byok-assistant"],
-  local: ["local-dictation", "local-assistant"],
+  local: ["local-setup"],
 };
 
 // Canonical flow order, independent of any one route. reconcileStepWithRoute uses
@@ -143,6 +142,7 @@ const STEP_ORDER: OnboardingStepId[] = [
   "byok-assistant",
   "local-dictation",
   "local-assistant",
+  "local-setup",
 ];
 
 const KNOWN_STEPS = new Set<OnboardingStepId>(STEP_ORDER);
@@ -162,6 +162,19 @@ export const COMPACT_STEPS: ReadonlySet<OnboardingStepId> = new Set<OnboardingSt
   "auth",
   "permissions",
 ]);
+
+export type OnboardingWindowMode = "compact" | "expanded" | "local-setup";
+
+/**
+ * The window size a step asks main for. Local setup gets a taller window than the
+ * other expanded steps: its card, with three 96px rows, would otherwise scroll its
+ * heading and button out of view. The card's placeholder renders on the same step,
+ * so the window doesn't move when the plan lands.
+ */
+export function getOnboardingWindowMode(stepId: OnboardingStepId): OnboardingWindowMode {
+  if (COMPACT_STEPS.has(stepId)) return "compact";
+  return stepId === "local-setup" ? "local-setup" : "expanded";
+}
 
 const LEGACY_STEP_MAP: OnboardingStepId[] = [
   "auth",
@@ -191,7 +204,6 @@ export function createOnboardingResumeState(): OnboardingResumeState {
       pendingVerificationEmail: null,
     },
     byok: {},
-    localModels: {},
   };
 }
 
@@ -204,6 +216,7 @@ export function createOnboardingSession(): OnboardingSession {
     setupMode: null,
     selfHostedRequested: false,
     screenContextRequested: false,
+    permissionGuide: null,
     resume: createOnboardingResumeState(),
   };
 }
@@ -215,6 +228,9 @@ export function resetOnboardingProgress(storage: OnboardingStorage): void {
   storage.removeItem("skipAuth");
   storage.removeItem("localSetupPending");
   storage.removeItem(PENDING_LOCAL_MODELS_KEY);
+  storage.removeItem(PENDING_GRAPHICS_PACK_KEY);
+  // A restart is not the sign-in that marker announces.
+  storage.removeItem(SIGN_IN_PROMPTED_AT_KEY);
   // AppRouter uses this marker to distinguish an explicit restart from a
   // returning signed-in user, while useOnboardingSession migrates it to auth.
   storage.setItem(LEGACY_ONBOARDING_STEP_KEY, "0");
@@ -256,6 +272,22 @@ export function getOnboardingRoute(context: OnboardingRouteContext): OnboardingS
 }
 
 /**
+ * The required-models step holds the member only while a model can still arrive.
+ * One the organization refused never will, so it no longer counts as missing.
+ */
+export function canLeaveRequiredModels({
+  loading,
+  missing,
+  refused,
+}: {
+  loading: boolean;
+  missing: string[];
+  refused: string[];
+}): boolean {
+  return !loading && missing.every((modelId) => refused.includes(modelId));
+}
+
+/**
  * The Notes step's forward action. Calendar connections are optional, so the step
  * offers Skip until one connects and Continue afterwards. "loading" is its own
  * state rather than an absence: while the setup decision is pending there is
@@ -289,6 +321,13 @@ export function isOnboardingStepId(value: unknown): value is OnboardingStepId {
   return typeof value === "string" && KNOWN_STEPS.has(value as OnboardingStepId);
 }
 
+function isPermissionGuideId(value: unknown): value is PermissionGuideId {
+  return (
+    typeof value === "string" &&
+    ["microphone", "accessibility", "system-audio", "screen-context"].includes(value)
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -316,14 +355,6 @@ function parseByokDraft(value: unknown): OnboardingByokDraft | undefined {
     selectedModel: readDraftString(value.selectedModel),
     baseUrl: readDraftString(value.baseUrl),
     customModel: readDraftString(value.customModel),
-  };
-}
-
-function parseLocalModelDraft(value: unknown): OnboardingLocalModelDraft | undefined {
-  if (!isRecord(value)) return undefined;
-  return {
-    provider: readDraftString(value.provider),
-    modelId: readDraftString(value.modelId),
   };
 }
 
@@ -360,11 +391,8 @@ function parseOnboardingResumeState(
   const authValue = isRecord(value.auth) ? value.auth : {};
   const authMode = authValue.authMode;
   const byokValue = isRecord(value.byok) ? value.byok : {};
-  const localModelsValue = isRecord(value.localModels) ? value.localModels : {};
   const byokDictation = parseByokDraft(byokValue["byok-dictation"]);
   const byokAssistant = parseByokDraft(byokValue["byok-assistant"]);
-  const localDictation = parseLocalModelDraft(localModelsValue["local-dictation"]);
-  const localAssistant = parseLocalModelDraft(localModelsValue["local-assistant"]);
 
   return {
     dictationHotkeyConfirmed: value.dictationHotkeyConfirmed === true,
@@ -385,10 +413,8 @@ function parseOnboardingResumeState(
       ...(byokDictation ? { "byok-dictation": byokDictation } : {}),
       ...(byokAssistant ? { "byok-assistant": byokAssistant } : {}),
     },
-    localModels: {
-      ...(localDictation ? { "local-dictation": localDictation } : {}),
-      ...(localAssistant ? { "local-assistant": localAssistant } : {}),
-    },
+    // Older builds also saved the two-stage local picker's model draft here
+    // (resume.localModels). Nothing reads it any more, so it is dropped.
   };
 }
 
@@ -437,6 +463,7 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
       setupMode,
       selfHostedRequested: parsed.selfHostedRequested ?? false,
       screenContextRequested: parsed.screenContextRequested ?? false,
+      permissionGuide: isPermissionGuideId(parsed.permissionGuide) ? parsed.permissionGuide : null,
       resume: parseOnboardingResumeState(parsed.resume, parsed.currentStepId),
     };
   } catch {
@@ -444,15 +471,41 @@ export function parseOnboardingSession(value: string | null): OnboardingSession 
   }
 }
 
+// Steps that show their own per-row download progress.
+const DOWNLOAD_OWNING_STEPS: ReadonlySet<OnboardingStepId> = new Set<OnboardingStepId>([
+  "required-models",
+  "local-setup",
+]);
+
 /**
- * True while a persisted onboarding session sits on the blocking
- * required-models step. The background download tray uses this to keep its
- * hands off downloads that step owns: a tray row would duplicate the step's
- * own progress pill, and the tray's cancel cannot stick — the step
- * auto-restarts org-mandated downloads.
+ * True while a persisted onboarding session sits on a step that owns its
+ * downloads. The background download tray uses this to keep its hands off
+ * them: a tray row would duplicate the step's own progress, the tray's cancel
+ * cannot stick on required-models (the step auto-restarts org-mandated
+ * downloads), and local-setup cancels and resumes its queue itself.
  */
-export function isRequiredModelsOnboardingStepActive(sessionValue: string | null): boolean {
-  return parseOnboardingSession(sessionValue)?.currentStepId === "required-models";
+export function isDownloadOwningOnboardingStepActive(sessionValue: string | null): boolean {
+  const stepId = parseOnboardingSession(sessionValue)?.currentStepId;
+  return stepId !== undefined && DOWNLOAD_OWNING_STEPS.has(stepId);
+}
+
+/**
+ * A policy refetch normally shows the loading screen, which unmounts onboarding.
+ * A rotated token refetches the same account's policy, and unmounting a step that
+ * owns downloads would cancel them, so that step stays up through it.
+ */
+export function keepsOnboardingStepThroughPolicyRefetch(input: {
+  showOnboarding: boolean;
+  sessionValue: string | null;
+  policyAccountId: string | null;
+  lastResolvedAccountId: string | null;
+}): boolean {
+  return (
+    input.showOnboarding &&
+    input.policyAccountId !== null &&
+    input.policyAccountId === input.lastResolvedAccountId &&
+    isDownloadOwningOnboardingStepActive(input.sessionValue)
+  );
 }
 
 export function migrateLegacyOnboardingStep(value: string | null): OnboardingStepId {
@@ -509,9 +562,9 @@ export interface OnboardingProgressState {
  *
  * The total comes from the route rather than a constant because the route itself
  * is conditional — the assistant pair drops out when the assistant is disallowed, and
- * the provider pair only exists once a non-cloud setup mode is picked. Choosing
- * BYOK/local on setup-choice therefore appends two steps and the row
- * grows by two dots at that moment, which is the flow honestly getting longer.
+ * the setup steps only exist once a non-cloud setup mode is picked. Choosing BYOK on
+ * setup-choice appends two steps and Local appends one, so the row grows by that
+ * many dots at that moment, which is the flow honestly getting longer.
  *
  * Returns null when there is nothing worth drawing: a compact step, an off-route
  * step, or a route with fewer than two counted steps, where a one-dot row would

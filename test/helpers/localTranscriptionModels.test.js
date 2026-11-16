@@ -47,3 +47,23 @@ test("a sherpa default is read from PARAKEET_MODEL, and cloud mode yields no def
     false
   );
 });
+
+test("a retired model is listed only while it is on disk", async () => {
+  const store = await import("../../src/models/registryData.js");
+  const data = structuredClone(registry);
+  Object.assign(data.whisperModels.tiny, { retired: true });
+  Object.assign(data.whisperModels.small, { retired: true });
+  store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
+  try {
+    const ids = listLocalTranscriptionModels({ ...managers(new Set(["tiny"])), env: {} }).map(
+      (m) => m.model
+    );
+    assert.ok(ids.includes("tiny"), "still runs from disk");
+    assert.equal(ids.includes("small"), false, "nothing to run, so not offered");
+  } finally {
+    store.replaceRegistryData({
+      data: structuredClone(registry),
+      manifestVersion: store.getRegistryVersion() + 1,
+    });
+  }
+});

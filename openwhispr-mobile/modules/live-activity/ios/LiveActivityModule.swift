@@ -5,8 +5,15 @@ public class LiveActivityModule: Module {
   public func definition() -> ModuleDefinition {
     Name("LiveActivity")
 
-    OnCreate {
-      LiveActivityController.shared.startObserving()
+    Events("onEndMeetingRequested")
+
+    OnCreate { [weak self] in
+      let controller = LiveActivityController.shared
+      controller.setEndMeetingHandler { [weak self] in
+        self?.sendEvent("onEndMeetingRequested", [:])
+      }
+      controller.startObserving()
+      controller.resetForNewJSRuntime()
     }
 
     Function("startSession") {
@@ -23,6 +30,19 @@ public class LiveActivityModule: Module {
 
     Function("isDictationModeEnabled") { () -> Bool in
       LiveActivityController.shared.isDictationModeEnabled()
+    }
+
+    Function("startMeeting") { (title: String?, startedAtMs: Double) in
+      LiveActivityController.shared.startMeeting(
+        title: title, startedAt: Date(timeIntervalSince1970: startedAtMs / 1000))
+    }
+
+    Function("setMeetingProcessing") { (recordedSeconds: Int) in
+      LiveActivityController.shared.setMeetingProcessing(recordedSeconds: recordedSeconds)
+    }
+
+    Function("endMeeting") {
+      LiveActivityController.shared.endMeeting()
     }
   }
 }

@@ -1,5 +1,6 @@
 import {
   filterByokProviderOptionsByPolicy,
+  filterLocalModelOptionsByPolicy,
   isModeAllowedByPolicy,
   isProviderAllowedByPolicy,
   type PolicyDecisionSnapshot,
@@ -26,11 +27,13 @@ export function getOnboardingSetupAvailability({
   agentAllowed,
   transcriptionProviders,
   llmProviders,
+  supportedLocalTranscriptionModels,
 }: {
   policy: PolicyDecisionSnapshot;
   agentAllowed: boolean;
   transcriptionProviders: ProviderOption[];
   llmProviders: ProviderOption[];
+  supportedLocalTranscriptionModels: ProviderOption[];
 }): OnboardingSetupAvailability {
   const transcriptionByokAvailable =
     isModeAllowedByPolicy(policy, "transcription", "providers") &&
@@ -42,9 +45,11 @@ export function getOnboardingSetupAvailability({
   const cloud =
     isModeAllowedByPolicy(policy, "transcription", "openwhispr") &&
     (!agentAllowed || isModeAllowedByPolicy(policy, "llm", "openwhispr"));
+  // Only speech decides: the local assistant step is optional, and when AI text
+  // is blocked it says so and offers Skip.
   const local =
-    isModeAllowedByPolicy(policy, "transcription", "local") &&
-    (!agentAllowed || isModeAllowedByPolicy(policy, "llm", "local"));
+    filterLocalModelOptionsByPolicy(supportedLocalTranscriptionModels, "transcription", policy)
+      .length > 0;
   const byok = transcriptionByokAvailable && (!agentAllowed || llmByokAvailable);
   const selfHosted =
     isModeAllowedByPolicy(policy, "transcription", "self-hosted") &&

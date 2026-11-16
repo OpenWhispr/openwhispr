@@ -1,11 +1,12 @@
+import { useOnboardingStep } from '@/hooks/useOnboardingStep';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, TextInput, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon } from '@/components/ui/SystemIcon';
-import { SpaceGrotesk } from '@/lib/fonts';
-import { getStepProgress, useOnboardingStore } from '@/store/useOnboardingStore';
+import { AppFont } from '@/lib/fonts';
+import { saveOnboardingConfig } from '@/lib/onboardingMode';
 import { useConfigStore } from '@/store/useConfigStore';
 import { detectPreferredLanguages } from '@/lib/deviceLanguages';
 // TODO: extract this registry into a shared @openwhispr/language-registry package
@@ -13,8 +14,6 @@ import { detectPreferredLanguages } from '@/lib/deviceLanguages';
 // copy of openwhispr/src/config/languageRegistry.json — re-copy after desktop
 // adds new Whisper languages until the shared package exists.
 import registry from '@/config/languageRegistry.json';
-
-const STEP_ID = 'language';
 
 interface RegistryEntry {
   code: string;
@@ -132,12 +131,11 @@ const WHISPER_LANGUAGES: SupportedLanguage[] = (registry.languages as RegistryEn
 const LANGUAGE_BY_CODE = new Map(WHISPER_LANGUAGES.map((l) => [l.code, l]));
 
 export function LanguageStep() {
-  const goNext = useOnboardingStore((s) => s.goNext);
-  const goToStep = useOnboardingStore((s) => s.goToStep);
-  const updateConfig = useConfigStore((s) => s.updateConfig);
+  const { goNext, progress, goBack } = useOnboardingStep('language');
+  const savedLanguages = useConfigStore((s) => s.config?.languages);
 
   const detectedCodes = useMemo(detectPreferredLanguages, []);
-  const [selected, setSelected] = useState<string[]>(() => detectedCodes);
+  const [selected, setSelected] = useState<string[]>(() => savedLanguages ?? detectedCodes);
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const selectedLanguages = useMemo(
@@ -155,17 +153,10 @@ export function LanguageStep() {
     setSheetVisible(false);
   }, []);
 
-  const handleContinue = useCallback(async () => {
-    await updateConfig({ languages: selected });
-    // The mode picked on the previous step decides what's next: private users download the
-    // model their languages route to; cloud users skip the download step entirely.
-    const mode = useConfigStore.getState().config?.defaultMode;
-    if (mode === 'private') {
-      await goNext(); // → 'private-download'
-    } else {
-      await goToStep('notifications');
-    }
-  }, [selected, updateConfig, goNext, goToStep]);
+  const handleContinue = useCallback(async (): Promise<void> => {
+    await saveOnboardingConfig({ languages: selected });
+    await goNext();
+  }, [selected, goNext]);
 
   const subtitle = detectedCodes.length
     ? 'We picked these from your keyboard. Add or remove based on your preference.'
@@ -174,7 +165,8 @@ export function LanguageStep() {
   return (
     <>
       <OnboardingShell
-        progress={getStepProgress(STEP_ID)}
+        progress={progress}
+        onBack={goBack}
         title="Choose your languages"
         titleAccent="languages"
         subtitle={subtitle}
@@ -281,7 +273,9 @@ function AddLanguageSheet({
     >
       <View className="flex-1 bg-systemBackground">
         <View className="flex-row items-center justify-between px-6 pb-4 pt-8">
-          <Text className="text-[22px] font-bold text-label">Add a language</Text>
+          <Text accessibilityRole="header" className="text-[22px] font-bold text-label">
+            Add a language
+          </Text>
           <Pressable
             onPress={onClose}
             hitSlop={8}
@@ -302,7 +296,7 @@ function AddLanguageSheet({
             autoCorrect={false}
             autoCapitalize="none"
             className="h-11 rounded-lg bg-secondarySystemGroupedBackground px-4 text-[15px] text-label"
-            style={{ fontFamily: SpaceGrotesk.regular }}
+            style={{ fontFamily: AppFont.regular }}
           />
         </View>
 

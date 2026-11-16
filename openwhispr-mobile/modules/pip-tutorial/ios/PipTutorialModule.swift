@@ -6,6 +6,19 @@ import os.log
 
 private let log = Logger(subsystem: "com.gizmolabs.openwhispr", category: "PipTutorial")
 
+// Outcomes `start` resolves with. Anything but `started` means no overlay is showing;
+// JS reports the unexpected ones so a silent failure shows up in Sentry.
+private enum StartOutcome {
+  static let started = "started"
+  static let unsupported = "unsupported"
+  static let videoMissing = "video_missing"
+  static let noRootView = "no_root_view"
+  static let controllerFailed = "controller_failed"
+  static let timeout = "timeout"
+  static let stopped = "stopped"
+  static func failed(_ error: Error) -> String { "failed:\(error.localizedDescription)" }
+}
+
 public class PipTutorialModule: Module {
   private var player: AVPlayer?
   private var playerLayer: AVPlayerLayer?
@@ -15,6 +28,9 @@ public class PipTutorialModule: Module {
   private var statusObserver: NSKeyValueObservation?
   private var startPromise: Promise?
   private var startTimeoutWorkItem: DispatchWorkItem?
+  // True only while the session is the one this module configured, so teardown
+  // never deactivates a session the dictation mic owns.
+  private var ownsAudioSession = false
 
   public func definition() -> ModuleDefinition {
     Name("PipTutorial")
@@ -41,38 +57,31 @@ public class PipTutorialModule: Module {
 
     guard AVPictureInPictureController.isPictureInPictureSupported() else {
       log.error("PiP not supported on this device")
-      promise.resolve(false)
+      promise.resolve(StartOutcome.unsupported)
       return
     }
 
     guard let url = Bundle.main.url(forResource: videoName, withExtension: "mp4") else {
       log.error("Video not found in bundle: \(videoName).mp4")
-      promise.resolve(false)
+      promise.resolve(StartOutcome.videoMissing)
       return
     }
     log.info("Video URL: \(url.absoluteString, privacy: .public)")
 
     DispatchQueue.main.async { [weak self] in
       guard let self = self else {
-        promise.resolve(false)
+        promise.resolve(StartOutcome.stopped)
         return
       }
-      self.resolveStart(false)
       self.teardownOnMain()
 
       guard let rootView = Self.activeRootView() else {
         log.error("No root view found; cannot attach player layer")
-        promise.resolve(false)
+        promise.resolve(StartOutcome.noRootView)
         return
       }
 
-      do {
-        try AVAudioSession.sharedInstance().setCategory(
-          .playback, mode: .moviePlayback, options: [.mixWithOthers])
-        try AVAudioSession.sharedInstance().setActive(true, options: [])
-      } catch {
-        log.error("AVAudioSession setup failed: \(error.localizedDescription)")
-      }
+      self.prepareAudioSession()
 
       let player = AVPlayer(url: url)
       player.isMuted = true
@@ -84,17 +93,21 @@ public class PipTutorialModule: Module {
         guard let self = self else { return }
         if self.pipController?.isPictureInPictureActive == true {
           log.info("PiP start callback timed out after activation; keeping session alive")
-          self.resolveStart(true)
+          self.resolveStart(StartOutcome.started)
           return
         }
-        log.error("Timed out waiting for PiP to start")
-        self.teardownOnMain()
+        let possible = self.pipController?.isPictureInPicturePossible == true
+        log.error("Timed out waiting for PiP to start (possible=\(possible, privacy: .public))")
+        self.teardownOnMain(outcome: "\(StartOutcome.timeout):possible=\(possible)")
       }
       self.startTimeoutWorkItem = timeoutWorkItem
       DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: timeoutWorkItem)
 
+      // PiP stays impossible for a layer outside the visible window, so keep it on
+      // screen at a single point in the top-left corner, which the display's rounded
+      // corner hides.
       let layer = AVPlayerLayer(player: player)
-      layer.frame = CGRect(x: -1000, y: -1000, width: 200, height: 100)
+      layer.frame = CGRect(x: 0, y: 0, width: 1, height: 1)
       layer.videoGravity = .resizeAspectFill
       rootView.layer.addSublayer(layer)
       self.playerLayer = layer
@@ -102,7 +115,7 @@ public class PipTutorialModule: Module {
 
       guard let pipController = AVPictureInPictureController(playerLayer: layer) else {
         log.error("Failed to create AVPictureInPictureController")
-        self.teardownOnMain()
+        self.teardownOnMain(outcome: StartOutcome.controllerFailed)
         return
       }
       if #available(iOS 14.2, *) {
@@ -110,10 +123,10 @@ public class PipTutorialModule: Module {
       }
       let delegate = PipDelegate(
         onDidStart: { [weak self] in
-          self?.resolveStart(true)
+          self?.resolveStart(StartOutcome.started)
         },
-        onFailedToStart: { [weak self] in
-          self?.resolveStart(false)
+        onFailedToStart: { [weak self] error in
+          self?.resolveStart(StartOutcome.failed(error))
         }
       )
       pipController.delegate = delegate
@@ -150,12 +163,41 @@ public class PipTutorialModule: Module {
     }
   }
 
-  private func resolveStart(_ success: Bool) {
+  // The dictation mic keeps a `.playAndRecord` session running while it's warm, and a
+  // recording holds `.record`. Switching either to `.playback` would cut the mic's input,
+  // and `.playAndRecord` already allows PiP, so only configure a session nobody has set up
+  // (or one an earlier tutorial left as `.playback`).
+  private func prepareAudioSession() {
+    let session = AVAudioSession.sharedInstance()
+    let category = session.category
+    guard category == .ambient || category == .soloAmbient || category == .playback else {
+      log.info("Leaving audio session as \(category.rawValue, privacy: .public)")
+      return
+    }
+    do {
+      try session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+      try session.setActive(true, options: [])
+      ownsAudioSession = true
+    } catch {
+      log.error("AVAudioSession setup failed: \(error.localizedDescription)")
+    }
+  }
+
+  private func releaseAudioSession() {
+    guard ownsAudioSession else { return }
+    ownsAudioSession = false
+    let session = AVAudioSession.sharedInstance()
+    // The dictation mic may have taken the session over since the tutorial started.
+    guard session.category == .playback else { return }
+    try? session.setActive(false, options: [.notifyOthersOnDeactivation])
+  }
+
+  private func resolveStart(_ outcome: String) {
     startTimeoutWorkItem?.cancel()
     startTimeoutWorkItem = nil
     guard let promise = startPromise else { return }
     startPromise = nil
-    promise.resolve(success)
+    promise.resolve(outcome)
   }
 
   private func teardown() {
@@ -165,8 +207,8 @@ public class PipTutorialModule: Module {
     }
   }
 
-  private func teardownOnMain() {
-    resolveStart(false)
+  private func teardownOnMain(outcome: String = StartOutcome.stopped) {
+    resolveStart(outcome)
     statusObserver?.invalidate()
     statusObserver = nil
     if let observer = loopObserver {
@@ -180,8 +222,7 @@ public class PipTutorialModule: Module {
     playerLayer = nil
     pipController = nil
     delegateRetainer = nil
-    try? AVAudioSession.sharedInstance().setActive(
-      false, options: [.notifyOthersOnDeactivation])
+    releaseAudioSession()
   }
 
   private static func activeRootView() -> UIView? {
@@ -200,9 +241,9 @@ public class PipTutorialModule: Module {
 
 private final class PipDelegate: NSObject, AVPictureInPictureControllerDelegate {
   private let onDidStart: () -> Void
-  private let onFailedToStart: () -> Void
+  private let onFailedToStart: (Error) -> Void
 
-  init(onDidStart: @escaping () -> Void, onFailedToStart: @escaping () -> Void) {
+  init(onDidStart: @escaping () -> Void, onFailedToStart: @escaping (Error) -> Void) {
     self.onDidStart = onDidStart
     self.onFailedToStart = onFailedToStart
   }
@@ -219,7 +260,7 @@ private final class PipDelegate: NSObject, AVPictureInPictureControllerDelegate 
     failedToStartPictureInPictureWithError error: Error
   ) {
     log.error("PiP failed to start: \(error.localizedDescription)")
-    onFailedToStart()
+    onFailedToStart(error)
   }
   func pictureInPictureControllerWillStopPictureInPicture(_ controller: AVPictureInPictureController) {
     log.info("PiP will stop")

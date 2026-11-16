@@ -5,6 +5,12 @@ const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 
 const CLICK_ID = /^[A-Za-z0-9_-]{1,128}$/;
+let signedOutGeneration = null;
+
+function setAccountScope(accountId, generation) {
+  signedOutGeneration = accountId === null ? generation : null;
+}
+
 function configuration() {
   const domain = process.env.OPENWHISPR_AFFILIATE_DOMAIN;
   return process.env.OPENWHISPR_AFFILIATE_ENABLED === "true" &&
@@ -58,7 +64,16 @@ function context() {
     ...state,
     binding: accountScopeBinding.read(),
   });
-  return { ...state, accountId: scope?.accountId ?? null };
+  return {
+    ...state,
+    accountId: scope?.accountId ?? null,
+    // A rejected session can leave its expired bearer on disk. Newly entered
+    // guest links must survive the next login without releasing older candidates.
+    tokenHash:
+      state.token && signedOutGeneration !== state.generation
+        ? accountScopeBinding.hashToken(state.token)
+        : null,
+  };
 }
 function read() {
   try {
@@ -99,7 +114,7 @@ function capture(value, protocol) {
     ...parsed,
     saved: false,
     ownerId: current.accountId,
-    tokenHash: current.token ? accountScopeBinding.hashToken(current.token) : null,
+    tokenHash: current.tokenHash,
   });
   return true;
 }
@@ -136,6 +151,14 @@ function saveCandidate(input) {
   )
     throw new Error("INVALID_REFERRAL");
   const previous = candidateForCurrentAccount();
+  const expected = input.expectedCandidate;
+  if (
+    expected &&
+    ["link", "clickId", "saved"].some(
+      (key) => expected[key] !== (previous ?? { link: "", clickId: null, saved: false })[key]
+    )
+  )
+    throw new Error("REFERRAL_CONTEXT_CHANGED");
   if (previous?.saved) return;
   // Partial text is allowed while editing; only a resolved link is used for requests.
   write({
@@ -143,7 +166,7 @@ function saveCandidate(input) {
     clickId: input.clickId ?? null,
     saved: input.saved === true,
     ownerId: current.accountId,
-    tokenHash: current.token ? accountScopeBinding.hashToken(current.token) : null,
+    tokenHash: current.tokenHash,
   });
 }
 async function resolveLink(value, expectedGeneration, fetcher = (...args) => net.fetch(...args)) {
@@ -175,6 +198,7 @@ async function resolveLink(value, expectedGeneration, fetcher = (...args) => net
 }
 module.exports = {
   configuration,
+  setAccountScope,
   parseLink,
   parseArrival,
   capture,

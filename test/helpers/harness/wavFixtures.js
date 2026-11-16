@@ -31,4 +31,14 @@ function pcm16Mono16kWav(samples = [0, 100, -100, 200]) {
   return pcm16ToWav(Buffer.from(Int16Array.from(samples).buffer));
 }
 
-module.exports = { wavHeader, pcm16Mono16kWav };
+function insertWavChunk(wav, id, payload, offset) {
+  const chunk = Buffer.alloc(8 + payload.length + (payload.length % 2));
+  chunk.write(id, 0, 4, "ascii");
+  chunk.writeUInt32LE(payload.length, 4);
+  payload.copy(chunk, 8);
+  const result = Buffer.concat([wav.subarray(0, offset), chunk, wav.subarray(offset)]);
+  result.writeUInt32LE(result.length - 8, 4);
+  return result;
+}
+
+module.exports = { wavHeader, pcm16Mono16kWav, insertWavChunk };

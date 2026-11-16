@@ -190,3 +190,54 @@ test("resetting a provider re-arms the next meeting timer for upcoming events", 
 
   scheduler.stop();
 });
+
+test("schedule refresh clears a no-longer-eligible cached meeting", (t) => {
+  const event = activeEvent("google", "meeting");
+  let rows = [event];
+  // Not started yet: the reminder fires in the minute before start.
+  let active = [];
+  const scheduler = new CalendarReminderScheduler({
+    getUpcomingEvents: () => rows,
+    getActiveEvents: () => active,
+  });
+  t.after(() => scheduler.stop());
+  let prompts = 0;
+  scheduler.meetingDetectionEngine = { handleCalendarReminder: () => prompts++ };
+  scheduler.scheduleNextMeeting();
+  assert.equal(prompts, 1);
+  assert.ok(scheduler.meetingEndTimer);
+  rows = [];
+  scheduler.scheduleNextMeeting();
+  assert.equal(scheduler.activeMeeting, null);
+  assert.equal(scheduler.meetingEndTimer, null);
+  assert.equal(prompts, 1);
+  rows = [event];
+  scheduler.scheduleNextMeeting();
+  assert.equal(prompts, 1, "reacceptance cannot repeat a delivered reminder");
+  assert.equal(scheduler.activeMeeting, event);
+  active = rows;
+  scheduler.onWakeFromSleep();
+  assert.equal(prompts, 1, "waking after the start cannot repeat it either");
+});
+
+test("clearing the cached meeting restores another reminded running meeting", (t) => {
+  const first = activeEvent("apple", "first");
+  const second = activeEvent("apple", "second");
+  let rows = [first];
+  const scheduler = new CalendarReminderScheduler({
+    getUpcomingEvents: () => rows,
+    getActiveEvents: () => rows,
+  });
+  t.after(() => scheduler.stop());
+  let prompts = 0;
+  scheduler.meetingDetectionEngine = { handleCalendarReminder: () => prompts++ };
+  scheduler.scheduleNextMeeting();
+  rows = [first, second];
+  scheduler.scheduleNextMeeting();
+  assert.equal(scheduler.activeMeeting, second);
+  rows = [first];
+  scheduler.scheduleNextMeeting();
+  assert.equal(scheduler.activeMeeting, first);
+  scheduler.onWakeFromSleep();
+  assert.equal(prompts, 2, "waking cannot repeat a delivered reminder");
+});

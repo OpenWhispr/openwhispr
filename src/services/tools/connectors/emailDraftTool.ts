@@ -1,0 +1,425 @@
+import i18n from "../../../i18n";
+import type { ToolDefinition, ToolExecutionContext, ToolResult } from "../ToolRegistry";
+import {
+  bareEmailAddress,
+  buildComposeRequest,
+  isValidEmailAddress,
+  recipientLabel,
+} from "../../../helpers/connectors/emailCompose";
+import type { ConnectorDirectResult } from "../../../types/connectors";
+import type { ComposeTarget, EmailDraftTarget } from "../../../utils/emailDraftTarget";
+import { getCachedPlatform } from "../../../utils/platform";
+import { useConnectorStatusStore } from "../../../stores/connectorStatusStore";
+import { connectorErrorText } from "../../../utils/connectorErrorCopy";
+import { connectFirst } from "../interactionTools";
+import { runApprovalAction } from "./runApprovalAction";
+import {
+  duplicateActionResult,
+  failedResult,
+  needsClarificationResult,
+  notSentResult,
+  unavailableResult,
+  unknownResult,
+} from "./toolOutcome";
+import { findContactTool } from "./findContactTool";
+import { connectorActionKey } from "./actionKey";
+import type { ConnectorToolModule } from "./connectorToolModules";
+
+// Enough for "email Josh and Dana each a recap"; a model stuck in a loop, or
+// following an injected instruction, can't bury the user in compose windows
+// or cards.
+const MAX_DRAFTS_PER_TURN = 3;
+
+const GMAIL_RECONNECT_GUIDANCE =
+  "Tell the user to reconnect Gmail under Settings → Integrations → Connectors. Don't retry.";
+const GMAIL_UNKNOWN_GUIDANCE = "Tell the user to check their Gmail Sent folder.";
+
+// One line for both paths: the tool's own description says whether a card
+// or the user's mail app sends it.
+const EMAIL_DRAFT_INSTRUCTION =
+  "Use email_draft to draft an email to full email addresses; its description says whether the user sends it from a card in the chat or from their own email app.";
+// Both paths send the body as it is written, so Markdown shows up as symbols.
+const PLAIN_TEXT_BODY = "Write the body in plain text, not Markdown (no **, # or [text](link)).";
+
+// Bounded runs: the body is the model's (up to 512 KB) and this runs on the
+// renderer's main thread, so no pattern may rescan a long line from every [.
+// A [ right after a word, ] or ) is code, not a link: callbacks[key](value).
+const LINK = /(?<![\w\])])\[([^\]\n]{1,500})\]\(([^)\s]{1,2000})\)/g;
+// Stops at a protected code span, which stays as it is.
+const URL_TOKEN = /\bhttps?:\/\/[^\s\u0000]+/g;
+// Fenced and inline code stay as written.
+const CODE = /^```[^\n]*\n[\s\S]*?^```|`[^`\n]{1,500}`/gm;
+// Both pairs of ** need a line edge or a non-word character outside them, so
+// x**2 + y**2 stays as it is.
+const BOLD = /(^|[^\w*])\*\*(?=\S)([^*\n]+?)(?<=\S)\*\*(?=$|[^\w*])/gm;
+const HEADING = /^(#{1,6})[ \t]+(\S.*)$/gm;
+// In any script: "# Über uns" is a heading too.
+const HEADING_START = /^[\p{L}\p{N}_]/u;
+// "# of attendees" and "# 1 priority" aren't headings; "# 2026 Goals" is.
+const LOWERCASE_START = /^(?:\p{Ll}|\p{N}+\s+\p{Ll})/u;
+
+// A heading's text without its optional closing hashes ("# Title ##").
+function headingText(rest: string): string {
+  const text = rest.trimEnd();
+  const closing = /[ \t]#+$/.exec(text);
+  return closing ? text.slice(0, closing.index).trimEnd() : text;
+}
+
+/**
+ * The body with the Markdown models write anyway made plain, before the card
+ * or the draft shows it, so the user sees exactly what is sent: **bold** loses
+ * its markers, a heading line keeps its text, a link becomes "text (url)".
+ * Links are left alone otherwise, and so are code, a count like "# of
+ * attendees" or "# 1", single asterisks, underscores, list dashes and numbers.
+ */
+function plainTextBody(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const urls: string[] = [];
+  return (
+    value
+      // NUL marks protected code and links below.
+      .replace(/\u0000/g, "")
+      .replace(CODE, (code) => `\u0000${urls.push(code) - 1}\u0000`)
+      .replace(LINK, (_, text, url) => (text === url ? url : `${text} (${url})`))
+      // A link's trailing ** is bold around it, not part of it: **https://…**.
+      .replace(URL_TOKEN, (token) => {
+        const url = token.replace(/\*+$/, "");
+        return `\u0000${urls.push(url) - 1}\u0000${token.slice(url.length)}`;
+      })
+      .replace(BOLD, "$1$2")
+      .replace(HEADING, (line, hashes: string, rest: string) => {
+        if (!HEADING_START.test(rest)) return line;
+        const text = headingText(rest);
+        return hashes.length === 1 && LOWERCASE_START.test(text) ? line : text;
+      })
+      .replace(/\u0000(\d+)\u0000/g, (_, index) => urls[Number(index)])
+  );
+}
+
+const EMAIL_PARAMETERS: ToolDefinition["parameters"] = {
+  type: "object",
+  properties: {
+    to: {
+      type: "array",
+      items: { type: "string" },
+      minItems: 1,
+      description: "Recipient email addresses",
+    },
+    cc: { type: "array", items: { type: "string" }, description: "Cc email addresses" },
+    subject: { type: "string", description: "Subject line" },
+    body: { type: "string", description: "Plain-text body; blank lines between paragraphs" },
+  },
+  required: ["to", "subject", "body"],
+  additionalProperties: false,
+};
+
+function addressList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string").map(bareEmailAddress)
+    : [];
+}
+
+interface Recipients {
+  to: string[];
+  cc: string[];
+}
+
+// Names and malformed addresses go back to the model, which fixes the call
+// or looks the person up; nothing is prepared or opened for them.
+function recipientsOrQuestion(args: Record<string, unknown>): Recipients | ToolResult {
+  const to = addressList(args.to);
+  const cc = addressList(args.cc);
+  const invalid = [...to, ...cc].filter((address) => !isValidEmailAddress(address));
+  if (to.length === 0 || invalid.length > 0) {
+    const rejected = invalid.map((address) => JSON.stringify(address)).join(", ");
+    return needsClarificationResult(
+      `Every recipient must be an email address like name@example.com${rejected ? ` (not ${rejected})` : ""}. If you already know the address, call email_draft again with it. If you only have a name, call find_contact first.`
+    );
+  }
+  return { to, cc };
+}
+
+function isToolResult(value: Recipients | ToolResult): value is ToolResult {
+  return "success" in value;
+}
+
+interface Overflow {
+  subject: boolean;
+  body: boolean;
+}
+
+function overflowedText({ subject, body }: Overflow): string {
+  return subject && body ? "subject and body" : subject ? "subject" : "body";
+}
+
+function draftOpenedGuidance(
+  result: Extract<ConnectorDirectResult, { state: "sent" }>,
+  overflow: Overflow
+): string {
+  if (result.copyFailed) {
+    const text = overflowedText(overflow);
+    return `The draft opened, but its ${text} didn't fit in a link and couldn't be copied to the clipboard. Put the ${text} in your reply so the user can paste it into the draft.`;
+  }
+  if (result.subjectCopied && result.bodyCopied) {
+    return "The subject and body were too long for a link, so they are on the user's clipboard (subject first, then a blank line, then the body). Tell them to paste the subject and body into the draft.";
+  }
+  if (result.subjectCopied) {
+    return "The subject was too long for a link, so it is on the user's clipboard. Tell them to paste it into the subject line.";
+  }
+  if (result.bodyCopied) {
+    return "The body was too long for a link, so it is on the user's clipboard. Tell them to paste it into the draft.";
+  }
+  return "Tell the user the draft is open for them to review and send.";
+}
+
+// The tool step reads "Gmail needs to be reconnected.", the same copy a
+// failed reconnect_needed step shows, not the generic "connectors unavailable".
+function gmailReconnectResult(): ToolResult {
+  return {
+    ...unavailableResult("reconnect_needed", GMAIL_RECONNECT_GUIDANCE),
+    displayText: connectorErrorText(i18n.t, "toolStatus", "gmail", "reconnect_needed"),
+  };
+}
+
+function resultStatus(result: ToolResult): string | undefined {
+  const data = result.data as { status?: unknown } | null;
+  return typeof data?.status === "string" ? data.status : undefined;
+}
+
+function isReconnectFailure(result: ToolResult): boolean {
+  const data = result.data as { status?: unknown; errorCode?: unknown } | null;
+  return data?.status === "failed" && data.errorCode === "reconnect_needed";
+}
+
+// canConnect: the chat can connect Gmail itself (it offers interactions).
+function createGmailSendTool(canConnect: boolean): ToolDefinition {
+  return {
+    name: "email_draft",
+    description:
+      "Write an email for the user to send from their connected Gmail account. It appears on a card in the chat where the user reviews, edits and sends it themselves; nothing is sent until they press Send. `to` and `cc` must be full email addresses; call find_contact first when you only have a name. " +
+      PLAIN_TEXT_BODY,
+    parameters: EMAIL_PARAMETERS,
+    readOnly: false,
+    connectorId: "email",
+    promptInstruction: EMAIL_DRAFT_INSTRUCTION,
+
+    async execute(
+      args: Record<string, unknown>,
+      context?: ToolExecutionContext
+    ): Promise<ToolResult> {
+      const recipients = recipientsOrQuestion(args);
+      if (isToolResult(recipients)) return recipients;
+      if (context?.signal.aborted) return notSentResult("cancelled");
+
+      // Read live, not when the registry was built: a login can lapse
+      // mid-conversation. No compose window stands in for it (spec §4.3):
+      // where the chat can, the user reconnects Gmail on this call's card and
+      // the email goes on; elsewhere they are sent to Settings.
+      const gmail = useConnectorStatusStore.getState().statuses.gmail;
+      if (gmail?.connected && gmail.needsReconnect) {
+        if (!canConnect) return gmailReconnectResult();
+        const refused = await connectFirst(context, "gmail");
+        if (refused) return refused;
+      }
+
+      if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
+        return notSentResult(
+          "draft_limit",
+          `Only ${MAX_DRAFTS_PER_TURN} emails can be prepared per request. Tell the user which emails are ready and ask them to request the rest again.`,
+          i18n.t("connectors.toolStatus.gmailDraftLimit", { max: MAX_DRAFTS_PER_TURN })
+        );
+      }
+      const result = await runApprovalAction(
+        context,
+        "gmail",
+        "send",
+        {
+          to: recipients.to,
+          cc: recipients.cc,
+          subject: typeof args.subject === "string" ? args.subject : "",
+          body: plainTextBody(args.body),
+        },
+        { unknownGuidance: GMAIL_UNKNOWN_GUIDANCE }
+      );
+      // A sent or unconfirmed email may have gone out, so it keeps its slot;
+      // one that never went out gives it back for a retry in the same turn.
+      const status = resultStatus(result);
+      if (status !== "sent" && status !== "unknown") context?.releaseTurnSlot("email_draft");
+      // The login lapsed between the status read above and the prepare: no
+      // card appeared, and the user reconnects in Settings.
+      return isReconnectFailure(result) ? gmailReconnectResult() : result;
+    },
+  };
+}
+
+function createComposeDraftTool(target: ComposeTarget): ToolDefinition {
+  return {
+    name: "email_draft",
+    description:
+      "Open a pre-filled email draft in the user's email app so they can review and send it themselves. This never sends email. `to` and `cc` must be full email addresses; call find_contact first when you only have a name. " +
+      PLAIN_TEXT_BODY,
+    parameters: EMAIL_PARAMETERS,
+    readOnly: false,
+    connectorId: "email",
+    promptInstruction: EMAIL_DRAFT_INSTRUCTION,
+
+    async execute(
+      args: Record<string, unknown>,
+      context?: ToolExecutionContext
+    ): Promise<ToolResult> {
+      const recipients = recipientsOrQuestion(args);
+      if (isToolResult(recipients)) return recipients;
+      const { to, cc } = recipients;
+
+      if (context?.signal.aborted) return notSentResult("cancelled");
+      const draft = {
+        target,
+        to,
+        cc,
+        subject: typeof args.subject === "string" ? args.subject : "",
+        body: plainTextBody(args.body),
+      };
+      // Main builds the same request; checking it here claims the clipboard
+      // before any await, so a second overflowing draft in the turn can't
+      // replace the first one's text before the user pastes it. Main refuses
+      // to use the clipboard unless this draft reserved it. Built before the
+      // slots are claimed, so nothing can throw between a claim and its release.
+      const preview = buildComposeRequest({ ...draft, platform: getCachedPlatform() });
+      const clipboardReserved = preview.ok && preview.clipboardText !== null;
+      const overflow = {
+        subject: preview.ok && preview.subjectCopied,
+        body: preview.ok && preview.bodyCopied,
+      };
+      // Shown to the user and in guidance with any punycode form; the data
+      // keeps bare addresses so the model can reuse them in a retry.
+      const destination = to.map(recipientLabel).join(", ");
+
+      // The same draft asked for twice in this request is opened once; one from
+      // an earlier request opens again, since opening a draft sends nothing.
+      const actionKey = connectorActionKey("email", "draft", {
+        to,
+        cc,
+        subject: draft.subject,
+        body: draft.body,
+      });
+      if (context && !context.claimAction(actionKey)) return duplicateActionResult();
+      if (context && !context.claimTurnSlot("email_draft", MAX_DRAFTS_PER_TURN)) {
+        context.releaseAction(actionKey);
+        return notSentResult(
+          "draft_limit",
+          `Only ${MAX_DRAFTS_PER_TURN} drafts can open per request. Tell the user which drafts opened and ask them to request the rest again.`,
+          i18n.t("connectors.toolStatus.draftLimit", { max: MAX_DRAFTS_PER_TURN })
+        );
+      }
+      if (clipboardReserved && context && !context.claimTurnSlot("clipboard", 1)) {
+        context.releaseTurnSlot("email_draft");
+        context.releaseAction(actionKey);
+        return notSentResult(
+          "clipboard_in_use",
+          "This draft is too long for a link, and its text would replace another draft's text on the clipboard. Tell the user to paste the earlier draft's text first, then ask again for this one.",
+          i18n.t("connectors.toolStatus.clipboardBusy")
+        );
+      }
+      // A draft that never opened gives its slots back, so a retry in the
+      // same turn isn't refused for text that never reached the clipboard.
+      const releaseSlots = (): void => {
+        context?.releaseTurnSlot("email_draft");
+        if (clipboardReserved) context?.releaseTurnSlot("clipboard");
+        context?.releaseAction(actionKey);
+      };
+
+      // Main may still be resolving policy when the user presses Esc; the
+      // cancel names this run so main drops it instead of opening a window.
+      const runId = crypto.randomUUID();
+      const cancelRun = () =>
+        void window.electronAPI?.connectorCancel?.(runId, "cancelled_by_user");
+      context?.signal.addEventListener("abort", cancelRun, { once: true });
+      // A rejected call (no handler in main) is treated like a missing API.
+      const result = await window.electronAPI
+        ?.connectorRunDirect?.("email", "draft", { ...draft, clipboardReserved }, runId)
+        .catch(() => undefined);
+      context?.signal.removeEventListener("abort", cancelRun);
+      if (!result) {
+        releaseSlots();
+        return unavailableResult("connectors_unavailable");
+      }
+      // An unknown run may have opened a window and used the clipboard, so
+      // it keeps its slots.
+      if (result.state === "unknown") {
+        context?.recordCompletedAction(actionKey, { status: "unknown" });
+        return unknownResult(
+          to.join(", "),
+          `The draft to ${destination} may or may not have opened. Ask the user to check for a draft window.`,
+          i18n.t("connectors.toolStatus.draftUnknown", { destination })
+        );
+      }
+      if (result.state !== "sent") releaseSlots();
+      else if (result.copyFailed) context?.releaseTurnSlot("clipboard");
+      if (result.state === "sent")
+        context?.recordCompletedAction(actionKey, { status: "draft_opened" });
+      if (result.state === "not_sent") return notSentResult(result.reason);
+      if (result.state === "unavailable") return unavailableResult(result.reason);
+      if (result.state === "failed") return failedResult(result.errorCode, result.message);
+
+      const bodyCopied = Boolean(result.bodyCopied);
+      const subjectCopied = Boolean(result.subjectCopied);
+
+      return {
+        success: true,
+        data: {
+          status: "draft_opened",
+          recipients: to,
+          bodyCopied,
+          subjectCopied,
+          guidance: draftOpenedGuidance(result, overflow),
+        },
+        displayText: i18n.t(
+          subjectCopied && bodyCopied
+            ? "connectors.toolStatus.draftOpenedSubjectCopied"
+            : subjectCopied
+              ? "connectors.toolStatus.draftOpenedOnlySubjectCopied"
+              : bodyCopied
+                ? "connectors.toolStatus.draftOpenedBodyCopied"
+                : "connectors.toolStatus.draftOpened",
+          { destination }
+        ),
+      };
+    },
+  };
+}
+
+/**
+ * One tool, two paths: with Gmail chosen, a card the user sends from the chat;
+ * otherwise a compose window in their email app. gmailSend must never reach
+ * buildComposeRequest, which only knows the compose targets. With
+ * `currentTarget`, each call takes the path the target resolves to then:
+ * Gmail can be connected in the middle of a turn.
+ */
+function emailDraftTool(target: EmailDraftTarget, canConnectGmail: boolean): ToolDefinition {
+  return target === "gmailSend"
+    ? createGmailSendTool(canConnectGmail)
+    : createComposeDraftTool(target);
+}
+
+// currentTarget is set when the chat can connect Gmail itself.
+export function createEmailDraftTool(
+  target: EmailDraftTarget,
+  currentTarget?: () => EmailDraftTarget
+): ToolDefinition {
+  const tool = emailDraftTool(target, Boolean(currentTarget));
+  if (!currentTarget) return tool;
+  return {
+    ...tool,
+    execute: (args, context) => emailDraftTool(currentTarget(), true).execute(args, context),
+  };
+}
+
+/** Email tools need no login of their own: compose windows, or Gmail's card. */
+export const emailToolModule: ConnectorToolModule = {
+  connectorId: "email",
+  requiresConnection: false,
+  createTools: (env) => [
+    findContactTool,
+    createEmailDraftTool(env.emailDraftTarget, env.currentEmailDraftTarget),
+  ],
+};

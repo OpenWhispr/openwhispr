@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 // The live canary's note probe is only worth its weekly tokens if it sends the
 // request the app sends: a meeting-sized transcript in the editor's layout and
-// the exact Detailed Notes system prompt.
+// the exact AI Summary system prompt.
 
 const load = () => import("../../scripts/lib/note-formatting-probe.mjs");
 
@@ -24,11 +24,19 @@ test("the probe transcript is meeting-sized, deterministic and in the editor's l
   assert.doesNotMatch(transcript, /\{(n|pct|date)\d+\}/, "every placeholder must be filled");
 });
 
-test("the probe sends the Detailed Notes prompt exactly as the note store assembles it", async () => {
+test("the probe sends the AI Summary prompt exactly as the note store assembles it", async () => {
   const { buildNoteProbeSystemPrompt } = await load();
-  const { BUILTIN_ACTIONS, DETAILED_NOTES_KEY, MEETING_INPUT_PREAMBLE } =
+  const { BUILTIN_ACTIONS, GENERATE_NOTES_KEY } =
     await import("../../src/helpers/builtinActions.js");
-  const detailed = BUILTIN_ACTIONS.find((action) => action.translationKey === DETAILED_NOTES_KEY);
+  const { compileTemplatePrompt } = await import("../../src/helpers/templatePrompts.js");
+  const summary = BUILTIN_ACTIONS.find((action) => action.translationKey === GENERATE_NOTES_KEY);
+  // The row the database seeds from the built-in, as the note store reads it.
+  const row = {
+    prompt: summary.prompt,
+    sections: summary.sections,
+    translation_key: summary.translationKey,
+  };
 
-  assert.equal(buildNoteProbeSystemPrompt(), MEETING_INPUT_PREAMBLE + detailed.prompt);
+  assert.equal(buildNoteProbeSystemPrompt(), compileTemplatePrompt(row, { isMeetingNote: true }));
+  assert.match(buildNoteProbeSystemPrompt(), /\n## Action Items\n/);
 });

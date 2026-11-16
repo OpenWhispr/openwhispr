@@ -109,6 +109,22 @@ beforeEach(() => {
 });
 
 describe('pushNotes calendar context', () => {
+  it('keeps a refused create pending without adopting another row’s identity or failing the pass', async (): Promise<void> => {
+    mockNotesRepository.getPendingNotes.mockReturnValue([
+      note({ id: 1, clientNoteId: 'refused' }),
+      note({ id: 2, clientNoteId: 'accepted' }),
+    ]);
+    mockBatchCreateNotes.mockResolvedValue({
+      created: [
+        { id: 'cloud-accepted', client_note_id: 'accepted', name: 'Meetings', updated_at: 'now' },
+      ],
+      refused: [{ client_note_id: 'refused', code: 'write_refused' }],
+    });
+    await expect(pushNotes()).resolves.toBeUndefined();
+    expect(mockNotesRepository.markNotePushed).toHaveBeenCalledTimes(1);
+    expect(mockNotesRepository.markNoteTerminal).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockNotesRepository.getFolders.mockReturnValue([
@@ -118,6 +134,7 @@ describe('pushNotes calendar context', () => {
         isDefault: 0,
         sortOrder: 0,
         clientFolderId: 'client-folder-2',
+        privateWorkspaceId: null,
         remoteId: 'remote-folder-2',
         deletedAt: null,
         pendingSync: 0,
@@ -130,7 +147,7 @@ describe('pushNotes calendar context', () => {
     mockNotesRepository.hasDirtyTranscript.mockReturnValue(false);
     mockNotesRepository.getSegments.mockReturnValue([]);
     mockNotesRepository.getSpeakers.mockReturnValue([]);
-    mockBatchCreateNotes.mockResolvedValue([]);
+    mockBatchCreateNotes.mockResolvedValue({ created: [] });
     mockUpdateNoteRemote.mockResolvedValue({
       id: 'remote-note-1',
       updated_at: '2026-06-26T11:00:00.000Z',
@@ -144,12 +161,14 @@ describe('pushNotes calendar context', () => {
         participants: '[{"email":"alice@example.com"}]',
       }),
     ]);
-    mockBatchCreateNotes.mockResolvedValue([
-      {
-        id: 'remote-note-1',
-        client_note_id: 'client-note-1',
-      },
-    ]);
+    mockBatchCreateNotes.mockResolvedValue({
+      created: [
+        {
+          id: 'remote-note-1',
+          client_note_id: 'client-note-1',
+        },
+      ],
+    });
 
     await pushNotes();
 
@@ -171,6 +190,54 @@ describe('pushNotes calendar context', () => {
       'remote-note-1',
       '2026-06-26T10:00:00.000Z',
       null,
+    );
+  });
+
+  it("holds a note whose folder hasn't reached the server yet, instead of filing it nowhere", async () => {
+    const UNSYNCED_FOLDER_ID = 3;
+    const [syncedFolder] = mockNotesRepository.getFolders();
+    mockNotesRepository.getFolders.mockReset().mockReturnValue([
+      syncedFolder,
+      {
+        ...syncedFolder,
+        id: UNSYNCED_FOLDER_ID,
+        name: 'Clients',
+        clientFolderId: 'client-folder-3',
+        remoteId: null,
+        pendingSync: 1,
+      },
+    ]);
+    mockNotesRepository.getPendingNotes.mockReturnValue([
+      note({ id: 1, remoteId: null, folderId: UNSYNCED_FOLDER_ID }),
+      note({
+        id: 2,
+        remoteId: 'remote-note-2',
+        clientNoteId: 'client-note-2',
+        folderId: UNSYNCED_FOLDER_ID,
+      }),
+      note({ id: 3, remoteId: null, clientNoteId: 'client-note-3', folderId: 2 }),
+    ]);
+    mockBatchCreateNotes.mockResolvedValue({
+      created: [{ id: 'remote-note-3', client_note_id: 'client-note-3' }],
+    });
+
+    await expect(pushNotes()).resolves.toBeUndefined();
+
+    // Only the note whose folder is on the server goes up, filed in it.
+    expect(mockBatchCreateNotes).toHaveBeenCalledWith([
+      expect.objectContaining({ client_note_id: 'client-note-3', folder_id: 'remote-folder-2' }),
+    ]);
+    expect(mockUpdateNoteRemote).not.toHaveBeenCalled();
+    expect(mockNotesRepository.markNotePushed).toHaveBeenCalledTimes(1);
+    expect(mockNotesRepository.markNoteTerminal).not.toHaveBeenCalled();
+    // Folders are read once per pass, not once per note.
+    expect(mockNotesRepository.getFolders).toHaveBeenCalledTimes(1);
+    expect(mockAddBreadcrumb).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: 'sync',
+        level: 'info',
+        message: expect.stringContaining('skipped 2 row(s) whose folder has no cloud id yet'),
+      }),
     );
   });
 
@@ -197,6 +264,27 @@ describe('pushNotes calendar context', () => {
       expect.objectContaining({ id: 1 }),
       'remote-note-1',
       '2026-06-26T11:00:00.000Z',
+      undefined,
+      undefined,
+    );
+  });
+
+  it('passes the server’s creation time from an update on to the note', async () => {
+    mockNotesRepository.getPendingNotes.mockReturnValue([note({ remoteId: 'remote-note-1' })]);
+    mockUpdateNoteRemote.mockResolvedValueOnce({
+      id: 'remote-note-1',
+      created_at: '2026-06-01T09:00:00.000Z',
+      updated_at: '2026-06-26T11:00:00.000Z',
+    });
+
+    await pushNotes();
+
+    expect(mockNotesRepository.markNotePushed).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      'remote-note-1',
+      '2026-06-26T11:00:00.000Z',
+      undefined,
+      '2026-06-01T09:00:00.000Z',
     );
   });
 
@@ -267,7 +355,7 @@ describe('pushNotes transcript', () => {
     mockNotesRepository.hasDirtyTranscript.mockReturnValue(false);
     mockNotesRepository.getSegments.mockReturnValue([]);
     mockNotesRepository.getSpeakers.mockReturnValue([]);
-    mockBatchCreateNotes.mockResolvedValue([]);
+    mockBatchCreateNotes.mockResolvedValue({ created: [] });
     mockUpdateNoteRemote.mockResolvedValue({
       id: 'remote-note-1',
       updated_at: '2026-06-26T11:00:00.000Z',
@@ -315,9 +403,9 @@ describe('pushNotes transcript', () => {
     mockNotesRepository.getPendingNotes.mockReturnValue([
       note({ remoteId: null, folderId: null, transcript: 'stored-raw' }),
     ]);
-    mockBatchCreateNotes.mockResolvedValue([
-      { id: 'remote-note-1', client_note_id: 'client-note-1' },
-    ]);
+    mockBatchCreateNotes.mockResolvedValue({
+      created: [{ id: 'remote-note-1', client_note_id: 'client-note-1' }],
+    });
 
     await pushNotes();
 
@@ -490,9 +578,9 @@ describe('pushNotes base_updated_at / 409 note_version_conflict (Task 5)', () =>
     mockNotesRepository.getPendingNotes.mockReturnValueOnce([
       note({ id: 1, remoteId: null, clientNoteId: 'client-note-1', folderId: null }),
     ]);
-    mockBatchCreateNotes.mockResolvedValueOnce([
-      { id: 'remote-note-1', client_note_id: 'client-note-1' },
-    ]);
+    mockBatchCreateNotes.mockResolvedValueOnce({
+      created: [{ id: 'remote-note-1', client_note_id: 'client-note-1' }],
+    });
 
     await pushNotes();
 
@@ -617,7 +705,11 @@ describe('pushNotes create batching (PUSH_BATCH_SIZE)', () => {
     mockBatchCreateNotes.mockImplementation(async (items: { client_note_id: string }[]) =>
       // Reverse the response order within each request to prove matching is by
       // client_note_id, not position, even inside a single chunk's response.
-      [...items].reverse().map((i) => serverRowFor(Number(i.client_note_id.split('-')[2]))),
+      ({
+        created: [...items]
+          .reverse()
+          .map((i) => serverRowFor(Number(i.client_note_id.split('-')[2]))),
+      }),
     );
 
     await expect(pushNotes()).resolves.toBeUndefined();
@@ -646,9 +738,9 @@ describe('pushNotes create batching (PUSH_BATCH_SIZE)', () => {
     mockNotesRepository.getPendingNotes.mockReturnValue(manyCreates(60));
     mockBatchCreateNotes
       .mockRejectedValueOnce(new ApiError('Payload rejected', 400))
-      .mockImplementationOnce(async (items: { client_note_id: string }[]) =>
-        items.map((i) => serverRowFor(Number(i.client_note_id.split('-')[2]))),
-      );
+      .mockImplementationOnce(async (items: { client_note_id: string }[]) => ({
+        created: items.map((i) => serverRowFor(Number(i.client_note_id.split('-')[2]))),
+      }));
 
     await expect(pushNotes()).resolves.toBeUndefined();
 
@@ -791,13 +883,15 @@ describe('pushNotes scope fields (Task 8)', () => {
       key === 'team_spaces_capability' ? 'true' : null,
     );
     mockListSpaces.mockReturnValue([PRIVATE_SPACE, TEAM_SPACE, TEAM_SPACE_SKELETON]);
-    mockBatchCreateNotes.mockResolvedValue([
-      {
-        id: 'remote-note-1',
-        client_note_id: 'client-note-1',
-        updated_at: '2026-08-24T12:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateNotes.mockResolvedValue({
+      created: [
+        {
+          id: 'remote-note-1',
+          client_note_id: 'client-note-1',
+          updated_at: '2026-08-24T12:00:00.000Z',
+        },
+      ],
+    });
     mockUpdateNoteRemote.mockResolvedValue({
       id: 'remote-note-1',
       updated_at: '2026-08-24T12:00:00.000Z',
@@ -1041,13 +1135,13 @@ describe('pushNotes code-aware error recovery (Task 8)', () => {
     );
     mockBatchCreateNotes
       .mockRejectedValueOnce(new ApiError('Space gone', 403, 'space_access_revoked'))
-      .mockImplementationOnce(async (items: { client_note_id: string }[]) =>
-        items.map((i) => ({
+      .mockImplementationOnce(async (items: { client_note_id: string }[]) => ({
+        created: items.map((i) => ({
           id: `remote-${i.client_note_id}`,
           client_note_id: i.client_note_id,
           updated_at: '2026-08-24T12:00:00.000Z',
         })),
-      );
+      }));
 
     await expect(pushNotes()).resolves.toBeUndefined();
 
@@ -1197,12 +1291,13 @@ describe('pushNotes scope-grouped create batching (Task 8 fix round)', () => {
   // re-identify personal rows that were never in a space.
   type CreateItem = { client_note_id: string; space_id?: string | null };
 
-  const createdFor = async (items: CreateItem[]) =>
-    items.map((i) => ({
+  const createdFor = async (items: CreateItem[]) => ({
+    created: items.map((i) => ({
       id: `remote-${i.client_note_id}`,
       client_note_id: i.client_note_id,
       updated_at: '2026-08-24T12:00:00.000Z',
-    }));
+    })),
+  });
 
   const spaceIdsIn = (call: CreateItem[]): (string | null | undefined)[] => [
     ...new Set(call.map((i) => i.space_id)),
@@ -1345,13 +1440,15 @@ describe('pushNotes teamOnly filter', () => {
       key === 'team_spaces_capability' ? 'true' : null,
     );
     mockListSpaces.mockReturnValue([PRIVATE_SPACE, TEAM_SPACE]);
-    mockBatchCreateNotes.mockResolvedValue([
-      {
-        id: 'remote-note-2',
-        client_note_id: 'client-note-2',
-        updated_at: '2026-08-24T12:00:00.000Z',
-      },
-    ]);
+    mockBatchCreateNotes.mockResolvedValue({
+      created: [
+        {
+          id: 'remote-note-2',
+          client_note_id: 'client-note-2',
+          updated_at: '2026-08-24T12:00:00.000Z',
+        },
+      ],
+    });
     mockUpdateNoteRemote.mockResolvedValue({
       id: 'remote-note-3',
       updated_at: '2026-08-24T12:00:00.000Z',
@@ -1375,13 +1472,13 @@ describe('pushNotes teamOnly filter', () => {
         spaceId: TEAM_SPACE.id,
       }),
     ]);
-    mockBatchCreateNotes.mockImplementation(async (items: { client_note_id: string }[]) =>
-      items.map((i) => ({
+    mockBatchCreateNotes.mockImplementation(async (items: { client_note_id: string }[]) => ({
+      created: items.map((i) => ({
         id: `remote-${i.client_note_id}`,
         client_note_id: i.client_note_id,
         updated_at: '2026-08-24T12:00:00.000Z',
       })),
-    );
+    }));
 
     await pushNotes();
 
@@ -1514,9 +1611,9 @@ describe('pushNotes create timestamps', () => {
     mockNotesRepository.getSpeakers.mockReturnValue([]);
     mockListSpaces.mockReturnValue([]);
     mockNotesRepository.getSyncState.mockReturnValue(null);
-    mockBatchCreateNotes.mockResolvedValue([
-      { id: 'remote-note-1', client_note_id: 'client-note-1' },
-    ]);
+    mockBatchCreateNotes.mockResolvedValue({
+      created: [{ id: 'remote-note-1', client_note_id: 'client-note-1' }],
+    });
   });
 
   it('lets the server stamp updated_at on create so other devices never crawl past the row', async () => {

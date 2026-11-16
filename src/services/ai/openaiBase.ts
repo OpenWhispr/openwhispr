@@ -1,7 +1,7 @@
-import { API_ENDPOINTS, ensureV1Suffix } from "../../config/constants";
+import { API_ENDPOINTS, ensureV1Suffix, isGeminiOpenAIBase } from "../../config/constants";
 import { usePolicyStore } from "../../stores/policyStore";
 import { getSettings } from "../../stores/settingsStore";
-import { isSecureHttpEndpoint } from "../../utils/urlUtils";
+import { isSecureHttpEndpoint, matchesHost } from "../../utils/urlUtils";
 import logger from "../../utils/logger";
 import i18n from "../../i18n";
 
@@ -41,7 +41,11 @@ export function resolveConfiguredOpenAIBase(provider: string, configuredBaseUrl?
     // Tinfoil must go through its attested SDK client, never a plain fetch.
     "tinfoil.sh",
   ];
-  if (knownNonOpenAIUrls.some((url) => normalized.includes(url))) {
+  if (
+    !isGeminiOpenAIBase(normalized) &&
+    (knownNonOpenAIUrls.some((url) => normalized.includes(url)) ||
+      matchesHost(normalized, "generativelanguage.googleapis.com"))
+  ) {
     return invalidCustomEndpoint("Custom URL is a known non-OpenAI provider", normalized);
   }
 

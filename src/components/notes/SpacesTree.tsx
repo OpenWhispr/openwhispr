@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Check,
   ChevronRight,
+  Copy,
   ExternalLink,
   FileText,
   Folder,
@@ -19,7 +20,12 @@ import {
   Trash2,
   Users,
 } from "../icons";
+import { FolderNotesPopover } from "./FolderNotesPopover";
+import { sidebarFolderNotes } from "./sidebarFolderNotes";
 import { Button } from "../ui/button";
+import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
+import sharedSpaceEmptyLight from "../../assets/empty-states/notes-shared-space-light.svg";
+import sharedSpaceEmptyDark from "../../assets/empty-states/notes-shared-space-dark.svg";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -37,22 +43,28 @@ import { useNoteDragAndDrop, type NoteMoveTarget } from "../../hooks/useNoteDrag
 import { useTeamSpacesCapability } from "../../hooks/useTeamSpacesCapability";
 import { useCanCreateTeamSpace } from "../../hooks/useCanCreateTeamSpace";
 import { useAuth } from "../../hooks/useAuth";
-import { useWorkspace } from "../../hooks/useWorkspace";
+import { useSpacesInWorkspaceScope, useWorkspace } from "../../hooks/useWorkspace";
+import {
+  privateSectionDropTarget,
+  privateSectionFolders,
+  privateSectionSpaces,
+  privateSectionTarget,
+  type PrivateFolderGroup,
+} from "../../lib/privateSection";
 import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
   canChangeSpaceNoteScope,
   canDeleteSpaceNote,
-  canManageSpace,
-  canManageWorkspace,
-  canMoveBetweenSpaces,
   canMoveOrDeleteSpaceFolder,
+  spaceTransferAction,
+  type SpaceTransfer,
 } from "../../lib/spacePermissions";
+import { spaceCan, workspaceCan } from "../../lib/capabilities";
 import {
   canOrganizeNote as canOrganizeSharedNote,
   resolveNotePermission,
   sharedNoteBlocksDelete,
 } from "../../lib/notePermissions";
-import { groupTeamSpacesByWorkspace } from "../../lib/workspaceSelection";
 import { localMutationErrorKey } from "../../lib/localMutationError";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
@@ -61,7 +73,14 @@ import CreateSpaceDialog from "./CreateSpaceDialog";
 import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import { defaultFolderDisplayName } from "./shared";
-import type { FolderItem, NoteItem, SpaceItem, WorkspaceRole } from "../../types/electron";
+import type {
+  FolderItem,
+  MoveRefusalCode,
+  NoteItem,
+  NoteMutationResult,
+  SpaceItem,
+  Workspace,
+} from "../../types/electron";
 import {
   folderContainerKey,
   spaceContainerKey,
@@ -73,6 +92,7 @@ import {
   useExpandedContainers,
   useActiveContext,
   useActiveNoteId,
+  useActiveNote,
   useIsTreeLoading,
   setActiveContext,
   setActiveNoteId,
@@ -86,8 +106,30 @@ import {
   getNoteFromStore,
   getFoldersValue,
   getSpacesValue,
+  openNote,
   useShareCache,
 } from "../../stores/noteStore";
+
+// A folder row's notes: those of every folder it stands for (one, except in the
+// Private section; see privateSectionFolders).
+function folderRowNotes(
+  members: FolderItem[],
+  notesByContainer: Record<string, NoteItem[]>,
+  folderCounts: Record<number, number>,
+  activeNote: NoteItem | null
+): { notes: NoteItem[]; hiddenCount: number; total: number; count: number } {
+  const loaded = (folder: FolderItem): NoteItem[] | undefined =>
+    notesByContainer[folderContainerKey(folder.id)];
+  const notes = members.flatMap((folder) => loaded(folder) ?? []);
+  const total = members.reduce(
+    (sum, folder) => sum + (folderCounts[folder.id] ?? loaded(folder)?.length ?? 0),
+    0
+  );
+  const count = members.reduce((sum, folder) => sum + (folderCounts[folder.id] ?? 0), 0);
+  const activeFolderId =
+    members.find((folder) => folder.id === activeNote?.folder_id)?.id ?? members[0].id;
+  return { ...sidebarFolderNotes(notes, activeNote, activeFolderId, total), total, count };
+}
 
 const FOLDER_INPUT_CLASS =
   "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
@@ -123,6 +165,7 @@ const SUB_TRIGGER_CLASS = cn(
 type TFn = (key: string, options?: Record<string, unknown>) => string;
 
 type TreeRow =
+  | { type: "more"; key: string; folder: FolderItem; parentKey: string; level: 2 | 3 }
   | { type: "space"; key: string; space: SpaceItem; parentKey?: undefined }
   | {
       type: "folder";
@@ -146,7 +189,7 @@ interface DropHandlers {
   onDrop: (e: React.DragEvent) => void;
 }
 
-interface RowA11yProps {
+export interface RowA11yProps {
   tabIndex: number;
   rowRef: (el: HTMLDivElement | null) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
@@ -154,8 +197,10 @@ interface RowA11yProps {
 }
 
 interface SpacesTreeProps {
+  onFlushPendingSaves?: (noteId: number) => Promise<void>;
   onDeleteNote: (id: number) => void;
-  onMoveNote: (noteId: number, target: NoteMoveTarget) => Promise<void>;
+  /** Moves the note; a result with `success: false` is a move main refused. */
+  onMoveNote: (noteId: number, target: NoteMoveTarget) => Promise<NoteMutationResult | void>;
   onCreateFolderAndMove: (noteId: number, folderName: string) => void;
   onNewNote: (spaceId: number, folderId: number | null) => void;
   onShowStructureIntro?: () => void;
@@ -542,6 +587,7 @@ function FolderRow({
   folder,
   level,
   spaces,
+  currentSpaceId,
   isExpanded,
   isActive,
   count,
@@ -563,6 +609,8 @@ function FolderRow({
   folder: FolderItem;
   level: 1 | 2;
   spaces: SpaceItem[];
+  /** The space the menu marks as the folder's own: the Private section's, for its folders. */
+  currentSpaceId: number;
   isExpanded: boolean;
   isActive: boolean;
   count: number;
@@ -678,7 +726,7 @@ function FolderRow({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    window.electronAPI?.showFolderInExplorer?.(folder.name);
+                    window.electronAPI?.showFolderInExplorer?.(folder.id);
                   }}
                   className={MENU_ITEM_CLASS}
                 >
@@ -709,7 +757,7 @@ function FolderRow({
                       searchPlaceholder={t("notes.spaces.searchSpaces")}
                     >
                       {filteredSpaces.map((space) => {
-                        const isCurrent = space.id === folder.space_id;
+                        const isCurrent = space.id === currentSpaceId;
                         return (
                           <DropdownMenuItem
                             key={space.id}
@@ -771,6 +819,9 @@ interface MoveOption {
   isCurrent: boolean;
 }
 
+// A folder row and every folder it stands for (one, except in the Private section).
+type FolderRowGroup = PrivateFolderGroup<FolderItem>;
+
 function NoteLeaf({
   note,
   level,
@@ -779,13 +830,16 @@ function NoteLeaf({
   isDragging,
   dragHandlers,
   spaces,
-  folders,
+  folderRows,
+  otherWorkspaces,
   noteFilesEnabled,
   fileManagerName,
   canDelete,
   canMove,
   onOpen,
   onMove,
+  onMoveToWorkspace,
+  onCopyToPrivate,
   onCreateFolderAndMove,
   onDelete,
   a11y,
@@ -802,13 +856,19 @@ function NoteLeaf({
     onDragEnd: () => void;
   };
   spaces: SpaceItem[];
-  folders: FolderItem[];
+  /** The folder rows of each space in `spaces`, by space id. */
+  folderRows: Map<number, FolderRowGroup[]>;
+  /** For a private note: the other workspaces whose Private it can move to. */
+  otherWorkspaces: Workspace[];
   noteFilesEnabled: boolean;
   fileManagerName: string;
   canDelete: boolean;
   canMove: boolean;
   onOpen: () => void;
   onMove: (target: NoteMoveTarget) => void;
+  onMoveToWorkspace: (workspace: Workspace) => void;
+  /** For a team note: copies it to the active workspace's Private. */
+  onCopyToPrivate?: () => void;
   onCreateFolderAndMove: (noteId: number, folderName: string) => void;
   onDelete: (id: number) => void;
   a11y: RowA11yProps;
@@ -832,18 +892,18 @@ function NoteLeaf({
           isCurrent: note.folder_id == null && note.space_id === space.id,
         });
       }
-      for (const folder of folders.filter((f) => f.space_id === space.id)) {
+      for (const { folder, members } of folderRows.get(space.id) ?? []) {
         options.push({
           key: folderContainerKey(folder.id),
           label: defaultFolderDisplayName(folder, t),
           space,
-          target: { spaceId: space.id, folderId: folder.id },
-          isCurrent: note.folder_id === folder.id,
+          target: { spaceId: folder.space_id, folderId: folder.id },
+          isCurrent: members.some((member) => member.id === note.folder_id),
         });
       }
     }
     return options;
-  }, [spaces, folders, note.folder_id, note.space_id, t]);
+  }, [spaces, folderRows, note.folder_id, note.space_id, t]);
 
   const filteredOptions = useMemo(() => {
     if (!moveSearch) return moveOptions;
@@ -873,7 +933,9 @@ function NoteLeaf({
   );
 
   const title = note.title || t("notes.list.untitled");
-  const hasActions = noteFilesEnabled || canMove || canDelete;
+  const workspaceMoves = canMove ? otherWorkspaces : [];
+  const hasTransfers = canMove || !!onCopyToPrivate;
+  const hasActions = noteFilesEnabled || hasTransfers || canDelete;
 
   return (
     <div
@@ -960,7 +1022,7 @@ function NoteLeaf({
                   <ExternalLink size={11} className="text-muted-foreground/70" />
                   {t("notes.context.showInFileManager", { manager: fileManagerName })}
                 </DropdownMenuItem>
-                {(canMove || canDelete) && <DropdownMenuSeparator />}
+                {(hasTransfers || canDelete) && <DropdownMenuSeparator />}
               </>
             )}
             {canMove && (
@@ -1060,9 +1122,36 @@ function NoteLeaf({
                 )}
               </SearchableMoveSubmenu>
             )}
+            {workspaceMoves.map((workspace) => (
+              <DropdownMenuItem
+                key={workspace.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMoveToWorkspace(workspace);
+                }}
+                className={MENU_ITEM_CLASS}
+              >
+                <Lock size={11} className="text-muted-foreground/70" />
+                <span dir="auto" className="truncate flex-1">
+                  {t("notes.spaces.moveToWorkspacePrivate", { workspace: workspace.name })}
+                </span>
+              </DropdownMenuItem>
+            ))}
+            {onCopyToPrivate && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopyToPrivate();
+                }}
+                className={MENU_ITEM_CLASS}
+              >
+                <Copy size={11} className="text-muted-foreground/70" />
+                {t("notes.spaces.copyToPrivate")}
+              </DropdownMenuItem>
+            )}
             {canDelete && (
               <>
-                {canMove && <DropdownMenuSeparator />}
+                {hasTransfers && <DropdownMenuSeparator />}
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1103,6 +1192,7 @@ function SkeletonRows() {
 }
 
 export default function SpacesTree({
+  onFlushPendingSaves,
   onDeleteNote,
   onMoveNote,
   onCreateFolderAndMove,
@@ -1113,19 +1203,29 @@ export default function SpacesTree({
   const { toast, dismiss } = useToast();
   const fileManagerName = getFileManagerName();
 
-  const spaces = useSpaces();
+  const allSpaces = useSpaces();
   const folders = useFolders();
   const folderCounts = useFolderCounts();
   const spaceRootCounts = useSpaceRootCounts();
   const notesByContainer = useNotesByContainer();
+  const [openFolderId, setOpenFolderId] = useState<number | null>(null);
   const expanded = useExpandedContainers();
   const activeContext = useActiveContext();
   const activeNoteId = useActiveNoteId();
+  const activeNote = useActiveNote();
+
   const isTreeLoading = useIsTreeLoading();
   const { isSignedIn, user } = useAuth();
   const teamCapability = useTeamSpacesCapability(isSignedIn);
   const canCreateTeamSpace = useCanCreateTeamSpace();
-  const { workspaces, loaded: workspacesLoaded } = useWorkspace();
+  const {
+    workspaces,
+    active: activeWorkspace,
+    loaded: workspacesLoaded,
+    defaultWorkspaceId,
+  } = useWorkspace();
+  // Other workspaces' teamspaces stay out of the tree until the user switches.
+  const spaces = useSpacesInWorkspaceScope(allSpaces);
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const shareByCloudId = useShareCache();
 
@@ -1145,35 +1245,77 @@ export default function SpacesTree({
 
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
 
-  const privateSpaces = useMemo(() => spaces.filter((s) => s.kind === "private"), [spaces]);
-  const privateSpace = privateSpaces[0];
+  // One Private section stands for every Private in scope: the workspace's own
+  // and, until main binds it into the default's, the pending one. Its header,
+  // expansion and drops are the first's; folders of one name are one row.
+  const privateSpaces = useMemo(() => privateSectionSpaces(spaces), [spaces]);
+  const privateSpace: SpaceItem | undefined = privateSpaces[0];
+  const privateFolderGroups = useMemo(
+    () => privateSectionFolders(privateSpaces, folders),
+    [privateSpaces, folders]
+  );
+  const privateRootNotes = useMemo(
+    () => privateSpaces.flatMap((space) => notesByContainer[spaceContainerKey(space.id)] ?? []),
+    [privateSpaces, notesByContainer]
+  );
   const privateSectionExpanded = privateSpace
     ? expanded.has(spaceContainerKey(privateSpace.id))
     : false;
   const teamSpaces = useMemo(() => spaces.filter((s) => s.kind === "team"), [spaces]);
-  const showWorkspaceGroups = workspaces.length > 1;
-  const {
-    groups: teamSpaceGroups,
-    ungrouped: ungroupedTeamSpaces,
-    ordered: groupedTeamSpaces,
-  } = useMemo(() => groupTeamSpacesByWorkspace(workspaces, teamSpaces), [teamSpaces, workspaces]);
-  const orderedTeamSpaces = showWorkspaceGroups ? groupedTeamSpaces : teamSpaces;
-  const visibleSpaces = teamCapability ? spaces : privateSpaces;
+  // The section is one destination too: its first Private.
+  const visibleSpaces = useMemo(
+    () => spaces.filter((s) => (s.kind === "private" ? s === privateSpace : teamCapability)),
+    [spaces, privateSpace, teamCapability]
+  );
+
+  // The rows show the other Private's notes and those of the folders it shares
+  // by name, but open with their own keys: load those containers with them.
+  useEffect(() => {
+    if (!privateSectionExpanded) return;
+    for (const space of privateSpaces.slice(1)) {
+      setContainerExpanded(spaceContainerKey(space.id), true);
+    }
+    for (const { folder, members } of privateFolderGroups) {
+      if (!expanded.has(folderContainerKey(folder.id))) continue;
+      for (const member of members.slice(1)) {
+        setContainerExpanded(folderContainerKey(member.id), true);
+      }
+    }
+  }, [privateSectionExpanded, privateSpaces, privateFolderGroups, expanded]);
   const spacesById = useMemo(() => new Map(spaces.map((space) => [space.id, space])), [spaces]);
-  // Valid move destinations per source space (the source itself stays listed —
-  // menus render it as the disabled "current" row).
+  // Where a note or folder of each space can move to (spaceTransferAction). The source itself
+  // stays listed: menus render it as the disabled "current" row.
   const moveTargetsBySpace = useMemo(() => {
     const targets = new Map<number, SpaceItem[]>();
     for (const source of spaces) {
       targets.set(
         source.id,
         visibleSpaces.filter(
-          (target) => target.id === source.id || canMoveBetweenSpaces(source, target)
+          (target) =>
+            target.id === source.id ||
+            spaceTransferAction(source, target, { defaultWorkspaceId }) === "move"
         )
       );
     }
     return targets;
-  }, [spaces, visibleSpaces]);
+  }, [spaces, visibleSpaces, defaultWorkspaceId]);
+  // The folder rows each destination shows, the Private section's merged ones for its Private.
+  const folderRowsBySpace = useMemo(() => {
+    const rows = new Map<number, FolderRowGroup[]>();
+    for (const space of visibleSpaces) {
+      rows.set(
+        space.id,
+        space === privateSpace
+          ? privateFolderGroups
+          : folders
+              .filter((folder) => folder.space_id === space.id)
+              .map((folder) => ({ folder, members: [folder] }))
+      );
+    }
+    return rows;
+  }, [visibleSpaces, privateSpace, privateFolderGroups, folders]);
+  const inPrivateSection = (spaceId: number): boolean =>
+    privateSpaces.some((space) => space.id === spaceId);
 
   // Until the workspace fetch settles, grouping is unknown — showing spaces
   // flat and regrouping on arrival reads as a glitch, so skeleton instead.
@@ -1182,13 +1324,15 @@ export default function SpacesTree({
   const workspacesPending = isSignedIn && !workspacesLoaded;
 
   const currentUserId = user?.id ?? null;
-  const workspaceRoleFor = (space: SpaceItem | undefined): WorkspaceRole | null =>
-    workspaces.find((w) => w.id === space?.workspace_id)?.role ?? null;
+  const workspaceFor = (space: SpaceItem | undefined): Workspace | null =>
+    workspaces.find((w) => w.id === space?.workspace_id) ?? null;
 
   // Local-only spaces (no cloud id) stay fully manageable; cloud spaces
-  // follow space/workspace roles. Cosmetic — the server enforces.
+  // follow space/workspace capabilities. Cosmetic — the server enforces.
   const canManageTeamSpace = (space: SpaceItem): boolean =>
-    !space.cloud_space_id || canManageSpace(space, workspaceRoleFor(space));
+    !space.cloud_space_id ||
+    spaceCan(space, "manage_settings") ||
+    workspaceCan(workspaceFor(space), "manage_settings");
 
   // Note-level ACL for cloud-backed personal notes shared with this user.
   // Without a cache entry (note never opened this session, offline) the
@@ -1214,11 +1358,11 @@ export default function SpacesTree({
   const canDeleteNote = (note: NoteItem): boolean => {
     if (sharedNoteBlocksDelete(sharedNotePermission(note), sharedNoteScope(note))) return false;
     const space = spacesById.get(note.space_id);
-    return canDeleteSpaceNote(note, space, currentUserId, workspaceRoleFor(space));
+    return canDeleteSpaceNote(note, space, currentUserId, workspaceFor(space));
   };
   const canChangeNoteScope = (note: NoteItem): boolean => {
     const space = spacesById.get(note.space_id);
-    return canChangeSpaceNoteScope(note, space, currentUserId, workspaceRoleFor(space));
+    return canChangeSpaceNoteScope(note, space, currentUserId, workspaceFor(space));
   };
   // Any local re-filing (same-space folder moves included): owner-only on
   // shared personal notes — a denied folder_id PATCH would fork an
@@ -1227,7 +1371,7 @@ export default function SpacesTree({
     canOrganizeSharedNote(sharedNotePermission(note), sharedNoteScope(note));
   const canManageFolderDestructive = (folder: FolderItem): boolean => {
     const space = spacesById.get(folder.space_id);
-    return canMoveOrDeleteSpaceFolder(space, workspaceRoleFor(space));
+    return canMoveOrDeleteSpaceFolder(space, workspaceFor(space));
   };
 
   // Cross-space targets require scope-change permission; same-space folder
@@ -1235,6 +1379,92 @@ export default function SpacesTree({
   const noteMoveTargets = (note: NoteItem): SpaceItem[] => {
     const targets = moveTargetsBySpace.get(note.space_id) ?? [];
     return canChangeNoteScope(note) ? targets : targets.filter((s) => s.id === note.space_id);
+  };
+
+  // The workspaces whose Private a private note can move to: every one the account is in but the
+  // note's own (the pending Private's is the default) and the active one.
+  const otherWorkspacesFor = (note: NoteItem): Workspace[] => {
+    const space = spacesById.get(note.space_id);
+    if (space?.kind !== "private") return [];
+    const ownWorkspaceId = space.workspace_id ?? defaultWorkspaceId;
+    return workspaces.filter(
+      (workspace) => workspace.id !== ownWorkspaceId && workspace.id !== activeWorkspace?.id
+    );
+  };
+
+  // What taking something from one space to another does, for spaces the store holds.
+  const transferBetween = (
+    fromSpaceId: number,
+    toSpaceId: number
+  ): { action: SpaceTransfer; from: SpaceItem; to: SpaceItem } | null => {
+    const all = getSpacesValue();
+    const from = all.find((space) => space.id === fromSpaceId);
+    const to = all.find((space) => space.id === toSpaceId);
+    if (!from || !to) return null;
+    const action = spaceTransferAction(from, to, { defaultWorkspaceId });
+    return action ? { action, from, to } : null;
+  };
+
+  // Until the default workspace is known, the Private section's pending Private may be another
+  // workspace's than the one shown, so a move between the section's two Privates could cross
+  // workspaces.
+  const crossesUnknownWorkspace = (fromSpaceId: number, toSpaceId: number): boolean =>
+    defaultWorkspaceId == null &&
+    fromSpaceId !== toSpaceId &&
+    inPrivateSection(fromSpaceId) &&
+    inPrivateSection(toSpaceId);
+
+  // Why a note can't go to a space, or null when it can: a move it may make, or a copy into
+  // Private. Menus leave out what can't happen; drops and stale menu picks show the reason.
+  const noteTransferRefusal = (note: NoteItem, toSpaceId: number): string | null => {
+    if (note.space_id === toSpaceId) return null;
+    if (crossesUnknownWorkspace(note.space_id, toSpaceId)) {
+      return t("notes.spaces.workspacesLoading");
+    }
+    const all = getSpacesValue();
+    const from = all.find((space) => space.id === note.space_id);
+    const to = all.find((space) => space.id === toSpaceId);
+    if (!from || !to) return t("notes.spaces.couldNotMoveNote");
+    const action = spaceTransferAction(from, to, { defaultWorkspaceId });
+    // A copy leaves the team's note as it is: whoever can read it may copy it.
+    if (action === "copy") return null;
+    if (action === "move") {
+      return canMoveNote(note) && canChangeNoteScope(note)
+        ? null
+        : t("notes.spaces.cantMoveTeammate");
+    }
+    if (from.kind === "team") return t("notes.spaces.cantMoveOut");
+    if (to.workspace_id == null) return t("notes.spaces.cantMoveIntoLegacy", { space: to.name });
+    if (from.workspace_id == null && defaultWorkspaceId == null) {
+      return t("notes.spaces.workspacesLoading");
+    }
+    return t("notes.spaces.couldNotMoveNote");
+  };
+
+  // A move main refused, and why (D30): a note or folder the cloud already has stays in its
+  // teamspace, and Copy to Private keeps a private copy instead.
+  const toastMoveRefusal = (
+    kind: "note" | "folder",
+    name: string,
+    fromSpaceId: number | null,
+    refusal: { code?: MoveRefusalCode; error?: string }
+  ): void => {
+    const space = getSpacesValue().find((s) => s.id === fromSpaceId);
+    if (refusal.code === "team_row_synced" && space) {
+      toast({
+        title:
+          kind === "note"
+            ? t("notes.spaces.noteAlreadyInTeam", { title: name, space: space.name })
+            : t("notes.spaces.folderAlreadyInTeam", { name, space: space.name }),
+        duration: 8000,
+      });
+      return;
+    }
+    toast({
+      title: t(kind === "note" ? "notes.spaces.couldNotMoveNote" : "notes.spaces.couldNotMove"),
+      description: t(localMutationErrorKey(refusal.error)),
+      variant: "destructive",
+    });
   };
 
   const requestDeleteNote = (note: NoteItem): void => {
@@ -1261,37 +1491,46 @@ export default function SpacesTree({
     undoToastIdRef.current = toast({
       title: t("notes.spaces.moved", { title, target }),
       duration: 8000,
-      action: (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            if (undoToastIdRef.current) dismiss(undoToastIdRef.current);
+      actions: [
+        {
+          label: t("notes.spaces.undo"),
+          onClick: () => {
             undoToastIdRef.current = null;
             onUndo();
-          }}
-          className="h-6 px-2 text-xs text-white/70 hover:text-white hover:bg-white/10"
-        >
-          {t("notes.spaces.undo")}
-        </Button>
-      ),
+          },
+        },
+      ],
     });
   };
 
-  // Every permitted cross-space move enters a team space (private→team or
-  // team→team): moving OUT of a team space is policy-blocked in
-  // canMoveBetweenSpaces, and there is only one private space.
-  const confirmCrossSpaceMove = (
+  // Asks before something reaches another audience: a move into a teamspace, or a copy of a team
+  // note into Private (the team keeps its note). A move between Privates keeps ownership and
+  // asks nothing.
+  const confirmTransfer = (
+    fromSpaceId: number,
     toSpaceId: number,
     isFolder: boolean,
     onConfirm: () => void
   ): void => {
-    const intoSpace = spaces.find((s) => s.id === toSpaceId);
-    if (!intoSpace) return;
+    const transfer = transferBetween(fromSpaceId, toSpaceId);
+    if (!transfer) return;
+    if (transfer.action === "copy") {
+      showConfirmDialog({
+        title: t("notes.spaces.confirmCopyTitle"),
+        description: t("notes.spaces.confirmCopy", { space: transfer.from.name }),
+        confirmText: t("common.copy"),
+        onConfirm,
+      });
+      return;
+    }
+    if (transfer.to.kind === "private") {
+      onConfirm();
+      return;
+    }
     showConfirmDialog({
-      title: t("notes.spaces.confirmMoveInTitle", { space: intoSpace.name }),
+      title: t("notes.spaces.confirmMoveInTitle", { space: transfer.to.name }),
       description: t(isFolder ? "notes.spaces.confirmMoveInFolder" : "notes.spaces.confirmMoveIn", {
-        space: intoSpace.name,
+        space: transfer.to.name,
       }),
       confirmText: t("notes.spaces.moveConfirm"),
       onConfirm,
@@ -1299,17 +1538,17 @@ export default function SpacesTree({
   };
 
   const moveNoteSafely = async (noteId: number, target: NoteMoveTarget): Promise<boolean> => {
+    const note = getNoteFromStore(noteId);
+    let result: NoteMutationResult | null;
     try {
-      await onMoveNote(noteId, target);
-      return true;
+      result = (await onMoveNote(noteId, target)) || null;
     } catch (err: unknown) {
-      toast({
-        title: t("notes.spaces.couldNotMoveNote"),
-        description: t(localMutationErrorKey(err instanceof Error ? err.message : undefined)),
-        variant: "destructive",
-      });
-      return false;
+      result = { success: false, error: err instanceof Error ? err.message : undefined };
     }
+    if (!result || result.success !== false) return true;
+    const title = note?.title || t("notes.list.untitled");
+    toastMoveRefusal("note", title, note?.space_id ?? null, result);
+    return false;
   };
 
   // The 8s undo window outlives the tree snapshot: the restore target may
@@ -1328,6 +1567,19 @@ export default function SpacesTree({
     // Undo restores across spaces outside the normal one-way policy, but it
     // must not bypass move/scope permissions after a role or ACL change.
     const current = getNoteFromStore(noteId);
+    // Nor make a team note private while it keeps its cloud identity (D31): back out of a
+    // teamspace only while the note has no cloud copy yet. The push runs 2 s after the move, so
+    // within the Undo window this is the common case, and the toast says why.
+    if (
+      current?.cloud_id &&
+      prevSpace.kind === "private" &&
+      getSpacesValue().find((s) => s.id === current.space_id)?.kind === "team"
+    ) {
+      toastMoveRefusal("note", current.title || title, current.space_id, {
+        code: "team_row_synced",
+      });
+      return;
+    }
     if (
       current &&
       (!canMoveNote(current) || (current.space_id !== prev.spaceId && !canChangeNoteScope(current)))
@@ -1344,7 +1596,11 @@ export default function SpacesTree({
     }
   };
 
-  const commitMoveNote = async (noteId: number, target: NoteMoveTarget): Promise<void> => {
+  const commitMoveNote = async (
+    noteId: number,
+    target: NoteMoveTarget,
+    label: string = targetLabel(target)
+  ): Promise<void> => {
     const note = getNoteFromStore(noteId);
     // Defense in depth behind the menu/drag gating: shared personal notes
     // are re-filed by their owner only.
@@ -1356,115 +1612,200 @@ export default function SpacesTree({
     if (moved && prev) {
       const title = note?.title || t("notes.list.untitled");
       // Undo silently restores the previous space/folder — no confirm, no new toast.
-      showUndoToast(title, targetLabel(target), () => void undoMoveNote(noteId, title, prev));
+      showUndoToast(title, label, () => void undoMoveNote(noteId, title, prev));
     }
   };
 
-  const allowsCrossSpaceMove = (fromSpaceId: number, toSpaceId: number): boolean => {
-    const from = spacesById.get(fromSpaceId);
-    const to = spacesById.get(toSpaceId);
-    return !!from && !!to && canMoveBetweenSpaces(from, to);
+  // Copy to Private (D8): a new private note, while the team keeps its own. It goes to the active
+  // workspace's Private, or where a drop put it there.
+  const copyNoteToPrivate = async (
+    note: NoteItem,
+    target: NoteMoveTarget | null = null
+  ): Promise<void> => {
+    const api = window.electronAPI;
+    let copy: NoteItem | null = null;
+    try {
+      await onFlushPendingSaves?.(note.id);
+      const spaceId = target?.spaceId ?? (await api.getPrivateSpaceId?.()) ?? null;
+      if (spaceId != null) {
+        copy = (await api.copyNoteToSpace?.(note.id, spaceId, target?.folderId ?? null)) ?? null;
+      }
+    } catch {
+      copy = null;
+    }
+    if (!copy) {
+      toast({ title: t("notes.spaces.couldNotCopyNote"), variant: "destructive" });
+      return;
+    }
+    const copied = copy;
+    toast({
+      title: t("notes.spaces.copiedToPrivate"),
+      duration: 8000,
+      actions: [{ label: t("notes.spaces.openCopy"), onClick: () => openNote(copied) }],
+    });
   };
 
-  const requestMoveNote = (noteId: number, target: NoteMoveTarget): void => {
+  // A drop that was confirmed, or one inside a space: a copy where that's what going there means.
+  const commitTransfer = async (noteId: number, target: NoteMoveTarget): Promise<void> => {
+    const note = getNoteFromStore(noteId);
+    if (note && transferBetween(note.space_id, target.spaceId)?.action === "copy") {
+      await copyNoteToPrivate(note, target);
+      return;
+    }
+    await commitMoveNote(noteId, target);
+  };
+
+  // A move picked from a note's menu. A Private section row stands for the note's own Private.
+  const requestMoveNote = (noteId: number, picked: NoteMoveTarget): void => {
     const note = getNoteFromStore(noteId);
     if (!note || !canMoveNote(note)) return;
-    if (note.space_id !== target.spaceId) {
-      if (!allowsCrossSpaceMove(note.space_id, target.spaceId)) return;
-      if (!canChangeNoteScope(note)) return;
-      confirmCrossSpaceMove(target.spaceId, false, () => void commitMoveNote(noteId, target));
-    } else {
-      void commitMoveNote(noteId, target);
+    const target = privateSectionTarget(privateSpaces, folders, note.space_id, picked);
+    if (note.space_id === target.spaceId) {
+      if (note.folder_id !== target.folderId) void commitMoveNote(noteId, target);
+      return;
     }
+    const refusal = noteTransferRefusal(note, target.spaceId);
+    if (refusal) {
+      toast({ title: refusal, duration: 4000 });
+      return;
+    }
+    // A copy is never a menu move: Copy to Private is its own item.
+    if (transferBetween(note.space_id, target.spaceId)?.action !== "move") return;
+    confirmTransfer(
+      note.space_id,
+      target.spaceId,
+      false,
+      () => void commitMoveNote(noteId, target)
+    );
   };
 
-  const moveFolderSafely = async (
-    folderId: number,
-    spaceId: number
-  ): Promise<{ success: boolean; error?: string }> => {
-    const result = await moveFolderToSpace(folderId, spaceId).catch((err: unknown) => ({
-      success: false,
-      error: (err as Error).message,
-    }));
-    if (!result.success) {
-      toast({
-        title: t("notes.spaces.couldNotMove"),
-        description: t(localMutationErrorKey(result.error)),
-        variant: "destructive",
-      });
+  // Move to {{workspace}} › Private: to the root of another workspace's Private, on this device
+  // (D8). Main makes that Private when this device has none yet.
+  const moveNoteToWorkspacePrivate = async (
+    note: NoteItem,
+    workspace: Workspace
+  ): Promise<void> => {
+    if (!canMoveNote(note)) return;
+    let spaceId: number | null = null;
+    try {
+      spaceId = (await window.electronAPI.getPrivateSpaceId?.(workspace.id)) ?? null;
+    } catch {
+      spaceId = null;
     }
+    if (spaceId == null || spaceId === note.space_id) {
+      toast({ title: t("notes.spaces.couldNotMoveNote"), variant: "destructive" });
+      return;
+    }
+    await commitMoveNote(
+      note.id,
+      { spaceId, folderId: null },
+      t("notes.spaces.workspacePrivate", { workspace: workspace.name })
+    );
+  };
+
+  // Moves the folder as it now stands (its name and space) and says why when main refuses.
+  const moveFolderSafely = async (
+    folder: FolderItem,
+    spaceId: number
+  ): Promise<{ success: boolean; error?: string; code?: MoveRefusalCode }> => {
+    const result = await moveFolderToSpace(folder.id, spaceId).catch(
+      (err: unknown): { success: boolean; error?: string; code?: MoveRefusalCode } => ({
+        success: false,
+        error: (err as Error).message,
+      })
+    );
+    if (!result.success) toastMoveRefusal("folder", folder.name, folder.space_id, result);
     return result;
   };
 
   const commitMoveFolder = async (folder: FolderItem, space: SpaceItem): Promise<void> => {
     const prevSpaceId = folder.space_id;
-    const result = await moveFolderSafely(folder.id, space.id);
+    const result = await moveFolderSafely(folder, space.id);
     if (!result.success) return;
     revealContainer(space.id, null);
     showUndoToast(folder.name, spaceDisplayName(space, t), () => {
       // Undo is a folder move like any other: after a role change it must
       // not bypass the destructive-folder-action rules in the new space.
+      // Main refuses it once the folder or a note in it reached the cloud (D31).
       const current = getFoldersValue().find((f) => f.id === folder.id);
       if (!current || !canManageFolderDestructive(current)) {
         toast({ title: t("notes.spaces.couldNotMove"), variant: "destructive" });
         return;
       }
-      void moveFolderSafely(folder.id, prevSpaceId);
+      void moveFolderSafely(current, prevSpaceId);
     });
   };
 
   const requestMoveFolder = (folder: FolderItem, space: SpaceItem): void => {
     if (space.id === folder.space_id) return;
-    if (!allowsCrossSpaceMove(folder.space_id, space.id)) return;
+    // The Private section is one place: its folders are already in its Private.
+    if (inPrivateSection(folder.space_id) && inPrivateSection(space.id)) return;
+    // Folders only move: there is no copy of a team folder.
+    if (transferBetween(folder.space_id, space.id)?.action !== "move") return;
     if (!canManageFolderDestructive(folder)) return;
-    confirmCrossSpaceMove(space.id, true, () => void commitMoveFolder(folder, space));
+    confirmTransfer(folder.space_id, space.id, true, () => void commitMoveFolder(folder, space));
   };
 
   const { dragState, noteDragHandlers, dropTargetHandlers } = useNoteDragAndDrop({
     untitledLabel: t("notes.list.untitled"),
-    onMoveToTarget: commitMoveNote,
-    onCrossSpaceDrop: (_note, target, commit) => {
-      confirmCrossSpaceMove(target.spaceId, false, commit);
+    onMoveToTarget: commitTransfer,
+    onCrossSpaceDrop: (note, target, commit) => {
+      confirmTransfer(note.spaceId, target.spaceId, false, commit);
     },
     canCrossSpaceDrop: (note, target) => {
-      if (!allowsCrossSpaceMove(note.spaceId, target.spaceId)) return false;
       const stored = getNoteFromStore(note.id);
-      return !!stored && canMoveNote(stored) && canChangeNoteScope(stored);
+      return !!stored && noteTransferRefusal(stored, target.spaceId) == null;
     },
-    onCrossSpaceVeto: (note) => {
+    onCrossSpaceVeto: (note, target) => {
       const stored = getNoteFromStore(note.id);
-      const scopeDenied = !!stored && !canChangeNoteScope(stored);
       toast({
-        title: t(scopeDenied ? "notes.spaces.cantMoveTeammate" : "notes.spaces.cantMoveOut"),
+        title:
+          (stored && noteTransferRefusal(stored, target.spaceId)) ??
+          t("notes.spaces.couldNotMoveNote"),
         duration: 4000,
       });
     },
+    // The Private section's rows stand for the dragged note's own Private (D22).
+    resolveDropTarget: (note, target) =>
+      privateSectionDropTarget(privateSpaces, folders, note.spaceId, target),
     onHoverTarget: (key) => setContainerExpanded(key, true),
   });
 
   const visibleRows = useMemo<TreeRow[]>(() => {
     const rows: TreeRow[] = [];
-    const pushPrivateSpace = (space: SpaceItem) => {
-      const spaceKey = spaceContainerKey(space.id);
-      if (!expanded.has(spaceKey)) return;
-      folders
-        .filter((f) => f.space_id === space.id)
-        .forEach((folder) => {
-          const folderKey = folderContainerKey(folder.id);
-          rows.push({ type: "folder", key: folderKey, folder, level: 1 });
-          if (expanded.has(folderKey)) {
-            (notesByContainer[folderKey] ?? []).forEach((note) => {
-              rows.push({
-                type: "note",
-                key: `n:${note.id}`,
-                note,
-                parentKey: folderKey,
-                level: 2,
-              });
+    const pushPrivateSection = () => {
+      if (!privateSpace || !expanded.has(spaceContainerKey(privateSpace.id))) return;
+      privateFolderGroups.forEach(({ folder, members }) => {
+        const folderKey = folderContainerKey(folder.id);
+        rows.push({ type: "folder", key: folderKey, folder, level: 1 });
+        if (expanded.has(folderKey)) {
+          const { notes: shownNotes, hiddenCount } = folderRowNotes(
+            members,
+            notesByContainer,
+            folderCounts,
+            activeNote
+          );
+          shownNotes.forEach((note) => {
+            rows.push({
+              type: "note",
+              key: `n:${note.id}`,
+              note,
+              parentKey: folderKey,
+              level: 2,
+            });
+          });
+          if (hiddenCount > 0) {
+            rows.push({
+              type: "more",
+              key: `more:${folder.id}`,
+              folder,
+              parentKey: folderKey,
+              level: 2,
             });
           }
-        });
-      (notesByContainer[spaceKey] ?? []).forEach((note) => {
+        }
+      });
+      privateRootNotes.forEach((note) => {
         rows.push({ type: "note", key: `n:${note.id}`, note, level: 1 });
       });
     };
@@ -1478,7 +1819,14 @@ export default function SpacesTree({
           const folderKey = folderContainerKey(folder.id);
           rows.push({ type: "folder", key: folderKey, folder, parentKey: spaceKey, level: 2 });
           if (expanded.has(folderKey)) {
-            (notesByContainer[folderKey] ?? []).forEach((note) => {
+            const folderNotes = notesByContainer[folderKey] ?? [];
+            const { notes: shownNotes, hiddenCount } = sidebarFolderNotes(
+              folderNotes,
+              activeNote,
+              folder.id,
+              folderCounts[folder.id] ?? folderNotes.length
+            );
+            shownNotes.forEach((note) => {
               rows.push({
                 type: "note",
                 key: `n:${note.id}`,
@@ -1487,16 +1835,36 @@ export default function SpacesTree({
                 level: 3,
               });
             });
+            if (hiddenCount > 0) {
+              rows.push({
+                type: "more",
+                key: `more:${folder.id}`,
+                folder,
+                parentKey: folderKey,
+                level: 3,
+              });
+            }
           }
         });
       (notesByContainer[spaceKey] ?? []).forEach((note) => {
         rows.push({ type: "note", key: `n:${note.id}`, note, parentKey: spaceKey, level: 2 });
       });
     };
-    privateSpaces.forEach(pushPrivateSpace);
-    if (teamCapability) orderedTeamSpaces.forEach(pushSpace);
+    pushPrivateSection();
+    if (teamCapability) teamSpaces.forEach(pushSpace);
     return rows;
-  }, [privateSpaces, orderedTeamSpaces, folders, notesByContainer, expanded, teamCapability]);
+  }, [
+    privateSpace,
+    privateFolderGroups,
+    privateRootNotes,
+    teamSpaces,
+    folders,
+    notesByContainer,
+    expanded,
+    teamCapability,
+    activeNote,
+    folderCounts,
+  ]);
 
   const effectiveFocusKey =
     focusedKey && visibleRows.some((r) => r.key === focusedKey)
@@ -1516,7 +1884,9 @@ export default function SpacesTree({
   };
 
   const activateRow = (row: TreeRow) => {
-    if (row.type === "space") {
+    if (row.type === "more") {
+      setOpenFolderId(row.folder.id);
+    } else if (row.type === "space") {
       // Deselect the note so the main pane shows the container overview.
       setActiveNoteId(null);
       setActiveContext(row.space.id, null);
@@ -1579,7 +1949,7 @@ export default function SpacesTree({
     const horizontalIntent = treeHorizontalIntent(e.key, i18n.dir());
     if (horizontalIntent === "inward") {
       e.preventDefault();
-      if (row.type === "note") return;
+      if (row.type === "note" || row.type === "more") return;
       if (!expanded.has(row.key)) {
         setContainerExpanded(row.key, true);
       } else if (visibleRows[idx + 1]?.parentKey === row.key) {
@@ -1589,7 +1959,7 @@ export default function SpacesTree({
     }
     if (horizontalIntent === "outward") {
       e.preventDefault();
-      if (row.type !== "note" && expanded.has(row.key)) {
+      if (row.type !== "note" && row.type !== "more" && expanded.has(row.key)) {
         setContainerExpanded(row.key, false);
       } else if (row.parentKey) {
         focusRow(row.parentKey);
@@ -1720,13 +2090,20 @@ export default function SpacesTree({
         spaceId: note.space_id,
       })}
       spaces={noteMoveTargets(note)}
-      folders={folders}
+      folderRows={folderRowsBySpace}
+      otherWorkspaces={otherWorkspacesFor(note)}
       noteFilesEnabled={noteFilesEnabled}
       fileManagerName={fileManagerName}
       canDelete={canDeleteNote(note)}
       canMove={canMoveNote(note)}
       onOpen={() => activateRow({ type: "note", key: `n:${note.id}`, note, parentKey, level })}
       onMove={(target) => requestMoveNote(note.id, target)}
+      onMoveToWorkspace={(workspace) => void moveNoteToWorkspacePrivate(note, workspace)}
+      onCopyToPrivate={
+        spacesById.get(note.space_id)?.kind === "team"
+          ? () => void copyNoteToPrivate(note)
+          : undefined
+      }
       onCreateFolderAndMove={onCreateFolderAndMove}
       onDelete={() => requestDeleteNote(note)}
       a11y={a11yFor(`n:${note.id}`)}
@@ -1734,10 +2111,21 @@ export default function SpacesTree({
     />
   );
 
-  const renderFolder = (folder: FolderItem, parentKey?: string, level: 1 | 2 = 2) => {
+  const renderFolder = (
+    folder: FolderItem,
+    parentKey?: string,
+    level: 1 | 2 = 2,
+    members: FolderItem[] = [folder]
+  ) => {
     const folderKey = folderContainerKey(folder.id);
     const isExpanded = expanded.has(folderKey);
     const isRenaming = renamingFolderId === folder.id;
+    const {
+      notes: shownNotes,
+      hiddenCount,
+      total,
+      count,
+    } = folderRowNotes(members, notesByContainer, folderCounts, activeNote);
 
     if (isRenaming) {
       return (
@@ -1772,9 +2160,14 @@ export default function SpacesTree({
           folder={folder}
           level={level}
           spaces={moveTargetsBySpace.get(folder.space_id) ?? []}
+          currentSpaceId={
+            privateSpace && inPrivateSection(folder.space_id) ? privateSpace.id : folder.space_id
+          }
           isExpanded={isExpanded}
-          isActive={activeNoteId == null && activeContext?.folderId === folder.id}
-          count={folderCounts[folder.id] ?? 0}
+          isActive={
+            activeNoteId == null && members.some((member) => member.id === activeContext?.folderId)
+          }
+          count={count}
           isDragOver={dragState.dragOverKey === folderKey}
           isDropSuccess={dragState.dropSuccessKey === folderKey}
           dropHandlers={dropTargetHandlers({
@@ -1799,8 +2192,30 @@ export default function SpacesTree({
         />
         <TreeChildren open={isExpanded}>
           <div className="space-y-px">
-            {(notesByContainer[folderKey] ?? []).map((note) =>
+            {shownNotes.map((note) =>
               level === 1 ? renderNote(note, 2, folderKey, "ps-8") : renderNote(note, 3, folderKey)
+            )}
+            {hiddenCount > 0 && (
+              <FolderNotesPopover
+                folder={folder}
+                folderIds={members.map((member) => member.id)}
+                total={total}
+                hiddenCount={hiddenCount}
+                activeNoteId={activeNoteId}
+                level={level === 1 ? 2 : 3}
+                open={openFolderId === folder.id}
+                onOpenChange={(open) => setOpenFolderId(open ? folder.id : null)}
+                a11y={a11yFor(`more:${folder.id}`)}
+                onPick={(note, keyboard) => {
+                  setActiveNoteId(note.id);
+                  if (keyboard) focusRowSoon(`n:${note.id}`);
+                  else setFocusedKey(`n:${note.id}`);
+                }}
+                onOpenFolder={() => {
+                  setActiveNoteId(null);
+                  setActiveContext(folder.space_id, folder.id);
+                }}
+              />
             )}
           </div>
         </TreeChildren>
@@ -1819,11 +2234,16 @@ export default function SpacesTree({
       rootNotes === undefined;
     const showEmptySpace =
       space.kind === "team" && spaceFolders.length === 0 && rootNotes?.length === 0;
+    // Flattened, this is the Private section: every Private it stands for.
+    const folderRows = flattened
+      ? privateFolderGroups
+      : spaceFolders.map((folder) => ({ folder, members: [folder] }));
+    const shownRootNotes = flattened ? privateRootNotes : (rootNotes ?? []);
 
     return (
       <div className="space-y-px">
-        {spaceFolders.map((folder) =>
-          flattened ? renderFolder(folder, undefined, 1) : renderFolder(folder, spaceKey)
+        {folderRows.map(({ folder, members }) =>
+          flattened ? renderFolder(folder, undefined, 1, members) : renderFolder(folder, spaceKey)
         )}
         {creatingFolderSpaceId === space.id && (
           <div className={cn(flattened ? "ps-2" : "ps-[14px]", "pe-2")}>
@@ -1849,7 +2269,7 @@ export default function SpacesTree({
             />
           </div>
         )}
-        {(rootNotes ?? []).map((note) =>
+        {shownRootNotes.map((note) =>
           flattened ? renderNote(note, 1, undefined, "ps-[30px]") : renderNote(note, 2, spaceKey)
         )}
         {showSkeletons && <SkeletonRows />}
@@ -1972,11 +2392,7 @@ export default function SpacesTree({
         {teamCapability && (
           <div role="none" className="group/section">
             <SectionHeader
-              label={
-                showWorkspaceGroups
-                  ? t("workspaces.switcher.workspaces")
-                  : t("notes.spaces.teamSpaces")
-              }
+              label={t("notes.spaces.teamSpaces")}
               className="mt-4"
               action={
                 <div className="flex items-center gap-px">
@@ -1991,14 +2407,12 @@ export default function SpacesTree({
                       <Info size={11} />
                     </Button>
                   )}
-                  {/* With one workspace the header + is unambiguous; with several,
-                      each workspace row carries its own + instead. */}
-                  {canCreateTeamSpace && !showWorkspaceGroups && (
+                  {canCreateTeamSpace && (
                     <Button
                       variant="ghost"
                       size="icon"
                       aria-label={t("notes.spaces.newSpace")}
-                      onClick={() => openCreateSpace()}
+                      onClick={() => openCreateSpace(activeWorkspace?.id ?? null)}
                       className={cn(HOVER_REVEAL_BUTTON_CLASS, "group-hover/section:opacity-100")}
                     >
                       <Plus size={12} />
@@ -2011,68 +2425,34 @@ export default function SpacesTree({
               <SkeletonRows />
             ) : (
               <>
-                {showWorkspaceGroups
-                  ? teamSpaceGroups.map(({ workspace, spaces: workspaceSpaces }) => (
-                      <div
-                        key={workspace.id}
-                        role="group"
-                        aria-label={workspace.name}
-                        className="mt-1 group/workspace"
-                      >
-                        <div
-                          role="none"
-                          className="flex items-center justify-between h-5 ps-4 pe-2"
-                        >
-                          <span
-                            dir="auto"
-                            title={workspace.name}
-                            className="min-w-0 text-[10px] font-medium text-foreground/60 truncate"
-                          >
-                            {workspace.name}
-                          </span>
-                          {canManageWorkspace(workspace.role) && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={t("notes.spaces.newSpaceInWorkspace", {
-                                workspace: workspace.name,
-                              })}
-                              onClick={() => openCreateSpace(workspace.id)}
-                              className={cn(
-                                HOVER_REVEAL_BUTTON_CLASS,
-                                "group-hover/workspace:opacity-100"
-                              )}
-                            >
-                              <Plus size={12} />
-                            </Button>
-                          )}
-                        </div>
-                        {workspaceSpaces.map(renderSpace)}
-                      </div>
-                    ))
-                  : teamSpaces.map(renderSpace)}
-                {showWorkspaceGroups && ungroupedTeamSpaces.map(renderSpace)}
-                {teamSpaces.length === 0 &&
-                  (canCreateTeamSpace ? (
-                    // Grouped view already offers a + on each manageable workspace row.
-                    !showWorkspaceGroups && (
-                      <div className="ps-[18px] pe-2 py-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openCreateSpace()}
-                          className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
-                        >
-                          <Plus size={11} />
-                          {t("notes.spaces.newSpace")}
-                        </Button>
-                      </div>
-                    )
-                  ) : (
-                    <p className="ps-[18px] pe-2 py-1 text-xs text-foreground/60 leading-relaxed">
+                {teamSpaces.map(renderSpace)}
+                {teamSpaces.length === 0 && (
+                  <div role="none" className="flex flex-col items-center px-3 py-6 text-center">
+                    <ThemedEmptyIllustration
+                      light={sharedSpaceEmptyLight}
+                      dark={sharedSpaceEmptyDark}
+                      width={134}
+                      height={139}
+                    />
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {t("notes.spaces.emptyTeamTitle")}
+                    </p>
+                    <p className="mt-2 text-xs text-muted-foreground">
                       {t("notes.spaces.emptyTeamHint")}
                     </p>
-                  ))}
+                    {canCreateTeamSpace && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openCreateSpace(activeWorkspace?.id ?? null)}
+                        className="mt-3 h-7 gap-1 text-xs text-primary"
+                      >
+                        <Plus size={11} />
+                        {t("notes.spaces.newSpace")}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>

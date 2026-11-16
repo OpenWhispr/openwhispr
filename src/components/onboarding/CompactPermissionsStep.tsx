@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { CircleCheck, Laptop, Undo2 } from "../icons";
+import { ArrowLeft, CircleCheck, Laptop } from "../icons";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 // Imported (not referenced by path) so Vite fingerprints them and they resolve
@@ -11,6 +11,7 @@ import accessibilityIcon from "@/assets/onboarding-permission-accessibility.webp
 import systemAudioIcon from "@/assets/onboarding-permission-system-audio.webp";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
 import type { SystemAudioAccessResult } from "../../types/electron";
+import type { PermissionGuideId } from "../../types/permissionGuide";
 import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 import { getPlatform } from "../../utils/platform";
 import { areRequiredPermissionsMet } from "../../utils/permissions";
@@ -20,6 +21,11 @@ import PasteToolsInfo from "../ui/PasteToolsInfo";
 import { CompactOnboardingFrame } from "./OnboardingShell";
 
 interface CompactPermissionsStepProps {
+  guide?: {
+    start: (permission: PermissionGuideId) => Promise<void>;
+    ready: boolean;
+    error: boolean;
+  };
   permissions: UsePermissionsReturn;
   systemAudio: Pick<SystemAudioAccessResult, "granted" | "mode" | "supportsOnboardingGrant"> & {
     request: () => Promise<boolean>;
@@ -34,8 +40,6 @@ interface CompactPermissionsStepProps {
   onBack?: () => void;
   onContinue: () => void;
 }
-
-type PermissionRowId = "microphone" | "accessibility" | "system-audio" | "screen-context";
 
 interface PermissionRowProps {
   title: string;
@@ -118,6 +122,7 @@ function PermissionRow({
 }
 
 export default function CompactPermissionsStep({
+  guide,
   permissions,
   systemAudio,
   screenContext,
@@ -125,7 +130,7 @@ export default function CompactPermissionsStep({
   onContinue,
 }: CompactPermissionsStepProps) {
   const { t } = useTranslation();
-  const [busyPermission, setBusyPermission] = useState<PermissionRowId | null>(null);
+  const [busyPermission, setBusyPermission] = useState<PermissionGuideId | null>(null);
   const platform = getPlatform();
   const canRequestSystemAudio = canManageSystemAudioInApp(systemAudio);
   const requiredGranted = areRequiredPermissionsMet(permissions.micPermissionGranted);
@@ -143,10 +148,11 @@ export default function CompactPermissionsStep({
     permissions.pasteToolsInfo !== null &&
     needsLinuxPasteToolGuidance(permissions.pasteToolsInfo);
 
-  const request = async (id: PermissionRowId, action: () => Promise<unknown>) => {
+  const request = async (id: PermissionGuideId, action: () => Promise<unknown>) => {
     setBusyPermission(id);
     try {
-      await action();
+      if (guide?.ready && !guide.error) await guide.start(id);
+      else await action();
     } finally {
       setBusyPermission(null);
     }
@@ -159,14 +165,11 @@ export default function CompactPermissionsStep({
             minutes") instead of leaving one word stranded. Preferred over a
             hardcoded <br> because the break point stays correct in all 9
             locales, where the string length differs. */}
-        <h1 className="onboarding-display-title mx-auto max-w-72 text-balance text-3xl!">
+        <h1 className="onboarding-display-title mx-auto max-w-96 text-balance text-3xl!">
           {t("onboarding.rehaul.permissions.title")}
         </h1>
-        <p className="mt-2 text-sm text-[var(--onboarding-text-secondary)]">
-          {t("auth.welcomeSubtitle")}
-        </p>
 
-        <div className="mt-3 rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-3 py-1">
+        <div className="mt-5 rounded-[1.35rem] bg-[var(--onboarding-surface-secondary)] px-3 py-1">
           <PermissionRow
             title={t("onboarding.permissions.microphoneTitle")}
             description={t("onboarding.rehaul.permissions.microphoneDescription")}
@@ -265,7 +268,7 @@ export default function CompactPermissionsStep({
               onClick={onBack}
               className="onboarding-pressable inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-[var(--onboarding-control-border)] bg-[var(--onboarding-surface)] px-5 text-sm font-medium text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_30%,transparent)]"
             >
-              <Undo2 className="size-4" aria-hidden="true" />
+              <ArrowLeft className="size-4 rtl:rotate-180" aria-hidden="true" />
               {t("common.back")}
             </button>
           )}

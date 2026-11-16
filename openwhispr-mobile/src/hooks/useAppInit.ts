@@ -1,6 +1,9 @@
 import { useEffect } from 'react';
+import { startMeetingRecoveryOnce } from '@/lib/meetingRecovery';
 import { useDictionaryStore } from '@/store/useDictionaryStore';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
+import { useAuthStore } from '@/store/useAuthStore';
+import { loadSharedDictionaryIfOwnedBy } from '@/store/useSharedDictionaryStore';
 import { useNotesStore } from '@/store/useNotesStore';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
@@ -14,6 +17,9 @@ export function useAppInit() {
   const isNotesInitialized = useNotesStore((state) => state.isInitialized);
   const loadConfig = useConfigStore((state) => state.loadConfig);
   const loadTranscripts = useTranscriptStore((state) => state.loadTranscripts);
+  const signedInUserId = useAuthStore((state) =>
+    state.user && !state.isGuest ? state.user.id : null,
+  );
 
   useEffect(() => {
     if (!isDictionaryLoaded) loadDictionary();
@@ -33,4 +39,16 @@ export function useAppInit() {
     loadConfig,
     loadTranscripts,
   ]);
+
+  // Stored shared words apply from launch, before (or without) a sync, but only
+  // for the account they were pulled under.
+  useEffect(() => {
+    loadSharedDictionaryIfOwnedBy(signedInUserId).catch(() => {});
+  }, [signedInUserId]);
+
+  // After notes load and before any meeting can start: recover meeting notes whose
+  // process died mid-recording or mid-pipeline.
+  useEffect(() => {
+    if (isNotesInitialized) startMeetingRecoveryOnce();
+  }, [isNotesInitialized]);
 }

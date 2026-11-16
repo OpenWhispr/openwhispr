@@ -6,13 +6,18 @@
 //
 // `settingsKey` names the globalThis slot the suite swaps its settings
 // through — a unique key per suite keeps the per-test module caches isolated.
-const { createRendererServer, installBrowserGlobals } = require("../../lib/rendererTestHarness");
+const {
+  addTeardown,
+  createRendererServer,
+  installBrowserGlobals,
+} = require("../../lib/rendererTestHarness");
 
 const defaultMockModules = (settingsKey) => ({
   "/utils/logger":
     "export default { debug() {}, info() {}, warn() {}, error() {}, logReasoning() {} };",
   "/stores/settingsStore": `
     export const getSettings = () => globalThis.${settingsKey};
+    export const useSettingsStore = { subscribe: () => () => {} };
     export const getEffectiveCleanupModel = () => null;
     export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
     export const isCloudCleanupMode = () => false;
@@ -32,7 +37,7 @@ async function loadAudioManager(t, { cachePrefix, settingsKey, settings, mockMod
     cachePrefix,
     mockModules: { ...defaultMockModules(settingsKey), ...mockModules },
   });
-  t.after(() => {
+  addTeardown(t, () => {
     delete globalThis[settingsKey];
   });
   globalThis[settingsKey] = settings ?? {};
@@ -48,7 +53,11 @@ async function loadAudioManager(t, { cachePrefix, settingsKey, settings, mockMod
     // Prototype-only instance: the constructor wires up media devices the
     // tests don't need.
     createManager: (overrides = {}) =>
-      Object.assign(Object.create(AudioManager.prototype), overrides),
+      Object.assign(
+        Object.create(AudioManager.prototype),
+        { preparedMicCapture: { active: false } },
+        overrides
+      ),
   };
 }
 

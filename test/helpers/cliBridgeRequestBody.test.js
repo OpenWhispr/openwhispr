@@ -67,7 +67,7 @@ test("CLI request body limit counts UTF-8 bytes, not JavaScript characters", asy
         return { success: true, note: { id: 1 } };
       },
     },
-    _asyncVectorUpsert() {},
+    notifyVectorChanges() {},
     _asyncMirrorWrite() {},
   });
   bridge.token = "test-token";
@@ -98,7 +98,7 @@ test("multibyte content split across request chunks is preserved", async () => {
         return { success: true, note: { id: 1 } };
       },
     },
-    _asyncVectorUpsert() {},
+    notifyVectorChanges() {},
     _asyncMirrorWrite() {},
   });
   bridge.token = "test-token";
@@ -126,7 +126,7 @@ test("a JSON body exactly at the byte limit is accepted", async () => {
         return { success: true, note: { id: 1 } };
       },
     },
-    _asyncVectorUpsert() {},
+    notifyVectorChanges() {},
     _asyncMirrorWrite() {},
   });
   bridge.token = "test-token";

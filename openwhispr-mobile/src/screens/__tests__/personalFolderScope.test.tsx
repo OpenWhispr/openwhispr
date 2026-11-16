@@ -79,8 +79,8 @@ jest.mock('@/components/ui/Fab', () => ({
   FAB_BOTTOM_PADDING: 0,
 }));
 jest.mock('@/sync/syncEngine', () => ({ requestSync: jest.fn() }));
-jest.mock('@/sync/useSyncStore', () => ({
-  useSyncStore: (selector: (state: { status: string }) => unknown) => selector({ status: 'idle' }),
+jest.mock('@/hooks/useManualSyncRefresh', () => ({
+  useManualSyncRefresh: () => ({ refreshing: false, onRefresh: jest.fn() }),
 }));
 jest.mock('@/components/notes/NoteRow', () => ({ NoteRow: () => null }));
 jest.mock('@/components/notes/NewFolderSheet', () => ({ NewFolderSheet: () => null }));

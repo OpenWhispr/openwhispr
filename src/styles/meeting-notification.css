@@ -1,0 +1,272 @@
+.meeting-folder-compound {
+  overflow: hidden;
+}
+.meeting-folder-trigger {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  width: 27px;
+  border-inline-start: 1px solid #ffffff55;
+  outline-offset: -2px;
+}
+.meeting-folder-trigger svg {
+  grid-area: 1/1;
+  transition: opacity 400ms ease-in-out;
+}
+.meeting-folder-confirmation {
+  opacity: 0;
+}
+.feedback-enter svg,
+.feedback-hold svg {
+  transition-duration: 200ms;
+}
+.feedback-enter .meeting-folder-chevron,
+.feedback-hold .meeting-folder-chevron {
+  opacity: 0;
+}
+.feedback-enter .meeting-folder-confirmation,
+.feedback-hold .meeting-folder-confirmation {
+  opacity: 1;
+}
+.meeting-folder-picker {
+  position: relative;
+  max-height: calc(var(--meeting-surface-height, 512px) - 108px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  width: 288px;
+  max-width: 100%;
+  margin: 12px 0 0 auto;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--color-card);
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px #0002;
+  font-size: 12px;
+}
+.meeting-folder-picker button:focus-visible,
+.meeting-folder-picker input:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline-offset: 1px;
+}
+.meeting-folder-picker button:disabled {
+  opacity: 0.5;
+}
+.meeting-folder-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  margin: 3px;
+  padding-block: 6px;
+  padding-inline: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-foreground) 4%, transparent);
+  color: var(--color-muted-foreground);
+}
+.dark .meeting-folder-search {
+  border-color: #ffffff1a;
+  background: #ffffff0d;
+}
+.meeting-folder-search:focus-within {
+  outline: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline-offset: 1px;
+}
+.meeting-folder-search input:focus-visible {
+  outline: none;
+}
+.meeting-folder-search > button {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  padding: 2px;
+  border-radius: 999px;
+}
+.meeting-folder-search input {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 2px;
+  outline: 0;
+  background: transparent;
+  color: var(--color-foreground);
+  font-size: 12px;
+}
+.meeting-folder-results {
+  max-height: 240px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.meeting-folder-results::before {
+  content: "";
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: block;
+  height: 16px;
+  margin-bottom: -16px;
+  pointer-events: none;
+  backdrop-filter: blur(3px);
+  background: color-mix(in srgb, var(--color-card) 25%, transparent);
+  mask-image: linear-gradient(#000, transparent);
+}
+.meeting-folder-group {
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+  font-weight: 500;
+  padding: 10px 8px 5px;
+}
+.meeting-folder-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px;
+  text-align: start;
+  border-radius: 6px;
+}
+.meeting-folder-option:hover,
+.meeting-folder-option.active,
+.meeting-folder-locations [role="menuitemradio"]:focus {
+  background: var(--color-muted);
+}
+.meeting-folder-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 16px;
+}
+.meeting-folder-space {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  line-height: 12px;
+  color: var(--color-muted-foreground);
+}
+.meeting-folder-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border-top: 1px solid var(--color-border);
+  margin-top: 5px;
+  padding: 9px 8px 7px;
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+}
+.meeting-folder-form {
+  padding: 0 6px 6px;
+}
+.meeting-folder-form h3 {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 7px 2px 10px;
+}
+.meeting-folder-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 0;
+}
+.meeting-folder-field > span {
+  width: 48px;
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+}
+.meeting-folder-field input {
+  min-width: 0;
+  width: 100%;
+  font-size: 12px;
+  padding-block: 7px;
+  padding-inline: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+.meeting-folder-location {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.meeting-folder-location-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  font-size: 11px;
+  border-radius: 6px;
+  padding-block: 7px;
+  padding-inline: 10px;
+  text-align: start;
+}
+.meeting-folder-location-trigger > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meeting-folder-locations {
+  width: var(--radix-dropdown-menu-trigger-width);
+  z-index: 5;
+  background: var(--color-card);
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 3px 10px #0002;
+  max-height: min(120px, var(--radix-dropdown-menu-content-available-height));
+  overflow: auto;
+}
+.meeting-folder-locations [role="menuitemradio"] {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  font-size: 11px;
+  padding: 6px;
+  text-align: start;
+  border-radius: 4px;
+}
+.meeting-folder-form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+}
+.meeting-folder-form-actions button {
+  font-size: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: var(--color-muted-foreground);
+}
+.meeting-folder-form-actions button[type="submit"] {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+.meeting-folder-error {
+  padding: 5px 8px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--color-destructive);
+}
+@media (prefers-reduced-motion: reduce) {
+  .meeting-folder-trigger svg {
+    transition: none;
+  }
+  .feedback-exit .meeting-folder-confirmation {
+    opacity: 1;
+  }
+  .feedback-exit .meeting-folder-chevron {
+    opacity: 0;
+  }
+}

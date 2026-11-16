@@ -22,10 +22,11 @@ function loadLoopback() {
   }
 }
 
-function startFlow(handleCallback = async () => ({ ok: true })) {
+function startFlow(handleCallback = async () => ({ ok: true }), options = {}) {
   const { runOAuthLoopbackFlow } = loadLoopback();
   let redirectUri;
   let state;
+  let authUrlCalls = 0;
   let server;
   const originalCreateServer = http.createServer;
   http.createServer = (...args) => {
@@ -36,14 +37,22 @@ function startFlow(handleCallback = async () => ({ ok: true })) {
   try {
     const flow = runOAuthLoopbackFlow({
       errorParam: "gcal_error",
+      ...options,
       buildAuthUrl: (uri, flowState) => {
         redirectUri = uri;
         state = flowState;
+        authUrlCalls += 1;
         return "https://example.test/auth";
       },
       handleCallback,
     });
-    return { flow, server, getRedirectUri: () => redirectUri, getState: () => state };
+    return {
+      flow,
+      server,
+      getRedirectUri: () => redirectUri,
+      getState: () => state,
+      getAuthUrlCalls: () => authUrlCalls,
+    };
   } finally {
     http.createServer = originalCreateServer;
   }
@@ -184,9 +193,7 @@ async function parkPartialRequest(redirectUri, server) {
 
   return {
     complete: (path) => {
-      socket.end(
-        `${path} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nConnection: close\r\n\r\n`
-      );
+      socket.end(`${path} HTTP/1.1\r\nHost: ${hostname}:${port}\r\nConnection: close\r\n\r\n`);
       return status;
     },
     destroy: () => socket.destroy(),
@@ -244,13 +251,8 @@ test("a provider error query still fails the flow immediately", async () => {
 });
 
 test("a late state mismatch cannot reject a valid callback already in progress", async () => {
-  const {
-    flow,
-    getRedirectUri,
-    getState,
-    callbackStarted,
-    releaseHandleCallback,
-  } = startBlockedFlow();
+  const { flow, getRedirectUri, getState, callbackStarted, releaseHandleCallback } =
+    startBlockedFlow();
   const redirectUri = await waitForListen(getRedirectUri);
   const flowOutcome = flow.then(
     () => "resolved",
@@ -284,13 +286,8 @@ test("a late state mismatch cannot reject a valid callback already in progress",
 });
 
 test("a late malformed request cannot reject a valid callback already in progress", async () => {
-  const {
-    flow,
-    getRedirectUri,
-    getState,
-    callbackStarted,
-    releaseHandleCallback,
-  } = startBlockedFlow();
+  const { flow, getRedirectUri, getState, callbackStarted, releaseHandleCallback } =
+    startBlockedFlow();
   const redirectUri = await waitForListen(getRedirectUri);
   const flowOutcome = flow.then(
     () => "resolved",
@@ -410,4 +407,272 @@ test("an accepted callback cannot run after the flow times out", async () => {
   } finally {
     parkedRequest.destroy();
   }
+});
+
+function freePort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
+function getLocal(url) {
+  return new Promise((resolve, reject) => {
+    http
+      .get(url, (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
+        res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body }));
+      })
+      .on("error", reject);
+  });
+}
+
+async function until(read) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const value = read();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("timed out waiting");
+}
+
+test("a fixed port, redirect host and path shape the redirect uri both times", async () => {
+  const port = await freePort();
+  const started = startFlow(async (code, redirectUri) => ({ code, redirectUri }), {
+    redirectHost: "localhost",
+    ports: [port],
+    callbackPath: "/slack/callback",
+  });
+  const redirectUri = await until(started.getRedirectUri);
+  assert.equal(redirectUri, `http://localhost:${port}/slack/callback`);
+
+  await getLocal(`http://127.0.0.1:${port}/slack/callback?code=c1&state=${started.getState()}`);
+
+  assert.deepEqual(await started.flow, {
+    code: "c1",
+    redirectUri: `http://localhost:${port}/slack/callback`,
+  });
+});
+
+test("a busy fixed port falls through to the next with one browser launch; all busy rejects ports_busy", async () => {
+  const blocker = net.createServer();
+  await new Promise((resolve) => blocker.listen(0, "127.0.0.1", resolve));
+  const busy = blocker.address().port;
+  const free = await freePort();
+  try {
+    const started = startFlow(async (code) => ({ code }), { ports: [busy, free] });
+    assert.equal(await until(started.getRedirectUri), `http://127.0.0.1:${free}`);
+    await getLocal(`http://127.0.0.1:${free}/?code=c2&state=${started.getState()}`);
+    assert.deepEqual(await started.flow, { code: "c2" });
+    assert.equal(started.getAuthUrlCalls(), 1, "exactly one browser launch");
+
+    const allBusy = startFlow(async () => ({}), { ports: [busy] });
+    await assert.rejects(allBusy.flow, (error) => error.code === "ports_busy");
+    assert.equal(allBusy.getAuthUrlCalls(), 0);
+  } finally {
+    blocker.close();
+  }
+});
+
+test("a local result page replaces the hosted desktop-callback redirect", async () => {
+  const started = startFlow(async () => ({ ok: true }), {
+    renderResultPage: ({ ok }) => `<p>${ok ? "connected" : "failed"}</p>`,
+  });
+  const redirectUri = await until(started.getRedirectUri);
+
+  const response = await getLocal(`${redirectUri}/?code=c3&state=${started.getState()}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.location, undefined);
+  assert.equal(response.body, "<p>connected</p>");
+  await started.flow;
+});
+
+test("a denied consent rejects with oauth_denied and shows the failure page", async () => {
+  const started = startFlow(async () => ({}), {
+    renderResultPage: ({ ok }) => (ok ? "yes" : "no"),
+  });
+  const redirectUri = await until(started.getRedirectUri);
+  const outcome = started.flow.catch((error) => error);
+
+  const response = await getLocal(
+    `${redirectUri}/?error=access_denied&state=${started.getState()}`
+  );
+
+  assert.equal(response.body, "no");
+  const error = await outcome;
+  assert.equal(error.code, "oauth_denied");
+  assert.equal(error.providerError, "access_denied");
+});
+
+const RELAY = "https://openwhispr.com/auth/slack/callback";
+
+test("behind a relay, the public redirect URI goes to the provider and the exchange, and state carries the port", async () => {
+  const started = startFlow(async (code, redirectUri) => ({ code, redirectUri }), {
+    publicRedirectUri: RELAY,
+    callbackPath: "/slack/callback",
+  });
+  assert.equal(await until(started.getRedirectUri), RELAY);
+  const port = started.server.address().port;
+  assert.match(started.getState(), new RegExp(`^v1\\.${port}\\.[0-9a-f]{64}$`));
+
+  // What the relay does with Slack's redirect.
+  await getLocal(`http://127.0.0.1:${port}/slack/callback?code=c4&state=${started.getState()}`);
+
+  assert.deepEqual(await started.flow, { code: "c4", redirectUri: RELAY });
+  assert.equal(started.getAuthUrlCalls(), 1);
+});
+
+test("behind a relay, the right port with another nonce is a state mismatch", async () => {
+  const started = startFlow(async () => ({ ok: true }), { publicRedirectUri: RELAY });
+  await until(started.getRedirectUri);
+  const port = started.server.address().port;
+  const outcome = started.flow.catch((error) => error);
+
+  await getLocal(`http://127.0.0.1:${port}/?code=c5&state=v1.${port}.${"0".repeat(64)}`);
+
+  assert.equal((await outcome).code, "oauth_state_mismatch");
+});
+
+test("without a relay, the state stays a bare nonce", async () => {
+  const started = startFlow(async (code) => ({ code }));
+  await until(started.getRedirectUri);
+  assert.match(started.getState(), /^[0-9a-f]{64}$/);
+
+  await getLocal(`${started.getRedirectUri()}/?code=c6&state=${started.getState()}`);
+
+  assert.deepEqual(await started.flow, { code: "c6" });
+});
+
+test("timeoutMs bounds how long the flow waits", { timeout: 5000 }, async () => {
+  const started = startFlow(async () => ({}), { timeoutMs: 30 });
+  await assert.rejects(started.flow, (error) => error.code === "oauth_timeout");
+});
+
+test("an abort closes the server and rejects oauth_cancelled", async () => {
+  const controller = new AbortController();
+  let callbackCount = 0;
+  const started = startFlow(
+    async () => {
+      callbackCount += 1;
+      return {};
+    },
+    { signal: controller.signal }
+  );
+  const redirectUri = await until(started.getRedirectUri);
+  const outcome = started.flow.catch((error) => error);
+
+  controller.abort();
+
+  assert.equal((await outcome).code, "oauth_cancelled");
+  assert.equal(started.server.listening, false);
+  await assert.rejects(getLocal(`${redirectUri}/?code=late&state=${started.getState()}`));
+  assert.equal(callbackCount, 0);
+});
+
+test("a flow whose signal is already aborted never opens the browser", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const started = startFlow(async () => ({}), { signal: controller.signal });
+
+  await assert.rejects(started.flow, (error) => error.code === "oauth_cancelled");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(started.getAuthUrlCalls(), 0);
+});
+
+test("an abort after the provider answered lets the exchange finish", async () => {
+  const controller = new AbortController();
+  let release;
+  let markStarted;
+  const exchangeStarted = new Promise((resolve) => {
+    markStarted = resolve;
+  });
+  const started = startFlow(
+    async (code) => {
+      markStarted();
+      await new Promise((resolve) => {
+        release = resolve;
+      });
+      return { code };
+    },
+    { signal: controller.signal }
+  );
+  const redirectUri = await until(started.getRedirectUri);
+
+  const response = getLocal(`${redirectUri}/?code=c9&state=${started.getState()}`);
+  await exchangeStarted;
+  controller.abort();
+  release();
+
+  // The caller decides what to do with a login it no longer wants; the flow
+  // never drops one the provider already issued.
+  assert.deepEqual(await started.flow, { code: "c9" });
+  assert.equal((await response).status, 302);
+});
+
+async function stillWaiting(flow) {
+  return Promise.race([
+    flow.then(
+      () => "resolved",
+      () => "rejected"
+    ),
+    new Promise((resolve) => setTimeout(() => resolve("pending"), 100)),
+  ]);
+}
+
+test("behind a relay, an error without this flow's state is a stray request, not a denial", async () => {
+  const started = startFlow(async (code) => ({ code }), { publicRedirectUri: RELAY });
+  await until(started.getRedirectUri);
+  const port = started.server.address().port;
+
+  const bare = await getLocal(`http://127.0.0.1:${port}/anything?error=access_denied`);
+  const otherState = await getLocal(
+    `http://127.0.0.1:${port}/?error=access_denied&state=v1.${port}.${"0".repeat(64)}`
+  );
+
+  assert.equal(bare.status, 400);
+  assert.equal(otherState.status, 400);
+  assert.equal(await stillWaiting(started.flow), "pending");
+  await getLocal(`http://127.0.0.1:${port}/?code=c7&state=${started.getState()}`);
+  assert.deepEqual(await started.flow, { code: "c7" });
+});
+
+test("behind a relay, an error with this flow's state still denies", async () => {
+  const started = startFlow(async () => ({}), { publicRedirectUri: RELAY });
+  await until(started.getRedirectUri);
+  const port = started.server.address().port;
+  const outcome = started.flow.catch((error) => error);
+
+  await getLocal(`http://127.0.0.1:${port}/?error=access_denied&state=${started.getState()}`);
+
+  assert.equal((await outcome).code, "oauth_denied");
+});
+
+test("with a callback path, only that path is a callback", async () => {
+  const started = startFlow(async (code) => ({ code }), {
+    publicRedirectUri: RELAY,
+    callbackPath: "/slack/callback",
+  });
+  await until(started.getRedirectUri);
+  const port = started.server.address().port;
+  const state = started.getState();
+
+  const wrongPathCode = await getLocal(`http://127.0.0.1:${port}/other?code=stray&state=${state}`);
+  const wrongPathError = await getLocal(
+    `http://127.0.0.1:${port}/other?error=access_denied&state=${state}`
+  );
+
+  assert.equal(wrongPathCode.status, 400);
+  assert.equal(wrongPathError.status, 400);
+  assert.equal(await stillWaiting(started.flow), "pending");
+  await getLocal(`http://127.0.0.1:${port}/slack/callback?code=c8&state=${state}`);
+  assert.deepEqual(await started.flow, { code: "c8" });
 });

@@ -3,9 +3,18 @@ import { createGroq } from "@ai-sdk/groq";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
+import type { LanguageModelV3 } from "@ai-sdk/provider";
+import type { InferenceMode } from "../../types/electron";
 import { getTinfoilLanguageModel } from "./tinfoilClient";
 import { API_ENDPOINTS } from "../../config/constants";
 import { openCodeSessionHeaders } from "./openCodeSession";
+import {
+  assertAgentAllowedByPolicy,
+  assertReasoningAllowedByPolicy,
+  onPolicyRestriction,
+  runningPolicyCheck,
+} from "../reasoningPolicy";
+import { guardLanguageModel } from "./policyModel";
 
 // Renderer-side AI SDK factory. Cloud + local only — enterprise providers
 // (bedrock/azure/vertex) run in the main process via the
@@ -15,23 +24,32 @@ import { openCodeSessionHeaders } from "./openCodeSession";
 
 // OpenRouter's reasoning control is a top-level request field the AI SDK
 // can't emit — inject it at the fetch boundary.
-const withDisabledReasoning: typeof fetch = (input, init) => {
-  if (typeof init?.body === "string") {
-    try {
-      const body = JSON.parse(init.body);
-      body.reasoning = { enabled: false };
-      init = { ...init, body: JSON.stringify(body) };
-    } catch {}
-  }
-  return fetch(input, init);
-};
+const withReasoning =
+  (reasoning: Record<string, unknown>): typeof fetch =>
+  (input, init) => {
+    if (typeof init?.body === "string") {
+      try {
+        const body = JSON.parse(init.body);
+        body.reasoning = reasoning;
+        init = { ...init, body: JSON.stringify(body) };
+      } catch {}
+    }
+    return fetch(input, init);
+  };
 
-export async function getAIModel(
+async function createAIModel(
   provider: string,
   model: string,
   apiKey: string,
   baseURL?: string,
-  opts?: { disableThinking?: boolean }
+  opts?: {
+    disableThinking?: boolean;
+    reasoningEffort?: string;
+    fetch?: typeof fetch;
+    mode?: InferenceMode;
+    requiresAgent?: boolean;
+    signal?: AbortSignal;
+  }
 ): Promise<LanguageModel> {
   switch (provider) {
     case "openai":
@@ -39,8 +57,7 @@ export async function getAIModel(
     case "groq":
       return createGroq({ apiKey })(model);
     case "anthropic":
-      // The assistant panel runs in the pill window, which keeps Chromium's
-      // default webSecurity (the deleted agent overlay disabled it). Anthropic
+      // The agent window keeps Chromium's default webSecurity. Anthropic
       // only answers browser-origin requests that opt in with this header;
       // the dictation path avoids the issue by going through IPC.
       return createAnthropic({
@@ -62,16 +79,52 @@ export async function getAIModel(
         baseURL,
         headers: openCodeSessionHeaders(baseURL),
       }).chat(model);
-    case "openrouter":
+    case "openrouter": {
+      const reasoning = opts?.disableThinking
+        ? { enabled: false }
+        : opts?.reasoningEffort
+          ? { effort: opts.reasoningEffort }
+          : null;
       // OpenRouter implements Chat Completions, not the OpenAI Responses API.
       return createOpenAI({
         apiKey,
         baseURL,
-        ...(opts?.disableThinking ? { fetch: withDisabledReasoning } : {}),
+        ...(reasoning ? { fetch: withReasoning(reasoning) } : {}),
       }).chat(model);
+    }
     case "local":
-      return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
+      return createOpenAI({
+        apiKey: apiKey || "no-key",
+        baseURL,
+        ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+      }).chat(model);
     default:
       throw new Error(`Unsupported AI SDK provider for renderer: ${provider}`);
+  }
+}
+
+export async function getAIModel(
+  ...args: Parameters<typeof createAIModel>
+): Promise<LanguageModel> {
+  const [provider, model, apiKey, baseURL, opts] = args;
+  const mode = opts?.mode ?? (provider === "local" ? "local" : "providers");
+  const assertAllowed = () => {
+    assertReasoningAllowedByPolicy(provider, mode, model);
+    if (opts?.requiresAgent) assertAgentAllowedByPolicy();
+  };
+  assertAllowed();
+  const assertStillAllowed = runningPolicyCheck(assertAllowed);
+  const controller = new AbortController();
+  const unsubscribe = onPolicyRestriction(assertStillAllowed, (error) => controller.abort(error));
+  const signal = opts?.signal
+    ? AbortSignal.any([opts.signal, controller.signal])
+    : controller.signal;
+  try {
+    const resolved = await createAIModel(provider, model, apiKey, baseURL, { ...opts, signal });
+    signal.throwIfAborted();
+    assertStillAllowed();
+    return guardLanguageModel(resolved as LanguageModelV3, assertStillAllowed);
+  } finally {
+    unsubscribe();
   }
 }

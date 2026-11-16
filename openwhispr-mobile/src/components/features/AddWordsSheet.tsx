@@ -4,7 +4,7 @@ import { Text } from '@/components/ui/Text';
 import { FormSheet } from '@/components/ui/FormSheet';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { iosColor } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 
 const LABEL_COLOR = iosColor('label');
@@ -143,7 +143,7 @@ export function AddWordsSheet({ visible, onClose, onSubmit }: Props) {
 const styles = StyleSheet.create({
   input: {
     color: LABEL_COLOR,
-    fontFamily: SpaceGrotesk.regular,
+    fontFamily: AppFont.regular,
     fontSize: 15,
     fontWeight: '400',
   },

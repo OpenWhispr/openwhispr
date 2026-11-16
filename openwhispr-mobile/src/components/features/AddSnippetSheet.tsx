@@ -4,7 +4,7 @@ import { Text } from '@/components/ui/Text';
 import { FormSheet } from '@/components/ui/FormSheet';
 import { iosColor } from '@/config/colors';
 import { confirmDestructive } from '@/lib/alerts';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 import type { Snippet } from '@/lib/snippets';
 
@@ -140,7 +140,7 @@ export function AddSnippetSheet({
 const styles = StyleSheet.create({
   input: {
     color: LABEL_COLOR,
-    fontFamily: SpaceGrotesk.regular,
+    fontFamily: AppFont.regular,
     fontSize: 15,
     fontWeight: '400',
   },

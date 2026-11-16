@@ -1,8 +1,9 @@
 import { useEffect, type ComponentType, type ReactElement } from 'react';
 import { View } from 'react-native';
 import { useOnboardingStore, type OnboardingStepId } from '@/store/useOnboardingStore';
+import { VoiceAgentStep } from './steps/VoiceAgentStep';
+import { ToneStep } from './steps/ToneStep';
 import { GetStartedStep } from './steps/GetStartedStep';
-import { SecurityFirstStep } from './steps/SecurityFirstStep';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { KeyboardIntroStep } from './steps/KeyboardIntroStep';
 import { KeyboardSwitchStep } from './steps/KeyboardSwitchStep';
@@ -21,12 +22,13 @@ import { TrackingPermissionStep } from './steps/TrackingPermissionStep';
 // which is safer than falling back to a placeholder at runtime.
 const STEP_COMPONENTS: Record<OnboardingStepId, ComponentType> = {
   'get-started': GetStartedStep,
-  'security-first': SecurityFirstStep,
   welcome: WelcomeStep,
   'keyboard-intro': KeyboardIntroStep,
   'keyboard-switch': KeyboardSwitchStep,
   microphone: MicrophoneStep,
   'dictation-email': DictationEmailStep,
+  'voice-agent': VoiceAgentStep,
+  tone: ToneStep,
   'privacy-mode': PrivacyModeStep,
   'private-download': PrivateDownloadStep,
   language: LanguageStep,

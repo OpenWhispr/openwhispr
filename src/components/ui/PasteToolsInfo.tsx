@@ -6,12 +6,30 @@ import type { PasteToolsResult } from "../../types/electron";
 import {
   getLinuxPasteInstallCommands,
   needsLinuxPasteToolGuidance,
+  needsWtype,
+  type LinuxPasteTool,
 } from "../../utils/linuxPasteTools";
 
 interface PasteToolsInfoProps {
   pasteToolsInfo: PasteToolsResult | null;
   isChecking: boolean;
   onCheck: () => void;
+}
+
+function LinuxInstallCommands({ tool }: { tool: LinuxPasteTool }) {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-3 space-y-2 bg-card border border-border p-3 rounded-md font-mono text-xs overflow-x-auto">
+      {getLinuxPasteInstallCommands(t, tool).map(({ label, cmd }) => (
+        <div key={cmd}>
+          <div className="text-muted-foreground">{label}</div>
+          <div dir="ltr" className="text-foreground">
+            {cmd}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function PasteToolsInfo({
@@ -99,8 +117,11 @@ export default function PasteToolsInfo({
 
   if (needsLinuxPasteToolGuidance(pasteToolsInfo)) {
     const isWayland = pasteToolsInfo.isWayland;
-    const needsWtype = pasteToolsInfo.isWlroots && !pasteToolsInfo.hasWtype;
-    const recommendedTool = needsWtype
+    const wlCopyMissing = !!pasteToolsInfo.wlCopyMissing;
+    const wtypeMissing = needsWtype(pasteToolsInfo);
+    const needsPasteTool = !pasteToolsInfo.available || wtypeMissing;
+    const cosmicTerminalsOnly = wtypeMissing && !!pasteToolsInfo.isCosmic;
+    const recommendedTool = wtypeMissing
       ? "wtype"
       : pasteToolsInfo.recommendedInstall === "wtype"
         ? "wtype"
@@ -111,75 +132,88 @@ export default function PasteToolsInfo({
 
     return (
       <InfoBox variant="warning" className="space-y-3">
-        <div className="flex items-start gap-3">
-          <Info className="w-6 h-6 text-warning dark:text-warning flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h3 className="font-semibold text-warning dark:text-warning">
-              {showInstall
-                ? t("pasteToolsInfo.optionalEnableTitle")
-                : t("pasteToolsInfo.waylandClipboardTitle")}
-            </h3>
-
-            {showInstall ? (
-              <>
-                <p className="text-sm text-warning dark:text-warning mt-1">
-                  {needsWtype ? (
-                    t("pasteToolsInfo.wtypeFallbackDescription")
-                  ) : (
-                    <>
-                      {t("pasteToolsInfo.installPrefix")}{" "}
-                      <code dir="ltr" className="bg-warning/20 px-1 rounded font-mono">
-                        {recommendedTool}
-                      </code>
-                      :
-                    </>
-                  )}
-                </p>
-
-                <div className="mt-3 space-y-2 bg-card border border-border p-3 rounded-md font-mono text-xs overflow-x-auto">
-                  {getLinuxPasteInstallCommands(t, recommendedTool).map(({ label, cmd }) => (
-                    <div key={cmd}>
-                      <div className="text-muted-foreground">{label}</div>
-                      <div dir="ltr" className="text-foreground">
-                        {cmd}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {isWayland && recommendedTool === "wtype" && (
-                  <p className="text-sm text-warning dark:text-warning mt-3">
-                    {t("pasteToolsInfo.noteXwaylandAlso")}
-                  </p>
-                )}
-
-                {isWayland && recommendedTool === "xdotool" && (
-                  <p className="text-sm text-warning dark:text-warning mt-3">
-                    {t("pasteToolsInfo.noteXwaylandOnly")}
-                  </p>
-                )}
-              </>
-            ) : (
+        {/* wl-clipboard and a paste tool can both be missing; list both, so one
+            Re-check doesn't uncover the other. */}
+        {wlCopyMissing && (
+          <div className="flex items-start gap-3">
+            <Info className="w-6 h-6 text-warning dark:text-warning flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-warning dark:text-warning">
+                {t("pasteToolsInfo.wlClipboardTitle")}
+              </h3>
               <p className="text-sm text-warning dark:text-warning mt-1">
-                {t("pasteToolsInfo.waylandClipboardDescription")}{" "}
-                <kbd dir="ltr" className="bg-warning/20 px-1 rounded text-xs">
-                  Ctrl+V
-                </kbd>
-                .
+                {t("pasteToolsInfo.wlClipboardDescription")}
               </p>
-            )}
-
-            {showInstall && (
-              <p className="text-sm text-warning dark:text-warning mt-3">
-                {t("pasteToolsInfo.withoutToolPrefix")}{" "}
-                <kbd dir="ltr" className="bg-warning/20 px-1 rounded text-xs">
-                  Ctrl+V
-                </kbd>
-                .
-              </p>
-            )}
+              <LinuxInstallCommands tool="wl-clipboard" />
+            </div>
           </div>
-        </div>
+        )}
+
+        {needsPasteTool && (
+          <div className="flex items-start gap-3">
+            <Info className="w-6 h-6 text-warning dark:text-warning flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-warning dark:text-warning">
+                {showInstall
+                  ? t("pasteToolsInfo.optionalEnableTitle")
+                  : t("pasteToolsInfo.waylandClipboardTitle")}
+              </h3>
+
+              {showInstall ? (
+                <>
+                  <p className="text-sm text-warning dark:text-warning mt-1">
+                    {cosmicTerminalsOnly ? (
+                      t("pasteToolsInfo.wtypeCosmicTerminalsDescription")
+                    ) : wtypeMissing ? (
+                      t("pasteToolsInfo.wtypeFallbackDescription")
+                    ) : (
+                      <>
+                        {t("pasteToolsInfo.installPrefix")}{" "}
+                        <code dir="ltr" className="bg-warning/20 px-1 rounded font-mono">
+                          {recommendedTool}
+                        </code>
+                        :
+                      </>
+                    )}
+                  </p>
+
+                  <LinuxInstallCommands tool={recommendedTool} />
+
+                  {isWayland && recommendedTool === "wtype" && (
+                    <p className="text-sm text-warning dark:text-warning mt-3">
+                      {t("pasteToolsInfo.noteXwaylandAlso")}
+                    </p>
+                  )}
+
+                  {isWayland && recommendedTool === "xdotool" && (
+                    <p className="text-sm text-warning dark:text-warning mt-3">
+                      {t("pasteToolsInfo.noteXwaylandOnly")}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-warning dark:text-warning mt-1">
+                  {t("pasteToolsInfo.waylandClipboardDescription")}{" "}
+                  <kbd dir="ltr" className="bg-warning/20 px-1 rounded text-xs">
+                    Ctrl+V
+                  </kbd>
+                  .
+                </p>
+              )}
+
+              {/* Without wl-copy, a manual Ctrl+V in a Wayland app pastes stale text too. */}
+              {showInstall && !cosmicTerminalsOnly && !wlCopyMissing && (
+                <p className="text-sm text-warning dark:text-warning mt-3">
+                  {t("pasteToolsInfo.withoutToolPrefix")}{" "}
+                  <kbd dir="ltr" className="bg-warning/20 px-1 rounded text-xs">
+                    Ctrl+V
+                  </kbd>
+                  .
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={onCheck} disabled={isChecking}>

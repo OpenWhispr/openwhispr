@@ -8,6 +8,7 @@
 import { Buffer } from 'buffer';
 import { startRealtimeMeetingWs, type WebSocketLike } from '../RealtimeMeetingWsService';
 import { ROTATION_MS } from '../realtimeReconnect';
+import { MEETING_RECORDING_DISABLED_MESSAGE } from '../policyErrors';
 import { api } from '@/lib/apiClient';
 import * as Network from 'expo-network';
 import { LivePCMStreaming, addPcmFrameListener } from '../../../../modules/live-pcm-streaming/src';
@@ -113,6 +114,18 @@ async function flushMicro(): Promise<void> {
   }
 }
 
+/**
+ * Advance fake time onto the rotation seam. advanceTimersByTimeAsync yields a real event-loop
+ * turn after every timer it fires, and the flush interval fires 20,000 times before the seam, so
+ * walking all of ROTATION_MS that way tied these tests' wall time to CPU load until they hit
+ * Jest's timeout. The flush ticks queue no async work, so walk them synchronously and cross only
+ * the seam itself (where the rotation's token fetch and leg open run) asynchronously.
+ */
+async function advanceToRotation(): Promise<void> {
+  jest.advanceTimersByTime(ROTATION_MS - 1);
+  await jest.advanceTimersByTimeAsync(1);
+}
+
 function emitFrame(bytes: number[]): void {
   const calls = (addPcmFrameListener as jest.Mock).mock.calls;
   const cb = calls[calls.length - 1]?.[0] as ((frame: { audio: string }) => void) | undefined;
@@ -176,6 +189,57 @@ describe('startRealtimeMeetingWs — normal meeting (leg-swap parity)', () => {
     expect(LivePCMStreaming.stop).toHaveBeenCalledTimes(1);
     expect(leg1.didCommit()).toBe(true);
     expect(leg1.closed).toBe(true);
+  });
+});
+
+describe('startRealtimeMeetingWs — token purpose', () => {
+  it('declares every mint, including a reconnect, as a meeting', async () => {
+    const { leg1 } = await boot({}, { language: 'de' });
+    leg1.serverClose(1006);
+    await flushMicro();
+    lastLeg().open();
+    await flushMicro();
+
+    const bodies = (api.post as jest.Mock).mock.calls.map(([, body]) => body);
+    expect(bodies.length).toBeGreaterThanOrEqual(2);
+    for (const body of bodies) {
+      expect(body).toEqual({ purpose: 'meeting', streams: 1, language: 'de' });
+    }
+  });
+});
+
+describe('startRealtimeMeetingWs — org policy refusal', () => {
+  const meetingRefusal = (): Error =>
+    Object.assign(new Error('Meeting recording is turned off by your organization.'), {
+      status: 403,
+      code: 'POLICY_MEETING_RECORDING_DISABLED',
+    });
+
+  it('rejects the start with the mapped meeting message, before the mic or a socket opens', async () => {
+    (api.post as jest.Mock).mockRejectedValue(meetingRefusal());
+
+    await expect(startRealtimeMeetingWs({}, {}, { wsFactory })).rejects.toMatchObject({
+      message: MEETING_RECORDING_DISABLED_MESSAGE,
+      status: 403,
+    });
+    expect(LivePCMStreaming.start).not.toHaveBeenCalled();
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  it('ends a live meeting with the mapped message when the reconnect token is refused, without retrying', async () => {
+    const callbacks = { onError: jest.fn() };
+    const { leg1 } = await boot(callbacks);
+
+    (api.post as jest.Mock).mockClear().mockRejectedValue(meetingRefusal());
+    leg1.serverClose(1006);
+    await flushMicro();
+    await jest.advanceTimersByTimeAsync(60_000);
+    await flushMicro();
+
+    expect(api.post as jest.Mock).toHaveBeenCalledTimes(1);
+    expect(callbacks.onError).toHaveBeenCalledWith({
+      error: { message: MEETING_RECORDING_DISABLED_MESSAGE },
+    });
   });
 });
 
@@ -298,7 +362,7 @@ describe('startRealtimeMeetingWs — rotation', () => {
     const { session, leg1 } = await boot();
     leg1.emit(completed('a', 'leg one'));
 
-    await jest.advanceTimersByTimeAsync(ROTATION_MS);
+    await advanceToRotation();
     await flushMicro();
 
     const leg2 = lastLeg();
@@ -326,7 +390,7 @@ describe('startRealtimeMeetingWs — rotation', () => {
 
     // The rotation's token fetch fails once; the follow-up reconnect then succeeds.
     (api.post as jest.Mock).mockRejectedValueOnce(new Error('rotate token failed'));
-    await jest.advanceTimersByTimeAsync(ROTATION_MS);
+    await advanceToRotation();
     await flushMicro();
 
     // Rotation failed → fell back to a reconnect (old leg still live meanwhile).
@@ -357,7 +421,7 @@ describe('startRealtimeMeetingWs — rotation', () => {
     });
     expect(onPartial).toHaveBeenLastCalledWith('half a senten', 'L1:x');
 
-    await jest.advanceTimersByTimeAsync(ROTATION_MS);
+    await advanceToRotation();
     await flushMicro();
     lastLeg().open();
     await flushMicro();
@@ -369,7 +433,7 @@ describe('startRealtimeMeetingWs — rotation', () => {
   it('routes PCM to exactly one leg across the seam', async () => {
     await boot();
 
-    await jest.advanceTimersByTimeAsync(ROTATION_MS);
+    await advanceToRotation();
     await flushMicro();
     const leg2 = lastLeg();
     leg2.open();

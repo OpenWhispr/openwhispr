@@ -55,3 +55,30 @@ for (const streamingCommit of [false, true]) {
     assert.strictEqual(manager.lastAudioBlob, recording);
   });
 }
+
+test("a revoked preview preserves audio and carries the terminal refusal into processing", async (t) => {
+  const { window, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-preview-policy-test-",
+    settingsKey: "__previewPolicySettings",
+  });
+  const refusal = { success: false, error: "Access revoked", code: "POLICY_MODEL_BLOCKED" };
+  window.electronAPI.stopDictationPreview = async () => refusal;
+  const recording = new Blob([new Uint8Array(4096)], { type: "audio/webm" });
+  let observed;
+  const manager = createManager({
+    micRecovery: { stop() {} },
+    teardownSpeechGate() {},
+    _batchSegments: [],
+    _receivedAudioData: true,
+    _streamingCommitActive: false,
+    _startProcessingPipeline: () => ({}),
+    _shouldAbandonProcessingPipeline: () => false,
+    shouldShowPreviewCleanupState: () => false,
+    processAudio: async (_blob, metadata) => {
+      observed = metadata.localPolicyRefusal;
+    },
+  });
+  await manager.finalizeBatchRecording(recording);
+  assert.equal(observed?.code, refusal.code);
+  assert.strictEqual(manager.lastAudioBlob, recording);
+});

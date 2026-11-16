@@ -68,7 +68,9 @@ async function setup(
     req.on("end", () => {
       let status = 200;
       let payload;
-      if (req.url === "/props") {
+      if (req.url === "/slots") {
+        payload = [];
+      } else if (req.url === "/props") {
         calls.props += 1;
         payload = { default_generation_settings: { n_ctx: serverManager.contextSize } };
       } else if (req.url === "/apply-template") {
@@ -326,6 +328,96 @@ test("a selection edit is refused rather than given a clipped answer", async (t)
   assert.equal(calls.completions, 0);
 });
 
+test("a summary rewrite gets a smaller answer, but never a clipped one", async (t) => {
+  // A rewrite replaces the whole summary, so it refuses any cut-off reply, but
+  // a shorter allowance is fine: most edits (Shorten, TL;DR) need far less
+  // room than they ask for.
+  const rewrite = {
+    systemPrompt: "Revise the summary.",
+    maxTokens: 8192,
+    requireCompleteOutput: true,
+    refuseClippedByWindow: true,
+  };
+  const fits = await setup(t, { tokenCount: 13000, totalMemoryBytes: 8 * GIB });
+  assert.equal(await fits.modelManager.runInference(fits.modelId, LONG_PROMPT, rewrite), "done");
+  assert.equal(fits.completionBody().max_tokens, 16384 - 13000);
+
+  const clipped = await setup(t, {
+    tokenCount: 13000,
+    totalMemoryBytes: 8 * GIB,
+    finishReason: "length",
+  });
+  await assert.rejects(
+    () => clipped.modelManager.runInference(clipped.modelId, LONG_PROMPT, rewrite),
+    (error) => error.code === "CONTEXT_TOO_LARGE"
+  );
+
+  const cappedWithRoom = await setup(t, { tokenCount: 40, finishReason: "length" });
+  await assert.rejects(
+    () => cappedWithRoom.modelManager.runInference(cappedWithRoom.modelId, SHORT_PROMPT, rewrite),
+    (error) => error.code === "OUTPUT_TRUNCATED"
+  );
+});
+
+test("a reply the window clipped is refused when the caller asks, so it can be split", async (t) => {
+  // A long note trades output room for prompt room. A summary that then fills
+  // the smaller allowance was cut short by the window, and a note action would
+  // rather summarise in parts than save it (#2142).
+  const { modelManager, modelId, calls, completionBody } = await setup(t, {
+    tokenCount: 13000,
+    totalMemoryBytes: 8 * GIB,
+    finishReason: "length",
+  });
+
+  await assert.rejects(
+    () =>
+      modelManager.runInference(modelId, LONG_PROMPT, {
+        systemPrompt: "Write meeting notes.",
+        maxTokens: 4096,
+        refuseClippedByWindow: true,
+      }),
+    (error) => {
+      assert.equal(error.code, "CONTEXT_TOO_LARGE");
+      assert.equal(error.details.modelId, modelId);
+      return true;
+    }
+  );
+  assert.equal(calls.completions, 1);
+  assert.equal(completionBody().max_tokens, 16384 - 13000);
+});
+
+test("a trimmed reply that finishes is kept when the caller refuses window clips", async (t) => {
+  const { modelManager, modelId } = await setup(t, {
+    tokenCount: 13000,
+    totalMemoryBytes: 8 * GIB,
+  });
+
+  const result = await modelManager.runInference(modelId, LONG_PROMPT, {
+    systemPrompt: "Write meeting notes.",
+    maxTokens: 4096,
+    refuseClippedByWindow: true,
+  });
+
+  assert.equal(result, "done");
+});
+
+test("a reply cut off at the caller's own cap is kept when only window clips are refused", async (t) => {
+  // A summary clipped at NOTE_OUTPUT_MAX_TOKENS is still worth keeping, so the
+  // flag must not behave like requireCompleteOutput when the window had room.
+  const { modelManager, modelId, completionBody } = await setup(t, {
+    tokenCount: 40,
+    finishReason: "length",
+  });
+
+  const result = await modelManager.runInference(modelId, SHORT_PROMPT, {
+    maxTokens: 4096,
+    refuseClippedByWindow: true,
+  });
+
+  assert.equal(result, "done");
+  assert.equal(completionBody().max_tokens, 4096);
+});
+
 test("a grow that fails comes back at the window that was working", async (t) => {
   // start() stops the running server before it spawns the bigger one, so a
   // grow that dies takes a working window with it. Restoring it keeps local
@@ -481,6 +573,54 @@ test("only Apple Silicon is treated as memory the GPU already shares", async (t)
   assert.ok(discrete.ceiling < unified.ceiling);
 });
 
+test("a server too busy to swap stays a busy error, and says how long to wait", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  manager.currentServerModelId = "another-model";
+  const asked = [];
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    asked.push(options.busyWaitMs);
+    throw Object.assign(new Error("busy"), { code: "LOCAL_MODEL_BUSY" });
+  };
+
+  await assert.rejects(
+    manager.runInference(modelId, SHORT_PROMPT, { busyWaitMs: 1234 }),
+    (error) => error.code === "LOCAL_MODEL_BUSY"
+  );
+  assert.deepEqual(asked, [1234]);
+});
+
+test("a start the caller cancelled stays cancelled and reaches the server with its signal", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  manager.currentServerModelId = "another-model";
+  const caller = new AbortController();
+  let received;
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    received = options.signal;
+    throw Object.assign(new Error("cancelled"), { code: "LOCAL_MODEL_CANCELLED" });
+  };
+
+  await assert.rejects(
+    manager.runInference(modelId, SHORT_PROMPT, { signal: caller.signal }),
+    (error) => error.code === "LOCAL_MODEL_CANCELLED"
+  );
+  assert.equal(received, caller.signal);
+  assert.equal(manager.currentServerModelId, "another-model");
+});
+
+test("a pre-warm never waits on another model's answer", async (t) => {
+  const { modelManager: manager, serverManager, modelId } = await setup(t);
+  const asked = [];
+  serverManager.isAvailable = () => true;
+  serverManager.start = async (_modelPath, options) => {
+    asked.push(options.busyWaitMs);
+  };
+
+  await manager.prewarmServer(modelId);
+  assert.deepEqual(asked, [0]);
+});
+
 test("a reply cut off at the token cap keeps its code through the bridge", async (t) => {
   // The bridge rewraps failures; the renderer maps this code to the cleanup toast (#2091).
   const { modelManager, modelId } = await setup(t, { tokenCount: 40, finishReason: "length" });
@@ -493,4 +633,63 @@ test("a reply cut off at the token cap keeps its code through the bridge", async
       return true;
     }
   );
+});
+
+test("a larger request overlapping pre-warm reports busy and can retry at its full context", async (t) => {
+  const { modelManager, modelId, serverManager, calls, restarts } = await setup(t, {
+    tokenCount: 20514,
+  });
+  serverManager.ready = false;
+  serverManager.process = null;
+  serverManager.contextSize = null;
+  modelManager.currentServerModelId = null;
+  const ready = Promise.withResolvers();
+  const joined = Promise.withResolvers();
+  const spawned = Promise.withResolvers();
+  const doStart = serverManager._doStart;
+  serverManager._doStart = async (modelPath, options) => {
+    spawned.resolve();
+    await ready.promise;
+    await doStart(modelPath, options);
+    serverManager.modelPath = modelPath;
+    serverManager.draftModelPath = options.draftModelPath || null;
+  };
+  const start = serverManager.start;
+  t.mock.method(serverManager, "start", function (...args) {
+    const result = start.apply(this, args);
+    if (args[1].contextSize > 16384) joined.resolve();
+    return result;
+  });
+  const warming = modelManager.prewarmServer(modelId);
+  await spawned.promise;
+  const inference = modelManager.runInference(modelId, LONG_PROMPT, {
+    systemPrompt: "Write notes.",
+    busyWaitMs: 0,
+  });
+  const rejected = assert.rejects(inference, { code: "LOCAL_MODEL_BUSY" });
+  await joined.promise;
+  ready.resolve();
+  assert.equal(await warming, true);
+  await rejected;
+  assert.equal(calls.completions, 0);
+  assert.deepEqual(restarts, [16384], "contention must leave the pre-warmed server running");
+  assert.equal(
+    await modelManager.runInference(modelId, LONG_PROMPT, { systemPrompt: "Write notes." }),
+    "done"
+  );
+  assert.deepEqual(restarts, [16384, 32768], "a retry must still be allowed to grow the context");
+  assert.equal(serverManager.contextSize, 32768);
+});
+
+test("a binary refresh clears the loaded model after reuse without cancelling the refresh", async (t) => {
+  const { modelManager, serverManager } = await setup(t);
+  const slots = Promise.withResolvers();
+  serverManager._requestJson = () => slots.promise;
+  const stopping = modelManager.stopServerWhenIdle({ cancelOnReuse: false });
+  serverManager.cancelDeferredStop();
+  slots.resolve([]);
+  await stopping;
+
+  assert.equal(serverManager.process, null);
+  assert.equal(modelManager.currentServerModelId, null);
 });

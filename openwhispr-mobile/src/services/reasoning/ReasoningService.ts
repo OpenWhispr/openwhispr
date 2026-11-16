@@ -1,7 +1,10 @@
-import type { ReasoningRequest, ReasoningResponse } from '../../types';
+import type { ReasoningRequest, ReasoningResponse, ReasoningRoutingOptions } from '../../types';
+import type { InferenceSelection } from '@/lib/mobileProviders';
+import { buildProviderPrompt, stripThinkingTags } from './buildProviderPrompt';
 import { api } from '../../lib/apiClient';
 import { buildChatOverNotePayload, type ChatOverNoteRequest } from '../../lib/notes/chatOverNote';
 import {
+  fitsLocalCleanupOutput,
   fitsLocalReasoningBudget,
   getLocalReasoningReadiness,
   getLocalReasoningUnavailableMessage,
@@ -12,10 +15,6 @@ import {
   buildLocalReasoningInstructions,
   LocalReasoningService,
 } from '@/services/reasoning/LocalReasoningService';
-
-function stripThinkingTags(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-}
 
 interface ApiErrorLike {
   status?: number;
@@ -44,10 +43,53 @@ interface CallApiOptions {
   language?: string;
   locale?: string;
   customDictionary?: string[];
+  sharedDictionary?: string[];
   tone?: string;
   agentName?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /**
+   * Cleanup keeps the dictated text when the server returns none. A chat answer must not, or the
+   * whole prompt, notes included, would show as the answer.
+   */
+  keepTextOnEmptyReply?: boolean;
+}
+
+export interface ReasoningPlacement {
+  selection: InferenceSelection | undefined;
+  usesProviders: boolean;
+  localSelected: boolean;
+  chosenProvider: boolean;
+  privateContent: boolean;
+  /** The request must try Apple Intelligence on this iPhone first. */
+  localRequired: boolean;
+}
+
+/** Where processText sends a request, so callers can fit a prompt to that route first. */
+export function resolveReasoningPlacement(
+  request: Pick<ReasoningRequest, 'inferenceScope' | 'inferenceRoute' | 'routing'>,
+): ReasoningPlacement {
+  const { getInferenceSelection } =
+    require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+  const { routing } = request;
+  const scope = request.inferenceScope ?? 'cleanup';
+  const configuredSelection = request.inferenceRoute ?? getInferenceSelection(scope);
+  const selection = configuredSelection ? { ...configuredSelection } : undefined;
+  const usesProviders = selection?.mode === 'providers';
+  const localSelected = selection?.mode === 'local';
+  const chosenProvider = usesProviders && routing?.sendToChosenProvider === true;
+  let privateContent = !chosenProvider && routing?.isPrivateNote === true;
+  // Local Mode keeps cleanup and note chat on this iPhone unless the user chose otherwise; note
+  // formatting follows its own selection there.
+  if (scope !== 'notes' && ((usesProviders && !chosenProvider) || localSelected)) {
+    const { useProcessingModeStore } =
+      require('@/store/useProcessingModeStore') as typeof import('@/store/useProcessingModeStore');
+    privateContent ||= useProcessingModeStore.getState().activeMode === 'private';
+  }
+  const localRequired =
+    localSelected ||
+    (usesProviders ? privateContent : !!routing && isLocalReasoningRequired(routing));
+  return { selection, usesProviders, localSelected, chosenProvider, privateContent, localRequired };
 }
 
 export class ReasoningService {
@@ -65,19 +107,22 @@ export class ReasoningService {
       // and skip server-side resolution.
       body.systemPrompt = options.systemPrompt;
     } else {
-      // Let the API resolve a localized cleanup prompt from these fields.
+      // Let the API resolve a localized cleanup prompt from these fields. promptMode "cleanup" keeps
+      // the API from treating a dictation that addresses the assistant by name as a command: the
+      // voice assistant is the keyboard's compose button.
+      body.promptMode = 'cleanup';
       if (options.language) body.language = options.language;
       if (options.locale) body.locale = options.locale;
       if (options.customDictionary && options.customDictionary.length > 0) {
         body.customDictionary = options.customDictionary;
       }
+      if (options.sharedDictionary && options.sharedDictionary.length > 0) {
+        body.sharedDictionary = options.sharedDictionary;
+      }
       if (options.tone && options.tone !== 'default') {
         body.tone = options.tone;
       }
-      if (options.customPrompt) {
-        body.customPrompt = options.customPrompt;
-        body.promptMode = 'cleanup';
-      }
+      if (options.customPrompt) body.customPrompt = options.customPrompt;
     }
 
     if (options.agentName) {
@@ -102,7 +147,8 @@ export class ReasoningService {
       throw error;
     }
 
-    const content = stripThinkingTags(data.text || text);
+    const keepText = options.keepTextOnEmptyReply ?? true;
+    const content = stripThinkingTags(data.text || (keepText ? text : ''));
 
     if (__DEV__) {
       console.log(
@@ -126,34 +172,52 @@ export class ReasoningService {
       language,
       locale,
       customDictionary,
+      sharedDictionary,
       signal,
       timeoutMs,
       tone,
       agentName,
       routing,
     } = request;
-    // Only callers that pass a routing hint opt into local/privacy routing.
-    // Dictation cleanup and the dictation agent carry no hint and must keep
-    // using the cloud path they were built for, regardless of mode or auth.
+    const { resolveMobileProviderRoute } =
+      require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+    const scope = request.inferenceScope ?? 'cleanup';
+    const {
+      selection,
+      usesProviders,
+      localSelected,
+      chosenProvider,
+      privateContent,
+      localRequired,
+    } = resolveReasoningPlacement(request);
     const allowCloudFallback = routing?.allowCloudFallback === true;
+    const localRequest =
+      (usesProviders || localSelected) && !systemPrompt
+        ? { ...request, ...buildProviderPrompt(request) }
+        : request;
 
-    if (routing && isLocalReasoningRequired(routing)) {
-      if (!systemPrompt && !allowCloudFallback) {
+    if (localRequired) {
+      if (!localRequest.systemPrompt && !allowCloudFallback) {
         throw new LocalReasoningError(
           'LOCAL_REASONING_UNAVAILABLE',
           'This content cannot be sent to cloud AI without explicit confirmation.',
         );
       }
 
-      if (systemPrompt) {
+      if (localRequest.systemPrompt) {
         const readiness = await getLocalReasoningReadiness();
         if (readiness.status === 'ready') {
-          const instructions = buildLocalReasoningInstructions(request);
-          const fits = await fitsLocalReasoningBudget({
-            instructions,
-            prompt: text,
-            readiness,
-          });
+          const instructions = buildLocalReasoningInstructions(localRequest);
+          const fits =
+            (await fitsLocalReasoningBudget({
+              instructions,
+              prompt: localRequest.text,
+              readiness,
+            })) &&
+            // The input fitting the context isn't enough for cleanup: its reply is as long as the
+            // transcript, and Apple Intelligence cuts it off at LOCAL_OUTPUT_TOKEN_RESERVE without an
+            // error.
+            (scope !== 'cleanup' || (await fitsLocalCleanupOutput(text)));
 
           if (!fits) {
             if (!allowCloudFallback) {
@@ -164,9 +228,10 @@ export class ReasoningService {
             }
           } else {
             try {
-              return await LocalReasoningService.processText(request);
+              return await LocalReasoningService.processText(localRequest);
             } catch (error) {
-              if (!allowCloudFallback) throw error;
+              // A cancelled or timed-out request is over; it must not start again in the cloud.
+              if (!allowCloudFallback || signal?.aborted) throw error;
             }
           }
         } else if (!allowCloudFallback) {
@@ -179,12 +244,40 @@ export class ReasoningService {
       }
     }
 
+    if (localSelected) {
+      throw new LocalReasoningError(
+        'LOCAL_REASONING_UNAVAILABLE',
+        'On-device AI is unavailable for this request. Choose a provider or OpenWhispr Cloud in AI Models.',
+      );
+    }
+
+    if (usesProviders) {
+      const route = await resolveMobileProviderRoute(
+        scope,
+        selection,
+        privateContent,
+        allowCloudFallback || chosenProvider,
+      );
+      const { processProviderText } =
+        require('@/services/providers/ProviderExecution') as typeof import('@/services/providers/ProviderExecution');
+      const prompt = { systemPrompt: localRequest.systemPrompt as string, text: localRequest.text };
+      const result = await processProviderText({
+        route,
+        ...prompt,
+        temperature: request.temperature ?? (request.systemPrompt ? undefined : 0),
+        maxTokens: request.maxTokens,
+        signal,
+      });
+      return { ...result, text: stripThinkingTags(result.text) };
+    }
+
     return this.callApi(text, {
       systemPrompt,
       customPrompt,
       language,
       locale,
       customDictionary,
+      sharedDictionary,
       signal,
       timeoutMs,
       tone,
@@ -193,11 +286,41 @@ export class ReasoningService {
   }
 
   static async chatOverNote(request: ChatOverNoteRequest): Promise<ReasoningResponse> {
-    const payload = buildChatOverNotePayload(request);
-
-    return this.callApi(payload.text, {
-      systemPrompt: payload.systemPrompt,
+    return this.chat({
+      ...buildChatOverNotePayload(request),
       signal: request.signal,
+      routing: request.routing,
+      inferenceRoute: request.inferenceRoute,
+    });
+  }
+
+  /** Sends an already-built chat payload through the Note Chat route. */
+  static async chat(request: {
+    systemPrompt: string;
+    text: string;
+    signal?: AbortSignal;
+    routing?: ReasoningRoutingOptions;
+    inferenceRoute?: ReasoningRequest['inferenceRoute'];
+  }): Promise<ReasoningResponse> {
+    const { getInferenceSelection } =
+      require('@/lib/inferenceRouting') as typeof import('@/lib/inferenceRouting');
+    const selection = request.inferenceRoute ?? getInferenceSelection('noteChat');
+    if (selection?.mode === 'providers' || selection?.mode === 'local') {
+      return this.processText({
+        text: request.text,
+        systemPrompt: request.systemPrompt,
+        signal: request.signal,
+        inferenceScope: 'noteChat',
+        inferenceRoute: request.inferenceRoute,
+        routing: request.routing,
+      });
+    }
+    // Cloud note chat keeps its pre-BYOK behavior: the consent dialog in the
+    // editor is the privacy gate, and the answer always comes from the hosted model.
+    return this.callApi(request.text, {
+      systemPrompt: request.systemPrompt,
+      signal: request.signal,
+      keepTextOnEmptyReply: false,
     });
   }
 }

@@ -52,6 +52,7 @@ async function renderTree(t, direction) {
         ]);
         export const useActiveContext = () => null;
         export const useActiveNoteId = () => null;
+        export const useActiveNote = () => null;
         export const useIsTreeLoading = () => false;
         export const useShareCache = () => new Map();
         export const getNoteFromStore = (id) => notes.find((note) => note.id === id);
@@ -78,8 +79,10 @@ async function renderTree(t, direction) {
       `,
       "/hooks/useTeamSpacesCapability": "export const useTeamSpacesCapability = () => true;",
       "/hooks/useAuth": "export const useAuth = () => ({ isSignedIn: false, user: null });",
-      "/hooks/useWorkspace":
-        "export const useWorkspace = () => ({ workspaces: [], loaded: true });",
+      "/hooks/useWorkspace": `
+        export const useWorkspace = () => ({ workspaces: [], loaded: true });
+        export const useSpacesInWorkspaceScope = (spaces) => spaces;
+      `,
       "/hooks/useCanCreateTeamSpace": "export const useCanCreateTeamSpace = () => false;",
       "/hooks/useDialogs": `
         export const useDialogs = () => ({
@@ -102,10 +105,12 @@ async function renderTree(t, direction) {
       "/lib/spacePermissions": `
         export const canChangeSpaceNoteScope = () => true;
         export const canDeleteSpaceNote = () => true;
-        export const canManageSpace = () => true;
-        export const canManageWorkspace = () => true;
-        export const canMoveBetweenSpaces = () => true;
+        export const spaceTransferAction = () => "move";
         export const canMoveOrDeleteSpaceFolder = () => true;
+      `,
+      "/lib/capabilities": `
+        export const spaceCan = () => true;
+        export const workspaceCan = () => true;
       `,
       "/lib/notePermissions": `
         export const canOrganizeNote = () => true;

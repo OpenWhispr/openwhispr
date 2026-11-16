@@ -10,7 +10,7 @@ import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { getDictationAgentName, isDictationAgentEnabled } from '@/lib/dictationAgent';
 import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 
 const DEFAULT_AGENT_NAME = 'OpenWhispr';
 
@@ -19,14 +19,26 @@ export function DictationAgentScreen(): React.JSX.Element {
   const updateConfig = useConfigStore((state) => state.updateConfig);
   const activeMode = useProcessingModeStore((state) => state.activeMode);
 
-  const isCloudMode = activeMode === 'cloud';
+  const agentSelected = !!config?.inference?.agent;
+  // Bring Your Own Key skips the assistant until it has a selection of its own.
+  const unavailableNotice =
+    activeMode === 'providers' && !agentSelected
+      ? 'Bring Your Own Key skips the voice assistant until you choose a provider for it in AI Models. Your settings are saved and apply once you do.'
+      : null;
+  const isAvailable = !unavailableNotice;
   const enabled = config ? isDictationAgentEnabled(config) : true;
   const shareContext = config?.dictationAgentShareContext ?? false;
   const currentName = config ? getDictationAgentName(config) : DEFAULT_AGENT_NAME;
 
   const [nameValue, setNameValue] = useState(currentName);
 
-  const handleToggleEnabled = useConfigToggle('dictationAgentEnabled');
+  const handleToggleEnabled = useCallback(
+    (value: boolean): void => {
+      safeHaptics('light');
+      void updateConfig({ dictationAgentEnabled: value });
+    },
+    [updateConfig],
+  );
   const handleToggleShareContext = useConfigToggle('dictationAgentShareContext');
 
   const commitName = useCallback((): void => {
@@ -44,21 +56,20 @@ export function DictationAgentScreen(): React.JSX.Element {
       <SettingsScreen keyboardShouldPersistTaps="handled">
         <View className="mx-4 mb-2 px-4">
           <Text className="text-[13px] text-secondaryLabel">
-            When you say your agent name while dictating, OpenWhispr rewrites what you said into
-            polished, ready-to-use text instead of inserting it word for word. Requires Cloud mode.
+            Tap the wand on the OpenWhispr keyboard and say what to write, like a reply or a rewrite
+            of the selected text. Your assistant drafts it for you to insert, regenerate or change.
+            Saying its name while dictating gives no command. It runs on the AI chosen for the Voice
+            Assistant in AI Models, whatever Dictation uses.
           </Text>
         </View>
 
-        {!isCloudMode ? (
+        {unavailableNotice ? (
           <View className="mx-4 mb-3">
             <View
               className="rounded-[14px] border border-separator bg-secondarySystemGroupedBackground px-4 py-3"
               style={{ borderCurve: 'continuous' }}
             >
-              <Text className="text-[13px] text-secondaryLabel">
-                Dictation Agent requires Cloud mode. Your settings are saved and will apply once
-                Cloud mode is active.
-              </Text>
+              <Text className="text-[13px] text-secondaryLabel">{unavailableNotice}</Text>
             </View>
           </View>
         ) : null}
@@ -68,20 +79,21 @@ export function DictationAgentScreen(): React.JSX.Element {
             iconStyle="line"
             icon="person.wave.2"
             mdIcon="UserRoundCog"
-            title="Enable Dictation Agent"
-            description="Say your agent name while dictating to have OpenWhispr rewrite what you said."
+            title="Enable Voice Assistant"
+            description="Use the wand on the OpenWhispr keyboard."
             rightElement={
               <SettingsSwitch
-                value={enabled}
+                // Shows what runs: the voice assistant is off wherever it can't run.
+                value={enabled && isAvailable}
                 onValueChange={handleToggleEnabled}
-                disabled={!isCloudMode}
+                disabled={!isAvailable}
               />
             }
             showChevron={false}
           />
         </SettingsSection>
 
-        <SettingsSection title="Agent Name">
+        <SettingsSection title="Assistant Name">
           <View className="px-4 py-3">
             <TextInput
               value={nameValue}
@@ -93,16 +105,15 @@ export function DictationAgentScreen(): React.JSX.Element {
               autoCapitalize="words"
               autoCorrect={false}
               returnKeyType="done"
-              editable={isCloudMode}
-              className={`text-[17px] text-label ${isCloudMode ? '' : 'opacity-40'}`}
-              style={{ fontFamily: SpaceGrotesk.regular }}
+              editable={isAvailable}
+              className={`text-[17px] text-label ${isAvailable ? '' : 'opacity-40'}`}
+              style={{ fontFamily: AppFont.regular }}
             />
           </View>
         </SettingsSection>
         <View className="mx-4 -mt-5 mb-7 px-4">
           <Text className="text-[13px] text-secondaryLabel">
-            Say this name anywhere while dictating to trigger the agent. The name is automatically
-            added to your transcription hints so the speech model recognises it.
+            Shown on the keyboard while you tell your assistant what to write.
           </Text>
         </View>
 
@@ -112,12 +123,12 @@ export function DictationAgentScreen(): React.JSX.Element {
             icon="text.cursor"
             mdIcon="TextCursor"
             title="Share Cursor Context"
-            description="Selected text is always sent when you use the agent. When on, the surrounding text near your cursor is also sent. Off by default."
+            description="Selected text is always sent when you use the voice assistant. When on, the surrounding text near your cursor is also sent. Off by default."
             rightElement={
               <SettingsSwitch
                 value={shareContext}
                 onValueChange={handleToggleShareContext}
-                disabled={!isCloudMode}
+                disabled={!isAvailable}
               />
             }
             showChevron={false}

@@ -1,139 +1,78 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Sparkles, ChevronDown, Settings2 } from "../icons";
+import { ChevronDown } from "../icons";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "../ui/dropdown-menu";
+  SPLIT_BUTTON_DIVIDER_CLASS,
+  SPLIT_BUTTON_GROUP_CLASS,
+  SPLIT_BUTTON_SEGMENT_CLASS,
+} from "../ui/splitButton";
 import { cn } from "../lib/utils";
-import {
-  useActions,
-  initializeActions,
-  getActionName,
-  getActionCta,
-  getActionDescription,
-} from "../../stores/actionStore";
+import { getActionCta } from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
-import { FOLLOW_UP_EMAIL_KEY } from "../../helpers/builtinActions";
+import { getActionIcon } from "./actionIcons";
+import ActionMenuItems, { type ActionMenuItemsProps } from "./ActionMenuItems";
 
-// Keyed fresh so the follow-up email default reaches installs that had
-// "Generate Notes" remembered under the old key.
-const ASK_BAR_ACTION_KEY = "askBarActionId";
+// The key the ask bar's picker has always used, so a remembered choice carries over.
+const LAST_ACTION_KEY = "askBarActionId";
 
-interface ActionPickerProps {
-  onRunAction: (action: ActionItem) => void;
-  onManageActions: () => void;
-  disabled?: boolean;
-}
-
+/** Runs the action last picked from it (the first action until then), or picks another. */
 export default function ActionPicker({
+  actions,
+  canRun,
   onRunAction,
   onManageActions,
-  disabled,
-}: ActionPickerProps) {
+}: ActionMenuItemsProps) {
   const { t } = useTranslation();
-  const actions = useActions();
-  const [lastUsedId, setLastUsedId] = useState<number | null>(() => {
-    const stored = localStorage.getItem(ASK_BAR_ACTION_KEY);
-    return stored ? Number(stored) : null;
-  });
+  const [lastUsedId, setLastUsedId] = useState(() => Number(localStorage.getItem(LAST_ACTION_KEY)));
+  const current = actions.find((action) => action.id === lastUsedId) ?? actions[0];
 
-  useEffect(() => {
-    initializeActions();
-  }, []);
-
-  const activeAction =
-    actions.find((a) => a.id === lastUsedId) ??
-    actions.find((a) => a.translation_key === FOLLOW_UP_EMAIL_KEY) ??
-    actions[0] ??
-    null;
-
-  const handleRun = (action: ActionItem) => {
+  const run = (action: ActionItem) => {
     setLastUsedId(action.id);
-    localStorage.setItem(ASK_BAR_ACTION_KEY, String(action.id));
+    localStorage.setItem(LAST_ACTION_KEY, String(action.id));
     onRunAction(action);
   };
-
-  if (!activeAction) return null;
+  const Icon = getActionIcon(current);
 
   return (
     <div
       className={cn(
-        "flex items-center shrink-0 rounded-full overflow-hidden",
-        "bg-white/60 dark:bg-white/8",
-        "backdrop-blur-lg transform-gpu",
-        "border border-black/10 dark:border-white/14",
-        "shadow-(--shadow-glass)",
-        disabled && "opacity-40 pointer-events-none"
+        SPLIT_BUTTON_GROUP_CLASS,
+        "h-8 shrink-0 animate-[fade-in-content_0.25s_ease-out_backwards] motion-reduce:animate-none"
       )}
     >
       <button
-        onClick={() => handleRun(activeAction)}
-        disabled={disabled}
-        aria-label={t("notes.actions.runAction", { name: getActionName(activeAction, t) })}
+        type="button"
+        onClick={() => run(current)}
+        disabled={!canRun(current)}
         className={cn(
-          "flex items-center gap-1.5 h-7 ps-3 pe-1.5",
-          "text-accent/70 dark:text-accent/60",
-          "transition-colors duration-150",
-          "hover:bg-accent/8 dark:hover:bg-accent/12",
-          "hover:text-accent/90 dark:hover:text-accent/80"
+          SPLIT_BUTTON_SEGMENT_CLASS,
+          "gap-1.5 ps-3 pe-2.5 disabled:pointer-events-none disabled:opacity-40"
         )}
       >
-        <Sparkles size={11} />
-        <span className="text-[11px] font-semibold tracking-tight">
-          {getActionCta(activeAction, t)}
+        <Icon size={14} className="shrink-0 text-primary" />
+        <span dir="auto" className="max-w-40 truncate">
+          {getActionCta(current, t)}
         </span>
       </button>
-
+      <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            disabled={disabled}
+            type="button"
             aria-label={t("notes.actions.selectAction")}
-            className={cn(
-              "flex items-center justify-center h-7 w-6 pe-0.5",
-              "border-s border-black/6 dark:border-white/10",
-              "text-accent/40 dark:text-accent/30",
-              "transition-colors duration-150",
-              "hover:bg-accent/8 dark:hover:bg-accent/12",
-              "hover:text-accent/70"
-            )}
+            className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-8 justify-center")}
           >
-            <ChevronDown size={10} />
+            <ChevronDown size={13} className="text-foreground/60" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="top" sideOffset={8} className="min-w-48">
-          {actions.map((action) => (
-            <DropdownMenuItem
-              key={action.id}
-              onClick={() => handleRun(action)}
-              className={cn(
-                "text-xs gap-2.5 rounded-md px-2.5 py-1.5",
-                action.id === activeAction.id && "bg-accent/5"
-              )}
-            >
-              <Sparkles size={12} className="text-accent/50 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{getActionName(action, t)}</div>
-                {action.description && (
-                  <div className="text-xs text-muted-foreground/70 truncate">
-                    {getActionDescription(action, t)}
-                  </div>
-                )}
-              </div>
-            </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={onManageActions}
-            className="text-xs gap-2.5 rounded-md px-2.5 py-1.5 text-muted-foreground/70"
-          >
-            <Settings2 size={12} />
-            {t("notes.actions.manage")}
-          </DropdownMenuItem>
+          <ActionMenuItems
+            actions={actions}
+            canRun={canRun}
+            onRunAction={run}
+            onManageActions={onManageActions}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

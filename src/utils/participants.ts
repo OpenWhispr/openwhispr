@@ -11,7 +11,10 @@ interface ParticipantSpeakerCountSyncInput {
 export const resolveParticipantExpectedSpeakerCount = (
   participants: readonly CalendarAttendee[]
 ): number | null => {
-  const others = participants.filter((attendee) => attendee?.self !== true).length;
+  // Rooms aren't speakers; notes linked before rooms were left out may hold them.
+  const others = participants.filter(
+    (attendee) => attendee?.self !== true && attendee?.resource !== true
+  ).length;
   return others > 0 ? others + 1 : null;
 };
 

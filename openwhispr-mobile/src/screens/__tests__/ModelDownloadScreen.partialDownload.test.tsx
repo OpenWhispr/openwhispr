@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEventAsync, renderAsync, screen } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ canGoBack: () => true, back: jest.fn(), replace: jest.fn() }),
@@ -79,26 +79,32 @@ beforeEach(() => {
 // delete button only exists for installed models, so without this action a user who gives up on
 // Parakeet has no visible way to get that storage back.
 describe('ModelDownloadScreen — partial Parakeet download', () => {
+  // Renders, presses and store updates all settle inside async act (renderAsync, fireEventAsync,
+  // act(async)), which keeps flushing until the mocked promise chains stop scheduling updates, so
+  // every assertion sees the settled screen. findByText/waitFor would instead poll on real timers
+  // against a 1 s budget, and under CPU load the event loop can stall past it before the render
+  // that shows or removes the link commits.
+
   it('offers to clear a staged partial download and reclaims it on confirm', async () => {
     mockParakeet.stagedDownloadBytes.mockImplementation(async (version) =>
       version === 'v2' ? 445 * MB : 0,
     );
-    render(<ModelDownloadScreen />);
+    await renderAsync(<ModelDownloadScreen />);
 
-    const action = await screen.findByText(/Clear partial download \(445\.0 MB\)/);
+    const action = screen.getByText(/Clear partial download \(445\.0 MB\)/);
     expect(screen.getAllByText(/Clear partial download/)).toHaveLength(1);
 
     mockParakeet.stagedDownloadBytes.mockResolvedValue(0);
-    fireEvent.press(action);
+    await fireEventAsync.press(action);
 
-    await waitFor(() => expect(mockParakeet.cancelModelDownload).toHaveBeenCalledWith('v2'));
-    await waitFor(() => expect(screen.queryByText(/Clear partial download/)).toBeNull());
+    expect(mockParakeet.cancelModelDownload).toHaveBeenCalledWith('v2');
+    expect(screen.queryByText(/Clear partial download/)).not.toBeOnTheScreen();
   });
 
   it('shows nothing when no partial download is staged', async () => {
-    render(<ModelDownloadScreen />);
+    await renderAsync(<ModelDownloadScreen />);
 
-    await screen.findByText('Parakeet v2');
+    expect(screen.getByText('Parakeet v2')).toBeTruthy();
     expect(screen.queryByText(/Clear partial download/)).toBeNull();
   });
 
@@ -108,14 +114,14 @@ describe('ModelDownloadScreen — partial Parakeet download', () => {
     mockParakeet.stagedDownloadBytes.mockImplementation(async (version) =>
       version === 'v2' ? 445 * MB : 0,
     );
-    render(<ModelDownloadScreen />);
-    await screen.findByText(/Clear partial download \(445\.0 MB\)/);
+    await renderAsync(<ModelDownloadScreen />);
+    expect(screen.getByText(/Clear partial download \(445\.0 MB\)/)).toBeTruthy();
 
-    act(() => setDownloadStatus('parakeet-v3', 'downloading'));
+    await act(async () => setDownloadStatus('parakeet-v3', 'downloading'));
     expect(screen.queryByText(/Clear partial download/)).toBeNull();
 
-    act(() => setDownloadStatus('parakeet-v3', 'idle'));
-    await screen.findByText(/Clear partial download \(445\.0 MB\)/);
+    await act(async () => setDownloadStatus('parakeet-v3', 'idle'));
+    expect(screen.getByText(/Clear partial download \(445\.0 MB\)/)).toBeTruthy();
   });
 
   // The red link alone reads as "something went wrong"; the row should also say the kept bytes
@@ -124,16 +130,27 @@ describe('ModelDownloadScreen — partial Parakeet download', () => {
     mockParakeet.stagedDownloadBytes.mockImplementation(async (version) =>
       version === 'v2' ? 445 * MB : 0,
     );
-    render(<ModelDownloadScreen />);
+    await renderAsync(<ModelDownloadScreen />);
 
-    await screen.findByText('445.0 MB saved from an earlier attempt will be reused.');
+    expect(screen.getByText('445.0 MB saved from an earlier attempt will be reused.')).toBeTruthy();
     expect(screen.getAllByText(/saved from an earlier attempt/)).toHaveLength(1);
   });
 
   it('does not mention reuse when nothing is staged', async () => {
-    render(<ModelDownloadScreen />);
+    await renderAsync(<ModelDownloadScreen />);
 
-    await screen.findByText('Parakeet v2');
+    expect(screen.getByText('Parakeet v2')).toBeTruthy();
     expect(screen.queryByText(/saved from an earlier attempt/)).toBeNull();
+  });
+});
+
+describe('ModelDownloadScreen — model languages', () => {
+  it('offers the language list beside each multi-language model', async () => {
+    await renderAsync(<ModelDownloadScreen />);
+
+    expect(screen.getByText('Parakeet v3')).toBeTruthy();
+    expect(screen.getByLabelText('Parakeet v3 languages')).toBeTruthy();
+    expect(screen.getByLabelText('Whisper base languages')).toBeTruthy();
+    expect(screen.queryByLabelText('Parakeet v2 languages')).toBeNull();
   });
 });

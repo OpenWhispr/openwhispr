@@ -1,152 +1,234 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ChatInput } from "../chat/ChatInput";
+import type { SlashCommand } from "../chat/slashCommands";
 import { cn } from "../lib/utils";
-import { SendIcon } from "../ui/SendIcon";
-import { GLASS_SURFACE } from "../ui/glass";
+import { hasLayerAbove } from "../ui/useDismissGuard";
+import { observeBottomBarHeight, observeFloatingChatMaxHeight } from "./floatingChatLayout";
 
-// While recording, the bar sits over the live streaming transcript, and every
-// partial would force backdrop-blur to re-blur the strip; the capsule trades
-// glass for a near-opaque surface until the recording ends.
 const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
+// One curve for everything that moves as the chat opens, so it unfolds as one piece:
+// a soft spring that settles just past its mark.
+const UNFOLD =
+  "duration-[480ms] ease-[cubic-bezier(0.25,1.15,0.4,1)] motion-reduce:transition-none";
+const DRAG_START_THRESHOLD_PX = 3;
 
 interface NoteBottomBarProps {
-  /** Swaps the glass surface for an opaque one while the live transcript streams underneath. */
   isRecording: boolean;
+  draftText: string;
+  onDraftChange: (text: string) => void;
   onAskSubmit: (text: string) => void;
   onInputFocus?: () => void;
-  askDisabled?: boolean;
+  onInputEscape?: () => void;
+  /**
+   * A click outside the open chat, other than one dismissing a menu or dialog over the page.
+   * Keep it stable: the panel's observers re-attach whenever it changes.
+   */
+  onClickOutside?: () => void;
+  /** Sits in the collapsed composer; the chips take over once the chat opens. */
   actionPicker?: React.ReactNode;
-  /** One centred call to action floated above the ask capsule. */
+  actionChips?: React.ReactNode;
+  slashCommands?: SlashCommand[];
   callout?: React.ReactNode;
+  footnote?: React.ReactNode;
   hideInput?: boolean;
+  chatOpen?: boolean;
+  floatingPanelRef?: (panel: HTMLDivElement, container: HTMLElement) => void | (() => void);
 }
 
 export default function NoteBottomBar({
   isRecording,
+  draftText,
+  onDraftChange,
   onAskSubmit,
   onInputFocus,
-  askDisabled,
+  onInputEscape,
+  onClickOutside,
   actionPicker,
+  actionChips,
+  slashCommands,
   callout,
-  hideInput,
+  footnote,
+  hideInput = false,
+  chatOpen = false,
+  floatingPanelRef,
 }: NoteBottomBarProps) {
   const { t } = useTranslation();
-  const [inputText, setInputText] = useState("");
-  const [isExpanded, setIsExpanded] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const hasText = inputText.trim().length > 0;
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
 
-  const handleSubmit = useCallback(() => {
-    const text = inputText.trim();
-    if (!text || askDisabled) return;
-    onAskSubmit(text);
-    setInputText("");
-    setIsExpanded(false);
-  }, [inputText, askDisabled, onAskSubmit]);
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = barRef.current;
+    const container = bar?.parentElement;
+    if (!bar || !container) return;
+    return observeBottomBarHeight({ bar, container });
+  }, []);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleSubmit();
+  const attachPanel = useCallback(
+    (panel: HTMLDivElement | null) => {
+      if (!panel) return;
+      if (!chatOpen) {
+        panel.style.height = "48px";
+        panel.style.maxHeight = "";
+        return;
       }
-      if (e.key === "Escape") {
-        setIsExpanded(false);
-        inputRef.current?.blur();
-      }
+      // Open, it fits the chips and the composer (or the / menu), within a cap.
+      panel.style.height = "auto";
+
+      // Panel → composer slot (with the card) → bar → the note view the bar floats over.
+      const slot = panel.parentElement;
+      const container = slot?.parentElement?.parentElement;
+      if (!slot || !container) return;
+
+      const stopSizing = observeFloatingChatMaxHeight({
+        panel,
+        container,
+      });
+      const stopLayout = floatingPanelRef?.(panel, container);
+      // Decided on press, while a menu it dismisses is still open, but acted on at click:
+      // closing drops the note's bottom inset, which would move the note under the press.
+      let outsidePress: { x: number; y: number } | null = null;
+      const handlePointerDown = (event: PointerEvent) => {
+        outsidePress =
+          !slot.contains(event.target as Node) && !hasLayerAbove(panel, document)
+            ? { x: event.clientX, y: event.clientY }
+            : null;
+      };
+      // A keyboard click (detail 0) has no press of its own, so a stale one mustn't count for it,
+      // and a drag (selecting text) ends in a click too but isn't one.
+      const handleClick = (event: MouseEvent) => {
+        if (
+          outsidePress &&
+          event.detail > 0 &&
+          Math.abs(event.clientX - outsidePress.x) < DRAG_START_THRESHOLD_PX &&
+          Math.abs(event.clientY - outsidePress.y) < DRAG_START_THRESHOLD_PX
+        ) {
+          onClickOutside?.();
+        }
+        outsidePress = null;
+      };
+      document.addEventListener("pointerdown", handlePointerDown, true);
+      document.addEventListener("click", handleClick, true);
+
+      return () => {
+        stopSizing();
+        if (typeof stopLayout === "function") stopLayout();
+        document.removeEventListener("pointerdown", handlePointerDown, true);
+        document.removeEventListener("click", handleClick, true);
+      };
     },
-    [handleSubmit]
+    [chatOpen, floatingPanelRef, onClickOutside]
   );
-
-  const handleInputFocus = useCallback(() => {
-    setIsExpanded(true);
-    onInputFocus?.();
-  }, [onInputFocus]);
-
-  // Chat panel opening hides the input; drop the expanded state so the bar
-  // comes back in its idle layout when the panel closes.
-  useEffect(() => {
-    if (hideInput) setIsExpanded(false);
-  }, [hideInput]);
-
-  useEffect(() => {
-    if (!isExpanded) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (!hasText && containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsExpanded(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isExpanded, hasText]);
 
   return (
     <div
-      ref={containerRef}
-      className="absolute bottom-0 left-0 right-0 z-10 px-5 pb-4 pt-6 pointer-events-none bg-gradient-to-t from-background from-45% to-transparent"
-    >
-      {callout && !hideInput && (
-        <div className="pointer-events-auto mb-3 flex justify-center">{callout}</div>
+      ref={barRef}
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-0 z-20 px-5 pt-6",
+        footnote ? "pb-1.5" : "pb-7"
       )}
-      <div className="flex items-end pointer-events-auto w-full max-w-[600px] mx-auto">
+    >
+      <div
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background from-45% to-transparent transition-opacity duration-200",
+          chatOpen && "opacity-0"
+        )}
+      />
+      {callout && !chatOpen && !hideInput && (
+        <div className="pointer-events-auto relative mb-3 flex justify-center">{callout}</div>
+      )}
+      {/* The composer's slot: the panel always fills it, so the composer never moves. */}
+      <div
+        className={cn(
+          "group/chat relative mx-auto w-full min-w-0 transition-[max-width]",
+          UNFOLD,
+          hideInput ? "max-w-0" : "max-w-[600px]"
+        )}
+      >
+        {/* The card hugs the composer as the bar, then unfolds around it as the chat opens. */}
         <div
-          aria-hidden={hideInput}
+          aria-hidden="true"
+          // Pressing the card's margin keeps focus (and the chat) on the composer.
+          onMouseDown={(event) => event.preventDefault()}
           className={cn(
-            "flex-1 min-w-0 flex items-center h-11 gap-2 rounded-full",
-            isRecording ? RECORDING_SURFACE : GLASS_SURFACE,
-            "border",
-            // Named properties, not transition-all: the surface swap below must
-            // land instantly, or every recording start/stop tweens
-            // backdrop-filter for 500ms — the exact cost being removed.
-            "transition-[max-width,opacity,padding,border-color,box-shadow] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]",
+            "absolute border transition-[inset,border-radius,box-shadow,background-color,border-color,opacity]",
+            UNFOLD,
+            chatOpen
+              ? "-inset-2 rounded-[32px] bg-background shadow-(--shadow-chat-card)"
+              : cn(
+                  "inset-0 rounded-3xl",
+                  isRecording ? RECORDING_SURFACE : "bg-background shadow-(--shadow-glass)",
+                  "group-hover/chat:border-black/15 dark:group-hover/chat:border-white/22"
+                ),
+            "border-black/[0.08] dark:border-white/12",
+            "group-focus-within/chat:border-black/15 group-focus-within/chat:ring-[3px] group-focus-within/chat:ring-primary/8 dark:group-focus-within/chat:border-white/22",
+            hideInput ? "pointer-events-none opacity-0" : "pointer-events-auto"
+          )}
+        />
+        <div
+          ref={attachPanel}
+          data-note-chat-panel
+          aria-hidden={hideInput}
+          inert={hideInput}
+          // From anywhere in the open chat, not just the composer. An Esc that closes a menu
+          // (Radix prevents its default) closes only the menu, and one that closes the chat
+          // stops here, so the note doesn't also clear its transcript selection.
+          onKeyDown={(event) => {
+            if (event.key !== "Escape" || !chatOpen || event.defaultPrevented) return;
+            event.stopPropagation();
+            onInputEscape?.();
+          }}
+          className={cn(
+            // Bottom-anchored: while it grows, what doesn't fit yet overflows the top, not the composer.
+            // Its height animates between the bar's 48px and auto.
+            "pointer-events-auto relative flex min-w-0 flex-col justify-end rounded-3xl transition-[height,opacity] [interpolate-size:allow-keywords]",
+            UNFOLD,
+            // Open, it clips only while it unfolds, so a chip's hover card can show above it.
             hideInput
-              ? "max-w-0 opacity-0 ps-0 pe-0 border-transparent shadow-none pointer-events-none"
-              : "max-w-[600px] opacity-100 ps-4 pe-1.5",
-            isExpanded
-              ? "border-black/15 dark:border-white/22 ring-[3px] ring-primary/8"
-              : !hideInput && "border-black/10 dark:border-white/14"
+              ? "overflow-hidden"
+              : chatOpen
+                ? "animate-[clip-while-unfolding_480ms] motion-reduce:animate-none"
+                : "overflow-visible",
+            hideInput && "opacity-0 pointer-events-none"
           )}
         >
-          <input
-            dir="auto"
-            ref={inputRef}
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onFocus={handleInputFocus}
-            disabled={askDisabled}
-            tabIndex={hideInput ? -1 : undefined}
-            placeholder={t("embeddedChat.askPlaceholder")}
-            className={cn(
-              "input-inline flex-1 bg-transparent outline-none min-w-0 p-0 caret-primary",
-              "text-[13px] text-foreground",
-              "placeholder:text-foreground/45 dark:placeholder:text-foreground/45"
-            )}
-          />
-
-          {hasText ? (
-            <button
-              onClick={handleSubmit}
-              disabled={askDisabled}
-              className={cn(
-                "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
-                "animate-[scale-in_0.15s_ease-out_backwards]",
-                "transition-all duration-150",
-                "hover:brightness-110",
-                "active:scale-90",
-                "disabled:opacity-30"
-              )}
-              aria-label={t("embeddedChat.send")}
-            >
-              <SendIcon size={28} className="block rtl:scale-x-[-1]" />
-            </button>
-          ) : !isExpanded ? (
-            <div className="shrink-0">{actionPicker}</div>
-          ) : null}
+          {actionChips && chatOpen && !slashMenuOpen && (
+            // Centered between the card's top edge and the composer.
+            <div className="shrink-0 px-1.5 pt-0.5 pb-2.5">{actionChips}</div>
+          )}
+          {!hideInput && (
+            <ChatInput
+              className="w-full min-w-0"
+              variant="note"
+              outlined={chatOpen}
+              agentState="idle"
+              partialTranscript=""
+              draftText={draftText}
+              onDraftChange={onDraftChange}
+              onTextSubmit={onAskSubmit}
+              onFocus={onInputFocus}
+              focusOnIdle={chatOpen}
+              voiceDraft={chatOpen}
+              placeholder={t("embeddedChat.askPlaceholder")}
+              trailingContent={chatOpen ? undefined : actionPicker}
+              slashCommands={slashCommands}
+              onSlashMenuOpenChange={setSlashMenuOpen}
+            />
+          )}
         </div>
       </div>
+      {footnote && (
+        <div
+          className={cn(
+            "relative mt-1.5 flex h-4 select-none items-center justify-center gap-1 text-[10px] text-muted-foreground/70 transition-opacity duration-200",
+            // The open card reaches over it.
+            chatOpen && "opacity-0"
+          )}
+        >
+          {footnote}
+        </div>
+      )}
     </div>
   );
 }

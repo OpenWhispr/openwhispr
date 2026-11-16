@@ -5,7 +5,7 @@ import { useHeaderHeight } from '@react-navigation/elements';
 import { router } from 'expo-router';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
-import { SpaceGrotesk } from '@/lib/fonts';
+import { AppFont } from '@/lib/fonts';
 import { safeHaptics } from '@/lib/utils';
 import { LANGUAGES, DEFAULT_LANGUAGE, type Language } from '@/lib/languages';
 
@@ -93,7 +93,7 @@ export default function TranscriptionLanguageScreen() {
             autoCapitalize="none"
             className="flex-1 text-[16px] text-label"
             returnKeyType="search"
-            style={{ fontFamily: SpaceGrotesk.regular }}
+            style={{ fontFamily: AppFont.regular }}
           />
           {query.length > 0 ? (
             <Pressable onPress={() => setQuery('')} hitSlop={8}>
