@@ -21,9 +21,27 @@ export interface StandInOwnershipResult {
   notOwned: number;
 }
 
-/** Whether the cloud answered for this account: true/false, or null when it did not say. */
+/**
+ * The cloud's answer for this account: true/false, or null when it did not
+ * say. A teamspace note counts as not owned, since the owner's team sync
+ * brings it in.
+ */
+function ownershipFromAccess(access: NoteAccessState, accountId: string): boolean | null {
+  switch (access?.my_permission) {
+    case "owner":
+      if (access.owner?.id !== accountId) return null;
+      return !access.grants?.some((grant) => grant.source === "space");
+    case "editor":
+    case "viewer":
+      return false;
+    default:
+      return null;
+  }
+}
+
 async function askIfOwned(
   cloudId: string,
+  accountId: string,
   authGeneration: number,
   get: typeof cloudGetForAuthGeneration
 ): Promise<boolean | null> {
@@ -32,11 +50,19 @@ async function askIfOwned(
       `/api/notes/${encodeURIComponent(cloudId)}/access`,
       authGeneration
     );
-    return access.my_permission === "owner";
+    const owned = ownershipFromAccess(access, accountId);
+    if (owned === null) {
+      console.warn("A backed-up note's access answer named no owner it could use");
+    }
+    return owned;
   } catch (error) {
     if (isAuthContextError(error)) return null;
-    // 404 and 403 both mean this account has no access to the note.
-    if (error instanceof CloudApiError && (error.status === 404 || error.status === 403)) {
+    // No relationship (404) or a grant short of editor (403 note_access_denied);
+    // any other 403, such as SSO_REQUIRED, refuses even the owner.
+    if (
+      error instanceof CloudApiError &&
+      (error.status === 404 || (error.status === 403 && error.code === "note_access_denied"))
+    ) {
       return false;
     }
     console.warn("Could not check who owns a backed-up note:", error);
@@ -62,17 +88,21 @@ export async function checkStandInOwnership({
   const worker = async (): Promise<void> => {
     for (let next = queue.shift(); next; next = queue.shift()) {
       if (!isCurrent()) return;
-      const owned = await askIfOwned(next.cloud_id, authGeneration, get);
-      if (owned === null || !isCurrent()) continue;
-      const outcome = await api?.resolveStandInOwnership?.({
-        noteId: next.id,
-        cloudId: next.cloud_id,
-        owned,
-        accountId,
-      });
-      if (!outcome || "success" in outcome) continue;
-      if (owned && outcome.claimed) result.claimed++;
-      else if (!owned) result.notOwned++;
+      try {
+        const owned = await askIfOwned(next.cloud_id, accountId, authGeneration, get);
+        if (owned === null || !isCurrent()) continue;
+        const outcome = await api?.resolveStandInOwnership?.({
+          noteId: next.id,
+          cloudId: next.cloud_id,
+          owned,
+          accountId,
+        });
+        if (!outcome || "success" in outcome) continue;
+        if (owned && outcome.claimed) result.claimed++;
+        else if (!owned) result.notOwned++;
+      } catch (error) {
+        console.warn("Could not record who owns a backed-up note:", error);
+      }
     }
   };
 

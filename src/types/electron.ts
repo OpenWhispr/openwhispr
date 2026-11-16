@@ -660,7 +660,8 @@ export type ShareVisibility = "private" | "link" | "domain" | "invited";
 
 export type NotePermission = "owner" | "editor" | "viewer";
 
-export type NoteAccessPrincipalType = "user" | "email" | "team" | "folder" | "workspace";
+// "space" only appears as the implicit grant of a teamspace note's members.
+export type NoteAccessPrincipalType = "user" | "email" | "team" | "space" | "folder" | "workspace";
 
 export interface NoteAccessPrincipal {
   type: NoteAccessPrincipalType;
@@ -675,7 +676,7 @@ export interface NoteAccessGrant {
   id: string;
   principal: NoteAccessPrincipal;
   permission: Exclude<NotePermission, "owner">;
-  source: "direct" | "team" | "folder" | "workspace";
+  source: "direct" | "team" | "space" | "folder" | "workspace";
   inherited: boolean;
   pending: boolean;
   created_at: string;

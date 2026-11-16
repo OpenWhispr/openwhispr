@@ -23,6 +23,22 @@ const makeApi = (candidates) => {
   };
 };
 
+const ownerAccess = ({ ownerId = "acct", grants = [] } = {}) => ({
+  owner: { type: "user", id: ownerId },
+  grants,
+  my_permission: "owner",
+});
+
+const quietly = async (body) => {
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    return await body();
+  } finally {
+    console.warn = warn;
+  }
+};
+
 const run = (checkStandInOwnership, options) =>
   checkStandInOwnership({
     accountId: "acct",
@@ -36,7 +52,7 @@ test("claims a note the cloud says the account owns", async () => {
   const { api, resolved } = makeApi([{ id: 4, cloud_id: "c4" }]);
   const result = await run(checkStandInOwnership, {
     api,
-    get: async () => ({ my_permission: "owner" }),
+    get: async () => ownerAccess(),
   });
   assert.deepEqual(resolved, [{ noteId: 4, cloudId: "c4", owned: true, accountId: "acct" }]);
   assert.deepEqual(result, { claimed: 1, notOwned: 0 });
@@ -98,7 +114,7 @@ test("stops when the account changes mid-check", async () => {
     isCurrent: () => current,
     get: async () => {
       current = false;
-      return { my_permission: "owner" };
+      return ownerAccess();
     },
   });
   assert.equal(resolved.length, 0);
@@ -124,4 +140,126 @@ test("asks at most three at a time", async () => {
     },
   });
   assert.equal(peak, 3);
+});
+
+test("records nothing for a 403 other than note_access_denied, such as SSO_REQUIRED", async () => {
+  const { checkStandInOwnership, CloudApiError } = await load();
+  const { api, resolved } = makeApi([
+    { id: 1, cloud_id: "sso" },
+    { id: 2, cloud_id: "bare" },
+  ]);
+  await quietly(() =>
+    run(checkStandInOwnership, {
+      api,
+      get: async (path) => {
+        if (path.includes("sso")) throw new CloudApiError("sso", 403, "SSO_REQUIRED");
+        throw new CloudApiError("forbidden", 403);
+      },
+    })
+  );
+  assert.equal(resolved.length, 0);
+});
+
+test("records a 403 note_access_denied as not owned", async () => {
+  const { checkStandInOwnership, CloudApiError } = await load();
+  const { api, resolved } = makeApi([{ id: 1, cloud_id: "viewer" }]);
+  const result = await run(checkStandInOwnership, {
+    api,
+    get: async () => {
+      throw new CloudApiError("denied", 403, "note_access_denied");
+    },
+  });
+  assert.deepEqual(
+    resolved.map((r) => [r.noteId, r.owned]),
+    [[1, false]]
+  );
+  assert.deepEqual(result, { claimed: 0, notOwned: 1 });
+});
+
+test("records nothing when the answer names no known permission", async () => {
+  const { checkStandInOwnership } = await load();
+  const { api, resolved } = makeApi([
+    { id: 1, cloud_id: "missing" },
+    { id: 2, cloud_id: "unknown" },
+  ]);
+  await quietly(() =>
+    run(checkStandInOwnership, {
+      api,
+      get: async (path) => (path.includes("unknown") ? { my_permission: "admin" } : {}),
+    })
+  );
+  assert.equal(resolved.length, 0);
+});
+
+test("records nothing when the owner the answer names is another account", async () => {
+  const { checkStandInOwnership } = await load();
+  const { api, resolved } = makeApi([{ id: 1, cloud_id: "c1" }]);
+  await quietly(() =>
+    run(checkStandInOwnership, { api, get: async () => ownerAccess({ ownerId: "someone" }) })
+  );
+  assert.equal(resolved.length, 0);
+});
+
+test("never claims a teamspace note the account owns", async () => {
+  const { checkStandInOwnership } = await load();
+  const { api, resolved } = makeApi([{ id: 1, cloud_id: "team" }]);
+  const result = await run(checkStandInOwnership, {
+    api,
+    get: async () =>
+      ownerAccess({
+        grants: [
+          {
+            id: "scope:space:s1",
+            principal: { type: "space", id: "s1" },
+            permission: "editor",
+            source: "space",
+            inherited: true,
+          },
+        ],
+      }),
+  });
+  assert.deepEqual(
+    resolved.map((r) => [r.noteId, r.owned]),
+    [[1, false]]
+  );
+  assert.deepEqual(result, { claimed: 0, notOwned: 1 });
+});
+
+test("asks nothing once the account has already changed", async () => {
+  const { checkStandInOwnership } = await load();
+  const { api, resolved } = makeApi([{ id: 1, cloud_id: "a" }]);
+  let asked = 0;
+  await run(checkStandInOwnership, {
+    api,
+    isCurrent: () => false,
+    get: async () => {
+      asked++;
+      return ownerAccess();
+    },
+  });
+  assert.equal(asked, 0);
+  assert.equal(resolved.length, 0);
+});
+
+test("one candidate that fails to resolve doesn't stop the others", async () => {
+  const { checkStandInOwnership } = await load();
+  const resolved = [];
+  const api = {
+    getStandInOwnershipCandidates: async () => [
+      { id: 1, cloud_id: "a" },
+      { id: 2, cloud_id: "b" },
+      { id: 3, cloud_id: "c" },
+      { id: 4, cloud_id: "d" },
+    ],
+    resolveStandInOwnership: async (request) => {
+      if (request.noteId === 1) throw new Error("database busy");
+      resolved.push(request.noteId);
+      return { claimed: false };
+    },
+  };
+  const result = await quietly(() =>
+    run(checkStandInOwnership, { api, get: async () => ({ my_permission: "editor" }) })
+  );
+  assert.deepEqual(resolved.sort(), [2, 3, 4]);
+  assert.deepEqual(result, { claimed: 0, notOwned: 3 });
 });
