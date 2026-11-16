@@ -6673,6 +6673,141 @@ class DatabaseManager {
     return { notes, folders };
   }
 
+  // Notes written signed out stay in the stand-in on a Mac other accounts
+  // have used, since no account owns them. They are listed and moved to an
+  // account's Private only while nothing has put them in a cloud (a cloud id,
+  // another owner, a create that may have reached it).
+  _deviceNotesApply() {
+    return Boolean(
+      this.activeAccountId && this.hasOtherAccountRows() && this._standInPrivateSpaceId() != null
+    );
+  }
+
+  _deviceNoteEligibleSql(alias) {
+    return `${alias}.space_id = (SELECT id FROM spaces WHERE kind = 'private' AND account_id IS NULL AND workspace_id IS NULL AND deleted_at IS NULL ORDER BY id LIMIT 1)
+      AND ${alias}.account_id IS NULL AND ${alias}.deleted_at IS NULL AND ${alias}.cloud_id IS NULL
+      AND ${alias}.owner_user_id IS NULL AND ${alias}.cloud_create_attempted = 0
+      AND ${alias}.cloud_create_pending IS NULL`;
+  }
+
+  getDeviceNotes() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this._deviceNotesApply()) return { folders: [], notes: [] };
+      const notes = this.db
+        .prepare(
+          `SELECT n.id, n.title, n.folder_id, n.created_at, n.updated_at, n.note_type FROM notes n
+           WHERE ${this._deviceNoteEligibleSql("n")} ORDER BY n.updated_at DESC, n.id DESC`
+        )
+        .all();
+      const folders = this.db
+        .prepare(
+          `SELECT f.id, f.name, f.is_default, COUNT(n.id) AS noteCount FROM folders f
+           JOIN notes n ON n.folder_id = f.id AND ${this._deviceNoteEligibleSql("n")}
+           WHERE f.deleted_at IS NULL GROUP BY f.id ORDER BY f.sort_order, f.id`
+        )
+        .all();
+      return { folders, notes };
+    } catch (error) {
+      debugLogger.error("Error getting device notes", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  getDeviceNote(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this._deviceNotesApply()) return null;
+      return (
+        this.db
+          .prepare(`SELECT * FROM notes n WHERE n.id = ? AND ${this._deviceNoteEligibleSql("n")}`)
+          .get(id) ?? null
+      );
+    } catch (error) {
+      debugLogger.error("Error getting device note", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  // Moves eligible device notes (the named ones, or those in the named
+  // folder) into the signed-in account's Private for the workspace. Cloud
+  // identity and sync state stay as they are, so each note is queued by the
+  // sync it was already in.
+  moveDeviceNotesToPrivate({ noteIds, folderId, workspaceId = null } = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const requested = noteIds ? new Set(noteIds) : null;
+      if (!this._deviceNotesApply()) return { moved: [], skipped: requested?.size ?? 0 };
+      const accountId = this.activeAccountId;
+      const filters = [];
+      const params = [];
+      if (requested) {
+        filters.push(`n.id IN (${[...requested].map(() => "?").join(",")})`);
+        params.push(...requested);
+      }
+      if (folderId != null) {
+        filters.push("n.folder_id = ?");
+        params.push(folderId);
+      }
+      const moved = this.db.transaction(() => {
+        const ids = this.db
+          .prepare(
+            `SELECT n.id FROM notes n WHERE ${[this._deviceNoteEligibleSql("n"), ...filters].join(" AND ")} ORDER BY n.id`
+          )
+          .all(...params)
+          .map((row) => row.id);
+        const targetSpaceId = this._forkPrivateSpaceId(workspaceId, accountId);
+        for (const id of ids) this._placeStandInNote(id, targetSpaceId, accountId);
+        return ids.length
+          ? this.db
+              .prepare(
+                `SELECT * FROM notes WHERE id IN (${ids.map(() => "?").join(",")}) ORDER BY id`
+              )
+              .all(...ids)
+          : [];
+      })();
+      return { moved, skipped: requested ? requested.size - moved.length : 0 };
+    } catch (error) {
+      debugLogger.error("Error moving device notes", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  // Files a stand-in note in the account's Private space, in its folder of
+  // the same name (made with the stand-in folder's settings when the account
+  // has none); a root note stays at the root. The stand-in's folders stay
+  // where they are, since signed-out notes may still use them. Callers check
+  // eligibility.
+  _placeStandInNote(noteId, targetSpaceId, accountId) {
+    const standInFolder = this.db
+      .prepare(
+        `SELECT f.name, f.is_default, f.sort_order FROM notes n
+         JOIN folders f ON f.id = n.folder_id WHERE n.id = ?`
+      )
+      .get(noteId);
+    const targetFolderId = standInFolder
+      ? (this._privateFolderNamed(targetSpaceId, accountId, standInFolder.name) ??
+        Number(
+          this.db
+            .prepare(
+              `INSERT INTO folders (name, is_default, sort_order, client_folder_id, sync_status, space_id, account_id)
+               VALUES (?, ?, ?, ?, 'synced', ?, ?)`
+            )
+            .run(
+              standInFolder.name,
+              standInFolder.is_default,
+              standInFolder.sort_order,
+              randomUUID(),
+              targetSpaceId,
+              accountId
+            ).lastInsertRowid
+        ))
+      : null;
+    this.db
+      .prepare("UPDATE notes SET space_id = ?, folder_id = ?, account_id = ? WHERE id = ?")
+      .run(targetSpaceId, targetFolderId, accountId, noteId);
+  }
+
   // The private row with no account and no workspace: what a signed-out user
   // sees, and the row every account's notes shared before user_version 6.
   _standInPrivateSpaceId() {
