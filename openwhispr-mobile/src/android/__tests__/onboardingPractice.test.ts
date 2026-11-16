@@ -19,8 +19,16 @@ jest.mock('../../../modules/android-dictation/src', () => ({
 jest.mock('expo-file-system/legacy', () => ({
   deleteAsync: (...args: unknown[]) => mockDelete(...(args as [])),
 }));
+const mockFormat = jest.fn(async (_request: { systemPrompt: string }) => ({
+  text: 'Hey Tim,\n\nCan we move our call to Friday at 4pm?\n\nThanks,\nJosh',
+}));
+jest.mock('@/services/reasoning/ReasoningService', () => ({
+  ReasoningService: {
+    processText: (request: { systemPrompt: string }) => mockFormat(request),
+  },
+}));
 jest.mock('../pipeline', () => ({
-  createAndroidJob: (mode: string) => ({ mode }),
+  createAndroidJob: (mode: string) => ({ mode, route: { provider: 'cloud' } }),
   processAndroidAudio: (...args: unknown[]) => mockProcess(...(args as [])),
 }));
 
@@ -35,12 +43,33 @@ describe('practice recorder', () => {
     expect(mockStop).toHaveBeenCalledWith(false);
     expect(mockProcess).toHaveBeenCalledWith(
       expect.objectContaining({ uri: 'file:///cache/practice.wav' }),
-      { mode: 'dictate' },
+      expect.objectContaining({ mode: 'dictate' }),
       expect.any(Object),
       expect.any(Function),
     );
     expect(mockDelete).toHaveBeenCalledWith('file:///cache/practice.wav', { idempotent: true });
     expect(recorder.active).toBe(false);
+  });
+
+  it('formats the email practice into lines', async () => {
+    const recorder = new PracticeRecorder();
+    await recorder.start();
+    await expect(recorder.finish('email')).resolves.toContain('Hey Tim,\n\n');
+    expect(mockFormat.mock.calls[0][0].systemPrompt).toMatch(/email/);
+  });
+
+  it('keeps the cleaned dictation when formatting fails', async () => {
+    mockFormat.mockRejectedValueOnce(new Error('rate limited'));
+    const recorder = new PracticeRecorder();
+    await recorder.start();
+    await expect(recorder.finish('list')).resolves.toBe('Hey, are we still on for dinner tonight?');
+  });
+
+  it('does not format the message practice', async () => {
+    const recorder = new PracticeRecorder();
+    await recorder.start();
+    await recorder.finish();
+    expect(mockFormat).not.toHaveBeenCalled();
   });
 
   it('throws the recording away on cancel', async () => {

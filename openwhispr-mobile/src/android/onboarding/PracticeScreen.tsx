@@ -144,7 +144,7 @@ export function PracticeScreen({
   const stop = async () => {
     setPhase('processing');
     try {
-      const result = await recorder.current.finish();
+      const result = await recorder.current.finish(kind === 'message' ? undefined : kind);
       if (!mounted.current) return;
       setText(result.trim());
       if (kind === 'message') setPhase('inserted');

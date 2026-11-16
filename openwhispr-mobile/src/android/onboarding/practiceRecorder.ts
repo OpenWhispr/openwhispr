@@ -1,7 +1,45 @@
 import { PermissionsAndroid } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
-import { createAndroidJob, processAndroidAudio } from '../pipeline';
+import { ReasoningService } from '@/services/reasoning/ReasoningService';
+import { createAndroidJob, processAndroidAudio, type AndroidJob } from '../pipeline';
+
+export type PracticeFormat = 'email' | 'list';
+
+// The cleanup request carries no hint about the field, so the email and list practices
+// ask the cleanup model for the shape the practice shows.
+const FORMAT_PROMPTS: Record<PracticeFormat, string> = {
+  email:
+    'Format the dictated text as a short email. Put the greeting on its own line, then a blank line, the body, a blank line, and the sign-off and name on separate lines. When the speaker corrects themselves, keep only the corrected version. Keep the speaker’s language and wording otherwise. Return only the email, with no subject line and no introduction.',
+  list: 'Format the dictated text as a list. If it starts with a heading such as "Things to do today", keep it as the first line ending with a colon. Put each item on its own line starting with "- ", capitalised, without trailing punctuation. Keep the speaker’s language and words. Return only the list, with no introduction.',
+};
+
+async function formatPractice(
+  text: string,
+  format: PracticeFormat,
+  job: AndroidJob,
+  signal: AbortSignal,
+): Promise<string> {
+  try {
+    const result = await ReasoningService.processText({
+      text,
+      systemPrompt: FORMAT_PROMPTS[format],
+      inferenceScope: 'cleanup',
+      inferenceRoute: job.route.cleanupRoute,
+      routing:
+        job.route.cleanupRoute?.mode === 'providers'
+          ? { sendToChosenProvider: true }
+          : { isPrivateNote: job.route.provider === 'local' },
+      signal,
+      maxTokens: 384,
+    });
+    return result.text.trim() || text;
+  } catch {
+    // The cleaned dictation is still a good result; formatting is the bonus.
+    if (signal.aborted) throw new Error('Cancelled.');
+    return text;
+  }
+}
 
 export type MicAccess = 'granted' | 'denied' | 'blocked';
 
@@ -36,19 +74,16 @@ export class PracticeRecorder {
     if (audio?.uri) await FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => {});
   }
 
-  async finish(): Promise<string> {
+  async finish(format?: PracticeFormat): Promise<string> {
     if (!AndroidDictation) throw new Error('Dictation is not available on this device.');
     this.recording = false;
     const audio = await AndroidDictation.stopRecording(false);
     const controller = new AbortController();
     this.controller = controller;
     try {
-      return await processAndroidAudio(
-        audio,
-        createAndroidJob('dictate'),
-        controller.signal,
-        () => {},
-      );
+      const job = createAndroidJob('dictate');
+      const text = await processAndroidAudio(audio, job, controller.signal, () => {});
+      return format ? await formatPractice(text, format, job, controller.signal) : text;
     } finally {
       if (this.controller === controller) this.controller = null;
       await FileSystem.deleteAsync(audio.uri, { idempotent: true }).catch(() => {});
