@@ -65,6 +65,7 @@ export default function AndroidHome() {
   const usage = useUsageStore((s) => s.usage);
   const { register } = useSuperwallGate();
   const action = useRef(false);
+  const scroll = useRef<ScrollView>(null);
   const navigationRevision = useRef(0);
   const retryController = useRef<AbortController | null>(null);
   const [retrying, setRetrying] = useState(false);
@@ -201,6 +202,11 @@ export default function AndroidHome() {
   useEffect(() => {
     applyHistoryRetention().catch(() => undefined);
   }, []);
+  // A dictation the bubble couldn't type is shown at the top; bring it into view.
+  const rescued = Boolean(pending.text || pending.error);
+  useEffect(() => {
+    if (rescued) scroll.current?.scrollTo({ y: 0, animated: true });
+  }, [rescued, pending.text, pending.error]);
   useFocusEffect(
     useCallback(() => {
       void refreshInsights();
@@ -265,6 +271,7 @@ export default function AndroidHome() {
         <AccountAvatar />
       </View>
       <ScrollView
+        ref={scroll}
         contentContainerStyle={{
           paddingHorizontal: GUTTER,
           paddingTop: 8,
