@@ -25,6 +25,10 @@ function setup(t) {
   };
 }
 
+// With the local row as the pull's merge decision read it, here unchanged since.
+const applyFromCloud = (library, entry) =>
+  library.applyFromCloud(entry, library.database.getSkillForCloudMerge(entry));
+
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 255]);
 const cloudSkill = (name, files, extra = {}) => ({
   id: `cloud-${name}`,
@@ -45,7 +49,7 @@ for (const deleted of [false, true]) {
     const ctx = setup(t);
     if (!ctx) return;
     const entry = cloudSkill("linked", [utf8("SKILL.md", skillText("linked"))]);
-    ctx.library.applyFromCloud(entry);
+    applyFromCloud(ctx.library, entry);
     const folder = path.join(ctx.skillsDir, "linked");
     const target = path.join(path.dirname(ctx.skillsDir), "linked-target");
     fs.renameSync(folder, target);
@@ -53,7 +57,7 @@ for (const deleted of [false, true]) {
     ctx.library.scan();
 
     assert.equal(
-      ctx.library.applyFromCloud({
+      applyFromCloud(ctx.library, {
         ...entry,
         updated_at: "2026-11-01T00:00:00.000Z",
         deleted_at: deleted ? "2026-11-01T00:00:00.000Z" : null,
@@ -69,12 +73,12 @@ test("an external edit after the merge lookup is kept pending instead of replace
   const ctx = setup(t);
   if (!ctx) return;
   const entry = cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]);
-  ctx.library.applyFromCloud(entry);
+  applyFromCloud(ctx.library, entry);
   ctx.library.scan();
   writeFolder(ctx.skillsDir, "recap", { "SKILL.md": skillText("recap", "My edit.") });
 
   assert.equal(
-    ctx.library.applyFromCloud({
+    applyFromCloud(ctx.library, {
       ...entry,
       files: [utf8("SKILL.md", skillText("recap", "Cloud edit."))],
     }),
@@ -115,7 +119,7 @@ test("a skill exports byte for byte: text as UTF-8, everything else as base64", 
   );
 
   const other = setup(t);
-  assert.equal(other.library.applyFromCloud(cloudSkill("crm-export", exported.files)), true);
+  assert.equal(applyFromCloud(other.library, cloudSkill("crm-export", exported.files)), true);
   assert.deepEqual(
     fs.readFileSync(path.join(other.skillsDir, "crm-export", "assets", "logo.png")),
     PNG
@@ -242,7 +246,7 @@ test("a pulled skill is validated and written atomically; an invalid one is skip
     utf8("SKILL.md", skillText("meeting-prep", "New.")),
     utf8("references/agenda.md", "Agenda\n"),
   ]);
-  assert.equal(ctx.library.applyFromCloud({ ...updated, enabled: false }), true);
+  assert.equal(applyFromCloud(ctx.library, { ...updated, enabled: false }), true);
   assert.equal(readSkill(ctx.skillsDir, "meeting-prep"), skillText("meeting-prep", "New."));
   assert.deepEqual(listDir(path.join(ctx.skillsDir, "meeting-prep", "references")), ["agenda.md"]);
   const [summary] = ctx.library.scan();
@@ -264,7 +268,7 @@ test("a pulled skill is validated and written atomically; an invalid one is skip
     cloudSkill("not-a-list", "SKILL.md"),
   ];
   for (const entry of refused) {
-    assert.equal(ctx.library.applyFromCloud(entry), false, entry.name);
+    assert.equal(applyFromCloud(ctx.library, entry), false, entry.name);
   }
   assert.deepEqual(listDir(ctx.skillsDir), ["meeting-prep"], "nothing else was written");
   assert.ok(!fs.existsSync(path.join(ctx.skillsDir, "..", "evil.md")));
@@ -282,7 +286,8 @@ test("a pulled skill already on disk only takes the cloud's state", (t) => {
   ctx.library.scan();
   const before = fs.statSync(path.join(ctx.skillsDir, "recap", "SKILL.md")).mtimeMs;
 
-  ctx.library.applyFromCloud(
+  applyFromCloud(
+    ctx.library,
     cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))], { enabled: false })
   );
 
@@ -294,11 +299,12 @@ test("a pulled skill already on disk only takes the cloud's state", (t) => {
 test("a pulled tombstone removes the folder and its versions", (t) => {
   const ctx = setup(t);
   if (!ctx) return;
-  ctx.library.applyFromCloud(cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
+  applyFromCloud(ctx.library, cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
   ctx.library.saveVersion("recap");
   assert.deepEqual(listDir(ctx.versionsDir), ["recap"]);
 
-  const removed = ctx.library.applyFromCloud(
+  const removed = applyFromCloud(
+    ctx.library,
     cloudSkill("recap", [], { deleted_at: "2026-10-21T10:00:00.000Z" })
   );
 
@@ -312,13 +318,13 @@ test("a pulled tombstone removes the folder and its versions", (t) => {
 test("a pulled tombstone also removes an old copy a replace couldn't clear", (t) => {
   const ctx = setup(t);
   if (!ctx) return;
-  ctx.library.applyFromCloud(cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
+  applyFromCloud(ctx.library, cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
   // What a replace leaves when its old copy can't be removed: put back at the next start.
   writeFolder(ctx.skillsDir, `.replaced-${"0".repeat(8)}-0000-0000-0000-${"0".repeat(12)}-recap`, {
     "SKILL.md": skillText("recap", "Old.", "Old.\n"),
   });
 
-  ctx.library.applyFromCloud(cloudSkill("recap", [], { deleted_at: "2026-10-21T10:00:00.000Z" }));
+  applyFromCloud(ctx.library, cloudSkill("recap", [], { deleted_at: "2026-10-21T10:00:00.000Z" }));
   const reopened = new SkillLibrary({
     userDataDir: path.dirname(ctx.skillsDir),
     database: ctx.database,
@@ -333,7 +339,8 @@ test("a pulled tombstone applies on a computer with no skills yet", (t) => {
   if (!ctx) return;
   assert.equal(fs.existsSync(ctx.skillsDir), false);
 
-  const removed = ctx.library.applyFromCloud(
+  const removed = applyFromCloud(
+    ctx.library,
     cloudSkill("recap", [], { deleted_at: "2026-10-21T10:00:00.000Z" })
   );
 
@@ -345,7 +352,7 @@ test("uninstalling, or removing a folder by hand, leaves a tombstone for a synce
   const ctx = setup(t);
   if (!ctx) return;
   for (const name of ["by-app", "by-hand"]) {
-    ctx.library.applyFromCloud(cloudSkill(name, [utf8("SKILL.md", skillText(name))]));
+    applyFromCloud(ctx.library, cloudSkill(name, [utf8("SKILL.md", skillText(name))]));
   }
 
   ctx.library.uninstall("by-app");
@@ -366,7 +373,7 @@ test("uninstalling, or removing a folder by hand, leaves a tombstone for a synce
 test("a skill over this computer's own limits is never replaced or removed from the cloud", (t) => {
   const ctx = setup(t);
   if (!ctx) return;
-  ctx.library.applyFromCloud(cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
+  applyFromCloud(ctx.library, cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
   const extra = Object.fromEntries(
     Array.from({ length: 501 }, (_, index) => [`references/f${index}.md`, `Note ${index}.\n`])
   );
@@ -374,12 +381,14 @@ test("a skill over this computer's own limits is never replaced or removed from 
   ctx.library.scan();
   const warn = t.mock.method(debugLogger, "warn", () => {});
 
-  const edited = ctx.library.applyFromCloud(
+  const edited = applyFromCloud(
+    ctx.library,
     cloudSkill("recap", [utf8("SKILL.md", skillText("recap", "Cloud.", "Cloud.\n"))], {
       updated_at: "2026-10-22T09:00:00.000Z",
     })
   );
-  const deleted = ctx.library.applyFromCloud(
+  const deleted = applyFromCloud(
+    ctx.library,
     cloudSkill("recap", [], { deleted_at: "2026-10-22T10:00:00.000Z" })
   );
 
@@ -394,7 +403,7 @@ test("a skill over this computer's own limits is never replaced or removed from 
 test("a skill waiting to be put back after a replace keeps its state", (t) => {
   const ctx = setup(t);
   if (!ctx) return;
-  ctx.library.applyFromCloud(cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
+  applyFromCloud(ctx.library, cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
   fs.renameSync(
     path.join(ctx.skillsDir, "recap"),
     path.join(ctx.skillsDir, `.replaced-${"0".repeat(8)}-0000-0000-0000-${"0".repeat(12)}-recap`)
@@ -409,18 +418,20 @@ test("a skill waiting to be put back after a replace keeps its state", (t) => {
 test("a skill whose files can't be read is never replaced or removed from the cloud", (t) => {
   const ctx = setup(t);
   if (!ctx) return;
-  ctx.library.applyFromCloud(cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
+  applyFromCloud(ctx.library, cloudSkill("recap", [utf8("SKILL.md", skillText("recap"))]));
   writeFolder(ctx.skillsDir, "recap", { "notes/mine.md": "Mine.\n" });
   fs.symlinkSync(os.tmpdir(), path.join(ctx.skillsDir, "recap", "linked"));
   ctx.library.scan();
   t.mock.method(debugLogger, "warn", () => {});
 
-  const edited = ctx.library.applyFromCloud(
+  const edited = applyFromCloud(
+    ctx.library,
     cloudSkill("recap", [utf8("SKILL.md", skillText("recap", "Cloud.", "Cloud.\n"))], {
       updated_at: "2026-10-22T09:00:00.000Z",
     })
   );
-  const deleted = ctx.library.applyFromCloud(
+  const deleted = applyFromCloud(
+    ctx.library,
     cloudSkill("recap", [], { deleted_at: "2026-10-22T10:00:00.000Z" })
   );
 
@@ -434,7 +445,7 @@ for (const priorState of ["absent", "synced", "deleted"]) {
     const ctx = setup(t);
     if (!ctx) return;
     const originalEntry = cloudSkill("recap", [utf8("SKILL.md", skillText("recap", "Old."))]);
-    if (priorState !== "absent") ctx.library.applyFromCloud(originalEntry);
+    if (priorState !== "absent") applyFromCloud(ctx.library, originalEntry);
     if (priorState === "deleted") ctx.library.uninstall("recap");
     const original = ctx.database.getSkillStateForRecovery("recap");
     const rename = fs.renameSync;
@@ -452,7 +463,7 @@ for (const priorState of ["absent", "synced", "deleted"]) {
       updated_at: "2026-10-22T09:00:00.000Z",
     });
 
-    assert.throws(() => ctx.library.applyFromCloud(changed), /commit locked/);
+    assert.throws(() => applyFromCloud(ctx.library, changed), /commit locked/);
 
     assert.deepEqual(ctx.database.getSkillStateForRecovery("recap"), original);
     assert.deepEqual(listDir(ctx.skillsDir), priorState === "synced" ? ["recap"] : []);
@@ -460,7 +471,7 @@ for (const priorState of ["absent", "synced", "deleted"]) {
       assert.equal(readSkill(ctx.skillsDir, "recap"), skillText("recap", "Old."));
     }
     t.mock.restoreAll();
-    assert.equal(ctx.library.applyFromCloud(changed), true);
+    assert.equal(applyFromCloud(ctx.library, changed), true);
     assert.equal(readSkill(ctx.skillsDir, "recap"), skillText("recap", "New."));
   });
 }
@@ -469,7 +480,7 @@ test("cloud sync waits for a blocked journal to restore its files and sync state
   const ctx = setup(t);
   if (!ctx) return;
   const originalEntry = cloudSkill("recap", [utf8("SKILL.md", skillText("recap", "Old."))]);
-  ctx.library.applyFromCloud(originalEntry);
+  applyFromCloud(ctx.library, originalEntry);
   const original = ctx.database.getSkillStateForRecovery("recap");
   const changed = cloudSkill("recap", [utf8("SKILL.md", skillText("recap", "New."))], {
     updated_at: "2026-10-22T09:00:00.000Z",
@@ -484,9 +495,9 @@ test("cloud sync waits for a blocked journal to restore its files and sync state
   t.mock.method(ctx.database, "restoreSkillState", () => {
     throw new Error("database locked");
   });
-  assert.throws(() => ctx.library.applyFromCloud(changed), /commit locked/);
+  assert.throws(() => applyFromCloud(ctx.library, changed), /commit locked/);
   assert.equal(ctx.library.exportForCloud("recap"), null);
-  assert.throws(() => ctx.library.applyFromCloud(changed), /needs recovery/);
+  assert.throws(() => applyFromCloud(ctx.library, changed), /needs recovery/);
   assert.deepEqual(ctx.library.scan(), []);
   t.mock.restoreAll();
 
@@ -496,5 +507,5 @@ test("cloud sync waits for a blocked journal to restore its files and sync state
   });
   assert.deepEqual(ctx.database.getSkillStateForRecovery("recap"), original);
   assert.equal(readSkill(ctx.skillsDir, "recap"), skillText("recap", "Old."));
-  assert.equal(reopened.applyFromCloud(changed), true);
+  assert.equal(applyFromCloud(reopened, changed), true);
 });

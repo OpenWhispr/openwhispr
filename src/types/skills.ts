@@ -93,6 +93,7 @@ export interface SkillSyncRow {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  synced_hash: string | null;
 }
 
 /** A skill's files for Cloud backup, or why it stays on this computer. */

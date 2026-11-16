@@ -1460,6 +1460,8 @@ class DatabaseManager {
         "cloud_id TEXT",
         "sync_status TEXT DEFAULT 'pending'",
         "deleted_at TEXT",
+        // The content hash the cloud last held, so a switch-only change sends no files.
+        "synced_hash TEXT",
       ]) {
         try {
           this.db.exec(`ALTER TABLE skills ADD COLUMN ${column}`);
@@ -3961,9 +3963,9 @@ class DatabaseManager {
       this.db
         .prepare(
           `INSERT INTO skills (id, name, enabled, content_hash, last_used_at, created_at, updated_at,
-             client_skill_id, cloud_id, sync_status, deleted_at)
+             client_skill_id, cloud_id, sync_status, deleted_at, synced_hash)
            VALUES (@id, @name, @enabled, @contentHash, @lastUsedAt, @createdAt, @updatedAt,
-             @clientId, @cloudId, @syncStatus, @deletedAt)
+             @clientId, @cloudId, @syncStatus, @deletedAt, @syncedHash)
            ON CONFLICT(name) DO UPDATE SET
              enabled = excluded.enabled,
              content_hash = excluded.content_hash,
@@ -3973,7 +3975,8 @@ class DatabaseManager {
              client_skill_id = excluded.client_skill_id,
              cloud_id = excluded.cloud_id,
              sync_status = excluded.sync_status,
-             deleted_at = excluded.deleted_at`
+             deleted_at = excluded.deleted_at,
+             synced_hash = excluded.synced_hash`
         )
         .run({
           name,
@@ -3987,6 +3990,7 @@ class DatabaseManager {
           cloudId: row.cloud_id ?? null,
           syncStatus: row.sync_status ?? "pending",
           deletedAt: row.deleted_at ?? null,
+          syncedHash: row.synced_hash ?? null,
         });
     } catch (error) {
       debugLogger.error("Error restoring skill state", { error: error.message }, "database");
@@ -4121,13 +4125,14 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       this.db
         .prepare(
-          `INSERT INTO skills (name, enabled, content_hash, client_skill_id, cloud_id,
+          `INSERT INTO skills (name, enabled, content_hash, synced_hash, client_skill_id, cloud_id,
              sync_status, deleted_at, created_at, updated_at)
-           VALUES (@name, @enabled, @contentHash, @clientId, @cloudId, 'synced', @deletedAt,
-             @createdAt, @updatedAt)
+           VALUES (@name, @enabled, @contentHash, @contentHash, @clientId, @cloudId, 'synced',
+             @deletedAt, @createdAt, @updatedAt)
            ON CONFLICT(name) DO UPDATE SET
              enabled = excluded.enabled,
              content_hash = COALESCE(excluded.content_hash, content_hash),
+             synced_hash = COALESCE(excluded.synced_hash, synced_hash),
              client_skill_id = COALESCE(excluded.client_skill_id, client_skill_id),
              cloud_id = excluded.cloud_id,
              sync_status = 'synced',
@@ -4161,7 +4166,7 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `UPDATE skills
-           SET sync_status = 'synced', cloud_id = @cloudId,
+           SET sync_status = 'synced', cloud_id = @cloudId, synced_hash = @expectedHash,
                updated_at = COALESCE(@serverUpdatedAt, updated_at)
            WHERE name = @name AND deleted_at IS NULL
              AND content_hash IS @expectedHash AND enabled = @expectedEnabled`

@@ -18,7 +18,7 @@ async function batchCreate(entries: SkillEntryInput[]): Promise<{ created: Cloud
 
 async function update(
   id: string,
-  updates: { enabled: boolean; content_hash: string; files: CloudSkillFile[] }
+  updates: { enabled: boolean; content_hash?: string; files?: CloudSkillFile[] }
 ): Promise<CloudSkillMeta> {
   return cloudPatch<CloudSkillMeta>("/api/skills/update", { id, ...updates });
 }

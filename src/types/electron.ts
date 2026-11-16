@@ -4026,7 +4026,7 @@ declare global {
       /** False when the entry was skipped for good; a failed write answers why. */
       applySkillFromCloud?: (
         cloudEntry: CloudSkillEntry,
-        expectedLocal?: SkillSyncRow | null
+        expectedLocal: SkillSyncRow | null
       ) => Promise<boolean | { ok: false; error: SkillWriteError }>;
       markSkillSynced?: (
         name: string,

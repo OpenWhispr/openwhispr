@@ -3649,8 +3649,10 @@ export class SyncService {
         content_hash: exported.contentHash,
         files: exported.files,
       };
-      if (row.cloud_id) updates.push({ cloudId: row.cloud_id, entry });
-      else if (pulled !== "failed" && !pulled.unwritten.has(row.name))
+      if (row.cloud_id) {
+        const switchOnly = exported.contentHash === row.synced_hash;
+        updates.push({ cloudId: row.cloud_id, entry, switchOnly });
+      } else if (pulled !== "failed" && !pulled.unwritten.has(row.name))
         creates.push({
           ...entry,
           client_skill_id: row.client_skill_id,
@@ -3658,7 +3660,7 @@ export class SyncService {
         });
     }
 
-    for (const { cloudId, entry } of updates) {
+    for (const { cloudId, entry, switchOnly } of updates) {
       const markSynced = (id: string, updatedAt?: string) =>
         window.electronAPI.markSkillSynced?.(
           entry.name,
@@ -3669,7 +3671,11 @@ export class SyncService {
         );
       try {
         const { name: _name, ...fields } = entry;
-        const server = await SkillsService.update(cloudId, fields);
+        // Files unchanged here go unsent, so they can't replace a newer copy from another device.
+        const server = await SkillsService.update(
+          cloudId,
+          switchOnly ? { enabled: entry.enabled } : fields
+        );
         await markSynced(server.id, server.updated_at);
       } catch (err) {
         if (isHttpStatus(err, 404)) {
@@ -3768,7 +3774,9 @@ export class SyncService {
 
           // A delete wins, as for snippets, except over a skill this computer has never sent.
           // A change waiting to be sent wins over the cloud's copy (the push that follows
-          // replaces it); a skill never sent meets the cloud's copy, and the newer one wins.
+          // replaces it); a skill never sent meets the cloud's copy, and the newer one wins. A
+          // synced skill whose files differ from the cloud's takes them, since a switch-only
+          // push leaves the files another device sent meanwhile in the cloud only.
           const pending = local?.sync_status === "pending";
           const shouldApply = cloudEntry.deleted_at
             ? !!local && !local.deleted_at && !(pending && !local.cloud_id)
@@ -3776,7 +3784,8 @@ export class SyncService {
               (pending
                 ? !local.cloud_id && cloudTs > normalizeTimestamp(local.updated_at)
                 : cloudTs > normalizeTimestamp(local.updated_at) ||
-                  local.cloud_id !== cloudEntry.id);
+                  local.cloud_id !== cloudEntry.id ||
+                  local.content_hash !== cloudEntry.content_hash);
           if (!shouldApply) continue;
           try {
             const applied = await window.electronAPI.applySkillFromCloud?.(

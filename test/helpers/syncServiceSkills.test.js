@@ -255,6 +255,26 @@ test("enabled state travels both ways", async (t) => {
   assert.deepEqual(pendingNames(ctx.db), []);
 });
 
+test("a switch flipped here doesn't overwrite a newer edit from another device", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const name = create(ctx.library, "Meeting prep");
+  await ctx.service.syncSkillsNow();
+  let now = Date.parse(cloudByName(ctx.cloud)[name].updated_at);
+  ctx.cloud.setClock(() => new Date((now += 1000)).toISOString());
+  seedRemote(ctx, name, "Their edit.");
+
+  ctx.library.setEnabled(name, false);
+  await ctx.service.syncSkillsNow();
+  await ctx.service.syncSkillsNow();
+
+  assert.match(cloudByName(ctx.cloud)[name].files[0].content, /Their edit\./);
+  assert.equal(cloudByName(ctx.cloud)[name].enabled, false);
+  assert.match(skillFile(ctx.skillsDir, name), /Their edit\./);
+  assert.equal(ctx.library.scan()[0].enabled, false);
+  assert.deepEqual(pendingNames(ctx.db), []);
+});
+
 test("a skill from another device appears here, and its delete removes it", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

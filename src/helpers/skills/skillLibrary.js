@@ -798,18 +798,16 @@ class SkillLibrary {
     const local = this.database.getSkillForCloudMerge(entry);
     // UI writes can land between the renderer's merge decision and this IPC call. A remote
     // delete still wins over an edit, but must not remove a new installation of the same name.
-    const changedSinceLookup =
-      expectedLocal !== undefined &&
-      [
-        "id",
-        "client_skill_id",
-        "cloud_id",
-        "content_hash",
-        "enabled",
-        "sync_status",
-        "deleted_at",
-        "updated_at",
-      ].some((field) => local?.[field] !== expectedLocal?.[field]);
+    const changedSinceLookup = [
+      "id",
+      "client_skill_id",
+      "cloud_id",
+      "content_hash",
+      "enabled",
+      "sync_status",
+      "deleted_at",
+      "updated_at",
+    ].some((field) => local?.[field] !== expectedLocal?.[field]);
     if (
       changedSinceLookup &&
       (!entry.deleted_at ||
