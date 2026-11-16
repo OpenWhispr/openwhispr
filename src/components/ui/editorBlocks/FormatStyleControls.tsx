@@ -73,12 +73,14 @@ const ColorIcon = ({ color }: { color?: string }) => (
 );
 
 function IconButton({
-  title,
+  label,
+  title = label,
   active,
   onClick,
   children,
 }: {
-  title: string;
+  label: string;
+  title?: string;
   active?: boolean;
   onClick: () => void;
   children: ReactNode;
@@ -88,7 +90,7 @@ function IconButton({
       size="icon"
       variant="ghost"
       title={title}
-      aria-label={title}
+      aria-label={label}
       aria-pressed={active}
       onClick={onClick}
       className={cn(BUTTON, active && "bg-foreground/10 text-foreground")}
@@ -149,7 +151,7 @@ function StyleDropdown({
 const ITEM = "text-xs gap-2 rounded-md px-2 py-1.5";
 
 export function FormatStyleControls({ editor, dropdown }: { editor: Editor; dropdown: Dropdown }) {
-  useTranslation(); // re-render on UI language change
+  const { t } = useTranslation();
   const state = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -168,21 +170,29 @@ export function FormatStyleControls({ editor, dropdown }: { editor: Editor; drop
   return (
     <>
       <IconButton
-        title={`${tb("toolbar.highlight")} (${formatHotkeyLabel("CommandOrControl+Shift+H")})`}
+        label={tb("toolbar.highlight")}
+        title={t("notes.editor.format.withShortcut", {
+          action: tb("toolbar.highlight"),
+          shortcut: formatHotkeyLabel("CommandOrControl+Shift+H"),
+        })}
         active={state.highlight}
         onClick={() => run((ch) => c(ch).toggleHighlight())}
       >
         <Highlighter size={15} />
       </IconButton>
       <IconButton
-        title={tb("toolbar.subscript")}
+        label={tb("toolbar.subscript")}
         active={state.subscript}
         onClick={() => run((ch) => c(ch).toggleSubscript())}
       >
         <Subscript size={15} />
       </IconButton>
       <IconButton
-        title={`${tb("toolbar.superscript")} (${formatHotkeyLabel("CommandOrControl+.")})`}
+        label={tb("toolbar.superscript")}
+        title={t("notes.editor.format.withShortcut", {
+          action: tb("toolbar.superscript"),
+          shortcut: formatHotkeyLabel("CommandOrControl+."),
+        })}
         active={state.superscript}
         onClick={() => run((ch) => c(ch).toggleSuperscript())}
       >
@@ -265,7 +275,7 @@ export function FormatStyleControls({ editor, dropdown }: { editor: Editor; drop
       </StyleDropdown>
 
       <IconButton
-        title={tb("toolbar.ruby")}
+        label={tb("toolbar.ruby")}
         active={state.ruby}
         onClick={async () => {
           if (state.ruby) return run((ch) => c(ch).unsetRubyText());

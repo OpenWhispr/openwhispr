@@ -3424,8 +3424,7 @@
         "fonts": {
           "default": "預設",
           "serif": "襯線",
-          "monospace": "等寬",
-          "rounded": "圓體"
+          "monospace": "等寬"
         },
         "align": {
           "left": "靠左",

@@ -3424,8 +3424,7 @@
         "fonts": {
           "default": "默认",
           "serif": "衬线",
-          "monospace": "等宽",
-          "rounded": "圆体"
+          "monospace": "等宽"
         },
         "align": {
           "left": "左对齐",

@@ -3964,8 +3964,7 @@
         "fonts": {
           "default": "Default",
           "serif": "Serif",
-          "monospace": "Monospace",
-          "rounded": "Rounded"
+          "monospace": "Monospace"
         },
         "align": {
           "left": "Left",

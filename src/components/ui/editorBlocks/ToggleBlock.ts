@@ -40,6 +40,7 @@ function toggleBlockPlugin(md: any) {
       let inFence = false;
       let line = startLine + 1;
       for (; line < endLine; line++) {
+        if (state.isEmpty(line)) continue;
         if (state.sCount[line] < state.blkIndent) break;
         const text = lineText(line);
         if (/^(```|~~~)/.test(text)) inFence = !inFence;
@@ -111,11 +112,14 @@ export const ToggleBlock = Details.extend({
       },
     };
   },
-}).configure({ HTMLAttributes: { class: "rte-toggle" } });
+});
 
-/** Everything the editor needs for toggles. The title takes no marks: it is saved as plain text. */
+/**
+ * Everything the editor needs for toggles. The title is saved as plain text, so it
+ * takes no marks, and `code` keeps inline nodes (emoji, note links, formulas) out.
+ */
 export const toggleBlockExtensions = [
   ToggleBlock,
-  DetailsSummary.extend({ marks: "" }),
+  DetailsSummary.extend({ marks: "", code: true }),
   DetailsContent,
 ];

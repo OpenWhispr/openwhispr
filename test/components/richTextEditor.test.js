@@ -1366,6 +1366,24 @@ test("[[ and / in a code block stay code: Enter is a new line", async (t) => {
   assert.equal(notes.saved(), "```\ncode [[\n /\n```");
 });
 
+test("a toggle title stays plain text: emoji, [[ and / add no nodes, Enter moves into the body", async (t) => {
+  happyWindow.electronAPI = {
+    ...happyWindow.electronAPI,
+    getNotes: async () => [
+      { id: 7, title: "Weekly sync", content: "", enhanced_content: "", updated_at: "2026-11-04" },
+    ],
+  };
+  const notes = await mountNotes(t, ":::toggle Title\n\nBody\n\n:::");
+  // The end of "Title": inside the toggle (1) and its title (2).
+  await notes.act(() => notes.editor().commands.setTextSelection(2 + "Title".length));
+  await notes.act(() => notes.editor().commands.insertContent(" 🚀 [[Week /"), 120);
+  assert.equal(happyWindow.document.querySelector(".rte-slash-menu"), null);
+  await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
+  await notes.act(() => notes.editor().commands.insertContent("Next"), 50);
+  assert.equal(notes.saved(), ":::toggle Title 🚀 [[Week /\n\nNext\n\nBody\n\n:::");
+  assert.deepEqual(notes.errors, []);
+});
+
 test("/ in a table cell opens no menu: its blocks would split the table", async (t) => {
   const notes = await mountNotes(t);
   await notes.act(() => caretInCell(notes.editor(), "Budget", "Budget".length));

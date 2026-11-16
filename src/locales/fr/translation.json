@@ -3964,8 +3964,7 @@
         "fonts": {
           "default": "Par défaut",
           "serif": "Serif",
-          "monospace": "Chasse fixe",
-          "rounded": "Arrondie"
+          "monospace": "Chasse fixe"
         },
         "align": {
           "left": "Gauche",

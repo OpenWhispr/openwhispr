@@ -272,13 +272,6 @@
 }
 
 /* ---- Find & replace ---------------------------------------------------- */
-.ProseMirror .search-result {
-  background: color-mix(in srgb, #facc15 35%, transparent);
-  border-radius: 2px;
-}
-.ProseMirror .search-result-current {
-  background: color-mix(in srgb, #f97316 55%, transparent);
-}
 .rte-find-panel {
   position: absolute;
   top: 6px;

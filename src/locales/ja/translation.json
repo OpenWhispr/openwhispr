@@ -3319,8 +3319,7 @@
         "fonts": {
           "default": "デフォルト",
           "serif": "明朝体",
-          "monospace": "等幅",
-          "rounded": "丸ゴシック"
+          "monospace": "等幅"
         },
         "align": {
           "left": "左",

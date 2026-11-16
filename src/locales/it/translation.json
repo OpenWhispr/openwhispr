@@ -3424,8 +3424,7 @@
         "fonts": {
           "default": "Predefinito",
           "serif": "Con grazie",
-          "monospace": "Monospaziato",
-          "rounded": "Arrotondato"
+          "monospace": "Monospaziato"
         },
         "align": {
           "left": "Sinistra",

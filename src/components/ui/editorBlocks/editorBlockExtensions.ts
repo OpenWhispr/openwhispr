@@ -18,9 +18,7 @@ import InvisibleCharacters from "@tiptap/extension-invisible-characters";
 import { CharacterCount } from "@tiptap/extensions";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
-import { TextStyle } from "@tiptap/extension-text-style";
-import { Color } from "@tiptap/extension-color";
-import { FontFamily } from "@tiptap/extension-font-family";
+import { Color, FontFamily, TextStyle } from "@tiptap/extension-text-style";
 import TextAlign from "@tiptap/extension-text-align";
 import { RubyText } from "@tiptap/extension-ruby-text";
 import { markdownSyntax, escapeMd } from "./markdownSyntax";
@@ -40,17 +38,9 @@ const MarkdownSyntaxExtras = Extension.create({
 });
 
 // ---- Paragraph / heading with alignment suffix ------------------------------
-// Not inside table cells: a GFM pipe table cell has no paragraph to carry it,
-// so it would come back as literal text.
-const alignSuffix = (node: any, parent?: any) => {
+const alignSuffix = (node: any) => {
   const a = node.attrs.textAlign;
-  if (
-    !a ||
-    a === "left" ||
-    !node.content.size ||
-    /^table(Cell|Header)$/.test(parent?.type?.name ?? "")
-  )
-    return "";
+  if (!a || a === "left" || !node.content.size) return "";
   return ` {align:${a}}`;
 };
 
@@ -58,9 +48,9 @@ const AlignedParagraph = Paragraph.extend({
   addStorage() {
     return {
       markdown: {
-        serialize(state: any, node: any, parent: any) {
+        serialize(state: any, node: any) {
           state.renderInline(node);
-          const suffix = alignSuffix(node, parent);
+          const suffix = alignSuffix(node);
           if (suffix) state.write(suffix);
           state.closeBlock(node);
         },
@@ -74,10 +64,10 @@ const AlignedHeading = Heading.extend({
   addStorage() {
     return {
       markdown: {
-        serialize(state: any, node: any, parent: any) {
+        serialize(state: any, node: any) {
           state.write(`${state.repeat("#", node.attrs.level)} `);
           state.renderInline(node, false);
-          const suffix = alignSuffix(node, parent);
+          const suffix = alignSuffix(node);
           if (suffix) state.write(suffix);
           state.closeBlock(node);
         },
@@ -225,7 +215,7 @@ export const Callout = Node.create({
           state.wrapBlock("> ", null, node, () => {
             state.write(`[!${String(node.attrs.type).toUpperCase()}]`);
             if (node.firstChild?.type.name === "paragraph") state.write(" ");
-            else state.ensureNewLine();
+            else state.closeBlock(node);
             state.renderContent(node);
           });
         },

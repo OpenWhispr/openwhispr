@@ -8,6 +8,7 @@ import type { Editor } from "@tiptap/react";
 import { FindAndReplacePluginKey } from "@tiptap/extension-find-and-replace";
 import { OPEN_FIND_EVENT } from "./events";
 import { tb } from "./translate";
+import { formatHotkeyLabel } from "../../../utils/hotkeys";
 
 /** Re-render on editor transactions, but only while `active`. */
 function useEditorTick(editor: Editor, active: boolean) {
@@ -23,7 +24,7 @@ function useEditorTick(editor: Editor, active: boolean) {
 }
 
 export function FindReplacePanel({ editor }: { editor: Editor }) {
-  useTranslation(); // re-render on UI language change
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
   const [replacement, setReplacement] = useState("");
@@ -104,7 +105,10 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
         <span className="rte-find-count">{term ? `${current}/${total}` : ""}</span>
         <button
           type="button"
-          title={`${tb("find.previous")} (⇧Enter)`}
+          title={t("notes.editor.format.withShortcut", {
+            action: tb("find.previous"),
+            shortcut: formatHotkeyLabel("Shift+Enter"),
+          })}
           aria-label={tb("find.previous")}
           onClick={() => commands.goToPreviousResult()}
         >
@@ -112,7 +116,10 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
         </button>
         <button
           type="button"
-          title={`${tb("find.next")} (Enter)`}
+          title={t("notes.editor.format.withShortcut", {
+            action: tb("find.next"),
+            shortcut: formatHotkeyLabel("Enter"),
+          })}
           aria-label={tb("find.next")}
           onClick={() => commands.goToNextResult()}
         >
@@ -130,7 +137,10 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
         </button>
         <button
           type="button"
-          title={`${tb("find.close")} (Esc)`}
+          title={t("notes.editor.format.withShortcut", {
+            action: tb("find.close"),
+            shortcut: formatHotkeyLabel("Escape"),
+          })}
           aria-label={tb("find.close")}
           onClick={close}
         >

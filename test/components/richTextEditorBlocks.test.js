@@ -231,6 +231,25 @@ test("a ::: line in a code block does not close the toggle around it", () => {
   assert.equal(save(toggle), toggle);
 });
 
+test("a toggle inside a list item reopens as a toggle", () => {
+  const list = "- Header\n\n  :::toggle Steps\n\n  two\n\n  :::";
+  assert.equal(save(list), list);
+  assert.ok(featuresOf(list).includes("details"));
+});
+
+test("a callout that starts with a divider reopens as a callout", () => {
+  const editor = editorFor("Intro");
+  try {
+    editor.chain().focus("end").splitBlock().setCallout("warning").run();
+    editor.chain().setHorizontalRule().insertContent("Careful").run();
+    const found = featuresOf(editor.storage.markdown.getMarkdown());
+    assert.ok(found.includes("callout") && found.includes("horizontalRule"), found.join());
+    assert.ok(!found.includes("heading"), "the marker became a heading");
+  } finally {
+    editor.destroy();
+  }
+});
+
 test("an aligned list item keeps its alignment, and the list stays tight", () => {
   const list = "- one\n- two {align:center}\n- three";
   assert.equal(save(list), list);

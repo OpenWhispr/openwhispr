@@ -43,7 +43,6 @@ export const COLORS: [string, string][] = [
 export const FONTS: [string, string][] = [
   ["serif", "Georgia, serif"],
   ["monospace", "Menlo, monospace"],
-  ["rounded", "Arial Rounded MT Bold, sans-serif"],
 ];
 const CALLOUTS = ["note", "tip", "important", "warning", "caution"] as const;
 const ALIGNS = ["left", "center", "right", "justify"] as const;

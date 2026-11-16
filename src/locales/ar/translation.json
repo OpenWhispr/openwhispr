@@ -3062,8 +3062,7 @@
         "fonts": {
           "default": "افتراضي",
           "serif": "مذيّل",
-          "monospace": "ثابت العرض",
-          "rounded": "مستدير"
+          "monospace": "ثابت العرض"
         },
         "align": {
           "left": "يسار",
