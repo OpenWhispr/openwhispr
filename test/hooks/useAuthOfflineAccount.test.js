@@ -21,7 +21,7 @@ const reconciledFor = (userId, profileUser = USER_A) => ({
   [PROFILE_KEY]: JSON.stringify({ ...profileUser, emailVerified: true, validatedAt: Date.now() }),
 });
 
-async function mountUseAuth(t, { initialStorage }) {
+async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
   // Registered first: the root must unmount while the browser globals exist.
   let root = null;
   t.after(async () => {
@@ -148,8 +148,18 @@ async function mountUseAuth(t, { initialStorage }) {
     });
     return null;
   }
+  // Other components of the window that read the account (a window has dozens).
+  function Consumer() {
+    useAuth();
+    return null;
+  }
+  const consumers = Array.from({ length: extraConsumers }, (_, index) =>
+    React.createElement(Consumer, { key: index })
+  );
   root = createRoot(container);
-  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () =>
+    root.render(React.createElement(React.Fragment, null, React.createElement(Harness), consumers))
+  );
 
   const settle = async () => {
     for (let i = 0; i < 10; i += 1) {
@@ -193,6 +203,21 @@ async function mountUseAuth(t, { initialStorage }) {
       isPending: false,
       error: null,
     });
+    if (user) {
+      // Reconciliation loads modules asynchronously; timer ticks alone do not
+      // establish the validated session the next test action depends on.
+      const deadline = performance.now() + 5000;
+      while (
+        authContext.getValidatedAuthGeneration() !== token.generation ||
+        result?.user?.id !== user.id ||
+        result?.isOfflineAccount !== false
+      ) {
+        assert.ok(performance.now() < deadline, "session reconciliation did not finish");
+        await settle();
+      }
+      // Committing validation notifies both useAuth consumers and reruns their effects.
+      await settle();
+    }
   };
   const reject = async () => {
     await React.act(() =>
@@ -329,6 +354,25 @@ test("back online, the same account is confirmed without a purge", async (t) => 
   for (const call of auth.calls.setActiveAccountScope) assert.deepEqual(call, ["user-a", 5]);
   assert.equal(auth.authContext.getValidatedAuthGeneration(), 5);
   assert.equal(JSON.parse(auth.storage.getItem(PROFILE_KEY)).name, "Ada L.");
+});
+
+test("a window's useAuth consumers share each scope request to main", async (t) => {
+  const consumers = 20;
+  const auth = await mountUseAuth(t, {
+    initialStorage: reconciledFor("user-a"),
+    extraConsumers: consumers,
+  });
+  await auth.goOffline();
+  await auth.answer(USER_A);
+
+  assert.equal(auth.result().isSignedIn, true);
+  assert.equal(auth.calls.purge, 0);
+  // Each pass ran in every consumer at once. One request per consumer per pass made a sign-in
+  // or sign-out cost hundreds of calls across the windows.
+  const requests = auth.calls.setActiveAccountScope.length;
+  assert.ok(requests > 0);
+  assert.ok(requests < consumers, `${requests} scope requests from ${consumers + 2} consumers`);
+  for (const call of auth.calls.setActiveAccountScope) assert.deepEqual(call, ["user-a", 5]);
 });
 
 test("back online, a different account purges the offline account's caches", async (t) => {

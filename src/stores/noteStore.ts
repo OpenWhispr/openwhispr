@@ -1,6 +1,7 @@
 import { forgetHeldSpaces, isSpaceHeld } from "../lib/heldSpaceDeletes";
 import { forgetHeldTeams } from "../lib/heldTeamDeletes";
 import { create } from "zustand";
+import logger from "../utils/logger";
 import { syncService } from "../services/SyncService.js";
 import {
   recordNoteCreateAttempts,
@@ -20,14 +21,24 @@ import {
 } from "../lib/noteConflictRegistry";
 import { findDefaultFolder } from "../components/notes/shared";
 import {
+  activePrivateSpace,
   decideNoteWorkspaceScope,
+  isSpaceInWorkspaceScope,
   spacesInWorkspaceScope,
   type NoteWorkspaceScopeReason,
 } from "../lib/workspaceSelection";
-import { useWorkspaceStore } from "./workspaceStore";
+import {
+  adoptActiveWorkspaceChoice,
+  onWorkspaceScopePublished,
+  setActiveWorkspaceYieldGuard,
+  useWorkspaceStore,
+} from "./workspaceStore";
+import { readTeamSpacesCapability } from "../lib/teamSpacesCapability";
+import { assertAuthGenerationCurrent, getValidatedAuthGeneration } from "../lib/authRequestContext";
 import type { CloudNote } from "../services/NotesService.js";
 import type {
   FolderItem,
+  MoveRefusalCode,
   NoteAccessState,
   NoteItem,
   NoteShareInvitation,
@@ -125,10 +136,60 @@ let applyingWorkspaceScope = false;
 // switch cancels that.
 let awaitingOpenedNoteId: number | null = null;
 let awaitingOpenedContext: ActiveContext | null = null;
-function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
+// Set while the view has no container and waits for the active workspace's
+// Private: one not in the store yet (a workspace this device hasn't opened:
+// main makes it once it hears the workspace), or a switch made while nothing
+// was open. Whichever read brings it lands the view there, unless the user
+// opened a container first.
+let landOnActivePrivate = false;
+// What the tree opened itself rather than the user: the note it selected first
+// and the container it landed on. Neither ever takes the user to another
+// workspace: a list answer that hides one closes it, like a switch.
+let pickedNoteId: number | null = null;
+let pickedContext: ActiveContext | null = null;
+
+function pickNote(id: number): void {
+  pickedNoteId = id;
+  setActiveNoteId(id);
+}
+
+/** The user edited a note: one the tree picked is theirs from now on (D46). */
+export function markNoteEdited(id: number): void {
+  if (id === pickedNoteId) pickedNoteId = null;
+}
+
+// D46: the workspace store asks before a provisional pick yields to the default. The open note
+// or container the user opened (or edited, for the tree's own pick) keeps them where they are
+// when the default's scope would hide it.
+setActiveWorkspaceYieldGuard(({ activeWorkspaceId, workspaces, defaultWorkspaceId }) => {
+  const state = useNoteStore.getState();
+  const spaceById = (id: number): SpaceItem | null =>
+    state.spaces.find((space) => space.id === id) ?? null;
+  const hides = (space: SpaceItem | null): boolean =>
+    space != null &&
+    !isSpaceInWorkspaceScope(space, activeWorkspaceId, workspaces, defaultWorkspaceId);
+  const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
+  const ownNote = state.activeNoteId != null && state.activeNoteId !== pickedNoteId;
+  const ownContext = state.activeContext != null && state.activeContext !== pickedContext;
+  return (
+    (ownNote &&
+      (activeNote == null ||
+        spaceById(activeNote.space_id) == null ||
+        hides(spaceById(activeNote.space_id)))) ||
+    (ownContext &&
+      state.activeContext != null &&
+      (spaceById(state.activeContext.spaceId) == null ||
+        hides(spaceById(state.activeContext.spaceId))))
+  );
+});
+
+function reconcileWorkspaceScope(
+  trigger: NoteWorkspaceScopeReason,
+  { defaultArrived = false }: { defaultArrived?: boolean } = {}
+): void {
   if (applyingWorkspaceScope) return;
   const state = useNoteStore.getState();
-  const { activeWorkspaceId, personalSelected, workspaces } = useWorkspaceStore.getState();
+  const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
   const spaceById = (id: number): SpaceItem | null =>
     state.spaces.find((space) => space.id === id) ?? null;
   const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
@@ -143,11 +204,39 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
     awaitingOpenedContext = null;
     reason = "navigated";
   }
+  if (reason === "navigated") {
+    // Opening something of the active workspace makes it the user's choice, so
+    // the account's default showing up later never moves them out of it (D45).
+    if (activeWorkspaceId != null) {
+      const opensActive = (space: SpaceItem | null, picked: boolean): boolean =>
+        space?.workspace_id === activeWorkspaceId && !picked;
+      if (
+        opensActive(noteSpace, state.activeNoteId === pickedNoteId) ||
+        opensActive(contextSpace, state.activeContext === pickedContext)
+      ) {
+        adoptActiveWorkspaceChoice(activeWorkspaceId);
+      }
+    }
+    // Whichever would take the user away (the note when it's hidden) must be
+    // one they opened.
+    const noteHidden =
+      noteSpace != null &&
+      !isSpaceInWorkspaceScope(noteSpace, activeWorkspaceId, workspaces, defaultWorkspaceId);
+    const picked = noteHidden
+      ? state.activeNoteId === pickedNoteId
+      : state.activeContext != null && state.activeContext === pickedContext;
+    // The default first becoming known claims the pending Private: whatever of it the user has
+    // open closes rather than taking them out of the workspace they're in (D46).
+    const target = noteHidden ? noteSpace : contextSpace;
+    const claimedPending =
+      defaultArrived && target?.kind === "private" && target.workspace_id == null;
+    if (picked || claimedPending) reason = "dataChanged";
+  }
   const decision = decideNoteWorkspaceScope({
     reason,
     activeWorkspaceId,
     workspaces,
-    personalSelected,
+    defaultWorkspaceId,
     contextSpace,
     noteSpace,
   });
@@ -160,16 +249,43 @@ function reconcileWorkspaceScope(trigger: NoteWorkspaceScopeReason): void {
   applyingWorkspaceScope = true;
   try {
     if (decision.clearNote) setActiveNoteId(null);
-    const context =
-      decision.context === "note" && activeNote
-        ? { spaceId: activeNote.space_id, folderId: activeNote.folder_id ?? null }
-        : decision.context === "default"
-          ? defaultContext(state.spaces, state.folders)
-          : null;
-    if (context) {
-      setActiveContext(context.spaceId, context.folderId);
-      revealContainer(context.spaceId, context.folderId);
+    if (decision.context === "note" && activeNote) {
+      const folderId = activeNote.folder_id ?? null;
+      setActiveContext(activeNote.space_id, folderId);
+      revealContainer(activeNote.space_id, folderId);
+    } else if (decision.context === "default") {
+      const context = defaultContext(state.spaces, state.folders);
+      if (context) {
+        setActiveContext(context.spaceId, context.folderId);
+        revealContainer(context.spaceId, context.folderId);
+      } else {
+        // Never left on a container the workspace hides while its Private is on its way.
+        useNoteStore.setState({ activeContext: null, notes: [] });
+      }
     }
+    if (decision.context !== "keep") pickedContext = useNoteStore.getState().activeContext;
+  } finally {
+    applyingWorkspaceScope = false;
+  }
+}
+
+/** Lands the view on the active workspace's Private once it's in the store, if it's still waiting. */
+function landOnArrivedPrivate(): void {
+  if (!landOnActivePrivate || applyingWorkspaceScope) return;
+  const state = useNoteStore.getState();
+  // Until the tree has loaded, initializeNotesTree picks the context itself.
+  if (state.isTreeLoading) return;
+  if (state.activeContext != null) {
+    landOnActivePrivate = false;
+    return;
+  }
+  const context = defaultContext(state.spaces, state.folders);
+  if (!context) return;
+  applyingWorkspaceScope = true;
+  try {
+    setActiveContext(context.spaceId, context.folderId);
+    revealContainer(context.spaceId, context.folderId);
+    pickedContext = useNoteStore.getState().activeContext;
   } finally {
     applyingWorkspaceScope = false;
   }
@@ -179,6 +295,8 @@ useNoteStore.subscribe((state, previous) => {
   // What reconciling itself opens is never the user's navigation.
   if (state.activeNoteId !== previous.activeNoteId) {
     awaitingOpenedNoteId = applyingWorkspaceScope ? null : state.activeNoteId;
+    // Another note opened: the picked one, opened again later, is the user's.
+    if (state.activeNoteId !== pickedNoteId) pickedNoteId = null;
   }
   if (state.activeContext !== previous.activeContext) {
     awaitingOpenedContext = applyingWorkspaceScope ? null : state.activeContext;
@@ -194,20 +312,50 @@ useNoteStore.subscribe((state, previous) => {
   ) {
     reconcileWorkspaceScope("dataChanged");
   }
+  if (state.spaces !== previous.spaces || state.folders !== previous.folders) {
+    landOnArrivedPrivate();
+  }
 });
 useWorkspaceStore.subscribe((state, previous) => {
-  if (
-    state.activeWorkspaceId !== previous.activeWorkspaceId ||
-    state.personalSelected !== previous.personalSelected
-  ) {
+  if (state.activeWorkspaceId !== previous.activeWorkspaceId) {
     awaitingOpenedNoteId = null;
     awaitingOpenedContext = null;
     reconcileWorkspaceScope("workspaceSwitched");
+    // With nothing open (the first list after signing in, a switch away from a
+    // workspace whose Private hadn't arrived), the view lands on this
+    // workspace's Private, or waits for it.
+    landOnActivePrivate = true;
   } else if (state.workspaces !== previous.workspaces) {
     // A workspace that just arrived (an accepted invitation) can claim the
     // space the user already opened.
-    reconcileWorkspaceScope("navigated");
+    reconcileWorkspaceScope("navigated", {
+      defaultArrived: previous.defaultWorkspaceId == null && state.defaultWorkspaceId != null,
+    });
+  } else if (state.defaultWorkspaceId !== previous.defaultWorkspaceId) {
+    // The pending Private shows in the default workspace alone once that's known.
+    reconcileWorkspaceScope("dataChanged");
   }
+  landOnArrivedPrivate();
+});
+
+// Main makes the active workspace's Private when it next reads the spaces after
+// hearing the workspace, so a workspace this device hasn't opened yet has none
+// in the store until they're read again. Once per scope; a tree that hasn't
+// loaded yet reads them itself.
+let publishedScopeKey: string | null = null;
+onWorkspaceScopePublished(({ accountId, activeWorkspaceId, defaultWorkspaceId }) => {
+  const key = JSON.stringify([accountId, activeWorkspaceId, defaultWorkspaceId]);
+  if (key === publishedScopeKey) return;
+  publishedScopeKey = key;
+  if (!hasBoundIpcListeners) return;
+  // Folders first, so the Private lands on its default folder when the spaces
+  // bring it (see landOnActivePrivate).
+  void loadFolders()
+    .catch(() => [])
+    .then(() => loadSpaces())
+    .catch(() => {
+      // The next read (any sync event, the next scope) brings the Private in.
+    });
 });
 
 let hasBoundIpcListeners = false;
@@ -424,7 +572,60 @@ function ensureIpcListeners() {
   // Space rows written by a sync pull or membership mutation.
   if (window.electronAPI.onSpaceSynced) {
     const dispose = window.electronAPI.onSpaceSynced((space) => {
-      if (space) void loadSpaces();
+      if (!space) return;
+      if (space.kind !== "private") {
+        void loadSpaces();
+        return;
+      }
+      // Binding and relocation change local containers without note sync events.
+      const generation = accountGeneration;
+      const selectedId = useNoteStore.getState().activeNoteId;
+      void (async (): Promise<void> => {
+        if (selectedId != null) {
+          const note = await window.electronAPI.getNote(selectedId);
+          if (generation !== accountGeneration) return;
+          if (note && useNoteStore.getState().activeNoteId === selectedId) {
+            await ensureContainerLoaded(noteContainerKey(note));
+            if (generation !== accountGeneration) return;
+            if (useNoteStore.getState().activeNoteId === selectedId) updateNoteInStore(note);
+          }
+        }
+        await loadFolders();
+        if (generation !== accountGeneration) return;
+        await loadSpaces();
+        if (generation !== accountGeneration) return;
+        const state = useNoteStore.getState();
+        const validKeys = new Set([
+          ...state.spaces.map((item) => spaceContainerKey(item.id)),
+          ...state.folders.map((item) => folderContainerKey(item.id)),
+        ]);
+        const notesByContainer = Object.fromEntries(
+          Object.entries(state.notesByContainer).filter(([key]) => validKeys.has(key))
+        );
+        applyContainers(notesByContainer);
+        const current = useNoteStore.getState();
+        const context = current.activeContext;
+        if (
+          context &&
+          (!current.spaces.some((item) => item.id === context.spaceId) ||
+            (context.folderId != null &&
+              !current.folders.some((item) => item.id === context.folderId)))
+        ) {
+          const note =
+            current.activeNoteId != null ? findNoteInState(current, current.activeNoteId) : null;
+          const target = note
+            ? { spaceId: note.space_id, folderId: note.folder_id }
+            : defaultContext(current.spaces, current.folders);
+          if (target) setActiveContext(target.spaceId, target.folderId);
+        }
+        await Promise.all(Object.keys(notesByContainer).map((key) => loadContainerNotes(key)));
+      })().catch((error: unknown) =>
+        logger.warn(
+          "Failed to refresh relocated private notes",
+          { error: (error as Error).message },
+          "notes"
+        )
+      );
     });
     if (typeof dispose === "function") {
       disposers.push(dispose);
@@ -502,6 +703,12 @@ export function resetForAccountChange(): void {
   accountGeneration += 1;
   pendingFolderPreset = null;
   purgeDisplacedNote = null;
+  landOnActivePrivate = false;
+  pickedNoteId = null;
+  pickedContext = null;
+  // The next account's first scope reads the spaces again, even one that names
+  // the same workspaces (the same account signing back in).
+  publishedScopeKey = null;
   hiddenSpaces.clear();
   forgetHeldSpaces();
   forgetHeldTeams();
@@ -637,16 +844,24 @@ export function setActiveContext(spaceId: number, folderId: number | null): void
   void ensureContainerLoaded(key);
 }
 
-// Where the notes view lands with nothing else to show: Personal's default
-// folder, which every workspace shows.
-function defaultContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
-  const { activeWorkspaceId, personalSelected, workspaces } = useWorkspaceStore.getState();
-  const visible = spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces, personalSelected);
-  const privateSpace = visible.find((s) => s.kind === "private") ?? visible[0];
+// The active workspace's Private, on its default folder.
+function activePrivateContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
+  const { activeWorkspaceId, workspaces, defaultWorkspaceId } = useWorkspaceStore.getState();
+  const privateSpace = activePrivateSpace(
+    spacesInWorkspaceScope(spaces, activeWorkspaceId, workspaces, defaultWorkspaceId)
+  );
   if (!privateSpace) return null;
   const privateFolders = folders.filter((f) => f.space_id === privateSpace.id);
   const initialFolder = findDefaultFolder(privateFolders) ?? privateFolders[0];
   return { spaceId: privateSpace.id, folderId: initialFolder?.id ?? null };
+}
+
+// Where the notes view lands with nothing else to show: the active workspace's
+// Private. Not in the store yet, the view waits for it (see landOnActivePrivate).
+function defaultContext(spaces: SpaceItem[], folders: FolderItem[]): ActiveContext | null {
+  const context = activePrivateContext(spaces, folders);
+  landOnActivePrivate = context == null;
+  return context;
 }
 
 /**
@@ -681,6 +896,7 @@ export async function initializeNotesTree(): Promise<void> {
       context = presetContext;
     } else {
       context = defaultContext(spaces, folders);
+      pickedContext = context;
     }
     if (!context) return;
 
@@ -701,10 +917,14 @@ export async function initializeNotesTree(): Promise<void> {
       if (validKeys.has(key)) void ensureContainerLoaded(key);
     });
     if (getActiveNoteIdValue() == null && notes.length > 0) {
-      setActiveNoteId(notes[0].id);
+      pickNote(notes[0].id);
     }
   } finally {
-    if (gen === treeLoadGeneration) useNoteStore.setState({ isTreeLoading: false });
+    if (gen === treeLoadGeneration) {
+      useNoteStore.setState({ isTreeLoading: false });
+      // A read during the load may have brought the Private this load lacked.
+      landOnArrivedPrivate();
+    }
   }
 }
 
@@ -877,23 +1097,21 @@ function handleSpacePurged(spaceId: number, { holding = false } = {}): void {
 
   let fallbackContext: ActiveContext | null = null;
   if (state.activeContext?.spaceId === spaceId) {
-    const privateSpace = extra.spaces?.find((s) => s.kind === "private");
-    if (privateSpace) {
-      const privateFolders = state.folders.filter((f) => f.space_id === privateSpace.id);
-      const fallbackFolder = findDefaultFolder(privateFolders) ?? privateFolders[0];
-      fallbackContext = { spaceId: privateSpace.id, folderId: fallbackFolder?.id ?? null };
-      extra.activeContext = fallbackContext;
-      extra.notes = teardown.notesByContainer[contextContainerKey(fallbackContext)] ?? [];
-    }
+    fallbackContext = defaultContext(extra.spaces ?? [], state.folders);
+    extra.activeContext = fallbackContext;
+    pickedContext = fallbackContext;
+    extra.notes = fallbackContext
+      ? (teardown.notesByContainer[contextContainerKey(fallbackContext)] ?? [])
+      : [];
   }
   useNoteStore.setState({ notesByContainer: teardown.notesByContainer, ...extra });
   if (fallbackContext) void ensureContainerLoaded(contextContainerKey(fallbackContext));
-  // The purge relocates never-synced notes to the private space root —
-  // refresh counts, and the root container when it's already cached.
+  // The purge relocates never-synced notes to a Private's root (the space's
+  // workspace's or the default's) — refresh counts, and those roots already cached.
   void loadFolders();
-  const privateSpace = state.spaces.find((s) => s.kind === "private" && s.id !== spaceId);
-  if (privateSpace) {
-    const privateRootKey = spaceContainerKey(privateSpace.id);
+  for (const space of state.spaces) {
+    if (space.kind !== "private" || space.id === spaceId) continue;
+    const privateRootKey = spaceContainerKey(space.id);
     if (useNoteStore.getState().notesByContainer[privateRootKey]) {
       void loadContainerNotes(privateRootKey);
     }
@@ -993,11 +1211,12 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
     const spaceFolders = folders.filter((f) => f.space_id === folder.space_id);
     const fallback = findDefaultFolder(spaceFolders) ?? spaceFolders[0];
     setActiveContext(folder.space_id, fallback?.id ?? null);
+    pickedContext = useNoteStore.getState().activeContext;
     if (getActiveNoteIdValue() == null) {
       const notes = await ensureContainerLoaded(
         fallback ? folderContainerKey(fallback.id) : spaceContainerKey(folder.space_id)
       );
-      if (notes.length > 0) setActiveNoteId(notes[0].id);
+      if (notes.length > 0) pickNote(notes[0].id);
     }
   }
   syncService.requestSyncAll("manual");
@@ -1007,7 +1226,7 @@ export async function deleteFolder(id: number): Promise<{ success: boolean; erro
 export async function moveFolderToSpace(
   folderId: number,
   spaceId: number
-): Promise<{ success: boolean; folder?: FolderItem; error?: string }> {
+): Promise<{ success: boolean; folder?: FolderItem; error?: string; code?: MoveRefusalCode }> {
   const result = await window.electronAPI.moveFolderToSpace(folderId, spaceId);
   if (!result.success) return result;
 
@@ -1065,6 +1284,16 @@ export function navigateToContainer(spaceId: number, folderId: number | null): v
   }
   setActiveContext(spaceId, null);
   revealContainer(spaceId, null);
+}
+
+/**
+ * Opens a note the user asked for by name (a toast's Open): its container, then the note. A note
+ * of another workspace takes the user to that workspace, since they asked for it.
+ */
+export function openNote(note: Pick<NoteItem, "id" | "space_id" | "folder_id">): void {
+  navigateToContainer(note.space_id, note.folder_id);
+  setActiveNoteId(note.id);
+  void ensureNoteLoaded(note.id);
 }
 
 export function setActiveFolderId(id: number | null): void {
@@ -1155,11 +1384,35 @@ export function useMigration(): { total: number; done: number } | null {
 }
 
 export async function startMigration(): Promise<void> {
+  if (!syncService.canSync()) return;
+  const authGeneration = getValidatedAuthGeneration();
+  if (authGeneration == null) return;
   const gen = ++migrationGeneration;
   const accountGen = accountGeneration;
+  const requestStillCurrent = (): boolean =>
+    accountGen === accountGeneration && getValidatedAuthGeneration() === authGeneration;
   const allNotes = (await window.electronAPI.getNotes(null, 9999, null)) ?? [];
-  if (gen !== migrationGeneration) return;
-  const unsynced = allNotes.filter((n) => !n.cloud_id);
+  await assertAuthGenerationCurrent(authGeneration);
+  const spaces = (await window.electronAPI.getSpaces?.()) ?? [];
+  await assertAuthGenerationCurrent(authGeneration);
+  if (gen !== migrationGeneration || !requestStillCurrent() || !syncService.canSync()) return;
+  // Private notes follow Backup consent. Team notes must carry their cloud
+  // scope so this upload sweep cannot file them as personal notes.
+  const teamScopes = new Map(
+    readTeamSpacesCapability()
+      ? spaces
+          .filter((s) => s.kind === "team" && s.cloud_space_id)
+          .map((s) => [s.id, { workspace_id: s.workspace_id, space_id: s.cloud_space_id }])
+      : []
+  );
+  const privateScopes = new Map(
+    spaces
+      .filter((space) => space.kind === "private")
+      .map((space) => [space.id, { private_workspace_id: space.workspace_id ?? null }])
+  );
+  const unsynced = allNotes.filter(
+    (note) => !note.cloud_id && (privateScopes.has(note.space_id) || teamScopes.has(note.space_id))
+  );
   if (unsynced.length === 0) return;
 
   useNoteStore.setState({ migration: { total: unsynced.length, done: 0 } });
@@ -1168,12 +1421,17 @@ export async function startMigration(): Promise<void> {
   const CHUNK_SIZE = 50;
 
   for (let i = 0; i < unsynced.length; i += CHUNK_SIZE) {
-    if (gen !== migrationGeneration) return;
+    if (gen !== migrationGeneration || !requestStillCurrent() || !syncService.canSync()) break;
     const chunk = unsynced.slice(i, i + CHUNK_SIZE);
     try {
-      const recorded = await recordNoteCreateAttempts(chunk.map((n) => n.client_note_id));
+      const recorded = await recordNoteCreateAttempts(
+        chunk.map((n) => n.client_note_id),
+        authGeneration
+      );
+      await assertAuthGenerationCurrent(authGeneration);
       const sendable = chunk.filter((n) => recorded.has(n.client_note_id));
       if (sendable.length === 0) continue;
+      if (gen !== migrationGeneration || !requestStillCurrent() || !syncService.canSync()) break;
       const { created } = await NotesService.batchCreate(
         sendable.map((n) => ({
           client_note_id: n.client_note_id,
@@ -1188,7 +1446,9 @@ export async function startMigration(): Promise<void> {
           audio_duration_seconds: n.audio_duration_seconds,
           created_at: n.created_at,
           updated_at: n.updated_at,
-        }))
+          ...(teamScopes.get(n.space_id) ?? privateScopes.get(n.space_id)),
+        })),
+        authGeneration
       );
       // A reset may invalidate the UI migration while the POST is in flight.
       // Still run every response through the atomic identity/snapshot guard so
@@ -1196,16 +1456,17 @@ export async function startMigration(): Promise<void> {
       await resolveRendererCloudNoteCreateBatch(
         sendable,
         created,
-        (cloudId) => NotesService.delete(cloudId),
-        // Migration POSTs intentionally omit transcript/diarization fields,
-        // folder mapping, and space scope. Adopt the id/base but leave the row
-        // pending so SyncService follows with the complete PATCH.
+        (cloudId) => NotesService.delete(cloudId, authGeneration),
+        // Migration POSTs intentionally omit transcript/diarization fields
+        // and folder mapping. Adopt the id/base but leave the row pending so
+        // SyncService follows with the complete PATCH.
         {
           settleIfUnchanged: false,
+          expectedAuthGeneration: authGeneration,
           // Starting a newer migration supersedes only this run's progress.
           // Both runs target the same account and idempotent cloud identity;
           // only an account reset makes the response an orphan to delete.
-          requestStillCurrent: () => accountGen === accountGeneration,
+          requestStillCurrent,
         }
       );
       if (gen !== migrationGeneration) return;

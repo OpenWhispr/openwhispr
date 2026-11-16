@@ -12,6 +12,7 @@ import {
 } from "../ui/dropdown-menu";
 import type { ConversationPreview } from "../../types/electron";
 import { subscribeAuthBoundary } from "../../lib/authRequestContext";
+import { isConversationInScope, resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
 import { useAgentWindowDrag } from "./useAgentWindowDrag";
 
 const CHAT_LIST_LIMIT = 50;
@@ -58,9 +59,17 @@ function ChatSwitcher({
         const show = (list: ConversationPreview[]): void => {
           if (request === requestRef.current) setChats(list);
         };
-        void window.electronAPI
-          ?.getAgentConversationsWithPreview?.(CHAT_LIST_LIMIT, 0, false)
-          .then((list) => show(list ?? []))
+        // As in the Chat list: chats about another workspace's notes stay out.
+        void resolveAssistantScopeSpaceIds()
+          .then(async (scopeSpaceIds) => {
+            const list = await window.electronAPI?.getAgentConversationsWithPreview?.(
+              CHAT_LIST_LIMIT,
+              0,
+              false,
+              scopeSpaceIds
+            );
+            show((list ?? []).filter((chat) => isConversationInScope(chat, scopeSpaceIds)));
+          })
           .catch(() => show([]));
       }}
     >

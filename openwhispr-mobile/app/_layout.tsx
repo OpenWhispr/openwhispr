@@ -37,6 +37,7 @@ import {
   refreshAppsFlyerTrackingAuthorization,
 } from '@/lib/appsflyer';
 import { initSyncTriggers } from '@/sync/syncEngine';
+import { initProductEvents } from '@/lib/productEvents';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
@@ -128,6 +129,7 @@ function RootLayout() {
 
   useEffect(() => {
     initSyncTriggers();
+    initProductEvents();
   }, []);
 
   // After an interactive sign-in (AuthScreen was shown, then auth completed),
