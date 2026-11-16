@@ -74,7 +74,7 @@ export function DownloadProgressBar({
       </div>
 
       <div
-        className="w-full rounded-full overflow-hidden bg-white/5 dark:bg-white/3"
+        className="w-full rounded-full overflow-hidden bg-white/5 dark:bg-text-primary/3"
         style={{ height: 4 }}
       >
         {indeterminate ? (

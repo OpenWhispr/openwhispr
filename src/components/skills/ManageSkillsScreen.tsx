@@ -53,10 +53,7 @@ export function ManageSkillsScreen({ onOpenSkill, onBack }: ManageSkillsScreenPr
       ) : (
         <SettingsPanel>
           {shown.map((skill) => (
-            <div
-              key={skill.name}
-              className="px-4 py-3 transition-colors hover:bg-text-primary/3 dark:hover:bg-white/3"
-            >
+            <div key={skill.name} className="px-4 py-3 transition-colors hover:bg-text-primary/3">
               <div className="flex items-center gap-3">
                 <button
                   type="button"

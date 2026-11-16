@@ -744,7 +744,7 @@ export default function TeamMembersPanel({
                 ) : (
                   <div
                     aria-hidden="true"
-                    className="h-10 animate-pulse rounded-lg bg-text-primary/5 dark:bg-white/5"
+                    className="h-10 animate-pulse rounded-lg bg-text-primary/5"
                   />
                 )}
               </div>
@@ -1051,7 +1051,7 @@ function PendingInvitations({
           >
             <span
               aria-hidden="true"
-              className="flex size-5 shrink-0 items-center justify-center rounded-full bg-text-primary/5 text-secondary dark:bg-white/6"
+              className="flex size-5 shrink-0 items-center justify-center rounded-full bg-text-primary/5 text-secondary"
             >
               <EnvelopePlus className="size-3" aria-hidden="true" />
             </span>

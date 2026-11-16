@@ -104,16 +104,14 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
                           "outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                           selected
                             ? "border-transparent bg-brand-solid/12 dark:bg-brand-solid/15"
-                            : "border-default hover:bg-surface-secondary/50 dark:border-white/10 dark:hover:bg-white/5"
+                            : "border-default hover:bg-surface-secondary/50"
                         )}
                       >
                         <span
                           aria-hidden="true"
                           className={cn(
                             "flex size-3.5 shrink-0 items-center justify-center rounded-full border",
-                            selected
-                              ? "border-brand-solid bg-brand-solid"
-                              : "border-hover dark:border-white/25"
+                            selected ? "border-brand-solid bg-brand-solid" : "border-hover"
                           )}
                         >
                           {selected && <span className="size-1.5 rounded-full bg-text-on-solid" />}

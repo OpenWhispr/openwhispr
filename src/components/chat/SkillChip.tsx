@@ -17,7 +17,7 @@ export function SkillChip({
   useEffect(() => setPlayKey(1), []);
 
   return (
-    <span className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border border-default bg-surface-primary ps-1 pe-1 text-xs text-primary dark:border-white/10">
+    <span className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border border-default bg-surface-primary ps-1 pe-1 text-xs text-primary">
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-solid/10 text-brand-solid">
         <SkillIcon size={12} playKey={playKey} />
       </span>

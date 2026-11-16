@@ -30,7 +30,7 @@ interface DictionaryToolbarProps {
 const SYNCED_LABEL_REFRESH_MS = 30_000;
 
 const ICON_BUTTON_CLASS =
-  "grid size-[26px] place-items-center rounded-md text-primary/50 transition-colors hover:bg-text-primary/5 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20 dark:hover:bg-white/6";
+  "grid size-[26px] place-items-center rounded-md text-primary/50 transition-colors hover:bg-text-primary/5 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20";
 
 function syncedLabel(
   lastSyncedAt: string | null,
@@ -122,7 +122,7 @@ export function DictionaryToolbar({
         className={cn(
           "relative flex h-7 shrink-0 items-center rounded-md border transition-[width,border-color,background-color] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
           searchOpen
-            ? "w-36 border-default/70 bg-surface-primary focus-within:border-brand-solid focus-within:ring-2 focus-within:ring-brand-solid/10 dark:border-white/10 dark:bg-surface-secondary @[640px]/dictionary:w-44"
+            ? "w-36 border-default/70 bg-surface-primary focus-within:border-brand-solid focus-within:ring-2 focus-within:ring-brand-solid/10 dark:bg-surface-secondary @[640px]/dictionary:w-44"
             : "w-7 border-transparent"
         )}
       >

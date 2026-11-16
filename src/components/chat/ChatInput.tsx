@@ -280,18 +280,18 @@ export function ChatInput({
             ? "min-h-12 bg-surface-primary shadow-sm dark:bg-surface-primary"
             : variant === "note"
               ? outlined
-                ? "min-h-12 bg-white/55 dark:bg-white/[0.035]"
+                ? "min-h-12 bg-surface-primary/55 dark:bg-text-primary/[0.035]"
                 : "min-h-12 bg-transparent"
               : variant === "default" && GLASS_SURFACE,
           // The outlined note composer draws an inset ring, which takes no room and sits where
           // the bar's outline was, so nothing in it moves as the chat opens.
           variant === "sidebar"
-            ? "border border-black/[0.08] dark:border-white/[0.08]"
+            ? "border border-default"
             : variant === "note"
               ? outlined
                 ? "border-0 ring-1 ring-inset ring-brand-solid/20 focus-within:ring-brand-solid/45 dark:ring-brand-solid/25 dark:focus-within:ring-brand-solid/50"
                 : "border-0"
-              : "border border-black/10 dark:border-white/14",
+              : "border border-default",
           variant === "sidebar"
             ? "transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
             : expands
@@ -309,8 +309,8 @@ export function ChatInput({
                 ? ""
                 : variant === "sidebar"
                   ? // The tray around it already frames it; a ring would read as a second border.
-                    "focus-within:border-black/15 dark:focus-within:border-white/15"
-                  : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-brand-solid/8")
+                    "focus-within:border-hover"
+                  : "focus-within:border-hover focus-within:ring-[3px] focus-within:ring-brand-solid/8")
         )}
       >
         {leadingRow && <div className="flex min-w-0 basis-full">{leadingRow}</div>}

@@ -128,7 +128,7 @@ export default function NoteRecordControl({
             )}
           >
             {isProcessing ? (
-              <Loader2 size={14} className="animate-spin text-white/90" />
+              <Loader2 size={14} className="animate-spin text-on-solid/90" />
             ) : (
               <Mic size={15} />
             )}

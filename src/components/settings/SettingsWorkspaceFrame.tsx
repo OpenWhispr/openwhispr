@@ -29,8 +29,8 @@ export default function SettingsWorkspaceFrame({
   if (status === "loading") {
     return (
       <div className="space-y-3">
-        <div className="h-6 w-32 rounded bg-text-primary/5 dark:bg-white/5 animate-pulse" />
-        <div className="h-24 rounded-lg bg-text-primary/5 dark:bg-white/5 animate-pulse" />
+        <div className="h-6 w-32 rounded bg-text-primary/5 animate-pulse" />
+        <div className="h-24 rounded-lg bg-text-primary/5 animate-pulse" />
       </div>
     );
   }

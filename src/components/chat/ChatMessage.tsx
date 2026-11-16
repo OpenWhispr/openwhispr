@@ -79,7 +79,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
         "border-s-2 transition-colors duration-300",
         isExecuting && "border-s-brand-solid/60",
         isCompleted && !isError && "border-s-text-secondary/20",
-        isClipboard && "border-s-emerald-500/50",
+        isClipboard && "border-s-green",
         isError && "border-s-red-solid/50"
       )}
     >
@@ -104,7 +104,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
             "shrink-0 transition-colors duration-300",
             isExecuting && "text-brand-solid/70",
             isCompleted && !isError && !isClipboard && "text-secondary/70",
-            isClipboard && "text-emerald-500/70",
+            isClipboard && "text-green-solid/70",
             isError && "text-red-solid/60"
           )}
         />
@@ -118,12 +118,10 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
           </div>
         ) : isClipboard ? (
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-emerald-600 dark:text-emerald-400/80">
-              {stepText}
-            </span>
+            <span className="text-[11px] text-green">{stepText}</span>
             <Check
               size={10}
-              className="text-emerald-500 shrink-0"
+              className="text-green-solid shrink-0"
               style={{ animation: "tool-check-pop 300ms ease-out both" }}
             />
           </div>
@@ -378,7 +376,7 @@ export const ChatMessage = memo(function ChatMessage({
           className={cn(
             "max-w-[80%] text-[13px] leading-relaxed",
             plain
-              ? "rounded-2xl rounded-ee-md bg-text-primary/[0.07] px-3.5 py-2 text-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.5)] dark:bg-white/[0.09] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
+              ? "rounded-2xl rounded-ee-md bg-text-primary/[0.07] px-3.5 py-2 text-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.5)] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
               : "rounded-lg rounded-ee-sm bg-brand-solid/90 px-3 py-2 text-on-solid"
           )}
         >
@@ -482,13 +480,13 @@ export const ChatMessage = memo(function ChatMessage({
               className={cn(
                 plain
                   ? // Always there in the note chat, not only on hover.
-                    "flex size-7 items-center justify-center rounded-full text-primary/45 hover:bg-text-primary/[0.07] hover:text-primary dark:hover:bg-white/[0.08] transition-colors duration-150"
+                    "flex size-7 items-center justify-center rounded-full text-primary/45 hover:bg-text-primary/[0.07] hover:text-primary transition-colors duration-150"
                   : "p-1 rounded-sm text-secondary/70 hover:text-primary hover:bg-text-primary/8 opacity-0 group-hover/msg:opacity-100 transition-all duration-150",
                 "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               )}
             >
               {copied ? (
-                <Check size={plain ? 15 : 12} className="text-emerald-500" />
+                <Check size={plain ? 15 : 12} className="text-green-solid" />
               ) : plain ? (
                 <CopyRounded size={15} />
               ) : (

@@ -780,7 +780,7 @@ function DictionaryPage({
         )}
         style={selectionActive ? { paddingBottom: selectionBarClearance } : undefined}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-dashed border-text-primary/10 pb-2 dark:border-white/10">
+        <div className="flex items-center justify-between gap-3 border-b border-dashed border-text-primary/10 pb-2">
           <h3 dir="auto" className="truncate text-[11px] font-semibold text-primary/45">
             {openEntry?.label} · {headerDetail}
           </h3>

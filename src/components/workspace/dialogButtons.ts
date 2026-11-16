@@ -18,7 +18,7 @@ export const SECONDARY_BUTTON = cn(
 export const FIELD_LABEL = "text-sm font-medium text-secondary";
 export const FIELD_GROUP = "flex flex-col gap-3";
 export const FIELD_CONTROL =
-  "input-inline h-[38px] w-full min-w-0 rounded-xl bg-surface-secondary px-3 text-base text-primary outline-none ring-1 ring-inset ring-black/[0.06] transition-shadow " +
+  "input-inline h-[38px] w-full min-w-0 rounded-xl bg-surface-secondary px-3 text-base text-primary outline-none ring-1 ring-inset ring-border-default transition-shadow " +
   "placeholder:text-secondary/70 focus-visible:ring-2 focus-visible:ring-focus/40 dark:bg-surface-secondary dark:ring-0 dark:focus-visible:ring-2 " +
   "aria-invalid:ring-2 aria-invalid:ring-red-solid/40 disabled:cursor-not-allowed disabled:opacity-50";
 export const FIELD_AREA = cn(FIELD_CONTROL, "h-auto min-h-[94px] resize-none py-2.5");
@@ -26,12 +26,12 @@ export const FIELD_AREA = cn(FIELD_CONTROL, "h-auto min-h-[94px] resize-none py-
 // A dialog's picker (the new owner): a rounded box with an up/down chevron, drawn on the card or
 // dialog around it.
 export const PICKER_TRIGGER =
-  "flex min-h-[38px] w-full items-center gap-2.5 rounded-xl bg-surface-secondary px-3 py-1.5 text-start text-sm text-primary outline-none ring-1 ring-inset ring-black/[0.06] transition-colors " +
+  "flex min-h-[38px] w-full items-center gap-2.5 rounded-xl bg-surface-secondary px-3 py-1.5 text-start text-sm text-primary outline-none ring-1 ring-inset ring-border-default transition-colors " +
   "hover:bg-surface-primary focus-visible:ring-2 focus-visible:ring-focus/40 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-secondary dark:ring-0 dark:hover:bg-surface-secondary";
 
 // The raised pill the design fills with surface-3: the active tab, the selection count and the bar's
 // buttons. The light theme's surface-3 is paler than the design's, so light mode darkens instead.
-export const RAISED_PILL = "bg-black/[0.07] dark:bg-surface-tertiary";
+export const RAISED_PILL = "bg-surface-tertiary";
 
 // The empty state's Create: a 34px raised pill, as the design draws it.
 const PILL_ACTION =

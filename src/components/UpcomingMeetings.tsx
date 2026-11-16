@@ -82,9 +82,9 @@ const ATTENDEE_COUNT_PILL_CLASS =
   "flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-surface-tertiary px-0.5 text-[9px] font-medium tabular-nums text-secondary ring-1 ring-surface-primary";
 
 const RSVP_DOT: Record<string, string> = {
-  accepted: "bg-green-500",
-  declined: "bg-red-400",
-  tentative: "bg-amber-400",
+  accepted: "bg-green-solid",
+  declined: "bg-red-solid",
+  tentative: "bg-amber-solid",
 };
 
 function AttendeePopover({
@@ -239,12 +239,10 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
         {isNow ? (
           <span className="mt-1 flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-green-500 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+              <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-green-solid opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-solid" />
             </span>
-            <span className="text-xs font-medium text-green-600 dark:text-green-400">
-              {t("upcoming.now")}
-            </span>
+            <span className="text-xs font-medium text-green">{t("upcoming.now")}</span>
           </span>
         ) : (
           <p className="mt-0.5 truncate text-xs tabular-nums text-secondary">{timeRange}</p>
@@ -300,7 +298,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
   return (
     <div
       className={cn(
-        "overflow-clip rounded-xl border border-default/70 bg-clip-padding dark:border-white/10",
+        "overflow-clip rounded-xl border border-default/70 bg-clip-padding",
         // Out on the grass the header goes quiet grey, so the lawn carries the colour.
         group.isToday && !rustle
           ? "bg-[image:var(--gradient-calendar-today)]"
@@ -310,7 +308,7 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
       <div
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium",
-          group.isToday && !rustle ? "calendar-today-header text-white" : "text-primary"
+          group.isToday && !rustle ? "calendar-today-header text-on-solid" : "text-primary"
         )}
       >
         <Calendar size={12} className="shrink-0" />

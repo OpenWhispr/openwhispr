@@ -88,7 +88,7 @@ export function OverviewAskSection({
                   disabled={agentState !== "idle"}
                   className={cn(
                     "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11px]",
-                    "border border-default/70 bg-surface-primary text-primary/55 shadow-sm dark:border-white/10",
+                    "border border-default/70 bg-surface-primary text-primary/55 shadow-sm",
                     "hover:bg-surface-tertiary hover:text-primary/80 disabled:pointer-events-none disabled:text-primary/30",
                     "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
                   )}

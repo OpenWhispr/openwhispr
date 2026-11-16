@@ -44,7 +44,7 @@ const TEXTAREA_CLASS = cn(
 );
 
 const ICON_BUTTON_CLASS =
-  "p-1 rounded-md text-secondary/70 hover:text-primary/70 hover:bg-text-primary/5 dark:hover:bg-white/6 transition-colors duration-150 disabled:opacity-30 disabled:pointer-events-none";
+  "p-1 rounded-md text-secondary/70 hover:text-primary/70 hover:bg-text-primary/5 transition-colors duration-150 disabled:opacity-30 disabled:pointer-events-none";
 
 export default function ActionManagerDialog({
   open,
@@ -214,7 +214,7 @@ export default function ActionManagerDialog({
             // Keep the draft selected until the save has finished.
             inert={isSaving}
             className={cn(
-              "w-56 shrink-0 border-e border-default dark:border-white/10 flex flex-col bg-surface-primary/50 dark:bg-surface-secondary/30",
+              "w-56 shrink-0 border-e border-default flex flex-col bg-surface-primary/50 dark:bg-surface-secondary/30",
               isSaving && "opacity-60"
             )}
           >
@@ -239,8 +239,8 @@ export default function ActionManagerDialog({
                 className={cn(
                   "p-1 rounded-md",
                   "text-secondary/70 hover:text-primary/70",
-                  "hover:bg-text-primary/5 dark:hover:bg-white/6",
-                  "active:bg-text-primary/8 dark:active:bg-white/8",
+                  "hover:bg-text-primary/5",
+                  "active:bg-text-primary/8",
                   "transition-colors duration-150"
                 )}
                 aria-label={t(
@@ -279,7 +279,7 @@ export default function ActionManagerDialog({
                           "transition-colors duration-150",
                           selectedId === action.id && !isCreating
                             ? "bg-accent-solid/8 dark:bg-accent-solid/10"
-                            : "hover:bg-text-primary/3 dark:hover:bg-white/3"
+                            : "hover:bg-text-primary/3"
                         )}
                       >
                         <Icon
@@ -304,7 +304,7 @@ export default function ActionManagerDialog({
                               {getActionName(action, t)}
                             </span>
                             {action.is_builtin === 1 && (
-                              <span className="text-[10px] font-medium px-1 py-px rounded bg-text-primary/5 dark:bg-white/6 text-secondary/70 shrink-0">
+                              <span className="text-[10px] font-medium px-1 py-px rounded bg-text-primary/5 text-secondary/70 shrink-0">
                                 {t("notes.actions.builtIn")}
                               </span>
                             )}
@@ -346,7 +346,7 @@ export default function ActionManagerDialog({
             {showEditor ? (
               <>
                 {/* Editor header — pe-12 clears the dialog close X button */}
-                <div className="flex items-center justify-between ps-5 pe-12 pt-4 pb-3 border-b border-default/70 dark:border-white/10">
+                <div className="flex items-center justify-between ps-5 pe-12 pt-4 pb-3 border-b border-default/70">
                   <span className="text-xs font-medium text-secondary/70">
                     {isTemplate
                       ? t(

@@ -8,14 +8,14 @@ import { cn } from "../lib/utils";
 // Two borderless boxes side by side, as the design draws them: the emoji tile's own 38px box and
 // the name's field. `input-inline` keeps the global input rules in index.css off the input.
 const BOX_CLASS =
-  "flex h-[38px] items-center rounded-xl bg-surface-secondary ring-1 ring-inset ring-black/[0.06] dark:bg-surface-secondary dark:ring-0";
+  "flex h-[38px] items-center rounded-xl bg-surface-secondary ring-1 ring-inset ring-border-default dark:bg-surface-secondary dark:ring-0";
 const BOX_EDITABLE_CLASS =
   "transition-shadow duration-200 focus-within:ring-2 focus-within:ring-focus/40 dark:focus-within:ring-2";
 
 const TILE_CLASS = "flex size-[38px] shrink-0 items-center justify-center rounded-xl";
 const TILE_EDITABLE_CLASS =
   "outline-none transition-colors hover:bg-text-primary/10 focus-visible:ring-2 focus-visible:ring-brand-solid/20 " +
-  "data-[state=open]:bg-text-primary/10 dark:hover:bg-white/10 dark:data-[state=open]:bg-white/10";
+  "data-[state=open]:bg-text-primary/10 dark:hover:bg-text-primary/10";
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 

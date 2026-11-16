@@ -105,7 +105,7 @@ export default function BatchQueueView({
             </Button>
           )}
         </div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-text-primary/8 dark:bg-white/10">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-text-primary/8">
           <div
             className="h-full rounded-full bg-brand-solid transition-[width] duration-500 ease-out"
             style={{ width: `${overallProgress}%` }}
@@ -113,7 +113,7 @@ export default function BatchQueueView({
         </div>
       </div>
 
-      <div className="max-h-[300px] divide-y divide-default/60 overflow-y-auto border-t border-default/60 dark:divide-white/10 dark:border-white/10">
+      <div className="max-h-[300px] divide-y divide-default/60 overflow-y-auto border-t border-default/60">
         {queue.map((item) => (
           <div
             key={item.id}
@@ -126,7 +126,7 @@ export default function BatchQueueView({
             <span className="flex-1 truncate text-primary/80">{item.name}</span>
 
             {item.status === "downloading" && (
-              <div className="h-1 w-16 overflow-hidden rounded-full bg-text-primary/8 dark:bg-white/10">
+              <div className="h-1 w-16 overflow-hidden rounded-full bg-text-primary/8">
                 <div
                   className={cn(
                     "h-full rounded-full bg-brand-solid transition-[width] duration-300",
@@ -185,7 +185,7 @@ export default function BatchQueueView({
       </div>
 
       {isProcessing && !allDone && (
-        <div className="flex justify-center border-t border-default/60 py-2 dark:border-white/10">
+        <div className="flex justify-center border-t border-default/60 py-2">
           <Button variant="ghost" size="sm" onClick={onCancelAll} className="rounded-full px-4">
             {t("notes.upload.cancelAll")}
           </Button>

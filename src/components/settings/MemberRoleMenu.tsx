@@ -83,7 +83,7 @@ export function MemberRoleMenu({
         aria-label={t("settingsPage.workspace.people.roleMenuLabel", {
           name: member.name || member.email,
         })}
-        className="inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-sm text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 active:bg-text-primary/8 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-text-primary/5 dark:hover:bg-white/5"
+        className="inline-flex h-7 items-center gap-1 rounded-lg px-1.5 text-sm text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 active:bg-text-primary/8 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-text-primary/5"
       >
         <span>{roleLabel}</span>
         {pending ? (

@@ -15,7 +15,7 @@ interface SlashCommandMenuProps {
 
 function Key({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-text-primary/[0.07] px-1 font-sans text-[10px] font-medium text-primary/65 shadow-[inset_0_-1px_0_rgb(0_0_0/0.08)] dark:bg-white/[0.08]">
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-text-primary/[0.07] px-1 font-sans text-[10px] font-medium text-primary/65 shadow-[inset_0_-1px_0_rgb(0_0_0/0.08)]">
       {children}
     </kbd>
   );
@@ -101,7 +101,7 @@ export default function SlashCommandMenu({
                 "transition-[background-color,color,translate] duration-200 ease-out",
                 "animate-[fade-in-up_0.3s_cubic-bezier(0.22,1,0.36,1)_backwards] motion-reduce:animate-none",
                 isActive
-                  ? "translate-x-1 bg-text-primary/[0.07] text-primary rtl:-translate-x-1 dark:bg-white/[0.08]"
+                  ? "translate-x-1 bg-text-primary/[0.07] text-primary rtl:-translate-x-1"
                   : "text-primary/70",
                 command.disabled ? "cursor-default opacity-40" : "cursor-pointer"
               )}
@@ -109,7 +109,7 @@ export default function SlashCommandMenu({
               <span
                 className={cn(
                   "flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-200",
-                  isActive ? "bg-text-primary/10 dark:bg-white/[0.12]" : "bg-text-primary/[0.06]"
+                  isActive ? "bg-text-primary/10" : "bg-text-primary/[0.06]"
                 )}
               >
                 <command.icon size={15} className="text-brand-solid" />
@@ -125,7 +125,7 @@ export default function SlashCommandMenu({
                 )}
               </span>
               {command.hint && (
-                <span className="shrink-0 rounded bg-text-primary/5 px-1 py-px text-[10px] font-medium text-secondary/70 dark:bg-white/6">
+                <span className="shrink-0 rounded bg-text-primary/5 px-1 py-px text-[10px] font-medium text-secondary/70">
                   {command.hint}
                 </span>
               )}

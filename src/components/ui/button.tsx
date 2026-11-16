@@ -65,7 +65,7 @@ const buttonVariants = cva(
           "border border-default/70",
           "hover:text-primary/80 hover:border-default hover:bg-text-primary/3",
           "active:scale-[0.98]",
-          "dark:border-white/10 dark:hover:bg-white/5 dark:hover:border-white/15",
+          "dark:border-text-primary/10 dark:hover:bg-text-primary/5 dark:hover:border-text-primary/15",
         ].join(" "),
 
         // Secondary — uses design tokens
@@ -75,7 +75,7 @@ const buttonVariants = cva(
           "border border-default/70",
           "hover:bg-surface-secondary",
           "active:scale-[0.98]",
-          "dark:text-primary/90 dark:bg-white/8 dark:border-white/10 dark:hover:bg-white/12",
+          "dark:text-primary/90 dark:bg-text-primary/8 dark:border-text-primary/10 dark:hover:bg-text-primary/12",
         ].join(" "),
 
         // Ghost — uses design tokens
@@ -84,7 +84,7 @@ const buttonVariants = cva(
           "text-primary",
           "hover:bg-surface-secondary",
           "active:scale-[0.98]",
-          "dark:text-primary/90 dark:hover:bg-white/8",
+          "dark:text-primary/90 dark:hover:bg-text-primary/8",
         ].join(" "),
 
         // Link — uses design tokens

@@ -200,7 +200,7 @@ export function ContainerOverview({
             {notes.length > 0 && (
               <button
                 onClick={onNewNote}
-                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-default/70 dark:border-white/10 text-xs font-medium text-primary/60 hover:text-primary/85 hover:border-default/70 hover:bg-text-primary/3 dark:hover:bg-white/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
+                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-default/70 text-xs font-medium text-primary/60 hover:text-primary/85 hover:border-default/70 hover:bg-text-primary/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               >
                 <Plus size={12} />
                 {t("notes.list.newNote")}
@@ -209,7 +209,7 @@ export function ContainerOverview({
             {canInvite && (
               <button
                 onClick={() => setShowInviteDialog(true)}
-                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-default/70 dark:border-white/10 text-xs font-medium text-primary/60 hover:text-primary/85 hover:border-default/70 hover:bg-text-primary/3 dark:hover:bg-white/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
+                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-default/70 text-xs font-medium text-primary/60 hover:text-primary/85 hover:border-default/70 hover:bg-text-primary/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               >
                 <UserPlus size={12} />
                 {t("notes.overview.invite")}
@@ -222,7 +222,7 @@ export function ContainerOverview({
           <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
         )}
         {notes.length > 0 && askSection}
-        <div className={notes.length > 0 ? "border-t border-default/70 dark:border-white/10" : ""}>
+        <div className={notes.length > 0 ? "border-t border-default/70" : ""}>
           <OverviewNoteList
             notes={notes}
             space={space}

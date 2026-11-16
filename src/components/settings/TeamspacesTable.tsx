@@ -279,7 +279,7 @@ function TeamspaceRow({
               aria-label={t("settingsPage.workspace.teamspaces.rowMenu.label", {
                 name: isolate(space.name),
               })}
-              className="inline-flex size-7 items-center justify-center rounded-md text-secondary outline-none transition-colors hover:bg-text-primary/5 hover:text-primary focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5 dark:hover:bg-white/5"
+              className="inline-flex size-7 items-center justify-center rounded-md text-secondary outline-none transition-colors hover:bg-text-primary/5 hover:text-primary focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5"
             >
               <MoreHorizontal className="size-4" aria-hidden="true" />
             </DropdownMenuTrigger>

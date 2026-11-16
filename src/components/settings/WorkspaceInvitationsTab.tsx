@@ -331,7 +331,7 @@ export default function WorkspaceInvitationsTab({
               aria-hidden="true"
               className={cn("flex h-14 items-center px-4", index > 0 && ROW_DIVIDER)}
             >
-              <div className="h-2.5 w-40 rounded bg-text-primary/5 dark:bg-white/5 animate-pulse" />
+              <div className="h-2.5 w-40 rounded bg-text-primary/5 animate-pulse" />
             </div>
           ))}
           <div role="status" className={cn("px-4 py-5 text-center", ROW_DIVIDER)}>
@@ -490,7 +490,7 @@ export default function WorkspaceInvitationsTab({
                         <DropdownMenuTrigger
                           disabled={resending || bulkResending}
                           aria-label={t("common.actions")}
-                          className="inline-flex h-7 items-center justify-center gap-1 rounded-lg px-1.5 text-sm text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 active:bg-text-primary/8 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-text-primary/5 dark:hover:bg-white/5"
+                          className="inline-flex h-7 items-center justify-center gap-1 rounded-lg px-1.5 text-sm text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 active:bg-text-primary/8 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-text-primary/5"
                         >
                           {resending ? (
                             <>

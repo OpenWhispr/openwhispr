@@ -112,8 +112,7 @@ interface LeaderboardSectionProps {
   ssoStarting: boolean;
 }
 
-const ERROR_CARD_CHROME =
-  "mt-6 rounded-2xl border border-default/70 bg-surface-primary/70 dark:border-white/10";
+const ERROR_CARD_CHROME = "mt-6 rounded-2xl border border-default/70 bg-surface-primary/70";
 
 function LeaderboardRetryCard({
   actionLabel,
@@ -855,7 +854,7 @@ export default function LeaderboardSection({
   return (
     <section
       data-leaderboard-state="board"
-      className="mt-6 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary/70 dark:border-white/10"
+      className="mt-6 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary/70"
     >
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-default/70 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">

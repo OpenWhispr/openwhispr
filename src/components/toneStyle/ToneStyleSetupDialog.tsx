@@ -109,7 +109,7 @@ function Pager({ step, total }: { step: number; total: number }) {
           key={index}
           className={cn(
             "h-2 rounded-full transition-all duration-300",
-            index + 1 === step ? "w-6 bg-brand-solid" : "w-2 bg-border-default dark:bg-white/15"
+            index + 1 === step ? "w-6 bg-brand-solid" : "w-2 bg-border-default"
           )}
         />
       ))}
@@ -206,7 +206,7 @@ export default function ToneStyleSetupDialog({
                     className={cn(
                       "flex h-[250px] flex-col gap-3 rounded-2xl border bg-surface-secondary/60 px-4.5 pb-4 text-start transition-colors",
                       category === "email" ? "pt-3.5" : "pt-7",
-                      "outline-none focus-visible:ring-2 focus-visible:ring-focus/30 dark:bg-white/5",
+                      "outline-none focus-visible:ring-2 focus-visible:ring-focus/30 dark:bg-text-primary/5",
                       selected
                         ? "border-brand-solid"
                         : "border-transparent shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:border-default"

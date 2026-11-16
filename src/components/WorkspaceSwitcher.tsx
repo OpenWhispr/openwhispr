@@ -30,9 +30,9 @@ import type { Workspace } from "../types/electron";
 const InviteTeammateDialog = React.lazy(() => import("./InviteTeammateDialog"));
 
 const triggerClass =
-  "group flex items-center gap-2.5 w-full h-10 px-2 rounded-md text-start outline-none hover:bg-text-primary/4 dark:hover:bg-white/4 active:bg-text-primary/6 data-[state=open]:bg-text-primary/5 dark:data-[state=open]:bg-white/6 focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors duration-150";
+  "group flex items-center gap-2.5 w-full h-10 px-2 rounded-md text-start outline-none hover:bg-text-primary/4 active:bg-text-primary/6 data-[state=open]:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors duration-150";
 const compactTriggerClass =
-  "group flex items-center justify-center w-9 h-9 rounded-md outline-none hover:bg-text-primary/4 dark:hover:bg-white/4 active:bg-text-primary/6 data-[state=open]:bg-text-primary/5 dark:data-[state=open]:bg-white/6 focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors duration-150";
+  "group flex items-center justify-center w-9 h-9 rounded-md outline-none hover:bg-text-primary/4 active:bg-text-primary/6 data-[state=open]:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors duration-150";
 const nameClass = "flex-1 min-w-0 truncate text-sm font-medium text-primary";
 const itemClass = "gap-3 px-2 py-2 text-[13px] rounded-lg";
 const chevronClass =
@@ -147,10 +147,8 @@ export default function WorkspaceSwitcher({
         className={cn("flex items-center gap-2.5 h-10 px-2", compact && "justify-center")}
         aria-hidden="true"
       >
-        <span className="w-7 h-7 rounded-full bg-text-primary/6 dark:bg-white/8 animate-pulse" />
-        {!compact && (
-          <span className="h-2.5 w-20 rounded bg-text-primary/6 dark:bg-white/8 animate-pulse" />
-        )}
+        <span className="w-7 h-7 rounded-full bg-text-primary/6 animate-pulse" />
+        {!compact && <span className="h-2.5 w-20 rounded bg-text-primary/6 animate-pulse" />}
       </div>
     );
   }
@@ -298,7 +296,7 @@ export default function WorkspaceSwitcher({
           {state.canInvite && (
             <DropdownMenuItem
               onSelect={() => setInvite({ workspace: current, afterCreate: false })}
-              className="mx-1 mb-1.5 justify-center gap-1.5 rounded-lg py-2 text-[13px] text-primary/80 bg-text-primary/5 dark:bg-white/6 focus:bg-text-primary/8 dark:focus:bg-white/10"
+              className="mx-1 mb-1.5 justify-center gap-1.5 rounded-lg py-2 text-[13px] text-primary/80 bg-text-primary/5 focus:bg-text-primary/8"
             >
               <UserPlus size={14} />
               {t("workspaces.switcher.invitePeople")}

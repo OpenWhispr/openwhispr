@@ -36,7 +36,7 @@ interface InsightsViewProps {
 const LeaderboardView = lazy(() => import("./LeaderboardView"));
 
 const ACTIVITY_INTENSITY_CLASSES = [
-  "bg-text-primary/6 dark:bg-white/6",
+  "bg-text-primary/6",
   "bg-brand-solid/25",
   "bg-brand-solid/45",
   "bg-brand-solid/70",
@@ -209,7 +209,7 @@ function MetricCard({
   largeValue?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-default/70 dark:border-white/10 bg-surface-primary/70 p-4">
+    <div className="rounded-xl border border-default/70 bg-surface-primary/70 p-4">
       <div className="flex items-center gap-2 text-secondary">
         <Icon size={14} />
         <span className="text-xs">{label}</span>
@@ -280,7 +280,7 @@ function UsageDashboard({ summary }: { summary: AnalyticsSummary | null }) {
         />
       </div>
 
-      <div className="mt-5 rounded-2xl border border-default/70 bg-surface-primary/70 px-5 py-2.5 dark:border-white/10">
+      <div className="mt-5 rounded-2xl border border-default/70 bg-surface-primary/70 px-5 py-2.5">
         <h2 className="text-base font-medium text-primary">{t("insights.activity")}</h2>
         <div className="mt-2">
           <Heatmap daily={summary?.daily ?? null} />
@@ -447,9 +447,9 @@ function YourUsage({
   return (
     <>
       {!dataRetentionEnabled && (
-        <div className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 px-3.5 py-2.5 flex items-center gap-2.5">
-          <span className="text-amber-600 dark:text-amber-400 shrink-0 text-sm">⊘</span>
-          <p className="text-xs text-amber-700 dark:text-amber-300/90 leading-relaxed">
+        <div className="mb-5 rounded-lg border border-amber bg-amber-surface px-3.5 py-2.5 flex items-center gap-2.5">
+          <span className="text-amber shrink-0 text-sm">⊘</span>
+          <p className="text-xs text-amber leading-relaxed">
             {t("insights.dataRetentionDisabled")}
           </p>
         </div>

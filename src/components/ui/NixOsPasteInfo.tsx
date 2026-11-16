@@ -30,9 +30,9 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span dir="ltr" className="inline-flex items-center gap-1 text-xs">
       {ok ? (
-        <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
+        <CircleCheck className="h-3.5 w-3.5 text-green-solid" />
       ) : (
-        <CircleX className="h-3.5 w-3.5 text-red-500" />
+        <CircleX className="h-3.5 w-3.5 text-red-solid" />
       )}
       <span className="font-mono">{label}</span>
     </span>

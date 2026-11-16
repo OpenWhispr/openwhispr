@@ -45,7 +45,7 @@ export function LineNumberedTextarea({
       <div
         ref={gutter}
         aria-hidden="true"
-        className="select-none overflow-hidden border-e border-default/60 dark:border-white/8 bg-text-primary/3 dark:bg-white/3 pt-2 pb-3.5 ps-3 pe-2 text-end font-mono text-[11px] leading-5 text-secondary/50 tabular-nums"
+        className="select-none overflow-hidden border-e border-default/60 bg-text-primary/3 pt-2 pb-3.5 ps-3 pe-2 text-end font-mono text-[11px] leading-5 text-secondary/50 tabular-nums"
       >
         {Array.from({ length: lineCount }, (_, index) => (
           <div key={index}>{index + 1}</div>

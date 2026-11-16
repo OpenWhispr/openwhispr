@@ -236,10 +236,10 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
       />
       <div className="flex items-center justify-between pt-1.5">
         <div dir="ltr" className="flex items-center gap-0.5">
-          <kbd className="rounded border border-default/70 bg-surface-secondary/40 px-1 py-px font-mono text-[10px] leading-tight text-secondary/70 dark:border-white/10">
+          <kbd className="rounded border border-default/70 bg-surface-secondary/40 px-1 py-px font-mono text-[10px] leading-tight text-secondary/70">
             {getCachedPlatform() === "darwin" ? "⌘" : "Ctrl"}
           </kbd>
-          <kbd className="rounded border border-default/70 bg-surface-secondary/40 px-1 py-px font-mono text-[10px] leading-tight text-secondary/70 dark:border-white/10">
+          <kbd className="rounded border border-default/70 bg-surface-secondary/40 px-1 py-px font-mono text-[10px] leading-tight text-secondary/70">
             ⏎
           </kbd>
         </div>
@@ -287,7 +287,7 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
             <h3 className="text-xs font-semibold text-primary/45">
               {t("dictionary.snippets.title")}
             </h3>
-            <div className="mt-2.5 border-t border-dashed border-text-primary/10 dark:border-white/10" />
+            <div className="mt-2.5 border-t border-dashed border-text-primary/10" />
           </>
         )}
 
@@ -323,7 +323,7 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
             {visibleSnippets.map((snippet) => (
               <li
                 key={snippet.trigger}
-                className="group flex items-center gap-2 h-9 border-b border-text-primary/4 dark:border-white/10 last:border-b-0"
+                className="group flex items-center gap-2 h-9 border-b border-text-primary/4 last:border-b-0"
               >
                 <div className="flex-1 min-w-0 flex items-center gap-2">
                   <span dir="auto" className="text-xs text-primary/60 shrink-0">

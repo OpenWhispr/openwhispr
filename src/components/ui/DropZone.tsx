@@ -71,10 +71,10 @@ export function DropZone({
         "transition-[background-color,border-color,transform] duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         disabled
-          ? "cursor-not-allowed border-default bg-surface-primary/50 opacity-50 dark:border-white/15 dark:bg-surface-primary/60"
+          ? "cursor-not-allowed border-default bg-surface-primary/50 opacity-50 dark:bg-surface-primary/60"
           : showDragOver
             ? "cursor-pointer scale-[1.01] border-brand-solid/60 bg-brand-solid/5 dark:bg-brand-solid/10"
-            : "cursor-pointer border-default bg-surface-primary/50 hover:border-brand-solid/40 hover:bg-brand-solid/5 dark:border-white/15 dark:bg-surface-primary/60 dark:hover:bg-brand-solid/10",
+            : "cursor-pointer border-default bg-surface-primary/50 hover:border-brand-solid/40 hover:bg-brand-solid/5 dark:bg-surface-primary/60 dark:hover:bg-brand-solid/10",
         className
       )}
       style={showDragOver ? { animation: "drag-pulse 1.5s ease-in-out infinite" } : undefined}

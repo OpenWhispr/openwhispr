@@ -37,20 +37,17 @@ const COLOR_CONFIG: Record<
   purple: {
     selected:
       "border-brand-solid/30 bg-brand-solid/8 dark:bg-brand-solid/6 dark:border-brand-solid/20 shadow-[0_0_0_1px_oklch(0.62_0.22_260/0.12),0_0_10px_-3px_oklch(0.62_0.22_260/0.18)]",
-    default:
-      "border-default bg-surface-secondary hover:border-hover hover:bg-surface-secondary dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
+    default: "border-default bg-surface-secondary hover:border-hover hover:bg-surface-secondary",
   },
   blue: {
     selected:
       "border-brand-solid/30 bg-brand-solid/10 dark:bg-brand-solid/6 shadow-[0_0_0_1px_oklch(0.62_0.22_260/0.15),0_0_12px_-3px_oklch(0.62_0.22_260/0.2)]",
-    default:
-      "border-default bg-surface-secondary hover:border-hover hover:bg-surface-secondary dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
+    default: "border-default bg-surface-secondary hover:border-hover hover:bg-surface-secondary",
   },
 };
 
 // The default card without its hover lift: a legacy card can't be picked.
-const LEGACY_CARD_CLASS =
-  "border-default bg-surface-secondary dark:border-white/10 dark:bg-white/3";
+const LEGACY_CARD_CLASS = "border-default bg-surface-secondary";
 
 interface ModelCardProps {
   model: ModelCardOption;
@@ -103,7 +100,7 @@ export function ModelCard({
         : "bg-green-solid shadow-[0_0_4px_rgba(34,197,94,0.5)]";
     }
     if (isDownloading) {
-      return "bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)]";
+      return "bg-amber-solid shadow-[0_0_4px_rgba(245,158,11,0.5)]";
     }
     return "bg-text-secondary/20";
   };

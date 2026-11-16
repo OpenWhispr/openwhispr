@@ -72,7 +72,7 @@ export function LeaderboardBoardSkeleton() {
 export default function LeaderboardSkeleton() {
   const { t } = useTranslation();
   return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary/70 dark:border-white/10">
+    <section className="mt-6 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary/70">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-default/70 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <Skeleton className="size-9 shrink-0 rounded-lg" />

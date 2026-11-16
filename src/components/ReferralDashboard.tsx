@@ -441,7 +441,7 @@ export function ReferralDashboard() {
                     className={cn(
                       "shrink-0 h-8 px-3.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-[background-color,color,transform] duration-200 active:scale-[0.97]",
                       copied
-                        ? "bg-emerald-500/15 text-emerald-400/80"
+                        ? "bg-green-surface text-green-solid/80"
                         : "bg-text-primary/7 text-primary/55 border border-text-primary/5 hover:bg-text-primary/12 hover:text-primary/90"
                     )}
                   >
@@ -533,8 +533,8 @@ export function ReferralDashboard() {
                           </div>
                           {isComplete ? (
                             <div className="flex items-center gap-1 ms-2 shrink-0">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-400/80" />
-                              <span className="text-xs text-emerald-400/80 font-medium">
+                              <CheckCircle2 className="w-3 h-3 text-green-solid/80" />
+                              <span className="text-xs text-green-solid/80 font-medium">
                                 {t("referral.friends.completed")}
                               </span>
                             </div>
@@ -548,7 +548,7 @@ export function ReferralDashboard() {
                           <div
                             className={cn(
                               "h-full rounded-full transition-[width] duration-500",
-                              isComplete ? "bg-emerald-400/60" : "bg-text-primary/20"
+                              isComplete ? "bg-green-solid/60" : "bg-text-primary/20"
                             )}
                             style={{ width: `${progress}%` }}
                           />

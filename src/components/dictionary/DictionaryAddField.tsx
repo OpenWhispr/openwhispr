@@ -131,7 +131,7 @@ export function DictionaryAddField({
   return (
     <div
       className={cn(
-        "flex h-9 items-center gap-2 rounded-lg border border-default/70 bg-surface-primary ps-3 pe-1.5 transition-colors focus-within:border-brand-solid focus-within:ring-2 focus-within:ring-brand-solid/10 dark:border-white/10 dark:bg-surface-secondary",
+        "flex h-9 items-center gap-2 rounded-lg border border-default/70 bg-surface-primary ps-3 pe-1.5 transition-colors focus-within:border-brand-solid focus-within:ring-2 focus-within:ring-brand-solid/10 dark:bg-surface-secondary",
         disabled && "opacity-60"
       )}
     >
@@ -194,7 +194,7 @@ export function DictionaryAddField({
             type="button"
             disabled={disabled}
             aria-label={t("dictionary.shared.add.chooseList")}
-            className="flex h-6 max-w-48 shrink-0 items-center gap-1 rounded-[5px] border border-text-primary/8 bg-text-primary/3 px-2 text-[11px] text-primary/80 transition-colors enabled:hover:bg-text-primary/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20 dark:border-white/8 dark:bg-white/4"
+            className="flex h-6 max-w-48 shrink-0 items-center gap-1 rounded-[5px] border border-text-primary/8 bg-text-primary/3 px-2 text-[11px] text-primary/80 transition-colors enabled:hover:bg-text-primary/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20"
           >
             <span dir="auto" className="truncate">
               {t("dictionary.shared.add.to", { list: targetLabel })}
@@ -217,7 +217,7 @@ export function DictionaryAddField({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="h-4 w-px bg-text-primary/10 dark:bg-white/8" />
+      <div className="h-4 w-px bg-text-primary/10" />
       {importMenu ?? (
         <button
           type="button"

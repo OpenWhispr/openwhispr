@@ -16,11 +16,11 @@ export default function ProcessingModeSelector({
   const { t } = useTranslation();
   return (
     <div
-      className={`relative flex p-0.5 rounded-lg bg-white/5 dark:bg-white/3 border border-white/10 dark:border-white/10 ${className}`}
+      className={`relative flex p-0.5 rounded-lg bg-white/5 dark:bg-text-primary/3 border border-white/10 dark:border-text-primary/10 ${className}`}
     >
       {/* Sliding indicator */}
       <div
-        className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-white/10 dark:bg-white/8 border border-white/10 transition-transform duration-200 ease-out ${
+        className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-white/10 dark:bg-text-primary/8 border border-white/10 transition-transform duration-200 ease-out ${
           useLocalWhisper
             ? "translate-x-[calc(100%+4px)] rtl:-translate-x-[calc(100%+4px)]"
             : "translate-x-0"
@@ -36,7 +36,7 @@ export default function ProcessingModeSelector({
         <Cloud className="w-4 h-4" />
         <span className="text-sm font-medium">{t("common.cloud")}</span>
         {!useLocalWhisper && (
-          <span className="text-xs text-emerald-500 font-medium">{t("common.fast")}</span>
+          <span className="text-xs text-green-solid font-medium">{t("common.fast")}</span>
         )}
       </button>
 

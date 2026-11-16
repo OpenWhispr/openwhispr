@@ -332,7 +332,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
           </DialogHeader>
           <div
             dir="ltr"
-            className="rounded-md border border-default/70 bg-text-primary/4 dark:bg-white/4 p-3 font-mono text-xs break-all"
+            className="rounded-md border border-default/70 bg-text-primary/4 p-3 font-mono text-xs break-all"
           >
             {newKey?.key}
           </div>

@@ -86,7 +86,7 @@ export default function ToneStyleBanner({
   return (
     <div
       ref={bannerRef}
-      className="relative mb-3 flex items-center gap-4 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary px-5 py-5 dark:border-white/10 dark:bg-surface-primary"
+      className="relative mb-3 flex items-center gap-4 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary px-5 py-5 dark:bg-surface-primary"
     >
       <BannerDecoration showLine={showLine} />
       <div className="relative min-w-0 flex-1">

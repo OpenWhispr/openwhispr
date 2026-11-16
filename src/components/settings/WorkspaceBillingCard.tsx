@@ -117,9 +117,9 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
           className={
             "text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wide " +
             (workspace.status === "active" || workspace.status === "trialing"
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              ? "bg-green-surface text-green"
               : workspace.status === "past_due"
-                ? "bg-amber-500/12 text-amber-600 dark:text-amber-400"
+                ? "bg-amber-surface text-amber"
                 : "bg-text-primary/8 text-primary/65")
           }
         >
@@ -154,7 +154,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
             {seatsUsed} / {seatsTotal}
           </span>
         </div>
-        <div className="h-1.5 rounded-full bg-text-primary/5 dark:bg-white/5 overflow-hidden">
+        <div className="h-1.5 rounded-full bg-text-primary/5 overflow-hidden">
           <div
             className="h-full bg-brand-solid/70 dark:bg-brand-solid/80"
             style={{ width: `${pct}%` }}

@@ -81,7 +81,7 @@ export function OverviewNoteList({
               <button
                 key={note.id}
                 onClick={() => onOpenNote(note.id)}
-                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-md text-start hover:bg-text-primary/4 dark:hover:bg-white/4 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
+                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-md text-start hover:bg-text-primary/4 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               >
                 <FileText size={14} className="text-primary/45 dark:text-primary/45 shrink-0" />
                 <span className="text-[13px] text-primary/85 truncate flex-1">

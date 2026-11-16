@@ -155,7 +155,7 @@ function LocalModelCard({
               }`}
             />
           ) : isDownloading ? (
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)] animate-[spinner-rotate_1s_linear_infinite]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-solid shadow-[0_0_4px_rgba(245,158,11,0.5)] animate-[spinner-rotate_1s_linear_infinite]" />
           ) : (
             <div className="w-1.5 h-1.5 rounded-full bg-text-secondary/20" />
           )}
@@ -386,7 +386,7 @@ interface ModeToggleProps {
 function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
   const { t } = useTranslation();
   return (
-    <div className="relative flex p-0.5 rounded-lg bg-surface-secondary/80 backdrop-blur-xl dark:bg-surface-secondary border border-default/70 dark:border-white/10 shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark)">
+    <div className="relative flex p-0.5 rounded-lg bg-surface-secondary/80 backdrop-blur-xl dark:bg-surface-secondary border border-default/70 shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark)">
       <div
         className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-surface-primary border border-default/70 dark:border-default shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark) transition-transform duration-200 ease-out ${
           useLocalWhisper

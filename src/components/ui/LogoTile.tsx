@@ -11,7 +11,7 @@ export function LogoTile({ src, alt, monochrome, className }: LogoTileProps) {
   return (
     <div
       className={cn(
-        "w-9 h-9 rounded-lg bg-white dark:bg-surface-tertiary shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10 flex items-center justify-center shrink-0",
+        "w-9 h-9 rounded-lg bg-surface-primary dark:bg-surface-tertiary shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-text-primary/10 flex items-center justify-center shrink-0",
         className
       )}
     >

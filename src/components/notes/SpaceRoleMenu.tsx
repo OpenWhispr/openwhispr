@@ -28,7 +28,7 @@ const ROLE_ICON: Record<TeamRole, IconComponent> = { member: User, admin: UserSe
 const TRIGGER_CLASS =
   "-ms-2 inline-flex h-7 max-w-full items-center gap-1 rounded-md px-2 text-sm text-primary outline-none transition-colors " +
   "hover:bg-text-primary/5 focus-visible:ring-2 focus-visible:ring-focus/40 data-[state=open]:bg-text-primary/5 " +
-  "disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent dark:hover:bg-white/5";
+  "disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent dark:hover:bg-text-primary/5";
 
 const ITEM_CLASS =
   "items-start gap-2.5 rounded-lg px-2.5 py-2 ps-2.5 pe-2.5 data-[state=checked]:bg-surface-secondary focus:bg-surface-secondary " +

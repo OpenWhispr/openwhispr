@@ -90,7 +90,7 @@ export function DictionaryListPicker({
           <button
             type="button"
             aria-label={selectedLabel}
-            className="me-1 flex h-7 min-w-0 max-w-44 items-center gap-2 rounded-md border border-default/70 bg-surface-primary px-2 text-xs text-primary transition-colors hover:border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20 dark:border-white/10 dark:bg-surface-secondary"
+            className="me-1 flex h-7 min-w-0 max-w-44 items-center gap-2 rounded-md border border-default/70 bg-surface-primary px-2 text-xs text-primary transition-colors hover:border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20 dark:bg-surface-secondary"
           >
             <span dir="auto" className="min-w-0 truncate">
               {selectedLabel}

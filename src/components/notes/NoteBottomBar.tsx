@@ -159,10 +159,10 @@ export default function NoteBottomBar({
               : cn(
                   "inset-0 rounded-3xl",
                   isRecording ? RECORDING_SURFACE : "bg-surface-primary shadow-(--shadow-glass)",
-                  "group-hover/chat:border-black/15 dark:group-hover/chat:border-white/22"
+                  "group-hover/chat:border-hover"
                 ),
-            "border-black/[0.08] dark:border-white/12",
-            "group-focus-within/chat:border-black/15 group-focus-within/chat:ring-[3px] group-focus-within/chat:ring-brand-solid/8 dark:group-focus-within/chat:border-white/22",
+            "border-default",
+            "group-focus-within/chat:border-hover group-focus-within/chat:ring-[3px] group-focus-within/chat:ring-brand-solid/8",
             hideInput ? "pointer-events-none opacity-0" : "pointer-events-auto"
           )}
         />

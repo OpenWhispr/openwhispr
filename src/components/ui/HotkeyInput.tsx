@@ -653,7 +653,7 @@ export function HotkeyInput({
         onMouseDown={handleMouseDown}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        className="absolute inset-0 z-10 cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20"
+        className="absolute inset-0 z-10 cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-focus/20"
       >
         <span className="sr-only">
           {validationWarning ??
@@ -724,9 +724,7 @@ export function HotkeyInput({
             {validationWarning && (
               <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-md bg-amber-solid/8 border border-amber-solid/20 dark:bg-amber-solid/12 dark:border-amber-solid/25">
                 <AlertTriangle className="w-3 h-3 text-amber-solid shrink-0" />
-                <span className="text-xs text-amber-solid dark:text-amber-400">
-                  {validationWarning}
-                </span>
+                <span className="text-xs text-amber-solid">{validationWarning}</span>
               </div>
             )}
           </div>
@@ -838,9 +836,7 @@ export function HotkeyInput({
             {validationWarning && (
               <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1.5 rounded-md bg-amber-solid/8 border border-amber-solid/20 dark:bg-amber-solid/12 dark:border-amber-solid/25">
                 <AlertTriangle className="w-3 h-3 text-amber-solid shrink-0" />
-                <span className="text-xs text-amber-solid dark:text-amber-400">
-                  {validationWarning}
-                </span>
+                <span className="text-xs text-amber-solid">{validationWarning}</span>
               </div>
             )}
           </>

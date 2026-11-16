@@ -111,9 +111,7 @@ export function ShareWordsPopover({
                 onToggle={() => toggle(option.target)}
                 className={cn(
                   "h-8 w-full gap-2 px-2 text-start text-xs transition-colors",
-                  option.alreadyShared
-                    ? "opacity-45"
-                    : "hover:bg-text-primary/5 dark:hover:bg-white/6"
+                  option.alreadyShared ? "opacity-45" : "hover:bg-text-primary/5"
                 )}
               >
                 <span dir="auto" className="min-w-0 flex-1 truncate text-primary/85">
@@ -128,7 +126,7 @@ export function ShareWordsPopover({
             );
           })}
         </div>
-        <div className="mt-1 flex items-center justify-between gap-2 border-t border-text-primary/8 px-2 pb-0.5 pt-2 dark:border-white/8">
+        <div className="mt-1 flex items-center justify-between gap-2 border-t border-text-primary/8 px-2 pb-0.5 pt-2">
           {nothingShareable ? (
             <span role="alert" className="min-w-0 text-[10px] leading-snug text-red-solid">
               {t("dictionary.shared.notTermLike")}

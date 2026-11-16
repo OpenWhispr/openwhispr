@@ -94,7 +94,7 @@ function RowActionButton({ action }: { action: RowAction }): ReactElement {
           "grid size-6 place-items-center rounded-[5px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20",
           action.destructive
             ? "text-red-solid/80 hover:bg-red-solid/10 hover:text-red-solid"
-            : "text-primary/55 hover:bg-text-primary/6 hover:text-primary/85 dark:hover:bg-white/8"
+            : "text-primary/55 hover:bg-text-primary/6 hover:text-primary/85"
         )}
       >
         {action.icon}
@@ -104,7 +104,7 @@ function RowActionButton({ action }: { action: RowAction }): ReactElement {
 }
 
 const BADGE_CLASS =
-  "max-w-32 truncate rounded-[4px] bg-text-primary/6 px-1.5 py-px text-[10px] text-primary/55 dark:bg-white/8";
+  "max-w-32 truncate rounded-[4px] bg-text-primary/6 px-1.5 py-px text-[10px] text-primary/55";
 
 function RowMeta({ row }: { row: DictionaryRow }): ReactElement | null {
   const { t } = useTranslation();
@@ -449,11 +449,9 @@ export function DictionaryWordList({
         }
         className={cn(
           "group relative -mx-2 flex h-[38px] items-center gap-2 rounded-md px-2",
-          index < rows.length - 1 && "border-b border-text-primary/4 dark:border-white/6",
+          index < rows.length - 1 && "border-b border-text-primary/4",
           virtualized && "absolute inset-x-0 top-0",
-          selected
-            ? "bg-brand-solid/8 dark:bg-brand-solid/12"
-            : "hover:bg-text-primary/[0.025] dark:hover:bg-white/[0.03]"
+          selected ? "bg-brand-solid/8 dark:bg-brand-solid/12" : "hover:bg-text-primary/[0.025]"
         )}
       >
         {selection && (

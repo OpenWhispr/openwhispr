@@ -1117,12 +1117,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           <p
             id={uploadRestrictionId}
             role="status"
-            className="mb-5 flex items-center justify-center gap-2 rounded-lg border border-amber-solid/20 bg-amber-solid/8 px-4 py-3 text-sm text-amber-700 dark:bg-amber-solid/10 dark:text-amber-solid/90"
+            className="mb-5 flex items-center justify-center gap-2 rounded-lg border border-amber bg-amber-surface px-4 py-3 text-sm text-amber"
           >
-            <AlertTriangle
-              aria-hidden="true"
-              className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-amber-solid"
-            />
+            <AlertTriangle aria-hidden="true" className="w-3.5 h-3.5 shrink-0 text-amber" />
             {t(uploadChoiceRefusal?.messageKey ?? uploadRestrictionKey(policyState))}
           </p>
         )}
@@ -1143,11 +1140,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             />
 
             <div className="my-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-border-default/70 dark:bg-white/10" />
+              <div className="h-px flex-1 bg-border-default/70" />
               <span className="text-xs font-medium uppercase tracking-wider text-secondary/70">
                 {t("notes.upload.orDivider")}
               </span>
-              <div className="h-px flex-1 bg-border-default/70 dark:bg-white/10" />
+              <div className="h-px flex-1 bg-border-default/70" />
             </div>
 
             {urlExpanded && uploadFeatureAllowed ? (
@@ -1398,12 +1395,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         )}
 
         {(state === "idle" || state === "selected") && (
-          <div
-            className={cn(
-              CARD_SURFACE_CLASS,
-              "mt-5 divide-y divide-default/60 dark:divide-white/10"
-            )}
-          >
+          <div className={cn(CARD_SURFACE_CLASS, "mt-5 divide-y divide-default/60")}>
             <div className="flex items-center gap-4 px-5 py-4">
               <div className="flex min-w-0 flex-1 items-start gap-3">
                 <Users size={16} className="mt-0.5 shrink-0 text-primary/45" />
@@ -1567,7 +1559,7 @@ function ProgressWaveform() {
 // null = size unknown (no content-length): pulse a full bar instead of sitting on an empty one.
 function ProgressBar({ percent }: { percent: number | null }) {
   return (
-    <div className="mb-4 h-1 w-full max-w-xs overflow-hidden rounded-full bg-text-primary/8 dark:bg-white/10">
+    <div className="mb-4 h-1 w-full max-w-xs overflow-hidden rounded-full bg-text-primary/8">
       <div
         className={cn(
           "h-full rounded-full bg-brand-solid transition-[width] duration-500 ease-out",

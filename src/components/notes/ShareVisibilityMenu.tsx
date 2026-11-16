@@ -41,9 +41,9 @@ export default function ShareVisibilityMenu({
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium",
-            "bg-text-primary/4 dark:bg-white/5 text-primary/80",
-            "hover:bg-text-primary/8 dark:hover:bg-white/10",
-            "active:bg-text-primary/12 dark:active:bg-white/15",
+            "bg-text-primary/4 text-primary/80",
+            "hover:bg-text-primary/8",
+            "active:bg-text-primary/12",
             "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus",
             "disabled:opacity-50 disabled:pointer-events-none transition-colors"
           )}

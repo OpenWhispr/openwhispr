@@ -17,7 +17,7 @@ export function SourceNoteBar({
   const title = note.title || t("notes.list.untitledNote");
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-default/70 bg-surface-secondary ps-4 pe-3 dark:border-white/8">
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-default/70 bg-surface-secondary ps-4 pe-3">
       <span
         aria-hidden="true"
         className={cn(

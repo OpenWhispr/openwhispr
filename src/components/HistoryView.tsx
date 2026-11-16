@@ -94,7 +94,7 @@ export default function HistoryView({
   const discardedToggle = (
     <button
       onClick={onToggleDiscarded}
-      className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-secondary/70 hover:!text-primary hover:!bg-black/5 dark:hover:!bg-white/5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 transition-all duration-200"
+      className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-secondary/70 hover:!text-primary hover:!bg-text-primary/5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 transition-all duration-200"
     >
       <Archive size={11} />
       <span>
@@ -148,7 +148,7 @@ export default function HistoryView({
               setAiCTADismissed(true);
             }}
             aria-label={t("common.close")}
-            className="absolute top-2 end-2 p-1 rounded-sm text-secondary hover:text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="absolute top-2 end-2 p-1 rounded-sm text-secondary hover:text-primary hover:bg-state-hover transition-colors"
           >
             <X size={14} />
           </button>
@@ -177,15 +177,15 @@ export default function HistoryView({
       <div className="flex gap-8">
         <div className="min-w-0 flex-1">
           {!dataRetentionEnabled && (
-            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 px-3.5 py-2.5 flex items-center gap-2.5">
-              <span className="text-amber-600 dark:text-amber-400 shrink-0 text-sm">⊘</span>
-              <p className="text-xs text-amber-700 dark:text-amber-300/90 leading-relaxed">
+            <div className="mb-3 rounded-lg border border-amber bg-amber-surface px-3.5 py-2.5 flex items-center gap-2.5">
+              <span className="text-amber shrink-0 text-sm">⊘</span>
+              <p className="text-xs text-amber leading-relaxed">
                 {t("controlPanel.history.dataRetentionDisabled")}
               </p>
             </div>
           )}
           {isLoading && history.length === 0 ? (
-            <div className="rounded-2xl border border-default/70 bg-surface-primary/50 dark:border-white/10 dark:bg-surface-primary/60">
+            <div className="rounded-2xl border border-default/70 bg-surface-primary/50 dark:bg-surface-primary/60">
               <div className="flex items-center justify-center gap-2 py-10">
                 <Loader2 size={14} className="animate-spin text-brand-solid" />
                 <span className="text-sm text-secondary">{t("controlPanel.loading")}</span>
@@ -227,7 +227,7 @@ export default function HistoryView({
                       </div>
                     )}
                   </div>
-                  <div className="relative z-0 overflow-clip rounded-2xl border border-default/70 bg-surface-primary/50 divide-y divide-default/60 dark:border-white/10 dark:bg-surface-primary/60">
+                  <div className="relative z-0 overflow-clip rounded-2xl border border-default/70 bg-surface-primary/50 divide-y divide-default/60 dark:bg-surface-primary/60">
                     {group.items.map((item) => (
                       <TranscriptionItem
                         key={item.id}

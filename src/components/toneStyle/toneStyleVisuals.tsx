@@ -69,7 +69,7 @@ function EmailMessage({ text }: { text: string }) {
   const { t } = useTranslation();
   return (
     <div className="text-[13px] leading-[18px]">
-      <p className="border-b border-default/80 pb-2.5 text-secondary dark:border-white/10">
+      <p className="border-b border-default/80 pb-2.5 text-secondary">
         {t("toneStyle.samples.email.to")}
       </p>
       <p className="mt-2 whitespace-pre-line text-primary">{text}</p>

@@ -392,7 +392,7 @@ export function InvitePeopleView({
                 <div
                   onClick={() => inputRef.current?.focus()}
                   className={cn(
-                    "flex max-h-[104px] min-h-[38px] cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl bg-surface-secondary px-2 py-1 ring-1 ring-inset ring-black/[0.06] transition-shadow dark:bg-surface-secondary dark:ring-0",
+                    "flex max-h-[104px] min-h-[38px] cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl bg-surface-secondary px-2 py-1 ring-1 ring-inset ring-border-default transition-shadow dark:bg-surface-secondary dark:ring-0",
                     "focus-within:ring-2 focus-within:ring-focus/40 dark:focus-within:ring-2",
                     sending && "opacity-60"
                   )}
@@ -508,7 +508,7 @@ export function InvitePeopleView({
                   // Radix owns the trigger's id, which its menu is labelled by.
                   aria-labelledby={`${roleLabelId} ${roleValueId}`}
                   disabled={sending || confirmed}
-                  className="flex min-h-[52px] w-full items-center gap-2.5 rounded-xl bg-surface-secondary px-3 py-2 text-start text-primary outline-none ring-1 ring-inset ring-black/[0.06] transition-colors hover:bg-surface-primary focus-visible:ring-2 focus-visible:ring-focus/40 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-secondary dark:ring-0 dark:hover:bg-surface-secondary"
+                  className="flex min-h-[52px] w-full items-center gap-2.5 rounded-xl bg-surface-secondary px-3 py-2 text-start text-primary outline-none ring-1 ring-inset ring-border-default transition-colors hover:bg-surface-primary focus-visible:ring-2 focus-visible:ring-focus/40 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-secondary dark:ring-0 dark:hover:bg-surface-secondary"
                 >
                   <RoleIcon className="size-4 shrink-0 text-secondary" aria-hidden="true" />
                   <span className="flex min-w-0 flex-1 flex-col">

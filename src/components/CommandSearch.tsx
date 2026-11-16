@@ -518,7 +518,7 @@ export default function CommandSearch({
                     "flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-start transition-colors duration-100 outline-none",
                     selectedIndex === idx
                       ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-                      : "hover:bg-text-primary/4 dark:hover:bg-white/4"
+                      : "hover:bg-text-primary/4"
                   )}
                 >
                   <MessageSquare
@@ -680,9 +680,7 @@ function ContainerRow({
       onMouseEnter={onHover}
       className={cn(
         "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-start transition-colors duration-100 outline-none",
-        isSelected
-          ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-          : "hover:bg-text-primary/4 dark:hover:bg-white/4"
+        isSelected ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4"
       )}
     >
       {target.folderId != null ? (
@@ -747,9 +745,7 @@ function NoteRow({
       onMouseEnter={onHover}
       className={cn(
         "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-start transition-colors duration-100 outline-none",
-        isSelected
-          ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-          : "hover:bg-text-primary/4 dark:hover:bg-white/4"
+        isSelected ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4"
       )}
     >
       <NoteIcon
@@ -817,9 +813,7 @@ function TranscriptRow({
       onMouseEnter={onHover}
       className={cn(
         "group flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg text-start transition-colors duration-100 outline-none",
-        isSelected
-          ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-          : "hover:bg-text-primary/4 dark:hover:bg-white/4"
+        isSelected ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4"
       )}
     >
       <Mic

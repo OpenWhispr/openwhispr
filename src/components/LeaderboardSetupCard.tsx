@@ -20,7 +20,7 @@ export default function LeaderboardSetupCard({
     <section
       data-leaderboard-state="create"
       className={cn(
-        "flex min-h-64 flex-col items-center justify-center rounded-2xl border border-default/70 bg-surface-primary/70 px-6 py-10 text-center dark:border-white/10",
+        "flex min-h-64 flex-col items-center justify-center rounded-2xl border border-default/70 bg-surface-primary/70 px-6 py-10 text-center",
         className
       )}
     >

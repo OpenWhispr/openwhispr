@@ -249,10 +249,7 @@ export default function NoteParticipants({
             <>
               <Calendar size={14} className="shrink-0 text-primary/60" />
               <span>{dateLabel}</span>
-              <span
-                aria-hidden="true"
-                className="mx-0.5 h-3.5 w-px bg-border-default dark:bg-white/15"
-              />
+              <span aria-hidden="true" className="mx-0.5 h-3.5 w-px bg-border-default" />
             </>
           )}
           {localParticipants.length > 0 ? (

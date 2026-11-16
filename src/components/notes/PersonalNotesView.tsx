@@ -931,7 +931,7 @@ export default function PersonalNotesView({
       >
         <div
           ref={notesListResize.panelRef}
-          className="relative max-w-full shrink-0 border-e border-default dark:border-white/10 flex flex-col h-full"
+          className="relative max-w-full shrink-0 border-e border-default flex flex-col h-full"
           style={{ width: notesListWidth }}
         >
           <PanelResizeHandle
@@ -1033,7 +1033,7 @@ export default function PersonalNotesView({
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center -mt-6">
             <svg
-              className="text-primary dark:text-white mb-5"
+              className="text-primary mb-5"
               width="72"
               height="64"
               viewBox="0 0 72 64"
@@ -1149,7 +1149,7 @@ export default function PersonalNotesView({
                   {activeFolderId != null && (
                     <button
                       onClick={() => setShowAddNotesDialog(true)}
-                      className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-text-primary/8 dark:border-white/10 text-xs text-primary/45 hover:text-primary/60 hover:border-text-primary/15 hover:bg-text-primary/3 dark:hover:bg-white/3 transition-colors"
+                      className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-text-primary/8 text-xs text-primary/45 hover:text-primary/60 hover:border-text-primary/15 hover:bg-text-primary/3 transition-colors"
                     >
                       {t("notes.addToFolder.addExisting")}
                     </button>

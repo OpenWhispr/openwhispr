@@ -499,7 +499,7 @@ export default function WorkspaceMembersTab({
                                 />
                               </p>
                               {isSelf && (
-                                <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-text-primary/5 text-secondary dark:bg-white/8">
+                                <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-text-primary/5 text-secondary">
                                   {t("settingsPage.workspace.people.you")}
                                 </span>
                               )}

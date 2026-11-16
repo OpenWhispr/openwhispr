@@ -141,14 +141,14 @@ export function notesEmptyTitleKey(inFolder: boolean): string {
 
 export const notesInputClass = cn(
   "w-full h-8 px-3 rounded-md text-xs",
-  "bg-text-primary/3 dark:bg-white/4 border border-default/70 dark:border-white/10",
+  "bg-text-primary/3 border border-default/70",
   "text-primary/80 placeholder:text-primary/45 outline-none",
   "focus:border-brand-solid/30 transition-colors duration-150"
 );
 
 export const notesTextareaClass = cn(
   "w-full px-3 py-2 rounded-md text-xs leading-relaxed resize-none",
-  "bg-text-primary/3 dark:bg-white/4 border border-default/70 dark:border-white/10",
+  "bg-text-primary/3 border border-default/70",
   "text-primary/80 placeholder:text-primary/45 outline-none",
   "focus:border-brand-solid/30 transition-colors duration-150"
 );

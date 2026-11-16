@@ -48,7 +48,7 @@ export default function ControlPanelTopBar({
     <header
       className={cn(
         // The trailing column never shrinks past its actions and window controls.
-        "grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,340px)_minmax(max-content,1fr)] items-center gap-4 border-b border-default px-3 dark:border-white/10",
+        "grid h-12 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,340px)_minmax(max-content,1fr)] items-center gap-4 border-b border-default px-3",
         // Eased with the sidebar spacer so the toggle glides instead of jumping when the
         // clearance switches; a jump would drag it back under the cursor and re-trigger peek.
         "transition-[padding] duration-300 ease-out",
@@ -81,7 +81,7 @@ export default function ControlPanelTopBar({
               style={noDragStyle}
               // z-40 keeps the toggle above the peeking sidebar (z-30) so the panel slides in
               // underneath it and the button stays clickable while collapsed.
-              className="group relative z-40 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg outline-none transition-colors duration-150 hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 dark:hover:bg-white/5"
+              className="group relative z-40 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg outline-none transition-colors duration-150 hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30"
             >
               <PanelLeftClose size={16} className={toggleIconClass} />
             </button>
@@ -99,7 +99,7 @@ export default function ControlPanelTopBar({
           onClick={onOpenSearch}
           data-no-window-drag=""
           style={noDragStyle}
-          className="flex h-8 w-full items-center gap-2.5 rounded-full border border-default bg-text-primary/4 px-4 text-start outline-none transition-colors duration-150 hover:bg-text-primary/6 focus-visible:ring-1 focus-visible:ring-brand-solid/30 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/8"
+          className="flex h-8 w-full items-center gap-2.5 rounded-full border border-default bg-text-primary/4 px-4 text-start outline-none transition-colors duration-150 hover:bg-text-primary/6 focus-visible:ring-1 focus-visible:ring-brand-solid/30"
         >
           <Search size={14} className="shrink-0 text-secondary/70" />
           <span className="flex-1 truncate text-[13px] text-secondary/70">
@@ -107,7 +107,7 @@ export default function ControlPanelTopBar({
           </span>
           <kbd
             dir="ltr"
-            className="shrink-0 rounded-full bg-text-primary/6 px-1.5 py-px font-sans text-[10px] font-medium text-secondary/70 dark:bg-white/8"
+            className="shrink-0 rounded-full bg-text-primary/6 px-1.5 py-px font-sans text-[10px] font-medium text-secondary/70"
           >
             {platform === "darwin" ? "⌘ + K" : "Ctrl + K"}
           </kbd>

@@ -44,13 +44,13 @@ export default function LeaderboardPreview({
     <section
       data-leaderboard-state={dataState}
       className={cn(
-        "relative min-h-96 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary/70 dark:border-white/10",
+        "relative min-h-96 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary/70",
         className
       )}
     >
       <div className="pointer-events-none select-none opacity-35 blur-[1px]" aria-hidden="true">
         <div className="flex items-center gap-2 border-b border-default/70 px-5 py-4">
-          <Trophy size={17} className="text-amber-500" />
+          <Trophy size={17} className="text-amber-solid" />
           <div className="h-4 w-28 rounded bg-text-primary/20" />
         </div>
 

@@ -329,7 +329,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-medium transition-colors duration-150 border-b-2 ${
                   isActive
                     ? "border-brand-solid text-primary bg-brand-solid/5 dark:bg-brand-solid/3"
-                    : "border-transparent text-secondary hover:text-primary hover:bg-black/2 dark:hover:bg-white/2"
+                    : "border-transparent text-secondary hover:text-primary hover:bg-state-hover"
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />

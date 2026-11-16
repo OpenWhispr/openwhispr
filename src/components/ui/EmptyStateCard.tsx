@@ -24,7 +24,7 @@ export default function EmptyStateCard({
   return (
     <div
       className={cn(
-        "flex flex-col items-center rounded-2xl border border-default/70 bg-surface-primary/50 px-6 py-10 text-center dark:border-white/10 dark:bg-surface-primary/60",
+        "flex flex-col items-center rounded-2xl border border-default/70 bg-surface-primary/50 px-6 py-10 text-center dark:bg-surface-primary/60",
         className
       )}
     >

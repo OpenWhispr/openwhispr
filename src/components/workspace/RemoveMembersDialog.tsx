@@ -303,7 +303,7 @@ export function RemoveMembersDialog({
       ) : null}
       {transferring ? (
         // The note, the label and the picker sit on one inset card, as the design draws them.
-        <div className="flex flex-col gap-3 rounded-xl bg-surface-secondary p-3 ring-1 ring-inset ring-black/[0.06] dark:bg-surface-secondary dark:ring-0">
+        <div className="flex flex-col gap-3 rounded-xl bg-surface-secondary p-3 ring-1 ring-inset ring-border-default dark:bg-surface-secondary dark:ring-0">
           <p className="text-sm text-secondary">{ownerNote}</p>
           <div className="flex flex-col gap-2">
             <span id={pickerLabelId} className="text-sm font-medium text-secondary">
@@ -316,7 +316,7 @@ export function RemoveMembersDialog({
                 disabled={busy || managedRefusal}
                 className={cn(
                   PICKER_TRIGGER,
-                  "bg-black/[0.04] dark:bg-surface-secondary dark:hover:bg-surface-primary"
+                  "bg-text-primary/4 dark:bg-surface-secondary dark:hover:bg-surface-primary"
                 )}
               >
                 {newOwner ? (

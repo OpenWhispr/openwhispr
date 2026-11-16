@@ -30,7 +30,7 @@ import { formatMmSs } from "../../utils/formatDuration";
 const platform = getCachedPlatform();
 
 const ACTION_BUTTON_CLASS =
-  "h-7 w-7 rounded-full text-secondary/70 hover:text-primary hover:bg-text-primary/6 dark:hover:bg-white/6";
+  "h-7 w-7 rounded-full text-secondary/70 hover:text-primary hover:bg-text-primary/6";
 
 const TRANSCRIPT_TEXT_CLASS =
   "text-base leading-normal wrap-break-word whitespace-pre-wrap text-primary";
@@ -162,7 +162,7 @@ export default function TranscriptionItem({
           ? "bg-red-solid/5"
           : isDiscarded
             ? "bg-surface-secondary/20 opacity-80"
-            : "hover:bg-surface-secondary/20 dark:hover:bg-white/2",
+            : "hover:bg-surface-secondary/20",
         // Translation rows get a 2px primary accent; ps-[14px] keeps text aligned with the other rows.
         item.route_kind === "translation" && "border-s-2 border-s-brand-solid/70 ps-[14px]"
       )}

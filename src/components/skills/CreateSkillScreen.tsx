@@ -306,7 +306,7 @@ export function CreateSkillScreen({
                 {draft.files.map((file, index) => (
                   <li
                     key={`${file.fileName}-${index}`}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-default/70 bg-surface-primary ps-2.5 pe-1 text-xs text-primary dark:border-white/10 dark:bg-surface-primary"
+                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-default/70 bg-surface-primary ps-2.5 pe-1 text-xs text-primary dark:bg-surface-primary"
                   >
                     <FileText size={12} className="text-secondary/70" />
                     <span dir="ltr" className="font-mono text-[11px]">
@@ -347,7 +347,7 @@ export function CreateSkillScreen({
             {fieldError("instructions")}
           </div>
         </SettingsPanel>
-        <div className="sticky bottom-0 z-10 mt-4 bg-surface-primary border-t border-default/70 dark:border-white/10 py-3">
+        <div className="sticky bottom-0 z-10 mt-4 bg-surface-primary border-t border-default/70 py-3">
           {leaving && (
             <div
               role="alert"

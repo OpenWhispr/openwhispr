@@ -316,7 +316,7 @@ export default function ChatView({
       )}
       <SkillChatActionsContext.Provider value={skillChatActions}>
         <div className="flex h-full min-h-0">
-          <div className="w-56 min-w-50 shrink-0 border-e border-default dark:border-white/10">
+          <div className="w-56 min-w-50 shrink-0 border-e border-default">
             <ConversationList
               activeConversationId={activeConversationId}
               onSelectConversation={handleSelectConversation}

@@ -49,7 +49,7 @@ export function IntegrationsNav({
     <nav
       aria-label={t("integrations.nav.label")}
       className={cn(
-        "w-54 shrink-0 flex flex-col gap-4 overflow-y-auto border-e border-default/70 dark:border-white/8 px-2 pt-3 pb-3",
+        "w-54 shrink-0 flex flex-col gap-4 overflow-y-auto border-e border-default/70 px-2 pt-3 pb-3",
         className
       )}
     >
@@ -73,7 +73,7 @@ export function IntegrationsNav({
                     "focus-visible:ring-1 focus-visible:ring-brand-solid/30",
                     isActive
                       ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-                      : "hover:bg-text-primary/4 dark:hover:bg-white/4 active:bg-text-primary/6"
+                      : "hover:bg-text-primary/4 active:bg-text-primary/6"
                   )}
                 >
                   <Icon
@@ -107,7 +107,7 @@ export function IntegrationsNav({
       <button
         type="button"
         onClick={() => window.electronAPI?.openExternal?.(INTEGRATIONS_DOCS_URL)}
-        className="flex items-center gap-2 h-7 px-2.5 rounded-md text-xs text-secondary outline-none transition-colors hover:text-primary hover:bg-text-primary/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-brand-solid/30"
+        className="flex items-center gap-2 h-7 px-2.5 rounded-md text-xs text-secondary outline-none transition-colors hover:text-primary hover:bg-text-primary/4 focus-visible:ring-1 focus-visible:ring-brand-solid/30"
       >
         <BookOpen size={14} className="shrink-0" />
         {t("integrations.nav.docs")}

@@ -132,7 +132,7 @@ function folderRowNotes(
 }
 
 const FOLDER_INPUT_CLASS =
-  "w-full h-6 bg-text-primary/5 dark:bg-white/5 rounded px-2 text-xs text-primary outline-none border border-brand-solid/30 focus:border-brand-solid/50";
+  "w-full h-6 bg-text-primary/5 rounded px-2 text-xs text-primary outline-none border border-brand-solid/30 focus:border-brand-solid/50";
 
 const ROW_BASE_CLASS =
   "group relative flex items-center gap-2 rounded-md cursor-pointer select-none " +
@@ -156,7 +156,7 @@ const MENU_ITEM_CLASS = "text-xs gap-2 rounded-md px-2 py-1";
 const SUB_CONTENT_CLASS = "min-w-36 rounded-xl border border-default p-1";
 
 const DROP_TARGET_CLASS = "bg-brand-solid/12 dark:bg-brand-solid/15 ring-1 ring-brand-solid/25";
-const DROP_SUCCESS_CLASS = "bg-emerald-500/10 dark:bg-emerald-400/10 ring-1 ring-emerald-500/20";
+const DROP_SUCCESS_CLASS = "bg-green-surface ring-1 ring-green-border";
 const SUB_TRIGGER_CLASS = cn(
   MENU_ITEM_CLASS,
   "cursor-pointer focus:bg-text-primary/5 data-[state=open]:bg-text-primary/5"
@@ -362,10 +362,7 @@ function RowToggle({
 function DropSuccessCheck({ isDropSuccess }: { isDropSuccess: boolean }) {
   if (!isDropSuccess) return null;
   return (
-    <Check
-      size={10}
-      className="text-emerald-500 dark:text-emerald-400 shrink-0 animate-[scale-in_200ms_ease-out]"
-    />
+    <Check size={10} className="text-green-solid shrink-0 animate-[scale-in_200ms_ease-out]" />
   );
 }
 
@@ -492,9 +489,7 @@ function SpaceRow({
       className={cn(
         ROW_BASE_CLASS,
         "h-7 px-2",
-        isActive
-          ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-          : "hover:bg-text-primary/4 dark:hover:bg-white/4",
+        isActive ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4",
         isDragOver && DROP_TARGET_CLASS,
         isDropSuccess && DROP_SUCCESS_CLASS
       )}
@@ -661,9 +656,7 @@ function FolderRow({
         ROW_BASE_CLASS,
         "h-7 pe-2",
         level === 1 ? "ps-2" : "ps-[14px]",
-        isActive
-          ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-          : "hover:bg-text-primary/4 dark:hover:bg-white/4",
+        isActive ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4",
         isDragOver && DROP_TARGET_CLASS,
         isDropSuccess && DROP_SUCCESS_CLASS
       )}
@@ -952,9 +945,7 @@ function NoteLeaf({
         ROW_BASE_CLASS,
         "h-7 pe-2",
         indentClassName ?? (level === 3 ? "ps-10" : "ps-[14px]"),
-        isActive
-          ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-          : "hover:bg-text-primary/4 dark:hover:bg-white/4",
+        isActive ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4",
         isDragging && "opacity-40"
       )}
     >
@@ -1175,12 +1166,7 @@ function SkeletonRows() {
     <div className="space-y-px" aria-hidden="true">
       {["w-3/5", "w-2/5", "w-1/2"].map((width) => (
         <div key={width} className="flex items-center h-7 ps-[18px] pe-2">
-          <div
-            className={cn(
-              "h-2.5 rounded-full bg-text-primary/6 dark:bg-white/6 animate-pulse",
-              width
-            )}
-          />
+          <div className={cn("h-2.5 rounded-full bg-text-primary/6 animate-pulse", width)} />
         </div>
       ))}
     </div>

@@ -160,7 +160,7 @@ export function TransferOwnershipDialog({
           {t("workspaces.transfer.newOwner")}
         </span>
         {status === "loading" ? (
-          <div className="h-10 animate-pulse rounded-full bg-text-primary/5 dark:bg-white/5" />
+          <div className="h-10 animate-pulse rounded-full bg-text-primary/5" />
         ) : (
           <DropdownMenu>
             <DropdownMenuTrigger

@@ -69,7 +69,7 @@ export function InstalledSkillCard({ skill, onOpen, ref }: InstalledSkillCardPro
         state: t(`skills.pane.${state}`),
       })}
       className={cn(
-        "group flex w-full min-w-0 items-center gap-3 p-3 text-start transition-colors hover:bg-text-primary/3 dark:hover:bg-white/4 outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
+        "group flex w-full min-w-0 items-center gap-3 p-3 text-start transition-colors hover:bg-text-primary/3 outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         CARD_SURFACE_CLASS
       )}
     >

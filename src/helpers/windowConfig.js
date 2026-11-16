@@ -248,8 +248,9 @@ const CONTROL_PANEL_CONFIG = {
   height: 800,
   // macOS: fully transparent, so nothing paints into the compact onboarding
   // frame's rounded corners. Windows/Linux keep an opaque backing (the renderer
-  // paints its own background on top) — see the transparent flag below.
-  backgroundColor: process.platform === "darwin" ? "#00000000" : "#1c1c2e",
+  // paints its own background on top) — see the transparent flag below. The
+  // backing is surface/secondary in Dark, the window chrome's own fill.
+  backgroundColor: process.platform === "darwin" ? "#00000000" : "#1a1a1a",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,

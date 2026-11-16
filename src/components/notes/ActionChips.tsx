@@ -13,7 +13,7 @@ const VISIBLE_CHIPS = 5;
 const CHIP_CLASS = cn(
   "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs text-primary/60",
   // A disabled chip still takes the pointer, so moving onto one moves the card to it.
-  "enabled:hover:bg-text-primary/[0.07] enabled:hover:text-primary disabled:cursor-default disabled:text-primary/30 disabled:[&_svg]:opacity-40 dark:enabled:hover:bg-white/[0.08]",
+  "enabled:hover:bg-text-primary/[0.07] enabled:hover:text-primary disabled:cursor-default disabled:text-primary/30 disabled:[&_svg]:opacity-40",
   "transition-colors duration-150 focus:outline-none focus-visible:bg-text-primary/6 focus-visible:text-primary",
   "animate-[fade-in-up_0.32s_cubic-bezier(0.22,1,0.36,1)_backwards] motion-reduce:animate-none"
 );
@@ -94,7 +94,7 @@ export default function ActionChips({
   return (
     <div className="relative">
       {previewed && (
-        <div className="pointer-events-none absolute bottom-full start-0 z-10 mb-2 flex w-full max-w-md items-center gap-3 rounded-2xl border border-black/[0.06] bg-surface-primary p-3 shadow-(--shadow-chat-card) animate-[fade-in-up_0.18s_ease-out] motion-reduce:animate-none dark:border-white/10">
+        <div className="pointer-events-none absolute bottom-full start-0 z-10 mb-2 flex w-full max-w-md items-center gap-3 rounded-2xl border border-default bg-surface-primary p-3 shadow-(--shadow-chat-card) animate-[fade-in-up_0.18s_ease-out] motion-reduce:animate-none">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-text-primary/6">
             {PreviewedIcon && <PreviewedIcon size={16} className="text-brand-solid" />}
           </span>

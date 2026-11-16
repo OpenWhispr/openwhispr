@@ -104,7 +104,7 @@ function PersonAvatar({
 }
 
 const TILE =
-  "flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-text-primary/5 dark:bg-white/6";
+  "flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-text-primary/5";
 // The tile's glyph is an emoji sized for a larger tile in the table.
 const TEAM_TILE = cn(TILE, "[&>span]:text-xs");
 const ACTION_PILL =

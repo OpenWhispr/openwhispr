@@ -978,7 +978,7 @@ export default function ShareNoteDialog({
               <p
                 id="share-invite-error"
                 aria-live="polite"
-                className={cn("text-xs text-red-500/90 -mt-1", !inputError && "sr-only")}
+                className={cn("text-xs text-red-solid/90 -mt-1", !inputError && "sr-only")}
               >
                 {inputError}
               </p>
@@ -1062,7 +1062,7 @@ export default function ShareNoteDialog({
                             type="button"
                             className={cn(
                               "h-6 w-6 flex items-center justify-center rounded-md",
-                              "hover:bg-text-primary/8 dark:hover:bg-white/8",
+                              "hover:bg-text-primary/8",
                               "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus",
                               "transition-colors"
                             )}
@@ -1082,7 +1082,7 @@ export default function ShareNoteDialog({
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem
-                            className="text-xs text-red-500"
+                            className="text-xs text-red-solid"
                             onClick={() => void handleRevoke(invitation)}
                           >
                             {t("noteEditor.share.dialog.revoke")}
@@ -1160,7 +1160,7 @@ export default function ShareNoteDialog({
                     option.onSelect();
                     onOpenChange(false);
                   }}
-                  className="flex items-center gap-2.5 rounded-xl border border-default/70 px-3 py-2.5 text-start text-xs font-medium text-primary/80 transition-colors hover:bg-surface-tertiary hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 dark:border-white/10 dark:hover:bg-surface-primary"
+                  className="flex items-center gap-2.5 rounded-xl border border-default/70 px-3 py-2.5 text-start text-xs font-medium text-primary/80 transition-colors hover:bg-surface-tertiary hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 dark:hover:bg-surface-primary"
                 >
                   <FileText size={14} className="shrink-0 text-primary/55" />
                   {option.label}
@@ -1294,7 +1294,7 @@ function AccessGrantRow({
                 aria-label={t("noteEditor.share.dialog.invitationActions")}
                 className={cn(
                   "h-7 px-2 flex items-center gap-1 rounded-md text-[11px] text-primary/50",
-                  "hover:bg-text-primary/8 dark:hover:bg-white/8",
+                  "hover:bg-text-primary/8",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus",
                   "disabled:opacity-50 transition-colors"
                 )}
@@ -1325,7 +1325,7 @@ function AccessGrantRow({
                 </>
               )}
               <DropdownMenuItem
-                className="text-xs text-red-500"
+                className="text-xs text-red-solid"
                 disabled={!canRemove}
                 onClick={onRemove}
               >

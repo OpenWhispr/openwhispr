@@ -194,8 +194,8 @@ function AddContactButton({
         <button
           className={cn(
             "inline-flex items-center mb-0.5 px-1.5 py-0.5 rounded-md text-[11px] outline-none cursor-pointer",
-            "border border-dashed border-default/70 dark:border-white/15",
-            "text-primary/50 hover:text-primary hover:border-default/90 dark:hover:border-white/30",
+            "border border-dashed border-default/70",
+            "text-primary/50 hover:text-primary hover:border-default/90",
             "transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-focus"
           )}
         >
@@ -521,7 +521,7 @@ function SpeakerLabel({
               segment.recorderName
             )
           }
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-secondary hover:text-emerald-500"
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-secondary hover:text-green-solid"
         >
           <Check size={12} />
         </button>
@@ -555,8 +555,8 @@ function SpeakerLabel({
         <button
           className={cn(
             "inline-flex items-center text-[11px] font-medium mb-0.5 px-1.5 py-0.5 rounded-md outline-none cursor-pointer",
-            "border border-default/70 dark:border-white/20",
-            "hover:bg-text-primary/5 hover:border-default/90 dark:hover:border-white/30",
+            "border border-default/70",
+            "hover:bg-text-primary/5 hover:border-default/90",
             "transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-focus",
             SPEAKER_COLORS[colorIdx],
             isUnmapped && "border-dashed",

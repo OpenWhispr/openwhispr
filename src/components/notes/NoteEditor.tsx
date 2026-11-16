@@ -1357,7 +1357,7 @@ export default function NoteEditor({
                       <span className="max-w-32 truncate">{summaryLabel}</span>
                       {enhancement.isStale && (
                         <span
-                          className="h-1 w-1 rounded-full bg-amber-400/60"
+                          className="h-1 w-1 rounded-full bg-amber-solid/60"
                           title={t("notes.editor.staleIndicator")}
                         />
                       )}
@@ -1425,13 +1425,13 @@ export default function NoteEditor({
           <div
             className={cn(
               "h-8 mt-2 shrink-0",
-              "bg-amber-400/5 dark:bg-amber-400/[0.07]",
-              "border-y border-amber-400/15 dark:border-amber-400/20",
+              "bg-amber-surface",
+              "border-y border-amber",
               "animate-in slide-in-from-top-2 duration-300"
             )}
           >
             <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
-              <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
+              <span className="w-1 h-1 rounded-full bg-amber-solid/60 shrink-0" />
               <p className="text-[11px] text-primary/50 flex-1 truncate">
                 {t("notes.spaces.conflictBanner")}
                 {conflictEditorName && (
@@ -1466,21 +1466,15 @@ export default function NoteEditor({
           (recordingRefusal === "disabled" || recordingChoiceRefusal) && (
             <div className="h-8 mt-2 shrink-0 border-y border-amber-solid/20 bg-amber-solid/8 dark:bg-amber-solid/10">
               <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
-                <AlertTriangle
-                  aria-hidden="true"
-                  className="w-3 h-3 shrink-0 text-amber-600 dark:text-amber-solid"
-                />
-                <p
-                  role="status"
-                  className="text-[11px] text-amber-700 dark:text-amber-solid/90 flex-1 truncate"
-                >
+                <AlertTriangle aria-hidden="true" className="w-3 h-3 shrink-0 text-amber" />
+                <p role="status" className="text-[11px] text-amber flex-1 truncate">
                   {t(recordingChoiceRefusal?.messageKey ?? MEETING_RECORDING_REFUSAL_KEYS.disabled)}
                 </p>
                 {recordingChoiceRefusal && (
                   <button
                     type="button"
                     onClick={() => openProviderSettings("noteRecording")}
-                    className="shrink-0 rounded-sm text-[11px] font-medium text-amber-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 dark:text-amber-solid/90"
+                    className="shrink-0 rounded-sm text-[11px] font-medium text-amber hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
                   >
                     {t("providerErrors.openSettings")}
                   </button>

@@ -550,7 +550,7 @@ export default function CreateSpaceDialog({
                     {t("settingsPage.workspace.teamspaces.form.people")}
                   </label>
                   {peopleLoading ? (
-                    <div className="h-[38px] rounded-xl bg-text-primary/5 dark:bg-white/5 animate-pulse" />
+                    <div className="h-[38px] rounded-xl bg-text-primary/5 animate-pulse" />
                   ) : peopleFailed ? (
                     <div className="rounded border border-default/70 dark:border-default/60 px-3 py-2.5 flex items-center justify-between gap-2">
                       <p className="text-xs text-secondary">

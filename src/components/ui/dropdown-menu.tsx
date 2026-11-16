@@ -110,9 +110,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
       aria-hidden="true"
       className={cn(
         "absolute start-1.5 flex size-4 items-center justify-center rounded-[4px] border",
-        checked
-          ? "border-brand-solid bg-brand-solid text-on-solid"
-          : "border-text-primary/30 dark:border-white/35"
+        checked ? "border-brand-solid bg-brand-solid text-on-solid" : "border-text-primary/30"
       )}
     >
       <DropdownMenuPrimitive.ItemIndicator>

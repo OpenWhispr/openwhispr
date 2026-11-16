@@ -16,7 +16,7 @@ const rowIconClass =
 const rowLabelClass =
   "text-[13px] text-primary/90 group-hover:text-primary dark:text-primary/85 dark:group-hover:text-primary transition-colors duration-150";
 const rowButtonClass =
-  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-start outline-none hover:bg-text-primary/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors duration-150";
+  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-start outline-none hover:bg-text-primary/4 focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors duration-150";
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
@@ -77,7 +77,7 @@ export default function ControlPanelSidebar({
                 "focus-visible:ring-1 focus-visible:ring-brand-solid/30",
                 isActive
                   ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-                  : "hover:bg-text-primary/4 dark:hover:bg-white/4 active:bg-text-primary/6"
+                  : "hover:bg-text-primary/4 active:bg-text-primary/6"
               )}
             >
               <Icon
@@ -133,14 +133,14 @@ export default function ControlPanelSidebar({
 
       {showUpgradeBanner && (
         <div className="px-2 pb-2">
-          <div className="relative rounded-xl border border-[#6c50e9]/25 dark:border-[#6c50e9]/40 bg-surface-primary bg-gradient-to-b from-[#6c50e9]/15 via-[#6c50e9]/5 to-transparent dark:from-[#6c50e9]/30 dark:via-[#6c50e9]/10 p-3">
+          <div className="relative rounded-xl border border-accent-solid/25 dark:border-accent-solid/40 bg-surface-primary bg-gradient-to-b from-accent-solid/15 via-accent-solid/5 to-transparent dark:from-accent-solid/30 dark:via-accent-solid/10 p-3">
             <button
               onClick={() => {
                 setUpgradeDismissed(true);
                 localStorage.setItem("upgradeProDismissed", "true");
               }}
               aria-label={t("common.dismiss")}
-              className="absolute top-2 end-2 p-0.5 rounded-sm text-secondary hover:text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="absolute top-2 end-2 p-0.5 rounded-sm text-secondary hover:text-primary hover:bg-state-hover transition-colors"
             >
               <X size={12} />
             </button>

@@ -29,7 +29,7 @@ export function NewChatEmptyState({
               type="button"
               disabled={disabled}
               onClick={() => onPrompt(t(key))}
-              className="flex min-h-24 flex-col items-start justify-between rounded-2xl border border-default bg-surface-primary p-4 text-start text-sm font-medium text-primary transition-colors hover:border-brand-solid/40 hover:bg-brand-solid/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10"
+              className="flex min-h-24 flex-col items-start justify-between rounded-2xl border border-default bg-surface-primary p-4 text-start text-sm font-medium text-primary transition-colors hover:border-brand-solid/40 hover:bg-brand-solid/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-50"
             >
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-secondary text-secondary">
                 <Icon size={16} />

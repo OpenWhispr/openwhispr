@@ -871,7 +871,7 @@ export default function SpaceMembersPanel({
                 ) : (
                   <div
                     aria-hidden="true"
-                    className="h-10 animate-pulse rounded-lg bg-text-primary/5 dark:bg-white/5"
+                    className="h-10 animate-pulse rounded-lg bg-text-primary/5"
                   />
                 )}
               </div>

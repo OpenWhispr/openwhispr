@@ -85,9 +85,7 @@ export default function ConversationItem({
       className={cn(
         "group relative w-full text-start px-3 py-2 cursor-pointer transition-all duration-150",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30",
-        isActive
-          ? "bg-brand-solid/8 dark:bg-brand-solid/10"
-          : "hover:bg-text-primary/4 dark:hover:bg-white/4"
+        isActive ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4"
       )}
     >
       <div className="flex-1 min-w-0">

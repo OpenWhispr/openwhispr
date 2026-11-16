@@ -99,10 +99,10 @@ export function ProviderTabs({
             className={cn(
               "relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs whitespace-nowrap transition-colors duration-150",
               isDisabled
-                ? "text-secondary/70 cursor-not-allowed ring-1 ring-border-default/40 dark:ring-white/5"
+                ? "text-secondary/70 cursor-not-allowed ring-1 ring-border-default/40"
                 : isSelected
                   ? "text-primary [&_svg]:text-brand-solid"
-                  : "text-secondary ring-1 ring-border-default/60 dark:ring-white/10 hover:text-primary hover:bg-text-primary/4 dark:hover:bg-white/5"
+                  : "text-secondary ring-1 ring-border-default/60 hover:text-primary hover:bg-text-primary/4"
             )}
           >
             {renderIcon ? renderIcon(provider.id) : <ProviderIcon provider={provider.id} />}

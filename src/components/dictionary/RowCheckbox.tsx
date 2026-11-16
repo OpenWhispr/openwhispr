@@ -30,7 +30,7 @@ function CheckboxBox({ checked }: { checked: boolean | "mixed" }): ReactElement 
   }
   return (
     <span
-      className="size-3.5 shrink-0 rounded-[4px] border border-text-primary/30 dark:border-white/35"
+      className="size-3.5 shrink-0 rounded-[4px] border border-text-primary/30"
       aria-hidden="true"
     />
   );

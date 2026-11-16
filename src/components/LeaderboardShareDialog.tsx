@@ -201,7 +201,7 @@ export default function LeaderboardShareDialog({
             className={
               status === "failed"
                 ? "text-center text-xs text-red-solid"
-                : "flex items-center justify-center gap-1 text-xs text-emerald-600"
+                : "flex items-center justify-center gap-1 text-xs text-green"
             }
           >
             {status !== "failed" && <Check size={13} />}

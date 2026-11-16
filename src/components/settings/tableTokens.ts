@@ -8,14 +8,14 @@ export const HEADER_CELL =
 // The tile before a row's name, and the button of a cell that opens a list (admins, members,
 // teamspaces), so the tables beside each other read the same.
 export const NAME_TILE =
-  "flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-text-primary/5 dark:bg-white/6 [&>span]:text-xs [&>span.font-emoji]:text-sm";
+  "flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-text-primary/5 [&>span]:text-xs [&>span.font-emoji]:text-sm";
 // The 1px line between columns, as the design draws it on every table.
 export const COLUMN_DIVIDER = "border-s border-default/60 dark:border-default/50";
 // A cell's list trigger drawn as plain text with a chevron (Actions, "3 notes"), filled on hover.
 export const PLAIN_MENU_TRIGGER =
-  "inline-flex h-7 max-w-full items-center gap-1 rounded-lg px-1.5 text-sm text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5 dark:hover:bg-white/5";
+  "inline-flex h-7 max-w-full items-center gap-1 rounded-lg px-1.5 text-sm text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5";
 export const CONTACTS_TRIGGER =
-  "inline-flex h-7 max-w-full items-center gap-1.5 rounded-md border border-default/70 px-2 text-xs text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5 dark:border-default/70 dark:hover:bg-white/5";
+  "inline-flex h-7 max-w-full items-center gap-1.5 rounded-md border border-default/70 px-2 text-xs text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5 dark:border-default/70";
 
 // A workspace settings page's own title and description, as the design sets them (People,
 // Teamspaces, General, Developer).

@@ -138,8 +138,8 @@ export function FolderNotesPopover({
             "flex h-7 items-center gap-2 rounded-md pe-2 text-xs cursor-pointer select-none outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-focus/30",
             level === 2 ? "ps-8" : "ps-[42px]",
             open
-              ? "bg-text-primary/8 text-primary dark:bg-white/10"
-              : "text-primary/55 hover:bg-text-primary/5 hover:text-primary dark:hover:bg-white/5"
+              ? "bg-text-primary/8 text-primary"
+              : "text-primary/55 hover:bg-text-primary/5 hover:text-primary"
           )}
         >
           <MoreHorizontal size={13} aria-hidden="true" />
@@ -184,7 +184,7 @@ export function FolderNotesPopover({
             onChange={(event) => setQuery(event.target.value)}
             aria-label={t("notes.folderMore.search", { count: total, folder: name })}
             placeholder={t("notes.folderMore.search", { count: total, folder: name })}
-            className="input-inline h-8 rounded-full bg-text-primary/5 ps-9 pe-8 text-xs dark:bg-white/5"
+            className="input-inline h-8 rounded-full bg-text-primary/5 ps-9 pe-8 text-xs"
             onKeyDown={(event) => {
               if (event.nativeEvent.isComposing) return;
               if (event.key === "ArrowDown") {

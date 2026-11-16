@@ -394,7 +394,7 @@ function CreateTeamForm({
               {selectionFirst ? null : note}
             </>
           ) : loadFailed ? null : (
-            <div className="h-[38px] animate-pulse rounded-xl bg-text-primary/5 dark:bg-white/5" />
+            <div className="h-[38px] animate-pulse rounded-xl bg-text-primary/5" />
           )}
           {peopleError}
           {emails.length > 0 && !isCreating && (
