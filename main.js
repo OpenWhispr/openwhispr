@@ -846,6 +846,7 @@ function handleEnterpriseAudioLink(url) {
 app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
+  if (handleAffiliateDeepLink(url)) return;
 
   if (url.includes("upgrade-success")) {
     handleUpgradeDeepLink();
@@ -868,6 +869,44 @@ app.on("open-url", (event, url) => {
 
   windowManager?.showControlPanel();
 });
+
+const pendingAffiliateDeepLinks = [];
+let affiliateWindowReady = false;
+
+async function flushPendingAffiliateDeepLink() {
+  if (!pendingAffiliateDeepLinks.length || !affiliateWindowReady || !windowManager) return;
+  const urls = pendingAffiliateDeepLinks.splice(0);
+  try {
+    const affiliateLinks = require("./src/helpers/affiliateLinks");
+    let captured = false;
+    for (const url of urls) {
+      if (affiliateLinks.capture(url, OAUTH_PROTOCOL)) captured = true;
+    }
+    if (!captured) return;
+    await windowManager.createControlPanelWindow();
+    windowManager.showControlPanel();
+    if (isLiveWindow(windowManager.controlPanelWindow)) {
+      windowManager.controlPanelWindow.webContents.send("affiliate-link");
+    }
+  } catch (error) {
+    debugLogger?.error("Creator link window could not be opened", { error: error.message });
+  }
+}
+
+function handleAffiliateDeepLink(url) {
+  try {
+    if (url.length > 4096) return false;
+    const parsed = new URL(url);
+    if (parsed.protocol !== `${OAUTH_PROTOCOL}:` || parsed.hostname !== "affiliate") return false;
+    // Packaged configuration may not be loaded when macOS first delivers open-url.
+    pendingAffiliateDeepLinks.push(url);
+    void flushPendingAffiliateDeepLink();
+    return true;
+  } catch {
+    debugLogger?.error("Creator link could not be saved");
+    return false;
+  }
+}
 
 function isInvitationDeepLink(url) {
   return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/");
@@ -1375,11 +1414,15 @@ async function startApp() {
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
+  affiliateWindowReady = true;
+  await flushPendingAffiliateDeepLink();
 
   // Windows/Linux cold start delivers protocol URLs via argv (macOS uses
   // open-url); without this scan a deep link that launches the app is lost.
   const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
-  if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
+  if (initialProtocolUrl && handleAffiliateDeepLink(initialProtocolUrl)) {
+    await flushPendingNoteDeepLink();
+  } else if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
     // The renderer consumes the saved setup request after settings mount.
   } else if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
     await handleNoteDeepLink(initialProtocolUrl);
@@ -2129,6 +2172,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
+      if (handleAffiliateDeepLink(url)) return;
       if (handleEnterpriseAudioLink(url)) return;
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();

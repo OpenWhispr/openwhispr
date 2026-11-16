@@ -86,6 +86,12 @@ test("account ownership operations forward the account and credential generation
   ]);
 });
 
+test("checkout forwards the generation separately from the Stripe options", async () => {
+  const { api, invocations } = loadPreloadApi();
+  await api.cloudCheckout({ plan: "annual" }, 7);
+  assert.deepEqual(invocations, [["cloud-checkout", { plan: "annual" }, 7]]);
+});
+
 test("sync writes forward the sign-in that read them and the account a chat was sent as", async () => {
   const { api, invocations } = loadPreloadApi();
 

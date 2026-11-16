@@ -6495,5 +6495,16 @@
       "bootstrapMismatch": "Le fichier d’amorçage ne correspond pas à votre compte, à cet espace de travail ou à ses identifiants configurés.",
       "testLinkOtherWorkspace": "Ce lien de test concerne un autre espace de travail. Passez à cet espace de travail et rouvrez le lien."
     }
+  },
+  "affiliate": {
+    "remove": "Supprimer le lien du créateur",
+    "haveLink": "Vous avez un lien de créateur ?",
+    "label": "Lien du créateur (facultatif)",
+    "placeholder": "Collez le lien de votre créateur",
+    "saved": "Lien du créateur enregistré.",
+    "checking": "Vérification de votre lien…",
+    "unavailable": "Impossible de vérifier votre lien. Réessayez ou videz le champ pour continuer.",
+    "privacy": "Les liens de créateurs ne sont pas disponibles avec vos paramètres de suivi actuels. Videz le champ pour continuer.",
+    "review": "Votre lien a été enregistré pour vérification."
   }
 }

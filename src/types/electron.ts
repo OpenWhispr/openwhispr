@@ -3264,10 +3264,13 @@ declare global {
           code?: string;
         }
       >;
-      cloudCheckout?: (opts?: {
-        plan?: "monthly" | "annual";
-        tier?: "pro" | "business";
-      }) => Promise<{
+      cloudCheckout?: (
+        opts?: {
+          plan?: "monthly" | "annual";
+          tier?: "pro" | "business";
+        },
+        expectedAuthGeneration?: number
+      ) => Promise<{
         success: boolean;
         url?: string;
         error?: string;
@@ -3304,6 +3307,23 @@ declare global {
       }>;
 
       // Authenticated cloud API proxy (`public: true` skips the auth requirement)
+      getAffiliateCandidate?: () => Promise<{
+        config: { domain: string } | null;
+        candidate: { link: string; clickId: string | null; saved: boolean } | null;
+        generation: number;
+      }>;
+      saveAffiliateCandidate?: (input: {
+        link: string;
+        clickId?: string | null;
+        saved?: boolean;
+        generation: number;
+        expectedCandidate?: { link: string; clickId: string | null; saved: boolean };
+      }) => Promise<void>;
+      resolveAffiliateLink?: (
+        link: string,
+        generation: number
+      ) => Promise<{ link: string; clickId: string }>;
+      onAffiliateLink?: (callback: () => void) => () => void;
       cloudApiRequest?: (opts: {
         method?: string;
         path: string;

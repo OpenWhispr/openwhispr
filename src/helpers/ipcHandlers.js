@@ -35,9 +35,10 @@ const { BYOK_API_KEYS } = require("../config/secretKeys");
 const { dictionaryWordKey } = require("../utils/dictionaryWordKey");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
+const affiliateLinks = require("./affiliateLinks");
 const { createNoteFilesSync } = require("./noteFilesSync");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
-const { createCloudApiRequestHandler } = require("./cloudApiRequest");
+const { captureAuthFence, createCloudApiRequestHandler } = require("./cloudApiRequest");
 const { MetaActivation } = require("./metaActivation");
 const { ProductEvents, createFileStore: createProductEventsStore } = require("./productEvents");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
@@ -3577,6 +3578,7 @@ class IPCHandlers {
         ...state,
         binding: accountScopeBinding.read(),
       });
+      affiliateLinks.setAccountScope(accountId, state.generation);
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
       // Every window asks again whenever its auth state moves, so most calls repeat the scope
       // this process last applied. A repeat changes nothing below: the claims only find rows
@@ -5915,6 +5917,8 @@ class IPCHandlers {
           "globe-preference-state.json",
           ".system-audio-permission",
           "account-scope-binding.json",
+          "affiliate-candidate.json",
+          "affiliate-candidate.json.tmp",
           "installed-models.json",
           "model-registry.json",
           "model-registry.json.backup",
@@ -13127,12 +13131,18 @@ class IPCHandlers {
       }
     });
 
-    const fetchStripeUrl = async (event, endpoint, errorPrefix, body) => {
+    const fetchStripeUrl = async (event, endpoint, errorPrefix, body, expectedAuthGeneration) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const authHeader = await getAuthHeader(event);
+        const fence =
+          expectedAuthGeneration === undefined
+            ? null
+            : captureAuthFence(tokenStore, expectedAuthGeneration);
+        const authHeader = fence
+          ? { Authorization: fence.authorization }
+          : await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const headers = { ...authHeader };
@@ -13142,7 +13152,9 @@ class IPCHandlers {
           fetchOpts.body = JSON.stringify(body);
         }
 
-        const response = await proxyFetch(`${apiUrl}${endpoint}`, fetchOpts);
+        const response = fence
+          ? await fence.awaitBound(() => proxyFetch(`${apiUrl}${endpoint}`, fetchOpts))
+          : await proxyFetch(`${apiUrl}${endpoint}`, fetchOpts);
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -13157,16 +13169,26 @@ class IPCHandlers {
           return { success: false, error: message, code: errorData.code };
         }
 
-        const data = await response.json();
+        const data = fence ? await fence.awaitBound(() => response.json()) : await response.json();
         return { success: true, url: data.url };
       } catch (error) {
         debugLogger.error(`${errorPrefix}: ${error.message}`);
-        return { success: false, error: error.message };
+        return {
+          success: false,
+          error: error.message,
+          ...(error.code ? { code: error.code } : {}),
+        };
       }
     };
 
-    ipcMain.handle("cloud-checkout", (event, opts) =>
-      fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error", opts || undefined)
+    ipcMain.handle("cloud-checkout", (event, opts, expectedAuthGeneration) =>
+      fetchStripeUrl(
+        event,
+        "/api/stripe/checkout",
+        "Cloud checkout error",
+        opts || undefined,
+        expectedAuthGeneration
+      )
     );
 
     ipcMain.handle("cloud-billing-portal", (event) =>
@@ -13265,6 +13287,17 @@ class IPCHandlers {
       }
       return handleCloudApiRequest(opts);
     });
+    ipcMain.handle("affiliate-get-candidate", () => ({
+      config: affiliateLinks.configuration(),
+      candidate: affiliateLinks.candidateForCurrentAccount(),
+      generation: tokenStore.getState().generation,
+    }));
+    ipcMain.handle("affiliate-save-candidate", (_event, input) =>
+      affiliateLinks.saveCandidate(input)
+    );
+    ipcMain.handle("affiliate-resolve-link", (_event, link, generation) =>
+      affiliateLinks.resolveLink(link, generation)
+    );
 
     ipcMain.handle("get-stt-config", handleSttConfigRequest);
 

@@ -6489,5 +6489,16 @@
       "bootstrapMismatch": "El archivo de arranque no coincide con tu cuenta, este espacio de trabajo o sus credenciales configuradas.",
       "testLinkOtherWorkspace": "Este enlace de prueba es para otro espacio de trabajo. Cambia a ese espacio de trabajo y vuelve a abrir el enlace."
     }
+  },
+  "affiliate": {
+    "remove": "Eliminar enlace de creador",
+    "haveLink": "¿Tienes un enlace de un creador?",
+    "label": "Enlace del creador (opcional)",
+    "placeholder": "Pega el enlace de tu creador",
+    "saved": "Enlace del creador guardado.",
+    "checking": "Comprobando tu enlace…",
+    "unavailable": "No pudimos comprobar tu enlace. Inténtalo de nuevo o borra el campo para continuar.",
+    "privacy": "Los enlaces de creadores no están disponibles con tus ajustes de seguimiento actuales. Borra el campo para continuar.",
+    "review": "Tu enlace se ha guardado para su revisión."
   }
 }
