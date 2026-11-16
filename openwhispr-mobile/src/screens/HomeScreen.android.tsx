@@ -70,7 +70,12 @@ export default function AndroidHome() {
   const retryController = useRef<AbortController | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [working, setWorking] = useState(false);
-  const [uploadName, setUploadName] = useState<string | null>(null);
+  // The upload being written up: shown from the moment a file is picked until its bar has filled.
+  const [uploadCard, setUploadCard] = useState<{ name: string; size?: number; done: boolean } | null>(null);
+  const uploadDone = useRef(false);
+  const revealNewest = useRef(false);
+  const historyY = useRef(0);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [toast, setToast] = useState({ message: '', id: 0 });
   const showToast = useCallback(
     (message: string) => setToast((previous) => ({ message, id: previous.id + 1 })),
@@ -78,8 +83,13 @@ export default function AndroidHome() {
   );
   const { isProcessing, stage, cancel, pickAndTranscribeFile } = useFileUpload({
     onError: (error) => Alert.alert(t('errorTitle'), error.message),
-    onPicked: (name) => setUploadName(name),
-    onComplete: () => showToast(h('addedToHistory')),
+    onPicked: (name, size) => setUploadCard({ name, size, done: false }),
+    onComplete: () => {
+      uploadDone.current = true;
+      revealNewest.current = true;
+      setUploadCard((current) => current && { ...current, done: true });
+      showToast(h('addedToHistory'));
+    },
   });
 
   // Try it: record over Home, then transcribe exactly as the bubble does.
@@ -140,7 +150,8 @@ export default function AndroidHome() {
       if (action.current || startedOnVisit !== navigationRevision.current) return;
       action.current = true;
       setWorking(true);
-      setUploadName(null);
+      setUploadCard(null);
+      uploadDone.current = false;
       try {
         await pickAndTranscribeFile();
       } catch {
@@ -149,7 +160,9 @@ export default function AndroidHome() {
         await applyHistoryRetention().catch(() => undefined);
         action.current = false;
         setWorking(false);
-        setUploadName(null);
+        // Let a finished bar show full for a moment; a cancelled or failed one goes at once.
+        if (uploadDone.current) setTimeout(() => setUploadCard(null), 450);
+        else setUploadCard(null);
       }
     };
     if (provider === 'cloud' && user) {
@@ -251,8 +264,20 @@ export default function AndroidHome() {
                 ? 'statsPending'
                 : undefined;
   const statsRetry = accountStats && (status === 'offline' || status === 'blocked');
-  const uploading = isProcessing && uploadName !== null;
+  const uploading = uploadCard !== null && (isProcessing || uploadCard.done);
+  const writingUp = uploading && !uploadCard?.done;
   const recent = [...history].sort((a, b) => b.createdAt - a.createdAt).slice(0, 30);
+  const newestId = recent[0]?.id;
+  // Once a finished upload's card has gone, take the person to the new History row.
+  useEffect(() => {
+    if (uploadCard !== null || !revealNewest.current || !newestId) return;
+    revealNewest.current = false;
+    setHighlightId(newestId);
+    const frame = requestAnimationFrame(() =>
+      scroll.current?.scrollTo({ y: Math.max(0, historyY.current - 8), animated: true }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [uploadCard, newestId]);
 
   return (
     <SafeAreaView
@@ -288,7 +313,7 @@ export default function AndroidHome() {
           onTryIt={() => {
             void openTryIt();
           }}
-          uploadLabel={uploading ? h('writingItUp') : h('uploadAudio')}
+          uploadLabel={writingUp ? h('writingItUp') : h('uploadAudio')}
           uploadDisabled={working}
           onUpload={() => {
             void upload();
@@ -296,8 +321,10 @@ export default function AndroidHome() {
         />
         {uploading || retrying ? (
           <UploadProgress
-            fileName={retrying ? '' : (uploadName ?? '')}
+            fileName={retrying ? '' : (uploadCard?.name ?? '')}
+            sizeBytes={retrying ? undefined : uploadCard?.size}
             cleaning={!retrying && stage === 'cleaning'}
+            done={!retrying && Boolean(uploadCard?.done)}
             onCancel={() => {
               if (retryController.current) retryController.current.abort();
               else cancel();
@@ -361,7 +388,12 @@ export default function AndroidHome() {
             ) : undefined
           }
         />
-        <View style={{ gap: 12 }}>
+        <View
+          style={{ gap: 12 }}
+          onLayout={({ nativeEvent }) => {
+            historyY.current = nativeEvent.layout.y;
+          }}
+        >
           <SectionHeader title={h('history')} />
           {historyError ? (
             <Card>
@@ -395,6 +427,7 @@ export default function AndroidHome() {
           {recent.length ? (
             <HistoryCard
               items={recent}
+              highlightId={highlightId}
               busy={working}
               onCopy={copy}
               onRetry={(id) => {

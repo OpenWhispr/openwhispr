@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   AppState,
+  Easing,
   Image,
   PermissionsAndroid,
   Platform,
@@ -21,7 +23,7 @@ import {
 } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
 import { home, PILL_ICON_CHROME, PillButton, type } from './kit';
-import { missingPermissions, PERMISSION_LABEL, type Permission } from './model';
+import { missingPermissions, PERMISSION_LABEL, uploadProgress, type Permission } from './model';
 
 const GLOSSY_ICON = require('./assets/glossy-icon.png');
 
@@ -222,14 +224,43 @@ export function BubbleCard({
 /** The upload under way, under the bubble card. */
 export function UploadProgress({
   fileName,
+  sizeBytes,
   cleaning,
+  done,
   onCancel,
 }: {
   fileName: string;
+  sizeBytes?: number;
   cleaning: boolean;
+  /** The text has arrived: fill the bar before the card goes. */
+  done: boolean;
   onCancel: () => void;
 }) {
   const t = useHomeT();
+  const fill = useRef(new Animated.Value(0)).current;
+  const startedAt = useRef(Date.now());
+  const cleaningSince = useRef<number | undefined>(undefined);
+  if (cleaning && cleaningSince.current === undefined) cleaningSince.current = Date.now();
+  useEffect(() => {
+    const step = () => {
+      const now = Date.now();
+      Animated.timing(fill, {
+        toValue: uploadProgress({
+          elapsedMs: now - startedAt.current,
+          sizeBytes,
+          cleaningMs: cleaningSince.current === undefined ? undefined : now - cleaningSince.current,
+          done,
+        }),
+        duration: done ? 250 : 200,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }).start();
+    };
+    step();
+    if (done) return;
+    const timer = setInterval(step, 200);
+    return () => clearInterval(timer);
+  }, [fill, sizeBytes, cleaning, done]);
   return (
     <View
       style={{
@@ -262,9 +293,9 @@ export function UploadProgress({
       <View
         style={{ height: 6, borderRadius: 999, backgroundColor: home.fill, overflow: 'hidden' }}
       >
-        <View
+        <Animated.View
           style={{
-            width: cleaning ? '80%' : '45%',
+            width: fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
             height: 6,
             borderRadius: 999,
             backgroundColor: home.accent,

@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { AppState, Image, Pressable, ScrollView, View } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Animated, AppState, Easing, Image, Pressable, ScrollView, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Text } from '@/components/ui/Text';
@@ -194,15 +194,52 @@ export function Stats({ stats, feedback }: { stats: HomeStats; feedback?: ReactN
   );
 }
 
+/** A row just added by an upload slides in and fades from a light accent tint to white. */
+function useArrival(active: boolean) {
+  const value = useRef(new Animated.Value(active ? 0 : 1)).current;
+  useEffect(() => {
+    if (!active) return;
+    value.setValue(0);
+    Animated.timing(value, {
+      toValue: 1,
+      duration: 1600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [active, value]);
+  return {
+    backgroundColor: value.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['rgba(21,85,212,0.10)', 'rgba(21,85,212,0)'],
+    }),
+    opacity: value.interpolate({
+      inputRange: [0, 0.2],
+      outputRange: [0.3, 1],
+      extrapolate: 'clamp',
+    }),
+    transform: [
+      {
+        translateY: value.interpolate({
+          inputRange: [0, 0.25],
+          outputRange: [-8, 0],
+          extrapolate: 'clamp',
+        }),
+      },
+    ],
+  };
+}
+
 function HistoryRow({
   item,
   last,
+  highlighted,
   busy,
   onCopy,
   onRetry,
 }: {
   item: Transcript;
   last: boolean;
+  highlighted: boolean;
   busy: boolean;
   onCopy: (text: string) => void;
   onRetry: (id: string) => void;
@@ -212,16 +249,21 @@ function HistoryRow({
   const text = failed ? item.errorMessage || '' : item.text;
   const when = relativeDate(item.createdAt, t);
   const canRetry = failed && Boolean(item.audioUrl) && !busy;
+  const arrival = useArrival(highlighted);
   return (
     <View>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-        }}
+      <Animated.View
+        style={[
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+          },
+          // The newest row is the card's first: keep the tint inside its rounded top.
+          highlighted ? [arrival, { borderTopLeftRadius: 13, borderTopRightRadius: 13 }] : null,
+        ]}
       >
         <View style={{ flex: 1, gap: 2 }}>
           <Text numberOfLines={1} style={type.headline}>
@@ -246,7 +288,7 @@ function HistoryRow({
         ) : (
           <IconButton icon="Copy" label={t('copy')} onPress={() => onCopy(item.text)} />
         )}
-      </View>
+      </Animated.View>
       {!last && (
         <View style={{ paddingLeft: 16 }}>
           <View style={{ height: 1, backgroundColor: home.divider }} />
@@ -292,11 +334,13 @@ function IconButton({
 
 export function HistoryCard({
   items,
+  highlightId,
   busy,
   onCopy,
   onRetry,
 }: {
   items: Transcript[];
+  highlightId?: string | null;
   busy: boolean;
   onCopy: (text: string) => void;
   onRetry: (id: string) => void;
@@ -316,6 +360,7 @@ export function HistoryCard({
           key={item.id}
           item={item}
           last={index === items.length - 1}
+          highlighted={item.id === highlightId}
           busy={busy}
           onCopy={onCopy}
           onRetry={onRetry}

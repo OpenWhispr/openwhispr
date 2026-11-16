@@ -345,6 +345,8 @@ it('allows a new Cloud upload after returning to Home', async () => {
   expect(mockSaveUpload).toHaveBeenCalledWith(
     expect.objectContaining({ text: 'Fresh upload', provider: 'cloud' }),
   );
+  // The finished bar stays full for a moment before the card goes.
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
   expect(screen.queryByText('writingItUp')).toBeNull();
 });
 it('shows unavailable account counts while loading rather than local counts presented as account totals', () => {

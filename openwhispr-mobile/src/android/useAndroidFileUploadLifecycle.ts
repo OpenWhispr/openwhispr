@@ -20,7 +20,7 @@ export interface AndroidFileUploadOptions extends CommonFileUploadOptions {
   saveToHistory?: boolean;
   isCurrent?: () => boolean;
   /** The file the person chose, before transcription starts. */
-  onPicked?: (fileName: string) => void;
+  onPicked?: (fileName: string, sizeBytes?: number) => void;
 }
 
 export function useAndroidFileUploadLifecycle(
@@ -90,7 +90,8 @@ export function useAndroidFileUploadLifecycle(
           )
             pickerCacheUri = pickedUri;
           check();
-          if (!result.canceled) options.onPicked?.(result.assets[0]?.name ?? '');
+          if (!result.canceled)
+            options.onPicked?.(result.assets[0]?.name ?? '', result.assets[0]?.size);
         },
         check,
         isCurrent,
