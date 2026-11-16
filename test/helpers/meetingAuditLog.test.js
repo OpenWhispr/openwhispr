@@ -364,6 +364,30 @@ test("a stop whose line can't be written is recovered with its own reason and ti
   assert.equal(fs.existsSync(marker()), false);
 });
 
+test("a stop whose line can't be written is written before the next recording starts", async () => {
+  const { log, clock } = harness();
+  log.recordingStarted({ sessionId: "s1", noteId: 3, trigger: "hotkey" });
+  await log.flush();
+  const dir = path.join(userData, "audit");
+  const [file] = fs.readdirSync(dir).filter((name) => name.endsWith(".jsonl"));
+  fs.chmodSync(path.join(dir, file), 0o444);
+  clock.now = START + 40_000;
+  log.recordingStopped({ sessionId: "s1", reason: "user" });
+  await log.flush();
+  fs.chmodSync(path.join(dir, file), 0o644);
+  clock.now = START + 60_000;
+  log.recordingStarted({ sessionId: "s2", noteId: 4, trigger: "hotkey" });
+  await log.flush();
+  assert.deepEqual(
+    lines().map(({ event, sessionId, reason, ts }) => [event, sessionId, reason, ts]),
+    [
+      ["recording.started", "s1", null, "2026-11-11T09:00:00.000Z"],
+      ["recording.stopped", "s1", "user", "2026-11-11T09:00:40.000Z"],
+      ["recording.started", "s2", null, "2026-11-11T09:01:00.000Z"],
+    ]
+  );
+});
+
 // One attempt: a stop that can't be written still drops the marker, so it never
 // holds up later recordings; the start line shows the recording didn't end cleanly.
 test("an interrupted stop the launch can't write is dropped, with a warning", async () => {
