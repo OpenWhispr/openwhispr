@@ -56,6 +56,12 @@ import {
 import { createSerialQueue } from "../utils/serialQueue";
 import { reduceMeetingSegmentEvent, type MeetingSegmentEvent } from "./meetingSegmentReducer";
 import {
+  pickSpeakerForRange,
+  pruneIdentifications,
+  rangeOverlapMs,
+  rangedLabelChanges,
+} from "../helpers/speakerRangeMatch";
+import {
   canStopMeetingRecordingSession,
   createMeetingRecordingStartCoordinator,
   createMeetingRecordingStopBarrier,
@@ -142,7 +148,6 @@ const MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS = {
   autoGainControl: false,
 } as const;
 
-const SPEAKER_IDENTIFICATION_RETENTION_MS = 30_000;
 const SYSTEM_SPEAKER_CARRY_FORWARD_MS = 8_000;
 
 const buildTranscriptText = (segments: TranscriptSegment[]) =>
@@ -495,6 +500,10 @@ let stoppingSeed: {
 let preparePromise: Promise<void> | null = null;
 let ipcCleanups: Array<() => void> = [];
 let speakerIdentifications: SpeakerIdentification[] = [];
+// Local-model rows arrive after the identifications that heard them, so each one
+// keeps the end of its audio range (it starts at the row's timestamp) and is picked
+// again from the kept identifications whenever a new one hears part of it.
+const segmentRangeEnds = new Map<string, number>();
 let nextPlaceholderSpeakerIndex = 0;
 // First speaker index this session owns; a resumed note's earlier sessions keep the
 // ids below it. Main may raise it (see _resolveMeetingSpeakerIndexBase).
@@ -674,15 +683,64 @@ function setSystemPartialSpeakerIdentity(speakerId: string | null, speakerName: 
   });
 }
 
+interface HeardSpeaker {
+  speakerId: string;
+  displayName: string | null;
+  overlapMs: number;
+}
+
+function labelRangedSegment(segment: TranscriptSegment, heard: HeardSpeaker): TranscriptSegment {
+  // Another speaker's name must never stay on a row that turned out to be someone else.
+  const keptName = segment.speaker === heard.speakerId ? segment.speakerName : undefined;
+  return normalizeTranscriptSegment({
+    ...segment,
+    speaker: heard.speakerId,
+    speakerName: heard.displayName ?? keptName,
+    speakerIsPlaceholder: false,
+    speakerStatus: "confirmed",
+  });
+}
+
+function labelSegmentByRange(
+  segment: TranscriptSegment,
+  start: number,
+  end: number
+): TranscriptSegment {
+  segmentRangeEnds.set(segment.id, end);
+  const heard: HeardSpeaker | null = pickSpeakerForRange(speakerIdentifications, start, end);
+  return heard ? labelRangedSegment(segment, heard) : segment;
+}
+
+function relabelRangedSegment(
+  segment: TranscriptSegment,
+  end: number,
+  identification: SpeakerIdentification
+): TranscriptSegment {
+  const start = segment.timestamp;
+  // Only rows in this identification's audio can change; re-picking the rest would
+  // let a label flip as old identifications age out.
+  if (
+    start == null ||
+    rangeOverlapMs(start, end, identification.startTime, identification.endTime) <= 0
+  ) {
+    return segment;
+  }
+  const heard: HeardSpeaker | null = pickSpeakerForRange(speakerIdentifications, start, end);
+  return heard && rangedLabelChanges(segment, heard) ? labelRangedSegment(segment, heard) : segment;
+}
+
 function applySpeakerIdentification(
   segment: TranscriptSegment,
   identification: SpeakerIdentification
 ): TranscriptSegment {
+  if (segment.source !== "system" || segment.speakerLocked) return segment;
+
+  const rangeEnd = segmentRangeEnds.get(segment.id);
+  if (rangeEnd != null) return relabelRangedSegment(segment, rangeEnd, identification);
+
   if (
-    segment.source !== "system" ||
     !isSegmentWithinIdentificationWindow(segment, identification) ||
-    (segment.speaker && !segment.speakerIsPlaceholder && segment.speakerStatus !== "provisional") ||
-    segment.speakerLocked
+    (segment.speaker && !segment.speakerIsPlaceholder && segment.speakerStatus !== "provisional")
   ) {
     return segment;
   }
@@ -1006,6 +1064,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     sessionSeedLength = seed.length;
     sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
+    segmentRangeEnds.clear();
     sessionSpeakerIndexBase = maxSpeakerIndex + 1;
     nextPlaceholderSpeakerIndex = sessionSpeakerIndexBase;
     recentSystemSpeaker = null;
@@ -1384,12 +1443,24 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
               // Must not call setState: `current.segments` was snapshotted before this runs and the
               // reduction inserts into that snapshot. Reads of segmentsRefValue (assignProvisionalSpeaker)
               // still see the previous segments, exactly as before the reducer extraction.
-              decorateFinal: (rawSegment) => {
+              decorateFinal: (rawSegment, event) => {
                 let decorated = args.recorderName
                   ? { ...rawSegment, recorderName: args.recorderName }
                   : rawSegment;
-                for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
-                  decorated = applySpeakerIdentification(decorated, speakerIdentifications[i]);
+                if (
+                  decorated.source === "system" &&
+                  decorated.timestamp != null &&
+                  event.endTimestamp != null
+                ) {
+                  decorated = labelSegmentByRange(
+                    decorated,
+                    decorated.timestamp,
+                    event.endTimestamp
+                  );
+                } else {
+                  for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
+                    decorated = applySpeakerIdentification(decorated, speakerIdentifications[i]);
+                  }
                 }
                 const provisional = assignProvisionalSpeaker(decorated);
                 reserveSpeakerIndex(provisional.speaker);
@@ -1466,9 +1537,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
         rememberSystemSpeaker(data.speakerId, data.displayName ?? null, false, data.endTime);
         speakerIdentifications = [
-          ...speakerIdentifications.filter(
-            (id) => id.endTime >= data.endTime - SPEAKER_IDENTIFICATION_RETENTION_MS
-          ),
+          ...pruneIdentifications(speakerIdentifications, data.endTime),
           data,
         ];
         const next = useMeetingRecordingStore

@@ -3893,6 +3893,7 @@ declare global {
           source: "mic" | "system";
           type: "partial" | "final" | "retract";
           timestamp?: number;
+          endTimestamp?: number;
         }) => void
       ) => () => void;
       onMeetingSpeakerIdentified?: (

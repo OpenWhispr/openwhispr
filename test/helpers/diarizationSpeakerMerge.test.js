@@ -20,10 +20,13 @@ require.cache[require.resolve("electron")] = {
 
 const DiarizationManager = require("../../src/helpers/diarization.js");
 const DeepgramStreaming = require("../../src/helpers/deepgramStreaming.js");
+const { localBufferEntry, describeLocalChunk } = require("../../src/helpers/meetingLocalChunk.js");
 const {
   fragmentFilterLanguages,
   isWrongScriptFragment,
 } = require("../../src/helpers/meetingFragmentFilter");
+const { pickSpeakerForRange } = require("../../src/helpers/speakerRangeMatch");
+const { applyConfirmedSpeaker } = require("../../src/helpers/speakerAssignmentPolicy");
 
 const systemSegment = (timestamp, text) => ({ source: "system", timestamp, text });
 const micSegment = (timestamp, text) => ({ source: "mic", timestamp, text });
@@ -265,6 +268,9 @@ function meetingRowsHarness({ holdMic = false } = {}) {
     DeepgramStreaming,
     Date: { now: () => now },
     meetingDiarizationSegments: segments,
+    meetingLiveIdentifications: [],
+    pickSpeakerForRange,
+    applyConfirmedSpeaker,
     meetingLocalTranscript: "",
     meetingLocalMode: false,
     meetingLocalBuffers: { mic: [], system: [] },
@@ -282,6 +288,7 @@ function meetingRowsHarness({ holdMic = false } = {}) {
     parakeetManager: {
       transcribeLocalParakeet: async () => ({ success: true, text: decodedText }),
     },
+    describeLocalChunk,
     downsample24kTo16k: (buffer) => buffer,
     pcm16ToWav: (buffer) => buffer,
     computeChunkStats: () => ({ rms: 0.2, peak: 0.5, sampleCount: 80000 }),
@@ -315,7 +322,14 @@ function meetingRowsHarness({ holdMic = false } = {}) {
       context.meetingLocalMode = true;
       now = MEETING_START_MS + seconds * 1000;
       decodedText = text;
-      context.meetingLocalBuffers[source] = [Buffer.alloc(24000 * 2 * 5)];
+      // Batches are consecutive 5 s spans and a decode finishes a little after its
+      // batch ends, so the batch that `seconds` completes is the one before it.
+      const batchStartSeconds = (Math.floor(seconds / 5) - 1) * 5;
+      context.meetingLocalBuffers[source] = [
+        localBufferEntry(Buffer.alloc(24000 * 2 * 5), {
+          capturedAt: MEETING_START_MS + batchStartSeconds * 1000,
+        }),
+      ];
       await context.transcribeLocal(source);
     },
     attach: (streaming, source) => context.attachStreaming(streaming, win, source),
@@ -330,13 +344,21 @@ const normalizedMeetingRows = (segments) =>
   segments.map((segment) => ({
     ...segment,
     timestamp: (segment.timestamp - MEETING_START_MS) / 1000,
+    ...(segment.endTimestamp === undefined
+      ? {}
+      : { endTimestamp: (segment.endTimestamp - MEETING_START_MS) / 1000 }),
   }));
 const rowContents = (segments) =>
-  segments.map(({ text, source, timestamp }) => ({ text, source, timestamp }));
+  segments.map(({ text, source, timestamp, endTimestamp }) => ({
+    text,
+    source,
+    timestamp,
+    ...(endTimestamp === undefined ? {} : { endTimestamp }),
+  }));
 
 for (const source of ["system", "mic"]) {
   const held = source === "mic";
-  test(`local ${held ? "held mic" : "system"} rows keep the speaker from their decoded batch`, async () => {
+  test(`local ${held ? "held mic" : "system"} rows keep the speaker from their own audio`, async () => {
     const harness = meetingRowsHarness({ holdMic: held });
     await harness.transcribe(source, "Good morning.", 5.1);
     await harness.transcribe(source, "Morning. Shall we discuss the budget today?", 10.1);
@@ -344,8 +366,13 @@ for (const source of ["system", "mic"]) {
     harness.release();
 
     const expectedRows = [
-      { source, timestamp: 5.1, text: "Good morning." },
-      { source, timestamp: 10.1, text: "Morning. Shall we discuss the budget today?" },
+      { source, timestamp: 0, endTimestamp: 5, text: "Good morning." },
+      {
+        source,
+        timestamp: 5,
+        endTimestamp: 10,
+        text: "Morning. Shall we discuss the budget today?",
+      },
     ];
     const rows = normalizedMeetingRows(harness.segments);
     assert.deepEqual(rowContents(rows), expectedRows);
@@ -355,8 +382,8 @@ for (const source of ["system", "mic"]) {
       expectedRows
     );
 
-    // The first batch ends at 5s. The reply belongs to the next batch,
-    // although its audio overlaps the first batch's decode-completion time.
+    // Rows carry their audio's range, not their decode time. The reply's audio
+    // [5, 10] overlaps speaker_0 for 3.8 s and speaker_1 for 1.2 s.
     const merged = new DiarizationManager().mergeWithTranscript(
       rows,
       [
@@ -470,4 +497,35 @@ test("speech-start streaming rows still exclude a later speaker during a pause",
     merged.map((segment) => segment.speaker),
     ["speaker_0", "speaker_1"]
   );
+});
+
+const rangedDiarization = [
+  { speaker: "speaker_00", start: 0, end: 5 },
+  { speaker: "speaker_01", start: 5, end: 10 },
+];
+
+test("a ranged row takes the speaker of its own audio", () => {
+  const manager = new DiarizationManager();
+  const merged = manager.mergeWithTranscript(
+    [
+      { text: "first", source: "system", timestamp: 0.2, endTimestamp: 4.8 },
+      { text: "second", source: "system", timestamp: 5.1, endTimestamp: 9.7 },
+    ],
+    rangedDiarization
+  );
+
+  assert.deepEqual(
+    merged.map((row) => row.speaker),
+    ["speaker_0", "speaker_1"]
+  );
+});
+
+test("a ranged row spanning two speakers takes the one covering more of it", () => {
+  const manager = new DiarizationManager();
+  const merged = manager.mergeWithTranscript(
+    [{ text: "long", source: "system", timestamp: 3, endTimestamp: 9 }],
+    rangedDiarization
+  );
+
+  assert.equal(merged[0].speaker, "speaker_1");
 });
