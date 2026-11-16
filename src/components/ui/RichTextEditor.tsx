@@ -6,7 +6,6 @@ import { createRichTextExtensions } from "./RichTextEditorExtensions";
 import { RichTextEditorFormatMenu } from "./RichTextEditorFormatMenu";
 import { RichTextEditorTableMenu } from "./RichTextEditorTableMenu";
 import { DragHandle } from "@tiptap/extension-drag-handle-react";
-import { AttrStep, ReplaceAroundStep } from "@tiptap/pm/transform";
 import { FindReplacePanel, WordCount } from "./editorBlocks/FindReplacePanel";
 import "katex/dist/katex.min.css";
 import "./editorBlocks/editorBlocks.css";
@@ -101,17 +100,6 @@ export function RichTextEditor({
       if (suppressUpdateRef.current || !transaction.docChanged) return;
 
       const md = (ed.storage as any).markdown.getMarkdown() as string;
-      // block IDs and heading anchors (set when a note opens)
-      // change only node attributes. If the Markdown before and after is the
-      // same, it is not an edit: saving would rewrite the note in canonical
-      // form and discard the assistant's Undo.
-      if (
-        transaction.steps.every(
-          (step) => step instanceof AttrStep || step instanceof ReplaceAroundStep
-        ) &&
-        (ed.storage as any).markdown.serializer.serialize(transaction.before) === md
-      )
-        return;
       internalValueRef.current = md;
       onChange?.(md);
     },

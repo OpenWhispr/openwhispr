@@ -5,10 +5,7 @@
 import type { Editor } from "@tiptap/core";
 import { tb } from "./translate";
 
-export function promptInline(
-  editor: Editor,
-  { placeholder }: { placeholder: string }
-): Promise<string | null> {
+export function promptInline(editor: Editor, placeholder: string): Promise<string | null> {
   document.querySelector(".rte-inline-input")?.remove();
   const coords = editor.view.coordsAtPos(editor.state.selection.from);
   const box = document.createElement("div");

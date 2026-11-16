@@ -62,22 +62,12 @@ export function useHideOnFocusLeave(editor: Editor, pluginKeys: readonly string[
 export function useMenuDropdown(menuOptions?: BubbleMenuProps["options"]) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
-  const [open, setOpen] = useState(false);
-  // which of the extra style dropdowns is open (one at a time).
-  const [extraOpen, setExtraOpen] = useState<string | null>(null);
+  // The id of the open dropdown, if any: a menu can hold several.
+  const [open, setOpen] = useState<string | null>(null);
   useEffect(() => setContainer(menuRef.current), []);
   // Stable: a menu dispatches a transaction whenever its props change.
-  const options = useMemo(
-    () => ({
-      ...menuOptions,
-      onHide: () => {
-        setOpen(false);
-        setExtraOpen(null);
-      },
-    }),
-    [menuOptions]
-  );
-  return { menuRef, container, open, setOpen, extraOpen, setExtraOpen, options };
+  const options = useMemo(() => ({ ...menuOptions, onHide: () => setOpen(null) }), [menuOptions]);
+  return { menuRef, container, open, setOpen, options };
 }
 
 /** Restore focus only while the note is still editable and mounted. */

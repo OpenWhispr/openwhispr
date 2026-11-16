@@ -148,14 +148,15 @@ export function markdownSyntax(md: any) {
       state.pos += 2;
       return true;
     }
-    // Not when the only closing "==" is inside a code span, nor across words
-    // with letters on both outer sides (x==y and y==z).
+    // Not when the only closing "==" follows a space or is inside a code span, nor
+    // across words with letters on both outer sides (x==y and y==z).
     const next = src.charAt(pos + 2);
     const close = src.indexOf("==", pos + 3);
     if (
       !next ||
       /\s|=/.test(next) ||
       close < 0 ||
+      /\s/.test(src.charAt(close - 1)) ||
       src.slice(pos, close).replace(/\\./g, "").includes("`")
     )
       return false;

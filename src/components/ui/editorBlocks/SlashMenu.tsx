@@ -51,9 +51,7 @@ const label = (key: string, params?: Record<string, unknown>) => () => tb(key, p
 /** Ruby text: a reading for the selection, or "text|reading" inserted at the caret. */
 export async function promptRuby(e: Editor) {
   const hasSelection = !e.state.selection.empty;
-  const answer = await promptInline(e, {
-    placeholder: tb(hasSelection ? "prompt.reading" : "prompt.textReading"),
-  });
+  const answer = await promptInline(e, tb(hasSelection ? "prompt.reading" : "prompt.textReading"));
   if (!answer) return;
   if (hasSelection) return chain(e).setRubyText({ rt: answer }).run();
   const [base, rt] = answer.split("|").map((s) => s.trim());
@@ -159,7 +157,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     hint: () => "LaTeX",
     keywords: "math equation formula latex katex",
     run: async (e) => {
-      const latex = await promptInline(e, { placeholder: tb("prompt.latexBlock") });
+      const latex = await promptInline(e, tb("prompt.latexBlock"));
       if (latex) chain(e).insertBlockMath({ latex }).run();
     },
   },
@@ -170,7 +168,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     hint: label("slash.inlineMathHint"),
     keywords: "math equation formula latex",
     run: async (e) => {
-      const latex = await promptInline(e, { placeholder: tb("prompt.latexInline") });
+      const latex = await promptInline(e, tb("prompt.latexInline"));
       if (latex) chain(e).insertInlineMath({ latex }).run();
     },
   },
@@ -181,7 +179,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     hint: label("slash.emojiHint"),
     keywords: "emoji smiley",
     run: async (e) => {
-      const name = await promptInline(e, { placeholder: tb("prompt.emoji") });
+      const name = await promptInline(e, tb("prompt.emoji"));
       if (name) chain(e).setEmoji(name.replace(/:/g, "").toLowerCase()).run();
     },
   },

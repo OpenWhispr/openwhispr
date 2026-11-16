@@ -24,8 +24,6 @@ Centered line {align:center}
 const answer = 42;
 ```
 
-[▶ YouTube video](https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ)
-
 - [ ] Ship it [@Alex Rivera](mention:alex%40example.com)
 
 Rocket 🚀 emoji.

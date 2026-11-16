@@ -1267,23 +1267,6 @@ test("the empty-line toolbar stays on the caret when Enter scrolls the note, abo
   assert.deepEqual(notes.errors, []);
 });
 
-test("opening a note stored in non-canonical Markdown does not save it", async (t) => {
-  // Block IDs and heading anchors are set as the note opens. That changes node
-  // attributes but not the Markdown, so it must not save (and must not drop the
-  // assistant's Undo). '*' bullets and '__bold__' aren't the serializer's form.
-  const notes = await mountNotes(
-    t,
-    "# Summary\n\n* first item\n* second item\n\n__bold__ text\n\n## Next"
-  );
-  await notes.act(() => {}, 300);
-  assert.deepEqual(notes.changes, []);
-  await notes.act(
-    () => notes.editor().commands.insertContentAt(notes.editor().state.doc.content.size - 1, "!"),
-    50
-  );
-  assert.equal(notes.changes.length, 1, "a real edit still saves");
-});
-
 test("the formatting toolbar's style controls apply Markdown-safe styles", async (t) => {
   const notes = await mountNotes(t, "Hello world here");
   await notes.act(() => notes.editor().commands.setTextSelection({ from: 1, to: 6 }), 300);

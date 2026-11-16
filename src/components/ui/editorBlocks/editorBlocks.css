@@ -225,19 +225,15 @@
 }
 .dark .ProseMirror pre .hljs-number,
 .dark .ProseMirror pre .hljs-literal,
-.dark .ProseMirror pre .hljs-symbol {
-  color: #79c0ff;
-}
-.dark .ProseMirror pre .hljs-title,
-.dark .ProseMirror pre .hljs-section,
-.dark .ProseMirror pre .hljs-function {
-  color: #ffa657;
-}
+.dark .ProseMirror pre .hljs-symbol,
 .dark .ProseMirror pre .hljs-attr,
 .dark .ProseMirror pre .hljs-attribute,
 .dark .ProseMirror pre .hljs-variable {
   color: #79c0ff;
 }
+.dark .ProseMirror pre .hljs-title,
+.dark .ProseMirror pre .hljs-section,
+.dark .ProseMirror pre .hljs-function,
 .dark .ProseMirror pre .hljs-type,
 .dark .ProseMirror pre .hljs-class {
   color: #ffa657;

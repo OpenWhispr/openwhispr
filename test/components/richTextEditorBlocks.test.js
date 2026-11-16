@@ -161,11 +161,9 @@ test("a highlight opener in one paragraph does not leak into the next", () => {
 });
 
 test("text that only looks like the new forms keeps its meaning", () => {
-  assert.equal(save("x==y and y==z"), "x==y and y==z");
+  for (const text of ["x==y and y==z", "x ==1 and y ==2"]) assert.equal(save(text), text);
   assert.ok(featuresOf("foo==bar baz== qux").includes("mark:highlight"), "mid-word highlight");
   assert.ok(featuresOf("==a \\` b==").includes("mark:highlight"), "escaped backtick");
-  const video = "[▶ YouTube video](https://www.youtube.com/watch?v=dQw4w9WgXcQ)";
-  assert.equal(save(video), video);
   // A $ or {sub} whose only close is inside a code span.
   for (const code of ["Set $HOME and `$PATH` first", "Use {sub}x in `{/sub}` docs"])
     assert.equal(save(code), code);

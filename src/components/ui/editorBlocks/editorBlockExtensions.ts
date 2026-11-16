@@ -10,7 +10,6 @@ import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { createLowlight, common } from "lowlight";
 import { Emoji, gitHubEmojis, shortcodeToEmoji } from "@tiptap/extension-emoji";
 import Typography from "@tiptap/extension-typography";
-import { TableOfContents, getHierarchicalIndexes } from "@tiptap/extension-table-of-contents";
 import Highlight from "@tiptap/extension-highlight";
 import { InlineMath, BlockMath } from "@tiptap/extension-mathematics";
 import { FindAndReplace } from "@tiptap/extension-find-and-replace";
@@ -248,7 +247,12 @@ export const TableOfContentsBlock = Node.create({
       dom.className = "table-of-contents";
       dom.setAttribute("contenteditable", "false");
       const render = () => {
-        const items: any[] = (editor.storage as any).tableOfContents?.content ?? [];
+        const items: { level: number; text: string; pos: number }[] = [];
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name === "heading" && node.textContent)
+            items.push({ level: node.attrs.level, text: node.textContent, pos });
+        });
+        const top = Math.min(...items.map((item) => item.level));
         dom.replaceChildren();
         const title = document.createElement("div");
         title.className = "table-of-contents-title";
@@ -264,11 +268,14 @@ export const TableOfContentsBlock = Node.create({
           const link = document.createElement("button");
           link.type = "button";
           link.className = "table-of-contents-item";
-          link.style.paddingInlineStart = `${(item.level - 1) * 14}px`;
-          link.textContent = item.textContent;
+          link.style.paddingInlineStart = `${(item.level - top) * 14}px`;
+          link.textContent = item.text;
           link.addEventListener("click", (event) => {
             event.preventDefault();
-            item.dom?.scrollIntoView({ behavior: "smooth", block: "start" });
+            (editor.view.nodeDOM(item.pos) as HTMLElement | null)?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
           });
           dom.appendChild(link);
         }
@@ -335,7 +342,6 @@ export function createEditorBlockExtensions() {
     ...toggleBlockExtensions,
     Callout,
     TableOfContentsBlock,
-    TableOfContents.configure({ anchorTypes: ["heading"], getIndex: getHierarchicalIndexes }),
     MarkdownInlineMath,
     MarkdownBlockMath,
     MarkdownHighlight.configure({ multicolor: false }),

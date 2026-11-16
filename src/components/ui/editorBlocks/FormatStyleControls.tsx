@@ -88,8 +88,8 @@ function StyleDropdown({
 }) {
   return (
     <DropdownMenu
-      open={dropdown.extraOpen === id}
-      onOpenChange={(open) => dropdown.setExtraOpen(open ? id : null)}
+      open={dropdown.open === id}
+      onOpenChange={(open) => dropdown.setOpen(open ? id : null)}
     >
       <DropdownMenuTrigger asChild>
         <Button

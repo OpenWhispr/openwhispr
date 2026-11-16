@@ -175,7 +175,6 @@
     "@tiptap/extension-subscript": "3.31.3",
     "@tiptap/extension-superscript": "3.31.3",
     "@tiptap/extension-table": "3.31.3",
-    "@tiptap/extension-table-of-contents": "3.31.3",
     "@tiptap/extension-task-item": "3.31.3",
     "@tiptap/extension-task-list": "3.31.3",
     "@tiptap/extension-text-align": "3.31.3",

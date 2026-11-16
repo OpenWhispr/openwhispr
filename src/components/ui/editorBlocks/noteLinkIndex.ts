@@ -33,16 +33,14 @@ export function loadNotes(maxAgeMs = 15000): Promise<IndexedNote[]> {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const rows: any[] = (await api()?.getNotes?.(null, 2000)) ?? [];
-      notes = rows
-        .filter((r) => r && r.id != null && !r.deleted_at)
-        .map((r) => ({
-          id: r.id,
-          title: (r.title || "").trim(),
-          content: r.content || "",
-          enhanced: r.enhanced_content || "",
-          updatedAt: r.updated_at || "",
-        }));
+      const rows: any[] = await api().getNotes(null, 2000);
+      notes = rows.map((r) => ({
+        id: r.id,
+        title: (r.title || "").trim(),
+        content: r.content || "",
+        enhanced: r.enhanced_content || "",
+        updatedAt: r.updated_at || "",
+      }));
       loadedAt = Date.now();
       listeners.forEach((l) => l());
     } catch {
