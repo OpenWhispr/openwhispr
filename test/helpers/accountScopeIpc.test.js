@@ -231,6 +231,179 @@ test("a sign-out in main stops connects without waiting for the renderer", async
   ]);
 });
 
+// Spies on what a scope pass does beyond moving the scope: the claims, the flushes and the
+// connector reset. Main's database follows the scope it is given.
+function watchScopeWork(t) {
+  const work = [];
+  const spied = {
+    setActiveAccountId: (accountId) => {
+      databaseScopes.push(accountId);
+      databaseManager.activeAccountId = accountId;
+    },
+    claimSignedOutLocalRows: () => work.push("claimSignedOutLocalRows"),
+    claimLegacyRowsOfOnlyAccount: () => work.push("claimLegacyRowsOfOnlyAccount"),
+  };
+  const originals = Object.fromEntries(
+    ["setActiveAccountId", "claimSignedOutLocalRows", "claimLegacyRowsOfOnlyAccount"].map(
+      (name) => [name, Object.getOwnPropertyDescriptor(databaseManager, name)]
+    )
+  );
+  const originalAccount = databaseManager.activeAccountId;
+  const originalThis = {
+    _claimSignedOutPrivateNotes: fakeThis._claimSignedOutPrivateNotes,
+    metaActivation: fakeThis.metaActivation,
+    productEvents: fakeThis.productEvents,
+  };
+  Object.assign(databaseManager, spied);
+  fakeThis._claimSignedOutPrivateNotes = () => work.push("claimSignedOutPrivateNotes");
+  fakeThis.metaActivation = { flush: async () => work.push("metaActivation.flush") };
+  fakeThis.productEvents = { flush: async () => work.push("productEvents.flush") };
+  t.after(() => {
+    for (const [name, descriptor] of Object.entries(originals)) {
+      if (descriptor) Object.defineProperty(databaseManager, name, descriptor);
+      else delete databaseManager[name];
+    }
+    databaseManager.activeAccountId = originalAccount;
+    Object.assign(fakeThis, originalThis);
+  });
+  const reset = () => {
+    work.length = 0;
+    broadcasts.length = 0;
+    connectorCalls.length = 0;
+  };
+  return { work, reset };
+}
+
+const FULL_PASS = [
+  "claimSignedOutLocalRows",
+  "claimLegacyRowsOfOnlyAccount",
+  "claimSignedOutPrivateNotes",
+  "metaActivation.flush",
+  "productEvents.flush",
+];
+
+test("a scope main already applied is taken again without claims, broadcasts or flushes", async (t) => {
+  const { work, reset } = watchScopeWork(t);
+  // A relaunch: main restored the account before any window asked.
+  tokenState = { token: "repeat-token", generation: 50 };
+  databaseManager.activeAccountId = "repeat-account";
+
+  reset();
+  assert.deepEqual(await setScope("repeat-account", 50), { success: true });
+  // The first pass of this process runs everything, legacy claims included.
+  assert.deepEqual(work, FULL_PASS);
+  assert.deepEqual(broadcasts, [
+    ["active-account-scope-changed", { accountId: "repeat-account", authGeneration: 50 }],
+  ]);
+
+  reset();
+  for (let i = 0; i < 5; i++) {
+    assert.deepEqual(await setScope("repeat-account", 50), { success: true });
+  }
+  // Windows re-ask when a broadcast lands; a repeat that broadcast would feed itself.
+  assert.deepEqual(work, []);
+  assert.deepEqual(broadcasts, []);
+  assert.deepEqual(connectorCalls, []);
+  assert.deepEqual(await getScope(), { accountId: "repeat-account", authGeneration: 50 });
+
+  // A rotated bearer is a new scope for the same account.
+  tokenState = { token: "repeat-token-rotated", generation: 51 };
+  reset();
+  await setScope("repeat-account", 51);
+  assert.deepEqual(work, FULL_PASS);
+  assert.deepEqual(broadcasts, [
+    ["active-account-scope-changed", { accountId: "repeat-account", authGeneration: 51 }],
+  ]);
+});
+
+test("a repeated sign-out is taken once, and an account after it runs every claim", async (t) => {
+  const { work, reset } = watchScopeWork(t);
+  tokenState = { token: "signed-in-token", generation: 60 };
+  await setScope("leaving-account", 60);
+
+  // Main clears the account itself; the renderer's sign-out pass follows.
+  handleAuthTokenChange({ token: null, generation: 61 });
+  tokenState = { token: null, generation: 61 };
+  reset();
+  await setScope(null, 61);
+  assert.deepEqual(work, FULL_PASS);
+  assert.deepEqual(broadcasts, [["active-account-scope-changed", null]]);
+
+  reset();
+  await setScope(null, 61);
+  await setScope(null, 61);
+  assert.deepEqual(work, []);
+  assert.deepEqual(broadcasts, []);
+
+  // The next sign-in claims what was written signed out, even with the generation unchanged
+  // since the sign-out pass.
+  tokenState = { token: "next-token", generation: 62 };
+  reset();
+  await setScope("next-account", 62);
+  assert.deepEqual(work, FULL_PASS);
+  assert.deepEqual(databaseManager.activeAccountId, "next-account");
+});
+
+test("a repeat runs in full once anything else moved main's account or binding", async (t) => {
+  const { work, reset } = watchScopeWork(t);
+  tokenState = { token: "moved-token", generation: 70 };
+  await setScope("moved-account", 70);
+
+  // The database's account was moved by another path.
+  databaseManager.activeAccountId = null;
+  reset();
+  await setScope("moved-account", 70);
+  assert.deepEqual(work, FULL_PASS);
+  assert.equal(databaseManager.activeAccountId, "moved-account");
+
+  // The binding no longer vouches for this bearer.
+  require("../../src/helpers/accountScopeBinding").clear();
+  reset();
+  await setScope("moved-account", 70);
+  assert.deepEqual(work, FULL_PASS);
+  assert.deepEqual(await getScope(), { accountId: "moved-account", authGeneration: 70 });
+});
+
+test("a failed private-note claim can retry before the scope becomes a no-op", async (t) => {
+  const { reset } = watchScopeWork(t);
+  const IPCHandlers = require(handlersModulePath);
+  const Ctor = IPCHandlers.default || IPCHandlers;
+  fakeThis._claimSignedOutPrivateNotes = () =>
+    Ctor.prototype._claimSignedOutPrivateNotes.call(fakeThis);
+  const originalClaim = Object.getOwnPropertyDescriptor(
+    databaseManager,
+    "claimSignedOutPrivateNotes"
+  );
+  t.after(() => {
+    if (originalClaim) {
+      Object.defineProperty(databaseManager, "claimSignedOutPrivateNotes", originalClaim);
+    } else delete databaseManager.claimSignedOutPrivateNotes;
+  });
+  let attempts = 0;
+  let claimed = false;
+  databaseManager.claimSignedOutPrivateNotes = () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error("temporary claim failure");
+    claimed = true;
+    return { notes: 1, folders: 0 };
+  };
+  tokenState = { token: "claim-retry-token", generation: 80 };
+
+  assert.deepEqual(await setScope("claim-retry-account", 80), { success: true });
+  assert.equal(claimed, false);
+  assert.deepEqual(await getScope(), { accountId: "claim-retry-account", authGeneration: 80 });
+
+  await setScope("claim-retry-account", 80);
+  assert.equal(claimed, true, "the next scope request retries the failed claim");
+  assert.equal(attempts, 2);
+
+  reset();
+  await setScope("claim-retry-account", 80);
+  assert.equal(attempts, 2);
+  assert.deepEqual(broadcasts, []);
+  assert.deepEqual(connectorCalls, []);
+});
+
 test("meeting prompt retirement precedes scope mutation and skips a true no-op", async () => {
   tokenState = { token: "meeting-test-token", generation: 20 };
   const originalManager = fakeThis.windowManager;

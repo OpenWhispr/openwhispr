@@ -1139,12 +1139,14 @@ class IPCHandlers {
     try {
       const claimed = this.databaseManager.claimSignedOutPrivateNotes();
       if (claimed.notes > 0 || claimed.folders > 0) this.notifyVectorChanges();
+      return true;
     } catch (error) {
       debugLogger.error(
         "Claiming signed-out private notes at sign-in failed",
         { error: error.message },
         "database"
       );
+      return false;
     }
   }
 
@@ -3168,6 +3170,24 @@ class IPCHandlers {
         binding: accountScopeBinding.read(),
       });
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
+      // Every window asks again whenever its auth state moves, so most calls repeat the scope
+      // this process last applied. A repeat changes nothing below: the claims only find rows
+      // written signed out, which can't appear while an account is active (see saveTranscription
+      // for the one that can), and the flushes ran for this scope already. Nor does it broadcast:
+      // every window reacts to the broadcast, and those reactions led back here.
+      if (
+        !accountChanged &&
+        this._appliedAccountScope?.accountId === accountId &&
+        this._appliedAccountScope.generation === state.generation &&
+        (accountId === null
+          ? previousScope === null
+          : accountScopeBinding.matchesActiveAccountScope(previousScope, {
+              accountId,
+              authGeneration: state.generation,
+            }))
+      ) {
+        return { success: true };
+      }
       const guestPolicy =
         accountId === null && !state.token ? guestAudioPolicy(state.generation) : null;
       const scopeChanged =
@@ -3201,7 +3221,7 @@ class IPCHandlers {
       this.databaseManager.claimLegacyRowsOfOnlyAccount();
       // After those two: they give the account the signed-out chats this moves
       // out of the stand-in along with the notes.
-      this._claimSignedOutPrivateNotes();
+      const privateNotesClaimed = this._claimSignedOutPrivateNotes();
       // After the claims, so the new account's notes include the ones it took over.
       if (accountChanged) this.noteFiles.accountChanged();
       if (accountChanged) {
@@ -3219,6 +3239,10 @@ class IPCHandlers {
       // account and cached under the binding, so neither may still be the old one.
       if (scopeChanged) this._localModelPolicy?.invalidate(guestPolicy);
       else if (guestPolicy) this._localModelPolicy?.update(guestPolicy);
+      // A failed best-effort claim must remain eligible for the next scope request.
+      this._appliedAccountScope = privateNotesClaimed
+        ? { accountId, generation: state.generation }
+        : null;
       broadcastToWindows(
         "active-account-scope-changed",
         accountId !== null ? { accountId, authGeneration: state.generation } : null
