@@ -15,7 +15,6 @@ export const homeEnglish = {
   turnOnOverlay: 'Allow display over other apps',
   turnOnAccessibility: 'Turn on Accessibility',
   turnOnMicrophone: 'Allow the microphone',
-  tapToDictate: 'Tap to dictate',
   dictate: 'Dictate',
   uploadAudio: 'Upload audio',
   writingUpRecording: 'Writing up your recording',

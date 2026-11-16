@@ -142,7 +142,7 @@ export default function AndroidHome() {
     try {
       const job = createAndroidJob('dictate');
       if (job.route.provider === 'cloud' && accountRequiredForCloud(user)) {
-        showAccountRequiredAlert(h('tapToDictate'));
+        showAccountRequiredAlert(h('dictate'));
         return;
       }
       await ensureAndroidModels(job);

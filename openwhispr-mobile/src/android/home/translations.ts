@@ -3,7 +3,6 @@ import type { HomeKey } from './strings';
 // Missing keys fall back to English.
 export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> = {
   es: {
-    tapToDictate: 'Toca para dictar',
     dictate: 'Dictar',
     writingUpRecording: 'Transcribiendo tu grabación',
     usuallyFewSeconds: 'Suele tardar unos segundos',
@@ -61,7 +60,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Permite el micrófono para probar el dictado.',
   },
   fr: {
-    tapToDictate: 'Toucher pour dicter',
     dictate: 'Dicter',
     writingUpRecording: 'Transcription de votre enregistrement',
     usuallyFewSeconds: 'En général quelques secondes',
@@ -119,7 +117,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Autorisez le micro pour essayer la dictée.',
   },
   de: {
-    tapToDictate: 'Zum Diktieren tippen',
     dictate: 'Diktieren',
     writingUpRecording: 'Deine Aufnahme wird geschrieben',
     usuallyFewSeconds: 'Dauert meist nur Sekunden',
@@ -177,7 +174,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Erlaube das Mikrofon, um das Diktieren auszuprobieren.',
   },
   pt: {
-    tapToDictate: 'Toque para ditar',
     dictate: 'Ditar',
     writingUpRecording: 'Transcrevendo sua gravação',
     usuallyFewSeconds: 'Costuma levar alguns segundos',
@@ -235,7 +231,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Permita o microfone para experimentar o ditado.',
   },
   it: {
-    tapToDictate: 'Tocca per dettare',
     dictate: 'Detta',
     writingUpRecording: 'Trascrivo la tua registrazione',
     usuallyFewSeconds: 'Di solito pochi secondi',
@@ -293,8 +288,7 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Consenti il microfono per provare la dettatura.',
   },
   ru: {
-    tapToDictate: 'Нажмите, чтобы диктовать',
-    dictate: 'Диктовка',
+    dictate: 'Диктовать',
     writingUpRecording: 'Расшифровываем запись',
     usuallyFewSeconds: 'Обычно несколько секунд',
     writingItUpMinute: 'Расшифровка… около минуты',
@@ -351,7 +345,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: 'Разрешите микрофон, чтобы попробовать диктовку.',
   },
   'zh-CN': {
-    tapToDictate: '点按听写',
     dictate: '听写',
     writingUpRecording: '正在转写你的录音',
     usuallyFewSeconds: '通常只需几秒',
@@ -409,7 +402,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '请允许使用麦克风以试用听写。',
   },
   'zh-TW': {
-    tapToDictate: '點一下聽寫',
     dictate: '聽寫',
     writingUpRecording: '正在轉寫你的錄音',
     usuallyFewSeconds: '通常只需幾秒',
@@ -467,7 +459,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '請允許使用麥克風以試用聽寫。',
   },
   ja: {
-    tapToDictate: 'タップして音声入力',
     dictate: '音声入力',
     writingUpRecording: '録音を文字にしています',
     usuallyFewSeconds: '通常は数秒です',
@@ -525,7 +516,6 @@ export const homeTranslations: Record<string, Partial<Record<HomeKey, string>>> 
     microphoneNeeded: '音声入力を試すにはマイクを許可してください。',
   },
   ar: {
-    tapToDictate: 'المس للإملاء',
     dictate: 'الإملاء',
     writingUpRecording: 'جارٍ تفريغ تسجيلك',
     usuallyFewSeconds: 'عادةً بضع ثوانٍ',

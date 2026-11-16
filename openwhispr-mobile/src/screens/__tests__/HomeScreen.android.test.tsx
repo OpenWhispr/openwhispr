@@ -280,7 +280,7 @@ it('aborts an initial upload when Home loses focus, without saving a late result
   expect(screen.getByText('writingItUpMinute')).toBeTruthy();
   // The buttons keep their words while busy.
   expect(screen.getByText('uploadAudio')).toBeTruthy();
-  expect(screen.getByText('tapToDictate')).toBeTruthy();
+  expect(screen.getByText('dictate')).toBeTruthy();
   expect(screen.getByText('input.wav')).toBeTruthy();
   expect(signal?.aborted).toBe(false);
   act(() => {
@@ -536,7 +536,7 @@ describe('bubble card', () => {
     render(<AndroidHome />);
     expect(screen.getByText('bubbleOff')).toBeTruthy();
     expect(screen.getByText('needsOnePermission')).toBeTruthy();
-    expect(screen.queryByText('tapToDictate')).toBeNull();
+    expect(screen.queryByText('dictate')).toBeNull();
     expect(screen.getByText('uploadAudio')).toBeTruthy();
     fireEvent.press(screen.getByText('turnOnAccessibility'));
     expect(mockOpenSettings).toHaveBeenCalledWith('accessibility');
@@ -553,7 +553,7 @@ describe('bubble card', () => {
   it('shows the bubble is on with Try it and Upload audio side by side', () => {
     render(<AndroidHome />);
     expect(screen.getByText('bubbleOn')).toBeTruthy();
-    expect(screen.getByText('tapToDictate')).toBeTruthy();
+    expect(screen.getByText('dictate')).toBeTruthy();
     expect(screen.getByText('uploadAudio')).toBeTruthy();
   });
 });
@@ -569,7 +569,7 @@ it('copies a Try it dictation to the clipboard and says so at the bottom', async
     () => new Promise<string>((resolve) => (finish = resolve)),
   );
   render(<AndroidHome />);
-  await act(async () => fireEvent.press(screen.getByText('tapToDictate')));
+  await act(async () => fireEvent.press(screen.getByText('dictate')));
   await act(async () => fireEvent.press(screen.getByText('recorder-done')));
   expect(screen.queryByText('recorder-done')).toBeNull();
   expect(screen.getByText('writingUpRecording')).toBeTruthy();
@@ -577,7 +577,7 @@ it('copies a Try it dictation to the clipboard and says so at the bottom', async
   await act(async () => finish('Testing this out.'));
   expect(clipboard.setStringAsync).toHaveBeenCalledWith('Testing this out.');
   expect(screen.getByText('copied', { includeHiddenElements: true })).toBeTruthy();
-  expect(screen.getByText('tapToDictate')).toBeTruthy();
+  expect(screen.getByText('dictate')).toBeTruthy();
 });
 
 it('says Added to History once an upload is written up', async () => {
@@ -592,7 +592,7 @@ describe('bubble card buttons by screen width', () => {
   const pairDirection = () => {
     const { StyleSheet } = require('react-native');
     const upload = screen.getByLabelText('uploadAudio');
-    let node = screen.getByLabelText('tapToDictate').parent;
+    let node = screen.getByLabelText('dictate').parent;
     const contains = (root: any, target: any): boolean =>
       root === target || (root.children ?? []).some((child: any) => contains(child, target));
     while (node && !contains(node, upload)) node = node.parent;

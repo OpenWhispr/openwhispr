@@ -87,7 +87,7 @@ export function BubbleCard({
   const { fontScale, width } = useWindowDimensions();
   const [rowWidth, setRowWidth] = useState(0);
   const [labelWidth, setLabelWidth] = useState(0);
-  const pairLabels = [t('tapToDictate'), t('uploadAudio')];
+  const pairLabels = [t('dictate'), t('uploadAudio')];
   const fits =
     !rowWidth || !labelWidth || labelWidth <= (rowWidth - 8) / 2 - PILL_ICON_CHROME_COMPACT;
   const stacked = width <= STACK_BUTTONS_AT_OR_BELOW || fontScale > 1.15 || !fits;
@@ -203,7 +203,7 @@ export function BubbleCard({
         >
           <PillButton
             icon="Mic"
-            label={t('tapToDictate')}
+            label={t('dictate')}
             disabled={busy}
             onPress={onDictate}
             compact={!stacked}
