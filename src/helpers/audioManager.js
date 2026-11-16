@@ -70,6 +70,7 @@ import {
   localModelRefusal,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
+import { runningPolicyCheck } from "../services/reasoningPolicy";
 import {
   getBatchTranscriptionModel,
   getCloudModel,
@@ -4040,6 +4041,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async processWithOpenAIAPI(audioBlob, metadata = {}, wasCancelled = neverCancelled) {
     const timings = {};
     let requestController = null;
+    let unsubscribePolicy;
     const apiSettings = getSettings();
     const language = getBaseLanguageCode(this.getEffectiveSttLanguage(apiSettings));
     const allowLocalFallback = apiSettings.allowLocalFallback;
@@ -4076,7 +4078,26 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // real problem (a realtime-only provider, or its missing key), whereas the
       // key read blames the OpenAI key for a provider that never uses it.
       const route = managedResolution ? null : this.resolveBatchRoute(apiSettings, model);
+      requestController = new AbortController();
+      this._activeTranscriptionAbortController = requestController;
+      const selection = {
+        mode: managedResolution
+          ? "enterprise"
+          : route.provider === "self-hosted" || apiSettings.transcriptionMode === "self-hosted"
+            ? "self-hosted"
+            : "providers",
+        provider: managedResolution?.provider ?? route.provider,
+      };
+      // The recording is already made: only a settled denial stops it, not a
+      // verdict that is still loading, as a rotated token's is.
+      const stopIfDisallowed = runningPolicyCheck(() => {
+        if (!isTranscriptionSelectionAllowed(usePolicyStore.getState(), selection))
+          requestController.abort();
+      });
+      unsubscribePolicy = usePolicyStore.subscribe(stopIfDisallowed);
+      stopIfDisallowed();
       const apiKey = managedResolution ? null : await this.getAPIKey();
+      requestController?.signal.throwIfAborted();
       const optimizedAudio = audioBlob;
 
       // Dispatch before endpoint resolution (which defaults to OpenAI and would leak
@@ -4121,6 +4142,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         } catch (err) {
           throw classifyProxyFailure(err);
         }
+        requestController.signal.throwIfAborted();
         if (result?.error) {
           // Main serialises an unclassified network failure as its bare
           // message (net::ERR_*), so classify the rebuilt error here.
@@ -4153,6 +4175,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const source = (await this.isReasoningAvailable())
           ? `${providerName}-reasoned`
           : providerName;
+        requestController.signal.throwIfAborted();
         return {
           success: true,
           text,
@@ -4199,6 +4222,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // Decoding can outlive cancellation and a newer recording's request.
       if (wasCancelled()) throw new DOMException("Transcription cancelled", "AbortError");
+      requestController.signal.throwIfAborted();
 
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
@@ -4351,8 +4375,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         surface: "transcription",
       };
 
-      requestController = new AbortController();
-      this._activeTranscriptionAbortController = requestController;
       let response;
       try {
         response = await fetch(endpoint, {
@@ -4451,6 +4473,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
 
+      requestController.signal.throwIfAborted();
       // Check for text - handle both empty string and missing field. ElevenLabs
       // Scribe answers silence with "[pause]" instead of an empty string.
       const spokenText = result.text?.trim();
@@ -4476,6 +4499,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         const source = (await this.isReasoningAvailable()) ? "openai-reasoned" : "openai";
+        requestController.signal.throwIfAborted();
         logger.debug(
           "Transcription successful",
           {
@@ -4518,6 +4542,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
     } catch (error) {
+      requestController?.signal.throwIfAborted();
       if (error.name === "AbortError" || isTranscriptionPolicyRefusal(error)) throw error;
       if (error.selectionEditFatal) {
         throw error;
@@ -4573,6 +4598,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       throw error;
     } finally {
+      unsubscribePolicy?.();
       if (this._activeTranscriptionAbortController === requestController) {
         this._activeTranscriptionAbortController = null;
       }

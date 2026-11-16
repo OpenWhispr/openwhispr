@@ -35,7 +35,7 @@ import {
 } from "../lib/offlineAccountProfile";
 import logger from "../utils/logger";
 import { useSettingsStore } from "../stores/settingsStore";
-import { usePolicyStore } from "../stores/policyStore";
+import { refreshEffectivePolicy, usePolicyStore } from "../stores/policyStore";
 import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
 import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
 
@@ -86,6 +86,11 @@ async function refreshManagedEnterpriseIdentity(accountId: string, authGeneratio
 }
 
 export function useAuth() {
+  const localOnly = useSyncExternalStore(
+    (listener) => usePolicyStore.subscribe?.(listener) ?? (() => {}),
+    () => usePolicyStore.getState().localOnly === true,
+    () => false
+  );
   const useSession = authClient?.useSession ?? useStaticSession;
   const { data: ambientSession, isPending, error: sessionError, refetch } = useSession();
   const accountRevision = useSyncExternalStore(
@@ -178,23 +183,24 @@ export function useAuth() {
   }, [validatedUser]);
 
   useEffect(() => {
-    if (!offlineUserId || offlineGeneration == null) return;
+    if (localOnly || !offlineUserId || offlineGeneration == null) return;
     const key = `${offlineUserId}:${offlineGeneration}`;
     if (hydratedOfflineAccount === key) return;
     hydratedOfflineAccount = key;
     // Main serves both from its caches for this account and credential.
-    void usePolicyStore.getState().fetchPolicy(offlineUserId, offlineGeneration);
+    void refreshEffectivePolicy();
     void refreshManagedEnterpriseIdentity(offlineUserId, offlineGeneration);
-  }, [offlineUserId, offlineGeneration]);
+  }, [localOnly, offlineUserId, offlineGeneration]);
 
   useEffect(() => {
-    if (!sessionResolutionFailed || !resolvedUserId || boundGeneration == null) return;
-    void usePolicyStore.getState().fetchPolicy(resolvedUserId, boundGeneration);
+    if (localOnly || !sessionResolutionFailed || !resolvedUserId || boundGeneration == null) return;
+    void refreshEffectivePolicy();
     void refreshManagedEnterpriseIdentity(resolvedUserId, boundGeneration);
-  }, [boundGeneration, resolvedUserId, sessionResolutionFailed]);
+  }, [localOnly, boundGeneration, resolvedUserId, sessionResolutionFailed]);
 
   useEffect(() => {
     if (
+      localOnly ||
       boundGeneration == null ||
       !shouldReconcileAccountScope(
         isPending,
@@ -241,7 +247,7 @@ export function useAuth() {
         // This legacy marker drives every already-running SyncService window;
         // its generation gate provides the immediate fence.
         useSettingsStore.getState().setIsSignedIn(false);
-        usePolicyStore.getState().suspendPolicy();
+        void refreshEffectivePolicy();
       }
 
       await reconcileAccountScope(resolvedUserId, {
@@ -262,14 +268,14 @@ export function useAuth() {
             authGeneration: boundGeneration,
           });
           useSettingsStore.getState().setIsSignedIn(true);
-          void usePolicyStore.getState().fetchPolicy(resolvedUserId, boundGeneration);
+          void refreshEffectivePolicy();
           void refreshManagedEnterpriseIdentity(resolvedUserId, boundGeneration);
         }
       } else {
         invalidateValidatedAuthContext();
         if (!cancelled) {
           useSettingsStore.getState().setIsSignedIn(false);
-          usePolicyStore.getState().clearPolicy();
+          void refreshEffectivePolicy();
           useEnterpriseIdentityStore.getState().clear();
         }
       }
@@ -286,6 +292,7 @@ export function useAuth() {
       cancelled = true;
     };
   }, [
+    localOnly,
     accountRevision,
     authContext.revision,
     boundGeneration,
@@ -297,9 +304,9 @@ export function useAuth() {
   ]);
 
   return {
-    isSignedIn,
+    isSignedIn: localOnly ? false : isSignedIn,
     isGracePeriodOnly: gracePeriodActive,
-    isLoaded,
+    isLoaded: localOnly || isLoaded,
     session: sessionIsBound && accountScopePresentable ? ambientSession : null,
     user: offlineAccount ? offlineAccount.profile : isSignedIn ? ambientUser : null,
     // Shown without a validated session: account changes and sync are paused.
