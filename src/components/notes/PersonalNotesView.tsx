@@ -5,6 +5,7 @@ import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
 import { PanelResizeHandle } from "../ui/PanelResizeHandle";
 import NoteEditor from "./NoteEditor";
+import { DeviceNoteView } from "./DeviceNoteView";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
@@ -65,6 +66,7 @@ import {
   getSpacesValue,
   markNoteEdited,
 } from "../../stores/noteStore";
+import { useDeviceNotesStore } from "../../stores/deviceNotesStore";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { isSpaceInWorkspaceScope } from "../../lib/workspaceSelection";
 import {
@@ -315,6 +317,7 @@ export default function PersonalNotesView({
   const meetingRecordingAllowed = useTranscriptionContextAllowed("meeting");
 
   const spaces = useSpaces();
+  const viewNoteId = useDeviceNotesStore((s) => s.viewNoteId);
   const folders = useFolders();
   const activeContext = useActiveContext();
   const overviewSpace = useMemo(
@@ -966,7 +969,9 @@ export default function PersonalNotesView({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {editorNote ? (
+        {viewNoteId != null ? (
+          <DeviceNoteView id={viewNoteId} />
+        ) : editorNote ? (
           <>
             <NoteEditor
               key={editorNote.id}
