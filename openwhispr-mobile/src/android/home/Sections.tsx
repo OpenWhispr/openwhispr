@@ -194,34 +194,40 @@ export function Stats({ stats, feedback }: { stats: HomeStats; feedback?: ReactN
   );
 }
 
-/** A row just added by an upload slides in and fades from a light accent tint to white. */
-function useArrival(active: boolean) {
+/**
+ * A row just added by an upload waits faded and tinted while Home scrolls to it, then slides
+ * in and its light accent tint fades to white.
+ */
+function useArrival(active: boolean, arriving: boolean) {
   const value = useRef(new Animated.Value(active ? 0 : 1)).current;
   useEffect(() => {
     if (!active) return;
     value.setValue(0);
-    Animated.timing(value, {
+    if (!arriving) return;
+    const animation = Animated.timing(value, {
       toValue: 1,
-      duration: 1600,
-      easing: Easing.out(Easing.cubic),
+      duration: 2000,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: false,
-    }).start();
-  }, [active, value]);
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [active, arriving, value]);
   return {
     backgroundColor: value.interpolate({
-      inputRange: [0, 1],
-      outputRange: ['rgba(21,85,212,0.10)', 'rgba(21,85,212,0)'],
+      inputRange: [0, 0.2, 1],
+      outputRange: ['rgba(21,85,212,0.12)', 'rgba(21,85,212,0.12)', 'rgba(21,85,212,0)'],
     }),
     opacity: value.interpolate({
-      inputRange: [0, 0.2],
-      outputRange: [0.3, 1],
+      inputRange: [0, 0.22],
+      outputRange: [0.25, 1],
       extrapolate: 'clamp',
     }),
     transform: [
       {
         translateY: value.interpolate({
-          inputRange: [0, 0.25],
-          outputRange: [-8, 0],
+          inputRange: [0, 0.22],
+          outputRange: [-10, 0],
           extrapolate: 'clamp',
         }),
       },
@@ -233,6 +239,7 @@ function HistoryRow({
   item,
   last,
   highlighted,
+  arriving,
   busy,
   onCopy,
   onRetry,
@@ -240,6 +247,7 @@ function HistoryRow({
   item: Transcript;
   last: boolean;
   highlighted: boolean;
+  arriving: boolean;
   busy: boolean;
   onCopy: (text: string) => void;
   onRetry: (id: string) => void;
@@ -249,7 +257,7 @@ function HistoryRow({
   const text = failed ? item.errorMessage || '' : item.text;
   const when = relativeDate(item.createdAt, t);
   const canRetry = failed && Boolean(item.audioUrl) && !busy;
-  const arrival = useArrival(highlighted);
+  const arrival = useArrival(highlighted, arriving);
   return (
     <View>
       <Animated.View
@@ -335,12 +343,14 @@ function IconButton({
 export function HistoryCard({
   items,
   highlightId,
+  highlightArriving = false,
   busy,
   onCopy,
   onRetry,
 }: {
   items: Transcript[];
   highlightId?: string | null;
+  highlightArriving?: boolean;
   busy: boolean;
   onCopy: (text: string) => void;
   onRetry: (id: string) => void;
@@ -361,6 +371,7 @@ export function HistoryCard({
           item={item}
           last={index === items.length - 1}
           highlighted={item.id === highlightId}
+          arriving={item.id === highlightId && highlightArriving}
           busy={busy}
           onCopy={onCopy}
           onRetry={onRetry}

@@ -46,6 +46,31 @@ import { TryItRecorder } from '@/android/home/TryItRecorder';
 import { homeStats, localDate } from '@/android/home/model';
 
 const GUTTER = 16;
+const SCROLL_TO_HISTORY_MS = 950;
+
+/** ScrollView's own animated scroll is quick and fixed; this one eases in and out slowly. */
+function smoothScroll(
+  view: ScrollView | null,
+  from: number,
+  to: number,
+  done: () => void,
+): () => void {
+  if (!view || Math.abs(to - from) < 2) {
+    done();
+    return () => undefined;
+  }
+  const start = Date.now();
+  let frame = 0;
+  const step = () => {
+    const t = Math.min(1, (Date.now() - start) / SCROLL_TO_HISTORY_MS);
+    const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    view.scrollTo({ y: from + (to - from) * eased, animated: false });
+    if (t < 1) frame = requestAnimationFrame(step);
+    else done();
+  };
+  frame = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(frame);
+}
 // Android 13 and later confirm every copy with their own pill at the bottom of the screen;
 // a second one from the app would sit on top of it.
 const SYSTEM_CONFIRMS_COPY = Platform.OS === 'android' && Number(Platform.Version) >= 33;
@@ -71,11 +96,17 @@ export default function AndroidHome() {
   const [retrying, setRetrying] = useState(false);
   const [working, setWorking] = useState(false);
   // The upload being written up: shown from the moment a file is picked until its bar has filled.
-  const [uploadCard, setUploadCard] = useState<{ name: string; size?: number; done: boolean } | null>(null);
+  const [uploadCard, setUploadCard] = useState<{
+    name: string;
+    size?: number;
+    done: boolean;
+  } | null>(null);
   const uploadDone = useRef(false);
   const revealNewest = useRef(false);
   const historyY = useRef(0);
-  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const historyRef = useRef<View>(null);
+  const [highlight, setHighlight] = useState<{ id: string; arriving: boolean } | null>(null);
+  const scrollY = useRef(0);
   const [toast, setToast] = useState({ message: '', id: 0 });
   const showToast = useCallback(
     (message: string) => setToast((previous) => ({ message, id: previous.id + 1 })),
@@ -272,11 +303,32 @@ export default function AndroidHome() {
   useEffect(() => {
     if (uploadCard !== null || !revealNewest.current || !newestId) return;
     revealNewest.current = false;
-    setHighlightId(newestId);
-    const frame = requestAnimationFrame(() =>
-      scroll.current?.scrollTo({ y: Math.max(0, historyY.current - 8), animated: true }),
-    );
-    return () => cancelAnimationFrame(frame);
+    // The row waits faded until the slow scroll has brought it to the top, then animates in.
+    setHighlight({ id: newestId, arriving: false });
+    let arrive: ReturnType<typeof setTimeout> | undefined;
+    let stop = () => {};
+    // Start once the gap the progress card left has closed, so History's position is current.
+    const settle = setTimeout(() => {
+      const start = (y: number) => {
+        stop = smoothScroll(scroll.current, scrollY.current, Math.max(0, y - 8), () => {
+          arrive = setTimeout(() => setHighlight({ id: newestId, arriving: true }), 120);
+        });
+      };
+      // Measured against the scroll view's frame, so add how far it is already scrolled.
+      const frame = scroll.current?.getNativeScrollRef();
+      if (historyRef.current && frame)
+        historyRef.current.measureLayout(
+          frame,
+          (_x, y) => start(y + scrollY.current),
+          () => start(historyY.current),
+        );
+      else start(historyY.current);
+    }, 150);
+    return () => {
+      clearTimeout(settle);
+      stop();
+      if (arrive) clearTimeout(arrive);
+    };
   }, [uploadCard, newestId]);
 
   return (
@@ -297,6 +349,10 @@ export default function AndroidHome() {
       </View>
       <ScrollView
         ref={scroll}
+        scrollEventThrottle={16}
+        onScroll={({ nativeEvent }) => {
+          scrollY.current = nativeEvent.contentOffset.y;
+        }}
         contentContainerStyle={{
           paddingHorizontal: GUTTER,
           paddingTop: 8,
@@ -389,6 +445,7 @@ export default function AndroidHome() {
           }
         />
         <View
+          ref={historyRef}
           style={{ gap: 12 }}
           onLayout={({ nativeEvent }) => {
             historyY.current = nativeEvent.layout.y;
@@ -427,7 +484,8 @@ export default function AndroidHome() {
           {recent.length ? (
             <HistoryCard
               items={recent}
-              highlightId={highlightId}
+              highlightId={highlight?.id ?? null}
+              highlightArriving={Boolean(highlight?.arriving)}
               busy={working}
               onCopy={copy}
               onRetry={(id) => {
