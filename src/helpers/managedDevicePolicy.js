@@ -318,11 +318,7 @@ async function readWindowsValues(run = execute) {
   try {
     deployed = await hasWindowsPolicyKey(run);
   } catch {
-    const entries = await readRegistryWithPowerShell(run).catch((error) => {
-      // The evidence check would only run the same PowerShell read again.
-      error.evidenceUnknown = true;
-      throw error;
-    });
+    const entries = await readRegistryWithPowerShell(run);
     const values = {};
     for (const [name, data] of Object.entries(entries ?? {})) {
       if (data === null) continue;
@@ -343,16 +339,15 @@ async function readWindowsValues(run = execute) {
 }
 
 // Whether an administrator deployed something, read without parsing it: a
-// reader that fails only means an invalid policy when one is there.
+// reader that fails only means an invalid policy when one is there. With
+// reg.exe blocked there's no such check on Windows: the read was PowerShell's,
+// and running it again would only double a slow failure.
 async function hasPolicyEvidence({
   platform = process.platform,
   run = execute,
   fileSystem = fs.promises,
 } = {}) {
-  if (platform === "win32")
-    return hasWindowsPolicyKey(run).catch(
-      async () => (await readRegistryWithPowerShell(run)) !== null
-    );
+  if (platform === "win32") return hasWindowsPolicyKey(run);
   const preferences = `${MACOS_PREFERENCES_DOMAIN}.plist`;
   const files =
     platform === "linux"
@@ -451,7 +446,7 @@ function createManagedDevicePolicy({
         });
         return null;
       }
-      const deployed = error.evidenceUnknown ? null : await hasPolicy().catch(() => null);
+      const deployed = await hasPolicy().catch(() => null);
       if (deployed) return INVALID_SNAPSHOT;
       logger.warn(
         deployed === false

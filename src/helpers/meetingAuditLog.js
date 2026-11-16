@@ -192,9 +192,11 @@ function createMeetingAuditLog({
     await fs.promises.rename(pending, markerPath);
   }
 
-  // Closes, as of its last checkpoint, a recording the last launch never
-  // stopped. Tried once: if that write fails the marker still goes, since the
-  // start line already shows the recording didn't end cleanly.
+  // Closes a recording whose stop line is missing: one the last launch never
+  // stopped, as of its last checkpoint, or one whose stop line failed, at its
+  // own time and reason. Run at launch and before each start, whose marker
+  // would replace it. Tried once: if that write fails the marker still goes,
+  // since the start line already shows the recording didn't end cleanly.
   function recoverInterrupted() {
     enqueue(async () => {
       let text;
@@ -236,6 +238,7 @@ function createMeetingAuditLog({
       lastSeenAt: startedAt,
     };
     session = open;
+    recoverInterrupted();
     enqueue(async () => {
       await append(open.dir, startedAt, { event: "recording.started", ...open });
       await writeMarker(open);
