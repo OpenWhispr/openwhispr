@@ -145,21 +145,43 @@ export function AccountAvatar() {
         opacity: pressed ? 0.7 : 1,
       })}
     >
+      {/* Figma Navigation/Button (glass, 36) holding the small Avatar (accent, 28). */}
       <View
         style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          backgroundColor: home.accent,
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: 'rgba(255,255,255,0.72)',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        {signedIn ? (
-          <Text style={{ fontSize: 13, fontWeight: '600', color: '#FFFFFF' }}>{initials}</Text>
-        ) : (
-          <SystemIcon name="person" mdName="UserRound" size={18} color="#FFFFFF" />
-        )}
+        <View
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: home.accent,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {signedIn ? (
+            <Text
+              style={{
+                fontSize: 13,
+                lineHeight: 18,
+                fontWeight: '400',
+                color: '#FFFFFF',
+                textAlign: 'center',
+              }}
+            >
+              {initials}
+            </Text>
+          ) : (
+            <SystemIcon name="person" mdName="UserRound" size={16} color="#FFFFFF" />
+          )}
+        </View>
       </View>
     </Pressable>
   );

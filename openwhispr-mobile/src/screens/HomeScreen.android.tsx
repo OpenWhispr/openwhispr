@@ -263,7 +263,7 @@ export default function AndroidHome() {
         style={{
           flexDirection: 'row',
           justifyContent: 'flex-end',
-          paddingHorizontal: GUTTER - 8,
+          paddingHorizontal: GUTTER - 6,
           minHeight: 52,
           alignItems: 'center',
         }}
