@@ -439,6 +439,7 @@ function createFakeCloud(config = {}) {
       files: input.files,
       deleted_at: null,
       updated_at: existing ? bump(existing, at) : at,
+      edited_at: toIso(input.edited_at ?? at),
     });
     skills.set(row.id, row);
     return row;
@@ -783,6 +784,9 @@ function createFakeCloud(config = {}) {
         if (body.enabled != null) row.enabled = body.enabled;
         if (body.files) Object.assign(row, { files: body.files, content_hash: body.content_hash });
         row.updated_at = bump(row, clock());
+        // As the API: a switch alone never dates the files back.
+        const editedAt = toIso(body.edited_at ?? row.updated_at);
+        if (body.files || editedAt > row.edited_at) row.edited_at = editedAt;
         return skillMeta(row);
       }
       case "DELETE /api/skills/delete": {

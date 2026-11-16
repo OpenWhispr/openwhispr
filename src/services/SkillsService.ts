@@ -8,6 +8,7 @@ interface SkillEntryInput {
   files: CloudSkillFile[];
   client_skill_id?: string | null;
   created_at?: string;
+  edited_at: string;
 }
 
 type SkillPage = { entries: CloudSkillEntry[]; hasMore: boolean };
@@ -18,7 +19,7 @@ async function batchCreate(entries: SkillEntryInput[]): Promise<{ created: Cloud
 
 async function update(
   id: string,
-  updates: { enabled: boolean; content_hash?: string; files?: CloudSkillFile[] }
+  updates: { enabled: boolean; content_hash?: string; files?: CloudSkillFile[]; edited_at: string }
 ): Promise<CloudSkillMeta> {
   return cloudPatch<CloudSkillMeta>("/api/skills/update", { id, ...updates });
 }

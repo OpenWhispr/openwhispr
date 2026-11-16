@@ -116,6 +116,8 @@ export interface CloudSkillMeta {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  /** When the device that sent this copy last changed it; updated_at is when it got there. */
+  edited_at: string;
 }
 
 export interface CloudSkillEntry extends CloudSkillMeta {

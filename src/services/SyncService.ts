@@ -335,6 +335,8 @@ const SYNC_CURSOR_KEYS = [
   "lastSyncedAt.dictionary.id",
   "lastSyncedAt.snippets",
   "lastSyncedAt.snippets.id",
+  "lastSyncedAt.skills",
+  "lastSyncedAt.skills.id",
 ];
 // Per account: cloud copies of a chat that another account took over while its
 // create was in flight, deleted when the sender is back to do it.
@@ -5406,8 +5408,9 @@ export class SyncService {
     // skill is sent until a pull has compared it. An API from before skills answers 404 on
     // every skills route: nothing to do there.
     const pulled = await this.pullSkills();
-    if (pulled === "unsupported") return;
+    if (pulled === "unsupported" || !this.passIsCurrent()) return;
     await this.pushPendingSkills(pulled);
+    if (!this.passIsCurrent()) return;
     await this.pushSkillDeletes();
   }
 
@@ -5424,6 +5427,7 @@ export class SyncService {
         enabled: row.enabled === 1,
         content_hash: exported.contentHash,
         files: exported.files,
+        edited_at: normalizeTimestamp(row.updated_at),
       };
       if (row.cloud_id) {
         const switchOnly = exported.contentHash === row.synced_hash;
@@ -5442,7 +5446,7 @@ export class SyncService {
         // Files unchanged here go unsent, so they can't replace a newer copy from another device.
         const server = await SkillsService.update(
           cloudId,
-          switchOnly ? { enabled: entry.enabled } : fields
+          switchOnly ? { enabled: entry.enabled, edited_at: entry.edited_at } : fields
         );
         await window.electronAPI.markSkillSynced?.(
           entry.name,
@@ -5549,7 +5553,8 @@ export class SyncService {
 
           // A delete wins, as for snippets, except over a skill this computer has never sent.
           // A change waiting to be sent wins over the cloud's copy (the push that follows
-          // replaces it); a skill never sent meets the cloud's copy, and the newer one wins. A
+          // replaces it); a skill never sent meets the cloud's copy, and the one edited last
+          // wins, by when each device edited it rather than when the cloud received it. A
           // synced skill whose files differ from the cloud's takes them, since a switch-only
           // push leaves the files another device sent meanwhile in the cloud only.
           const pending = local?.sync_status === "pending";
@@ -5557,7 +5562,8 @@ export class SyncService {
             ? !!local && !local.deleted_at && !(pending && !local.cloud_id)
             : !local ||
               (pending
-                ? !local.cloud_id && cloudTs > normalizeTimestamp(local.updated_at)
+                ? !local.cloud_id &&
+                  normalizeTimestamp(cloudEntry.edited_at) > normalizeTimestamp(local.updated_at)
                 : cloudTs > normalizeTimestamp(local.updated_at) ||
                   local.cloud_id !== cloudEntry.id ||
                   local.content_hash !== cloudEntry.content_hash);
@@ -5585,7 +5591,8 @@ export class SyncService {
         cursorId = last.id;
       }
 
-      if (unwritten.size === 0) {
+      // After a sign-in change mid-pull, the pages came from another account than the cursor's.
+      if (unwritten.size === 0 && this.passIsCurrent()) {
         if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.skills", maxUpdatedAt);
         if (maxId) localStorage.setItem("lastSyncedAt.skills.id", maxId);
       }

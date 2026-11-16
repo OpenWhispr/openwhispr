@@ -444,6 +444,43 @@ test("a first push does overwrite an older copy from another device", async (t) 
   assert.equal(skillFile(ctx.skillsDir, "recap"), skillText("recap", "Does it.", "Mine.\n"));
 });
 
+test("a first push keeps an edit made here after another device's, though theirs reached the cloud later", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  ctx.cloud.setClock(() => new Date(Date.now() + 60_000).toISOString());
+  ctx.cloud.seedSkill({
+    name: "recap",
+    enabled: true,
+    content_hash: "h",
+    files: cloudSkillMd("recap", "Theirs.\n"),
+    edited_at: "2026-01-01T09:00:00.000Z",
+  });
+  writeFolder(ctx.skillsDir, "recap", { "SKILL.md": skillText("recap", "Does it.", "Mine.\n") });
+  ctx.library.scan();
+
+  await ctx.service.syncSkillsNow();
+
+  assert.match(cloudByName(ctx.cloud).recap.files[0].content, /Mine\./);
+  assert.equal(skillFile(ctx.skillsDir, "recap"), skillText("recap", "Does it.", "Mine.\n"));
+});
+
+test("a skill saved before another account's last pull here still arrives for this account", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  ctx.cloud.setClock(() => "2026-01-01T09:00:00.000Z");
+  seedRemote(ctx, "recap", "Saved early.\n");
+  ctx.cloud.setClock(() => new Date().toISOString());
+  localStorageStub.setItem("lastSyncedAt.accountId", "another-account");
+  localStorageStub.setItem("lastSyncedAt.skills", "2026-02-01T00:00:00.000Z");
+  localStorageStub.setItem("lastSyncedAt.skills.id", "another-accounts-skill");
+
+  await ctx.service.syncSkillsNow();
+
+  assert.equal(skillFile(ctx.skillsDir, "recap"), skillText("recap", "Does it.", "Saved early.\n"));
+  const setAside = JSON.parse(localStorageStub.getItem("lastSyncedAt.byAccount.another-account"));
+  assert.equal(setAside["lastSyncedAt.skills"], "2026-02-01T00:00:00.000Z");
+});
+
 test("an edit made while its push is in flight is kept and sent next", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
