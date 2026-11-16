@@ -112,7 +112,12 @@ export function isSelectionQuestionResponse(result, completionMarker = "") {
 export function extractLocalSelectionEditReplacement(result) {
   if (typeof result === "string" && !result.trim()) throw emptyResponse();
   if (typeof result !== "string" || !REPLACEMENT_OBJECT.test(result)) throw invalidResponse();
-  return requireReplacement(JSON.parse(result).replacement);
+  const replacement = JSON.parse(result).replacement;
+  // A damaged question verdict must never be pasted over the document.
+  if (/^__OPENWHISPR_SELECTION_QUESTION(?:__|_?(?=\W|$))/.test(replacement.trimStart())) {
+    throw invalidResponse();
+  }
+  return requireReplacement(replacement);
 }
 
 const STANDALONE_CAPTURE_CODES = new Set([

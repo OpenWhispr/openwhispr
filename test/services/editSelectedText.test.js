@@ -103,6 +103,21 @@ test("a Cloud screenshot edit validates its JSON envelope; text-only and BYOK re
       cloud.editSelectedText("Elaborate this", "Short.", { attachment, signal })
     );
   }
+  for (const replacement of [
+    "__OPENWHISPR_SELECTION_QUESTION",
+    "__OPENWHISPR_SELECTION_QUESTION__\nWhat change should I make?",
+  ]) {
+    response = JSON.stringify({ replacement });
+    await assert.rejects(cloud.editSelectedText("Explain this", "Short.", { attachment, signal }), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+  }
+  const literalMarker = "The document mentions __OPENWHISPR_SELECTION_QUESTION__ in passing.";
+  response = JSON.stringify({ replacement: literalMarker });
+  assert.equal(
+    await cloud.editSelectedText("Keep this unchanged", literalMarker, { attachment, signal }),
+    literalMarker
+  );
   response = '{"replacement":"Revised paragraph."}';
   await assert.rejects(cloud.editSelectedText("Elaborate this", "Short.", { signal }), {
     code: "SELECTION_EDIT_INVALID_RESPONSE",
@@ -152,6 +167,31 @@ test("a Cloud screenshot retry rejects raw prose and keeps the complete JSON con
   assert.match(configs[2].systemPrompt, /SCREEN CONTEXT:/);
   assert.doesNotMatch(configs[3].systemPrompt, /SCREEN CONTEXT:/);
   for (const config of configs) assert.match(config.systemPrompt, /Return exactly one JSON object/);
+
+  const options = {
+    attachment: { image: "fixture-image", mediaType: "image/jpeg" },
+    signal: new AbortController().signal,
+  };
+  for (const replacement of [
+    "__OPENWHISPR_SELECTION_QUESTION",
+    "__OPENWHISPR_SELECTION_QUESTION__\nWhat change should I make?",
+  ]) {
+    response = JSON.stringify({ replacement });
+    const before = configs.length;
+    await assert.rejects(editSelectedText("Explain this", "Short.", options), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+    assert.equal(configs.length, before + 2);
+    assert.equal(configs.at(-1).screenContext, undefined);
+  }
+  response = '{"replacement":"__OPENWHISPR_SELECTION_QUESTION__"}';
+  assert.equal(await editSelectedText("Explain this", "Short.", options), null);
+  const literalMarker = "The document mentions __OPENWHISPR_SELECTION_QUESTION__ in passing.";
+  response = JSON.stringify({ replacement: literalMarker });
+  assert.equal(
+    await editSelectedText("Keep this unchanged", literalMarker, options),
+    literalMarker
+  );
 });
 
 test("a screenshot the model refuses costs the edit nothing: it runs once more without it", async (t) => {

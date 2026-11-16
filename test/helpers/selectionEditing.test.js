@@ -166,6 +166,41 @@ test("local JSON replacement preserves document bytes and rejects ambiguous enve
   }
 });
 
+test("JSON edits reject leading question control markers instead of replacing document text", async () => {
+  const { extractLocalSelectionEditReplacement } = await load();
+  for (const replacement of [
+    "__OPENWHISPR_SELECTION_QUESTION",
+    "__OPENWHISPR_SELECTION_QUESTION_",
+    "  \n__OPENWHISPR_SELECTION_QUESTION",
+    "__OPENWHISPR_SELECTION_QUESTION.",
+    "__OPENWHISPR_SELECTION_QUESTION_ What should I explain?",
+    "__OPENWHISPR_SELECTION_QUESTION__\nWhat change do you want?",
+    "__OPENWHISPR_SELECTION_QUESTION__Please clarify.",
+  ]) {
+    assert.throws(
+      () => extractLocalSelectionEditReplacement(JSON.stringify({ replacement })),
+      { code: "SELECTION_EDIT_INVALID_RESPONSE" },
+      replacement
+    );
+  }
+});
+
+test("JSON edits preserve literal question-marker mentions and longer identifiers", async () => {
+  const { extractLocalSelectionEditReplacement } = await load();
+  for (const replacement of [
+    "Keep __OPENWHISPR_SELECTION_QUESTION__ as literal text.",
+    '"__OPENWHISPR_SELECTION_QUESTION"',
+    "`__OPENWHISPR_SELECTION_QUESTION__`",
+    "  __OPENWHISPR_SELECTION_QUESTIONNAIRE\n",
+    "__OPENWHISPR_SELECTION_QUESTION_SUFFIX",
+  ]) {
+    assert.equal(
+      extractLocalSelectionEditReplacement(JSON.stringify({ replacement })),
+      replacement
+    );
+  }
+});
+
 test("both edit prompts tell the model to hand a question about the selection back", async () => {
   const {
     SELECTION_QUESTION_MARKER,

@@ -143,6 +143,23 @@ test("a Cloud selection screenshot retry validates the same JSON contract", asyn
     ["raw refusal", "I cannot see your screen. Please provide context.", null],
     ["partial JSON", '{"replacement":"Only the first paragraph', null],
     ["unclosed JSON object", '{"replacement":"Only the first paragraph"', null],
+    [
+      "question marker missing underscores",
+      '{"replacement":"__OPENWHISPR_SELECTION_QUESTION"}',
+      null,
+    ],
+    [
+      "question marker followed by clarification",
+      JSON.stringify({
+        replacement: "__OPENWHISPR_SELECTION_QUESTION__\nWhat change should I make?",
+      }),
+      null,
+    ],
+    [
+      "literal question marker in document text",
+      JSON.stringify({ replacement: "The document mentions __OPENWHISPR_SELECTION_QUESTION__." }),
+      "The document mentions __OPENWHISPR_SELECTION_QUESTION__.",
+    ],
   ]) {
     await t.test(name, async () => {
       const calls = [];

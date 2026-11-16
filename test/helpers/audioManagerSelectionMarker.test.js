@@ -117,6 +117,13 @@ test("selection edits validate the nonce or complete Cloud screenshot JSON", asy
     ["unfinished JSON string", '{"replacement":"Only the first paragraph'],
     ["missing closing brace", '{"replacement":"Only the first paragraph"'],
     ["JSON with trailing prose", '{"replacement":"edited"} explanation'],
+    ["question marker missing underscores", '{"replacement":"__OPENWHISPR_SELECTION_QUESTION"}'],
+    [
+      "question marker followed by clarification",
+      JSON.stringify({
+        replacement: "__OPENWHISPR_SELECTION_QUESTION__\nWhat change should I make?",
+      }),
+    ],
   ]) {
     await t.test(`Cloud rejects ${name} without arming a screenshot edit`, async () => {
       const manager = cloudManagerFor(response);
@@ -124,6 +131,12 @@ test("selection edits validate the nonce or complete Cloud screenshot JSON", asy
       assert.ok(!manager.pendingSelectionEdit);
     });
   }
+  await t.test("Cloud preserves a literal question marker mentioned in document text", async () => {
+    const literalMarker = "The document mentions __OPENWHISPR_SELECTION_QUESTION__ in passing.";
+    const manager = cloudManagerFor(JSON.stringify({ replacement: literalMarker }));
+    assert.equal(await runCloud(manager), literalMarker);
+    assert.deepEqual(manager.pendingSelectionEdit, { sessionId: "synthetic-selection" });
+  });
   await t.test("a Cloud JSON question verdict goes to the panel", async () => {
     const manager = cloudManagerFor('{"replacement":"__OPENWHISPR_SELECTION_QUESTION__"}');
     assert.equal(await runCloud(manager), instruction);
