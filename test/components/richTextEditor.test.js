@@ -1308,7 +1308,13 @@ test("typing [[ links a note, saved as [[Title]], and clicking it opens the note
   happyWindow.electronAPI = {
     ...happyWindow.electronAPI,
     getNotes: async () => [
-      { id: 7, title: "Weekly sync", content: "", enhanced_content: "", updated_at: "2026-11-04" },
+      {
+        id: 7,
+        title: "[Team] Weekly sync",
+        content: "",
+        enhanced_content: "",
+        updated_at: "2026-11-04",
+      },
     ],
     agentOpenNote: async (id) => opened.push(id),
   };
@@ -1316,7 +1322,20 @@ test("typing [[ links a note, saved as [[Title]], and clicking it opens the note
   await notes.act(() => notes.editor().commands.setTextSelection(6));
   await notes.act(() => notes.editor().commands.insertContent(" [[Week"), 120);
   await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
-  assert.match(notes.saved(), /Start \[\[Weekly sync\]\]/);
+  // Brackets in the title are dropped from the link, which still resolves.
+  assert.match(notes.saved(), /Start \[\[Team Weekly sync\]\]/);
   await notes.act(() => happyWindow.document.querySelector(".note-link").click(), 60);
   assert.deepEqual(opened, [7]);
+});
+
+test("Enter after a closed [[ in the text is a new line, not a note link", async (t) => {
+  happyWindow.electronAPI = { ...happyWindow.electronAPI, getNotes: async () => [] };
+  const notes = await mountNotes(t, "matrix [[1, 2], [3, 4]] in numpy");
+  await notes.act(
+    () => notes.editor().commands.setTextSelection(notes.editor().state.doc.content.size - 1),
+    120
+  );
+  await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
+  assert.equal(notes.saved().trim(), "matrix \\[\\[1, 2\\], \\[3, 4\\]\\] in numpy");
+  assert.equal(happyWindow.document.querySelector(".note-link"), null);
 });

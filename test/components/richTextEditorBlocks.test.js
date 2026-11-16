@@ -162,6 +162,7 @@ test("a highlight opener in one paragraph does not leak into the next", () => {
 
 test("text that only looks like the new forms keeps its meaning", () => {
   assert.equal(save("x==y and y==z"), "x==y and y==z");
+  assert.ok(featuresOf("foo==bar baz== qux").includes("mark:highlight"), "mid-word highlight");
   const video = "[▶ YouTube video](https://www.youtube.com/watch?v=dQw4w9WgXcQ)";
   assert.equal(save(video), video);
   for (const citation of ["[[1]](https://example.com)", "[\\[1\\]](https://example.com)"]) {
@@ -223,6 +224,17 @@ test("alignment is never written inside a table cell", () => {
   } finally {
     editor.destroy();
   }
+});
+
+test("a ::: line in a code block does not close the toggle around it", () => {
+  const toggle = ":::toggle Snippet\n\n```\n:::note\nText\n:::\n```\n\nAfter\n\n:::";
+  assert.equal(save(toggle), toggle);
+});
+
+test("an aligned list item keeps its alignment, and the list stays tight", () => {
+  const list = "- one\n- two {align:center}\n- three";
+  assert.equal(save(list), list);
+  assert.ok(featuresOf(list).includes("align:center"));
 });
 
 test("notes without the new forms keep the editor's existing Markdown", () => {

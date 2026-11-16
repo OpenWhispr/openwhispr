@@ -17,7 +17,8 @@ let inflight: Promise<IndexedNote[]> | null = null;
 const listeners = new Set<() => void>();
 
 const api = () => (window as any).electronAPI;
-const norm = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+// Brackets dropped as cleanTitle drops them from saved links.
+const norm = (s: string) => s.replace(/[[\]]/g, " ").trim().replace(/\s+/g, " ").toLowerCase();
 
 export function onNotesIndexChange(listener: () => void): () => void {
   listeners.add(listener);

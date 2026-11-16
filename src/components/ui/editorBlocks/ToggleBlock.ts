@@ -35,13 +35,16 @@ function toggleBlockPlugin(md: any) {
       const open = OPEN.exec(lineText(startLine));
       if (!open) return false;
 
-      // Find the matching close, counting nested toggles.
+      // Find the matching close, counting nested toggles and skipping code fences.
       let depth = 1;
+      let inFence = false;
       let line = startLine + 1;
       for (; line < endLine; line++) {
         if (state.sCount[line] < state.blkIndent) break;
         const text = lineText(line);
-        if (OPEN.test(text)) depth++;
+        if (/^(```|~~~)/.test(text)) inFence = !inFence;
+        else if (inFence) continue;
+        else if (OPEN.test(text)) depth++;
         else if (CLOSE.test(text) && --depth === 0) break;
       }
       if (depth !== 0) return false; // unclosed: leave it as plain text
@@ -110,5 +113,9 @@ export const ToggleBlock = Details.extend({
   },
 }).configure({ persist: true, HTMLAttributes: { class: "rte-toggle" } });
 
-/** Everything the editor needs for toggles. */
-export const toggleBlockExtensions = [ToggleBlock, DetailsSummary, DetailsContent];
+/** Everything the editor needs for toggles. The title takes no marks: it is saved as plain text. */
+export const toggleBlockExtensions = [
+  ToggleBlock,
+  DetailsSummary.extend({ marks: "" }),
+  DetailsContent,
+];

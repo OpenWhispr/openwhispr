@@ -124,6 +124,8 @@ export const NoteLink = Node.create({
         allowSpaces: true,
         startOfLine: false,
         allowedPrefixes: null,
+        // Not past a "]": the link (or a literal [[1], [2]]) has already closed.
+        allow: ({ state, range }) => !state.doc.textBetween(range.from + 2, range.to).includes("]"),
         items: async ({ query }) => {
           await loadNotes();
           const q = cleanTitle(query);

@@ -145,12 +145,17 @@ export function markdownSyntax(md: any) {
       return true;
     }
     // Not when the only closing "==" is inside a code span, nor across words
-    // after a letter (x==y and y==z).
+    // with letters on both outer sides (x==y and y==z).
     const next = src.charAt(pos + 2);
     const close = src.indexOf("==", pos + 3);
     if (!next || /\s|=/.test(next) || close < 0 || src.slice(pos, close).includes("`"))
       return false;
-    if (/\w/.test(src.charAt(pos - 1)) && /\s/.test(src.slice(pos, close))) return false;
+    if (
+      /\w/.test(src.charAt(pos - 1)) &&
+      /\w/.test(src.charAt(close + 2)) &&
+      /\s/.test(src.slice(pos, close))
+    )
+      return false;
     if (!silent) {
       state.push("html_inline", "", 0).content = "<mark>";
       state.highlightOpen = true;
@@ -246,6 +251,16 @@ export function markdownSyntax(md: any) {
         const last = kids[kids.length - 1];
         if (last?.type === "text") last.content = last.content.replace(ALIGN_RE, "");
         open.attrSet("style", `text-align: ${align}`);
+        // A tight list item's paragraph is hidden, which drops the style; show it
+        // and mark the list tight so the other items still save without blank lines.
+        if (open.hidden) {
+          open.hidden = close.hidden = false;
+          tokens
+            .findLast(
+              (x: any, j: number) => j < i && x.type.endsWith("list_open") && x.level < open.level
+            )
+            ?.attrSet("data-tight", "true");
+        }
       }
     }
   });

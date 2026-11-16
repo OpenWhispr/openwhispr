@@ -327,7 +327,14 @@ export function createEditorBlockExtensions() {
     MarkdownSyntaxExtras,
     AlignedParagraph,
     AlignedHeading.configure({ levels: [1, 2, 3] }),
-    CodeBlockLowlight.configure({ lowlight, defaultLanguage: null }),
+    // Unlabelled blocks stay plain: auto-detecting the language re-scans the whole
+    // block on every keystroke.
+    CodeBlockLowlight.configure({
+      lowlight: {
+        ...lowlight,
+        highlightAuto: (code: string) => lowlight.highlight("plaintext", code),
+      },
+    }),
     ...toggleBlockExtensions,
     Callout,
     TableOfContentsBlock,

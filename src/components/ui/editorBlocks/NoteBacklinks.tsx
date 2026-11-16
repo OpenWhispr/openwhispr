@@ -29,15 +29,12 @@ export function NoteBacklinks({
     let alive = true;
     const refresh = () => alive && setLinks(backlinksTo(title || "", noteId));
     // Reuse the cached list (≤15 s old) rather than re-reading every note, with
-    // its transcript, on each note switch; refresh when the window regains focus.
+    // its transcript, on each note switch.
     void loadNotes().then(refresh);
     const unsubscribe = onNotesIndexChange(refresh);
-    const onFocus = () => void loadNotes();
-    window.addEventListener("focus", onFocus);
     return () => {
       alive = false;
       unsubscribe();
-      window.removeEventListener("focus", onFocus);
     };
   }, [noteId, title]);
 
