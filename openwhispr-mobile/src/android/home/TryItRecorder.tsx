@@ -150,7 +150,7 @@ export function TryItRecorder({
               accessibilityRole="header"
               style={[type.headline, { flex: 1, textAlign: 'center', lineHeight: 24 }]}
             >
-              {t('tryIt')}
+              {t('dictate')}
             </Text>
             <View style={{ width: 42 }} />
           </View>

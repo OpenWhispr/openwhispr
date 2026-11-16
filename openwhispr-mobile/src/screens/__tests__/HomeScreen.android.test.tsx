@@ -29,6 +29,36 @@ jest.mock('../../../modules/android-dictation/src', () => ({
   },
   dictationEvents: null,
 }));
+jest.mock('@/android/home/OlderRecordings', () => {
+  const { Pressable, Text, View } = require('react-native');
+  return {
+    OlderRecordingsRow: ({ count, onPress }: { count: number; onPress: () => void }) => (
+      <Pressable onPress={onPress}>
+        <Text>olderRecordings</Text>
+        <Text>{`count:${count}`}</Text>
+      </Pressable>
+    ),
+    OlderRecordingsSheet: ({
+      visible,
+      items,
+      onClose,
+    }: {
+      visible: boolean;
+      items: { id: string; text: string }[];
+      onClose: () => void;
+    }) =>
+      visible ? (
+        <View>
+          {items.map((item) => (
+            <Text key={item.id}>{item.text}</Text>
+          ))}
+          <Pressable onPress={onClose}>
+            <Text>close-sheet</Text>
+          </Pressable>
+        </View>
+      ) : null,
+  };
+});
 jest.mock('@/android/home/TryItRecorder', () => {
   const { Pressable, Text } = require('react-native');
   return {
@@ -247,7 +277,10 @@ it('aborts an initial upload when Home loses focus, without saving a late result
     onBlur = onFocus();
   });
   await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
-  expect(screen.getAllByText('writingItUp').length).toBeGreaterThan(0);
+  expect(screen.getByText('writingItUpMinute')).toBeTruthy();
+  // The buttons keep their words while busy.
+  expect(screen.getByText('uploadAudio')).toBeTruthy();
+  expect(screen.getByText('tapToDictate')).toBeTruthy();
   expect(screen.getByText('input.wav')).toBeTruthy();
   expect(signal?.aborted).toBe(false);
   act(() => {
@@ -262,7 +295,7 @@ it('aborts an initial upload when Home loses focus, without saving a late result
     });
   });
   expect(abortedOnBlur).toBe(true);
-  expect(screen.queryByText('writingItUp')).toBeNull();
+  expect(screen.queryByText('writingItUpMinute')).toBeNull();
   expect(mockSaveUpload).not.toHaveBeenCalled();
   expect(mockSaveFailedUpload).not.toHaveBeenCalled();
 });
@@ -298,7 +331,7 @@ it('does not start processing a picker result after Home loses focus', async () 
   expect(mockProcessUpload).not.toHaveBeenCalled();
   expect(mockSaveUpload).not.toHaveBeenCalled();
   expect(mockSaveFailedUpload).not.toHaveBeenCalled();
-  expect(screen.queryByText('writingItUp')).toBeNull();
+  expect(screen.queryByText('writingItUpMinute')).toBeNull();
 });
 
 it('ignores a deferred Cloud upload grant from an earlier Home visit', async () => {
@@ -347,7 +380,7 @@ it('allows a new Cloud upload after returning to Home', async () => {
   );
   // The finished bar stays full for a moment before the card goes.
   await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
-  expect(screen.queryByText('writingItUp')).toBeNull();
+  expect(screen.queryByText('writingItUpMinute')).toBeNull();
 });
 it('shows unavailable account counts while loading rather than local counts presented as account totals', () => {
   mockUser = { id: 'a' };
@@ -427,10 +460,10 @@ describe('history retry controls', () => {
   it('shows Cancel during a history retry and aborts that request', async () => {
     render(<AndroidHome />);
     await act(async () => fireEvent.press(screen.getByLabelText('retry')));
-    expect(screen.getByText('writingItUp')).toBeTruthy();
+    expect(screen.getByText('writingItUpMinute')).toBeTruthy();
     await act(async () => fireEvent.press(screen.getByText('cancel')));
     expect(signal?.aborted).toBe(true);
-    expect(screen.queryByText('writingItUp')).toBeNull();
+    expect(screen.queryByText('writingItUpMinute')).toBeNull();
     expect(screen.getByText('Unreadable audio')).toBeTruthy();
   });
 
@@ -451,18 +484,32 @@ describe('history retry controls', () => {
   });
 });
 
-it('shows older history only after explicitly opening the signed-out archive', async () => {
-  mockUnassignedHistory.mockResolvedValueOnce([
+it('offers older recordings in a sheet when signed out and there are some', async () => {
+  mockUnassignedHistory.mockResolvedValue([
     { id: 'old', text: 'Unassigned text', createdAt: 1 },
   ] as never);
   const view = render(<AndroidHome />);
+  await act(async () => {
+    jest.mocked(useFocusEffect).mock.calls.forEach(([focus]) => focus());
+  });
+  expect(screen.getByText('count:1')).toBeTruthy();
   expect(screen.queryByText('Unassigned text')).toBeNull();
-  await act(async () => fireEvent.press(screen.getByText('olderDeviceHistory')));
+  await act(async () => fireEvent.press(screen.getByText('olderRecordings')));
   expect(screen.getByText('Unassigned text')).toBeTruthy();
+  fireEvent.press(screen.getByText('close-sheet'));
+  expect(screen.queryByText('Unassigned text')).toBeNull();
   mockUser = { id: 'b' };
   view.rerender(<AndroidHome />);
-  expect(screen.queryByText('Unassigned text')).toBeNull();
-  expect(screen.queryByText('olderDeviceHistory')).toBeNull();
+  expect(screen.queryByText('olderRecordings')).toBeNull();
+  mockUnassignedHistory.mockReset().mockImplementation(async () => []);
+});
+
+it('hides the older recordings row when the archive is empty', async () => {
+  render(<AndroidHome />);
+  await act(async () => {
+    jest.mocked(useFocusEffect).mock.calls.forEach(([focus]) => focus());
+  });
+  expect(screen.queryByText('olderRecordings')).toBeNull();
 });
 
 it('shows connection recovery guidance when a saved upload retry cannot resolve the server', async () => {
@@ -476,7 +523,7 @@ it('shows connection recovery guidance when a saved upload retry cannot resolve 
     'errorTitle',
     'No internet connection. Check your connection and try again.',
   );
-  expect(screen.queryByText('writingItUp')).toBeNull();
+  expect(screen.queryByText('writingItUpMinute')).toBeNull();
   expect(screen.getByLabelText('retry')).toBeTruthy();
   alert.mockRestore();
 });
@@ -489,7 +536,7 @@ describe('bubble card', () => {
     render(<AndroidHome />);
     expect(screen.getByText('bubbleOff')).toBeTruthy();
     expect(screen.getByText('needsOnePermission')).toBeTruthy();
-    expect(screen.queryByText('tryIt')).toBeNull();
+    expect(screen.queryByText('tapToDictate')).toBeNull();
     expect(screen.getByText('uploadAudio')).toBeTruthy();
     fireEvent.press(screen.getByText('turnOnAccessibility'));
     expect(mockOpenSettings).toHaveBeenCalledWith('accessibility');
@@ -506,7 +553,7 @@ describe('bubble card', () => {
   it('shows the bubble is on with Try it and Upload audio side by side', () => {
     render(<AndroidHome />);
     expect(screen.getByText('bubbleOn')).toBeTruthy();
-    expect(screen.getByText('tryIt')).toBeTruthy();
+    expect(screen.getByText('tapToDictate')).toBeTruthy();
     expect(screen.getByText('uploadAudio')).toBeTruthy();
   });
 });
@@ -522,14 +569,15 @@ it('copies a Try it dictation to the clipboard and says so at the bottom', async
     () => new Promise<string>((resolve) => (finish = resolve)),
   );
   render(<AndroidHome />);
-  await act(async () => fireEvent.press(screen.getByText('tryIt')));
+  await act(async () => fireEvent.press(screen.getByText('tapToDictate')));
   await act(async () => fireEvent.press(screen.getByText('recorder-done')));
   expect(screen.queryByText('recorder-done')).toBeNull();
-  expect(screen.getByText('processing')).toBeTruthy();
+  expect(screen.getByText('writingUpRecording')).toBeTruthy();
+  expect(screen.getByText('usuallyFewSeconds')).toBeTruthy();
   await act(async () => finish('Testing this out.'));
   expect(clipboard.setStringAsync).toHaveBeenCalledWith('Testing this out.');
   expect(screen.getByText('copied', { includeHiddenElements: true })).toBeTruthy();
-  expect(screen.getByText('tryIt')).toBeTruthy();
+  expect(screen.getByText('tapToDictate')).toBeTruthy();
 });
 
 it('says Added to History once an upload is written up', async () => {

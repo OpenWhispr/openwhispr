@@ -175,3 +175,19 @@ describe('uploadProgress', () => {
     expect(uploadProgress({ elapsedMs: 10, done: true })).toBe(1);
   });
 });
+
+it('has every Home string in every language', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { homeTranslations } = require('../home/translations');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { homeEnglish } = jest.requireActual('../home/strings.ts') as {
+    homeEnglish: Record<string, string>;
+  };
+  for (const [language, strings] of Object.entries(
+    homeTranslations as Record<string, Record<string, string>>,
+  ))
+    expect([language, Object.keys(homeEnglish).filter((key) => !(key in strings))]).toEqual([
+      language,
+      [],
+    ]);
+});

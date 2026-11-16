@@ -129,19 +129,12 @@ export function Tips({ gutter }: { gutter: number }) {
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function StatColumn({ value, label }: { value: string; label: string }) {
   return (
     <View
       accessible
       accessibilityLabel={`${value} ${label}`}
-      style={{
-        flex: 1,
-        backgroundColor: home.surface,
-        borderRadius: 16,
-        padding: 14,
-        gap: 2,
-        boxShadow: home.cardShadow,
-      }}
+      style={{ flex: 1, alignItems: 'center', gap: 2, paddingHorizontal: 6 }}
     >
       <Text
         numberOfLines={1}
@@ -152,6 +145,7 @@ function Stat({ value, label }: { value: string; label: string }) {
           fontWeight: '700',
           letterSpacing: -0.11,
           color: home.text,
+          textAlign: 'center',
         }}
       >
         {value}
@@ -160,7 +154,13 @@ function Stat({ value, label }: { value: string; label: string }) {
         numberOfLines={wordSafeLines(label)}
         adjustsFontSizeToFit={wordSafeLines(label) !== undefined}
         minimumFontScale={0.7}
-        style={type.footnote}
+        style={{
+          fontSize: 12,
+          lineHeight: 16,
+          letterSpacing: 0.06,
+          color: home.secondary,
+          textAlign: 'center',
+        }}
       >
         {label}
       </Text>
@@ -168,6 +168,11 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
+function StatDivider() {
+  return <View style={{ width: 1, height: 36, backgroundColor: home.divider }} />;
+}
+
+/** One strip: words spoken, words per minute, streak, with thin dividers between. */
 export function Stats({ stats, feedback }: { stats: HomeStats; feedback?: ReactNode }) {
   const t = useHomeT();
   const dash = '—';
@@ -175,18 +180,29 @@ export function Stats({ stats, feedback }: { stats: HomeStats; feedback?: ReactN
   return (
     <View style={{ gap: 8 }}>
       <SectionHeader title={t('yourStats')} />
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <Stat
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: 14,
+          borderRadius: 20,
+          backgroundColor: home.surface,
+          boxShadow: home.tipShadow,
+        }}
+      >
+        <StatColumn
           value={stats.words === undefined ? dash : stats.words.toLocaleString()}
           label={t('wordsSpoken')}
         />
-        <Stat
+        <StatDivider />
+        <StatColumn
           value={stats.wordsPerMinute == null ? dash : String(stats.wordsPerMinute)}
-          label={t('wordsPerMinute')}
+          label={t('wordsPerMin')}
         />
-        <Stat
+        <StatDivider />
+        <StatColumn
           value={days === undefined ? dash : days === 1 ? t('oneDay') : t('days', { count: days })}
-          label={t('currentStreak')}
+          label={t('streak')}
         />
       </View>
       {feedback}

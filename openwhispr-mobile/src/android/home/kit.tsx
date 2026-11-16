@@ -30,6 +30,7 @@ export const home = {
   warningBackground: '#FFF4E5',
   warning: '#DB7C00',
   error: '#E5372B',
+  disabled: '#C0BFBB',
   cardShadow: '0px 8px 12px rgba(0,0,0,0.06), 0px 1px 1px rgba(0,0,0,0.04)',
   tipShadow: '0px 8px 24px rgba(0,0,0,0.06), 0px 1px 2px rgba(0,0,0,0.04)',
   floatingShadow: '0px 12px 32px rgba(0,0,0,0.10), 0px 4px 12px rgba(0,0,0,0.08)',
@@ -58,16 +59,19 @@ export function SectionHeader({ title }: { title: string }) {
 }
 
 /** Horizontal room a PillButton with an icon needs besides its label: padding, icon slot, gap, border. */
-export const PILL_ICON_CHROME = 8 * 2 + 28 + 4 + 2;
+export const PILL_ICON_CHROME = 14 * 2 + 28 + 8 + 2;
 
-/** Small pill button. The icon sits in a 28 px slot and follows the label colour. */
+/**
+ * Figma Button, medium (44 tall). Inside a card it is flat: secondary has a border and no
+ * shadow. Disabled just dims; the label never changes. The icon sits in a 28 px slot and
+ * follows the label colour, so a pair of buttons always shows same-size icons.
+ */
 export function PillButton({
   label,
   icon,
   onPress,
   primary,
   disabled,
-  busy,
   style,
 }: {
   label: string;
@@ -75,53 +79,43 @@ export function PillButton({
   onPress: () => void;
   primary?: boolean;
   disabled?: boolean;
-  busy?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
-  const inactive = Boolean(disabled || busy);
-  const color = primary ? '#FFFFFF' : inactive ? home.tertiary : home.text;
+  const color = primary ? '#FFFFFF' : disabled ? home.disabled : home.text;
   return (
     <Pressable
       cssInterop={false}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: inactive, busy: Boolean(busy) }}
-      disabled={inactive}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      disabled={disabled}
       onPress={onPress}
+      hitSlop={2}
       style={({ pressed }) => [
         {
           flex: 1,
-          minHeight: 36,
+          minHeight: 44,
           borderRadius: 999,
-          // Narrower than Figma's 14/8 so "Upload audio" fits at full size beside "Try it".
-          paddingHorizontal: 8,
+          paddingHorizontal: 14,
+          paddingVertical: 8,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 4,
-          backgroundColor: primary ? home.accent : home.surface,
+          gap: 8,
+          backgroundColor: primary ? (disabled ? home.fill : home.accent) : home.surface,
           borderWidth: primary ? 0 : 1,
           borderColor: home.borderSubtle,
-          // A disabled secondary button drops its shadow (Figma Button, tone = disabled).
-          boxShadow: primary || inactive ? undefined : home.cardShadow,
           opacity: pressed ? 0.7 : 1,
         },
         style,
       ]}
     >
-      {icon && !busy ? (
+      {icon ? (
         <View style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}>
           <SystemIcon name="circle" mdName={icon} size={19} color={color} />
         </View>
       ) : null}
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.75}
-        style={[type.subhead, { color, flexShrink: 1 }]}
-      >
-        {label}
-      </Text>
+      <Text style={[type.subhead, { color, flexShrink: 1, textAlign: 'center' }]}>{label}</Text>
     </Pressable>
   );
 }

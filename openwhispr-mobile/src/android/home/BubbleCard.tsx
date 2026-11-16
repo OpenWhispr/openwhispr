@@ -26,6 +26,7 @@ import { home, PILL_ICON_CHROME, PillButton, type } from './kit';
 import { missingPermissions, PERMISSION_LABEL, uploadProgress, type Permission } from './model';
 
 const GLOSSY_ICON = require('./assets/glossy-icon.png');
+const FULL_WIDTH = { flex: 0, alignSelf: 'stretch' as const };
 
 const readStatus = (): BubbleStatus | null => AndroidDictation?.getStatus() ?? null;
 
@@ -64,18 +65,13 @@ export async function grantPermission(permission: Permission): Promise<void> {
 }
 
 export function BubbleCard({
-  tryItLabel,
-  tryItDisabled,
-  onTryIt,
-  uploadLabel,
-  uploadDisabled,
+  busy,
+  onDictate,
   onUpload,
 }: {
-  tryItLabel: string;
-  tryItDisabled: boolean;
-  onTryIt: () => void;
-  uploadLabel: string;
-  uploadDisabled: boolean;
+  /** Dictating or uploading: both buttons dim; their labels never change. */
+  busy: boolean;
+  onDictate: () => void;
   onUpload: () => void;
 }) {
   const t = useHomeT();
@@ -83,15 +79,15 @@ export function BubbleCard({
   const { status, refresh } = useBubbleStatus();
   const bubbleSize = useConfigStore((s) => s.config?.androidBubbleSize ?? 64);
   const [switching, setSwitching] = useState(false);
-  // Try it and Upload audio share a row only when every label they can show fits at full
-  // size; otherwise (enlarged text, longer translations) they stack full width.
+  // Tap to dictate and Upload audio share a row only when both labels fit on one line;
+  // otherwise (small phones, enlarged text, longer translations) they stack full width.
   const { fontScale } = useWindowDimensions();
   const [rowWidth, setRowWidth] = useState(0);
   const [labelWidth, setLabelWidth] = useState(0);
-  const pairLabels = [t('tryIt'), t('processing'), t('uploadAudio'), t('writingItUp')];
+  const pairLabels = [t('tapToDictate'), t('uploadAudio')];
   const fits = !rowWidth || !labelWidth || labelWidth <= (rowWidth - 8) / 2 - PILL_ICON_CHROME;
   const stacked = fontScale > 1.15 || !fits;
-  const pairStyle = stacked ? { flex: 0, alignSelf: 'stretch' as const } : undefined;
+  const pairStyle = stacked ? FULL_WIDTH : undefined;
   const missing = missingPermissions(status);
   const needsPermission = missing.length > 0;
   const on = Boolean(status?.enabled) && !needsPermission;
@@ -177,7 +173,7 @@ export function BubbleCard({
         />
       </View>
       {needsPermission ? (
-        <>
+        <View style={{ gap: 10 }}>
           <PillButton
             primary
             label={t(PERMISSION_LABEL[missing[0]])}
@@ -186,32 +182,32 @@ export function BubbleCard({
                 .then(refresh)
                 .catch((error: Error) => Alert.alert(tAndroid('errorTitle'), error.message));
             }}
-            style={{ flex: 0, alignSelf: 'stretch' }}
+            style={FULL_WIDTH}
           />
           <PillButton
             icon="FileUp"
-            label={uploadLabel}
-            disabled={uploadDisabled}
+            label={t('uploadAudio')}
+            disabled={busy}
             onPress={onUpload}
-            style={{ flex: 0, alignSelf: 'stretch' }}
+            style={FULL_WIDTH}
           />
-        </>
+        </View>
       ) : (
         <View
           onLayout={({ nativeEvent }) => setRowWidth(Math.round(nativeEvent.layout.width))}
-          style={{ flexDirection: stacked ? 'column' : 'row', gap: stacked ? 14 : 8 }}
+          style={{ flexDirection: stacked ? 'column' : 'row', gap: stacked ? 10 : 8 }}
         >
           <PillButton
             icon="Mic"
-            label={tryItLabel}
-            disabled={tryItDisabled}
-            onPress={onTryIt}
+            label={t('tapToDictate')}
+            disabled={busy}
+            onPress={onDictate}
             style={pairStyle}
           />
           <PillButton
             icon="FileUp"
-            label={uploadLabel}
-            disabled={uploadDisabled}
+            label={t('uploadAudio')}
+            disabled={busy}
             onPress={onUpload}
             style={pairStyle}
           />
@@ -221,20 +217,25 @@ export function BubbleCard({
   );
 }
 
-/** The upload under way, under the bubble card. */
-export function UploadProgress({
-  fileName,
+/** What is being written up, in one full-width card under the bubble card. Text wraps. */
+export function ProgressCard({
+  icon,
+  title,
+  footer,
   sizeBytes,
   cleaning,
   done,
   onCancel,
 }: {
-  fileName: string;
+  /** What is being written up: a dictation (waveform) or an uploaded file. */
+  icon: 'AudioLines' | 'FileUp';
+  title: string;
+  footer: string;
   sizeBytes?: number;
   cleaning: boolean;
   /** The text has arrived: fill the bar before the card goes. */
   done: boolean;
-  onCancel: () => void;
+  onCancel?: () => void;
 }) {
   const t = useHomeT();
   const fill = useRef(new Animated.Value(0)).current;
@@ -284,11 +285,9 @@ export function UploadProgress({
             justifyContent: 'center',
           }}
         >
-          <SystemIcon name="doc" mdName="FileAudio" size={20} color={home.accent} />
+          <SystemIcon name="doc" mdName={icon} size={22} color={home.accent} />
         </View>
-        <Text numberOfLines={1} style={[type.headline, { flex: 1 }]}>
-          {fileName || t('yourRecording')}
-        </Text>
+        <Text style={[type.headline, { flex: 1 }]}>{title}</Text>
       </View>
       <View
         style={{ height: 6, borderRadius: 999, backgroundColor: home.fill, overflow: 'hidden' }}
@@ -302,18 +301,20 @@ export function UploadProgress({
           }}
         />
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text accessibilityLiveRegion="polite" style={type.footnote}>
-          {cleaning ? t('tidyingUp') : t('writingItUp')}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Text accessibilityLiveRegion="polite" style={[type.footnote, { flex: 1 }]}>
+          {footer}
         </Text>
-        <Text
-          accessibilityRole="button"
-          onPress={onCancel}
-          suppressHighlighting
-          style={[type.footnote, { color: home.tertiary, paddingVertical: 8, paddingLeft: 16 }]}
-        >
-          {t('cancel')}
-        </Text>
+        {onCancel ? (
+          <Text
+            accessibilityRole="button"
+            onPress={onCancel}
+            suppressHighlighting
+            style={{ fontSize: 15, lineHeight: 20, color: home.accent, paddingVertical: 12 }}
+          >
+            {t('cancel')}
+          </Text>
+        ) : null}
       </View>
     </View>
   );

@@ -1,7 +1,7 @@
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import { StorageService } from '@/services/storage/StorageService.android';
 import type { Transcript } from '@/types';
-import { AppState, Modal, Alert, Platform, ScrollView, View } from 'react-native';
+import { AppState, Alert, Platform, ScrollView, View } from 'react-native';
 import { useBubbleResult } from '@/android/bubbleResult';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useTranscriptStore } from '@/store/useTranscriptStore.android';
 import { useAppInit } from '@/hooks/useAppInit';
-import { Page, Card, Button, Row, styles } from '@/android/ui';
+import { Card, Button } from '@/android/ui';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useInsights, refreshInsights } from '@/android/insights';
 import {
@@ -40,7 +40,8 @@ import {
   SectionHeader,
   type,
 } from '@/android/home/kit';
-import { BubbleCard, UploadProgress } from '@/android/home/BubbleCard';
+import { BubbleCard, ProgressCard } from '@/android/home/BubbleCard';
+import { OlderRecordingsRow, OlderRecordingsSheet } from '@/android/home/OlderRecordings';
 import { HistoryCard, Stats, Tips } from '@/android/home/Sections';
 import { TryItRecorder } from '@/android/home/TryItRecorder';
 import { homeStats, localDate } from '@/android/home/model';
@@ -79,7 +80,9 @@ export default function AndroidHome() {
   useAppInit();
   const { t } = useTranslation();
   const h = useHomeT();
+  // Recordings saved on this phone before accounts; loaded while signed out.
   const [archive, setArchive] = useState<Transcript[] | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const pending = useBubbleResult();
   const insights = useInsights();
   const syncInsights = useConfigStore((s) => s.config?.insightsSyncEnabled === true);
@@ -126,6 +129,8 @@ export default function AndroidHome() {
   // Try it: record over Home, then transcribe exactly as the bubble does.
   const [recorderOpen, setRecorderOpen] = useState(false);
   const [trying, setTrying] = useState(false);
+  // The dictation being written up, from the tick until its bar has filled.
+  const [dictationCard, setDictationCard] = useState<{ size: number; done: boolean } | null>(null);
   const tryJob = useRef<AndroidJob | null>(null);
   const tryController = useRef<AbortController | null>(null);
   const openTryIt = async () => {
@@ -133,7 +138,7 @@ export default function AndroidHome() {
     try {
       const job = createAndroidJob('dictate');
       if (job.route.provider === 'cloud' && accountRequiredForCloud(user)) {
-        showAccountRequiredAlert(h('tryIt'));
+        showAccountRequiredAlert(h('tapToDictate'));
         return;
       }
       await ensureAndroidModels(job);
@@ -149,11 +154,16 @@ export default function AndroidHome() {
     tryJob.current = null;
     if (!job) return;
     setTrying(true);
+    // 16 kHz mono 16-bit WAV: 32 bytes a millisecond, for the progress estimate.
+    setDictationCard({ size: recording.durationMs * 32, done: false });
+    let finished = false;
     const controller = new AbortController();
     tryController.current = controller;
     try {
       const text = await processAndroidAudio(recording, job, controller.signal, () => undefined);
       if (controller.signal.aborted) return;
+      finished = true;
+      setDictationCard((current) => current && { ...current, done: true });
       await Clipboard.setStringAsync(text);
       if (!SYSTEM_CONFIRMS_COPY) showToast(h('copied'));
     } catch (error) {
@@ -165,6 +175,8 @@ export default function AndroidHome() {
       void FileSystem.deleteAsync(recording.uri, { idempotent: true }).catch(() => undefined);
       if (tryController.current === controller) tryController.current = null;
       setTrying(false);
+      if (finished) setTimeout(() => setDictationCard(null), 450);
+      else setDictationCard(null);
     }
   };
   useEffect(() => () => tryController.current?.abort(), []);
@@ -241,8 +253,23 @@ export default function AndroidHome() {
   };
   useEffect(() => {
     setArchive(null);
+    setArchiveOpen(false);
     return () => retryController.current?.abort();
   }, [user?.id]);
+  useFocusEffect(
+    useCallback(() => {
+      if (user) return;
+      let current = true;
+      StorageService.getUnassignedTranscripts()
+        .then((items) => {
+          if (current) setArchive(items);
+        })
+        .catch(() => undefined);
+      return () => {
+        current = false;
+      };
+    }, [user]),
+  );
   useEffect(() => {
     applyHistoryRetention().catch(() => undefined);
   }, []);
@@ -296,7 +323,7 @@ export default function AndroidHome() {
                 : undefined;
   const statsRetry = accountStats && (status === 'offline' || status === 'blocked');
   const uploading = uploadCard !== null && (isProcessing || uploadCard.done);
-  const writingUp = uploading && !uploadCard?.done;
+  const busy = trying || recorderOpen || working || dictationCard !== null;
   const recent = [...history].sort((a, b) => b.createdAt - a.createdAt).slice(0, 30);
   const newestId = recent[0]?.id;
   // Once a finished upload's card has gone, take the person to the new History row.
@@ -364,20 +391,29 @@ export default function AndroidHome() {
         }}
       >
         <BubbleCard
-          tryItLabel={trying ? h('processing') : h('tryIt')}
-          tryItDisabled={trying || recorderOpen}
-          onTryIt={() => {
+          busy={busy}
+          onDictate={() => {
             void openTryIt();
           }}
-          uploadLabel={writingUp ? h('writingItUp') : h('uploadAudio')}
-          uploadDisabled={working}
           onUpload={() => {
             void upload();
           }}
         />
+        {dictationCard ? (
+          <ProgressCard
+            icon="AudioLines"
+            title={h('writingUpRecording')}
+            footer={h('usuallyFewSeconds')}
+            sizeBytes={dictationCard.size}
+            cleaning={false}
+            done={dictationCard.done}
+          />
+        ) : null}
         {uploading || retrying ? (
-          <UploadProgress
-            fileName={retrying ? '' : (uploadCard?.name ?? '')}
+          <ProgressCard
+            icon="FileUp"
+            title={retrying ? h('yourRecording') : uploadCard?.name || h('yourRecording')}
+            footer={h('writingItUpMinute')}
             sizeBytes={retrying ? undefined : uploadCard?.size}
             cleaning={!retrying && stage === 'cleaning'}
             done={!retrying && Boolean(uploadCard?.done)}
@@ -493,16 +529,9 @@ export default function AndroidHome() {
               }}
             />
           ) : null}
-          {!user && (
-            <Row
-              title={t('olderDeviceHistory')}
-              onPress={() => {
-                StorageService.getUnassignedTranscripts()
-                  .then(setArchive)
-                  .catch((error: Error) => Alert.alert(t('errorTitle'), error.message));
-              }}
-            />
-          )}
+          {!user && archive?.length ? (
+            <OlderRecordingsRow count={archive.length} onPress={() => setArchiveOpen(true)} />
+          ) : null}
         </View>
       </ScrollView>
       <HomeToast message={toast.message} showId={toast.id} />
@@ -517,36 +546,12 @@ export default function AndroidHome() {
           }}
         />
       ) : null}
-      <Modal
-        visible={!user && archive !== null}
-        animationType="slide"
-        onRequestClose={() => setArchive(null)}
-      >
-        <SafeAreaView style={styles.page}>
-          <Page
-            title={t('olderDeviceHistory')}
-            showAccount={false}
-            footer={<Button secondary label={t('close')} onPress={() => setArchive(null)} />}
-          >
-            <Text style={styles.body}>{t('olderDeviceHistoryBody')}</Text>
-            {!archive?.length && <Text>{t('emptyHistory')}</Text>}
-            {!user &&
-              archive?.map((item) => (
-                <Card key={item.id}>
-                  <Text style={styles.caption}>
-                    {new Date(item.createdAt).toLocaleDateString()}
-                  </Text>
-                  <Text selectable>
-                    {item.text || item.errorMessage || t('olderDeviceHistoryAudio')}
-                  </Text>
-                  {item.audioUrl && (
-                    <Text style={styles.caption}>{t('olderDeviceHistoryAudio')}</Text>
-                  )}
-                </Card>
-              ))}
-          </Page>
-        </SafeAreaView>
-      </Modal>
+      <OlderRecordingsSheet
+        visible={!user && archiveOpen}
+        items={archive ?? []}
+        onClose={() => setArchiveOpen(false)}
+        onCopy={copy}
+      />
     </SafeAreaView>
   );
 }
