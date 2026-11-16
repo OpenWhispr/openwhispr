@@ -155,3 +155,38 @@ test("a rejected prefetch still surfaces its error to the awaiting command", asy
     /Selection edit could not safely read the selection: ipc exploded/
   );
 });
+
+test("an agent command falls back to a late selection capture when prefetch found no selection", async (t) => {
+  const { window, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-sel-late-test-",
+    settingsKey: "__selLateSettings",
+  });
+  const calls = [];
+  window.electronAPI.captureSelectedText = async (options = {}) => {
+    calls.push(options);
+    if (options.forceFreshTarget) {
+      return { status: "selected", text: "late selected text", sessionId: "late-session" };
+    }
+    return { status: "none" };
+  };
+  const manager = createManager({ onError: () => {} });
+
+  manager.beginSelectionCapture();
+  let receivedPrompt;
+  manager.processWithReasoningModel = async (prompt) => {
+    receivedPrompt = prompt;
+    throw new Error("model finished");
+  };
+
+  await assert.rejects(
+    () =>
+      manager.processAgentCommand("make it shorter", "gpt-5", "Agent", {
+        selectionEditReachable: true,
+      }),
+    /Selection edit failed: model finished/
+  );
+
+  assert.equal(calls.length, 2, "the command performs a second late capture");
+  assert.equal(calls[1].forceFreshTarget, true);
+  assert.ok(receivedPrompt.includes("late selected text"));
+});

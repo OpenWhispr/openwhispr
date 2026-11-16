@@ -1788,7 +1788,9 @@ declare global {
             clipboardCopied: true;
           }
       >;
-      captureSelectedText?: () => Promise<
+      captureSelectedText?: (options?: {
+        forceFreshTarget?: boolean;
+      }) => Promise<
         | {
             status: "selected";
             sessionId: string;

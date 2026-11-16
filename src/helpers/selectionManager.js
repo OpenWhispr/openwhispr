@@ -240,7 +240,8 @@ class SelectionManager {
     return (result.success && result.stdout.trim()) || null;
   }
 
-  async captureSelectedText() {
+  async captureSelectedText(options = {}) {
+    const forceFreshTarget = options?.forceFreshTarget === true;
     return this.clipboardManager.runClipboardOperation(async () => {
       // captureTarget() fires on every toggle press, including stop. Fast
       // cloud transcription can get here before the stop-press probe lands
@@ -256,6 +257,9 @@ class SelectionManager {
         }
       }
       this._pruneSessions();
+      if (forceFreshTarget || !this.lastTarget) {
+        await this.captureTarget({ force: true });
+      }
       const expectedTarget =
         this.platform === "darwin" && this.textEditMonitor?.lastTargetPid
           ? { kind: "mac-pid", pid: this.textEditMonitor.lastTargetPid }
