@@ -19,7 +19,7 @@ async function setup(t) {
   localStorage.setItem("agentName", "Whisper");
   localStorage.setItem("customDictionary", JSON.stringify(["Whisper", "Unrelated"]));
   const mocks = {
-    "react-i18next": `const t=(key,opts)=>key+(opts?JSON.stringify(opts):"");export const useTranslation=()=>({t,i18n:{language:"en"}});`,
+    "react-i18next": `const t=(key,opts)=>key+(opts?JSON.stringify(opts):"");export const useTranslation=()=>({t,i18n:{language:"en",dir:()=>"ltr"}});`,
     "/i18n": `export const normalizeUiLanguage=value=>value||"en";export default {language:"en",changeLanguage:async()=>{},getFixedT:locale=>(key)=>locale+":"+key+" {{agentName}} {{targetLanguage}}"};`,
     "/utils/logger": `export default {debug(){},error(){},warn(){},info(){}};`,
     "/services/SyncService.js": `export const syncService={canSync:()=>false,syncDictionaryNow(){}};`,

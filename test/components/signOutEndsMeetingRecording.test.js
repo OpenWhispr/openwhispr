@@ -24,6 +24,7 @@ test("invitation account switch awaits the meeting before signing out", async (t
     signOut: async () => {
       calls.push("signed out");
     },
+    resetChat: () => calls.push("chat reset"),
   };
   t.after(() => delete globalThis.__invitationSignOut);
   const vite = await createRendererServer(t, {
@@ -33,6 +34,7 @@ test("invitation account switch awaits the meeting before signing out", async (t
       "/services/InvitationsService": `export const InvitationsService = {preview: async () => ({email: "invitee@example.test", workspace_name: "Workspace", workspace_role: "member"})};`,
       "/utils/pendingInvitationToken": `export const storePendingInvitationToken = token => globalThis.__invitationSignOut.storeToken(token); export const clearPendingInvitationToken = () => {};`,
       "/stores/meetingRecordingStore": `export const stopRecording = () => globalThis.__invitationSignOut.stopRecording();`,
+      "/stores/chatTurnStore": `export const resetForAccountChange = () => globalThis.__invitationSignOut.resetChat();`,
       "/services/SyncService.js": `export const syncService = {purgeTeamSpacesForSignOut: () => globalThis.__invitationSignOut.purge()};`,
       "/lib/auth": `export const signOut = () => globalThis.__invitationSignOut.signOut();`,
       "/services/membershipActions": `export const afterWorkspaceJoined = async () => {};`,
@@ -51,9 +53,10 @@ test("invitation account switch awaits the meeting before signing out", async (t
   );
   assert.ok(button, "the real wrong-account branch offers Switch account");
   await React.act(async () => button.click());
-  assert.deepEqual(calls, ["invitation kept: invite-token", "stop requested"]);
+  assert.deepEqual(calls, ["chat reset", "invitation kept: invite-token", "stop requested"]);
   await React.act(async () => finishStop());
   assert.deepEqual(calls, [
+    "chat reset",
     "invitation kept: invite-token",
     "stop requested",
     "meeting stopped",
@@ -75,6 +78,7 @@ test("shared sign-out asks before ending a meeting and waits before clearing sco
       "/stores/meetingRecordingStore": `export const useMeetingRecordingStore = {getState: () => ({isRecording: globalThis.__signOutOwner.recording})}; export const stopRecording = () => {globalThis.__signOutOwner.calls.push("stop requested"); return globalThis.__signOutOwner.stop.promise;};`,
       "/services/SyncService.js": `export const syncService = {purgeTeamSpacesForSignOut: async () => {globalThis.__signOutOwner.calls.push("purged");}};`,
       "/lib/auth": `export const signOut = async () => {globalThis.__signOutOwner.calls.push("signed out");};`,
+      "/stores/chatTurnStore": `export const resetForAccountChange = () => {globalThis.__signOutOwner.calls.push("chat reset");};`,
     },
   });
   const { useSignOut } = await vite.ssrLoadModule("/hooks/useSignOut.ts");
@@ -97,16 +101,16 @@ test("shared sign-out asks before ending a meeting and waits before clearing sco
   assert.deepEqual(calls, []);
   assert.equal(state.confirm.title, "settingsPage.account.signOut.endMeetingTitle");
   await React.act(async () => state.confirm.onConfirm());
-  assert.deepEqual(calls, ["stop requested"]);
+  assert.deepEqual(calls, ["chat reset", "stop requested"]);
   assert.equal(container.querySelector("button").disabled, true);
   await React.act(async () => stop.resolve());
-  assert.deepEqual(calls, ["stop requested", "purged", "signed out", "reloaded"]);
+  assert.deepEqual(calls, ["chat reset", "stop requested", "purged", "signed out", "reloaded"]);
   state.recording = false;
   state.confirm = null;
   calls.length = 0;
   await React.act(async () => container.querySelector("button").click());
   assert.equal(state.confirm, null, "no recording means no confirmation");
-  assert.deepEqual(calls, ["stop requested", "purged", "signed out", "reloaded"]);
+  assert.deepEqual(calls, ["chat reset", "stop requested", "purged", "signed out", "reloaded"]);
 });
 
 test("auth sign-out closes activation before revoking credentials, even offline", async (t) => {

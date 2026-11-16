@@ -1,10 +1,10 @@
+import React, { useEffect, useMemo, useState } from "react";
 import { useStore } from "zustand";
-import type {
-  SettingsNavigationStore,
-  SettingsSectionType,
-} from "../stores/settingsNavigationStore";
+import type { SettingsNavigationStore } from "../stores/settingsNavigationStore";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { usePolicyStore } from "../stores/policyStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
 import {
   Sliders,
   Mic,
@@ -17,12 +17,39 @@ import {
   ShieldCheck,
   Users,
   SquareSparkle,
+  Settings,
+  Key,
+  Office,
 } from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
-import SettingsPage, { AccountAvatar } from "./SettingsPage";
+import SettingsPage from "./SettingsPage";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { useAuth } from "../hooks/useAuth";
+import { workspaceCan } from "../lib/capabilities";
+import { settingsWorkspace } from "../lib/workspaceSwitcher";
+import {
+  buildSettingsNav,
+  resolveSettingsSection,
+  type SettingsSectionType,
+} from "../lib/settingsNav";
 
 export type { SettingsSectionType };
+
+const SECTION_ICONS: Record<SettingsSectionType, React.ComponentType<{ className?: string }>> = {
+  account: UserCircle,
+  general: Sliders,
+  toneStyle: SquareSparkle,
+  hotkeys: Keyboard,
+  plansBilling: CreditCard,
+  workspaceGeneral: Settings,
+  workspacePeople: Users,
+  workspaceTeamspaces: Office,
+  workspaceDeveloper: Key,
+  speechToText: Mic,
+  llms: Brain,
+  privacyData: Shield,
+  system: Wrench,
+};
 
 interface SettingsModalProps {
   navigation: SettingsNavigationStore;
@@ -31,84 +58,65 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ navigation, onOpenChange }: SettingsModalProps) {
   // The only renderer (SettingsHost) mounts this modal iff the section is set.
-  const activeSection = useStore(navigation, (state) => state.section)!;
-  const handleSectionChange = useStore(navigation, (state) => state.openSettings);
+  const requestedSection = useStore(navigation, (state) => state.section)!;
+  const openSettings = useStore(navigation, (state) => state.openSettings);
+  // Takes the user to a teamspace in Notes; the control panel closes Settings.
+  const onOpenTeamspace = useStore(navigation, (state) => state.openTeamspace) ?? undefined;
   const { t } = useTranslation();
-  const { isSignedIn, user } = useAuth();
+  const { isSignedIn } = useAuth();
   const policyManaged = usePolicyStore((s) => s.managed);
-  const items: SidebarItem<SettingsSectionType>[] = [
-    {
-      id: "account",
-      label: t("settingsModal.sections.account.label"),
-      icon: UserCircle,
-      description: t("settingsModal.sections.account.description"),
-      group: t("settingsModal.groups.account"),
-    },
-    {
-      id: "plansBilling",
-      label: t("settingsModal.sections.plansBilling.label"),
-      icon: CreditCard,
-      description: t("settingsModal.sections.plansBilling.description"),
-      group: t("settingsModal.groups.account"),
-    },
-    {
-      id: "workspace",
-      label: t("settingsModal.sections.workspace.label"),
-      icon: Users,
-      description: t("settingsModal.sections.workspace.description"),
-      group: t("settingsModal.groups.account"),
-    },
-    {
-      id: "general",
-      label: t("settingsModal.sections.general.label"),
-      icon: Sliders,
-      description: t("settingsModal.sections.general.description"),
-      group: t("settingsModal.groups.app"),
-    },
-    {
-      id: "hotkeys",
-      label: t("settingsModal.sections.hotkeys.label"),
-      icon: Keyboard,
-      description: t("settingsModal.sections.hotkeys.description"),
-      group: t("settingsModal.groups.app"),
-    },
-    {
-      id: "toneStyle",
-      label: t("settingsModal.sections.toneStyle.label"),
-      icon: SquareSparkle,
-      description: t("settingsModal.sections.toneStyle.description"),
-      group: t("settingsModal.groups.app"),
-    },
-    {
-      id: "speechToText",
-      label: t("settingsModal.sections.speechToText.label"),
-      icon: Mic,
-      description: t("settingsModal.sections.speechToText.description"),
-      group: t("settingsModal.groups.aiModels"),
-    },
-    {
-      id: "llms",
-      label: t("settingsModal.sections.llms.label"),
-      icon: Brain,
-      description: t("settingsModal.sections.llms.description"),
-      group: t("settingsModal.groups.aiModels"),
-    },
-    {
-      id: "privacyData",
-      label: t("settingsModal.sections.privacyData.label"),
-      icon: Shield,
-      description: t("settingsModal.sections.privacyData.description"),
-      group: t("settingsModal.groups.system"),
-    },
-    {
-      id: "system",
-      label: t("settingsModal.sections.system.label"),
-      icon: Wrench,
-      description: t("settingsModal.sections.system.description"),
-      group: t("settingsModal.groups.system"),
-    },
-  ];
-  const sidebarItems = isSignedIn ? items : items.filter((item) => item.id !== "workspace");
+  const { workspaces, activeWorkspaceId, workspacesLoaded } = useWorkspaceStore(
+    useShallow((s) => ({
+      workspaces: s.workspaces,
+      activeWorkspaceId: s.activeWorkspaceId,
+      workspacesLoaded: s.loaded,
+    }))
+  );
+  const activeWorkspace = settingsWorkspace(workspaces, activeWorkspaceId);
+  const hasWorkspace = activeWorkspace !== null;
+  const canManageSettings = activeWorkspace
+    ? workspaceCan(activeWorkspace, "manage_settings")
+    : false;
+  const signedIn = Boolean(isSignedIn);
+
+  const nav = useMemo(
+    () => buildSettingsNav({ isSignedIn: signedIn, hasWorkspace, canManageSettings }),
+    [signedIn, hasWorkspace, canManageSettings]
+  );
+  // Until the workspace list loads, which workspace pages exist is unknown; a deep link to one
+  // waits for the list rather than falling back to General.
+  const navKnown = !signedIn || workspacesLoaded;
+
+  const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(
+    () =>
+      nav.map(({ id, group }) => ({
+        id,
+        label: t(`settingsModal.sections.${id}.label`),
+        icon: SECTION_ICONS[id],
+        description: t(`settingsModal.sections.${id}.description`),
+        group: t(`settingsModal.groups.${group}`),
+      })),
+    [nav, t]
+  );
+
+  const [initialSubTab, setInitialSubTab] = useState<string | undefined>(undefined);
+
+  // The open section can disappear (manage_settings revoked, the last workspace left or
+  // deleted, signed out); land on the nearest page that still exists.
+  const activeSection =
+    navKnown && !nav.some((entry) => entry.id === requestedSection)
+      ? resolveSettingsSection(requestedSection, nav)
+      : requestedSection;
+  useEffect(() => {
+    if (activeSection === requestedSection) return;
+    openSettings(activeSection);
+    setInitialSubTab(undefined);
+  }, [activeSection, requestedSection, openSettings]);
+
+  const handleSectionChange = (section: SettingsSectionType, subTab?: string): void => {
+    openSettings(section);
+    setInitialSubTab(subTab);
+  };
 
   return (
     <SidebarModal<SettingsSectionType>
@@ -118,21 +126,8 @@ export default function SettingsModal({ navigation, onOpenChange }: SettingsModa
       sidebarItems={sidebarItems}
       activeSection={activeSection}
       onSectionChange={handleSectionChange}
-      header={
-        isSignedIn && user ? (
-          <div className="flex flex-col items-center gap-2 pb-2 text-center">
-            <AccountAvatar image={user.image} name={user.name || t("settingsPage.account.user")} />
-            <div className="min-w-0 w-full">
-              <p dir="auto" className="text-[13px] font-semibold text-foreground truncate">
-                {user.name || t("settingsPage.account.user")}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                <bdi dir="ltr">{user.email}</bdi>
-              </p>
-            </div>
-          </div>
-        ) : undefined
-      }
+      header={signedIn ? <WorkspaceSwitcher placement="settings" /> : undefined}
+      compactHeader={signedIn ? <WorkspaceSwitcher placement="settings" compact /> : undefined}
       notice={
         policyManaged
           ? {
@@ -143,7 +138,13 @@ export default function SettingsModal({ navigation, onOpenChange }: SettingsModa
           : undefined
       }
     >
-      <SettingsPage navigation={navigation} />
+      <SettingsPage
+        navigation={navigation}
+        activeSection={activeSection}
+        onNavigateToSection={handleSectionChange}
+        initialSubTab={initialSubTab}
+        onOpenTeamspace={onOpenTeamspace}
+      />
     </SidebarModal>
   );
 }

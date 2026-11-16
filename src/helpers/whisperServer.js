@@ -1,3 +1,8 @@
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+} = require("./localModelPolicyGate");
 const { spawn } = require("child_process");
 const EventEmitter = require("events");
 const fs = require("fs");
@@ -513,11 +518,22 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async start(modelPath, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      this.localModelIdForPath?.(modelPath),
+      () => this._policyAllowedStart(modelPath, options),
+      { memoryOnly: options.policyMemoryOnly === true, onAbort: () => this.stop() }
+    );
+  }
+
+  async _policyAllowedStart(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
 
     // Remember the options so a wake re-warm can reload with the same VAD/thread
     // signature and survive start()'s no-op guard on the next dictation. See #766.
     this.lastStartOptions = { ...options };
+    delete this.lastStartOptions.policyMemoryOnly;
 
     const threadResolution = resolveWhisperThreads(options);
     const nextThreadSignature = getThreadSignature(threadResolution);
@@ -645,6 +661,7 @@ class WhisperServerManager extends EventEmitter {
       threads: threadResolution,
     });
 
+    assertLocalModelOperation(this);
     this.process = spawn(serverBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -898,6 +915,24 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async transcribe(audioBuffer, options = {}) {
+    // Nothing to authorize once stopped, which clears the model: that's the
+    // ordinary not-running error, not a refusal of a model nobody named.
+    if (this.isRemote || !this.ready || !this.process)
+      return this._policyAllowedTranscribe(audioBuffer, options);
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      this.localModelIdForPath?.(this.modelPath),
+      () =>
+        this._policyAllowedTranscribe(audioBuffer, {
+          ...options,
+          signal: localModelOperationSignal(this, options.signal),
+        }),
+      { onAbort: () => this.stop() }
+    );
+  }
+
+  async _policyAllowedTranscribe(audioBuffer, options = {}) {
     if (!this.ready || (!this.process && !this.isRemote)) {
       throw new Error("whisper-server is not running");
     }
@@ -963,7 +998,12 @@ class WhisperServerManager extends EventEmitter {
           `Content-Disposition: form-data; name="prompt"\r\n\r\n` +
           `${initialPrompt}\r\n`
       );
-      debugLogger.info("Using custom dictionary prompt", { prompt: initialPrompt });
+      // The prompt carries teammates' words, so only its size is logged at info.
+      debugLogger.info("Using custom dictionary prompt", {
+        promptLength: initialPrompt.length,
+        promptTerms: initialPrompt.split(",").filter((term) => term.trim()).length,
+      });
+      debugLogger.debug("Custom dictionary prompt", { prompt: initialPrompt });
     }
 
     parts.push(
@@ -997,12 +1037,14 @@ class WhisperServerManager extends EventEmitter {
         boundary,
         generation,
         modelPath,
-        stderrMark
+        stderrMark,
+        signal
       );
     }
   }
 
   _postInference(body, boundary, signal) {
+    if (!this.isRemote) signal = localModelOperationSignal(this, signal);
     // Multipart boilerplate adds under a kilobyte, so body length tracks audio length.
     const timeoutMs = computeTranscriptionTimeoutMs(body.length / PCM16_MONO_16K_BYTES_PER_SECOND);
 
@@ -1082,7 +1124,7 @@ class WhisperServerManager extends EventEmitter {
     });
   }
 
-  async _retryAfterRequestFailure(err, body, boundary, generation, modelPath, stderrMark) {
+  async _retryAfterRequestFailure(err, body, boundary, generation, modelPath, stderrMark, signal) {
     if (!err?.isConnectionError || this.isRemote || this._stopRequested) throw err;
 
     if (this.startGeneration === generation) {
@@ -1102,7 +1144,7 @@ class WhisperServerManager extends EventEmitter {
           processExited,
         })
       ) {
-        return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark);
+        return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark, signal);
       }
       if (this.startGeneration === generation) throw err;
     }
@@ -1123,7 +1165,7 @@ class WhisperServerManager extends EventEmitter {
       throw err;
     }
     try {
-      return await this._postInference(body, boundary);
+      return await this._postInference(body, boundary, signal);
     } catch (retryErr) {
       // The replacement can be another doomed GPU server (a peer restarted with the
       // GPU flags still set): give it the same one-shot crash check before giving up.
@@ -1136,11 +1178,13 @@ class WhisperServerManager extends EventEmitter {
       }
       const exited = await this._waitForProcessExit(PROCESS_EXIT_WAIT_MS);
       if (!exited || this._stopRequested) throw retryErr;
-      return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark);
+      return await this._fallbackAndRetry(body, boundary, modelPath, stderrMark, signal);
     }
   }
 
-  async _fallbackAndRetry(body, boundary, modelPath, stderrMark) {
+  async _fallbackAndRetry(body, boundary, modelPath, stderrMark, signal) {
+    signal?.throwIfAborted();
+    assertLocalModelOperation(this);
     const backend = this.useCuda ? "cuda" : "vulkan";
     const fallbackToVulkan = backend === "cuda" && this.lastStartOptions.fallbackToVulkan === true;
     // Read the crashed server's output now (the start below replaces it),
@@ -1181,7 +1225,7 @@ class WhisperServerManager extends EventEmitter {
         fallbackBackend: this.activeGpuBackend ?? "cpu",
       });
     }
-    return await this._postInference(body, boundary);
+    return await this._postInference(body, boundary, signal);
   }
 
   async _waitForProcessExit(timeoutMs) {

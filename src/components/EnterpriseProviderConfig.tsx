@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -103,8 +104,9 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 }
 
 function useSuggestedModels(provider: "bedrock" | "vertex") {
+  useRegistryVersion();
   const { t } = useTranslation();
-  return useMemo(() => {
+  return (() => {
     const providerData = REASONING_PROVIDERS[provider];
     if (!providerData?.models?.length) return [];
     const iconUrl = getProviderIcon(provider);
@@ -117,7 +119,7 @@ function useSuggestedModels(provider: "bedrock" | "vertex") {
       icon: iconUrl,
       invertInDark,
     }));
-  }, [t, provider]);
+  })();
 }
 
 const EMPTY_CATALOG: ModelCardOption[] = [];

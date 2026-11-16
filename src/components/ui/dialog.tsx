@@ -33,7 +33,11 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { overlayClassName?: string }
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    overlayClassName?: string;
+    /** For dialogs that own their dismissal (e.g. one that can't close while busy). */
+    hideCloseButton?: boolean;
+  }
 >(
   (
     {
@@ -43,6 +47,7 @@ const DialogContent = React.forwardRef<
       onOpenAutoFocus,
       onCloseAutoFocus,
       overlayClassName,
+      hideCloseButton,
       ...props
     },
     ref
@@ -150,10 +155,12 @@ const DialogContent = React.forwardRef<
           {...props}
         >
           {children}
-          <DialogPrimitive.Close className="absolute end-4 top-4 rounded-full opacity-50 ring-offset-background transition-[opacity,background-color] hover:opacity-100 hover:bg-muted/50 dark:hover:bg-surface-raised focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none p-1.5">
-            <X className="h-4 w-4 text-muted-foreground" />
-            <span className="sr-only">{t("common.close")}</span>
-          </DialogPrimitive.Close>
+          {hideCloseButton ? null : (
+            <DialogPrimitive.Close className="absolute end-4 top-4 rounded-full opacity-50 ring-offset-background transition-[opacity,background-color] hover:opacity-100 hover:bg-muted/50 dark:hover:bg-surface-raised focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none p-1.5">
+              <X className="h-4 w-4 text-muted-foreground" />
+              <span className="sr-only">{t("common.close")}</span>
+            </DialogPrimitive.Close>
+          )}
         </DialogPrimitive.Content>
       </DialogPortal>
     );
@@ -209,7 +216,7 @@ interface ConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: React.ReactNode;
-  description?: string;
+  description?: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void;
@@ -248,10 +255,12 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   // Radix auto-focuses the first tabbable — the Cancel button — so Enter used
   // to cancel. Focus Confirm instead, except: destructive dialogs keep Cancel
-  // focused (Enter must never destroy by default), and dialogs with children
-  // keep Radix's choice (a type-to-confirm input owns focus and Enter itself).
+  // focused (Enter must never destroy by default), dialogs with children
+  // keep Radix's choice (a type-to-confirm input owns focus and Enter itself),
+  // and a disabled Confirm can't take focus, which would leave it behind the
+  // dialog.
   const handleOpenAutoFocus = (event: Event) => {
-    if (children != null || variant === "destructive") return;
+    if (children != null || variant === "destructive" || confirmDisabled) return;
     event.preventDefault();
     confirmRef.current?.focus();
   };

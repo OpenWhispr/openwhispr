@@ -16,6 +16,7 @@ async function createOnboardingRenderer(t, platform = "linux") {
     noExternal: ["react-i18next"],
     mockModules: {
       "react-i18next": `
+        export const initReactI18next = { type: "3rdParty", init() {} };
         export function useTranslation() {
           return { t(key) { return key; } };
         }
@@ -111,6 +112,21 @@ test("Linux onboarding exposes labelled minimize, maximize, and close controls i
       );
     }
   }
+});
+
+test("Back can be shown and held inert, so the footer stays put while onboarding finishes", async (t) => {
+  const vite = await createOnboardingRenderer(t);
+  const { default: OnboardingShell } = await vite.ssrLoadModule(
+    "/components/onboarding/OnboardingShell.tsx"
+  );
+  const back = (props) =>
+    renderToStaticMarkup(
+      React.createElement(OnboardingShell, { onBack: () => {}, ...props }, React.createElement("div"))
+    ).match(/<button[^>]*aria-label="common\.back"[^>]*>/)?.[0];
+
+  assert.ok(back({}), "Back is shown");
+  assert.doesNotMatch(back({}), /\sdisabled=""/);
+  assert.match(back({ backDisabled: true }), /\sdisabled=""/);
 });
 
 test("a denied microphone exposes the existing Linux settings recovery", async (t) => {
@@ -365,10 +381,49 @@ test("provider setup stages mark dictation complete before Assistant", async (t)
     "/components/onboarding/ProviderSetupStep.tsx"
   );
 
-  for (const stepId of ["byok-assistant", "local-assistant"]) {
-    const markup = renderToStaticMarkup(React.createElement(SetupStageStepper, { stepId }));
+  const markup = renderToStaticMarkup(
+    React.createElement(SetupStageStepper, { stepId: "byok-assistant" })
+  );
 
-    assert.match(markup, /data-icon="circle-check"/);
-    assert.doesNotMatch(markup, /data-icon="audio-lines"/);
-  }
+  assert.match(markup, /data-icon="circle-check"/);
+  assert.doesNotMatch(markup, /data-icon="audio-lines"/);
+});
+
+test("the Local card quotes the space its setup needs and offers no warning", async (t) => {
+  installBrowserGlobals(t, {
+    window: { electronAPI: { getPlatform: () => "darwin" } },
+  });
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-onboarding-setup-choice-",
+    noExternal: ["react-i18next"],
+    resolveAlias: { "@": require("node:path").resolve(__dirname, "../../src") },
+    mockModules: {
+      "react-i18next": `
+        export function useTranslation() {
+          return { t(key, values) { return values ? key + JSON.stringify(values) : key; } };
+        }
+        export const initReactI18next = { type: "3rdParty", init() {} };
+      `,
+    },
+  });
+  const { default: SetupChoiceStep } = await vite.ssrLoadModule(
+    "/components/onboarding/SetupChoiceStep.tsx"
+  );
+  const render = (props) =>
+    renderToStaticMarkup(
+      React.createElement(SetupChoiceStep, {
+        isSignedIn: true,
+        agentAllowed: true,
+        onSelect: noop,
+        onRequestAuthentication: noop,
+        ...props,
+      })
+    );
+
+  const markup = render({ localSpaceGb: 7 });
+  assert.match(markup, /setupChoice\.local\.description\{&quot;minimumSpace&quot;:7\}/);
+  assert.match(markup, /setupChoice\.local\.features\.setup/);
+  assert.doesNotMatch(markup, /warnings\.|features\.models/);
+  // Until the plan and the space read land, the card keeps today's 2 GB floor.
+  assert.match(render({}), /\{&quot;minimumSpace&quot;:2\}/);
 });

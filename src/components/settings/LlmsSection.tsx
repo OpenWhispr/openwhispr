@@ -16,6 +16,7 @@ import DictationTranslationSettings from "./DictationTranslationSettings";
 import GpuDeviceSelector from "./GpuDeviceSelector";
 import InferenceConfigEditor from "./InferenceConfigEditor";
 import { KeepAlive, TabPanel } from "./KeepAlive";
+import { LocalOffInstalledModels } from "./LocalOffInstalledModels";
 import type { InferenceMode } from "../../types/electron";
 import {
   LLM_TABS,
@@ -208,6 +209,7 @@ const LlmsTabs = memo(function LlmsTabs({ navigation }: { navigation: SettingsNa
           {content.chatIntelligence}
         </TabPanel>
       )}
+      <LocalOffInstalledModels scope="llm" />
     </div>
   );
 });

@@ -153,7 +153,6 @@ const WINDOW_SIZES = {
   WITH_MENU: { width: 240, height: 280 },
   WITH_TOAST: { width: 400, height: 500 },
   EXPANDED: { width: 400, height: 500 },
-  ASSISTANT: ASSISTANT_WINDOW_SIZE,
 };
 
 /**
@@ -204,12 +203,43 @@ const MAIN_WINDOW_CONFIG = {
   type: OVERLAY_WINDOW_TYPES.main,
 };
 
+// The assistant's own window: a pill, a composer above it, or a modal, sized to
+// whichever is shown (agentWindowPlacement.js). Web security stays on: it renders
+// model and tool output. Its focusability is per platform (agentWindowManager.js).
+const AGENT_WINDOW_CONFIG = {
+  title: "Assistant",
+  webPreferences: {
+    preload: path.join(__dirname, "..", "..", "preload.js"),
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+    // Streaming and the waveform must not stall while another app is in front.
+    backgroundThrottling: false,
+  },
+  frame: false,
+  alwaysOnTop: true,
+  resizable: false,
+  transparent: true,
+  show: false,
+  skipTaskbar: true,
+  visibleOnAllWorkspaces: process.platform !== "win32",
+  fullscreenable: false,
+  hasShadow: false,
+  acceptFirstMouse: true,
+  type: OVERLAY_WINDOW_TYPES.main,
+};
+
 // The expanded flow deliberately uses a denser frame than the main control
 // panel. Its typography, cards and spacing are sized for this 1000x740 canvas;
 // clampedBounds still handles displays whose work area is smaller.
 const ONBOARDING_WINDOW_SIZES = {
   COMPACT: { width: 480, height: 624 },
   EXPANDED: { width: 1000, height: 740 },
+  // The local setup step is the one expanded step taller than 740: its heading,
+  // three 96px rows, button, foot line and the footer navigation come to about
+  // 834px in English. 880 fits that with room to spare, and fits the
+  // translations whose title wraps to a second line.
+  LOCAL_SETUP: { width: 1000, height: 880 },
 };
 
 // Control panel window configuration
@@ -355,7 +385,7 @@ class WindowPositionUtil {
       // Re-applying the collection behavior when nothing drifted makes the
       // window server momentarily pull the window out of the active Space,
       // which blinks the entire visible window. Enforce calls land on hot
-      // paths (assistant panel open/close, window show), so Spaces membership
+      // paths (window show, resize), so Spaces membership
       // is only touched when it was actually lost.
       if (!window.isVisibleOnAllWorkspaces()) {
         window.setVisibleOnAllWorkspaces(true, {
@@ -383,6 +413,7 @@ class WindowPositionUtil {
 
 module.exports = {
   fitMeetingNotificationWindow,
+  AGENT_WINDOW_CONFIG,
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
   ONBOARDING_WINDOW_SIZES,

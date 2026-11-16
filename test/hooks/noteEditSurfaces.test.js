@@ -6,6 +6,7 @@ const {
   createRendererServer,
   installBrowserGlobals,
   SIGNED_OUT_AUTH_MOCK,
+  userTextOf,
 } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 
@@ -36,7 +37,7 @@ const noop = () => {};
 // Mounts both real entry points, their persistence/sender/streaming hooks and note
 // tools. Only the provider transport and Electron IPC are fake. Scripted tool
 // choices verify execution and request contracts, not a live model's judgment.
-for (const surface of ["note chat", "assistant panel"]) {
+for (const surface of ["note chat", "agent window"]) {
   for (const priorEmail of [false, true]) {
     for (const provider of ["cloud", "byok"]) {
       test(`${surface}, ${provider}, ${priorEmail ? "after email" : "fresh"}: edit the summary without opening email`, async (t) => {
@@ -55,15 +56,32 @@ for (const surface of ["note chat", "assistant panel"]) {
           space_id: 1,
         };
         const savedMessages = [];
+        const protectedNotes = [];
+        const writeGuards = [];
+        const writeGuard = { accountId: null, authGeneration: 0 };
         const externalActions = [];
         installBrowserGlobals(t, {
           initialStorage: { isSubscribed: "true" },
           window: {
             clearInterval: noop,
             electronAPI: {
+              getDatabaseAccountScope: async () => ({ accountId: null, visibleAccountId: null }),
+              getNoteWriteGuard: async () => writeGuard,
+              protectConversation: async (id, notes, deviceOnly, accountId) => {
+                assert.equal(id, 1);
+                assert.deepEqual(notes, [{ id: stored.id, space_id: stored.space_id }]);
+                assert.equal(deviceOnly, false);
+                assert.equal(accountId, writeGuard.accountId);
+                protectedNotes.push(notes);
+                return { success: true };
+              },
+              // The note is in main's Private, all a chat reads with no workspace active.
+              getPrivateSpaceId: async () => 1,
               getNote: async () => ({ ...stored }),
               updateNote: async (_id, updates, options) => {
                 assert.equal(options.undoable, true);
+                assert.deepEqual(options.writeGuard, writeGuard);
+                writeGuards.push(options.writeGuard);
                 assert.equal(options.expected.id, stored.id);
                 Object.assign(stored, updates);
                 return { success: true };
@@ -166,11 +184,13 @@ for (const surface of ["note chat", "assistant panel"]) {
             )
         );
         let chat;
-        let settled = false;
+        let agentChat;
         const { useEmbeddedChat } = await vite.ssrLoadModule("/hooks/useEmbeddedChat.ts");
-        const { AssistantPanel } = await vite.ssrLoadModule(
-          "/components/dictation/AssistantPanel.tsx"
-        );
+        const { useAgentChat } = await vite.ssrLoadModule("/components/agent/useAgentChat.ts");
+        function AgentHarness() {
+          agentChat = useAgentChat({ onRegenerateFailed: noop });
+          return null;
+        }
         function NoteHarness() {
           chat = useEmbeddedChat({
             noteId: 7,
@@ -184,48 +204,17 @@ for (const surface of ["note chat", "assistant panel"]) {
         }
         root = createRoot(container);
         await React.act(async () =>
-          root.render(
-            surface === "note chat"
-              ? React.createElement(NoteHarness)
-              : React.createElement(AssistantPanel, {
-                  pendingCommand: {
-                    id: 1,
-                    text: REQUEST,
-                    attachment: null,
-                    selectedContext: null,
-                    delivery: null,
-                  },
-                  initialConversationId: priorEmail ? 1 : null,
-                  onCommandConsumed: noop,
-                  onCommandDiscarded: noop,
-                  onCommandSettled: () => {
-                    settled = true;
-                  },
-                  onConversationIdChange: noop,
-                  onClose: noop,
-                  onBusyChange: noop,
-                  onResponseReadyChange: noop,
-                  onResponseContent: noop,
-                  onConversationReset: noop,
-                  onSelectionContextChange: noop,
-                  voiceState: "idle",
-                  thinking: false,
-                  open: true,
-                  footerPhase: "actions",
-                  horizontalDirection: "left",
-                })
-          )
+          root.render(React.createElement(surface === "note chat" ? NoteHarness : AgentHarness))
         );
         if (surface === "note chat") {
           if (priorEmail) await React.act(async () => chat.switchConversation(1));
           await React.act(async () => chat.sendMessage(REQUEST));
         } else {
-          for (let i = 0; !settled && i < 100; i++)
-            await React.act(async () => {
-              await new Promise((resolve) => setTimeout(resolve, 10));
-            });
-          assert.equal(settled, true);
+          if (priorEmail) await React.act(async () => agentChat.switchChat(1));
+          await React.act(async () => agentChat.send(REQUEST));
         }
+        assert.ok(protectedNotes.length >= 3, "grounding/tool reads protect the persisted chat");
+        assert.equal(writeGuards.length, 2, "both note edits carry the pinned main guard");
         assert.equal(stored.enhanced_content, EDITED);
         assert.equal(stored.title, "Renamed workshop");
         assert.equal(stored.content, "Bring a notebook.");
@@ -234,14 +223,18 @@ for (const surface of ["note chat", "assistant panel"]) {
         assert.ok(
           savedMessages.some((m) => m[1] === "assistant" && m[2].includes("saved summary"))
         );
-        assert.equal(request.messages.at(-1).content, REQUEST);
+        assert.equal(userTextOf(request.messages.at(-1).content), REQUEST);
         assert.match(
           request.config.systemPrompt,
           /previous email interaction does not authorize another email action/
         );
         assert.match(request.config.systemPrompt, /ask which document before acting/);
+        // The earlier draft replays as the call it was, with its outcome.
         if (priorEmail)
-          assert.match(JSON.stringify(request.messages), /email_draft \(draft opened\)/);
+          assert.match(
+            JSON.stringify(request.messages),
+            /"toolName":"email_draft","output":\{"type":"text","value":"\{\\"status\\":\\"draft opened\\"\}"\}/
+          );
         if (surface === "note chat") {
           assert.match(request.config.systemPrompt, /Note fields \(JSON\)/);
           assert.equal("noteChat" in request.config, false);

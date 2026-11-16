@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAuth } from "./useAuth";
 import { withSessionRefresh } from "../lib/auth";
-import { getValidatedAuthGeneration, getBoundSessionGeneration } from "../lib/authRequestContext";
+import {
+  getValidatedAuthGeneration,
+  getBoundSessionGeneration,
+  hasValidatedAuthContext,
+} from "../lib/authRequestContext";
+import { UNCONFIRMED_SESSION_CODE } from "../lib/billingPortalError";
 import {
   getUsageState,
   isPastDueUsage,
@@ -59,7 +64,7 @@ export interface UseUsageResult {
   switchPlan: (opts: {
     plan: "monthly" | "annual";
     tier: "pro" | "business";
-  }) => Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }>;
+  }) => Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string; code?: string }>;
   previewSwitchPlan: (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => Promise<{
     success: boolean;
     immediateAmount?: number;
@@ -71,6 +76,7 @@ export interface UseUsageResult {
     nextBillingDate?: string;
     alreadyOnPlan?: boolean;
     error?: string;
+    code?: string;
   }>;
 }
 
@@ -90,6 +96,10 @@ const obsoleteBillingRequest = () => ({
   success: false as const,
   code: "AUTH_CONTEXT_CHANGED",
 });
+
+// Main sends billing requests with the stored bearer as is, so only a
+// validated session may make them (not one shown offline).
+const UNCONFIRMED_SESSION = { success: false, code: UNCONFIRMED_SESSION_CODE } as const;
 
 async function fetchUsageResponse(): Promise<UsageResponse> {
   const cloudUsage = window.electronAPI?.cloudUsage;
@@ -163,6 +173,7 @@ export function useUsage(): UseUsageResult | null {
       plan?: "monthly" | "annual";
       tier?: "pro" | "business";
     }): Promise<{ success: boolean; error?: string; code?: string }> => {
+      if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
       if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
       if (checkoutInFlightRef.current)
         return { success: false, error: "Checkout already in progress" };
@@ -199,6 +210,7 @@ export function useUsage(): UseUsageResult | null {
     error?: string;
     code?: string;
   }> => {
+    if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
     if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
     if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
     if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
@@ -232,6 +244,7 @@ export function useUsage(): UseUsageResult | null {
       plan: "monthly" | "annual";
       tier: "pro" | "business";
     }): Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }> => {
+      if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
       if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
       if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
       if (!window.electronAPI?.cloudSwitchPlan) {
@@ -254,6 +267,7 @@ export function useUsage(): UseUsageResult | null {
 
   const previewSwitchPlan = useCallback(
     async (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => {
+      if (!hasValidatedAuthContext()) return UNCONFIRMED_SESSION;
       if (!billingContextCurrent(accountId, authGeneration)) return obsoleteBillingRequest();
       if (!window.electronAPI?.cloudPreviewSwitch) {
         return { success: false as const, error: "App not ready" };

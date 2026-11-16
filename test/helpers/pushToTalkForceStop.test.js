@@ -1,6 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
 
 // WindowManager pulls in electron and its sibling managers at require time; only
 // the pieces the push-to-talk state machine touches need to behave.
@@ -59,6 +62,7 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 const WindowManager = require("../../src/helpers/windowManager");
+const HotkeyManager = require("../../src/helpers/hotkeyManager");
 Module._load = originalLoad;
 
 // Returns the manager plus the channels it pushed to the renderer, in order.
@@ -215,4 +219,99 @@ test("a settings-driven reset reports a forced stop, not a release", (t) => {
     "stop-dictation",
   ]);
   assert.deepEqual(sent.at(-2).payload, { reason: "reset" });
+});
+
+function installCaptureHandler(manager, platform) {
+  manager.hotkeyManager = new HotkeyManager();
+  manager.hotkeyManager.currentHotkey = "RightControl";
+  manager._cachedActivationMode = "push";
+  manager._nativeKeyListenersReady = true;
+  const nativeKeyManager = { stop() {}, setKeys() {} };
+  manager.windowsKeyManager = manager.linuxKeyManager = nativeKeyManager;
+  const owner = {
+    windowManager: manager,
+    windowsKeyManager: nativeKeyManager,
+    linuxKeyManager: nativeKeyManager,
+  };
+  const handlers = new Map();
+  const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
+  const start = source.indexOf('    ipcMain.handle("set-hotkey-listening-mode"');
+  const end = source.indexOf('    ipcMain.handle("get-hotkey-mode-info"', start);
+  assert.ok(start >= 0 && end > start);
+  vm.runInNewContext(`(function () { ${source.slice(start, end)} }).call(owner)`, {
+    owner,
+    process: { platform },
+    ipcMain: { handle: (channel, handler) => handlers.set(channel, handler), emit() {} },
+    BrowserWindow: { fromWebContents: () => ({}) },
+    debugLogger: { log() {}, warn() {} },
+    require(name) {
+      if (name === "./hotkeyManager") return HotkeyManager;
+      if (name === "electron") return { globalShortcut: {} };
+      throw new Error(`Unexpected capture dependency: ${name}`);
+    },
+  });
+  const handler = handlers.get("set-hotkey-listening-mode");
+  return (enabled) => handler({ sender: {} }, enabled);
+}
+
+for (const platform of ["win32", "linux"]) {
+  for (const phase of ["preparing", "recording"]) {
+    test(`${platform} capture ends a ${phase} Hold and cancellation allows the next Hold`, async (t) => {
+      t.mock.timers.enable({ apis: ["setTimeout"] });
+      t.after(() => t.mock.timers.reset());
+      const { manager, sent, channels, hides } = makeManager();
+      const setCapture = installCaptureHandler(manager, platform);
+      manager.startWindowsPushToTalk("RightControl");
+      if (phase === "recording") t.mock.timers.tick(150);
+
+      await setCapture(true);
+      assert.equal(manager.winPushState, null, "capture cannot leave an orphaned Hold");
+      assert.equal(manager.hotkeyManager.isInListeningMode(), true);
+      assert.deepEqual(
+        channels(),
+        phase === "recording"
+          ? ["prepare-dictation", "start-dictation", "dictation-force-stopped", "stop-dictation"]
+          : ["prepare-dictation", "dictation-force-stopped", "cancel-dictation-preparation"]
+      );
+      assert.deepEqual(sent.at(-2).payload, { reason: "reset" });
+      assert.deepEqual(hides, phase === "preparing" ? [true] : []);
+
+      const stoppedChannels = channels();
+      await setCapture(true);
+      t.mock.timers.tick(300_000);
+      assert.deepEqual(channels(), stoppedChannels, "duplicate capture and old timers stay inert");
+
+      await setCapture(false);
+      assert.equal(manager.hotkeyManager.isInListeningMode(), false);
+      assert.deepEqual(
+        channels(),
+        stoppedChannels,
+        "cancelling capture does not restart recording"
+      );
+      manager.startWindowsPushToTalk("RightControl");
+      t.mock.timers.tick(150);
+      manager.handleWindowsPushKeyUp("RightControl");
+      assert.deepEqual(channels().slice(stoppedChannels.length), [
+        "prepare-dictation",
+        "start-dictation",
+        "stop-dictation",
+      ]);
+      assert.equal(manager.winPushState, null);
+    });
+  }
+}
+
+test("macOS capture does not invoke the Windows/Linux Hold reset", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => t.mock.timers.reset());
+  const { manager, channels } = makeManager();
+  const setCapture = installCaptureHandler(manager, "darwin");
+  manager.resetWindowsPushState = () => assert.fail("Windows/Linux reset reached macOS");
+  manager.startMacCompoundPushToTalk("Control+Option");
+  t.mock.timers.tick(150);
+  const activePush = manager.macCompoundPushState;
+  await setCapture(true);
+  await setCapture(false);
+  assert.equal(manager.macCompoundPushState, activePush);
+  assert.deepEqual(channels(), ["prepare-dictation", "start-dictation"]);
 });

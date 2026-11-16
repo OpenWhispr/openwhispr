@@ -15,7 +15,10 @@ const STUBBED_SURFACES = [
   "/settings/LlmsSection",
   "/settings/SystemUpdates",
   "/settings/HotkeysSection",
-  "/settings/WorkspaceSection",
+  "/settings/WorkspaceGeneralSection",
+  "/settings/WorkspacePeopleSection",
+  "/settings/WorkspaceTeamspacesSection",
+  "/settings/WorkspaceDeveloperSection",
   "/settings/WorkspaceBillingOverview",
   "/settings/EnterpriseCheckoutDialog",
   "/CreateWorkspaceDialog",
@@ -186,6 +189,8 @@ async function mountSettingsPageOwner(
       globalThis.__settingsPageOwner.auth = useAuthState;
       export const useAuth = () => useAuthState();
     `,
+    "/EnterpriseAudioSettings": "export function EnterpriseAudioSettings() { return null; }",
+    "/LocalOffInstalledModels": "export function LocalOffInstalledModels() { return null; }",
     "/hooks/usePolicy": `export const usePolicySnapshot = () => ({status: "unmanaged", policy: null}); export const usePolicyModeOptions = modes => ({modes});`,
     "/stores/policyStore": `const state = {status: "unmanaged", policy: null}; export const usePolicyStore = select => select(state); usePolicyStore.getState = () => state;`,
     "/stores/enterpriseIdentityStore": `export const useManagedScopeResolution = () => ({kind: "unmanaged"}); export const getManagedScopeResolution = () => ({kind: "unmanaged"});`,

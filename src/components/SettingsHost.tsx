@@ -10,6 +10,8 @@ import { getCachedPlatform } from "../utils/platform";
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const platform = getCachedPlatform();
+// open-settings-section names an Integrations section as "integrations.<section>".
+const INTEGRATIONS_TARGET_PREFIX = "integrations.";
 
 export function SettingsHost({
   children,
@@ -60,7 +62,14 @@ export function SettingsHost({
       if (disposed || request?.hostId !== hostId || !Number.isSafeInteger(request.requestId))
         return;
       if (request.section !== undefined && typeof request.section !== "string") return;
-      openSettings(request.section);
+      if (request.section?.startsWith(INTEGRATIONS_TARGET_PREFIX)) {
+        // Integrations is a view, not a Settings section.
+        const { openIntegrations, setSettingsOpen } = navigation.getState();
+        openIntegrations?.(request.section.slice(INTEGRATIONS_TARGET_PREFIX.length));
+        setSettingsOpen(false);
+      } else {
+        openSettings(request.section);
+      }
       window.electronAPI?.acknowledgeSettingsOpen?.(hostId, request.requestId);
     });
     // This host exists only after AppRouter's auth/policy/onboarding gates and
@@ -79,7 +88,7 @@ export function SettingsHost({
         window.electronAPI?.setSettingsHostReady?.(hostId, false, documentId);
       dispose?.();
     };
-  }, [openSettings]);
+  }, [navigation, openSettings]);
 
   return (
     <>

@@ -1,3 +1,5 @@
+import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import React, { useState, useCallback, useEffect, useRef, useId, useMemo } from "react";
 import { useStore } from "zustand";
 import type { SettingsNavigationStore } from "../stores/settingsNavigationStore";
@@ -32,10 +34,12 @@ import {
   Trash2,
 } from "./icons";
 import { useAuth } from "../hooks/useAuth";
+import { resetForAccountChange as resetChatForAccountChange } from "../stores/chatTurnStore";
 import { AUTH_URL, signOut } from "../lib/auth";
 import { deleteAccount } from "../lib/accountDeletionRequest";
 import { executeAccountDeletion } from "../lib/accountDeletionFlow";
 import { getValidatedAuthGeneration, getBoundSessionGeneration } from "../lib/authRequestContext";
+import { checkoutErrorDescriptionKey } from "../lib/billingPortalError";
 import { useBillingPortal } from "../hooks/useBillingPortal";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
@@ -108,9 +112,11 @@ import {
 } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
+import { discardPendingLocalSetup } from "./onboarding/pendingLocalModels";
 import {
   clearMissingLocalModelSelections,
   reconcileLocalModelSelections,
+  selectedLocalSpeechModelIds,
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
@@ -130,8 +136,19 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { requestSignIn } from "../utils/requestSignIn";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
-import WorkspaceSection from "./settings/WorkspaceSection";
-import { enterpriseTileCta, type EnterpriseTileCta } from "../lib/workspaceBilling";
+import WorkspaceGeneralSection from "./settings/WorkspaceGeneralSection";
+import WorkspacePeopleSection from "./settings/WorkspacePeopleSection";
+import WorkspaceTeamspacesSection from "./settings/WorkspaceTeamspacesSection";
+import WorkspaceDeveloperSection from "./settings/WorkspaceDeveloperSection";
+import type { SettingsSectionType } from "../lib/settingsNav";
+import {
+  businessDowngradeAction,
+  enterpriseManageAction,
+  enterpriseTileCta,
+  entitledWorkspacePlans,
+  type EnterpriseTileCta,
+} from "../lib/workspaceBilling";
+import { WorkspacePlanActionButton } from "./settings/WorkspacePlanActionButton";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
 import EnterpriseCheckoutDialog from "./settings/EnterpriseCheckoutDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
@@ -142,8 +159,17 @@ import { enterpriseProviderName, getTranscriptionProvider } from "../models/Mode
 import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
+export type { SettingsSectionType };
+
 interface SettingsPageProps {
   navigation: SettingsNavigationStore;
+  /** The section SettingsModal shows, once corrected for pages that no longer exist. */
+  activeSection?: SettingsSectionType;
+  onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
+  /** Sub-tab for a section opened from another page (e.g. People → Members). */
+  initialSubTab?: string;
+  /** Takes the user to a teamspace in Notes (owned by the control panel, which closes Settings). */
+  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
@@ -535,12 +561,19 @@ function TranscriptionSection({
       requestSignIn();
       return;
     }
-    if (mode === effectiveTranscriptionMode) return;
-    setTranscriptionMode(mode);
-    setUseLocalWhisper(mode === "local");
-    updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
-    setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
-    if (mode === "enterprise") setEnterpriseTranscriptionSetupMode("managed");
+    // Only the explicit enterprise controls change the shared setup mode. Managed setup
+    // outranks the personal mode, which stays as the user left it so "Use personal
+    // setup" returns to it.
+    if (mode === "enterprise") {
+      if (enterpriseTranscriptionSetupMode === "managed") return;
+      setEnterpriseTranscriptionSetupMode("managed");
+    } else {
+      if (mode === effectiveTranscriptionMode) return;
+      setTranscriptionMode(mode);
+      setUseLocalWhisper(mode === "local");
+      updateTranscriptionSettings({ useLocalWhisper: mode === "local" });
+      setCloudTranscriptionMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    }
 
     const toastKey = {
       openwhispr: "switchedCloud",
@@ -691,6 +724,7 @@ function TranscriptionSection({
     <div className="space-y-4">
       {errorCard}
       {managedCard}
+      <EnterpriseAudioSettings />
       {!errorCard && !managedCard && (
         <>
           {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
@@ -798,8 +832,16 @@ export function AccountAvatar({ image, name }: { image?: string | null; name: st
   );
 }
 
-export default function SettingsPage({ navigation }: SettingsPageProps) {
-  const activeSection = useStore(navigation, (state) => state.section ?? "general");
+export default function SettingsPage({
+  navigation,
+  activeSection: shownSection,
+  onNavigateToSection,
+  initialSubTab,
+  onOpenTeamspace,
+}: SettingsPageProps) {
+  const registryVersion = useRegistryVersion();
+  const navigationSection = useStore(navigation, (state) => state.section ?? "general");
+  const activeSection = shownSection ?? navigationSection;
   // Stable children still isolate hidden panels from unrelated page renders.
   const speechPanels = useMemo(
     () => ({
@@ -953,6 +995,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
   const { toast } = useToast();
 
   const [isRemovingModels, setIsRemovingModels] = useState(false);
+  const [retiredLocalModels, setRetiredLocalModels] = useState<Array<{ name: string }>>([]);
   const [cachePathHint, setCachePathHint] = useState(
     typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent)
       ? "%USERPROFILE%\\.cache\\openwhispr"
@@ -1005,7 +1048,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
       const usage = await window.electronAPI.getAudioStorageUsage();
       setAudioStorageUsage(usage);
       toast({
-        title: t(result.failed ? "common.error" : "settingsPage.privacy.clearAllAudio"),
+        title: t(result.failed ? "common.error" : "settingsPage.privacy.clearHistoryAudio"),
         variant: result.failed ? "destructive" : "default",
       });
     } catch {
@@ -1066,6 +1109,16 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
   const enterpriseCta: EnterpriseTileCta = billingWorkspacesLoaded
     ? enterpriseTileCta(billingWorkspaces, activeWorkspaceId)
     : { action: "contactSales", ownerName: null };
+  // The grid's Pro badge is the personal plan; these mark what workspaces provide.
+  const workspacePlans = billingWorkspacesLoaded
+    ? entitledWorkspacePlans(billingWorkspaces)
+    : new Set<string>();
+  const enterpriseAction = billingWorkspacesLoaded
+    ? enterpriseManageAction(billingWorkspaces, activeWorkspaceId)
+    : null;
+  const businessAction = billingWorkspacesLoaded
+    ? businessDowngradeAction(billingWorkspaces, activeWorkspaceId)
+    : null;
   const { accountPlan, isWorkspaceCovered, coveringWorkspaceNames, coveringPlanLabel, planLabel } =
     useAccountPlan(usage);
   const hasShownApproachingToast = useRef(false);
@@ -1086,6 +1139,22 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
   const platform = getCachedPlatform();
+
+  const [modelListUpdates, setModelListUpdates] = useState(true);
+  useEffect(() => {
+    window.electronAPI
+      ?.getModelRegistryUpdates?.()
+      .then(setModelListUpdates)
+      .catch(() => {});
+  }, []);
+  const updateModelListUpdates = async (enabled: boolean) => {
+    setModelListUpdates(enabled);
+    const result = await window.electronAPI?.setModelRegistryUpdates?.(enabled);
+    if (result && !result.success) {
+      setModelListUpdates(!enabled);
+      logger.error("Failed to save model list updates", { error: result.error }, "settings");
+    }
+  };
 
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartNeedsApproval, setAutoStartNeedsApproval] = useState(false);
@@ -1220,6 +1289,37 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
     });
   };
 
+  const refreshRetiredLocalModels = useCallback(async () => {
+    setRetiredLocalModels(
+      (await window.electronAPI?.listRetiredLocalModels?.(selectedLocalSpeechModelIds())) ?? []
+    );
+  }, []);
+
+  useEffect(() => {
+    void refreshRetiredLocalModels().catch(() => {});
+  }, [refreshRetiredLocalModels, registryVersion]);
+
+  const handleRemoveRetiredModels = useCallback(() => {
+    showConfirmDialog({
+      title: t("settingsPage.developer.retiredModels.confirmTitle"),
+      description: t("settingsPage.developer.retiredModels.confirmDescription"),
+      confirmText: t("settingsPage.developer.removeModels.confirmText"),
+      variant: "destructive",
+      onConfirm: async () => {
+        const result = await window.electronAPI?.deleteRetiredLocalModels?.(
+          selectedLocalSpeechModelIds()
+        );
+        await refreshRetiredLocalModels();
+        if (!result?.success) {
+          showAlertDialog({
+            title: t("settingsPage.developer.removeModels.failedTitle"),
+            description: t("settingsPage.developer.retiredModels.failedDescription"),
+          });
+        }
+      },
+    });
+  }, [refreshRetiredLocalModels, showConfirmDialog, showAlertDialog, t]);
+
   const handleRemoveModels = () => {
     if (isRemovingModels) return;
 
@@ -1252,6 +1352,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
           } else {
             // Every local model is gone, so no local selection can still resolve.
             clearMissingLocalModelSelections(() => false);
+            discardPendingLocalSetup();
             window.dispatchEvent(new Event("openwhispr-models-cleared"));
             showAlertDialog({
               title: t("settingsPage.developer.removeModels.successTitle"),
@@ -1270,7 +1371,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
     });
   };
 
-  const { isSignedIn, isLoaded, user, refetch } = useAuth();
+  const { isSignedIn, isLoaded, user, refetch, isOfflineAccount } = useAuth();
   const {
     canToggleSync: canToggleInsightsSync,
     disableInsightsSync,
@@ -1397,7 +1498,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
       if (!preview.success) {
         toast({
           title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-          description: preview.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
+          description: preview.error || t(checkoutErrorDescriptionKey(preview.code)),
         });
         return;
       }
@@ -1441,7 +1542,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
     } else {
       toast({
         title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-        description: result.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
+        description: result.error || t(checkoutErrorDescriptionKey(result.code)),
       });
     }
   };
@@ -1467,7 +1568,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
     ) {
       toast({
         title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-        description: t("settingsPage.account.checkout.couldNotOpenDescription"),
+        description: t(checkoutErrorDescriptionKey(result.code)),
       });
     }
   };
@@ -1505,6 +1606,8 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
       return;
     }
 
+    // A background answer must not write under an account whose data is about to go.
+    resetChatForAccountChange();
     setIsDeletingAccount(true);
     try {
       const result = await executeAccountDeletion({
@@ -1520,6 +1623,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
             if (!cleanup?.success) {
               throw new Error(cleanup?.error ?? "Could not remove local account data");
             }
+            syncService.forgetAccount(accountId);
           },
           clearWorkspaceSessionState: () => syncService.purgeTeamSpacesForSignOut(),
           signOut,
@@ -1583,9 +1687,36 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
             ) : isLoaded && isSignedIn && user ? (
               <>
                 <SectionHeader title={t("settingsPage.account.title")} />
+                <div className="flex items-center gap-3">
+                  <AccountAvatar
+                    image={user.image}
+                    name={user.name || t("settingsPage.account.user")}
+                  />
+                  <div className="min-w-0">
+                    <p dir="auto" className="truncate text-[13px] font-semibold text-foreground">
+                      {user.name || t("settingsPage.account.user")}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      <bdi dir="ltr">{user.email}</bdi>
+                    </p>
+                  </div>
+                </div>
+                {isOfflineAccount && (
+                  <SettingsPanel>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.account.offlineAccount.title")}
+                        description={t("settingsPage.account.offlineAccount.description")}
+                      >
+                        <Badge variant="outline">{t("settingsPage.account.offline")}</Badge>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </SettingsPanel>
+                )}
                 <ProfileSection
                   key={user.id}
                   name={user.name || ""}
+                  readOnly={isOfflineAccount}
                   onSessionRefresh={() => {
                     void refetch();
                   }}
@@ -1615,7 +1746,9 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
                       <Button
                         onClick={handleDeleteAccount}
                         variant="outline"
-                        disabled={isDeletingAccount || currentAuthGeneration == null}
+                        disabled={
+                          isDeletingAccount || isOfflineAccount || currentAuthGeneration == null
+                        }
                         size="sm"
                         className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
                       >
@@ -1934,9 +2067,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
                                 ) {
                                   toast({
                                     title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-                                    description: t(
-                                      "settingsPage.account.checkout.couldNotOpenDescription"
-                                    ),
+                                    description: t(checkoutErrorDescriptionKey(result.code)),
                                     variant: "destructive",
                                   });
                                 }
@@ -2096,7 +2227,9 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
                       {proCardCta === "currentPlan" ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary">
-                            {t("settingsPage.account.pricing.currentPlan")}
+                            {workspacePlans.size > 0
+                              ? t("settingsPage.account.pricing.yourPersonalPlan")
+                              : t("settingsPage.account.pricing.currentPlan")}
                           </span>
                         </div>
                       ) : proCardCta === "downgradeToPro" ? (
@@ -2147,7 +2280,14 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
                       ) : null}
                     </div>
 
-                    <div className="rounded-md border-2 border-primary/50 bg-primary/8 dark:border-primary/40 dark:bg-primary/10 p-2.5 flex flex-col relative">
+                    <div
+                      className={cn(
+                        "rounded-md border-2 p-2.5 flex flex-col relative",
+                        workspacePlans.has("business")
+                          ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
+                          : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
+                      )}
+                    >
                       <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
                         {t("settingsPage.account.pricing.business.badge")}
                       </span>
@@ -2210,15 +2350,39 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
                           {t("settingsPage.account.pricing.business.cta")}
                         </Button>
                       ) : (
-                        <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-primary">
-                            {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
-                          </span>
+                        <div className="mt-2 space-y-1 text-center">
+                          {workspacePlans.has("business") ? (
+                            <span className="block text-[9px] font-medium text-primary">
+                              {t("settingsPage.account.pricing.yourWorkspacePlan")}
+                            </span>
+                          ) : !businessAction ? (
+                            <span className="block text-[9px] font-medium text-muted-foreground">
+                              {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
+                            </span>
+                          ) : null}
+                          {businessAction && (
+                            <WorkspacePlanActionButton
+                              action={businessAction}
+                              onRefreshEntitlement={usage?.refetch}
+                              label={
+                                businessAction.kind === "contactSales"
+                                  ? t("settingsPage.account.pricing.enterprise.cta")
+                                  : t("settingsPage.account.pricing.downgrade")
+                              }
+                            />
+                          )}
                         </div>
                       )}
                     </div>
 
-                    <div className="rounded-md border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
+                    <div
+                      className={cn(
+                        "rounded-md p-2.5 flex flex-col",
+                        workspacePlans.has("enterprise")
+                          ? "border-2 border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
+                          : "border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                      )}
+                    >
                       <p className="text-xs font-semibold text-foreground">
                         {t("settingsPage.account.pricing.enterprise.name")}
                       </p>
@@ -2251,6 +2415,21 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
                           </li>
                         ))}
                       </ul>
+                      {isSignedIn && workspacePlans.has("enterprise") && (
+                        <div className="mt-2 space-y-1 text-center">
+                          <span className="block text-[9px] font-medium text-primary">
+                            {t("settingsPage.account.pricing.yourWorkspacePlan")}
+                          </span>
+                          {enterpriseAction && (
+                            <WorkspacePlanActionButton
+                              action={enterpriseAction}
+                              onRefreshEntitlement={usage?.refetch}
+                              label={t("settingsPage.account.pricing.manage")}
+                            />
+                          )}
+                        </div>
+                      )}
+                      {/* Another workspace can still be upgraded alongside the current plan. */}
                       {isSignedIn && enterpriseCta.action !== "contactSales" ? (
                         <div className="mt-2 space-y-1">
                           <Button
@@ -2280,7 +2459,7 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
                             {t("settingsPage.account.pricing.enterprise.cta")}
                           </Button>
                         </div>
-                      ) : isSignedIn ? (
+                      ) : isSignedIn && workspacePlans.has("enterprise") ? null : isSignedIn ? (
                         <div className="mt-2 space-y-1">
                           <Button
                             variant="outline"
@@ -2437,8 +2616,19 @@ export default function SettingsPage({ navigation }: SettingsPageProps) {
           </div>
         );
 
-      case "workspace":
-        return <WorkspaceSection />;
+      case "workspaceGeneral":
+        return <WorkspaceGeneralSection onNavigateToSection={onNavigateToSection} />;
+
+      case "workspacePeople":
+        return (
+          <WorkspacePeopleSection initialSubTab={initialSubTab} onOpenTeamspace={onOpenTeamspace} />
+        );
+
+      case "workspaceTeamspaces":
+        return <WorkspaceTeamspacesSection onOpenTeamspace={onOpenTeamspace} />;
+
+      case "workspaceDeveloper":
+        return <WorkspaceDeveloperSection />;
 
       case "toneStyle":
         return (
@@ -3480,11 +3670,6 @@ EOF`,
                       </div>
                     </div>
                   )}
-                  {!migration && cloudBackupEnabled && isSignedIn && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t("settingsPage.privacy.cloudNotesMigrationDone")}
-                    </p>
-                  )}
                   {cloudBackupEnabled &&
                     isSignedIn &&
                     (() => {
@@ -3599,6 +3784,17 @@ EOF`,
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.modelListUpdates")}
+                    description={t("settingsPage.privacy.modelListUpdatesDescription")}
+                  >
+                    <Toggle
+                      checked={modelListUpdates}
+                      onChange={(enabled) => void updateModelListUpdates(enabled)}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -3652,11 +3848,11 @@ EOF`,
                     label={t("settingsPage.privacy.audioStorageUsage")}
                     description={
                       audioStorageUsage.fileCount > 0
-                        ? t("settingsPage.privacy.audioStorageFiles", {
+                        ? t("settingsPage.privacy.audioStorageHistoryFiles", {
                             count: audioStorageUsage.fileCount,
                             size: formatBytes(audioStorageUsage.totalBytes),
                           })
-                        : t("settingsPage.privacy.audioStorageEmpty")
+                        : t("settingsPage.privacy.audioStorageHistoryEmpty")
                     }
                   >
                     <Button
@@ -3666,7 +3862,7 @@ EOF`,
                       disabled={audioStorageUsage.fileCount === 0}
                       onClick={handleClearAllAudio}
                     >
-                      {t("settingsPage.privacy.clearAllAudio")}
+                      {t("settingsPage.privacy.clearHistoryAudio")}
                     </Button>
                   </SettingsRow>
                 </SettingsPanelRow>
@@ -3873,6 +4069,20 @@ EOF`,
                       </div>
                     </SettingsRow>
                   </SettingsPanelRow>
+                  {retiredLocalModels.length > 0 && (
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.developer.retiredModels.label")}
+                        description={t("settingsPage.developer.retiredModels.description", {
+                          models: retiredLocalModels.map(({ name }) => name).join(", "),
+                        })}
+                      >
+                        <Button variant="destructive" size="sm" onClick={handleRemoveRetiredModels}>
+                          {t("settingsPage.developer.retiredModels.remove")}
+                        </Button>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  )}
                 </SettingsPanel>
 
                 <SettingsPanel>
@@ -3887,6 +4097,7 @@ EOF`,
                             title: t("settingsPage.developer.resetAll.title"),
                             description: t("settingsPage.developer.resetAll.description"),
                             onConfirm: async () => {
+                              resetChatForAccountChange();
                               try {
                                 try {
                                   await signOut();

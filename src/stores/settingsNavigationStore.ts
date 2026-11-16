@@ -1,17 +1,8 @@
 import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand";
+import { LEGACY_SUB_TAB, SECTION_ALIASES, type SettingsSectionType } from "../lib/settingsNav";
 
-export type SettingsSectionType =
-  | "account"
-  | "plansBilling"
-  | "workspace"
-  | "general"
-  | "hotkeys"
-  | "toneStyle"
-  | "speechToText"
-  | "llms"
-  | "privacyData"
-  | "system";
+export type { SettingsSectionType };
 export const SPEECH_TABS = ["dictation", "noteRecording", "upload"] as const;
 export type SpeechTab = (typeof SPEECH_TABS)[number];
 export const LLM_TABS = [
@@ -26,45 +17,22 @@ export const AGENT_LLM_TABS = new Set<LlmTab>(["dictationAgent", "chatIntelligen
 
 const SECTIONS = new Set<string>([
   "account",
-  "plansBilling",
-  "workspace",
   "general",
-  "hotkeys",
   "toneStyle",
+  "hotkeys",
+  "plansBilling",
+  "workspaceGeneral",
+  "workspacePeople",
+  "workspaceTeamspaces",
+  "workspaceDeveloper",
   "speechToText",
   "llms",
   "privacyData",
   "system",
-]);
+] satisfies SettingsSectionType[]);
 // Legacy aliases remain requests, not saved section preferences.
-const ALIASES: Record<string, SettingsSectionType> = {
-  aiModels: "llms",
-  agentConfig: "llms",
-  agentMode: "llms",
-  dictationAgent: "llms",
-  intelligence: "llms",
-  meetings: "llms",
-  noteFormatting: "llms",
-  prompts: "llms",
-  transcription: "speechToText",
-  uploadTranscription: "speechToText",
-  softwareUpdates: "system",
-  privacy: "privacyData",
-  permissions: "privacyData",
-  developer: "system",
-};
-const ALIAS_TABS: Record<string, LlmTab | SpeechTab> = {
-  transcription: "dictation",
-  uploadTranscription: "upload",
-  dictationAgent: "dictationAgent",
-  meetings: "noteFormatting",
-  noteFormatting: "noteFormatting",
-  intelligence: "dictationCleanup",
-  agentMode: "chatIntelligence",
-  agentConfig: "chatIntelligence",
-  aiModels: "dictationCleanup",
-  prompts: "dictationCleanup",
-};
+const ALIASES = SECTION_ALIASES;
+const ALIAS_TABS = LEGACY_SUB_TAB;
 const LLM_KEY = "settings.llmsTab";
 const SPEECH_KEY = "settings.speechToTextTab";
 
@@ -107,6 +75,9 @@ interface NavigationState {
   selectLlmTab: (tab: string) => void;
   reconcilePolicy: () => void;
   persistCurrentTab: () => void;
+  // Views the control panel owns, registered by it while mounted.
+  openTeamspace: ((localSpaceId: number) => void) | null;
+  openIntegrations: ((section: string) => void) | null;
 }
 
 // A private instance belongs to one host. Construction reads but never writes
@@ -139,6 +110,8 @@ export function createSettingsNavigationStore(
   const state = initialSection ? prepare(initial, initialSection) : initial;
   return createStore<NavigationState>()((set, get) => ({
     ...state,
+    openTeamspace: null,
+    openIntegrations: null,
     gpuBannerDismissed: (() => {
       try {
         return localStorage.getItem("gpuBannerDismissedUnified") === "true";

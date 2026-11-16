@@ -183,7 +183,7 @@ export default function EnterpriseCheckoutDialog({
     setSubmitting(true);
     try {
       await WorkspacesService.upgradeToEnterprise(selected.id);
-      await refresh();
+      await refresh({ fresh: true });
       await onRefreshEntitlement?.();
       toast({
         title: t("settingsPage.enterpriseCheckout.upgradedTitle"),

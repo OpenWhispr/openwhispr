@@ -16,6 +16,11 @@ SELECTION EDITING MODE:
 - Output only the complete replacement text. Do not add a preamble, label, quotation marks, code fence, explanation, or alternatives.
 - Never repeat the assistant wake name or spoken command in the output.`;
 
+// Ends on the full nonce: models can drop decorative closing underscores.
+export function createSelectionCompletionMarker() {
+  return `__OPENWHISPR_SELECTION_COMPLETE_${crypto.randomUUID()}`;
+}
+
 export function buildSelectionEditSystemPrompt(basePrompt, completionMarker = "") {
   const markerInstruction = completionMarker
     ? `\n- The desktop app removes the completion marker before replacing the selection. Nothing may follow the marker (no period, whitespace, or explanation).\n- Immediately append this exact completion marker after the final replacement character, with no added spaces or newline: ${completionMarker}`
@@ -125,7 +130,6 @@ const STANDALONE_CAPTURE_CODES = new Set([
 ]);
 
 export function getSelectionCaptureDisposition(capture) {
-  if (capture?.status === "editable") return "caret";
   if (!capture || capture.status === "none") return "standalone";
   if (capture.status === "selected") return "selection";
   if (STANDALONE_CAPTURE_CODES.has(capture.code)) return "standalone";

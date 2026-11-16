@@ -488,3 +488,10 @@ test("owner fill: never fires on stubs or tombstones", async () => {
     false
   );
 });
+
+test("existing personal shares keep their sharing eligibility", async () => {
+  const { isLegacySharedPrivateNote } = await load();
+  assert.equal(isLegacySharedPrivateNote({ is_shared: 1, cloud_id: "c" }), true);
+  assert.equal(isLegacySharedPrivateNote({ is_shared: 1, cloud_id: null }), false);
+  assert.equal(isLegacySharedPrivateNote({ is_shared: 0, cloud_id: "c" }), false);
+});

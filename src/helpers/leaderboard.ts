@@ -120,6 +120,22 @@ export function resolveLeaderboardScopeKey(
   );
 }
 
+/**
+ * The workspace "grow your leaderboard" invites into: the selected workspace board, or for a
+ * company board the active workspace when the user can invite there, else the first one they can.
+ */
+export function leaderboardInviteScope<S extends Pick<LeaderboardAccessScope, "kind" | "id">>(
+  selected: S | undefined,
+  scopes: S[],
+  activeWorkspaceId: string | null,
+  canInvite: (scope: S) => boolean
+): S | undefined {
+  if (!selected) return undefined;
+  if (selected.kind !== "domain") return canInvite(selected) ? selected : undefined;
+  const invitable = scopes.filter(canInvite);
+  return invitable.find((scope) => scope.id === activeWorkspaceId) ?? invitable[0];
+}
+
 export function missingLeaderboardMembers(memberCount: number, participantCount: number): number {
   return Math.max(0, memberCount - participantCount);
 }

@@ -31,8 +31,13 @@ import { useAnonymousOnboardingSession } from '@/hooks/useAnonymousOnboardingSes
 import { useGuestPrivateMode } from '@/hooks/useGuestPrivateMode';
 import { runMigrations } from '@/db/migrate';
 import { initSentry, Sentry } from '@/lib/sentry';
-import { initAppsFlyer, refreshAppsFlyerTrackingAuthorization } from '@/lib/appsflyer';
+import {
+  initAppsFlyer,
+  recheckAppsFlyerTrackingAuthorization,
+  refreshAppsFlyerTrackingAuthorization,
+} from '@/lib/appsflyer';
 import { initSyncTriggers } from '@/sync/syncEngine';
+import { initProductEvents } from '@/lib/productEvents';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
@@ -124,6 +129,7 @@ function RootLayout() {
 
   useEffect(() => {
     initSyncTriggers();
+    initProductEvents();
   }, []);
 
   // After an interactive sign-in (AuthScreen was shown, then auth completed),
@@ -154,8 +160,9 @@ function RootLayout() {
   // Returning to a still-in-memory app (background→foreground) should land on
   // Home, not wherever it was suspended (e.g. the Account screen). Cold launches
   // go through app/index.tsx; warm resume never re-resolves "/", so it needs this
-  // explicit reset. Tracking an actual 'background' first ignores transient
-  // 'inactive' flickers (control center, notifications). `resolveResumeAction`
+  // explicit reset. Tracking an actual 'background' first keeps transient
+  // 'inactive' flickers (control center, notifications) from resetting it; those
+  // returns only re-read ATT. `resolveResumeAction`
   // owns the guard list — flows that drive their own navigation (keyboard
   // handoff, calendar auth, Stripe link-out) opt out of the reset there.
   useEffect(() => {
@@ -165,15 +172,20 @@ function RootLayout() {
         backgrounded = true;
         return;
       }
-      if (state === 'active') {
-        // ATT can change in iOS Settings while the app is backgrounded. Reapply
-        // that system decision before allowing any further attribution events.
-        refreshAppsFlyerTrackingAuthorization().catch((error: unknown): void => {
-          Sentry.captureException(error);
-        });
+      const reportAttError = (error: unknown): void => {
+        Sentry.captureException(error);
+      };
+      if (state === 'active' && !backgrounded) {
+        // An inactive return (the StoreKit sheet, Face ID, or a paywall's own
+        // tracking prompt) re-reads ATT without the stop and pending window of a
+        // full refresh, so a purchase completing right now keeps its link.
+        recheckAppsFlyerTrackingAuthorization().catch(reportAttError);
       }
       if (state === 'active' && backgrounded) {
         backgrounded = false;
+        // ATT can change in iOS Settings while the app is backgrounded. Reapply
+        // that system decision before allowing any further attribution events.
+        refreshAppsFlyerTrackingAuthorization().catch(reportAttError);
         const { resetToHome, refreshUsage } = resolveResumeAction(homeRouteRef.current.onHome);
         if (refreshUsage) {
           const usageStore = useUsageStore.getState();

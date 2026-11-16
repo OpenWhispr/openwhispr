@@ -54,6 +54,7 @@ async function startStream(t, provider, { holdHeaders = false, status = 200 } = 
     return pendingHeaders;
   });
 
+  const streamOwner = new AbortController();
   const chunks = [];
   // Exercise the no-tools Chat path that delegates to raw streaming.
   const outcome = (async () => {
@@ -64,7 +65,9 @@ async function startStream(t, provider, { holdHeaders = false, status = 200 } = 
       {
         systemPrompt: "Answer the user.",
         ...(provider === "lan" ? { lanUrl: "http://127.0.0.1:11434/v1" } : {}),
-      }
+      },
+      undefined,
+      streamOwner.signal
     )) {
       chunks.push(chunk);
     }
@@ -81,6 +84,7 @@ async function startStream(t, provider, { holdHeaders = false, status = 200 } = 
   await flush();
   return {
     service,
+    cancel: () => streamOwner.abort(),
     signal,
     body,
     chunks,
@@ -180,7 +184,7 @@ test("a local model that never sends bytes still times out after the startup all
 test("cancelling a raw stream ends normally", async (t) => {
   const stream = await startStream(t, "local");
   await stream.send(contentEvent("Partial answer"));
-  stream.service.cancelActiveStream();
+  stream.cancel();
   assert.equal((await stream.outcome).error, undefined);
   assert.equal(stream.body.locked, false);
 });

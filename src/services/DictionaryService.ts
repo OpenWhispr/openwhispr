@@ -1,4 +1,9 @@
-import { cloudGet, cloudPost, cloudPatch, cloudDelete } from "./cloudApi.js";
+import {
+  cloudGet,
+  cloudPatchForAuthGeneration,
+  cloudPostForAuthGeneration,
+  cloudDeleteForAuthGeneration,
+} from "./cloudApi.js";
 
 export type DictionarySource = "manual" | "learned";
 
@@ -8,6 +13,9 @@ interface DictionaryEntryInput {
   client_dict_id?: string;
   created_at?: string;
   updated_at?: string;
+  // Set once the word was shared into a team list; null makes it plain
+  // personal, and leaving it out keeps the server's value.
+  shared_at?: string | null;
 }
 
 export interface CloudDictionaryEntry {
@@ -16,27 +24,38 @@ export interface CloudDictionaryEntry {
   word: string;
   source: DictionarySource;
   deleted_at: string | null;
+  // Absent from an API that predates sharing.
+  shared_at?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 async function batchCreate(
-  entries: DictionaryEntryInput[]
+  entries: DictionaryEntryInput[],
+  authGeneration: number
 ): Promise<{ created: CloudDictionaryEntry[] }> {
-  return cloudPost<{ created: CloudDictionaryEntry[] }>("/api/dictionary/batch-create", {
-    entries,
-  });
+  return cloudPostForAuthGeneration<{ created: CloudDictionaryEntry[] }>(
+    "/api/dictionary/batch-create",
+    { entries },
+    authGeneration
+  );
 }
 
 async function update(
   id: string,
-  updates: { word?: string; source?: DictionarySource }
+  // shared_at as for batchCreate: absent keeps, null clears.
+  updates: { word?: string; source?: DictionarySource; shared_at?: string | null },
+  authGeneration: number
 ): Promise<CloudDictionaryEntry> {
-  return cloudPatch<CloudDictionaryEntry>("/api/dictionary/update", { id, ...updates });
+  return cloudPatchForAuthGeneration<CloudDictionaryEntry>(
+    "/api/dictionary/update",
+    { id, ...updates },
+    authGeneration
+  );
 }
 
-async function deleteEntry(id: string): Promise<void> {
-  await cloudDelete("/api/dictionary/delete", { id });
+async function deleteEntry(id: string, authGeneration: number): Promise<void> {
+  await cloudDeleteForAuthGeneration("/api/dictionary/delete", { id }, authGeneration);
 }
 
 async function listSnapshot(

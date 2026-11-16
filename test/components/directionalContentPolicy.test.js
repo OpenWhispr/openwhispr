@@ -1,0 +1,262 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const test = require("node:test");
+
+const repoRoot = path.join(__dirname, "../..");
+
+function source(relativePath) {
+  return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+}
+
+test("dynamic prose and identity values keep their own direction", () => {
+  const expectations = [
+    [
+      "src/components/dictation/LiveTranscriptPanel.tsx",
+      /<p\s+dir="auto"[\s\S]*?\{shimmerParts\.settled\}/,
+    ],
+    ["src/components/ui/TranscriptionItem.tsx", /<p\s+dir="auto"[\s\S]*?\{item\.text\}/],
+    ["src/components/ui/TranscriptionItem.tsx", /<p\s+dir="auto"[^>]*>\s*\{rawText\}/],
+    ["src/components/CommandSearch.tsx", /<p\s+dir="auto"[^>]*>\s*\{transcript\.text\}/],
+    [
+      "src/components/dictionary/DictionaryWordList.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{row\.word\}/,
+    ],
+    [
+      "src/components/dictionary/DictionaryWordList.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{row\.otherLists > 0[\s\S]*?: row\.badge\}/,
+    ],
+    [
+      "src/components/dictionary/DictionaryListPicker.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{entry\.label\}/,
+    ],
+    ["src/components/SnippetsView.tsx", /<span\s+dir="auto"[^>]*>\s*\{snippet\.trigger\}/],
+    ["src/components/SnippetsView.tsx", /<span\s+dir="auto"[^>]*>\s*\{snippet\.replacement\}/],
+    [
+      "src/components/notes/SpacesTree.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{displayName\}\s*<\/span>/,
+    ],
+    ["src/components/notes/SpacesTree.tsx", /<span\s+dir="auto"[^>]*>\s*\{title\}\s*<\/span>/],
+    ["src/components/EmailVerificationStep.tsx", /<span\s+dir="ltr"[^>]*>\s*\{email\}/],
+    [
+      "src/components/SettingsPage.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{user\.name \|\| t\("settingsPage\.account\.user"\)\}/,
+    ],
+    ["src/components/SettingsPage.tsx", /<bdi dir="ltr">\{user\.email\}<\/bdi>/],
+    [
+      "src/components/settings/WorkspaceMembersTab.tsx",
+      /<p\s+dir="auto"[^>]*>\s*<HighlightMatch\s+text=\{member\.name \|\| member\.email\}/,
+    ],
+    [
+      "src/components/settings/WorkspaceMembersTab.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{request\.name \?\? request\.email\}/,
+    ],
+    [
+      "src/components/notes/UploadAudioView.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{downloadProgress\.title\}/,
+    ],
+    ["src/components/notes/UploadAudioView.tsx", /<span\s+dir="auto"[^>]*>\s*\{f\.name\}/],
+  ];
+
+  for (const [file, pattern] of expectations) {
+    assert.match(source(file), pattern, `${file} lost its content-direction policy`);
+  }
+
+  const treeContainerLabels = source("src/components/notes/SpacesTree.tsx").match(
+    /<span\s+dir="auto"[^>]*>[\s\S]*?\{displayName\}\s*<\/span>/g
+  );
+  assert.equal(
+    treeContainerLabels?.length,
+    2,
+    "space and localized folder labels must both detect their content direction"
+  );
+});
+
+test("technical output values remain LTR inside an Arabic document", () => {
+  const expectations = [
+    ["src/components/DeveloperSection.tsx", /<code\s+dir="ltr"[\s\S]*?\{logPath\}/],
+    [
+      "src/components/TestConnectionButton.tsx",
+      /<code\s+dir="ltr"[^>]*>\s*\{errorInfo\.copyCommand\}/,
+    ],
+    ["src/components/ui/TechnicalErrorDetails.tsx", /<pre\s+dir="ltr"[\s\S]*?\{text\}/],
+    ["src/components/ui/NixOsPasteInfo.tsx", /<div\s+dir="ltr"[\s\S]*?<pre/],
+    ["src/components/integrations/McpPane.tsx", /<CopyableCommand\s+command=\{MCP_URL\}/],
+    ["src/components/ui/CopyableCommand.tsx", /<div\s+dir="ltr"[\s\S]*?\{command\}/],
+    [
+      "src/components/settings/WorkspaceBillingCard.tsx",
+      /<span\s+dir="ltr"[^>]*>\s*\{seatsUsed\} \/ \{seatsTotal\}/,
+    ],
+    [
+      "src/components/settings/WorkspaceMembersTab.tsx",
+      /<bdi dir="ltr">\s*<HighlightMatch text=\{member\.email\}/,
+    ],
+    [
+      "src/components/settings/WorkspaceInvitationsTab.tsx",
+      /<bdi dir="ltr">\{invitation\.email\}<\/bdi>/,
+    ],
+    [
+      "src/components/EnterpriseProviderConfig.tsx",
+      /<select\s+dir="ltr"\s+id=\{[^\n]*?\}\s+value=\{store\.bedrockRegion\}/,
+    ],
+    [
+      "src/components/EnterpriseProviderConfig.tsx",
+      /<select\s+dir="ltr"\s+id=\{[^\n]*?\}\s+value=\{store\.vertexLocation\}/,
+    ],
+    [
+      "src/components/notes/UploadAudioView.tsx",
+      /<p\s+dir="ltr"[^>]*font-medium[^>]*>\s*\{file\.name\}/,
+    ],
+    [
+      "src/components/notes/UploadAudioView.tsx",
+      /<p\s+dir="ltr"[^>]*max-w-sm[^>]*>\s*\{file\.name\}/,
+    ],
+    ["src/components/ui/SidebarModal.tsx", /<span\s+dir="ltr"[\s\S]*?v\{version\}/],
+    ["src/components/ui/ModelCardList.tsx", /<span\s+dir="ltr"[\s\S]*?\{model\.label\}/],
+    [
+      "src/components/onboarding/ProviderSetupStep.tsx",
+      /<span\s+dir="ltr">\s*\{models\.find[\s\S]*?\?\? selectedModel\}/,
+    ],
+    [
+      "src/components/onboarding/RequiredModelDownloadStep.tsx",
+      /<span\s+dir="ltr"[\s\S]*?\{info\?\.name \?\? modelId\}/,
+    ],
+    ["src/components/TranscriptionModelPicker.tsx", /<p\s+dir="ltr"[^>]*>\s*\{gpuFailReason\}/],
+    [
+      "src/components/skills/UploadSkillsScreen.tsx",
+      /<span\s+dir="ltr"[^>]*>\s*\{row\.preview\.fileName\}/,
+    ],
+    ["src/components/skills/SkillDetailDialog.tsx", /<span\s+dir="ltr"[^>]*>\s*\{file\.path\}/],
+    ["src/components/skills/CreateSkillScreen.tsx", /<span\s+dir="ltr"[^>]*>\s*\{file\.fileName\}/],
+  ];
+
+  for (const [file, pattern] of expectations) {
+    assert.match(source(file), pattern, `${file} lost its LTR technical-output isolation`);
+  }
+});
+
+test("localized sentences isolate technical interpolations without changing word order", () => {
+  const expectations = [
+    [
+      "src/components/ControlPanel.tsx",
+      /<BidiInterpolatedText[\s\S]*?updateRequiredByOrg\.description[\s\S]*?value=\{policyMinAppVersion\}/,
+    ],
+    [
+      "src/components/settings/HotkeysSection.tsx",
+      /<BidiInterpolatedText[\s\S]*?hyprlandConfigWriteWarningDescription[\s\S]*?value=\{hyprlandConfigStatus\.path\}/,
+    ],
+    [
+      "src/components/settings/HotkeysSection.tsx",
+      /<BidiInterpolatedText[\s\S]*?resetToDefault[\s\S]*?value=\{formatHotkeyLabel\(effectiveDefaultHotkey\)\}/,
+    ],
+    [
+      "src/components/settings/SystemUpdates.tsx",
+      /<BidiInterpolatedText[\s\S]*?updates\.whatsNew[\s\S]*?value=\{updateInfo\?\.version\}/,
+    ],
+    [
+      "src/components/integrations/CalendarsPane.tsx",
+      /<BidiInterpolatedText[\s\S]*?googleCalendar\.disconnectConfirm[\s\S]*?value=\{confirmDisconnectEmail\}/,
+    ],
+    [
+      "src/components/integrations/CalendarsPane.tsx",
+      /<BidiInterpolatedText[\s\S]*?microsoftCalendar\.disconnectConfirm[\s\S]*?value=\{confirmMsDisconnectEmail\}/,
+    ],
+  ];
+
+  for (const [file, pattern] of expectations) {
+    const text = source(file);
+    assert.match(text, pattern, `${file} lost a bidi-isolated technical interpolation`);
+    assert.match(text, /BIDI_VALUE_TOKEN/, `${file} must interpolate with the stable marker`);
+  }
+});
+
+test("direction-sensitive transient motion mirrors in RTL", () => {
+  assert.match(
+    source("src/components/dictation/LiveTranscriptPanel.tsx"),
+    /pointer-events-none translate-x-2 rtl:-translate-x-2 opacity-0/,
+    "LiveTranscriptPanel controls must retreat toward the document end"
+  );
+});
+
+test("user-authored names and previews detect direction at their display boundary", () => {
+  const expectations = [
+    ["src/components/CommandSearch.tsx", /<p\s+dir="auto"[^>]*>\s*\{conv\.title\}/],
+    [
+      "src/components/CommandSearch.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{conv\.last_message\.slice\(0, 90\)\}/,
+    ],
+    ["src/components/CommandSearch.tsx", /<span\s+dir="auto"[^>]*>\s*\{spaceLabel\(scopeSpace\)\}/],
+    ["src/components/CommandSearch.tsx", /<span\s+dir="auto"[^>]*>\s*\{spaceLabel\(space\)\}/],
+    ["src/components/CommandSearch.tsx", /<p\s+dir="auto"[^>]*>\s*\{target\.label\}/],
+    ["src/components/chat/ConversationItem.tsx", /<p\s+dir="auto"[^>]*>\s*\{title\}/],
+    ["src/components/chat/ConversationItem.tsx", /<span\s+dir="auto"[^>]*>\s*\{sourceNote\.title/],
+    ["src/components/chat/SourceNoteBar.tsx", /<span\s+dir="auto"[^>]*>\s*\{title\}/],
+    [
+      "src/components/chat/ConversationItem.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{conversation\.preview\}/,
+    ],
+    ["src/components/chat/ChatMessage.tsx", /<p\s+dir="auto"[^>]*>\s*\{title\}/],
+    ["src/components/DictionaryView.tsx", /<span\s+dir="auto"[^>]*>\s*\{agentName\}/],
+    [
+      "src/components/notes/MeetingTranscriptChat.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{speakerLabel\}/,
+    ],
+    ["src/components/notes/MeetingTranscriptChat.tsx", /<span\s+dir="auto"[^>]*>\s*\{text\}/],
+    [
+      "src/components/notes/MeetingTranscriptChat.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{isYouSpeakerName\(segment\.suggestedName![^}]*\?\s*recorderLabel\s*:\s*segment\.suggestedName\}/,
+    ],
+    [
+      "src/components/notes/MeetingTranscriptChat.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{displayLabel\}/,
+    ],
+    ["src/components/notes/CreateSpaceDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{item\.name\}/],
+    ["src/components/notes/CreateSpaceDialog.tsx", /<p\s+dir="auto"[^>]*>\s*\{workspace\.name\}/],
+    ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{member\.name\}/],
+    ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
+    ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{row\.teamName\}/],
+    // The page shows the name only in its input.
+    [
+      "src/components/settings/WorkspaceGeneralSection.tsx",
+      /<Input\s+id=\{nameId\}\s+dir="auto"\s+value=\{name\}/,
+    ],
+    ["src/components/notes/NoteEditor.tsx", /<span\s+dir="auto"[^>]*>\s*\{space\.name\}/],
+    ["src/components/notes/NoteEditor.tsx", /<span\s+dir="auto"[^>]*>\s*\{folderName\}/],
+    [
+      "src/components/notes/NoteEditor.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{defaultFolderDisplayName\(folder, t\)\}/,
+    ],
+    ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/],
+    ["src/components/skills/SkillCards.tsx", /<p\s+dir="auto"[^>]*>\s*\{skill\.description\}/],
+    [
+      "src/components/skills/ManageSkillsScreen.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/,
+    ],
+    [
+      "src/components/skills/ManageSkillsScreen.tsx",
+      /<p\s+dir="auto"[^>]*>\s*\{skill\.description\}/,
+    ],
+    [
+      "src/components/skills/SkillDetailDialog.tsx",
+      /<span\s+dir="auto"[^>]*>\s*\{skill\.displayName\}/,
+    ],
+    [
+      "src/components/skills/SkillDetailDialog.tsx",
+      /<DialogDescription\s+dir="auto"[^>]*>\s*\{skill\.description\}/,
+    ],
+    ["src/components/chat/SkillChip.tsx", /<span\s+dir="auto"[^>]*>\s*\{name\}/],
+  ];
+
+  for (const [file, pattern] of expectations) {
+    assert.match(source(file), pattern, `${file} lost a dynamic-content direction boundary`);
+  }
+
+  const meetingCards = source("src/components/UpcomingMeetings.tsx").match(
+    /<p\s+dir="auto"[^>]*>\s*\{event\.summary \|\| t\("upcoming\.untitledEvent"\)\}/g
+  );
+  assert.equal(
+    meetingCards?.length,
+    2,
+    "both calendar event summary displays must detect direction"
+  );
+});

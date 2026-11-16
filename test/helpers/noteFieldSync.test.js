@@ -12,6 +12,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { TEAM_SPACE, joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 const {
   buildNoteCreatePayload,
@@ -38,7 +39,8 @@ const INITIAL = {
   transcript: "Original transcript",
   note_type: "meeting",
   folder_id: null,
-  space_id: null,
+  workspace_id: TEAM_SPACE.workspace_id,
+  space_id: TEAM_SPACE.id,
   user_id: "user-harness",
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
@@ -47,6 +49,10 @@ const INITIAL = {
   enhanced_content_state: null,
 };
 const copy = (value) => JSON.parse(JSON.stringify(value));
+
+// Private notes stay on the device (D2), so the field protocol runs end to end
+// on a teamspace's note: the device joins it on first use, and INITIAL is its.
+const teamIn = (db) => joinTeamSpace(db, null).id;
 const SUMMARY_KEYS = ["enhancement_prompt", "enhancement_template_id", "enhanced_at_content_hash"];
 
 test("explicit server clears replace stored text while an empty transcript remains protected", (t) => {
@@ -80,6 +86,7 @@ test("explicit server clears replace stored text while an empty transcript remai
 function protocolCloud(initial = INITIAL) {
   let row = copy(initial);
   const fallback = createFakeCloud();
+  fallback.seedSpace(TEAM_SPACE);
   const calls = [];
   // The text each clear removed: a legacy write resending exactly it is ignored.
   const removed = {};
@@ -151,6 +158,8 @@ async function client(t, db, cloud) {
   resetBrowserGlobals();
   installBrowserGlobals();
   enableSync();
+  // A device that has seen its teamspace, so a push carries its scope.
+  localStorageStub.setItem("teamSpacesCapability", "true");
   windowStub.electronAPI = createElectronApi(db, { cloud });
   await establishValidatedAuth();
   const service = new SyncService();
@@ -170,8 +179,8 @@ for (const field of ["content", "enhanced_content"]) {
     const b = createDb(t);
     if (!a || !b) return;
     const cloud = protocolCloud();
-    const noteA = a.upsertNoteFromCloud(INITIAL, null);
-    const noteB = b.upsertNoteFromCloud(INITIAL, null);
+    const noteA = a.upsertNoteFromCloud(INITIAL, null, teamIn(a));
+    const noteB = b.upsertNoteFromCloud(INITIAL, null, teamIn(b));
     assert.equal(a.updateNote(noteA.id, { clear_fields: [field] }).success, true);
     // A later title autosave resends the now-blank document after debounce.
     a.updateNote(noteA.id, { title: "Renamed offline", [field]: a.getNote(noteA.id)[field] });
@@ -297,7 +306,7 @@ test("an unconfirmed local blank is never pushed as a clear", (t) => {
 test("a clear on a pre-guard row adopts the revision without a false conflict", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   db.updateNote(row.id, { cloud_updated_at: null, cloud_revision: null });
   db.db.prepare("UPDATE notes SET cloud_revision = NULL WHERE id = ?").run(row.id);
   db.updateNote(row.id, { clear_fields: ["content"] });
@@ -351,17 +360,20 @@ test("pulls adopt unattributed rows and personal<->team moves instead of abortin
 
   // A full pull carries on past such a row to the notes after it.
   db.db.prepare("UPDATE notes SET account_id = NULL WHERE id = ?").run(unattributed.id);
-  const second = { ...INITIAL, id: "cloud-2", client_note_id: "client-2", title: "Brand new" };
+  // Personal rows, which a pull applies only during the one-time import.
+  const personal = { ...INITIAL, workspace_id: null, space_id: null };
+  const second = { ...personal, id: "cloud-2", client_note_id: "client-2", title: "Brand new" };
   const cloud = {
     request: async (opts) =>
       opts.path.startsWith("/api/notes/list")
         ? {
             success: true,
-            data: { notes: [{ ...INITIAL, revision: 9, title: "Again" }, second] },
+            data: { notes: [{ ...personal, revision: 9, title: "Again" }, second] },
           }
         : createFakeCloud().request(opts),
   };
-  assert.equal(await (await client(t, db, cloud)).pullNotes(false, true), true);
+  const service = await client(t, db, cloud);
+  assert.equal(await service.pullNotes(false, true, false, { includePersonal: true }), true);
   assert.equal(db.getNote(unattributed.id).title, "Again");
   assert.equal(db.getNoteByClientId("client-2")?.title, "Brand new");
 });
@@ -417,6 +429,57 @@ test("creating a note with typed text settles in one request; a clear still foll
     assert.equal(after.content_sync_operation, expected === "synced" ? null : "clear");
   }
 });
+
+for (const metadataOnly of [false, true]) {
+  for (const [creatorKind, attribution, userId, expectedCreator] of [
+    ["explicit creator", { created_by_user_id: "recorder" }, "recorder", "recorder"],
+    ["legacy owner", {}, "owner", "owner"],
+    ["cleared creator", { created_by_user_id: null }, "owner", null],
+  ]) {
+    test(`create attribution keeps the ${creatorKind} after ${metadataOnly ? "metadata-only reconciliation" : "a full receipt"}`, async (t) => {
+      const { resolveCloudNoteCreate } = require("../../src/services/noteCreateAck.ts");
+      const { isNoteRecorder } = require("../../src/utils/noteRecorder.ts");
+      const { ownsNote } = require("../../src/lib/spacePermissions.ts");
+      const db = createDb(t);
+      if (!db) return;
+      const note = saveNoteIn(db, teamIn(db), "My recording", "Draft", "meeting").note;
+      assert.equal(isNoteRecorder(note, userId), true);
+      const cloud = protocolCloud({
+        ...INITIAL,
+        id: `cloud-${note.id}`,
+        client_note_id: note.client_note_id,
+        title: note.title,
+        content: note.content,
+        enhanced_content: null,
+        user_id: "owner",
+        revision: 1,
+        ...attribution,
+      });
+      const receipt = cloud.row();
+      if (metadataOnly) {
+        delete receipt.content;
+        delete receipt.enhanced_content;
+      }
+      const outcome = await resolveCloudNoteCreate(note, receipt, {
+        acknowledge: (...args) => db.acknowledgeNoteCreate(...args),
+        deleteCloud: () => assert.fail("A live note's create must not be deleted"),
+      });
+      assert.equal(outcome, metadataOnly ? "awaiting-cloud" : "synced");
+      if (metadataOnly) {
+        assert.equal(db.getNote(note.id).created_by_user_id, null);
+        await (await client(t, db, cloud)).pullNotes(false, true);
+      }
+      reopen(db);
+      const after = db.getNote(note.id);
+      assert.equal(after.created_by_user_id, expectedCreator);
+      assert.equal(after.owner_user_id, "owner");
+      assert.equal(isNoteRecorder(after, userId), expectedCreator === userId);
+      assert.equal(ownsNote(after, userId), userId === "owner");
+      assert.equal(after.sync_status, "synced");
+      assert.equal(isCloudNoteNewer(cloud.row(), after), false);
+    });
+  }
+}
 
 test("revisions order same-timestamp pulls and outrank clock skew", () => {
   const local = { cloud_revision: 8, updated_at: INITIAL.updated_at };
@@ -543,7 +606,7 @@ test("a rejected legacy create stays parked across failed pulls, restart, and de
   const { resolveCloudNoteCreate } = require("../../src/services/noteCreateAck.ts");
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   db.updateNote(row.id, { cloud_id: null, cloud_updated_at: null, content: "Old local text" });
   const snapshot = db.getNote(row.id);
   await resolveCloudNoteCreate(
@@ -644,8 +707,8 @@ for (const field of ["content", "enhanced_content"]) {
       const a = createDb(t);
       const b = createDb(t);
       if (!a || !b) return;
-      const noteA = a.upsertNoteFromCloud(INITIAL, null);
-      const noteB = b.upsertNoteFromCloud(INITIAL, null);
+      const noteA = a.upsertNoteFromCloud(INITIAL, null, teamIn(a));
+      const noteB = b.upsertNoteFromCloud(INITIAL, null, teamIn(b));
       withoutRevision(a, noteA.id);
       if (!timestampBase)
         a.db.prepare("UPDATE notes SET cloud_updated_at = NULL WHERE id = ?").run(noteA.id);
@@ -709,7 +772,7 @@ for (const field of ["content", "enhanced_content"]) {
         enhanced_content_state: _summaryState,
         ...legacy
       } = INITIAL;
-      const row = db.upsertNoteFromCloud(legacy, null);
+      const row = db.upsertNoteFromCloud(legacy, null, teamIn(db));
       if (!timestampBase)
         db.db.prepare("UPDATE notes SET cloud_updated_at = NULL WHERE id = ?").run(row.id);
       db.updateNote(row.id, { clear_fields: [field] });
@@ -738,7 +801,7 @@ for (const field of ["content", "enhanced_content"]) {
   test(`${field}: a stale timestamp base after failed discovery remains a pending conflict`, async (t) => {
     const db = createDb(t);
     if (!db) return;
-    const row = db.upsertNoteFromCloud(INITIAL, null);
+    const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
     withoutRevision(db, row.id);
     db.updateNote(row.id, { clear_fields: [field] });
     const cloud = unansweredRevisionProbeOnce(protocolCloud());
@@ -777,7 +840,7 @@ for (const [kind, notes] of [
   test(`${kind} discovery remains unknown until a readable revision allows both clears`, async (t) => {
     const db = createDb(t);
     if (!db) return;
-    const row = db.upsertNoteFromCloud(INITIAL, null);
+    const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
     withoutRevision(db, row.id);
     db.updateNote(row.id, { clear_fields: ["content", "enhanced_content"] });
     const cloud = unansweredRevisionProbeOnce(protocolCloud(), { success: true, data: { notes } });
@@ -820,7 +883,7 @@ function rejectCreate(db, row, { cloudUpdatedAt = INITIAL.updated_at } = {}) {
 test("a rejected create already surfaced as a conflict is not re-pulled every pass", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  rejectCreate(db, db.upsertNoteFromCloud(INITIAL, null));
+  rejectCreate(db, db.upsertNoteFromCloud(INITIAL, null, teamIn(db)));
   const cloud = protocolCloud({ ...INITIAL, revision: 12, content: "Newer elsewhere" });
   const service = await client(t, db, cloud);
   await service.pushPendingNotes();
@@ -835,7 +898,7 @@ test("a base-less clear pushes as before against an API without revisions", asyn
   const db = createDb(t);
   if (!db) return;
   const { revision: _revision, ...legacy } = INITIAL;
-  const row = db.upsertNoteFromCloud(legacy, null);
+  const row = db.upsertNoteFromCloud(legacy, null, teamIn(db));
   db.db.prepare("UPDATE notes SET cloud_updated_at = NULL WHERE id = ?").run(row.id);
   db.updateNote(row.id, { clear_fields: ["content"] });
   const cloud = protocolCloud(legacy);
@@ -853,7 +916,7 @@ test("a base-less clear pushes as before against an API without revisions", asyn
 test("a debounced push leaves a base-less clear to the full pass until revisions are ruled out", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   db.db
     .prepare("UPDATE notes SET cloud_updated_at = NULL, cloud_revision = NULL WHERE id = ?")
     .run(row.id);
@@ -869,7 +932,7 @@ test("a debounced push leaves a base-less clear to the full pass until revisions
 test("a base-less clear the pull cannot resolve waits without a full pull every pass", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   db.db
     .prepare("UPDATE notes SET cloud_updated_at = NULL, cloud_revision = NULL WHERE id = ?")
     .run(row.id);
@@ -899,7 +962,7 @@ function quietDelta(cloud) {
 async function clearedElsewhere(t) {
   const db = createDb(t);
   if (!db) return null;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   withoutRevision(db, row.id);
   const cloud = protocolCloud();
   await cloud.request({
@@ -974,7 +1037,8 @@ test("one snapshot pull per session backfills clean rows synced before revisions
     db,
     db.upsertNoteFromCloud(
       { ...INITIAL, id: "cloud-missing", client_note_id: "client-missing" },
-      null
+      null,
+      teamIn(db)
     ).id
   );
   const service = await client(t, db, quietDelta(cloud));
@@ -989,7 +1053,7 @@ test("an API without revisions never gets the revision backfill pull", async (t)
   const db = createDb(t);
   if (!db) return;
   const { revision: _revision, ...legacy } = INITIAL;
-  db.upsertNoteFromCloud(legacy, null);
+  db.upsertNoteFromCloud(legacy, null, teamIn(db));
   const cloud = protocolCloud(legacy);
   const service = await client(t, db, quietDelta(cloud));
   localStorageStub.setItem("lastSyncedAt.notes", "2026-06-01T00:00:00.000Z");
@@ -1002,7 +1066,7 @@ test("an API without revisions never gets the revision backfill pull", async (t)
 test("a push ack restores text the device left out as an unconfirmed blank", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   db.updateNote(row.id, { content: "", title: "Renamed" });
   const cloud = protocolCloud();
   await (await client(t, db, cloud)).pushPendingNotes();
@@ -1047,7 +1111,7 @@ test("an in-flight ack adopts only fields untouched since the push", (t) => {
 test("a pending pre-revision row with a stale base surfaces a conflict instead of overwriting", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   withoutRevision(db, row.id);
   db.updateNote(row.id, { content: "Local edit" });
   const cloud = protocolCloud({
@@ -1068,10 +1132,10 @@ test("a pending pre-revision row with a stale base surfaces a conflict instead o
 test("Refresh after a local clear drops the stale clear, so the next push is valid", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   db.updateNote(row.id, { clear_fields: ["content"] });
   const cloud = protocolCloud({ ...INITIAL, revision: 8, content: "Newer elsewhere" });
-  db.upsertNoteFromCloud(cloud.row(), null);
+  db.upsertNoteFromCloud(cloud.row(), null, teamIn(db));
   assert.equal(db.getNote(row.id).content_sync_operation, null);
   db.updateNote(row.id, { title: "Renamed" });
   await (await client(t, db, cloud)).pushPendingNotes();
@@ -1130,7 +1194,7 @@ test("a local summary clear drops its prompt and hash but keeps the template", (
 test("a batch create the server refused stays parked", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const note = db.saveNote("Offline", "Draft").note;
+  const note = saveNoteIn(db, teamIn(db), "Offline", "Draft").note;
   const cloud = protocolCloud();
   const rejecting = {
     request: async (opts) =>
@@ -1218,7 +1282,7 @@ test("an upsert older than the acknowledged revision is ignored", (t) => {
 test("a rejected create surfaces a conflict even when the cloud row is older than the local edit", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  rejectCreate(db, db.upsertNoteFromCloud(INITIAL, null), { cloudUpdatedAt: null });
+  rejectCreate(db, db.upsertNoteFromCloud(INITIAL, null, teamIn(db)), { cloudUpdatedAt: null });
   const cloud = protocolCloud();
   await (await client(t, db, cloud)).pullNotes(false, true);
   assert.equal(readNoteConflictIds().has(INITIAL.client_note_id), true);
@@ -1304,7 +1368,7 @@ test("a create ack resets the operations a rejected create keeps; creates never 
 test("Keep after a refused create keeps and delivers the note's own text", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const note = db.saveNote("Rejected", "A offline text").note;
+  const note = saveNoteIn(db, teamIn(db), "Rejected", "A offline text").note;
   const server = {
     ...INITIAL,
     client_note_id: note.client_note_id,
@@ -1397,7 +1461,7 @@ test("a database from before sync status marks all its text as a set", (t) => {
 test("Keep after the upgrade keeps an offline edit made on a release", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   withoutRevision(db, row.id);
   downgradeToReleasedSchema(db);
   db.db
@@ -1429,7 +1493,7 @@ test("Keep after the upgrade keeps an offline edit made on a release", async (t)
 test("a clear on a row with a timestamp base and no revision waits for one, then pushes as a clear", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   withoutRevision(db, row.id);
   db.updateNote(row.id, { title: "Meeting", content: "", clear_fields: ["content"] });
   const cloud = protocolCloud();
@@ -1452,9 +1516,9 @@ test("a clear on a row with a timestamp base and no revision waits for one, then
 test("a revision-aware push leaves out text and summary metadata without an operation", async (t) => {
   const db = createDb(t);
   if (!db) return;
-  const row = db.upsertNoteFromCloud(INITIAL, null);
+  const row = db.upsertNoteFromCloud(INITIAL, null, teamIn(db));
   const blank = { ...INITIAL, revision: 9, content: "", enhanced_content: null };
-  db.upsertNoteFromCloud(blank, null);
+  db.upsertNoteFromCloud(blank, null, teamIn(db));
   assert.equal(db.getNote(row.id).content, INITIAL.content, "the pull kept the local text");
   db.updateNote(row.id, { title: "Renamed" });
   const body = JSON.parse(JSON.stringify(buildNoteUpdatePayload(db.getNote(row.id), null)));
@@ -1502,4 +1566,30 @@ test("a title save after an ack applied a clear does not bring the text back", a
   assert.equal(cloud.row().title, "T12");
   assert.equal(cloud.row().content, "");
   assert.equal(cloud.row().content_state, "clear");
+});
+
+test("a conflict is stale once the note's base covers the cloud copy it recorded", async () => {
+  const { isStaleNoteConflict } = await import("../../src/helpers/noteFieldSync.js");
+  const local = { cloud_id: "cloud-1", cloud_revision: 4 };
+  // This device's own write, acknowledged since: the base already holds it.
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-1", revision: 4 }), true);
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-1", revision: 3 }), true);
+  // Someone else's newer write is still a conflict.
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-1", revision: 5 }), false);
+  // Without revisions on both sides there is no proof either way.
+  assert.equal(
+    isStaleNoteConflict({ ...local, cloud_revision: null }, { id: "cloud-1", revision: 1 }),
+    false
+  );
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-1" }), false);
+  // Another cloud row, or a create that hasn't settled, is never matched.
+  assert.equal(isStaleNoteConflict(local, { id: "cloud-2", revision: 1 }), false);
+  assert.equal(
+    isStaleNoteConflict({ ...local, cloud_create_rejected: 1 }, { id: "cloud-1", revision: 1 }),
+    false
+  );
+  assert.equal(
+    isStaleNoteConflict({ ...local, cloud_create_pending: "{}" }, { id: "cloud-1", revision: 1 }),
+    false
+  );
 });

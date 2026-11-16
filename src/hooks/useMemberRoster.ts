@@ -1,120 +1,43 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useToast } from "../components/ui/useToast";
-import { useDialogSession } from "./useDialogSession";
-import { subscribeSpaceRoster } from "../lib/spaceRosterCache";
 
-// Local roster reads follow the committed resource and latest reload. Mutation
-// services still own completed-write reconciliation, independently of this UI.
-export function useMemberRoster<M>(
-  resourceId: string,
-  load: () => Promise<M[]>,
-  onLoaded?: (members: M[]) => void
-) {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const { sessionKey, capture, bindSession } = useDialogSession(true);
-  const resourceKey = JSON.stringify(["member-roster", resourceId, sessionKey]);
-  const [owner, setOwner] = useState({ load, resourceKey });
-  const publishedCallback = useRef(onLoaded);
-  // Callback replacement is not resource replacement: keep in-flight writes
-  // and their required reload, but publish to the latest committed subscriber.
-  useEffect(() => {
-    publishedCallback.current = onLoaded;
-  }, [onLoaded]);
+// Load state for a roster backed by a server list. The team and teamspace
+// members panels have their own tables and row actions.
+export function useMemberRoster<M>(load: () => Promise<M[]>) {
   const [members, setMembers] = useState<M[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
-  const committedOwner = useRef<typeof owner | null>(null);
-  const request = useRef(0);
-  const mutations = useRef(new Set<string>());
-
-  if (owner.load !== load || owner.resourceKey !== resourceKey) {
-    setOwner({ load, resourceKey });
-    setMembers([]);
-    setLoading(false);
-    setLoadFailed(false);
-    setBusyIds(new Set());
-  }
-
-  const bindRoster = useCallback(
-    (node: HTMLElement | null) => {
-      const cleanup = bindSession(node);
-      if (!cleanup) return;
-      committedOwner.current = owner;
-      mutations.current.clear();
-      return () => {
-        cleanup();
-        committedOwner.current = null;
-        ++request.current;
-        mutations.current.clear();
-      };
-    },
-    [bindSession, owner]
-  );
+  // What the last read failed with, so a panel can tell a team or teamspace that is gone apart
+  // from a read that can be tried again.
+  const [loadError, setLoadError] = useState<unknown>(null);
+  // Reads after a change can land out of order, and an older list would bring back someone just
+  // removed, so only the latest read is shown.
+  const latest = useRef(0);
 
   const reload = useCallback(async () => {
-    const completion = capture();
-    if (!completion.isCurrent() || committedOwner.current !== owner) return;
-    const read = ++request.current;
-    const isCurrent = () =>
-      completion.isCurrent() && committedOwner.current === owner && read === request.current;
+    const request = ++latest.current;
     setLoading(true);
     setLoadFailed(false);
+    setLoadError(null);
     try {
-      const list = await load();
-      if (!isCurrent()) return;
-      setMembers(list);
-      publishedCallback.current?.(list);
-    } catch {
-      if (isCurrent()) setLoadFailed(true);
+      const next = await load();
+      if (latest.current === request) setMembers(next);
+    } catch (error) {
+      if (latest.current === request) {
+        setLoadFailed(true);
+        setLoadError(error);
+      }
     } finally {
-      if (isCurrent()) setLoading(false);
+      if (latest.current === request) setLoading(false);
     }
-  }, [load, capture, owner]);
+  }, [load]);
 
   useEffect(() => {
     void reload();
-    return subscribeSpaceRoster(resourceKey, () => {
-      void reload();
-    });
-  }, [reload, resourceKey]);
+    // An answer for what was loaded before must not land on what is loaded now.
+    return () => {
+      latest.current += 1;
+    };
+  }, [reload]);
 
-  const mutate = useCallback(
-    async <T>(userId: string, action: () => Promise<T>, onSuccess?: (result: T) => void) => {
-      const completion = capture();
-      const isCurrent = () => completion.isCurrent() && committedOwner.current === owner;
-      if (!isCurrent() || mutations.current.has(userId)) return;
-      mutations.current.add(userId);
-      setBusyIds((prev) => new Set(prev).add(userId));
-      try {
-        const result = await action();
-        if (!isCurrent()) return;
-        // The action service invalidates rosters after the write, including
-        // reopened owners. Local completion only owns feedback and row state.
-        onSuccess?.(result);
-      } catch (err) {
-        if (isCurrent()) {
-          toast({
-            title: t("common.error"),
-            description: err instanceof Error ? err.message : t("common.unknownError"),
-            variant: "destructive",
-          });
-        }
-      } finally {
-        if (isCurrent()) {
-          mutations.current.delete(userId);
-          setBusyIds((prev) => {
-            const next = new Set(prev);
-            next.delete(userId);
-            return next;
-          });
-        }
-      }
-    },
-    [capture, owner, toast, t]
-  );
-
-  return { members, loading, loadFailed, reload, busyIds, mutate, bindRoster };
+  return { members, loading, loadFailed, loadError, reload };
 }

@@ -6,6 +6,7 @@ import { ProviderTabs } from "../ui/ProviderTabs";
 import { SectionHeader } from "../ui/SettingsSection";
 import type { SettingsNavigationStore } from "../../stores/settingsNavigationStore";
 import { TabPanel } from "./KeepAlive";
+import { LocalOffInstalledModels } from "./LocalOffInstalledModels";
 
 export default function SpeechToTextTabs({
   navigation,
@@ -55,6 +56,7 @@ export default function SpeechToTextTabs({
       <TabPanel active={tab === "dictation"}>{dictation}</TabPanel>
       <TabPanel active={tab === "noteRecording"}>{noteRecording}</TabPanel>
       <TabPanel active={tab === "upload"}>{upload}</TabPanel>
+      <LocalOffInstalledModels scope="transcription" />
     </div>
   );
 }

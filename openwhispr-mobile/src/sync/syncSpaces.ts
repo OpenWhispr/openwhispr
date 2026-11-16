@@ -2,9 +2,9 @@ import { uncheckedSync, type SyncCheckpoint } from './syncContext';
 import { spacesRepository } from '@/data';
 import type { Space } from '@/data/spacesTypes';
 import { fetchMySpaces } from '@/data/remote/spacesApi';
-import { fetchMyWorkspaces } from '@/data/remote/workspacesApi';
+import { fetchMyWorkspaces, type RemoteWorkspace } from '@/data/remote/workspacesApi';
 import { ApiError } from '@/lib/apiClient';
-import { setTeamSpacesCapability } from './teamSpacesCapability';
+import { setDefaultPrivateWorkspaceId, setTeamSpacesCapability } from './teamSpacesCapability';
 
 // Mirrors syncEngine.ts's isEndpointUnavailable: a missing/undeployed route
 // answers with 404 (not found), 405 (method not allowed behind a catch-all),
@@ -17,26 +17,28 @@ function isEndpointUnavailable(error: unknown): boolean {
 }
 
 /**
- * Workspace id → name, for the separators the Spaces list groups under.
- * Purely cosmetic, so every failure degrades to an empty map rather than
- * failing the sync pass: spaces still mirror, they just group unnamed until a
- * later pass resolves the names.
+ * The caller's workspaces, for the separators the Spaces list groups under.
+ * Purely cosmetic here, so every failure degrades to null rather than failing
+ * the sync pass: spaces still mirror, they just group unnamed until a later
+ * pass resolves the names.
  */
-async function fetchWorkspaceNames(checkpoint: SyncCheckpoint): Promise<Map<string, string>> {
+async function fetchWorkspaces(checkpoint: SyncCheckpoint): Promise<RemoteWorkspace[] | null> {
   try {
     checkpoint();
     const { data } = await fetchMyWorkspaces();
     checkpoint();
-    return new Map(data.map((workspace) => [workspace.id, workspace.name]));
+    return data;
   } catch {
     checkpoint();
-    return new Map();
+    return null;
   }
 }
 
 export interface SyncSpacesResult {
   capable: boolean;
   activeSpaces: Space[];
+  /** GET /api/workspaces as this pass read it; null when it wasn't read or failed. */
+  workspaces: RemoteWorkspace[] | null;
 }
 
 /**
@@ -59,18 +61,21 @@ export async function syncSpaces(
     if (isEndpointUnavailable(err)) {
       // Backend predates team spaces: not an error, just the probe result.
       setTeamSpacesCapability(false);
-      return { capable: false, activeSpaces: [] };
+      setDefaultPrivateWorkspaceId(null);
+      return { capable: false, activeSpaces: [], workspaces: null };
     }
     throw err;
   }
 
   setTeamSpacesCapability(true);
+  setDefaultPrivateWorkspaceId(remote.default_workspace_id ?? null);
 
   // Only reached once team spaces are known to exist, so accounts without them
   // never pay for this request.
   checkpoint();
-  const workspaceNames = await fetchWorkspaceNames(checkpoint);
+  const workspaces = await fetchWorkspaces(checkpoint);
   checkpoint();
+  const workspaceNames = new Map((workspaces ?? []).map((ws) => [ws.id, ws.name]));
 
   const remoteIds = new Set(remote.data.map((s) => s.id));
   for (const space of remote.data) {
@@ -88,5 +93,5 @@ export async function syncSpaces(
     spacesRepository.softDeleteByCloudId(space.cloudSpaceId as string);
   }
 
-  return { capable: true, activeSpaces: local.filter((s) => !revoked.has(s)) };
+  return { capable: true, activeSpaces: local.filter((s) => !revoked.has(s)), workspaces };
 }

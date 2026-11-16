@@ -14,6 +14,7 @@ import type {
   SelfHostedType,
 } from "../types/electron";
 import type { Snippet } from "../utils/snippets";
+import type { SharedHintWords } from "../utils/sharedDictionaryHints";
 import {
   effectiveAudioRetentionDays,
   effectiveLocalHistoryEnabled,
@@ -47,6 +48,8 @@ export interface TranscriptionSettings {
   remoteTranscriptionModel: string;
   customDictionary: string[];
   snippets: Snippet[];
+  // Teammates' words, already filtered to what may reach the prompt (see selectSharedHintWords).
+  sharedDictionaryHints: SharedHintWords;
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
 }

@@ -130,7 +130,7 @@ Use the GitHub issue templates. For security issues, follow [SECURITY.md](./SECU
 
 ## Provider development
 
-Mobile owns its provider code: the catalog is `src/config/providerCatalog.json`, routing is `src/lib/mobileProviders.ts`, and endpoint rules are `src/lib/providerEndpoints.ts`. The catalog is a trimmed copy of the desktop registry's OpenAI and Groq entries; update it by hand when those models change.
+Mobile owns its provider code: the catalog is `src/config/providerCatalog.json`, routing is `src/lib/mobileProviders.ts`, and endpoint rules are `src/lib/providerEndpoints.ts`. The catalog is a trimmed copy of the desktop registry's OpenAI and Groq entries; update it by hand when those models change. Copy desktop's `"legacy": true` flags too: the model picker lists a legacy model only while it is the selection. When a provider shuts a model down, remove it and add it to `src/lib/retiredModels.ts`, which moves saved selections to its replacement.
 
 From `openwhispr-mobile`, run:
 

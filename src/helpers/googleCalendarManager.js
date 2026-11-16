@@ -81,8 +81,9 @@ class GoogleCalendarManager {
     }
   }
 
-  async startOAuth() {
-    const result = await this.oauth.startOAuthFlow();
+  async startOAuth({ signal } = {}) {
+    const result = await this.oauth.startOAuthFlow({ signal });
+    signal?.throwIfAborted();
     this.addAccount(result.email);
 
     await this.fetchCalendars(result.email);
@@ -359,8 +360,8 @@ class GoogleCalendarManager {
     broadcastToWindows("gcal-events-synced", {});
   }
 
-  async getUpcomingEvents(windowMinutes) {
-    return this.databaseManager.getUpcomingEvents(windowMinutes);
+  async getUpcomingEvents(windowMinutes, options) {
+    return this.databaseManager.getUpcomingEvents(windowMinutes, options);
   }
 
   _loadAccounts() {

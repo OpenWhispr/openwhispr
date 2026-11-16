@@ -25,8 +25,10 @@ const diarization = { enabled: true, localModelsReady: true, numSpeakers: 2 };
 const gateMocks = {
   "/lib/auth": "export const withSessionRefresh = (fn) => fn();",
   "./settingsStore": "export const getSettings = () => ({});",
-  "./policyStore": "export const usePolicyStore = { getState: () => ({}) };",
-  "./policyRules": "export const isTranscriptionContextAllowed = () => true;",
+  "./policyStore":
+    "export const usePolicyStore = { getState: () => ({}), subscribe: () => () => {} };",
+  "./policyRules":
+    "export const isTranscriptionContextAllowed = () => true; export const isAudioFeatureAllowed = () => true;",
 };
 
 async function waitForQueueSettled(store, timeoutMs = 5000) {

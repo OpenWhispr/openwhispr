@@ -52,6 +52,54 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     });
   };
 
+  await t.test("blocked local models never reach inference or streaming dispatch", async () => {
+    setPolicy({ llmModes: ["local", "openwhispr"] });
+    usePolicyStore.setState({
+      policy: {
+        ...usePolicyStore.getState().policy,
+        llm: { ...usePolicyStore.getState().policy.llm, allowedLocalModels: [] },
+      },
+    });
+    const model = "qwen3.5-0.8b-q4_k_m";
+    const dispatch = t.mock.fn(() => {
+      throw new Error("unexpected local dispatch");
+    });
+    global.window.electronAPI.modelRunInference = dispatch;
+    global.window.electronAPI.llamaServerStart = dispatch;
+    await assert.rejects(reasoningService.processText("hi", model, null, { provider: "qwen" }), {
+      code: "POLICY_MODEL_BLOCKED",
+    });
+    await assert.rejects(
+      reasoningService
+        .processTextStreaming([{ role: "user", content: "hi" }], model, "qwen", {
+          systemPrompt: "s",
+        })
+        .next(),
+      { code: "POLICY_MODEL_BLOCKED" }
+    );
+    assert.equal(dispatch.mock.callCount(), 0);
+  });
+
+  await t.test("a finished answer ends only on a settled denial", async () => {
+    const finishUnder = (change) => {
+      setPolicy({ llmModes: ["local"] });
+      global.window.electronAPI.processLocalReasoning = async () => {
+        usePolicyStore.setState(change);
+        return { success: true, text: "answer" };
+      };
+      return reasoningService.processText("hi", "qwen3.5-0.8b-q4_k_m", null, {
+        provider: "qwen",
+        systemPrompt: "s",
+      });
+    };
+    for (const status of ["loading", "error"]) {
+      assert.equal(await finishUnder({ status, policy: null }), "answer");
+    }
+    const denied = buildPolicy({ llmModes: ["local"] });
+    denied.llm.allowedLocalModels = [];
+    await assert.rejects(finishUnder({ policy: denied }), { code: "POLICY_MODEL_BLOCKED" });
+  });
+
   // A custom endpoint's 400 body ("expected test stop") now classifies as a
   // provider bad-request error; its original text survives on
   // technicalDetails.underlyingError rather than as the top-level message.
@@ -272,63 +320,69 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
     }
   });
 
-  await t.test("implicit cleanup pins the selected provider instead of inferring from its model", async () => {
-    setPolicy({
-      llmModes: ["providers"],
-      llmByokProviders: ["openai", "groq"],
-    });
-    useSettingsStore.setState({
-      cleanupMode: "providers",
-      cleanupProvider: "openai",
-      cleanupModel: "llama-3.3-70b-versatile",
-    });
-    globalThis.window.electronAPI.getOpenAIKey = async () => "openai-key";
-
-    const originalFetch = globalThis.fetch;
-    const requestedUrls = [];
-    globalThis.fetch = async (url) => {
-      requestedUrls.push(String(url));
-      return new Response(JSON.stringify({ error: "expected test stop" }), {
-        status: 400,
-        headers: { "content-type": "application/json" },
+  await t.test(
+    "implicit cleanup pins the selected provider instead of inferring from its model",
+    async () => {
+      setPolicy({
+        llmModes: ["providers"],
+        llmByokProviders: ["openai", "groq"],
       });
-    };
-
-    try {
-      await rejectsExpectedTestStop(
-        reasoningService.processText("hi", "llama-3.3-70b-versatile")
-      );
-      assert.ok(requestedUrls.length > 0);
-      assert.ok(requestedUrls.every((url) => url.startsWith("https://api.openai.com/")));
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  await t.test("implicit self-hosted cleanup without a URL never infers a cloud provider", async () => {
-    usePolicyStore.setState({ status: "unmanaged", appVersion: "1.8.1", policy: null });
-    useSettingsStore.setState({
-      cleanupMode: "self-hosted",
-      cleanupRemoteUrl: "",
-      cleanupModel: "gpt-4.1",
-    });
-
-    const originalFetch = globalThis.fetch;
-    let fetchCalls = 0;
-    globalThis.fetch = async () => {
-      fetchCalls += 1;
-      return new Response(null, { status: 500 });
-    };
-
-    try {
-      await assert.rejects(reasoningService.processText("hi", "gpt-4.1"), {
-        message: HTTPS_REQUIRED,
+      useSettingsStore.setState({
+        cleanupMode: "providers",
+        cleanupProvider: "openai",
+        cleanupModel: "llama-3.3-70b-versatile",
       });
-      assert.equal(fetchCalls, 0);
-    } finally {
-      globalThis.fetch = originalFetch;
+      globalThis.window.electronAPI.getOpenAIKey = async () => "openai-key";
+
+      const originalFetch = globalThis.fetch;
+      const requestedUrls = [];
+      globalThis.fetch = async (url) => {
+        requestedUrls.push(String(url));
+        return new Response(JSON.stringify({ error: "expected test stop" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        });
+      };
+
+      try {
+        await rejectsExpectedTestStop(
+          reasoningService.processText("hi", "llama-3.3-70b-versatile")
+        );
+        assert.ok(requestedUrls.length > 0);
+        assert.ok(requestedUrls.every((url) => url.startsWith("https://api.openai.com/")));
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
     }
-  });
+  );
+
+  await t.test(
+    "implicit self-hosted cleanup without a URL never infers a cloud provider",
+    async () => {
+      usePolicyStore.setState({ status: "unmanaged", appVersion: "1.8.1", policy: null });
+      useSettingsStore.setState({
+        cleanupMode: "self-hosted",
+        cleanupRemoteUrl: "",
+        cleanupModel: "gpt-4.1",
+      });
+
+      const originalFetch = globalThis.fetch;
+      let fetchCalls = 0;
+      globalThis.fetch = async () => {
+        fetchCalls += 1;
+        return new Response(null, { status: 500 });
+      };
+
+      try {
+        await assert.rejects(reasoningService.processText("hi", "gpt-4.1"), {
+          message: HTTPS_REQUIRED,
+        });
+        assert.equal(fetchCalls, 0);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  );
 
   await t.test(
     "self-hosted execution rejects unsafe endpoint schemes before dispatch",

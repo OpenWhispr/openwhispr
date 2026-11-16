@@ -82,18 +82,18 @@ test("sidebar layout context changes only when the compact breakpoint changes", 
   assert.equal(regular.isCompact, false);
   assert.ok(observers[0].node);
   await render("llms");
-  await resize(900);
+  await resize(1000);
   assert.deepEqual(
     snapshots,
     [regular],
     "navigation and same-mode resize do not broadcast a new context value"
   );
   assert.equal(observers.length, 1);
-  await resize(799);
+  await resize(959);
   const compact = snapshots.at(-1);
   assert.equal(compact.isCompact, true);
   assert.notEqual(compact, regular);
-  await resize(800);
+  await resize(960);
   assert.equal(snapshots.at(-1).isCompact, false);
   assert.notEqual(snapshots.at(-1), compact);
   const count = snapshots.length;

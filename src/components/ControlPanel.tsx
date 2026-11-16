@@ -16,6 +16,7 @@ import { useSignOut } from "../hooks/useSignOut";
 import { useHotkey } from "../hooks/useHotkey";
 import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
+import { recordingRecorderName } from "../utils/noteRecorder";
 import { useAuth } from "../hooks/useAuth";
 import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useUsage } from "../hooks/useUsage";
@@ -30,13 +31,28 @@ import {
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
 import { getSettings, useSettingsStore } from "../stores/settingsStore";
+import {
+  startNewChat,
+  subscribeChatAccountScope,
+  subscribeChatPolicy,
+} from "../stores/chatTurnStore";
+import { useChatNeedsAttention } from "./chat/useChatNeedsAttention";
 import { usePolicyStore } from "../stores/policyStore";
+import { useWorkspaceStore } from "../stores/workspaceStore";
+import { startWorkspaceScopeBridge } from "../stores/workspaceScopeBridge";
+import { useEnsureDefaultWorkspace } from "../hooks/useWorkspace";
+import type { EnterpriseAudioTestLink } from "../types/enterpriseAudio";
+import { useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
+import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
+import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
 import {
   isAgentAllowed,
+  isAudioFeatureAllowed,
   isControlPanelViewAllowed,
   isPolicyActionAllowed,
   isTranscriptionContextAllowed,
   isUpdateRequiredByOrg,
+  transcriptionChoiceRefusal,
 } from "../stores/policyRules";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import {
@@ -65,6 +81,7 @@ import {
   setActiveNoteId,
   setActiveFolderId,
   navigateToContainer,
+  ensureNoteLoaded,
   useActiveNoteId,
   initializeNotes,
   subscribeMeetingNotificationFolders,
@@ -80,17 +97,22 @@ import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
-import { providerErrorToastProps } from "../utils/describeProviderError";
+import { providerErrorActions, providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
+import SharedDictionaryArrivalToastListener from "./SharedDictionaryArrivalToastListener";
 import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
 import JoinYourTeamModal from "./JoinYourTeamModal";
 import { GpuAccelerationBanner } from "./GpuAccelerationBanner";
+import { useModalGate } from "../stores/modalGateStore";
+import { useInvitationNotesEntry } from "../hooks/useInvitationNotesEntry";
 import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
+import type { SkillChatRequest, SkillChatStart, SkillOpenRequest } from "../types/skills";
+import type { SourceNote } from "./chat/useSourceNote";
 
 const platform = getCachedPlatform();
 
@@ -115,8 +137,11 @@ export default function ControlPanel({
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
   const openSettings = useStore(settingsNavigation, (state) => state.openSettings);
+  const settingsOpen = useStore(settingsNavigation, (state) => state.section !== null);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPostMigration, setShowPostMigration] = useState(false);
+  const [postMigrationChecked, setPostMigrationChecked] = useState(platform !== "darwin");
+  useModalGate("postMigrationPending", !postMigrationChecked);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
   const [aiCTADismissed, setAiCTADismissed] = useState(
@@ -124,14 +149,20 @@ export default function ControlPanel({
   );
   const [showReferrals, setShowReferrals] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
-  const [invitationNotesEntry, setInvitationNotesEntry] = useState<{
-    workspaceId: string;
-    teamIds: string[];
-    spaceIds: string[];
-  } | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  // The chat keeps its turns running behind other views; one that waits on the user marks Chat.
+  const chatNeedsAttention = useChatNeedsAttention();
+  useModalGate("invitation", invitationToken !== null);
+  // Accepting an invitation or joining a workspace routes to Notes, which may open its structure
+  // intro. Notes is lazy, so it can mount late; this holds the gate until it has taken over.
+  const [notesHandOff, setNotesHandOff] = useState(false);
+  const finishNotesHandOff = useCallback(() => setNotesHandOff(false), []);
+  useModalGate("notesHandOff", notesHandOff && activeView === "personal-notes");
+  const [invitationNotesEntry, setInvitationNotesEntry] = useInvitationNotesEntry(
+    activeView === "personal-notes"
+  );
   const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
     DEFAULT_INTEGRATIONS_SECTION
   );
@@ -159,18 +190,29 @@ export default function ControlPanel({
     noteId: number;
     folderId: number | null;
     event: any;
+    trigger?: string;
+    noteSessionId?: string;
   } | null>(null);
+  // Try now and Create with assistant open a chat; Open skill on a chat's card opens the skill.
+  const [skillChatRequest, setSkillChatRequest] = useState<SkillChatRequest | null>(null);
+  const [openSkillRequest, setOpenSkillRequest] = useState<SkillOpenRequest | null>(null);
   const updateReadyToastShown = useRef(false);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
   const useCleanupModel = useSettingsStore((settings) => settings.useCleanupModel);
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
+  const canAutoStartMeeting = useMeetingAutoTranscriptionCheck({
+    isLoaded: authLoaded,
+    isSignedIn,
+  });
   // Suppressed while a deep-linked invitation is open so the two never stack.
   const {
     joinable,
+    pending: joinablePending,
     dismiss: dismissJoinable,
     markRequested,
   } = useJoinableWorkspaces(user?.id ?? null, isSignedIn && !invitationToken);
+  useModalGate("joinYourTeamPending", joinablePending);
   const usage = useUsage();
   const upsell = decideUpsell({
     authLoaded,
@@ -193,14 +235,55 @@ export default function ControlPanel({
     [openSettings]
   );
   useSignInCloudNudge(isSignedIn, openTranscriptionSettings);
+  const workspacesLoaded = useWorkspaceStore((state) => state.loaded);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const [audioTestLink, setAudioTestLink] = useState<EnterpriseAudioTestLink | null>(null);
+  useEffect(() => {
+    const claim = (): void => {
+      void window.electronAPI?.claimEnterpriseAudioTest?.().then((link) => {
+        if (link) setAudioTestLink(link);
+      });
+    };
+    claim();
+    return window.electronAPI?.onEnterpriseAudioTestRequested?.(claim);
+  }, []);
+  // Settings consumes a link for the active workspace; any other one is dropped here.
+  useEffect(() => {
+    if (!audioTestLink || !authLoaded || (isSignedIn && !workspacesLoaded)) return;
+    setAudioTestLink(null);
+    if (isSignedIn && audioTestLink.workspaceId === activeWorkspaceId) {
+      openTranscriptionSettings();
+      return;
+    }
+    void window.electronAPI?.getPendingEnterpriseAudioTest?.(true);
+    toast({ description: t("enterprise.audio.testLinkOtherWorkspace") });
+  }, [
+    audioTestLink,
+    authLoaded,
+    isSignedIn,
+    workspacesLoaded,
+    activeWorkspaceId,
+    openTranscriptionSettings,
+    toast,
+    t,
+  ]);
 
   const agentAllowedByPolicy = usePolicyStore(isAgentAllowed);
-  const { createNote } = useCreateNote();
+  useEffect(subscribeChatPolicy, []);
+  useEffect(subscribeChatAccountScope, []);
+  // Main resolves where new private notes go from the workspace this window has active.
+  useEffect(startWorkspaceScopeBridge, []);
+  useEnsureDefaultWorkspace();
+  const { createNote } = useCreateNote(canAutoStartMeeting);
   // The note is created before the view switches so Notes mounts with it already open.
   const handleNewNote = useCallback(async () => {
     await createNote();
     setActiveView("personal-notes");
   }, [createNote]);
+  const showDictionary = useCallback(() => {
+    settingsNavigation.getState().setSettingsOpen(false);
+    setActiveView("dictionary");
+  }, [settingsNavigation]);
   const policyActionsAllowed = usePolicyStore((state) => isPolicyActionAllowed(state));
   useEffect(() => {
     if (!isControlPanelViewAllowed(activeView, agentAllowedByPolicy, policyActionsAllowed)) {
@@ -251,9 +334,16 @@ export default function ControlPanel({
 
   useEffect(() => {
     if (platform !== "darwin") return;
-    window.electronAPI?.getPostMigrationState?.().then((state) => {
-      if (state?.justMigrated) setShowPostMigration(true);
-    });
+    const check = window.electronAPI?.getPostMigrationState?.();
+    if (!check) {
+      setPostMigrationChecked(true);
+      return;
+    }
+    check
+      .then((state) => {
+        if (state?.justMigrated) setShowPostMigration(true);
+      })
+      .finally(() => setPostMigrationChecked(true));
   }, []);
 
   const dismissPostMigrationPermanently = useCallback(async () => {
@@ -348,6 +438,9 @@ export default function ControlPanel({
 
   // A ref, not a per-run flag: StrictMode's remount must not cancel the first drain.
   const meetingNavigationMounted = useRef(false);
+  const meetingNoteSession = useMeetingNoteSession(activeView, activeNoteId);
+  const recordingIdentityRef = useRef({ user, t });
+  recordingIdentityRef.current = { user, t };
   useEffect(() => {
     meetingNavigationMounted.current = true;
     const isCurrent = () => meetingNavigationMounted.current;
@@ -365,22 +458,47 @@ export default function ControlPanel({
           isCurrent,
           () => import("./notes/PersonalNotesView"),
           (note) => {
-            void startRecordingForNote(note)
-              .then((accepted) => {
-                if (!accepted) void window.electronAPI?.restoreFromMeetingMode?.();
-              })
-              .catch((error) =>
-                logger.warn(
-                  "Failed to start notification recording",
-                  { error: String(error) },
-                  "meeting"
-                )
-              );
+            const { user: recordingUser, t: translate } = recordingIdentityRef.current;
+            if (data.noteSessionId)
+              meetingNoteSession.current = { id: data.noteSessionId, noteId: note.id };
+            void handleMeetingRecordingRequest({
+              args: {
+                noteId: note.id,
+                noteTitle: note.title,
+                folderId: note.folder_id,
+                autoEndEligible: true,
+              },
+              canAutoStart: canAutoStartMeeting,
+              startRecording: (args) =>
+                startRecordingForNote(
+                  note,
+                  recordingRecorderName(note, recordingUser, translate),
+                  args.canAutoStart
+                ),
+              restoreFromMeetingMode: () => window.electronAPI?.restoreFromMeetingMode?.(),
+              onSuppressed: () =>
+                data.noteSessionId
+                  ? window.electronAPI?.meetingNoteOpenedWithoutRecording?.(data.noteSessionId)
+                  : undefined,
+              onHandled: () => {},
+            }).catch((error) =>
+              logger.warn(
+                "Failed to start notification recording",
+                { error: String(error) },
+                "meeting"
+              )
+            );
           }
         );
         return;
       }
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        // Main already gave this navigation away, so nothing else can end its session.
+        if (data.noteSessionId) void window.electronAPI?.meetingNoteClosed?.(data.noteSessionId);
+        return;
+      }
+      if (data.noteSessionId)
+        meetingNoteSession.current = { id: data.noteSessionId, noteId: data.noteId };
       setActiveFolderId(data.folderId);
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
@@ -388,6 +506,8 @@ export default function ControlPanel({
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
+        trigger: data.trigger,
+        noteSessionId: data.noteSessionId,
       });
       void initializeNotes(null, 50, data.folderId);
       if (
@@ -408,7 +528,7 @@ export default function ControlPanel({
       meetingNavigationMounted.current = false;
       cleanup?.();
     };
-  }, []);
+  }, [canAutoStartMeeting, meetingNoteSession]);
 
   useEffect(() => {
     const drain = async () => {
@@ -419,6 +539,7 @@ export default function ControlPanel({
         initializeNotes(null, 50, data.folderId);
       }
       setActiveNoteId(data.noteId);
+      void ensureNoteLoaded(data.noteId);
       setActiveView("personal-notes");
     };
     drain();
@@ -442,13 +563,60 @@ export default function ControlPanel({
     return () => cleanup?.();
   }, [openSettings, toast, t]);
 
+  // The config is refused while the org has meetings off, so it's fetched again
+  // whenever they become allowed.
+  const meetingAllowedByPolicy = usePolicyStore((state) => isAudioFeatureAllowed(state, "meeting"));
   useEffect(() => {
-    fetchStreamingProviders();
-  }, []);
+    if (meetingAllowedByPolicy) fetchStreamingProviders();
+  }, [meetingAllowedByPolicy]);
 
   const handleMeetingRecordingRequestHandled = useCallback(
     () => setMeetingRecordingRequest(null),
     []
+  );
+
+  const startSkillChat = useCallback((start: SkillChatStart) => {
+    setSkillChatRequest({ ...start, id: Date.now() });
+    setActiveView("chat");
+  }, []);
+  const handleSkillChatRequestHandled = useCallback(() => setSkillChatRequest(null), []);
+  const openSkill = useCallback((name: string) => {
+    setIntegrationsSection("skills");
+    setOpenSkillRequest({ id: Date.now(), name });
+    setActiveView("integrations");
+  }, []);
+  const handleOpenSkillRequestHandled = useCallback(() => setOpenSkillRequest(null), []);
+  // Settings sits over the notes view, so a teamspace opens by closing it and landing the tree there.
+  const openTeamspace = useCallback(
+    (spaceId: number) => {
+      settingsNavigation.getState().setSettingsOpen(false);
+      navigateToContainer(spaceId, null);
+      setActiveView("personal-notes");
+    },
+    [settingsNavigation]
+  );
+  // Integrations is a view, not a Settings section; SettingsHost hands its links over.
+  const openIntegrations = useCallback((section: string) => {
+    setIntegrationsSection(section as IntegrationsSection);
+    setActiveView("integrations");
+  }, []);
+  useEffect(() => {
+    settingsNavigation.setState({ openTeamspace, openIntegrations });
+    return () => settingsNavigation.setState({ openTeamspace: null, openIntegrations: null });
+  }, [settingsNavigation, openTeamspace, openIntegrations]);
+  const openNoteInNotes = useCallback(
+    (noteId: number, folderId: number | null, spaceId?: number | null) => {
+      if (folderId != null) setActiveFolderId(folderId);
+      else if (spaceId != null) navigateToContainer(spaceId, null);
+      setActiveNoteId(noteId);
+      void ensureNoteLoaded(noteId);
+      setActiveView("personal-notes");
+    },
+    []
+  );
+  const openChatSourceNote = useCallback(
+    (note: SourceNote) => openNoteInNotes(note.id, note.folderId, note.spaceId),
+    [openNoteInNotes]
   );
 
   // The side-panel layout is shared by meeting mode and by a note opened in a
@@ -578,7 +746,12 @@ export default function ControlPanel({
           return;
         }
         if (!managed && !isTranscriptionContextAllowed(usePolicyStore.getState(), s, "dictation")) {
-          toast({ title: t("common.managedByOrg"), variant: "default" });
+          const refusal = transcriptionChoiceRefusal(usePolicyStore.getState(), s, "dictation");
+          toast({
+            title: t(refusal?.messageKey ?? "common.managedByOrg"),
+            variant: "default",
+            ...(refusal ? { actions: providerErrorActions(refusal, t) } : {}),
+          });
           return;
         }
         const result = await window.electronAPI.retryTranscription(id, {
@@ -915,6 +1088,7 @@ export default function ControlPanel({
         onClose={() => setInvitationToken(null)}
         onAccepted={(entry) => {
           setInvitationNotesEntry(entry);
+          setNotesHandOff(true);
           setActiveView("personal-notes");
         }}
       />
@@ -924,7 +1098,10 @@ export default function ControlPanel({
         domain={user?.email?.split("@")[1] ?? null}
         onDismiss={dismissJoinable}
         onRequested={markRequested}
-        onJoined={() => setActiveView("personal-notes")}
+        onJoined={() => {
+          setNotesHandOff(true);
+          setActiveView("personal-notes");
+        }}
       />
 
       {/* Always mounted so the palette chunk is warm and Radix can play its exit animation. */}
@@ -933,12 +1110,7 @@ export default function ControlPanel({
           open={showSearch}
           onOpenChange={setShowSearch}
           transcriptions={history}
-          onNoteSelect={(id, folderId, spaceId) => {
-            if (folderId != null) setActiveFolderId(folderId);
-            else if (spaceId != null) navigateToContainer(spaceId, null);
-            setActiveNoteId(id);
-            setActiveView("personal-notes");
-          }}
+          onNoteSelect={openNoteInNotes}
           onContainerSelect={(spaceId, folderId) => {
             navigateToContainer(spaceId, folderId);
             setActiveView("personal-notes");
@@ -969,6 +1141,7 @@ export default function ControlPanel({
         >
           <ControlPanelSidebar
             activeView={activeView}
+            chatNeedsAttention={activeView !== "chat" && chatNeedsAttention}
             onViewChange={setActiveView}
             onOpenSettings={() => openSettings()}
             onOpenReferrals={() => setShowReferrals(true)}
@@ -976,6 +1149,8 @@ export default function ControlPanel({
             isOverLimit={usage?.isOverLimit ?? false}
             isSignedIn={isSignedIn}
             upsell={upsell}
+            // The side-panel layout (a meeting, or a narrow window with a note open) has no room for it.
+            workspaceIntroAllowed={!settingsOpen && !isSidePanelLayout}
             updateAction={
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
@@ -1010,7 +1185,14 @@ export default function ControlPanel({
                 <div className="flex items-center gap-2">
                   <NewNoteMenu
                     onNewNote={handleNewNote}
-                    onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
+                    onNewChat={
+                      agentAllowedByPolicy
+                        ? () => {
+                            startNewChat();
+                            setActiveView("chat");
+                          }
+                        : undefined
+                    }
                   />
                   <ProfileMenu
                     onOpenSettings={openSettings}
@@ -1103,7 +1285,12 @@ export default function ControlPanel({
               )}
               {activeView === "chat" && agentAllowedByPolicy && (
                 <Suspense fallback={null}>
-                  <ChatView />
+                  <ChatView
+                    skillRequest={skillChatRequest}
+                    onSkillRequestHandled={handleSkillChatRequestHandled}
+                    onOpenSkill={openSkill}
+                    onOpenNote={openChatSourceNote}
+                  />
                 </Suspense>
               )}
               {activeView === "personal-notes" && (
@@ -1111,15 +1298,18 @@ export default function ControlPanel({
                   <PersonalNotesView
                     onOpenSettings={openSettings}
                     meetingRecordingRequest={meetingRecordingRequest}
+                    canAutoStartMeeting={canAutoStartMeeting}
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                     invitationEntry={invitationNotesEntry}
                     onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
+                    notesHandOff={notesHandOff}
+                    onNotesHandOffDone={finishNotesHandOff}
                   />
                 </Suspense>
               )}
               {activeView === "dictionary" && (
                 <Suspense fallback={null}>
-                  <DictionaryView />
+                  <DictionaryView onUpgrade={() => openSettings("plansBilling")} />
                 </Suspense>
               )}
               {activeView === "upload" && policyActionsAllowed && (
@@ -1141,6 +1331,9 @@ export default function ControlPanel({
                     onUpgrade={() => openSettings("plansBilling")}
                     section={integrationsSection}
                     onSectionChange={setIntegrationsSection}
+                    onStartSkillChat={agentAllowedByPolicy ? startSkillChat : undefined}
+                    openSkillRequest={openSkillRequest}
+                    onOpenSkillRequestHandled={handleOpenSkillRequestHandled}
                   />
                 </Suspense>
               )}
@@ -1151,6 +1344,7 @@ export default function ControlPanel({
       <BackgroundActionToastListener />
       <AssistantNoteUndoListener />
       <SpaceSyncToastListener />
+      <SharedDictionaryArrivalToastListener onViewWords={showDictionary} />
     </div>
   );
 }
