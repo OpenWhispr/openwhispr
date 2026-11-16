@@ -56,7 +56,7 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
     return t(`connectors.email.targets.${option}`);
   };
 
-  // A free plan sees what drafting does, dimmed; the one upsell sits above the list.
+  // A signed-out user sees what drafting does, dimmed; the one sign-in/upsell bar sits above the list.
   const locked = !isPaid && !blockedByOrg;
   const description = blockedByOrg
     ? t("connectors.policyOff")

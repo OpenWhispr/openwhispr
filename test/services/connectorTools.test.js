@@ -29,7 +29,6 @@ async function until(ready, what = "the condition", ms = 5000) {
     await new Promise((resolve) => setImmediate(resolve));
   }
 }
-const loadEligibility = () => import("../../src/utils/connectorEligibility.ts");
 const loadRegistry = () => import("../../src/services/tools/index.ts");
 // Tool-step text is localized; the UI language otherwise follows the machine's locale.
 // (tsx loads its ESM default export through CommonJS interop.)
@@ -1128,23 +1127,6 @@ test("find_contact reports an org policy refusal instead of an empty result", as
   const result = await findContactTool.execute({ name: "Gabe" });
   assert.equal(result.data.status, "unavailable");
   assert.equal(result.data.reason, "policy_blocked");
-});
-
-test("connector plan eligibility uses usage data, then the persisted isSubscribed flag", async () => {
-  const { hasConnectorPlan } = await loadEligibility();
-  const success = (isSubscribed, isTrial) => ({
-    status: "success",
-    accountId: "acct",
-    data: { isSubscribed, isTrial },
-    isRefreshing: false,
-  });
-  assert.equal(hasConnectorPlan(success(false, true), false), true);
-  assert.equal(hasConnectorPlan(success(false, false), true), false);
-  // A fresh voice-window session never loads usage, so the isSubscribed flag
-  // the control panel persisted (the API sets it for trials too) decides.
-  assert.equal(hasConnectorPlan({ status: "idle", accountId: null }, true), true);
-  assert.equal(hasConnectorPlan({ status: "idle", accountId: null }, false), false);
-  assert.equal(hasConnectorPlan({ status: "loading", accountId: "acct" }, false), false);
 });
 
 test("connector tools register only when connectors are available", async () => {

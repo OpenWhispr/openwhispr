@@ -44,7 +44,7 @@ export interface ConnectorLoginRowProps {
 
 /**
  * One connector's login in Settings → Connectors: Connect, Reconnect,
- * Disconnect and the locked state on a free plan. Copy
+ * Disconnect and the locked state for signed-out users. Copy
  * lives under `connectors.<connectorId>.*`.
  */
 export function ConnectorLoginRow({
@@ -78,7 +78,7 @@ export function ConnectorLoginRow({
   // Set when Connect or Reconnect had focus as the connect started.
   const focusConnectingDetail = useRef(false);
 
-  // Loaded for every plan: a lapsed plan must still see, and remove, its login.
+  // Loaded for every state: a signed-out user must still see, and remove, a login saved earlier.
   useEffect(() => {
     void ensureConnectorStatus();
   }, []);
@@ -203,7 +203,7 @@ export function ConnectorLoginRow({
   if (phase === "connecting" && (!connected || needsReconnect)) summary = copy("connecting");
   else if (needsReconnect) summary = copy("needsReconnect");
   else if (connected && status) summary = copy("connectedAs", accountSummary(status));
-  // A free plan sees the connector dimmed, without Connect; the section's one upsell sits above.
+  // A signed-out user sees the connector dimmed, without Connect; the section's one bar sits above.
   // Only what describes the connector dims: notes about a login just removed stay readable.
   const locked = !isPaid && !connected;
   const dimmed = locked ? "opacity-60" : "";

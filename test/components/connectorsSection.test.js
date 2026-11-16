@@ -17,13 +17,14 @@ const MOCKS = {
   `,
   "/stores/settingsStore": `
     const state = {
-      isSignedIn: true,
       emailDraftTarget: globalThis.__emailDraftTarget ?? "auto",
       setEmailDraftTarget() {},
       gcalConnected: false,
       mcalAccounts: [{ email: "a@corp.com", tenantId: null }],
     };
-    export function useSettingsStore(selector) { return selector(state); }
+    export function useSettingsStore(selector) {
+      return selector({ ...state, isSignedIn: globalThis.__isSignedIn ?? true });
+    }
   `,
   "/lib/usageStore": `
     export const getUsageState = () => globalThis.__usage;
@@ -86,13 +87,14 @@ const count = (markup, pattern) => (markup.match(pattern) ?? []).length;
 const buttonWithText = (container, text) =>
   findElement(container, (node) => node.tagName === "BUTTON" && node.textContent === text);
 
-// `usageState`/`subscribedFlag` are the review round's shape; `isPaid` is a
-// shortcut for tests that don't care about the usage/flag distinction. An org
+// Connectors are free for signed-in users; `signedIn` is the only gate the real
+// hook reads now. `isPaid` remains a shortcut for the row-level UI tests. An org
 // block is a resolved policy that disallows connectors, so it implies not
 // allowed; `allowed: false` alone is a policy that is loading or failed.
 function setPlan(
   t,
   {
+    signedIn = true,
     usageState,
     subscribedFlag = false,
     blocked = false,
@@ -102,6 +104,7 @@ function setPlan(
     emailDraftTarget,
   } = {}
 ) {
+  globalThis.__isSignedIn = signedIn;
   globalThis.__emailDraftTarget = emailDraftTarget;
   globalThis.__usage = usageState ?? usage(Boolean(isPaid));
   globalThis.__subscribedFlag = isPaid ?? subscribedFlag;
@@ -109,6 +112,7 @@ function setPlan(
   globalThis.__connectorsAllowed = allowed;
   globalThis.__connectorStatuses = statuses;
   t.after(() => {
+    delete globalThis.__isSignedIn;
     delete globalThis.__emailDraftTarget;
     delete globalThis.__usage;
     delete globalThis.__subscribedFlag;
@@ -166,20 +170,8 @@ test("automatic names the app it resolved to", async (t) => {
   );
 });
 
-test("while usage is unknown, the card follows the saved flag like the chat does", async (t) => {
-  const loading = { status: "loading", accountId: "acct" };
-  const { textContent } = await renderSection(t, { usageState: loading, subscribedFlag: true });
-  assert.match(textContent, /connectors\.email\.description/);
-});
-
-test("while usage is unknown and the flag is unset, the card asks for a plan", async (t) => {
-  const loading = { status: "loading", accountId: "acct" };
-  const { textContent } = await renderSection(t, { usageState: loading, subscribedFlag: false });
-  assert.match(textContent, /connectors\.upsell/);
-});
-
-test("free users see one upsell above the connectors, which still say what they do", async (t) => {
-  const container = await renderSection(t, { usageState: usage(false) });
+test("signed-out users see one upsell above the connectors, which still say what they do", async (t) => {
+  const container = await renderSection(t, { signedIn: false });
   assert.match(container.textContent, /connectors\.upsell/);
   assert.match(container.textContent, /connectors\.email\.description/);
   assert.doesNotMatch(container.textContent, /connectors\.email\.targets\.gmail/);
@@ -217,8 +209,8 @@ test("while the policy is unresolved, the card says drafts are unavailable", asy
   assert.equal(fetches, 0);
 });
 
-test("an unresolved policy doesn't hide the upsell from a free user", async (t) => {
-  const { textContent } = await renderSection(t, { usageState: usage(false), allowed: false });
+test("an unresolved policy doesn't hide the upsell from a signed-out user", async (t) => {
+  const { textContent } = await renderSection(t, { signedIn: false, allowed: false });
   assert.match(textContent, /connectors\.upsell/);
   assert.match(textContent, /integrations\.api\.viewPlans/);
 });
@@ -276,17 +268,17 @@ test("a stale login offers Reconnect and Disconnect", async (t) => {
   assert.match(staleMarkup, /connectors\.slack\.needsReconnect/);
 });
 
-test("free users with no login see a single View plans and no Connect", async (t) => {
-  const none = await renderSection(t, { isPaid: false, blocked: false });
+test("signed-out users see a single View plans and no Connect", async (t) => {
+  const none = await renderSection(t, { signedIn: false, blocked: false });
   assert.equal(count(none.textContent, /integrations\.api\.viewPlans/g), 1);
   assert.equal(buttonWithText(none, "connectors.slack.connect"), null);
   // The beta badge sits on the Connectors title, not on each row.
   assert.doesNotMatch(none.textContent, /connectors\.beta/);
 });
 
-test("free users can always disconnect a login they have", async (t) => {
+test("signed-out users can always disconnect a login they have", async (t) => {
   const lapsed = await renderSection(t, {
-    isPaid: false,
+    signedIn: false,
     blocked: false,
     statuses: { slack: SLACK },
   });
@@ -471,8 +463,8 @@ test("every CONNECTOR_ROWS entry renders after the email row, in list order", as
   }
 });
 
-test("a free user whose org turned connectors off sees why, not an upsell", async (t) => {
-  const { textContent } = await renderSection(t, { usageState: usage(false), blocked: true });
+test("a signed-out user whose org turned connectors off sees why, not an upsell", async (t) => {
+  const { textContent } = await renderSection(t, { signedIn: false, blocked: true });
   assert.match(textContent, /connectors\.policyOff/);
   assert.doesNotMatch(textContent, /connectors\.upsell/);
   assert.doesNotMatch(textContent, /integrations\.api\.viewPlans/);

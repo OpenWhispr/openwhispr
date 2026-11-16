@@ -31,9 +31,6 @@ import {
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { readSkillCardRecord, SKILL_CARD_TOOLS } from "./skillCardRecord";
-import { getUsageState } from "../../lib/usageStore";
-import { readIsSubscribed } from "../../lib/subscriptionFlag";
-import { hasConnectorPlan } from "../../utils/connectorEligibility";
 import { gmailSendStatus, resolveEmailDraftTarget } from "../../utils/emailDraftTarget";
 import {
   ensureConnectorStatus,
@@ -730,9 +727,8 @@ export function createChatTurnEngine(
       const policy = usePolicyStore.getState();
       const calendarConnected = selectCalendarConnected(settings);
       const webSearchEnabled = isWebSearchAllowed(policy);
-      const connectorPlan = hasConnectorPlan(getUsageState(), readIsSubscribed());
       const connectorsAvailable =
-        allowConnectors && settings.isSignedIn && connectorPlan && isConnectorsAllowed(policy);
+        allowConnectors && settings.isSignedIn && isConnectorsAllowed(policy);
       let registry: ToolRegistry | null = null;
       let connectorsOffered = false;
       let interactions: InteractionToolOptions | undefined;
@@ -831,7 +827,6 @@ export function createChatTurnEngine(
         calendarConnected,
         connectors: allowConnectors
           ? {
-              hasPlan: connectorPlan,
               allowed: isConnectorsAllowed(policy),
               blockedByOrg: isConnectorsBlockedByOrg(policy),
               statuses: useConnectorStatusStore.getState().statuses,

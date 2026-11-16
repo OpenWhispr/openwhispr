@@ -52,7 +52,6 @@ export interface UnavailableCapabilityInput {
   calendarConnected: boolean;
   /** Omitted on surfaces that never offer connectors (container chat, onboarding demo). */
   connectors?: {
-    hasPlan: boolean;
     allowed: boolean;
     blockedByOrg: boolean;
     statuses: Readonly<Record<string, ConnectorAvailability>>;
@@ -156,10 +155,7 @@ export function resolveUnavailableCapabilities(
   if (!input.isSignedIn) {
     unavailableConnector(CONNECTORS_NAME, "signedOut", locations.account);
   } else if (connectors.blockedByOrg) {
-    // Before the plan: paying wouldn't help while the organization keeps them off.
     unavailableConnector(CONNECTORS_NAME, "policyOff");
-  } else if (!connectors.hasPlan) {
-    unavailableConnector(CONNECTORS_NAME, "planRequired", locations.plans);
   } else if (!connectors.allowed) {
     unavailableConnector(CONNECTORS_NAME, "policyLoading");
   } else {

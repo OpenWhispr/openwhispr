@@ -43,9 +43,9 @@ export function sectionMeta(
 ): SectionMeta | null {
   switch (section) {
     case "connectors":
-      // Turned off by the organization: no plan would change that, and no login can act.
-      if (connectors.blockedByOrg) return null;
-      if (!connectors.isPaid) return { kind: "badge", badge: "pro" };
+      // Turned off by the organization: no login can act. Connectors are free
+      // for signed-in users, so there is no plan badge to show.
+      if (connectors.blockedByOrg || !connectors.isPaid) return null;
       return connectors.ready > 0 ? { kind: "count", value: connectors.ready } : null;
     case "calendars":
       return connectedCalendars > 0 ? { kind: "count", value: connectedCalendars } : null;

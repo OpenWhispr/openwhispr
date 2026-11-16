@@ -20,7 +20,6 @@ function input(overrides = {}) {
     webSearch: { allowed: true, blockedByOrg: false },
     calendarConnected: true,
     connectors: {
-      hasPlan: true,
       allowed: true,
       blockedByOrg: false,
       statuses: { slack: READY, linear: READY, github: READY },
@@ -86,7 +85,7 @@ test("web search off by the org reads as policy, while a loading policy is tempo
   assert.equal(loading[0].reason, "policyLoading");
 });
 
-test("connectors name the org, then the plan, then a loading policy, as one line", async () => {
+test("connectors name the org, then a loading policy, as one line", async () => {
   const { resolveUnavailableCapabilities } = await load();
   const connectors = input().connectors;
   const reasonFor = (overrides) =>
@@ -94,11 +93,6 @@ test("connectors name the org, then the plan, then a loading policy, as one line
       (item) => item.reason
     );
 
-  // A free member of an org that turned connectors off isn't told to buy a plan.
-  assert.deepEqual(reasonFor({ hasPlan: false, allowed: false, blockedByOrg: true }), [
-    "policyOff",
-  ]);
-  assert.deepEqual(reasonFor({ hasPlan: false }), ["planRequired"]);
   assert.deepEqual(reasonFor({ allowed: false, blockedByOrg: true }), ["policyOff"]);
   assert.deepEqual(reasonFor({ allowed: false }), ["policyLoading"]);
 });
@@ -280,25 +274,23 @@ test("a loading connector policy asks a paid user to retry instead of connecting
   assert.doesNotMatch(text, /Connect Slack and I can post this/);
 });
 
-test("an organization-blocked connector omits the closing pitch on either plan", async () => {
+test("an organization-blocked connector omits the closing pitch", async () => {
   const { resolveUnavailableCapabilities, describeUnavailable } = await load();
-  for (const hasPlan of [false, true]) {
-    const text = describeUnavailable(
-      resolveUnavailableCapabilities(
-        input({
-          connectors: { ...input().connectors, hasPlan, allowed: false, blockedByOrg: true },
-        })
-      )
-    );
+  const text = describeUnavailable(
+    resolveUnavailableCapabilities(
+      input({
+        connectors: { ...input().connectors, allowed: false, blockedByOrg: true },
+      })
+    )
+  );
 
-    assert.match(text, /still write it in full in your reply/);
-    assert.match(text, /leave that sentence out when only their admin can turn it on/);
-    assert.match(
-      text,
-      /^- Integrations .*: turned off by the user's organization; only their admin can turn it back on\.$/m
-    );
-    assert.doesNotMatch(text, /Connect Slack and I can post this/);
-  }
+  assert.match(text, /still write it in full in your reply/);
+  assert.match(text, /leave that sentence out when only their admin can turn it on/);
+  assert.match(
+    text,
+    /^- Integrations .*: turned off by the user's organization; only their admin can turn it back on\.$/m
+  );
+  assert.doesNotMatch(text, /Connect Slack and I can post this/);
 });
 
 test("a model too small for tools may still use the prompt's notes and write text", async () => {

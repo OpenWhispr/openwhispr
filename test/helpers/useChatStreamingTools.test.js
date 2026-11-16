@@ -145,13 +145,13 @@ test("a signed-out chat never offers them", async (t) => {
   assert.equal(offersConnectors(offeredTools[0]), false);
 });
 
-test("a free plan never offers them", async (t) => {
+test("a free plan offers them", async (t) => {
   const { captured, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
   await captured.sendToAI("Email Josh", []);
   assert.ok(offeredTools[0].length > 0);
-  assert.equal(offersConnectors(offeredTools[0]), false);
+  assert.equal(offersConnectors(offeredTools[0]), true);
 });
 
 test("an org that turns connectors off mid-session removes them from the next send", async (t) => {
@@ -665,14 +665,14 @@ test("a chat that offers no connector tools never looks up or lists attendees", 
   assert.match(prompts[0], /Title: Kickoff/, "the note itself is still there");
 });
 
-test("a free plan's note chat never looks up or lists attendees", async (t) => {
+test("a free plan's note chat can look up and list attendees", async (t) => {
   const { captured, lookups, prompts } = await renderNoteChat(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
   await captured.sendToAI("Draft a follow-up to everyone", []);
 
-  assert.deepEqual(lookups, []);
-  assert.doesNotMatch(prompts[0], /Meeting attendees/);
+  assert.equal(lookups.length, 1);
+  assert.match(prompts[0], /Meeting attendees/);
 });
 
 test("a chat that isn't about a note never looks up attendees", async (t) => {
@@ -979,18 +979,14 @@ test("signed out, the model is told to point the user at signing in", async (t) 
   );
 });
 
-test("on a free plan, the model still writes the email and says sending it needs a paid plan, not to connect", async (t) => {
+test("on a free plan, the model can use connectors without a paid plan", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
   await captured.sendToAI("Email Josh", []);
   const prompt = systemPromptOf(sentMessages[0]);
-  assert.match(
-    prompt,
-    /still write it in full in your reply, then end with one short sentence on what sending it needs, as its line below says, never on connecting it[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
-  );
-  assert.doesNotMatch(prompt, /Connect Slack and I can post this/);
-  assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
+  assert.doesNotMatch(prompt, /needs a paid OpenWhispr plan/);
+  assert.match(prompt, /email_draft/);
 });
 
 test("an org that turns web search off is named as the reason", async (t) => {
@@ -1985,11 +1981,39 @@ test("a finished voice answer after asking the user reports onlyRead false", asy
 });
 
 test("an answer typed at another app's caret names nothing to connect", async (t) => {
-  const { captured, reasoningService } = await renderChatStreaming(
+  const { captured, reasoningService, usePolicyStore } = await renderChatStreaming(
     t,
     { inferenceScope: "dictationAgent", allowInteractions: true, allowConnectors: true },
     { subscribed: false }
   );
+  // Connectors are free now, so make the org policy the unavailable reason:
+  // the normal send names it, while a plain-text caret answer omits the block.
+  usePolicyStore.setState({
+    status: "managed",
+    appVersion: "1.10.0",
+    policy: {
+      version: 1,
+      transcription: {
+        allowedLocalModels: null,
+        allowedModes: ["local", "openwhispr", "providers"],
+        allowedByokProviders: [],
+      },
+      llm: {
+        allowedLocalModels: null,
+        allowedModes: ["local", "openwhispr", "providers"],
+        allowedByokProviders: [],
+        allowedEnterpriseProviders: [],
+      },
+      features: { agentEnabled: true, webSearchEnabled: true, connectorsEnabled: false },
+      sharing: { externalLinkSharing: "allowed" },
+      dataRetention: {
+        audioRetentionMaxDays: null,
+        localHistoryMode: "user_choice",
+        cloudBackupAllowed: true,
+      },
+      minAppVersion: null,
+    },
+  });
   const configs = [];
   reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) => {
     configs.push(config);
