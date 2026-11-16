@@ -99,6 +99,8 @@ const HELD_BACK_CODES = {
   "modifiers-held": "modifiers_held",
   "wl-copy-missing": "wl_copy_missing",
   "wl-copy-failed": "wl_copy_failed",
+  cancelled: "cancelled",
+  "target-changed": "target_changed",
 };
 
 function heldBackCode(fallback, { code, reason } = {}) {
@@ -305,6 +307,7 @@ class SelectionManager {
   }
 
   cancelSelectionEdit(sessionId) {
+    this.sessions.get(sessionId)?.deliveryController?.abort();
     this.sessions.delete(sessionId);
   }
 
@@ -366,8 +369,7 @@ class SelectionManager {
     return this.clipboardManager.runClipboardOperation(async () => {
       this._pruneSessions();
       const session = this.sessions.get(sessionId);
-      this.sessions.delete(sessionId);
-      if (!session || session.kind !== "caret") {
+      if (!session || session.kind !== "caret" || session.delivering) {
         return this._declineAssistantPaste("session_expired", {
           sessionFound: Boolean(session),
           sessionKind: session?.kind ?? null,
@@ -375,7 +377,13 @@ class SelectionManager {
       }
 
       const current = await this._readCurrentSelection(session.target, { probeEditable: true });
+      const windowTitle =
+        current.status === "editable" ? await this._macWindowTitle(session.target) : undefined;
+      if (this.sessions.get(sessionId) !== session || session.delivering) {
+        return this._declineAssistantPaste("cancelled");
+      }
       if (current.status !== "editable") {
+        this.sessions.delete(sessionId);
         return this._declineAssistantPaste(heldBackCode("target_changed", current), {
           probeStatus: current.status,
           probeCode: current.code ?? null,
@@ -385,16 +393,21 @@ class SelectionManager {
       // tab) would pass the probe; and the agent window, a non-activating
       // panel, can hold the keys while the app stays in front, so ⌘V would
       // land there.
-      if (
-        (await this._macWindowTitle(session.target)) !== session.windowTitle ||
-        options.webContents?.isFocused()
-      ) {
+      if (windowTitle !== session.windowTitle || options.webContents?.isFocused()) {
+        this.sessions.delete(sessionId);
         return this._declineAssistantPaste("target_changed");
       }
 
+      // Keep cancellation live through the clipboard dispatcher's waits and
+      // retries, while preventing another request from reusing this session.
+      session.delivering = true;
+      session.deliveryController = new AbortController();
       try {
         const pasteResult = await this.clipboardManager._pasteText(text, {
           ...options,
+          isCancelled: () => this.sessions.get(sessionId) !== session,
+          signal: session.deliveryController.signal,
+          validateTarget: () => this._isCapturedCaretTarget(session, options.webContents),
           ...(session.target?.kind === "win-hwnd" ? { targetWindow: session.target.id } : {}),
         });
         await pasteResult?.restoreComplete;
@@ -405,8 +418,38 @@ class SelectionManager {
       } catch (error) {
         debugLogger.warn("Assistant response paste failed", { error: error.message }, "clipboard");
         return { success: false, code: "paste_failed", error: error.message };
+      } finally {
+        if (this.sessions.get(sessionId) === session) this.sessions.delete(sessionId);
       }
     });
+  }
+
+  // Dispatch runs after the answer is on the clipboard. Use read-only probes:
+  // another synthetic copy here would replace the answer about to be pasted.
+  async _isCapturedCaretTarget(session, webContents) {
+    try {
+      if (webContents?.isDestroyed?.() || webContents?.isFocused()) return false;
+      const target = session.target;
+      const pid = target.kind === "mac-pid" ? target.pid : await this._linuxTargetPid(target);
+      if (
+        (await this.textEditMonitor?.isFocusedEditable?.(pid ? { ...target, pid } : target)) !==
+        "editable"
+      ) {
+        return false;
+      }
+      if ((await this._macWindowTitle(target)) !== session.windowTitle) return false;
+      const current =
+        this.platform === "darwin"
+          ? { kind: "mac-pid", pid: await this.textEditMonitor._readFrontmostPid() }
+          : await this._probeTarget();
+      return (
+        this._sameTarget(current, target) &&
+        !webContents?.isDestroyed?.() &&
+        !webContents?.isFocused()
+      );
+    } catch {
+      return false;
+    }
   }
 
   // The focused window's title for a macOS target; undefined for other targets.
@@ -429,7 +472,7 @@ class SelectionManager {
   _pruneSessions() {
     const now = this.now();
     for (const [id, session] of this.sessions) {
-      if (session.expiresAt <= now) this.sessions.delete(id);
+      if (session.expiresAt <= now) this.cancelSelectionEdit(id);
     }
   }
 

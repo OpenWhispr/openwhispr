@@ -73,9 +73,11 @@ it('retains a folder rename made during creation and records the remote identity
   mockRepo.setFolderClientId(folder.id, 'folder-client');
   jest.mocked(batchCreateFolders).mockImplementationOnce(async () => {
     mockRepo.renameFolder(folder.id, 'After');
-    return [
-      { id: 'remote-folder', client_folder_id: 'folder-client', updated_at: 'server-time' },
-    ] as Awaited<ReturnType<typeof batchCreateFolders>>;
+    return {
+      created: [
+        { id: 'remote-folder', client_folder_id: 'folder-client', updated_at: 'server-time' },
+      ],
+    } as Awaited<ReturnType<typeof batchCreateFolders>>;
   });
   await pushFolders();
   expect(mockRepo.getFolders().find((row) => row.id === folder.id)).toMatchObject({
@@ -218,7 +220,7 @@ it('does not acknowledge an old account upload into a replacement local database
     switched = true;
     mockRepo.wipeAllSyncableData();
     mockRepo.createNote('New account', 'different');
-    return [{ id: 'old-account-remote', client_note_id: 'client' }];
+    return { created: [{ id: 'old-account-remote', client_note_id: 'client' }] };
   });
   await expect(
     pushNotes(false, () => {
@@ -236,10 +238,12 @@ it('stops the next batch after backup is disabled, while acknowledging the sent 
   let disabled = false;
   jest.mocked(batchCreateNotes).mockImplementationOnce(async (rows) => {
     disabled = true;
-    return rows.map((row, index) => ({
-      id: `remote-${index}`,
-      client_note_id: row.client_note_id,
-    }));
+    return {
+      created: rows.map((row, index) => ({
+        id: `remote-${index}`,
+        client_note_id: row.client_note_id,
+      })),
+    };
   });
   await expect(
     pushNotes(false, (upload) => {
@@ -269,14 +273,31 @@ it('does not upload a queued note made private during an earlier request', async
   expect(updateNote).toHaveBeenCalledTimes(1);
 });
 
-it('does not attach a mismatched identified batch response to a different local note', async () => {
+it('ignores a mismatched response and retries the note with its own identity', async (): Promise<void> => {
   const created = mockRepo.createNote('Keep', 'pending');
   mockRepo.setNoteClientId(created.id, 'expected-client');
   jest
     .mocked(batchCreateNotes)
-    .mockResolvedValueOnce([{ id: 'unrelated', client_note_id: 'different-client' }]);
-  await pushNotes();
-  expect(mockRepo.getNoteById(created.id)).toMatchObject({ remoteId: null, pendingSync: 1 });
+    .mockResolvedValueOnce({ created: [{ id: 'unrelated', client_note_id: 'different-client' }] });
+  await expect(pushNotes()).resolves.toBeUndefined();
+  expect(mockRepo.getNoteById(created.id)).toMatchObject({
+    clientNoteId: 'expected-client',
+    remoteId: null,
+    pendingSync: 1,
+  });
+
+  jest.mocked(batchCreateNotes).mockResolvedValueOnce({
+    created: [{ id: 'remote-expected', client_note_id: 'expected-client' }],
+  });
+  await expect(pushNotes()).resolves.toBeUndefined();
+  expect(batchCreateNotes).toHaveBeenNthCalledWith(2, [
+    expect.objectContaining({ client_note_id: 'expected-client' }),
+  ]);
+  expect(mockRepo.getNoteById(created.id)).toMatchObject({
+    clientNoteId: 'expected-client',
+    remoteId: 'remote-expected',
+    pendingSync: 0,
+  });
 });
 
 it('does not process an old account rejection against new local work', async () => {

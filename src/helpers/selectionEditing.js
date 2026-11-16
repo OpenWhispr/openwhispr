@@ -45,6 +45,7 @@ export const SELECTION_EDIT_RESPONSE_FORMAT = {
   },
 };
 
+// Shared by local models and Cloud screenshot edits, whose vision chain may omit a nonce.
 export function buildLocalSelectionEditSystemPrompt({
   customPrompt = "",
   dictionary = [],
@@ -111,7 +112,12 @@ export function isSelectionQuestionResponse(result, completionMarker = "") {
 export function extractLocalSelectionEditReplacement(result) {
   if (typeof result === "string" && !result.trim()) throw emptyResponse();
   if (typeof result !== "string" || !REPLACEMENT_OBJECT.test(result)) throw invalidResponse();
-  return requireReplacement(JSON.parse(result).replacement);
+  const replacement = JSON.parse(result).replacement;
+  // A damaged question verdict must never be pasted over the document.
+  if (/^__OPENWHISPR_SELECTION_QUESTION(?:__|_?(?=\W|$))/.test(replacement.trimStart())) {
+    throw invalidResponse();
+  }
+  return requireReplacement(replacement);
 }
 
 const STANDALONE_CAPTURE_CODES = new Set([
@@ -136,23 +142,12 @@ export function getSelectionCaptureDisposition(capture) {
   return capture.status === "target_changed" ? "changed" : "unavailable";
 }
 
-// markerOptional: OpenWhispr Cloud already refuses a rewrite cut off at the
-// length limit (OUTPUT_TRUNCATED) or left blank, so a Cloud answer that leaves
-// off the marker is still complete; its vision model often does. Any trace of
-// a marker, damaged or decorated, must still be the exact one at the end, or it
-// would be pasted.
-export function extractSelectionEditReplacement(
-  result,
-  completionMarker,
-  { markerOptional = false } = {}
-) {
-  if (typeof result !== "string") throw invalidResponse();
-  const marked = Boolean(completionMarker) && result.endsWith(completionMarker);
-  if (completionMarker && !marked && (!markerOptional || result.includes("OPENWHISPR_SELECTION"))) {
+export function extractSelectionEditReplacement(result, completionMarker) {
+  if (typeof result !== "string" || (completionMarker && !result.endsWith(completionMarker))) {
     throw invalidResponse();
   }
 
-  const replacement = marked ? result.slice(0, -completionMarker.length) : result;
+  const replacement = completionMarker ? result.slice(0, -completionMarker.length) : result;
   if (completionMarker && replacement.includes(completionMarker)) throw invalidResponse();
   return requireReplacement(replacement);
 }

@@ -33,7 +33,7 @@ const MOCKS = {
       globalThis.__editorProps = props;
       return null;
     }`,
-  "./SpacesTree": `export default () => null;`,
+  "./SpacesTree": `export default (props) => { globalThis.__treeProps = props; return null; };`,
   "/overview/ContainerOverview": `export const ContainerOverview = () => null;`,
   "./NotesStructureIntroDialog": `export default () => null;`,
   "./ActionManagerDialog": `export default () => null;`,
@@ -69,6 +69,7 @@ const MOCKS = {
     export const revealContainer = () => {};
     export const createFolder = async () => ({ success: false });
     export const getNoteFromStore = () => note();
+    export const markNoteEdited = (id) => globalThis.__editedNotes?.push(id);
   `,
 };
 
@@ -118,6 +119,8 @@ const saves = (calls) => calls.filter(([kind]) => kind === "save");
 // editor's delayed save: an Undo clicked in that second would restore the
 // assistant's previous text over what the user just typed.
 test("editing either document retires the assistant's Undo before the delayed save", async (t) => {
+  globalThis.__editedNotes = [];
+  t.after(() => delete globalThis.__editedNotes);
   const calls = await mountView(t);
 
   await React.act(async () => globalThis.__editorProps.onContentChange(NOTE.id, "Typed"));
@@ -127,6 +130,8 @@ test("editing either document retires the assistant's Undo before the delayed sa
   );
   assert.deepEqual(calls.at(-1), ["discard", NOTE.id]);
   assert.equal(saves(calls).length, 0);
+  // The note store hears of the edit too: a note the tree picked is the user's once edited (D46).
+  assert.deepEqual(globalThis.__editedNotes, [NOTE.id, NOTE.id]);
 });
 
 // Keep on the conflict banner saves the draft first: a delayed save landing
@@ -566,4 +571,21 @@ test("an upload whose transcript is the note's text runs as a plain transcript",
   assert.equal(input, `## Meeting Transcript\n${content}`, "not the user's own notes");
   assert.deepEqual(options.material, { notes: "", meetingContext: "", transcript: content });
   assert.deepEqual(options.knownPeople, [{ name: "Sam Rivera", email: "sam@example.com" }]);
+});
+
+test("the tree copy flush writes all pending title, text and summary edits", async (t) => {
+  const calls = await mountView(t);
+  await React.act(async () => globalThis.__editorProps.onTitleChange(NOTE.id, "Latest title"));
+  await React.act(async () => globalThis.__editorProps.onContentChange(NOTE.id, "Latest text"));
+  await React.act(async () =>
+    globalThis.__editorProps.enhancement.onChange(NOTE.id, "Latest summary")
+  );
+  await React.act(async () => globalThis.__treeProps.onFlushPendingSaves(NOTE.id));
+  assert.deepEqual(saves(calls), [
+    [
+      "save",
+      NOTE.id,
+      { title: "Latest title", content: "Latest text", enhanced_content: "Latest summary" },
+    ],
+  ]);
 });

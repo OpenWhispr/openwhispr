@@ -3,7 +3,12 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { en as enPrompts } from "../../locales/prompts";
 import { getLanguageInstruction } from "../../utils/languageSupport";
 import { splitSharedDictionaryWords } from "../../utils/snippets";
-import { PROMPT_KINDS, PLAIN_TEXT_RESPONSE_SUFFIX, type PromptKind } from "./registry";
+import {
+  PROMPT_KINDS,
+  PLAIN_TEXT_RESPONSE_SUFFIX,
+  CARET_RESPONSE_DISPOSITION_SUFFIX,
+  type PromptKind,
+} from "./registry";
 
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./registry";
 
@@ -48,8 +53,12 @@ export function appendScreenContextSuffix(prompt: string, uiLanguage?: string): 
 
 // An answer typed at the user's caret in another app. Append after every other
 // suffix: trailing instructions are the ones models weight most.
-export function appendPlainTextResponseSuffix(prompt: string): string {
-  return prompt + PLAIN_TEXT_RESPONSE_SUFFIX;
+export function appendPlainTextResponseSuffix(prompt: string, requireDisposition = false): string {
+  return (
+    prompt +
+    PLAIN_TEXT_RESPONSE_SUFFIX +
+    (requireDisposition ? CARET_RESPONSE_DISPOSITION_SUFFIX : "")
+  );
 }
 
 // Teammates' words are data another person controls, so they never join the

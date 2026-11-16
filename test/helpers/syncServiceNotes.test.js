@@ -19,6 +19,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud, createAccountCloud } = require("./harness/fakeCloud.js");
+const { TEAM_SPACE, joinTeamSpace, saveNoteIn } = require("./harness/teamSpace.js");
 const { assertNoContentRegression, snapshotNotes } = require("./harness/invariants.js");
 const { SyncService } = require("../../src/services/SyncService.ts");
 const { NotesService } = require("../../src/services/NotesService.ts");
@@ -33,7 +34,8 @@ const BATCH_SIZE = 50;
 const LOCAL_EARLY = "2026-07-20 10:00:00";
 const LOCAL_LATE = "2026-07-20 11:00:00";
 
-async function setup(t) {
+// Team fixtures exercise collaboration independently from personal backup consent.
+async function setup(t, { team = false } = {}) {
   const db = createDb(t);
   if (!db) return null;
   resetBrowserGlobals();
@@ -42,10 +44,13 @@ async function setup(t) {
   const cloud = createFakeCloud();
   const api = createElectronApi(db, { cloud });
   windowStub.electronAPI = api;
+  const teamSpace = team ? joinTeamSpace(db, cloud) : null;
   await establishValidatedAuth();
+  // These scenarios start after the one-time restored-backup cursor repair.
+  localStorageStub.setItem("syncCursors.privateBackup:user-harness", "1");
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
-  return { db, cloud, api, service };
+  return { db, cloud, api, service, team: teamSpace };
 }
 
 // Deterministic timestamps come from SQL, never from a fake clock.
@@ -77,12 +82,12 @@ function errorMessages(mock) {
 }
 
 test("migration push sends the full note body, not just the client id", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
   // The meeting shell exactly as meetingDetectionEngine.js creates it.
-  const shell = db.saveNote("Weekly sync", "", "meeting").note;
+  const shell = saveNoteIn(db, ctx.team.id, "Weekly sync", "", "meeting").note;
   updateNote(db, shell.id, { created_at: LOCAL_EARLY, updated_at: LOCAL_EARLY });
 
   await service.syncAll(true);
@@ -124,12 +129,12 @@ test("migration push sends the full note body, not just the client id", async (t
 });
 
 test("migration push marks the note errored when the PATCH fails", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   silenceConsoleErrors(t);
 
-  const shell = db.saveNote("Weekly sync", "", "meeting").note;
+  const shell = saveNoteIn(db, ctx.team.id, "Weekly sync", "", "meeting").note;
   updateNote(db, shell.id, { created_at: LOCAL_EARLY, updated_at: LOCAL_EARLY });
   await service.syncAll(true);
   const cloudId = db.getNote(shell.id).cloud_id;
@@ -153,12 +158,12 @@ test("migration push marks the note errored when the PATCH fails", async (t) => 
 });
 
 test("fresh notes are pushed in BATCH_SIZE chunks with acks matched by client id", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
   for (let i = 0; i < BATCH_SIZE + 1; i += 1) {
-    db.saveNote(`Note ${i}`, `body ${i}`, "personal");
+    saveNoteIn(db, ctx.team.id, `Note ${i}`, `body ${i}`);
   }
 
   // The cloud is free to answer in any order; matching acks positionally would
@@ -192,13 +197,13 @@ test("fresh notes are pushed in BATCH_SIZE chunks with acks matched by client id
 });
 
 test("a failing chunk marks only its own members as errored", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   silenceConsoleErrors(t);
 
   for (let i = 0; i < BATCH_SIZE + 1; i += 1) {
-    db.saveNote(`Note ${i}`, `body ${i}`, "personal");
+    saveNoteIn(db, ctx.team.id, `Note ${i}`, `body ${i}`);
   }
   const pending = db.getPendingNotes();
   const firstChunk = pending.slice(0, BATCH_SIZE);
@@ -226,7 +231,7 @@ test("a failing chunk marks only its own members as errored", async (t) => {
 });
 
 test("pullNotes applies a strictly newer cloud copy and rejects older and tied ones", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -246,10 +251,11 @@ test("pullNotes applies a strictly newer cloud copy and rejects older and tied o
       created_at: "2026-07-20T08:00:00.000Z",
       updated_at: c.cloudUpdatedAt,
     });
-    const local = db.saveNote(`Local ${c.key}`, `local body ${c.key}`, "personal").note;
+    const local = saveNoteIn(db, ctx.team.id, `Local ${c.key}`, `local body ${c.key}`).note;
     updateNote(db, local.id, {
       client_note_id: cloudRow.client_note_id,
       cloud_id: cloudRow.id,
+      owner_user_id: cloudRow.user_id,
       sync_status: "synced",
       created_at: LOCAL_EARLY,
       updated_at: LOCAL_EARLY,
@@ -279,7 +285,7 @@ test("pullNotes applies a strictly newer cloud copy and rejects older and tied o
 });
 
 test("a cloud tombstone hard-deletes the local note", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -290,10 +296,11 @@ test("a cloud tombstone hard-deletes the local note", async (t) => {
     created_at: "2026-07-20T08:00:00.000Z",
     updated_at: "2026-07-20T08:00:00.000Z",
   });
-  const local = db.saveNote("Deleted elsewhere", "gone", "personal").note;
+  const local = saveNoteIn(db, ctx.team.id, "Deleted elsewhere", "gone").note;
   updateNote(db, local.id, {
     client_note_id: cloudRow.client_note_id,
     cloud_id: cloudRow.id,
+    owner_user_id: cloudRow.user_id,
     sync_status: "synced",
     created_at: LOCAL_EARLY,
     updated_at: LOCAL_EARLY,
@@ -318,7 +325,7 @@ test("a cloud tombstone hard-deletes the local note", async (t) => {
 });
 
 test("an untitled cloud note is saved as Untitled Note and does not stall the pull", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   const errors = silenceConsoleErrors(t);
@@ -352,7 +359,7 @@ test("an untitled cloud note is saved as Untitled Note and does not stall the pu
 });
 
 test("a cloud note that fails to save is retried without blocking the rest of the pull", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, api, service } = ctx;
   const errors = silenceConsoleErrors(t);
@@ -466,7 +473,7 @@ test("a 500 on the delete leaves the tombstone pending and the local row intact"
 });
 
 test("the first pull pages 120 cloud notes across tied timestamps and stamps its cursor", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -508,7 +515,7 @@ test("the first pull pages 120 cloud notes across tied timestamps and stamps its
 });
 
 test("a mid-pagination failure leaves the pull cursor unstamped", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   silenceConsoleErrors(t);
@@ -548,6 +555,7 @@ async function signInAs(t, db, cloud, accountId) {
   db.setActiveAccountId(accountId);
   windowStub.electronAPI = createElectronApi(db, { cloud });
   await establishValidatedAuth(accountId);
+  localStorageStub.setItem(`syncCursors.privateBackup:${accountId}`, "1");
   const service = new SyncService();
   t.after(() => stopSyncTimers(service));
   return service;
@@ -562,7 +570,7 @@ const LIST_PATHS = [
   "/api/snippets/list",
 ];
 
-test("the first pass after an account switch pulls the new account's older notes and conversations", async (t) => {
+test("the first pass after an account switch pulls the new account's older chats, not with A's cursors", async (t) => {
   const db = createDb(t);
   if (!db) return;
   resetBrowserGlobals();
@@ -603,11 +611,7 @@ test("the first pass after an account switch pulls the new account's older notes
   const accountB = await signInAs(t, db, cloudB, "account-b");
   await accountB.syncAll(true);
 
-  assert.deepEqual(
-    db.getNotes(null, 100, null).map((note) => note.title),
-    ["B's note"],
-    "account B's existing cloud note must reach this device"
-  );
+  assert.equal(db.getNoteByClientId("b-note")?.content, "written on B's laptop");
   assert.equal(db.getConversationByClientId("b-conversation")?.title, "B's chat");
   for (const path of LIST_PATHS) {
     assert.notEqual(
@@ -625,32 +629,30 @@ test("signing out and back in as the same account keeps its cursors for deletes 
   installBrowserGlobals();
   enableSync();
 
+  // A known local chat remains Backup eligible; newly restored history is device-only.
   const cloud = createAccountCloud();
-  const seeded = cloud.seedNote({
-    client_note_id: "a-note",
-    title: "A's note",
-    content: "deleted on another device later",
-    created_at: "2026-01-05T09:00:00.000Z",
-    updated_at: "2026-01-05T09:00:00.000Z",
-  });
   const firstSession = await signInAs(t, db, cloud, "account-a");
+  const local = db.createAgentConversation("A's chat");
+  db.addAgentMessage(local.id, "user", "hello");
+  const clientId = db.getAgentConversation(local.id).client_conversation_id;
+  assert.equal(db.getAgentConversation(local.id).device_only, 0);
   await firstSession.syncAll(true);
-  assert.deepEqual(
-    db.getNotes(null, 100, null).map((note) => note.title),
-    ["A's note"]
-  );
+  assert.equal(db.getConversationByClientId(clientId)?.title, "A's chat");
+  const seeded = cloud.conversation(clientId);
+  assert.ok(seeded, "the local chat was backed up before signing out");
 
   await firstSession.purgeTeamSpacesForSignOut();
-  await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: seeded.id } });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  cloud.deleteConversation(seeded.id);
 
   // A cursor-less pull lists live rows only, so the tombstone arrives through
   // the kept delta cursor or not at all.
   const secondSession = await signInAs(t, db, cloud, "account-a");
   await secondSession.syncAll(true);
-  assert.deepEqual(
-    db.getNotes(null, 100, null).map((note) => note.title),
-    [],
-    "a note deleted elsewhere while signed out must leave this device"
+  assert.equal(
+    db.getConversationByClientId(clientId),
+    null,
+    "a chat deleted elsewhere while signed out must leave this device"
   );
 });
 
@@ -804,13 +806,18 @@ test("unowned cursors on a device another account used get one snapshot pull", a
     created_at: "2026-01-05T09:00:00.000Z",
     updated_at: "2026-01-05T09:00:00.000Z",
   });
+  cloudB.seedConversation({
+    client_conversation_id: "b-chat",
+    title: "B's chat",
+    created_at: "2026-01-05T09:00:00.000Z",
+    updated_at: "2026-01-05T09:00:00.000Z",
+    messages: [{ role: "user", content: "older too", created_at: "2026-01-05T09:00:00.000Z" }],
+  });
 
   const accountB = await signInAs(t, db, cloudB, "account-b");
   await accountB.syncAll(true);
-  assert.deepEqual(
-    db.getNotes(null, 100, null).map((note) => note.title),
-    ["B's note"]
-  );
+  assert.equal(db.getConversationByClientId("b-chat")?.title, "B's chat");
+  assert.equal(db.getNoteByClientId("b-note")?.content, "older than the inherited cursor");
   assert.equal(localStorageStub.getItem("lastSyncedAt.accountId"), "account-b");
 
   await accountB.syncAll(true);
@@ -868,11 +875,12 @@ test("a pass requested during a dictionary edit runs once the edit finishes", as
   assert.equal(cloud.logFor("/api/notes/list").length, 1);
 });
 
-test("canSync gating: sign-out blocks every call; plan and backup gates protect personal notes", async (t) => {
-  const ctx = await setup(t);
+test("canSync gating: private backup requires sign-in, subscription and consent", async (t) => {
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud } = ctx;
   const note = db.saveNote("Pending note", "body", "personal").note;
+  const teamNote = saveNoteIn(db, ctx.team.id, "Team note", "body").note;
 
   enableSync();
   localStorageStub.removeItem("isSignedIn");
@@ -882,43 +890,203 @@ test("canSync gating: sign-out blocks every call; plan and backup gates protect 
   assert.equal(cloud.log.length, 0, "sync ran while signed out");
   assert.equal(localStorageStub.getItem("lastSyncedAt"), null);
 
-  // Collaboration is free, so an unsubscribed account still checks shared
-  // notes and team spaces. Private backup remains paid and must not run.
+  // Collaboration is free, so an unsubscribed account still syncs shared
+  // notes and team spaces. Nothing private leaves the machine.
   enableSync();
   localStorageStub.removeItem("isSubscribed");
   const freeService = new SyncService();
   await freeService.syncAll(true);
   stopSyncTimers(freeService);
   assert.ok(cloud.log.length > 0, "a free signed-in account must still sync collaboration");
-  assert.equal(cloud.logFor("/api/notes/batch-create").length, 0);
+  assert.equal(db.getNote(teamNote.id).sync_status, "synced", "the teamspace note pushes");
   assert.equal(db.getNote(note.id).sync_status, "pending");
 
   // Backup off is not sign-out: team-space membership still syncs, but nothing
-  // personal may leave the machine.
+  // private may leave the machine.
   enableSync();
   localStorageStub.removeItem("cloudBackupEnabled");
-  const markBeforeBackupOff = cloud.log.length;
   const teamOnlyService = new SyncService();
   await teamOnlyService.syncAll(true);
   stopSyncTimers(teamOnlyService);
-  assert.equal(
-    cloud.log.slice(markBeforeBackupOff).filter((call) => call.path === "/api/notes/batch-create")
-      .length,
-    0,
-    "a personal note must not push while backup is off"
-  );
   assert.equal(db.getNote(note.id).sync_status, "pending");
 
+  // Ordinary personal notes join collaboration only once every backup gate is open.
   enableSync();
   const mark = cloud.log.length;
   const fullService = new SyncService();
   await fullService.syncAll(true);
   stopSyncTimers(fullService);
   assert.ok(cloud.log.length > mark, "with all three keys set the same pass must do real work");
+  assert.equal(db.getNote(note.id).sync_status, "synced");
+  assert.ok(db.getNote(note.id).cloud_id);
+  const sent = cloud.log.flatMap((call) =>
+    call.path === "/api/notes/batch-create" ? call.body.notes.map((n) => n.client_note_id) : []
+  );
+  assert.deepEqual(sent, [teamNote.client_note_id, note.client_note_id]);
+});
+
+test("a backed-up private note moves into a teamspace with the same cloud identity", async (t) => {
+  const ctx = await setup(t, { team: true });
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: TEAM_SPACE.workspace_id,
+    defaultWorkspaceId: TEAM_SPACE.workspace_id,
+  });
+  db.bindDefaultPrivateSpace(TEAM_SPACE.workspace_id);
+  const note = db.saveNote("Roadmap", "the body on this device", "personal").note;
+  const backup = cloud.seedNote({
+    client_note_id: note.client_note_id,
+    title: "Roadmap",
+    content: "the earlier cloud body",
+    created_at: "2026-07-20T09:00:00.000Z",
+    updated_at: "2026-07-20T09:00:00.000Z",
+    space_id: null,
+    workspace_id: null,
+  });
+  db.markNoteSynced(note.id, backup.id, backup.updated_at, "user-harness");
+  assert.ok(db.updateNote(note.id, { space_id: ctx.team.id, folder_id: null }).success);
+  const mark = cloud.log.length;
+  await service.syncAll(true);
+  const moved = db.getNote(note.id);
+  assert.equal(moved.cloud_id, backup.id);
+  assert.equal(moved.client_note_id, note.client_note_id);
+  assert.equal(cloud.note(backup.id).space_id, TEAM_SPACE.id);
+  assert.equal(cloud.note(backup.id).content, "the body on this device");
+  assert.equal(cloud.notes().length, 1);
   assert.equal(
-    db.getNote(note.id).sync_status,
-    "synced",
-    "the personal note pushes once backup is back on"
+    cloud.log
+      .slice(mark)
+      .filter((call) => call.method === "POST" && call.path.includes("/api/notes/")).length,
+    0
+  );
+});
+
+test("an ambiguous missing cloud copy keeps local work pending without republishing it", async (t) => {
+  const ctx = await setup(t, { team: true });
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: TEAM_SPACE.workspace_id,
+    defaultWorkspaceId: TEAM_SPACE.workspace_id,
+  });
+  db.bindDefaultPrivateSpace(TEAM_SPACE.workspace_id);
+  const note = db.saveNote("Roadmap", "the body on this device", "personal").note;
+  db.markNoteSynced(note.id, "purged-backup-copy", "2026-06-01T10:00:00.000Z", "user-harness");
+
+  assert.ok(db.updateNote(note.id, { space_id: ctx.team.id, folder_id: null }).success);
+  stopSyncTimers(service);
+  const cloudId = await service.ensureNoteSynced(note.id);
+
+  assert.equal(cloudId, null, "sharing waits for a verified live cloud copy");
+  const pending = db.getNote(note.id);
+  assert.equal(pending.cloud_id, "purged-backup-copy");
+  assert.equal(pending.client_note_id, note.client_note_id);
+  assert.equal(pending.content, "the body on this device");
+  assert.equal(pending.space_id, ctx.team.id);
+  assert.notEqual(pending.sync_status, "synced");
+  assert.equal(cloud.notes().length, 0);
+  assert.equal(cloud.logFor("/api/notes/create").length, 0);
+});
+
+// The API keeps tombstones deleted. A pending move must preserve the local text
+// when a different device deleted the previous personal copy before this sync.
+test("a private note whose Backup copy was deleted elsewhere stays live once moved into a teamspace", async (t) => {
+  const ctx = await setup(t, { team: true });
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: TEAM_SPACE.workspace_id,
+    defaultWorkspaceId: TEAM_SPACE.workspace_id,
+  });
+  db.bindDefaultPrivateSpace(TEAM_SPACE.workspace_id);
+  const note = db.saveNote("Roadmap", "the body on this device", "personal").note;
+  const backup = cloud.seedNote({
+    client_note_id: note.client_note_id,
+    title: "Roadmap",
+    content: "the body Backup uploaded months ago",
+    space_id: null,
+    workspace_id: null,
+  });
+  db.markNoteSynced(note.id, backup.id, backup.updated_at, "user-harness");
+  cloud.deleteNote(backup.id);
+
+  assert.ok(db.updateNote(note.id, { space_id: ctx.team.id, folder_id: null }).success);
+  stopSyncTimers(service);
+  await service.ensureNoteSynced(note.id);
+  // The harness has no shared dictionary bindings; that stage's error is noise here.
+  silenceConsoleErrors(t);
+  await service.syncAll(true);
+
+  const local = db.getNote(note.id);
+  assert.ok(local && !local.deleted_at, "the moved note survives the next pull");
+  assert.notEqual(local.client_note_id, note.client_note_id);
+  assert.equal(local.space_id, ctx.team.id);
+  assert.ok(local.cloud_id, "the moved note has a cloud copy in the teamspace");
+  const row = cloud.note(local.cloud_id);
+  assert.equal(row.deleted_at, null, "the team's copy is live");
+  assert.equal(row.space_id, TEAM_SPACE.id);
+  assert.equal(row.content, "the body on this device");
+  assert.equal(cloud.note(backup.id).deleted_at !== null, true, "the old copy stays deleted");
+});
+
+// A Granola import derives the note's key from the meeting, so the same export imported on
+// another device gives the same key there. That device uploaded it with Backup and deleted it later;
+// this one never sent it. Moved into a teamspace under that key, the create would land on the
+// other device's tombstone and the next pull would delete the note the user just shared.
+test("a never-sent Granola note whose key was deleted elsewhere stays live once moved into a teamspace", async (t) => {
+  const ctx = await setup(t, { team: true });
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  db.setActiveWorkspaceScope({
+    activeWorkspaceId: TEAM_SPACE.workspace_id,
+    defaultWorkspaceId: TEAM_SPACE.workspace_id,
+  });
+  db.bindDefaultPrivateSpace(TEAM_SPACE.workspace_id);
+  const { deterministicUuid } = await import("../../src/helpers/granolaImport.js");
+  const clientNoteId = deterministicUuid("granola-doc-1");
+  const imported = db.importNotes([
+    {
+      clientNoteId,
+      sourceFile: "granola:granola-doc-1",
+      title: "Kickoff",
+      content: "the body on this device",
+      transcript: null,
+      participants: null,
+      createdAt: "2026-05-01 10:00:00",
+    },
+  ]);
+  const noteId = imported.noteIds[0];
+  assert.equal(db.getNote(noteId).cloud_id, null);
+  assert.equal(db.getNote(noteId).cloud_create_attempted, 0);
+  const elsewhere = cloud.seedNote({
+    client_note_id: clientNoteId,
+    title: "Kickoff",
+    content: "the body the other device uploaded",
+    space_id: null,
+    workspace_id: null,
+  });
+  cloud.deleteNote(elsewhere.id);
+
+  assert.ok(db.updateNote(noteId, { space_id: ctx.team.id, folder_id: null }).success);
+  stopSyncTimers(service);
+  await service.ensureNoteSynced(noteId);
+  silenceConsoleErrors(t);
+  await service.syncAll(true);
+
+  const local = db.getNote(noteId);
+  assert.ok(local && !local.deleted_at, "the moved note survives the next pull");
+  assert.equal(local.space_id, ctx.team.id);
+  assert.notEqual(local.client_note_id, clientNoteId);
+  assert.ok(local.cloud_id, "the moved note has a cloud copy in the teamspace");
+  const row = cloud.note(local.cloud_id);
+  assert.equal(row.deleted_at, null, "the team's copy is live");
+  assert.equal(row.space_id, TEAM_SPACE.id);
+  assert.equal(row.content, "the body on this device");
+  assert.notEqual(
+    cloud.note(elsewhere.id).deleted_at,
+    null,
+    "the other device's copy stays deleted"
   );
 });
 
@@ -1005,11 +1173,11 @@ test("a request arriving mid-pass re-runs syncAll exactly once", async (t) => {
 });
 
 test("a note pull failure is contained: the pass finishes and later stages still run", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   const errors = silenceConsoleErrors(t);
-  const note = db.saveNote("Pending note", "body", "personal").note;
+  const note = saveNoteIn(db, ctx.team.id, "Pending note", "body").note;
 
   // Model an older API's incomplete receipt; the normal fake now returns
   // authoritative text, which can settle without waiting for a list request.
@@ -1049,11 +1217,11 @@ test("a note pull failure is contained: the pass finishes and later stages still
 });
 
 test("a missing dictionary IPC binding aborts the pass without stamping lastSyncedAt", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   const errors = silenceConsoleErrors(t);
-  const note = db.saveNote("Pending note", "body", "personal").note;
+  const note = saveNoteIn(db, ctx.team.id, "Pending note", "body").note;
 
   delete windowStub.electronAPI.markDictionarySynced;
   await service.syncAll(true);
@@ -1130,11 +1298,11 @@ test("an AUTH_EXPIRED envelope surfaces as a 401 CloudApiError and nothing is ma
 });
 
 test("an unlinked calendar event reaches the cloud as a blank and clears a stale copy on pull", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
-  const note = db.saveNote("Weekly sync", "", "meeting").note;
+  const note = saveNoteIn(db, ctx.team.id, "Weekly sync", "", "meeting").note;
   db.updateNote(note.id, { calendar_event_id: "evt-1" });
   await service.syncAll(true);
   const cloudId = db.getNote(note.id).cloud_id;
@@ -1186,15 +1354,16 @@ function copiesOf(db, cloudId) {
 
 async function editInCloud(cloud, id, fields) {
   await new Promise((resolve) => setTimeout(resolve, 5));
-  await cloud.request({
+  const response = await cloud.request({
     method: "PATCH",
     path: "/api/notes/update",
     body: { id, ...fields },
   });
+  assert.equal(response.success, true, JSON.stringify(response));
 }
 
 test("a cloud note with no client id keeps one local copy through edits and a delete", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -1217,7 +1386,7 @@ test("a cloud note with no client id keeps one local copy through edits and a de
 });
 
 test("a local copy adopts the client id its cloud row gains, without a second copy", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -1237,7 +1406,7 @@ test("a local copy adopts the client id its cloud row gains, without a second co
 });
 
 test("Refresh on a conflicted copy settles it even when the cloud row has another key", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -1263,13 +1432,13 @@ test("Refresh on a conflicted copy settles it even when the cloud row has anothe
 });
 
 test("a synced copy with no revision stops forcing a snapshot pull once it is matched", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
   const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Keyed", content: "body" });
   cloud.setNoteRevision(row.id, 3);
-  insertCloudCopy(db, { client_note_id: "local-key", cloud_id: row.id });
+  insertCloudCopy(db, { client_note_id: "local-key", cloud_id: row.id, space_id: ctx.team.id });
   await service.syncAll(true);
 
   assert.equal(db.countNotesMissingRevision(), 0);
@@ -1497,16 +1666,14 @@ test("merging preserves a pending team retraction even with distinct text", (t) 
     space_id: teamSpace,
     sync_status: "pending",
   });
-  // Undoing a Personal-to-Team move must retract the original cloud note,
-  // including when text changed too: a detached copy cannot do that.
-  assert.equal(
-    db.updateNote(pending, {
-      space_id: db.getPrivateSpaceId(),
-      folder_id: null,
-      content: "Private edit",
-    }).success,
-    true
-  );
+  // A pending retraction as builds before D31 left it: a team note moved to
+  // Private with its cloud copy, its text changed too. A move can't make one
+  // now; a detached copy still could not retract it.
+  db.db
+    .prepare(
+      "UPDATE notes SET space_id = ?, folder_id = NULL, left_team = 1, sync_status = 'pending', content = 'Private edit' WHERE id = ?"
+    )
+    .run(db.getPrivateSpaceId(), pending);
   const snapshot = db.getNote(pending);
   assert.equal(snapshot.left_team, 1);
 
@@ -1578,13 +1745,16 @@ for (const refresh of [false, true]) {
     });
     cloud.setNoteRevision(row.id, 3);
     const remote = cloud.note(row.id);
-    db.upsertNoteFromCloud(remote, null);
+    // Copies of a legacy shared private note, the one private note that syncs.
+    const clean = db.upsertNoteFromCloud(remote, null);
+    updateNote(db, clean.id, { is_shared: 1 });
     const pending = insertCloudCopy(db, {
       client_note_id: "pending-copy",
       cloud_id: row.id,
       cloud_revision: 2,
       cloud_updated_at: "2026-10-27T00:00:00.000Z",
       calendar_event_id: "event",
+      is_shared: 1,
     });
     assert.equal(db.updateNote(pending, { calendar_event_id: "" }).success, true);
     const request = api.cloudApiRequest;
@@ -1633,7 +1803,7 @@ for (const refresh of [false, true]) {
 }
 
 test("a queued delete of one copy no longer deletes the note everywhere", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -1642,6 +1812,7 @@ test("a queued delete of one copy no longer deletes the note everywhere", async 
   insertCloudCopy(db, {
     client_note_id: "stale-copy",
     cloud_id: row.id,
+    space_id: ctx.team.id,
     sync_status: "pending",
     deleted_at: LOCAL_LATE,
   });
@@ -1815,14 +1986,14 @@ test("a copy with no base never overwrites the cloud note through a current sibl
   assert.equal(db.getNote(stale).content, "stale text");
 });
 
-test("unpushed text that differs reaches the cloud as a note of its own", async (t) => {
+test("unpushed text that differs is backed up as a distinct personal note", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
+  // A private note backed up before Private stayed on the device.
   const row = cloud.seedNote({ client_note_id: "cloud-key", title: "Keyed", content: "cloud" });
-  await service.syncAll(true);
-  const [keyed] = copiesOf(db, row.id);
+  const keyed = db.upsertNoteFromCloud(row, null, db.getPrivateSpaceId());
   updateNote(db, keyed.id, { sync_status: "pending", updated_at: LOCAL_LATE });
   // These are text-only edits, so keep the pulled copy's resolved default folder.
   const other = insertCloudCopy(db, {
@@ -1853,10 +2024,12 @@ test("unpushed text that differs reaches the cloud as a note of its own", async 
   await service.syncAll(true);
 
   const detached = db.getNote(other);
-  assert.equal(detached.sync_status, "synced");
-  assert.ok(detached.cloud_id);
+  assert.ok(detached.cloud_id, "backup includes the preserved personal copy");
   assert.notEqual(detached.cloud_id, row.id);
+  assert.equal(cloud.note(detached.cloud_id).content, "only here");
+  assert.notEqual(detached.client_note_id, "edited-copy", "it has an identity of its own");
   assert.equal(detached.content, "only here");
+  assert.equal(detached.sync_status, "synced");
   assert.equal(noteCount(db), 2, "a blank difference made no note of its own");
 });
 
@@ -2025,7 +2198,7 @@ test("cloud-id lookup reports a held copy, prefers a live one, ignores another r
 });
 
 test("adopting a key settles a conflict left under it", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -2033,6 +2206,7 @@ test("adopting a key settles a conflict left under it", async (t) => {
   insertCloudCopy(db, {
     client_note_id: "local-key",
     cloud_id: row.id,
+    space_id: ctx.team.id,
     content: "old",
     cloud_updated_at: "2020-01-01T00:00:00.000Z",
     updated_at: "2020-01-01 00:00:00",
@@ -2228,7 +2402,7 @@ function syncedPastTheFeed(service, cloud) {
 }
 
 test("replaying the feed once retires a copy whose delete the cursor had passed", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -2258,7 +2432,7 @@ test("replaying the feed once retires a copy whose delete the cursor had passed"
 });
 
 test("the replay leaves a copy with unpushed text to its push", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
 
@@ -2297,7 +2471,7 @@ test("a note the feed no longer returns stays, as it may exist and be unreadable
 });
 
 test("a failed replay is retried next session, and stops after a few attempts", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   silenceConsoleErrors(t);
@@ -2352,7 +2526,7 @@ test("a first sync covers the feed without a second full read", async (t) => {
 });
 
 test("a retry of a partial first pull removes old tombstones", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   silenceConsoleErrors(t);
@@ -2388,13 +2562,13 @@ test("a retry of a partial first pull removes old tombstones", async (t) => {
 });
 
 test("a first feed pull preserves unpushed text behind an old tombstone", async (t) => {
-  const ctx = await setup(t);
+  const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud, service } = ctx;
   silenceConsoleErrors(t);
   cloud.setClock(() => "2026-10-28T00:00:00.000Z");
   const row = cloud.seedUnkeyedNote({ title: "Edited offline", content: "old text" });
-  const local = db.upsertNoteFromCloud(row, null, db.getPrivateSpaceId());
+  const local = db.upsertNoteFromCloud(row, null, ctx.team.id);
   db.updateNote(local.id, { content: "unpushed text" });
   cloud.setClock(() => "2026-10-29T00:00:00.000Z");
   await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
@@ -2410,10 +2584,13 @@ for (const backup of [true, false]) {
   test(`${backup ? "full" : "team-only"} replay waits for team capability without spending attempts`, async (t) => {
     const ctx = await setup(t);
     if (!ctx) return;
-    const { db, cloud, api, service } = ctx;
+    const { db, cloud, service } = ctx;
     silenceConsoleErrors(t);
     localStorageStub.setItem("cloudBackupEnabled", String(backup));
     db.setActiveAccountId("user-harness");
+    const api = createElectronApi(db, { cloud });
+    windowStub.electronAPI = api;
+    await establishValidatedAuth();
     const space = {
       id: "cloud-space",
       workspace_id: "workspace",
@@ -2476,11 +2653,7 @@ for (const backup of [true, false]) {
 
     assert.ok(db.getNote(local.id), "personal scope cannot see the old team tombstone");
     assert.equal(localStorageStub.getItem(replayKey), null, "incomplete scope spends no attempts");
-    assert.equal(
-      copiesOf(db, personal.id).length,
-      backup ? 1 : 0,
-      "ordinary personal pulls continue"
-    );
+    assert.equal(copiesOf(db, personal.id).length, backup ? 1 : 0);
     available = true;
 
     await service.syncAll(true);
@@ -2522,5 +2695,553 @@ test("a pull landing on a just-deleted note keeps its delete queued", (t) => {
   assert.deepEqual(
     db.getPendingNoteDeletes().map((note) => note.id),
     [id]
+  );
+});
+
+// --- Ordinary Private notes follow Cloud Backup consent --------------------
+
+const PRIVATE_ACCOUNT = "user-harness";
+const NOTE_AND_FOLDER_WRITES = new Set([
+  "POST /api/notes/create",
+  "POST /api/notes/batch-create",
+  "PATCH /api/notes/update",
+  "POST /api/folders/create",
+  "POST /api/folders/batch-create",
+  "PATCH /api/folders/update",
+]);
+
+function noteAndFolderWrites(cloud) {
+  return cloud.log.filter((call) =>
+    NOTE_AND_FOLDER_WRITES.has(`${call.method} ${call.path.split("?")[0]}`)
+  );
+}
+
+// Signed in, as useAuth and the workspace bridge leave main: the active
+// workspace isn't the default one, so the active Private and the default's are
+// two rows and a test can tell which one sync used.
+async function setupSignedIn(t, { backup = true } = {}) {
+  const ctx = await setup(t);
+  if (!ctx) return null;
+  ctx.db.setActiveAccountId(PRIVATE_ACCOUNT);
+  // Bind the simulated sign-in after main has scoped the database to this account.
+  ctx.api = createElectronApi(ctx.db, { cloud: ctx.cloud });
+  windowStub.electronAPI = ctx.api;
+  await establishValidatedAuth(PRIVATE_ACCOUNT);
+  ctx.db.setActiveWorkspaceScope({
+    activeWorkspaceId: "workspace-active",
+    defaultWorkspaceId: "workspace-default",
+  });
+  localStorageStub.setItem("cloudBackupEnabled", String(backup));
+  ctx.activePrivateId = ctx.db.getPrivateSpaceId();
+  ctx.defaultPrivateId = ctx.db.getDefaultPrivateSpaceId();
+  assert.notEqual(ctx.activePrivateId, ctx.defaultPrivateId);
+  return ctx;
+}
+
+// A private note with a cloud copy from before Private stayed on the device: as
+// Backup or an earlier share left it.
+function linkPrivateNote(db, cloud, spaceId, fields = {}) {
+  const row = cloud.seedNote({
+    title: "Private",
+    content: "cloud body",
+    created_at: "2026-07-20T09:00:00.000Z",
+    updated_at: "2026-07-20T09:00:00.000Z",
+    ...fields,
+  });
+  const local = db.upsertNoteFromCloud(row, null, spaceId);
+  return { row, local };
+}
+
+test("a full pass with Backup on uploads ordinary private notes and folders", async (t) => {
+  const ctx = await setupSignedIn(t);
+  if (!ctx) return;
+  const { db, cloud, service, activePrivateId, defaultPrivateId } = ctx;
+
+  const folder = db.createFolder("Ideas", activePrivateId).folder;
+  const fresh = db.saveNote("Draft", "never leaves", "personal", null, null, folder.id).note;
+  const inDefault = db.saveNote(
+    "Default",
+    "never leaves either",
+    "personal",
+    null,
+    null,
+    null,
+    defaultPrivateId
+  ).note;
+  // Backed up before this change, then edited: its cloud copy must not move.
+  const { row, local: backedUp } = linkPrivateNote(db, cloud, activePrivateId);
+  db.updateNote(backedUp.id, { content: "edited since" });
+  // A folder linked to a cloud folder, then renamed.
+  const cloudFolder = cloud.seedFolder({ name: "Old name", client_folder_id: "linked-folder" });
+  const linkedFolder = db.createFolder("Linked", activePrivateId).folder;
+  db.db
+    .prepare(
+      "UPDATE folders SET client_folder_id = ?, cloud_id = ?, sync_status = 'pending' WHERE id = ?"
+    )
+    .run("linked-folder", cloudFolder.id, linkedFolder.id);
+
+  await service.syncAll(true);
+  // The debounced pushes an edit or a rename starts.
+  await service.pushEntity("note", backedUp.id);
+  await service.pushEntity("note", fresh.id);
+  await service.pushEntity("folder", folder.id);
+  await service.pushEntity("folder", linkedFolder.id);
+
+  assert.ok(noteAndFolderWrites(cloud).length > 0);
+  assert.equal(cloud.notes().length, 3);
+  assert.equal(cloud.note(row.id).content, "edited since");
+  assert.equal(cloud.folder(cloudFolder.id).name, "Linked");
+  for (const note of [fresh, inDefault, backedUp]) {
+    assert.equal(db.getNote(note.id).sync_status, "synced");
+    assert.ok(db.getNote(note.id).cloud_id);
+  }
+  assert.equal(db.getNote(backedUp.id).space_id, activePrivateId);
+  assert.equal(
+    cloud.note(db.getNote(fresh.id).cloud_id).folder_id,
+    db.getFolders().find((row) => row.id === folder.id).cloud_id
+  );
+  assert.equal(cloud.logFor("/api/me/private-notes/on-device").length, 0);
+});
+
+test("a shared private note pushes edits with its existing cloud folder under either backup setting", async (t) => {
+  for (const backup of [true, false]) {
+    await t.test(backup ? "Backup on" : "Backup off", async (st) => {
+      const ctx = await setupSignedIn(st, { backup });
+      if (!ctx) return;
+      const { db, cloud, service, activePrivateId } = ctx;
+      const cloudFolder = cloud.seedFolder({ name: "Ideas", client_folder_id: "ideas" });
+      const folder = db.createFolder("Ideas", activePrivateId).folder;
+      db.db
+        .prepare(
+          "UPDATE folders SET client_folder_id = 'ideas', cloud_id = ?, sync_status = 'synced' WHERE id = ?"
+        )
+        .run(cloudFolder.id, folder.id);
+      const { row, local } = linkPrivateNote(db, cloud, activePrivateId, {
+        folder_id: cloudFolder.id,
+      });
+      db.updateNote(local.id, { folder_id: folder.id });
+      db.updateNoteShareState(local.id, { is_shared: 1 });
+
+      db.updateNote(local.id, { content: "an edit the guests should see" });
+      if (backup) await service.syncAll(true);
+      else await service.pushEntity("note", local.id);
+
+      const patches = cloud.logFor("/api/notes/update");
+      assert.equal(patches.length, 1);
+      assert.equal(patches[0].body.id, row.id);
+      assert.equal(patches[0].body.content, "an edit the guests should see");
+      assert.equal(patches[0].body.folder_id, cloudFolder.id);
+      assert.equal(cloud.note(row.id).content, "an edit the guests should see");
+      const after = db.getNote(local.id);
+      assert.equal(after.sync_status, "synced");
+      assert.equal(after.space_id, activePrivateId);
+      assert.equal(after.folder_id, folder.id, "the note stays filed here");
+      assert.equal(cloud.logFor("/api/folders/update").length, 0);
+    });
+  }
+});
+
+test("ordinary personal pulls follow the backup setting", async (t) => {
+  for (const backup of [true, false]) {
+    await t.test(backup ? "Backup on" : "Backup off", async (st) => {
+      const ctx = await setupSignedIn(st, { backup });
+      if (!ctx) return;
+      const { db, cloud, service, activePrivateId, defaultPrivateId } = ctx;
+      const edited = linkPrivateNote(db, cloud, activePrivateId, { content: "kept here" });
+      const deleted = linkPrivateNote(db, cloud, defaultPrivateId, { content: "still here" });
+      const cloudFolder = cloud.seedFolder({ name: "Ideas", client_folder_id: "ideas" });
+      const folder = db.createFolder("Ideas", activePrivateId).folder;
+      db.db
+        .prepare(
+          "UPDATE folders SET client_folder_id = 'ideas', cloud_id = ?, sync_status = 'synced', updated_at = '2026-07-20T09:00:00.000Z' WHERE id = ?"
+        )
+        .run(cloudFolder.id, folder.id);
+      // Another device changes ordinary personal content.
+      await editInCloud(cloud, edited.row.id, {
+        content: "changed elsewhere",
+        updated_at: "2026-07-21T00:00:00.000Z",
+      });
+      await cloud.request({
+        method: "DELETE",
+        path: "/api/notes/delete",
+        body: { id: deleted.row.id },
+      });
+      cloud.seedNote({ client_note_id: "cloud-only", title: "From the cloud" });
+      await cloud.request({
+        method: "PATCH",
+        path: "/api/folders/update",
+        body: { id: cloudFolder.id, name: "Renamed elsewhere" },
+      });
+      cloud.seedFolder({ name: "Cloud folder", client_folder_id: "cloud-only-folder" });
+      const before = snapshotNotes(db);
+      const folders = db.db.prepare("SELECT * FROM folders ORDER BY id").all();
+
+      await service.syncAll(true);
+      // Snapshot recovery must honor the same consent gate as the normal delta pass.
+      await service.pullNotes(!backup, true);
+      await service.pullFolders(!backup, true);
+
+      if (backup) {
+        assert.equal(db.getNote(edited.local.id).content, "changed elsewhere");
+        assert.equal(db.getNote(edited.local.id).space_id, activePrivateId);
+        assert.equal(db.getNote(deleted.local.id), null);
+        assert.equal(db.getNoteByClientId("cloud-only")?.title, "From the cloud");
+        assert.ok(db.getFolders().some((row) => row.name === "Cloud folder"));
+        assert.equal(db.getFolderByClientId("ideas").name, "Renamed elsewhere");
+      } else {
+        assert.deepEqual(snapshotNotes(db), before);
+        assert.deepEqual(db.db.prepare("SELECT * FROM folders ORDER BY id").all(), folders);
+        assert.equal(db.getNoteByClientId("cloud-only"), null);
+        assert.equal(db.getNote(edited.local.id).content, "kept here");
+        assert.ok(db.getNote(deleted.local.id), "backup-off does not import a personal tombstone");
+      }
+    });
+  }
+});
+
+test("a guest's edit to a shared private note pulls in where the note is filed", async (t) => {
+  for (const backup of [true, false]) {
+    await t.test(backup ? "Backup on" : "Backup off", async (st) => {
+      const ctx = await setupSignedIn(st, { backup });
+      if (!ctx) return;
+      const { db, cloud, service, activePrivateId } = ctx;
+      const folder = db.createFolder("Shared things", activePrivateId).folder;
+      const { row, local } = linkPrivateNote(db, cloud, activePrivateId);
+      // Filed and shared on this device before the guest's edit.
+      updateNote(db, local.id, { folder_id: folder.id, is_shared: 1 });
+      if (backup) {
+        const cloudFolder = cloud.seedFolder({
+          name: folder.name,
+          client_folder_id: folder.client_folder_id,
+        });
+        db.markFolderSynced(folder.id, cloudFolder.id);
+        await editInCloud(cloud, row.id, {
+          folder_id: cloudFolder.id,
+          updated_at: "2026-07-20T10:00:00.000Z",
+        });
+      }
+      await editInCloud(cloud, row.id, {
+        content: "a guest's edit",
+        updated_at: "2026-07-21T00:00:00.000Z",
+      });
+
+      await service.syncAll(true);
+
+      const after = db.getNote(local.id);
+      assert.equal(after.content, "a guest's edit");
+      assert.equal(after.space_id, activePrivateId, "it stays in its own Private");
+      assert.equal(after.folder_id, folder.id, "and in its folder");
+      assert.equal(after.sync_status, "synced");
+      assert.equal(after.is_shared, 1);
+
+      await cloud.request({ method: "DELETE", path: "/api/notes/delete", body: { id: row.id } });
+      await service.syncAll(true);
+      assert.equal(db.getNote(local.id), null, "the owner's delete elsewhere applies too");
+    });
+  }
+});
+
+test("a revoked team note forks into that workspace's Private", async (t) => {
+  const ctx = await setupSignedIn(t);
+  if (!ctx) return;
+  const { db, cloud, api, service, activePrivateId, defaultPrivateId } = ctx;
+  silenceConsoleErrors(t);
+  const team = joinTeamSpace(db, cloud, { fileRowsHere: false });
+  const row = cloud.seedNote({
+    title: "Team draft",
+    content: "team body",
+    space_id: TEAM_SPACE.id,
+    workspace_id: TEAM_SPACE.workspace_id,
+    user_id: PRIVATE_ACCOUNT,
+  });
+  const local = db.upsertNoteFromCloud(row, null, team.id);
+  db.updateNote(local.id, { content: "unpushed edit" });
+  cloud.failNext("PATCH /api/notes/update", { status: 403, code: "space_access_revoked" });
+
+  await service.syncAll(true);
+
+  const forked = db.getNote(local.id);
+  const workspacePrivateId = db.getPrivateSpaceId(TEAM_SPACE.workspace_id);
+  assert.equal(forked.space_id, workspacePrivateId);
+  assert.notEqual(workspacePrivateId, activePrivateId);
+  assert.notEqual(workspacePrivateId, defaultPrivateId);
+  assert.equal(db.getSpace(workspacePrivateId).kind, "private");
+  assert.equal(forked.content, "unpushed edit", "the edit survives");
+  assert.equal(forked.cloud_id, null);
+  assert.notEqual(forked.client_note_id, row.client_note_id);
+  assert.deepEqual(
+    api.syncEvents.filter((event) => event.name === "note-relocated").map((e) => e.payload.title),
+    ["Team draft"]
+  );
+  const mark = cloud.log.length;
+  await service.syncAll(true);
+  assert.ok(noteAndFolderWrites({ log: cloud.log.slice(mark) }).length > 0);
+  const backedUp = db.getNote(local.id);
+  assert.ok(backedUp.cloud_id);
+  assert.equal(cloud.note(backedUp.cloud_id).space_id, null);
+  assert.equal(cloud.note(backedUp.cloud_id).content, "unpushed edit");
+});
+
+test("a team note's access stub forks a dirty copy into that workspace's Private", async (t) => {
+  const ctx = await setupSignedIn(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const team = joinTeamSpace(db, cloud, { fileRowsHere: false });
+  const row = cloud.seedNote({
+    title: "Moved away",
+    content: "team body",
+    space_id: TEAM_SPACE.id,
+    workspace_id: TEAM_SPACE.workspace_id,
+    user_id: PRIVATE_ACCOUNT,
+  });
+  const local = db.upsertNoteFromCloud(row, null, team.id);
+  db.updateNote(local.id, { content: "unpushed edit" });
+  // A private note that happens to match the stub is this device's own.
+  const own = linkPrivateNote(db, cloud, ctx.activePrivateId);
+  const send = api.cloudApiRequest;
+  api.cloudApiRequest = async (opts) => {
+    if (opts.method === "PATCH") return { success: false, status: 500, error: "offline" };
+    const answer = await send(opts);
+    if (!opts.path.startsWith("/api/notes/list") || !answer.success) return answer;
+    const stub = (note) => ({
+      id: note.id,
+      client_note_id: note.client_note_id,
+      space_id: null,
+      previous_space_id: note.space_id ?? null,
+      access_removed: true,
+      updated_at: "2026-07-22T00:00:00.000Z",
+    });
+    return {
+      ...answer,
+      data: {
+        notes: answer.data.notes.map((note) =>
+          note.id === row.id || note.id === own.row.id ? stub(note) : note
+        ),
+      },
+    };
+  };
+  silenceConsoleErrors(t);
+
+  await service.syncAll(true);
+
+  const forked = db.getNote(local.id);
+  assert.equal(forked.space_id, db.getPrivateSpaceId(TEAM_SPACE.workspace_id));
+  assert.equal(forked.content, "unpushed edit");
+  assert.equal(forked.cloud_id, null);
+  const ownAfter = db.db.prepare("SELECT * FROM notes WHERE id = ?").get(own.local.id);
+  assert.deepEqual(ownAfter, own.local, "a private note ignores the stub");
+});
+
+test("a personal row turns a team copy private in the default's Private, not the active one", async (t) => {
+  for (const backup of [true, false]) {
+    await t.test(backup ? "Backup on" : "Backup off", async (st) => {
+      const ctx = await setupSignedIn(st, { backup });
+      if (!ctx) return;
+      const { db, cloud, service, defaultPrivateId } = ctx;
+      const team = joinTeamSpace(db, cloud, { fileRowsHere: false });
+      const row = cloud.seedNote({
+        title: "Was the team's",
+        content: "team body",
+        space_id: TEAM_SPACE.id,
+        workspace_id: TEAM_SPACE.workspace_id,
+        user_id: PRIVATE_ACCOUNT,
+        updated_at: "2026-07-20T09:00:00.000Z",
+      });
+      const local = db.upsertNoteFromCloud(row, null, team.id);
+      // An older build moved it out of the team.
+      await editInCloud(cloud, row.id, {
+        space_id: null,
+        workspace_id: null,
+        content: "now personal",
+        updated_at: "2026-07-21T00:00:00.000Z",
+      });
+
+      await service.syncAll(true);
+
+      const after = db.getNote(local.id);
+      assert.equal(after.space_id, defaultPrivateId);
+      assert.equal(after.content, "now personal");
+    });
+  }
+});
+
+test("a batch create the server refuses stays pending, unforked and unmarked", async (t) => {
+  const ctx = await setupSignedIn(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const team = joinTeamSpace(db, cloud);
+  const accepted = saveNoteIn(db, team.id, "Accepted", "body").note;
+  const refused = saveNoteIn(db, team.id, "Refused", "body").note;
+  // A racing build's write the server refuses: it answers for the rest.
+  const send = api.cloudApiRequest;
+  api.cloudApiRequest = async (opts) => {
+    if (opts.path !== "/api/notes/batch-create") return send(opts);
+    const answer = await send({
+      ...opts,
+      body: { notes: opts.body.notes.filter((n) => n.client_note_id !== refused.client_note_id) },
+    });
+    return {
+      ...answer,
+      data: {
+        ...answer.data,
+        refused: [{ client_note_id: refused.client_note_id, code: "personal_notes_on_device" }],
+      },
+    };
+  };
+
+  await service.syncAll(true);
+
+  assert.equal(db.getNote(accepted.id).sync_status, "synced");
+  const left = db.getNote(refused.id);
+  assert.equal(left.sync_status, "pending");
+  assert.equal(left.cloud_id, null);
+  assert.equal(left.client_note_id, refused.client_note_id, "not forked");
+  assert.equal(left.space_id, team.id);
+  assert.equal(cloud.logFor("/api/notes/batch-create").length, 1);
+  assert.equal(cloud.logFor("/api/notes/create").length, 0, "no retry in the same pass");
+});
+
+test("a folder batch the server partly refuses links the rest by position", async (t) => {
+  const ctx = await setupSignedIn(t);
+  if (!ctx) return;
+  const { db, cloud, api, service } = ctx;
+  const team = joinTeamSpace(db, cloud);
+  const first = db.createFolder("First", team.id).folder;
+  const refused = db.createFolder("Refused", team.id).folder;
+  const last = db.createFolder("Last", team.id).folder;
+  const send = api.cloudApiRequest;
+  api.cloudApiRequest = async (opts) => {
+    if (opts.path !== "/api/folders/batch-create") return send(opts);
+    const answer = await send({
+      ...opts,
+      body: {
+        folders: opts.body.folders.filter((f) => f.client_folder_id !== refused.client_folder_id),
+      },
+    });
+    return {
+      ...answer,
+      data: {
+        ...answer.data,
+        refused: [{ client_folder_id: refused.client_folder_id, code: "personal_notes_on_device" }],
+      },
+    };
+  };
+
+  await service.syncAll(true);
+
+  assert.equal(
+    db.getFolderByClientId(first.client_folder_id).cloud_id,
+    cloud.folder(first.client_folder_id).id
+  );
+  assert.equal(
+    db.getFolderByClientId(last.client_folder_id).cloud_id,
+    cloud.folder(last.client_folder_id).id
+  );
+  const left = db.getFolderByClientId(refused.client_folder_id);
+  assert.equal(left.cloud_id, null);
+  assert.equal(left.sync_status, "pending");
+});
+
+test("ending a share returns ordinary edits to the backup gate", async (t) => {
+  for (const backup of [true, false]) {
+    await t.test(backup ? "Backup on" : "Backup off", async (st) => {
+      const ctx = await setupSignedIn(st, { backup });
+      if (!ctx) return;
+      const { db, cloud, service, activePrivateId } = ctx;
+      const { row, local } = linkPrivateNote(db, cloud, activePrivateId);
+      db.updateNoteShareState(local.id, { is_shared: 1, share_token: "prior-share" });
+      db.updateNoteShareState(local.id, { is_shared: 0, share_token: null });
+      db.updateNote(local.id, { content: "ordinary edit after unsharing" });
+      await service.pushEntity("note", local.id);
+      await service.syncAll(true);
+      assert.equal(
+        cloud.note(row.id).content,
+        backup ? "ordinary edit after unsharing" : "cloud body"
+      );
+      assert.equal(db.getNote(local.id).sync_status, backup ? "synced" : "pending");
+      assert.equal(db.getNote(local.id).cloud_id, row.id);
+      assert.equal(db.getNote(local.id).client_note_id, local.client_note_id);
+    });
+  }
+});
+
+test("a pending team-to-private move publishes its scope retraction without changing identity", async (t) => {
+  const ctx = await setupSignedIn(t);
+  if (!ctx) return;
+  const { db, cloud, service, activePrivateId } = ctx;
+  const team = joinTeamSpace(db, cloud, { fileRowsHere: false });
+  const row = cloud.seedNote({
+    title: "Taken out",
+    content: "team body",
+    space_id: TEAM_SPACE.id,
+    workspace_id: TEAM_SPACE.workspace_id,
+    user_id: PRIVATE_ACCOUNT,
+  });
+  const local = db.upsertNoteFromCloud(row, null, team.id);
+  // How an older build left a team → Private move whose retraction never landed.
+  db.db
+    .prepare(
+      "UPDATE notes SET space_id = ?, folder_id = NULL, left_team = 1, sync_status = 'pending', content = 'private edit' WHERE id = ?"
+    )
+    .run(activePrivateId, local.id);
+
+  await service.syncAll(true);
+
+  assert.equal(cloud.note(row.id).space_id, null, "the team no longer owns the copy");
+  assert.equal(cloud.note(row.id).content, "private edit");
+  const after = db.getNote(local.id);
+  assert.equal(after.space_id, activePrivateId);
+  assert.equal(after.content, "private edit");
+  assert.equal(after.cloud_id, row.id);
+  assert.equal(after.left_team, 0);
+  assert.equal(after.client_note_id, row.client_note_id);
+});
+
+test("the full upload queue includes ordinary private rows and the team queue remains narrow", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const team = joinTeamSpace(db, null);
+  const teamNote = saveNoteIn(db, team.id, "Team", "body").note;
+  const privateNote = db.saveNote("Private", "body").note;
+  const shared = db.saveNote("Shared earlier", "body").note;
+  updateNote(db, shared.id, { cloud_id: "cloud-shared", is_shared: 1, sync_status: "pending" });
+  const forked = db.saveNote("Shared, then forked", "body").note;
+  updateNote(db, forked.id, { is_shared: 1, sync_status: "pending" });
+  const teamFolder = db.createFolder("Team folder", team.id).folder;
+  db.createFolder("Private folder");
+
+  const ids = (rows) => rows.map((row) => row.id).sort((a, b) => a - b);
+  assert.deepEqual(ids(db.getPendingNotes("team")), [teamNote.id]);
+  assert.deepEqual(ids(db.getPendingNotes()), [teamNote.id, privateNote.id, shared.id, forked.id]);
+  assert.ok(
+    db.getPendingNotes().some((note) => note.id === privateNote.id),
+    "still queued locally"
+  );
+  assert.ok(!db.getPendingNotes("team").some((note) => note.id === forked.id));
+  assert.deepEqual(ids(db.getPendingFolders("team")), [teamFolder.id]);
+});
+
+test("merging legacy share metadata does not upload unchanged content", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const { db, cloud, service } = ctx;
+  const remote = cloud.seedNote({ client_note_id: "share-key", title: "Copy", content: "body" });
+  const clean = db.upsertNoteFromCloud(remote, null);
+  insertCloudCopy(db, {
+    client_note_id: "share-copy",
+    cloud_id: remote.id,
+    is_shared: 1,
+    share_token: "legacy-token",
+    cloud_updated_at: "2020-01-01T00:00:00Z",
+  });
+  db.mergeDuplicateCloudNotes();
+  assert.equal(db.getNote(clean.id).sync_status, "synced");
+  const before = cloud.log.length;
+  await service.pushPendingNotes(false);
+  assert.equal(
+    cloud.log
+      .slice(before)
+      .filter((call) => call.method === "PATCH" && call.path === "/api/notes/update").length,
+    0
   );
 });

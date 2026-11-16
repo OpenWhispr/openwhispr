@@ -9,6 +9,7 @@ import {
   isAccountScopeRetryWaiting,
   markAccountScopePurgeRequired,
   reconcileAccountScope,
+  requestActiveAccountScope,
   resetAccountScopeRetry,
   scheduleAccountScopeRetry,
   shouldBlockAccountScope,
@@ -213,10 +214,7 @@ export function useAuth() {
         await loadAccountDependencies();
       if (getAuthRequestContextSnapshot().observedGeneration !== boundGeneration) return;
       prepareChatAccountScope(resolvedUserId);
-      const scopeResult = await window.electronAPI?.setActiveAccountScope?.(
-        resolvedUserId,
-        boundGeneration
-      );
+      const scopeResult = await requestActiveAccountScope(resolvedUserId, boundGeneration);
       if (!scopeResult?.success) {
         throw new Error(scopeResult?.error ?? "Could not establish the local account scope");
       }
@@ -258,6 +256,11 @@ export function useAuth() {
         }
         if (!cancelled) {
           logger.debug("Auth state sync", { isSignedIn: true, userId: resolvedUserId }, "auth");
+          // The app sign-in milestone, anchored by the server to this validation.
+          void window.electronAPI?.recordProductEventAppSession?.({
+            accountId: resolvedUserId,
+            authGeneration: boundGeneration,
+          });
           useSettingsStore.getState().setIsSignedIn(true);
           void usePolicyStore.getState().fetchPolicy(resolvedUserId, boundGeneration);
           void refreshManagedEnterpriseIdentity(resolvedUserId, boundGeneration);

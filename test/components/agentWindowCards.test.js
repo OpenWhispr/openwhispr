@@ -229,6 +229,11 @@ async function mountWindow(t, { platform } = {}) {
     ask,
     askApproval,
     wait,
+    unmount: () =>
+      React.act(async () => {
+        root.unmount();
+        root = null;
+      }),
   };
 }
 
@@ -1667,6 +1672,84 @@ test("an answer the field refused stays in the window", async (t) => {
   assert.equal(hides(), 0);
   assert.equal(globalThis.__chat.newChats, 0);
 });
+
+for (const action of ["dismiss", "Stop", "account change", "unmount", "newer request"]) {
+  test(`${action} cancels a voice answer while native caret validation is pending`, async (t) => {
+    const view = await mountWindow(t);
+    const Module = require("node:module");
+    const originalLoad = Module._load;
+    Module._load = function loadWithoutElectronLogger(request, parent, isMain) {
+      if (request === "./debugLogger") return { info() {}, debug() {}, warn() {} };
+      return originalLoad.call(this, request, parent, isMain);
+    };
+    let SelectionManager;
+    try {
+      SelectionManager = require("../../src/helpers/selectionManager");
+    } finally {
+      Module._load = originalLoad;
+    }
+    const probe = defer();
+    const pasted = [];
+    const manager = new SelectionManager({
+      clipboardManager: {
+        runClipboardOperation: (operation) => operation(),
+        _pasteText: async (text) => {
+          pasted.push(text);
+          return { pasted: true };
+        },
+      },
+      textEditMonitor: {},
+      platform: "win32",
+      now: () => 1000,
+    });
+    manager.sessions.set("pending-caret", {
+      kind: "caret",
+      target: { kind: "win-hwnd", id: "123" },
+      expiresAt: 2000,
+    });
+    manager._readCurrentSelection = () => probe.promise;
+    Object.assign(view.happyWindow.electronAPI, {
+      captureSelectedText: async () => ({ status: "editable", sessionId: "pending-caret" }),
+      pasteAtCapturedTarget: (...args) => manager.pasteAtCapturedTarget(...args),
+      cancelSelectionEdit: async (sessionId) => manager.cancelSelectionEdit(sessionId),
+    });
+    await React.act(async () => view.main.handlers.hotkey({ external: true }));
+    await React.act(async () =>
+      globalThis.__voice.callbacks.onTranscript("Write a note", "submit")
+    );
+    await view.chat({ busy: true });
+    let delivery;
+    await React.act(async () => {
+      delivery = globalThis.__chat.sentOptions[0].onComplete({
+        content: "Old answer",
+        onlyRead: true,
+      });
+    });
+    if (action === "dismiss") await React.act(async () => view.main.handlers.dismiss());
+    else if (action === "Stop") {
+      await React.act(async () => view.main.handlers.open({ layout: "modal" }));
+      await view.settle();
+      await React.act(async () => view.button("Stop").click());
+      assert.equal(globalThis.__chat.cancels, 1);
+    } else if (action === "account change") {
+      const auth = await view.vite.ssrLoadModule("/lib/authRequestContext.ts");
+      await React.act(async () =>
+        auth.observeAuthTokenStateEvent({ generation: 1, hasToken: true })
+      );
+    } else if (action === "unmount") await view.unmount();
+    else await React.act(async () => view.main.handlers.command({ text: "Newer request" }));
+    await React.act(async () => {
+      probe.resolve({ status: "editable" });
+      await delivery;
+    });
+    await view.settle();
+    assert.deepEqual(
+      pasted,
+      [],
+      "a cancelled answer cannot insert after its native check finishes"
+    );
+  });
+}
 
 test("without auto-paste the press skips the writable-field probe", async (t) => {
   const view = await mountWindow(t);

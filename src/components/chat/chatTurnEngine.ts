@@ -1,3 +1,4 @@
+import type { NoteItem, NoteWriteGuard } from "../../types/electron";
 import i18n from "../../i18n";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
 import {
@@ -73,6 +74,7 @@ import { createToolRegistry } from "../../services/tools";
 import type { SharedDictionaryWord } from "../../services/tools/dictionaryTool";
 import { setSharedWordsHidden } from "../../services/sharedDictionaryActions";
 import { readActiveWorkspaceId } from "../../stores/workspaceStore";
+import { resolveAssistantNoteScope } from "../../lib/assistantNoteScope";
 import { selectAppliedSharedWords } from "../../utils/sharedDictionaryHints";
 import { executeTool, type ToolRegistry, type ToolResult } from "../../services/tools/ToolRegistry";
 import { createToolExecutionScope, type ToolExecutionScope } from "./toolExecutionScope";
@@ -100,6 +102,7 @@ import {
   type ToolHistory,
 } from "./historyMessages";
 import { isUnbackedClaim } from "./actionClaims";
+import { readCaretResponse } from "./caretResponse";
 import type { ContainerScope } from "../../types/chat";
 import type { NoteAttendeesRequest } from "../../types/connectors";
 import type { ConversationClaim } from "./useChatPersistence";
@@ -107,6 +110,8 @@ import {
   buildAgentRequestText,
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
+
+class ConversationPrivacyError extends Error {}
 
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
@@ -194,21 +199,30 @@ async function buildNoteAttendeesContext(
   }
 }
 
-async function buildRAGContext(userText: string, scope?: ContainerScope): Promise<string> {
+// Notes from the turn's scope only (the same spaces its tools read), within the container when
+// the chat has one.
+async function buildRAGContext(
+  userText: string,
+  scopeSpaceIds: number[],
+  scope: ContainerScope | undefined,
+  protectNotes: (notes: ReadonlyArray<Pick<NoteItem, "id" | "space_id">>) => Promise<void>
+): Promise<string> {
   if (!window.electronAPI?.semanticSearchNotes) return "";
   try {
     const results = await window.electronAPI.semanticSearchNotes(
       userText,
       RAG_NOTE_LIMIT,
       scope?.spaceId ?? null,
-      scope?.folderId ?? null
+      scope?.folderId ?? null,
+      scopeSpaceIds
     );
     if (!results || results.length === 0) return "";
 
     const snippets = await Promise.all(
       results.map(async (r: { id: number; title: string; score?: number }) => {
         const note = await window.electronAPI.getNote(r.id);
-        if (!note) return null;
+        if (!note || !scopeSpaceIds.includes(note.space_id)) return null;
+        await protectNotes([note]);
         const content = [
           note.enhanced_content?.slice(0, RAG_NOTE_SNIPPET_LENGTH),
           note.content?.slice(0, RAG_NOTE_SNIPPET_LENGTH),
@@ -220,7 +234,8 @@ async function buildRAGContext(userText: string, scope?: ContainerScope): Promis
     );
 
     return snippets.filter(Boolean).join("\n\n");
-  } catch {
+  } catch (error) {
+    if (error instanceof ConversationPrivacyError) throw error;
     return "";
   }
 }
@@ -250,6 +265,19 @@ export interface ChatTurnOptions {
   openNote?: string | ((maxTranscriptTokens: number) => OpenNoteContext);
   /** Optional container scope applied to RAG and the search_notes tool (container overview chat). */
   searchScope?: ContainerScope;
+  /**
+   * The note a note's chat is about. Its tools read and edit it even outside the active
+   * workspace's scope: its text is the chat's subject already. Every other note stays in scope.
+   */
+  openNoteId?: number | null;
+  /**
+   * The space of `openNote` when it isn't the note on screen but a Chat-section conversation's
+   * source note: the conversation list spans every workspace, so the note is sent only while its
+   * space is in the turn's scope (null, unknown: never). Unset, the note is always sent.
+   */
+  openNoteSpaceId?: number | null;
+  /** A saved conversation’s source, checked before any of its history reaches the model. */
+  sourceNoteId?: number;
   /**
    * The agent chat: offer the interaction tools (questions, connect cards,
    * access, keys, settings), show and save each turn's notes (status, timing,
@@ -420,7 +448,9 @@ export function createChatTurnEngine(
     cancel({ explicit: true });
     const sendNumber = ++latestSend;
     const stopsAtStart = stops;
-    const { claimConversation } = getOptions();
+    const turnOptions = getOptions();
+    const pendingWriteGuard = window.electronAPI.getNoteWriteGuard?.().catch(() => null);
+    const { claimConversation } = turnOptions;
     const claim =
       options?.conversationId != null && claimConversation
         ? await claimConversation(options.conversationId)
@@ -527,7 +557,39 @@ export function createChatTurnEngine(
       skillsEnabled = false,
       onStreamComplete,
       onTurnCheckpoint,
-    } = getOptions();
+    } = turnOptions;
+    // Capture the account before any note reads. Every exposure rechecks main's
+    // ownership; a cancelled or switched conversation never receives the result.
+    const accountScope =
+      options?.conversationId != null
+        ? window.electronAPI.getDatabaseAccountScope?.().catch(() => undefined)
+        : undefined;
+    const getWriteGuard = async (): Promise<NoteWriteGuard | undefined> => {
+      const guard = await pendingWriteGuard;
+      if (cancelled() || (!guard && (pendingWriteGuard || options?.conversationId != null))) {
+        throw new Error("Note write account could not be verified");
+      }
+      return guard ?? undefined;
+    };
+    const protectNotes = async (
+      notes: ReadonlyArray<Pick<NoteItem, "id" | "space_id">>,
+      deviceOnly = false
+    ): Promise<void> => {
+      if (options?.conversationId == null || (!notes.length && !deviceOnly)) return;
+      const expected = await accountScope;
+      if (cancelled() || !expected)
+        throw new ConversationPrivacyError("Conversation privacy could not be verified");
+      const result = await window.electronAPI
+        .protectConversation?.(
+          options.conversationId,
+          notes.map(({ id, space_id }) => ({ id, space_id })),
+          deviceOnly,
+          expected.accountId
+        )
+        .catch(() => undefined);
+      if (!result?.success || cancelled())
+        throw new ConversationPrivacyError("Conversation privacy could not be saved");
+    };
     const t = i18n.t.bind(i18n);
     let carriedSkillNames: ReadonlySet<string> = new Set();
     try {
@@ -553,7 +615,7 @@ export function createChatTurnEngine(
           },
         ]);
       };
-      const currentOpenNote = getOptions().openNote;
+      const currentOpenNote = turnOptions.openNote;
       const settings = getSettings();
       const { config: llmConfig, attachScreenContext } = resolveChatStreamingInference(settings, {
         inferenceScope,
@@ -647,7 +709,24 @@ export function createChatTurnEngine(
         offeredSkills = usableSkills.filter((skill) => !removedSkills.has(skill.name));
       }
 
-      const scope = getOptions().searchScope;
+      const scope = turnOptions.searchScope;
+      // The spaces this turn may read, for its tools and its library context alike.
+      const noteScope = await resolveAssistantNoteScope();
+      const scopeSpaceIds = noteScope.spaceIds;
+      if (cancelled()) return;
+      const { openNoteSpaceId, sourceNoteId } = turnOptions;
+      if (sourceNoteId != null) {
+        const note = await window.electronAPI.getNote?.(sourceNoteId);
+        if (cancelled()) return;
+        if (note && !scopeSpaceIds.includes(note.space_id)) {
+          throw new Error("This conversation’s source note is outside the active workspace");
+        }
+      }
+      const groundingNote =
+        openNoteSpaceId === undefined ||
+        (openNoteSpaceId !== null && scopeSpaceIds.includes(openNoteSpaceId))
+          ? currentOpenNote
+          : undefined;
       const policy = usePolicyStore.getState();
       const calendarConnected = selectCalendarConnected(settings);
       const webSearchEnabled = isWebSearchAllowed(policy);
@@ -705,9 +784,15 @@ export function createChatTurnEngine(
         const keepNotesUnchanged = !!options?.keepNotesUnchanged;
         registry = createToolRegistry({
           isSignedIn: settings.isSignedIn,
-          calendarConnected,
           cloudBackupEnabled: settings.cloudBackupEnabled,
+          calendarConnected,
           searchScope: scope,
+          scopeSpaceIds,
+          protectNotes,
+          getWriteGuard,
+          privateWorkspaceId: noteScope.privateWorkspaceId,
+          privateCreationAllowed: noteScope.privateCreationAllowed,
+          openNoteId: turnOptions.openNoteId,
           webSearchEnabled,
           productHelpEnabled,
           vocabulary: {
@@ -836,11 +921,26 @@ export function createChatTurnEngine(
         options?.onSkillPicked?.({ name: picked.name, displayName: picked.displayName });
       }
 
+      if (groundingNote) {
+        const noteId = turnOptions.openNoteId ?? turnOptions.sourceNoteId;
+        if (noteId != null) {
+          const note = await window.electronAPI.getNote(noteId);
+          if (!note) throw new Error("Conversation source note is unavailable");
+          await protectNotes([note]);
+        } else {
+          // A caller providing raw local context without its source cannot prove
+          // it is team content. Demos without a persisted conversation are exempt.
+          await protectNotes([], true);
+        }
+      }
+      if (turnOptions.noteContext) await protectNotes([], true);
+      if (cancelled()) return;
+
       // A note's chat is about its note: other notes up front would compete with
       // it, and search_notes still reaches them when it doesn't answer.
       const [ragContext, attendeesContext] = await Promise.all([
-        currentOpenNote ? "" : buildRAGContext(userText, scope),
-        connectorsOffered ? buildNoteAttendeesContext(getOptions().noteMeeting) : "",
+        groundingNote ? "" : buildRAGContext(userText, scopeSpaceIds, scope, protectNotes),
+        connectorsOffered ? buildNoteAttendeesContext(turnOptions.noteMeeting) : "",
       ]);
       if (cancelled()) return;
       // A transcript too long for the model is read through get_note, except
@@ -850,16 +950,16 @@ export function createChatTurnEngine(
           ? FULL_TRANSCRIPT_MAX_TOKENS[contextTier]
           : Infinity;
       const currentNote: OpenNoteContext =
-        typeof currentOpenNote === "function"
-          ? currentOpenNote(maxTranscriptTokens)
-          : { text: currentOpenNote ?? "", transcriptPreview: false };
+        typeof groundingNote === "function"
+          ? groundingNote(maxTranscriptTokens)
+          : { text: groundingNote ?? "", transcriptPreview: false };
       // Only main's attendee block may carry its fence: note text and search
       // results can't fake a second list.
       const openNoteContext = [withoutAttendeesFence(currentNote.text), attendeesContext]
         .filter(Boolean)
         .join("\n\n");
       const libraryContext = [
-        withoutAttendeesFence(getOptions().noteContext ?? ""),
+        withoutAttendeesFence(turnOptions.noteContext ?? ""),
         withoutAttendeesFence(ragContext),
       ]
         .filter(Boolean)
@@ -873,6 +973,9 @@ export function createChatTurnEngine(
             ? "text"
             : "parts";
       const offeredTools = registry?.getAll();
+      const requireCaretDisposition = Boolean(
+        options?.plainTextResponse && !registry?.get("ask_user")
+      );
       // The user's dictionary rides on every conversation so replies use their
       // jargon — same suffix the dictation prompts carry.
       let systemPrompt = appendDictionarySuffix(
@@ -883,7 +986,7 @@ export function createChatTurnEngine(
           ...(toolHistory !== "none" ? { toolHistory } : {}),
           openNote: openNoteContext || undefined,
           openNoteTranscriptPreview: currentNote.transcriptPreview,
-          userName: getOptions().userName,
+          userName: turnOptions.userName,
           writingStyle: settings.toneStyleEnabled ? { tones: settings.toneStyles } : undefined,
           skillCatalog: registry?.get("load_skill")
             ? buildSkillCatalog(offeredSkills, SKILL_CATALOG_MAX_TOKENS[contextTier])
@@ -951,12 +1054,19 @@ export function createChatTurnEngine(
         requestedAttachment && isCloudAgent
           ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
           : null;
+      let textOnlySystemPrompt = systemPrompt;
       if (requestedAttachment) {
         // Either way it needs its grounding instruction, as the dictation path
         // pairs the suffix with an attached image.
         systemPrompt = appendScreenContextSuffix(systemPrompt, settings.uiLanguage);
       }
-      if (options?.plainTextResponse) systemPrompt = appendPlainTextResponseSuffix(systemPrompt);
+      if (options?.plainTextResponse) {
+        systemPrompt = appendPlainTextResponseSuffix(systemPrompt, requireCaretDisposition);
+        textOnlySystemPrompt = appendPlainTextResponseSuffix(
+          textOnlySystemPrompt,
+          requireCaretDisposition
+        );
+      }
       if (attachment) {
         transformLastUserMessage(history, (message) => ({
           role: "user",
@@ -980,6 +1090,10 @@ export function createChatTurnEngine(
       let reasoning = "";
       let rawContent = "";
       let fullContent = "";
+      const responseContent = (): string =>
+        withoutEchoedToolTrace(
+          requireCaretDisposition ? readCaretResponse(rawContent).content : rawContent
+        );
       // A tool may report before the stream shows its call (it can ask the
       // user at once), so what it reports waits here for the call.
       const annotations = new Map<string, Partial<ToolCallInfo>>();
@@ -1182,6 +1296,7 @@ export function createChatTurnEngine(
       let afterToolCall = false;
       let reasoningAfterToolCall = false;
       let stepLimitReached = false;
+      let finishReason: string | undefined;
       // Where the text of the step now streaming starts, so an answer asked
       // again (an unbacked claim) can be withdrawn.
       let stepTextStart = 0;
@@ -1192,7 +1307,7 @@ export function createChatTurnEngine(
       const replaceAskedReply = (): void => {
         if (askedAgainFrom === null) return;
         rawContent = rawContent.slice(0, askedAgainFrom);
-        fullContent = withoutEchoedToolTrace(rawContent);
+        fullContent = responseContent();
         afterToolCall = true;
         askedAgainFrom = null;
       };
@@ -1291,7 +1406,9 @@ export function createChatTurnEngine(
                 parameters: t.parameters,
               })),
               executeToolCall,
-              ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
+              ...(cloudScreenContext
+                ? { screenContext: cloudScreenContext, textOnlySystemPrompt }
+                : {}),
               isUnbackedClaim: isUnbacked,
             },
             control.controller.signal
@@ -1345,7 +1462,7 @@ export function createChatTurnEngine(
             if (afterToolCall && rawContent && !/\s$/.test(rawContent)) rawContent += "\n\n";
             afterToolCall = false;
             rawContent += chunk.text;
-            fullContent = withoutEchoedToolTrace(rawContent);
+            fullContent = responseContent();
             scheduleContentFlush();
           } else if (chunk.type === "reasoning") {
             if (reasoningAfterToolCall && reasoning && !/\s$/.test(reasoning)) reasoning += "\n\n";
@@ -1415,6 +1532,7 @@ export function createChatTurnEngine(
             setAgentState("streaming");
             completeToolActivity();
           } else if (chunk.type === "done") {
+            finishReason = chunk.finishReason;
             // Ended from outside the turn: it stops, rather than counting as answered.
             if (chunk.finishReason === "abort") {
               control.controller.abort();
@@ -1466,6 +1584,9 @@ export function createChatTurnEngine(
             onlyRead:
               !stepLimitReached &&
               !unbackedClaim &&
+              finishReason === "stop" &&
+              (!requireCaretDisposition ||
+                readCaretResponse(rawContent).disposition === "answer") &&
               (calls ?? []).every(
                 (call) =>
                   !call.interaction &&

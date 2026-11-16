@@ -743,7 +743,7 @@ class ReasoningService extends BaseReasoningService {
     provider: string,
     config: ReasoningConfig & { systemPrompt: string },
     abortController: AbortController
-  ): AsyncGenerator<string, void, unknown> {
+  ): AsyncGenerator<string, string | undefined, unknown> {
     const route = resolveChatRoute({
       provider,
       lanUrl: config.lanUrl,
@@ -930,6 +930,7 @@ class ReasoningService extends BaseReasoningService {
 
     const decoder = new TextDecoder();
     let buffer = "";
+    let finishReason: string | undefined;
     const stripThinking = (isLocalProvider || isLanChat) && config.disableThinking !== false;
     const filterThinkTags = stripThinking ? createStreamingThinkFilter() : null;
 
@@ -937,15 +938,14 @@ class ReasoningService extends BaseReasoningService {
       while (true) {
         const { done, value } = await reader.read();
         assertStreamAllowed();
-        if (done) break;
 
         // Reset on bytes, including keepalives, partial SSE frames and hidden
         // reasoning. A reply may stream for much longer than the idle timeout.
-        if (value.byteLength > 0) resetTimeout(timeoutSeconds);
+        if (!done && value.byteLength > 0) resetTimeout(timeoutSeconds);
 
-        buffer += decoder.decode(value, { stream: true });
+        buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        buffer = done ? "" : lines.pop() || "";
 
         for (const line of lines) {
           assertStreamAllowed();
@@ -957,13 +957,17 @@ class ReasoningService extends BaseReasoningService {
             const trailing = filterThinkTags?.finish();
             if (trailing) yield trailing;
             assertStreamAllowed();
-            return;
+            return finishReason;
           }
 
           let content: string | undefined;
           try {
-            const parsed = JSON.parse(data);
-            content = parsed.choices?.[0]?.delta?.content;
+            const parsed: {
+              choices?: Array<{ delta?: { content?: string }; finish_reason?: unknown }>;
+            } = JSON.parse(data);
+            const choice = parsed.choices?.[0];
+            if (typeof choice?.finish_reason === "string") finishReason = choice.finish_reason;
+            content = choice?.delta?.content;
           } catch {
             // skip malformed SSE chunks
             continue;
@@ -975,11 +979,13 @@ class ReasoningService extends BaseReasoningService {
           yield content;
           assertStreamAllowed();
         }
+        if (done) break;
       }
 
       const trailing = filterThinkTags?.finish();
       if (trailing) yield trailing;
       assertStreamAllowed();
+      return finishReason;
     } catch (error) {
       assertStreamAllowed();
       if ((error as Error).name === "AbortError" && abortController.signal.aborted) {
@@ -1057,13 +1063,28 @@ class ReasoningService extends BaseReasoningService {
             config,
             abortController
           );
-          for await (const text of contentGen) {
-            assertStreamAllowed();
-            yield { type: "content", text };
+          let finishReason: string | undefined;
+          try {
+            while (true) {
+              const chunk = await contentGen.next();
+              if (chunk.done) {
+                finishReason = chunk.value;
+                break;
+              }
+              assertStreamAllowed();
+              yield { type: "content", text: chunk.value };
+            }
+          } finally {
+            // Manual iteration retains the final provider metadata, and must
+            // still release the reader when the consumer stops mid-response.
+            await contentGen.return(undefined);
           }
           assertStreamAllowed();
           transportComplete = true;
-          yield { type: "done", finishReason: abortController.signal.aborted ? "abort" : "stop" };
+          yield {
+            type: "done",
+            finishReason: abortController.signal.aborted ? "abort" : (finishReason ?? "unknown"),
+          };
         } catch (error) {
           if (abortController.signal.aborted && (error as Error).name === "AbortError") return;
           throw error;
@@ -1452,6 +1473,7 @@ class ReasoningService extends BaseReasoningService {
         name?: string;
         arguments?: string;
         finishReason?: string;
+        message?: string;
       },
       void,
       unknown
@@ -1465,6 +1487,7 @@ class ReasoningService extends BaseReasoningService {
       name?: string;
       arguments?: string;
       finishReason?: string;
+      message?: string;
     };
     const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
     let resolve: (() => void) | null = null;
@@ -1526,6 +1549,9 @@ class ReasoningService extends BaseReasoningService {
             const item = queue.shift()!;
             if (item.type === "__end") return;
             if (item.type === "__error") throw new Error((item as { error: string }).error);
+            if (item.type === "error") {
+              throw new Error((item as StreamEvent).message || "Stream interrupted");
+            }
             yield item as StreamEvent;
           }
         }
@@ -1549,6 +1575,8 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      /** The same instructions without screenshot grounding, for a failed first image request. */
+      textOnlySystemPrompt?: string;
       /** Whether a final answer claims an action no tool call in its turn did. */
       isUnbackedClaim?: (text: string) => boolean;
     },
@@ -1568,42 +1596,66 @@ class ReasoningService extends BaseReasoningService {
       // hasn't seen yet start where the last step's pairs do.
       let latestStepStart = currentMessages.length;
       let claimRetried = false;
+      let screenContext = config.screenContext;
+      let systemPrompt = config.systemPrompt;
 
       for (let step = 0; step < maxSteps; step++) {
         if (operationWasCancelled()) return;
         currentMessages = compactTranscriptHistory(currentMessages, latestStepStart);
-        // The screenshot rides every step of the tool loop so the model keeps
-        // its vision after tool results come back.
-        const ipcStream = this.streamFromIPC(
-          currentMessages,
-          {
-            systemPrompt: config.systemPrompt,
-            tools: config.tools,
-            screenContext: config.screenContext,
-          },
-          controller.signal
-        );
-
         const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
         let stepText = "";
+        let finishReason = "unknown";
+        let emittedOutput = false;
 
-        for await (const ev of ipcStream.stream) {
-          if (ev.type === "content") {
-            stepText += ev.text as string;
-            yield { type: "content", text: ev.text as string };
-          } else if (ev.type === "tool_call") {
-            const call = {
-              id: ev.id as string,
-              name: ev.name as string,
-              arguments: ev.arguments as string,
-            };
-            pendingToolCalls.push(call);
-            yield { type: "tool_calls", calls: [call] };
+        // A rejected optional image must not lose the command. Retry only before
+        // the first visible output or tool call; later retries could replay an action.
+        while (true) {
+          const ipcStream = this.streamFromIPC(
+            currentMessages,
+            { systemPrompt, tools: config.tools, screenContext },
+            controller.signal
+          );
+          try {
+            for await (const ev of ipcStream.stream) {
+              if (ev.type === "content") {
+                emittedOutput = true;
+                stepText += ev.text as string;
+                yield { type: "content", text: ev.text as string };
+              } else if (ev.type === "tool_call") {
+                emittedOutput = true;
+                const call = {
+                  id: ev.id as string,
+                  name: ev.name as string,
+                  arguments: ev.arguments as string,
+                };
+                pendingToolCalls.push(call);
+                yield { type: "tool_calls", calls: [call] };
+              } else if (ev.type === "done") {
+                finishReason = ev.finishReason || "unknown";
+              }
+            }
+          } catch (error) {
+            if (!operationWasCancelled() && step === 0 && screenContext && !emittedOutput) {
+              screenContext = undefined;
+              systemPrompt = config.textOnlySystemPrompt ?? config.systemPrompt;
+              finishReason = "unknown";
+              continue;
+            }
+            throw error;
           }
+          if (ipcStream.wasCancelled() || operationWasCancelled()) {
+            yield { type: "done", finishReason: "abort" };
+            return;
+          }
+          break;
         }
 
-        if (ipcStream.wasCancelled() || operationWasCancelled()) {
-          yield { type: "done", finishReason: "abort" };
+        // EOF and truncation do not authorize either delivery or tool execution.
+        if (finishReason !== "stop" && finishReason !== "tool-calls") {
+          if (pendingToolCalls.length > 0) {
+            throw new Error("Cloud stream ended before tool calls completed");
+          }
+          yield { type: "done", finishReason };
           return;
         }
 
@@ -1621,7 +1673,7 @@ class ReasoningService extends BaseReasoningService {
               continue;
             }
           }
-          yield { type: "done", finishReason: "stop" };
+          yield { type: "done", finishReason };
           return;
         }
 
@@ -1686,7 +1738,7 @@ class ReasoningService extends BaseReasoningService {
       // One more step, with no tools, answers with what it has.
       const answer = this.streamFromIPC(
         [...currentMessages, { role: "user", content: STEP_LIMIT_NOTE }],
-        { systemPrompt: config.systemPrompt, screenContext: config.screenContext },
+        { systemPrompt, screenContext },
         controller.signal
       );
       let answerText = "";

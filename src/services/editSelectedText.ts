@@ -51,7 +51,14 @@ export async function editSelectedText(
     provider: target.provider,
   });
   const local = provider === "local";
-  const marker = local ? "" : createSelectionCompletionMarker();
+  const screenContext =
+    attachment && attachScreenContext && isScreenContextAllowed(usePolicyStore.getState())
+      ? { data: attachment.image, mediaType: attachment.mediaType }
+      : undefined;
+  // Cloud's vision chain can omit a nonce, and /reason does not expose its
+  // finish reason. JSON rejects interrupted strings without server finish metadata.
+  const usesJsonResponse = local || (provider === "openwhispr" && Boolean(screenContext));
+  const marker = usesJsonResponse ? "" : createSelectionCompletionMarker();
   const dictionary = getDictionaryHintWords(settings);
   const toneSentence = settings.toneStyleEnabled
     ? selectionEditToneSentence(resolveDictationToneStyle(settings.toneStyles, appCategory ?? null))
@@ -67,11 +74,13 @@ export async function editSelectedText(
   ]
     .filter(Boolean)
     .join("\n\n");
-  const systemPrompt = local
+  const systemPrompt = usesJsonResponse
     ? buildLocalSelectionEditSystemPrompt({
-        customPrompt: settings.customPrompts.dictationAgent.replaceAll("{{agentName}}", agentName),
-        dictionary,
-        toneSentence,
+        customPrompt: local
+          ? settings.customPrompts.dictationAgent.replaceAll("{{agentName}}", agentName)
+          : cloudBasePrompt,
+        dictionary: local ? dictionary : [],
+        toneSentence: local ? toneSentence : "",
       })
     : buildSelectionEditSystemPrompt(cloudBasePrompt, marker);
   const config: ReasoningConfig = {
@@ -93,24 +102,23 @@ export async function editSelectedText(
       : {}),
     requestId: crypto.randomUUID(),
   };
-  if (attachment && attachScreenContext && isScreenContextAllowed(usePolicyStore.getState())) {
-    config.screenContext = { data: attachment.image, mediaType: attachment.mediaType };
-    // The completion marker's instruction stays last, as in the wake-word edit.
+  if (screenContext) {
+    config.screenContext = screenContext;
+    const screenPrompt = appendScreenContextSuffix(cloudBasePrompt, settings.uiLanguage);
     config.systemPrompt = local
       ? appendScreenContextSuffix(systemPrompt, settings.uiLanguage)
-      : buildSelectionEditSystemPrompt(
-          appendScreenContextSuffix(cloudBasePrompt, settings.uiLanguage),
-          marker
-        );
+      : usesJsonResponse
+        ? buildLocalSelectionEditSystemPrompt({ customPrompt: screenPrompt })
+        : buildSelectionEditSystemPrompt(screenPrompt, marker);
   }
-  const cancel = () => {
+  const cancel = (): void => {
     if (local) void window.electronAPI?.cancelLocalReasoning?.(config.requestId);
   };
   signal.throwIfAborted();
   signal.addEventListener("abort", cancel, { once: true });
-  const run = (runConfig: ReasoningConfig) =>
+  const run = (runConfig: ReasoningConfig): Promise<string> =>
     ReasoningService.processText(
-      local
+      usesJsonResponse
         ? buildLocalSelectionEditUserPrompt(instruction, selectedText)
         : buildSelectionEditUserPrompt(instruction, selectedText),
       target.model,
@@ -119,25 +127,19 @@ export async function editSelectedText(
     );
   try {
     let result: string;
-    let runConfig = config;
     try {
-      result = await run(runConfig);
+      result = await run(config);
     } catch (error) {
       // As with the wake word, a screenshot the model or transport rejects
       // must not cost the edit: run it once more without the screenshot.
       if (!config.screenContext || signal.aborted) throw error;
-      runConfig = { ...config, screenContext: undefined, systemPrompt };
-      result = await run(runConfig);
+      result = await run({ ...config, screenContext: undefined, systemPrompt });
     }
     signal.throwIfAborted();
     if (isSelectionQuestionResponse(result, marker)) return null;
-    return local
+    return usesJsonResponse
       ? extractLocalSelectionEditReplacement(result)
-      : extractSelectionEditReplacement(result, marker, {
-          // Only Cloud's vision chain leaves the marker off; text-only Cloud
-          // keeps it, so an unmarked answer there is prose, not a rewrite.
-          markerOptional: provider === "openwhispr" && Boolean(runConfig.screenContext),
-        });
+      : extractSelectionEditReplacement(result, marker);
   } finally {
     signal.removeEventListener("abort", cancel);
   }

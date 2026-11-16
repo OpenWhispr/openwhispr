@@ -705,15 +705,18 @@ test("a failed attendee lookup still answers, without the block", async (t) => {
   assert.doesNotMatch(prompts[0], /Meeting attendees/);
 });
 
-// A library search that finds another note, recording what it was asked.
+// A library search that finds another note, recording what it was asked. The note is in main's
+// Private, all a chat reads with no workspace active.
 function libraryWithOneHit(searches) {
   return {
+    getPrivateSpaceId: async () => 1,
     semanticSearchNotes: async (query) => {
       searches.push(query);
       return [{ id: 3, title: "Pricing sync Sep 29" }];
     },
     getNote: async (id) => ({
       id,
+      space_id: 1,
       title: "Pricing sync Sep 29",
       content: "Testing $15 against $12",
     }),
@@ -1235,11 +1238,18 @@ test("product questions retain note, scoped search, selected text and screenshot
     {
       settings: BYOK_SETTINGS,
       electronAPI: {
+        // The container is main's Private, all a chat reads with no workspace active.
+        getPrivateSpaceId: async () => 12,
         semanticSearchNotes: async (...args) => {
           searchCalls.push(args);
           return [{ id: 7, title: "Planning" }];
         },
-        getNote: async () => ({ id: 7, title: "Planning", content: "Follow up with Alex." }),
+        getNote: async () => ({
+          id: 7,
+          space_id: 12,
+          title: "Planning",
+          content: "Follow up with Alex.",
+        }),
       },
     }
   );
@@ -1248,7 +1258,7 @@ test("product questions retain note, scoped search, selected text and screenshot
     selectedContext: { text: "Selected OpenWhispr passage", sourceMessageId: "earlier" },
     attachment: { image: "data:image/png;base64,c3ludGhldGlj", mediaType: "image/png" },
   });
-  assert.deepEqual(searchCalls, [[prompt, 5, 12, 34]]);
+  assert.deepEqual(searchCalls, [[prompt, 5, 12, 34, [12]]]);
   assert.doesNotMatch(systemPromptOf(sentMessages[0]), /next Tuesday|Follow up with Alex/);
   const content = sentMessages[0].at(-1).content;
   assert.ok(Array.isArray(content), "image-capable provider receives multimodal request");
@@ -1470,12 +1480,101 @@ test("the first Cloud request carries its screenshot without a look_at_screen st
   for (const [i, question] of ["Translate this email", "Hello"].entries()) {
     await captured.sendToAI(question, [{ id: `u${i}`, role: "user", content: question }], {
       attachment: { image: `image-${i}`, mediaType: "image/jpeg" },
+      plainTextResponse: true,
     });
     assert.deepEqual(configs[i].screenContext, { data: `image-${i}`, mediaType: "image/jpeg" });
     assert.equal(offeredTools[i].includes("look_at_screen"), false);
     assert.match(configs[i].systemPrompt, /SCREEN CONTEXT:/);
+    assert.doesNotMatch(configs[i].textOnlySystemPrompt, /SCREEN CONTEXT:/);
+    assert.match(configs[i].textOnlySystemPrompt, /OUTPUT FORMAT:[^]*own line with no marker\.$/);
   }
   assert.equal(configs.length, 2, "one provider call per request");
+});
+
+test("cloud caret delivery follows the real IPC completion and recovers a rejected first screenshot", async (t) => {
+  const listeners = {};
+  const requests = [];
+  let scenario = "stop";
+  const electronAPI = {
+    onAgentStreamChunk: (callback) => ((listeners.chunk = callback), () => {}),
+    onAgentStreamError: (callback) => ((listeners.error = callback), () => {}),
+    onAgentStreamEnd: (callback) => ((listeners.end = callback), () => {}),
+    cancelAgentStream() {},
+    startAgentStream(requestId, messages, options) {
+      requests.push({ messages, options });
+      queueMicrotask(() => {
+        if (scenario === "image failure" && options.screenContext) {
+          listeners.error({ requestId, error: "API error: 500" });
+          return;
+        }
+        listeners.chunk({
+          requestId,
+          chunk:
+            scenario === "incomplete tool"
+              ? {
+                  type: "tool_call",
+                  id: "c1",
+                  name: "create_note",
+                  arguments: '{"title":"Reply","content":"Monday"}',
+                }
+              : { type: "content", text: "Monday works." },
+        });
+        if (scenario === "stream error") {
+          listeners.chunk({ requestId, chunk: { type: "error", message: "Stream interrupted" } });
+        } else if (scenario !== "EOF") {
+          listeners.chunk({
+            requestId,
+            chunk: {
+              type: "done",
+              finishReason:
+                scenario === "length" || scenario === "incomplete tool" ? "length" : "stop",
+            },
+          });
+        }
+        listeners.end({ requestId });
+      });
+    },
+  };
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent", allowInteractions: true },
+    { electronAPI }
+  );
+  reasoningService.processTextStreamingCloud.mock.restore();
+  for (scenario of ["stop", "length", "EOF", "stream error", "incomplete tool", "image failure"]) {
+    const before = requests.length;
+    const completed = [];
+    const question = "Reply that Monday works";
+    await captured.sendToAI(question, [{ id: `u-${scenario}`, role: "user", content: question }], {
+      attachment: { image: "captured-image", mediaType: "image/jpeg" },
+      plainTextResponse: true,
+      onComplete: (result) => completed.push(result),
+    });
+    assert.equal(requests.length - before, scenario === "image failure" ? 2 : 1, scenario);
+    if (scenario === "stream error" || scenario === "incomplete tool") {
+      assert.deepEqual(completed, []);
+      assert.equal(getMessages().at(-1).turn.status, "error");
+      if (scenario === "incomplete tool") {
+        assert.equal(getMessages().at(-1).toolCalls[0].status, "stopped");
+      }
+    } else {
+      assert.equal(completed.length, 1, scenario);
+      assert.equal(
+        completed[0].onlyRead,
+        scenario === "stop" || scenario === "image failure",
+        scenario
+      );
+      assert.equal(completed[0].content, "Monday works.");
+    }
+    if (scenario === "image failure") {
+      const { options } = requests.at(-1);
+      assert.equal(options.screenContext, undefined);
+      assert.doesNotMatch(options.systemPrompt, /SCREEN CONTEXT:/);
+      assert.match(options.systemPrompt, /OUTPUT FORMAT:/);
+      assert.ok(options.tools.some(({ name }) => name === "ask_user"));
+      assert.equal(getMessages().at(-1).turn.status, "complete");
+    }
+  }
 });
 
 test("automatic library context includes saved summaries and prioritizes private information", async (t) => {
@@ -1484,9 +1583,11 @@ test("automatic library context includes saved summaries and prioritizes private
     {},
     {
       electronAPI: {
+        getPrivateSpaceId: async () => 1,
         semanticSearchNotes: async () => [{ id: 3, title: "Pricing" }],
         getNote: async () => ({
           id: 3,
+          space_id: 1,
           title: "Pricing",
           content: "Introductory notes",
           enhanced_content: "Starter $9; Pro $19 per month",
@@ -1782,6 +1883,9 @@ test("an answer typed at another app's caret asks for plain text as the last ins
 
 for (const [tool, onlyRead, finishReason = "stop"] of [
   [null, true],
+  [null, false, "length"],
+  [null, false, "unknown"],
+  ["search_notes", false, "length"],
   ["search_notes", true],
   ["create_note", false],
   // Paused at the step limit: the reply so far is not the whole answer.
@@ -1810,6 +1914,40 @@ for (const [tool, onlyRead, finishReason = "stop"] of [
     assert.equal(completed[0].onlyRead, onlyRead);
   });
 }
+
+test("a hosted BYOK caret answer requires a successful completion even with question tools", async (t) => {
+  const { captured, reasoningService } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent", allowInteractions: true },
+    {
+      settings: {
+        useDictationAgent: true,
+        dictationAgentMode: "providers",
+        dictationAgentProvider: "openai",
+        dictationAgentModel: "gpt-5-mini",
+      },
+    }
+  );
+  let finishReason;
+  reasoningService.processTextStreamingAI.mock.mockImplementation(
+    (_messages, _model, _provider, _config, tools) => {
+      assert.ok(tools.ask_user);
+      return (async function* () {
+        yield { type: "content", text: "Monday works." };
+        if (finishReason !== undefined) yield { type: "done", finishReason };
+      })();
+    }
+  );
+  for (finishReason of ["stop", "length", "unknown", "error", undefined]) {
+    const completed = [];
+    await captured.sendToAI("Reply that Monday works", [], {
+      plainTextResponse: true,
+      onComplete: (result) => completed.push(result),
+    });
+    assert.equal(completed.length, 1);
+    assert.equal(completed[0].onlyRead, finishReason === "stop", String(finishReason));
+  }
+});
 
 // ask_user is a read-only tool, so only its interaction keeps the turn from
 // counting as one that only read.
@@ -1865,4 +2003,236 @@ test("an answer typed at another app's caret names nothing to connect", async (t
 
   assert.doesNotMatch(configs[0].systemPrompt, /still write it in full in your reply/);
   assert.match(configs[1].systemPrompt, /still write it in full in your reply/);
+});
+
+const SMALL_VOICE_MODEL = {
+  useDictationAgent: true,
+  dictationAgentMode: "local",
+  dictationAgentProvider: "qwen",
+  dictationAgentModel: "qwen3.5-2b-q4_k_m",
+};
+
+test("a voice model without question tools explicitly identifies a complete caret answer", async (t) => {
+  const saved = [];
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    {
+      inferenceScope: "dictationAgent",
+      allowInteractions: true,
+      onStreamComplete: (_id, content) => saved.push(content),
+    },
+    { settings: SMALL_VOICE_MODEL }
+  );
+  const cases = [
+    {
+      name: "unmarked clarification",
+      response: "What time should I propose?",
+      content: "What time should I propose?",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "explicit clarification",
+      response: "__OPENWHISPR_CARET_QUESTION__\nWhat time should I propose?",
+      content: "What time should I propose?",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "ready answer",
+      response: "__OPENWHISPR_CARET_ANSWER__\nMonday works.",
+      content: "Monday works.",
+      finishReason: "stop",
+      onlyRead: true,
+    },
+    {
+      name: "ready reply containing a question",
+      response: "__OPENWHISPR_CARET_ANSWER__\nWould Monday work for you?",
+      content: "Would Monday work for you?",
+      finishReason: "stop",
+      onlyRead: true,
+    },
+    {
+      name: "unknown disposition",
+      response: "__OPENWHISPR_CARET_OTHER__\nI need more details.",
+      content: "__OPENWHISPR_CARET_OTHER__\nI need more details.",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "conflicting dispositions",
+      response: "__OPENWHISPR_CARET_ANSWER__\n__OPENWHISPR_CARET_QUESTION__\nWhich Monday?",
+      content: "Which Monday?",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "duplicate answer disposition",
+      response: "__OPENWHISPR_CARET_ANSWER__\n__OPENWHISPR_CARET_ANSWER__\nMonday works.",
+      content: "Monday works.",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    {
+      name: "revised disposition after reply text",
+      response:
+        "__OPENWHISPR_CARET_ANSWER__\nMonday works.\n__OPENWHISPR_CARET_QUESTION__\nWhich Monday?",
+      content: "Monday works.\n\nWhich Monday?",
+      finishReason: "stop",
+      onlyRead: false,
+    },
+    ...["length", "error", undefined].map((finishReason) => ({
+      name: `incomplete answer (${finishReason ?? "missing done"})`,
+      response: "__OPENWHISPR_CARET_ANSWER__\nMonday works.",
+      content: "Monday works.",
+      finishReason,
+      onlyRead: false,
+    })),
+  ];
+  let scenario;
+  const configs = [];
+  reasoningService.processTextStreamingAI.mock.mockImplementation(
+    (_messages, _model, _provider, config, tools) => {
+      configs.push({ config, tools });
+      return (async function* () {
+        yield { type: "content", text: scenario.response };
+        if (scenario.finishReason !== undefined)
+          yield { type: "done", finishReason: scenario.finishReason };
+      })();
+    }
+  );
+  for (scenario of cases) {
+    const completed = [];
+    await captured.sendToAI("Reply and suggest a time", [], {
+      plainTextResponse: true,
+      onComplete: (result) => completed.push(result),
+    });
+    assert.equal(configs.at(-1).tools, undefined, "the bundled 2B model has no ask_user");
+    assert.equal(completed.length, 1, scenario.name);
+    assert.equal(completed[0].onlyRead, scenario.onlyRead, scenario.name);
+    assert.match(configs.at(-1).config.systemPrompt, /__OPENWHISPR_CARET_ANSWER__/);
+    assert.equal(completed[0].content, scenario.content, scenario.name);
+    assert.equal(getMessages().at(-1).content, scenario.content, scenario.name);
+    assert.equal(saved.at(-1), scenario.content, scenario.name);
+  }
+
+  scenario = { response: "Ordinary chat reply.", finishReason: "stop" };
+  await captured.sendToAI("Hello", []);
+  assert.doesNotMatch(configs.at(-1).config.systemPrompt, /__OPENWHISPR_CARET_/);
+  assert.equal(getMessages().at(-1).content, "Ordinary chat reply.");
+});
+
+test("split caret disposition prefixes never appear in streamed or saved content", async (t) => {
+  const saved = [];
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    {
+      inferenceScope: "dictationAgent",
+      allowInteractions: true,
+      onTurnCheckpoint: (_id, content) => saved.push(content),
+      onStreamComplete: (_id, content) => saved.push(content),
+    },
+    { settings: SMALL_VOICE_MODEL }
+  );
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.after(() => t.mock.timers.reset());
+  const shown = [];
+  reasoningService.processTextStreamingAI.mock.mockImplementation(() =>
+    (async function* () {
+      for (const text of ["__OPEN", "WHISPR_CARET_", "ANSWER__", "\nMonday ", "works."]) {
+        yield { type: "content", text };
+        t.mock.timers.tick(32);
+        shown.push(getMessages().at(-1).content);
+      }
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  const completed = [];
+  await captured.sendToAI("Reply that Monday works", [], {
+    plainTextResponse: true,
+    onComplete: (result) => completed.push(result),
+  });
+  assert.deepEqual(shown, ["", "", "", "Monday ", "Monday works."]);
+  assert.equal(completed[0].onlyRead, true);
+  assert.equal(completed[0].content, "Monday works.");
+  assert.deepEqual(saved, ["", "Monday works."]);
+
+  const revisedShown = [];
+  reasoningService.processTextStreamingAI.mock.mockImplementation(() =>
+    (async function* () {
+      for (const text of [
+        "__OPENWHISPR_CARET_ANSWER__\nMonday works.\n",
+        "__OPEN",
+        "WHISPR_CARET_QUESTION__",
+        "\nWhich Monday?",
+      ]) {
+        yield { type: "content", text };
+        t.mock.timers.tick(32);
+        revisedShown.push(getMessages().at(-1).content);
+      }
+      yield { type: "done", finishReason: "stop" };
+    })()
+  );
+  await captured.sendToAI("Reply again", [], {
+    plainTextResponse: true,
+    onComplete: (result) => completed.push(result),
+  });
+  assert.equal(completed.at(-1).onlyRead, false);
+  assert.equal(completed.at(-1).content, "Monday works.\n\nWhich Monday?");
+  assert.equal(
+    revisedShown.some((content) => content.includes("__OPEN")),
+    false
+  );
+
+  reasoningService.processTextStreamingAI.mock.mockImplementation(() =>
+    (async function* () {
+      yield { type: "content", text: "__OPENWHISPR_CARET_AN" };
+      t.mock.timers.tick(32);
+      captured.cancelStream();
+    })()
+  );
+  await captured.sendToAI("Reply again", [], { plainTextResponse: true });
+  assert.equal(getMessages().at(-1).content, "");
+  assert.equal(
+    saved.some((content) => content.includes("__OPEN")),
+    false
+  );
+});
+
+test("real local SSE completion controls whether a caret answer can be pasted", async (t) => {
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent", allowInteractions: true },
+    {
+      settings: SMALL_VOICE_MODEL,
+      electronAPI: { llamaServerStart: async () => ({ success: true, port: 11434 }) },
+    }
+  );
+  reasoningService.processTextStreamingAI.mock.restore();
+  let finishReason;
+  t.mock.method(globalThis, "fetch", async () => {
+    const chunks = [
+      { choices: [{ delta: { content: "__OPENWHISPR_CARET_ANSWER__\nMonday works." } }] },
+    ];
+    if (finishReason) chunks.push({ choices: [{ delta: {}, finish_reason: finishReason }] });
+    return new Response(
+      chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n",
+      { status: 200, headers: { "content-type": "text/event-stream" } }
+    );
+  });
+  for (const [reason, onlyRead] of [
+    ["length", false],
+    [undefined, false],
+    ["stop", true],
+  ]) {
+    finishReason = reason;
+    const completed = [];
+    await captured.sendToAI("Reply that Monday works", [], {
+      plainTextResponse: true,
+      onComplete: (result) => completed.push(result),
+    });
+    assert.equal(completed[0].onlyRead, onlyRead, `provider finish: ${reason ?? "missing"}`);
+    assert.equal(completed[0].content, "Monday works.");
+    assert.equal(getMessages().at(-1).content, "Monday works.");
+  }
 });

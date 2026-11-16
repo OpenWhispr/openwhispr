@@ -3164,31 +3164,50 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       requireCompleteOutput: true,
     };
     const isLocalSelection = config?.provider === "local";
+    const isCloudScreenSelection =
+      config?.provider === "openwhispr" && Boolean(selectionConfig.screenContext);
+    const usesJsonResponse = isLocalSelection || isCloudScreenSelection;
     const toneSentence = toneStyle ? selectionEditToneSentence(toneStyle) : "";
     const withToneSentence = (prompt) =>
       toneSentence ? `${String(prompt ?? "").trim()}\n\n${toneSentence}` : prompt;
     let userPrompt;
     let completionMarker;
-    if (isLocalSelection) {
+    if (usesJsonResponse) {
       const settings = getSettings();
       selectionConfig.systemPrompt = buildLocalSelectionEditSystemPrompt({
-        customPrompt: (settings.customPrompts.dictationAgent || "").replace(
-          /\{\{agentName\}\}/g,
-          agentName?.trim() || "Assistant"
-        ),
-        dictionary: getLlmDictionaryWords(settings, { includeTriggers: true }),
-        toneSentence,
+        customPrompt: isLocalSelection
+          ? (settings.customPrompts.dictationAgent || "").replace(
+              /\{\{agentName\}\}/g,
+              agentName?.trim() || "Assistant"
+            )
+          : withToneSentence(config.systemPrompt),
+        dictionary: isLocalSelection
+          ? getLlmDictionaryWords(settings, { includeTriggers: true })
+          : [],
+        toneSentence: isLocalSelection ? toneSentence : "",
       });
-      selectionConfig.responseFormat = SELECTION_EDIT_RESPONSE_FORMAT;
-      selectionConfig.disableThinking = true;
-      const instruction = this.voiceAgentRequested
-        ? text
-        : stripAgentAddressPreservingFormatting(
-            text,
-            agentName,
-            wakeWordLanguage ?? resolveWakeWordLanguage(settings),
-            config?.snippets ?? settings.snippets
-          );
+      if (isLocalSelection) {
+        selectionConfig.responseFormat = SELECTION_EDIT_RESPONSE_FORMAT;
+        selectionConfig.disableThinking = true;
+      }
+      if (isCloudScreenSelection) {
+        // Retain the JSON contract when a rejected screenshot is retried;
+        // /reason can also return partial output for a non-length finish.
+        selectionConfig.textOnlySystemPrompt = buildLocalSelectionEditSystemPrompt({
+          customPrompt: withToneSentence(
+            config.textOnlySystemPrompt ?? dictationAgentPrompt(settings, agentName)
+          ),
+        });
+      }
+      const instruction =
+        !isLocalSelection || this.voiceAgentRequested
+          ? text
+          : stripAgentAddressPreservingFormatting(
+              text,
+              agentName,
+              wakeWordLanguage ?? resolveWakeWordLanguage(settings),
+              config?.snippets ?? settings.snippets
+            );
       userPrompt = buildLocalSelectionEditUserPrompt(instruction, capture.text);
     } else {
       completionMarker = createSelectionCompletionMarker();
@@ -3216,12 +3235,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
       if (wasCancelled()) return text;
       if (!isSelectionQuestionResponse(result, completionMarker)) {
-        const replacement = isLocalSelection
+        const replacement = usesJsonResponse
           ? extractLocalSelectionEditReplacement(result)
-          : extractSelectionEditReplacement(result, completionMarker, {
-              markerOptional:
-                config?.provider === "openwhispr" && Boolean(selectionConfig.screenContext),
-            });
+          : extractSelectionEditReplacement(result, completionMarker);
         this.pendingSelectionEdit = { sessionId: capture.sessionId };
         return replacement;
       }
