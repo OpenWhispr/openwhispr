@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,7 +23,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
-import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useOnboardingT } from './strings';
 
@@ -272,21 +272,30 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   return <View style={[s.card, style]}>{children}</View>;
 }
 
-// The approved idle bubble: brand gradient disc with the white OpenWhispr mark.
+const BUBBLE = require('./assets/bubble.png');
+
+// The bubble, drawn from the desktop's Liquid Glass dock icon.
 export function BubbleIcon({ size = 56 }: { size?: number }) {
   return (
-    <LinearGradient
-      colors={['#3F72EC', '#0C3FBF']}
-      start={{ x: 0.2, y: 0.1 }}
-      end={{ x: 0.8, y: 0.95 }}
-      style={[
-        s.bubble,
-        { width: size, height: size, borderRadius: size / 2 },
-        { shadowColor: colors.brandDeep },
-      ]}
-    >
-      <OpenWhisprMark size={size * 0.56} color="#FFFFFF" />
-    </LinearGradient>
+    <View style={[s.bubble, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Image source={BUBBLE} style={{ width: size, height: size }} accessible={false} />
+    </View>
+  );
+}
+
+// A still halo, for screens where the bubble isn't asking to be tapped.
+export function Halo({ size, color = 'rgba(52,102,226,0.14)' }: { size: number; color?: string }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: color,
+      }}
+    />
   );
 }
 
@@ -437,8 +446,7 @@ export const s = StyleSheet.create({
     elevation: 2,
   },
   bubble: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    shadowColor: '#163992',
     shadowOpacity: 0.35,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },

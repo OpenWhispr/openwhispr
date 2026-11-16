@@ -1,15 +1,12 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
-  Easing,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
+import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { Text } from '@/components/ui/Text';
 import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
@@ -82,36 +79,46 @@ export function PracticeBubble({
 }
 
 const HEIGHTS = [10, 18, 26, 16, 24, 12, 20];
+const QUIET = 0.08;
 
+// Bars follow the microphone level, so they stay flat until someone speaks.
 function Waveform() {
+  const level = useSharedValue(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      let next = 0;
+      try {
+        next = AndroidDictation?.getRecordingLevel?.() ?? 0;
+      } catch {
+        next = 0;
+      }
+      level.value = withTiming(next < QUIET ? 0 : next, { duration: 90 });
+    }, 80);
+    return () => clearInterval(timer);
+  }, [level]);
   return (
     <View style={b.wave} accessible={false}>
       {HEIGHTS.map((height, index) => (
-        <Bar key={index} height={height} delay={index * 90} />
+        <Bar key={index} height={height} index={index} level={level} />
       ))}
     </View>
   );
 }
 
-function Bar({ height, delay }: { height: number; delay: number }) {
-  const reduced = useReducedMotion();
-  const scale = useSharedValue(0.6);
-  useEffect(() => {
-    if (reduced) return;
-    scale.value = withDelay(
-      delay,
-      withRepeat(
-        withSequence(
-          withTiming(1, { duration: 260, easing: Easing.inOut(Easing.quad) }),
-          withTiming(0.4, { duration: 260, easing: Easing.inOut(Easing.quad) }),
-        ),
-        -1,
-        true,
-      ),
-    );
-  }, [delay, reduced, scale]);
-  const style = useAnimatedStyle(() => ({ transform: [{ scaleY: scale.value }] }));
-  return <Animated.View style={[b.bar, { height }, style]} />;
+function Bar({
+  height,
+  index,
+  level,
+}: {
+  height: number;
+  index: number;
+  level: SharedValue<number>;
+}) {
+  const style = useAnimatedStyle(() => {
+    const wobble = 0.75 + 0.25 * Math.sin(index * 1.7 + level.value * 9);
+    return { height: 4 + (height - 4) * Math.min(1, level.value * 1.6) * wobble };
+  });
+  return <Animated.View style={[b.bar, style]} />;
 }
 
 const b = StyleSheet.create({

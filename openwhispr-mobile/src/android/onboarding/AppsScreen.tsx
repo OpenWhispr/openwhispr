@@ -1,15 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
-import { AccentText, BubbleIcon, GlassButton, PulseRings, Screen, colors } from './kit';
+import { AccentText, BubbleIcon, GlassButton, Halo, Screen, colors } from './kit';
 import { useOnboardingT } from './strings';
 
 const app = (name: string) => {
@@ -118,10 +110,10 @@ export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () 
                 },
               ]}
             >
-              <PulseRings size={84 * scale} color="rgba(255,255,255,0.16)" />
+              <Halo size={92 * scale} color="rgba(255,255,255,0.16)" />
               <BubbleIcon size={68 * scale} />
             </View>
-            {ORBIT.map(([name, angle, distance, size, tilt, opacity], index) => {
+            {ORBIT.map(([name, angle, distance, size, tilt, opacity]) => {
               const radians = (angle * Math.PI) / 180;
               const half = (size * scale) / 2;
               const x = Math.min(
@@ -130,9 +122,8 @@ export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () 
               );
               const y = Math.max(half + 8, centerY + distance * scale * Math.sin(radians));
               return (
-                <Floating
+                <View
                   key={name}
-                  index={index}
                   style={{
                     position: 'absolute',
                     left: x - half,
@@ -142,7 +133,7 @@ export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () 
                   }}
                 >
                   <Image source={app(name)} style={{ width: size * scale, height: size * scale }} />
-                </Floating>
+                </View>
               );
             })}
           </>
@@ -150,31 +141,6 @@ export function AppsScreen({ onBack, onNext }: { onBack: () => void; onNext: () 
       </View>
     </Screen>
   );
-}
-
-function Floating({
-  index,
-  style,
-  children,
-}: {
-  index: number;
-  style: object;
-  children: React.ReactNode;
-}) {
-  const reduced = useReducedMotion();
-  const drift = useSharedValue(0);
-  useEffect(() => {
-    if (reduced) return;
-    drift.value = withRepeat(
-      withTiming(1, { duration: 2400 + (index % 5) * 380, easing: Easing.inOut(Easing.sin) }),
-      -1,
-      true,
-    );
-  }, [drift, index, reduced]);
-  const animated = useAnimatedStyle(() => ({
-    marginTop: (drift.value - 0.5) * (index % 2 ? 6 : -6),
-  }));
-  return <Animated.View style={[style, animated]}>{children}</Animated.View>;
 }
 
 const o = StyleSheet.create({

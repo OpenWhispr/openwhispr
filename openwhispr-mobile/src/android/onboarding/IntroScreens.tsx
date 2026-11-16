@@ -29,49 +29,54 @@ export function BrandBackground({ children }: { children: React.ReactNode }) {
   );
 }
 
+const SPLASH_BG = require('./assets/splash-bg.jpg');
+
+// Laid out on the Figma frame (393 x 852): the background art, rings included, is exported
+// from it, and the icon and copy sit at the same fractions of the screen.
 export function SplashScreen({ onStart }: { onStart: () => void }) {
   const t = useOnboardingT();
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const y = (value: number) => (size.height * value) / 852;
+  const icon = (size.width * 112) / 393;
   return (
-    <BrandBackground>
+    <View
+      style={{ flex: 1, backgroundColor: colors.brandMid }}
+      onLayout={(event) => setSize(event.nativeEvent.layout)}
+    >
       <StatusBar style="light" />
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={[s.center, { flex: 1 }]}>
-          <View style={[s.center, { width: 280, height: 280 }]}>
-            {[280, 210, 150].map((size) => (
-              <View
-                key={size}
-                pointerEvents="none"
-                style={[
-                  local.ring,
-                  { width: size, height: size, borderRadius: size / 2 },
-                  size === 150 && { backgroundColor: 'rgba(255,255,255,0.06)' },
-                ]}
-              />
-            ))}
-            <Image
-              source={APP_ICON}
-              style={{ width: 112, height: 112 }}
-              accessibilityIgnoresInvertColors
-              accessible={false}
-            />
-          </View>
-        </View>
-        <View style={{ paddingHorizontal: 24, gap: 12, paddingBottom: 32 }}>
-          <AccentText
-            center
-            text={t('splashTitle')}
-            accent={LIGHT_ACCENT}
-            style={{ color: '#FFFFFF', fontSize: 36, lineHeight: 42 }}
+      <Image source={SPLASH_BG} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      {size.height > 0 ? (
+        <>
+          <Image
+            source={APP_ICON}
+            style={[
+              local.splashIcon,
+              { width: icon, height: icon, top: y(300) - icon / 2, left: (size.width - icon) / 2 },
+            ]}
+            accessible={false}
           />
-          <Text style={[s.body, { color: 'rgba(255,255,255,0.85)', textAlign: 'center' }]}>
-            {t('splashBody')}
-          </Text>
-        </View>
+          <View style={{ position: 'absolute', top: y(508), left: 16, right: 16, gap: 12 }}>
+            <AccentText
+              center
+              text={t('splashTitle')}
+              accent={LIGHT_ACCENT}
+              style={{ color: '#FFFFFF', fontSize: 36, lineHeight: 42 }}
+            />
+            <Text style={[s.body, { color: 'rgba(255,255,255,0.78)', textAlign: 'center' }]}>
+              {t('splashBody')}
+            </Text>
+          </View>
+        </>
+      ) : null}
+      <SafeAreaView
+        style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
+        edges={['bottom']}
+      >
         <View style={s.footer}>
           <WhiteButton label={t('getStarted')} onPress={onStart} />
         </View>
       </SafeAreaView>
-    </BrandBackground>
+    </View>
   );
 }
 
@@ -201,10 +206,12 @@ const local = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     opacity: 0.16,
   },
-  ring: {
+  splashIcon: {
     position: 'absolute',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
+    shadowColor: '#0B1F66',
+    shadowOpacity: 0.45,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 16 },
   },
   pitch: {
     flex: 1,

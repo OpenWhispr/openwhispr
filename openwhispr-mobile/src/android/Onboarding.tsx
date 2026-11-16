@@ -123,17 +123,26 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
     [t],
   );
 
-  const finish = useCallback(async () => {
+  const finish = useCallback(() => {
     if (finishing) return;
     setFinishing(true);
+    clearProgress();
+    onFinish();
+  }, [finishing, onFinish]);
+
+  // Choosing Cloud opens the Pro offer; paying or skipping both land on You're ready.
+  const [offering, setOffering] = useState(false);
+  const chooseCloud = useCallback(async () => {
+    if (offering) return;
+    setOffering(true);
     try {
-      if (mode === 'cloud')
-        await register({ placement: SUPERWALL_PLACEMENTS.onboardingPaywall }).catch(() => false);
+      await applyCloudConfig();
+      await register({ placement: SUPERWALL_PLACEMENTS.onboardingPaywall }).catch(() => false);
     } finally {
-      clearProgress();
-      onFinish();
+      setOffering(false);
+      go('ready', 'cloud');
     }
-  }, [finishing, mode, onFinish, register]);
+  }, [go, offering, register]);
 
   switch (step) {
     case 'splash':
@@ -178,28 +187,20 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
         <ModeScreen
           mode={mode}
           onBack={back}
+          busy={offering}
           onChoose={(chosen) => {
-            if (chosen === 'cloud') {
-              void applyCloudConfig();
-              go('ready', 'cloud');
-            } else go('privateSetup', 'private');
+            if (chosen === 'cloud') void chooseCloud();
+            else go('privateSetup', 'private');
           }}
         />
       );
     case 'privateSetup':
       return (
-        <PrivateSetupScreen
-          onBack={back}
-          onReady={advance}
-          onUseCloud={() => {
-            void applyCloudConfig();
-            go('ready', 'cloud');
-          }}
-        />
+        <PrivateSetupScreen onBack={back} onReady={advance} onUseCloud={() => void chooseCloud()} />
       );
     case 'privateReady':
       return <PrivateReadyScreen onBack={back} onNext={advance} />;
     case 'ready':
-      return <ReadyScreen onDone={() => void finish()} />;
+      return <ReadyScreen onDone={finish} />;
   }
 }

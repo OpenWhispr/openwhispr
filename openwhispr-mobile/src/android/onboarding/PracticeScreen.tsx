@@ -68,7 +68,7 @@ export function PracticeScreen({
   const [text, setText] = useState('');
   const [phase, setPhase] = useState<Phase>('blank');
   const [focused, setFocused] = useState(false);
-  const [used, setUsed] = useState(false);
+  const [nudge, setNudge] = useState(false);
   const [error, setError] = useState('');
   const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
   const [overlayBottom, setOverlayBottom] = useState(16);
@@ -138,7 +138,6 @@ export function PracticeScreen({
     }
     try {
       await recorder.current.start();
-      setUsed(true);
       setPhase('listening');
     } catch (failure) {
       setError(t('practiceFailed', { message: (failure as Error).message }));
@@ -152,10 +151,7 @@ export function PracticeScreen({
       if (!mounted.current) return;
       setText(result.trim());
       if (kind === 'message') setPhase('inserted');
-      else {
-        setPhase('done');
-        Keyboard.dismiss();
-      }
+      else setPhase('done');
     } catch (failure) {
       if (!mounted.current) return;
       const message = (failure as Error).message;
@@ -180,10 +176,19 @@ export function PracticeScreen({
       ? 'listening'
       : phase === 'processing'
         ? 'processing'
-        : used
-          ? 'idle'
-          : 'pulsing';
-  const showBubble = focused && keyboardTop !== null && !success;
+        : nudge
+          ? 'pulsing'
+          : 'idle';
+  const keyboardUp = focused && keyboardTop !== null;
+  const showBubble = keyboardUp && !success;
+  const idle = showBubble && (phase === 'focused' || phase === 'inserted');
+  // The bubble nudges only when someone has sat on a step for 9 s without tapping it.
+  useEffect(() => {
+    setNudge(false);
+    if (!idle) return;
+    const timer = setTimeout(() => setNudge(true), 9000);
+    return () => clearTimeout(timer);
+  }, [idle, phase]);
   const hint = error
     ? null
     : phase === 'listening'
@@ -224,37 +229,6 @@ export function PracticeScreen({
                   />
                 </View>
               </View>
-              {kind === 'email' ? (
-                <>
-                  <View style={p.field}>
-                    <Text style={p.label}>{t('to')}</Text>
-                    <View style={p.chip}>
-                      <View style={p.avatar}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: colors.accent,
-                            fontFamily: AppFont.semibold,
-                          }}
-                        >
-                          {t('emailRecipient').slice(0, 1)}
-                        </Text>
-                      </View>
-                      <Text style={{ fontSize: 15, color: colors.ink }}>{t('emailRecipient')}</Text>
-                    </View>
-                  </View>
-                  <View style={p.field}>
-                    <Text style={p.label}>{t('subject')}</Text>
-                    <Text style={p.value}>{t('emailSubject')}</Text>
-                  </View>
-                </>
-              ) : null}
-              {kind === 'list' ? (
-                <View style={p.field}>
-                  <Text style={p.label}>{t('title')}</Text>
-                  <Text style={p.value}>{t('listTitle')}</Text>
-                </View>
-              ) : null}
               <View>
                 <TextInput
                   ref={input}
@@ -293,7 +267,7 @@ export function PracticeScreen({
             ) : null}
           </View>
         </Pressable>
-        {success ? (
+        {success && !keyboardUp ? (
           <View style={s.footer}>
             <AccentText center text={t(copy.success)} style={p.hintDone} />
             <GlassButton
@@ -303,15 +277,27 @@ export function PracticeScreen({
             />
           </View>
         ) : null}
-        {showBubble ? (
+        {keyboardUp ? (
           <View style={[p.overlay, { bottom: overlayBottom }]} pointerEvents="box-none">
-            {hint ? <AccentText text={hint} style={p.hint} /> : <View style={{ flex: 1 }} />}
-            <PracticeBubble
-              state={bubbleState}
-              onPress={() => void start()}
-              onStop={() => void stop()}
-              onCancel={cancel}
-            />
+            <View style={p.hintRow}>
+              {success ? (
+                <AccentText center text={t(copy.success)} style={[p.hint, p.hintCentered]} />
+              ) : hint ? (
+                <AccentText text={hint} style={p.hint} />
+              ) : null}
+            </View>
+            {success ? (
+              <GlassButton label={t(kind === 'message' ? 'continue' : 'next')} onPress={onNext} />
+            ) : (
+              <View style={p.bubbleRow}>
+                <PracticeBubble
+                  state={bubbleState}
+                  onPress={() => void start()}
+                  onStop={() => void stop()}
+                  onCancel={cancel}
+                />
+              </View>
+            )}
           </View>
         ) : null}
       </View>
@@ -348,37 +334,8 @@ const p = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  field: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    minHeight: 44,
-    borderBottomWidth: 1,
-    borderColor: colors.divider,
-  },
-  label: { fontSize: 15, color: colors.tertiary },
-  value: { fontSize: 15, color: colors.ink, fontFamily: AppFont.medium },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.fill,
-    borderRadius: 14,
-    paddingLeft: 3,
-    paddingRight: 10,
-    paddingVertical: 3,
-  },
-  avatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.accentSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   input: {
-    minHeight: 120,
+    minHeight: 96,
     paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 14,
@@ -387,15 +344,15 @@ const p = StyleSheet.create({
     color: colors.ink,
     textAlignVertical: 'top',
   },
-  overlay: {
-    position: 'absolute',
-    left: 16,
-    right: 12,
+  overlay: { position: 'absolute', left: 16, right: 16, gap: 10 },
+  hintRow: { minHeight: 26, justifyContent: 'flex-end' },
+  bubbleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 12,
+    minHeight: 64,
+    alignItems: 'center',
   },
-  hint: { flex: 1, fontSize: 18, lineHeight: 24, textAlign: 'right', fontFamily: AppFont.medium },
+  hint: { fontSize: 18, lineHeight: 24, textAlign: 'right', fontFamily: AppFont.medium },
+  hintCentered: { textAlign: 'center' },
   hintDone: { fontSize: 20, lineHeight: 26, fontFamily: AppFont.medium },
 });

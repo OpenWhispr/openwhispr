@@ -29,10 +29,12 @@ const megabytes = (id: AndroidModelId) => `${Math.round(ANDROID_MODELS[id].bytes
 
 export function ModeScreen({
   mode,
+  busy,
   onBack,
   onChoose,
 }: {
   mode: OnboardingMode;
+  busy?: boolean;
   onBack: () => void;
   onChoose: (mode: OnboardingMode) => void;
 }) {
@@ -46,7 +48,7 @@ export function ModeScreen({
   return (
     <Screen
       onBack={onBack}
-      footer={<GlassButton label={t('continue')} onPress={() => onChoose(selected)} />}
+      footer={<GlassButton label={t('continue')} busy={busy} onPress={() => onChoose(selected)} />}
     >
       <AccentText text={t('modeTitle')} />
       <Text style={s.body}>{t('modeBody')}</Text>
@@ -137,11 +139,13 @@ type DownloadState = 'waiting' | 'downloading' | 'ready' | 'failed';
 
 function ModelRow({
   title,
+  size,
   body,
   state,
   progress,
 }: {
   title: string;
+  size: string;
   body: string;
   state: DownloadState;
   progress: number;
@@ -160,9 +164,12 @@ function ModelRow({
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 18, fontFamily: AppFont.medium, color: colors.ink }}>
-            {title}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+            <Text style={{ fontSize: 18, fontFamily: AppFont.medium, color: colors.ink }}>
+              {title}
+            </Text>
+            <Text style={s.caption}>{size}</Text>
+          </View>
           <Text style={s.caption}>{body}</Text>
         </View>
       </View>
@@ -266,13 +273,15 @@ export function PrivateSetupScreen({
       <Text style={s.body}>{t('privateSetupBody')}</Text>
       <ModelRow
         title={t('speechModel')}
-        body={t('speechModelBody', { size: megabytes(SPEECH) })}
+        size={megabytes(SPEECH)}
+        body={t('speechModelBody')}
         state={states[SPEECH]}
         progress={fraction(SPEECH)}
       />
       <ModelRow
         title={t('cleanupModel')}
-        body={t('cleanupModelBody', { size: megabytes(CLEANUP) })}
+        size={megabytes(CLEANUP)}
+        body={t('cleanupModelBody')}
         state={states[CLEANUP]}
         progress={fraction(CLEANUP)}
       />
@@ -293,13 +302,15 @@ export function PrivateReadyScreen({ onBack, onNext }: { onBack: () => void; onN
       <Text style={s.body}>{t('privateReadyBody')}</Text>
       <ModelRow
         title={t('speechModel')}
-        body={t('speechModelBody', { size: megabytes(SPEECH) })}
+        size={megabytes(SPEECH)}
+        body={t('speechModelBody')}
         state="ready"
         progress={1}
       />
       <ModelRow
         title={t('cleanupModel')}
-        body={t('cleanupModelBody', { size: megabytes(CLEANUP) })}
+        size={megabytes(CLEANUP)}
+        body={t('cleanupModelBody')}
         state="ready"
         progress={1}
       />
@@ -329,12 +340,14 @@ function Marquee({ apps, reverse }: { apps: string[]; reverse?: boolean }) {
   }));
   return (
     <View
-      style={{ height: TILE + 24, overflow: 'hidden' }}
+      style={{ height: TILE + 56, overflow: 'hidden' }}
       importantForAccessibility="no-hide-descendants"
     >
-      <Animated.View style={[{ flexDirection: 'row', gap: GAP, paddingVertical: 12 }, style]}>
+      <Animated.View style={[{ flexDirection: 'row', gap: GAP, paddingVertical: 20 }, style]}>
         {[...apps, ...apps, ...apps].map((name, index) => (
-          <Image key={`${name}-${index}`} source={appIcon(name)} style={e.tile} />
+          <View key={`${name}-${index}`} style={e.tile}>
+            <Image source={appIcon(name)} style={e.tileImage} />
+          </View>
         ))}
       </Animated.View>
     </View>
@@ -396,8 +409,15 @@ const e = StyleSheet.create({
   tile: {
     width: TILE,
     height: TILE,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(0,0,0,0.10)',
     shadowColor: '#000000',
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
   },
+  tileImage: { width: TILE, height: TILE, borderRadius: 17 },
 });

@@ -16,7 +16,7 @@ import {
   GlassButton,
   LinkButton,
   PillButton,
-  PulseRings,
+  Halo,
   Screen,
   colors,
   s,
@@ -109,7 +109,7 @@ export function OverlayScreen({ onBack, onNext }: { onBack: () => void; onNext: 
       <Text style={[s.body, { textAlign: 'center' }]}>{t('overlayBody')}</Text>
       <View style={p.overlayArt} importantForAccessibility="no-hide-descendants">
         <View style={[p.overlayBubble, s.center]}>
-          <PulseRings size={72} />
+          <Halo size={88} />
           <BubbleIcon size={60} />
         </View>
         <View style={p.overlayCard}>
@@ -172,12 +172,23 @@ export function AccessibilityScreen({
       ),
     },
     {
-      title: t('accessibilityStep2'),
-      art: <SettingCard header="‹  OpenWhispr" label={t('accessibilityStep2On')} on />,
+      title: t('accessibilityStep2', { service: t('accessibilityService') }),
+      art: (
+        <SettingCard
+          header={`‹  ${t('accessibilityService')}`}
+          label={t('accessibilityStep2On')}
+          on
+        />
+      ),
     },
     {
       title: t('accessibilityStep3'),
-      art: <SettingCard label={t('accessibilityShortcut')} on={false} />,
+      art: (
+        <SettingCard
+          label={t('accessibilityShortcut', { service: t('accessibilityService') })}
+          on={false}
+        />
+      ),
     },
   ];
   return (
