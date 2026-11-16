@@ -655,7 +655,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Aggiornamento richiesto",
-      "description": "La tua organizzazione richiede OpenWhispr {{version}} o versioni successive. Aggiorna l'app."
+      "description": "La tua organizzazione richiede OpenWhispr {{version}} o versioni successive. Aggiorna l'app.",
+      "contactIT": "La tua organizzazione richiede OpenWhispr {{version}} o successivo. Contatta il reparto IT per installare una versione approvata."
     },
     "update": {
       "readyTitle": "Aggiornamento pronto da installare",
@@ -2269,7 +2270,14 @@
         "restarting": "Riavvio...",
         "title": "Aggiornamenti",
         "versionPlaceholder": "—",
-        "whatsNew": "Novità nella v{{version}}"
+        "whatsNew": "Novità nella v{{version}}",
+        "managedByOrganization": "Gestito dalla tua organizzazione.",
+        "itManaged": "La tua organizzazione gestisce gli aggiornamenti.",
+        "policyLoading": "Caricamento delle impostazioni di aggiornamento…",
+        "policyUnavailable": "Impossibile caricare le impostazioni di aggiornamento. Controlla gli aggiornamenti per riprovare.",
+        "policyChanged": "La politica di aggiornamento è cambiata. Controlla di nuovo gli aggiornamenti.",
+        "managedBadge": "Gestito",
+        "stagedBeforePolicy": "Un aggiornamento è stato preparato prima dell’applicazione di questa politica e potrebbe essere installato alla chiusura dell’app. Contatta il reparto IT prima di chiudere o riavviare."
       },
       "translationHotkey": {
         "title": "Hotkey Traduzione",

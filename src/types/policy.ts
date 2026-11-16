@@ -9,6 +9,7 @@ import type { InferenceMode } from "./electron";
  * `allowedByokProviders`) so the server enum can grow ahead of this build.
  */
 
+export type UpdateMode = "user_choice" | "always_on" | "it_managed";
 export type LocalHistoryMode = "user_choice" | "always_on" | "always_off";
 export type ExternalSharingMode = "allowed" | "domain_only" | "disabled";
 
@@ -70,6 +71,8 @@ export interface OrgPolicy {
    * policy — unknown ids are filtered at enforcement time.
    */
   requiredLocalModels?: string[];
+  /** Optional for older servers; unknown future strings behave as user_choice. */
+  updates?: { mode?: string };
   minAppVersion: string | null;
 }
 
