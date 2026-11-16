@@ -1,7 +1,5 @@
 // Reads the oldest macOS a Mach-O image was built to run on (the minos of its
-// LC_BUILD_VERSION command), the way otool prints it. Used by
-// download-llama-server.js to refuse a llama.cpp build that targets a newer
-// macOS than upstream's 13.3 deployment target (#2943).
+// LC_BUILD_VERSION command), the way otool prints it.
 const MH_MAGIC_64 = 0xfeedfacf;
 const MACH_HEADER_64_SIZE = 32;
 const LC_BUILD_VERSION = 0x32;

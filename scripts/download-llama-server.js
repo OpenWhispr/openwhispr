@@ -103,11 +103,11 @@ async function downloadBinary(key, config, release, isForce = false) {
   console.log(`  ${key}: Downloading from ${asset.url}`);
 
   const zipPath = path.join(BIN_DIR, asset.name);
-  const extractDir = path.join(BIN_DIR, `temp-llama-${key}`);
 
   try {
     await downloadFile(asset.url, zipPath);
 
+    const extractDir = path.join(BIN_DIR, `temp-llama-${key}`);
     // A tree left by an earlier failed or killed run would add its old libraries.
     fs.rmSync(extractDir, { recursive: true, force: true });
     fs.mkdirSync(extractDir, { recursive: true });
