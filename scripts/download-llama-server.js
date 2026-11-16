@@ -7,16 +7,22 @@ const {
   extractArchive,
   fetchLatestRelease,
   findBinaryInDir,
+  findLibrariesInDir,
   parseArgs,
   setExecutable,
   cleanupFiles,
 } = require("./lib/download-utils");
+const { readMinimumMacOS } = require("./lib/macho-build-version");
 
 const LLAMA_CPP_REPO = "ggml-org/llama.cpp";
 
 // Pinned to a tested build that loads current GGUF models. whisper-server is
 // statically linked, so bumping this can't affect local Whisper.
 const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b12110";
+
+// Upstream builds macOS llama.cpp for 13.3, but b9426-b10267 shipped arm64 builds
+// for 26.0, whose Metal library aborts llama-server at launch on macOS 14 (#2943).
+const MACOS_DEPLOYMENT_TARGET = "13.3";
 
 const BINARIES = {
   "darwin-arm64": {
@@ -63,6 +69,17 @@ function findAsset(release, pattern) {
   return release?.assets?.find((a) => pattern.test(a.name));
 }
 
+function assertRunsOnMacOS(files) {
+  for (const file of files) {
+    const minimum = readMinimumMacOS(fs.readFileSync(file));
+    if (minimum.localeCompare(MACOS_DEPLOYMENT_TARGET, undefined, { numeric: true }) > 0) {
+      throw new Error(
+        `${path.basename(file)} needs macOS ${minimum}, but the bundled llama.cpp has to run on macOS ${MACOS_DEPLOYMENT_TARGET}`
+      );
+    }
+  }
+}
+
 async function downloadBinary(key, config, release, isForce = false) {
   if (!config) {
     console.log(`  ${key}: Not supported`);
@@ -85,11 +102,11 @@ async function downloadBinary(key, config, release, isForce = false) {
   console.log(`  ${key}: Downloading from ${asset.url}`);
 
   const zipPath = path.join(BIN_DIR, asset.name);
+  const extractDir = path.join(BIN_DIR, `temp-llama-${key}`);
 
   try {
     await downloadFile(asset.url, zipPath);
 
-    const extractDir = path.join(BIN_DIR, `temp-llama-${key}`);
     fs.mkdirSync(extractDir, { recursive: true });
     await extractArchive(zipPath, extractDir);
 
@@ -101,6 +118,9 @@ async function downloadBinary(key, config, release, isForce = false) {
     }
 
     if (binaryPath && fs.existsSync(binaryPath)) {
+      if (config.platformArch.startsWith("darwin-")) {
+        assertRunsOnMacOS([binaryPath, ...findLibrariesInDir(extractDir, config.libPattern)]);
+      }
       fs.copyFileSync(binaryPath, outputPath);
       setExecutable(outputPath);
       console.log(`  ${key}: Extracted to ${config.outputName}`);
@@ -120,6 +140,8 @@ async function downloadBinary(key, config, release, isForce = false) {
     return true;
   } catch (error) {
     console.error(`  ${key}: Failed - ${error.message}`);
+    // A rerun would otherwise extract over this tree and pick up its libraries.
+    fs.rmSync(extractDir, { recursive: true, force: true });
     if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
     return false;
   }
@@ -196,4 +218,8 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+if (require.main === module) {
+  main().catch(console.error);
+}
+
+module.exports = { MACOS_DEPLOYMENT_TARGET, assertRunsOnMacOS };
