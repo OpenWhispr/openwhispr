@@ -16,7 +16,7 @@ const WORKSPACES = [
 async function loadStore(t, { initialStorage = {}, accountId = "acct-1", list } = {}) {
   const { storage } = installBrowserGlobals(t, {
     initialStorage,
-    window: { dispatchEvent() {} },
+    window: { dispatchEvent() {}, location: { search: "?panel=true" } },
   });
   globalThis.__workspaceCacheTest = {
     accountId,

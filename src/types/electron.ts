@@ -4,7 +4,7 @@ import type { PermissionGuideState, PermissionGuideAction } from "./permissionGu
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
-import type { OrgPolicy } from "./policy";
+import type { EffectivePolicySnapshot } from "./policy";
 import type { SplitLiveSpeakers } from "../utils/transcriptSpeakerState";
 import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
@@ -1310,6 +1310,7 @@ export interface ScreenContextImage {
 }
 
 export interface UpdateCheckResult {
+  code?: string;
   updateAvailable: boolean;
   version?: string;
   releaseDate?: string;
@@ -1319,6 +1320,13 @@ export interface UpdateCheckResult {
 }
 
 export interface UpdateStatusResult {
+  /** null while no verdict allows updates. */
+  updateMode?: import("./policy").UpdateMode | null;
+  policyReady?: boolean;
+  /** The policy lookup failed with no verdict held; a check retries it. */
+  policyUnavailable?: boolean;
+  effectiveAutoUpdatesEnabled?: boolean;
+  stagedUpdate?: boolean;
   updateAvailable: boolean;
   updateDownloaded: boolean;
   isDevelopment: boolean;
@@ -1333,6 +1341,7 @@ export interface UpdateInfoResult {
 }
 
 export interface UpdateResult {
+  code?: string;
   success: boolean;
   message: string;
 }
@@ -1788,12 +1797,17 @@ declare global {
             clipboardCopied: true;
           }
       >;
-      captureSelectedText?: () => Promise<
+      captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
             sessionId: string;
             text: string;
             characterCount: number;
+          }
+        | {
+            /** A writable field has the caret, with nothing selected: an answer can be typed there. */
+            status: "editable";
+            sessionId: string;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
@@ -1823,6 +1837,10 @@ declare global {
           | "selection_manager_unavailable";
         error?: string;
       }>;
+      pasteAtCapturedTarget?: (
+        sessionId: string,
+        text: string
+      ) => Promise<{ success: boolean; code?: string }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       openSettingsSection?: (
@@ -1861,47 +1879,9 @@ declare global {
       >;
 
       // Org policy (see src/types/policy.ts)
-      getWorkspacePolicy?: (
-        accountId?: string,
-        expectedAuthGeneration?: number
-      ) => Promise<{
-        success: boolean;
-        status?: "network" | "cached" | "current" | "unsupported" | "restricted" | "error";
-        revision?: number;
-        accountId?: string | null;
-        authGeneration?: number | null;
-        managed?: boolean;
-        policy?: OrgPolicy | null;
-        policyUpdatedAt?: string | null;
-        endpointSupported?: boolean;
-        code?: string;
-        error?: string;
-        enforcementRequired?: boolean;
-      }>;
-      onWorkspacePolicyChanged?: (
-        callback: (
-          snapshot:
-            | {
-                success: true;
-                status: "network" | "cached" | "current" | "unsupported";
-                revision: number;
-                accountId: string | null;
-                authGeneration: number;
-                managed: boolean;
-                policy: OrgPolicy | null;
-                policyUpdatedAt: string | null;
-                endpointSupported: boolean;
-              }
-            | {
-                success: false;
-                status: "error";
-                revision: number;
-                accountId: string | null;
-                authGeneration: number;
-                code: "POLICY_UNRESOLVABLE";
-                error: string;
-              }
-        ) => void
+      getEffectivePolicy?: () => Promise<EffectivePolicySnapshot>;
+      onEffectivePolicyChanged?: (
+        callback: (snapshot: EffectivePolicySnapshot) => void
       ) => () => void;
 
       getNoteRecordingConfig?: () => Promise<NoteRecordingConfigResult | null>;
@@ -2269,6 +2249,13 @@ declare global {
       recordOnboardingCompleted?: (completion: {
         setupMode: string | null;
         flowVersion: string;
+      }) => Promise<void>;
+      /** Dashboard funnel: an original dictation finished, as its word count only. */
+      recordDictationCompleted?: (dictation: {
+        captureId: string;
+        words: number;
+        mode: string;
+        startedAt?: string;
       }) => Promise<void>;
       getNoteWriteGuard?: () => Promise<NoteWriteGuard>;
       getDatabaseAccountScope?: () => Promise<DatabaseAccountScope>;
@@ -2801,6 +2788,7 @@ declare global {
       setAutoUpdatesEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
 
       // Update event listeners
+      onUpdateStatusChanged?: (callback: (status: UpdateStatusResult) => void) => () => void;
       onUpdateAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateNotAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateDownloaded: (callback: (event: any, info: any) => void) => () => void;
@@ -3688,12 +3676,13 @@ declare global {
         callback: (payload: {
           requestId: string;
           chunk: {
-            type: "content" | "tool_call" | "done";
+            type: "content" | "tool_call" | "done" | "error";
             text?: string;
             id?: string;
             name?: string;
             arguments?: string;
             finishReason?: string;
+            message?: string;
           };
         }) => void
       ) => () => void;
@@ -3867,6 +3856,7 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
+      isMeetingRecordingDisabled?: () => Promise<boolean>;
       meetingTranscriptionSend?: (
         buffer: ArrayBuffer,
         source: "mic" | "system",

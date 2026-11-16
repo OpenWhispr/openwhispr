@@ -2528,6 +2528,7 @@ class DatabaseManager {
       // continue to sort chronologically, while the trailing Z marks this as
       // an exact client-captured instant for clear-state reconciliation.
       const occurredAt = toDbTimestamp(analyticsOccurredAt);
+      const spokenUnder = this._accountSpokenUnder(analyticsOccurredAt);
       const stmt = this.db.prepare(
         `INSERT INTO transcriptions (
            text, raw_text, status, error_message, error_code, route_kind,
@@ -2543,8 +2544,11 @@ class DatabaseManager {
         routeKind,
         clientTranscriptionId,
         occurredAt,
-        this._accountSpokenUnder(analyticsOccurredAt)
+        spokenUnder
       );
+      // Spoken signed out, landing after a sign-in: the sign-in's claim has already run, and
+      // set-active-account-scope doesn't run it again for the same account.
+      if (spokenUnder === null && this.activeAccountId) this.claimSignedOutLocalRows();
 
       const fetchStmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
       const transcription = fetchStmt.get(result.lastInsertRowid);
@@ -6932,14 +6936,30 @@ class DatabaseManager {
   getMirrorNoteSummaries() {
     if (!this.db) throw new Error("Database not initialized");
     const accountScope = this._accountScopeCondition("notes");
+    // SQLite trims only spaces by default; match the mirror's String.trim().
+    const trimCharacters =
+      "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
     return this.db
       .prepare(
         `SELECT id, title, folder_id, space_id,
            CASE WHEN json_valid(transcript) AND json_type(transcript) = 'array'
-             AND json_array_length(transcript) > 0 THEN 1 ELSE 0 END AS has_transcript
+             AND json_array_length(transcript) > 0 THEN 1 ELSE 0 END AS has_transcript,
+           CASE WHEN note_type = 'upload'
+             AND trim(COALESCE(content, ''), ?) = ''
+             AND trim(COALESCE(enhanced_content, ''), ?) = ''
+             AND EXISTS (
+               SELECT 1 FROM json_each(
+                 CASE WHEN json_valid(transcript) AND json_type(transcript) = 'array'
+                   THEN transcript ELSE '[]' END
+               ) AS segment
+               WHERE CASE WHEN segment.type = 'object' THEN
+                 json_type(segment.value, '$.text') = 'text'
+                 AND trim(json_extract(segment.value, '$.text'), ?) <> ''
+                 ELSE 0 END
+             ) THEN 1 ELSE 0 END AS is_transcript_only_upload
          FROM notes WHERE deleted_at IS NULL AND ${accountScope.sql}`
       )
-      .all(...accountScope.params);
+      .all(trimCharacters, trimCharacters, trimCharacters, ...accountScope.params);
   }
 
   // Deleted notes included, since the mirror removes their files. Another

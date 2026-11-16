@@ -1,19 +1,36 @@
 const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { ANALYTICS_COUNTER_VERSION } = require("./analytics");
 
 // Dashboard funnel milestones this build can report. Sent with every upload as
 // coverage, which is what tells a stage nobody could observe apart from one
 // that never happened.
-const CAPABILITIES = ["app_session_authenticated", "onboarding_completed"];
+const CAPABILITIES = ["app_session_authenticated", "onboarding_completed", "dictation_completed"];
 const SCHEMA_VERSION = 1;
 const BATCH_SIZE = 50;
-// The queue only ever holds a handful of milestones; these bound what a server
-// that never acknowledges (deferring an event forever, or unreachable) leaves behind.
-const MAX_QUEUED_EVENTS = 200;
+// The queue only ever holds a handful of milestones and the dictations of the
+// first 200 words; these bound what a server that never acknowledges
+// (deferring an event forever, or unreachable) leaves behind.
+// Dictations cannot displace sign-in or onboarding milestones.
+const MAX_QUEUED_EVENTS_PER_KIND = 200;
 const MAX_EVENT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 30 * 60_000];
 const ONBOARDING_SETUP_MODES = new Set(["cloud", "byok", "local", "managed"]);
+// The funnel's last stage. Once one installation has recorded this many
+// counted words for an account, none of its later dictations can be the one
+// that crosses, for the account or for its platform, so none is recorded.
+const DICTATION_WORDS_NEEDED = 200;
+// The modes the API's analytics ledger knows (resolveAnalyticsMode's values).
+const DICTATION_MODES = new Set([
+  "local",
+  "openwhispr_cloud",
+  "byok",
+  "self_hosted",
+  "enterprise",
+  "unknown",
+]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Sign-ins the server already took. A relaunch validates the same session and
 // gets the same binding back, which then needs no second upload.
 const MAX_ACKNOWLEDGED_BINDINGS = 50;
@@ -27,6 +44,8 @@ function emptyState() {
     installationId: null,
     onboardingCompletions: 0,
     acknowledgedBindings: [],
+    // Counted dictation words recorded here, per account.
+    dictationWords: {},
     events: [],
   };
 }
@@ -110,6 +129,7 @@ class ProductEvents {
     this.logger = logger;
     this.state = { ...emptyState(), ...store.load() };
     this.running = null;
+    this.inFlightEventIds = new Set();
     this.retryTimer = null;
     this.retryAttempt = 0;
     // Per process run: the scopes whose session was bound, and whose coverage
@@ -140,11 +160,44 @@ class ProductEvents {
   enqueue(event) {
     this.persist((state) => {
       if (state.events.some((queued) => queued.event_id === event.event_id)) return state;
-      // Oldest first out when full: a newer milestone is worth more than one
-      // the server has been refusing to take.
-      const events = [...state.events, event].slice(-MAX_QUEUED_EVENTS);
-      return { ...state, events };
+      const queued = [...state.events, event];
+      const dictationCount = queued.filter(
+        (candidate) => candidate.event_name === "dictation_completed"
+      ).length;
+      const excess = {
+        dictation: Math.max(0, dictationCount - MAX_QUEUED_EVENTS_PER_KIND),
+        milestone: Math.max(0, queued.length - dictationCount - MAX_QUEUED_EVENTS_PER_KIND),
+      };
+      // Keep in-flight IDs retryable if their acknowledgement is lost.
+      const events = queued.filter((candidate) => {
+        const kind = candidate.event_name === "dictation_completed" ? "dictation" : "milestone";
+        if (excess[kind] === 0 || this.inFlightEventIds.has(candidate.event_id)) return true;
+        excess[kind] -= 1;
+        return false;
+      });
+      return this.retainQueuedEvents(state, events);
     });
+  }
+
+  retainQueuedEvents(state, events) {
+    const retainedIds = new Set(events.map((event) => event.event_id));
+    const dictationWords = { ...state.dictationWords };
+    // Only discarded pending facts release the ceiling; acknowledged words remain.
+    for (const event of state.events) {
+      if (
+        retainedIds.has(event.event_id) ||
+        event.event_name !== "dictation_completed" ||
+        event.properties.is_practice !== false ||
+        event.properties.is_retranscribe !== false
+      ) {
+        continue;
+      }
+      dictationWords[event.account_id] = Math.max(
+        0,
+        (dictationWords[event.account_id] ?? 0) - event.properties.word_count
+      );
+    }
+    return { ...state, dictationWords, events };
   }
 
   scopeKey(scope) {
@@ -240,16 +293,86 @@ class ProductEvents {
     void this.flush();
   }
 
+  /**
+   * An original dictation finished (audioManager, beside the activation
+   * capture): its word count, never its text. `practice` is onboarding's
+   * try-it dictation, recorded as such and never counted. Main supplies the
+   * account at recording start; unknown origin never adopts the active account.
+   */
+  recordDictationCompleted({ captureId, words, mode, practice }, scope) {
+    if (
+      this.disposed ||
+      !scope ||
+      this.purgedAccounts.has(scope.accountId) ||
+      !UUID_PATTERN.test(String(captureId)) ||
+      !Number.isSafeInteger(words)
+    ) {
+      return;
+    }
+    this.dropExpired();
+    const counted = this.state.dictationWords[scope.accountId] ?? 0;
+    const activeScope = this.getScope();
+    const blocked =
+      activeScope?.accountId === scope.accountId
+        ? this.blockedScopes.has(this.scopeKey(activeScope))
+        : [...this.blockedScopes].some((key) => key.startsWith(`${scope.accountId}:`));
+    if (
+      words < 1 ||
+      // Origin metadata may lack a generation; the active credential still owns policy.
+      blocked ||
+      counted >= DICTATION_WORDS_NEEDED ||
+      this.state.events.some((event) => event.event_id === captureId)
+    ) {
+      return;
+    }
+    const occurredAt = new Date(this.now()).toISOString();
+    this.enqueue({
+      // One recording is one event: its capture id, which its Insights row
+      // and its cloud transcription carry too.
+      event_id: captureId,
+      event_name: "dictation_completed",
+      occurred_at: occurredAt,
+      account_id: scope.accountId,
+      identity_generation: scope.authGeneration,
+      app_version: this.getAppVersion(),
+      flow_version: null,
+      properties: {
+        word_count: words,
+        counter_version: ANALYTICS_COUNTER_VERSION,
+        mode: DICTATION_MODES.has(mode) ? mode : "unknown",
+        source: "dictation",
+        is_practice: Boolean(practice),
+        // A history retry runs in the main process and never reaches here.
+        is_retranscribe: false,
+      },
+      captured_at: occurredAt,
+    });
+    if (!practice) {
+      this.persist((state) => ({
+        ...state,
+        dictationWords: {
+          ...state.dictationWords,
+          [scope.accountId]: (state.dictationWords[scope.accountId] ?? 0) + words,
+        },
+      }));
+    }
+    void this.flush();
+  }
+
   /** Drops what an erased account left queued here. */
   purge(accountId) {
     if (this.disposed) return;
     // The bearer is still active during local cleanup. Retire it here before
     // a delayed binding answer can repopulate the erased account's queue.
     this.purgedAccounts.add(accountId);
-    this.persist((state) => ({
-      ...state,
-      events: state.events.filter((event) => event.account_id !== accountId),
-    }));
+    this.persist((state) => {
+      const { [accountId]: _erased, ...dictationWords } = state.dictationWords;
+      return {
+        ...state,
+        dictationWords,
+        events: state.events.filter((event) => event.account_id !== accountId),
+      };
+    });
   }
 
   async flush() {
@@ -266,6 +389,7 @@ class ProductEvents {
         this.scheduleRetry();
       })
       .finally(() => {
+        this.inFlightEventIds.clear();
         this.running = null;
         if (this.flushAgain) void this.flush();
       });
@@ -287,9 +411,10 @@ class ProductEvents {
   // account that never signs in again would otherwise stay queued for good.
   dropExpired() {
     const cutoff = this.now() - MAX_EVENT_AGE_MS;
-    const fresh = (event) => !(Date.parse(event.captured_at) < cutoff);
+    const fresh = (event) =>
+      this.inFlightEventIds.has(event.event_id) || !(Date.parse(event.captured_at) < cutoff);
     if (this.state.events.every(fresh)) return;
-    this.persist((state) => ({ ...state, events: state.events.filter(fresh) }));
+    this.persist((state) => this.retainQueuedEvents(state, state.events.filter(fresh)));
   }
 
   async runPass() {
@@ -305,6 +430,7 @@ class ProductEvents {
       .slice(0, BATCH_SIZE);
     if (pending.length === 0 && this.reportedScopes.has(key)) return;
 
+    this.inFlightEventIds = new Set(pending.map((event) => event.event_id));
     const result = await this.request({
       path: "/api/product-events/batch",
       method: "POST",
@@ -345,11 +471,12 @@ class ProductEvents {
       // a policy that can't be resolved, which fails closed). What it queued
       // is not collected later either.
       this.blockedScopes.add(key);
-      const sent = new Set(pending.map((event) => event.event_id));
-      this.persist((state) => ({
-        ...state,
-        events: state.events.filter((event) => !sent.has(event.event_id)),
-      }));
+      this.persist((state) =>
+        this.retainQueuedEvents(
+          state,
+          state.events.filter((event) => event.account_id !== scope.accountId)
+        )
+      );
       return;
     }
     // A dead session waits for the next credential, whose scope flushes again.
@@ -368,6 +495,11 @@ class ProductEvents {
       )
     );
     if (accepted.size > 0) {
+      const rejected = new Set(
+        (Array.isArray(result.data?.rejected) ? result.data.rejected : [])
+          .map((outcome) => String(outcome.event_id).toLowerCase())
+          .filter((id) => accepted.has(id))
+      );
       const bindings = pending
         .filter(
           (event) =>
@@ -375,13 +507,20 @@ class ProductEvents {
             accepted.has(event.event_id.toLowerCase())
         )
         .map((event) => event.event_id.toLowerCase());
-      this.persist((state) => ({
-        ...state,
-        acknowledgedBindings: [...state.acknowledgedBindings, ...bindings].slice(
-          -MAX_ACKNOWLEDGED_BINDINGS
-        ),
-        events: state.events.filter((event) => !accepted.has(event.event_id.toLowerCase())),
-      }));
+      this.persist((state) => {
+        // Accepted means stop retrying; terminal rejections contributed no words.
+        const reconciled = this.retainQueuedEvents(
+          state,
+          state.events.filter((event) => !rejected.has(event.event_id.toLowerCase()))
+        );
+        return {
+          ...reconciled,
+          acknowledgedBindings: [...reconciled.acknowledgedBindings, ...bindings].slice(
+            -MAX_ACKNOWLEDGED_BINDINGS
+          ),
+          events: reconciled.events.filter((event) => !accepted.has(event.event_id.toLowerCase())),
+        };
+      });
     }
     // A full batch taken whole may have more behind it.
     if (pending.length === BATCH_SIZE && accepted.size === pending.length) await this.runPass();

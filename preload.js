@@ -124,10 +124,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   testProviderConnection: (config) => ipcRenderer.invoke("test-provider-connection", config),
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
-  captureSelectedText: () => ipcRenderer.invoke("capture-selected-text"),
+  captureSelectedText: (options) => ipcRenderer.invoke("capture-selected-text", options),
   cancelSelectionEdit: (sessionId) => ipcRenderer.invoke("cancel-selection-edit", sessionId),
   replaceSelectedText: (sessionId, text, options) =>
     ipcRenderer.invoke("replace-selected-text", sessionId, text, options),
+  pasteAtCapturedTarget: (sessionId, text) =>
+    ipcRenderer.invoke("paste-at-captured-target", sessionId, text),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
   openSettingsSection: (section) => ipcRenderer.invoke("open-settings-section", section),
@@ -330,6 +332,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("product-events-record-app-session", context),
   recordOnboardingCompleted: (completion) =>
     ipcRenderer.invoke("product-events-record-onboarding-completed", completion),
+  recordDictationCompleted: (dictation) =>
+    ipcRenderer.invoke("product-events-record-dictation", dictation),
   getNoteWriteGuard: () => ipcRenderer.invoke("get-note-write-guard"),
   getDatabaseAccountScope: () => ipcRenderer.invoke("get-database-account-scope"),
   onDatabaseAccountScopeChanged: registerListener(
@@ -675,6 +679,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setAutoUpdatesEnabled: (enabled) => ipcRenderer.invoke("set-auto-updates-enabled", enabled),
 
   // Update event listeners
+  onUpdateStatusChanged: registerListener(
+    "update-status-changed",
+    (callback) => (_event, status) => callback(status)
+  ),
   onUpdateAvailable: registerListener("update-available"),
   onUpdateNotAvailable: registerListener("update-not-available"),
   onUpdateDownloaded: registerListener("update-downloaded"),
@@ -906,13 +914,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
   cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
   getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
-  getWorkspacePolicy: (accountId, expectedAuthGeneration) =>
-    ipcRenderer.invoke("get-workspace-policy", accountId, expectedAuthGeneration),
-  onWorkspacePolicyChanged: (callback) => {
-    const listener = (_event, snapshot) => callback(snapshot);
-    ipcRenderer.on("workspace-policy-changed", listener);
-    return () => ipcRenderer.removeListener("workspace-policy-changed", listener);
-  },
+  getEffectivePolicy: () => ipcRenderer.invoke("get-effective-policy"),
+  onEffectivePolicyChanged: registerListener(
+    "effective-policy-changed",
+    (callback) => (_event, snapshot) => callback(snapshot)
+  ),
   getNoteRecordingConfig: () => ipcRenderer.invoke("get-note-recording-config"),
 
   // Cloud audio file transcription
@@ -1028,6 +1034,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-transcription-prepare", options),
   meetingTranscriptionStart: (options) =>
     ipcRenderer.invoke("meeting-transcription-start", options),
+  isMeetingRecordingDisabled: () => ipcRenderer.invoke("is-meeting-recording-disabled"),
   meetingTranscriptionSend: (buffer, source, capturedAt) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source, capturedAt),
   meetingTranscriptionSetSystemAudioAvailable: (sessionId, available) =>
@@ -1219,8 +1226,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   completeDictationPreview: (payload) => ipcRenderer.invoke("complete-dictation-preview", payload),
   hideDictationPreview: () => ipcRenderer.invoke("hide-dictation-preview"),
   sendDictationPreviewAudio: (data) => ipcRenderer.send("dictation-preview-audio", data),
-  acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
-  releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 
   // Agent cloud streaming (event-based for real-time chunks)
   startAgentStream: (requestId, messages, opts) =>
