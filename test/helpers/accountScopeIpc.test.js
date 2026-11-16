@@ -1541,7 +1541,12 @@ test("account deletion still deletes the note mirrors when the enterprise vault 
   assert.deepEqual(mirrored, [11, 12]);
 });
 
-test("a repeated validated account scope keeps its settled policy and refreshes nothing", async (t) => {
+test("a repeated validated account scope keeps its settled policy while refreshing", async (t) => {
+  // A private-note claim that fails leaves the scope unapplied, so each repeat
+  // runs in full and refreshes; a repeat of an applied scope changes nothing.
+  const claim = fakeThis._claimSignedOutPrivateNotes;
+  fakeThis._claimSignedOutPrivateNotes = () => false;
+  t.after(() => (fakeThis._claimSignedOutPrivateNotes = claim));
   tokenState = { token: "stable-policy-token", generation: 80 };
   await setScope("stable-policy-account", 80);
   await new Promise((resolve) => setImmediate(resolve));
@@ -1581,8 +1586,7 @@ test("a repeated validated account scope keeps its settled policy and refreshes 
     assert.equal(manager.getCurrent().revision, settled.revision);
     assert.equal(manager.getCurrent().policy.dataRetention.audioRetentionMaxDays, 7);
   }
-  // A repeat of the scope already applied changes nothing (#3216).
-  assert.equal(refreshes.length, 0);
+  assert.equal(refreshes.length, 3);
 
   tokenState = { token: "rotated-policy-token", generation: 81 };
   await setScope("stable-policy-account", 81);
