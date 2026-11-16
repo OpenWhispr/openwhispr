@@ -332,6 +332,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("product-events-record-app-session", context),
   recordOnboardingCompleted: (completion) =>
     ipcRenderer.invoke("product-events-record-onboarding-completed", completion),
+  recordDictationCompleted: (dictation) =>
+    ipcRenderer.invoke("product-events-record-dictation", dictation),
   getNoteWriteGuard: () => ipcRenderer.invoke("get-note-write-guard"),
   getDatabaseAccountScope: () => ipcRenderer.invoke("get-database-account-scope"),
   onDatabaseAccountScopeChanged: registerListener(

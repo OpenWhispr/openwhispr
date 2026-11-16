@@ -2250,6 +2250,13 @@ declare global {
         setupMode: string | null;
         flowVersion: string;
       }) => Promise<void>;
+      /** Dashboard funnel: an original dictation finished, as its word count only. */
+      recordDictationCompleted?: (dictation: {
+        captureId: string;
+        words: number;
+        mode: string;
+        startedAt?: string;
+      }) => Promise<void>;
       getNoteWriteGuard?: () => Promise<NoteWriteGuard>;
       getDatabaseAccountScope?: () => Promise<DatabaseAccountScope>;
       onDatabaseAccountScopeChanged?: (

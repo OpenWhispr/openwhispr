@@ -8148,11 +8148,29 @@ class IPCHandlers {
     });
     // Collectors have no renderer IPC operation to own their policy checks or
     // cancellation, but their uploads follow the same backup rules as sync.
-    const handleBackgroundCloudApiRequest = createProductHandler(
+    const requestBackgroundCloudApi = createProductHandler(
       "cloud-api-request",
       (_event, opts) => backgroundCloudApiRequest(opts),
       true
     );
+    const handleBackgroundCloudApiRequest = async (opts) => {
+      const origin = this.effectivePolicyManager.getCurrent();
+      const result = await requestBackgroundCloudApi(undefined, opts);
+      if (result?.code !== "DEVICE_POLICY_BLOCKED") return result;
+      const current = this.effectivePolicyManager.getCurrent();
+      // A settled backup denial has the API's discard semantics. Loading or a
+      // replacement identity only delays the original account's pending facts.
+      if (
+        current.success &&
+        current.policy?.dataRetention.cloudBackupAllowed === false &&
+        current.accountId === origin.accountId &&
+        current.authGeneration === opts.expectedAuthGeneration &&
+        origin.authGeneration === opts.expectedAuthGeneration
+      ) {
+        return { ...result, status: 403, code: "POLICY_CLOUD_BACKUP_BLOCKED" };
+      }
+      return result;
+    };
     try {
       const ActivationDatabase = require("better-sqlite3");
       const activationDb = new ActivationDatabase(
@@ -8166,7 +8184,7 @@ class IPCHandlers {
             ...tokenStore.getState(),
             binding: accountScopeBinding.read(),
           }),
-        request: (opts) => handleBackgroundCloudApiRequest(undefined, opts),
+        request: handleBackgroundCloudApiRequest,
         logger: debugLogger,
       });
       this.metaActivation.start();
@@ -8187,7 +8205,7 @@ class IPCHandlers {
             ...tokenStore.getState(),
             binding: accountScopeBinding.read(),
           }),
-        request: (opts) => handleBackgroundCloudApiRequest(undefined, opts),
+        request: handleBackgroundCloudApiRequest,
         getAppVersion: () => app.getVersion(),
         logger: debugLogger,
       });
@@ -8201,6 +8219,28 @@ class IPCHandlers {
     ipcMain.handle("product-events-record-onboarding-completed", (_event, completion) =>
       this.productEvents?.recordOnboardingCompleted(completion)
     );
+    ipcMain.handle("product-events-record-dictation", (_event, dictation) => {
+      const startedAt = Date.parse(dictation?.startedAt);
+      // History's recovery fallback uses the current account. A funnel fact
+      // needs a proven live origin instead, including an explicitly guest one.
+      if (
+        !Number.isFinite(startedAt) ||
+        startedAt < this.databaseManager._accountTrackedSince ||
+        startedAt > Date.now()
+      ) {
+        return;
+      }
+      const accountId = this.databaseManager._accountSpokenUnder(dictation.startedAt);
+      if (!accountId) return;
+      return this.productEvents?.recordDictationCompleted(
+        {
+          ...dictation,
+          // While onboarding holds the app only its try-it dictation can run.
+          practice: this.windowManager?.isOnboardingActive() !== false,
+        },
+        { accountId, authGeneration: null }
+      );
+    });
     ipcMain.handle("activation-close", async () => {
       await Promise.race([
         this.metaActivation?.close(),

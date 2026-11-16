@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { CAPABILITIES, ProductEvents, createFileStore } = require("../../src/helpers/productEvents");
+const { createCloudApiRequestHandler } = require("../../src/helpers/cloudApiRequest");
 
 const BINDING = "0d6b9a52-7a3c-4c8e-9f1d-2b4a6c8e0f13";
 const SECOND_BINDING = "5e2c1b4a-9d8f-4e7a-8b6c-1a3f5d7e9b20";
@@ -33,6 +34,8 @@ function rig({ store = memoryStore(), scope = { accountId: "a", authGeneration: 
     bindingId: BINDING,
     defer: new Set(),
     omit: new Set(),
+    reject: new Map(),
+    duplicates: new Set(),
     throwBind: false,
   };
   const state = { scope };
@@ -54,6 +57,18 @@ function rig({ store = memoryStore(), scope = { accountId: "a", authGeneration: 
       success: true,
       data: {
         accepted: ids.filter((id) => !server.defer.has(id) && !server.omit.has(id)),
+        stored: ids.filter(
+          (id) =>
+            !server.defer.has(id) &&
+            !server.omit.has(id) &&
+            !server.reject.has(id) &&
+            !server.duplicates.has(id)
+        ),
+        duplicates: ids.filter((id) => server.duplicates.has(id)),
+        conflicts: [],
+        rejected: ids
+          .filter((id) => server.reject.has(id))
+          .map((id) => ({ event_id: id, reason: server.reject.get(id) })),
         deferred: ids
           .filter((id) => server.defer.has(id))
           .map((id) => ({ event_id: id, reason: "unsupported_event" })),
@@ -82,6 +97,7 @@ function rig({ store = memoryStore(), scope = { accountId: "a", authGeneration: 
     setScope: (next) => {
       state.scope = next;
     },
+    getScope: () => state.scope,
     advance: (ms) => {
       now += ms;
     },
@@ -452,6 +468,542 @@ test("erasing an account purges only its queued events", async () => {
   );
 });
 
+// F4 — dictation
+
+function captureId(n) {
+  return `7c9e6679-7425-40de-944b-${String(n).padStart(12, "0")}`;
+}
+
+function queuedPracticeEvent(index) {
+  return {
+    ...queuedEvent(captureId(1000 + index), "b"),
+    event_name: "dictation_completed",
+    properties: {
+      word_count: 1,
+      counter_version: 2,
+      mode: "local",
+      source: "dictation",
+      is_practice: true,
+      is_retranscribe: false,
+    },
+  };
+}
+
+function dictate(r, n, words, overrides = {}) {
+  r.events.recordDictationCompleted(
+    {
+      captureId: captureId(n),
+      words,
+      mode: "local",
+      practice: false,
+      ...overrides,
+    },
+    r.getScope()
+  );
+}
+
+function queuedDictation(r) {
+  return r
+    .queued()
+    .filter((event) => event.event_name === "dictation_completed")
+    .map((event) => [event.event_id, event.properties.word_count, event.properties.is_practice]);
+}
+
+test("a finished dictation goes up as its word count under the account, never its text", async () => {
+  const r = rig();
+  dictate(r, 1, 12);
+  await r.events.flush();
+
+  const [upload] = r.batches();
+  assert.ok(CAPABILITIES.includes("dictation_completed"));
+  assert.deepEqual(upload.body.collector.capabilities, CAPABILITIES);
+  assert.equal(upload.expectedAuthGeneration, 1);
+  assert.deepEqual(upload.body.events, [
+    {
+      event_id: captureId(1),
+      event_name: "dictation_completed",
+      schema_version: 1,
+      occurred_at: "2026-11-04T08:00:05.000Z",
+      app_version: "1.12.0",
+      flow_version: null,
+      identity_generation: 1,
+      properties: {
+        word_count: 12,
+        counter_version: 2,
+        mode: "local",
+        source: "dictation",
+        is_practice: false,
+        is_retranscribe: false,
+      },
+    },
+  ]);
+  assert.deepEqual(r.queued(), []);
+});
+
+test("199 and then 1 word are both recorded, and nothing after this device's first 200", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 199);
+  dictate(r, 2, 1);
+  dictate(r, 3, 40);
+
+  assert.deepEqual(queuedDictation(r), [
+    [captureId(1), 199, false],
+    [captureId(2), 1, false],
+  ]);
+});
+
+test("150 and then 75 words are both recorded, the later ones not", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 150);
+  dictate(r, 2, 75);
+  dictate(r, 3, 10);
+
+  assert.deepEqual(queuedDictation(r), [
+    [captureId(1), 150, false],
+    [captureId(2), 75, false],
+  ]);
+});
+
+test("onboarding practice is recorded as practice and never brings the 200 closer", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 180, { practice: true });
+  dictate(r, 2, 150);
+  dictate(r, 3, 49);
+  dictate(r, 4, 1);
+  dictate(r, 5, 1);
+
+  assert.deepEqual(queuedDictation(r), [
+    [captureId(1), 180, true],
+    [captureId(2), 150, false],
+    [captureId(3), 49, false],
+    [captureId(4), 1, false],
+  ]);
+});
+
+test("one capture reported twice is one event and counts once", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 150);
+  dictate(r, 1, 150);
+  dictate(r, 2, 49);
+
+  assert.deepEqual(queuedDictation(r), [
+    [captureId(1), 150, false],
+    [captureId(2), 49, false],
+  ]);
+  assert.deepEqual(r.events.state.dictationWords, { a: 199 });
+});
+
+test("a dictation without a capture id or words records nothing, and an odd mode reads unknown", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 0);
+  dictate(r, 2, 1.5);
+  dictate(r, 3, Number.NaN);
+  r.events.recordDictationCompleted({ captureId: "recording-1", words: 5, practice: false });
+  r.events.recordDictationCompleted({ captureId: null, words: 5, practice: false });
+  dictate(r, 4, 5, { mode: "telepathy" });
+
+  assert.deepEqual(
+    r.queued().map((event) => [event.event_id, event.properties.mode]),
+    [[captureId(4), "unknown"]]
+  );
+});
+
+test("a guest's dictation has no identity to report and is not recorded", async () => {
+  const r = rig({ scope: null });
+  dictate(r, 1, 50);
+  await r.events.flush();
+
+  assert.deepEqual(r.queued(), []);
+  assert.deepEqual(r.events.state.dictationWords, {});
+  assert.equal(r.calls.length, 0);
+});
+
+test("dictation keeps its account through a switch, and each account counts its own 200", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 150);
+  r.setScope({ accountId: "b", authGeneration: 2 });
+  dictate(r, 2, 199);
+  dictate(r, 3, 5);
+  dictate(r, 4, 1);
+  r.server.batchStatus = 200;
+  await r.events.flush();
+
+  // B's session sends only B's dictation; A's waits for A.
+  assert.deepEqual(
+    r
+      .batches()
+      .at(-1)
+      .body.events.map((event) => event.event_id),
+    [captureId(2), captureId(3)]
+  );
+  assert.deepEqual(
+    r.queued().map((event) => [event.account_id, event.event_id]),
+    [["a", captureId(1)]]
+  );
+  assert.deepEqual(r.events.state.dictationWords, { a: 150, b: 204 });
+});
+
+test("a dictation recorded offline goes up later with its own completion time", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 30);
+  await r.events.flush();
+  assert.equal(r.timers.length, 1);
+
+  r.advance(2 * 60 * 60_000);
+  r.server.batchStatus = 200;
+  await r.timers[0].fn();
+  await r.events.running;
+
+  const upload = r.batches().at(-1);
+  assert.equal(upload.body.events[0].occurred_at, "2026-11-04T08:00:05.000Z");
+  assert.equal(upload.body.collector.sent_at, "2026-11-04T10:00:05.000Z");
+  assert.deepEqual(r.queued(), []);
+});
+
+test("a policy block drops queued dictation and queues none while it lasts", async () => {
+  const r = rig();
+  r.server.batchStatus = 403;
+  r.server.batchCode = "POLICY_CLOUD_BACKUP_BLOCKED";
+  dictate(r, 1, 30);
+  await r.events.flush();
+  assert.deepEqual(r.queued(), []);
+
+  dictate(r, 2, 60);
+  assert.deepEqual(r.queued(), []);
+  assert.deepEqual(r.events.state.dictationWords, { a: 0 });
+});
+
+test("an accepted privacy rejection releases the ceiling for dictations after opt-in", async () => {
+  const client = rig();
+  client.server.reject.set(captureId(1), "before_opt_in");
+  dictate(client, 1, 200);
+  await client.events.flush();
+
+  assert.deepEqual(client.queued(), []);
+  assert.deepEqual(client.events.state.dictationWords, { a: 0 });
+  client.events.dispose();
+
+  const restarted = rig({ store: client.store });
+  dictate(restarted, 2, 200);
+  await restarted.events.flush();
+  assert.deepEqual(
+    restarted.batches().flatMap((batch) => batch.body.events.map((event) => event.event_id)),
+    [captureId(2)]
+  );
+  assert.deepEqual(restarted.events.state.dictationWords, { a: 200 });
+});
+
+test("a mixed acknowledgement releases only rejected dictation progress", async () => {
+  const client = rig();
+  dictate(client, 1, 40);
+  await client.events.flush();
+  client.server.batchStatus = 503;
+  await client.events.recordAppSession(client.getScope());
+  client.events.recordOnboardingCompleted();
+  dictate(client, 2, 80);
+  dictate(client, 3, 30);
+  dictate(client, 4, 20);
+  dictate(client, 5, 500, { practice: true });
+  dictate(client, 6, 30);
+  await client.events.flush();
+
+  client.server.reject.set(captureId(2), "before_opt_in");
+  client.server.reject.set(captureId(5), "before_opt_in");
+  client.server.reject.set(BINDING, "before_opt_in");
+  client.server.duplicates.add(captureId(4));
+  client.server.defer.add(captureId(6));
+  client.server.batchStatus = 200;
+  await client.events.flush();
+
+  assert.deepEqual(queuedDictation(client), [[captureId(6), 30, false]]);
+  assert.deepEqual(client.events.state.dictationWords, { a: 120 });
+  assert.deepEqual(client.events.state.acknowledgedBindings, [BINDING]);
+
+  client.server.defer.clear();
+  dictate(client, 7, 80);
+  await client.events.flush();
+  assert.deepEqual(client.queued(), []);
+  assert.deepEqual(client.events.state.dictationWords, { a: 200 });
+  assert.ok(
+    client
+      .batches()
+      .some((batch) => batch.body.events.some((event) => event.event_id === captureId(7)))
+  );
+});
+
+test("policy recovery releases discarded words but preserves acknowledged progress across restarts", async () => {
+  const client = rig();
+  dictate(client, 1, 75);
+  await client.events.flush();
+  client.setScope({ accountId: "b", authGeneration: 2 });
+  dictate(client, 2, 190);
+  await client.events.flush();
+  client.setScope({ accountId: "a", authGeneration: 3 });
+  client.server.batchStatus = 503;
+  dictate(client, 3, 500, { practice: true });
+  dictate(client, 4, 150);
+  await client.events.flush();
+  client.server.batchStatus = 403;
+  client.server.batchCode = "POLICY_CLOUD_BACKUP_BLOCKED";
+  await client.events.flush();
+  assert.deepEqual(client.queued(), []);
+  assert.deepEqual(client.events.state.dictationWords, { a: 75, b: 190 });
+  client.events.dispose();
+
+  const restarted = rig({ store: client.store });
+  dictate(restarted, 5, 125);
+  await restarted.events.flush();
+  dictate(restarted, 6, 1);
+  await restarted.events.flush();
+  assert.deepEqual(
+    restarted.batches().flatMap((batch) => batch.body.events.map((event) => event.event_id)),
+    [captureId(5)]
+  );
+  assert.deepEqual(restarted.events.state.dictationWords, { a: 200, b: 190 });
+});
+
+test("expired dictations release the ceiling before the next capture, keeping fresh and acknowledged words", async () => {
+  const client = rig();
+  dictate(client, 1, 75);
+  await client.events.flush();
+  client.server.batchStatus = 503;
+  dictate(client, 2, 500, { practice: true });
+  dictate(client, 3, 125);
+  await client.events.flush();
+  client.advance(29 * 24 * 60 * 60_000);
+  client.setScope({ accountId: "b", authGeneration: 2 });
+  dictate(client, 4, 40);
+  await client.events.flush();
+  client.advance(2 * 24 * 60 * 60_000);
+  client.setScope({ accountId: "a", authGeneration: 3 });
+  client.server.batchStatus = 200;
+
+  dictate(client, 5, 125);
+  await client.events.flush();
+  assert.deepEqual(
+    client
+      .batches()
+      .at(-1)
+      .body.events.map((event) => event.event_id),
+    [captureId(5)]
+  );
+  assert.deepEqual(queuedDictation(client), [[captureId(4), 40, false]]);
+  assert.deepEqual(client.events.state.dictationWords, { a: 200, b: 40 });
+  dictate(client, 6, 1);
+  assert.deepEqual(queuedDictation(client), [[captureId(4), 40, false]]);
+});
+
+test("bounded queue eviction releases only unacknowledged dictation words", async () => {
+  const client = rig();
+  dictate(client, 1, 50);
+  await client.events.flush();
+  client.server.batchStatus = 503;
+  dictate(client, 2, 150);
+  await client.events.flush();
+  for (let index = 0; index < 300; index += 1) {
+    client.events.enqueue(queuedPracticeEvent(index));
+  }
+  assert.equal(client.queued().length, 200);
+  assert.deepEqual(client.events.state.dictationWords, { a: 50 });
+  client.server.batchStatus = 200;
+  dictate(client, 3, 150);
+  await client.events.flush();
+  while (client.events.running) await client.events.running;
+  assert.ok(
+    client
+      .batches()
+      .some((batch) => batch.body.events.some((event) => event.event_id === captureId(3)))
+  );
+  assert.deepEqual(client.events.state.dictationWords, { a: 200 });
+});
+
+for (const lifecycle of ["same account", "account switch", "account erasure"]) {
+  test(`in-flight dictation survives queue pressure and expiry after ${lifecycle}`, async () => {
+    const client = rig();
+    const request = client.events.request;
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    client.events.request = async (options) => {
+      await held;
+      return request(options);
+    };
+    dictate(client, 1, 250);
+    const upload = client.events.running;
+    for (let index = 0; index < 300; index += 1) {
+      client.events.enqueue(queuedPracticeEvent(index));
+    }
+    client.advance(31 * 24 * 60 * 60_000);
+    client.events.dropExpired();
+    assert.deepEqual(queuedDictation(client), [[captureId(1), 250, false]]);
+    assert.deepEqual(client.events.state.dictationWords, { a: 250 });
+    if (lifecycle === "account switch") client.setScope({ accountId: "b", authGeneration: 2 });
+    if (lifecycle === "account erasure") client.events.purge("a");
+    release();
+    await upload;
+    assert.deepEqual(
+      client.events.state.dictationWords,
+      lifecycle === "account erasure" ? {} : { a: 250 }
+    );
+  });
+}
+
+for (const rejected of [false, true]) {
+  test(`the real auth fence keeps a ${rejected ? "rejected" : "stored"} dictation retryable after an account switch`, async () => {
+    const client = rig();
+    let auth = { token: "test-token-a", generation: 1 };
+    let release;
+    const held = new Promise((resolve) => {
+      release = resolve;
+    });
+    const received = [];
+    client.events.request = createCloudApiRequestHandler({
+      getApiUrl: () => "https://api.example.test",
+      getAppVersion: () => "1.12.0",
+      tokenStore: { getState: () => auth },
+      proxyFetch: async (_url, options) => {
+        const body = JSON.parse(options.body);
+        received.push(body.events);
+        await held;
+        return new Response(
+          JSON.stringify({
+            accepted: body.events.map((event) => event.event_id),
+            stored: body.events
+              .filter((event) => !rejected || event.event_id !== captureId(1))
+              .map((event) => event.event_id),
+            duplicates: [],
+            conflicts: [],
+            rejected: body.events
+              .filter((event) => rejected && event.event_id === captureId(1))
+              .map((event) => ({ event_id: event.event_id, reason: "before_opt_in" })),
+            deferred: [],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        );
+      },
+    });
+    dictate(client, 1, 250);
+    const upload = client.events.running;
+    for (let index = 0; index < 300; index += 1) {
+      client.events.enqueue(queuedPracticeEvent(index));
+    }
+    assert.equal(client.queued().length, 200);
+    client.setScope({ accountId: "b", authGeneration: 2 });
+    auth = { token: "test-token-b", generation: 2 };
+    release();
+    await upload;
+    assert.ok(client.queued().some((event) => event.event_id === captureId(1)));
+    assert.deepEqual(client.events.state.dictationWords, { a: 250 });
+
+    client.setScope({ accountId: "a", authGeneration: 3 });
+    auth = { token: "test-token-a-new", generation: 3 };
+    dictate(client, 2, 250);
+    await client.events.flush();
+    assert.deepEqual(
+      received.flat().map((event) => event.event_id),
+      [captureId(1), captureId(1)]
+    );
+    assert.equal(
+      client.queued().some((event) => event.event_id === captureId(1)),
+      false
+    );
+    assert.deepEqual(client.events.state.dictationWords, { a: rejected ? 0 : 250 });
+    if (rejected) {
+      dictate(client, 3, 200);
+      await client.events.flush();
+      assert.deepEqual(
+        received.flat().map((event) => event.event_id),
+        [captureId(1), captureId(1), captureId(3)]
+      );
+      assert.deepEqual(client.events.state.dictationWords, { a: 200 });
+    }
+  });
+}
+
+test("a rejection arriving after erasure cannot decrement the replacement account", async () => {
+  const client = rig();
+  client.server.reject.set(captureId(1), "before_opt_in");
+  const request = client.events.request;
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  client.events.request = async (options) => {
+    const result = await request(options);
+    await held;
+    return result;
+  };
+  dictate(client, 1, 200);
+  const upload = client.events.running;
+  client.events.purge("a");
+  client.setScope({ accountId: "b", authGeneration: 2 });
+  dictate(client, 2, 100);
+  release();
+  await upload;
+  while (client.events.running) await client.events.running;
+
+  assert.deepEqual(client.events.state.dictationWords, { b: 100 });
+  assert.deepEqual(client.queued(), []);
+});
+
+test("erasing an account purges its dictation and its word count, and only its own", async () => {
+  const r = rig();
+  r.server.batchStatus = 503;
+  dictate(r, 1, 150);
+  r.setScope({ accountId: "b", authGeneration: 2 });
+  dictate(r, 2, 120);
+
+  r.events.purge("a");
+  assert.deepEqual(
+    r.queued().map((event) => event.account_id),
+    ["b"]
+  );
+  assert.deepEqual(r.events.state.dictationWords, { b: 120 });
+});
+
+test("a late dictation cannot restore an erased account's queue or word count", async () => {
+  const client = rig();
+  client.server.batchStatus = 503;
+  dictate(client, 1, 150);
+  await client.events.flush();
+
+  client.events.purge("a");
+  const requestsBefore = client.calls.length;
+  dictate(client, 2, 50);
+  await client.events.flush();
+
+  assert.deepEqual(client.queued(), []);
+  assert.deepEqual(client.events.state.dictationWords, {});
+  assert.equal(client.calls.length, requestsBefore);
+});
+
+test("a dictation completing after disposal leaves the persisted queue untouched", async () => {
+  const client = rig();
+  client.server.batchStatus = 503;
+  dictate(client, 1, 150);
+  await client.events.flush();
+  const savedBefore = structuredClone(client.store.saved());
+  const requestsBefore = client.calls.length;
+
+  client.events.dispose();
+  dictate(client, 2, 50);
+  await client.events.flush();
+
+  assert.deepEqual(client.store.saved(), savedBefore);
+  assert.equal(client.calls.length, requestsBefore);
+});
+
 test("the file store writes atomically and starts fresh from an unreadable file", (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "product-events-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -472,6 +1024,88 @@ test("the file store writes atomically and starts fresh from an unreadable file"
     installationId: null,
     onboardingCompletions: 0,
     acknowledgedBindings: [],
+    dictationWords: {},
     events: [],
   });
+});
+
+test("the first 200 offline one-word dictations retain sign-in and onboarding milestones", async () => {
+  const client = rig();
+  client.server.batchStatus = 503;
+  await client.events.recordAppSession({ accountId: "a", authGeneration: 1 });
+  client.events.recordOnboardingCompleted({ setupMode: "local", flowVersion: "v1" });
+  await client.events.flush();
+  for (let index = 1; index <= 200; index += 1) {
+    dictate(client, index, 1);
+    await client.events.flush();
+  }
+
+  assert.equal(client.queued().length, 202);
+  assert.equal(queuedDictation(client).length, 200);
+  assert.ok(client.queued().some((event) => event.event_name === "app_session_authenticated"));
+  assert.ok(client.queued().some((event) => event.event_name === "onboarding_completed"));
+  client.server.batchStatus = 200;
+  await client.events.flush();
+  while (client.events.running) await client.events.running;
+  assert.deepEqual(client.queued(), []);
+  assert.deepEqual(client.events.state.dictationWords, { a: 200 });
+});
+
+test("dictations and milestones have independent bounded queue capacity", async () => {
+  const client = rig();
+  client.server.batchStatus = 503;
+  for (let index = 0; index < 250; index += 1) {
+    client.events.enqueue(queuedEvent(`onboarding-${index}`));
+  }
+  for (let index = 1; index <= 300; index += 1) {
+    dictate(client, index, 1, { practice: true });
+    await client.events.flush();
+  }
+
+  assert.equal(
+    client.queued().filter((event) => event.event_name !== "dictation_completed").length,
+    200
+  );
+  assert.equal(queuedDictation(client).length, 200);
+  assert.equal(client.queued().length, 400);
+  assert.deepEqual(client.events.state.dictationWords, {});
+});
+
+test("a policy refusal discards all of its account's pending dictations across batches", async () => {
+  const client = rig();
+  client.server.batchStatus = 503;
+  for (let index = 1; index <= 100; index += 1) {
+    dictate(client, index, 2);
+    await client.events.flush();
+  }
+  client.setScope({ accountId: "b", authGeneration: 2 });
+  dictate(client, 101, 30);
+  await client.events.flush();
+  client.setScope({ accountId: "a", authGeneration: 3 });
+  client.server.batchStatus = 403;
+  client.server.batchCode = "POLICY_CLOUD_BACKUP_BLOCKED";
+  await client.events.flush();
+
+  assert.deepEqual(client.events.state.dictationWords, { a: 0, b: 30 });
+  assert.deepEqual(queuedDictation(client), [[captureId(101), 30, false]]);
+  client.setScope({ accountId: "a", authGeneration: 4 });
+  client.server.batchStatus = 200;
+  dictate(client, 102, 200);
+  await client.events.flush();
+  assert.equal(client.batches().at(-1).body.events[0].event_id, captureId(102));
+  assert.deepEqual(client.events.state.dictationWords, { a: 200, b: 30 });
+});
+
+test("a dictation fact without an explicit capture scope never adopts the active account", async () => {
+  const client = rig();
+  client.events.recordDictationCompleted({
+    captureId: captureId(1),
+    words: 25,
+    mode: "local",
+    practice: false,
+  });
+  await client.events.flush();
+
+  assert.deepEqual(client.events.state.dictationWords, {});
+  assert.equal(client.batches().flatMap((batch) => batch.body.events).length, 0);
 });
