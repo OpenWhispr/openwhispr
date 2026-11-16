@@ -121,11 +121,40 @@ test("Windows shapes the floating window to the pill instead of the transparent 
     assert.ok(shapedArea < 208 * 120);
     assert.equal(await manager.setMainWindowInputRegion(null), true);
     assert.deepEqual(shapes.at(-1), []);
-    assert.equal(
-      await manager.setMainWindowInputRegion({ ...pill, width: 0, height: 0 }),
-      true
-    );
+    assert.equal(await manager.setMainWindowInputRegion({ ...pill, width: 0, height: 0 }), true);
     assert.deepEqual(shapes.at(-1), []);
+  } finally {
+    Object.defineProperty(process, "platform", original);
+  }
+});
+
+test("Windows puts the pill shape back after the show nudge", async () => {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+  try {
+    const shapes = [];
+    const bounds = { x: 10, y: 20, width: 208, height: 120 };
+    const win = {
+      ...fakeWindow(),
+      isVisible: () => true,
+      isMinimized: () => false,
+      getBounds: () => ({ ...bounds }),
+      getMinimumSize: () => [bounds.width, bounds.height],
+      setBounds: () => undefined,
+      setShape: (rects) => shapes.push(rects),
+    };
+    const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
+    await manager.setMainWindowInputRegion({
+      x: 156,
+      y: 68,
+      width: 40,
+      height: 40,
+      viewportWidth: 208,
+      viewportHeight: 120,
+    });
+    shapes.length = 0;
+    manager._restoreWin32MainWindowClicks();
+    assert.deepEqual(shapes, [[{ x: 156, y: 68, width: 40, height: 40 }]]);
   } finally {
     Object.defineProperty(process, "platform", original);
   }

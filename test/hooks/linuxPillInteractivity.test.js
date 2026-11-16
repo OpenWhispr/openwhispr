@@ -310,13 +310,25 @@ test("unmount queues full input after a pending narrow region and silences later
   assert.equal(mounted.regions.length, writes);
 });
 
-for (const platform of ["darwin", "win32"]) {
-  test(`${platform} keeps its native interactivity implementation`, async (t) => {
-    const mounted = await mountPill(t, { platform });
-    await mounted.render({ captureWindow: true });
-    await mounted.tick();
-    await mounted.unmount();
-    assert.deepEqual(mounted.regions, []);
-    assert.equal(mounted.measurements(), 0);
-  });
-}
+test("darwin keeps its native interactivity implementation", async (t) => {
+  const mounted = await mountPill(t, { platform: "darwin" });
+  await mounted.render({ captureWindow: true });
+  await mounted.tick();
+  await mounted.unmount();
+  assert.deepEqual(mounted.regions, []);
+  assert.equal(mounted.measurements(), 0);
+});
+
+test("win32 shapes the measured pill and restores the full window for overlays", async (t) => {
+  const mounted = await mountPill(t, { platform: "win32" });
+  await mounted.render({ captureWindow: true });
+  await mounted.tick();
+  await mounted.unmount();
+  assert.deepEqual(mounted.regions, [
+    { x: 144, y: 56, width: 64, height: 64, ...VIEWPORT },
+    null,
+    null,
+    null,
+  ]);
+  assert.equal(mounted.measurements(), 1);
+});
