@@ -27,6 +27,7 @@ import { SharedDictionaryService } from "./SharedDictionaryService";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError, isAuthContextError, wasRefusedBeforeSending } from "./cloudApi.js";
 import { LeaderboardService } from "./LeaderboardService";
+import { checkStandInOwnership } from "./standInOwnershipCheck";
 import {
   assertAuthGenerationCurrent,
   getAuthRequestContextSnapshot,
@@ -1235,6 +1236,15 @@ export class SyncService {
         this.passGeneration = authGeneration;
         teamSpacesReady = await this.syncSpaces(authGeneration);
         if (!this.passIsCurrent()) return;
+        if (this.consent().shared) {
+          await checkStandInOwnership({
+            accountId,
+            authGeneration,
+            isCurrent: () =>
+              this.passIsCurrent() && getAuthRequestContextSnapshot().sessionUserId === accountId,
+          }).catch((err) => console.error("Ownership check failed:", err));
+          if (!this.passIsCurrent()) return;
+        }
         // Both branches below: shared lists follow membership, not cloud backup.
         const dictionaryGeneration = useSharedDictionaryStore.getState().generation;
         const sharedResult = await this.syncSharedDictionary(authGeneration);
