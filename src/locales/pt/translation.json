@@ -3566,6 +3566,21 @@
         "loadError": "Não foi possível carregar as equipes."
       }
     },
+    "deviceNotes": {
+      "title": "Neste dispositivo",
+      "info": "Estas notas não estão atribuídas a nenhuma conta. Mova uma nota para mantê-la e editá-la.",
+      "infoLabel": "Sobre as notas neste dispositivo",
+      "moveNote": "Mover para meu Privado",
+      "moveFolder": "Mover pasta para meu Privado",
+      "moved": "Movida para seu Privado",
+      "movedCount_one": "{{count}} nota movida para seu Privado",
+      "movedCount_other": "{{count}} notas movidas para seu Privado",
+      "moveFailed": "Não foi possível mover esta nota",
+      "banner": "Esta nota ainda não está atribuída a uma conta.",
+      "notesHeading": "Notas",
+      "summaryHeading": "Resumo com IA",
+      "transcriptHeading": "Transcrição"
+    },
     "structureIntro": {
       "title": "Onde ficam suas notas",
       "description": "O OpenWhispr separa pensamentos privados do trabalho compartilhado para que as pessoas certas vejam as notas certas.",

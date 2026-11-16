@@ -1269,6 +1269,22 @@ export function setActiveNoteId(id: number | null): void {
   useNoteStore.setState({ activeNoteId: id });
 }
 
+type NoteView = Pick<NoteState, "activeNoteId" | "activeContext">;
+
+/** Calls `listener` whenever the open note or container changes. */
+export function subscribeNoteView(
+  listener: (view: NoteView, previous: NoteView) => void
+): () => void {
+  return useNoteStore.subscribe((state, previous) => {
+    if (
+      state.activeNoteId !== previous.activeNoteId ||
+      state.activeContext !== previous.activeContext
+    ) {
+      listener(state, previous);
+    }
+  });
+}
+
 /**
  * Jump navigation (CommandSearch/ControlPanel): activate and reveal a
  * space/folder. Works both with a mounted tree and as a preset that

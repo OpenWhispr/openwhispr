@@ -3560,6 +3560,21 @@
         "loadError": "无法加载团队。"
       }
     },
+    "deviceNotes": {
+      "title": "在此设备上",
+      "info": "这些笔记尚未分配给任何账户。移动笔记即可保留并编辑。",
+      "infoLabel": "关于此设备上的笔记",
+      "moveNote": "移动到我的私密",
+      "moveFolder": "将文件夹移动到我的私密",
+      "moved": "已移动到你的私密",
+      "movedCount_one": "已将 {{count}} 条笔记移动到你的私密",
+      "movedCount_other": "已将 {{count}} 条笔记移动到你的私密",
+      "moveFailed": "无法移动此笔记",
+      "banner": "此笔记尚未分配给任何账户。",
+      "notesHeading": "笔记",
+      "summaryHeading": "AI 摘要",
+      "transcriptHeading": "转录"
+    },
     "structureIntro": {
       "title": "笔记存放在哪里",
       "description": "OpenWhispr 将个人想法与协作内容分开，让合适的人看到合适的笔记。",

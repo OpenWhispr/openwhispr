@@ -27,14 +27,24 @@ const NOTES = [
   { id: 901, space_id: 9, folder_id: null, title: "Pending loose note" },
 ];
 const EXPANDED = ["space:1", "space:2", "folder:10", "folder:91"];
+const NO_DEVICE_NOTES = { folders: [], notes: [], viewNoteId: null };
 
-async function renderTree(t) {
+async function renderTree(t, deviceNotes = NO_DEVICE_NOTES) {
   installBrowserGlobals(t);
   const i18n = i18next.createInstance();
   await i18n.use(initReactI18next).init({
     lng: "en",
     fallbackLng: "en",
-    resources: { en: { translation: {} } },
+    resources: {
+      en: {
+        translation: {
+          notes: {
+            deviceNotes: { title: "On this device" },
+            spaces: { noteCount_one: "{{count}} note", noteCount_other: "{{count}} notes" },
+          },
+        },
+      },
+    },
     initImmediate: false,
     interpolation: { escapeValue: false },
   });
@@ -139,6 +149,16 @@ async function renderTree(t) {
       "/CreateSpaceDialog": "export default function Mock() { return null; }",
       "/DeleteSpaceDialog": "export default function Mock() { return null; }",
       "/SpaceSettingsDialog": "export default function Mock() { return null; }",
+      "/stores/deviceNotesStore": `
+        const state = {
+          ...${JSON.stringify(deviceNotes)},
+          load: async () => {},
+          startListening: () => () => {},
+        };
+        export const useDeviceNotesStore = Object.assign((selector) => selector(state), {
+          getState: () => state,
+        });
+      `,
     },
   });
   const { I18nextProvider } = await vite.ssrLoadModule("react-i18next");
@@ -169,4 +189,40 @@ test("the pending Private and the workspace's own one show as one section, every
   for (const note of NOTES) {
     assert.match(markup, new RegExp(note.title), `${note.title} is reachable from the tree`);
   }
+});
+
+test("the section is hidden when there are no device notes", async (t) => {
+  const markup = await renderTree(t);
+  assert.doesNotMatch(markup, /On this device/);
+});
+
+test("the section shows its title, folder rows with counts and root notes", async (t) => {
+  const markup = await renderTree(t, {
+    folders: [{ id: 7, name: "Old plans", is_default: 0, noteCount: 2 }],
+    notes: [
+      { id: 70, title: "Device plan", folder_id: 7 },
+      { id: 71, title: "Device draft", folder_id: 7 },
+      { id: 72, title: "Device loose note", folder_id: null },
+      // Its folder was deleted: it sits at the section's root.
+      { id: 73, title: "Orphaned device note", folder_id: 99 },
+    ],
+    viewNoteId: null,
+  });
+  assert.match(markup, />On this device</);
+  assert.match(markup, />Old plans</);
+  assert.match(markup, /Old plans, 2 notes/);
+  for (const title of [
+    "Device plan",
+    "Device draft",
+    "Device loose note",
+    "Orphaned device note",
+  ]) {
+    assert.match(markup, new RegExp(`>${title}<`));
+  }
+  const level = (title) => markup.match(new RegExp(`aria-level="(\\d)"[^>]*title="${title}"`))?.[1];
+  assert.deepEqual(["Device plan", "Device loose note", "Orphaned device note"].map(level), [
+    "2",
+    "1",
+    "1",
+  ]);
 });

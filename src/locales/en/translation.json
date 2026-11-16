@@ -4119,6 +4119,21 @@
         "loadError": "Couldn't load teams."
       }
     },
+    "deviceNotes": {
+      "title": "On this device",
+      "info": "These notes have not been assigned to an account. Move a note to keep it and edit.",
+      "infoLabel": "About notes on this device",
+      "moveNote": "Move to my Private",
+      "moveFolder": "Move folder to my Private",
+      "moved": "Moved to your Private",
+      "movedCount_one": "Moved {{count}} note to your Private",
+      "movedCount_other": "Moved {{count}} notes to your Private",
+      "moveFailed": "Couldn't move this note",
+      "banner": "This note isn't assigned to an account yet.",
+      "notesHeading": "Notes",
+      "summaryHeading": "AI summary",
+      "transcriptHeading": "Transcript"
+    },
     "structureIntro": {
       "title": "Where your notes live",
       "description": "OpenWhispr separates private thoughts from shared work so the right people see the right notes.",

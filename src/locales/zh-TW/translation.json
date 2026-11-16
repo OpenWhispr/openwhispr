@@ -3560,6 +3560,21 @@
         "loadError": "無法載入團隊。"
       }
     },
+    "deviceNotes": {
+      "title": "在此裝置上",
+      "info": "這些筆記尚未指派給任何帳號。移動筆記即可保留並編輯。",
+      "infoLabel": "關於此裝置上的筆記",
+      "moveNote": "移動到我的私人",
+      "moveFolder": "將資料夾移動到我的私人",
+      "moved": "已移動到你的私人",
+      "movedCount_one": "已將 {{count}} 則筆記移動到你的私人",
+      "movedCount_other": "已將 {{count}} 則筆記移動到你的私人",
+      "moveFailed": "無法移動此筆記",
+      "banner": "此筆記尚未指派給任何帳號。",
+      "notesHeading": "筆記",
+      "summaryHeading": "AI 摘要",
+      "transcriptHeading": "轉錄"
+    },
     "structureIntro": {
       "title": "筆記存放在哪裡",
       "description": "OpenWhispr 將個人想法與協作內容分開，讓合適的人看到合適的筆記。",

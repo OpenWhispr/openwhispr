@@ -205,6 +205,10 @@ async function mountTree(
           dismiss: () => {},
         });
       `,
+      "/stores/deviceNotesStore": `
+        const state = { folders: [], notes: [], viewNoteId: null, load: async () => {}, startListening: () => () => {} };
+        export const useDeviceNotesStore = Object.assign((selector) => selector(state), { getState: () => state });
+      `,
       "/stores/settingsStore": `
         export const useSettingsStore = (selector) => selector({ noteFilesEnabled: false });
       `,

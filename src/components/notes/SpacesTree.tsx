@@ -37,6 +37,7 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { ConfirmDialog } from "../ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useToast } from "../ui/useToast";
 import { useNoteDragAndDrop, type NoteMoveTarget } from "../../hooks/useNoteDragAndDrop";
@@ -74,6 +75,8 @@ import DeleteSpaceDialog from "./DeleteSpaceDialog";
 import { treeHorizontalIntent, treeRowActionClearanceStyle } from "./treeDirection";
 import { defaultFolderDisplayName } from "./shared";
 import type {
+  DeviceNoteFolder,
+  DeviceNoteSummary,
   FolderItem,
   MoveRefusalCode,
   NoteItem,
@@ -109,6 +112,7 @@ import {
   openNote,
   useShareCache,
 } from "../../stores/noteStore";
+import { useDeviceNotesStore } from "../../stores/deviceNotesStore";
 
 // A folder row's notes: those of every folder it stands for (one, except in the
 // Private section; see privateSectionFolders).
@@ -1174,6 +1178,227 @@ function NoteLeaf({
   );
 }
 
+function DeviceNoteRow({
+  level,
+  label,
+  icon,
+  isActive,
+  isExpanded,
+  ariaLabel,
+  menuLabel,
+  indentClassName,
+  onActivate,
+  onMove,
+}: {
+  level: 1 | 2;
+  label: string;
+  icon: React.ReactNode;
+  isActive: boolean;
+  isExpanded?: boolean;
+  ariaLabel?: string;
+  menuLabel: string;
+  indentClassName: string;
+  onActivate: () => void;
+  onMove: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      role="treeitem"
+      aria-level={level}
+      aria-expanded={isExpanded}
+      aria-selected={isActive}
+      aria-label={ariaLabel}
+      tabIndex={0}
+      title={label}
+      onClick={onActivate}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        onActivate();
+      }}
+      style={treeRowActionClearanceStyle(1)}
+      className={cn(
+        ROW_BASE_CLASS,
+        "h-7 pe-2",
+        indentClassName,
+        isActive ? "bg-primary/8 dark:bg-primary/10" : "hover:bg-foreground/4 dark:hover:bg-white/4"
+      )}
+    >
+      {icon}
+      <span
+        dir="auto"
+        className={cn(
+          "text-[13px] truncate flex-1 transition-colors duration-150",
+          isActive
+            ? "text-foreground font-medium"
+            : "text-foreground/85 group-hover:text-foreground"
+        )}
+      >
+        {label}
+      </span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t("common.actions")}
+            onClick={(e) => e.stopPropagation()}
+            className={KEBAB_TRIGGER_CLASS}
+          >
+            <MoreHorizontal size={12} />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={4} className="min-w-40">
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              onMove();
+            }}
+            className={MENU_ITEM_CLASS}
+          >
+            <Lock size={11} className="text-muted-foreground/70" />
+            {menuLabel}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+/**
+ * Notes no account owns on a Mac other accounts have used: view-only until moved into the
+ * on-screen Private (`workspaceId` is its workspace). Kept out of the tree's arrow-key rows.
+ */
+function DeviceNotesSection({ workspaceId }: { workspaceId: string | null }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const folders = useDeviceNotesStore((s) => s.folders);
+  const notes = useDeviceNotesStore((s) => s.notes);
+  const viewNoteId = useDeviceNotesStore((s) => s.viewNoteId);
+  const [expandedFolderIds, setExpandedFolderIds] = useState<ReadonlySet<number>>(new Set());
+
+  if (folders.length === 0 && notes.length === 0) return null;
+
+  // A note whose folder isn't listed (deleted since) sits at the root.
+  const folderIds = new Set(folders.map((folder) => folder.id));
+  const rootNotes = notes.filter(
+    (note) => note.folder_id == null || !folderIds.has(note.folder_id)
+  );
+
+  const move = async (request: { noteIds?: number[]; folderId?: number }) => {
+    const result = await useDeviceNotesStore.getState().move(request, { workspaceId });
+    if ("error" in result) {
+      toast({ title: t("notes.deviceNotes.moveFailed"), variant: "destructive" });
+    } else if (request.folderId != null) {
+      toast({ title: t("notes.deviceNotes.movedCount", { count: result.moved.length }) });
+    } else {
+      toast({ title: t("notes.deviceNotes.moved") });
+    }
+  };
+
+  const toggleFolder = (id: number) =>
+    setExpandedFolderIds((previous) => {
+      const next = new Set(previous);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  const renderNote = (note: DeviceNoteSummary, level: 1 | 2) => (
+    <DeviceNoteRow
+      key={note.id}
+      level={level}
+      label={note.title || t("notes.list.untitled")}
+      icon={
+        <FileText
+          size={14}
+          className={cn(
+            "shrink-0 transition-colors duration-150",
+            note.id === viewNoteId ? "text-primary" : "text-foreground/50 dark:text-foreground/45"
+          )}
+        />
+      }
+      isActive={note.id === viewNoteId}
+      menuLabel={t("notes.deviceNotes.moveNote")}
+      indentClassName={level === 1 ? "ps-[30px]" : "ps-8"}
+      onActivate={() => {
+        setActiveNoteId(null);
+        useDeviceNotesStore.getState().openView(note.id);
+      }}
+      onMove={() => void move({ noteIds: [note.id] })}
+    />
+  );
+
+  const renderFolder = (folder: DeviceNoteFolder) => {
+    const isExpanded = expandedFolderIds.has(folder.id);
+    const name = defaultFolderDisplayName(folder, t);
+    return (
+      <div key={folder.id} role="none">
+        <DeviceNoteRow
+          level={1}
+          label={name}
+          icon={
+            <RowToggle
+              isExpanded={isExpanded}
+              onToggle={() => toggleFolder(folder.id)}
+              icon={<Folder size={14} className="text-foreground/55 dark:text-foreground/45" />}
+            />
+          }
+          isActive={false}
+          isExpanded={isExpanded}
+          ariaLabel={`${name}, ${t("notes.spaces.noteCount", { count: folder.noteCount })}`}
+          menuLabel={t("notes.deviceNotes.moveFolder")}
+          indentClassName="ps-2"
+          onActivate={() => toggleFolder(folder.id)}
+          onMove={() => void move({ folderId: folder.id })}
+        />
+        <TreeChildren open={isExpanded}>
+          <div className="space-y-px">
+            {notes
+              .filter((note) => note.folder_id === folder.id)
+              .map((note) => renderNote(note, 2))}
+          </div>
+        </TreeChildren>
+      </div>
+    );
+  };
+
+  return (
+    <div role="none" className="group/section">
+      <SectionHeader
+        label={t("notes.deviceNotes.title")}
+        className="mt-4"
+        action={
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t("notes.deviceNotes.infoLabel")}
+                className={cn(
+                  HOVER_REVEAL_BUTTON_CLASS,
+                  "group-hover/section:opacity-100 data-[state=open]:opacity-100"
+                )}
+              >
+                <Info size={11} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="end" className="max-w-64 p-3">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t("notes.deviceNotes.info")}
+              </p>
+            </PopoverContent>
+          </Popover>
+        }
+      />
+      <div role="none" className="space-y-px">
+        {folders.map(renderFolder)}
+        {rootNotes.map((note) => renderNote(note, 1))}
+      </div>
+    </div>
+  );
+}
+
 function SkeletonRows() {
   return (
     <div className="space-y-px" aria-hidden="true">
@@ -1267,6 +1492,13 @@ export default function SpacesTree({
     () => spaces.filter((s) => (s.kind === "private" ? s === privateSpace : teamCapability)),
     [spaces, privateSpace, teamCapability]
   );
+
+  useEffect(() => {
+    const { startListening, load } = useDeviceNotesStore.getState();
+    const stopListening = startListening();
+    void load();
+    return stopListening;
+  }, []);
 
   // The rows show the other Private's notes and those of the folders it shares
   // by name, but open with their own keys: load those containers with them.
@@ -2389,6 +2621,7 @@ export default function SpacesTree({
             </TreeChildren>
           )}
         </div>
+        <DeviceNotesSection workspaceId={privateSpace?.workspace_id ?? null} />
         {teamCapability && (
           <div role="none" className="group/section">
             <SectionHeader
