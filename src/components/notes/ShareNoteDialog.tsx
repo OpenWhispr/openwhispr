@@ -978,7 +978,7 @@ export default function ShareNoteDialog({
               <p
                 id="share-invite-error"
                 aria-live="polite"
-                className={cn("text-xs text-red-solid/90 -mt-1", !inputError && "sr-only")}
+                className={cn("text-xs text-red/90 -mt-1", !inputError && "sr-only")}
               >
                 {inputError}
               </p>
@@ -1082,7 +1082,7 @@ export default function ShareNoteDialog({
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem
-                            className="text-xs text-red-solid"
+                            className="text-xs text-red"
                             onClick={() => void handleRevoke(invitation)}
                           >
                             {t("noteEditor.share.dialog.revoke")}
@@ -1325,7 +1325,7 @@ function AccessGrantRow({
                 </>
               )}
               <DropdownMenuItem
-                className="text-xs text-red-solid"
+                className="text-xs text-red"
                 disabled={!canRemove}
                 onClick={onRemove}
               >

@@ -676,8 +676,8 @@ test("when no email was delivered, Done doesn't read as a success", async (t) =>
 
   assert.match(markup, /workspaces\.invite\.createdTitle\|\{&quot;count&quot;:2\}/);
   assert.match(markup, /workspaces\.invite\.noEmail\|\{&quot;count&quot;:2\}/);
-  assert.doesNotMatch(markup, /sentTitle|sentMany|text-green-solid/);
-  assert.match(markup, /text-amber-solid/);
+  assert.doesNotMatch(markup, /sentTitle|sentMany|text-green/);
+  assert.match(markup, /text-amber/);
   // In the description, not again in a bar beside it.
   assert.deepEqual(bars(markup), []);
 });

@@ -973,7 +973,7 @@ export default function LeaderboardSection({
               {/* Participation remains undoable without changing this device's Sync setting. */}
               <DropdownMenuItem
                 disabled={participationUpdating}
-                className="gap-2 text-xs text-red-solid focus:bg-red-solid/10 focus:text-red-solid"
+                className="gap-2 text-xs text-red focus:bg-red-solid/10 focus:text-red"
                 onSelect={leaveLeaderboards}
               >
                 <LogOut size={13} />

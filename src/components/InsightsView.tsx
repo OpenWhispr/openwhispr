@@ -435,7 +435,7 @@ function YourUsage({
           <button
             type="button"
             onClick={() => void load()}
-            className="rounded-md border border-default px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent-solid"
+            className="rounded-md border border-default px-3 py-1.5 text-xs font-medium text-primary hover:bg-state-hover"
           >
             {t("common.retry")}
           </button>

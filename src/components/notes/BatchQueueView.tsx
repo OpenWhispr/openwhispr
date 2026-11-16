@@ -88,7 +88,7 @@ export default function BatchQueueView({
               total: totalCount,
             })}
             {failedCount > 0 && (
-              <span className="font-normal text-red-solid">
+              <span className="font-normal text-red">
                 {" · "}
                 {t("notes.upload.queueFailed", { n: failedCount })}
               </span>
@@ -158,7 +158,7 @@ export default function BatchQueueView({
 
             {item.status === "error" && item.error && (
               <span
-                className="max-w-40 truncate text-xs text-red-solid"
+                className="max-w-40 truncate text-xs text-red"
                 title={t(`notes.upload.${item.error}`, {
                   defaultValue: item.error,
                   size: byokMaxFileSizeMb,

@@ -634,7 +634,7 @@ export function HotkeyInput({
           e.stopPropagation();
           onClear();
         }}
-        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-focus/30 transition-opacity duration-150 text-secondary/70 hover:text-red-solid cursor-pointer"
+        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-focus/30 transition-opacity duration-150 text-secondary/70 hover:text-red cursor-pointer"
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
@@ -724,7 +724,7 @@ export function HotkeyInput({
             {validationWarning && (
               <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-md bg-amber-solid/8 border border-amber-solid/20 dark:bg-amber-solid/12 dark:border-amber-solid/25">
                 <AlertTriangle className="w-3 h-3 text-amber-solid shrink-0" />
-                <span className="text-xs text-amber-solid">{validationWarning}</span>
+                <span className="text-xs text-amber">{validationWarning}</span>
               </div>
             )}
           </div>
@@ -836,7 +836,7 @@ export function HotkeyInput({
             {validationWarning && (
               <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1.5 rounded-md bg-amber-solid/8 border border-amber-solid/20 dark:bg-amber-solid/12 dark:border-amber-solid/25">
                 <AlertTriangle className="w-3 h-3 text-amber-solid shrink-0" />
-                <span className="text-xs text-amber-solid">{validationWarning}</span>
+                <span className="text-xs text-amber">{validationWarning}</span>
               </div>
             )}
           </>

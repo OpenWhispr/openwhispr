@@ -8,8 +8,9 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 /* Inside the assistant's own window, whose chat cards are a step larger than
-   the same cards in the Control Panel and note chats. */
-@custom-variant agent (&:where(.agent-window *));
+   the same cards in the Control Panel and note chats. The window is its own
+   page, so this also reaches the menus that portal out of .agent-window. */
+@custom-variant agent (&:where(:root:has(.agent-window) *));
 
 :root {
   /* Easing. The built-in CSS curves are too weak to read as intentional, so
@@ -41,10 +42,6 @@
   --radius-lg: 0.5rem; /* 8px - cards, panels */
   --radius-xl: 0.625rem; /* 10px - large cards */
   --radius-shell: 0.75rem; /* 12px - the inset content container in the main window */
-
-  /* The assistant pill's glow. Lighter than Figma's accent/solid, which has no
-     glow step yet, so it stays a literal until the collection gains one. */
-  --color-agent-brand: #8787ff;
 
   --shadow-modal: 0 24px 48px -12px oklch(0 0 0 / 0.18);
 

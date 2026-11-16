@@ -265,11 +265,11 @@ test("expired keeps its colour in the wide column and reads muted under the emai
 
   assert.match(
     markup,
-    /<td class="[^"]*hidden @xl:table-cell[^"]*text-red-solid[^"]*">settingsPage\.workspace\.people\.invitations\.expired<\/td>/
+    /<td class="[^"]*hidden @xl:table-cell[^"]*text-red[^"]*">settingsPage\.workspace\.people\.invitations\.expired<\/td>/
   );
   assert.match(
     markup,
-    /<p class="[^"]*@xl:hidden[^"]*text-secondary[^"]*">settingsPage\.workspace\.role\.member · <span class="text-red-solid">settingsPage\.workspace\.people\.invitations\.expired<\/span><\/p>/
+    /<p class="[^"]*@xl:hidden[^"]*text-secondary[^"]*">settingsPage\.workspace\.role\.member · <span class="text-red">settingsPage\.workspace\.people\.invitations\.expired<\/span><\/p>/
   );
 });
 
@@ -288,7 +288,7 @@ test("expired shows Expired and still offers Resend", async (t) => {
 
   assert.match(markup, /settingsPage\.workspace\.people\.invitations\.expired/);
   assert.doesNotMatch(markup, /invitations\.pending/);
-  assert.match(markup, /text-red-solid[^>]*>settingsPage\.workspace\.people\.invitations\.expired/);
+  assert.match(markup, /text-red[^>]*>settingsPage\.workspace\.people\.invitations\.expired/);
   assert.match(markup, /settingsPage\.workspace\.people\.invitations\.resend/);
 });
 
@@ -351,7 +351,7 @@ test("row menu offers Resend invite and Cancel invite", async (t) => {
   );
   assert.match(
     markup,
-    /role="menuitem"[^>]*text-red-solid[^>]*>(?:<svg[\s\S]*?<\/svg>)?settingsPage\.workspace\.people\.invitations\.cancel</
+    /role="menuitem"[^>]*text-red[^>]*>(?:<svg[\s\S]*?<\/svg>)?settingsPage\.workspace\.people\.invitations\.cancel</
   );
 });
 
@@ -699,7 +699,7 @@ test("selecting invitations shows Cancel invites and Resend invites", async (t) 
   assert.ok(barButton(container, "resendSelected"));
   assert.match(
     barButton(container, "cancelSelected").getAttribute("class"),
-    /text-red-solid/,
+    /text-red/,
     "Cancel invites is destructive"
   );
 

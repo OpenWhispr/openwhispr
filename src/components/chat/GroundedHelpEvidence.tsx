@@ -67,7 +67,7 @@ export function HelpEvidence({ evidence }: { evidence: HelpEvidenceData }) {
         </div>
       )}
       {openFailed && (
-        <p role="alert" className="mt-1 text-red-solid">
+        <p role="alert" className="mt-1 text-red">
           {t("productHelp.openFailed")}
         </p>
       )}

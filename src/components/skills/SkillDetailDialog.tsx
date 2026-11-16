@@ -287,7 +287,7 @@ export function SkillDetailDialog({
                   variant="ghost"
                   size="sm"
                   onClick={() => setConfirmChoice(true)}
-                  className="-ms-2 text-red-solid hover:bg-red-solid/10 dark:text-red-solid dark:hover:bg-red-solid/10"
+                  className="-ms-2 text-red hover:bg-red-solid/10 dark:text-red dark:hover:bg-red-solid/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {t("skills.detail.uninstall")}

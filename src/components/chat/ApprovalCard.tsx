@@ -329,10 +329,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       <div className="px-4">
         {hasFieldLayout && editing && (
           <>
-            <p
-              id={problemsId}
-              className="pb-1 text-xs text-red-solid empty:hidden agent:text-[13px]"
-            >
+            <p id={problemsId} className="pb-1 text-xs text-red empty:hidden agent:text-[13px]">
               {problemText}
             </p>
             {/* Always present while editable, so each new reason is heard. */}
@@ -374,7 +371,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
           {/* Translated copy only: entry.message is the connector's English,
               written for the model. */}
           {entry.state === "failed" && (
-            <p className="pb-1 text-red-solid">
+            <p className="pb-1 text-red">
               {t("connectors.approval.failed", {
                 message: connectorErrorText(t, "approval", entry.connectorId, entry.errorCode, {
                   destination,

@@ -119,7 +119,7 @@ export function ConnectRow({
         {working && target !== "apple" && (
           <p className="mt-2 text-secondary">{t("agentMode.interactions.connection.connecting")}</p>
         )}
-        {errorText && <p className="mt-2 text-red-solid">{errorText}</p>}
+        {errorText && <p className="mt-2 text-red">{errorText}</p>}
       </div>
     </div>
   );

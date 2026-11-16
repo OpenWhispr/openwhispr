@@ -1247,9 +1247,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           </>
         )}
 
-        {skippedNotice && (
-          <p className="mt-2 text-center text-xs text-amber-solid">{skippedNotice}</p>
-        )}
+        {skippedNotice && <p className="mt-2 text-center text-xs text-amber">{skippedNotice}</p>}
 
         {batch.hasQueue && (
           <div className="mt-5">
@@ -1418,7 +1416,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     </p>
                   )}
                   {diarizationEnabled && byokDiarizeProvider === "groq" && (
-                    <p className="mt-1.5 text-xs leading-relaxed text-amber-solid">
+                    <p className="mt-1.5 text-xs leading-relaxed text-amber">
                       {t("notes.upload.groqDiarizeNote")}
                     </p>
                   )}
@@ -1718,9 +1716,7 @@ function SelectedView({
       {/* Cloud absolute limit (500 MB) */}
       {fileTooLarge && (
         <div className="rounded-xl border border-red-solid/20 bg-red-solid/5 px-4 py-3 dark:bg-red-solid/10">
-          <p className="text-[13px] leading-relaxed text-red-solid">
-            {t("notes.upload.fileTooLarge")}
-          </p>
+          <p className="text-[13px] leading-relaxed text-red">{t("notes.upload.fileTooLarge")}</p>
         </div>
       )}
 
@@ -2045,7 +2041,7 @@ function ErrorView({ t, error, reset, onRetry, onOpenSettings }: ErrorViewProps)
     <div className="flex flex-col gap-4" style={{ animation: "float-up 0.3s ease-out" }}>
       <div className="flex items-start gap-3 rounded-2xl border border-red-solid/20 bg-red-solid/5 p-4 dark:bg-red-solid/10">
         <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-solid" />
-        <p className="flex-1 text-sm leading-relaxed text-red-solid">{error}</p>
+        <p className="flex-1 text-sm leading-relaxed text-red">{error}</p>
         <button
           onClick={reset}
           aria-label={t("common.close")}

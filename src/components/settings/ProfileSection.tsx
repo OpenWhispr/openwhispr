@@ -276,7 +276,7 @@ function ChangePasswordDialog({
                 autoComplete="new-password"
               />
               {tooShort && (
-                <p className="text-xs text-red-solid leading-snug">
+                <p className="text-xs text-red leading-snug">
                   {t("settingsPage.account.profile.password.minLength")}
                 </p>
               )}
@@ -295,7 +295,7 @@ function ChangePasswordDialog({
                 autoComplete="new-password"
               />
               {mismatch && (
-                <p className="text-xs text-red-solid leading-snug">
+                <p className="text-xs text-red leading-snug">
                   {t("settingsPage.account.profile.password.mismatch")}
                 </p>
               )}
@@ -316,7 +316,7 @@ function ChangePasswordDialog({
           {error && (
             <div className="px-2.5 py-1.5 rounded bg-red-solid/5 border border-red-solid/20 flex items-center gap-1.5">
               <AlertCircle className="w-3 h-3 text-red-solid shrink-0" />
-              <p className="text-xs text-red-solid leading-snug">{error}</p>
+              <p className="text-xs text-red leading-snug">{error}</p>
             </div>
           )}
           <DialogFooter>

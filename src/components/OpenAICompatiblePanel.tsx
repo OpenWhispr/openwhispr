@@ -457,7 +457,7 @@ export default function OpenAICompatiblePanel({
           <p className="text-xs text-secondary/70 mt-1">{t("reasoning.custom.apiKeyHelp")}</p>
         )}
         {apiKeyRequired && !apiKey.trim() && (
-          <p className="text-xs text-amber-solid">{t("reasoning.custom.keyRequiredHint")}</p>
+          <p className="text-xs text-amber">{t("reasoning.custom.keyRequiredHint")}</p>
         )}
       </div>
 
@@ -502,20 +502,18 @@ export default function OpenAICompatiblePanel({
         {isDraftDirty && (
           <p className="text-xs text-brand-solid">{t("reasoning.custom.modelsReloadHint")}</p>
         )}
-        {!hasBase && (
-          <p className="text-xs text-amber-solid">{t("reasoning.custom.enterEndpoint")}</p>
-        )}
+        {!hasBase && <p className="text-xs text-amber">{t("reasoning.custom.enterEndpoint")}</p>}
         {hasBase && (
           <>
             {modelsLoading && (
               <p className="text-xs text-brand-solid">{t("reasoning.custom.fetchingModels")}</p>
             )}
-            {listErrorShown && <p className="text-xs text-red-solid">{modelsError}</p>}
+            {listErrorShown && <p className="text-xs text-red">{modelsError}</p>}
             {!modelsLoading && !modelsError && modelOptions.length === 0 && (
-              <p className="text-xs text-amber-solid">{t("reasoning.custom.noModels")}</p>
+              <p className="text-xs text-amber">{t("reasoning.custom.noModels")}</p>
             )}
             {!modelsLoading && displayedModels.length > 0 && !model && (
-              <p className="text-xs text-amber-solid">{t("reasoning.custom.selectModelHint")}</p>
+              <p className="text-xs text-amber">{t("reasoning.custom.selectModelHint")}</p>
             )}
           </>
         )}

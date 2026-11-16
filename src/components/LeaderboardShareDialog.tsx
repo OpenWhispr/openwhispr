@@ -200,7 +200,7 @@ export default function LeaderboardShareDialog({
             role="status"
             className={
               status === "failed"
-                ? "text-center text-xs text-red-solid"
+                ? "text-center text-xs text-red"
                 : "flex items-center justify-center gap-1 text-xs text-green"
             }
           >

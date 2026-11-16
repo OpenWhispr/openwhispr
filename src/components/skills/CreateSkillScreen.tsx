@@ -227,7 +227,7 @@ export function CreateSkillScreen({
 
   const fieldError = (field: Field) =>
     errors[field] && (
-      <p id={errorId(field)} className="text-xs text-red-solid">
+      <p id={errorId(field)} className="text-xs text-red">
         {errors[field]}
       </p>
     );

@@ -396,7 +396,7 @@ export default function SpaceSettingsDialog({
               }}
               className={cn(
                 ROW_BUTTON_CLASS,
-                "bg-red-solid/10 text-red-solid hover:bg-red-solid/20 disabled:cursor-not-allowed disabled:opacity-50"
+                "bg-red-solid/10 text-red hover:bg-red-solid/20 disabled:cursor-not-allowed disabled:opacity-50"
               )}
             >
               {t("settingsPage.workspace.teamspaces.settings.deleteAction")}

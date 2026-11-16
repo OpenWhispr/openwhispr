@@ -157,7 +157,7 @@ export default function ConversationItem({
                     e.stopPropagation();
                     onDelete(conversation.id);
                   }}
-                  className="text-xs gap-2 rounded-lg px-2.5 py-1.5 text-red-solid focus:text-red-solid focus:bg-red-solid/10 cursor-pointer"
+                  className="text-xs gap-2 rounded-lg px-2.5 py-1.5 text-red focus:text-red focus:bg-red-solid/10 cursor-pointer"
                 >
                   <Trash2 size={12} />
                   {t("chat.delete")}

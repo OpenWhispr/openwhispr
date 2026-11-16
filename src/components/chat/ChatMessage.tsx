@@ -104,8 +104,8 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
             "shrink-0 transition-colors duration-300",
             isExecuting && "text-brand-solid/70",
             isCompleted && !isError && !isClipboard && "text-secondary/70",
-            isClipboard && "text-green-solid/70",
-            isError && "text-red-solid/60"
+            isClipboard && "text-green/70",
+            isError && "text-red/60"
           )}
         />
 
@@ -114,7 +114,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
         ) : isError ? (
           <div className="flex items-center gap-1">
             <CircleAlert size={10} className="text-red-solid/60 shrink-0" />
-            <span className="text-[11px] text-red-solid/70">{stepText}</span>
+            <span className="text-[11px] text-red/70">{stepText}</span>
           </div>
         ) : isClipboard ? (
           <div className="flex items-center gap-1">
@@ -267,10 +267,10 @@ export function TurnNotes({
         <p className="mt-1.5 text-[11px] text-secondary/80">{t("agentMode.turn.stopped")}</p>
       )}
       {turn.status === "error" && !failedHere && (
-        <p className="mt-1.5 text-[11px] text-red-solid/80">{t("agentMode.turn.failed")}</p>
+        <p className="mt-1.5 text-[11px] text-red/80">{t("agentMode.turn.failed")}</p>
       )}
       {turn.unbackedClaim && (
-        <p className="mt-1.5 text-[11px] text-red-solid/80">{t("agentMode.turn.unbackedClaim")}</p>
+        <p className="mt-1.5 text-[11px] text-red/80">{t("agentMode.turn.unbackedClaim")}</p>
       )}
       {turn.status === "step_limit" && (
         <p className="mt-1.5 flex items-center gap-2 text-[11px] text-secondary/80">

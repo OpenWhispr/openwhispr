@@ -22,14 +22,14 @@ export const MODEL_PICKER_COLORS: Record<ColorScheme, ModelPickerStyles> = {
     badges: {
       selected: "text-[10px] text-on-solid bg-brand-solid px-1.5 py-0.5 rounded-sm font-medium",
       downloaded:
-        "text-[10px] text-green-solid dark:text-green-solid bg-green-solid/10 dark:bg-green-solid/12 px-1.5 py-0.5 rounded-sm",
+        "text-[10px] text-green dark:text-green bg-green-solid/10 dark:bg-green-solid/12 px-1.5 py-0.5 rounded-sm",
       recommended:
         "text-[10px] text-brand-solid bg-brand-solid/10 dark:bg-brand-solid/12 px-1.5 py-0.5 rounded-sm font-medium",
     },
     buttons: {
       download: "",
       select: "border-brand-solid/25 text-brand-solid hover:bg-brand-solid/8",
-      delete: "text-red-solid hover:text-red-solid/90 hover:bg-red-solid/8 border-red-solid/25",
+      delete: "text-red hover:text-red/90 hover:bg-red-solid/8 border-red-solid/25",
       refresh: "border-brand-solid/25 text-brand-solid hover:bg-brand-solid/8",
     },
   },
@@ -45,15 +45,14 @@ export const MODEL_PICKER_COLORS: Record<ColorScheme, ModelPickerStyles> = {
     },
     badges: {
       selected: "text-[10px] text-on-solid bg-brand-solid px-1.5 py-0.5 rounded-sm font-medium",
-      downloaded:
-        "text-[10px] text-green-solid bg-green-solid/10 px-1.5 py-0.5 rounded-sm font-medium",
+      downloaded: "text-[10px] text-green bg-green-solid/10 px-1.5 py-0.5 rounded-sm font-medium",
       recommended:
         "text-[10px] bg-brand-solid/10 text-brand-solid px-1.5 py-0.5 rounded-sm font-medium",
     },
     buttons: {
       download: "",
       select: "border-default text-primary hover:bg-surface-tertiary",
-      delete: "text-red-solid hover:text-red-solid/90 hover:bg-red-solid/8 border-red-solid/25",
+      delete: "text-red hover:text-red/90 hover:bg-red-solid/8 border-red-solid/25",
       refresh: "border-default text-primary hover:bg-surface-tertiary",
     },
   },

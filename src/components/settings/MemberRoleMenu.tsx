@@ -152,10 +152,7 @@ export function MemberRoleMenu({
             {t("settingsPage.workspace.members.transferOwnership")}
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem
-          className="text-sm text-red-solid focus:text-red-solid"
-          onSelect={onRemove}
-        >
+        <DropdownMenuItem className="text-sm text-red focus:text-red" onSelect={onRemove}>
           <UserXmark className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t("settingsPage.workspace.members.remove")}
         </DropdownMenuItem>

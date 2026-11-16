@@ -325,7 +325,7 @@ export default function ActionManagerDialog({
                             className={cn(
                               "p-1 rounded-md shrink-0",
                               "text-secondary/0 group-hover:text-secondary/70",
-                              "hover:text-red-solid/60! hover:bg-red-solid/5",
+                              "hover:text-red/60! hover:bg-red-solid/5",
                               "active:bg-red-solid/8",
                               "transition-all duration-150"
                             )}

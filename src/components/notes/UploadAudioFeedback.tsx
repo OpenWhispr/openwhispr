@@ -56,7 +56,7 @@ export function UploadCompleteWarnings({
   return (
     <>
       {partialWarning && (
-        <p className={cn(COMPLETION_WARNING, "text-red-solid")}>
+        <p className={cn(COMPLETION_WARNING, "text-red")}>
           {t("notes.upload.partialWarningCount", {
             failed: partialWarning.failed,
             total: partialWarning.total,
@@ -64,7 +64,7 @@ export function UploadCompleteWarnings({
         </p>
       )}
       {diarizationWarning && (
-        <p className={cn(COMPLETION_WARNING, "text-amber-solid")} role="status" aria-live="polite">
+        <p className={cn(COMPLETION_WARNING, "text-amber")} role="status" aria-live="polite">
           {t("notes.upload.diarizationWarning")}
         </p>
       )}

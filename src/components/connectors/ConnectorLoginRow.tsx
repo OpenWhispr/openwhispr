@@ -240,7 +240,7 @@ export function ConnectorLoginRow({
             {grantKept && <p className="mt-1">{copy("grantKept")}</p>}
           </div>
           {errorCode && (
-            <p role="alert" className="text-xs text-red-solid mt-1">
+            <p role="alert" className="text-xs text-red mt-1">
               {copy(`errors.${ROW_ERRORS.has(errorCode) ? errorCode : "connect_failed"}`)}
             </p>
           )}

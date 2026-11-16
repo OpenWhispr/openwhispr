@@ -110,7 +110,7 @@ export default function SidebarModal<T extends string>({
           item.badgeVariant === "new"
             ? "bg-brand-solid/10 text-brand-solid dark:bg-brand-solid/15"
             : item.badgeVariant === "update"
-              ? "bg-amber-solid/10 text-amber-solid dark:bg-amber-solid/15"
+              ? "bg-amber-solid/10 text-amber dark:bg-amber-solid/15"
               : "bg-surface-secondary text-secondary"
         }`}
       >
@@ -126,7 +126,7 @@ export default function SidebarModal<T extends string>({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
-            "fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "fixed inset-0 z-50 bg-state-scrim data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             blurBehindOverlays && "backdrop-blur-sm"
           )}
         />

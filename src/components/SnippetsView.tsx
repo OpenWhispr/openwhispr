@@ -76,9 +76,7 @@ function EditSnippetDialog({
               placeholder={t("dictionary.snippets.triggerPlaceholder")}
               maxLength={80}
             />
-            {duplicate && (
-              <p className="text-xs text-red-solid">{t("dictionary.snippets.duplicate")}</p>
-            )}
+            {duplicate && <p className="text-xs text-red">{t("dictionary.snippets.duplicate")}</p>}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="snippet-replacement" className="text-xs font-medium">
@@ -213,9 +211,7 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
           <CornerDownLeft size={12} />
         </button>
       </div>
-      {duplicate && (
-        <p className="mt-1.5 text-xs text-red-solid">{t("dictionary.snippets.duplicate")}</p>
-      )}
+      {duplicate && <p className="mt-1.5 text-xs text-red">{t("dictionary.snippets.duplicate")}</p>}
     </div>
   );
 
@@ -345,7 +341,7 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
                   <button
                     onClick={() => handleRemove(snippet.trigger)}
                     aria-label={t("dictionary.snippets.remove", { trigger: snippet.trigger })}
-                    className="p-1 text-primary/45 hover:text-red-solid/70 transition-colors"
+                    className="p-1 text-primary/45 hover:text-red/70 transition-colors"
                   >
                     <X size={11} strokeWidth={2} />
                   </button>

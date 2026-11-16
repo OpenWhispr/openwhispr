@@ -327,7 +327,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
           </Button>
           {catalog.status === "error" && (
             <FieldHint>
-              <span role="alert" className="text-red-solid">
+              <span role="alert" className="text-red">
                 {catalog.error}
               </span>
             </FieldHint>

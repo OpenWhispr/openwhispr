@@ -270,10 +270,7 @@ export default function TeamSettingsDialog({
               type="button"
               onClick={() => setDeleteOpen(true)}
               disabled={checkingLeave}
-              className={cn(
-                ROW_BUTTON_CLASS,
-                "bg-red-solid/10 text-red-solid hover:bg-red-solid/20"
-              )}
+              className={cn(ROW_BUTTON_CLASS, "bg-red-solid/10 text-red hover:bg-red-solid/20")}
             >
               {t(`${KEY}.exit.deleteAction`)}
             </button>
@@ -320,7 +317,7 @@ export default function TeamSettingsDialog({
                     className={cn(INLINE_FIELD_CLASS, "h-8 text-lg font-medium text-primary")}
                   />
                   {nameTaken !== null && (
-                    <p role="alert" className="text-xs text-red-solid">
+                    <p role="alert" className="text-xs text-red">
                       {t(`${KEY}.form.nameTaken`, { name: isolate(nameTaken) })}
                     </p>
                   )}

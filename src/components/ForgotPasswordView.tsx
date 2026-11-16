@@ -47,7 +47,7 @@ export default function ForgotPasswordView({
       <div className="text-center">
         <h1 className="onboarding-display-title">{t("forgotPassword.title")}</h1>
         <div className="mt-4 rounded-lg border border-amber-solid/20 bg-amber-solid/5 p-3">
-          <p className="text-center text-xs leading-snug text-amber-solid">
+          <p className="text-center text-xs leading-snug text-amber">
             {t("forgotPassword.notConfigured")}
           </p>
         </div>
@@ -132,7 +132,7 @@ export default function ForgotPasswordView({
         {error && (
           <div className="flex items-center gap-1.5 rounded border border-red-solid/20 bg-red-solid/5 px-2.5 py-1.5">
             <AlertCircle className="size-3 shrink-0 text-red-solid" />
-            <p className="text-xs leading-snug text-red-solid">{error}</p>
+            <p className="text-xs leading-snug text-red">{error}</p>
           </div>
         )}
 

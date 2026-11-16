@@ -27,8 +27,7 @@ const respond =
     text: async () => "",
   });
 const modelList = respond(200, { data: [{ id: "llama-test" }] });
-const listError = (panel) =>
-  panel.find((node) => node.props?.className === "text-xs text-red-solid")[0];
+const listError = (panel) => panel.find((node) => node.props?.className === "text-xs text-red")[0];
 const mount = (t, { overrides, ...options } = {}) =>
   mountSettingsPanel(t, { module: PANEL, props: props(overrides), fetch: modelList, ...options });
 // The key setter saves straight into the panel's props, as the store does for its parent.

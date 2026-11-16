@@ -790,7 +790,7 @@ function DictionaryPage({
                 <button
                   onClick={() => setConfirmClear(true)}
                   aria-label={t("dictionary.clearAll")}
-                  className="text-[11px] text-primary/45 transition-colors hover:text-red-solid/70"
+                  className="text-[11px] text-primary/45 transition-colors hover:text-red/70"
                 >
                   {t("dictionary.clearAll")}
                 </button>
@@ -1012,7 +1012,7 @@ function DictionaryPage({
                       <p className="text-xs text-primary/45">
                         {t("dictionary.separateWithCommas")}
                         {pendingImportCount > 0 && (
-                          <span className="text-green-solid">
+                          <span className="text-green">
                             {" • "}
                             {t("dictionary.wordsReady", { count: pendingImportCount })}
                           </span>

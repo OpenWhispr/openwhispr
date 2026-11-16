@@ -120,7 +120,7 @@ interface GeneralPageProps {
 const ROW_CLASS =
   "flex items-center justify-between gap-4 border-t border-default/70 dark:border-default/60 pt-8";
 const DESTRUCTIVE_PILL =
-  "bg-red-solid/10 text-red-solid hover:bg-red-solid/15 hover:text-red-solid dark:text-red-solid dark:hover:bg-red-solid/20";
+  "bg-red-solid/10 text-red hover:bg-red-solid/15 hover:text-red dark:text-red dark:hover:bg-red-solid/20";
 
 function GeneralPage({
   workspace,
@@ -180,9 +180,7 @@ function GeneralPage({
           </label>
           <p
             id={hintId}
-            className={
-              overLimit ? "text-xs text-red-solid mt-0.5" : "text-xs text-secondary/80 mt-0.5"
-            }
+            className={overLimit ? "text-xs text-red mt-0.5" : "text-xs text-secondary/80 mt-0.5"}
           >
             {t("settingsPage.workspace.general.nameHint")}
           </p>

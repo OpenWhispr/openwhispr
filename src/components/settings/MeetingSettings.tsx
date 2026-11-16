@@ -250,7 +250,7 @@ export function MeetingTranscriptionPanel() {
         </p>
       )}
       {managed.kind === "error" ? (
-        <p role="alert" className="text-sm text-red-solid">
+        <p role="alert" className="text-sm text-red">
           {managed.messageKey ? t(managed.messageKey) : managed.message}
         </p>
       ) : (

@@ -760,7 +760,7 @@ export default function TeamMembersPanel({
               role={line.tone === "error" ? "alert" : "status"}
               className={cn(
                 "text-[11px] leading-snug",
-                line.tone === "error" ? "text-red-solid" : "text-secondary"
+                line.tone === "error" ? "text-red" : "text-secondary"
               )}
             >
               {line.text}

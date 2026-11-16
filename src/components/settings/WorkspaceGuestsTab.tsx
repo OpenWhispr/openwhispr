@@ -651,10 +651,7 @@ function RowMenu({
           <Copy className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t(`${KEY}.menu.copyEmail`)}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="text-xs text-red-solid focus:text-red-solid"
-          onSelect={onRemove}
-        >
+        <DropdownMenuItem className="text-xs text-red focus:text-red" onSelect={onRemove}>
           <UserMinus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t(`${KEY}.menu.remove`)}
         </DropdownMenuItem>

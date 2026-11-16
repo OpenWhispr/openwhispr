@@ -2279,7 +2279,7 @@ export default function SettingsPage({
                     variant="outline"
                     disabled={isSigningOut}
                     size="sm"
-                    className="text-red-solid border-red-solid/30 hover:bg-red-solid/10 hover:border-red-solid/50"
+                    className="text-red border-red-solid/30 hover:bg-red-solid/10 hover:border-red-solid/50"
                   >
                     <LogOut className="me-1.5 h-3.5 w-3.5" />
                     {isSigningOut
@@ -2299,7 +2299,7 @@ export default function SettingsPage({
                         variant="outline"
                         disabled={isDeletingAccount || isOfflineAccount}
                         size="sm"
-                        className="text-red-solid border-red-solid/30 hover:bg-red-solid/10 hover:border-red-solid"
+                        className="text-red border-red-solid/30 hover:bg-red-solid/10 hover:border-red-solid"
                       >
                         <Trash2 className="me-1.5 h-3.5 w-3.5" />
                         {isDeletingAccount
@@ -2524,7 +2524,7 @@ export default function SettingsPage({
                                   {usage.limit.toLocaleString(i18n.language)}
                                 </span>
                                 {usage.isApproachingLimit && (
-                                  <span className="text-amber-solid">
+                                  <span className="text-amber">
                                     {t("settingsPage.account.wordsRemaining", {
                                       remaining: usage.wordsRemaining.toLocaleString(i18n.language),
                                     })}
@@ -4986,7 +4986,7 @@ EOF`,
                         }}
                         variant="outline"
                         size="sm"
-                        className="text-red-solid border-red-solid/30 hover:bg-red-solid/10 hover:border-red-solid"
+                        className="text-red border-red-solid/30 hover:bg-red-solid/10 hover:border-red-solid"
                       >
                         {t("common.reset")}
                       </Button>
@@ -5046,7 +5046,7 @@ EOF`,
               {t("settingsPage.account.deleteAccount.eraseDeviceDescription")}
             </span>
             {eraseDeviceData && (
-              <span className="block text-xs font-medium text-red-solid">
+              <span className="block text-xs font-medium text-red">
                 {t("settingsPage.account.deleteAccount.eraseDeviceWarning")}
               </span>
             )}

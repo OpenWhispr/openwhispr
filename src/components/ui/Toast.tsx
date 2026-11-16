@@ -392,7 +392,7 @@ const Toast: React.FC<
           <p className="mt-1 text-[13px] leading-snug text-secondary">{secondaryDescription}</p>
         )}
         {rawError && (
-          <div className="mt-2 flex items-start justify-between gap-1.5 rounded-lg border border-default/60 bg-text-primary/5 px-2 py-1.5 font-mono text-xs leading-snug text-red-solid">
+          <div className="mt-2 flex items-start justify-between gap-1.5 rounded-lg border border-default/60 bg-text-primary/5 px-2 py-1.5 font-mono text-xs leading-snug text-red">
             <span className="min-w-0 select-all wrap-break-word">{rawError}</span>
             <button
               type="button"

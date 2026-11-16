@@ -225,7 +225,7 @@ export function ModelCard({
                   disabled={modelIsCancelling}
                   size="sm"
                   variant="outline"
-                  className="h-6 px-2.5 text-xs text-red-solid border-red-solid/25 hover:bg-red-solid/8"
+                  className="h-6 px-2.5 text-xs text-red border-red-solid/25 hover:bg-red-solid/8"
                 >
                   <X size={11} className="me-0.5" />
                   {modelIsCancelling ? "..." : t("common.cancel")}

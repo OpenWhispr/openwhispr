@@ -391,7 +391,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
           <div className="divide-y divide-default/60 dark:divide-default">
             <div className="px-5 py-4">
               <p className="text-xs text-secondary leading-relaxed">
-                <span className="font-medium text-amber-solid">
+                <span className="font-medium text-amber">
                   {t("promptStudio.edit.cautionLabel")}
                 </span>{" "}
                 {t("promptStudio.edit.cautionTextPrefix")}{" "}

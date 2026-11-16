@@ -158,7 +158,7 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
                   )
                 )}
                 {wrongAccount ? (
-                  <DialogDescription className="text-xs text-red-solid mt-1">
+                  <DialogDescription className="text-xs text-red mt-1">
                     {t("workspaces.accept.wrongAccount", {
                       email: preview.email,
                       current: user?.email,
@@ -171,7 +171,7 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
                 )}
               </>
             )}
-            {error && <DialogDescription className="text-red-solid">{error}</DialogDescription>}
+            {error && <DialogDescription className="text-red">{error}</DialogDescription>}
             {loading && (
               <DialogDescription className="flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin" />

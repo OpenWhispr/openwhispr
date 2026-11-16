@@ -233,9 +233,8 @@ function DiffPart({ part }: { part: ChangedPart }): ReactElement {
             data-diff={line.kind}
             className={cn(
               "flex gap-2 px-2.5",
-              line.kind === "+" && "bg-green-solid/10 text-green-solid",
-              line.kind === "-" &&
-                "bg-red-solid/10 text-red-solid line-through decoration-red-solid/40",
+              line.kind === "+" && "bg-green-solid/10 text-green",
+              line.kind === "-" && "bg-red-solid/10 text-red line-through decoration-red-solid/40",
               line.kind === " " && "text-secondary"
             )}
           >
@@ -330,7 +329,7 @@ function UpdateSkillBody({
         <div className="mt-2 flex items-start gap-2 rounded-md border border-red-solid/20 bg-red-solid/5 px-2.5 py-1.5 text-xs text-primary/85 dark:bg-red-solid/10">
           <Trash2 size={12} className="mt-0.5 shrink-0 text-red-solid/80" />
           <p dir="auto">
-            <span className="font-medium text-red-solid">{t("skills.approval.removes")}</span>{" "}
+            <span className="font-medium text-red">{t("skills.approval.removes")}</span>{" "}
             {entry.removals.join("; ")}
           </p>
         </div>
@@ -419,7 +418,7 @@ export function SkillApprovalCard({ entry }: { entry: SkillApprovalEntry }): Rea
           announces each change. */}
       <div role="status" aria-live="polite" className="text-xs">
         {entry.state === "pending" && entry.problems?.[0] && (
-          <p className="mt-2 text-amber-solid">
+          <p className="mt-2 text-amber">
             {t(problemKey(entry.problems[0]), entry.problems[0].values)}
           </p>
         )}
@@ -444,7 +443,7 @@ export function SkillApprovalCard({ entry }: { entry: SkillApprovalEntry }): Rea
           </p>
         )}
         {entry.state === "saved" && entry.undoFailed && (
-          <p className="mt-1 text-red-solid">{t("skills.approval.undoFailed")}</p>
+          <p className="mt-1 text-red">{t("skills.approval.undoFailed")}</p>
         )}
         {entry.state === "saved" && !entry.versionId && (
           <p className="mt-2 text-primary">
@@ -466,9 +465,7 @@ export function SkillApprovalCard({ entry }: { entry: SkillApprovalEntry }): Rea
             {isUpdate ? t("skills.approval.skippedUpdate") : t("skills.approval.skippedCreate")}
           </p>
         )}
-        {entry.state === "failed" && (
-          <p className="mt-2 text-red-solid">{t("skills.approval.failed")}</p>
-        )}
+        {entry.state === "failed" && <p className="mt-2 text-red">{t("skills.approval.failed")}</p>}
         {entry.state === "not_saved" && (
           <p className="mt-2 text-secondary">{t("skills.approval.notSaved")}</p>
         )}
@@ -544,7 +541,7 @@ export function SkillCardSummary({ record }: { record: SkillCardRecord }): React
           </p>
         )}
         {canUndo && undo === "failed" && (
-          <p className="mt-1 text-red-solid">{t("skills.approval.undoFailed")}</p>
+          <p className="mt-1 text-red">{t("skills.approval.undoFailed")}</p>
         )}
         {undo === "undone" && <p className="mt-2 text-secondary">{t("skills.approval.undone")}</p>}
         {undo === "changed_since" && (
@@ -561,9 +558,7 @@ export function SkillCardSummary({ record }: { record: SkillCardRecord }): React
             {isUpdate ? t("skills.approval.skippedUpdate") : t("skills.approval.skippedCreate")}
           </p>
         )}
-        {status === "failed" && (
-          <p className="mt-2 text-red-solid">{t("skills.approval.failed")}</p>
-        )}
+        {status === "failed" && <p className="mt-2 text-red">{t("skills.approval.failed")}</p>}
         {status === "changed" && (
           <p className="mt-2 text-secondary">{t("skills.approval.outdated")}</p>
         )}

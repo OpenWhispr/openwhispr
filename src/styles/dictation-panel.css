@@ -153,18 +153,18 @@
 }
 
 .voice-identity-icon[data-agent-mode="true"] .voice-identity-svg {
-  color: var(--color-agent-brand);
+  color: var(--color-accent-solid);
 }
 
 .voice-identity-final-agent {
-  color: var(--color-agent-brand);
+  color: var(--color-accent-solid);
 }
 
 .voice-pill-control[data-agent-beam-active="true"] {
   box-shadow:
     var(--shadow-card),
-    0 0 0 1px color-mix(in oklch, var(--color-agent-brand) 28%, transparent),
-    0 0 10px color-mix(in oklch, var(--color-agent-brand) 18%, transparent);
+    0 0 0 1px color-mix(in oklch, var(--color-accent-solid) 28%, transparent),
+    0 0 10px color-mix(in oklch, var(--color-accent-solid) 18%, transparent);
 }
 
 /* While the cancel button's liquid skin owns the fused surface, the pill goes
@@ -250,7 +250,7 @@
 /* Agent Mode keeps the identical glow in its purple identity. */
 .processing-signal-glow[data-agent="true"] {
   --signal-bright: #a78bfa;
-  --signal-core: #8787ff;
+  --signal-core: var(--color-accent-solid);
   --signal-deep: #7c3aed;
   --signal-head: #f2edff;
 }

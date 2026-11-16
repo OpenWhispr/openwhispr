@@ -38,7 +38,7 @@ export default class ErrorBoundary extends React.Component<ErrorBoundaryProps, E
             {this.state.error && (
               <pre
                 dir="ltr"
-                className="text-xs text-red-solid bg-surface-secondary rounded-md p-3 overflow-auto max-h-32 text-left"
+                className="text-xs text-red bg-surface-secondary rounded-md p-3 overflow-auto max-h-32 text-left"
               >
                 {this.state.error.message}
               </pre>

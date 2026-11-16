@@ -214,7 +214,7 @@ export default function TranscriptionItem({
                   onSelect={onSelect}
                   className={cn(
                     "gap-2.5",
-                    destructive && "text-red-solid focus:bg-red-solid/8 focus:text-red-solid"
+                    destructive && "text-red focus:bg-red-solid/8 focus:text-red"
                   )}
                 >
                   <Icon size={14} className="shrink-0 opacity-70" />
@@ -231,7 +231,7 @@ export default function TranscriptionItem({
           <div className="flex items-start gap-2">
             <AlertCircle size={14} className="mt-0.5 shrink-0 text-red-solid" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-red-solid">
+              <p className="text-sm font-medium text-red">
                 {t(
                   hasKeptText
                     ? "controlPanel.history.editFailedTranscriptKept"

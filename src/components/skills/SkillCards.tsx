@@ -43,7 +43,7 @@ export function SkillTile({
 export function NeedsFixLabel(): ReactElement {
   const { t } = useTranslation();
   return (
-    <span className="flex shrink-0 items-center gap-1 text-[11px] text-amber-solid">
+    <span className="flex shrink-0 items-center gap-1 text-[11px] text-amber">
       <AlertTriangle size={12} />
       {t("skills.pane.needsFix")}
     </span>

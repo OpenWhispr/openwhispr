@@ -4,7 +4,7 @@
     "fileKey": "Xka1lcxnlbvq9ne8k0gZd0",
     "fileName": "OpenWhispr UI Kit",
     "collectionId": "VariableCollectionId:73:2",
-    "readAt": "2026-10-14"
+    "readAt": "2026-11-16"
   },
   "tokens": {
     "accent/solid": {
@@ -94,6 +94,10 @@
     "state/hover": {
       "light": "#0000000d",
       "dark": "#ffffff0f"
+    },
+    "state/scrim": {
+      "light": "#00000099",
+      "dark": "#00000099"
     },
     "surface/primary": {
       "light": "#ffffff",

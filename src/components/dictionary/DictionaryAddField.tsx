@@ -157,7 +157,7 @@ export function DictionaryAddField({
             title={notice}
             className={cn(
               "min-w-0 truncate text-[11px]",
-              notTermLike && !alreadyAdded ? "text-red-solid" : "text-primary/45"
+              notTermLike && !alreadyAdded ? "text-red" : "text-primary/45"
             )}
           >
             {notice}

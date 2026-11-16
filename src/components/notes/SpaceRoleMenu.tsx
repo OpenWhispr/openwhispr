@@ -149,7 +149,7 @@ export function SpaceRoleMenu({
         </DropdownMenuRadioGroup>
         {onRemove ? (
           <DropdownMenuItem
-            className="gap-2.5 text-sm text-red-solid focus:bg-red-solid/10 focus:text-red-solid"
+            className="gap-2.5 text-sm text-red focus:bg-red-solid/10 focus:text-red"
             onSelect={onRemove}
           >
             <UserXmark className="size-3.5 shrink-0" aria-hidden="true" />

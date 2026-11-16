@@ -69,7 +69,7 @@ export default function PermissionCard({
       </div>
 
       {hint && !granted && (
-        <p className="text-[11px] text-amber-solid/80 leading-snug mt-2 ps-11">{hint}</p>
+        <p className="text-[11px] text-amber/80 leading-snug mt-2 ps-11">{hint}</p>
       )}
     </div>
   );

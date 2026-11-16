@@ -223,7 +223,7 @@ export default function DeveloperSection() {
         <div className="rounded-xl border border-amber-solid/20 bg-amber-solid/5 dark:bg-amber-solid/10">
           <div className="px-5 py-4">
             <p className="text-xs text-secondary leading-relaxed">
-              <span className="font-medium text-amber-solid">
+              <span className="font-medium text-amber">
                 {t("developerSection.performanceNote.label")}
               </span>{" "}
               {t("developerSection.performanceNote.description")}

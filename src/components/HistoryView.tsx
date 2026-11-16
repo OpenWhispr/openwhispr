@@ -219,7 +219,7 @@ export default function HistoryView({
                         {discardedToggle}
                         <button
                           onClick={clearAllTranscriptions}
-                          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-secondary/70 hover:!text-red-solid hover:!bg-red-solid/8 dark:hover:!bg-red-solid/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 transition-all duration-200"
+                          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-secondary/70 hover:!text-red hover:!bg-red-solid/8 dark:hover:!bg-red-solid/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 transition-all duration-200"
                         >
                           <Trash2 size={11} />
                           <span>{t("controlPanel.history.clearAll")}</span>

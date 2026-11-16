@@ -519,7 +519,7 @@ export default function CreateSpaceDialog({
                   onEnter={() => void handleCreate()}
                 />
                 {takenName !== null && (
-                  <p id={nameErrorId} role="alert" className="text-xs text-red-solid">
+                  <p id={nameErrorId} role="alert" className="text-xs text-red">
                     {t("settingsPage.workspace.teamspaces.form.nameTaken", {
                       name: isolate(takenName),
                     })}
@@ -588,7 +588,7 @@ export default function CreateSpaceDialog({
               )}
 
               {failure?.kind === "general" && (
-                <p role="alert" className="text-center text-sm text-red-solid">
+                <p role="alert" className="text-center text-sm text-red">
                   {t("settingsPage.workspace.teamspaces.form.failed")}
                 </p>
               )}

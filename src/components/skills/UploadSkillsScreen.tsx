@@ -195,7 +195,7 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
     if (asked === "invalid") {
       const [problem] = preview.problems;
       return (
-        <span className="flex items-center gap-1.5 text-xs text-amber-solid">
+        <span className="flex items-center gap-1.5 text-xs text-amber">
           <AlertTriangle size={13} className="shrink-0" />
           {t(problemKey(problem), problem.values)}
         </span>

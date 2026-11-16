@@ -113,7 +113,7 @@ export default function ApiKeyInput({
               <button
                 type="button"
                 onClick={save}
-                className="h-6 w-6 flex items-center justify-center rounded text-green-solid hover:bg-green-solid/10 active:scale-95 transition-all"
+                className="h-6 w-6 flex items-center justify-center rounded text-green hover:bg-green-solid/10 active:scale-95 transition-all"
                 aria-label={t("apiKeyInput.save")}
               >
                 <Check className="w-3.5 h-3.5" />

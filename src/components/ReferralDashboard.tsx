@@ -184,7 +184,7 @@ function StatGauge({
       <div
         className={cn(
           "text-lg font-bold tabular-nums leading-none",
-          highlight ? "text-green-solid" : "text-primary"
+          highlight ? "text-green" : "text-primary"
         )}
       >
         <AnimatedCounter value={value} delay={delay} />
@@ -441,7 +441,7 @@ export function ReferralDashboard() {
                     className={cn(
                       "shrink-0 h-8 px-3.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-[background-color,color,transform] duration-200 active:scale-[0.97]",
                       copied
-                        ? "bg-green-surface text-green-solid/80"
+                        ? "bg-green-surface text-green/80"
                         : "bg-text-primary/7 text-primary/55 border border-text-primary/5 hover:bg-text-primary/12 hover:text-primary/90"
                     )}
                   >
@@ -534,7 +534,7 @@ export function ReferralDashboard() {
                           {isComplete ? (
                             <div className="flex items-center gap-1 ms-2 shrink-0">
                               <CheckCircle2 className="w-3 h-3 text-green-solid/80" />
-                              <span className="text-xs text-green-solid/80 font-medium">
+                              <span className="text-xs text-green/80 font-medium">
                                 {t("referral.friends.completed")}
                               </span>
                             </div>

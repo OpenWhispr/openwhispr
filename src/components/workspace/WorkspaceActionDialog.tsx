@@ -88,7 +88,7 @@ export function WorkspaceActionDialog({
         {children}
 
         {error ? (
-          <p role="alert" className="text-center text-sm text-red-solid">
+          <p role="alert" className="text-center text-sm text-red">
             {error}
           </p>
         ) : null}

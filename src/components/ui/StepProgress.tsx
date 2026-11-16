@@ -27,7 +27,7 @@ export default function StepProgress({ steps, currentStep, className = "" }: Ste
                 isActive
                   ? "bg-brand-solid/10 text-brand-solid"
                   : isCompleted
-                    ? "text-green-solid"
+                    ? "text-green"
                     : "text-secondary/70"
               }`}
             >
@@ -36,7 +36,7 @@ export default function StepProgress({ steps, currentStep, className = "" }: Ste
                   isActive
                     ? "bg-brand-solid text-on-solid"
                     : isCompleted
-                      ? "bg-green-solid/15 text-green-solid"
+                      ? "bg-green-solid/15 text-green"
                       : "bg-surface-secondary text-secondary/70"
                 }`}
               >
@@ -48,11 +48,7 @@ export default function StepProgress({ steps, currentStep, className = "" }: Ste
               </div>
               <span
                 className={`text-xs font-medium hidden md:block tracking-wide ${
-                  isActive
-                    ? "text-brand-solid"
-                    : isCompleted
-                      ? "text-green-solid"
-                      : "text-secondary/70"
+                  isActive ? "text-brand-solid" : isCompleted ? "text-green" : "text-secondary/70"
                 }`}
               >
                 {step.title}

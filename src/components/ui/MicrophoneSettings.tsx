@@ -126,7 +126,7 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
         </div>
 
         {error ? (
-          <p className="text-sm text-red-solid">{error}</p>
+          <p className="text-sm text-red">{error}</p>
         ) : (
           <Select
             value={selectorValue}
@@ -182,7 +182,7 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
         <div className="p-3 bg-green-solid/10 dark:bg-green-solid/20 border border-green-solid/30 rounded-lg">
           <div className="flex items-center gap-2">
             <Mic className="w-4 h-4 text-green-solid dark:text-green-solid" />
-            <span className="text-sm text-green-solid dark:text-green-solid">
+            <span className="text-sm text-green dark:text-green">
               {t("microphoneSettings.using", { device: builtInDevice.label })}
             </span>
           </div>
@@ -191,7 +191,7 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
 
       {microphoneSelectionMode === "built-in" && !builtInDevice && devices.length > 0 && (
         <div className="p-3 bg-amber-solid/10 dark:bg-amber-solid/20 border border-amber-solid/30 rounded-lg">
-          <p className="text-sm text-amber-solid dark:text-amber-solid">
+          <p className="text-sm text-amber dark:text-amber">
             {t("microphoneSettings.noBuiltInDetected")}
           </p>
         </div>

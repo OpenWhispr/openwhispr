@@ -244,12 +244,12 @@ test("Agent Mode uses the supplied mark, a purple perimeter glow, and a neutral 
   const styles = readDictationStyles();
 
   assert.match(AGENT_MODE_PATH, /^M6\.14226 /);
-  assert.match(styles, /--color-agent-brand:/);
+  assert.match(styles, /--color-accent-solid:/);
   assert.doesNotMatch(styles, /\.voice-pill-control\[data-agent-mode="true"\]\s*\{/);
   // The agent glow is the same Signal treatment re-palettes to the agent's
   // purple around the brand color.
   assert.match(styles, /\.processing-signal-glow\[data-agent="true"\]\s*\{/);
-  assert.match(styles, /--signal-core: #8787ff/);
+  assert.match(styles, /--signal-core: var\(--color-accent-solid\)/);
   assert.doesNotMatch(styles, /agent-waveform-background|agent-waveform-highlight/);
   // Listening stays glow-free; the purple Signal glow is reserved for the
   // post-recording thinking state so "hearing you" and "working" read apart.

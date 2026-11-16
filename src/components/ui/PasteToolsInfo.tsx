@@ -65,15 +65,15 @@ export default function PasteToolsInfo({
           <div className="flex items-center gap-3">
             <Terminal className="w-6 h-6 text-green-solid dark:text-green-solid" />
             <div>
-              <h3 className="font-semibold text-green-solid dark:text-green-solid">
+              <h3 className="font-semibold text-green dark:text-green">
                 {t("pasteToolsInfo.readyTitle")}
               </h3>
-              <p className="text-sm text-green-solid dark:text-green-solid">
+              <p className="text-sm text-green dark:text-green">
                 {t("pasteToolsInfo.windowsReady")}
               </p>
             </div>
           </div>
-          <div className="text-green-solid dark:text-green-solid">
+          <div className="text-green dark:text-green">
             <Check className="w-5 h-5" />
           </div>
         </div>
@@ -95,10 +95,10 @@ export default function PasteToolsInfo({
           <div className="flex items-center gap-3">
             <Terminal className="w-6 h-6 text-green-solid dark:text-green-solid" />
             <div>
-              <h3 className="font-semibold text-green-solid dark:text-green-solid">
+              <h3 className="font-semibold text-green dark:text-green">
                 {t("pasteToolsInfo.readyTitle")}
               </h3>
-              <p className="text-sm text-green-solid dark:text-green-solid">
+              <p className="text-sm text-green dark:text-green">
                 {t("pasteToolsInfo.usingMethodPrefix")}{" "}
                 <code dir="ltr" className="bg-green-solid/20 px-1 rounded">
                   {methodLabel}
@@ -107,7 +107,7 @@ export default function PasteToolsInfo({
               </p>
             </div>
           </div>
-          <div className="text-green-solid dark:text-green-solid">
+          <div className="text-green dark:text-green">
             <Check className="w-5 h-5" />
           </div>
         </div>
@@ -138,10 +138,10 @@ export default function PasteToolsInfo({
           <div className="flex items-start gap-3">
             <Info className="w-6 h-6 text-amber-solid dark:text-amber-solid flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="font-semibold text-amber-solid dark:text-amber-solid">
+              <h3 className="font-semibold text-amber dark:text-amber">
                 {t("pasteToolsInfo.wlClipboardTitle")}
               </h3>
-              <p className="text-sm text-amber-solid dark:text-amber-solid mt-1">
+              <p className="text-sm text-amber dark:text-amber mt-1">
                 {t("pasteToolsInfo.wlClipboardDescription")}
               </p>
               <LinuxInstallCommands tool="wl-clipboard" />
@@ -153,7 +153,7 @@ export default function PasteToolsInfo({
           <div className="flex items-start gap-3">
             <Info className="w-6 h-6 text-amber-solid dark:text-amber-solid flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="font-semibold text-amber-solid dark:text-amber-solid">
+              <h3 className="font-semibold text-amber dark:text-amber">
                 {showInstall
                   ? t("pasteToolsInfo.optionalEnableTitle")
                   : t("pasteToolsInfo.waylandClipboardTitle")}
@@ -161,7 +161,7 @@ export default function PasteToolsInfo({
 
               {showInstall ? (
                 <>
-                  <p className="text-sm text-amber-solid dark:text-amber-solid mt-1">
+                  <p className="text-sm text-amber dark:text-amber mt-1">
                     {cosmicTerminalsOnly ? (
                       t("pasteToolsInfo.wtypeCosmicTerminalsDescription")
                     ) : wtypeMissing ? (
@@ -180,19 +180,19 @@ export default function PasteToolsInfo({
                   <LinuxInstallCommands tool={recommendedTool} />
 
                   {isWayland && recommendedTool === "wtype" && (
-                    <p className="text-sm text-amber-solid dark:text-amber-solid mt-3">
+                    <p className="text-sm text-amber dark:text-amber mt-3">
                       {t("pasteToolsInfo.noteXwaylandAlso")}
                     </p>
                   )}
 
                   {isWayland && recommendedTool === "xdotool" && (
-                    <p className="text-sm text-amber-solid dark:text-amber-solid mt-3">
+                    <p className="text-sm text-amber dark:text-amber mt-3">
                       {t("pasteToolsInfo.noteXwaylandOnly")}
                     </p>
                   )}
                 </>
               ) : (
-                <p className="text-sm text-amber-solid dark:text-amber-solid mt-1">
+                <p className="text-sm text-amber dark:text-amber mt-1">
                   {t("pasteToolsInfo.waylandClipboardDescription")}{" "}
                   <kbd dir="ltr" className="bg-amber-solid/20 px-1 rounded text-xs">
                     Ctrl+V
@@ -203,7 +203,7 @@ export default function PasteToolsInfo({
 
               {/* Without wl-copy, a manual Ctrl+V in a Wayland app pastes stale text too. */}
               {showInstall && !cosmicTerminalsOnly && !wlCopyMissing && (
-                <p className="text-sm text-amber-solid dark:text-amber-solid mt-3">
+                <p className="text-sm text-amber dark:text-amber mt-3">
                   {t("pasteToolsInfo.withoutToolPrefix")}{" "}
                   <kbd dir="ltr" className="bg-amber-solid/20 px-1 rounded text-xs">
                     Ctrl+V

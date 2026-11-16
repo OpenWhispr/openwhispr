@@ -37,12 +37,7 @@ export function WorkspaceErrorBar({
           tone === "error" ? "text-red-solid" : "text-amber-solid"
         )}
       />
-      <p
-        className={cn(
-          "min-w-0 flex-1 leading-snug break-words",
-          tone === "error" && "text-red-solid"
-        )}
-      >
+      <p className={cn("min-w-0 flex-1 leading-snug break-words", tone === "error" && "text-red")}>
         {message}
       </p>
       {action ? (

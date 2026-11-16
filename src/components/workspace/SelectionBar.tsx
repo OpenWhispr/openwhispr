@@ -84,7 +84,7 @@ export function SelectionBar({
                   WHILE_BUSY,
                   "h-[34px] rounded-full ps-2.5 pe-3",
                   action.tone === "destructive"
-                    ? "bg-red-solid/10 text-red-solid hover:bg-red-solid/15"
+                    ? "bg-red-solid/10 text-red hover:bg-red-solid/15"
                     : cn(RAISED_PILL, "text-secondary hover:text-primary")
                 )}
               >

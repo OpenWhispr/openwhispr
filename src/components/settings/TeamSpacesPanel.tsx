@@ -314,7 +314,7 @@ export default function TeamSpacesPanel({
             </p>
             <p
               role={failureText ? "alert" : undefined}
-              className={cn("text-xs", failureText ? "text-red-solid" : "text-secondary")}
+              className={cn("text-xs", failureText ? "text-red" : "text-secondary")}
             >
               {failureText ??
                 t(`${COPY}.selectedBody`, {
@@ -330,7 +330,7 @@ export default function TeamSpacesPanel({
           <>
             {failureText && (
               // Every teamspace it named has left the choices, so nothing staged carries the line.
-              <p role="alert" className="text-xs text-red-solid">
+              <p role="alert" className="text-xs text-red">
                 {failureText}
               </p>
             )}

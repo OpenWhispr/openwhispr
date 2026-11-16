@@ -100,7 +100,7 @@ export function SkillActionsMenu({
               onSelect={() => {
                 uninstallPicked.current = true;
               }}
-              className="text-xs gap-2 rounded-lg px-2.5 py-1.5 text-red-solid focus:text-red-solid focus:bg-red-solid/10 cursor-pointer"
+              className="text-xs gap-2 rounded-lg px-2.5 py-1.5 text-red focus:text-red focus:bg-red-solid/10 cursor-pointer"
             >
               <Trash2 size={12} />
               {t("skills.menu.uninstall")}

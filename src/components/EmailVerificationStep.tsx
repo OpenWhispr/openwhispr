@@ -151,7 +151,7 @@ export default function EmailVerificationStep({
 
         {error && (
           <div className="mt-5 rounded-xl border border-red-solid/20 bg-red-solid/5 px-3 py-2">
-            <p className="text-xs leading-snug text-red-solid">{error}</p>
+            <p className="text-xs leading-snug text-red">{error}</p>
           </div>
         )}
 

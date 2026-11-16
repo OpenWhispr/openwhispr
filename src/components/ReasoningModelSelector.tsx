@@ -226,7 +226,7 @@ function GpuStatusBadge() {
   if (error) {
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
-        <span className="text-xs text-red-solid">{error}</span>
+        <span className="text-xs text-red">{error}</span>
         <button
           type="button"
           onClick={() => setError(null)}
@@ -278,7 +278,7 @@ function GpuStatusBadge() {
             onClick={handleDelete}
             size="sm"
             variant="ghost"
-            className="h-6 shrink-0 px-2 text-xs text-secondary hover:text-red-solid"
+            className="h-6 shrink-0 px-2 text-xs text-secondary hover:text-red"
           >
             {t("gpu.remove")}
           </Button>
@@ -731,7 +731,7 @@ export default function ReasoningModelSelector({
                           </p>
                         )}
                         {!tinfoilModelsLoading && tinfoilModelsError && (
-                          <p className="text-xs text-red-solid">
+                          <p className="text-xs text-red">
                             {t("reasoning.custom.unableToLoadModels")}
                           </p>
                         )}

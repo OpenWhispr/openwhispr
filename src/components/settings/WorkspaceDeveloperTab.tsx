@@ -218,7 +218,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
               type="button"
               onClick={() => confirmRevoke(k)}
               aria-label={t("settingsPage.workspace.developer.revoke")}
-              className="p-1 rounded-md text-secondary hover:text-red-solid hover:bg-red-solid/8 outline-none focus-visible:ring-1 focus-visible:ring-brand-solid/30"
+              className="p-1 rounded-md text-secondary hover:text-red hover:bg-red-solid/8 outline-none focus-visible:ring-1 focus-visible:ring-brand-solid/30"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>

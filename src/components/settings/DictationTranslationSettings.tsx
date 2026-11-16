@@ -116,7 +116,7 @@ export default function DictationTranslationSettings() {
                                 aria-label={t("dictationTranslation.removeTarget", {
                                   language: label,
                                 })}
-                                className="rounded-full p-0.5 hover:text-red-solid"
+                                className="rounded-full p-0.5 hover:text-red"
                               >
                                 <X className="h-3 w-3" />
                               </button>

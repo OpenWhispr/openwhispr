@@ -754,7 +754,7 @@ test("an invalid address blocks Add members and says the rest are kept", async (
   assert.deepEqual(chipTexts(), ["Ethan", "alex@ · Workspace Member"]);
   assert.equal(lineText(), "Enter a valid email address. Your selected people are kept.");
   assert.equal(lineElement().getAttribute("role"), "alert");
-  assert.match(lineElement().className, /text-red-solid/);
+  assert.match(lineElement().className, /text-red/);
   assert.equal(addButton().disabled, true);
 
   // Removing it brings the button back, with the others untouched.
@@ -958,7 +958,7 @@ test("a partial failure keeps only what failed", async (t) => {
     "Ethan was added. alex@example.com's invitation didn't send. Try again."
   );
   assert.equal(lineElement().getAttribute("role"), "alert");
-  assert.match(lineElement().className, /text-red-solid/);
+  assert.match(lineElement().className, /text-red/);
   assert.equal(text(addButton()), "Try again");
   assert.equal(addButton().disabled, false);
   assert.ok(doc().activeElement === addButton(), "focus goes where the next press is");

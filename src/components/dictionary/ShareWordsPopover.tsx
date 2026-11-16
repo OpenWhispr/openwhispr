@@ -128,7 +128,7 @@ export function ShareWordsPopover({
         </div>
         <div className="mt-1 flex items-center justify-between gap-2 border-t border-text-primary/8 px-2 pb-0.5 pt-2">
           {nothingShareable ? (
-            <span role="alert" className="min-w-0 text-[10px] leading-snug text-red-solid">
+            <span role="alert" className="min-w-0 text-[10px] leading-snug text-red">
               {t("dictionary.shared.notTermLike")}
             </span>
           ) : (

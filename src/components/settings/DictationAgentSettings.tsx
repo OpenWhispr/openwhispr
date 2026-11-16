@@ -222,7 +222,7 @@ export default function DictationAgentSettings() {
             />
           )}
           {screenContextActive && isMacOS && screenNeedsRelaunch && (
-            <p className="text-[11px] text-amber-solid/80 leading-snug">
+            <p className="text-[11px] text-amber/80 leading-snug">
               {t("dictationAgent.screenContext.relaunchHint")}
             </p>
           )}

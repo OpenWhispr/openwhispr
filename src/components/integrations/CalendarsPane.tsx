@@ -92,7 +92,7 @@ function CalendarAccountRows({
             <button
               onClick={() => onUnlink(account.email)}
               disabled={disconnectingEmail === account.email}
-              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md text-secondary hover:text-red-solid hover:bg-red-solid/10 transition-all disabled:opacity-50"
+              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md text-secondary hover:text-red hover:bg-red-solid/10 transition-all disabled:opacity-50"
               aria-label={t(`${i18nKey}.disconnect`)}
             >
               {disconnectingEmail === account.email ? (
@@ -367,7 +367,7 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
               </span>
               <button
                 onClick={() => setConfirmAppleDisconnect(true)}
-                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md text-secondary hover:text-red-solid hover:bg-red-solid/10 transition-all"
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md text-secondary hover:text-red hover:bg-red-solid/10 transition-all"
                 aria-label={t("integrations.appleCalendar.disconnect")}
               >
                 <Unlink className="h-3.5 w-3.5" />

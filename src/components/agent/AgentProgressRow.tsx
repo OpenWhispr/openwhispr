@@ -174,7 +174,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
     <div
       className={cn(
         "text-[15px]",
-        active ? "text-primary" : failed ? "text-red-solid/80" : "text-secondary"
+        active ? "text-primary" : failed ? "text-red/80" : "text-secondary"
       )}
     >
       <button
@@ -203,10 +203,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
           {steps.map((step) => (
             <div
               key={step.id}
-              className={cn(
-                "flex min-w-0 items-center gap-2",
-                stepFailed(step) && "text-red-solid/80"
-              )}
+              className={cn("flex min-w-0 items-center gap-2", stepFailed(step) && "text-red/80")}
             >
               <ToolMark name={step.name} />
               <span dir="auto" className="truncate">

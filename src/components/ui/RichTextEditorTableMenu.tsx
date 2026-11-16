@@ -74,7 +74,7 @@ function TableActions({ editor }: { editor: Editor }) {
     <DropdownMenuItem
       className={cn(
         "text-xs rounded-md px-2 py-1.5",
-        destructive && "text-red-solid focus:bg-red-solid/10 focus:text-red-solid"
+        destructive && "text-red focus:bg-red-solid/10 focus:text-red"
       )}
       disabled={disabled}
       onSelect={onSelect}

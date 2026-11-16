@@ -457,10 +457,7 @@ export default function WorkspaceInvitationsTab({
                       </p>
                       <p className="@xl:hidden mt-0.5 text-xs text-secondary">
                         {role} ·{" "}
-                        <span
-                          title={statusTitle}
-                          className={expired ? "text-red-solid" : undefined}
-                        >
+                        <span title={statusTitle} className={expired ? "text-red" : undefined}>
                           {status}
                         </span>
                       </p>
@@ -479,7 +476,7 @@ export default function WorkspaceInvitationsTab({
                         COLUMN_DIVIDER,
                         WIDE_ONLY,
                         "px-3 whitespace-nowrap text-xs",
-                        expired ? "text-red-solid" : "text-secondary"
+                        expired ? "text-red" : "text-secondary"
                       )}
                       title={statusTitle}
                     >
@@ -513,7 +510,7 @@ export default function WorkspaceInvitationsTab({
                             {t("settingsPage.workspace.people.invitations.resend")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className="text-xs text-red-solid focus:text-red-solid"
+                            className="text-xs text-red focus:text-red"
                             onSelect={() => dispatchCancel({ type: "open", subject: invitation })}
                           >
                             <UserMinus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />

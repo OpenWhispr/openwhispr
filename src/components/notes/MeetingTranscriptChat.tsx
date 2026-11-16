@@ -521,13 +521,13 @@ function SpeakerLabel({
               segment.recorderName
             )
           }
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-secondary hover:text-green-solid"
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-secondary hover:text-green"
         >
           <Check size={12} />
         </button>
         <button
           onClick={() => onDismiss?.(speakerId)}
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-secondary hover:text-red-solid"
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-secondary hover:text-red"
         >
           <X size={12} />
         </button>
@@ -1037,7 +1037,7 @@ export function MeetingTranscriptChat({
                   <button
                     onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount - 1)}
                     disabled={sessionExpectedCount <= 1}
-                    className="px-1.5 py-0.5 rounded-s-md hover:bg-accent-solid focus-visible:bg-accent-solid focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    className="px-1.5 py-0.5 rounded-s-md hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                     aria-label={t("notes.speaker.pill.decAria")}
                   >
                     −
@@ -1050,7 +1050,7 @@ export function MeetingTranscriptChat({
                   <button
                     onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount + 1)}
                     disabled={sessionExpectedCount >= MAX_SPEAKER_COUNT}
-                    className="px-1.5 py-0.5 rounded-e-md hover:bg-accent-solid focus-visible:bg-accent-solid focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    className="px-1.5 py-0.5 rounded-e-md hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                     aria-label={t("notes.speaker.pill.incAria")}
                   >
                     +

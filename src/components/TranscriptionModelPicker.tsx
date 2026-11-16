@@ -210,7 +210,7 @@ function LocalModelCard({
               disabled={isCancelling || isInstalling}
               size="sm"
               variant="outline"
-              className="h-6 px-2.5 text-xs text-red-solid border-red-solid/25 hover:bg-red-solid/8"
+              className="h-6 px-2.5 text-xs text-red border-red-solid/25 hover:bg-red-solid/8"
             >
               <X size={11} className="me-0.5" />
               {isCancelling ? "..." : t("common.cancel")}
@@ -451,7 +451,7 @@ function GpuWarningRow({
         onClick={onRemove}
         size="sm"
         variant="ghost"
-        className="h-6 shrink-0 px-2 text-xs text-secondary hover:text-red-solid"
+        className="h-6 shrink-0 px-2 text-xs text-secondary hover:text-red"
       >
         {t("gpu.remove")}
       </Button>
@@ -1826,7 +1826,7 @@ export default function TranscriptionModelPicker({
                         onClick={handleGpuDelete}
                         size="sm"
                         variant="ghost"
-                        className="h-6 px-2 text-xs text-secondary hover:text-red-solid"
+                        className="h-6 px-2 text-xs text-secondary hover:text-red"
                       >
                         {t("gpu.remove")}
                       </Button>
@@ -1870,7 +1870,7 @@ export default function TranscriptionModelPicker({
                   </div>
                 )}
                 {!gpuDownloaded && gpuDownloadError !== null && (
-                  <p className="mt-2 text-xs leading-snug text-red-solid">
+                  <p className="mt-2 text-xs leading-snug text-red">
                     {t("gpu.downloadFailed")}
                     {gpuDownloadError && ` ${gpuDownloadError}`}
                   </p>

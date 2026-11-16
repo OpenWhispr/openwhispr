@@ -725,9 +725,7 @@ function InviteDoneContent({
         <div
           className={cn(
             "flex size-[42px] items-center justify-center rounded-full",
-            undelivered
-              ? "bg-amber-solid/10 text-amber-solid"
-              : "bg-green-solid/10 text-green-solid"
+            undelivered ? "bg-amber-solid/10 text-amber" : "bg-green-solid/10 text-green"
           )}
         >
           {undelivered ? (

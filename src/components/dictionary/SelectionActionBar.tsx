@@ -139,7 +139,7 @@ export function SelectionActionBar({
           <button
             type="button"
             onClick={onDeleteForEveryone}
-            className={cn(SOLID_BUTTON_CLASS, "text-red-solid")}
+            className={cn(SOLID_BUTTON_CLASS, "text-red")}
           >
             {t("dictionary.shared.actions.deleteForEveryone")}
           </button>

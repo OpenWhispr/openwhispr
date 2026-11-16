@@ -85,7 +85,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
 
       {status === "error" && errorInfo && (
         <div className="rounded-md bg-red-solid/10 border border-red-solid/20 p-2.5 space-y-1.5">
-          <p dir="auto" className="text-xs text-red-solid font-medium">
+          <p dir="auto" className="text-xs text-red font-medium">
             {errorInfo.message}
           </p>
           {errorInfo.action && (

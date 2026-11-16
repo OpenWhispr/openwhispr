@@ -784,7 +784,7 @@ function FolderRow({
                         }}
                         className={cn(
                           MENU_ITEM_CLASS,
-                          "text-red-solid focus:text-red-solid focus:bg-red-solid/10"
+                          "text-red focus:text-red focus:bg-red-solid/10"
                         )}
                       >
                         <Trash2 size={11} />
@@ -1144,10 +1144,7 @@ function NoteLeaf({
                     e.stopPropagation();
                     onDelete(note.id);
                   }}
-                  className={cn(
-                    MENU_ITEM_CLASS,
-                    "text-red-solid focus:text-red-solid focus:bg-red-solid/10"
-                  )}
+                  className={cn(MENU_ITEM_CLASS, "text-red focus:text-red focus:bg-red-solid/10")}
                 >
                   <Trash2 size={11} />
                   {t("notes.context.delete")}

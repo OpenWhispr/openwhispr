@@ -291,7 +291,7 @@ function TeamspaceRow({
                 {t("settingsPage.workspace.teamspaces.rowMenu.settings")}
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="text-xs text-red-solid focus:text-red-solid"
+                className="text-xs text-red focus:text-red"
                 onSelect={() => onDelete(space, actionsButtonRef.current)}
               >
                 <Trash2 className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />

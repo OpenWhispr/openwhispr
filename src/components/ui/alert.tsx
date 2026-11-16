@@ -9,9 +9,9 @@ const alertVariants = cva(
     variants: {
       variant: {
         default: "bg-surface-secondary border-default text-primary [&>svg]:text-secondary",
-        destructive: "bg-red-surface border-red text-primary [&>svg]:text-red-solid",
-        success: "bg-green-surface border-green text-primary [&>svg]:text-green-solid",
-        warning: "bg-amber-surface border-amber text-primary [&>svg]:text-amber-solid",
+        destructive: "bg-red-surface border-red text-primary [&>svg]:text-red",
+        success: "bg-green-surface border-green text-primary [&>svg]:text-green",
+        warning: "bg-amber-surface border-amber text-primary [&>svg]:text-amber",
       },
     },
     defaultVariants: {

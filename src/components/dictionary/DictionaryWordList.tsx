@@ -93,7 +93,7 @@ function RowActionButton({ action }: { action: RowAction }): ReactElement {
         className={cn(
           "grid size-6 place-items-center rounded-[5px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20",
           action.destructive
-            ? "text-red-solid/80 hover:bg-red-solid/10 hover:text-red-solid"
+            ? "text-red/80 hover:bg-red-solid/10 hover:text-red"
             : "text-primary/55 hover:bg-text-primary/6 hover:text-primary/85"
         )}
       >
@@ -120,7 +120,7 @@ function RowMeta({ row }: { row: DictionaryRow }): ReactElement | null {
     <span className="flex shrink-0 items-center gap-2">
       {unused && (
         <Tooltip content={t("dictionary.shared.notUsedTooltip")}>
-          <span data-not-used="" className={cn(BADGE_CLASS, "text-amber-solid")}>
+          <span data-not-used="" className={cn(BADGE_CLASS, "text-amber")}>
             {t("dictionary.shared.notUsed")}
             <span className="sr-only">. {t("dictionary.shared.notUsedTooltip")}</span>
           </span>
@@ -211,7 +211,7 @@ function RowEditor({
         className="h-7 min-w-0 flex-1 rounded-md text-xs"
       />
       {error && (
-        <span id={errorId} className="shrink-0 text-[11px] text-red-solid">
+        <span id={errorId} className="shrink-0 text-[11px] text-red">
           {error.message}
         </span>
       )}
