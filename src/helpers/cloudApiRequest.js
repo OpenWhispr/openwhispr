@@ -108,6 +108,7 @@ function createCloudApiRequestHandler({
         headers,
         useSessionCookies: false,
       };
+      if (method === "GET" && opts.cache === "no-store") fetchOptions.cache = "no-store";
       if (opts.body !== undefined) {
         headers["Content-Type"] = "application/json";
         fetchOptions.body = JSON.stringify(opts.body);

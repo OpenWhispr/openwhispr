@@ -45,7 +45,11 @@ export interface ChatPersistence {
     scope?: ContainerScope
   ) => Promise<number>;
   /** False for an obsolete load; null for a missing conversation; true when loaded. */
-  loadConversation: (id: number, beforeOpen?: () => void) => Promise<boolean | null>;
+  loadConversation: (
+    id: number,
+    beforeOpen?: () => void,
+    canOpen?: (conversation: StoredChatConversation) => Promise<boolean>
+  ) => Promise<boolean | null>;
   /** Changes when the user leaves this conversation, including before a send starts. */
   getSessionVersion: () => number;
   claimConversation: (id: number) => Promise<false | ConversationClaim>;
@@ -188,9 +192,13 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   );
 
   const loadConversation = useCallback(
-    async (id: number, beforeOpen?: () => void) => {
+    async (
+      id: number,
+      beforeOpen?: () => void,
+      canOpen?: (conversation: StoredChatConversation) => Promise<boolean>
+    ): Promise<boolean | null> => {
       const navigationVersion = ++navigationVersionRef.current;
-      if (beforeOpen) {
+      if (beforeOpen || canOpen) {
         const version = sessionVersionRef.current;
         const target = await window.electronAPI?.getAgentConversation?.(id);
         if (
@@ -199,7 +207,13 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
         )
           return false;
         if (!target) return null;
-        beforeOpen();
+        if (canOpen && !(await canOpen(target))) return false;
+        if (
+          version !== sessionVersionRef.current ||
+          navigationVersion !== navigationVersionRef.current
+        )
+          return false;
+        beforeOpen?.();
       }
       const version = ++sessionVersionRef.current;
       // Unknown up front, so the last conversation's note never grounds a send made while this loads.

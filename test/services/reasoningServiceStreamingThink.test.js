@@ -1054,11 +1054,13 @@ test("cloud action requests supply source fidelity once through every tool step"
     requestId,
     chunk: { type: "tool_call", id: "read-1", name: "get_note", arguments: '{"id":7}' },
   });
+  bridge.emitChunk({ requestId, chunk: { type: "done", finishReason: "tool-calls" } });
   bridge.emitEnd({ requestId });
   await waitForMicrotasks();
   assert.equal(bridge.startCalls.length, 2);
   const [nextRequestId] = bridge.startCalls[1];
   bridge.emitChunk({ requestId: nextRequestId, chunk: { type: "content", text: "Not approved." } });
+  bridge.emitChunk({ requestId: nextRequestId, chunk: { type: "done", finishReason: "stop" } });
   bridge.emitEnd({ requestId: nextRequestId });
   assert.equal(await output, "Not approved.");
 
@@ -1135,6 +1137,7 @@ test("cloud agent streaming correlates events to the initiating request", async 
   assert.deepEqual(await first, { value: { type: "content", text: "right" }, done: false });
 
   const end = stream.next();
+  bridge.emitChunk({ requestId, chunk: { type: "done", finishReason: "stop" } });
   bridge.emitEnd({ requestId });
   assert.deepEqual(await end, {
     value: { type: "done", finishReason: "stop" },
@@ -1300,6 +1303,7 @@ test("cancelling during a cloud tool execution prevents results and later model 
   });
 
   const pending = stream.next();
+  bridge.emitChunk({ requestId, chunk: { type: "done", finishReason: "tool-calls" } });
   bridge.emitEnd({ requestId });
   while (!toolStarted) await waitForMicrotasks();
 
