@@ -89,7 +89,10 @@ export function isChineseText(text) {
  * @param {string | null | undefined} [text]
  * @returns {ChineseScriptTarget | null}
  */
+import { isKeyboardLayoutLanguage } from "./keyboardLayoutLanguage.ts";
+
 export function resolveChineseScriptTarget(preferredLanguage, chineseScriptPreference, text) {
+  if (isKeyboardLayoutLanguage(preferredLanguage)) preferredLanguage = "auto";
   if (preferredLanguage === "zh-CN") return "simplified";
   if (preferredLanguage === "zh-TW") return "traditional";
 
@@ -112,7 +115,13 @@ export function resolveChineseScriptTarget(preferredLanguage, chineseScriptPrefe
  * @returns {string}
  */
 export function resolveCleanupLanguage(preferredLanguage) {
-  if (preferredLanguage && preferredLanguage !== "auto") return preferredLanguage;
+  if (
+    preferredLanguage &&
+    preferredLanguage !== "auto" &&
+    !isKeyboardLayoutLanguage(preferredLanguage)
+  ) {
+    return preferredLanguage;
+  }
   return "auto";
 }
 
