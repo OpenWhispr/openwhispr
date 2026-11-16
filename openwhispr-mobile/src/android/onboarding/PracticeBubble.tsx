@@ -2,8 +2,8 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
+  useFrameCallback,
   useSharedValue,
-  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
@@ -78,45 +78,56 @@ export function PracticeBubble({
   );
 }
 
-const BARS = 9;
-const MAX = 28;
+// A port of the real bubble's waveform (BubblePolicy.bars and WaveformView in the bubble
+// module): seven bars, tallest in the middle, eased toward the microphone level every frame with
+// a gentle wobble, and never fully flat. The level is the same -60…-20 dBFS scale.
+const BAR_SHAPE = [0.45, 0.7, 0.9, 1, 0.9, 0.7, 0.45];
+const HEIGHT = 24;
 
-// Each bar is a recent moment of the voice, newest on the right, so the wave scrolls while
-// someone speaks and lies flat in silence. The meter learns the room: the quietest recent
-// level is the noise floor, and only sound clearly above it moves the bars.
 function Waveform() {
-  const history = useSharedValue<number[]>(Array(BARS).fill(0));
+  const target = useSharedValue(0);
+  const level = useSharedValue(0);
+  const phase = useSharedValue(0);
   useEffect(() => {
-    // The first readings after the mic opens are artificially quiet, so they don't set the floor.
-    let floor = 1;
-    let samples = 0;
     const timer = setInterval(() => {
-      let next = 0;
       try {
-        next = AndroidDictation?.getRecordingLevel?.() ?? 0;
+        target.value = AndroidDictation?.getRecordingLevel?.() ?? 0;
       } catch {
-        next = 0;
+        target.value = 0;
       }
-      samples += 1;
-      if (samples > 4 && next > 0) floor = Math.min(next, floor + 0.004);
-      const speech = Math.max(0, Math.min(1, (next - floor - 0.03) / 0.16));
-      history.value = [...history.value.slice(1), speech];
-    }, 70);
+    }, 50);
     return () => clearInterval(timer);
-  }, [history]);
+  }, [target]);
+  useFrameCallback(() => {
+    level.value += (target.value - level.value) * 0.35;
+    phase.value += 0.18;
+  });
   return (
     <View style={b.wave} accessible={false}>
-      {Array.from({ length: BARS }, (_, index) => (
-        <Bar key={index} index={index} history={history} />
+      {BAR_SHAPE.map((shape, index) => (
+        <Bar key={index} index={index} shape={shape} level={level} phase={phase} />
       ))}
     </View>
   );
 }
 
-function Bar({ index, history }: { index: number; history: SharedValue<number[]> }) {
-  const style = useAnimatedStyle(() => ({
-    height: withTiming(4 + (MAX - 4) * Math.sqrt(history.value[index] ?? 0), { duration: 70 }),
-  }));
+function Bar({
+  index,
+  shape,
+  level,
+  phase,
+}: {
+  index: number;
+  shape: number;
+  level: SharedValue<number>;
+  phase: SharedValue<number>;
+}) {
+  const style = useAnimatedStyle(() => {
+    const wobble = 0.75 + 0.25 * Math.sin(phase.value + index * 1.3);
+    const value = Math.min(1, Math.max(0, level.value));
+    const height = Math.min(1, Math.max(0.15, 0.15 + 0.85 * value * shape * wobble));
+    return { height: height * HEIGHT };
+  });
   return <Animated.View style={[b.bar, style]} />;
 }
 
@@ -153,6 +164,6 @@ const b = StyleSheet.create({
     justifyContent: 'center',
   },
   stopSquare: { width: 12, height: 12, borderRadius: 2, backgroundColor: '#FFFFFF' },
-  wave: { flexDirection: 'row', alignItems: 'center', gap: 3, height: 30, width: 60 },
-  bar: { width: 4, borderRadius: 2, backgroundColor: colors.accent },
+  wave: { flexDirection: 'row', alignItems: 'center', gap: 48 / 13, height: HEIGHT, width: 48 },
+  bar: { width: 48 / 13, borderRadius: 2, backgroundColor: colors.accent },
 });
