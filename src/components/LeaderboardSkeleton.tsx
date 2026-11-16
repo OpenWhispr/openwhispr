@@ -24,8 +24,8 @@ export function LeaderboardBoardSkeleton() {
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-sm">
-          <thead className="bg-muted/10">
-            <tr className="border-y border-border/70 text-start text-[11px] uppercase tracking-wide text-muted-foreground">
+          <thead className="bg-surface-secondary/10">
+            <tr className="border-y border-default/70 text-start text-[11px] uppercase tracking-wide text-secondary">
               <th scope="col" className="w-16 px-5 py-2.5 font-medium">
                 {t("insights.leaderboard.rank")}
               </th>
@@ -39,7 +39,7 @@ export function LeaderboardBoardSkeleton() {
           </thead>
           <tbody>
             {ROW_WIDTHS.map(([nameWidth, detailWidth]) => (
-              <tr key={nameWidth} className="border-b border-border/70 last:border-0">
+              <tr key={nameWidth} className="border-b border-default/70 last:border-0">
                 <td className="px-5 py-3">
                   <Skeleton className="size-6" />
                 </td>
@@ -72,17 +72,17 @@ export function LeaderboardBoardSkeleton() {
 export default function LeaderboardSkeleton() {
   const { t } = useTranslation();
   return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-border/70 bg-card/70 dark:border-white/10">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 px-5 py-4">
+    <section className="mt-6 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary/70 dark:border-white/10">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-default/70 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <Skeleton className="size-9 shrink-0 rounded-lg" />
           <div className="min-w-0">
             <p className="text-sm font-semibold">
               <Skeleton className="inline-block h-3.5 w-36 align-middle" />
             </p>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-secondary">
               <Skeleton className="h-2.5 w-18" />
-              <span aria-hidden="true" className="size-0.5 rounded-full bg-muted-foreground/50" />
+              <span aria-hidden="true" className="size-0.5 rounded-full bg-text-secondary/50" />
               <span className="flex items-center gap-1">
                 <Clock3 size={11} />
                 {t("insights.leaderboard.refreshCadence")}

@@ -1121,7 +1121,7 @@ export default function NoteEditor({
             onKeyDown={handleTitleKeyDown}
             onPaste={handleTitlePaste}
             data-placeholder={t("notes.editor.untitled")}
-            className="text-3xl font-medium leading-tight text-foreground bg-transparent outline-none tracking-[-0.01em] [overflow-wrap:anywhere] @max-[400px]/note-editor:text-[26px] empty:before:content-[attr(data-placeholder)] empty:before:text-foreground/45 empty:before:pointer-events-none"
+            className="text-3xl font-medium leading-tight text-primary bg-transparent outline-none tracking-[-0.01em] [overflow-wrap:anywhere] @max-[400px]/note-editor:text-[26px] empty:before:content-[attr(data-placeholder)] empty:before:text-primary/45 empty:before:pointer-events-none"
             role="textbox"
             aria-label={t("notes.editor.noteTitle")}
           />
@@ -1149,14 +1149,14 @@ export default function NoteEditor({
                       {space.emoji}
                     </span>
                   ) : (
-                    <Users size={14} className="shrink-0 text-foreground/60" />
+                    <Users size={14} className="shrink-0 text-primary/60" />
                   )}
                   <span dir="auto" className="truncate max-w-32">
                     {space.name}
                   </span>
                 </button>
                 {folders && onMoveToFolder && (canMoveToFolders || folderName) && (
-                  <span aria-hidden="true" className="text-xs text-foreground/45">
+                  <span aria-hidden="true" className="text-xs text-primary/45">
                     /
                   </span>
                 )}
@@ -1164,7 +1164,7 @@ export default function NoteEditor({
             )}
             {folders && onMoveToFolder && !canMoveToFolders && folderName && (
               <span className={cn(NOTE_META_CHIP_CLASS, "cursor-default")}>
-                <FolderOpen size={14} className="shrink-0 text-foreground/60" />
+                <FolderOpen size={14} className="shrink-0 text-primary/60" />
                 <span dir="auto" className="truncate">
                   {folderName}
                 </span>
@@ -1182,7 +1182,7 @@ export default function NoteEditor({
               >
                 <DropdownMenuTrigger asChild>
                   <button className={NOTE_META_CHIP_CLASS}>
-                    <FolderOpen size={14} className="shrink-0 text-foreground/60" />
+                    <FolderOpen size={14} className="shrink-0 text-primary/60" />
                     {folderName ? (
                       <span dir="auto" className="truncate">
                         {folderName}
@@ -1198,7 +1198,7 @@ export default function NoteEditor({
                       <div className="relative px-1.5 py-0.5">
                         <Search
                           size={9}
-                          className="absolute start-3.5 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
+                          className="absolute start-3.5 top-1/2 -translate-y-1/2 text-primary/45 pointer-events-none"
                         />
                         <input
                           dir="auto"
@@ -1206,7 +1206,7 @@ export default function NoteEditor({
                           onChange={(e) => setFolderSearch(e.target.value)}
                           onKeyDown={(e) => e.stopPropagation()}
                           placeholder={t("notes.context.searchFolders")}
-                          className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+                          className="input-inline w-full ps-4.5 pe-1 py-0.5 text-xs text-primary placeholder:text-primary/45 outline-none border-none appearance-none"
                         />
                       </div>
                       <DropdownMenuSeparator />
@@ -1222,16 +1222,16 @@ export default function NoteEditor({
                           onClick={() => onMoveToFolder(note.id, folder.id)}
                           className="text-xs gap-2 rounded-md px-2 py-1.5"
                         >
-                          <FolderOpen size={11} className="text-foreground/45 shrink-0" />
+                          <FolderOpen size={11} className="text-primary/45 shrink-0" />
                           <span dir="auto" className="truncate flex-1">
                             {defaultFolderDisplayName(folder, t)}
                           </span>
-                          {isCurrent && <Check size={9} className="text-primary shrink-0" />}
+                          {isCurrent && <Check size={9} className="text-brand-solid shrink-0" />}
                         </DropdownMenuItem>
                       );
                     })}
                     {folderSearch && filteredFolders.length === 0 && (
-                      <p className="text-xs text-foreground/45 text-center py-1.5">
+                      <p className="text-xs text-primary/45 text-center py-1.5">
                         {t("notes.context.noResults")}
                       </p>
                     )}
@@ -1259,7 +1259,7 @@ export default function NoteEditor({
                               }
                             }}
                             placeholder={t("notes.folders.folderName")}
-                            className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+                            className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-primary placeholder:text-primary/45 outline-none border-none appearance-none"
                           />
                         </div>
                       ) : (
@@ -1268,7 +1268,7 @@ export default function NoteEditor({
                             e.preventDefault();
                             setIsCreatingFolder(true);
                           }}
-                          className="text-xs gap-2 rounded-md px-2 py-1.5 text-foreground/45"
+                          className="text-xs gap-2 rounded-md px-2 py-1.5 text-primary/45"
                         >
                           <Plus size={10} />
                           {t("notes.context.newFolder")}
@@ -1286,13 +1286,13 @@ export default function NoteEditor({
                 aria-label={t("notes.spaces.teamsMembers.title", { space: space.name })}
                 className={NOTE_META_CHIP_CLASS}
               >
-                <Users size={14} className="shrink-0 text-foreground/60" />
+                <Users size={14} className="shrink-0 text-primary/60" />
                 {/* member_count tracks explicit rosters only — the audience always includes the viewer */}
                 {Math.max(1, space.member_count ?? 1)}
               </button>
             )}
             {isSaving && (
-              <span className="inline-flex items-center gap-1 text-xs text-foreground/45 tabular-nums">
+              <span className="inline-flex items-center gap-1 text-xs text-primary/45 tabular-nums">
                 <Loader2 size={10} className="animate-spin" />
                 {t("notes.editor.saving")}
               </span>
@@ -1305,10 +1305,10 @@ export default function NoteEditor({
             >
               <div
                 ref={segmentContainerRef}
-                className="relative flex shrink-0 items-center rounded-full bg-surface-3 p-0.5 dark:bg-surface-2"
+                className="relative flex shrink-0 items-center rounded-full bg-surface-tertiary p-0.5 dark:bg-surface-primary"
               >
                 <div
-                  className="pointer-events-none absolute top-0.5 left-0 rounded-full bg-background shadow-sm transition-[width,height,transform,opacity] duration-200 ease-out dark:bg-surface-3"
+                  className="pointer-events-none absolute top-0.5 left-0 rounded-full bg-surface-primary shadow-sm transition-[width,height,transform,opacity] duration-200 ease-out dark:bg-surface-tertiary"
                   style={indicatorStyle}
                 />
                 <button
@@ -1318,8 +1318,8 @@ export default function NoteEditor({
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
                     viewMode === "transcript"
-                      ? "text-foreground"
-                      : "text-foreground/60 hover:text-foreground/80"
+                      ? "text-primary"
+                      : "text-primary/60 hover:text-primary/80"
                   )}
                 >
                   {isRecording ? <RecordingWave /> : <MessageSquareText size={12} />}
@@ -1331,9 +1331,7 @@ export default function NoteEditor({
                   onClick={() => setSelectedViewMode("raw")}
                   className={cn(
                     SEGMENT_BUTTON_CLASS,
-                    viewMode === "raw"
-                      ? "text-foreground"
-                      : "text-foreground/60 hover:text-foreground/80"
+                    viewMode === "raw" ? "text-primary" : "text-primary/60 hover:text-primary/80"
                   )}
                 >
                   <AlignLeft size={12} />
@@ -1347,8 +1345,8 @@ export default function NoteEditor({
                     className={cn(
                       "relative z-1 flex items-center",
                       viewMode === "enhanced"
-                        ? "text-foreground"
-                        : "text-foreground/60 hover:text-foreground/80"
+                        ? "text-primary"
+                        : "text-primary/60 hover:text-primary/80"
                     )}
                   >
                     <button
@@ -1406,7 +1404,7 @@ export default function NoteEditor({
                   onClick={() => openShare("open")}
                   className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "gap-1.5 ps-2.5 pe-3")}
                 >
-                  <Lock size={13} className={isShared ? "text-primary" : "text-foreground/60"} />
+                  <Lock size={13} className={isShared ? "text-brand-solid" : "text-primary/60"} />
                   {t("noteEditor.share.button")}
                 </button>
                 <span aria-hidden="true" className={SPLIT_BUTTON_DIVIDER_CLASS} />
@@ -1416,7 +1414,7 @@ export default function NoteEditor({
                   aria-label={t("noteEditor.share.dialog.copyLink")}
                   className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-[30px] justify-center")}
                 >
-                  <Link2 size={13} className="text-foreground/60" />
+                  <Link2 size={13} className="text-primary/60" />
                 </button>
               </div>
             </div>
@@ -1434,10 +1432,10 @@ export default function NoteEditor({
           >
             <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
               <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
-              <p className="text-[11px] text-foreground/50 flex-1 truncate">
+              <p className="text-[11px] text-primary/50 flex-1 truncate">
                 {t("notes.spaces.conflictBanner")}
                 {conflictEditorName && (
-                  <span className="text-foreground/45">
+                  <span className="text-primary/45">
                     {" "}
                     {t("notes.spaces.editedBy", {
                       name: conflictEditorName,
@@ -1448,13 +1446,13 @@ export default function NoteEditor({
               </p>
               <button
                 onClick={handleConflictRefresh}
-                className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                className="text-[11px] font-medium text-primary/50 hover:text-primary/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               >
                 {t("notes.spaces.conflictRefresh")}
               </button>
               <button
                 onClick={handleConflictKeep}
-                className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                className="text-[11px] font-medium text-primary/45 hover:text-primary/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               >
                 {t("notes.spaces.conflictKeep")}
               </button>
@@ -1466,15 +1464,15 @@ export default function NoteEditor({
         {canEditNote &&
           !recordingAllowed &&
           (recordingRefusal === "disabled" || recordingChoiceRefusal) && (
-            <div className="h-8 mt-2 shrink-0 border-y border-warning/20 bg-warning/8 dark:bg-warning/10">
+            <div className="h-8 mt-2 shrink-0 border-y border-amber-solid/20 bg-amber-solid/8 dark:bg-amber-solid/10">
               <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
                 <AlertTriangle
                   aria-hidden="true"
-                  className="w-3 h-3 shrink-0 text-amber-600 dark:text-warning"
+                  className="w-3 h-3 shrink-0 text-amber-600 dark:text-amber-solid"
                 />
                 <p
                   role="status"
-                  className="text-[11px] text-amber-700 dark:text-warning/90 flex-1 truncate"
+                  className="text-[11px] text-amber-700 dark:text-amber-solid/90 flex-1 truncate"
                 >
                   {t(recordingChoiceRefusal?.messageKey ?? MEETING_RECORDING_REFUSAL_KEYS.disabled)}
                 </p>
@@ -1482,7 +1480,7 @@ export default function NoteEditor({
                   <button
                     type="button"
                     onClick={() => openProviderSettings("noteRecording")}
-                    className="shrink-0 rounded-sm text-[11px] font-medium text-amber-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 dark:text-warning/90"
+                    className="shrink-0 rounded-sm text-[11px] font-medium text-amber-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 dark:text-amber-solid/90"
                   >
                     {t("providerErrors.openSettings")}
                   </button>
@@ -1551,10 +1549,10 @@ export default function NoteEditor({
                   width={590}
                   height={77}
                 />
-                <h2 className="mt-12 text-xl font-semibold text-foreground">
+                <h2 className="mt-12 text-xl font-semibold text-primary">
                   {t("notes.editor.transcriptEmptyTitle")}
                 </h2>
-                <p className="mt-2 max-w-xs text-base leading-6 text-muted-foreground">
+                <p className="mt-2 max-w-xs text-base leading-6 text-secondary">
                   {t("notes.editor.transcriptEmptyDescription")}
                 </p>
                 {canEditNote && recordingAllowed && (
@@ -1596,7 +1594,7 @@ export default function NoteEditor({
           <div
             className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none"
             style={{
-              background: "linear-gradient(to bottom, transparent, var(--color-background))",
+              background: "linear-gradient(to bottom, transparent, var(--color-surface-primary))",
             }}
           />
           {!isRecording && selectedSegmentIds.size > 0 && (

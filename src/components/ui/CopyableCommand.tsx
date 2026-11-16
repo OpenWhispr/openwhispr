@@ -34,20 +34,20 @@ export function CopyableCommand({
 
   return (
     <div className={className}>
-      {label && <div className="text-xs text-muted-foreground mb-1">{label}</div>}
+      {label && <div className="text-xs text-secondary mb-1">{label}</div>}
       <div
         dir="ltr"
-        className="relative bg-card border border-border p-3 rounded-md font-mono text-xs overflow-x-auto"
+        className="relative bg-surface-primary border border-default p-3 rounded-md font-mono text-xs overflow-x-auto"
       >
-        <span className="text-foreground pr-8">{command}</span>
+        <span className="text-primary pr-8">{command}</span>
         <button
           type="button"
           onClick={handleCopy}
           aria-label={copied ? t("common.copied") : (copyLabel ?? t("common.copy"))}
-          className="absolute top-2 right-2 h-6 w-6 flex items-center justify-center rounded text-muted-foreground/70 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
+          className="absolute top-2 right-2 h-6 w-6 flex items-center justify-center rounded text-secondary/70 hover:text-secondary hover:bg-surface-secondary/50 active:scale-95 transition-all"
         >
           {copied ? (
-            <Check className="w-3.5 h-3.5 text-success" />
+            <Check className="w-3.5 h-3.5 text-green-solid" />
           ) : (
             <Copy className="w-3.5 h-3.5" />
           )}

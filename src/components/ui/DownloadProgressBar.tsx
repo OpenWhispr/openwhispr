@@ -30,22 +30,22 @@ export function DownloadProgressBar({
   const indeterminate = !isInstalling && totalBytes === 0 && downloadedBytes > 0;
 
   return (
-    <div className="px-2.5 py-2 border-b border-white/5 dark:border-border-subtle">
+    <div className="px-2.5 py-2 border-b border-white/5 dark:border-default">
       <div className="flex items-center gap-2 mb-2">
         <div className="relative flex items-center justify-center h-6 min-w-6 px-1.5 shrink-0">
           <div
-            className={`absolute inset-0 rounded-md bg-primary/15 ${isInstalling || indeterminate ? "animate-pulse" : ""}`}
+            className={`absolute inset-0 rounded-md bg-brand-solid/15 ${isInstalling || indeterminate ? "animate-pulse" : ""}`}
           />
           {isInstalling ? (
-            <Loader2 className="relative w-3.5 h-3.5 text-primary animate-spin" />
+            <Loader2 className="relative w-3.5 h-3.5 text-brand-solid animate-spin" />
           ) : (
-            <span className="relative text-xs font-bold text-primary tabular-nums">
+            <span className="relative text-xs font-bold text-brand-solid tabular-nums">
               {indeterminate ? "···" : `${pct}%`}
             </span>
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-foreground truncate">
+          <p className="text-xs font-medium text-primary truncate">
             {isInstalling
               ? `Installing ${modelName}`
               : isVerifying
@@ -55,17 +55,17 @@ export function DownloadProgressBar({
           {!isInstalling && (indeterminate || speedText || etaText) && (
             <div className="flex items-center gap-1.5 mt-0.5">
               {indeterminate && (
-                <span className="text-xs text-muted-foreground/70 tabular-nums">
+                <span className="text-xs text-secondary/70 tabular-nums">
                   {formatBytes(downloadedBytes)}
                 </span>
               )}
               {speedText && (
-                <span className="text-xs text-muted-foreground/70 tabular-nums">{speedText}</span>
+                <span className="text-xs text-secondary/70 tabular-nums">{speedText}</span>
               )}
               {etaText && (
                 <>
-                  <span className="text-xs text-muted-foreground/70">·</span>
-                  <span className="text-xs text-muted-foreground/70 tabular-nums">{etaText}</span>
+                  <span className="text-xs text-secondary/70">·</span>
+                  <span className="text-xs text-secondary/70 tabular-nums">{etaText}</span>
                 </>
               )}
             </div>
@@ -78,10 +78,10 @@ export function DownloadProgressBar({
         style={{ height: 4 }}
       >
         {indeterminate ? (
-          <div className="h-full w-1/3 rounded-full bg-primary shadow-[0_0_8px_oklch(0.62_0.22_260/0.4)] animate-[indeterminate_1.5s_ease-in-out_infinite]" />
+          <div className="h-full w-1/3 rounded-full bg-brand-solid shadow-[0_0_8px_oklch(0.62_0.22_260/0.4)] animate-[indeterminate_1.5s_ease-in-out_infinite]" />
         ) : (
           <div
-            className={`${isInstalling ? "animate-pulse" : ""} bg-primary shadow-[0_0_8px_oklch(0.62_0.22_260/0.4)]`}
+            className={`${isInstalling ? "animate-pulse" : ""} bg-brand-solid shadow-[0_0_8px_oklch(0.62_0.22_260/0.4)]`}
             style={{
               height: "100%",
               width: `${isInstalling ? 100 : Math.min(percentage, 100)}%`,

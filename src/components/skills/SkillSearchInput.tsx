@@ -14,7 +14,7 @@ export function SkillSearchInput({ value, onChange }: SkillSearchInputProps): Re
     <div className="relative">
       <Search
         size={13}
-        className="pointer-events-none absolute start-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70"
+        className="pointer-events-none absolute start-2.5 top-1/2 -translate-y-1/2 text-secondary/70"
       />
       <Input
         type="search"

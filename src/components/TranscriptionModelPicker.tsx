@@ -150,37 +150,33 @@ function LocalModelCard({
             <div
               className={`w-1.5 h-1.5 rounded-full ${
                 isSelected
-                  ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)] animate-[pulse-glow_2s_ease-in-out_infinite]"
-                  : "bg-success shadow-[0_0_4px_rgba(34,197,94,0.5)]"
+                  ? "bg-brand-solid shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)] animate-[pulse-glow_2s_ease-in-out_infinite]"
+                  : "bg-green-solid shadow-[0_0_4px_rgba(34,197,94,0.5)]"
               }`}
             />
           ) : isDownloading ? (
             <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)] animate-[spinner-rotate_1s_linear_infinite]" />
           ) : (
-            <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/20" />
+            <div className="w-1.5 h-1.5 rounded-full bg-text-secondary/20" />
           )}
         </div>
 
         <div className="flex-1 min-w-0 flex items-center gap-1.5">
           <ProviderIcon provider={provider} className="w-3.5 h-3.5 shrink-0" />
-          <span className="font-semibold text-sm text-foreground truncate tracking-tight">
-            {name}
-          </span>
-          <span className="text-xs text-muted-foreground/70 tabular-nums shrink-0">
+          <span className="font-semibold text-sm text-primary truncate tracking-tight">{name}</span>
+          <span className="text-xs text-secondary/70 tabular-nums shrink-0">
             {actualSizeMb ? `${actualSizeMb}MB` : size}
           </span>
           {recommended && !policyBlocked && (
             <span className={cardStyles.badges.recommended}>{t("common.recommended")}</span>
           )}
           {policyBlocked && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-secondary">
               {t(policyRefusal?.labelKey ?? "models.policy.notApproved")}
             </span>
           )}
           {languageLabel && (
-            <span className="text-xs text-muted-foreground/70 font-medium shrink-0">
-              {languageLabel}
-            </span>
+            <span className="text-xs text-secondary/70 font-medium shrink-0">{languageLabel}</span>
           )}
         </div>
 
@@ -188,7 +184,7 @@ function LocalModelCard({
           {isDownloaded ? (
             <>
               {isSelected && !policyBlocked && !unavailable && (
-                <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
+                <span className="text-xs font-medium text-brand-solid px-2 py-0.5 bg-brand-solid/10 rounded-sm">
                   {t("common.active")}
                 </span>
               )}
@@ -200,7 +196,7 @@ function LocalModelCard({
                 aria-label={t("common.delete")}
                 size="icon"
                 variant="ghost"
-                className={`size-6 text-muted-foreground/70 hover:text-destructive ${policyBlocked ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"} transition-[color,opacity,transform] active:scale-95`}
+                className={`size-6 text-secondary/70 hover:text-red-solid ${policyBlocked ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"} transition-[color,opacity,transform] active:scale-95`}
               >
                 <Trash2 size={12} />
               </Button>
@@ -214,7 +210,7 @@ function LocalModelCard({
               disabled={isCancelling || isInstalling}
               size="sm"
               variant="outline"
-              className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
+              className="h-6 px-2.5 text-xs text-red-solid border-red-solid/25 hover:bg-red-solid/8"
             >
               <X size={11} className="me-0.5" />
               {isCancelling ? "..." : t("common.cancel")}
@@ -244,7 +240,7 @@ function LocalModelCard({
             event.stopPropagation();
             createExternalLinkHandler(modelCardUrl)(event);
           }}
-          className="inline-block ms-7 mb-2 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="inline-block ms-7 mb-2 text-xs text-secondary underline underline-offset-2 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           {t("transcription.modelCard")}
         </a>
@@ -390,9 +386,9 @@ interface ModeToggleProps {
 function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
   const { t } = useTranslation();
   return (
-    <div className="relative flex p-0.5 rounded-lg bg-surface-1/80 backdrop-blur-xl dark:bg-surface-1 border border-border/70 dark:border-white/10 shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark)">
+    <div className="relative flex p-0.5 rounded-lg bg-surface-secondary/80 backdrop-blur-xl dark:bg-surface-secondary border border-default/70 dark:border-white/10 shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark)">
       <div
-        className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-card border border-border/70 dark:border-border-subtle shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark) transition-transform duration-200 ease-out ${
+        className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-md bg-surface-primary border border-default/70 dark:border-default shadow-(--shadow-metallic-light) dark:shadow-(--shadow-metallic-dark) transition-transform duration-200 ease-out ${
           useLocalWhisper
             ? "translate-x-[calc(100%)] rtl:-translate-x-[calc(100%)]"
             : "translate-x-0"
@@ -401,7 +397,7 @@ function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
       <button
         onClick={() => onModeChange(false)}
         className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md transition-colors duration-150 ${
-          !useLocalWhisper ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+          !useLocalWhisper ? "text-primary" : "text-secondary hover:text-primary"
         }`}
       >
         <Cloud className="w-3.5 h-3.5" />
@@ -410,7 +406,7 @@ function ModeToggle({ useLocalWhisper, onModeChange }: ModeToggleProps) {
       <button
         onClick={() => onModeChange(true)}
         className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md transition-colors duration-150 ${
-          useLocalWhisper ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+          useLocalWhisper ? "text-primary" : "text-secondary hover:text-primary"
         }`}
       >
         <Lock className="w-3.5 h-3.5" />
@@ -441,10 +437,10 @@ function GpuWarningRow({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-2">
-        <CircleAlert size={15} className="mt-0.5 shrink-0 text-warning" />
+        <CircleAlert size={15} className="mt-0.5 shrink-0 text-amber-solid" />
         <div className="min-w-0">
-          <p className="text-xs font-medium text-foreground">{title}</p>
-          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p>
+          <p className="text-xs font-medium text-primary">{title}</p>
+          <p className="mt-0.5 text-xs leading-snug text-secondary">{description}</p>
           {children}
           <Button onClick={onAction} size="sm" className="mt-2 h-7 px-3 text-xs">
             {actionLabel}
@@ -455,7 +451,7 @@ function GpuWarningRow({
         onClick={onRemove}
         size="sm"
         variant="ghost"
-        className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
+        className="h-6 shrink-0 px-2 text-xs text-secondary hover:text-red-solid"
       >
         {t("gpu.remove")}
       </Button>
@@ -1588,7 +1584,7 @@ export default function TranscriptionModelPicker({
               {displayedCloudProvider === "custom" ? (
                 <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-medium text-foreground">
+                    <label className="block text-xs font-medium text-primary">
                       {t("transcription.endpointUrl")}
                     </label>
                     <ProviderCheckField
@@ -1606,7 +1602,7 @@ export default function TranscriptionModelPicker({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-medium text-foreground">
+                    <label className="block text-xs font-medium text-primary">
                       {t("transcription.apiKeyOptional")}
                     </label>
                     <ProviderCheckField
@@ -1627,7 +1623,7 @@ export default function TranscriptionModelPicker({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-medium text-foreground">
+                    <label className="block text-xs font-medium text-primary">
                       {t("common.model")}
                     </label>
                     <ProviderCheckField
@@ -1644,7 +1640,7 @@ export default function TranscriptionModelPicker({
                   </div>
 
                   {/azure\.com/i.test(cloudTranscriptionBaseUrl || "") && (
-                    <p className="text-xs text-muted-foreground">{t("transcription.azureHint")}</p>
+                    <p className="text-xs text-secondary">{t("transcription.azureHint")}</p>
                   )}
                 </div>
               ) : (
@@ -1654,12 +1650,12 @@ export default function TranscriptionModelPicker({
                     return (
                       <div key={field.key} className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-medium text-foreground">{label}</label>
+                          <label className="text-xs font-medium text-primary">{label}</label>
                           {index === 0 && (
                             <GetApiKeyLink
                               url={providerCredentials.consoleUrl}
                               labelKey="transcription.getKey"
-                              className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                              className="text-xs text-brand-solid/70 hover:text-brand-solid transition-colors cursor-pointer"
                             />
                           )}
                         </div>
@@ -1712,9 +1708,7 @@ export default function TranscriptionModelPicker({
                   })}
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-foreground">
-                      {t("common.model")}
-                    </label>
+                    <label className="text-xs font-medium text-primary">{t("common.model")}</label>
                     <ModelCardList
                       models={cloudModelOptions}
                       selectedModel={
@@ -1724,12 +1718,12 @@ export default function TranscriptionModelPicker({
                       colorScheme="purple"
                     />
                     {displayedCloudProvider === "tinfoil" && (
-                      <p className="text-xs text-muted-foreground/70">
+                      <p className="text-xs text-secondary/70">
                         {t("transcription.tinfoil.transportNote")}{" "}
                         <a
                           href={TINFOIL_AUDIO_DOCS_URL}
                           onClick={createExternalLinkHandler(TINFOIL_AUDIO_DOCS_URL)}
-                          className="text-primary/70 hover:text-primary transition-colors"
+                          className="text-brand-solid/70 hover:text-brand-solid transition-colors"
                         >
                           {t("transcription.tinfoil.docsLink")}
                         </a>
@@ -1765,7 +1759,7 @@ export default function TranscriptionModelPicker({
               <div className="px-2.5 pb-1 flex justify-end">
                 <button
                   onClick={handleGpuCancel}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-xs text-secondary hover:text-primary transition-colors"
                 >
                   {t("gpu.cancel")}
                 </button>
@@ -1780,8 +1774,8 @@ export default function TranscriptionModelPicker({
               <div
                 className={`rounded-md border p-2.5 ${
                   (gpuDownloaded ? gpuFailed : gpuNeedsUpdate)
-                    ? "border-warning/40 bg-warning/5"
-                    : "border-border bg-surface-1"
+                    ? "border-amber-solid/40 bg-amber-solid/5"
+                    : "border-default bg-surface-secondary"
                 }`}
               >
                 {gpuDownloaded ? (
@@ -1796,7 +1790,7 @@ export default function TranscriptionModelPicker({
                       {gpuFailReason && (
                         <p
                           dir="ltr"
-                          className="mt-1 wrap-break-word font-mono text-[11px] leading-snug text-muted-foreground"
+                          className="mt-1 wrap-break-word font-mono text-[11px] leading-snug text-secondary"
                         >
                           {gpuFailReason}
                         </p>
@@ -1807,22 +1801,22 @@ export default function TranscriptionModelPicker({
                       <div className="flex items-center gap-1.5">
                         {gpuActivating ? (
                           <>
-                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
-                            <span className="text-xs font-medium text-foreground">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-brand-solid animate-pulse" />
+                            <span className="text-xs font-medium text-primary">
                               {t("gpu.activatingBackend", { backend: gpuBackendName })}
                             </span>
                           </>
                         ) : gpuActive ? (
                           <>
-                            <Check size={13} className="text-success" />
-                            <span className="text-xs font-medium text-foreground">
+                            <Check size={13} className="text-green-solid" />
+                            <span className="text-xs font-medium text-primary">
                               {t("gpu.activeBackend", { backend: gpuBackendName })}
                             </span>
                           </>
                         ) : (
                           <>
-                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary" />
-                            <span className="text-xs font-medium text-foreground">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-brand-solid" />
+                            <span className="text-xs font-medium text-primary">
                               {t("gpu.readyBackend", { backend: gpuBackendName })}
                             </span>
                           </>
@@ -1832,7 +1826,7 @@ export default function TranscriptionModelPicker({
                         onClick={handleGpuDelete}
                         size="sm"
                         variant="ghost"
-                        className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                        className="h-6 px-2 text-xs text-secondary hover:text-red-solid"
                       >
                         {t("gpu.remove")}
                       </Button>
@@ -1848,12 +1842,12 @@ export default function TranscriptionModelPicker({
                   />
                 ) : (
                   <div className="flex items-start gap-2.5">
-                    <Zap size={13} className="text-primary shrink-0 mt-0.5" />
+                    <Zap size={13} className="text-brand-solid shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground">
+                      <p className="text-xs font-medium text-primary">
                         {t("gpu.transcriptionBanner")}
                       </p>
-                      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                      <p className="mt-0.5 text-xs leading-snug text-secondary">
                         {t(gpuBackend === "cuda" ? "gpu.cudaDescription" : "gpu.vulkanDescription")}
                       </p>
                       <div className="flex items-center gap-2 mt-1.5">
@@ -1867,7 +1861,7 @@ export default function TranscriptionModelPicker({
                         </Button>
                         <button
                           onClick={() => setGpuDismissed(true)}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          className="text-xs text-secondary hover:text-primary transition-colors"
                         >
                           {t("gpu.dismiss")}
                         </button>
@@ -1876,7 +1870,7 @@ export default function TranscriptionModelPicker({
                   </div>
                 )}
                 {!gpuDownloaded && gpuDownloadError !== null && (
-                  <p className="mt-2 text-xs leading-snug text-destructive">
+                  <p className="mt-2 text-xs leading-snug text-red-solid">
                     {t("gpu.downloadFailed")}
                     {gpuDownloadError && ` ${gpuDownloadError}`}
                   </p>

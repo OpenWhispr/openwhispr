@@ -60,7 +60,7 @@ export function AddToTeamList({
   if (teams.status === "failed") {
     return (
       <>
-        <p role="status" className="px-2.5 py-2 text-sm text-muted-foreground">
+        <p role="status" className="px-2.5 py-2 text-sm text-secondary">
           {t(`${COPY}.failedTitle`)}
         </p>
         <DropdownMenuItem
@@ -83,7 +83,7 @@ export function AddToTeamList({
   }
   if (teams.status !== "ready") {
     return (
-      <p role="status" className="px-2.5 py-2 text-sm text-muted-foreground">
+      <p role="status" className="px-2.5 py-2 text-sm text-secondary">
         {t(`${COPY}.loadingTitle`)}
       </p>
     );
@@ -92,7 +92,7 @@ export function AddToTeamList({
   const offered = addableTeams(teams.teams, workspace);
   if (offered.length === 0) {
     return (
-      <DropdownMenuItem disabled className="text-sm text-muted-foreground">
+      <DropdownMenuItem disabled className="text-sm text-secondary">
         {/* Teams exist but are directory-managed or not the caller's to manage: "yet" would mislead. */}
         {t(`${COPY}.addPeople.${teams.teams.length === 0 ? "none" : "noneAddable"}`)}
       </DropdownMenuItem>

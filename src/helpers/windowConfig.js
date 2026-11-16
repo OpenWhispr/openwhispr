@@ -276,7 +276,7 @@ const CONTROL_PANEL_CONFIG = {
   // macOS only: transparent so a renderer that insets or rounds itself shows
   // the desktop rather than a square page backing bleeding out behind it. Safe
   // for the other control panel screens because each paints its own opaque
-  // background (ControlPanel's root is `bg-background`); only the compact
+  // background (ControlPanel's root is `bg-surface-primary`); only the compact
   // onboarding steps clear body/#root — see index.css. Not on Windows/Linux:
   // transparency is creation-time-only and this window outlives onboarding, and
   // on Windows `transparent` forces thickFrame:false (no maximize/Aero-snap)

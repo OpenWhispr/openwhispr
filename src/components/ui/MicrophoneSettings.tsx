@@ -111,7 +111,7 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
     <div className="space-y-4">
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-foreground">
+          <label className="text-sm font-medium text-primary">
             {t("microphoneSettings.inputDevice")}
           </label>
           <Button
@@ -126,7 +126,7 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
         </div>
 
         {error ? (
-          <p className="text-sm text-destructive">{error}</p>
+          <p className="text-sm text-red-solid">{error}</p>
         ) : (
           <Select
             value={selectorValue}
@@ -165,7 +165,7 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
                   <SelectItem key={device.deviceId} value={device.deviceId}>
                     {device.label}
                     {device.isBuiltIn && (
-                      <span className="ml-2 text-xs text-muted-foreground">
+                      <span className="ml-2 text-xs text-secondary">
                         {t("microphoneSettings.builtIn")}
                       </span>
                     )}
@@ -175,14 +175,14 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
           </Select>
         )}
 
-        <p className="text-xs text-muted-foreground">{t("microphoneSettings.helpText")}</p>
+        <p className="text-xs text-secondary">{t("microphoneSettings.helpText")}</p>
       </div>
 
       {microphoneSelectionMode === "built-in" && builtInDevice && (
-        <div className="p-3 bg-success/10 dark:bg-success/20 border border-success/30 rounded-lg">
+        <div className="p-3 bg-green-solid/10 dark:bg-green-solid/20 border border-green-solid/30 rounded-lg">
           <div className="flex items-center gap-2">
-            <Mic className="w-4 h-4 text-success dark:text-success" />
-            <span className="text-sm text-success dark:text-success">
+            <Mic className="w-4 h-4 text-green-solid dark:text-green-solid" />
+            <span className="text-sm text-green-solid dark:text-green-solid">
               {t("microphoneSettings.using", { device: builtInDevice.label })}
             </span>
           </div>
@@ -190,8 +190,8 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
       )}
 
       {microphoneSelectionMode === "built-in" && !builtInDevice && devices.length > 0 && (
-        <div className="p-3 bg-warning/10 dark:bg-warning/20 border border-warning/30 rounded-lg">
-          <p className="text-sm text-warning dark:text-warning">
+        <div className="p-3 bg-amber-solid/10 dark:bg-amber-solid/20 border border-amber-solid/30 rounded-lg">
+          <p className="text-sm text-amber-solid dark:text-amber-solid">
             {t("microphoneSettings.noBuiltInDetected")}
           </p>
         </div>
@@ -220,9 +220,7 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
         </Select>
       </SettingsRow>
       {micWarmHoldSeconds > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {t("microphoneSettings.warmHold.privacyNote")}
-        </p>
+        <p className="text-xs text-secondary">{t("microphoneSettings.warmHold.privacyNote")}</p>
       )}
     </div>
   );

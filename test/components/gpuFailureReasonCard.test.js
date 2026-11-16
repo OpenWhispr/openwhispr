@@ -49,7 +49,8 @@ function findElement(node, predicate) {
   return findElement(node.props?.children, predicate);
 }
 
-const isFailedCard = (node) => String(node.props?.className ?? "").includes("border-warning/40");
+const isFailedCard = (node) =>
+  String(node.props?.className ?? "").includes("border-amber-solid/40");
 const hasText = (text) => (node) => node.props?.children === text;
 // The shared warning row renders its buttons from these props, and this
 // element tree never expands components, so its buttons are read off the row

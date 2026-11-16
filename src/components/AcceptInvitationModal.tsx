@@ -144,7 +144,7 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
                   })}
                 </DialogDescription>
                 {(preview.space_names?.length ?? 0) > 0 ? (
-                  <DialogDescription className="text-xs text-muted-foreground/80 mt-1">
+                  <DialogDescription className="text-xs text-secondary/80 mt-1">
                     {t("notes.spaces.invitedToSpaces", {
                       spaces: formatList(i18n.language, preview.space_names ?? []),
                     })}
@@ -152,26 +152,26 @@ export default function AcceptInvitationModal({ token, onClose, onAccepted }: Pr
                 ) : (
                   (preview.team_ids?.length ?? 0) > 0 && (
                     // Group grants arrive as ids only, so show a count.
-                    <DialogDescription className="text-xs text-muted-foreground/80 mt-1">
+                    <DialogDescription className="text-xs text-secondary/80 mt-1">
                       {t("notes.spaces.invitedTo", { count: preview.team_ids.length })}
                     </DialogDescription>
                   )
                 )}
                 {wrongAccount ? (
-                  <DialogDescription className="text-xs text-destructive mt-1">
+                  <DialogDescription className="text-xs text-red-solid mt-1">
                     {t("workspaces.accept.wrongAccount", {
                       email: preview.email,
                       current: user?.email,
                     })}
                   </DialogDescription>
                 ) : (
-                  <DialogDescription className="text-xs text-muted-foreground/80 mt-1">
+                  <DialogDescription className="text-xs text-secondary/80 mt-1">
                     {t("workspaces.accept.sentTo", { email: preview.email })}
                   </DialogDescription>
                 )}
               </>
             )}
-            {error && <DialogDescription className="text-destructive">{error}</DialogDescription>}
+            {error && <DialogDescription className="text-red-solid">{error}</DialogDescription>}
             {loading && (
               <DialogDescription className="flex items-center gap-1.5">
                 <Loader2 className="w-3 h-3 animate-spin" />

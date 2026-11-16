@@ -28,14 +28,14 @@ export default function EmptyConversationList({ state, onRetry }: EmptyConversat
           height={150}
         />
       )}
-      <p className="mt-3 text-sm font-semibold text-foreground">{t(TITLE_KEYS[state])}</p>
+      <p className="mt-3 text-sm font-semibold text-primary">{t(TITLE_KEYS[state])}</p>
       {state === "active" && (
-        <p className="mt-2 text-xs text-muted-foreground">{t("chat.noConversationsDescription")}</p>
+        <p className="mt-2 text-xs text-secondary">{t("chat.noConversationsDescription")}</p>
       )}
       {state === "error" && (
         <button
           onClick={onRetry}
-          className="mt-3 text-xs text-primary hover:underline focus-visible:underline"
+          className="mt-3 text-xs text-brand-solid hover:underline focus-visible:underline"
         >
           {t("common.retry")}
         </button>

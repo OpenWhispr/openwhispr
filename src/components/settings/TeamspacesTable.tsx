@@ -26,7 +26,8 @@ import {
   TABLE_FRAME,
 } from "./tableTokens";
 
-const YOU_CHIP = "shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-primary/10 text-primary";
+const YOU_CHIP =
+  "shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-brand-solid/10 text-brand-solid";
 
 export interface TeamspacesTableUser {
   name?: string | null;
@@ -125,10 +126,10 @@ export default function TeamspacesTable({
               <td colSpan={3} className="px-4 py-8 text-center">
                 {status === "failed" ? (
                   <div>
-                    <p className="text-xs font-medium text-foreground">
+                    <p className="text-xs font-medium text-primary">
                       {t("settingsPage.workspace.teamspaces.failedTitle")}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-secondary">
                       {t("settingsPage.workspace.teamspaces.failedBody")}
                     </p>
                     <Button variant="outline" size="sm" className="mt-3" onClick={() => onRetry()}>
@@ -137,10 +138,10 @@ export default function TeamspacesTable({
                   </div>
                 ) : (
                   <div role="status">
-                    <p className="text-xs font-medium text-foreground">
+                    <p className="text-xs font-medium text-primary">
                       {t("settingsPage.workspace.teamspaces.loadingTitle")}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-secondary">
                       {t("settingsPage.workspace.teamspaces.loadingBody")}
                     </p>
                   </div>
@@ -165,10 +166,10 @@ function EmptyTeamspaces({
   return (
     <div className="flex flex-col items-center px-6 py-10 text-center">
       <EmptyStateArt kind="teamspaces" />
-      <p className="mt-2 text-lg font-medium leading-[1.4] text-foreground">
+      <p className="mt-2 text-lg font-medium leading-[1.4] text-primary">
         {t("settingsPage.workspace.teamspaces.emptyTitle")}
       </p>
-      <p className="mt-1.5 max-w-[339px] text-sm text-muted-foreground">
+      <p className="mt-1.5 max-w-[339px] text-sm text-secondary">
         {canCreate
           ? t("settingsPage.workspace.teamspaces.emptyBody")
           : t("settingsPage.workspace.teamspaces.emptyBodyMember")}
@@ -237,7 +238,7 @@ function TeamspaceRow({
       className={cn(
         "h-12",
         ROW_DIVIDER,
-        opensSettings && "cursor-pointer transition-colors hover:bg-foreground/3"
+        opensSettings && "cursor-pointer transition-colors hover:bg-text-primary/3"
       )}
       onClick={opensSettings ? () => onSettings(space) : undefined}
     >
@@ -251,12 +252,12 @@ function TeamspaceRow({
             <button
               type="button"
               dir="auto"
-              className="min-w-0 truncate rounded-sm text-start text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="min-w-0 truncate rounded-sm text-start text-sm text-primary outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/30"
             >
               {space.name}
             </button>
           ) : (
-            <span dir="auto" className="min-w-0 truncate text-sm text-foreground">
+            <span dir="auto" className="min-w-0 truncate text-sm text-primary">
               {space.name}
             </span>
           )}
@@ -278,7 +279,7 @@ function TeamspaceRow({
               aria-label={t("settingsPage.workspace.teamspaces.rowMenu.label", {
                 name: isolate(space.name),
               })}
-              className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 data-[state=open]:bg-foreground/5 dark:hover:bg-white/5"
+              className="inline-flex size-7 items-center justify-center rounded-md text-secondary outline-none transition-colors hover:bg-text-primary/5 hover:text-primary focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5 dark:hover:bg-white/5"
             >
               <MoreHorizontal className="size-4" aria-hidden="true" />
             </DropdownMenuTrigger>
@@ -290,7 +291,7 @@ function TeamspaceRow({
                 {t("settingsPage.workspace.teamspaces.rowMenu.settings")}
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="text-xs text-destructive focus:text-destructive"
+                className="text-xs text-red-solid focus:text-red-solid"
                 onSelect={() => onDelete(space, actionsButtonRef.current)}
               >
                 <Trash2 className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
@@ -309,7 +310,7 @@ function TeamspaceRow({
                 image={currentUser?.image}
                 size="row"
               />
-              <span dir="auto" className="min-w-0 truncate text-xs text-foreground">
+              <span dir="auto" className="min-w-0 truncate text-xs text-primary">
                 <PersonLabel name={currentUser?.name} email={currentUser?.email} />
               </span>
               <span className={YOU_CHIP}>{t("settingsPage.workspace.teamspaces.you")}</span>
@@ -360,7 +361,7 @@ function AdminsCell({
     return (
       <div className="flex min-w-0 items-center gap-2">
         <MemberAvatar name={admin.name} email={admin.email} image={admin.image} size="row" />
-        <span dir="auto" className="min-w-0 truncate text-sm text-foreground">
+        <span dir="auto" className="min-w-0 truncate text-sm text-primary">
           <PersonLabel name={admin.name} email={admin.email} />
         </span>
       </div>
@@ -403,15 +404,15 @@ function ContactsMenu({
   return (
     <Popover onOpenChange={(open) => open && onOpen?.()}>
       <PopoverTrigger className={CONTACTS_TRIGGER} title={label}>
-        <Users className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Users className="size-3.5 shrink-0 text-secondary" aria-hidden="true" />
         <span className="truncate">{label}</span>
-        <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronDown className="size-3 shrink-0 text-secondary" aria-hidden="true" />
       </PopoverTrigger>
       {(contacts.length > 0 || loading) && (
         <PopoverContent align="start" className="w-64 p-1.5">
           {contacts.length === 0 ? (
             <div role="status" className="flex justify-center py-2">
-              <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
+              <Loader2 className="size-3.5 animate-spin text-secondary" aria-hidden="true" />
             </div>
           ) : (
             <ul className="flex flex-col">
@@ -424,11 +425,11 @@ function ContactsMenu({
                     size="sm"
                   />
                   <div className="min-w-0">
-                    <p dir="auto" className="truncate text-xs font-medium text-foreground">
+                    <p dir="auto" className="truncate text-xs font-medium text-primary">
                       <PersonLabel name={contact.name} email={contact.email} />
                     </p>
                     {contact.name && (
-                      <p className="truncate text-[11px] text-muted-foreground">
+                      <p className="truncate text-[11px] text-secondary">
                         <bdi dir="ltr">{contact.email}</bdi>
                       </p>
                     )}

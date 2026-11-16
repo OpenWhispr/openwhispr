@@ -30,7 +30,7 @@ export default function ProcessingModeSelector({
       <button
         onClick={() => setUseLocalWhisper(false)}
         className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md transition-colors duration-150 ${
-          !useLocalWhisper ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+          !useLocalWhisper ? "text-primary" : "text-secondary hover:text-primary"
         }`}
       >
         <Cloud className="w-4 h-4" />
@@ -43,13 +43,13 @@ export default function ProcessingModeSelector({
       <button
         onClick={() => setUseLocalWhisper(true)}
         className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md transition-colors duration-150 ${
-          useLocalWhisper ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+          useLocalWhisper ? "text-primary" : "text-secondary hover:text-primary"
         }`}
       >
         <Lock className="w-4 h-4" />
         <span className="text-sm font-medium">{t("common.local")}</span>
         {useLocalWhisper && (
-          <span className="text-xs text-primary font-medium">{t("common.private")}</span>
+          <span className="text-xs text-brand-solid font-medium">{t("common.private")}</span>
         )}
       </button>
     </div>

@@ -582,7 +582,7 @@ test("an invalid address marks the field", async (t) => {
   assert.equal(input().getAttribute("aria-invalid"), "true");
   const [chip] = chips();
   assert.equal(text(chip), "saket@ · Workspace Member");
-  assert.match(chip.className, /destructive/);
+  assert.match(chip.className, /red-solid/);
   assert.equal(readable(chip.getAttribute("title")), "saket@ isn't a valid email");
 
   // Taking it out clears the mark.

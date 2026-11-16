@@ -27,7 +27,7 @@ export function Checkbox({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "flex w-full items-center gap-3 rounded-md py-1.5 text-start text-[14px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 agent:min-h-10 agent:gap-3.5 agent:px-1.5 agent:py-2 agent:text-[15px] agent:font-medium",
+        "flex w-full items-center gap-3 rounded-md py-1.5 text-start text-[14px] text-primary outline-none focus-visible:ring-1 focus-visible:ring-focus/40 disabled:cursor-not-allowed disabled:opacity-50 agent:min-h-10 agent:gap-3.5 agent:px-1.5 agent:py-2 agent:text-[15px] agent:font-medium",
         className
       )}
     >
@@ -36,8 +36,8 @@ export function Checkbox({
         className={cn(
           "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
           checked
-            ? "border-primary bg-primary text-primary-foreground"
-            : "border-foreground/20 bg-transparent"
+            ? "border-brand-solid bg-brand-solid text-on-solid"
+            : "border-text-primary/20 bg-transparent"
         )}
       >
         {checked && <Check size={12} strokeWidth={3} />}

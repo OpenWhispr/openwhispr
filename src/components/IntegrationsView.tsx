@@ -152,7 +152,7 @@ export default function IntegrationsView({
         {isPaid ? (
           <>
             <ApiKeysSection createRequest={createKeyRequest} onCanCreateChange={setCanCreateKey} />
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-1 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ps-1 text-xs text-secondary">
               <span>{t("integrations.api.useWith")}</span>
               {(
                 [
@@ -164,7 +164,7 @@ export default function IntegrationsView({
                   key={id}
                   type="button"
                   onClick={() => openSection(id)}
-                  className="inline-flex items-center gap-1 rounded-sm text-primary/80 hover:text-primary outline-none focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors"
+                  className="inline-flex items-center gap-1 rounded-sm text-brand-solid/80 hover:text-brand-solid outline-none focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors"
                 >
                   <Icon size={13} />
                   {titleOf(id)}

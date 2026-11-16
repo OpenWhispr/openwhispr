@@ -67,8 +67,8 @@ test("shows the count, Clear and the actions", async (t) => {
     "Resend invites",
     "Cancel invites",
   ]);
-  assert.match(buttons(markup)[2], /destructive/);
-  assert.doesNotMatch(buttons(markup)[1], /destructive/);
+  assert.match(buttons(markup)[2], /red-solid/);
+  assert.doesNotMatch(buttons(markup)[1], /red-solid/);
   assert.doesNotMatch(markup, /disabled=""/);
 });
 

@@ -29,8 +29,8 @@ export default function SettingsWorkspaceFrame({
   if (status === "loading") {
     return (
       <div className="space-y-3">
-        <div className="h-6 w-32 rounded bg-foreground/5 dark:bg-white/5 animate-pulse" />
-        <div className="h-24 rounded-lg bg-foreground/5 dark:bg-white/5 animate-pulse" />
+        <div className="h-6 w-32 rounded bg-text-primary/5 dark:bg-white/5 animate-pulse" />
+        <div className="h-24 rounded-lg bg-text-primary/5 dark:bg-white/5 animate-pulse" />
       </div>
     );
   }
@@ -46,21 +46,21 @@ export default function SettingsWorkspaceFrame({
     return (
       <div className="space-y-4">
         <div>
-          <h3 className="text-xs font-semibold text-foreground">
+          <h3 className="text-xs font-semibold text-primary">
             {t("settingsPage.workspace.title")}
           </h3>
-          <p className="text-xs text-muted-foreground/80 mt-0.5">
+          <p className="text-xs text-secondary/80 mt-0.5">
             {t("settingsPage.workspace.description")}
           </p>
         </div>
         {/* Unavailable: the list holds no default workspace yet; Retry asks the server for it. */}
-        <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
-          <p className="text-xs font-medium text-foreground mb-1">
+        <div className="rounded-lg border border-default/70 dark:border-default/70 bg-surface-primary/50 dark:bg-surface-primary/50 p-6 text-center">
+          <p className="text-xs font-medium text-primary mb-1">
             {status === "error"
               ? t("settingsPage.workspace.loadError.title")
               : t("workspaces.switcher.unavailable")}
           </p>
-          <p className="text-xs text-muted-foreground mb-4">
+          <p className="text-xs text-secondary mb-4">
             {t("settingsPage.workspace.loadError.description")}
           </p>
           {retryButton}
@@ -78,11 +78,9 @@ export default function SettingsWorkspaceFrame({
       {stale && (
         <div
           role="status"
-          className={`flex items-center gap-3 rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-3 py-2${fill ? " mb-4 shrink-0" : ""}`}
+          className={`flex items-center gap-3 rounded-lg border border-default/70 dark:border-default/70 bg-surface-primary/50 dark:bg-surface-primary/50 px-3 py-2${fill ? " mb-4 shrink-0" : ""}`}
         >
-          <p className="flex-1 text-xs text-muted-foreground">
-            {t("settingsPage.workspace.staleList")}
-          </p>
+          <p className="flex-1 text-xs text-secondary">{t("settingsPage.workspace.staleList")}</p>
           {retryButton}
         </div>
       )}

@@ -15,7 +15,7 @@ interface SlashCommandMenuProps {
 
 function Key({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-foreground/[0.07] px-1 font-sans text-[10px] font-medium text-foreground/65 shadow-[inset_0_-1px_0_rgb(0_0_0/0.08)] dark:bg-white/[0.08]">
+    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-text-primary/[0.07] px-1 font-sans text-[10px] font-medium text-primary/65 shadow-[inset_0_-1px_0_rgb(0_0_0/0.08)] dark:bg-white/[0.08]">
       {children}
     </kbd>
   );
@@ -48,7 +48,7 @@ export default function SlashCommandMenu({
       {/* The keys the composer answers to while the menu is open. */}
       <div
         aria-hidden="true"
-        className="flex shrink-0 items-center gap-4 px-2.5 pb-2 text-[11px] text-muted-foreground/80"
+        className="flex shrink-0 items-center gap-4 px-2.5 pb-2 text-[11px] text-secondary/80"
       >
         <span className="flex items-center gap-1.5">
           <Key>
@@ -101,31 +101,31 @@ export default function SlashCommandMenu({
                 "transition-[background-color,color,translate] duration-200 ease-out",
                 "animate-[fade-in-up_0.3s_cubic-bezier(0.22,1,0.36,1)_backwards] motion-reduce:animate-none",
                 isActive
-                  ? "translate-x-1 bg-foreground/[0.07] text-foreground rtl:-translate-x-1 dark:bg-white/[0.08]"
-                  : "text-foreground/70",
+                  ? "translate-x-1 bg-text-primary/[0.07] text-primary rtl:-translate-x-1 dark:bg-white/[0.08]"
+                  : "text-primary/70",
                 command.disabled ? "cursor-default opacity-40" : "cursor-pointer"
               )}
             >
               <span
                 className={cn(
                   "flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-200",
-                  isActive ? "bg-foreground/10 dark:bg-white/[0.12]" : "bg-foreground/[0.06]"
+                  isActive ? "bg-text-primary/10 dark:bg-white/[0.12]" : "bg-text-primary/[0.06]"
                 )}
               >
-                <command.icon size={15} className="text-primary" />
+                <command.icon size={15} className="text-brand-solid" />
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span dir="auto" className="truncate text-[13px] font-medium">
                   {command.label}
                 </span>
                 {command.description && (
-                  <span dir="auto" className="truncate text-muted-foreground/70">
+                  <span dir="auto" className="truncate text-secondary/70">
                     {command.description}
                   </span>
                 )}
               </span>
               {command.hint && (
-                <span className="shrink-0 rounded bg-foreground/5 px-1 py-px text-[10px] font-medium text-muted-foreground/70 dark:bg-white/6">
+                <span className="shrink-0 rounded bg-text-primary/5 px-1 py-px text-[10px] font-medium text-secondary/70 dark:bg-white/6">
                   {command.hint}
                 </span>
               )}

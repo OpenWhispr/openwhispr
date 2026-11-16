@@ -37,12 +37,12 @@ export function IntegrationsPane({
           <div className="flex-1 basis-60 min-w-0">
             {/* Focusable so a link that opens another section can move focus here. */}
             <div className="flex items-center gap-2">
-              <h2 ref={headingRef} tabIndex={-1} className="text-base text-foreground outline-none">
+              <h2 ref={headingRef} tabIndex={-1} className="text-base text-primary outline-none">
                 {title}
               </h2>
               {titleBadge}
             </div>
-            <p className="text-xs text-muted-foreground/80 mt-1 leading-relaxed">{description}</p>
+            <p className="text-xs text-secondary/80 mt-1 leading-relaxed">{description}</p>
           </div>
           {(docsUrl || actions) && (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -51,7 +51,7 @@ export function IntegrationsPane({
                   variant="ghost"
                   size="sm"
                   onClick={() => window.electronAPI?.openExternal?.(docsUrl)}
-                  className="gap-1.5 text-muted-foreground"
+                  className="gap-1.5 text-secondary"
                 >
                   {t("integrations.readDocs")}
                   <ExternalLink className="h-3 w-3" />
@@ -80,10 +80,10 @@ export function UpsellBar({ message, onUpgrade, icon }: UpsellBarProps): ReactEl
   const { t } = useTranslation();
   return (
     <div
-      className={`flex items-center gap-3 rounded-lg border border-primary/20 dark:border-primary/30 bg-primary/5 dark:bg-primary/10 ps-3.5 py-2 ${onUpgrade ? "pe-2" : "pe-3.5"}`}
+      className={`flex items-center gap-3 rounded-lg border border-brand-solid/20 dark:border-brand-solid/30 bg-brand-solid/5 dark:bg-brand-solid/10 ps-3.5 py-2 ${onUpgrade ? "pe-2" : "pe-3.5"}`}
     >
-      {icon ?? <Sparkles size={15} className="shrink-0 text-primary" />}
-      <p className="flex-1 min-w-0 text-xs text-foreground/85 leading-relaxed">{message}</p>
+      {icon ?? <Sparkles size={15} className="shrink-0 text-brand-solid" />}
+      <p className="flex-1 min-w-0 text-xs text-primary/85 leading-relaxed">{message}</p>
       {onUpgrade && (
         <Button size="sm" onClick={onUpgrade} className="shrink-0">
           {t("integrations.api.viewPlans")}

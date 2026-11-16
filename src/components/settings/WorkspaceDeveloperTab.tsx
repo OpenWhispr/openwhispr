@@ -180,10 +180,10 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         </Button>
       </div>
 
-      <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+      <div className="rounded-lg border border-default/70 dark:border-default/70 divide-y divide-default/60 dark:divide-default/50 bg-surface-primary/50 dark:bg-surface-primary/50">
         {loadError && (
           <div className="px-4 py-6 flex items-center justify-between gap-2">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-secondary">
               {t("settingsPage.workspace.developer.loadError")}
             </p>
             <Button variant="outline" size="sm" onClick={() => void refresh()}>
@@ -193,23 +193,21 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         )}
         {!loadError && keys.length === 0 && (
           <div className="py-10 text-center">
-            <Key className="w-5 h-5 text-muted-foreground/70 mx-auto mb-2" />
-            <p className="text-xs text-muted-foreground">
-              {t("settingsPage.workspace.developer.empty")}
-            </p>
+            <Key className="w-5 h-5 text-secondary/70 mx-auto mb-2" />
+            <p className="text-xs text-secondary">{t("settingsPage.workspace.developer.empty")}</p>
           </div>
         )}
         {keys.map((k) => (
           <div key={k.id} className="flex items-center gap-3 px-4 h-14">
             <div className="flex-1 min-w-0">
-              <p dir="auto" className="text-xs font-medium text-foreground truncate">
+              <p dir="auto" className="text-xs font-medium text-primary truncate">
                 {k.name}
               </p>
-              <p dir="ltr" className="text-[11px] font-mono text-muted-foreground truncate">
+              <p dir="ltr" className="text-[11px] font-mono text-secondary truncate">
                 {k.key_prefix}…
               </p>
             </div>
-            <span className="text-xs text-muted-foreground hidden md:inline">
+            <span className="text-xs text-secondary hidden md:inline">
               {k.last_used_at
                 ? t("settingsPage.workspace.developer.lastUsed", {
                     date: new Date(k.last_used_at).toLocaleDateString(),
@@ -220,7 +218,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
               type="button"
               onClick={() => confirmRevoke(k)}
               aria-label={t("settingsPage.workspace.developer.revoke")}
-              className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+              className="p-1 rounded-md text-secondary hover:text-red-solid hover:bg-red-solid/8 outline-none focus-visible:ring-1 focus-visible:ring-brand-solid/30"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -254,7 +252,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {SCOPE_GROUPS_DEF.map((group) => (
                 <div key={group.groupKey} className="space-y-1.5">
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
+                  <p className="text-[10px] uppercase tracking-wide text-secondary font-medium">
                     {t(`settingsPage.workspace.developer.scopes.${group.groupKey}.title`)}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
@@ -268,10 +266,10 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                           onClick={() => toggleScope(s.id)}
                           className={cn(
                             "h-7 px-2.5 rounded-md border text-xs transition-colors outline-none",
-                            "focus-visible:ring-1 focus-visible:ring-primary/30",
+                            "focus-visible:ring-1 focus-visible:ring-brand-solid/30",
                             checked
-                              ? "border-primary/40 bg-primary/8 text-foreground"
-                              : "border-border/70 text-muted-foreground hover:bg-foreground/4 hover:text-foreground"
+                              ? "border-brand-solid/40 bg-brand-solid/8 text-primary"
+                              : "border-default/70 text-secondary hover:bg-text-primary/4 hover:text-primary"
                           )}
                         >
                           {t(
@@ -334,7 +332,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
           </DialogHeader>
           <div
             dir="ltr"
-            className="rounded-md border border-border/70 bg-foreground/4 dark:bg-white/4 p-3 font-mono text-xs break-all"
+            className="rounded-md border border-default/70 bg-text-primary/4 dark:bg-white/4 p-3 font-mono text-xs break-all"
           >
             {newKey?.key}
           </div>

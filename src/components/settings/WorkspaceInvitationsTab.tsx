@@ -64,7 +64,7 @@ const SKELETON_ROWS = 3;
 const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
 // A bigger target than the box, without moving it; the important cursor beats the global button rule.
 const ROW_CHECKBOX =
-  "-m-1 p-1 focus-visible:ring-primary/50 disabled:opacity-50 disabled:cursor-default!";
+  "-m-1 p-1 focus-visible:ring-brand-solid/50 disabled:opacity-50 disabled:cursor-default!";
 
 export default function WorkspaceInvitationsTab({
   workspace,
@@ -311,10 +311,10 @@ export default function WorkspaceInvitationsTab({
     <div className="space-y-4">
       {rows.length === 0 && invitations.status === "failed" && (
         <div className={cn(TABLE_FRAME, "px-4 py-8 text-center")}>
-          <p className="text-xs font-medium text-foreground">
+          <p className="text-xs font-medium text-primary">
             {t("settingsPage.workspace.people.invitations.failedTitle")}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs text-secondary mt-0.5">
             {t("settingsPage.workspace.people.failed.body")}
           </p>
           <Button variant="outline" size="sm" className="mt-3" onClick={() => void reload()}>
@@ -331,11 +331,11 @@ export default function WorkspaceInvitationsTab({
               aria-hidden="true"
               className={cn("flex h-14 items-center px-4", index > 0 && ROW_DIVIDER)}
             >
-              <div className="h-2.5 w-40 rounded bg-foreground/5 dark:bg-white/5 animate-pulse" />
+              <div className="h-2.5 w-40 rounded bg-text-primary/5 dark:bg-white/5 animate-pulse" />
             </div>
           ))}
           <div role="status" className={cn("px-4 py-5 text-center", ROW_DIVIDER)}>
-            <p className="text-xs font-medium text-foreground">
+            <p className="text-xs font-medium text-primary">
               {t("settingsPage.workspace.people.invitations.loading")}
             </p>
           </div>
@@ -345,17 +345,17 @@ export default function WorkspaceInvitationsTab({
       {rows.length === 0 && invitations.status === "ready" && (
         // No frame: the design sets the message straight on the page.
         <div className="flex flex-col items-center gap-1.5 px-4 py-16 text-center">
-          <p className="text-lg font-medium leading-[1.4] text-foreground">
+          <p className="text-lg font-medium leading-[1.4] text-primary">
             {t("settingsPage.workspace.people.invitations.emptyTitle")}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-secondary">
             {t("settingsPage.workspace.people.invitations.emptyBody")}
           </p>
         </div>
       )}
 
       {invitations.stale && (
-        <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between gap-3 text-xs text-secondary">
           <p>{t("settingsPage.workspace.people.invitations.refreshFailed")}</p>
           <Button variant="outline" size="sm" onClick={() => void reload()}>
             {t("workspaces.exit.tryAgain")}
@@ -452,14 +452,14 @@ export default function WorkspaceInvitationsTab({
                     </td>
                     {/* max-w-0 keeps the email from widening the column in an auto-layout table. */}
                     <td className={cn(COLUMN_DIVIDER, "ps-3 pe-3 py-2 @xl:py-0 w-full max-w-0")}>
-                      <p className="text-xs font-medium text-foreground break-all @xl:truncate">
+                      <p className="text-xs font-medium text-primary break-all @xl:truncate">
                         <bdi dir="ltr">{invitation.email}</bdi>
                       </p>
-                      <p className="@xl:hidden mt-0.5 text-xs text-muted-foreground">
+                      <p className="@xl:hidden mt-0.5 text-xs text-secondary">
                         {role} ·{" "}
                         <span
                           title={statusTitle}
-                          className={expired ? "text-destructive" : undefined}
+                          className={expired ? "text-red-solid" : undefined}
                         >
                           {status}
                         </span>
@@ -469,7 +469,7 @@ export default function WorkspaceInvitationsTab({
                       className={cn(
                         COLUMN_DIVIDER,
                         WIDE_ONLY,
-                        "px-3 whitespace-nowrap text-xs text-foreground"
+                        "px-3 whitespace-nowrap text-xs text-primary"
                       )}
                     >
                       {role}
@@ -479,7 +479,7 @@ export default function WorkspaceInvitationsTab({
                         COLUMN_DIVIDER,
                         WIDE_ONLY,
                         "px-3 whitespace-nowrap text-xs",
-                        expired ? "text-destructive" : "text-muted-foreground"
+                        expired ? "text-red-solid" : "text-secondary"
                       )}
                       title={statusTitle}
                     >
@@ -490,7 +490,7 @@ export default function WorkspaceInvitationsTab({
                         <DropdownMenuTrigger
                           disabled={resending || bulkResending}
                           aria-label={t("common.actions")}
-                          className="inline-flex h-7 items-center justify-center gap-1 rounded-lg px-1.5 text-sm text-foreground outline-none transition-colors hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-primary/30 active:bg-foreground/8 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-foreground/5 dark:hover:bg-white/5"
+                          className="inline-flex h-7 items-center justify-center gap-1 rounded-lg px-1.5 text-sm text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 active:bg-text-primary/8 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-text-primary/5 dark:hover:bg-white/5"
                         >
                           {resending ? (
                             <>
@@ -500,10 +500,7 @@ export default function WorkspaceInvitationsTab({
                           ) : (
                             <>
                               {t("common.actions")}
-                              <ChevronDown
-                                className="size-4 text-muted-foreground"
-                                aria-hidden="true"
-                              />
+                              <ChevronDown className="size-4 text-secondary" aria-hidden="true" />
                             </>
                           )}
                         </DropdownMenuTrigger>
@@ -516,7 +513,7 @@ export default function WorkspaceInvitationsTab({
                             {t("settingsPage.workspace.people.invitations.resend")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className="text-xs text-destructive focus:text-destructive"
+                            className="text-xs text-red-solid focus:text-red-solid"
                             onSelect={() => dispatchCancel({ type: "open", subject: invitation })}
                           >
                             <UserMinus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />

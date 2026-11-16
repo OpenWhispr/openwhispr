@@ -252,7 +252,7 @@ export default function TeamSettingsDialog({
               aria-busy={checkingLeave}
               className={cn(
                 ROW_BUTTON_CLASS,
-                "gap-1.5 bg-surface-3 text-foreground hover:bg-surface-raised"
+                "gap-1.5 bg-surface-tertiary text-primary hover:bg-surface-tertiary"
               )}
             >
               {checkingLeave && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}
@@ -272,7 +272,7 @@ export default function TeamSettingsDialog({
               disabled={checkingLeave}
               className={cn(
                 ROW_BUTTON_CLASS,
-                "bg-destructive/10 text-destructive hover:bg-destructive/20"
+                "bg-red-solid/10 text-red-solid hover:bg-red-solid/20"
               )}
             >
               {t(`${KEY}.exit.deleteAction`)}
@@ -291,7 +291,7 @@ export default function TeamSettingsDialog({
         >
           <div className="flex flex-col items-start gap-3 pe-8">
             <span
-              className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-surface-3"
+              className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-surface-tertiary"
               aria-hidden="true"
             >
               <TeamGlyph emoji={team.emoji} name={team.name} />
@@ -317,10 +317,10 @@ export default function TeamSettingsDialog({
                         void commitName();
                       }
                     }}
-                    className={cn(INLINE_FIELD_CLASS, "h-8 text-lg font-medium text-foreground")}
+                    className={cn(INLINE_FIELD_CLASS, "h-8 text-lg font-medium text-primary")}
                   />
                   {nameTaken !== null && (
-                    <p role="alert" className="text-xs text-destructive">
+                    <p role="alert" className="text-xs text-red-solid">
                       {t(`${KEY}.form.nameTaken`, { name: isolate(nameTaken) })}
                     </p>
                   )}

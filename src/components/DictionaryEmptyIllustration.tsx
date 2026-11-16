@@ -15,7 +15,7 @@ export default function DictionaryEmptyIllustration({ variant }: DictionaryEmpty
         <svg
           viewBox="0 0 320 320"
           fill="none"
-          className="absolute inset-0 size-full text-primary/15 dark:text-primary/30"
+          className="absolute inset-0 size-full text-brand-solid/15 dark:text-brand-solid/30"
         >
           <circle
             cx="160"
@@ -34,7 +34,7 @@ export default function DictionaryEmptyIllustration({ variant }: DictionaryEmpty
             strokeDasharray="14 16"
           />
         </svg>
-        <span className="flex size-18 items-center justify-center rounded-full bg-primary/10 text-primary dark:bg-primary/20">
+        <span className="flex size-18 items-center justify-center rounded-full bg-brand-solid/10 text-brand-solid dark:bg-brand-solid/20">
           {isSnippet ? <PanelRight size={28} /> : <NotebookPen size={28} />}
         </span>
       </span>
@@ -43,25 +43,25 @@ export default function DictionaryEmptyIllustration({ variant }: DictionaryEmpty
         <>
           <span
             dir="auto"
-            className="absolute start-16 top-7 flex flex-col gap-1 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
+            className="absolute start-16 top-7 flex flex-col gap-1 rounded-2xl border border-default/70 bg-surface-primary px-4 py-2.5 text-sm shadow-sm dark:bg-surface-secondary"
           >
-            <span className="italic text-foreground/50 dark:text-foreground/65">
+            <span className="italic text-primary/50 dark:text-primary/65">
               “{t("dictionary.snippets.examples.signoffTrigger")}”
             </span>
-            <span className="italic text-primary">
-              <span className="me-2 text-foreground/50 dark:text-foreground/65">↳</span>
+            <span className="italic text-brand-solid">
+              <span className="me-2 text-primary/50 dark:text-primary/65">↳</span>
               {t("dictionary.snippets.examples.signoffText")}
             </span>
           </span>
           <span
             dir="auto"
-            className="absolute bottom-7 end-2 flex flex-col gap-1 rounded-2xl border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
+            className="absolute bottom-7 end-2 flex flex-col gap-1 rounded-2xl border border-default/70 bg-surface-primary px-4 py-2.5 text-sm shadow-sm dark:bg-surface-secondary"
           >
-            <span className="italic text-foreground/50 dark:text-foreground/65">
+            <span className="italic text-primary/50 dark:text-primary/65">
               “{t("dictionary.snippets.examples.linkedinTrigger")}”
             </span>
-            <span className="italic text-primary">
-              <span className="me-2 text-foreground/50 dark:text-foreground/65">↳</span>
+            <span className="italic text-brand-solid">
+              <span className="me-2 text-primary/50 dark:text-primary/65">↳</span>
               {t("dictionary.snippets.examples.linkedinText")}
             </span>
           </span>
@@ -70,21 +70,21 @@ export default function DictionaryEmptyIllustration({ variant }: DictionaryEmpty
         <>
           <span
             dir="ltr"
-            className="absolute start-16 top-7 flex items-center gap-2 rounded-full border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
+            className="absolute start-16 top-7 flex items-center gap-2 rounded-full border border-default/70 bg-surface-primary px-4 py-2.5 text-sm shadow-sm dark:bg-surface-secondary"
           >
-            <span className="italic text-foreground/50 line-through dark:text-foreground/65">
+            <span className="italic text-primary/50 line-through dark:text-primary/65">
               open whisper
             </span>
-            <span className="font-medium text-primary">OpenWhispr</span>
+            <span className="font-medium text-brand-solid">OpenWhispr</span>
           </span>
           <span
             dir="ltr"
-            className="absolute bottom-7 end-2 flex items-center gap-2 rounded-full border border-border/70 bg-card px-4 py-2.5 text-sm shadow-sm dark:bg-surface-window"
+            className="absolute bottom-7 end-2 flex items-center gap-2 rounded-full border border-default/70 bg-surface-primary px-4 py-2.5 text-sm shadow-sm dark:bg-surface-secondary"
           >
-            <span className="italic text-foreground/50 line-through dark:text-foreground/65">
+            <span className="italic text-primary/50 line-through dark:text-primary/65">
               Cameren
             </span>
-            <span className="font-medium text-primary">Cameron</span>
+            <span className="font-medium text-brand-solid">Cameron</span>
           </span>
         </>
       )}

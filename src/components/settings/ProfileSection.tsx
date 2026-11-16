@@ -276,7 +276,7 @@ function ChangePasswordDialog({
                 autoComplete="new-password"
               />
               {tooShort && (
-                <p className="text-xs text-destructive leading-snug">
+                <p className="text-xs text-red-solid leading-snug">
                   {t("settingsPage.account.profile.password.minLength")}
                 </p>
               )}
@@ -295,7 +295,7 @@ function ChangePasswordDialog({
                 autoComplete="new-password"
               />
               {mismatch && (
-                <p className="text-xs text-destructive leading-snug">
+                <p className="text-xs text-red-solid leading-snug">
                   {t("settingsPage.account.profile.password.mismatch")}
                 </p>
               )}
@@ -306,17 +306,17 @@ function ChangePasswordDialog({
                 checked={revokeOtherSessions}
                 onChange={(e) => setRevokeOtherSessions(e.target.checked)}
                 disabled={submitting || readOnly}
-                className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                className="h-3.5 w-3.5 rounded border-default accent-primary cursor-pointer"
               />
-              <span className="text-xs text-foreground">
+              <span className="text-xs text-primary">
                 {t("settingsPage.account.profile.password.revokeOthers")}
               </span>
             </label>
           </div>
           {error && (
-            <div className="px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5">
-              <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
-              <p className="text-xs text-destructive leading-snug">{error}</p>
+            <div className="px-2.5 py-1.5 rounded bg-red-solid/5 border border-red-solid/20 flex items-center gap-1.5">
+              <AlertCircle className="w-3 h-3 text-red-solid shrink-0" />
+              <p className="text-xs text-red-solid leading-snug">{error}</p>
             </div>
           )}
           <DialogFooter>

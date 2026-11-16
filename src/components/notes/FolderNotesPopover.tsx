@@ -98,7 +98,7 @@ export function FolderNotesPopover({
     return (
       <>
         {title.slice(0, index)}
-        <span className="font-semibold text-primary">
+        <span className="font-semibold text-brand-solid">
           {title.slice(index, index + value.length)}
         </span>
         {title.slice(index + value.length)}
@@ -135,11 +135,11 @@ export function FolderNotesPopover({
           }}
           onFocus={a11y.onFocus}
           className={cn(
-            "flex h-7 items-center gap-2 rounded-md pe-2 text-xs cursor-pointer select-none outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring/30",
+            "flex h-7 items-center gap-2 rounded-md pe-2 text-xs cursor-pointer select-none outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-focus/30",
             level === 2 ? "ps-8" : "ps-[42px]",
             open
-              ? "bg-foreground/8 text-foreground dark:bg-white/10"
-              : "text-foreground/55 hover:bg-foreground/5 hover:text-foreground dark:hover:bg-white/5"
+              ? "bg-text-primary/8 text-primary dark:bg-white/10"
+              : "text-primary/55 hover:bg-text-primary/5 hover:text-primary dark:hover:bg-white/5"
           )}
         >
           <MoreHorizontal size={13} aria-hidden="true" />
@@ -175,7 +175,7 @@ export function FolderNotesPopover({
           <Search
             size={14}
             aria-hidden="true"
-            className="absolute start-3 top-2.5 text-muted-foreground"
+            className="absolute start-3 top-2.5 text-secondary"
           />
           <Input
             dir="auto"
@@ -184,7 +184,7 @@ export function FolderNotesPopover({
             onChange={(event) => setQuery(event.target.value)}
             aria-label={t("notes.folderMore.search", { count: total, folder: name })}
             placeholder={t("notes.folderMore.search", { count: total, folder: name })}
-            className="input-inline h-8 rounded-full bg-foreground/5 ps-9 pe-8 text-xs dark:bg-white/5"
+            className="input-inline h-8 rounded-full bg-text-primary/5 ps-9 pe-8 text-xs dark:bg-white/5"
             onKeyDown={(event) => {
               if (event.nativeEvent.isComposing) return;
               if (event.key === "ArrowDown") {
@@ -201,7 +201,7 @@ export function FolderNotesPopover({
             <button
               type="button"
               aria-label={t("meetingNotification.folders.clear")}
-              className="absolute end-2 top-2 rounded-sm text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+              className="absolute end-2 top-2 rounded-sm text-secondary focus-visible:ring-1 focus-visible:ring-focus"
               onClick={() => {
                 setQuery("");
                 inputRef.current?.focus();
@@ -211,7 +211,7 @@ export function FolderNotesPopover({
             </button>
           )}
         </div>
-        <p id={titleId} className="px-2 py-2 text-[11px] text-muted-foreground">
+        <p id={titleId} className="px-2 py-2 text-[11px] text-secondary">
           {query.trim()
             ? t("notes.folderMore.results", { count: filtered.length, total })
             : t("notes.folderMore.newest")}
@@ -245,13 +245,13 @@ export function FolderNotesPopover({
               {t("notes.folderMore.retry")}
             </Button>
           ) : !allNotes ? (
-            <p role="status" className="p-3 text-xs text-muted-foreground">
+            <p role="status" className="p-3 text-xs text-secondary">
               {t("notes.folderMore.loading")}
             </p>
           ) : filtered.length === 0 ? (
             <p
               role="status"
-              className="flex min-h-40 flex-col items-center justify-center gap-3 p-6 text-center text-xs text-muted-foreground"
+              className="flex min-h-40 flex-col items-center justify-center gap-3 p-6 text-center text-xs text-secondary"
             >
               <Search size={24} aria-hidden="true" />
               {t("notes.folderMore.empty")}
@@ -264,18 +264,15 @@ export function FolderNotesPopover({
                 onClick={(event) => pick(note, event.detail === 0)}
                 aria-current={note.id === activeNoteId ? "page" : undefined}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs text-start outline-none hover:bg-foreground/5 focus-visible:bg-foreground/8 focus-visible:ring-1 focus-visible:ring-ring/30",
-                  note.id === activeNoteId && "bg-primary/8 text-primary"
+                  "flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs text-start outline-none hover:bg-text-primary/5 focus-visible:bg-text-primary/8 focus-visible:ring-1 focus-visible:ring-focus/30",
+                  note.id === activeNoteId && "bg-brand-solid/8 text-brand-solid"
                 )}
               >
                 <FileText size={13} aria-hidden="true" className="shrink-0" />
                 <span dir="auto" className="truncate flex-1">
                   {highlightTitle(note.title || t("notes.list.untitled"))}
                 </span>
-                <time
-                  dateTime={note.updated_at}
-                  className="shrink-0 text-[11px] text-muted-foreground"
-                >
+                <time dateTime={note.updated_at} className="shrink-0 text-[11px] text-secondary">
                   {formatRelativeTime(note.updated_at, t, i18n.language)}
                 </time>
               </button>

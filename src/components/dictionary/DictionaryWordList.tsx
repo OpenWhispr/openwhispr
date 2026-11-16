@@ -91,10 +91,10 @@ function RowActionButton({ action }: { action: RowAction }): ReactElement {
         aria-label={action.ariaLabel}
         onClick={(event) => action.onClick(event.currentTarget)}
         className={cn(
-          "grid size-6 place-items-center rounded-[5px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+          "grid size-6 place-items-center rounded-[5px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20",
           action.destructive
-            ? "text-destructive/80 hover:bg-destructive/10 hover:text-destructive"
-            : "text-foreground/55 hover:bg-foreground/6 hover:text-foreground/85 dark:hover:bg-white/8"
+            ? "text-red-solid/80 hover:bg-red-solid/10 hover:text-red-solid"
+            : "text-primary/55 hover:bg-text-primary/6 hover:text-primary/85 dark:hover:bg-white/8"
         )}
       >
         {action.icon}
@@ -104,7 +104,7 @@ function RowActionButton({ action }: { action: RowAction }): ReactElement {
 }
 
 const BADGE_CLASS =
-  "max-w-32 truncate rounded-[4px] bg-foreground/6 px-1.5 py-px text-[10px] text-foreground/55 dark:bg-white/8";
+  "max-w-32 truncate rounded-[4px] bg-text-primary/6 px-1.5 py-px text-[10px] text-primary/55 dark:bg-white/8";
 
 function RowMeta({ row }: { row: DictionaryRow }): ReactElement | null {
   const { t } = useTranslation();
@@ -120,14 +120,14 @@ function RowMeta({ row }: { row: DictionaryRow }): ReactElement | null {
     <span className="flex shrink-0 items-center gap-2">
       {unused && (
         <Tooltip content={t("dictionary.shared.notUsedTooltip")}>
-          <span data-not-used="" className={cn(BADGE_CLASS, "text-warning")}>
+          <span data-not-used="" className={cn(BADGE_CLASS, "text-amber-solid")}>
             {t("dictionary.shared.notUsed")}
             <span className="sr-only">. {t("dictionary.shared.notUsedTooltip")}</span>
           </span>
         </Tooltip>
       )}
       {attribution && (
-        <span dir="auto" className="max-w-32 truncate text-[11px] text-foreground/45">
+        <span dir="auto" className="max-w-32 truncate text-[11px] text-primary/45">
           {attribution}
         </span>
       )}
@@ -211,7 +211,7 @@ function RowEditor({
         className="h-7 min-w-0 flex-1 rounded-md text-xs"
       />
       {error && (
-        <span id={errorId} className="shrink-0 text-[11px] text-destructive">
+        <span id={errorId} className="shrink-0 text-[11px] text-red-solid">
           {error.message}
         </span>
       )}
@@ -449,11 +449,11 @@ export function DictionaryWordList({
         }
         className={cn(
           "group relative -mx-2 flex h-[38px] items-center gap-2 rounded-md px-2",
-          index < rows.length - 1 && "border-b border-foreground/4 dark:border-white/6",
+          index < rows.length - 1 && "border-b border-text-primary/4 dark:border-white/6",
           virtualized && "absolute inset-x-0 top-0",
           selected
-            ? "bg-primary/8 dark:bg-primary/12"
-            : "hover:bg-foreground/[0.025] dark:hover:bg-white/[0.03]"
+            ? "bg-brand-solid/8 dark:bg-brand-solid/12"
+            : "hover:bg-text-primary/[0.025] dark:hover:bg-white/[0.03]"
         )}
       >
         {selection && (
@@ -488,7 +488,7 @@ export function DictionaryWordList({
             <span
               dir="auto"
               className={cn(
-                "min-w-0 flex-1 truncate text-xs text-foreground/75",
+                "min-w-0 flex-1 truncate text-xs text-primary/75",
                 // The hover actions sit over the row's end; the word stops short of them.
                 showActions &&
                   "group-focus-within:pe-[var(--row-actions-width)] group-hover:pe-[var(--row-actions-width)]"

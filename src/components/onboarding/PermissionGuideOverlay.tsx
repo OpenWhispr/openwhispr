@@ -88,7 +88,7 @@ export function PermissionGuideCard({ state, onAction, onDrag }: CardProps): Rea
           </div>
         )}
         {state.error && (
-          <p role="alert" className="mt-1 text-xs text-warning">
+          <p role="alert" className="mt-1 text-xs text-amber-solid">
             {t("onboarding.permissionGuide.failed")}
           </p>
         )}

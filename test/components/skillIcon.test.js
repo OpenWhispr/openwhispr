@@ -23,8 +23,7 @@ async function mountIcon(t) {
   const { SkillIcon } = await vite.ssrLoadModule("/components/skills/SkillIcon.tsx");
   root = createRoot(container);
   return {
-    render: (props) =>
-      React.act(async () => root.render(React.createElement(SkillIcon, props))),
+    render: (props) => React.act(async () => root.render(React.createElement(SkillIcon, props))),
     svg: () => findElement(container, (node) => node.tagName === "SVG"),
   };
 }
@@ -47,9 +46,9 @@ test("the icon plays only when its play count changes", async (t) => {
   assert.equal(played === first, false);
   assert.equal(playing(played), true);
 
-  await render({ playKey: 4, className: "text-primary" });
+  await render({ playKey: 4, className: "text-brand-solid" });
   assert.equal(svg() === played, true);
-  assert.match(svg().getAttribute("class"), /text-primary/);
+  assert.match(svg().getAttribute("class"), /text-brand-solid/);
 });
 
 test("the glyph has three layers and no bars", async (t) => {

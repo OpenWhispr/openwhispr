@@ -42,10 +42,10 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
   return (
     <div>
       <div className="mb-5">
-        <h3 className="text-base font-normal! tracking-normal! text-foreground">
+        <h3 className="text-base font-normal! tracking-normal! text-primary">
           {t("toneStyle.title")}
         </h3>
-        <p className="mt-1 text-[13px] text-muted-foreground">{t("toneStyle.description")}</p>
+        <p className="mt-1 text-[13px] text-secondary">{t("toneStyle.description")}</p>
       </div>
 
       {/* Off, cleanup keeps the speaker's own tone (the standard tone). */}
@@ -70,7 +70,7 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
       {/* Tones only shape what cleanup writes. */}
       {toneStyleEnabled && !useCleanupModel && (
         <InfoBox variant="warning" className="mb-6 flex items-center justify-between gap-4 p-3">
-          <p className="text-[13px] text-foreground">{t("toneStyle.settings.cleanupOff")}</p>
+          <p className="text-[13px] text-primary">{t("toneStyle.settings.cleanupOff")}</p>
           <Button variant="outline" size="sm" className="shrink-0" onClick={turnOnCleanup}>
             {t("toneStyle.settings.turnOnCleanup")}
           </Button>
@@ -85,7 +85,7 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
               <section key={category}>
                 <div className="mb-4 flex items-center gap-3">
                   <AppMarkStack marks={CATEGORY_APP_MARKS[category].settings} size={22} />
-                  <h4 className="text-[15px] font-normal! tracking-normal! text-foreground">
+                  <h4 className="text-[15px] font-normal! tracking-normal! text-primary">
                     {title}
                   </h4>
                 </div>
@@ -100,11 +100,11 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
                         disabled={!toneStyleEnabled}
                         onClick={() => setDraft((current) => ({ ...current, [category]: tone }))}
                         className={cn(
-                          "flex h-[34px] items-center gap-2.5 rounded-[9px] border px-3 text-start text-[13px] text-foreground transition-colors",
-                          "outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+                          "flex h-[34px] items-center gap-2.5 rounded-[9px] border px-3 text-start text-[13px] text-primary transition-colors",
+                          "outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                           selected
-                            ? "border-transparent bg-primary/12 dark:bg-primary/15"
-                            : "border-border hover:bg-muted/50 dark:border-white/10 dark:hover:bg-white/5"
+                            ? "border-transparent bg-brand-solid/12 dark:bg-brand-solid/15"
+                            : "border-default hover:bg-surface-secondary/50 dark:border-white/10 dark:hover:bg-white/5"
                         )}
                       >
                         <span
@@ -112,13 +112,11 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
                           className={cn(
                             "flex size-3.5 shrink-0 items-center justify-center rounded-full border",
                             selected
-                              ? "border-primary bg-primary"
-                              : "border-border-hover dark:border-white/25"
+                              ? "border-brand-solid bg-brand-solid"
+                              : "border-hover dark:border-white/25"
                           )}
                         >
-                          {selected && (
-                            <span className="size-1.5 rounded-full bg-primary-foreground" />
-                          )}
+                          {selected && <span className="size-1.5 rounded-full bg-text-on-solid" />}
                         </span>
                         {t(`toneStyle.tones.${tone}`)}
                       </button>
@@ -133,7 +131,7 @@ export default function ToneStyleSection({ onOpenCleanupSettings }: ToneStyleSec
         <div className="mt-6 flex justify-end">
           <Button
             variant={canSave ? "default" : "secondary"}
-            className="h-8 border-transparent px-4 text-[13px] disabled:opacity-100 disabled:text-muted-foreground/60"
+            className="h-8 border-transparent px-4 text-[13px] disabled:opacity-100 disabled:text-secondary/60"
             disabled={!canSave}
             onClick={save}
           >

@@ -17,16 +17,16 @@ export default function LinuxPttSetupInfo({ isAvailable }: LinuxPttSetupInfoProp
   return (
     <InfoBox variant="warning" className="mt-3">
       <div className="flex items-start gap-3">
-        <Info className="w-6 h-6 text-warning dark:text-warning flex-shrink-0 mt-0.5" />
+        <Info className="w-6 h-6 text-amber-solid dark:text-amber-solid flex-shrink-0 mt-0.5" />
         <div className="flex-1">
-          <h3 className="font-semibold text-warning dark:text-warning">
+          <h3 className="font-semibold text-amber-solid dark:text-amber-solid">
             {t("settingsPage.general.hotkey.linuxPttSetupTitle")}
           </h3>
-          <p className="text-sm text-warning dark:text-warning mt-1">
+          <p className="text-sm text-amber-solid dark:text-amber-solid mt-1">
             {t("settingsPage.general.hotkey.linuxPttSetupDescription")}
           </p>
           <CopyableCommand command="sudo usermod -aG input $USER" className="mt-3" />
-          <p className="text-sm text-warning dark:text-warning mt-3">
+          <p className="text-sm text-amber-solid dark:text-amber-solid mt-3">
             {t("settingsPage.general.hotkey.linuxPttSetupNote")}
           </p>
         </div>

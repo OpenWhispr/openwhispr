@@ -30,10 +30,10 @@ import { formatMmSs } from "../../utils/formatDuration";
 const platform = getCachedPlatform();
 
 const ACTION_BUTTON_CLASS =
-  "h-7 w-7 rounded-full text-muted-foreground/70 hover:text-foreground hover:bg-foreground/6 dark:hover:bg-white/6";
+  "h-7 w-7 rounded-full text-secondary/70 hover:text-primary hover:bg-text-primary/6 dark:hover:bg-white/6";
 
 const TRANSCRIPT_TEXT_CLASS =
-  "text-base leading-normal wrap-break-word whitespace-pre-wrap text-foreground";
+  "text-base leading-normal wrap-break-word whitespace-pre-wrap text-primary";
 
 interface MenuAction {
   key: string;
@@ -159,16 +159,16 @@ export default function TranscriptionItem({
       className={cn(
         "group/row px-4 py-3 transition-colors duration-150",
         isFailed
-          ? "bg-destructive/5"
+          ? "bg-red-solid/5"
           : isDiscarded
-            ? "bg-muted/20 opacity-80"
-            : "hover:bg-muted/20 dark:hover:bg-white/2",
+            ? "bg-surface-secondary/20 opacity-80"
+            : "hover:bg-surface-secondary/20 dark:hover:bg-white/2",
         // Translation rows get a 2px primary accent; ps-[14px] keeps text aligned with the other rows.
-        item.route_kind === "translation" && "border-s-2 border-s-primary/70 ps-[14px]"
+        item.route_kind === "translation" && "border-s-2 border-s-brand-solid/70 ps-[14px]"
       )}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs tabular-nums text-muted-foreground">{formattedTime}</span>
+        <span className="text-xs tabular-nums text-secondary">{formattedTime}</span>
         <div
           className={cn(
             "-me-1.5 flex items-center gap-1 transition-opacity duration-150",
@@ -214,7 +214,7 @@ export default function TranscriptionItem({
                   onSelect={onSelect}
                   className={cn(
                     "gap-2.5",
-                    destructive && "text-destructive focus:bg-destructive/8 focus:text-destructive"
+                    destructive && "text-red-solid focus:bg-red-solid/8 focus:text-red-solid"
                   )}
                 >
                   <Icon size={14} className="shrink-0 opacity-70" />
@@ -229,9 +229,9 @@ export default function TranscriptionItem({
       <div className="mt-1.5">
         {isFailed ? (
           <div className="flex items-start gap-2">
-            <AlertCircle size={14} className="mt-0.5 shrink-0 text-destructive" />
+            <AlertCircle size={14} className="mt-0.5 shrink-0 text-red-solid" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-destructive">
+              <p className="text-sm font-medium text-red-solid">
                 {t(
                   hasKeptText
                     ? "controlPanel.history.editFailedTranscriptKept"
@@ -239,27 +239,27 @@ export default function TranscriptionItem({
                 )}
               </p>
               {errorText && (
-                <p className="mt-0.5 text-xs leading-relaxed wrap-break-word text-muted-foreground">
+                <p className="mt-0.5 text-xs leading-relaxed wrap-break-word text-secondary">
                   {errorText}
                 </p>
               )}
               {isConfigError && hasKeptText && (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-secondary">
                   <button
                     onClick={() => onOpenSettings?.("dictationAgent")}
-                    className="cursor-pointer text-primary hover:underline"
+                    className="cursor-pointer text-brand-solid hover:underline"
                   >
                     {t("controlPanel.history.failedCtaAiSettings")}
                   </button>
                 </p>
               )}
               {isConfigError && !hasKeptText && (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-secondary">
                   {hasAudio ? (
                     <>
                       <button
                         onClick={() => onOpenSettings?.()}
-                        className="cursor-pointer text-primary hover:underline"
+                        className="cursor-pointer text-brand-solid hover:underline"
                       >
                         {t("controlPanel.history.failedCtaSettings")}
                       </button>{" "}
@@ -268,7 +268,7 @@ export default function TranscriptionItem({
                   ) : (
                     <button
                       onClick={() => onOpenSettings?.()}
-                      className="cursor-pointer text-primary hover:underline"
+                      className="cursor-pointer text-brand-solid hover:underline"
                     >
                       {t("controlPanel.history.failedCtaSettingsOnly")}
                     </button>
@@ -276,12 +276,12 @@ export default function TranscriptionItem({
                 </p>
               )}
               {isLimitError && (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-secondary">
                   {t("controlPanel.history.failedLimitReached")}
                 </p>
               )}
               {isOfflineError && (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-secondary">
                   {t("controlPanel.history.failedOffline")}
                 </p>
               )}
@@ -289,10 +289,10 @@ export default function TranscriptionItem({
           </div>
         ) : isDiscarded ? (
           <div className="flex items-center gap-2">
-            <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="shrink-0 rounded-sm bg-surface-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-secondary">
               {t("controlPanel.history.discarded.badge")}
             </span>
-            <span className="truncate text-sm text-muted-foreground">
+            <span className="truncate text-sm text-secondary">
               {discardedDuration
                 ? t("controlPanel.history.discarded.recordingWithDuration", {
                     duration: discardedDuration,
@@ -321,9 +321,9 @@ export default function TranscriptionItem({
           )}
         >
           <div className="min-h-0 overflow-hidden">
-            <div className="mt-2 border-t border-border/70 pt-2">
+            <div className="mt-2 border-t border-default/70 pt-2">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-secondary">
                   {t("controlPanel.history.rawTranscript")}
                 </span>
                 <Tooltip content={t("controlPanel.history.copyRawTranscript")}>
@@ -331,17 +331,17 @@ export default function TranscriptionItem({
                     size="icon"
                     variant="ghost"
                     onClick={() => onCopy(rawText)}
-                    className="h-5 w-5 rounded-sm text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+                    className="h-5 w-5 rounded-sm text-secondary hover:bg-text-primary/10 hover:text-primary"
                   >
                     <Copy size={10} />
                   </Button>
                 </Tooltip>
               </div>
-              <p dir="auto" className="mt-1 text-xs leading-relaxed text-muted-foreground/80">
+              <p dir="auto" className="mt-1 text-xs leading-relaxed text-secondary/80">
                 {rawText}
               </p>
               {rawText === item.text && (
-                <p className="mt-1 text-[10px] italic text-muted-foreground/70">
+                <p className="mt-1 text-[10px] italic text-secondary/70">
                   {t("controlPanel.history.noAiProcessing")}
                 </p>
               )}

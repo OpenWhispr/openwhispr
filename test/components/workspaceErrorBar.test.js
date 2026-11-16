@@ -24,7 +24,7 @@ test("renders the message as an alert with its action", async (t) => {
   assert.match(markup, /role="alert"/);
   assert.match(markup, /2 couldn&#x27;t be invited\./);
   assert.match(markup, /<button[^>]*>Try again<\/button>/);
-  assert.match(markup, /bg-destructive/);
+  assert.match(markup, /bg-red-solid/);
   assert.doesNotMatch(render({ tone: "error", message: "Nope" }), /<button/);
 });
 
@@ -34,6 +34,6 @@ test("warning tone uses the warning tint", async (t) => {
   const markup = render({ tone: "warning", message: "Email not delivered." });
 
   assert.match(markup, /role="alert"/);
-  assert.match(markup, /bg-warning/);
-  assert.doesNotMatch(markup, /destructive/);
+  assert.match(markup, /bg-amber-solid/);
+  assert.doesNotMatch(markup, /red-solid/);
 });

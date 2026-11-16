@@ -156,16 +156,16 @@ export function TransferOwnershipDialog({
       onDismiss={dismiss}
     >
       <div className="flex flex-col gap-2">
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="text-xs font-medium text-secondary">
           {t("workspaces.transfer.newOwner")}
         </span>
         {status === "loading" ? (
-          <div className="h-10 animate-pulse rounded-full bg-foreground/5 dark:bg-white/5" />
+          <div className="h-10 animate-pulse rounded-full bg-text-primary/5 dark:bg-white/5" />
         ) : (
           <DropdownMenu>
             <DropdownMenuTrigger
               disabled={pickerDisabled}
-              className={cn(PICKER_TRIGGER, !picked && "text-muted-foreground")}
+              className={cn(PICKER_TRIGGER, !picked && "text-secondary")}
             >
               {picked ? (
                 <MemberAvatar
@@ -178,10 +178,7 @@ export function TransferOwnershipDialog({
               <span dir="auto" className="min-w-0 flex-1 truncate">
                 {picked ? memberName(picked) : t("workspaces.transfer.placeholder")}
               </span>
-              <ChevronsUpDown
-                className="size-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
+              <ChevronsUpDown className="size-4 shrink-0 text-secondary" aria-hidden="true" />
             </DropdownMenuTrigger>
             {/* Opens upward, over the title, and never flips: below the picker sit the dialog's
                 buttons, and picking enables Transfer ownership, so a double-click would land
@@ -207,12 +204,10 @@ export function TransferOwnershipDialog({
                     size="row"
                   />
                   <span className="flex min-w-0 flex-col">
-                    <span dir="auto" className="truncate text-sm text-foreground">
+                    <span dir="auto" className="truncate text-sm text-primary">
                       {memberName(member)}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {roleLabel(member)}
-                    </span>
+                    <span className="truncate text-xs text-secondary">{roleLabel(member)}</span>
                   </span>
                 </DropdownMenuItem>
               ))}
@@ -220,19 +215,19 @@ export function TransferOwnershipDialog({
           </DropdownMenu>
         )}
         {status === "error" ? (
-          <p className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <p className="flex items-center justify-between gap-2 text-xs text-secondary">
             <span>{t("settingsPage.workspace.members.loadError")}</span>
             <button
               type="button"
               onClick={() => setLoadAttempt((attempt) => attempt + 1)}
-              className="font-medium text-foreground underline underline-offset-2"
+              className="font-medium text-primary underline underline-offset-2"
             >
               {t("common.retry")}
             </button>
           </p>
         ) : null}
         {noCandidates ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-secondary">
             {t("workspaces.transfer.noCandidates", { workspace: workspace.name })}
           </p>
         ) : null}

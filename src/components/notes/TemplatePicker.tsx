@@ -66,7 +66,7 @@ export default function TemplatePicker({
         sideOffset={6}
         className="min-w-56"
       >
-        <DropdownMenuLabel className="px-2.5 py-1 text-[11px] font-medium text-muted-foreground/70">
+        <DropdownMenuLabel className="px-2.5 py-1 text-[11px] font-medium text-secondary/70">
           {t("notes.templates.tab")}
         </DropdownMenuLabel>
         {templates.map((template) => {
@@ -82,17 +82,20 @@ export default function TemplatePicker({
               </span>
               {isCurrent && (
                 <Tooltip content={t("notes.templates.regenerate")}>
-                  <RefreshCw size={12} className="shrink-0 text-foreground/50" />
+                  <RefreshCw size={12} className="shrink-0 text-primary/50" />
                 </Tooltip>
               )}
-              <Check size={12} className={cn("shrink-0 text-accent", !isCurrent && "invisible")} />
+              <Check
+                size={12}
+                className={cn("shrink-0 text-accent-solid", !isCurrent && "invisible")}
+              />
             </DropdownMenuItem>
           );
         })}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={onManage}
-          className="gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-muted-foreground/70"
+          className="gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-secondary/70"
         >
           <Settings2 size={12} />
           {t("notes.templates.manage")}

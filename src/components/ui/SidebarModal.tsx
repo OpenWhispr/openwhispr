@@ -101,17 +101,17 @@ export default function SidebarModal<T extends string>({
     if (!item.badge && item.badgeVariant !== "dot") return null;
 
     if (item.badgeVariant === "dot") {
-      return <span className="ms-auto h-1.5 w-1.5 rounded-full bg-primary shrink-0" />;
+      return <span className="ms-auto h-1.5 w-1.5 rounded-full bg-brand-solid shrink-0" />;
     }
 
     return (
       <span
         className={`ms-auto text-xs font-semibold uppercase tracking-wider px-1.5 py-px rounded-sm shrink-0 ${
           item.badgeVariant === "new"
-            ? "bg-primary/10 text-primary dark:bg-primary/15"
+            ? "bg-brand-solid/10 text-brand-solid dark:bg-brand-solid/15"
             : item.badgeVariant === "update"
-              ? "bg-warning/10 text-warning dark:bg-warning/15"
-              : "bg-muted text-muted-foreground"
+              ? "bg-amber-solid/10 text-amber-solid dark:bg-amber-solid/15"
+              : "bg-surface-secondary text-secondary"
         }`}
       >
         {item.badge}
@@ -149,18 +149,18 @@ export default function SidebarModal<T extends string>({
             // otherwise take the whole settings modal with it.
             if (shouldBlockDismiss(e)) e.preventDefault();
           }}
-          className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-[1020px] translate-x-[-50%] translate-y-[-50%] rounded-xl p-0 overflow-hidden outline-none bg-background border border-border shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] dark:bg-surface-1 dark:border-border-subtle dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98"
+          className="fixed left-[50%] top-[50%] z-50 max-h-[85vh] w-[90vw] max-w-[1020px] translate-x-[-50%] translate-y-[-50%] rounded-xl p-0 overflow-hidden outline-none bg-surface-primary border border-default shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] dark:bg-surface-secondary dark:border-default dark:shadow-[0_25px_60px_-12px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.05)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-98 data-[state=open]:zoom-in-98"
         >
           <div className="relative h-full max-h-[85vh] overflow-hidden">
             <div className="absolute end-4 top-4 z-20 flex items-center gap-2">
               {notice && isCompact && (
-                <InfoBox title={notice.description} className="rounded-md p-1.25 text-primary">
+                <InfoBox title={notice.description} className="rounded-md p-1.25 text-brand-solid">
                   {notice.icon}
                   <span className="sr-only">{notice.description}</span>
                 </InfoBox>
               )}
-              <DialogPrimitive.Close className="rounded-md p-1.5 opacity-40 ring-offset-background transition-[opacity,background-color] hover:opacity-100 bg-transparent hover:bg-muted dark:hover:bg-surface-raised outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1">
-                <X className="h-3.5 w-3.5 text-muted-foreground" />
+              <DialogPrimitive.Close className="rounded-md p-1.5 opacity-40 ring-offset-surface-primary transition-[opacity,background-color] hover:opacity-100 bg-transparent hover:bg-surface-secondary dark:hover:bg-surface-tertiary outline-none focus-visible:ring-2 focus-visible:ring-focus/30 focus-visible:ring-offset-1">
+                <X className="h-3.5 w-3.5 text-secondary" />
                 <span className="sr-only">{t("common.close")}</span>
               </DialogPrimitive.Close>
             </div>
@@ -170,7 +170,7 @@ export default function SidebarModal<T extends string>({
 
               {/* Sidebar */}
               <div
-                className={`${actualSidebarWidth} shrink-0 border-e border-border/70 dark:border-border-subtle flex flex-col bg-surface-1 transition-[width] duration-200 ease-out`}
+                className={`${actualSidebarWidth} shrink-0 border-e border-default/70 dark:border-default flex flex-col bg-surface-secondary transition-[width] duration-200 ease-out`}
               >
                 {/* Identity / custom header */}
                 {(isCompact ? compactHeader : header) && (
@@ -183,7 +183,7 @@ export default function SidebarModal<T extends string>({
                     <span
                       aria-hidden="true"
                       title={notice.description}
-                      className="inline-flex items-center gap-1.5 text-center text-[11px] text-primary"
+                      className="inline-flex items-center gap-1.5 text-center text-[11px] text-brand-solid"
                     >
                       {notice.icon}
                       {notice.label}
@@ -202,7 +202,7 @@ export default function SidebarModal<T extends string>({
                     <div key={groupIndex} className={groupIndex > 0 ? "mt-4" : ""}>
                       {!isCompact && group.label && (
                         <div className="px-2 pb-1">
-                          <span className="text-[11px] font-medium text-muted-foreground/70 dark:text-muted-foreground/65">
+                          <span className="text-[11px] font-medium text-secondary/70 dark:text-secondary/65">
                             {group.label}
                           </span>
                         </div>
@@ -222,15 +222,15 @@ export default function SidebarModal<T extends string>({
                                 isCompact ? "justify-center px-0 py-2" : "gap-2 px-2 py-1.5"
                               } ${
                                 isActive
-                                  ? "text-foreground bg-muted dark:bg-surface-raised"
-                                  : "text-muted-foreground dark:text-foreground/75 hover:text-foreground hover:bg-muted/50 dark:hover:bg-surface-2"
+                                  ? "text-primary bg-surface-secondary dark:bg-surface-tertiary"
+                                  : "text-secondary dark:text-primary/75 hover:text-primary hover:bg-surface-secondary/50 dark:hover:bg-surface-primary"
                               }`}
                             >
                               <Icon
                                 className={`h-4 w-4 shrink-0 transition-colors duration-100 ${
                                   isActive
-                                    ? "text-primary"
-                                    : "text-muted-foreground/70 dark:text-foreground/55 group-hover:text-foreground/80"
+                                    ? "text-brand-solid"
+                                    : "text-secondary/70 dark:text-primary/55 group-hover:text-primary/80"
                                 }`}
                               />
                               {!isCompact && (
@@ -244,7 +244,7 @@ export default function SidebarModal<T extends string>({
                                   {item.shortcut && !item.badge && (
                                     <kbd
                                       dir="ltr"
-                                      className="ms-auto text-xs text-muted-foreground/70 font-mono shrink-0"
+                                      className="ms-auto text-xs text-secondary/70 font-mono shrink-0"
                                     >
                                       {item.shortcut}
                                     </kbd>
@@ -252,7 +252,7 @@ export default function SidebarModal<T extends string>({
                                 </>
                               )}
                               {isCompact && item.badgeVariant === "dot" && (
-                                <span className="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                                <span className="absolute top-1.5 end-1.5 h-1.5 w-1.5 rounded-full bg-brand-solid" />
                               )}
                             </button>
                           );
@@ -265,16 +265,16 @@ export default function SidebarModal<T extends string>({
                 {/* Footer / version */}
                 {version && (
                   <div
-                    className={`border-t border-border/70 dark:border-border-subtle ${
+                    className={`border-t border-default/70 dark:border-default ${
                       isCompact ? "flex justify-center py-2.5" : "px-3 py-2.5"
                     }`}
                   >
                     <div className="flex items-center gap-1.5">
-                      <div className="h-1 w-1 rounded-full bg-success/60" />
+                      <div className="h-1 w-1 rounded-full bg-green-solid/60" />
                       {!isCompact && (
                         <span
                           dir="ltr"
-                          className="text-xs text-muted-foreground/70 tabular-nums tracking-wide"
+                          className="text-xs text-secondary/70 tabular-nums tracking-wide"
                         >
                           v{version}
                         </span>
@@ -285,7 +285,7 @@ export default function SidebarModal<T extends string>({
               </div>
 
               {/* Main Content */}
-              <div className="flex-1 overflow-y-auto bg-background">
+              <div className="flex-1 overflow-y-auto bg-surface-primary">
                 <SettingsLayoutProvider value={{ isCompact }}>
                   {/* The close button (and compact notice badge) float over this column's top corner
                       (top-4, 26px tall); pt-[22px] centres a text-xs heading (line-height 1.15) on that row. */}

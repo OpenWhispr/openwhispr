@@ -38,7 +38,7 @@ test("recording state renders no backdrop-filter surface over the live transcrip
   // The 1.9.0 CPU regression: every transcript partial re-blurred the strip.
   assert.ok(!html.includes("backdrop-blur"), "no backdrop-blur while recording");
   assert.ok(!html.includes("backdrop-saturate"), "no backdrop-saturate while recording");
-  assert.ok(html.includes("bg-surface-2/95"), "capsules use the near-opaque surface");
+  assert.ok(html.includes("bg-surface-primary/95"), "capsules use the near-opaque surface");
   assert.ok(html.includes("shadow-(--shadow-glass)"), "capsules keep the glass rim shadow");
 });
 

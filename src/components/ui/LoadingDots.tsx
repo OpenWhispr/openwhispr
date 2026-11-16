@@ -13,7 +13,7 @@ export const LoadingDots = () => {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="bg-primary-foreground"
+          className="bg-text-on-solid"
           style={{
             width: 4,
             height: 6 + 6 * (tick % 3 === i ? 1 : 0),

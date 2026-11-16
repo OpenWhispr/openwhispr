@@ -95,8 +95,8 @@ export default function DictationTranslationSettings() {
                             className={cn(
                               "inline-flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium transition-colors",
                               isActive
-                                ? "bg-primary/10 text-primary ring-1 ring-primary/30"
-                                : "bg-muted text-muted-foreground"
+                                ? "bg-brand-solid/10 text-brand-solid ring-1 ring-brand-solid/30"
+                                : "bg-surface-secondary text-secondary"
                             )}
                           >
                             <button
@@ -116,7 +116,7 @@ export default function DictationTranslationSettings() {
                                 aria-label={t("dictationTranslation.removeTarget", {
                                   language: label,
                                 })}
-                                className="rounded-full p-0.5 hover:text-destructive"
+                                className="rounded-full p-0.5 hover:text-red-solid"
                               >
                                 <X className="h-3 w-3" />
                               </button>
@@ -140,14 +140,14 @@ export default function DictationTranslationSettings() {
           </SettingsPanel>
 
           {!translationTargetLanguage && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-secondary">
               {t("dictationTranslation.targetLanguageMissing")}
             </p>
           )}
 
           <InferenceConfigEditor scope="dictationTranslation" />
 
-          <div className="border-t border-border/70 pt-6">
+          <div className="border-t border-default/70 pt-6">
             <SectionHeader
               title={t("dictationTranslation.prompt.title")}
               description={t("dictationTranslation.prompt.description")}
@@ -155,7 +155,7 @@ export default function DictationTranslationSettings() {
             <PromptStudio kind="translate" />
           </div>
 
-          <p className="text-xs text-muted-foreground">{t("dictationTranslation.hotkeyHint")}</p>
+          <p className="text-xs text-secondary">{t("dictationTranslation.hotkeyHint")}</p>
         </>
       )}
     </div>

@@ -19,7 +19,7 @@ export function FieldLabel({ children }: { children: ReactNode }) {
 // Onboarding's provider field, wherever it is used. Outside onboarding its colour names
 // fall back to the app theme (.onboarding-provider-input in index.css).
 const FIELD_CLASS =
-  "onboarding-provider-input h-9 rounded-xl! border px-3 text-xs shadow-none! focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent,var(--color-primary))_15%,transparent)]";
+  "onboarding-provider-input h-9 rounded-xl! border px-3 text-xs shadow-none! focus:ring-2 focus:ring-[color-mix(in_srgb,var(--onboarding-accent,var(--color-brand-solid))_15%,transparent)]";
 
 type ProviderCheckFieldProps = Omit<
   ComponentProps<typeof Input>,
@@ -106,7 +106,7 @@ export function ProviderCheckField({
       {masked && (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 font-mono text-xs tracking-wide text-[var(--onboarding-text-primary,var(--color-foreground))] opacity-70"
+          className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 font-mono text-xs tracking-wide text-[var(--onboarding-text-primary,var(--color-text-primary))] opacity-70"
         >
           {maskKey(value)}
         </span>
@@ -137,7 +137,7 @@ export function ProviderCheckField({
               ? cn(
                   "mt-1 px-1 text-xs leading-[1.4]",
                   // Amber text needs the darker shade to stay readable on white.
-                  phase === "unverified" ? "text-amber-700 dark:text-amber-300" : "text-destructive"
+                  phase === "unverified" ? "text-amber-700 dark:text-amber-300" : "text-red-solid"
                 )
               : undefined
           }

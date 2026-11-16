@@ -63,7 +63,7 @@ export function PillCommandMenu({
   return (
     <div
       ref={menuRef}
-      className={`absolute bottom-full ${alignClass} mb-3 w-48 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm`}
+      className={`absolute bottom-full ${alignClass} mb-3 w-48 overflow-hidden rounded-lg border border-default bg-surface-primary text-primary shadow-lg backdrop-blur-sm`}
       onMouseEnter={() => {
         setWindowInteractivity(true);
       }}
@@ -74,7 +74,7 @@ export function PillCommandMenu({
       }}
     >
       <button
-        className="w-full px-3 py-2 text-start text-sm font-medium hover:bg-muted focus:bg-muted focus:outline-none"
+        className="w-full px-3 py-2 text-start text-sm font-medium hover:bg-surface-secondary focus:bg-surface-secondary focus:outline-none"
         onClick={onToggleListening}
       >
         {isRecording ? t("app.commandMenu.stopListening") : t("app.commandMenu.startListening")}
@@ -85,9 +85,9 @@ export function PillCommandMenu({
           panel). Stop or finish the recording first. */}
       {agentAllowed && !isRecording && (
         <>
-          <div className="h-px bg-border" />
+          <div className="h-px bg-border-default" />
           <button
-            className="w-full px-3 py-2 text-start text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+            className="w-full px-3 py-2 text-start text-sm hover:bg-surface-secondary focus:bg-surface-secondary focus:outline-none"
             onClick={onAskAssistant}
           >
             {t("app.commandMenu.askAssistant")}
@@ -96,18 +96,18 @@ export function PillCommandMenu({
       )}
       {meetingAllowed && !isRecording && (
         <>
-          <div className="h-px bg-border" />
+          <div className="h-px bg-border-default" />
           <button
-            className="w-full px-3 py-2 text-start text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+            className="w-full px-3 py-2 text-start text-sm hover:bg-surface-secondary focus:bg-surface-secondary focus:outline-none"
             onClick={onStartMeeting}
           >
             {t("app.commandMenu.startMeetingRecording")}
           </button>
         </>
       )}
-      <div className="h-px bg-border" />
+      <div className="h-px bg-border-default" />
       <button
-        className="w-full px-3 py-2 text-start text-sm hover:bg-muted focus:bg-muted focus:outline-none"
+        className="w-full px-3 py-2 text-start text-sm hover:bg-surface-secondary focus:bg-surface-secondary focus:outline-none"
         onClick={onHide}
       >
         {t("app.commandMenu.hideForNow")}

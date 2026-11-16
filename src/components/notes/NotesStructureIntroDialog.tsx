@@ -22,12 +22,12 @@ function StructureRow({
   description: string;
 }): ReactElement {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background/70 px-3 py-2.5">
-      <ChevronRight size={12} className="shrink-0 text-foreground/45 rtl:rotate-180" />
+    <div className="flex items-center gap-2 rounded-lg border border-default/70 bg-surface-primary/70 px-3 py-2.5">
+      <ChevronRight size={12} className="shrink-0 text-primary/45 rtl:rotate-180" />
       {icon}
       <div className="min-w-0">
-        <p className="text-xs font-medium text-foreground/80">{title}</p>
-        <p className="text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+        <p className="text-xs font-medium text-primary/80">{title}</p>
+        <p className="text-[11px] leading-relaxed text-secondary">{description}</p>
       </div>
     </div>
   );
@@ -53,34 +53,34 @@ export default function NotesStructureIntroDialog({
           <DialogDescription>{t("notes.structureIntro.description")}</DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-xl border border-primary/15 bg-primary/[0.025] p-3.5">
+        <div className="rounded-xl border border-brand-solid/15 bg-brand-solid/[0.025] p-3.5">
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/8 text-primary/70">
+            <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-solid/8 text-brand-solid/70">
               <Building2 size={13} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-foreground">
+              <p className="text-xs font-medium text-primary">
                 {t("notes.structureIntro.workspace.title")}
               </p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+              <p className="mt-0.5 text-xs leading-relaxed text-secondary">
                 {t("notes.structureIntro.workspace.description")}
               </p>
 
               {/* Every workspace has its own Private beside its teamspaces. */}
               <div className="mt-3 space-y-2">
                 <StructureRow
-                  icon={<Lock size={13} className="shrink-0 text-foreground/50" />}
+                  icon={<Lock size={13} className="shrink-0 text-primary/50" />}
                   title={t("notes.structureIntro.personal.title")}
                   description={t("notes.structureIntro.personal.description")}
                 />
                 <StructureRow
-                  icon={<Users size={13} className="shrink-0 text-primary/60" />}
+                  icon={<Users size={13} className="shrink-0 text-brand-solid/60" />}
                   title={t("notes.structureIntro.teamSpace.title")}
                   description={t("notes.structureIntro.teamSpace.description")}
                 />
               </div>
 
-              <div className="mt-2 flex items-center gap-2 ps-5 text-[11px] text-muted-foreground">
+              <div className="mt-2 flex items-center gap-2 ps-5 text-[11px] text-secondary">
                 <FolderOpen size={12} className="shrink-0" />
                 {t("notes.structureIntro.contents")}
               </div>

@@ -24,13 +24,13 @@ export default function LeaderboardEmptyStrip({ missingCount }: { missingCount: 
   return (
     <div
       data-leaderboard-state="empty_strip"
-      className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-primary/5 px-5 py-3"
+      className="flex flex-wrap items-center justify-between gap-3 border-b border-default/70 bg-brand-solid/5 px-5 py-3"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-solid/10 text-brand-solid">
           <Users size={15} />
         </div>
-        <p className="text-xs leading-relaxed text-muted-foreground">
+        <p className="text-xs leading-relaxed text-secondary">
           {t("insights.leaderboard.emptyStrip", { count: missingCount })}
         </p>
       </div>

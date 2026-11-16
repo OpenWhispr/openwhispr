@@ -38,10 +38,10 @@ export function ConversationPicker({
       <DropdownMenuTrigger asChild>
         <button
           className={cn(
-            "inline-flex items-center rounded-md transition-colors duration-150 outline-none hover:bg-foreground/5",
+            "inline-flex items-center rounded-md transition-colors duration-150 outline-none hover:bg-text-primary/5",
             variant === "sidebar"
-              ? "-ms-1 gap-2.5 px-1 py-1 text-sm text-foreground/65 hover:text-foreground"
-              : "-ms-1.5 gap-1 px-1.5 py-0.5 text-xs font-medium text-foreground/50 hover:text-foreground/70"
+              ? "-ms-1 gap-2.5 px-1 py-1 text-sm text-primary/65 hover:text-primary"
+              : "-ms-1.5 gap-1 px-1.5 py-0.5 text-xs font-medium text-primary/50 hover:text-primary/70"
           )}
           aria-label={t("embeddedChat.conversationSelector")}
         >
@@ -51,14 +51,12 @@ export function ConversationPicker({
               ? t("embeddedChat.history")
               : activeConversation?.title || t("embeddedChat.newChat")}
           </span>
-          {variant !== "sidebar" && (
-            <ChevronDown size={10} className="shrink-0 text-foreground/45" />
-          )}
+          {variant !== "sidebar" && <ChevronDown size={10} className="shrink-0 text-primary/45" />}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={4} className="min-w-44 max-w-56 p-1">
         <DropdownMenuItem onClick={onNewChat} className="text-xs gap-2 rounded-md px-2 py-1.5">
-          <Plus size={10} className="text-foreground/45 shrink-0" />
+          <Plus size={10} className="text-primary/45 shrink-0" />
           {t("embeddedChat.newChat")}
         </DropdownMenuItem>
         {conversations.length > 0 && (
@@ -70,11 +68,11 @@ export function ConversationPicker({
                 onClick={() => onSwitchConversation(conversation.id)}
                 className={cn(
                   "text-xs gap-2 rounded-md px-2 py-1.5",
-                  conversation.id === activeConversationId && "bg-foreground/4"
+                  conversation.id === activeConversationId && "bg-text-primary/4"
                 )}
               >
                 <span className="truncate flex-1">{conversation.title}</span>
-                <span className="text-[10px] text-foreground/45 shrink-0">
+                <span className="text-[10px] text-primary/45 shrink-0">
                   {formatShortDate(conversation.updated_at, locale)}
                 </span>
               </DropdownMenuItem>

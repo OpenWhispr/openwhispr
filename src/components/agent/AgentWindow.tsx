@@ -1116,16 +1116,16 @@ export default function AgentWindow() {
   };
 
   const emptyState = refusal ? (
-    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center text-sm text-muted-foreground">
-      <BrandMarkIcon size={22} className="text-primary" />
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center text-sm text-secondary">
+      <BrandMarkIcon size={22} className="text-brand-solid" />
       <p dir="auto">{t(refusal)}</p>
     </div>
   ) : state.input === "keyboard" && !forkOrigin?.parentTitle ? (
     // A fork with nothing of its own yet shows just its chip.
     <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-      <BrandMarkIcon size={22} className="text-primary" />
-      <p className="text-lg font-medium text-foreground">{t("agentWindow.empty.title")}</p>
-      <p className="text-sm text-muted-foreground">{t("agentWindow.empty.description")}</p>
+      <BrandMarkIcon size={22} className="text-brand-solid" />
+      <p className="text-lg font-medium text-primary">{t("agentWindow.empty.title")}</p>
+      <p className="text-sm text-secondary">{t("agentWindow.empty.description")}</p>
     </div>
   ) : null;
 
@@ -1155,7 +1155,7 @@ export default function AgentWindow() {
             footer={
               <div className="flex flex-col items-center gap-2">
                 {state.input === "keyboard" && notice && (
-                  <p className="self-start px-1 text-xs text-muted-foreground">{notice}</p>
+                  <p className="self-start px-1 text-xs text-secondary">{notice}</p>
                 )}
                 {state.selectedContext && <div className="w-full">{pendingContext(false)}</div>}
                 {state.input === "keyboard" ? (
@@ -1199,7 +1199,7 @@ export default function AgentWindow() {
               onPointerMove={(event) => {
                 if (event.movementX || event.movementY) nudge.cancel();
               }}
-              className="agent-chat-scroll flex max-h-[400px] w-[420px] shrink-0 flex-col overflow-y-auto rounded-2xl border border-border/50 shadow-[var(--shadow-card)] [&>*>*]:my-0"
+              className="agent-chat-scroll flex max-h-[400px] w-[420px] shrink-0 flex-col overflow-y-auto rounded-2xl border border-default/50 shadow-[var(--shadow-card)] [&>*>*]:my-0"
             >
               <ToolCallCard messageId={pendingCard.messageId} toolCall={pendingCard.toolCall} />
             </div>

@@ -103,13 +103,13 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   }
 
   return (
-    <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-4 space-y-3">
+    <div className="rounded-lg border border-default/70 dark:border-default/70 bg-surface-primary/50 dark:bg-surface-primary/50 p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p dir="auto" className="text-xs font-semibold text-foreground truncate">
+          <p dir="auto" className="text-xs font-semibold text-primary truncate">
             {workspace.name}
           </p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
+          <p className="text-[10px] text-secondary mt-0.5">
             {t(`settingsPage.workspace.role.${workspace.role}`)}
           </p>
         </div>
@@ -120,7 +120,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
               : workspace.status === "past_due"
                 ? "bg-amber-500/12 text-amber-600 dark:text-amber-400"
-                : "bg-foreground/8 text-foreground/65")
+                : "bg-text-primary/8 text-primary/65")
           }
         >
           {t(`settingsPage.workspace.billing.status.${workspace.status}`, {
@@ -131,16 +131,16 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
 
       <div className="flex items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
+          <p className="text-[10px] uppercase tracking-wide text-secondary font-medium">
             {t("settingsPage.workspace.billing.plan")}
           </p>
-          <p className="text-base font-semibold text-foreground">
+          <p className="text-base font-semibold text-primary">
             {t(`settingsPage.workspace.billing.planLabel.${workspace.plan}`, {
               defaultValue: workspace.plan,
             })}
           </p>
         </div>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-[10px] text-secondary">
           {workspace.is_billable !== false
             ? t("settingsPage.unifiedBilling.billableSeat")
             : t("settingsPage.unifiedBilling.nonBillableSeat")}
@@ -149,27 +149,30 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
 
       <div>
         <div className="flex items-center justify-between text-xs mb-1.5">
-          <span className="text-muted-foreground">{t("settingsPage.workspace.billing.seats")}</span>
-          <span dir="ltr" className="text-foreground font-medium">
+          <span className="text-secondary">{t("settingsPage.workspace.billing.seats")}</span>
+          <span dir="ltr" className="text-primary font-medium">
             {seatsUsed} / {seatsTotal}
           </span>
         </div>
-        <div className="h-1.5 rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden">
-          <div className="h-full bg-primary/70 dark:bg-primary/80" style={{ width: `${pct}%` }} />
+        <div className="h-1.5 rounded-full bg-text-primary/5 dark:bg-white/5 overflow-hidden">
+          <div
+            className="h-full bg-brand-solid/70 dark:bg-brand-solid/80"
+            style={{ width: `${pct}%` }}
+          />
         </div>
       </div>
 
       {workspace.current_period_end && (
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex items-center justify-between text-xs text-secondary">
           <span>{t("settingsPage.workspace.billing.nextInvoice")}</span>
-          <span dir="ltr" className="text-foreground">
+          <span dir="ltr" className="text-primary">
             {new Date(workspace.current_period_end).toLocaleDateString()}
           </span>
         </div>
       )}
 
       {!canManageBilling ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-secondary">
           {workspace.billing_manager
             ? t("settingsPage.unifiedBilling.managedBy", {
                 owner: workspace.billing_manager,
@@ -177,7 +180,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
             : t("settingsPage.workspace.billing.ownerOnly")}
         </p>
       ) : provisioned ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-secondary">
           {t("settingsPage.workspace.billing.provisionedPlan")}
         </p>
       ) : (
@@ -246,15 +249,15 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
             </DialogDescription>
           </DialogHeader>
           {seatPreview && (
-            <div className="rounded-lg border border-border/70 divide-y divide-border/60">
+            <div className="rounded-lg border border-default/70 divide-y divide-default/60">
               <div className="flex justify-between px-3 py-2 text-xs">
-                <span className="text-muted-foreground">
+                <span className="text-secondary">
                   {t("settingsPage.unifiedBilling.confirmSeats.newCapacity")}
                 </span>
                 <span className="font-medium">{seatPreview.next_quantity}</span>
               </div>
               <div className="flex justify-between px-3 py-2 text-xs">
-                <span className="text-muted-foreground">
+                <span className="text-secondary">
                   {t("settingsPage.unifiedBilling.confirmSeats.chargeToday")}
                 </span>
                 <span className="font-medium">

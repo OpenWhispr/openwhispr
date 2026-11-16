@@ -68,13 +68,13 @@ function IntroArt() {
             height={68}
             decoding="async"
             draggable={false}
-            className="size-[68px] rounded-[18px] shadow-[0_0_0_3px_white,0_6px_16px_rgba(32,86,223,0.25)] dark:shadow-[0_0_0_3px_var(--color-surface-2),0_6px_16px_rgba(0,0,0,0.4)]"
+            className="size-[68px] rounded-[18px] shadow-[0_0_0_3px_white,0_6px_16px_rgba(32,86,223,0.25)] dark:shadow-[0_0_0_3px_var(--color-surface-primary),0_6px_16px_rgba(0,0,0,0.4)]"
           />
         ) : (
           <div
             key={index}
             className={cn(
-              "flex size-[68px] items-center justify-center rounded-[18px] border border-primary/15 bg-card dark:bg-surface-2",
+              "flex size-[68px] items-center justify-center rounded-[18px] border border-brand-solid/15 bg-surface-primary dark:bg-surface-primary",
               tile?.tileClassName
             )}
           >
@@ -109,7 +109,7 @@ function Pager({ step, total }: { step: number; total: number }) {
           key={index}
           className={cn(
             "h-2 rounded-full transition-all duration-300",
-            index + 1 === step ? "w-6 bg-primary" : "w-2 bg-border dark:bg-white/15"
+            index + 1 === step ? "w-6 bg-brand-solid" : "w-2 bg-border-default dark:bg-white/15"
           )}
         />
       ))}
@@ -180,7 +180,7 @@ export default function ToneStyleSetupDialog({
                   category: BIDI_VALUE_TOKEN,
                 })}
                 value={
-                  <span className="text-primary">
+                  <span className="text-brand-solid">
                     {t(`toneStyle.categories.${category}.inline`)}
                   </span>
                 }
@@ -204,19 +204,19 @@ export default function ToneStyleSetupDialog({
                     aria-pressed={selected}
                     onClick={() => setDraft((current) => ({ ...current, [category]: tone }))}
                     className={cn(
-                      "flex h-[250px] flex-col gap-3 rounded-2xl border bg-muted/60 px-4.5 pb-4 text-start transition-colors",
+                      "flex h-[250px] flex-col gap-3 rounded-2xl border bg-surface-secondary/60 px-4.5 pb-4 text-start transition-colors",
                       category === "email" ? "pt-3.5" : "pt-7",
-                      "outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-white/5",
+                      "outline-none focus-visible:ring-2 focus-visible:ring-focus/30 dark:bg-white/5",
                       selected
-                        ? "border-primary"
-                        : "border-transparent shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:border-border"
+                        ? "border-brand-solid"
+                        : "border-transparent shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:border-default"
                     )}
                   >
                     {/* A long translation is cut off above the label, fading out. */}
                     <div className="min-h-0 flex-1 overflow-hidden [mask-image:linear-gradient(to_bottom,black_calc(100%-12px),transparent)]">
                       <ToneSample category={category} tone={tone} selected={selected} />
                     </div>
-                    <span className="self-center text-[15px] font-medium text-foreground">
+                    <span className="self-center text-[15px] font-medium text-primary">
                       {t(`toneStyle.tones.${tone}`)}
                     </span>
                   </button>
@@ -229,7 +229,7 @@ export default function ToneStyleSetupDialog({
             <div className="mt-7.5 flex items-center gap-3">
               <Button
                 variant="secondary"
-                className="h-10 min-w-[84px] border-transparent text-muted-foreground"
+                className="h-10 min-w-[84px] border-transparent text-secondary"
                 onClick={() => setStep(step - 1)}
               >
                 {t("common.back")}

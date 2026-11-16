@@ -118,9 +118,9 @@ interface GeneralPageProps {
 }
 
 const ROW_CLASS =
-  "flex items-center justify-between gap-4 border-t border-border/70 dark:border-border-subtle/60 pt-8";
+  "flex items-center justify-between gap-4 border-t border-default/70 dark:border-default/60 pt-8";
 const DESTRUCTIVE_PILL =
-  "bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive dark:text-destructive dark:hover:bg-destructive/20";
+  "bg-red-solid/10 text-red-solid hover:bg-red-solid/15 hover:text-red-solid dark:text-red-solid dark:hover:bg-red-solid/20";
 
 function GeneralPage({
   workspace,
@@ -175,15 +175,13 @@ function GeneralPage({
 
       <div className="space-y-3">
         <div>
-          <label htmlFor={nameId} className="text-xs font-medium text-foreground">
+          <label htmlFor={nameId} className="text-xs font-medium text-primary">
             {t("settingsPage.workspace.general.nameLabel")}
           </label>
           <p
             id={hintId}
             className={
-              overLimit
-                ? "text-xs text-destructive mt-0.5"
-                : "text-xs text-muted-foreground/80 mt-0.5"
+              overLimit ? "text-xs text-red-solid mt-0.5" : "text-xs text-secondary/80 mt-0.5"
             }
           >
             {t("settingsPage.workspace.general.nameHint")}
@@ -217,10 +215,10 @@ function GeneralPage({
 
       <div className="space-y-3">
         <div>
-          <p className="text-xs font-medium text-foreground">
+          <p className="text-xs font-medium text-primary">
             {t("settingsPage.workspace.general.iconLabel")}
           </p>
-          <p className="text-xs text-muted-foreground/80 mt-0.5">
+          <p className="text-xs text-secondary/80 mt-0.5">
             {t("settingsPage.workspace.general.iconHint")}
           </p>
         </div>
@@ -228,10 +226,10 @@ function GeneralPage({
       </div>
 
       <div>
-        <p className="text-xs font-medium text-foreground">
+        <p className="text-xs font-medium text-primary">
           {t("settingsPage.workspace.general.roleLabel")}
         </p>
-        <p className="text-xs text-muted-foreground/80 mt-0.5">
+        <p className="text-xs text-secondary/80 mt-0.5">
           {t(`settingsPage.workspace.role.${workspace.role}`)}
         </p>
       </div>
@@ -288,8 +286,8 @@ function RowText({
 }): React.ReactElement {
   return (
     <div className="min-w-0">
-      <p className="text-xs font-medium text-foreground">{title}</p>
-      <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
+      <p className="text-xs font-medium text-primary">{title}</p>
+      <p className="text-xs text-secondary/80 mt-0.5 leading-relaxed">{description}</p>
     </div>
   );
 }

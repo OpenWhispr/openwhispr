@@ -407,7 +407,7 @@ export default function OpenAICompatiblePanel({
       <ConnectionCheckAnnouncer announcement={check.announcement} />
       {!lockedBaseUrl && (
         <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
-          <h4 className="font-medium text-foreground">{t("reasoning.custom.endpointTitle")}</h4>
+          <h4 className="font-medium text-primary">{t("reasoning.custom.endpointTitle")}</h4>
           <ProviderCheckField
             aria-label={t("reasoning.custom.endpointTitle")}
             check={endpointCheck}
@@ -420,13 +420,13 @@ export default function OpenAICompatiblePanel({
             spellCheck={false}
           />
           {helpExamples ?? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-secondary">
               {t("reasoning.custom.endpointExamples")}{" "}
-              <code dir="ltr" className="text-primary">
+              <code dir="ltr" className="text-brand-solid">
                 https://openrouter.ai/api/v1
               </code>{" "}
               (OpenRouter),{" "}
-              <code dir="ltr" className="text-primary">
+              <code dir="ltr" className="text-brand-solid">
                 https://api.together.xyz/v1
               </code>{" "}
               (Together).
@@ -437,7 +437,7 @@ export default function OpenAICompatiblePanel({
 
       <div className="space-y-2 pt-3" onFocus={editing.onFocus} onBlur={editing.onBlur}>
         <div className="flex items-baseline justify-between">
-          <h4 className="font-medium text-foreground">{keyLabel}</h4>
+          <h4 className="font-medium text-primary">{keyLabel}</h4>
           {getKeyUrl && <GetApiKeyLink url={getKeyUrl} />}
         </div>
         <ProviderCheckField
@@ -454,18 +454,16 @@ export default function OpenAICompatiblePanel({
           spellCheck={false}
         />
         {!apiKeyRequired && (
-          <p className="text-xs text-muted-foreground/70 mt-1">
-            {t("reasoning.custom.apiKeyHelp")}
-          </p>
+          <p className="text-xs text-secondary/70 mt-1">{t("reasoning.custom.apiKeyHelp")}</p>
         )}
         {apiKeyRequired && !apiKey.trim() && (
-          <p className="text-xs text-warning">{t("reasoning.custom.keyRequiredHint")}</p>
+          <p className="text-xs text-amber-solid">{t("reasoning.custom.keyRequiredHint")}</p>
         )}
       </div>
 
       <div className="space-y-2 pt-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-medium text-foreground">{t("reasoning.availableModels")}</h4>
+          <h4 className="text-sm font-medium text-primary">{t("reasoning.availableModels")}</h4>
           <div className="flex gap-2">
             {defaultBaseUrl !== undefined && (
               <Button
@@ -494,7 +492,7 @@ export default function OpenAICompatiblePanel({
             </Button>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-secondary">
           {t("reasoning.custom.queryPrefix")}{" "}
           <code dir="ltr" className="break-all">
             {queryUrl}
@@ -502,20 +500,22 @@ export default function OpenAICompatiblePanel({
           {t("reasoning.custom.querySuffix")}
         </p>
         {isDraftDirty && (
-          <p className="text-xs text-primary">{t("reasoning.custom.modelsReloadHint")}</p>
+          <p className="text-xs text-brand-solid">{t("reasoning.custom.modelsReloadHint")}</p>
         )}
-        {!hasBase && <p className="text-xs text-warning">{t("reasoning.custom.enterEndpoint")}</p>}
+        {!hasBase && (
+          <p className="text-xs text-amber-solid">{t("reasoning.custom.enterEndpoint")}</p>
+        )}
         {hasBase && (
           <>
             {modelsLoading && (
-              <p className="text-xs text-primary">{t("reasoning.custom.fetchingModels")}</p>
+              <p className="text-xs text-brand-solid">{t("reasoning.custom.fetchingModels")}</p>
             )}
-            {listErrorShown && <p className="text-xs text-destructive">{modelsError}</p>}
+            {listErrorShown && <p className="text-xs text-red-solid">{modelsError}</p>}
             {!modelsLoading && !modelsError && modelOptions.length === 0 && (
-              <p className="text-xs text-warning">{t("reasoning.custom.noModels")}</p>
+              <p className="text-xs text-amber-solid">{t("reasoning.custom.noModels")}</p>
             )}
             {!modelsLoading && displayedModels.length > 0 && !model && (
-              <p className="text-xs text-warning">{t("reasoning.custom.selectModelHint")}</p>
+              <p className="text-xs text-amber-solid">{t("reasoning.custom.selectModelHint")}</p>
             )}
           </>
         )}

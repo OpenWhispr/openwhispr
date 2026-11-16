@@ -20,7 +20,7 @@ export function CodeBlockActions({ code }: { code: string }): ReactElement {
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="outline" onClick={() => void copy()}>
           {copied ? (
-            <Check className="h-3.5 w-3.5 text-success" />
+            <Check className="h-3.5 w-3.5 text-green-solid" />
           ) : (
             <Copy className="h-3.5 w-3.5" />
           )}

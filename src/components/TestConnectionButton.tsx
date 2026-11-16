@@ -75,7 +75,7 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
       >
         {status === "testing" && <Loader2 className="w-3.5 h-3.5 me-1.5 animate-spin" />}
         {status === "success" && <CheckCircle className="w-3.5 h-3.5 me-1.5 text-green-500" />}
-        {status === "error" && <XCircle className="w-3.5 h-3.5 me-1.5 text-destructive" />}
+        {status === "error" && <XCircle className="w-3.5 h-3.5 me-1.5 text-red-solid" />}
         {status === "testing"
           ? t("reasoning.enterprise.testing", { defaultValue: "Testing..." })
           : status === "success"
@@ -84,18 +84,21 @@ export default function TestConnectionButton({ provider, getConfig }: TestConnec
       </Button>
 
       {status === "error" && errorInfo && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/20 p-2.5 space-y-1.5">
-          <p dir="auto" className="text-xs text-destructive font-medium">
+        <div className="rounded-md bg-red-solid/10 border border-red-solid/20 p-2.5 space-y-1.5">
+          <p dir="auto" className="text-xs text-red-solid font-medium">
             {errorInfo.message}
           </p>
           {errorInfo.action && (
-            <p dir="auto" className="text-xs text-muted-foreground">
+            <p dir="auto" className="text-xs text-secondary">
               {errorInfo.action}
             </p>
           )}
           {errorInfo.copyCommand && (
             <div className="flex items-center gap-1.5">
-              <code dir="ltr" className="text-xs bg-muted px-1.5 py-0.5 rounded flex-1 font-mono">
+              <code
+                dir="ltr"
+                className="text-xs bg-surface-secondary px-1.5 py-0.5 rounded flex-1 font-mono"
+              >
                 {errorInfo.copyCommand}
               </code>
               <Button

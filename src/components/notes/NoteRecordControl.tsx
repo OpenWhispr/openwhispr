@@ -18,7 +18,7 @@ function readMeetingMicLevel(): number {
 }
 
 // Same near-opaque surface the ask bar wears while recording, so the two capsules match.
-const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
+const RECORDING_SURFACE = "bg-surface-primary/95 shadow-(--shadow-glass)";
 
 const WAVE_BAR_HEIGHTS = [6, 12, 9, 11];
 
@@ -29,7 +29,7 @@ export function RecordingWave({ className }: { className?: string }) {
       {WAVE_BAR_HEIGHTS.map((height, i) => (
         <span
           key={i}
-          className="w-0.5 rounded-full bg-primary animate-[ow-wave_1s_ease-in-out_infinite] motion-reduce:animate-none"
+          className="w-0.5 rounded-full bg-brand-solid animate-[ow-wave_1s_ease-in-out_infinite] motion-reduce:animate-none"
           style={{ height, animationDelay: `${i * 0.15}s` }}
         />
       ))}
@@ -89,9 +89,9 @@ export default function NoteRecordControl({
           className={cn(
             "group flex h-[30px] w-full items-center gap-2 rounded-full ps-1 pe-3",
             RECORDING_SURFACE,
-            "border border-primary/15 transition-[border-color] duration-200 hover:border-primary/30",
-            "dark:border-primary/25 dark:hover:border-primary/40",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            "border border-brand-solid/15 transition-[border-color] duration-200 hover:border-brand-solid/30",
+            "dark:border-brand-solid/25 dark:hover:border-brand-solid/40",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/30"
           )}
         >
           <span
@@ -104,7 +104,7 @@ export default function NoteRecordControl({
             <Square size={8} fill="currentColor" />
           </span>
           <LiveWaveform readLevel={readMeetingMicLevel} bars={10} className="h-3.5 flex-1" />
-          <span className="shrink-0 text-xs font-medium tabular-nums text-foreground/85">
+          <span className="shrink-0 text-xs font-medium tabular-nums text-primary/85">
             {formatMmSs(elapsed)}
           </span>
         </button>
@@ -121,7 +121,7 @@ export default function NoteRecordControl({
               "flex h-[30px] w-[30px] items-center justify-center rounded-full",
               GRADIENT_CIRCLE,
               "transition-[filter,transform] duration-150 enabled:hover:brightness-110 enabled:active:scale-95",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/30",
               // Keeps pointer events so hovering still shows why recording is off.
               disabled && "cursor-not-allowed opacity-40 saturate-0",
               isProcessing && "pointer-events-none"

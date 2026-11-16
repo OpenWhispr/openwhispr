@@ -165,10 +165,10 @@ test("the collapsed Live Transcript pill transitions its logo into an expand che
 test("the idle pill keeps the logo at normal foreground strength", async () => {
   const idle = await renderPill("idle", false);
 
-  assert.match(idle, /border-border-hover[^"\n]*dark:border-border\/50/);
+  assert.match(idle, /border-hover[^"\n]*dark:border-default\/50/);
   assert.match(
     idle,
-    /voice-identity-icon relative inline-block shrink-0 transition-\[width,height\] duration-200 text-foreground/
+    /voice-identity-icon relative inline-block shrink-0 transition-\[width,height\] duration-200 text-primary/
   );
 });
 
@@ -176,7 +176,7 @@ test("the floating hover pill changes surface treatment without zooming", async 
   const footprint = await pillFootprints();
   const hovered = await renderPill("hover", false);
 
-  assert.match(hovered, /border-border-hover bg-surface-3 text-foreground/);
+  assert.match(hovered, /border-hover bg-surface-tertiary text-primary/);
   assert.match(hovered, /box-shadow:var\(--shadow-card-hover-subtle\)/);
   assert.doesNotMatch(hovered, /style="[^"]*transform:/);
   assert.match(hovered, footprint.idle);
@@ -211,7 +211,7 @@ test("the waveform uses foreground contrast, rounded caps, and a pronounced heig
   const { WAVEFORM_BAR_MIN_PX, WAVEFORM_BAR_MAX_PX, resolveWaveformBarHeight } =
     await import("../../src/components/dictation/waveformMath.ts");
 
-  assert.match(recording, /relative shrink-0 overflow-hidden text-foreground/);
+  assert.match(recording, /relative shrink-0 overflow-hidden text-primary/);
   assert.equal(
     (recording.match(/w-0\.5 rounded-full bg-current/g) || []).length,
     await totalWaveBars()

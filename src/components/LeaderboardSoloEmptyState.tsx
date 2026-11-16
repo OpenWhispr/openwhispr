@@ -23,25 +23,25 @@ export default function LeaderboardSoloEmptyState({
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 size-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-3xl"
+        className="pointer-events-none absolute left-1/2 top-1/2 size-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-solid/5 blur-3xl"
       />
 
       <div className="relative flex max-w-lg flex-col items-center">
         <div aria-hidden="true" className="flex items-center">
-          <div className="flex size-11 items-center justify-center rounded-full border border-dashed border-border/70 bg-muted/30 text-muted-foreground/70">
+          <div className="flex size-11 items-center justify-center rounded-full border border-dashed border-default/70 bg-surface-secondary/30 text-secondary/70">
             <UserRound size={18} />
           </div>
-          <div className="w-9 border-t border-dashed border-border/70" />
-          <div className="flex size-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary shadow-sm">
+          <div className="w-9 border-t border-dashed border-default/70" />
+          <div className="flex size-14 items-center justify-center rounded-2xl border border-brand-solid/20 bg-brand-solid/10 text-brand-solid shadow-sm">
             <UserPlus size={24} />
           </div>
-          <div className="w-9 border-t border-dashed border-border/70" />
-          <div className="flex size-11 items-center justify-center rounded-full border border-dashed border-border/70 bg-muted/30 text-muted-foreground/70">
+          <div className="w-9 border-t border-dashed border-default/70" />
+          <div className="flex size-11 items-center justify-center rounded-full border border-dashed border-default/70 bg-surface-secondary/30 text-secondary/70">
             <UserRound size={18} />
           </div>
         </div>
 
-        <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/30 px-3 py-1 text-[11px] font-medium text-muted-foreground">
+        <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-default/70 bg-surface-secondary/30 px-3 py-1 text-[11px] font-medium text-secondary">
           <ScopeIcon size={12} />
           <span>{scopeName}</span>
         </div>
@@ -49,7 +49,7 @@ export default function LeaderboardSoloEmptyState({
         <h3 className="mt-4 text-xl font-semibold tracking-tight">
           {t("insights.leaderboard.soloTitle")}
         </h3>
-        <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-secondary">
           {t("insights.leaderboard.soloDescription", { scope: scopeName })}
         </p>
 
@@ -57,11 +57,9 @@ export default function LeaderboardSoloEmptyState({
           <UserPlus size={16} />
           {t("insights.leaderboard.inviteCta")}
         </Button>
-        <p className="mt-3 text-[11px] text-muted-foreground/75">
-          {t("insights.leaderboard.soloHint")}
-        </p>
+        <p className="mt-3 text-[11px] text-secondary/75">{t("insights.leaderboard.soloHint")}</p>
         {pendingInvites.length > 0 && (
-          <div className="mt-4 flex max-w-full items-start gap-2 rounded-lg border border-border/70 bg-muted/25 px-3 py-2 text-left text-[11px] text-muted-foreground">
+          <div className="mt-4 flex max-w-full items-start gap-2 rounded-lg border border-default/70 bg-surface-secondary/25 px-3 py-2 text-left text-[11px] text-secondary">
             <Clock3 size={13} className="mt-0.5 shrink-0" />
             <p className="min-w-0 break-words">
               {t("insights.leaderboard.invitedList", { emails: pendingInvites.join(", ") })}

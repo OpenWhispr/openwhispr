@@ -69,7 +69,7 @@ export function AgentComposer({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-[22px] border border-border bg-surface-1 px-3 pt-3 pb-2 shadow-[var(--shadow-card)]",
+        "flex flex-col rounded-[22px] border border-default bg-surface-secondary px-3 pt-3 pb-2 shadow-[var(--shadow-card)]",
         className
       )}
     >
@@ -89,10 +89,10 @@ export function AgentComposer({
         }}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="input-inline field-sizing-content max-h-36 min-h-6 flex-1 resize-none border-0 bg-transparent px-1 text-base leading-6 text-foreground caret-primary outline-none placeholder:text-muted-foreground/70"
+        className="input-inline field-sizing-content max-h-36 min-h-6 flex-1 resize-none border-0 bg-transparent px-1 text-base leading-6 text-primary caret-brand-solid outline-none placeholder:text-secondary/70"
       />
       {micUnavailableHint && (
-        <p className="px-1 pb-1 text-[11px] text-muted-foreground">{micUnavailableHint}</p>
+        <p className="px-1 pb-1 text-[11px] text-secondary">{micUnavailableHint}</p>
       )}
       <div className="flex items-center gap-2 pt-1">
         {onClose && (
@@ -125,7 +125,7 @@ export function AgentComposer({
             disabled={!canSend}
             aria-label={t("agentMode.input.send")}
             title={t("agentMode.input.send")}
-            className="flex h-6 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-[filter,opacity] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:brightness-100"
+            className="flex h-6 w-8 shrink-0 items-center justify-center rounded-full bg-brand-solid text-on-solid transition-[filter,opacity] hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 disabled:opacity-40 disabled:hover:brightness-100"
           >
             <CornerDownLeft size={16} className="rtl:scale-x-[-1]" />
           </button>
@@ -137,7 +137,7 @@ export function AgentComposer({
               title={t("agentWindow.actions.stop")}
               className={cn(
                 ICON_BUTTON,
-                "bg-foreground/10 text-foreground hover:bg-foreground/15 dark:bg-surface-2 dark:hover:bg-surface-raised"
+                "bg-text-primary/10 text-primary hover:bg-text-primary/15 dark:bg-surface-primary dark:hover:bg-surface-tertiary"
               )}
             >
               <Square size={14} />

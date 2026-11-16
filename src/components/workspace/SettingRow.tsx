@@ -23,12 +23,12 @@ export function SettingRow({
     <div className="flex items-center gap-1 rounded-[9px] p-1">
       <div className="flex min-w-0 flex-1 items-start gap-1">
         <span className="grid size-5 shrink-0 place-items-center">
-          <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+          <Icon className="size-3.5 text-secondary" aria-hidden="true" />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1 text-sm leading-[21px]">
-          <p className="truncate font-medium text-foreground">{title}</p>
-          <p className="text-muted-foreground">{body}</p>
-          {hint && <p className="text-muted-foreground/70">{hint}</p>}
+          <p className="truncate font-medium text-primary">{title}</p>
+          <p className="text-secondary">{body}</p>
+          {hint && <p className="text-secondary/70">{hint}</p>}
         </div>
       </div>
       {children}

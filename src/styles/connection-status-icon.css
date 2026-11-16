@@ -13,7 +13,7 @@
   height: 1.25rem;
   flex: none;
   overflow: visible;
-  color: var(--onboarding-text-secondary, var(--color-muted-foreground));
+  color: var(--onboarding-text-secondary, var(--color-text-secondary));
   transition: color 0.2s ease;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .connection-status-icon[data-state="connected"] {
-  color: var(--color-success);
+  color: var(--color-green-solid);
 }
 
 .connection-status-icon[data-state="connected"] .connection-status-icon-ring {
@@ -79,11 +79,11 @@
 }
 
 .connection-status-icon[data-state="failed"] {
-  color: var(--color-destructive);
+  color: var(--color-red-solid);
 }
 
 .connection-status-icon[data-state="unverified"] {
-  color: var(--color-warning);
+  color: var(--color-amber-solid);
 }
 
 .connection-status-icon[data-state="unverified"] .connection-status-icon-ring,

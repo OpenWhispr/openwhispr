@@ -17,17 +17,17 @@ export function AccessCard({
   const capturing = entry.state === "working";
   return (
     <div>
-      <p className="text-[14px] font-medium text-foreground agent:text-[15px]">
+      <p className="text-[14px] font-medium text-primary agent:text-[15px]">
         {t("agentMode.interactions.access.screen")}
       </p>
-      <p className="text-xs text-muted-foreground agent:text-[13px]" dir="auto">
+      <p className="text-xs text-secondary agent:text-[13px]" dir="auto">
         {payload.reason}
       </p>
       <div className="mt-3 flex justify-end gap-2">
         <button
           type="button"
           onClick={() => void respondToAccess(entry.key, false)}
-          className={cn(PILL_BUTTON, "text-muted-foreground")}
+          className={cn(PILL_BUTTON, "text-secondary")}
         >
           {t("agentMode.interactions.notNow")}
         </button>

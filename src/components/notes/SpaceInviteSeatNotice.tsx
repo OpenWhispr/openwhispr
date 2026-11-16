@@ -50,8 +50,8 @@ export function SpaceInviteSeatNotice({
           }
         />
       ) : null}
-      {seatLine ? <p className="text-xs text-muted-foreground">{seatLine}</p> : null}
-      {seatCostLine ? <p className="text-xs text-muted-foreground">{seatCostLine}</p> : null}
+      {seatLine ? <p className="text-xs text-secondary">{seatLine}</p> : null}
+      {seatCostLine ? <p className="text-xs text-secondary">{seatCostLine}</p> : null}
     </div>
   );
 }

@@ -16,7 +16,7 @@ import { getCachedPlatform, showInFolderLabelKey } from "../../utils/platform";
 import type { SkillSummary } from "../../types/skills";
 
 // A row's ⋯ menu items, as ConversationItem's.
-const ITEM_CLASS = "text-xs gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer focus:bg-foreground/5";
+const ITEM_CLASS = "text-xs gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer focus:bg-text-primary/5";
 
 interface SkillActionsMenuProps {
   skill: SkillSummary;
@@ -68,7 +68,7 @@ export function SkillActionsMenu({
           variant="ghost"
           size="sm"
           aria-label={t("skills.detail.more", { name: skill.displayName })}
-          className="h-7 w-7 px-0 rounded-full text-muted-foreground/70 hover:text-foreground"
+          className="h-7 w-7 px-0 rounded-full text-secondary/70 hover:text-primary"
         >
           <MoreHorizontal size={14} />
         </Button>
@@ -86,11 +86,11 @@ export function SkillActionsMenu({
         }}
       >
         <DropdownMenuItem onSelect={() => void reveal()} className={ITEM_CLASS}>
-          <FolderOpen size={12} className="text-muted-foreground/80" />
+          <FolderOpen size={12} className="text-secondary/80" />
           {t(showInFolderLabelKey(getCachedPlatform()))}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void copyMarkdown()} className={ITEM_CLASS}>
-          <Copy size={12} className="text-muted-foreground/80" />
+          <Copy size={12} className="text-secondary/80" />
           {t("skills.menu.copyMarkdown")}
         </DropdownMenuItem>
         {onUninstall && (
@@ -100,7 +100,7 @@ export function SkillActionsMenu({
               onSelect={() => {
                 uninstallPicked.current = true;
               }}
-              className="text-xs gap-2 rounded-lg px-2.5 py-1.5 text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+              className="text-xs gap-2 rounded-lg px-2.5 py-1.5 text-red-solid focus:text-red-solid focus:bg-red-solid/10 cursor-pointer"
             >
               <Trash2 size={12} />
               {t("skills.menu.uninstall")}

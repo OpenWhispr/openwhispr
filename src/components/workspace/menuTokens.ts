@@ -7,12 +7,12 @@ export const MENU_PANEL = "w-60 max-w-[calc(100vw-32px)] rounded-xl p-2";
 export const MENU_ROWS = "flex flex-col gap-2";
 
 /** A plain or submenu-trigger row. */
-export const MENU_ROW = "gap-1 rounded-[9px] p-1 text-sm leading-[21px] focus:bg-muted";
-export const MENU_SUBMENU_TRIGGER = `${MENU_ROW} data-[state=open]:bg-muted`;
+export const MENU_ROW = "gap-1 rounded-[9px] p-1 text-sm leading-[21px] focus:bg-surface-secondary";
+export const MENU_SUBMENU_TRIGGER = `${MENU_ROW} data-[state=open]:bg-surface-secondary`;
 
 /** A row with a box in front: the box sits in a 20px slot, so the label starts at 28px. */
 export const MENU_CHECK_ROW =
-  "rounded-[9px] p-1 ps-7 pe-1 text-sm leading-[21px] focus:bg-muted data-[disabled]:opacity-100";
+  "rounded-[9px] p-1 ps-7 pe-1 text-sm leading-[21px] focus:bg-surface-secondary data-[disabled]:opacity-100";
 
 /** A 14px icon centred in the row's 20px slot. */
-export const MENU_ICON = "mx-[3px] size-3.5 shrink-0 text-muted-foreground";
+export const MENU_ICON = "mx-[3px] size-3.5 shrink-0 text-secondary";

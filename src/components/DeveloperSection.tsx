@@ -114,30 +114,30 @@ export default function DeveloperSection() {
   return (
     <div className="space-y-8">
       <div className="mb-5">
-        <h3 className="text-[15px] font-semibold text-foreground tracking-tight">
+        <h3 className="text-[15px] font-semibold text-primary tracking-tight">
           {t("developerSection.title")}
         </h3>
-        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+        <p className="text-xs text-secondary mt-1 leading-relaxed">
           {t("developerSection.description")}
         </p>
       </div>
 
       {/* Debug Toggle */}
-      <div className="rounded-xl border border-border/70 dark:border-border-subtle bg-card dark:bg-surface-2 divide-y divide-border/60 dark:divide-border-subtle">
+      <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary dark:bg-surface-primary divide-y divide-default/60 dark:divide-default">
         <div className="px-5 py-4">
           <div className="flex items-center justify-between gap-6">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <p className="text-xs font-medium text-foreground">
+                <p className="text-xs font-medium text-primary">
                   {t("developerSection.debugMode.label")}
                 </p>
                 <div
                   className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                    debugEnabled ? "bg-success" : "bg-muted-foreground/30"
+                    debugEnabled ? "bg-green-solid" : "bg-text-secondary/30"
                   }`}
                 />
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              <p className="text-xs text-secondary mt-0.5 leading-relaxed">
                 {debugEnabled
                   ? t("developerSection.debugMode.enabledDescription")
                   : t("developerSection.debugMode.disabledDescription")}
@@ -156,21 +156,21 @@ export default function DeveloperSection() {
         {/* Log Path — only when active */}
         {debugEnabled && logPath && (
           <div className="px-5 py-4">
-            <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider mb-2">
+            <p className="text-xs font-medium text-secondary/70 uppercase tracking-wider mb-2">
               {t("developerSection.currentLogFile")}
             </p>
             <div className="flex items-center gap-2">
               <code
                 dir="ltr"
-                className="flex-1 text-xs text-muted-foreground font-mono break-all leading-relaxed bg-muted/30 dark:bg-surface-raised/30 px-3 py-2 rounded-lg border border-border/70"
+                className="flex-1 text-xs text-secondary font-mono break-all leading-relaxed bg-surface-secondary/30 dark:bg-surface-tertiary/30 px-3 py-2 rounded-lg border border-default/70"
               >
                 {logPath}
               </code>
               <Button onClick={handleCopyPath} variant="ghost" size="icon" className="size-8">
                 {copiedPath ? (
-                  <Check className="h-3.5 w-3.5 text-success" />
+                  <Check className="h-3.5 w-3.5 text-green-solid" />
                 ) : (
-                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Copy className="h-3.5 w-3.5 text-secondary" />
                 )}
               </Button>
             </div>
@@ -191,11 +191,11 @@ export default function DeveloperSection() {
       {/* What gets logged */}
       <div>
         <div className="mb-5">
-          <h3 className="text-[15px] font-semibold text-foreground tracking-tight">
+          <h3 className="text-[15px] font-semibold text-primary tracking-tight">
             {t("developerSection.whatGetsLogged.title")}
           </h3>
         </div>
-        <div className="rounded-xl border border-border/70 dark:border-border-subtle bg-card dark:bg-surface-2">
+        <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary dark:bg-surface-primary">
           <div className="px-5 py-4">
             <div
               className={`grid gap-y-2 ${isCompact ? "grid-cols-1 gap-x-0" : "grid-cols-2 gap-x-6"}`}
@@ -209,8 +209,8 @@ export default function DeveloperSection() {
                 t("developerSection.whatGetsLogged.items.errorDetails"),
               ].map((item) => (
                 <div key={item} className="flex items-center gap-2">
-                  <div className="h-1 w-1 rounded-full bg-muted-foreground/30 shrink-0" />
-                  <span className="text-xs text-muted-foreground">{item}</span>
+                  <div className="h-1 w-1 rounded-full bg-text-secondary/30 shrink-0" />
+                  <span className="text-xs text-secondary">{item}</span>
                 </div>
               ))}
             </div>
@@ -220,10 +220,10 @@ export default function DeveloperSection() {
 
       {/* Performance note — conditional */}
       {debugEnabled && (
-        <div className="rounded-xl border border-warning/20 bg-warning/5 dark:bg-warning/10">
+        <div className="rounded-xl border border-amber-solid/20 bg-amber-solid/5 dark:bg-amber-solid/10">
           <div className="px-5 py-4">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              <span className="font-medium text-warning">
+            <p className="text-xs text-secondary leading-relaxed">
+              <span className="font-medium text-amber-solid">
                 {t("developerSection.performanceNote.label")}
               </span>{" "}
               {t("developerSection.performanceNote.description")}
@@ -236,11 +236,11 @@ export default function DeveloperSection() {
       {debugEnabled && (
         <div>
           <div className="mb-5">
-            <h3 className="text-[15px] font-semibold text-foreground tracking-tight">
+            <h3 className="text-[15px] font-semibold text-primary tracking-tight">
               {t("developerSection.sharing.title")}
             </h3>
           </div>
-          <div className="rounded-xl border border-border/70 dark:border-border-subtle bg-card dark:bg-surface-2">
+          <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary dark:bg-surface-primary">
             <div className="px-5 py-4">
               <div className="space-y-2">
                 {[
@@ -249,14 +249,14 @@ export default function DeveloperSection() {
                   t("developerSection.sharing.steps.2"),
                 ].map((step, i) => (
                   <div key={i} className="flex items-start gap-3">
-                    <span className="mt-0.5 w-4 shrink-0 text-end font-mono text-xs text-muted-foreground/70">
+                    <span className="mt-0.5 w-4 shrink-0 text-end font-mono text-xs text-secondary/70">
                       {i + 1}
                     </span>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{step}</p>
+                    <p className="text-xs text-secondary leading-relaxed">{step}</p>
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground/70 mt-4 pt-3 border-t border-border/70">
+              <p className="text-xs text-secondary/70 mt-4 pt-3 border-t border-default/70">
                 {t("developerSection.sharing.footer")}
               </p>
             </div>

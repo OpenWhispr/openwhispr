@@ -17,32 +17,30 @@ export function SourceNoteBar({
   const title = note.title || t("notes.list.untitledNote");
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border/70 bg-surface-1 ps-4 pe-3 dark:border-white/8">
+    <div className="flex h-10 shrink-0 items-center gap-2 border-b border-default/70 bg-surface-secondary ps-4 pe-3 dark:border-white/8">
       <span
         aria-hidden="true"
         className={cn(
           "flex h-5 w-5 shrink-0 items-center justify-center rounded",
-          note.deleted ? "bg-foreground/5 text-muted-foreground" : "bg-primary/10 text-primary"
+          note.deleted ? "bg-text-primary/5 text-secondary" : "bg-brand-solid/10 text-brand-solid"
         )}
       >
         <FileText size={12} />
       </span>
-      <span className="shrink-0 text-xs text-muted-foreground">{t("chat.sourceNote.from")}</span>
+      <span className="shrink-0 text-xs text-secondary">{t("chat.sourceNote.from")}</span>
       <span
         dir="auto"
         className={cn(
           "min-w-0 truncate text-xs",
           note.deleted
-            ? "text-muted-foreground line-through"
-            : cn("font-medium text-foreground", !note.title && "italic")
+            ? "text-secondary line-through"
+            : cn("font-medium text-primary", !note.title && "italic")
         )}
       >
         {title}
       </span>
       {note.deleted ? (
-        <span className="shrink-0 text-xs text-muted-foreground">
-          · {t("chat.sourceNote.deleted")}
-        </span>
+        <span className="shrink-0 text-xs text-secondary">· {t("chat.sourceNote.deleted")}</span>
       ) : (
         <Button
           type="button"

@@ -194,8 +194,8 @@ function GpuStatusBadge() {
     if (!serverStatus?.running) return null;
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
-        <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-success" />
-        <span className="text-xs text-muted-foreground">{t("gpu.active")}</span>
+        <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-green-solid" />
+        <span className="text-xs text-secondary">{t("gpu.active")}</span>
       </div>
     );
   }
@@ -204,17 +204,17 @@ function GpuStatusBadge() {
   if (downloading && progress) {
     return (
       <div className="flex items-center gap-2 mt-2 px-1">
-        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+        <div className="flex-1 h-1 bg-surface-secondary rounded-full overflow-hidden">
           <div
-            className="h-full bg-primary transition-all"
+            className="h-full bg-brand-solid transition-all"
             style={{ width: `${progress.percentage}%` }}
           />
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums">{progress.percentage}%</span>
+        <span className="text-xs text-secondary tabular-nums">{progress.percentage}%</span>
         <button
           type="button"
           onClick={() => window.electronAPI?.cancelLlamaVulkanDownload?.()}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="text-xs text-secondary hover:text-primary transition-colors"
         >
           {t("gpu.cancel")}
         </button>
@@ -226,11 +226,11 @@ function GpuStatusBadge() {
   if (error) {
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
-        <span className="text-xs text-destructive">{error}</span>
+        <span className="text-xs text-red-solid">{error}</span>
         <button
           type="button"
           onClick={() => setError(null)}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors ms-1"
+          className="text-xs text-secondary hover:text-primary transition-colors ms-1"
         >
           {t("gpu.dismiss")}
         </button>
@@ -242,8 +242,8 @@ function GpuStatusBadge() {
   if (activating) {
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
-        <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
-        <span className="text-xs text-muted-foreground">{t("gpu.activating")}</span>
+        <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-brand-solid animate-pulse" />
+        <span className="text-xs text-secondary">{t("gpu.activating")}</span>
       </div>
     );
   }
@@ -255,12 +255,12 @@ function GpuStatusBadge() {
     // State 6: Activation failed
     if (!isGpu && activationFailed) {
       return (
-        <div className="mt-2 flex items-start justify-between gap-3 rounded-md border border-warning/40 bg-warning/5 p-2.5">
+        <div className="mt-2 flex items-start justify-between gap-3 rounded-md border border-amber-solid/40 bg-amber-solid/5 p-2.5">
           <div className="flex min-w-0 items-start gap-2">
-            <CircleAlert size={15} className="mt-0.5 shrink-0 text-warning" />
+            <CircleAlert size={15} className="mt-0.5 shrink-0 text-amber-solid" />
             <div className="min-w-0">
-              <p className="text-xs font-medium text-foreground">{t("gpu.activationFailed")}</p>
-              <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+              <p className="text-xs font-medium text-primary">{t("gpu.activationFailed")}</p>
+              <p className="mt-0.5 text-xs leading-snug text-secondary">
                 {t("gpu.reasoningActivationFailedDescription")}
               </p>
               <Button
@@ -278,7 +278,7 @@ function GpuStatusBadge() {
             onClick={handleDelete}
             size="sm"
             variant="ghost"
-            className="h-6 shrink-0 px-2 text-xs text-muted-foreground hover:text-destructive"
+            className="h-6 shrink-0 px-2 text-xs text-secondary hover:text-red-solid"
           >
             {t("gpu.remove")}
           </Button>
@@ -290,15 +290,13 @@ function GpuStatusBadge() {
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
         <span
-          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${isGpu ? "bg-success" : "bg-primary"}`}
+          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${isGpu ? "bg-green-solid" : "bg-brand-solid"}`}
         />
-        <span className="text-xs text-muted-foreground">
-          {isGpu ? t("gpu.active") : t("gpu.ready")}
-        </span>
+        <span className="text-xs text-secondary">{isGpu ? t("gpu.active") : t("gpu.ready")}</span>
         <button
           type="button"
           onClick={handleDelete}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors ms-auto"
+          className="text-xs text-secondary hover:text-primary transition-colors ms-auto"
         >
           {t("gpu.remove")}
         </button>
@@ -309,11 +307,11 @@ function GpuStatusBadge() {
   // State 7: GPU available, not downloaded — show banner
   if (gpuResult?.available && !dismissed) {
     return (
-      <div className="mt-2 rounded-md border border-primary/20 bg-primary/5 p-2.5">
+      <div className="mt-2 rounded-md border border-brand-solid/20 bg-brand-solid/5 p-2.5">
         <div className="flex items-start gap-2.5">
-          <Zap size={13} className="text-primary shrink-0 mt-0.5" />
+          <Zap size={13} className="text-brand-solid shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-foreground">{t("gpu.reasoningBanner")}</p>
+            <p className="text-xs font-medium text-primary">{t("gpu.reasoningBanner")}</p>
             <div className="flex items-center gap-2 mt-1.5">
               <Button
                 onClick={handleDownload}
@@ -328,7 +326,7 @@ function GpuStatusBadge() {
                   localStorage.setItem("llamaVulkanBannerDismissed", "true");
                   setDismissed(true);
                 }}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="text-xs text-secondary hover:text-primary transition-colors"
               >
                 {t("gpu.dismiss")}
               </button>
@@ -622,14 +620,14 @@ export default function ReasoningModelSelector({
                 renderIcon={renderModeIcon}
                 colorScheme="purple"
               />
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="text-xs text-secondary text-center">
                 {effectiveMode === "local"
                   ? t("reasoning.mode.localDescription")
                   : t("reasoning.mode.cloudDescription")}
               </p>
             </>
           ) : (
-            <p className="text-xs text-muted-foreground text-center">{t("common.managedByOrg")}</p>
+            <p className="text-xs text-secondary text-center">{t("common.managedByOrg")}</p>
           )}
         </div>
       )}
@@ -687,12 +685,10 @@ export default function ReasoningModelSelector({
                   {hostedKey && (
                     <div className="space-y-2" onFocus={editing.onFocus} onBlur={editing.onBlur}>
                       {displayedCloudProvider === "corti" && (
-                        <p className="text-xs text-muted-foreground">
-                          {t("reasoning.corti.euOnly")}
-                        </p>
+                        <p className="text-xs text-secondary">{t("reasoning.corti.euOnly")}</p>
                       )}
                       <div className="flex items-baseline justify-between">
-                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
+                        <h4 className="font-medium text-primary">{t("common.apiKey")}</h4>
                         <GetApiKeyLink url={hostedKey.url} />
                       </div>
                       <ProviderCheckField
@@ -717,7 +713,7 @@ export default function ReasoningModelSelector({
                   )}
 
                   <div className="pt-3 space-y-2">
-                    <h4 className="text-sm font-medium text-foreground">
+                    <h4 className="text-sm font-medium text-primary">
                       {t("reasoning.selectModel")}
                     </h4>
                     <ModelCardList
@@ -730,12 +726,12 @@ export default function ReasoningModelSelector({
                     {displayedCloudProvider === "tinfoil" && (
                       <>
                         {tinfoilModelsLoading && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-secondary">
                             {t("reasoning.tinfoil.refreshingModels")}
                           </p>
                         )}
                         {!tinfoilModelsLoading && tinfoilModelsError && (
-                          <p className="text-xs text-destructive">
+                          <p className="text-xs text-red-solid">
                             {t("reasoning.custom.unableToLoadModels")}
                           </p>
                         )}

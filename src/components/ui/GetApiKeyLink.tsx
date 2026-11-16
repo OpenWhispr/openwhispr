@@ -4,7 +4,7 @@ import { createExternalLinkHandler, withUtm } from "../../utils/externalLinks";
 export function GetApiKeyLink({
   url,
   labelKey = "reasoning.getApiKey",
-  className = "text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors",
+  className = "text-xs text-brand underline decoration-brand-text/30 hover:decoration-brand-text/60 cursor-pointer transition-colors",
 }: {
   url: string;
   labelKey?: string;

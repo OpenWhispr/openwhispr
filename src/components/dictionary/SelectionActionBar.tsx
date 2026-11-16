@@ -29,9 +29,9 @@ interface SelectionActionBarProps {
 }
 
 const QUIET_BUTTON_CLASS =
-  "rounded-[5px] px-1 text-[11px] text-background/70 transition-colors enabled:hover:text-background disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background/40";
+  "rounded-[5px] px-1 text-[11px] text-surface-primary/70 transition-colors enabled:hover:text-surface-primary disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-surface-primary/40";
 const SOLID_BUTTON_CLASS =
-  "flex h-6 items-center gap-1 rounded-md bg-background px-2.5 text-[11px] font-medium transition-colors hover:bg-background/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-background/40";
+  "flex h-6 items-center gap-1 rounded-md bg-surface-primary px-2.5 text-[11px] font-medium transition-colors hover:bg-surface-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-surface-primary/40";
 
 function QuietButton({
   onClick,
@@ -95,7 +95,7 @@ export function SelectionActionBar({
       // Pulled up across the column's 12px gap so it floats inside the list's
       // clearance, 8px above the list's bottom edge.
       style={{ marginTop: -(height + 20) }}
-      className="sticky bottom-3 z-20 flex min-h-10 w-[min(100%,40rem)] flex-wrap items-center justify-between gap-x-3 gap-y-1 self-center rounded-lg bg-foreground py-1.5 ps-3 pe-2 text-background shadow-lg animate-in fade-in-0 slide-in-from-bottom-2"
+      className="sticky bottom-3 z-20 flex min-h-10 w-[min(100%,40rem)] flex-wrap items-center justify-between gap-x-3 gap-y-1 self-center rounded-lg bg-text-primary py-1.5 ps-3 pe-2 text-surface-primary shadow-lg animate-in fade-in-0 slide-in-from-bottom-2"
     >
       <span className="flex min-w-0 items-center gap-1.5 text-[11px]">
         <span aria-live="polite" className="shrink-0 font-medium tabular-nums">
@@ -103,7 +103,7 @@ export function SelectionActionBar({
         </span>
         {!allShownSelected && total > 0 && (
           <>
-            <span aria-hidden="true" className="text-background/40">
+            <span aria-hidden="true" className="text-surface-primary/40">
               ·
             </span>
             <span className="truncate">
@@ -129,7 +129,7 @@ export function SelectionActionBar({
             aria-haspopup="dialog"
             aria-expanded={shareOpen}
             onClick={(event) => onShare(event.currentTarget)}
-            className={cn(SOLID_BUTTON_CLASS, "text-foreground")}
+            className={cn(SOLID_BUTTON_CLASS, "text-primary")}
           >
             {t("dictionary.shared.selection.shareWith")}
             <ChevronDown size={11} />
@@ -139,7 +139,7 @@ export function SelectionActionBar({
           <button
             type="button"
             onClick={onDeleteForEveryone}
-            className={cn(SOLID_BUTTON_CLASS, "text-destructive")}
+            className={cn(SOLID_BUTTON_CLASS, "text-red-solid")}
           >
             {t("dictionary.shared.actions.deleteForEveryone")}
           </button>

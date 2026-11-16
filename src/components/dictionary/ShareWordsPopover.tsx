@@ -96,7 +96,7 @@ export function ShareWordsPopover({
       >
         <p
           dir="auto"
-          className="truncate px-2 pb-1 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-foreground/45"
+          className="truncate px-2 pb-1 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-primary/45"
         >
           {title}
         </p>
@@ -113,13 +113,13 @@ export function ShareWordsPopover({
                   "h-8 w-full gap-2 px-2 text-start text-xs transition-colors",
                   option.alreadyShared
                     ? "opacity-45"
-                    : "hover:bg-foreground/5 dark:hover:bg-white/6"
+                    : "hover:bg-text-primary/5 dark:hover:bg-white/6"
                 )}
               >
-                <span dir="auto" className="min-w-0 flex-1 truncate text-foreground/85">
+                <span dir="auto" className="min-w-0 flex-1 truncate text-primary/85">
                   {option.label}
                 </span>
-                <span className="shrink-0 text-[10px] tabular-nums text-foreground/45">
+                <span className="shrink-0 text-[10px] tabular-nums text-primary/45">
                   {option.alreadyShared
                     ? t("dictionary.shared.share.alreadyShared")
                     : option.memberCount}
@@ -128,13 +128,13 @@ export function ShareWordsPopover({
             );
           })}
         </div>
-        <div className="mt-1 flex items-center justify-between gap-2 border-t border-foreground/8 px-2 pb-0.5 pt-2 dark:border-white/8">
+        <div className="mt-1 flex items-center justify-between gap-2 border-t border-text-primary/8 px-2 pb-0.5 pt-2 dark:border-white/8">
           {nothingShareable ? (
-            <span role="alert" className="min-w-0 text-[10px] leading-snug text-destructive">
+            <span role="alert" className="min-w-0 text-[10px] leading-snug text-red-solid">
               {t("dictionary.shared.notTermLike")}
             </span>
           ) : (
-            <span className="min-w-0 truncate text-[10px] text-foreground/45">
+            <span className="min-w-0 truncate text-[10px] text-primary/45">
               {/* A pronoun, not a count: "it" for one word, "them" for several. */}
               {t(
                 words.length === 1

@@ -175,7 +175,7 @@ export function SkillsHome({
         <Button ref={controlRefs.add} variant="outline" size="sm">
           <Plus className="h-3.5 w-3.5" />
           {t("skills.pane.add")}
-          <ChevronDown className="h-3 w-3 -me-0.5 text-muted-foreground" />
+          <ChevronDown className="h-3 w-3 -me-0.5 text-secondary" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={6} className="min-w-52">
@@ -285,7 +285,7 @@ export function SkillsHome({
                       ref={controlRefs.seeMore}
                       type="button"
                       onClick={() => onManage("seeMore")}
-                      className="mt-2 ms-1 inline-flex items-center gap-1 rounded-sm text-xs text-primary/80 hover:text-primary outline-none focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors"
+                      className="mt-2 ms-1 inline-flex items-center gap-1 rounded-sm text-xs text-brand-solid/80 hover:text-brand-solid outline-none focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors"
                     >
                       {seeLabel}
                       <ChevronRight className="h-3 w-3 rtl:rotate-180" />
@@ -293,7 +293,7 @@ export function SkillsHome({
                   )}
                 </>
               ) : (
-                <p className="ps-1 text-xs text-muted-foreground">
+                <p className="ps-1 text-xs text-secondary">
                   {t("skills.pane.noMatches", { query: query.trim() })}
                 </p>
               )}

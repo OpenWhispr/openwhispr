@@ -74,10 +74,10 @@ export default function TeamsTable({
               <td colSpan={3} className="px-4 py-8 text-center">
                 {status === "failed" ? (
                   <div>
-                    <p className="text-xs font-medium text-foreground">
+                    <p className="text-xs font-medium text-primary">
                       {t("settingsPage.workspace.teams.failedTitle")}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-secondary">
                       {t("settingsPage.workspace.teams.failedBody")}
                     </p>
                     <Button variant="outline" size="sm" className="mt-3" onClick={() => onRetry()}>
@@ -86,10 +86,10 @@ export default function TeamsTable({
                   </div>
                 ) : (
                   <div role="status">
-                    <p className="text-xs font-medium text-foreground">
+                    <p className="text-xs font-medium text-primary">
                       {t("settingsPage.workspace.teams.loadingTitle")}
                     </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-secondary">
                       {t("settingsPage.workspace.teams.loadingBody")}
                     </p>
                   </div>
@@ -114,10 +114,10 @@ function EmptyTeams({
   return (
     <div className="flex flex-col items-center px-6 py-10 text-center">
       <EmptyStateArt kind="teams" />
-      <p className="mt-2 text-lg font-medium leading-[1.4] text-foreground">
+      <p className="mt-2 text-lg font-medium leading-[1.4] text-primary">
         {t("settingsPage.workspace.teams.emptyTitle")}
       </p>
-      <p className="mt-1.5 max-w-[339px] text-sm text-muted-foreground">
+      <p className="mt-1.5 max-w-[339px] text-sm text-secondary">
         {canCreate
           ? t("settingsPage.workspace.teams.emptyBody")
           : t("settingsPage.workspace.teams.emptyBodyMember")}
@@ -144,7 +144,7 @@ function TeamRow({
 
   return (
     <tr
-      className={cn("h-12 cursor-pointer transition-colors hover:bg-foreground/3", ROW_DIVIDER)}
+      className={cn("h-12 cursor-pointer transition-colors hover:bg-text-primary/3", ROW_DIVIDER)}
       onClick={() => onOpen(team)}
     >
       <td className="ps-4 pe-3 max-w-0">
@@ -156,7 +156,7 @@ function TeamRow({
           <button
             type="button"
             dir="auto"
-            className="min-w-0 truncate rounded-sm text-start text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="min-w-0 truncate rounded-sm text-start text-sm text-primary outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/30"
           >
             {team.name}
           </button>
@@ -200,7 +200,7 @@ function MembersCell({ team }: { team: Team }): React.ReactElement {
   }, [team.id]);
 
   const label = t("settingsPage.workspace.teams.people", { count });
-  if (count === 0) return <span className="text-xs text-muted-foreground">{label}</span>;
+  if (count === 0) return <span className="text-xs text-secondary">{label}</span>;
 
   return (
     <Popover onOpenChange={(open) => open && void read()}>
@@ -212,14 +212,12 @@ function MembersCell({ team }: { team: Team }): React.ReactElement {
         })}
       >
         <span className="truncate">{label}</span>
-        <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronDown className="size-3 shrink-0 text-secondary" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-1.5">
         {roster.status === "failed" ? (
           <div className="px-2 py-1.5">
-            <p className="text-xs text-muted-foreground">
-              {t("settingsPage.workspace.teams.failedBody")}
-            </p>
+            <p className="text-xs text-secondary">{t("settingsPage.workspace.teams.failedBody")}</p>
             <Button variant="outline" size="sm" className="mt-2" onClick={() => void read()}>
               {t("settingsPage.workspace.teams.retry")}
             </Button>
@@ -235,11 +233,11 @@ function MembersCell({ team }: { team: Team }): React.ReactElement {
                   size="sm"
                 />
                 <div className="min-w-0">
-                  <p dir="auto" className="truncate text-xs font-medium text-foreground">
+                  <p dir="auto" className="truncate text-xs font-medium text-primary">
                     {member.name ? member.name : <bdi dir="ltr">{member.email}</bdi>}
                   </p>
                   {member.name && (
-                    <p className="truncate text-[11px] text-muted-foreground">
+                    <p className="truncate text-[11px] text-secondary">
                       <bdi dir="ltr">{member.email}</bdi>
                     </p>
                   )}
@@ -249,7 +247,7 @@ function MembersCell({ team }: { team: Team }): React.ReactElement {
           </ul>
         ) : (
           <div role="status" className="flex justify-center py-2">
-            <Loader2 className="size-3.5 animate-spin text-muted-foreground" aria-hidden="true" />
+            <Loader2 className="size-3.5 animate-spin text-secondary" aria-hidden="true" />
           </div>
         )}
       </PopoverContent>
@@ -265,7 +263,7 @@ function SpaceGlyph({ emoji }: { emoji: string | null }): React.ReactElement {
       {emoji}
     </span>
   ) : (
-    <FolderRounded aria-hidden="true" size={14} className="text-muted-foreground" />
+    <FolderRounded aria-hidden="true" size={14} className="text-secondary" />
   );
 }
 
@@ -281,9 +279,7 @@ function SpacesCell({
 
   if (spaces.length === 0) {
     return (
-      <span className="text-xs text-muted-foreground">
-        {t("settingsPage.workspace.teams.spacesNone")}
-      </span>
+      <span className="text-xs text-secondary">{t("settingsPage.workspace.teams.spacesNone")}</span>
     );
   }
 
@@ -292,7 +288,7 @@ function SpacesCell({
     return (
       <div className="flex min-w-0 items-center gap-2">
         <SpaceGlyph emoji={space.emoji} />
-        <span dir="auto" className="min-w-0 truncate text-xs text-foreground">
+        <span dir="auto" className="min-w-0 truncate text-xs text-primary">
           {space.name}
         </span>
       </div>
@@ -309,14 +305,14 @@ function SpacesCell({
         })}
       >
         <span className="truncate">{label}</span>
-        <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronDown className="size-3 shrink-0 text-secondary" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-1.5">
         <ul className="flex flex-col">
           {spaces.map((space) => (
             <li key={space.id} className="flex items-center gap-2.5 px-2 py-1.5">
               <SpaceGlyph emoji={space.emoji} />
-              <span dir="auto" className="min-w-0 truncate text-xs text-foreground">
+              <span dir="auto" className="min-w-0 truncate text-xs text-primary">
                 {space.name}
               </span>
             </li>

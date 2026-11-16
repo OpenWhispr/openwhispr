@@ -45,12 +45,12 @@ const COMPACT_CONTENT_GAP_PX = 6;
 // which redraws this chrome while the cancel skin owns the fused surface —
 // change together.
 const STATE_APPEARANCE: Record<VoicePillState, string> = {
-  idle: "border-border-hover bg-surface-1 text-muted-foreground dark:border-border/50",
-  hover: "border-border-hover bg-surface-3 text-foreground",
-  recording: "border-border-hover bg-surface-1 text-foreground",
-  processing: "border-border/60 bg-surface-1 text-foreground/70",
-  thinking: "border-border/60 bg-surface-1 text-foreground",
-  unavailable: "border-border/60 bg-surface-1 text-muted-foreground",
+  idle: "border-hover bg-surface-secondary text-secondary dark:border-default/50",
+  hover: "border-hover bg-surface-tertiary text-primary",
+  recording: "border-hover bg-surface-secondary text-primary",
+  processing: "border-default/60 bg-surface-secondary text-primary/70",
+  thinking: "border-default/60 bg-surface-secondary text-primary",
+  unavailable: "border-default/60 bg-surface-secondary text-secondary",
 };
 
 /** One persistent control that resizes between the floating and panel layouts. */
@@ -129,7 +129,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       {...props}
     >
       <div
-        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-foreground/10 to-transparent transition-opacity duration-200 ease-out"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-text-primary/10 to-transparent transition-opacity duration-200 ease-out"
         style={{ opacity: state === "hover" ? 0.72 : 0 }}
       />
 
@@ -149,7 +149,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
             agentMode={agentMode}
             className={cn(
               "transition-[width,height] duration-200",
-              state === "idle" && "text-foreground",
+              state === "idle" && "text-primary",
               (isUnavailable || isProcessing) && "animate-pulse"
             )}
           />
@@ -164,7 +164,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       </span>
 
       <div
-        className="shrink-0 overflow-hidden bg-border/60"
+        className="shrink-0 overflow-hidden bg-border-default/60"
         style={{
           height: showCompactPill ? 16 : 20,
           width: showDivider ? 1 : 0,
@@ -176,7 +176,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       />
 
       <div
-        className="voice-pill-waveform relative shrink-0 overflow-hidden text-foreground"
+        className="voice-pill-waveform relative shrink-0 overflow-hidden text-primary"
         style={{
           width: showCompactPill ? 52 : 0,
           height: showCompactPill ? 24 : 32,
@@ -207,7 +207,7 @@ export const VoicePill = forwardRef<HTMLDivElement, VoicePillProps>(function Voi
       </div>
 
       {isUnavailable && (
-        <div className="pointer-events-none absolute inset-0 rounded-full border-2 border-foreground/30 animate-pulse" />
+        <div className="pointer-events-none absolute inset-0 rounded-full border-2 border-text-primary/30 animate-pulse" />
       )}
     </div>
   );

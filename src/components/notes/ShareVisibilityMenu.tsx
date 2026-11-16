@@ -41,29 +41,29 @@ export default function ShareVisibilityMenu({
           disabled={disabled}
           className={cn(
             "inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs font-medium",
-            "bg-foreground/4 dark:bg-white/5 text-foreground/80",
-            "hover:bg-foreground/8 dark:hover:bg-white/10",
-            "active:bg-foreground/12 dark:active:bg-white/15",
-            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            "bg-text-primary/4 dark:bg-white/5 text-primary/80",
+            "hover:bg-text-primary/8 dark:hover:bg-white/10",
+            "active:bg-text-primary/12 dark:active:bg-white/15",
+            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus",
             "disabled:opacity-50 disabled:pointer-events-none transition-colors"
           )}
           aria-label={t("noteEditor.share.dialog.visibility.label")}
         >
           {current.icon}
           <span className="max-w-44 truncate">{current.label}</span>
-          <ChevronDown size={12} className="text-foreground/45 shrink-0" />
+          <ChevronDown size={12} className="text-primary/45 shrink-0" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={4} className="min-w-[260px]">
         <VisibilityItem
-          icon={<Lock size={13} className="text-foreground/50" />}
+          icon={<Lock size={13} className="text-primary/50" />}
           label={t("noteEditor.share.dialog.visibility.privateOption")}
           active={value === "private"}
           onSelect={() => onChange("private")}
         />
         {isVisible("invited") && (
           <VisibilityItem
-            icon={<Users size={13} className="text-foreground/50" />}
+            icon={<Users size={13} className="text-primary/50" />}
             label={t("noteEditor.share.dialog.visibility.invited")}
             active={value === "invited"}
             onSelect={() => onChange("invited")}
@@ -71,7 +71,7 @@ export default function ShareVisibilityMenu({
         )}
         {isVisible("link") && (
           <VisibilityItem
-            icon={<Globe size={13} className="text-foreground/50" />}
+            icon={<Globe size={13} className="text-primary/50" />}
             label={t("noteEditor.share.dialog.visibility.link")}
             active={value === "link"}
             onSelect={() => onChange("link")}
@@ -79,7 +79,7 @@ export default function ShareVisibilityMenu({
         )}
         {showDomainOption && isVisible("domain") && (
           <VisibilityItem
-            icon={<Building2 size={13} className="text-foreground/50" />}
+            icon={<Building2 size={13} className="text-primary/50" />}
             label={t("noteEditor.share.dialog.visibility.domain", { domain: ownerDomain })}
             active={value === "domain"}
             onSelect={() => onChange("domain")}
@@ -98,23 +98,23 @@ function renderCurrent(
   switch (value) {
     case "link":
       return {
-        icon: <Globe size={12} className="text-foreground/60" />,
+        icon: <Globe size={12} className="text-primary/60" />,
         label: t("noteEditor.share.dialog.visibility.link"),
       };
     case "domain":
       return {
-        icon: <Building2 size={12} className="text-foreground/60" />,
+        icon: <Building2 size={12} className="text-primary/60" />,
         label: t("noteEditor.share.dialog.visibility.domain", { domain: ownerDomain }),
       };
     case "invited":
       return {
-        icon: <Users size={12} className="text-foreground/60" />,
+        icon: <Users size={12} className="text-primary/60" />,
         label: t("noteEditor.share.dialog.visibility.invited"),
       };
     case "private":
     default:
       return {
-        icon: <Lock size={12} className="text-foreground/60" />,
+        icon: <Lock size={12} className="text-primary/60" />,
         label: t("noteEditor.share.dialog.visibility.private"),
       };
   }
@@ -135,7 +135,7 @@ function VisibilityItem({
     <DropdownMenuItem onClick={onSelect} className="text-xs gap-2 py-1.5">
       {icon}
       <span className="flex-1">{label}</span>
-      {active && <Check size={12} className="text-primary" />}
+      {active && <Check size={12} className="text-brand-solid" />}
     </DropdownMenuItem>
   );
 }

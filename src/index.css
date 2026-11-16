@@ -42,16 +42,9 @@
   --radius-xl: 0.625rem; /* 10px - large cards */
   --radius-shell: 0.75rem; /* 12px - the inset content container in the main window */
 
-  /* Custom Light Mode Brand Colors (Parchment Theme) */
-  --color-parchment-bg: #f9f6f1;
-  --color-parchment-border: #ddd4c7;
-  --color-parchment-text: #2b1f14;
-  --color-parchment-accent: #c0a77d;
-  --color-brand-primary: #2b1f14;
-  --color-brand-accent: #4b2e2b;
-  --color-brand-highlight: #c0a77d;
-  --color-brand-link: #2e3659;
-  --color-pattern: #e7e5e4;
+  /* The assistant pill's glow. Lighter than Figma's accent/solid, which has no
+     glow step yet, so it stays a literal until the collection gains one. */
+  --color-agent-brand: #8787ff;
 
   --shadow-modal: 0 24px 48px -12px oklch(0 0 0 / 0.18);
 
@@ -118,7 +111,7 @@
 
 @layer base {
   * {
-    border-color: var(--color-border);
+    border-color: var(--color-border-default);
     transition:
       background-color 150ms ease,
       border-color 150ms ease,
@@ -126,8 +119,8 @@
   }
 
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    background-color: var(--color-surface-primary);
+    color: var(--color-text-primary);
     margin: 0;
     padding: 0;
     font-family: var(--font-family-sans);
@@ -243,8 +236,8 @@ body:has(.onboarding-canvas) {
   font-optical-sizing: auto;
 
   /* Onboarding design tokens from the Figma library, except the accent: that is
-     the app's one brand blue, so both themes resolve it through --color-primary. */
-  --onboarding-accent: var(--color-primary);
+     the app's one brand blue, so both themes resolve it through --color-brand-solid. */
+  --onboarding-accent: var(--color-brand-solid);
   --onboarding-accent-foreground: #ffffff;
   /* Hover on a filled accent means "darker" on light and "lighter" on dark, so the
      mix target is a token rather than a literal `black` in the utility class. */
@@ -276,7 +269,7 @@ body:has(.onboarding-canvas) {
   --onboarding-inverse-text: #ffffff;
   /* Status. Kept separate from the accent so a failed provider test never reads
      as a brand colour. */
-  --onboarding-link: var(--color-link);
+  --onboarding-link: var(--color-brand-text);
   --onboarding-danger: #ef4444;
   --onboarding-success: #22c55e;
   --onboarding-success-foreground: #0a0a0a;
@@ -337,18 +330,18 @@ body.dark:has(.onboarding-canvas) {
    embedded version the same semantic names without applying onboarding's page
    chrome or overriding the dialog's existing theme. */
 .onboarding-embedded-auth {
-  --onboarding-accent: var(--color-primary);
-  --onboarding-accent-foreground: var(--color-primary-foreground);
-  --onboarding-text-primary: var(--color-foreground);
-  --onboarding-text-secondary: var(--color-muted-foreground);
-  --onboarding-text-tertiary: color-mix(in srgb, var(--color-muted-foreground) 75%, transparent);
-  --onboarding-control-border: var(--color-border);
-  --onboarding-surface: var(--color-background);
-  --onboarding-surface-secondary: var(--color-muted);
-  --onboarding-surface-tertiary: var(--color-secondary);
-  --onboarding-surface-hover: var(--color-surface-1);
-  --onboarding-inverse-surface: var(--color-foreground);
-  --onboarding-inverse-text: var(--color-background);
+  --onboarding-accent: var(--color-brand-solid);
+  --onboarding-accent-foreground: var(--color-text-on-solid);
+  --onboarding-text-primary: var(--color-text-primary);
+  --onboarding-text-secondary: var(--color-text-secondary);
+  --onboarding-text-tertiary: color-mix(in srgb, var(--color-text-secondary) 75%, transparent);
+  --onboarding-control-border: var(--color-border-default);
+  --onboarding-surface: var(--color-surface-primary);
+  --onboarding-surface-secondary: var(--color-surface-secondary);
+  --onboarding-surface-tertiary: var(--color-surface-secondary);
+  --onboarding-surface-hover: var(--color-surface-secondary);
+  --onboarding-inverse-surface: var(--color-text-primary);
+  --onboarding-inverse-text: var(--color-surface-primary);
 }
 
 /* Remaps the app-wide shadcn tokens onto the onboarding palette, so any shared
@@ -357,14 +350,12 @@ body.dark:has(.onboarding-canvas) {
    tokens rather than literals, so the .dark block above is the only place the
    theme is described twice. */
 .onboarding-canvas {
-  --color-background: var(--onboarding-surface);
-  --color-foreground: var(--onboarding-text-primary);
-  --color-card: var(--onboarding-surface);
-  --color-card-foreground: var(--onboarding-text-primary);
-  --color-muted: var(--onboarding-surface-secondary);
-  --color-muted-foreground: var(--onboarding-text-secondary);
-  --color-border: var(--onboarding-control-border);
-  --color-ring: var(--onboarding-accent);
+  --color-surface-primary: var(--onboarding-surface);
+  --color-text-primary: var(--onboarding-text-primary);
+  --color-surface-secondary: var(--onboarding-surface-secondary);
+  --color-text-secondary: var(--onboarding-text-secondary);
+  --color-border-default: var(--onboarding-control-border);
+  --color-border-focus: var(--onboarding-accent);
   background-color: var(--onboarding-surface);
   /* Supplied full-width artwork replaces the generated corner washes. Keeping
      its natural aspect ratio preserves the authored violet-to-blue composition
@@ -540,7 +531,7 @@ body.dark:has(.onboarding-canvas) {
    crossed by the dividers.
 
    Why this is CSS and not Tailwind on the item: the base SelectItem's
-   `hover:bg-muted` / `dark:hover:bg-primary/8` resolve against the app's own
+   `hover:bg-surface-secondary` / `dark:hover:bg-brand-solid/8` resolve against the app's own
    palette, which is a different scale from the onboarding one and moves
    independently of it. Those are neutralised on the item (see SELECT_ITEM_CLASS)
    and the fill is bound to --onboarding-row-hover here instead, the same token
@@ -814,7 +805,7 @@ h1 {
 
 /* Focus is the brand ring, not a stroke: the field stays borderless at rest. */
 .onboarding-canvas .onboarding-light-input:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 35%, transparent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand-solid) 35%, transparent) !important;
 }
 
 .onboarding-canvas .onboarding-light-input::placeholder {
@@ -845,14 +836,14 @@ h1 {
 .onboarding-provider-input:hover,
 .onboarding-provider-input:focus-visible,
 .onboarding-provider-input:disabled {
-  border-color: var(--onboarding-control-border, var(--color-border)) !important;
-  background-color: var(--onboarding-surface-secondary, var(--color-muted)) !important;
-  color: var(--onboarding-text-primary, var(--color-foreground)) !important;
+  border-color: var(--onboarding-control-border, var(--color-border-default)) !important;
+  background-color: var(--onboarding-surface-secondary, var(--color-surface-secondary)) !important;
+  color: var(--onboarding-text-primary, var(--color-text-primary)) !important;
   opacity: 1 !important;
 }
 
 .onboarding-provider-input::placeholder {
-  color: var(--onboarding-text-secondary, var(--color-muted-foreground)) !important;
+  color: var(--onboarding-text-secondary, var(--color-text-secondary)) !important;
 }
 
 .onboarding-provider-icon-monochrome {
@@ -908,58 +899,61 @@ textarea:not(.input-inline) {
     color 0.2s ease,
     box-shadow 0.2s ease;
   font-family: var(--font-family-sans);
-  box-shadow: inset 0 1px 2px oklch(from var(--color-foreground) l c h / 0.06);
+  box-shadow: inset 0 1px 2px oklch(from var(--color-text-primary) l c h / 0.06);
 }
 
 /* Light mode inputs */
 :root input:not(.input-inline),
 :root textarea:not(.input-inline) {
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  color: var(--color-foreground);
+  background-color: var(--color-surface-primary);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
 }
 
 :root input:not(.input-inline):focus,
 :root textarea:not(.input-inline):focus {
-  border-color: var(--color-border-active);
-  box-shadow: 0 0 0 2px oklch(from var(--color-ring) l c h / 0.15);
-  background-color: var(--color-background);
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 2px oklch(from var(--color-border-focus) l c h / 0.15);
+  background-color: var(--color-surface-primary);
 }
 
 /* Dark mode inputs — flat, no embossed shadow */
 .dark input:not(.input-inline),
 .dark textarea:not(.input-inline) {
-  background-color: var(--color-input);
-  border: 1px solid var(--color-border);
-  color: var(--color-foreground);
+  background-color: var(--color-surface-primary);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
   box-shadow: none;
 }
 
 .dark input:not(.input-inline):focus,
 .dark textarea:not(.input-inline):focus {
-  border-color: var(--color-border-active);
-  box-shadow: 0 0 0 2px oklch(from var(--color-ring) l c h / 0.15);
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 2px oklch(from var(--color-border-focus) l c h / 0.15);
 }
 
-/* Card styling - elevated parchment */
+/* Card styling */
 .card {
-  background-color: var(--color-card);
-  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-primary);
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card, 0 1px 3px oklch(from var(--color-foreground) l c h / 0.08));
+  box-shadow: var(--shadow-card, 0 1px 3px oklch(from var(--color-text-primary) l c h / 0.08));
   transition:
     box-shadow 0.2s ease,
     transform 0.2s ease;
 }
 
 .card:hover {
-  box-shadow: var(--shadow-card-hover, 0 4px 12px oklch(from var(--color-foreground) l c h / 0.1));
+  box-shadow: var(
+    --shadow-card-hover,
+    0 4px 12px oklch(from var(--color-text-primary) l c h / 0.1)
+  );
   transform: translateY(-1px);
 }
 
 /* Dark mode cards — grounded, no lift, subtle border glow */
 .dark .card {
-  border-color: var(--color-border-subtle);
+  border-color: var(--color-border-default);
   box-shadow: var(--shadow-card);
 }
 
@@ -971,46 +965,24 @@ textarea:not(.input-inline) {
 
 /* Link styling */
 a {
-  color: var(--color-link);
+  color: var(--color-brand-text);
   text-decoration: none;
   transition: color 0.2s ease;
   cursor: pointer;
 }
 
 a:hover {
-  color: var(--color-link);
+  color: var(--color-brand-text);
   opacity: 0.8;
   cursor: pointer;
-}
-
-/* Status indicators */
-.status-active {
-  color: var(--color-brand-accent);
-  font-weight: 600;
-}
-
-.text-brand-primary {
-  color: var(--color-brand-primary);
-}
-
-.text-brand-accent {
-  color: var(--color-brand-accent);
-}
-
-.text-brand-highlight {
-  color: var(--color-brand-highlight);
-}
-
-.text-brand-link {
-  color: var(--color-brand-link);
 }
 
 /* ---- Premium UI Utilities ---- */
 
 /* Section panel — grouped settings container */
 .section-panel {
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-xl);
 }
 
@@ -1480,7 +1452,7 @@ a:hover {
 }
 
 :hover::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: var(--color-border-default);
 }
 
 :hover::-webkit-scrollbar-thumb:hover {
@@ -1619,8 +1591,8 @@ a:hover {
   padding-inline: max(1.25rem, calc((100% - var(--container-5xl)) / 2 + 1.25rem));
   font-size: 0.875rem;
   line-height: 1.7;
-  color: var(--color-foreground);
-  caret-color: var(--color-foreground);
+  color: var(--color-text-primary);
+  caret-color: var(--color-text-primary);
 }
 
 .rich-text-editor-content h1 {
@@ -1702,7 +1674,7 @@ a:hover {
 
 .rich-text-editor-content hr {
   border: none;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border-default);
   margin: 0.75rem 0;
 }
 
@@ -1740,8 +1712,8 @@ a:hover {
 }
 
 .rich-text-editor-content ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
-  background-color: var(--color-primary);
-  border-color: var(--color-primary);
+  background-color: var(--color-brand-solid);
+  border-color: var(--color-brand-solid);
   background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
   background-size: 100% 100%;
 }
@@ -1765,7 +1737,7 @@ a:hover {
 .rich-text-editor-content td {
   min-width: 5rem;
   padding: 0.25rem 0.625rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-default);
   text-align: start;
   vertical-align: top;
 }
@@ -1789,7 +1761,7 @@ a:hover {
 
 /* Tiptap draws the gap cursor (e.g. above a table that starts the note) in black. */
 .rich-text-editor-content .ProseMirror-gapcursor:after {
-  border-top-color: var(--color-foreground);
+  border-top-color: var(--color-text-primary);
 }
 
 /* Placeholder */
@@ -1850,5 +1822,5 @@ a:hover {
 
 .emoji-picker-scroll::-webkit-scrollbar-thumb {
   border-radius: 8px;
-  background-color: var(--color-border);
+  background-color: var(--color-border-default);
 }

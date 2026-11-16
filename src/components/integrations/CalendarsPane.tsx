@@ -30,12 +30,12 @@ function ProviderRow({ icon, i18nKey, connected, isConnecting, onConnect }: Prov
   return (
     <SettingsPanelRow>
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10 flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-tertiary shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10 flex items-center justify-center shrink-0">
           <img src={icon} alt="" className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground">{t(`${i18nKey}.title`)}</p>
-          <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
+          <p className="text-xs font-semibold text-primary">{t(`${i18nKey}.title`)}</p>
+          <p className="text-xs text-secondary/70 mt-0.5 leading-relaxed">
             {t(`${i18nKey}.description`)}
           </p>
         </div>
@@ -85,14 +85,14 @@ function CalendarAccountRows({
       {accounts.map((account) => (
         <SettingsPanelRow key={account.email}>
           <div className="group flex items-center gap-3 ps-12">
-            <Mail className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
-            <span className="text-xs text-muted-foreground truncate flex-1">
+            <Mail className="h-3.5 w-3.5 text-secondary/70 shrink-0" />
+            <span className="text-xs text-secondary truncate flex-1">
               <bdi dir="ltr">{account.email}</bdi>
             </span>
             <button
               onClick={() => onUnlink(account.email)}
               disabled={disconnectingEmail === account.email}
-              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all disabled:opacity-50"
+              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md text-secondary hover:text-red-solid hover:bg-red-solid/10 transition-all disabled:opacity-50"
               aria-label={t(`${i18nKey}.disconnect`)}
             >
               {disconnectingEmail === account.email ? (
@@ -118,7 +118,7 @@ function CalendarAccountRows({
         <button
           onClick={onAddAnother}
           disabled={isConnecting}
-          className="flex items-center gap-2 ps-12 text-xs text-primary hover:text-primary/80 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 ps-12 text-xs text-brand-solid hover:text-brand-solid/80 transition-colors disabled:opacity-50"
         >
           {isConnecting ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -361,13 +361,13 @@ export function CalendarsPane({ title }: CalendarsPaneProps): ReactElement {
         {isMac && appleCalendarConnected && (
           <SettingsPanelRow>
             <div className="group flex items-center gap-3 ps-12">
-              <CalendarDays className="h-3.5 w-3.5 text-muted-foreground/70 shrink-0" />
-              <span className="text-xs text-muted-foreground truncate flex-1">
+              <CalendarDays className="h-3.5 w-3.5 text-secondary/70 shrink-0" />
+              <span className="text-xs text-secondary truncate flex-1">
                 {appleSourceNames.join(" · ")}
               </span>
               <button
                 onClick={() => setConfirmAppleDisconnect(true)}
-                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-1 rounded-md text-secondary hover:text-red-solid hover:bg-red-solid/10 transition-all"
                 aria-label={t("integrations.appleCalendar.disconnect")}
               >
                 <Unlink className="h-3.5 w-3.5" />

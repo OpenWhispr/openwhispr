@@ -15,7 +15,7 @@ export function AppMarkStack({ marks, size }: { marks: string[]; size: number })
           height={size}
           decoding="async"
           draggable={false}
-          className="select-none rounded-full ring-2 ring-card dark:ring-surface-2"
+          className="select-none rounded-full ring-2 ring-surface-primary dark:ring-surface-primary"
           style={{ marginInlineStart: index === 0 ? 0 : -size * 0.24 }}
         />
       ))}
@@ -28,7 +28,7 @@ function Bubble({ text, selected }: { text: string; selected: boolean }) {
     <div
       className={cn(
         "relative max-w-[92%] rounded-2xl px-2.5 py-2 text-[15px] leading-[21px] text-white",
-        selected ? "bg-primary" : "bg-[#2f8cf7]"
+        selected ? "bg-brand-solid" : "bg-[#2f8cf7]"
       )}
     >
       {text}
@@ -38,7 +38,7 @@ function Bubble({ text, selected }: { text: string; selected: boolean }) {
         viewBox="0 0 13 9"
         className={cn(
           "absolute -end-[9px] bottom-[5px] h-[9px] w-[13px] rtl:-scale-x-100",
-          selected ? "fill-primary" : "fill-[#2f8cf7]"
+          selected ? "fill-brand-solid" : "fill-[#2f8cf7]"
         )}
       >
         <path d="M0 0H4C4 4 7 7 13 8C9 8.6 4 8.4 0 7.8Z" />
@@ -56,12 +56,10 @@ function WorkMessage({ text }: { text: string }) {
       </div>
       <div className="min-w-0">
         <p className="text-[13px] leading-[18px]">
-          <span className="font-semibold text-foreground">
-            {t("toneStyle.samples.work.sender")}
-          </span>{" "}
-          <span className="text-muted-foreground">{t("toneStyle.samples.work.time")}</span>
+          <span className="font-semibold text-primary">{t("toneStyle.samples.work.sender")}</span>{" "}
+          <span className="text-secondary">{t("toneStyle.samples.work.time")}</span>
         </p>
-        <p className="mt-0.5 text-[15px] leading-[21px] text-foreground">{text}</p>
+        <p className="mt-0.5 text-[15px] leading-[21px] text-primary">{text}</p>
       </div>
     </div>
   );
@@ -71,10 +69,10 @@ function EmailMessage({ text }: { text: string }) {
   const { t } = useTranslation();
   return (
     <div className="text-[13px] leading-[18px]">
-      <p className="border-b border-border/80 pb-2.5 text-muted-foreground dark:border-white/10">
+      <p className="border-b border-default/80 pb-2.5 text-secondary dark:border-white/10">
         {t("toneStyle.samples.email.to")}
       </p>
-      <p className="mt-2 whitespace-pre-line text-foreground">{text}</p>
+      <p className="mt-2 whitespace-pre-line text-primary">{text}</p>
     </div>
   );
 }
@@ -94,5 +92,5 @@ export function ToneSample({
   if (category === "personal") return <Bubble text={text} selected={selected} />;
   if (category === "work") return <WorkMessage text={text} />;
   if (category === "email") return <EmailMessage text={text} />;
-  return <p className="text-[15px] leading-[21px] text-foreground">{text}</p>;
+  return <p className="text-[15px] leading-[21px] text-primary">{text}</p>;
 }

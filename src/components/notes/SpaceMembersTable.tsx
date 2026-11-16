@@ -16,7 +16,7 @@ import { SpaceRoleMenu, type SpaceRoleMenuCopy } from "./SpaceRoleMenu";
 // the cap shrinks so the dialog around it never has to scroll as a whole.
 const ROWS_SCROLLER = "max-h-[clamp(9rem,calc(85vh-25rem),22rem)] overflow-y-auto";
 const TILE =
-  "flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/15 text-primary";
+  "flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-solid/15 text-brand-solid";
 
 const TEAM_ACCESS_TRIGGER: Record<TeamRole, string> = {
   member: "settingsPage.workspace.teamspaces.members.teamAccessMemberShort",
@@ -73,7 +73,7 @@ export function SpaceMembersTable({
         aria-label={label}
         className={cn(
           ROWS_SCROLLER,
-          "outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          "outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
         )}
       >
         <table className="w-full table-fixed border-collapse">
@@ -130,9 +130,7 @@ function TableMessage({
   if (status === "failed") {
     return (
       <div className="flex flex-col items-center gap-3">
-        <p className="text-xs text-muted-foreground">
-          {t("settingsPage.workspace.members.loadError")}
-        </p>
+        <p className="text-xs text-secondary">{t("settingsPage.workspace.members.loadError")}</p>
         <Button variant="outline" size="sm" onClick={onRetry}>
           {t("settingsPage.workspace.loadError.retry")}
         </Button>
@@ -140,9 +138,9 @@ function TableMessage({
     );
   }
   if (status === "loading") {
-    return <div aria-hidden="true" className="h-10 animate-pulse rounded-lg bg-foreground/5" />;
+    return <div aria-hidden="true" className="h-10 animate-pulse rounded-lg bg-text-primary/5" />;
   }
-  return <p className="text-xs text-muted-foreground">{t("notes.spaces.members.empty")}</p>;
+  return <p className="text-xs text-secondary">{t("notes.spaces.members.empty")}</p>;
 }
 
 interface MemberRowProps {
@@ -205,7 +203,7 @@ function MemberRow({
       // whole "via" line stays on hover.
       role = (
         <span
-          className="text-sm text-foreground"
+          className="text-sm text-primary"
           title={t(
             row.asAdmin
               ? "settingsPage.workspace.teamspaces.members.viaAdmin"
@@ -256,7 +254,7 @@ function MemberRow({
     name = (
       <NameCell
         lead={
-          <span className={cn(TILE, "[&>span]:text-xs [&>span]:text-primary")}>
+          <span className={cn(TILE, "[&>span]:text-xs [&>span]:text-brand-solid")}>
             <TileGlyph emoji={teamEmoji.get(team.id) ?? null} name={team.name} />
           </span>
         }
@@ -291,7 +289,7 @@ function MemberRow({
 }
 
 function RoleText({ children }: { children: ReactNode }): ReactElement {
-  return <span className="text-sm text-foreground">{children}</span>;
+  return <span className="text-sm text-primary">{children}</span>;
 }
 
 function NameCell({
@@ -309,10 +307,8 @@ function NameCell({
         {lead}
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-xs text-foreground">{primary}</span>
-        {secondary ? (
-          <span className="truncate text-xs text-muted-foreground">{secondary}</span>
-        ) : null}
+        <span className="truncate text-xs text-primary">{primary}</span>
+        {secondary ? <span className="truncate text-xs text-secondary">{secondary}</span> : null}
       </span>
     </div>
   );

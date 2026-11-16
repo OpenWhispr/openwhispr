@@ -75,9 +75,9 @@ export default function MeetingRecordingPill({
       <div
         className={cn(
           "flex items-center gap-2 h-9 px-3 rounded-xl",
-          "bg-card/95 dark:bg-surface-2/95",
+          "bg-surface-primary/95 dark:bg-surface-primary/95",
           "backdrop-blur-xl",
-          "border border-primary/25 dark:border-primary/30",
+          "border border-brand-solid/25 dark:border-brand-solid/30",
           "shadow-elevated"
         )}
       >
@@ -89,8 +89,8 @@ export default function MeetingRecordingPill({
           className={cn(
             "flex items-center gap-3 px-1 -mx-1 rounded-md",
             "transition-colors",
-            "hover:bg-primary/8 active:bg-primary/14",
-            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+            "hover:bg-brand-solid/8 active:bg-brand-solid/14",
+            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
           )}
         >
           <div className="flex items-end gap-0.75 h-4">
@@ -99,13 +99,13 @@ export default function MeetingRecordingPill({
                 key={i}
                 className={cn(
                   "w-0.75 rounded-full origin-bottom",
-                  isWaitingForMic ? "bg-amber-500" : "bg-primary/60 dark:bg-primary/70"
+                  isWaitingForMic ? "bg-amber-500" : "bg-brand-solid/60 dark:bg-brand-solid/70"
                 )}
                 style={{ height: computeBarHeight(micLevel, i) }}
               />
             ))}
           </div>
-          <span className="text-xs font-medium text-foreground/80 truncate max-w-[12rem]">
+          <span className="text-xs font-medium text-primary/80 truncate max-w-[12rem]">
             {isWaitingForMic ? t("notes.meetingPill.waitingForMicrophone") : title}
           </span>
         </button>
@@ -119,10 +119,10 @@ export default function MeetingRecordingPill({
           className={cn(
             "flex items-center justify-center w-7 h-7 rounded-lg",
             "transition-colors duration-150",
-            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30",
             isStopping
-              ? "bg-primary/6 text-primary/40 cursor-not-allowed"
-              : "bg-primary/10 hover:bg-primary/18 active:bg-primary/25 text-primary"
+              ? "bg-brand-solid/6 text-brand-solid/40 cursor-not-allowed"
+              : "bg-brand-solid/10 hover:bg-brand-solid/18 active:bg-brand-solid/25 text-brand-solid"
           )}
         >
           <Square size={12} fill="currentColor" />

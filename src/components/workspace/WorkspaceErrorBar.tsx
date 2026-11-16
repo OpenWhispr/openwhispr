@@ -24,23 +24,23 @@ export function WorkspaceErrorBar({
       id={id}
       role="alert"
       className={cn(
-        "flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm text-foreground",
+        "flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-sm text-primary",
         tone === "error"
-          ? "border-destructive/25 bg-destructive/10"
-          : "border-warning/30 bg-warning/10"
+          ? "border-red-solid/25 bg-red-solid/10"
+          : "border-amber-solid/30 bg-amber-solid/10"
       )}
     >
       <AlertCircle
         aria-hidden="true"
         className={cn(
           "mt-0.5 size-4 shrink-0",
-          tone === "error" ? "text-destructive" : "text-warning"
+          tone === "error" ? "text-red-solid" : "text-amber-solid"
         )}
       />
       <p
         className={cn(
           "min-w-0 flex-1 leading-snug break-words",
-          tone === "error" && "text-destructive"
+          tone === "error" && "text-red-solid"
         )}
       >
         {message}
@@ -49,7 +49,7 @@ export function WorkspaceErrorBar({
         <button
           type="button"
           onClick={action.onClick}
-          className="-my-0.5 shrink-0 rounded-full bg-foreground/10 px-2.5 py-0.5 text-xs font-medium text-foreground transition-colors hover:bg-foreground/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="-my-0.5 shrink-0 rounded-full bg-text-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-text-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         >
           {action.label}
         </button>

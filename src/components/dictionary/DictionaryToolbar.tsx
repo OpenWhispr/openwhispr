@@ -30,7 +30,7 @@ interface DictionaryToolbarProps {
 const SYNCED_LABEL_REFRESH_MS = 30_000;
 
 const ICON_BUTTON_CLASS =
-  "grid size-[26px] place-items-center rounded-md text-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 dark:hover:bg-white/6";
+  "grid size-[26px] place-items-center rounded-md text-primary/50 transition-colors hover:bg-text-primary/5 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20 dark:hover:bg-white/6";
 
 function syncedLabel(
   lastSyncedAt: string | null,
@@ -74,7 +74,7 @@ function ToolButton({
         type="button"
         aria-label={label}
         onClick={onClick}
-        className={cn(ICON_BUTTON_CLASS, active && "bg-card text-foreground shadow-sm")}
+        className={cn(ICON_BUTTON_CLASS, active && "bg-surface-primary text-primary shadow-sm")}
       >
         {children}
       </button>
@@ -122,7 +122,7 @@ export function DictionaryToolbar({
         className={cn(
           "relative flex h-7 shrink-0 items-center rounded-md border transition-[width,border-color,background-color] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
           searchOpen
-            ? "w-36 border-border/70 bg-card focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 dark:border-white/10 dark:bg-surface-1 @[640px]/dictionary:w-44"
+            ? "w-36 border-default/70 bg-surface-primary focus-within:border-brand-solid focus-within:ring-2 focus-within:ring-brand-solid/10 dark:border-white/10 dark:bg-surface-secondary @[640px]/dictionary:w-44"
             : "w-7 border-transparent"
         )}
       >
@@ -164,7 +164,7 @@ export function DictionaryToolbar({
             type="button"
             onClick={closeSearch}
             aria-label={t("dictionary.shared.toolbar.closeSearch")}
-            className="absolute end-1.5 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground/70"
+            className="absolute end-1.5 top-1/2 -translate-y-1/2 text-primary/40 hover:text-primary/70"
           >
             <X size={11} />
           </button>
@@ -191,7 +191,7 @@ export function DictionaryToolbar({
               className="gap-2 rounded-md px-2 py-1.5 text-xs"
             >
               <span className="flex-1">{t(SORT_LABEL_KEYS[key])}</span>
-              {key === sort && <Check size={12} className="text-primary" />}
+              {key === sort && <Check size={12} className="text-brand-solid" />}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>

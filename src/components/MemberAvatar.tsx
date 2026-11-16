@@ -40,7 +40,7 @@ export default function MemberAvatar({ name, email, image, size = "md" }: Member
       className={cn(
         box,
         text,
-        "rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center shrink-0"
+        "rounded-full bg-brand-solid/10 text-brand-solid font-semibold flex items-center justify-center shrink-0"
       )}
     >
       {avatarInitials(name, email)}

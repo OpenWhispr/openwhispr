@@ -36,20 +36,21 @@ const COLOR_CONFIG: Record<
 > = {
   purple: {
     selected:
-      "border-primary/30 bg-primary/8 dark:bg-primary/6 dark:border-primary/20 shadow-[0_0_0_1px_oklch(0.62_0.22_260/0.12),0_0_10px_-3px_oklch(0.62_0.22_260/0.18)]",
+      "border-brand-solid/30 bg-brand-solid/8 dark:bg-brand-solid/6 dark:border-brand-solid/20 shadow-[0_0_0_1px_oklch(0.62_0.22_260/0.12),0_0_10px_-3px_oklch(0.62_0.22_260/0.18)]",
     default:
-      "border-border bg-surface-1 hover:border-border-hover hover:bg-muted dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
+      "border-default bg-surface-secondary hover:border-hover hover:bg-surface-secondary dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
   },
   blue: {
     selected:
-      "border-primary/30 bg-primary/10 dark:bg-primary/6 shadow-[0_0_0_1px_oklch(0.62_0.22_260/0.15),0_0_12px_-3px_oklch(0.62_0.22_260/0.2)]",
+      "border-brand-solid/30 bg-brand-solid/10 dark:bg-brand-solid/6 shadow-[0_0_0_1px_oklch(0.62_0.22_260/0.15),0_0_12px_-3px_oklch(0.62_0.22_260/0.2)]",
     default:
-      "border-border bg-surface-1 hover:border-border-hover hover:bg-muted dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
+      "border-default bg-surface-secondary hover:border-hover hover:bg-surface-secondary dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20 dark:hover:bg-white/8",
   },
 };
 
 // The default card without its hover lift: a legacy card can't be picked.
-const LEGACY_CARD_CLASS = "border-border bg-surface-1 dark:border-white/10 dark:bg-white/3";
+const LEGACY_CARD_CLASS =
+  "border-default bg-surface-secondary dark:border-white/10 dark:bg-white/3";
 
 interface ModelCardProps {
   model: ModelCardOption;
@@ -93,18 +94,18 @@ export function ModelCard({
   const getStatusDotClass = () => {
     if (!isLocalMode) {
       return isSelected
-        ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)]"
-        : "bg-muted-foreground/30";
+        ? "bg-brand-solid shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)]"
+        : "bg-text-secondary/30";
     }
     if (isDownloaded) {
       return isSelected
-        ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)]"
-        : "bg-success shadow-[0_0_4px_rgba(34,197,94,0.5)]";
+        ? "bg-brand-solid shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)]"
+        : "bg-green-solid shadow-[0_0_4px_rgba(34,197,94,0.5)]";
     }
     if (isDownloading) {
       return "bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)]";
     }
-    return "bg-muted-foreground/20";
+    return "bg-text-secondary/20";
   };
 
   return (
@@ -145,14 +146,14 @@ export function ModelCard({
             aria-hidden="true"
           />
         ) : (
-          <Globe className="w-3.5 h-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Globe className="w-3.5 h-3.5 shrink-0 text-secondary" aria-hidden="true" />
         )}
 
         <span
           dir="ltr"
           className={cn(
             "text-sm font-semibold truncate tracking-tight",
-            isLegacy ? "text-muted-foreground" : "text-foreground",
+            isLegacy ? "text-secondary" : "text-primary",
             truncateDescription && (model.description ? "shrink-0 max-w-[60%]" : "min-w-0 flex-1")
           )}
         >
@@ -162,8 +163,8 @@ export function ModelCard({
           <span
             className={
               truncateDescription
-                ? "text-xs text-muted-foreground/70 truncate min-w-0 flex-1"
-                : "text-xs text-muted-foreground/70 tabular-nums shrink-0"
+                ? "text-xs text-secondary/70 truncate min-w-0 flex-1"
+                : "text-xs text-secondary/70 tabular-nums shrink-0"
             }
           >
             {model.description}
@@ -173,7 +174,7 @@ export function ModelCard({
           <a
             href={specHref}
             onClick={createExternalLinkHandler(specHref)}
-            className="inline-flex items-center gap-0.5 text-xs text-primary/60 hover:text-primary transition-colors shrink-0"
+            className="inline-flex items-center gap-0.5 text-xs text-brand-solid/60 hover:text-brand-solid transition-colors shrink-0"
           >
             {t("models.learnMore")}
             <ExternalLink size={9} />
@@ -181,24 +182,24 @@ export function ModelCard({
         )}
 
         {model.recommended && !isBlocked && (
-          <span className="text-xs font-medium text-primary px-1.5 py-0.5 bg-primary/10 rounded-sm shrink-0">
+          <span className="text-xs font-medium text-brand-solid px-1.5 py-0.5 bg-brand-solid/10 rounded-sm shrink-0">
             {t("common.recommended")}
           </span>
         )}
         {isBlocked && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-secondary">
             {t(model.policyRefusal?.labelKey ?? "models.policy.notApproved")}
           </span>
         )}
         {isLegacy && (
-          <span className="text-xs font-medium text-muted-foreground px-1.5 py-0.5 bg-muted rounded-sm shrink-0">
+          <span className="text-xs font-medium text-secondary px-1.5 py-0.5 bg-surface-secondary rounded-sm shrink-0">
             {t("models.legacy")}
           </span>
         )}
 
         <div className="ms-auto flex items-center gap-1.5 shrink-0">
           {isSelected && !isBlocked && (
-            <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
+            <span className="text-xs font-medium text-brand-solid px-2 py-0.5 bg-brand-solid/10 rounded-sm">
               {t("common.active")}
             </span>
           )}
@@ -214,7 +215,7 @@ export function ModelCard({
                   aria-label={t("common.delete")}
                   size="icon"
                   variant="ghost"
-                  className={`size-6 text-muted-foreground/70 hover:text-destructive ${isBlocked ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"} transition-[color,opacity,transform] active:scale-95`}
+                  className={`size-6 text-secondary/70 hover:text-red-solid ${isBlocked ? "" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"} transition-[color,opacity,transform] active:scale-95`}
                 >
                   <Trash2 size={12} />
                 </Button>
@@ -227,7 +228,7 @@ export function ModelCard({
                   disabled={modelIsCancelling}
                   size="sm"
                   variant="outline"
-                  className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
+                  className="h-6 px-2.5 text-xs text-red-solid border-red-solid/25 hover:bg-red-solid/8"
                 >
                   <X size={11} className="me-0.5" />
                   {modelIsCancelling ? "..." : t("common.cancel")}
@@ -284,7 +285,7 @@ export default function ModelCardList({
   );
 
   if (listedModels.length === 0) {
-    return <p className="text-sm text-muted-foreground py-2">{t("models.noneAvailable")}</p>;
+    return <p className="text-sm text-secondary py-2">{t("models.noneAvailable")}</p>;
   }
 
   return (

@@ -43,8 +43,8 @@ export function MeetingNotificationCard({
     <div
       className={[
         "relative",
-        "bg-card/95 dark:bg-surface-2/95 backdrop-blur-xl",
-        "border border-border/70 dark:border-border-subtle/60",
+        "bg-surface-primary/95 dark:bg-surface-primary/95 backdrop-blur-xl",
+        "border border-default/70 dark:border-default/60",
         "rounded-xl shadow-lg p-2.5",
         picker ? "min-h-[60px] flex flex-col justify-center" : "",
         className,
@@ -61,8 +61,8 @@ export function MeetingNotificationCard({
           className={[
             "absolute -left-2.5 -top-2.5 z-10 size-6 rounded-full",
             "flex items-center justify-center",
-            "bg-card dark:bg-surface-2 border border-border/70 dark:border-border-subtle/60 shadow-sm",
-            "text-muted-foreground/70 hover:text-foreground hover:bg-muted",
+            "bg-surface-primary dark:bg-surface-primary border border-default/70 dark:border-default/60 shadow-sm",
+            "text-secondary/70 hover:text-primary hover:bg-surface-secondary",
             "transition-all duration-150",
             closeVisible ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none",
           ].join(" ")}
@@ -72,7 +72,7 @@ export function MeetingNotificationCard({
       )}
 
       <div className="flex items-center gap-2.5">
-        <div className="shrink-0 bg-primary/10 rounded-md p-1">
+        <div className="shrink-0 bg-brand-solid/10 rounded-md p-1">
           <svg viewBox="0 0 1024 1024" className="w-4.5 h-4.5">
             <rect width="1024" height="1024" rx="241" fill="#2056DF" />
             <circle cx="512" cy="512" r="314" fill="#2056DF" stroke="white" strokeWidth="74" />
@@ -83,12 +83,8 @@ export function MeetingNotificationCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="truncate text-[12px] font-semibold text-foreground leading-tight">
-            {title}
-          </p>
-          <p className="text-[11px] text-muted-foreground leading-tight mt-0.5 break-words">
-            {body}
-          </p>
+          <p className="truncate text-[12px] font-semibold text-primary leading-tight">{title}</p>
+          <p className="text-[11px] text-secondary leading-tight mt-0.5 break-words">{body}</p>
         </div>
 
         <div

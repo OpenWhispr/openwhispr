@@ -120,14 +120,14 @@ export default function JoinYourTeamModal({
             return (
               <div
                 key={entry.workspace_id}
-                className="flex items-center gap-3 rounded-md border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-3 py-2.5"
+                className="flex items-center gap-3 rounded-md border border-default/70 dark:border-default/70 bg-surface-primary/50 dark:bg-surface-primary/50 px-3 py-2.5"
               >
-                <span className="w-8 h-8 shrink-0 rounded-md bg-primary/10 text-primary text-[11px] font-semibold flex items-center justify-center">
+                <span className="w-8 h-8 shrink-0 rounded-md bg-brand-solid/10 text-brand-solid text-[11px] font-semibold flex items-center justify-center">
                   {workspaceMonogram(entry.workspace_name)}
                 </span>
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-foreground truncate">
+                  <p className="text-xs font-medium text-primary truncate">
                     {entry.workspace_name}
                   </p>
                   <div className="flex items-center gap-1.5 mt-1">
@@ -136,7 +136,7 @@ export default function JoinYourTeamModal({
                         {entry.members.map((member) => (
                           <span
                             key={member.email}
-                            className="ring-1 ring-card dark:ring-surface-2 rounded-full"
+                            className="ring-1 ring-surface-primary dark:ring-surface-primary rounded-full"
                           >
                             <MemberAvatar
                               name={member.name}
@@ -148,7 +148,7 @@ export default function JoinYourTeamModal({
                         ))}
                       </div>
                     )}
-                    <p className="text-[11px] text-muted-foreground truncate">
+                    <p className="text-[11px] text-secondary truncate">
                       {entry.source === "invitation"
                         ? t("workspaces.join.invitedBy", {
                             inviter: entry.inviter_name || entry.inviter_email || "",
@@ -163,7 +163,7 @@ export default function JoinYourTeamModal({
                   <span
                     className={cn(
                       "shrink-0 inline-flex items-center gap-1 h-7 px-2 rounded-md",
-                      "text-[11px] font-medium text-muted-foreground bg-foreground/5"
+                      "text-[11px] font-medium text-secondary bg-text-primary/5"
                     )}
                   >
                     <Check className="h-3 w-3" />

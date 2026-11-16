@@ -113,7 +113,7 @@ interface LeaderboardSectionProps {
 }
 
 const ERROR_CARD_CHROME =
-  "mt-6 rounded-2xl border border-border/70 bg-card/70 dark:border-white/10";
+  "mt-6 rounded-2xl border border-default/70 bg-surface-primary/70 dark:border-white/10";
 
 function LeaderboardRetryCard({
   actionLabel,
@@ -855,18 +855,18 @@ export default function LeaderboardSection({
   return (
     <section
       data-leaderboard-state="board"
-      className="mt-6 overflow-hidden rounded-2xl border border-border/70 bg-card/70 dark:border-white/10"
+      className="mt-6 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary/70 dark:border-white/10"
     >
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-default/70 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/8 text-primary">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-solid/8 text-brand-solid">
             {selectedScope.kind === "workspace" ? <Building2 size={16} /> : <Globe2 size={16} />}
           </div>
           <div className="min-w-0">
             {showScopeSelect ? (
               <Select value={selectedScope.key} onValueChange={setScopeKey}>
                 <SelectTrigger
-                  className="h-auto w-auto max-w-full gap-1 rounded-md border-0 bg-transparent p-0 text-sm font-semibold shadow-none hover:bg-transparent focus-visible:ring-2 focus-visible:ring-ring dark:border-0"
+                  className="h-auto w-auto max-w-full gap-1 rounded-md border-0 bg-transparent p-0 text-sm font-semibold shadow-none hover:bg-transparent focus-visible:ring-2 focus-visible:ring-focus dark:border-0"
                   aria-label={t("insights.leaderboard.chooseBoard")}
                 >
                   <SelectValue />
@@ -876,7 +876,7 @@ export default function LeaderboardSection({
             ) : (
               <h2 className="truncate text-sm font-semibold">{selectedScope.name}</h2>
             )}
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-secondary">
               {(boardParticipantCount != null || boardLoading) && (
                 <>
                   {boardParticipantCount != null ? (
@@ -887,10 +887,7 @@ export default function LeaderboardSection({
                   ) : (
                     <Skeleton className="h-2.5 w-18" />
                   )}
-                  <span
-                    aria-hidden="true"
-                    className="size-0.5 rounded-full bg-muted-foreground/50"
-                  />
+                  <span aria-hidden="true" className="size-0.5 rounded-full bg-text-secondary/50" />
                 </>
               )}
               <span className="flex items-center gap-1">
@@ -913,8 +910,8 @@ export default function LeaderboardSection({
                 setPage(0);
               }}
             >
-              <SelectTrigger className="h-8 w-44 rounded-lg border border-border/70 bg-background/30 px-2.5 text-xs font-medium shadow-none hover:bg-muted/40">
-                <CalendarDays size={13} className="text-muted-foreground" />
+              <SelectTrigger className="h-8 w-44 rounded-lg border border-default/70 bg-surface-primary/30 px-2.5 text-xs font-medium shadow-none hover:bg-surface-secondary/40">
+                <CalendarDays size={13} className="text-secondary" />
                 <SelectValue>
                   {range === "all"
                     ? t("insights.leaderboard.allTime")
@@ -942,7 +939,7 @@ export default function LeaderboardSection({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-8 text-muted-foreground"
+                className="size-8 text-secondary"
                 aria-label={t("insights.leaderboard.moreActions")}
               >
                 <MoreHorizontal size={15} />
@@ -977,7 +974,7 @@ export default function LeaderboardSection({
               {/* Participation remains undoable without changing this device's Sync setting. */}
               <DropdownMenuItem
                 disabled={participationUpdating}
-                className="gap-2 text-xs text-destructive focus:bg-destructive/10 focus:text-destructive"
+                className="gap-2 text-xs text-red-solid focus:bg-red-solid/10 focus:text-red-solid"
                 onSelect={leaveLeaderboards}
               >
                 <LogOut size={13} />
@@ -1064,8 +1061,8 @@ export default function LeaderboardSection({
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
-              <thead className="bg-muted/10">
-                <tr className="border-y border-border/70 text-start text-[11px] uppercase tracking-wide text-muted-foreground">
+              <thead className="bg-surface-secondary/10">
+                <tr className="border-y border-default/70 text-start text-[11px] uppercase tracking-wide text-secondary">
                   <th scope="col" className="w-16 px-5 py-2.5 font-medium">
                     {t("insights.leaderboard.rank")}
                   </th>
@@ -1083,8 +1080,8 @@ export default function LeaderboardSection({
                         setPage(0);
                       }}
                     >
-                      <SelectTrigger className="ml-auto h-8 w-48 rounded-lg border border-border/70 bg-background/30 px-2.5 text-xs font-medium normal-case tracking-normal shadow-none hover:bg-muted/40">
-                        <ArrowUpDown size={12} className="text-muted-foreground" />
+                      <SelectTrigger className="ml-auto h-8 w-48 rounded-lg border border-default/70 bg-surface-primary/30 px-2.5 text-xs font-medium normal-case tracking-normal shadow-none hover:bg-surface-secondary/40">
+                        <ArrowUpDown size={12} className="text-secondary" />
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1106,17 +1103,17 @@ export default function LeaderboardSection({
                       id={`leaderboard-rank-${member.rank}`}
                       key={member.userId}
                       className={cn(
-                        "border-b border-border/70 transition-colors last:border-0 hover:bg-muted/20",
-                        isViewer && "bg-primary/5 hover:bg-primary/7"
+                        "border-b border-default/70 transition-colors last:border-0 hover:bg-surface-secondary/20",
+                        isViewer && "bg-brand-solid/5 hover:bg-brand-solid/7"
                       )}
                     >
                       <td className="px-5 py-3 tabular-nums">
                         <span
                           className={cn(
-                            "inline-flex size-6 items-center justify-center rounded-md text-xs font-medium text-muted-foreground",
+                            "inline-flex size-6 items-center justify-center rounded-md text-xs font-medium text-secondary",
                             member.rank === 1 &&
                               "bg-amber-400/12 font-semibold text-amber-600 dark:text-amber-400",
-                            member.rank === 2 && "bg-foreground/6 text-foreground/70",
+                            member.rank === 2 && "bg-text-primary/6 text-primary/70",
                             member.rank === 3 &&
                               "bg-orange-400/10 text-orange-600 dark:text-orange-400"
                           )}
@@ -1136,15 +1133,13 @@ export default function LeaderboardSection({
                             <p className="truncate font-medium">
                               {memberLabel(member)}
                               {isViewer && (
-                                <span className="ms-1 text-xs font-normal text-primary">
+                                <span className="ms-1 text-xs font-normal text-brand-solid">
                                   {t("insights.leaderboard.you")}
                                 </span>
                               )}
                             </p>
                             {member.name && member.email && (
-                              <p className="truncate text-[11px] text-muted-foreground">
-                                {member.email}
-                              </p>
+                              <p className="truncate text-[11px] text-secondary">{member.email}</p>
                             )}
                           </div>
                         </div>
@@ -1160,7 +1155,7 @@ export default function LeaderboardSection({
           </div>
 
           {(showJumpToMe || visibleLeaderboard.totalMembers > pageSize) && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 bg-muted/10 px-5 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-default/70 bg-surface-secondary/10 px-5 py-3">
               {showJumpToMe && (
                 <Tooltip
                   content={
@@ -1222,7 +1217,7 @@ export default function LeaderboardSection({
                   ) : (
                     <button
                       type="button"
-                      className="rounded px-2 py-1 text-xs tabular-nums text-muted-foreground hover:bg-muted hover:text-foreground"
+                      className="rounded px-2 py-1 text-xs tabular-nums text-secondary hover:bg-surface-secondary hover:text-primary"
                       onClick={() => {
                         setRankInput(String(page * pageSize + 1));
                         setEditingRank(true);

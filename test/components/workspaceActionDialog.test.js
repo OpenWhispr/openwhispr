@@ -99,9 +99,9 @@ test("destructive tone uses the destructive fill", async (t) => {
   );
   const plain = primaryButton(render());
 
-  assert.match(destructive, /bg-destructive/);
-  assert.doesNotMatch(plain, /bg-destructive/);
-  assert.match(plain, /bg-primary/);
+  assert.match(destructive, /bg-red-solid/);
+  assert.doesNotMatch(plain, /bg-red-solid/);
+  assert.match(plain, /bg-brand-solid/);
 });
 
 test("omitting cancelLabel renders no Cancel button", async (t) => {

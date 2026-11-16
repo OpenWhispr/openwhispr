@@ -33,12 +33,12 @@ export default function ActionMenuItems({
             disabled={!canRun(action)}
             className="text-xs gap-2.5 rounded-md px-2.5 py-1.5"
           >
-            <Icon size={14} className="shrink-0 text-primary" />
+            <Icon size={14} className="shrink-0 text-brand-solid" />
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">
                 <span dir="auto">{getActionName(action, t)}</span>
               </div>
-              <div className="text-xs text-muted-foreground/70 truncate">
+              <div className="text-xs text-secondary/70 truncate">
                 {getActionDescription(action, t)}
               </div>
             </div>
@@ -48,7 +48,7 @@ export default function ActionMenuItems({
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onClick={onManageActions}
-        className="text-xs gap-2.5 rounded-md px-2.5 py-1.5 text-muted-foreground/70"
+        className="text-xs gap-2.5 rounded-md px-2.5 py-1.5 text-secondary/70"
       >
         <Settings2 size={12} />
         {t("notes.actions.manage")}

@@ -104,11 +104,11 @@ function PersonAvatar({
 }
 
 const TILE =
-  "flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-foreground/5 dark:bg-white/6";
+  "flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-text-primary/5 dark:bg-white/6";
 // The tile's glyph is an emoji sized for a larger tile in the table.
 const TEAM_TILE = cn(TILE, "[&>span]:text-xs");
 const ACTION_PILL =
-  "shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15";
+  "shrink-0 rounded-full bg-brand-solid/10 px-2.5 py-1 text-[11px] font-medium text-brand-solid transition-colors hover:bg-brand-solid/15";
 
 const isPickable = (row: PickerRow): boolean =>
   row.kind === "invite" || (row.kind !== "pending" && !row.hasAccess);
@@ -424,7 +424,7 @@ export function SpacePeopleField({
                     className={cn(
                       "flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-start",
                       disabledRow ? "cursor-default opacity-50" : "cursor-pointer",
-                      index === active && "bg-muted"
+                      index === active && "bg-surface-secondary"
                     )}
                   >
                     <RowContent
@@ -441,10 +441,10 @@ export function SpacePeopleField({
             </div>
           ) : (
             <div role="status" className="flex flex-col gap-0.5 px-2.5 py-2">
-              <p className="text-xs font-medium text-foreground">
+              <p className="text-xs font-medium text-primary">
                 {t("settingsPage.workspace.teamspaces.picker.noResultsTitle")}
               </p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] text-secondary">
                 {canInvite
                   ? t("settingsPage.workspace.teamspaces.picker.noResultsBody")
                   : t("settingsPage.workspace.teamspaces.picker.noResultsBodyNoInvite")}
@@ -592,14 +592,14 @@ function RowContent({
 
 function MailTile(): ReactElement {
   return (
-    <span aria-hidden="true" className={cn(TILE, "text-muted-foreground")}>
+    <span aria-hidden="true" className={cn(TILE, "text-secondary")}>
       <Mail className="size-3" aria-hidden="true" />
     </span>
   );
 }
 
 function PickedCheck(): ReactElement {
-  return <Check className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />;
+  return <Check className="size-3.5 shrink-0 text-secondary" aria-hidden="true" />;
 }
 
 function RowText({
@@ -611,10 +611,8 @@ function RowText({
 }): ReactElement {
   return (
     <span className="flex min-w-0 flex-1 flex-col">
-      <span className="truncate text-xs text-foreground">{primary}</span>
-      {secondary ? (
-        <span className="truncate text-[11px] text-muted-foreground">{secondary}</span>
-      ) : null}
+      <span className="truncate text-xs text-primary">{primary}</span>
+      {secondary ? <span className="truncate text-[11px] text-secondary">{secondary}</span> : null}
     </span>
   );
 }
@@ -636,7 +634,7 @@ function InviteRoleMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-foreground outline-none transition-colors hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/5">
+      <DropdownMenuTrigger className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-2 focus-visible:ring-focus data-[state=open]:bg-text-primary/5">
         <span className="sr-only">{t("workspaces.invite.roleLabel")}</span>
         {/* Announced when the arrow keys change it, as the menu isn't open for that. */}
         <span aria-live="polite">
@@ -662,16 +660,16 @@ function InviteRoleMenu({
         >
           <DropdownMenuRadioItem value="member" className={itemClass}>
             <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm text-foreground">{t("workspaces.invite.role.member")}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-primary">{t("workspaces.invite.role.member")}</span>
+              <span className="text-xs text-secondary">
                 {t("workspaces.invite.roleDescription.member")}
               </span>
             </span>
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="admin" className={itemClass}>
             <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm text-foreground">{t("workspaces.invite.role.admin")}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-primary">{t("workspaces.invite.role.admin")}</span>
+              <span className="text-xs text-secondary">
                 {t("workspaces.invite.roleDescription.admin")}
               </span>
             </span>

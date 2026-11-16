@@ -52,7 +52,7 @@ const MentionSuggestions = forwardRef<MentionSuggestionsHandle, MentionSuggestio
     if (items.length === 0) return null;
 
     return (
-      <div className="w-60 rounded-md border border-border bg-popover p-1 shadow-lg">
+      <div className="w-60 rounded-md border border-default bg-surface-primary p-1 shadow-lg">
         {items.map((item, index) => (
           <button
             key={`${item.label}-${item.email ?? index}`}
@@ -60,8 +60,8 @@ const MentionSuggestions = forwardRef<MentionSuggestionsHandle, MentionSuggestio
             onClick={() => command(item)}
             onMouseEnter={() => setSelectedIndex(index)}
             className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-xs text-foreground/70 transition-colors cursor-pointer",
-              index === selectedIndex && "bg-foreground/5 text-foreground"
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-xs text-primary/70 transition-colors cursor-pointer",
+              index === selectedIndex && "bg-text-primary/5 text-primary"
             )}
           >
             <PersonAvatar email={item.email} displayName={item.label} size={20} />
@@ -69,7 +69,7 @@ const MentionSuggestions = forwardRef<MentionSuggestionsHandle, MentionSuggestio
               {item.label}
             </span>
             {item.email && (
-              <span dir="ltr" className="truncate text-[11px] text-foreground/45">
+              <span dir="ltr" className="truncate text-[11px] text-primary/45">
                 {item.email}
               </span>
             )}

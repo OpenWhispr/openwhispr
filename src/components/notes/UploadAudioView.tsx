@@ -1117,11 +1117,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           <p
             id={uploadRestrictionId}
             role="status"
-            className="mb-5 flex items-center justify-center gap-2 rounded-lg border border-warning/20 bg-warning/8 px-4 py-3 text-sm text-amber-700 dark:bg-warning/10 dark:text-warning/90"
+            className="mb-5 flex items-center justify-center gap-2 rounded-lg border border-amber-solid/20 bg-amber-solid/8 px-4 py-3 text-sm text-amber-700 dark:bg-amber-solid/10 dark:text-amber-solid/90"
           >
             <AlertTriangle
               aria-hidden="true"
-              className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-warning"
+              className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-amber-solid"
             />
             {t(uploadChoiceRefusal?.messageKey ?? uploadRestrictionKey(policyState))}
           </p>
@@ -1143,11 +1143,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             />
 
             <div className="my-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-border/70 dark:bg-white/10" />
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              <div className="h-px flex-1 bg-border-default/70 dark:bg-white/10" />
+              <span className="text-xs font-medium uppercase tracking-wider text-secondary/70">
                 {t("notes.upload.orDivider")}
               </span>
-              <div className="h-px flex-1 bg-border/70 dark:bg-white/10" />
+              <div className="h-px flex-1 bg-border-default/70 dark:bg-white/10" />
             </div>
 
             {urlExpanded && uploadFeatureAllowed ? (
@@ -1158,7 +1158,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   onChange={(e) => setUrlInput(e.target.value)}
                   placeholder={t("notes.upload.pasteUrls")}
                   rows={4}
-                  className="w-full resize-none rounded-2xl! px-4 py-3 text-sm placeholder:text-foreground/45"
+                  className="w-full resize-none rounded-2xl! px-4 py-3 text-sm placeholder:text-primary/45"
                   autoFocus
                 />
                 <div className="mt-3 flex items-center justify-end gap-2">
@@ -1196,12 +1196,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 ) : uploadFileUrlPattern.test(urlInput) ? (
                   <FileAudio
                     size={16}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-primary/45 z-10 pointer-events-none"
                   />
                 ) : (
                   <Link2
                     size={16}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/45 z-10 pointer-events-none"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-primary/45 z-10 pointer-events-none"
                   />
                 )}
                 <input
@@ -1229,7 +1229,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   placeholder={t("notes.upload.urlPlaceholder")}
                   disabled={!uploadFeatureAllowed}
                   aria-describedby={uploadRestrictionDescription}
-                  className="h-11 w-full rounded-full! pl-11 pr-12 text-sm placeholder:text-foreground/45 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="h-11 w-full rounded-full! pl-11 pr-12 text-sm placeholder:text-primary/45 disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <button
                   onClick={handleUrlSubmit}
@@ -1237,10 +1237,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   aria-label={t("notes.upload.urlSubmit")}
                   className={cn(
                     "absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full transition-[filter,transform] duration-100",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
                     uploadFeatureAllowed && urlInput.trim()
                       ? cn(GRADIENT_CIRCLE, "hover:brightness-110 active:scale-95")
-                      : "bg-muted text-muted-foreground"
+                      : "bg-surface-secondary text-secondary"
                   )}
                 >
                   <ArrowRight size={16} />
@@ -1250,7 +1250,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           </>
         )}
 
-        {skippedNotice && <p className="mt-2 text-center text-xs text-warning">{skippedNotice}</p>}
+        {skippedNotice && (
+          <p className="mt-2 text-center text-xs text-amber-solid">{skippedNotice}</p>
+        )}
 
         {batch.hasQueue && (
           <div className="mt-5">
@@ -1332,17 +1334,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   : null
               }
             />
-            <p className="text-[15px] font-medium text-foreground">
+            <p className="text-[15px] font-medium text-primary">
               {downloadProgress.stage === "resolving"
                 ? t("notes.upload.urlResolving")
                 : t("notes.upload.urlDownloading")}
             </p>
 
             {downloadProgress.title && (
-              <p
-                dir="auto"
-                className="mt-1 w-full max-w-sm truncate text-[13px] text-muted-foreground"
-              >
+              <p dir="auto" className="mt-1 w-full max-w-sm truncate text-[13px] text-secondary">
                 {downloadProgress.title}
               </p>
             )}
@@ -1402,44 +1401,44 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           <div
             className={cn(
               CARD_SURFACE_CLASS,
-              "mt-5 divide-y divide-border/60 dark:divide-white/10"
+              "mt-5 divide-y divide-default/60 dark:divide-white/10"
             )}
           >
             <div className="flex items-center gap-4 px-5 py-4">
               <div className="flex min-w-0 flex-1 items-start gap-3">
-                <Users size={16} className="mt-0.5 shrink-0 text-foreground/45" />
+                <Users size={16} className="mt-0.5 shrink-0 text-primary/45" />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">
+                  <p className="text-sm font-medium text-primary">
                     {t("notes.upload.speakerDetection")}
                   </p>
-                  <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-0.5 text-sm leading-relaxed text-secondary">
                     {t("notes.upload.speakerDetectionDescription")}
                   </p>
 
                   {diarizationEnabled && byokDiarizeProvider === "openai" && (
-                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                    <p className="mt-1.5 text-xs leading-relaxed text-secondary">
                       {t("notes.upload.openaiDiarizeNote")}
                     </p>
                   )}
                   {diarizationEnabled && byokDiarizeProvider === "mistral" && (
-                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                    <p className="mt-1.5 text-xs leading-relaxed text-secondary">
                       {t("notes.upload.mistralDiarizeNote")}
                     </p>
                   )}
                   {diarizationEnabled && byokDiarizeProvider === "groq" && (
-                    <p className="mt-1.5 text-xs leading-relaxed text-warning">
+                    <p className="mt-1.5 text-xs leading-relaxed text-amber-solid">
                       {t("notes.upload.groqDiarizeNote")}
                     </p>
                   )}
 
                   {diarizationDownloading && (
-                    <p className="mt-1.5 text-xs leading-relaxed text-primary">
+                    <p className="mt-1.5 text-xs leading-relaxed text-brand-solid">
                       {t("notes.upload.downloadingModels")}
                     </p>
                   )}
 
                   {diarizationEnabled && (isOpenWhisprCloud || managedActive) && (
-                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                    <p className="mt-1.5 text-xs leading-relaxed text-secondary">
                       {t("notes.upload.diarizationRunsLocally")}
                     </p>
                   )}
@@ -1469,11 +1468,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 <div className="min-w-0 flex-1 ps-7">
                   <label
                     htmlFor="upload-num-speakers"
-                    className="block text-sm font-medium text-foreground"
+                    className="block text-sm font-medium text-primary"
                   >
                     {t("notes.upload.numSpeakersLabel")}
                   </label>
-                  <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-0.5 text-sm leading-relaxed text-secondary">
                     {t("notes.upload.numSpeakersHint")}
                   </p>
                 </div>
@@ -1499,7 +1498,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     setDiarizationNumSpeakers(String(Math.max(2, Math.min(MAX_SPEAKER_COUNT, n))));
                   }}
                   placeholder={t("notes.upload.numSpeakersPlaceholder")}
-                  className="h-9 w-32 shrink-0 rounded-xl! px-3 text-sm placeholder:text-foreground/45 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="h-9 w-32 shrink-0 rounded-xl! px-3 text-sm placeholder:text-primary/45 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
             )}
@@ -1513,7 +1512,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             <DialogTitle>{t("notes.upload.newFolder")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground/50">
+            <label className="text-xs font-medium text-primary/50">
               {t("notes.upload.folderName")}
             </label>
             <Input
@@ -1553,7 +1552,7 @@ function ProgressWaveform() {
       {[0, 1, 2, 3, 4, 5, 6].map((i) => (
         <div
           key={i}
-          className="w-[3px] origin-bottom rounded-full bg-primary/60"
+          className="w-[3px] origin-bottom rounded-full bg-brand-solid/60"
           style={{
             height: "100%",
             animation: `waveform-bar ${0.8 + i * 0.12}s ease-in-out infinite`,
@@ -1568,10 +1567,10 @@ function ProgressWaveform() {
 // null = size unknown (no content-length): pulse a full bar instead of sitting on an empty one.
 function ProgressBar({ percent }: { percent: number | null }) {
   return (
-    <div className="mb-4 h-1 w-full max-w-xs overflow-hidden rounded-full bg-foreground/8 dark:bg-white/10">
+    <div className="mb-4 h-1 w-full max-w-xs overflow-hidden rounded-full bg-text-primary/8 dark:bg-white/10">
       <div
         className={cn(
-          "h-full rounded-full bg-primary transition-[width] duration-500 ease-out",
+          "h-full rounded-full bg-brand-solid transition-[width] duration-500 ease-out",
           percent === null && "animate-pulse"
         )}
         style={{ width: `${percent === null ? 100 : Math.min(percent, 100)}%` }}
@@ -1623,14 +1622,14 @@ function IdleView({
   return (
     <>
       <div className="flex flex-col items-center gap-2 text-center">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">
+        <h2 className="text-xl font-semibold tracking-tight text-primary">
           {t("notes.upload.title")}
         </h2>
         <UploadModelSettingsButton
           label={t("notes.upload.using", { model: getActiveModelLabel() })}
           actionLabel={t("notes.upload.noProviderAction")}
           onOpenSettings={onOpenSettings}
-          className="text-[13px] text-muted-foreground"
+          className="text-[13px] text-secondary"
         />
       </div>
 
@@ -1693,14 +1692,14 @@ function SelectedView({
   return (
     <div className="flex flex-col gap-3" style={{ animation: "float-up 0.3s ease-out" }}>
       <div className={cn(CARD_SURFACE_CLASS, "flex items-center gap-4 p-4")}>
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary dark:bg-primary/15">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-solid/10 text-brand-solid dark:bg-brand-solid/15">
           <FileAudio size={20} />
         </span>
         <div className="min-w-0 flex-1">
-          <p dir="ltr" className="truncate text-sm font-medium text-foreground">
+          <p dir="ltr" className="truncate text-sm font-medium text-primary">
             {file.name}
           </p>
-          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-secondary">
             {file.size && (
               <>
                 <span className="shrink-0">{file.size}</span>
@@ -1718,7 +1717,7 @@ function SelectedView({
         <button
           onClick={reset}
           aria-label={t("notes.upload.cancel")}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full text-foreground/45 transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full text-primary/45 transition-colors hover:bg-text-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
         >
           <X size={14} />
         </button>
@@ -1726,8 +1725,8 @@ function SelectedView({
 
       {/* Cloud absolute limit (500 MB) */}
       {fileTooLarge && (
-        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 dark:bg-destructive/10">
-          <p className="text-[13px] leading-relaxed text-destructive">
+        <div className="rounded-xl border border-red-solid/20 bg-red-solid/5 px-4 py-3 dark:bg-red-solid/10">
+          <p className="text-[13px] leading-relaxed text-red-solid">
             {t("notes.upload.fileTooLarge")}
           </p>
         </div>
@@ -1735,14 +1734,14 @@ function SelectedView({
 
       {/* BYOK file too large — shared explanation */}
       {byokTooLarge && (
-        <div className="rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 dark:bg-primary/10">
-          <p className="text-[13px] leading-relaxed text-foreground/80">
+        <div className="rounded-xl border border-brand-solid/15 bg-brand-solid/5 px-4 py-3 dark:bg-brand-solid/10">
+          <p className="text-[13px] leading-relaxed text-primary/80">
             {t("notes.upload.byokTooLarge", { size: byokMaxFileSizeMb })}
           </p>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+          <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">
             {t("notes.upload.byokTooLargeDetail", { size: byokMaxFileSizeMb })}
           </p>
-          <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-foreground">
+          <p className="mt-1.5 text-[13px] font-medium leading-relaxed text-primary">
             {requiresAccount
               ? t("notes.upload.byokTooLargeNeedsAccount")
               : isProUser
@@ -1754,8 +1753,8 @@ function SelectedView({
 
       {/* Cloud free user, file > 25 MB → needs paid plan */}
       {requiresUpgrade && !fileTooLarge && (
-        <div className="rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 dark:bg-primary/10">
-          <p className="text-[13px] leading-relaxed text-foreground/80">
+        <div className="rounded-xl border border-brand-solid/15 bg-brand-solid/5 px-4 py-3 dark:bg-brand-solid/10">
+          <p className="text-[13px] leading-relaxed text-primary/80">
             {t("notes.upload.paidPlanRequired")}
           </p>
         </div>
@@ -1763,9 +1762,7 @@ function SelectedView({
 
       {/* Cloud large file info (Pro user, will be chunked) */}
       {isLargeFile && !requiresUpgrade && !fileTooLarge && isOpenWhisprCloud && (
-        <p className="text-center text-[13px] text-muted-foreground">
-          {t("notes.upload.largeFileNote")}
-        </p>
+        <p className="text-center text-[13px] text-secondary">{t("notes.upload.largeFileNote")}</p>
       )}
 
       <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
@@ -1844,9 +1841,9 @@ function TranscribingView({
       <ProgressWaveform />
       <ProgressBar percent={progress} />
 
-      <p className="text-[15px] font-medium text-foreground">{getTranscribingLabel()}</p>
+      <p className="text-[15px] font-medium text-primary">{getTranscribingLabel()}</p>
       {hasChunkInfo ? (
-        <p className="mt-1 text-[13px] text-muted-foreground">
+        <p className="mt-1 text-[13px] text-secondary">
           {t("notes.upload.chunkProgress", {
             completed: chunkProgress.chunksCompleted,
             total: chunkProgress.chunksTotal,
@@ -1854,7 +1851,7 @@ function TranscribingView({
         </p>
       ) : null}
       {!hasChunkInfo && file ? (
-        <p dir="ltr" className="mt-1 w-full max-w-sm truncate text-[13px] text-muted-foreground">
+        <p dir="ltr" className="mt-1 w-full max-w-sm truncate text-[13px] text-secondary">
           {file.name}
         </p>
       ) : null}
@@ -1889,7 +1886,7 @@ function FolderSelect({
 }: FolderSelectProps) {
   return (
     <div className={cn("flex items-center justify-center gap-2", className)}>
-      <FolderOpen size={14} className="shrink-0 text-muted-foreground" />
+      <FolderOpen size={14} className="shrink-0 text-secondary" />
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger className="h-9 w-52 rounded-full px-3.5 text-sm [&>svg]:h-3.5 [&>svg]:w-3.5">
           <SelectValue placeholder={t("notes.upload.selectFolder")} />
@@ -1907,7 +1904,7 @@ function FolderSelect({
                 <span className="flex items-center gap-1.5">
                   <span dir="auto">{f.name}</span>
                   {isMeetings && (
-                    <span className="text-[9px] uppercase tracking-wider text-foreground/45 font-medium">
+                    <span className="text-[9px] uppercase tracking-wider text-primary/45 font-medium">
                       {t("notes.folders.soon")}
                     </span>
                   )}
@@ -1919,7 +1916,7 @@ function FolderSelect({
             <>
               <SelectSeparator />
               <SelectItem value="__create_new__" className="text-sm py-1.5 ps-2.5 pe-7 rounded-md">
-                <span className="flex items-center gap-1.5 text-primary">
+                <span className="flex items-center gap-1.5 text-brand-solid">
                   <Plus size={12} />
                   {t("notes.upload.newFolder")}
                 </span>
@@ -1970,7 +1967,7 @@ function CompleteView({
             r="15"
             fill="none"
             strokeWidth="1.5"
-            className="stroke-success/20"
+            className="stroke-green-solid/20"
           />
           <circle
             cx="18"
@@ -1978,14 +1975,14 @@ function CompleteView({
             r="15"
             fill="none"
             strokeWidth="1.5"
-            className="stroke-success"
+            className="stroke-green-solid"
             strokeDasharray="94.25"
             strokeLinecap="round"
             style={{ animation: "ring-fill 0.8s ease-out forwards" }}
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <svg className="w-5 h-5 text-success" viewBox="0 0 24 24" fill="none">
+          <svg className="w-5 h-5 text-green-solid" viewBox="0 0 24 24" fill="none">
             <path
               d="M5 13l4 4L19 7"
               stroke="currentColor"
@@ -2000,10 +1997,10 @@ function CompleteView({
         </div>
       </div>
 
-      <p className="text-[15px] font-medium text-foreground">
+      <p className="text-[15px] font-medium text-primary">
         {t("notes.upload.transcriptionComplete")}
       </p>
-      <p className="mt-1 max-w-md text-[13px] leading-relaxed text-muted-foreground line-clamp-2">
+      <p className="mt-1 max-w-md text-[13px] leading-relaxed text-secondary line-clamp-2">
         {result.slice(0, 150)}
       </p>
 
@@ -2054,13 +2051,13 @@ interface ErrorViewProps {
 function ErrorView({ t, error, reset, onRetry, onOpenSettings }: ErrorViewProps) {
   return (
     <div className="flex flex-col gap-4" style={{ animation: "float-up 0.3s ease-out" }}>
-      <div className="flex items-start gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 dark:bg-destructive/10">
-        <AlertCircle size={16} className="mt-0.5 shrink-0 text-destructive" />
-        <p className="flex-1 text-sm leading-relaxed text-destructive">{error}</p>
+      <div className="flex items-start gap-3 rounded-2xl border border-red-solid/20 bg-red-solid/5 p-4 dark:bg-red-solid/10">
+        <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-solid" />
+        <p className="flex-1 text-sm leading-relaxed text-red-solid">{error}</p>
         <button
           onClick={reset}
           aria-label={t("common.close")}
-          className="flex size-7 shrink-0 items-center justify-center rounded-full text-foreground/45 transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full text-primary/45 transition-colors hover:bg-text-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
         >
           <X size={14} />
         </button>

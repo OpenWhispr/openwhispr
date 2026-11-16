@@ -44,10 +44,7 @@ export default function SupportDropdown({ className, trigger }: SupportDropdownP
           <Button
             variant="ghost"
             size="icon"
-            className={cn(
-              "text-foreground/70 hover:text-foreground hover:bg-foreground/10",
-              className
-            )}
+            className={cn("text-primary/70 hover:text-primary hover:bg-text-primary/10", className)}
           >
             <HelpCircle size={16} />
           </Button>

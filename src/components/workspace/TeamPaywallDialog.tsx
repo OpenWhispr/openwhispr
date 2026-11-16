@@ -76,7 +76,7 @@ export default function TeamPaywallDialog({
         className="w-[330px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-5 rounded-[28px] p-5 sm:max-w-[330px]"
       >
         <DialogHeader className="items-center gap-3 space-y-0 text-center sm:text-center">
-          <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">
+          <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-tertiary text-primary">
             <Users className="size-3.5" aria-hidden="true" />
           </div>
           <div className="flex flex-col items-center gap-1.5">

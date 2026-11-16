@@ -389,17 +389,15 @@ const Toast: React.FC<
         progressPaused={timerPaused}
       >
         {secondaryDescription && (
-          <p className="mt-1 text-[13px] leading-snug text-muted-foreground">
-            {secondaryDescription}
-          </p>
+          <p className="mt-1 text-[13px] leading-snug text-secondary">{secondaryDescription}</p>
         )}
         {rawError && (
-          <div className="mt-2 flex items-start justify-between gap-1.5 rounded-lg border border-border/60 bg-foreground/5 px-2 py-1.5 font-mono text-xs leading-snug text-destructive">
+          <div className="mt-2 flex items-start justify-between gap-1.5 rounded-lg border border-default/60 bg-text-primary/5 px-2 py-1.5 font-mono text-xs leading-snug text-red-solid">
             <span className="min-w-0 select-all wrap-break-word">{rawError}</span>
             <button
               type="button"
               onClick={() => void copy()}
-              className="shrink-0 rounded-xs p-0.5 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+              className="shrink-0 rounded-xs p-0.5 text-secondary transition-colors hover:bg-text-primary/10 hover:text-primary"
               aria-label={t("common.copy")}
             >
               {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
@@ -407,17 +405,17 @@ const Toast: React.FC<
           </div>
         )}
         {copyCommand && (
-          <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-border/60 bg-foreground/5 px-2 py-1.5">
+          <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-default/60 bg-text-primary/5 px-2 py-1.5">
             <code
               dir="ltr"
-              className="min-w-0 flex-1 wrap-break-word font-mono text-xs text-muted-foreground select-all"
+              className="min-w-0 flex-1 wrap-break-word font-mono text-xs text-secondary select-all"
             >
               {copyCommand}
             </code>
             <button
               type="button"
               onClick={() => void copyRecoveryCommand()}
-              className="shrink-0 rounded-xs p-1 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+              className="shrink-0 rounded-xs p-1 text-secondary transition-colors hover:bg-text-primary/10 hover:text-primary"
               aria-label={t("reasoning.enterprise.technicalDetails.copyCommand")}
             >
               {commandCopied ? <Check className="size-3" /> : <Copy className="size-3" />}

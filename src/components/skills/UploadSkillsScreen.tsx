@@ -195,7 +195,7 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
     if (asked === "invalid") {
       const [problem] = preview.problems;
       return (
-        <span className="flex items-center gap-1.5 text-xs text-warning">
+        <span className="flex items-center gap-1.5 text-xs text-amber-solid">
           <AlertTriangle size={13} className="shrink-0" />
           {t(problemKey(problem), problem.values)}
         </span>
@@ -203,8 +203,8 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
     }
     if (asked === "ready") {
       return (
-        <span className="flex items-center gap-1.5 text-xs text-foreground">
-          <Check size={13} className="text-success" />
+        <span className="flex items-center gap-1.5 text-xs text-primary">
+          <Check size={13} className="text-green-solid" />
           {t("skills.upload.ready")}
         </span>
       );
@@ -215,12 +215,12 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
       return (
         <>
           {row.choice === "replace" ? (
-            <span className="flex items-center gap-1.5 text-xs text-foreground">
-              <Check size={13} className="text-success" />
+            <span className="flex items-center gap-1.5 text-xs text-primary">
+              <Check size={13} className="text-green-solid" />
               {t(repeat ? "skills.upload.willReplaceCopy" : "skills.upload.willReplace")}
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">{t("skills.upload.skipped")}</span>
+            <span className="text-xs text-secondary">{t("skills.upload.skipped")}</span>
           )}
           <Button variant="link" size="sm" className="h-6 px-1" onClick={() => choose(row.id)}>
             {t("skills.upload.undo")}
@@ -230,8 +230,8 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
     }
     return (
       <>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Info size={13} className="text-info shrink-0" />
+        <span className="flex items-center gap-1.5 text-xs text-secondary">
+          <Info size={13} className="text-brand-solid shrink-0" />
           {t(repeat ? "skills.upload.alsoInUpload" : "skills.upload.duplicate")}
         </span>
         <Button
@@ -290,13 +290,13 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
           if (files.length > 0) void addFiles(files);
         }}
       />
-      <ul className="mt-3 space-y-1 ps-1 text-xs text-muted-foreground/80 leading-relaxed">
+      <ul className="mt-3 space-y-1 ps-1 text-xs text-secondary/80 leading-relaxed">
         <li className="flex items-center gap-2">
-          <FileText size={12} className="shrink-0 text-muted-foreground/60" />
+          <FileText size={12} className="shrink-0 text-secondary/60" />
           <span>{t("skills.upload.ruleMd")}</span>
         </li>
         <li className="flex items-center gap-2">
-          <Code2 size={12} className="shrink-0 text-muted-foreground/60" />
+          <Code2 size={12} className="shrink-0 text-secondary/60" />
           <span>{t("skills.upload.ruleZip")}</span>
         </li>
       </ul>
@@ -313,8 +313,8 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
                   className="px-4 py-3 flex flex-wrap items-center gap-x-3 gap-y-1.5"
                 >
                   <div className="flex flex-1 basis-52 min-w-0 items-center gap-2.5">
-                    <Icon size={14} className="shrink-0 text-muted-foreground/70" />
-                    <span dir="ltr" className="truncate font-mono text-xs text-foreground">
+                    <Icon size={14} className="shrink-0 text-secondary/70" />
+                    <span dir="ltr" className="truncate font-mono text-xs text-primary">
                       {row.preview.fileName}
                     </span>
                   </div>
@@ -327,7 +327,7 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
                     type="button"
                     onClick={() => remove(row)}
                     aria-label={t("skills.create.removeFile", { path: row.preview.fileName })}
-                    className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-foreground/8 hover:text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-secondary/70 hover:bg-text-primary/8 hover:text-primary outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
                   >
                     <X size={12} />
                   </button>
@@ -335,7 +335,7 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
                     row.preview.warnings.map((warning) => (
                       <p
                         key={warning.code}
-                        className="basis-full ps-6 text-[11px] leading-relaxed text-muted-foreground"
+                        className="basis-full ps-6 text-[11px] leading-relaxed text-secondary"
                       >
                         {t(warningKey(warning), warning.values)}
                       </p>
@@ -348,7 +348,7 @@ export function UploadSkillsScreen({ onDone, onBack }: UploadSkillsScreenProps):
       )}
       <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
         {toInstall.length === 0 && (
-          <span id={hintId} className="me-1 text-xs text-muted-foreground">
+          <span id={hintId} className="me-1 text-xs text-secondary">
             {t("skills.upload.chooseFile")}
           </span>
         )}

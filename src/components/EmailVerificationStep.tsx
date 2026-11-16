@@ -150,8 +150,8 @@ export default function EmailVerificationStep({
         </div>
 
         {error && (
-          <div className="mt-5 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2">
-            <p className="text-xs leading-snug text-destructive">{error}</p>
+          <div className="mt-5 rounded-xl border border-red-solid/20 bg-red-solid/5 px-3 py-2">
+            <p className="text-xs leading-snug text-red-solid">{error}</p>
           </div>
         )}
 
@@ -166,7 +166,7 @@ export default function EmailVerificationStep({
               size="sm"
               onClick={handleResend}
               disabled={resendCooldown > 0 || isResending}
-              className="text-muted-foreground"
+              className="text-secondary"
             >
               {isResending ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -182,7 +182,7 @@ export default function EmailVerificationStep({
               variant="ghost"
               size="sm"
               onClick={onBack}
-              className="text-muted-foreground"
+              className="text-secondary"
             >
               {t("emailVerification.backToSignIn")}
             </Button>

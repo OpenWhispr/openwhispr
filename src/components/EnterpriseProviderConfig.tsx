@@ -64,7 +64,7 @@ function AuthModeToggle({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex gap-1 p-0.5 bg-muted rounded-md w-fit">
+    <div className="flex gap-1 p-0.5 bg-surface-secondary rounded-md w-fit">
       {options.map((opt) => (
         <button
           key={opt.id}
@@ -72,8 +72,8 @@ function AuthModeToggle({
           onClick={() => onChange(opt.id)}
           className={`px-2.5 py-1 text-xs rounded-sm transition-colors ${
             value === opt.id
-              ? "bg-background text-foreground shadow-sm font-medium"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-surface-primary text-primary shadow-sm font-medium"
+              : "text-secondary hover:text-primary"
           }`}
         >
           {opt.label}
@@ -84,11 +84,11 @@ function AuthModeToggle({
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="text-xs font-medium text-muted-foreground">{children}</label>;
+  return <label className="text-xs font-medium text-secondary">{children}</label>;
 }
 
 function FieldHint({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs text-muted-foreground/70">{children}</p>;
+  return <p className="text-xs text-secondary/70">{children}</p>;
 }
 
 function useSuggestedModels(provider: "bedrock" | "vertex") {
@@ -264,7 +264,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
           dir="ltr"
           value={store.bedrockRegion}
           onChange={(e) => handleRegionChange(e.target.value)}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className="w-full rounded-md border border-default bg-surface-primary px-3 py-2 text-sm"
         >
           {BEDROCK_REGIONS.map((r) => (
             <option key={r} value={r}>
@@ -327,7 +327,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
           </Button>
           {catalog.status === "error" && (
             <FieldHint>
-              <span role="alert" className="text-destructive">
+              <span role="alert" className="text-red-solid">
                 {catalog.error}
               </span>
             </FieldHint>
@@ -494,7 +494,7 @@ function VertexConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderC
           dir="ltr"
           value={store.vertexLocation}
           onChange={(e) => store.setVertexLocation(e.target.value)}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className="w-full rounded-md border border-default bg-surface-primary px-3 py-2 text-sm"
         >
           {VERTEX_LOCATIONS.map((loc) => (
             <option key={loc} value={loc}>

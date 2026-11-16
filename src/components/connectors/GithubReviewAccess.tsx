@@ -13,7 +13,7 @@ export const GITHUB_AUTHORIZATIONS_URL = "https://github.com/settings/apps/autho
 export function GithubReviewAccess(): ReactElement {
   const { t } = useTranslation();
   return (
-    <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed">
+    <p className="text-xs text-secondary/70 mt-1 leading-relaxed">
       {t("connectors.github.disconnectedHint")}{" "}
       <Button
         size="sm"

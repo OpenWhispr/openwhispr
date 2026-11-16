@@ -29,7 +29,7 @@ interface SelectionBarProps {
 // page, and whoever pressed Resend invites would have to find their way back to retry.
 const WHILE_BUSY = "aria-disabled:pointer-events-none aria-disabled:opacity-50";
 const PILL =
-  "inline-flex items-center gap-1.5 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40";
+  "inline-flex items-center gap-1.5 text-xs font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-focus/40";
 
 export function SelectionBar({
   count,
@@ -46,14 +46,14 @@ export function SelectionBar({
   return (
     // Full width under the list, as the design docks it; sticky so a tab that scrolls as a whole
     // keeps it in view.
-    <div className="sticky bottom-0 z-10 shrink-0 bg-background pt-3">
+    <div className="sticky bottom-0 z-10 shrink-0 bg-surface-primary pt-3">
       <div
         role="region"
         aria-label={t("settingsPage.workspace.people.selection.label")}
-        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface-1 px-3 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.08)] dark:border-border-subtle"
+        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-default bg-surface-secondary px-3 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.08)] dark:border-default"
       >
         <div className={cn("flex h-[34px] items-center rounded-full", RAISED_PILL)}>
-          <span className="ps-4 pe-2 text-xs font-medium tabular-nums text-muted-foreground">
+          <span className="ps-4 pe-2 text-xs font-medium tabular-nums text-secondary">
             {t("settingsPage.workspace.people.selection.count", { count })}
           </span>
           <button
@@ -63,7 +63,7 @@ export function SelectionBar({
             className={cn(
               PILL,
               WHILE_BUSY,
-              "h-full rounded-e-full border-s border-border ps-2.5 pe-3 text-link hover:bg-foreground/5 dark:border-border-subtle"
+              "h-full rounded-e-full border-s border-default ps-2.5 pe-3 text-brand hover:bg-text-primary/5 dark:border-default"
             )}
           >
             <X className="size-3.5" aria-hidden="true" />
@@ -84,8 +84,8 @@ export function SelectionBar({
                   WHILE_BUSY,
                   "h-[34px] rounded-full ps-2.5 pe-3",
                   action.tone === "destructive"
-                    ? "bg-destructive/10 text-destructive hover:bg-destructive/15"
-                    : cn(RAISED_PILL, "text-muted-foreground hover:text-foreground")
+                    ? "bg-red-solid/10 text-red-solid hover:bg-red-solid/15"
+                    : cn(RAISED_PILL, "text-secondary hover:text-primary")
                 )}
               >
                 {action.busy ? (

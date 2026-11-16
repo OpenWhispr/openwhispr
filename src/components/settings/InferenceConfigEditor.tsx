@@ -174,14 +174,14 @@ export default function InferenceConfigEditor({
 
   if (managed.kind === "error") {
     return (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3" role="alert">
+      <div className="rounded-lg border border-red-solid/30 bg-red-solid/5 p-3" role="alert">
         <div className="flex items-start gap-2">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-solid" />
           <div>
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-xs text-secondary">
               {managed.messageKey ? t(managed.messageKey) : managed.message}
             </p>
           </div>
@@ -192,25 +192,25 @@ export default function InferenceConfigEditor({
 
   if (managed.kind === "managed") {
     return (
-      <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
+      <div className="space-y-3 rounded-lg border border-brand-solid/20 bg-brand-solid/[0.03] p-3">
         <div className="flex items-start gap-2.5">
-          <div className="rounded-md bg-primary/10 p-1.5 text-primary">
+          <div className="rounded-md bg-brand-solid/10 p-1.5 text-brand-solid">
             <ShieldCheck className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.title")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-xs text-secondary">
               {enterpriseProviderName(managed.provider)} ·{" "}
               <span className="font-mono">{managed.model}</span>
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-xs text-secondary">
               {t("settingsPage.aiModels.managedEnterprise.description")}
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-default/70 pt-3">
           <TestConnectionButton
             provider={managed.provider}
             getConfig={() => ({
@@ -236,12 +236,12 @@ export default function InferenceConfigEditor({
   return (
     <div className="space-y-3">
       {enterpriseSetupMode === "manual" && managedAvailable.kind === "managed" && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-surface-secondary/30 p-3">
           <div className="min-w-0">
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.availableTitle")}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-secondary">
               {t("settingsPage.aiModels.managedEnterprise.availableDescription", {
                 provider: enterpriseProviderName(managedAvailable.provider),
               })}
@@ -279,9 +279,7 @@ export default function InferenceConfigEditor({
           setModel={setModel}
           baseUrlPlaceholder="http://192.168.1.126:11434/v1"
           helpExamples={
-            <p className="text-xs text-muted-foreground">
-              {t("reasoning.selfHosted.endpointHelp")}
-            </p>
+            <p className="text-xs text-secondary">{t("reasoning.selfHosted.endpointHelp")}</p>
           }
         />
       )}
@@ -289,10 +287,10 @@ export default function InferenceConfigEditor({
       {showThinkingToggle && (
         <div className="flex items-start justify-between gap-3 pt-1">
           <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-medium text-foreground">
+            <h4 className="text-sm font-medium text-primary">
               {t("reasoning.disableThinking.label")}
             </h4>
-            <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
+            <p className="text-xs text-secondary">{t("reasoning.disableThinking.help")}</p>
           </div>
           <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
         </div>
@@ -301,8 +299,8 @@ export default function InferenceConfigEditor({
       {effortCapability && (
         <div className="flex items-start justify-between gap-3 pt-1">
           <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-medium text-foreground">{t("reasoning.effort.title")}</h4>
-            <p className="text-xs text-muted-foreground">
+            <h4 className="text-sm font-medium text-primary">{t("reasoning.effort.title")}</h4>
+            <p className="text-xs text-secondary">
               {effortCapability.defaultValue
                 ? t("reasoning.effort.descriptionWithDefault", {
                     value: t(`reasoning.effort.options.${effortCapability.defaultValue}`),
@@ -349,10 +347,10 @@ export default function InferenceConfigEditor({
       {effectiveMode === "local" && (
         <div className="flex items-start justify-between gap-3 pt-1">
           <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-medium text-foreground">
+            <h4 className="text-sm font-medium text-primary">
               {t("reasoning.keepModelLoaded.label")}
             </h4>
-            <p className="text-xs text-muted-foreground">{t("reasoning.keepModelLoaded.help")}</p>
+            <p className="text-xs text-secondary">{t("reasoning.keepModelLoaded.help")}</p>
           </div>
           <Toggle checked={keepLocalModelLoaded} onChange={setKeepLocalModelLoaded} />
         </div>

@@ -232,7 +232,7 @@ export default function CompactPermissionsStep({
         </div>
 
         {platform === "darwin" && screenContext?.enabled && screenContext.needsRelaunch && (
-          <p className="mt-2 text-start text-xs leading-4 text-warning/80">
+          <p className="mt-2 text-start text-xs leading-4 text-amber-solid/80">
             {t("dictationAgent.screenContext.relaunchHint")}
           </p>
         )}

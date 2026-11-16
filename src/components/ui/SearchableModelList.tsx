@@ -210,7 +210,7 @@ export default function SearchableModelList({
       <div dir="ltr" className="relative">
         <Search
           size={14}
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 pointer-events-none"
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-secondary/70 pointer-events-none"
         />
         <Input
           dir="ltr"
@@ -253,10 +253,10 @@ export default function SearchableModelList({
                 >
                   {row.type === "header" ? (
                     <div className="flex items-center gap-1.5 px-0.5 pt-2 pb-1">
-                      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-secondary/70">
                         {row.label}
                       </span>
-                      <span className="text-[11px] text-muted-foreground/70 tabular-nums">
+                      <span className="text-[11px] text-secondary/70 tabular-nums">
                         {row.count}
                       </span>
                     </div>
@@ -265,7 +265,7 @@ export default function SearchableModelList({
                       id={`${listboxId}-${row.data.value}`}
                       role="option"
                       aria-selected={row.data.value === selectedModel}
-                      className={`pb-0.5 rounded-md ${isActive ? "ring-1 ring-primary/50" : ""}`}
+                      className={`pb-0.5 rounded-md ${isActive ? "ring-1 ring-brand-solid/50" : ""}`}
                     >
                       <ModelCard
                         model={row.data}
@@ -283,7 +283,7 @@ export default function SearchableModelList({
       )}
 
       {showEmpty && (
-        <p className="text-xs text-muted-foreground py-3 text-center">
+        <p className="text-xs text-secondary py-3 text-center">
           {t("reasoning.custom.noSearchResults", { query: query.trim() })}
         </p>
       )}

@@ -77,10 +77,10 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
       className={cn(
         "relative rounded-md mb-1 overflow-hidden",
         "border-s-2 transition-colors duration-300",
-        isExecuting && "border-s-primary/60",
-        isCompleted && !isError && "border-s-muted-foreground/20",
+        isExecuting && "border-s-brand-solid/60",
+        isCompleted && !isError && "border-s-text-secondary/20",
         isClipboard && "border-s-emerald-500/50",
-        isError && "border-s-destructive/50"
+        isError && "border-s-red-solid/50"
       )}
     >
       {isExecuting && (
@@ -93,7 +93,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
       <div
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1.5",
-          "bg-surface-1/60",
+          "bg-surface-secondary/60",
           hasDetail && !isExecuting && "cursor-pointer"
         )}
         onClick={hasDetail && !isExecuting ? () => setExpanded((v) => !v) : undefined}
@@ -102,19 +102,19 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
           size={12}
           className={cn(
             "shrink-0 transition-colors duration-300",
-            isExecuting && "text-primary/70",
-            isCompleted && !isError && !isClipboard && "text-muted-foreground/70",
+            isExecuting && "text-brand-solid/70",
+            isCompleted && !isError && !isClipboard && "text-secondary/70",
             isClipboard && "text-emerald-500/70",
-            isError && "text-destructive/60"
+            isError && "text-red-solid/60"
           )}
         />
 
         {isExecuting ? (
-          <span className="text-[11px] text-muted-foreground/80">{stepText}</span>
+          <span className="text-[11px] text-secondary/80">{stepText}</span>
         ) : isError ? (
           <div className="flex items-center gap-1">
-            <CircleAlert size={10} className="text-destructive/60 shrink-0" />
-            <span className="text-[11px] text-destructive/70">{stepText}</span>
+            <CircleAlert size={10} className="text-red-solid/60 shrink-0" />
+            <span className="text-[11px] text-red-solid/70">{stepText}</span>
           </div>
         ) : isClipboard ? (
           <div className="flex items-center gap-1">
@@ -128,14 +128,14 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
             />
           </div>
         ) : (
-          <span className="text-[11px] text-muted-foreground/70">{stepText}</span>
+          <span className="text-[11px] text-secondary/70">{stepText}</span>
         )}
 
         {hasDetail && !isExecuting && (
           <ChevronDown
             size={10}
             className={cn(
-              "ms-auto text-muted-foreground/70 shrink-0 transition-transform duration-200",
+              "ms-auto text-secondary/70 shrink-0 transition-transform duration-200",
               expanded && "rotate-180"
             )}
           />
@@ -149,7 +149,7 @@ function ToolCallStep({ toolCall }: { toolCall: ToolCallInfo }) {
         >
           <pre
             dir="ltr"
-            className="text-[10px] text-muted-foreground/70 px-2.5 pb-1.5 whitespace-pre-wrap leading-tight"
+            className="text-[10px] text-secondary/70 px-2.5 pb-1.5 whitespace-pre-wrap leading-tight"
           >
             {toolCall.result}
           </pre>
@@ -258,7 +258,7 @@ export function TurnNotes({
   return (
     <>
       {showReasoning && turn.reasoning && (
-        <details className="mt-1.5 text-[11px] text-muted-foreground/80">
+        <details className="mt-1.5 text-[11px] text-secondary/80">
           <summary className="cursor-pointer select-none">{t("agentMode.turn.reasoning")}</summary>
           <p className="mt-1 whitespace-pre-wrap" dir="auto">
             {turn.reasoning}
@@ -266,24 +266,22 @@ export function TurnNotes({
         </details>
       )}
       {turn.status === "stopped" && (
-        <p className="mt-1.5 text-[11px] text-muted-foreground/80">{t("agentMode.turn.stopped")}</p>
+        <p className="mt-1.5 text-[11px] text-secondary/80">{t("agentMode.turn.stopped")}</p>
       )}
       {turn.status === "error" && !failedHere && (
-        <p className="mt-1.5 text-[11px] text-destructive/80">{t("agentMode.turn.failed")}</p>
+        <p className="mt-1.5 text-[11px] text-red-solid/80">{t("agentMode.turn.failed")}</p>
       )}
       {turn.unbackedClaim && (
-        <p className="mt-1.5 text-[11px] text-destructive/80">
-          {t("agentMode.turn.unbackedClaim")}
-        </p>
+        <p className="mt-1.5 text-[11px] text-red-solid/80">{t("agentMode.turn.unbackedClaim")}</p>
       )}
       {turn.status === "step_limit" && (
-        <p className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground/80">
+        <p className="mt-1.5 flex items-center gap-2 text-[11px] text-secondary/80">
           {t("agentMode.turn.stepLimit")}
           {onContinue && (
             <button
               type="button"
               onClick={onContinue}
-              className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+              className="font-medium text-brand-solid hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 rounded-sm"
             >
               {t("agentMode.turn.continue")}
             </button>
@@ -312,25 +310,25 @@ function NoteCard({
       }
       className={cn(
         "flex items-center gap-2 w-full mt-2 px-2.5 py-2 rounded-md",
-        "bg-primary/6 border border-primary/12",
-        "hover:bg-primary/10 hover:border-primary/20",
+        "bg-brand-solid/6 border border-brand-solid/12",
+        "hover:bg-brand-solid/10 hover:border-brand-solid/20",
         "active:scale-[0.99]",
         "transition-all duration-150",
         "text-start group/note"
       )}
     >
-      <div className={cn("shrink-0 p-1 rounded", "bg-primary/10")}>
-        <FileText size={12} className="text-primary/70" />
+      <div className={cn("shrink-0 p-1 rounded", "bg-brand-solid/10")}>
+        <FileText size={12} className="text-brand-solid/70" />
       </div>
       <div className="min-w-0 flex-1">
-        <p dir="auto" className="text-[12px] font-medium text-foreground truncate">
+        <p dir="auto" className="text-[12px] font-medium text-primary truncate">
           {title}
         </p>
-        <p className="text-[10px] text-muted-foreground/70">{t("agentMode.tools.openNote")}</p>
+        <p className="text-[10px] text-secondary/70">{t("agentMode.tools.openNote")}</p>
       </div>
       <ChevronRight
         size={12}
-        className="text-muted-foreground/70 group-hover/note:text-primary/50 shrink-0 transition-colors duration-150 rtl:rotate-180"
+        className="text-secondary/70 group-hover/note:text-brand-solid/50 shrink-0 transition-colors duration-150 rtl:rotate-180"
       />
     </button>
   );
@@ -380,8 +378,8 @@ export const ChatMessage = memo(function ChatMessage({
           className={cn(
             "max-w-[80%] text-[13px] leading-relaxed",
             plain
-              ? "rounded-2xl rounded-ee-md bg-foreground/[0.07] px-3.5 py-2 text-foreground shadow-[inset_0_1px_0_rgb(255_255_255/0.5)] dark:bg-white/[0.09] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
-              : "rounded-lg rounded-ee-sm bg-primary/90 px-3 py-2 text-primary-foreground"
+              ? "rounded-2xl rounded-ee-md bg-text-primary/[0.07] px-3.5 py-2 text-primary shadow-[inset_0_1px_0_rgb(255_255_255/0.5)] dark:bg-white/[0.09] dark:shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
+              : "rounded-lg rounded-ee-sm bg-brand-solid/90 px-3 py-2 text-on-solid"
           )}
         >
           <span dir="auto" className="whitespace-pre-wrap">
@@ -405,16 +403,16 @@ export const ChatMessage = memo(function ChatMessage({
       <div
         data-chat-bubble
         className={cn(
-          "text-[13px] leading-relaxed text-foreground",
+          "text-[13px] leading-relaxed text-primary",
           plain
             ? "max-w-full px-1 py-1"
-            : "max-w-[85%] rounded-lg rounded-es-sm border border-border/70 bg-surface-1 px-3 py-2"
+            : "max-w-[85%] rounded-lg rounded-es-sm border border-default/70 bg-surface-secondary px-3 py-2"
         )}
       >
         {hasToolCalls && (
           <div
             className={cn(
-              (hasContent || noteCards.length > 0) && "mb-2 pb-1.5 border-b border-border/70"
+              (hasContent || noteCards.length > 0) && "mb-2 pb-1.5 border-b border-default/70"
             )}
           >
             {steps.map((tc) => (
@@ -435,7 +433,7 @@ export const ChatMessage = memo(function ChatMessage({
 
         {isStreaming && hasContent && (
           <span
-            className="inline-block w-[2px] h-[14px] bg-foreground/70 align-middle ms-0.5"
+            className="inline-block w-[2px] h-[14px] bg-text-primary/70 align-middle ms-0.5"
             style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
           />
         )}
@@ -450,7 +448,7 @@ export const ChatMessage = memo(function ChatMessage({
           <button
             type="button"
             onClick={() => openProviderSettings(error.settingsTarget!)}
-            className="mt-1.5 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+            className="mt-1.5 text-xs font-medium text-brand-solid hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 rounded-sm"
           >
             {t("providerErrors.openSettings")}
           </button>
@@ -484,9 +482,9 @@ export const ChatMessage = memo(function ChatMessage({
               className={cn(
                 plain
                   ? // Always there in the note chat, not only on hover.
-                    "flex size-7 items-center justify-center rounded-full text-foreground/45 hover:bg-foreground/[0.07] hover:text-foreground dark:hover:bg-white/[0.08] transition-colors duration-150"
-                  : "p-1 rounded-sm text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8 opacity-0 group-hover/msg:opacity-100 transition-all duration-150",
-                "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                    "flex size-7 items-center justify-center rounded-full text-primary/45 hover:bg-text-primary/[0.07] hover:text-primary dark:hover:bg-white/[0.08] transition-colors duration-150"
+                  : "p-1 rounded-sm text-secondary/70 hover:text-primary hover:bg-text-primary/8 opacity-0 group-hover/msg:opacity-100 transition-all duration-150",
+                "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               )}
             >
               {copied ? (
@@ -503,7 +501,7 @@ export const ChatMessage = memo(function ChatMessage({
                 onClick={() => onFork(messageId)}
                 aria-label={t("chat.fork")}
                 title={t("chat.fork")}
-                className="p-1 rounded-sm text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8 opacity-0 group-hover/msg:opacity-100 transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 focus-visible:opacity-100"
+                className="p-1 rounded-sm text-secondary/70 hover:text-primary hover:bg-text-primary/8 opacity-0 group-hover/msg:opacity-100 transition-all duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 focus-visible:opacity-100"
               >
                 <GitFork size={12} />
               </button>

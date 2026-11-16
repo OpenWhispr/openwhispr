@@ -317,8 +317,8 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       />
 
       {/* Tab Navigation + Content in a single panel */}
-      <div className="rounded-xl border border-border/70 dark:border-border-subtle bg-card dark:bg-surface-2 overflow-hidden">
-        <div className="flex border-b border-border/70 dark:border-border-subtle">
+      <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary dark:bg-surface-primary overflow-hidden">
+        <div className="flex border-b border-default/70 dark:border-default">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -328,8 +328,8 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-medium transition-colors duration-150 border-b-2 ${
                   isActive
-                    ? "border-primary text-foreground bg-primary/5 dark:bg-primary/3"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-black/2 dark:hover:bg-white/2"
+                    ? "border-brand-solid text-primary bg-brand-solid/5 dark:bg-brand-solid/3"
+                    : "border-transparent text-secondary hover:text-primary hover:bg-black/2 dark:hover:bg-white/2"
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -341,17 +341,17 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
         {/* ── View Tab ── */}
         {activeTab === "current" && (
-          <div className="divide-y divide-border/60 dark:divide-border-subtle">
+          <div className="divide-y divide-default/60 dark:divide-default">
             <div className="px-5 py-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-secondary/70 uppercase tracking-wider">
                     {isCustomPrompt
                       ? t("promptStudio.view.customPrompt")
                       : t("promptStudio.view.defaultPrompt")}
                   </p>
                   {isCustomPrompt && (
-                    <span className="text-xs font-semibold uppercase tracking-wider px-1.5 py-px rounded-full bg-primary/10 text-primary">
+                    <span className="text-xs font-semibold uppercase tracking-wider px-1.5 py-px rounded-full bg-brand-solid/10 text-brand-solid">
                       {t("promptStudio.view.modified")}
                     </span>
                   )}
@@ -364,7 +364,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 >
                   {copiedPrompt ? (
                     <>
-                      <Check className="w-3 h-3 me-1 text-success" />{" "}
+                      <Check className="w-3 h-3 me-1 text-green-solid" />{" "}
                       {t("promptStudio.common.copied")}
                     </>
                   ) : (
@@ -374,10 +374,10 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                   )}
                 </Button>
               </div>
-              <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/70 rounded-lg p-4 max-h-80 overflow-y-auto">
+              <div className="bg-surface-secondary/30 dark:bg-surface-tertiary/30 border border-default/70 rounded-lg p-4 max-h-80 overflow-y-auto">
                 <pre
                   dir="auto"
-                  className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed"
+                  className="text-xs font-mono text-secondary whitespace-pre-wrap leading-relaxed"
                 >
                   {currentPrompt.replace(/\{\{agentName\}\}/g, agentName)}
                 </pre>
@@ -388,14 +388,17 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
         {/* ── Edit Tab ── */}
         {activeTab === "edit" && (
-          <div className="divide-y divide-border/60 dark:divide-border-subtle">
+          <div className="divide-y divide-default/60 dark:divide-default">
             <div className="px-5 py-4">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                <span className="font-medium text-warning">
+              <p className="text-xs text-secondary leading-relaxed">
+                <span className="font-medium text-amber-solid">
                   {t("promptStudio.edit.cautionLabel")}
                 </span>{" "}
                 {t("promptStudio.edit.cautionTextPrefix")}{" "}
-                <code dir="ltr" className="text-xs bg-muted/50 px-1 py-0.5 rounded font-mono">
+                <code
+                  dir="ltr"
+                  className="text-xs bg-surface-secondary/50 px-1 py-0.5 rounded font-mono"
+                >
                   {"{{agentName}}"}
                 </code>{" "}
                 {t("promptStudio.edit.cautionTextSuffix")}
@@ -411,9 +414,9 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 className="font-mono text-xs leading-relaxed"
                 placeholder={t("promptStudio.edit.placeholder")}
               />
-              <p className="text-xs text-muted-foreground/70 mt-2">
+              <p className="text-xs text-secondary/70 mt-2">
                 {t("promptStudio.edit.agentNameLabel")}{" "}
-                <span dir="auto" className="font-medium text-foreground">
+                <span dir="auto" className="font-medium text-primary">
                   {agentName}
                 </span>
               </p>
@@ -492,15 +495,15 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 : providerConfig.label;
 
             return (
-              <div className="divide-y divide-border/60 dark:divide-border-subtle">
+              <div className="divide-y divide-default/60 dark:divide-default">
                 {!isTranslate && !isAgent && !useCleanupModel && (
                   <div className="px-5 py-4">
-                    <div className="rounded-lg border border-warning/20 bg-warning/5 dark:bg-warning/10 px-4 py-3">
+                    <div className="rounded-lg border border-amber-solid/20 bg-amber-solid/5 dark:bg-amber-solid/10 px-4 py-3">
                       <div className="flex items-start gap-2.5">
-                        <AlertTriangle className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
-                        <p className="text-xs text-muted-foreground leading-relaxed">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-solid mt-0.5 shrink-0" />
+                        <p className="text-xs text-secondary leading-relaxed">
                           {t("promptStudio.test.disabledInSettingsPrefix")}{" "}
-                          <span className="font-medium text-foreground">
+                          <span className="font-medium text-primary">
                             {t("promptStudio.test.aiModels")}
                           </span>{" "}
                           {t("promptStudio.test.disabledInSettingsSuffix")}
@@ -513,19 +516,19 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 <div className="px-5 py-4">
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider">
+                      <p className="text-xs text-secondary/70 uppercase tracking-wider">
                         {t("promptStudio.test.modelLabel")}
                       </p>
-                      <p dir="ltr" className="text-xs font-medium text-foreground font-mono">
+                      <p dir="ltr" className="text-xs font-medium text-primary font-mono">
                         {displayModel}
                       </p>
                     </div>
-                    <div className="h-3 w-px bg-border/40" />
+                    <div className="h-3 w-px bg-border-default/40" />
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground/70 uppercase tracking-wider">
+                      <p className="text-xs text-secondary/70 uppercase tracking-wider">
                         {t("promptStudio.test.providerLabel")}
                       </p>
-                      <p dir="ltr" className="text-xs font-medium text-foreground">
+                      <p dir="ltr" className="text-xs font-medium text-primary">
                         {displayProvider}
                       </p>
                     </div>
@@ -534,15 +537,15 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
 
                 <div className="px-5 py-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-medium text-foreground">
+                    <p className="text-xs font-medium text-primary">
                       {t("promptStudio.test.inputLabel")}
                     </p>
                     {testText && (
                       <span
                         className={`text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
                           isTranslate || isAgent || isAgentAddressed
-                            ? "bg-primary/10 text-primary dark:bg-primary/15"
-                            : "bg-muted text-muted-foreground"
+                            ? "bg-brand-solid/10 text-brand-solid dark:bg-brand-solid/15"
+                            : "bg-surface-secondary text-secondary"
                         }`}
                       >
                         {isTranslate
@@ -563,7 +566,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                   />
                   {/* The agent tab always runs the agent prompt, addressed or not. */}
                   {!isAgent && (
-                    <p className="text-xs text-muted-foreground/70 mt-1.5">
+                    <p className="text-xs text-secondary/70 mt-1.5">
                       {isTranslate
                         ? t("promptStudio.test.translateHint", {
                             language: getLanguageLabel(translationTargetLanguage),
@@ -592,7 +595,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 {testResult && (
                   <div className="px-5 py-4">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-medium text-foreground">
+                      <p className="text-xs font-medium text-primary">
                         {t("promptStudio.test.outputLabel")}
                       </p>
                       <Button
@@ -601,13 +604,13 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                         size="icon"
                         className="h-6 w-7"
                       >
-                        <Copy className="w-3 h-3 text-muted-foreground" />
+                        <Copy className="w-3 h-3 text-secondary" />
                       </Button>
                     </div>
-                    <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/70 rounded-lg p-4 max-h-48 overflow-y-auto">
+                    <div className="bg-surface-secondary/30 dark:bg-surface-tertiary/30 border border-default/70 rounded-lg p-4 max-h-48 overflow-y-auto">
                       <pre
                         dir="auto"
-                        className="text-xs text-foreground whitespace-pre-wrap leading-relaxed"
+                        className="text-xs text-primary whitespace-pre-wrap leading-relaxed"
                       >
                         {testResult}
                       </pre>

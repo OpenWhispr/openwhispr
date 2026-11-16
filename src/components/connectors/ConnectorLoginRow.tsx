@@ -214,16 +214,16 @@ export function ConnectorLoginRow({
         <div
           className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${dimmed} ${
             brandIcon
-              ? "bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10"
-              : "bg-primary/5 dark:bg-primary/10"
+              ? "bg-white dark:bg-surface-tertiary shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/10"
+              : "bg-brand-solid/5 dark:bg-brand-solid/10"
           }`}
         >
           {icon}
         </div>
         <div className="flex-1 min-w-0">
           <div className={dimmed}>
-            <p className="text-xs font-semibold text-foreground">{copy("title")}</p>
-            <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed" dir="auto">
+            <p className="text-xs font-semibold text-primary">{copy("title")}</p>
+            <p className="text-xs text-secondary/70 mt-0.5 leading-relaxed" dir="auto">
               {summary}
             </p>
           </div>
@@ -236,11 +236,11 @@ export function ConnectorLoginRow({
             <DisconnectedDetail connectorId={connectorId} />
           )}
           {/* Mounted before the note arrives, so a screen reader announces it. */}
-          <div role="status" className="text-xs text-muted-foreground" dir="auto">
+          <div role="status" className="text-xs text-secondary" dir="auto">
             {grantKept && <p className="mt-1">{copy("grantKept")}</p>}
           </div>
           {errorCode && (
-            <p role="alert" className="text-xs text-destructive mt-1">
+            <p role="alert" className="text-xs text-red-solid mt-1">
               {copy(`errors.${ROW_ERRORS.has(errorCode) ? errorCode : "connect_failed"}`)}
             </p>
           )}
@@ -275,7 +275,7 @@ export function ConnectorLoginRow({
               size={14}
               role="img"
               aria-label={t("connectors.locked")}
-              className="text-muted-foreground opacity-60"
+              className="text-secondary opacity-60"
             />
           )}
         </div>

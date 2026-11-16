@@ -25,19 +25,19 @@ export default function StepProgress({ steps, currentStep, className = "" }: Ste
             <div
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors duration-150 ${
                 isActive
-                  ? "bg-primary/10 text-primary"
+                  ? "bg-brand-solid/10 text-brand-solid"
                   : isCompleted
-                    ? "text-success"
-                    : "text-muted-foreground/70"
+                    ? "text-green-solid"
+                    : "text-secondary/70"
               }`}
             >
               <div
                 className={`w-4.5 h-4.5 rounded-md flex items-center justify-center shrink-0 transition-colors duration-150 ${
                   isActive
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-brand-solid text-on-solid"
                     : isCompleted
-                      ? "bg-success/15 text-success"
-                      : "bg-muted text-muted-foreground/70"
+                      ? "bg-green-solid/15 text-green-solid"
+                      : "bg-surface-secondary text-secondary/70"
                 }`}
               >
                 {isCompleted ? (
@@ -49,10 +49,10 @@ export default function StepProgress({ steps, currentStep, className = "" }: Ste
               <span
                 className={`text-xs font-medium hidden md:block tracking-wide ${
                   isActive
-                    ? "text-primary"
+                    ? "text-brand-solid"
                     : isCompleted
-                      ? "text-success"
-                      : "text-muted-foreground/70"
+                      ? "text-green-solid"
+                      : "text-secondary/70"
                 }`}
               >
                 {step.title}
@@ -61,7 +61,7 @@ export default function StepProgress({ steps, currentStep, className = "" }: Ste
             {index < steps.length - 1 && (
               <div
                 className={`w-3 h-px mx-0.5 transition-colors duration-150 ${
-                  isCompleted ? "bg-success/40" : "bg-border"
+                  isCompleted ? "bg-green-solid/40" : "bg-border-default"
                 }`}
               />
             )}

@@ -52,7 +52,7 @@ for (const ending of ["complete", "fail", "cancel"]) {
       node.getAttribute?.("class")?.includes("animate-spin")
     )[0];
     assert.equal(spinner.getAttribute("width"), "12");
-    assert.match(spinner.getAttribute("class"), /text-muted-foreground\/70/);
+    assert.match(spinner.getAttribute("class"), /text-secondary\/70/);
     assert.equal(container.textContent.split("<1m").length - 1, 1);
     assert.match(container.textContent, /Delete/);
     await React.act(async () => {

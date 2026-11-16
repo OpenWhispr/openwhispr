@@ -72,7 +72,7 @@ export function LiveTranscriptPanel({
           {text ? (
             <p
               dir="auto"
-              className="select-text whitespace-pre-wrap break-words text-base leading-relaxed text-foreground"
+              className="select-text whitespace-pre-wrap break-words text-base leading-relaxed text-primary"
             >
               <span>{shimmerParts.settled}</span>
               {shimmerParts.active && (
@@ -80,7 +80,7 @@ export function LiveTranscriptPanel({
               )}
             </p>
           ) : (
-            <p className="text-base leading-relaxed text-muted-foreground/55">
+            <p className="text-base leading-relaxed text-secondary/55">
               {t("transcriptionPreview.waitingForInput")}
             </p>
           )}
@@ -105,7 +105,7 @@ export function LiveTranscriptPanel({
             onClick={() => void handleCopy()}
             disabled={!controlsVisible || !text.trim()}
             tabIndex={controlsVisible ? 0 : -1}
-            className="inline-flex size-9 items-center justify-center rounded-full border border-border/35 bg-surface-1 text-muted-foreground shadow-[var(--shadow-card)] transition-colors hover:border-border/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
+            className="inline-flex size-9 items-center justify-center rounded-full border border-default/35 bg-surface-secondary text-secondary shadow-[var(--shadow-card)] transition-colors hover:border-default/60 hover:text-primary disabled:pointer-events-none disabled:opacity-35"
             aria-label={copied ? t("transcriptionPreview.copied") : t("transcriptionPreview.copy")}
           >
             {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -115,7 +115,7 @@ export function LiveTranscriptPanel({
             onClick={onCollapse}
             disabled={!controlsVisible}
             tabIndex={controlsVisible ? 0 : -1}
-            className="inline-flex size-9 items-center justify-center rounded-full border border-border/35 bg-surface-1 text-foreground shadow-[var(--shadow-card)] transition-colors hover:border-border/60 hover:bg-surface-2 disabled:pointer-events-none"
+            className="inline-flex size-9 items-center justify-center rounded-full border border-default/35 bg-surface-secondary text-primary shadow-[var(--shadow-card)] transition-colors hover:border-default/60 hover:bg-surface-primary disabled:pointer-events-none"
             aria-label={t("transcriptionPreview.collapse", { defaultValue: "Collapse transcript" })}
           >
             <ChevronDown className="size-4" />

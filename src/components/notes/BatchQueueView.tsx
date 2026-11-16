@@ -22,13 +22,13 @@ interface BatchQueueViewProps {
 function StatusIcon({ status }: { status: QueueItem["status"] }) {
   switch (status) {
     case "done":
-      return <Check size={14} className="shrink-0 text-success" />;
+      return <Check size={14} className="shrink-0 text-green-solid" />;
     case "error":
-      return <X size={14} className="shrink-0 text-destructive" />;
+      return <X size={14} className="shrink-0 text-red-solid" />;
     case "queued":
-      return <Clock size={14} className="shrink-0 text-muted-foreground" />;
+      return <Clock size={14} className="shrink-0 text-secondary" />;
     default:
-      return <Loader2 size={14} className="shrink-0 animate-spin text-primary" />;
+      return <Loader2 size={14} className="shrink-0 animate-spin text-brand-solid" />;
   }
 }
 
@@ -51,7 +51,7 @@ export function BatchWarningIndicator({
   const label = messages.join(" ");
   return (
     <span className="flex shrink-0" role="img" title={label} aria-label={label}>
-      <AlertTriangle size={11} className="text-warning" />
+      <AlertTriangle size={11} className="text-amber-solid" />
     </span>
   );
 }
@@ -82,13 +82,13 @@ export default function BatchQueueView({
     >
       <div className="px-4 pt-4 pb-3">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <p className="text-sm font-medium text-foreground">
+          <p className="text-sm font-medium text-primary">
             {t("notes.upload.queueProgress", {
               completed: completedCount,
               total: totalCount,
             })}
             {failedCount > 0 && (
-              <span className="font-normal text-destructive">
+              <span className="font-normal text-red-solid">
                 {" · "}
                 {t("notes.upload.queueFailed", { n: failedCount })}
               </span>
@@ -105,31 +105,31 @@ export default function BatchQueueView({
             </Button>
           )}
         </div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-foreground/8 dark:bg-white/10">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-text-primary/8 dark:bg-white/10">
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+            className="h-full rounded-full bg-brand-solid transition-[width] duration-500 ease-out"
             style={{ width: `${overallProgress}%` }}
           />
         </div>
       </div>
 
-      <div className="max-h-[300px] divide-y divide-border/60 overflow-y-auto border-t border-border/60 dark:divide-white/10 dark:border-white/10">
+      <div className="max-h-[300px] divide-y divide-default/60 overflow-y-auto border-t border-default/60 dark:divide-white/10 dark:border-white/10">
         {queue.map((item) => (
           <div
             key={item.id}
             className={cn(
               "flex min-h-12 items-center gap-3 px-4 py-2 text-sm",
-              item.status === "error" && "bg-destructive/5"
+              item.status === "error" && "bg-red-solid/5"
             )}
           >
             <StatusIcon status={item.status} />
-            <span className="flex-1 truncate text-foreground/80">{item.name}</span>
+            <span className="flex-1 truncate text-primary/80">{item.name}</span>
 
             {item.status === "downloading" && (
-              <div className="h-1 w-16 overflow-hidden rounded-full bg-foreground/8 dark:bg-white/10">
+              <div className="h-1 w-16 overflow-hidden rounded-full bg-text-primary/8 dark:bg-white/10">
                 <div
                   className={cn(
-                    "h-full rounded-full bg-primary transition-[width] duration-300",
+                    "h-full rounded-full bg-brand-solid transition-[width] duration-300",
                     // Percent 0 = size unknown: pulse instead of an empty bar.
                     !item.progress && "animate-pulse"
                   )}
@@ -149,7 +149,7 @@ export default function BatchQueueView({
             {item.status === "done" && item.noteId && onOpenNote && (
               <button
                 onClick={() => onOpenNote(item.noteId!)}
-                className="text-xs font-medium text-primary hover:underline"
+                className="text-xs font-medium text-brand-solid hover:underline"
                 aria-label={t("notes.upload.openNote")}
               >
                 {t("notes.upload.openNote")}
@@ -158,7 +158,7 @@ export default function BatchQueueView({
 
             {item.status === "error" && item.error && (
               <span
-                className="max-w-40 truncate text-xs text-destructive"
+                className="max-w-40 truncate text-xs text-red-solid"
                 title={t(`notes.upload.${item.error}`, {
                   defaultValue: item.error,
                   size: byokMaxFileSizeMb,
@@ -174,7 +174,7 @@ export default function BatchQueueView({
             {item.status === "queued" && (
               <button
                 onClick={() => onRemoveItem(item.id)}
-                className="flex size-7 shrink-0 items-center justify-center rounded-full text-foreground/45 transition-colors hover:bg-foreground/5 hover:text-foreground"
+                className="flex size-7 shrink-0 items-center justify-center rounded-full text-primary/45 transition-colors hover:bg-text-primary/5 hover:text-primary"
                 aria-label={t("notes.upload.removeFromQueue")}
               >
                 <Trash2 size={13} />
@@ -185,7 +185,7 @@ export default function BatchQueueView({
       </div>
 
       {isProcessing && !allDone && (
-        <div className="flex justify-center border-t border-border/60 py-2 dark:border-white/10">
+        <div className="flex justify-center border-t border-default/60 py-2 dark:border-white/10">
           <Button variant="ghost" size="sm" onClick={onCancelAll} className="rounded-full px-4">
             {t("notes.upload.cancelAll")}
           </Button>

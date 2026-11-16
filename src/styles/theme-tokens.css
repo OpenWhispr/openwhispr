@@ -3,109 +3,88 @@
    change the Figma variable, update the JSON, and regenerate. */
 
 @theme {
-  --color-background: #ffffff; /* surface/primary */
-  --color-card: #ffffff; /* surface/primary */
-  --color-popover: #ffffff; /* surface/primary */
-  --color-input: #ffffff; /* surface/primary */
-  --color-surface-0: #ffffff; /* surface/primary */
-  --color-surface-2: #ffffff; /* surface/primary */
-  --color-surface-1: #f7f7f7; /* surface/secondary */
-  --color-surface-window: #f7f7f7; /* surface/secondary */
-  --color-muted: #f7f7f7; /* surface/secondary */
-  --color-secondary: #f7f7f7; /* surface/secondary */
-  --color-surface-3: #e6e6e6; /* surface/tertiary */
-  --color-surface-raised: #e6e6e6; /* surface/tertiary */
-  --color-border: #e3e3e3; /* border/default */
-  --color-border-subtle: #e3e3e3; /* border/default */
-  --color-border-hover: #d4d4d4; /* border/hover */
-  --color-border-active: #4577e9; /* border/focus */
-  --color-ring: #4577e9; /* border/focus */
-  --color-foreground: #000000; /* text/primary */
-  --color-card-foreground: #000000; /* text/primary */
-  --color-popover-foreground: #000000; /* text/primary */
-  --color-secondary-foreground: #000000; /* text/primary */
-  --color-muted-foreground: #656565; /* text/secondary */
-  --color-foreground-tertiary: #969393; /* text/tertiary */
-  --color-state-hover: #0000000d; /* state/hover */
-  --color-primary: #4577e9; /* brand/solid */
-  --color-primary-foreground: #ffffff; /* text/on-solid */
-  --color-link: #2e58b1; /* brand/text */
-  --color-info: #4577e9; /* brand/solid */
-  --color-info-surface: #f2f6ff; /* brand/surface */
-  --color-info-border: #dae5fd; /* brand/border */
-  --color-info-text: #2e58b1; /* brand/text */
-  --color-info-foreground: #ffffff; /* text/on-solid */
-  --color-success: #049041; /* green/solid */
-  --color-success-surface: #f0f9f2; /* green/surface */
-  --color-success-border: #d5ecd9; /* green/border */
-  --color-success-text: #007132; /* green/text */
-  --color-success-foreground: #ffffff; /* text/on-solid */
-  --color-warning: #d97706; /* amber/solid */
-  --color-warning-surface: #fffbeb; /* amber/surface */
-  --color-warning-border: #fde68a; /* amber/border */
-  --color-warning-text: #92400e; /* amber/text */
-  --color-warning-foreground: #ffffff; /* text/on-solid */
-  --color-destructive: #de3b3d; /* red/solid */
-  --color-destructive-surface: #fff3f2; /* red/surface */
-  --color-destructive-border: #fcddd9; /* red/border */
-  --color-destructive-text: #a12f2f; /* red/text */
-  --color-destructive-foreground: #ffffff; /* text/on-solid */
-  --color-accent: #6c50e9; /* accent/solid */
-  --color-accent-text: #5236c9; /* accent/text */
-  --color-accent-foreground: #ffffff; /* text/on-solid */
-  --color-agent-brand: #6c50e9; /* accent/solid */
+  --color-accent-solid: #6c50e9;
+  --color-accent-text: #5236c9;
+  --color-amber-border: #fde68a;
+  --color-amber-solid: #d97706;
+  --color-amber-surface: #fffbeb;
+  --color-amber-text: #92400e;
+  --color-border-default: #e3e3e3;
+  --color-border-focus: #4577e9;
+  --color-border-hover: #d4d4d4;
+  --color-brand-border: #dae5fd;
+  --color-brand-solid: #4577e9;
+  --color-brand-surface: #f2f6ff;
+  --color-brand-text: #2e58b1;
+  --color-green-border: #d5ecd9;
+  --color-green-solid: #049041;
+  --color-green-surface: #f0f9f2;
+  --color-green-text: #007132;
+  --color-red-border: #fcddd9;
+  --color-red-solid: #de3b3d;
+  --color-red-surface: #fff3f2;
+  --color-red-text: #a12f2f;
+  --color-state-hover: #0000000d;
+  --color-surface-primary: #ffffff;
+  --color-surface-secondary: #f7f7f7;
+  --color-surface-tertiary: #e6e6e6;
+  --color-text-on-solid: #ffffff;
+  --color-text-primary: #000000;
+  --color-text-secondary: #656565;
+  --color-text-tertiary: #969393;
+}
+
+/* Short names on the one property a group belongs to. Inline, so a scope that
+   overrides a --color-* variable changes these too. */
+@theme inline {
+  --text-color-accent: var(--color-accent-text);
+  --border-color-amber: var(--color-amber-border);
+  --text-color-amber: var(--color-amber-text);
+  --border-color-default: var(--color-border-default);
+  --border-color-focus: var(--color-border-focus);
+  --ring-color-focus: var(--color-border-focus);
+  --outline-color-focus: var(--color-border-focus);
+  --border-color-hover: var(--color-border-hover);
+  --border-color-brand: var(--color-brand-border);
+  --text-color-brand: var(--color-brand-text);
+  --border-color-green: var(--color-green-border);
+  --text-color-green: var(--color-green-text);
+  --border-color-red: var(--color-red-border);
+  --text-color-red: var(--color-red-text);
+  --text-color-on-solid: var(--color-text-on-solid);
+  --text-color-primary: var(--color-text-primary);
+  --text-color-secondary: var(--color-text-secondary);
+  --text-color-tertiary: var(--color-text-tertiary);
 }
 
 .dark {
-  --color-background: #0f0f0f; /* surface/primary */
-  --color-card: #0f0f0f; /* surface/primary */
-  --color-popover: #0f0f0f; /* surface/primary */
-  --color-input: #0f0f0f; /* surface/primary */
-  --color-surface-0: #0f0f0f; /* surface/primary */
-  --color-surface-2: #0f0f0f; /* surface/primary */
-  --color-surface-1: #1a1a1a; /* surface/secondary */
-  --color-surface-window: #1a1a1a; /* surface/secondary */
-  --color-muted: #1a1a1a; /* surface/secondary */
-  --color-secondary: #1a1a1a; /* surface/secondary */
-  --color-surface-3: #262626; /* surface/tertiary */
-  --color-surface-raised: #262626; /* surface/tertiary */
-  --color-border: #303030; /* border/default */
-  --color-border-subtle: #303030; /* border/default */
-  --color-border-hover: #3d3d3d; /* border/hover */
-  --color-border-active: #4577e9; /* border/focus */
-  --color-ring: #4577e9; /* border/focus */
-  --color-foreground: #ffffff; /* text/primary */
-  --color-card-foreground: #ffffff; /* text/primary */
-  --color-popover-foreground: #ffffff; /* text/primary */
-  --color-secondary-foreground: #ffffff; /* text/primary */
-  --color-muted-foreground: #a3a3a3; /* text/secondary */
-  --color-foreground-tertiary: #868686; /* text/tertiary */
-  --color-state-hover: #ffffff0f; /* state/hover */
-  --color-primary: #4577e9; /* brand/solid */
-  --color-primary-foreground: #ffffff; /* text/on-solid */
-  --color-link: #9cbeff; /* brand/text */
-  --color-info: #4577e9; /* brand/solid */
-  --color-info-surface: #151c2a; /* brand/surface */
-  --color-info-border: #233968; /* brand/border */
-  --color-info-text: #9cbeff; /* brand/text */
-  --color-info-foreground: #ffffff; /* text/on-solid */
-  --color-success: #049041; /* green/solid */
-  --color-success-surface: #122015; /* green/surface */
-  --color-success-border: #0e4721; /* green/border */
-  --color-success-text: #89d298; /* green/text */
-  --color-success-foreground: #ffffff; /* text/on-solid */
-  --color-warning: #d97706; /* amber/solid */
-  --color-warning-surface: #271c0e; /* amber/surface */
-  --color-warning-border: #60390b; /* amber/border */
-  --color-warning-text: #fbbf24; /* amber/text */
-  --color-warning-foreground: #ffffff; /* text/on-solid */
-  --color-destructive: #de3b3d; /* red/solid */
-  --color-destructive-surface: #281715; /* red/surface */
-  --color-destructive-border: #612623; /* red/border */
-  --color-destructive-text: #fda19a; /* red/text */
-  --color-destructive-foreground: #ffffff; /* text/on-solid */
-  --color-accent: #6c50e9; /* accent/solid */
-  --color-accent-text: #b4a8ff; /* accent/text */
-  --color-accent-foreground: #ffffff; /* text/on-solid */
-  --color-agent-brand: #6c50e9; /* accent/solid */
+  --color-accent-solid: #6c50e9;
+  --color-accent-text: #b4a8ff;
+  --color-amber-border: #60390b;
+  --color-amber-solid: #d97706;
+  --color-amber-surface: #271c0e;
+  --color-amber-text: #fbbf24;
+  --color-border-default: #303030;
+  --color-border-focus: #4577e9;
+  --color-border-hover: #3d3d3d;
+  --color-brand-border: #233968;
+  --color-brand-solid: #4577e9;
+  --color-brand-surface: #151c2a;
+  --color-brand-text: #9cbeff;
+  --color-green-border: #0e4721;
+  --color-green-solid: #049041;
+  --color-green-surface: #122015;
+  --color-green-text: #89d298;
+  --color-red-border: #612623;
+  --color-red-solid: #de3b3d;
+  --color-red-surface: #281715;
+  --color-red-text: #fda19a;
+  --color-state-hover: #ffffff0f;
+  --color-surface-primary: #0f0f0f;
+  --color-surface-secondary: #1a1a1a;
+  --color-surface-tertiary: #262626;
+  --color-text-on-solid: #ffffff;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #a3a3a3;
+  --color-text-tertiary: #868686;
 }

@@ -27,8 +27,8 @@ function BannerDecoration({ showLine }: { showLine: boolean }) {
     >
       <defs>
         <radialGradient id={`${id}-glow`}>
-          <stop offset="0" stopColor="var(--color-primary)" stopOpacity="0.4" />
-          <stop offset="1" stopColor="var(--color-primary)" stopOpacity="0" />
+          <stop offset="0" stopColor="var(--color-brand-solid)" stopOpacity="0.4" />
+          <stop offset="1" stopColor="var(--color-brand-solid)" stopOpacity="0" />
         </radialGradient>
         <path
           id={`${id}-curve`}
@@ -41,7 +41,7 @@ function BannerDecoration({ showLine }: { showLine: boolean }) {
         <ellipse cx="450" cy="112" rx="170" ry="55" fill={`url(#${id}-glow)`} opacity="0.45" />
       </g>
       {showLine && (
-        <text className="fill-primary/22 text-[11px] [direction:ltr]">
+        <text className="fill-brand-solid/22 text-[11px] [direction:ltr]">
           <textPath href={`#${id}-curve`} startOffset="47">
             {t("toneStyle.banner.decoration")}
           </textPath>
@@ -86,17 +86,14 @@ export default function ToneStyleBanner({
   return (
     <div
       ref={bannerRef}
-      className="relative mb-3 flex items-center gap-4 overflow-hidden rounded-2xl border border-border/70 bg-card px-5 py-5 dark:border-white/10 dark:bg-surface-2"
+      className="relative mb-3 flex items-center gap-4 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary px-5 py-5 dark:border-white/10 dark:bg-surface-primary"
     >
       <BannerDecoration showLine={showLine} />
       <div className="relative min-w-0 flex-1">
-        <p className="brand-heading text-[19px] font-medium! tracking-normal! text-foreground">
+        <p className="brand-heading text-[19px] font-medium! tracking-normal! text-primary">
           {cleanupEnabled ? t("toneStyle.banner.title") : t("toneStyle.banner.cleanupOffTitle")}
         </p>
-        <p
-          ref={descriptionRef}
-          className="mt-1.5 w-fit max-w-full text-[15px] text-muted-foreground/90"
-        >
+        <p ref={descriptionRef} className="mt-1.5 w-fit max-w-full text-[15px] text-secondary/90">
           {cleanupEnabled
             ? t("toneStyle.banner.description")
             : t("toneStyle.banner.cleanupOffDescription")}
@@ -108,7 +105,7 @@ export default function ToneStyleBanner({
         </Button>
         <Button
           variant="secondary"
-          className="h-10 border-transparent bg-[color-mix(in_srgb,var(--color-foreground)_10%,var(--color-card))] px-6 text-sm text-muted-foreground/70 hover:bg-[color-mix(in_srgb,var(--color-foreground)_14%,var(--color-card))]"
+          className="h-10 border-transparent bg-[color-mix(in_srgb,var(--color-text-primary)_10%,var(--color-surface-primary))] px-6 text-sm text-secondary/70 hover:bg-[color-mix(in_srgb,var(--color-text-primary)_14%,var(--color-surface-primary))]"
           onClick={onDismiss}
         >
           {t("toneStyle.banner.notNow")}

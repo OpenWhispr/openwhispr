@@ -172,17 +172,17 @@ async function resumeDownloads(modelIds: string[], graphicsPack: boolean): Promi
 function CancelGlyph() {
   return (
     <svg width={24} height={24} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect width={24} height={24} rx={12} fill="var(--color-muted)" />
+      <rect width={24} height={24} rx={12} fill="var(--color-surface-secondary)" />
       <path
         d="M16 8L8 16"
-        stroke="var(--color-muted-foreground)"
+        stroke="var(--color-text-secondary)"
         strokeWidth={1.33333}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
         d="M8 8L16 16"
-        stroke="var(--color-muted-foreground)"
+        stroke="var(--color-text-secondary)"
         strokeWidth={1.33333}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -536,14 +536,14 @@ export default function BackgroundModelDownloadTray({
   return (
     // Figma "Onboarding / Frame 2147259036": 341 wide, radius 12, #E3E3E3
     // stroke, no shadow. Colours bind to the app's standard theme tokens
-    // (bg-card & co.) rather than --onboarding-*: the tray is mounted as a
+    // (bg-surface-primary & co.) rather than --onboarding-*: the tray is mounted as a
     // sibling of the onboarding canvas / control panel in AppRouter, so the
     // onboarding tokens are out of scope post-onboarding and their light-mode
     // literals would break on a dark control panel. The app tokens resolve in
     // both contexts and match the Figma light values within a couple of hex
     // steps.
     <aside
-      className={`fixed z-[60] w-[341px] overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground ${positionClass}`}
+      className={`fixed z-[60] w-[341px] overflow-hidden rounded-[12px] border border-default bg-surface-primary text-primary ${positionClass}`}
       style={
         placement === "onboarding" ? ({ WebkitAppRegion: "no-drag" } as CSSProperties) : undefined
       }
@@ -551,8 +551,8 @@ export default function BackgroundModelDownloadTray({
       aria-live="polite"
     >
       {/* Frame 2147259037: #F7F7F7 strip, 7/8 padding, gap 5, 12/140% label. */}
-      <div className="flex items-center gap-[5px] bg-muted px-2 py-[7px] text-xs leading-[1.4] text-muted-foreground">
-        <BrandMark className="size-[11.2px] shrink-0 text-primary" />
+      <div className="flex items-center gap-[5px] bg-surface-secondary px-2 py-[7px] text-xs leading-[1.4] text-secondary">
+        <BrandMark className="size-[11.2px] shrink-0 text-brand-solid" />
         {installing ? (
           <span>
             {t("onboarding.rehaul.local.installing")}
@@ -569,7 +569,7 @@ export default function BackgroundModelDownloadTray({
         <div
           key={downloadKey(download.kind, download.id)}
           className={`flex items-center gap-2.5 px-2.5 py-2 ${
-            index === 0 ? "" : "border-t border-border"
+            index === 0 ? "" : "border-t border-default"
           }`}
         >
           {/* Frame 17: fills the row, col gap 8. */}
@@ -589,7 +589,7 @@ export default function BackgroundModelDownloadTray({
                   carrying information exactly when the bar stops moving. Naming
                   the phase per row — as the setup step and the settings picker
                   already do — keeps that readable whatever the other rows do. */}
-              <span className="shrink-0 font-medium tabular-nums text-muted-foreground">
+              <span className="shrink-0 font-medium tabular-nums text-secondary">
                 {download.installing
                   ? t("onboarding.rehaul.local.installing")
                   : download.verifying
@@ -599,11 +599,11 @@ export default function BackgroundModelDownloadTray({
             </div>
             {download.error ? (
               <div>
-                <p className="truncate text-[0.625rem] text-destructive" title={download.error}>
+                <p className="truncate text-[0.625rem] text-red-solid" title={download.error}>
                   {download.error}
                 </p>
                 {isPendingLocalModel(download.id) && (
-                  <p className="text-[0.625rem] text-muted-foreground">
+                  <p className="text-[0.625rem] text-secondary">
                     {t("onboarding.rehaul.localSetup.foot.failedStaysOff")}
                   </p>
                 )}
@@ -611,9 +611,9 @@ export default function BackgroundModelDownloadTray({
             ) : (
               // Frame 2147259038: 12 tall track on #F7F7F7 at radius 9, brand fill
               // at radius 11.
-              <div className="h-3 overflow-hidden rounded-[9px] bg-muted">
+              <div className="h-3 overflow-hidden rounded-[9px] bg-surface-secondary">
                 <div
-                  className="h-full rounded-[11px] bg-primary transition-[width] motion-reduce:transition-none"
+                  className="h-full rounded-[11px] bg-brand-solid transition-[width] motion-reduce:transition-none"
                   style={{ width: `${download.percentage}%` }}
                 />
               </div>
@@ -626,7 +626,7 @@ export default function BackgroundModelDownloadTray({
               aria-label={t("onboarding.rehaul.localSetup.retryRow", {
                 row: downloadDisplay(download).name,
               })}
-              className="shrink-0 rounded-full px-1 text-xs font-medium text-primary transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              className="shrink-0 rounded-full px-1 text-xs font-medium text-brand-solid transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30"
             >
               {t("onboarding.rehaul.localSetup.retry")}
             </button>
@@ -641,7 +641,7 @@ export default function BackgroundModelDownloadTray({
             aria-label={t("onboarding.rehaul.local.cancelDownload", {
               model: downloadDisplay(download).name,
             })}
-            className="shrink-0 rounded-full transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-default disabled:opacity-40 disabled:hover:opacity-40"
+            className="shrink-0 rounded-full transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 disabled:cursor-default disabled:opacity-40 disabled:hover:opacity-40"
           >
             <CancelGlyph />
           </button>

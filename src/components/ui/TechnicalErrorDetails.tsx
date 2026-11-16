@@ -16,8 +16,8 @@ export function TechnicalErrorDetails({
   if (!text) return null;
 
   return (
-    <details className="group/details mt-1.5 rounded-[3px] border border-border bg-muted/50 px-1.5 py-1 text-xs">
-      <summary className="cursor-pointer select-none text-xs text-muted-foreground">
+    <details className="group/details mt-1.5 rounded-[3px] border border-default bg-surface-secondary/50 px-1.5 py-1 text-xs">
+      <summary className="cursor-pointer select-none text-xs text-secondary">
         {t("reasoning.enterprise.technicalDetails.title")}
       </summary>
       <div className="mt-1.5 flex items-start justify-between gap-2">
@@ -30,7 +30,7 @@ export function TechnicalErrorDetails({
         <button
           type="button"
           onClick={() => void copy()}
-          className="shrink-0 rounded-xs p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="shrink-0 rounded-xs p-1 text-secondary transition-colors hover:bg-surface-secondary hover:text-primary"
           aria-label={t("reasoning.enterprise.technicalDetails.copy")}
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}

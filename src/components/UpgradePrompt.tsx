@@ -31,10 +31,10 @@ export default function UpgradePrompt({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <div className="text-center space-y-2 pt-2">
-          <h2 className="text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold text-primary">
             {isPastDue ? t("upgradePrompt.paymentFailed") : t("upgradePrompt.weeklyLimit")}
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-secondary">
             {(isPastDue
               ? t("upgradePrompt.pastDueDescription", { limit: limit.toLocaleString() })
               : t("upgradePrompt.limitDescription", {
@@ -96,7 +96,7 @@ export default function UpgradePrompt({
           />
         </div>
 
-        <p className="text-xs text-muted-foreground/70 text-center">
+        <p className="text-xs text-secondary/70 text-center">
           {t("upgradePrompt.rollingWeeklyLimit")}
         </p>
       </DialogContent>
@@ -123,15 +123,15 @@ function OptionCard({
       disabled={disabled}
       className={`w-full text-start p-4 rounded-lg border transition-shadow duration-150 hover:shadow-md flex items-center justify-between cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
         highlighted
-          ? "bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/15"
-          : "bg-muted/50 dark:bg-surface-2 border-border dark:border-border-subtle hover:border-border-hover"
+          ? "bg-brand-solid/5 dark:bg-brand-solid/10 border-brand-solid/20 dark:border-brand-solid/15"
+          : "bg-surface-secondary/50 dark:bg-surface-primary border-default dark:border-default hover:border-hover"
       }`}
     >
       <div>
-        <div className="font-medium text-foreground">{title}</div>
-        <div className="text-sm text-muted-foreground">{description}</div>
+        <div className="font-medium text-primary">{title}</div>
+        <div className="text-sm text-secondary">{description}</div>
       </div>
-      <ChevronRight className="h-4 w-4 text-muted-foreground/70 shrink-0 rtl:rotate-180" />
+      <ChevronRight className="h-4 w-4 text-secondary/70 shrink-0 rtl:rotate-180" />
     </button>
   );
 }

@@ -44,7 +44,7 @@ function MarkdownLink({ node: _node, ...props }: ComponentProps<"a"> & ExtraProp
         }
         target={props.href?.startsWith("#") ? undefined : "_blank"}
         rel="noopener noreferrer"
-        className="text-link underline decoration-link/30 hover:decoration-link/60 transition-colors wrap-break-word"
+        className="text-brand underline decoration-brand-text/30 hover:decoration-brand-text/60 transition-colors wrap-break-word"
       />
     </InsideLinkContext>
   );

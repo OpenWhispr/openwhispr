@@ -118,7 +118,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
         {executing.slice(0, MAX_GROUPED_ICONS).map((step) => (
           <span
             key={step.id}
-            className="agent-step-badge flex size-[18px] items-center justify-center rounded-full border border-transparent bg-surface-2 bg-clip-padding"
+            className="agent-step-badge flex size-[18px] items-center justify-center rounded-full border border-transparent bg-surface-primary bg-clip-padding"
           >
             <ToolMark name={step.name} size={11} />
           </span>
@@ -174,7 +174,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
     <div
       className={cn(
         "text-[15px]",
-        active ? "text-foreground" : failed ? "text-destructive/80" : "text-muted-foreground"
+        active ? "text-primary" : failed ? "text-red-solid/80" : "text-secondary"
       )}
     >
       <button
@@ -182,7 +182,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
         disabled={!expandable}
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expandable ? expanded : undefined}
-        className="flex max-w-full items-center gap-2.5 rounded-md py-0.5 text-start transition-colors hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:cursor-default disabled:hover:text-inherit"
+        className="flex max-w-full items-center gap-2.5 rounded-md py-0.5 text-start transition-colors hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40 disabled:cursor-default disabled:hover:text-inherit"
       >
         {icon}
         <span className={cn("truncate", active && "agent-shimmer-text")}>{label}</span>
@@ -194,12 +194,9 @@ export function AgentProgressRow({ message }: { message: Message }) {
         )}
       </button>
       {expanded && (
-        <div className="ms-2 mt-2 flex flex-col gap-2.5 border-s border-border ps-4 text-muted-foreground">
+        <div className="ms-2 mt-2 flex flex-col gap-2.5 border-s border-default ps-4 text-secondary">
           {reasoning && (
-            <p
-              dir="auto"
-              className="whitespace-pre-wrap text-[13px] leading-5 text-muted-foreground/80"
-            >
+            <p dir="auto" className="whitespace-pre-wrap text-[13px] leading-5 text-secondary/80">
               {reasoning}
             </p>
           )}
@@ -208,7 +205,7 @@ export function AgentProgressRow({ message }: { message: Message }) {
               key={step.id}
               className={cn(
                 "flex min-w-0 items-center gap-2",
-                stepFailed(step) && "text-destructive/80"
+                stepFailed(step) && "text-red-solid/80"
               )}
             >
               <ToolMark name={step.name} />

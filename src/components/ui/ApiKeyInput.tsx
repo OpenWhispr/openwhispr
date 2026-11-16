@@ -34,7 +34,7 @@ export default function ApiKeyInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hasKey = apiKey.length > 0;
-  const variantClasses = variant === "purple" ? "border-primary focus:border-primary" : "";
+  const variantClasses = variant === "purple" ? "border-brand-solid focus:border-brand-solid" : "";
 
   useEffect(() => {
     if (isEditing) {
@@ -90,7 +90,7 @@ export default function ApiKeyInput({
   return (
     <div className={className}>
       {resolvedLabel && (
-        <label className="block text-xs font-medium text-foreground mb-1">{resolvedLabel}</label>
+        <label className="block text-xs font-medium text-primary mb-1">{resolvedLabel}</label>
       )}
 
       <div ref={containerRef} className="relative">
@@ -113,7 +113,7 @@ export default function ApiKeyInput({
               <button
                 type="button"
                 onClick={save}
-                className="h-6 w-6 flex items-center justify-center rounded text-success hover:bg-success/10 active:scale-95 transition-all"
+                className="h-6 w-6 flex items-center justify-center rounded text-green-solid hover:bg-green-solid/10 active:scale-95 transition-all"
                 aria-label={t("apiKeyInput.save")}
               >
                 <Check className="w-3.5 h-3.5" />
@@ -121,7 +121,7 @@ export default function ApiKeyInput({
               <button
                 type="button"
                 onClick={cancel}
-                className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/70 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
+                className="h-6 w-6 flex items-center justify-center rounded text-secondary/70 hover:text-secondary hover:bg-surface-secondary/50 active:scale-95 transition-all"
                 aria-label={t("apiKeyInput.cancelEdit")}
               >
                 <X className="w-3.5 h-3.5" />
@@ -134,30 +134,30 @@ export default function ApiKeyInput({
             onClick={enterEdit}
             className={`w-full h-8 flex items-center px-3 rounded border text-sm transition-all cursor-pointer group ${
               hasKey
-                ? "border-border/70 bg-input hover:border-border-hover dark:bg-surface-1 dark:border-border-subtle/60 dark:hover:border-border-hover"
-                : "border-dashed border-border/70 bg-transparent hover:border-border/70 hover:bg-muted/30"
+                ? "border-default/70 bg-surface-primary hover:border-hover dark:bg-surface-secondary dark:border-default/60 dark:hover:border-hover"
+                : "border-dashed border-default/70 bg-transparent hover:border-default/70 hover:bg-surface-secondary/30"
             }`}
             aria-label={hasKey ? t("apiKeyInput.edit") : t("apiKeyInput.add")}
           >
             {hasKey ? (
               <span
                 dir="ltr"
-                className="flex items-center gap-1.5 text-foreground/70 font-mono text-xs tracking-wide"
+                className="flex items-center gap-1.5 text-primary/70 font-mono text-xs tracking-wide"
               >
-                <KeyRound className="w-3 h-3 text-muted-foreground/70 shrink-0" />
+                <KeyRound className="w-3 h-3 text-secondary/70 shrink-0" />
                 {maskKey(apiKey)}
               </span>
             ) : (
-              <span className="text-muted-foreground/70 text-xs">{resolvedPlaceholder}</span>
+              <span className="text-secondary/70 text-xs">{resolvedPlaceholder}</span>
             )}
-            <span className="ms-auto text-muted-foreground/70 text-xs group-hover:text-muted-foreground/70 transition-colors">
+            <span className="ms-auto text-secondary/70 text-xs group-hover:text-secondary/70 transition-colors">
               {hasKey ? t("apiKeyInput.editButton") : t("apiKeyInput.addButton")}
             </span>
           </button>
         )}
       </div>
 
-      {helpText && <p className="text-xs text-muted-foreground/70 mt-1">{helpText}</p>}
+      {helpText && <p className="text-xs text-secondary/70 mt-1">{helpText}</p>}
     </div>
   );
 }

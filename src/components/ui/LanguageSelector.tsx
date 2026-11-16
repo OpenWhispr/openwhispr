@@ -172,23 +172,23 @@ export default function LanguageSelector({
           rounded text-xs font-medium
           border shadow-sm
           transition-[background-color,border-color,transform] duration-200 ease-out
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 focus-visible:ring-offset-1
           ${
             isOpen
-              ? "border-border-active bg-surface-2/90 shadow ring-1 ring-primary/20"
-              : "border-border/70 bg-surface-1/80 hover:border-border-hover hover:bg-surface-2/70 hover:shadow active:scale-[0.985]"
+              ? "border-focus bg-surface-primary/90 shadow ring-1 ring-brand-solid/20"
+              : "border-default/70 bg-surface-secondary/80 hover:border-hover hover:bg-surface-primary/70 hover:shadow active:scale-[0.985]"
           }
         `}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className={`truncate ${selected ? "text-foreground" : "text-muted-foreground"}`}>
+        <span className={`truncate ${selected ? "text-primary" : "text-secondary"}`}>
           <span className="me-1.5">{selected?.flag ?? "\uD83C\uDF10"}</span>
           {selected?.label ?? (value || placeholder || "")}
         </span>
         <ChevronDown
-          className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-[color,transform] duration-200 ${
-            isOpen ? "rotate-180 text-primary" : "group-hover:text-foreground"
+          className={`w-3.5 h-3.5 shrink-0 text-secondary transition-[color,transform] duration-200 ${
+            isOpen ? "rotate-180 text-brand-solid" : "group-hover:text-primary"
           }`}
         />
       </button>
@@ -205,12 +205,12 @@ export default function LanguageSelector({
               left: `${dropdownPosition.left}px`,
               width: `${dropdownPosition.width}px`,
             }}
-            className="z-9999 bg-popover/95 backdrop-blur-xl border border-border/70 rounded shadow-xl overflow-hidden"
+            className="z-9999 bg-surface-primary/95 backdrop-blur-xl border border-default/70 rounded shadow-xl overflow-hidden"
           >
             {showSearch && (
-              <div className="px-2 pt-2 pb-1.5 border-b border-border/70">
+              <div className="px-2 pt-2 pb-1.5 border-b border-default/70">
                 <div className="relative">
-                  <Search className="absolute start-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                  <Search className="absolute start-2 top-1/2 -translate-y-1/2 w-3 h-3 text-secondary pointer-events-none" />
                   <input
                     dir="auto"
                     ref={searchInputRef}
@@ -219,13 +219,13 @@ export default function LanguageSelector({
                     onChange={(e) => handleSearchQueryChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={t("languageSelector.searchPlaceholder")}
-                    className="w-full h-7 ps-7 pe-6 text-xs bg-transparent text-foreground border-0 focus:outline-none placeholder:text-muted-foreground/70"
+                    className="w-full h-7 ps-7 pe-6 text-xs bg-transparent text-primary border-0 focus:outline-none placeholder:text-secondary/70"
                   />
                   {searchQuery && (
                     <button
                       type="button"
                       onClick={clearSearch}
-                      className="absolute end-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors rounded p-0.5 hover:bg-muted/50"
+                      className="absolute end-1.5 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors rounded p-0.5 hover:bg-surface-secondary/50"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -237,7 +237,7 @@ export default function LanguageSelector({
             {/* Language list - tight, premium with smart scrollbar */}
             <div className="max-h-48 overflow-y-auto px-1 pb-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-border">
               {filteredLanguages.length === 0 ? (
-                <div className="px-2.5 py-2 text-xs text-muted-foreground">
+                <div className="px-2.5 py-2 text-xs text-secondary">
                   {t("languageSelector.noLanguagesFound")}
                 </div>
               ) : (
@@ -257,10 +257,10 @@ export default function LanguageSelector({
                           rounded transition-[background-color,color,transform] duration-150 ease-out
                           ${
                             isSelected
-                              ? "bg-primary/15 text-primary shadow-sm"
+                              ? "bg-brand-solid/15 text-brand-solid shadow-sm"
                               : isHighlighted
-                                ? "bg-muted/70 text-foreground"
-                                : "text-foreground hover:bg-muted/50 active:scale-[0.98]"
+                                ? "bg-surface-secondary/70 text-primary"
+                                : "text-primary hover:bg-surface-secondary/50 active:scale-[0.98]"
                           }
                         `}
                         role="option"

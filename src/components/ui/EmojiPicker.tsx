@@ -149,8 +149,8 @@ function EmojiPickerPanel({ value, onSelect }: EmojiPickerContentProps) {
 
   return (
     <>
-      <div className="flex h-9 items-center gap-2 border-b border-border px-3">
-        <Search size={14} className="shrink-0 text-muted-foreground/70" />
+      <div className="flex h-9 items-center gap-2 border-b border-default px-3">
+        <Search size={14} className="shrink-0 text-secondary/70" />
         <input
           dir="auto"
           type="text"
@@ -161,7 +161,7 @@ function EmojiPickerPanel({ value, onSelect }: EmojiPickerContentProps) {
           aria-label={t("emojiPicker.search")}
           aria-controls={gridId}
           aria-activedescendant={activePosition ? activeCellId : undefined}
-          className="input-inline min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
+          className="input-inline min-w-0 flex-1 bg-transparent text-sm text-primary outline-none placeholder:text-secondary/70"
         />
       </div>
       <div
@@ -172,9 +172,7 @@ function EmojiPickerPanel({ value, onSelect }: EmojiPickerContentProps) {
         style={{ height: VIEWPORT_HEIGHT }}
       >
         {data && rows.length === 0 ? (
-          <p className="pt-10 text-center text-xs text-muted-foreground">
-            {t("emojiPicker.noResults")}
-          </p>
+          <p className="pt-10 text-center text-xs text-secondary">{t("emojiPicker.noResults")}</p>
         ) : (
           <div role="rowgroup" className="relative" style={{ height: virtualizer.getTotalSize() }}>
             {virtualizer.getVirtualItems().map((item) => {
@@ -187,7 +185,7 @@ function EmojiPickerPanel({ value, onSelect }: EmojiPickerContentProps) {
                   style={{ top: item.start, height: item.size }}
                 >
                   {row.kind === "header" ? (
-                    <div className="self-end pb-1 ps-1 text-xs font-medium text-muted-foreground">
+                    <div className="self-end pb-1 ps-1 text-xs font-medium text-secondary">
                       {row.title}
                     </div>
                   ) : (
@@ -207,7 +205,7 @@ function EmojiPickerPanel({ value, onSelect }: EmojiPickerContentProps) {
                           onClick={() => select(entry.emoji)}
                           className={cn(
                             "font-emoji flex size-8 items-center justify-center rounded-md text-[20px] leading-none transition-colors duration-100",
-                            isActive && "bg-foreground/8 dark:bg-white/10"
+                            isActive && "bg-text-primary/8 dark:bg-white/10"
                           )}
                         >
                           {entry.emoji}
@@ -222,7 +220,7 @@ function EmojiPickerPanel({ value, onSelect }: EmojiPickerContentProps) {
         )}
       </div>
       {value && (
-        <div className="flex justify-end border-t border-border px-2 py-1.5">
+        <div className="flex justify-end border-t border-default px-2 py-1.5">
           <Button variant="ghost" size="sm" onClick={() => onSelect(null)}>
             {t("emojiPicker.remove")}
           </Button>
