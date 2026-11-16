@@ -7,6 +7,8 @@ export interface NotchModel {
   flow: 'dictate' | 'upload' | 'retry';
   startedAt: number;
   doneText: string | null;
+  /** Cancelled or failed: the notch slides back without a done state. */
+  closing?: boolean;
   /** Upload only: the file chosen in the picker. */
   name?: string;
   size?: number;
@@ -42,6 +44,7 @@ export function notchStateFor(
   onCancel: () => void,
 ): NotchState | null {
   if (!model) return null;
+  if (model.closing) return { kind: 'closing' };
   if (model.doneText) return { kind: 'done', text: model.doneText };
   if (model.flow === 'dictate') return { kind: 'busy', text: t('writingItUp') };
   if (uploading(model, stage, now)) {
@@ -68,7 +71,7 @@ export function notchAnnouncement(
   now: number,
   t: T,
 ): string {
-  if (!state || !model) return '';
+  if (!state || !model || state.kind === 'closing') return '';
   if (state.kind === 'done') return state.text;
   if (uploading(model, stage, now)) {
     const step = Math.floor(uploadRing(model, now) * 4) * 25;

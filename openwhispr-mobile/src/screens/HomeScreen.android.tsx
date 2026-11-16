@@ -1,7 +1,16 @@
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import { StorageService } from '@/services/storage/StorageService.android';
 import type { Transcript } from '@/types';
-import { AccessibilityInfo, AppState, Alert, Platform, ScrollView, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  Animated,
+  AppState,
+  Alert,
+  Easing,
+  Platform,
+  ScrollView,
+  View,
+} from 'react-native';
 import { useBubbleResult } from '@/android/bubbleResult';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,6 +58,10 @@ import { TryItRecorder } from '@/android/home/TryItRecorder';
 import { homeStats, localDate } from '@/android/home/model';
 
 const GUTTER = 16;
+/** Home stacks its sections this far apart. */
+const SECTION_GAP = 20;
+/** Room below the card while the notch is out: its reach plus 12 px before the next section. */
+const NOTCH_SPACE = NOTCH_REACH + 12 - SECTION_GAP;
 const SCROLL_TO_HISTORY_MS = 950;
 
 /** ScrollView's own animated scroll is quick and fixed; this one eases in and out slowly. */
@@ -105,6 +118,12 @@ export default function AndroidHome() {
   const [cardWidth, setCardWidth] = useState(0);
   const [cardHeight, setCardHeight] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  // Room below the card for the notch: open only while the notch is out, so the sections
+  // below move down with it and back up as it leaves.
+  const notchSpace = useRef(new Animated.Value(0)).current;
+  // Cancelled or failed work slides its notch back; a finished one does after its done state.
+  const closeNotch = () =>
+    setNotch((current) => current && (current.doneText ? current : { ...current, closing: true }));
   const uploadDone = useRef(false);
   const uploadStartedAt = useRef(0);
   // Set when an upload or dictation finished: take the person to its new History row once
@@ -185,8 +204,8 @@ export default function AndroidHome() {
       void FileSystem.deleteAsync(recording.uri, { idempotent: true }).catch(() => undefined);
       if (tryController.current === controller) tryController.current = null;
       setTrying(false);
-      // A finished one slides back once its done state has shown; anything else goes now.
-      if (!finished) setNotch(null);
+      // A finished one slides back once its done state has shown; anything else now.
+      if (!finished) closeNotch();
     }
   };
   useEffect(() => () => tryController.current?.abort(), []);
@@ -215,8 +234,8 @@ export default function AndroidHome() {
         action.current = false;
         setWorking(false);
         // A finished upload slides back once its done state has shown; a cancelled or failed
-        // one goes at once.
-        if (!uploadDone.current) setNotch(null);
+        // one at once.
+        if (!uploadDone.current) closeNotch();
       }
     };
     if (provider === 'cloud' && user) {
@@ -255,7 +274,7 @@ export default function AndroidHome() {
       retryController.current = null;
       action.current = false;
       setWorking(false);
-      if (!retried) setNotch(null);
+      if (!retried) closeNotch();
     }
   };
   const copy = (text: string) => {
@@ -345,6 +364,18 @@ export default function AndroidHome() {
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, [uploadingNow]);
+  // If a notch goes without sliding back (new work replacing it), close its room anyway.
+  useEffect(() => {
+    if (notch !== null) return;
+    const animation = Animated.timing(notchSpace, {
+      toValue: 0,
+      duration: 200,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [notch, notchSpace]);
   const cancelWork = () => {
     if (retryController.current) retryController.current.abort();
     else cancel();
@@ -417,18 +448,18 @@ export default function AndroidHome() {
           paddingHorizontal: GUTTER,
           paddingTop: 8,
           paddingBottom: 96,
-          gap: 20,
+          gap: SECTION_GAP,
           width: '100%',
           maxWidth: 680,
           alignSelf: 'center',
         }}
       >
-        {/* The notch hangs below the card without taking layout space. This wrapper reaches
-            below the card far enough to hold it, so its ✕ gets touches and it never covers
-            what comes next. */}
-        <View
+        {/* The notch hangs below the card. While it is out, this wrapper reaches below the
+            card far enough to hold it, so its ✕ gets touches and it never covers what comes
+            next; the notch opens and closes that room as it moves. */}
+        <Animated.View
           onLayout={({ nativeEvent }) => setCardWidth(Math.round(nativeEvent.layout.width))}
-          style={{ paddingBottom: NOTCH_REACH + 12 - 20 }}
+          style={{ paddingBottom: notchSpace }}
         >
           {notchState ? (
             <Notch
@@ -436,6 +467,8 @@ export default function AndroidHome() {
               state={notchState}
               cardWidth={cardWidth}
               top={cardHeight}
+              space={notchSpace}
+              spaceOpen={NOTCH_SPACE}
               onFinished={() => setNotch(null)}
             />
           ) : null}
@@ -452,7 +485,7 @@ export default function AndroidHome() {
               }}
             />
           </View>
-        </View>
+        </Animated.View>
         {pending.text || pending.error ? (
           <View
             style={{

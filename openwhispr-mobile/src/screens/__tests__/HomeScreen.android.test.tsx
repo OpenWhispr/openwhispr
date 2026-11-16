@@ -44,7 +44,8 @@ jest.mock('@/android/home/Notch', () => {
             <Text>cancelUpload</Text>
           </Pressable>
         ) : null}
-        {state.kind === 'done' ? (
+        {state.kind === 'closing' ? <Text>notch-closing</Text> : null}
+        {state.kind === 'done' || state.kind === 'closing' ? (
           <Pressable onPress={onFinished}>
             <Text>notch-finished</Text>
           </Pressable>
@@ -493,6 +494,10 @@ describe('history retry controls', () => {
     expect(screen.queryByText('uploadingPercent')).toBeNull();
     expect(screen.queryByText('writingItUpMinute')).toBeNull();
     expect(screen.getByText('Unreadable audio')).toBeTruthy();
+    // The notch slides back rather than vanishing, then goes once it is in.
+    expect(screen.getByText('notch-closing')).toBeTruthy();
+    fireEvent.press(screen.getByText('notch-finished'));
+    expect(screen.queryByText('notch-closing')).toBeNull();
   });
 
   it('aborts a pending retry when the screen unmounts', async () => {

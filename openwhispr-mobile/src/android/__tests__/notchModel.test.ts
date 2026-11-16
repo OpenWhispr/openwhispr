@@ -32,7 +32,7 @@ it('fills the upload ring with the file name and a cancel, then writes it up', (
   const early = notchStateFor(upload(), 'transcribing', 1000, t, cancel);
   expect(early).toMatchObject({ kind: 'busy', detail: 'team-sync.m4a', onCancel: cancel });
   expect(early?.kind === 'busy' && early.progress).toBeGreaterThan(0);
-  expect(early?.text).toMatch(/^uploadingPercent:\d+$/);
+  expect(early?.kind === 'busy' && early.text).toMatch(/^uploadingPercent:\d+$/);
   // The ring is full once half the estimate has passed; then the notch moves on.
   const later = notchStateFor(upload(), 'transcribing', 600_000, t, cancel);
   expect(later).toEqual({ kind: 'busy', text: 'writingItUpMinute', onCancel: cancel });
@@ -72,4 +72,10 @@ it('announces uploads in steps of 25 percent, not every tick', () => {
       t,
     ),
   ).toBe('announceWritingItUp');
+});
+
+it('slides back quietly once work is cancelled or fails', () => {
+  const closing = notchStateFor(upload({ closing: true }), 'transcribing', 100, t, cancel);
+  expect(closing).toEqual({ kind: 'closing' });
+  expect(notchAnnouncement(closing, upload({ closing: true }), 'transcribing', 100, t)).toBe('');
 });
