@@ -13,6 +13,7 @@ const {
   cleanupFiles,
 } = require("./lib/download-utils");
 const { readMinimumMacOS } = require("./lib/macho-build-version");
+const { compareVersions } = require("../src/helpers/parakeetCapability");
 
 const LLAMA_CPP_REPO = "ggml-org/llama.cpp";
 
@@ -72,7 +73,7 @@ function findAsset(release, pattern) {
 function assertRunsOnMacOS(files) {
   for (const file of files) {
     const minimum = readMinimumMacOS(fs.readFileSync(file));
-    if (minimum.localeCompare(MACOS_DEPLOYMENT_TARGET, undefined, { numeric: true }) > 0) {
+    if (compareVersions(minimum, MACOS_DEPLOYMENT_TARGET) > 0) {
       throw new Error(
         `${path.basename(file)} needs macOS ${minimum}, but the bundled llama.cpp has to run on macOS ${MACOS_DEPLOYMENT_TARGET}`
       );
