@@ -2,11 +2,20 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createSyncDevice } = require("../helpers/harness/syncDevice.js");
 const { createAccountCloud } = require("../helpers/harness/fakeCloud.js");
-const { localStorage: storage } = require("../helpers/harness/browserGlobals.js");
+const {
+  localStorage: storage,
+  window: windowStub,
+} = require("../helpers/harness/browserGlobals.js");
 
 async function setup(t, config = {}) {
   const device = createSyncDevice(t);
   if (!device) return null;
+  // Sync runs in the control panel, the one window that relocates a lost workspace's Private.
+  const { location } = windowStub;
+  windowStub.location = { ...location, search: "?panel=true" };
+  t.after(() => {
+    windowStub.location = location;
+  });
   const cloud = createAccountCloud(config);
   await device.signIn("backup-owner", cloud);
   return { device, cloud };
