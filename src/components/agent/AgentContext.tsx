@@ -27,7 +27,9 @@ export function SelectedContextBlock({
     <div
       className={cn(
         "rounded-2xl px-3",
-        compact ? "bg-surface-primary py-2" : "bg-surface-secondary py-2.5",
+        compact
+          ? "bg-surface-primary py-2 dark:bg-surface-tertiary"
+          : "bg-surface-secondary py-2.5",
         className
       )}
     >
@@ -71,7 +73,7 @@ export function ForkOriginChip({ title, onOpen }: { title: string; onOpen: () =>
     <button
       type="button"
       onClick={onOpen}
-      className="inline-flex h-7.5 max-w-4/5 items-center gap-1.5 rounded-full border border-default bg-surface-secondary px-3 text-[13px] text-secondary transition-colors hover:bg-surface-primary hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40"
+      className="inline-flex h-7.5 max-w-4/5 items-center gap-1.5 rounded-full border border-default bg-surface-secondary px-3 text-[13px] text-secondary transition-colors hover:bg-surface-primary dark:hover:bg-surface-tertiary hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40"
     >
       <GitFork size={14} className="shrink-0" />
       <span dir="auto" className="truncate">

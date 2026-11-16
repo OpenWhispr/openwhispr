@@ -57,7 +57,9 @@ export function AgentPill({
       className={cn(
         "flex h-10 max-w-full cursor-grab items-center rounded-full border border-default pe-1.25 select-none active:cursor-grabbing text-secondary shadow-[var(--shadow-card)]",
         hasStatus ? "ps-2.5" : "ps-1.25",
-        inModal ? "bg-surface-secondary dark:bg-surface-primary" : "agent-panel bg-surface-primary",
+        inModal
+          ? "bg-surface-secondary dark:bg-surface-tertiary"
+          : "agent-panel bg-surface-primary",
         className
       )}
       {...dragHandlers}

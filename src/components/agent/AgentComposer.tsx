@@ -137,7 +137,7 @@ export function AgentComposer({
               title={t("agentWindow.actions.stop")}
               className={cn(
                 ICON_BUTTON,
-                "bg-text-primary/10 text-primary hover:bg-text-primary/15 dark:bg-surface-primary dark:hover:bg-surface-tertiary"
+                "bg-text-primary/10 text-primary hover:bg-text-primary/15 dark:bg-surface-tertiary"
               )}
             >
               <Square size={14} />

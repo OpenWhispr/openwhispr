@@ -248,7 +248,7 @@ function UserMessage({ message }: { message: Message }) {
       )}
       <div
         dir="auto"
-        className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-tertiary px-3 py-2 dark:bg-surface-primary text-[14px] leading-5 text-primary"
+        className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-tertiary px-3 py-2 text-[14px] leading-5 text-primary"
       >
         {message.content}
       </div>
@@ -313,7 +313,7 @@ function SelectionToolbar({
       aria-label={t("agentWindow.selectionToolbar")}
       // Keeps the selection while a button is pressed.
       onMouseDown={(event) => event.preventDefault()}
-      className="fixed z-30 flex h-10 items-center overflow-hidden rounded-full border border-default bg-surface-primary shadow-[var(--shadow-card)]"
+      className="fixed z-30 flex h-10 items-center overflow-hidden rounded-full border border-default bg-surface-primary shadow-[var(--shadow-card)] dark:bg-surface-secondary"
       style={position ?? { top: 0, left: 0, visibility: "hidden" }}
     >
       <button type="button" onClick={onFollowUp} className={item}>
