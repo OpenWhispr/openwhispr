@@ -17,6 +17,7 @@ const defaultMockModules = (settingsKey) => ({
     "export default { debug() {}, info() {}, warn() {}, error() {}, logReasoning() {} };",
   "/stores/settingsStore": `
     export const getSettings = () => globalThis.${settingsKey};
+    export const useSettingsStore = { subscribe: () => () => {} };
     export const getEffectiveCleanupModel = () => null;
     export const selectResolvedLLMConfig = () => ({ model: null, provider: null });
     export const isCloudCleanupMode = () => false;
@@ -52,7 +53,11 @@ async function loadAudioManager(t, { cachePrefix, settingsKey, settings, mockMod
     // Prototype-only instance: the constructor wires up media devices the
     // tests don't need.
     createManager: (overrides = {}) =>
-      Object.assign(Object.create(AudioManager.prototype), overrides),
+      Object.assign(
+        Object.create(AudioManager.prototype),
+        { preparedMicCapture: { active: false } },
+        overrides
+      ),
   };
 }
 

@@ -82,7 +82,7 @@ test("Hold check distinguishes control instructions from the current activation 
 test("missing side-effect and freshness observations cannot silently pass", () => {
   const result = evaluateRecord({
     caseId: "no-side-effects",
-    content: "Settings → App → Hotkeys; Settings → App → Preferences.",
+    content: "Settings → Account → Hotkeys; Settings → Account → Preferences.",
   });
   assert.equal(result.failures.length, 3);
   assert.ok(
@@ -132,4 +132,16 @@ test("an official but unrelated article cannot satisfy source relevance", () => 
     metadata: { sources: [{ url, path: "/help/meetings/record-a-meeting" }] },
   });
   assert.deepEqual(result.failures, ["invalid source URL"]);
+});
+
+test("a route through the removed App group no longer counts", () => {
+  const routes = (content) =>
+    evaluateRecord({ caseId: "no-side-effects", content }).failures.filter((failure) =>
+      /Route$/.test(failure)
+    );
+  assert.deepEqual(routes("Settings → App → Hotkeys; Settings → App → Preferences."), [
+    "hotkeysRoute",
+    "microphoneRoute",
+  ]);
+  assert.deepEqual(routes("Settings → Account → Hotkeys; Settings → Account → Preferences."), []);
 });

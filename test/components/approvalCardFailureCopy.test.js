@@ -136,8 +136,8 @@ test("a Gmail card speaks Gmail: its failures, a bad address, and where to check
   }
 
   const pending = render(gmailCard({}));
-  assert.match(pending, /Email to josh@acme\.test/);
-  assert.match(pending, /From you@example\.test/);
+  assert.match(pending, />To<\/span><input[^>]*value="josh@acme\.test"/);
+  assert.match(pending, />From<\/span><span[^>]*>you@example\.test</);
 
   const badAddress = render(
     gmailCard({ draft: { body: "Hi", fields: { ...EMAIL_FIELDS, to: ["Josh <josh@acme.test>"] } } })
@@ -154,10 +154,10 @@ test("a Gmail card speaks Gmail: its failures, a bad address, and where to check
   const unknown = render(gmailCard({ state: "unknown", url: "https://mail.google.test/#sent" }));
   assert.match(unknown, /Couldn&#x27;t confirm it was sent\. Check your Sent folder\./);
   assert.doesNotMatch(unknown, /Check josh@acme\.test/);
-  assert.match(unknown, /<button[^>]*>Open in Gmail<\/button>/);
+  assert.match(unknown, /<button[^>]*>(?:<svg.*?<\/svg>)?Open in Gmail<\/button>/);
 
   const sent = render(gmailCard({ state: "sent", url: "https://mail.google.test/#sent/1" }));
-  assert.match(sent, /<button[^>]*>Open in Gmail<\/button>/);
+  assert.match(sent, /<button[^>]*>(?:<svg.*?<\/svg>)?Open in Gmail<\/button>/);
 
   // A connector without its own label keeps "Open".
   const slackSent = render({
@@ -165,5 +165,5 @@ test("a Gmail card speaks Gmail: its failures, a bad address, and where to check
     state: "sent",
     url: "https://acme.slack.test/archives/C1/p1",
   });
-  assert.match(slackSent, /<button[^>]*>Open<\/button>/);
+  assert.match(slackSent, /<button[^>]*>(?:<svg.*?<\/svg>)?Open<\/button>/);
 });

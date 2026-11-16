@@ -1,3 +1,4 @@
+import { startAffiliateAttribution } from "../stores/affiliateStore";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { authClient, getGracePeriodRemainingMs, isWithinGracePeriod } from "../lib/auth";
 import {
@@ -9,6 +10,7 @@ import {
   isAccountScopeRetryWaiting,
   markAccountScopePurgeRequired,
   reconcileAccountScope,
+  requestActiveAccountScope,
   resetAccountScopeRetry,
   scheduleAccountScopeRetry,
   shouldBlockAccountScope,
@@ -34,7 +36,7 @@ import {
 } from "../lib/offlineAccountProfile";
 import logger from "../utils/logger";
 import { useSettingsStore } from "../stores/settingsStore";
-import { usePolicyStore } from "../stores/policyStore";
+import { refreshEffectivePolicy, usePolicyStore } from "../stores/policyStore";
 import { useEnterpriseIdentityStore } from "../stores/enterpriseIdentityStore";
 import { useLeaderboardParticipationStore } from "../stores/leaderboardParticipationStore";
 
@@ -55,20 +57,23 @@ async function loadAccountDependencies() {
     { invalidateSpaceRoster },
     { resetForAccountChange },
     { useWorkspaceStore },
+    { resetForAccountChange: resetChatForAccountChange, prepareChatAccountScope },
   ] = await Promise.all([
     import("../services/SyncService.js"),
     import("../lib/spaceRosterCache"),
     import("../stores/noteStore"),
     import("../stores/workspaceStore"),
+    import("../stores/chatTurnStore"),
   ]);
 
   const resetRendererCaches = () => {
+    resetChatForAccountChange();
     clearOfflineAccountProfile();
     invalidateSpaceRoster();
     resetForAccountChange();
     useWorkspaceStore.getState().resetForAccountChange();
   };
-  return { syncService, resetRendererCaches };
+  return { syncService, resetRendererCaches, prepareChatAccountScope };
 }
 
 async function refreshManagedEnterpriseIdentity(accountId: string, authGeneration: number) {
@@ -82,6 +87,12 @@ async function refreshManagedEnterpriseIdentity(accountId: string, authGeneratio
 }
 
 export function useAuth() {
+  useEffect(startAffiliateAttribution, []);
+  const localOnly = useSyncExternalStore(
+    (listener) => usePolicyStore.subscribe?.(listener) ?? (() => {}),
+    () => usePolicyStore.getState().localOnly === true,
+    () => false
+  );
   const useSession = authClient?.useSession ?? useStaticSession;
   const { data: ambientSession, isPending, error: sessionError, refetch } = useSession();
   const accountRevision = useSyncExternalStore(
@@ -174,23 +185,24 @@ export function useAuth() {
   }, [validatedUser]);
 
   useEffect(() => {
-    if (!offlineUserId || offlineGeneration == null) return;
+    if (localOnly || !offlineUserId || offlineGeneration == null) return;
     const key = `${offlineUserId}:${offlineGeneration}`;
     if (hydratedOfflineAccount === key) return;
     hydratedOfflineAccount = key;
     // Main serves both from its caches for this account and credential.
-    void usePolicyStore.getState().fetchPolicy(offlineUserId, offlineGeneration);
+    void refreshEffectivePolicy();
     void refreshManagedEnterpriseIdentity(offlineUserId, offlineGeneration);
-  }, [offlineUserId, offlineGeneration]);
+  }, [localOnly, offlineUserId, offlineGeneration]);
 
   useEffect(() => {
-    if (!sessionResolutionFailed || !resolvedUserId || boundGeneration == null) return;
-    void usePolicyStore.getState().fetchPolicy(resolvedUserId, boundGeneration);
+    if (localOnly || !sessionResolutionFailed || !resolvedUserId || boundGeneration == null) return;
+    void refreshEffectivePolicy();
     void refreshManagedEnterpriseIdentity(resolvedUserId, boundGeneration);
-  }, [boundGeneration, resolvedUserId, sessionResolutionFailed]);
+  }, [localOnly, boundGeneration, resolvedUserId, sessionResolutionFailed]);
 
   useEffect(() => {
     if (
+      localOnly ||
       boundGeneration == null ||
       !shouldReconcileAccountScope(
         isPending,
@@ -206,11 +218,11 @@ export function useAuth() {
 
     let cancelled = false;
     const run = async () => {
-      const { syncService, resetRendererCaches } = await loadAccountDependencies();
-      const scopeResult = await window.electronAPI?.setActiveAccountScope?.(
-        resolvedUserId,
-        boundGeneration
-      );
+      const { syncService, resetRendererCaches, prepareChatAccountScope } =
+        await loadAccountDependencies();
+      if (getAuthRequestContextSnapshot().observedGeneration !== boundGeneration) return;
+      prepareChatAccountScope(resolvedUserId);
+      const scopeResult = await requestActiveAccountScope(resolvedUserId, boundGeneration);
       if (!scopeResult?.success) {
         throw new Error(scopeResult?.error ?? "Could not establish the local account scope");
       }
@@ -237,7 +249,7 @@ export function useAuth() {
         // This legacy marker drives every already-running SyncService window;
         // its generation gate provides the immediate fence.
         useSettingsStore.getState().setIsSignedIn(false);
-        usePolicyStore.getState().suspendPolicy();
+        void refreshEffectivePolicy();
       }
 
       await reconcileAccountScope(resolvedUserId, {
@@ -252,15 +264,20 @@ export function useAuth() {
         }
         if (!cancelled) {
           logger.debug("Auth state sync", { isSignedIn: true, userId: resolvedUserId }, "auth");
+          // The app sign-in milestone, anchored by the server to this validation.
+          void window.electronAPI?.recordProductEventAppSession?.({
+            accountId: resolvedUserId,
+            authGeneration: boundGeneration,
+          });
           useSettingsStore.getState().setIsSignedIn(true);
-          void usePolicyStore.getState().fetchPolicy(resolvedUserId, boundGeneration);
+          void refreshEffectivePolicy();
           void refreshManagedEnterpriseIdentity(resolvedUserId, boundGeneration);
         }
       } else {
         invalidateValidatedAuthContext();
         if (!cancelled) {
           useSettingsStore.getState().setIsSignedIn(false);
-          usePolicyStore.getState().clearPolicy();
+          void refreshEffectivePolicy();
           useEnterpriseIdentityStore.getState().clear();
         }
       }
@@ -277,6 +294,7 @@ export function useAuth() {
       cancelled = true;
     };
   }, [
+    localOnly,
     accountRevision,
     authContext.revision,
     boundGeneration,
@@ -288,9 +306,9 @@ export function useAuth() {
   ]);
 
   return {
-    isSignedIn,
+    isSignedIn: localOnly ? false : isSignedIn,
     isGracePeriodOnly: gracePeriodActive,
-    isLoaded,
+    isLoaded: localOnly || isLoaded,
     session: sessionIsBound && accountScopePresentable ? ambientSession : null,
     user: offlineAccount ? offlineAccount.profile : isSignedIn ? ambientUser : null,
     // Shown without a validated session: account changes and sync are paused.

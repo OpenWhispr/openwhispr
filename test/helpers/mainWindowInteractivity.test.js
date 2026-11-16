@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const { EventEmitter } = require("node:events");
 let applyInputRegion;
-let focusInputRegion;
 
 // Load the real WindowManager with the module surface it touches at require
 // time. setMainWindowInteractivity only reads `this.mainWindow`, so the tests
@@ -31,7 +30,6 @@ Module._load = function loadWindowManagerWithStubs(request, parent, isMain) {
     return {
       createLinuxWindowInputRegion: () => ({
         set: (region) => applyInputRegion(region),
-        focus: () => focusInputRegion(),
         stop: () => undefined,
       }),
     };
@@ -184,115 +182,132 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
   }
 });
 
-test("a failed Linux keyboard focus request settles quietly", async () => {
-  const win = { ...fakeWindow(), isVisible: () => true, isMinimized: () => false };
-  const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
-  let rejectFocus;
-  focusInputRegion = () =>
-    new Promise((_, reject) => {
-      rejectFocus = reject;
-    });
-  manager._focusLinuxMainWindow();
-  // The writer logs its own failure; a rejected request would skip a closing
-  // panel's deferred hand-back.
-  rejectFocus(new Error("helper closed"));
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(manager._linuxFocusRequest, null);
-});
-
-test("clicks on an unfocused panel share the focus request already in flight", async () => {
-  const original = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
-  const win = new EventEmitter();
-  win.isFocused = () => false;
-  win.isVisible = () => true;
-  win.isMinimized = () => false;
-  win.isDestroyed = () => false;
-  win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
-  const manager = Object.assign(Object.create(WindowManager.prototype), {
-    mainWindow: win,
-    _assistantPanelOpen: true,
-    enforceMainWindowOnTop: () => {},
-  });
-  const lands = [];
-  focusInputRegion = () => new Promise((resolve) => lands.push(resolve));
-  const mouseDown = () => win.webContents.emit("input-event", {}, { type: "mouseDown" });
-  try {
-    WindowManager.prototype.registerMainWindowEvents.call(manager);
-    win.emit("ready-to-show");
-    mouseDown();
-    mouseDown();
-    // Each request can wait on the window manager, and queued repeats would
-    // run into the helper's timeout, which ends the input region with it.
-    assert.equal(lands.length, 1);
-    lands[0]();
-    await new Promise((resolve) => setImmediate(resolve));
-    mouseDown();
-    assert.equal(lands.length, 2, "a click after the request landed asks again");
-    lands[1]();
-  } finally {
-    Object.defineProperty(process, "platform", original);
-  }
-});
-
-test("only Linux listens for clicks that re-take keyboard focus", () => {
+test("Windows nudges the pill's size on every show so button presses reach it again", () => {
   const original = Object.getOwnPropertyDescriptor(process, "platform");
   try {
     for (const [platform, expected] of [
-      ["linux", 1],
-      ["win32", 0],
+      ["win32", 2],
       ["darwin", 0],
+      ["linux", 0],
     ]) {
       Object.defineProperty(process, "platform", { value: platform, configurable: true });
+      const bounds = { x: 1708, y: 908, width: 208, height: 120 };
+      const setBounds = [];
       const win = new EventEmitter();
+      win.isDestroyed = () => false;
       win.isVisible = () => true;
       win.isMinimized = () => false;
+      win.getBounds = () => ({ ...bounds });
+      win.getMinimumSize = () => [bounds.width, bounds.height];
+      win.setBounds = (next) => setBounds.push(next);
       win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
-      WindowManager.prototype.registerMainWindowEvents.call({
+      const manager = Object.assign(Object.create(WindowManager.prototype), {
         mainWindow: win,
         enforceMainWindowOnTop: () => {},
       });
+      WindowManager.prototype.registerMainWindowEvents.call(manager);
       win.emit("ready-to-show");
-      assert.equal(win.webContents.listenerCount("input-event"), expected, platform);
+      win.emit("show");
+      assert.equal(setBounds.length, expected, platform);
+      if (expected) {
+        // The size changes for one call and always ends where it started.
+        assert.deepEqual(setBounds, [{ ...bounds, width: 209 }, bounds]);
+      }
     }
   } finally {
     Object.defineProperty(process, "platform", original);
   }
 });
 
-test("Linux takes keyboard focus again when an unfocused open assistant panel is clicked", () => {
-  const original = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { value: "linux", configurable: true });
-  const win = new EventEmitter();
-  let focused = false;
-  win.isFocused = () => focused;
-  win.isVisible = () => true;
-  win.isMinimized = () => false;
-  win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
-  const focusRequests = [];
-  const manager = {
-    mainWindow: win,
-    _assistantPanelOpen: false,
-    enforceMainWindowOnTop: () => {},
-    _focusLinuxMainWindow: () => focusRequests.push("focus"),
-  };
-  const mouseDown = () => win.webContents.emit("input-event", {}, { type: "mouseDown" });
-  try {
-    WindowManager.prototype.registerMainWindowEvents.call(manager);
-    win.emit("ready-to-show");
-    mouseDown();
-    assert.deepEqual(focusRequests, [], "a pill click must leave the user's app focused");
-    manager._assistantPanelOpen = true;
-    win.webContents.emit("input-event", {}, { type: "mouseMove" });
-    focused = true;
-    mouseDown();
-    assert.deepEqual(focusRequests, [], "the panel already has the keyboard");
-    // Back from another app: the window manager never refocuses the
-    // override-redirect pill on a click.
-    focused = false;
-    mouseDown();
-    assert.deepEqual(focusRequests, ["focus"]);
-  } finally {
-    Object.defineProperty(process, "platform", original);
-  }
-});
+for (const { scaleFactor, size, nativeBounds } of [
+  {
+    scaleFactor: 1.25,
+    size: [208, 120],
+    nativeBounds: { x: 126, y: 126, width: 260, height: 150 },
+  },
+  { scaleFactor: 1.5, size: [208, 120], nativeBounds: { x: 152, y: 152, width: 312, height: 180 } },
+  {
+    scaleFactor: 1.75,
+    size: [208, 120],
+    nativeBounds: { x: 177, y: 177, width: 364, height: 210 },
+  },
+  {
+    scaleFactor: 1.25,
+    size: [333, 137],
+    nativeBounds: { x: -126, y: -126, width: 417, height: 172 },
+  },
+  {
+    scaleFactor: 1.5,
+    size: [333, 137],
+    nativeBounds: { x: -152, y: -152, width: 500, height: 206 },
+  },
+  {
+    scaleFactor: 1.75,
+    size: [333, 137],
+    nativeBounds: { x: -177, y: -177, width: 583, height: 240 },
+  },
+]) {
+  test(`Windows preserves native bounds over repeated shows at ${scaleFactor * 100}% (${size.join("x")})`, () => {
+    const original = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    try {
+      let currentNativeBounds = { ...nativeBounds };
+      let minimumSize = [...size];
+      const resizedBounds = [];
+      const roundPoint = (value) => Math.sign(value) * Math.round(Math.abs(value));
+      const inverseScale = Math.fround(1 / scaleFactor);
+      const win = new EventEmitter();
+      win.isDestroyed = () => false;
+      win.isVisible = () => true;
+      win.isMinimized = () => false;
+      // ScreenWin rounds the origin but encloses both screen-space edges for
+      // size. Fixed-size HWND constraints instead retain the requested DIP size.
+      win.getBounds = () => {
+        const { x, y, width, height } = currentNativeBounds;
+        return {
+          x: roundPoint(Math.fround(x * inverseScale)),
+          y: roundPoint(Math.fround(y * inverseScale)),
+          width:
+            Math.ceil(Math.fround((x + width) * inverseScale)) -
+            Math.floor(Math.fround(x * inverseScale)),
+          height:
+            Math.ceil(Math.fround((y + height) * inverseScale)) -
+            Math.floor(Math.fround(y * inverseScale)),
+        };
+      };
+      win.getMinimumSize = () => [...minimumSize];
+      win.setBounds = ({ x, y, width, height }) => {
+        minimumSize = [width, height];
+        currentNativeBounds = {
+          x: roundPoint(x * scaleFactor),
+          y: roundPoint(y * scaleFactor),
+          width: Math.ceil(width * scaleFactor),
+          height: Math.ceil(height * scaleFactor),
+        };
+        resizedBounds.push(currentNativeBounds);
+      };
+      win.webContents = Object.assign(new EventEmitter(), { send: () => undefined });
+      const manager = Object.assign(Object.create(WindowManager.prototype), {
+        mainWindow: win,
+        enforceMainWindowOnTop: () => {},
+      });
+      manager.registerMainWindowEvents();
+      win.emit("ready-to-show");
+
+      for (let cycle = 0; cycle < 10; cycle++) {
+        win.emit("hide");
+        win.emit("show");
+        assert.deepEqual(currentNativeBounds, nativeBounds, `show ${cycle + 1}`);
+        assert.ok(
+          Math.ceil(Math.fround(resizedBounds.at(-2).width * inverseScale)) >
+            Math.ceil(Math.fround(nativeBounds.width * inverseScale)),
+          "nudge changes the renderer's DIP width"
+        );
+        assert.deepEqual(minimumSize, size);
+      }
+      assert.equal(resizedBounds.length, 20);
+    } finally {
+      Object.defineProperty(process, "platform", original);
+    }
+  });
+}

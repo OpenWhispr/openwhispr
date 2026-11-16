@@ -11,6 +11,7 @@ import { Button } from "./ui/button";
 import PermissionsSection from "./ui/PermissionsSection";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
+import { useModalGate } from "../stores/modalGateStore";
 
 interface PostMigrationOnboardingProps {
   open: boolean;
@@ -26,6 +27,7 @@ export default function PostMigrationOnboarding({
   const { t } = useTranslation();
   const permissions = usePermissions();
   const systemAudio = useSystemAudioPermission();
+  useModalGate("postMigration", open);
 
   const remindLater = () => {
     window.electronAPI?.markBundleMigrationDismissed?.();

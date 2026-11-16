@@ -88,18 +88,27 @@ import * as Nucleo from "./nucleo";
 
 export type { IconComponent, IconProps } from "./createIcon";
 export {
+  ArrowUp,
   Bold,
   ChevronsUpDown,
   Circle,
   CopyRounded,
+  DoorOpen,
+  EnvelopePlus,
   EyeOff,
   FolderRounded,
+  GitFork,
   Heading,
   Italic,
+  Lightbulb,
   List,
   ListChecks,
   ListEnd,
   ListOrdered,
+  Maximize,
+  MessageCircleQuestion,
+  Minimize,
+  Office,
   Quote,
   SkillStack,
   Square,
@@ -107,6 +116,11 @@ export {
   SquareSparkle,
   Strikethrough,
   Table,
+  TextSelect,
+  UserMinus,
+  UserSettings,
+  UserXmark,
+  Volume,
 } from "./primitives";
 
 ${exportLines.join("\n")}

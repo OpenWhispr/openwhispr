@@ -21,6 +21,10 @@ export type ConnectorErrorCopyKey =
   | "network"
   | "dm_failed"
   | "restricted"
+  | "thread_mismatch"
+  | "invalid_thread"
+  | "thread_closed"
+  | "thread_only"
   | "generic"
   // Email drafts fail in a tool step only, never on a card.
   | "open_failed"
@@ -41,6 +45,8 @@ const OWN_COPY: ReadonlySet<string> = new Set<ConnectorErrorCopyKey>([
   "open_failed",
   "draft_too_long",
   "invalid_address",
+  "thread_mismatch",
+  "invalid_thread",
 ]);
 
 const ALIASES: ReadonlyMap<string, ConnectorErrorCopyKey> = new Map([
@@ -68,6 +74,11 @@ const ALIASES: ReadonlyMap<string, ConnectorErrorCopyKey> = new Map([
   ["too_many_users", "dm_failed"],
   ["users_list_not_supplied", "dm_failed"],
   ["method_not_supported_for_channel_type", "dm_failed"],
+  // Thread replies Slack refused, or a channel that takes only those.
+  ["cannot_reply_to_message", "thread_closed"],
+  ["restricted_action_thread_locked", "thread_closed"],
+  ["restricted_action_non_threadable_channel", "thread_closed"],
+  ["restricted_action_thread_only_channel", "thread_only"],
 ]);
 
 // Transport codes: Node's (ECONNREFUSED, EAI_AGAIN), Chromium's

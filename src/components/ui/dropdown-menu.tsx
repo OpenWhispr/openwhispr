@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronRight, Circle } from "../icons";
+import { Check, ChevronRight, Circle, Minus } from "../icons";
 
 import { cn } from "../lib/utils";
 
@@ -98,15 +98,29 @@ const DropdownMenuCheckboxItem = React.forwardRef<
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none transition-colors focus:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     checked={checked}
     {...props}
   >
-    <span className="absolute start-2 flex h-3.5 w-3.5 items-center justify-center">
+    {/* A box rather than a bare tick, so an unchecked row still reads as one to tick, and "some" has a
+        mark of its own: a dash in the same filled box. */}
+    <span
+      aria-hidden="true"
+      className={cn(
+        "absolute start-1.5 flex size-4 items-center justify-center rounded-[4px] border",
+        checked
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-foreground/30 dark:border-white/35"
+      )}
+    >
       <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="h-4 w-4" />
+        {checked === "indeterminate" ? (
+          <Minus className="size-2.5" strokeWidth={2.5} />
+        ) : (
+          <Check className="size-2.5" strokeWidth={2.5} />
+        )}
       </DropdownMenuPrimitive.ItemIndicator>
     </span>
     {children}
@@ -121,7 +135,7 @@ const DropdownMenuRadioItem = React.forwardRef<
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 ps-8 pe-2 text-sm outline-none transition-colors focus:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}

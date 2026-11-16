@@ -68,3 +68,20 @@ test("safePaste preserves exact final text only for confirmed permission recover
   await manager.safePaste(text);
   assert.equal(errors[1].description, "bad input");
 });
+
+test("safePaste forwards the confirmed clipboard fallback reason without an error", async (t) => {
+  const { window, createManager } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-clipboard-fallback-",
+    settingsKey: "__clipboardFallbackSettings",
+  });
+  const manager = createManager({ onError: () => assert.fail("fallback is not an error") });
+  window.electronAPI.pasteText = async () => ({
+    success: true,
+    pasted: false,
+    reason: "accessibility-missing",
+  });
+  assert.deepEqual(await manager.safePaste("synthetic text"), {
+    pasted: false,
+    reason: "accessibility-missing",
+  });
+});

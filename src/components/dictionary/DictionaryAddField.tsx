@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type ReactElement, type Ref } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, CornerDownLeft, Upload } from "../icons";
 import { Input } from "../ui/input";
@@ -33,6 +41,7 @@ interface DictionaryAddFieldProps {
   // Resolves true once the hidden copy is back, which clears the field.
   onUnhide: (word: string) => Promise<boolean>;
   onImport: () => void;
+  importMenu?: ReactNode;
   inputRef?: Ref<HTMLInputElement>;
   // A list that takes no new words (paused) keeps the field, dimmed and inert.
   disabled?: boolean;
@@ -47,6 +56,7 @@ export function DictionaryAddField({
   isHiddenInTarget,
   onUnhide,
   onImport,
+  importMenu,
   inputRef,
   disabled = false,
 }: DictionaryAddFieldProps): ReactElement {
@@ -208,15 +218,17 @@ export function DictionaryAddField({
         </DropdownMenuContent>
       </DropdownMenu>
       <div className="h-4 w-px bg-foreground/10 dark:bg-white/8" />
-      <button
-        type="button"
-        onClick={onImport}
-        disabled={disabled}
-        aria-label={t("dictionary.importWords")}
-        className="grid size-6 shrink-0 place-items-center rounded-[5px] text-foreground/45 transition-colors enabled:hover:bg-foreground/5 enabled:hover:text-foreground/70"
-      >
-        <Upload size={13} />
-      </button>
+      {importMenu ?? (
+        <button
+          type="button"
+          onClick={onImport}
+          disabled={disabled}
+          aria-label={t("dictionary.importWords")}
+          className="grid size-6 shrink-0 place-items-center rounded-[5px] text-foreground/45 transition-colors enabled:hover:bg-foreground/5 enabled:hover:text-foreground/70"
+        >
+          <Upload size={13} />
+        </button>
+      )}
     </div>
   );
 }

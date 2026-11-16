@@ -693,3 +693,28 @@ describe('LocalNotesRepository.moveNoteToSpace', () => {
     expect(repo.getPendingNotes().map((n) => n.id)).toContain(note.id);
   });
 });
+
+describe('LocalNotesRepository — owner-only Private folder placement', () => {
+  it('retains association metadata through omitted responses and pending local renames', () => {
+    const { repo, db } = createMemoryRepository();
+    repo.applyRemoteFolder(remoteFolder({ private_workspace_id: 'workspace-beta' }));
+    const [folder] = repo.getFolders();
+    expect(folder.privateWorkspaceId).toBe('workspace-beta');
+    repo.applyRemoteFolder(remoteFolder({ name: 'Remote rename' }));
+    expect(repo.getFolders()[0].privateWorkspaceId).toBe('workspace-beta');
+    db.update(folders)
+      .set({ name: 'Local rename', pendingSync: 1 })
+      .where(eq(folders.id, folder.id))
+      .run();
+    repo.applyRemoteFolder(remoteFolder({ private_workspace_id: 'workspace-alpha' }));
+    expect(repo.getFolders()[0]).toEqual(
+      expect.objectContaining({
+        name: 'Local rename',
+        pendingSync: 1,
+        privateWorkspaceId: 'workspace-alpha',
+      }),
+    );
+    repo.applyRemoteFolder(remoteFolder({ private_workspace_id: null }));
+    expect(repo.getFolders()[0].privateWorkspaceId).toBeNull();
+  });
+});

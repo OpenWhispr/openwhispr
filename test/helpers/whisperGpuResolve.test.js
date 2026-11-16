@@ -127,6 +127,7 @@ test("startup pre-warm preserves the installed Vulkan fallback", async () => {
     });
 
     assert.deepEqual(startOptions, {
+      policyMemoryOnly: true,
       useCuda: true,
       useVulkan: false,
       fallbackToVulkan: true,

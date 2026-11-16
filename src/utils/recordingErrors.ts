@@ -36,6 +36,8 @@ export function getRecordingErrorTitle(error: RecordingError, t: TFunction): str
     return t("hooks.audioRecording.errorTitles.cloudLimitReached");
   if (error.code === "PROVIDER_RATE_LIMITED")
     return t("hooks.audioRecording.errorTitles.providerRateLimited");
+  if (error.code === "OPENROUTER_OUT_OF_CREDITS")
+    return t("hooks.audioRecording.errorTitles.outOfCredits");
   if (error.code?.startsWith("PROVIDER_")) {
     return t(
       error.surface === "llm" ? "providerErrors.titles.llm" : "providerErrors.titles.transcription"

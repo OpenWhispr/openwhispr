@@ -114,3 +114,52 @@ test("null workspace or space can do nothing", () => {
   assert.equal(spaceCan(null, "edit_notes"), false);
   assert.equal(spaceCan(undefined, "leave"), false);
 });
+
+const { teamCan, teamCreationFor } = require("../../src/lib/capabilities.ts");
+
+const noCapabilities = () =>
+  Object.fromEntries(WORKSPACE_CAPABILITIES.map((name) => [name, false]));
+
+test("an admin on Business is allowed to create teams", () => {
+  const capabilities = { ...noCapabilities(), manage_teams: true, create_teams: true };
+  assert.equal(teamCreationFor({ role: "admin", capabilities }), "allowed");
+});
+
+test("an admin below it gets the paywall", () => {
+  const capabilities = { ...noCapabilities(), manage_teams: true, create_teams: false };
+  assert.equal(teamCreationFor({ role: "admin", capabilities }), "paywall");
+});
+
+test("a member is unavailable", () => {
+  const capabilities = { ...noCapabilities(), create_teams: false };
+  assert.equal(teamCreationFor({ role: "member", capabilities }), "unavailable");
+  assert.equal(teamCreationFor(null), "unavailable");
+});
+
+test("a missing create_teams lets the server answer", () => {
+  const capabilities = { ...noCapabilities(), manage_teams: true };
+  assert.equal(teamCreationFor({ role: "admin", capabilities }), "allowed");
+});
+
+test("a role-only cached row of an admin is allowed", () => {
+  assert.equal(teamCreationFor({ role: "admin" }), "allowed");
+  assert.equal(teamCreationFor({ role: "member" }), "unavailable");
+});
+
+test("team capabilities win over the workspace", () => {
+  const workspace = { role: "admin" };
+  const team = { capabilities: { manage_members: false, manage_settings: false, leave: true } };
+  assert.equal(teamCan(team, workspace, "manage_members"), false);
+  assert.equal(teamCan(team, workspace, "manage_settings"), false);
+  assert.equal(teamCan(team, workspace, "leave"), true);
+  const open = { capabilities: { manage_members: true, manage_settings: true, leave: false } };
+  assert.equal(teamCan(open, { role: "member" }, "manage_members"), true);
+});
+
+test("an older API falls back to manage_teams, and never to leave", () => {
+  assert.equal(teamCan({}, { role: "admin" }, "manage_members"), true);
+  assert.equal(teamCan({}, { role: "admin" }, "manage_settings"), true);
+  assert.equal(teamCan({}, { role: "member" }, "manage_members"), false);
+  assert.equal(teamCan({}, { role: "admin" }, "leave"), false);
+  assert.equal(teamCan({}, null, "manage_members"), false);
+});

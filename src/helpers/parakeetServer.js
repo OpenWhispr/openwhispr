@@ -1,3 +1,4 @@
+const { runLocalModelOperation, localModelOperationSignal } = require("./localModelPolicyGate");
 const fs = require("fs");
 const path = require("path");
 const debugLogger = require("./debugLogger");
@@ -21,6 +22,7 @@ const {
   getRequiredModelFiles,
   resolveModelLanguage,
 } = require("./parakeetModelInfo");
+const { getSherpaHotwordsScore, buildSherpaHotwords } = require("../utils/sherpaHotwords");
 
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 4; // float32
@@ -32,6 +34,9 @@ const COHERE_MAX_SEGMENT_SECONDS = 30;
 // bound only caps memory when transcribing very long files.
 const ONLINE_MAX_SEGMENT_SECONDS = 600;
 const SILENCE_RMS_THRESHOLD = 0.001;
+// Dictionary edits arrive in bursts (imports, auto-learn), and each reload
+// costs a model load, so a running server waits for them to settle.
+const HOTWORDS_REFRESH_DELAY_MS = 2000;
 
 // Runs fn over items with at most `limit` in flight; results keep item order.
 // Once one item rejects, no further items are started.
@@ -55,6 +60,50 @@ async function mapWithConcurrency(items, limit, fn) {
 class ParakeetServerManager {
   constructor() {
     this.wsServer = new ParakeetWsServer();
+    this.dictionaryProvider = () => [];
+    this.hotwordsRefreshTimer = null;
+  }
+
+  // provider returns the dictionary, highest priority first.
+  setDictionaryProvider(provider) {
+    this.dictionaryProvider = provider;
+  }
+
+  _hotwordsFor(modelName) {
+    const score = getSherpaHotwordsScore(modelName);
+    if (score === null) return null;
+    const words = buildSherpaHotwords(this.dictionaryProvider());
+    return words.length > 0 ? { score, words } : null;
+  }
+
+  // Reloads a running server with the current dictionary in the background, so
+  // the next dictation does not wait for the model to load.
+  refreshHotwordsSoon() {
+    clearTimeout(this.hotwordsRefreshTimer);
+    this.hotwordsRefreshTimer = setTimeout(() => {
+      this.hotwordsRefreshTimer = null;
+      // Busy servers keep their words until idle; trying again later spares the
+      // next dictation the reload.
+      if (this.wsServer.startupPromise || this.wsServer.activeTranscriptions.size > 0) {
+        this.refreshHotwordsSoon();
+        return;
+      }
+      const { ready, modelName, modelDir, modelRuntime, language } = this.wsServer;
+      if (!ready || getSherpaHotwordsScore(modelName) === null) return;
+      const stopSignal = this.wsServer.stopSignal;
+      this.wsServer
+        .start(modelName, modelDir, modelRuntime, language, this._hotwordsFor(modelName))
+        .then((reloaded) => {
+          // A dictation may have arrived while the reload waited for policy.
+          if (reloaded === false && !stopSignal.aborted) this.refreshHotwordsSoon();
+        })
+        .catch((error) => {
+          if (stopSignal.aborted) return;
+          debugLogger.warn("Failed to reload parakeet-ws with the new dictionary", {
+            error: error.message,
+          });
+        });
+    }, HOTWORDS_REFRESH_DELAY_MS);
   }
 
   getBinaryPath(runtime) {
@@ -111,8 +160,23 @@ class ParakeetServerManager {
   }
 
   async transcribe(audioBuffer, options = {}) {
-    // signal is optional; only cancellable uploads pass one. Aborting stops
-    // scheduling further segments — the in-flight one finishes server-side.
+    const stopSignal = this.wsServer.stopSignal;
+    const signal = options.signal ? AbortSignal.any([options.signal, stopSignal]) : stopSignal;
+    return runLocalModelOperation(
+      this,
+      "transcription",
+      options.modelName ?? "",
+      () =>
+        this._policyAllowedTranscribe(audioBuffer, {
+          ...options,
+          signal: localModelOperationSignal(this, signal),
+        }),
+      { onAbort: () => !stopSignal.aborted && this.stopServer() }
+    );
+  }
+
+  async _policyAllowedTranscribe(audioBuffer, options = {}) {
+    // Aborting stops scheduling further segments — the in-flight one finishes server-side.
     const { modelName = "parakeet-tdt-0.6b-v3", language, signal } = options;
     const throwIfAborted = () => {
       if (signal?.aborted) throw createAbortError("Parakeet transcription cancelled");
@@ -132,8 +196,12 @@ class ParakeetServerManager {
     // An already-cancelled upload skips the ffmpeg conversion entirely.
     throwIfAborted();
 
-    const { wavBuffer, filesToCleanup } = await this._ensureWav(audioBuffer);
+    const releaseTranscription = this.wsServer.reserveTranscription();
+    let filesToCleanup = [];
     try {
+      const wav = await this._ensureWav(audioBuffer);
+      const { wavBuffer } = wav;
+      filesToCleanup = wav.filesToCleanup;
       throwIfAborted();
       const runtime = getModelRuntime(modelName);
       // Awaiting unconditionally also covers a startup's warm-up completion.
@@ -141,8 +209,11 @@ class ParakeetServerManager {
         modelName,
         modelDir,
         runtime,
-        resolveModelLanguage(modelName, language)
+        resolveModelLanguage(modelName, language),
+        this._hotwordsFor(modelName),
+        { transcription: releaseTranscription }
       );
+      throwIfAborted();
 
       const samples = wavToFloat32Samples(wavBuffer);
       const durationSeconds = samples.length / BYTES_PER_SAMPLE / SAMPLE_RATE;
@@ -224,6 +295,7 @@ class ParakeetServerManager {
         ? { text, elapsed, truncated: true }
         : { text, elapsed };
     } finally {
+      releaseTranscription();
       this._cleanupFiles(filesToCleanup);
     }
   }
@@ -259,16 +331,19 @@ class ParakeetServerManager {
         modelName,
         modelDir,
         runtime,
-        resolveModelLanguage(modelName, language)
+        resolveModelLanguage(modelName, language),
+        this._hotwordsFor(modelName)
       );
       return { success: true, port: this.wsServer.port };
     } catch (error) {
       debugLogger.error("Failed to start parakeet WS server", { error: error.message });
-      return { success: false, reason: error.message };
+      return { success: false, reason: error.message, code: error.code };
     }
   }
 
   async stopServer() {
+    clearTimeout(this.hotwordsRefreshTimer);
+    this.hotwordsRefreshTimer = null;
     await this.wsServer.stop();
   }
 
