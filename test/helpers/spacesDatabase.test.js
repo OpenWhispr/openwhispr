@@ -375,16 +375,25 @@ function seedFolder(
 function seedNote(
   sqlite,
   spaceId,
-  { title, accountId = null, folderId = null, cloudId = null, deletedAt = null }
+  { title, accountId = null, folderId = null, cloudId = null, deletedAt = null, ownerUserId = null }
 ) {
   return Number(
     sqlite
       .prepare(
-        `INSERT INTO notes (title, content, client_note_id, cloud_id, sync_status, deleted_at, folder_id, space_id, account_id, updated_at)
-         VALUES (?, '', ?, ?, 'synced', ?, ?, ?, ?, ?)`
+        `INSERT INTO notes (title, content, client_note_id, cloud_id, sync_status, deleted_at, folder_id, space_id, account_id, owner_user_id, updated_at)
+         VALUES (?, '', ?, ?, 'synced', ?, ?, ?, ?, ?, ?)`
       )
-      .run(title, randomUUID(), cloudId, deletedAt, folderId, spaceId, accountId, SEEDED_AT)
-      .lastInsertRowid
+      .run(
+        title,
+        randomUUID(),
+        cloudId,
+        deletedAt,
+        folderId,
+        spaceId,
+        accountId,
+        ownerUserId,
+        SEEDED_AT
+      ).lastInsertRowid
   );
 }
 
@@ -3641,32 +3650,111 @@ test("claimSignedOutPrivateNotes moves signed-out notes to the signed-in account
   assert.deepEqual(db.claimSignedOutPrivateNotes(), { notes: 0, folders: 0 }, "nothing is left");
 });
 
-test("claimSignedOutPrivateNotes leaves them on a device another account has used", (t) => {
+test("claimSignedOutPrivateNotes gives them to the account that signs in on a device another account has used", (t) => {
   const db = createFreshDeviceDb(t);
   if (!db) return;
+  const sqlite = db.db;
   const standInId = db._standInPrivateSpaceId();
   signIn(db, "b");
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const aMeetings = db.getMeetingsFolder().id;
   signIn(db, null);
+  // Notes from before attribution sit in the stand-in with no account, as the
+  // user_version 6 split leaves them. One synced under this account earlier.
+  const meetings = seededFolderId(sqlite, "Meetings");
+  const legacy = seedNote(sqlite, standInId, { title: "Before attribution", folderId: meetings });
+  const synced = seedNote(sqlite, standInId, {
+    title: "Synced by a",
+    folderId: meetings,
+    cloudId: "cloud-a",
+    ownerUserId: "a",
+  });
   const note = db.saveNote("Signed out", "").note;
   const chat = db.createAgentConversation("Signed-out chat", null, standInId);
 
   signIn(db, "a", W1_ACTIVE);
   db.claimSignedOutLocalRows();
-  assert.deepEqual(db.claimSignedOutPrivateNotes(), { notes: 0, folders: 0 });
-  assert.deepEqual(
-    { space_id: noteRow(db.db, note.id).space_id, account_id: noteRow(db.db, note.id).account_id },
-    { space_id: standInId, account_id: null }
-  );
-  assert.equal(db.getNote(note.id), null);
+  assert.deepEqual(db.claimSignedOutPrivateNotes(), { notes: 3, folders: 0 });
+  for (const id of [legacy, synced]) {
+    assert.deepEqual(
+      {
+        space_id: noteRow(sqlite, id).space_id,
+        folder_id: noteRow(sqlite, id).folder_id,
+        account_id: noteRow(sqlite, id).account_id,
+      },
+      { space_id: home, folder_id: aMeetings, account_id: "a" },
+      `note ${id} joins the account's Meetings`
+    );
+    assert.ok(db.getNote(id), `note ${id} shows signed in`);
+  }
+  assert.equal(noteRow(sqlite, note.id).account_id, "a");
+  assert.ok(db.getNote(note.id));
   // #2924 gave the chat to this account at sign-in, so it leaves the stand-in.
-  assert.deepEqual(chatRow(db.db, chat.id), {
-    space_id: db.getDefaultPrivateSpaceId(),
+  assert.deepEqual(chatRow(sqlite, chat.id), {
+    space_id: home,
     folder_id: null,
     account_id: "a",
   });
+  assertEveryRowInItsFolderSpace(sqlite);
 
+  signIn(db, "b");
+  assert.deepEqual(db.claimSignedOutPrivateNotes(), { notes: 0, folders: 0 }, "nothing is left");
+  assert.equal(db.getNote(legacy), null, "the next account doesn't see them");
+});
+
+test("claimSignedOutPrivateNotes leaves a note whose cloud copy another account owns for that account", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const sqlite = db.db;
+  const standInId = db._standInPrivateSpaceId();
+  signIn(db, "b");
   signIn(db, null);
-  assert.ok(db.getNote(note.id), "still there signed out");
+  const meetings = seededFolderId(sqlite, "Meetings");
+  const bMeeting = seedNote(sqlite, standInId, {
+    title: "b's meeting",
+    folderId: meetings,
+    cloudId: "cloud-b-1",
+    ownerUserId: "b",
+  });
+  const ideas = db.createFolder("Ideas").folder;
+  const ownIdea = db.saveNote("Unowned idea", "", "personal", null, null, ideas.id).note;
+  const bIdea = seedNote(sqlite, standInId, {
+    title: "b's idea",
+    folderId: ideas.id,
+    cloudId: "cloud-b-2",
+    ownerUserId: "b",
+  });
+
+  signIn(db, "a", W1_ACTIVE);
+  assert.deepEqual(db.claimSignedOutPrivateNotes(), { notes: 1, folders: 0 });
+  const aHome = db.getDefaultPrivateSpaceId();
+  for (const id of [bMeeting, bIdea]) {
+    assert.deepEqual(
+      { space_id: noteRow(sqlite, id).space_id, account_id: noteRow(sqlite, id).account_id },
+      { space_id: standInId, account_id: null },
+      `b's note ${id} stays in the stand-in`
+    );
+  }
+  assert.equal(folderRow(sqlite, ideas.id).space_id, standInId, "Ideas stays with b's idea");
+  const aIdeas = noteRow(sqlite, ownIdea.id).folder_id;
+  assert.notEqual(aIdeas, ideas.id);
+  assert.deepEqual(
+    {
+      space_id: noteRow(sqlite, ownIdea.id).space_id,
+      account_id: noteRow(sqlite, ownIdea.id).account_id,
+      folder: folderRow(sqlite, aIdeas).name,
+    },
+    { space_id: aHome, account_id: "a", folder: "Ideas" }
+  );
+  assertEveryRowInItsFolderSpace(sqlite);
+
+  signIn(db, "b", W1_ACTIVE);
+  assert.deepEqual(db.claimSignedOutPrivateNotes(), { notes: 2, folders: 1 });
+  assert.ok(db.getNote(bMeeting));
+  assert.ok(db.getNote(bIdea));
+  assert.equal(noteRow(sqlite, bIdea).folder_id, ideas.id, "the folder goes with b's idea");
+  assertEveryRowInItsFolderSpace(sqlite);
 });
 
 test("saveNote without a space lands in the active workspace's Private, in its own Meetings folder", (t) => {

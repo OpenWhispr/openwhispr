@@ -260,6 +260,12 @@ const SPACE_CONTAINER_CONVERSATION_FILTER = `((space_id = ? AND folder_id IS NUL
 const LEGACY_SHARED_PRIVATE_NOTE_SQL =
   "(s.kind = 'private' AND n.is_shared = 1 AND n.cloud_id IS NOT NULL)";
 
+// A stand-in note the signing-in account may take: any but one whose cloud
+// copy another account owns. Takes that account's id as its one parameter.
+function claimableStandInNoteSql(alias) {
+  return `(${alias}.owner_user_id IS NULL OR ${alias}.owner_user_id = ?)`;
+}
+
 // D31: a team row the cloud already holds never becomes private by a move, which would keep its
 // cloud identity in a Private. Copy to Private makes a private copy instead. Forks drop the cloud
 // link in the same write and aren't moves.
@@ -6538,12 +6544,15 @@ class DatabaseManager {
     }
   }
 
-  // At sign-in, what was written signed out goes to the account that signs
-  // in, the rule #2924 uses for history and chats: only on a device no other
-  // account has used. Anywhere else it stays in the stand-in, seen only signed
-  // out. A folder holding such notes goes with them, ids and cloud ids kept,
-  // as "Name (2)" when the account has one of that name; the stand-in's own
-  // defaults stay, and their notes join the account's folder of that name.
+  // At sign-in, the stand-in's notes go to the account that signs in, on any
+  // device. Signed in, nobody sees the stand-in, so a note left there (written
+  // signed out, or from before attribution, which the user_version 6 split
+  // leaves there) would be out of every account's reach. The one exception is
+  // a note whose cloud copy another account owns: it waits for that account.
+  // A folder holding such notes goes with them, ids and cloud ids kept, as
+  // "Name (2)" when the account has one of that name. The stand-in's own
+  // defaults, and a folder still holding a note left for another account,
+  // stay, and their notes join the account's folder of that name.
   // The sign-in claims that run first give the account signed-out chats;
   // those leave the stand-in on any device, following their folder, or to the
   // root when it stays. Running it again finds nothing left.
@@ -6554,13 +6563,14 @@ class DatabaseManager {
       const accountId = this.activeAccountId;
       const standInId = accountId ? this._standInPrivateSpaceId() : null;
       if (standInId == null) return claimed;
-      const claimsNotes = !this.hasOtherAccountRows();
       this.db.transaction(() => {
-        const notesToClaim =
-          claimsNotes &&
-          this.db
-            .prepare("SELECT 1 FROM notes WHERE space_id = ? AND account_id IS NULL LIMIT 1")
-            .get(standInId);
+        const notesToClaim = this.db
+          .prepare(
+            `SELECT 1 FROM notes
+             WHERE space_id = ? AND account_id IS NULL AND ${claimableStandInNoteSql("notes")}
+             LIMIT 1`
+          )
+          .get(standInId, accountId);
         const strayChats = this.db
           .prepare(
             `SELECT 1 FROM agent_conversations
@@ -6610,7 +6620,14 @@ class DatabaseManager {
     let folders = 0;
     const claimNotesIn = this.db.prepare(
       `UPDATE notes SET space_id = ?, folder_id = ?, account_id = ?
-       WHERE folder_id = ? AND space_id = ? AND account_id IS NULL`
+       WHERE folder_id = ? AND space_id = ? AND account_id IS NULL
+         AND ${claimableStandInNoteSql("notes")}`
+    );
+    const holdsNoteLeftForAnother = this.db.prepare(
+      `SELECT 1 FROM notes
+       WHERE folder_id = ? AND space_id = ? AND account_id IS NULL
+         AND NOT ${claimableStandInNoteSql("notes")}
+       LIMIT 1`
     );
     const moveFolder = this.db.prepare(
       "UPDATE folders SET space_id = ?, account_id = ?, name = ? WHERE id = ?"
@@ -6632,12 +6649,15 @@ class DatabaseManager {
          WHERE f.space_id = ? AND f.account_id IS NULL AND EXISTS (
            SELECT 1 FROM notes n
            WHERE n.folder_id = f.id AND n.space_id = ? AND n.account_id IS NULL
+             AND ${claimableStandInNoteSql("n")}
          )
          ORDER BY f.id`
       )
-      .all(standInId, standInId);
+      .all(standInId, standInId, accountId);
     for (const folder of standInFolders) {
-      if (folder.is_default) {
+      // A folder that keeps another account's note stays with it, so every
+      // note's folder is in the note's space.
+      if (folder.is_default || holdsNoteLeftForAnother.get(folder.id, standInId, accountId)) {
         const target =
           this._privateFolderNamed(homeId, accountId, folder.name) ??
           Number(
@@ -6651,7 +6671,14 @@ class DatabaseManager {
             ).lastInsertRowid
           );
         joined.set(folder.id, target);
-        notes += claimNotesIn.run(homeId, target, accountId, folder.id, standInId).changes;
+        notes += claimNotesIn.run(
+          homeId,
+          target,
+          accountId,
+          folder.id,
+          standInId,
+          accountId
+        ).changes;
         continue;
       }
       // A deleted folder holds no name, and keeps its own for a rollback.
@@ -6659,7 +6686,14 @@ class DatabaseManager {
         ? folder.name
         : this._uniqueFolderName(homeId, accountId, folder.name, folder.id);
       moveFolder.run(homeId, accountId, name, folder.id);
-      notes += claimNotesIn.run(homeId, folder.id, accountId, folder.id, standInId).changes;
+      notes += claimNotesIn.run(
+        homeId,
+        folder.id,
+        accountId,
+        folder.id,
+        standInId,
+        accountId
+      ).changes;
       followFolder.run(homeId, folder.id, standInId, accountId);
       followFolderChats.run(homeId, folder.id);
       folders += 1;
@@ -6667,9 +6701,10 @@ class DatabaseManager {
     notes += this.db
       .prepare(
         `UPDATE notes SET space_id = ?, account_id = ?
-         WHERE space_id = ? AND account_id IS NULL AND folder_id IS NULL`
+         WHERE space_id = ? AND account_id IS NULL AND folder_id IS NULL
+           AND ${claimableStandInNoteSql("notes")}`
       )
-      .run(homeId, accountId, standInId).changes;
+      .run(homeId, accountId, standInId, accountId).changes;
     return { notes, folders };
   }
 
