@@ -37,6 +37,13 @@ test("the probe sends the AI Summary prompt exactly as the note store assembles 
     translation_key: summary.translationKey,
   };
 
-  assert.equal(buildNoteProbeSystemPrompt(), compileTemplatePrompt(row, { isMeetingNote: true }));
+  const { noteOutputLanguageInstruction } = await import("../../src/helpers/noteOutputLanguage.js");
+  assert.equal(
+    buildNoteProbeSystemPrompt(),
+    compileTemplatePrompt(row, {
+      isMeetingNote: true,
+      outputLanguage: noteOutputLanguageInstruction("auto", "en"),
+    })
+  );
   assert.match(buildNoteProbeSystemPrompt(), /\n## Action Items\n/);
 });

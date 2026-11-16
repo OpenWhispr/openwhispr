@@ -2,6 +2,10 @@ import { create } from "zustand";
 import { NOTE_OUTPUT_MAX_TOKENS, NOTHING_TO_SUMMARIZE } from "../helpers/builtinActions";
 import { stripThinkingTags } from "../helpers/stripThinking";
 import { compileSummaryActionPrompt, compileTemplatePrompt } from "../helpers/templatePrompts";
+import {
+  noteOutputLanguageInstruction,
+  resolveNoteSummaryLanguage,
+} from "../helpers/noteOutputLanguage";
 import reasoningService from "../services/ReasoningService";
 import {
   getSettings,
@@ -505,6 +509,8 @@ export interface RunActionOptions {
   material?: NoteMaterial;
   /** An action's input is the note's AI summary rather than its notes and transcript. */
   fromSummary?: boolean;
+  /** This run's summary language ("auto" or a language code); unset follows the setting. */
+  summaryLanguage?: string;
 }
 
 export interface RunActionLabels {
@@ -564,15 +570,21 @@ export function runBackgroundAction(
       const editsSummary = action.kind === "action";
       // A summary action with no summary yet writes a first one, like a template.
       const rewritesSummary = editsSummary && !!options.fromSummary;
+      const outputLanguage = noteOutputLanguageInstruction(
+        resolveNoteSummaryLanguage(options.summaryLanguage, settings.noteSummaryLanguage),
+        settings.uiLanguage
+      );
       const instructions = editsSummary
         ? compileSummaryActionPrompt(action, {
             fromSummary: !!options.fromSummary,
             isMeetingNote: options.isMeetingNote,
             hasPlainTranscript: options.hasPlainTranscript,
+            outputLanguage,
           })
         : compileTemplatePrompt(action, {
             isMeetingNote: options.isMeetingNote,
             hasPlainTranscript: options.hasPlainTranscript,
+            outputLanguage,
           });
       const providerOverrides = buildNoteFormattingOverrides(noteFormatting, options.isCloudMode);
       const systemPrompt = appendDictionarySuffix(

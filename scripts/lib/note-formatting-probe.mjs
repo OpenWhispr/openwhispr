@@ -5,6 +5,7 @@
  */
 import { BUILTIN_ACTIONS, GENERATE_NOTES_KEY } from "../../src/helpers/builtinActions.js";
 import { compileTemplatePrompt } from "../../src/helpers/templatePrompts.js";
+import { noteOutputLanguageInstruction } from "../../src/helpers/noteOutputLanguage.js";
 
 /** A real 45-minute meeting lands around here; the 1.10.1 report was 2,170 words. */
 export const NOTE_PROBE_MIN_WORDS = 2000;
@@ -124,6 +125,7 @@ export function buildNoteProbeSystemPrompt() {
   if (!action) throw new Error("AI Summary is no longer a built-in template");
   return compileTemplatePrompt(
     { prompt: action.prompt, sections: action.sections, translation_key: action.translationKey },
-    { isMeetingNote: true }
+    // The defaults: Summary language Automatic, English interface.
+    { isMeetingNote: true, outputLanguage: noteOutputLanguageInstruction("auto", "en") }
   );
 }
