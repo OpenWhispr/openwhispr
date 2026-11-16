@@ -29,6 +29,30 @@ jest.mock('../../../modules/android-dictation/src', () => ({
   },
   dictationEvents: null,
 }));
+// The notch's motion needs the native animation and SVG modules; this stand-in shows what it
+// would say, its ✕, and lets a test finish the slide back.
+jest.mock('@/android/home/Notch', () => {
+  const { Pressable, Text, View } = require('react-native');
+  return {
+    NOTCH_REACH: 44,
+    Notch: ({ state, onFinished }: any) => (
+      <View>
+        <Text>{state.text}</Text>
+        {state.detail ? <Text>{state.detail}</Text> : null}
+        {state.onCancel ? (
+          <Pressable accessibilityLabel="cancelUpload" onPress={state.onCancel}>
+            <Text>cancelUpload</Text>
+          </Pressable>
+        ) : null}
+        {state.kind === 'done' ? (
+          <Pressable onPress={onFinished}>
+            <Text>notch-finished</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    ),
+  };
+});
 jest.mock('@/android/home/OlderRecordings', () => {
   const { Pressable, Text, View } = require('react-native');
   return {
@@ -277,7 +301,7 @@ it('aborts an initial upload when Home loses focus, without saving a late result
     onBlur = onFocus();
   });
   await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
-  expect(screen.getByText('writingItUpMinute')).toBeTruthy();
+  expect(screen.getByText('uploadingPercent')).toBeTruthy();
   // The buttons keep their words while busy.
   expect(screen.getByText('uploadAudio')).toBeTruthy();
   expect(screen.getByText('dictate')).toBeTruthy();
@@ -295,6 +319,7 @@ it('aborts an initial upload when Home loses focus, without saving a late result
     });
   });
   expect(abortedOnBlur).toBe(true);
+  expect(screen.queryByText('uploadingPercent')).toBeNull();
   expect(screen.queryByText('writingItUpMinute')).toBeNull();
   expect(mockSaveUpload).not.toHaveBeenCalled();
   expect(mockSaveFailedUpload).not.toHaveBeenCalled();
@@ -331,6 +356,7 @@ it('does not start processing a picker result after Home loses focus', async () 
   expect(mockProcessUpload).not.toHaveBeenCalled();
   expect(mockSaveUpload).not.toHaveBeenCalled();
   expect(mockSaveFailedUpload).not.toHaveBeenCalled();
+  expect(screen.queryByText('uploadingPercent')).toBeNull();
   expect(screen.queryByText('writingItUpMinute')).toBeNull();
 });
 
@@ -380,6 +406,7 @@ it('allows a new Cloud upload after returning to Home', async () => {
   );
   // The finished bar stays full for a moment before the card goes.
   await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
+  expect(screen.queryByText('uploadingPercent')).toBeNull();
   expect(screen.queryByText('writingItUpMinute')).toBeNull();
 });
 it('shows unavailable account counts while loading rather than local counts presented as account totals', () => {
@@ -461,8 +488,9 @@ describe('history retry controls', () => {
     render(<AndroidHome />);
     await act(async () => fireEvent.press(screen.getByLabelText('retry')));
     expect(screen.getByText('writingItUpMinute')).toBeTruthy();
-    await act(async () => fireEvent.press(screen.getByText('cancel')));
+    await act(async () => fireEvent.press(screen.getByLabelText('cancelUpload')));
     expect(signal?.aborted).toBe(true);
+    expect(screen.queryByText('uploadingPercent')).toBeNull();
     expect(screen.queryByText('writingItUpMinute')).toBeNull();
     expect(screen.getByText('Unreadable audio')).toBeTruthy();
   });
@@ -523,6 +551,7 @@ it('shows connection recovery guidance when a saved upload retry cannot resolve 
     'errorTitle',
     'No internet connection. Check your connection and try again.',
   );
+  expect(screen.queryByText('uploadingPercent')).toBeNull();
   expect(screen.queryByText('writingItUpMinute')).toBeNull();
   expect(screen.getByLabelText('retry')).toBeTruthy();
   alert.mockRestore();
@@ -572,11 +601,14 @@ it('copies a Try it dictation to the clipboard and says so at the bottom', async
   await act(async () => fireEvent.press(screen.getByText('dictate')));
   await act(async () => fireEvent.press(screen.getByText('recorder-done')));
   expect(screen.queryByText('recorder-done')).toBeNull();
-  expect(screen.getByText('writingUpRecording')).toBeTruthy();
-  expect(screen.getByText('usuallyFewSeconds')).toBeTruthy();
+  expect(screen.getByText('writingItUp')).toBeTruthy();
   await act(async () => finish('Testing this out.'));
   expect(clipboard.setStringAsync).toHaveBeenCalledWith('Testing this out.');
   expect(screen.getByText('copied', { includeHiddenElements: true })).toBeTruthy();
+  // The notch shows the done state until it has slid back into the card.
+  expect(screen.getByText('copiedAddedToHistory')).toBeTruthy();
+  fireEvent.press(screen.getByText('notch-finished'));
+  expect(screen.queryByText('copiedAddedToHistory')).toBeNull();
   expect(screen.getByText('dictate')).toBeTruthy();
 });
 

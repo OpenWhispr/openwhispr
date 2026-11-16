@@ -1,7 +1,7 @@
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import { StorageService } from '@/services/storage/StorageService.android';
 import type { Transcript } from '@/types';
-import { AppState, Alert, Platform, ScrollView, View } from 'react-native';
+import { AccessibilityInfo, AppState, Alert, Platform, ScrollView, View } from 'react-native';
 import { useBubbleResult } from '@/android/bubbleResult';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,7 +40,9 @@ import {
   SectionHeader,
   type,
 } from '@/android/home/kit';
-import { BubbleCard, ProgressCard } from '@/android/home/BubbleCard';
+import { BubbleCard } from '@/android/home/BubbleCard';
+import { Notch, NOTCH_REACH } from '@/android/home/Notch';
+import { notchAnnouncement, notchStateFor, type NotchModel } from '@/android/home/notchModel';
 import { OlderRecordingsRow, OlderRecordingsSheet } from '@/android/home/OlderRecordings';
 import { HistoryCard, Stats, Tips } from '@/android/home/Sections';
 import { TryItRecorder } from '@/android/home/TryItRecorder';
@@ -96,14 +98,13 @@ export default function AndroidHome() {
   const scroll = useRef<ScrollView>(null);
   const navigationRevision = useRef(0);
   const retryController = useRef<AbortController | null>(null);
-  const [retrying, setRetrying] = useState(false);
   const [working, setWorking] = useState(false);
-  // The upload being written up: shown from the moment a file is picked until its bar has filled.
-  const [uploadCard, setUploadCard] = useState<{
-    name: string;
-    size?: number;
-    done: boolean;
-  } | null>(null);
+  // What the processing notch under the bubble card shows, from the moment work starts until
+  // its done state has slid back into the card.
+  const [notch, setNotch] = useState<NotchModel | null>(null);
+  const [cardWidth, setCardWidth] = useState(0);
+  const [cardHeight, setCardHeight] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const uploadDone = useRef(false);
   const uploadStartedAt = useRef(0);
   // Set when an upload or dictation finished: take the person to its new History row once
@@ -119,22 +120,20 @@ export default function AndroidHome() {
     (message: string) => setToast((previous) => ({ message, id: previous.id + 1 })),
     [],
   );
-  const { isProcessing, stage, cancel, pickAndTranscribeFile } = useFileUpload({
+  const { stage, cancel, pickAndTranscribeFile } = useFileUpload({
     onError: (error) => Alert.alert(t('errorTitle'), error.message),
-    onPicked: (name, size) => setUploadCard({ name, size, done: false }),
+    onPicked: (name, size) =>
+      setNotch({ flow: 'upload', name, size, startedAt: Date.now(), doneText: null }),
     onComplete: () => {
       uploadDone.current = true;
       revealNewest.current = uploadStartedAt.current;
-      setUploadCard((current) => current && { ...current, done: true });
-      showToast(h('addedToHistory'));
+      setNotch((current) => current && { ...current, doneText: h('addedToHistory') });
     },
   });
 
   // Try it: record over Home, then transcribe exactly as the bubble does.
   const [recorderOpen, setRecorderOpen] = useState(false);
   const [trying, setTrying] = useState(false);
-  // The dictation being written up, from the tick until its bar has filled.
-  const [dictationCard, setDictationCard] = useState<{ size: number; done: boolean } | null>(null);
   const tryJob = useRef<AndroidJob | null>(null);
   const tryController = useRef<AbortController | null>(null);
   const openTryIt = async () => {
@@ -158,9 +157,8 @@ export default function AndroidHome() {
     tryJob.current = null;
     if (!job) return;
     setTrying(true);
-    // 16 kHz mono 16-bit WAV: 32 bytes a millisecond, for the progress estimate.
-    setDictationCard({ size: recording.durationMs * 32, done: false });
     const startedAt = Date.now();
+    setNotch({ flow: 'dictate', startedAt, doneText: null });
     let finished = false;
     const controller = new AbortController();
     tryController.current = controller;
@@ -169,7 +167,13 @@ export default function AndroidHome() {
       if (controller.signal.aborted) return;
       finished = true;
       revealNewest.current = startedAt;
-      setDictationCard((current) => current && { ...current, done: true });
+      setNotch(
+        (current) =>
+          current && {
+            ...current,
+            doneText: historyEnabled ? h('copiedAddedToHistory') : h('copied'),
+          },
+      );
       await Clipboard.setStringAsync(text);
       if (!SYSTEM_CONFIRMS_COPY) showToast(h('copied'));
     } catch (error) {
@@ -181,8 +185,8 @@ export default function AndroidHome() {
       void FileSystem.deleteAsync(recording.uri, { idempotent: true }).catch(() => undefined);
       if (tryController.current === controller) tryController.current = null;
       setTrying(false);
-      if (finished) setTimeout(() => setDictationCard(null), 450);
-      else setDictationCard(null);
+      // A finished one slides back once its done state has shown; anything else goes now.
+      if (!finished) setNotch(null);
     }
   };
   useEffect(() => () => tryController.current?.abort(), []);
@@ -199,7 +203,7 @@ export default function AndroidHome() {
       if (action.current || startedOnVisit !== navigationRevision.current) return;
       action.current = true;
       setWorking(true);
-      setUploadCard(null);
+      setNotch(null);
       uploadDone.current = false;
       uploadStartedAt.current = Date.now();
       try {
@@ -210,9 +214,9 @@ export default function AndroidHome() {
         await applyHistoryRetention().catch(() => undefined);
         action.current = false;
         setWorking(false);
-        // Let a finished bar show full for a moment; a cancelled or failed one goes at once.
-        if (uploadDone.current) setTimeout(() => setUploadCard(null), 450);
-        else setUploadCard(null);
+        // A finished upload slides back once its done state has shown; a cancelled or failed
+        // one goes at once.
+        if (!uploadDone.current) setNotch(null);
       }
     };
     if (provider === 'cloud' && user) {
@@ -234,11 +238,14 @@ export default function AndroidHome() {
     if (action.current) return;
     action.current = true;
     setWorking(true);
-    setRetrying(true);
     const controller = new AbortController();
     retryController.current = controller;
+    setNotch({ flow: 'retry', startedAt: Date.now(), doneText: null });
+    let retried = false;
     try {
       await useTranscriptStore.getState().retryTranscript(id, controller.signal);
+      retried = !controller.signal.aborted;
+      if (retried) setNotch((current) => current && { ...current, doneText: h('addedToHistory') });
     } catch (error) {
       if (!controller.signal.aborted && (error as Error)?.name !== 'AbortError') {
         Alert.alert(t('errorTitle'), toFriendlyTranscriptionErrorMessage(error));
@@ -247,8 +254,8 @@ export default function AndroidHome() {
       if (!controller.signal.aborted) await applyHistoryRetention().catch(() => undefined);
       retryController.current = null;
       action.current = false;
-      setRetrying(false);
       setWorking(false);
+      if (!retried) setNotch(null);
     }
   };
   const copy = (text: string) => {
@@ -329,15 +336,31 @@ export default function AndroidHome() {
                 ? 'statsPending'
                 : undefined;
   const statsRetry = accountStats && (status === 'offline' || status === 'blocked');
-  const uploading = uploadCard !== null && (isProcessing || uploadCard.done);
-  const busy = trying || recorderOpen || working || dictationCard !== null;
+
+  const busy = trying || recorderOpen || working || notch !== null;
+  // The upload ring ticks while the file goes up; nothing else needs a clock.
+  const uploadingNow = notch?.flow === 'upload' && !notch.doneText && stage !== 'cleaning';
+  useEffect(() => {
+    if (!uploadingNow) return;
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [uploadingNow]);
+  const cancelWork = () => {
+    if (retryController.current) retryController.current.abort();
+    else cancel();
+  };
+  const notchState = notchStateFor(notch, stage, now, h, cancelWork);
+  const announcement = notchAnnouncement(notchState, notch, stage, now, h);
+  useEffect(() => {
+    if (announcement) AccessibilityInfo.announceForAccessibility(announcement);
+  }, [announcement]);
   const recent = [...history].sort((a, b) => b.createdAt - a.createdAt).slice(0, 30);
   const newestId = recent[0]?.id;
   const newestAt = recent[0]?.createdAt ?? 0;
-  // Once a finished upload's or dictation's card has gone, take the person to the new row.
+  // Once a finished upload's or dictation's notch has slid back, take the person to the new row.
   useEffect(() => {
     const since = revealNewest.current;
-    if (uploadCard !== null || dictationCard !== null || since === null || !newestId) return;
+    if (notch !== null || since === null || !newestId) return;
     revealNewest.current = null;
     if (newestAt < since) return;
     // Highlight the new row only once the slow scroll has brought it to the top.
@@ -366,7 +389,7 @@ export default function AndroidHome() {
       stop();
       if (arrive) clearTimeout(arrive);
     };
-  }, [uploadCard, dictationCard, newestId, newestAt]);
+  }, [notch, newestId, newestAt]);
 
   return (
     <SafeAreaView
@@ -400,39 +423,36 @@ export default function AndroidHome() {
           alignSelf: 'center',
         }}
       >
-        <BubbleCard
-          busy={busy}
-          onDictate={() => {
-            void openTryIt();
-          }}
-          onUpload={() => {
-            void upload();
-          }}
-        />
-        {dictationCard ? (
-          <ProgressCard
-            icon="AudioLines"
-            title={h('writingUpRecording')}
-            footer={h('usuallyFewSeconds')}
-            sizeBytes={dictationCard.size}
-            cleaning={false}
-            done={dictationCard.done}
-          />
-        ) : null}
-        {uploading || retrying ? (
-          <ProgressCard
-            icon="FileUp"
-            title={retrying ? h('yourRecording') : uploadCard?.name || h('yourRecording')}
-            footer={h('writingItUpMinute')}
-            sizeBytes={retrying ? undefined : uploadCard?.size}
-            cleaning={!retrying && stage === 'cleaning'}
-            done={!retrying && Boolean(uploadCard?.done)}
-            onCancel={() => {
-              if (retryController.current) retryController.current.abort();
-              else cancel();
-            }}
-          />
-        ) : null}
+        {/* The notch hangs below the card without taking layout space. This wrapper reaches
+            below the card far enough to hold it, so its ✕ gets touches and it never covers
+            what comes next. */}
+        <View
+          onLayout={({ nativeEvent }) => setCardWidth(Math.round(nativeEvent.layout.width))}
+          style={{ paddingBottom: NOTCH_REACH + 12 - 20 }}
+        >
+          {notchState ? (
+            <Notch
+              key={notch?.startedAt}
+              state={notchState}
+              cardWidth={cardWidth}
+              top={cardHeight}
+              onFinished={() => setNotch(null)}
+            />
+          ) : null}
+          <View
+            onLayout={({ nativeEvent }) => setCardHeight(Math.round(nativeEvent.layout.height))}
+          >
+            <BubbleCard
+              busy={busy}
+              onDictate={() => {
+                void openTryIt();
+              }}
+              onUpload={() => {
+                void upload();
+              }}
+            />
+          </View>
+        </View>
         {pending.text || pending.error ? (
           <View
             style={{

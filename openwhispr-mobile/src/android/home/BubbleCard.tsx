@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
-  Animated,
   AppState,
-  Easing,
   Image,
   PermissionsAndroid,
   Platform,
@@ -14,7 +12,6 @@ import {
 import { useIsFocused } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
-import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
 import {
   AndroidDictation,
@@ -23,7 +20,7 @@ import {
 } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
 import { home, PILL_ICON_CHROME_COMPACT, PillButton, type } from './kit';
-import { missingPermissions, PERMISSION_LABEL, uploadProgress, type Permission } from './model';
+import { missingPermissions, PERMISSION_LABEL, type Permission } from './model';
 
 const GLOSSY_ICON = require('./assets/glossy-icon.png');
 const FULL_WIDTH = { flex: 0, alignSelf: 'stretch' as const };
@@ -219,109 +216,6 @@ export function BubbleCard({
           />
         </View>
       )}
-    </View>
-  );
-}
-
-/** What is being written up, in one full-width card under the bubble card. Text wraps. */
-export function ProgressCard({
-  icon,
-  title,
-  footer,
-  sizeBytes,
-  cleaning,
-  done,
-  onCancel,
-}: {
-  /** What is being written up: a dictation (waveform) or an uploaded file. */
-  icon: 'AudioLines' | 'FileUp';
-  title: string;
-  footer: string;
-  sizeBytes?: number;
-  cleaning: boolean;
-  /** The text has arrived: fill the bar before the card goes. */
-  done: boolean;
-  onCancel?: () => void;
-}) {
-  const t = useHomeT();
-  const fill = useRef(new Animated.Value(0)).current;
-  const startedAt = useRef(Date.now());
-  const cleaningSince = useRef<number | undefined>(undefined);
-  if (cleaning && cleaningSince.current === undefined) cleaningSince.current = Date.now();
-  useEffect(() => {
-    const step = () => {
-      const now = Date.now();
-      Animated.timing(fill, {
-        toValue: uploadProgress({
-          elapsedMs: now - startedAt.current,
-          sizeBytes,
-          cleaningMs: cleaningSince.current === undefined ? undefined : now - cleaningSince.current,
-          done,
-        }),
-        duration: done ? 250 : 200,
-        easing: Easing.linear,
-        useNativeDriver: false,
-      }).start();
-    };
-    step();
-    if (done) return;
-    const timer = setInterval(step, 200);
-    return () => clearInterval(timer);
-  }, [fill, sizeBytes, cleaning, done]);
-  return (
-    <View
-      style={{
-        backgroundColor: home.surface,
-        borderWidth: 1,
-        borderColor: home.borderSubtle,
-        borderRadius: 14,
-        padding: 16,
-        gap: 8,
-        boxShadow: home.cardShadow,
-      }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            backgroundColor: home.tint,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <SystemIcon name="doc" mdName={icon} size={22} color={home.accent} />
-        </View>
-        <Text style={[type.headline, { flex: 1 }]}>{title}</Text>
-      </View>
-      <View
-        style={{ height: 6, borderRadius: 999, backgroundColor: home.fill, overflow: 'hidden' }}
-      >
-        <Animated.View
-          style={{
-            width: fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-            height: 6,
-            borderRadius: 999,
-            backgroundColor: home.accent,
-          }}
-        />
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <Text accessibilityLiveRegion="polite" style={[type.footnote, { flex: 1 }]}>
-          {footer}
-        </Text>
-        {onCancel ? (
-          <Text
-            accessibilityRole="button"
-            onPress={onCancel}
-            suppressHighlighting
-            style={{ fontSize: 15, lineHeight: 20, color: home.accent, paddingVertical: 12 }}
-          >
-            {t('cancel')}
-          </Text>
-        ) : null}
-      </View>
     </View>
   );
 }
