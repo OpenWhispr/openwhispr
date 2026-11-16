@@ -111,6 +111,27 @@ test("account-scope change reloads and closes the view", async (t) => {
   assert.equal(calls.moves[0].accountId, "b");
 });
 
+test("a same-account scope broadcast reloads but keeps the view", async (t) => {
+  const { state, calls, listeners } = await listening(t);
+  state().openView(70);
+  const listsBefore = calls.lists;
+
+  listeners.scope({ accountId: "a", visibleAccountId: "a" });
+  await settle();
+  assert.equal(state().viewNoteId, 70);
+  assert.equal(calls.lists, listsBefore + 1);
+});
+
+test("stopping the listeners closes the view, so a remount never shows a stale note", async (t) => {
+  const { state } = await fixture(t);
+  const stop = state().startListening();
+  await settle();
+  state().openView(70);
+
+  stop();
+  assert.equal(state().viewNoteId, null);
+});
+
 test("device-notes-changed closes a view whose note is gone", async (t) => {
   let present = true;
   const { state, listeners } = await listening(t, {

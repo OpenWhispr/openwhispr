@@ -76,8 +76,8 @@ export const useDeviceNotesStore = create<DeviceNotesState>()((set, get) => ({
     );
     const stopScope = api?.onDatabaseAccountScopeChanged?.((scope) => {
       heardScope = true;
+      if (scope.accountId !== accountId) get().closeView();
       accountId = scope.accountId;
-      get().closeView();
       void get().load();
     });
     const stopChanged = api?.onDeviceNotesChanged?.(() => {
@@ -94,10 +94,12 @@ export const useDeviceNotesStore = create<DeviceNotesState>()((set, get) => ({
         get().closeView();
       }
     });
+    // Nothing keeps the view current once these stop, so it closes with them.
     return () => {
       stopScope?.();
       stopChanged?.();
       stopNoteView();
+      get().closeView();
     };
   },
 }));
