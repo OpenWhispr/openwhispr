@@ -255,7 +255,7 @@ function versionIds(folder) {
 
 /**
  * The user's skills: one folder each under userData/skills, which is the only copy of a
- * skill's content. The database keeps only each skill's on/off state.
+ * skill's content. The database keeps each skill's state and its Cloud backup record.
  */
 class SkillLibrary {
   constructor({ userDataDir, database, recommendedDir }) {
