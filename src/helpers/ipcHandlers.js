@@ -123,6 +123,33 @@ function syncSenderAccount(accountId, authGeneration) {
     ? accountId
     : null;
 }
+// A workspace id from the renderer: a non-empty string, or null for none.
+// The note queues a sync pass reads (DatabaseManager.getPendingNotes).
+const SYNC_NOTE_QUEUES = new Set([null, undefined, "private", "team", "syncable"]);
+
+function isWorkspaceIdArgument(value) {
+  return value === null || (typeof value === "string" && value.trim().length > 0);
+}
+// A local row id from the renderer.
+function isRowIdArgument(value) {
+  return Number.isInteger(value) && value > 0;
+}
+// The spaces a search may read: null when the caller names none, and nothing
+// when it names them in any other shape than a list of row ids.
+function spaceIdsArgument(value) {
+  if (value == null) return null;
+  return Array.isArray(value) && value.every(isRowIdArgument) ? value : [];
+}
+// Workspace calls may name the account they were made for. One that arrives
+// after another account signed in is refused rather than applied to it.
+function isForOtherAccount(accountId, activeAccountId) {
+  return accountId !== undefined && accountId !== activeAccountId;
+}
+const ACCOUNT_CHANGED_RESULT = {
+  success: false,
+  code: "ACCOUNT_CHANGED",
+  error: "The account changed before the workspace call arrived",
+};
 // Local engines resolve a failed decode instead of throwing. Retry turns that
 // into a coded error so the toast says what went wrong rather than blaming a
 // missing engine.
@@ -1106,6 +1133,21 @@ class IPCHandlers {
     void this.connectorManager?.notifyStatusChanged();
   }
 
+  // A failed claim leaves the notes where they were, visible signed out, and
+  // must not stop the sign-in that runs it.
+  _claimSignedOutPrivateNotes() {
+    try {
+      const claimed = this.databaseManager.claimSignedOutPrivateNotes();
+      if (claimed.notes > 0 || claimed.folders > 0) this.notifyVectorChanges();
+    } catch (error) {
+      debugLogger.error(
+        "Claiming signed-out private notes at sign-in failed",
+        { error: error.message },
+        "database"
+      );
+    }
+  }
+
   _cancelCalendarAuthorizations() {
     for (const senderId of this._calendarAuthorizationRequests?.requestsBySender.keys() ?? []) {
       this._calendarAuthorizationRequests.cancelSender(senderId);
@@ -1819,6 +1861,13 @@ class IPCHandlers {
       tokenStore.getState().generation !== expectedAuthGeneration ||
       scopedAccountByGeneration.get(expectedAuthGeneration) !==
         this.databaseManager.activeAccountId;
+    const isStaleNoteWrite = (guard) =>
+      guard !== undefined &&
+      (!guard ||
+        !(guard.accountId === null || typeof guard.accountId === "string") ||
+        !Number.isSafeInteger(guard.authGeneration) ||
+        guard.accountId !== this.databaseManager.activeAccountId ||
+        guard.authGeneration !== tokenStore.getState().generation);
     // Each handler takes at most one renderer argument, so the job's signal
     // always lands after it and can't be supplied by the renderer.
     const handleAudioFeature = (channel, purpose, handler) =>
@@ -2779,8 +2828,10 @@ class IPCHandlers {
         audioDuration,
         folderId,
         spaceId,
-        transcript
+        transcript,
+        writeGuard
       ) => {
+        if (isStaleNoteWrite(writeGuard)) return { success: false, error: "Account changed" };
         const result = this.databaseManager.saveNote(
           title,
           content,
@@ -2830,6 +2881,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-update-note", async (event, id, updates, options) => {
+      if (isStaleNoteWrite(options?.writeGuard))
+        return { success: false, error: "Account changed" };
       const result = this.databaseManager.updateNote(id, updates, options);
       if (result?.success && result?.note) {
         setImmediate(() => broadcastToWindows("note-updated", result.note));
@@ -2848,23 +2901,33 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-search-notes", async (event, query, limit, spaceId, folderId, spaceIds) => {
-      return this.databaseManager.searchNotes(query, limit, spaceId, folderId, spaceIds);
+      return this.databaseManager.searchNotes(
+        query,
+        limit,
+        spaceId,
+        folderId,
+        spaceIdsArgument(spaceIds)
+      );
     });
 
     ipcMain.handle(
       "db-semantic-search-notes",
-      async (event, query, limit = 5, spaceId, folderId) => {
+      async (event, query, limit = 5, spaceId, folderId, requestedSpaceIds) => {
+        // The assistant names the spaces in its workspace scope; an empty or
+        // malformed list reads nothing rather than everything.
+        const spaceIds = spaceIdsArgument(requestedSpaceIds);
+        if (spaceIds?.length === 0) return [];
         try {
           // Qdrant payload updates are best-effort. Use its space filter to
           // reduce the candidate set, then validate every scoped vector hit
           // against SQLite before it can enter the fused ranking.
           const overFetch = folderId != null ? limit * 4 : limit * 2;
-          const vectorFilter =
-            spaceId != null
-              ? { must: [{ key: "space_id", match: { value: spaceId } }] }
-              : undefined;
+          const must = [];
+          if (spaceId != null) must.push({ key: "space_id", match: { value: spaceId } });
+          if (spaceIds) must.push({ key: "space_id", match: { any: spaceIds } });
+          const vectorFilter = must.length > 0 ? { must } : undefined;
           const [ftsResults, vectorResults] = await Promise.all([
-            this.databaseManager.searchNotes(query, overFetch, spaceId, folderId),
+            this.databaseManager.searchNotes(query, overFetch, spaceId, folderId, spaceIds),
             this.getSemanticSearch?.()?.search(query, overFetch, vectorFilter),
           ]);
           if (vectorResults == null) return ftsResults.slice(0, limit);
@@ -2872,7 +2935,8 @@ class IPCHandlers {
             this.databaseManager.getNoteIdsInScope(
               spaceId,
               folderId,
-              vectorResults.map(({ noteId }) => noteId)
+              vectorResults.map(({ noteId }) => noteId),
+              spaceIds
             )
           );
 
@@ -2909,7 +2973,7 @@ class IPCHandlers {
           debugLogger.error("Semantic search failed, falling back to FTS5", {
             error: error.message,
           });
-          return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
+          return this.databaseManager.searchNotes(query, limit, spaceId, folderId, spaceIds);
         }
       }
     );
@@ -2930,8 +2994,10 @@ class IPCHandlers {
       return this.databaseManager.getFolders(spaceId);
     });
 
-    ipcMain.handle("db-create-folder", (_event, name, spaceId) =>
-      this.createFolderWithEffects(name, spaceId)
+    ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard) =>
+      isStaleNoteWrite(writeGuard)
+        ? { success: false, error: "Account changed" }
+        : this.createFolderWithEffects(name, spaceId)
     );
 
     ipcMain.handle("db-delete-folder", async (event, id) => {
@@ -2978,6 +3044,105 @@ class IPCHandlers {
     ipcMain.handle("db-has-other-account-rows", () => this.databaseManager.hasOtherAccountRows());
     ipcMain.handle("db-has-unclaimed-legacy-rows", () =>
       this.databaseManager.hasUnclaimedLegacyRows()
+    );
+
+    ipcMain.handle("set-active-workspace-scope", (_event, scope) => {
+      if (!scope || typeof scope !== "object" || Array.isArray(scope)) {
+        return { success: false, error: "Invalid workspace scope" };
+      }
+      const { activeWorkspaceId = null, defaultWorkspaceId = null, accountId } = scope;
+      if (!isWorkspaceIdArgument(activeWorkspaceId) || !isWorkspaceIdArgument(defaultWorkspaceId)) {
+        return { success: false, error: "Invalid workspace scope" };
+      }
+      if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+        return ACCOUNT_CHANGED_RESULT;
+      }
+      this.databaseManager.setActiveWorkspaceScope({ activeWorkspaceId, defaultWorkspaceId });
+      return { success: true };
+    });
+
+    ipcMain.handle("get-private-space-id", (_event, workspaceId = null, expectedAuthGeneration) => {
+      if (!isWorkspaceIdArgument(workspaceId)) return null;
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return null;
+      return this.databaseManager.getPrivateSpaceId(workspaceId);
+    });
+
+    // Personal cloud rows without recorded placement fall back to the account's
+    // default Private, never the active workspace's.
+    ipcMain.handle("get-default-private-space-id", (_event, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return null;
+      return this.databaseManager.getDefaultPrivateSpaceId();
+    });
+
+    ipcMain.handle("bind-default-private-space", (_event, defaultWorkspaceId, accountId) => {
+      if (typeof defaultWorkspaceId !== "string" || !defaultWorkspaceId.trim()) {
+        return { success: false, error: "Invalid workspace" };
+      }
+      if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+        return ACCOUNT_CHANGED_RESULT;
+      }
+      if (!this.databaseManager.activeAccountId) {
+        return { success: false, code: "SIGNED_OUT", error: "No account is signed in" };
+      }
+      this.databaseManager.bindDefaultPrivateSpace(defaultWorkspaceId);
+      this.noteFiles.containersChanged();
+      broadcastToWindows(
+        "space-synced",
+        this.databaseManager.getSpace(this.databaseManager.getDefaultPrivateSpaceId())
+      );
+      // Moved notes carry their space in Qdrant payloads; the triggers journaled them.
+      this.notifyVectorChanges();
+      return { success: true };
+    });
+
+    ipcMain.handle("copy-note-to-space", (_event, noteId, targetSpaceId, folderId = null) => {
+      if (
+        !isRowIdArgument(noteId) ||
+        !isRowIdArgument(targetSpaceId) ||
+        (folderId !== null && !isRowIdArgument(folderId))
+      ) {
+        return null;
+      }
+      const note = this.databaseManager.copyNoteToSpace(noteId, targetSpaceId, folderId);
+      if (note) {
+        setImmediate(() => broadcastToWindows("note-added", note));
+        this.notifyVectorChanges();
+        this._asyncMirrorWrite(note);
+      }
+      return note;
+    });
+
+    ipcMain.handle(
+      "relocate-private-space",
+      (_event, fromWorkspaceId, toWorkspaceId = null, accountId) => {
+        if (
+          typeof fromWorkspaceId !== "string" ||
+          !fromWorkspaceId.trim() ||
+          !isWorkspaceIdArgument(toWorkspaceId)
+        ) {
+          return { success: false, error: "Invalid workspace" };
+        }
+        if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+          return ACCOUNT_CHANGED_RESULT;
+        }
+        if (!this.databaseManager.activeAccountId) {
+          return { success: false, code: "SIGNED_OUT", error: "No account is signed in" };
+        }
+        const moved = this.databaseManager.relocatePrivateSpace(fromWorkspaceId, toWorkspaceId);
+        this.noteFiles.containersChanged();
+        if (moved.notes > 0 || moved.folders > 0) {
+          const targetId =
+            toWorkspaceId == null
+              ? this.databaseManager.getDefaultPrivateSpaceId()
+              : this.databaseManager.getPrivateSpaceId(toWorkspaceId);
+          broadcastToWindows("space-synced", this.databaseManager.getSpace(targetId));
+        }
+        // Moved notes carry their space in Qdrant payloads; the triggers journaled them.
+        if (moved.notes > 0) this.notifyVectorChanges();
+        return { success: true, ...moved };
+      }
     );
 
     ipcMain.handle("set-active-account-scope", async (_event, accountId, expectedGeneration) => {
@@ -3034,6 +3199,9 @@ class IPCHandlers {
       this.databaseManager.setActiveAccountId(accountId);
       this.databaseManager.claimSignedOutLocalRows();
       this.databaseManager.claimLegacyRowsOfOnlyAccount();
+      // After those two: they give the account the signed-out chats this moves
+      // out of the stand-in along with the notes.
+      this._claimSignedOutPrivateNotes();
       // After the claims, so the new account's notes include the ones it took over.
       if (accountChanged) this.noteFiles.accountChanged();
       if (accountChanged) {
@@ -3070,6 +3238,12 @@ class IPCHandlers {
         binding: accountScopeBinding.read(),
       })
     );
+
+    // A tool can wait on folder lookup or a lock before writing; keep its original account.
+    ipcMain.handle("get-note-write-guard", () => ({
+      accountId: this.databaseManager.activeAccountId,
+      authGeneration: tokenStore.getState().generation,
+    }));
 
     // The binding above stops matching as soon as the token rotates, while the
     // database keeps the account until the renderer re-scopes it, so a window
@@ -3275,6 +3449,10 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.handle("db-protect-conversation", (_, id, notes, deviceOnly, expectedAccountId) =>
+      this.databaseManager.protectConversation(id, notes, deviceOnly, expectedAccountId)
+    );
+
     ipcMain.handle("db-get-agent-conversations", async (event, limit) => {
       return this.databaseManager.getAgentConversations(limit);
     });
@@ -3343,18 +3521,26 @@ class IPCHandlers {
 
     ipcMain.handle(
       "db-get-agent-conversations-with-preview",
-      async (event, limit, offset, includeArchived) => {
+      async (event, limit, offset, includeArchived, spaceIds = null) => {
         return this.databaseManager.getAgentConversationsWithPreview(
           limit,
           offset,
-          includeArchived
+          includeArchived,
+          spaceIdsArgument(spaceIds)
         );
       }
     );
 
-    ipcMain.handle("db-search-agent-conversations", async (event, query, limit) => {
-      return this.databaseManager.searchAgentConversations(query, limit);
-    });
+    ipcMain.handle(
+      "db-search-agent-conversations",
+      async (event, query, limit, spaceIds = null) => {
+        return this.databaseManager.searchAgentConversations(
+          query,
+          limit,
+          spaceIdsArgument(spaceIds)
+        );
+      }
+    );
 
     ipcMain.handle("db-archive-agent-conversation", async (event, id) => {
       return this.databaseManager.archiveAgentConversation(id);
@@ -3368,32 +3554,48 @@ class IPCHandlers {
       return this.databaseManager.updateAgentConversationCloudId(id, cloudId);
     });
 
-    ipcMain.handle("db-semantic-search-conversations", async (event, query, limit) => {
-      if (this.vectorIndex?.isReady?.()) {
-        try {
-          const vectorResults = await this.vectorIndex.searchConversations(query, limit);
-          if (vectorResults?.length > 0) {
-            const ids = vectorResults.map((r) => r.conversationId);
-            const previews = ids
-              .map((id) => this.databaseManager.getAgentConversation(id))
-              .filter(Boolean)
-              .map((c) => ({
-                ...c,
-                message_count: c.messages?.length ?? 0,
-                last_message: c.messages?.[c.messages.length - 1]?.content,
-              }));
-            if (previews.length > 0) return previews;
+    ipcMain.handle(
+      "db-semantic-search-conversations",
+      async (event, query, limit = 20, spaceIds = null) => {
+        const scopeSpaceIds = spaceIdsArgument(spaceIds);
+        const allowedIds = this.databaseManager.getConversationIdsInScope(scopeSpaceIds);
+        if (allowedIds.length === 0) return [];
+        if (this.vectorIndex?.isReady?.()) {
+          try {
+            const vectorResults = await this.vectorIndex.searchConversations(
+              query,
+              limit,
+              allowedIds
+            );
+            if (vectorResults?.length > 0) {
+              const currentIds = new Set(
+                this.databaseManager.getConversationIdsInScope(scopeSpaceIds)
+              );
+              const ids = vectorResults
+                .map((r) => r.conversationId)
+                .filter((id) => currentIds.has(id));
+              const previews = ids
+                .map((id) => this.databaseManager.getAgentConversation(id))
+                .filter(Boolean)
+                .map((c) => ({
+                  ...c,
+                  message_count: c.messages?.length ?? 0,
+                  last_message: c.messages?.[c.messages.length - 1]?.content,
+                }));
+              if (previews.length > 0) return previews;
+            }
+          } catch {
+            // fall through to keyword search
           }
-        } catch {
-          // fall through to keyword search
         }
+        return this.databaseManager.searchAgentConversations(query, limit, scopeSpaceIds);
       }
-      return this.databaseManager.searchAgentConversations(query, limit);
-    });
+    );
 
     // Notes sync
-    ipcMain.handle("db-get-pending-notes", (_, spaceKind) =>
-      this.databaseManager.getPendingNotes(spaceKind)
+    // Full Backup reads personal rows too; SyncService applies the current consent.
+    ipcMain.handle("db-get-pending-notes", (_, scope) =>
+      SYNC_NOTE_QUEUES.has(scope) ? this.databaseManager.getPendingNotes(scope) : []
     );
     ipcMain.handle("db-get-pending-note-deletes", () =>
       this.databaseManager.getPendingNoteDeletes()
@@ -3404,21 +3606,82 @@ class IPCHandlers {
     ipcMain.handle("db-get-note-for-cloud-row", (_, clientNoteId, cloudId) =>
       this.databaseManager.getNoteForCloudRow(clientNoteId, cloudId)
     );
-    ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
-      const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
-      if (note) {
-        setImmediate(() => broadcastToWindows("note-synced", note));
-        this.notifyVectorChanges();
-        this.noteFiles.queueNote(note.id);
+    // A pull passes its sign-in generation so replacement accounts cannot accept its rows.
+    ipcMain.handle(
+      "db-upsert-note-from-cloud",
+      (_, cloudNote, localFolderId, localSpaceId, expectedAuthGeneration, options) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) {
+          return STALE_SYNC_ACK;
+        }
+        const note = this.databaseManager.upsertNoteFromCloud(
+          cloudNote,
+          localFolderId,
+          localSpaceId,
+          { newKeyIfTaken: options?.newKeyIfTaken === true }
+        );
+        if (note) {
+          setImmediate(() => broadcastToWindows("note-synced", note));
+          this.notifyVectorChanges();
+          this.noteFiles.queueNote(note.id);
+        }
+        return note;
       }
-      return note;
-    });
-    ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds) =>
-      this.databaseManager.markNoteCreatesAttempted(clientNoteIds)
     );
+    ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) return [];
+      return this.databaseManager.markNoteCreatesAttempted(clientNoteIds);
+    });
+    ipcMain.handle(
+      "db-renew-note-cloud-identity",
+      (_, id, clientNoteId, cloudId, spaceId, expectedAuthGeneration) => {
+        if (
+          !Number.isSafeInteger(expectedAuthGeneration) ||
+          isStaleSyncAck(expectedAuthGeneration)
+        ) {
+          return STALE_SYNC_ACK;
+        }
+        const result = this.databaseManager.renewNoteCloudIdentity(
+          id,
+          clientNoteId,
+          cloudId,
+          spaceId
+        );
+        if (result.note) setImmediate(() => broadcastToWindows("note-synced", result.note));
+        return result;
+      }
+    );
+    ipcMain.handle("db-get-private-placement-backup-candidates", (_, expectedAuthGeneration) => {
+      if (!Number.isSafeInteger(expectedAuthGeneration) || isStaleSyncAck(expectedAuthGeneration)) {
+        return STALE_SYNC_ACK;
+      }
+      return this.databaseManager.getPrivatePlacementBackupCandidates();
+    });
+    ipcMain.handle(
+      "db-get-private-placement-backup-rows",
+      (_, expectedAuthGeneration, candidates) => {
+        if (
+          !Number.isSafeInteger(expectedAuthGeneration) ||
+          isStaleSyncAck(expectedAuthGeneration)
+        ) {
+          return STALE_SYNC_ACK;
+        }
+        return this.databaseManager.getPrivatePlacementBackupRows(candidates);
+      }
+    );
+    ipcMain.handle("db-queue-unlinked-private-folders", (_, expectedAuthGeneration) => {
+      if (!Number.isSafeInteger(expectedAuthGeneration) || isStaleSyncAck(expectedAuthGeneration)) {
+        return STALE_SYNC_ACK;
+      }
+      return this.databaseManager.queueUnlinkedPrivateFolders();
+    });
     ipcMain.handle(
       "db-acknowledge-note-create",
       (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
+        if (
+          options?.expectedAuthGeneration !== undefined &&
+          isStaleSyncAck(options.expectedAuthGeneration)
+        )
+          return STALE_SYNC_ACK;
         const result = this.databaseManager.acknowledgeNoteCreate(
           id,
           snapshot,
@@ -3437,7 +3700,19 @@ class IPCHandlers {
     );
     ipcMain.handle(
       "db-mark-note-synced-if-unchanged",
-      (_, id, snapshot, expectedCloudId, cloudUpdatedAt, ownerUserId, cloudRevision, cloudNote) => {
+      (
+        _,
+        id,
+        snapshot,
+        expectedCloudId,
+        cloudUpdatedAt,
+        ownerUserId,
+        cloudRevision,
+        cloudNote,
+        expectedAuthGeneration
+      ) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+          return STALE_SYNC_ACK;
         const result = this.databaseManager.markNoteSyncedIfUnchanged(
           id,
           snapshot,
@@ -3477,7 +3752,9 @@ class IPCHandlers {
       if (result?.success) this.noteFiles.queueNote(id);
       return result;
     });
-    ipcMain.handle("db-hard-delete-note", (_, id) => {
+    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return STALE_SYNC_ACK;
       const snapshots = this._captureMirrorDeletionNotes({ id });
       const result = this.databaseManager.hardDeleteNote(id);
       if (result?.success) {
@@ -3489,34 +3766,68 @@ class IPCHandlers {
     });
 
     // Folders sync
-    ipcMain.handle("db-get-pending-folders", (_, spaceKind) =>
-      this.databaseManager.getPendingFolders(spaceKind)
+    ipcMain.handle("db-get-pending-folders", (_, scope) =>
+      scope == null || scope === "private" || scope === "team"
+        ? this.databaseManager.getPendingFolders(scope)
+        : []
     );
     ipcMain.handle("db-get-folder-by-client-id", (_, clientFolderId) =>
       this.databaseManager.getFolderByClientId(clientFolderId)
     );
-    ipcMain.handle("db-upsert-folder-from-cloud", (_, cloudFolder, localSpaceId) => {
-      const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId);
-      if (folder) {
-        this.noteFiles.containersChanged();
-        setImmediate(() => broadcastToWindows("folder-synced", folder));
+    ipcMain.handle("db-get-folder-by-cloud-id", (_, cloudId) =>
+      typeof cloudId === "string" && cloudId
+        ? this.databaseManager.getFolderByCloudId(cloudId)
+        : null
+    );
+    // Pinned, and keyed afresh on request, like db-upsert-note-from-cloud.
+    ipcMain.handle(
+      "db-upsert-folder-from-cloud",
+      (_, cloudFolder, localSpaceId, expectedAuthGeneration, options) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) {
+          return STALE_SYNC_ACK;
+        }
+        const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId, {
+          newKeyIfTaken: options?.newKeyIfTaken === true,
+        });
+        if (folder) {
+          this.noteFiles.containersChanged();
+          setImmediate(() => broadcastToWindows("folder-synced", folder));
+        }
+        return folder;
       }
-      return folder;
-    });
+    );
     ipcMain.handle(
       "db-acknowledge-folder-create",
-      (_, id, snapshot, expectedCloudId, responseClientFolderId, cloudId, cloudUpdatedAt) =>
-        this.databaseManager.acknowledgeFolderCreate(
+      (
+        _,
+        id,
+        snapshot,
+        expectedCloudId,
+        responseClientFolderId,
+        cloudId,
+        cloudUpdatedAt,
+        expectedAuthGeneration
+      ) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration)) {
+          return STALE_SYNC_ACK;
+        }
+        return this.databaseManager.acknowledgeFolderCreate(
           id,
           snapshot,
           expectedCloudId,
           responseClientFolderId,
           cloudId,
           cloudUpdatedAt
-        )
+        );
+      }
     );
-    ipcMain.handle("db-mark-folder-synced-if-unchanged", (_, id, snapshot, expectedCloudId) =>
-      this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId)
+    ipcMain.handle(
+      "db-mark-folder-synced-if-unchanged",
+      (_, id, snapshot, expectedCloudId, expectedAuthGeneration) => {
+        if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+          return STALE_SYNC_ACK;
+        return this.databaseManager.markFolderSyncedIfUnchanged(id, snapshot, expectedCloudId);
+      }
     );
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
     ipcMain.handle("db-get-pending-folder-deletes", () =>
@@ -3524,22 +3835,26 @@ class IPCHandlers {
     );
     ipcMain.handle("db-restore-folder-after-denied-delete", (_, id) => {
       const result = this.databaseManager.restoreFolderAfterDeniedDelete(id);
-      if (result?.success) {
-        this.notifyVectorChanges();
-        this.noteFiles.containersChanged();
-        for (const note of result.notes ?? []) {
-          this._asyncMirrorWrite(note);
-        }
-        setImmediate(() => {
-          if (result.folder) broadcastToWindows("folder-synced", result.folder);
-          for (const note of result.notes ?? []) {
-            broadcastToWindows("note-synced", note);
-          }
-        });
+      if (!result?.success) return result;
+      this.notifyVectorChanges();
+      this.noteFiles.containersChanged();
+      for (const note of result.notes ?? []) {
+        this._asyncMirrorWrite(note);
       }
-      return result;
+      // A stand-in folder also brings back the signed-out notes it holds; only
+      // the account's own reach its windows.
+      const notes = (result.notes ?? []).filter((note) => this.databaseManager.getNote(note.id));
+      setImmediate(() => {
+        if (result.folder) broadcastToWindows("folder-synced", result.folder);
+        for (const note of notes) {
+          broadcastToWindows("note-synced", note);
+        }
+      });
+      return { ...result, notes };
     });
-    ipcMain.handle("db-hard-delete-folder", (_, id) => {
+    ipcMain.handle("db-hard-delete-folder", (_, id, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return STALE_SYNC_ACK;
       const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
       const result = this.databaseManager.hardDeleteFolder(id);
       if (result?.success) {
@@ -3549,6 +3864,11 @@ class IPCHandlers {
       }
       return result;
     });
+    // A private folder that left a team keeps the team's cloud identity until
+    // sync detaches it, so the team's row stays the team's (D8).
+    ipcMain.handle("db-fork-folder-identity", (_, id) =>
+      this.databaseManager.forkFolderIdentity(id)
+    );
     ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
       const snapshots = this._captureMirrorDeletionNotes({ folder_id: id });
       const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
@@ -3669,7 +3989,7 @@ class IPCHandlers {
     );
     ipcMain.handle("db-hard-delete-conversation", (_, id, expectedAuthGeneration) => {
       if (isStaleSyncAck(expectedAuthGeneration)) return STALE_SYNC_ACK;
-      const result = this.databaseManager.hardDeleteConversation(id);
+      const result = this.databaseManager.hardDeleteConversation(id, true);
       if (result?.success) {
         setImmediate(() => broadcastToWindows("conversation-deleted", { id }));
       }
@@ -14474,9 +14794,7 @@ class IPCHandlers {
             }
           }
         }
-        const existing = new Set(
-          this.databaseManager.getExistingClientNoteIds(notes.map((n) => n.clientNoteId))
-        );
+        const existing = new Set(this.databaseManager.getImportedClientNoteIds(notes));
         const freshNotes = notes.filter((n) => !existing.has(n.clientNoteId));
         // The run handler only ever imports what this preview parsed — the
         // renderer never sends a file path across the bridge.

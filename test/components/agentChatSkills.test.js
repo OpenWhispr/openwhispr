@@ -10,13 +10,18 @@ async function mountChat(t, electronAPI = {}) {
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  installBrowserGlobals(t, { window: { electronAPI } });
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: { getAgentConversation: async (id) => ({ id, messages: [] }), ...electronAPI },
+    },
+  });
   const container = installInteractiveDom(t);
   const calls = { sends: [], regenerated: [], streaming: null };
   globalThis.__agentSkillCalls = calls;
   t.after(() => delete globalThis.__agentSkillCalls);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-agent-skills-",
+    noExternal: ["react-i18next"],
     mockModules: {
       "react-i18next": SKILLS_MOCKS["react-i18next"],
       "/chat/useChatPersistence": `
@@ -25,7 +30,7 @@ async function mountChat(t, electronAPI = {}) {
           { id: "a1", role: "assistant", content: "Your prep", isStreaming: false },
         ];
         export function useChatPersistence() { return {
-          messages, conversationId: 1, forkOrigin: null, setMessages() {},
+          messages, conversationId: 1, noteId: null, forkOrigin: null, setMessages() {},
           async createConversation() { return 1; },
           async loadConversation(id, beforeOpen) { beforeOpen?.(); return { id }; },
           getSessionVersion: () => 1,
