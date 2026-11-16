@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AndroidDictation, type Recording } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
-import { home, type } from './kit';
+import { gloss, glossPressed, home, type } from './kit';
 
 const BARS = 48;
 const BAR_MAX = 48;
@@ -217,16 +217,18 @@ export function TryItRecorder({
               onPress={() => {
                 void finish();
               }}
-              style={({ pressed }) => ({
-                width: 96,
-                height: 96,
-                borderRadius: 48,
-                backgroundColor: home.accent,
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: home.floatingShadow,
-                opacity: !recording ? 0.5 : pressed ? 0.8 : 1,
-              })}
+              style={({ pressed }) => [
+                {
+                  width: 96,
+                  height: 96,
+                  borderRadius: 48,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: recording ? 1 : 0.5,
+                },
+                gloss,
+                pressed && glossPressed,
+              ]}
             >
               <SystemIcon name="checkmark" mdName="Check" size={28} color="#FFFFFF" />
             </Pressable>

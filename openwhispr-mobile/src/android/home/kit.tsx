@@ -27,14 +27,29 @@ export const home = {
   divider: 'rgba(0,0,0,0.08)',
   fill: '#E8E7E4',
   tint: 'rgba(21,75,212,0.12)',
-  warningBackground: '#FFF4E5',
-  warning: '#DB7C00',
   error: '#E5372B',
   disabled: '#C0BFBB',
   cardShadow: '0px 8px 12px rgba(0,0,0,0.06), 0px 1px 1px rgba(0,0,0,0.04)',
   tipShadow: '0px 8px 24px rgba(0,0,0,0.06), 0px 1px 2px rgba(0,0,0,0.04)',
   floatingShadow: '0px 12px 32px rgba(0,0,0,0.10), 0px 4px 12px rgba(0,0,0,0.08)',
 } as const;
+
+/**
+ * The desktop app's primary gloss (`BRAND_GLASS_SURFACE` in `src/components/ui/button.tsx`):
+ * a top-to-bottom blue gradient with a light inner rim and no outer shadow. Every primary
+ * blue button on Home uses this.
+ */
+export const gloss = {
+  experimental_backgroundImage: 'linear-gradient(180deg, #5588f0 0%, #3466e2 100%)',
+  boxShadow:
+    'inset 0px 1px 0px rgba(255,255,255,0.6), inset 0px 0px 0px 1px rgba(255,255,255,0.16), inset 0px -1px 1px rgba(0,0,0,0.12)',
+} satisfies ViewStyle;
+
+/** Pressed gloss: a touch darker and smaller, as on desktop (brightness 95%, scale 0.985). */
+export const glossPressed = {
+  filter: [{ brightness: 0.95 }],
+  transform: [{ scale: 0.985 }],
+} satisfies ViewStyle;
 
 export const type = {
   headline: { fontSize: 17, lineHeight: 22, fontWeight: '500' as const, color: home.text },
@@ -102,11 +117,13 @@ export function PillButton({
           alignItems: 'center',
           justifyContent: 'center',
           gap: 8,
-          backgroundColor: primary ? (disabled ? home.fill : home.accent) : home.surface,
+          backgroundColor: primary ? undefined : home.surface,
           borderWidth: primary ? 0 : 1,
           borderColor: home.borderSubtle,
-          opacity: pressed ? 0.7 : 1,
+          opacity: primary ? (disabled ? 0.5 : 1) : pressed ? 0.7 : 1,
         },
+        primary && gloss,
+        primary && pressed && glossPressed,
         style,
       ]}
     >
@@ -115,7 +132,15 @@ export function PillButton({
           <SystemIcon name="circle" mdName={icon} size={19} color={color} />
         </View>
       ) : null}
-      <Text style={[type.subhead, { color, flexShrink: 1, textAlign: 'center' }]}>{label}</Text>
+      <Text
+        style={[
+          type.subhead,
+          { color, flexShrink: 1, textAlign: 'center' },
+          primary && { fontWeight: '600' },
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }

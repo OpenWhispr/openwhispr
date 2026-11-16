@@ -126,7 +126,7 @@ export function BubbleCard({
   return (
     <View
       style={{
-        backgroundColor: needsPermission ? home.warningBackground : home.surface,
+        backgroundColor: home.surface,
         borderRadius: 20,
         padding: 16,
         gap: 14,
@@ -156,7 +156,7 @@ export function BubbleCard({
           <Text style={type.headline}>{title}</Text>
           <Text
             accessibilityLiveRegion="polite"
-            style={[type.footnote, needsPermission && { color: home.warning }]}
+            style={[type.footnote, needsPermission && { color: home.accent }]}
           >
             {subtitle}
           </Text>
