@@ -375,6 +375,7 @@ test("a stop whose line can't be written is written before the next recording st
   log.recordingStopped({ sessionId: "s1", reason: "user" });
   await log.flush();
   fs.chmodSync(path.join(dir, file), 0o644);
+  assert.equal(lines().length, 1);
   clock.now = START + 60_000;
   log.recordingStarted({ sessionId: "s2", noteId: 4, trigger: "hotkey" });
   await log.flush();
