@@ -870,95 +870,42 @@ class MarkdownMirror {
   // companions open with "# <title>". BOM and CRLF are tolerated so a note an
   // external editor re-saved is still recognised.
   _isNoteMarkdownFile(filePath) {
-    return /^\uFEFF?---\r?\n/.test(this._readFileHead(filePath, 8) ?? "");
-  }
-
-  // A regular file's first bytes, or null for anything else.
-  _readFileHead(filePath, length) {
     let fd;
     try {
       const stats = fs.lstatSync(filePath);
-      if (stats.isSymbolicLink() || !stats.isFile()) return null;
+      if (stats.isSymbolicLink() || !stats.isFile()) return false;
       fd = fs.openSync(filePath, "r");
-      const head = Buffer.alloc(length);
-      const bytesRead = fs.readSync(fd, head, 0, length, 0);
-      return head.toString("utf8", 0, bytesRead);
+      const marker = Buffer.alloc(8);
+      const bytesRead = fs.readSync(fd, marker, 0, marker.length, 0);
+      return /^\uFEFF?---\r?\n/.test(marker.toString("utf8", 0, bytesRead));
     } catch {
-      return null;
+      return false;
     } finally {
       if (fd !== undefined) fs.closeSync(fd);
     }
   }
 
-  // A note file this mirror wrote: "<id>-<slug>.md", or such a file kept aside
-  // as "edited-<name>" after an outside edit, whose frontmatter opens with that
-  // id and has the title, type, created and updated lines the mirror always
-  // writes. An id alone is common in a user's vault.
-  _mirroredNoteId(filePath) {
-    if (!filePath.endsWith(".md")) return null;
-    const head = (this._readFileHead(filePath, 65536) ?? "").replace(/^\uFEFF/, "");
-    const values = parseFrontmatter(head)?.values;
-    const id = values?.keys().next().value === "id" ? values.get("id") : null;
-    return /^\d+$/.test(id ?? "") &&
-      ["title", "type", "created", "updated"].every((key) => values.has(key)) &&
-      new RegExp(`^(?:edited-(?:\\d+-)?)?${id}-.*\\.md$`).test(path.basename(filePath))
-      ? id
-      : null;
-  }
-
-  // Erasing local data (#3030) in a folder the user chose removes only what
-  // this mirror wrote there, at any depth of its workspace, space and folder
-  // layout: its note files, their transcripts, and folders that leaves empty.
-  // The chosen folder itself stays, and links are never followed. A file that
-  // can't go doesn't stop the rest; the first failure is thrown at the end.
-  removeMirroredFiles(basePath) {
-    const files = [];
-    const walk = (folder) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(folder, { withFileTypes: true });
-      } catch (error) {
-        if (folder === basePath) throw error;
-        return; // An unreadable folder holds nothing this mirror could have written.
-      }
-      for (const entry of entries) {
-        const entryPath = path.join(folder, entry.name);
-        if (entry.isDirectory()) walk(entryPath);
-        else if (entry.isFile()) files.push(entryPath);
-      }
-    };
-    walk(basePath);
-    // A transcript goes only with its own note, beside it.
-    const notes = new Set();
-    const owned = files.filter((file) => {
-      const id = this._mirroredNoteId(file);
-      if (id) notes.add(path.join(path.dirname(file), id));
-      return id !== null;
-    });
-    for (const file of files) {
-      const id = /^(?:edited-(?:\d+-)?)?(\d+)-.*-transcript\.(?:md|txt)$/.exec(
-        path.basename(file)
-      )?.[1];
-      if (
-        id &&
-        notes.has(path.join(path.dirname(file), id)) &&
-        !owned.includes(file) &&
-        this._looksLikeTranscript(file)
-      )
-        owned.push(file);
-    }
+  // Erasing local data (#3030) in a folder the user chose removes only the
+  // files the mirror's record lists there that still hold what it wrote, and the
+  // folders that leaves empty. Anything else, an outside edit included, is the
+  // user's. The chosen folder itself stays, and links are never followed. A file
+  // that can't go doesn't stop the rest; the first failure is thrown at the end.
+  removeMirroredFiles(basePath, entries) {
+    const mirror = new MarkdownMirror();
+    mirror._baseRealPath = fs.realpathSync.native(basePath);
     let failure = null;
-    for (const file of owned) {
+    for (const entry of entries) {
+      if (entry.kind === "dir" || !mirror._isPristine(entry)) continue;
       try {
-        fs.rmSync(file, { force: true });
+        mirror._removeFile(mirror._absolutePath(entry.relPath));
       } catch (error) {
         failure ??= error;
       }
     }
-    // Only folders this emptied, up to the chosen one: one the user left empty stays.
-    for (let folder of new Set(owned.map((file) => path.dirname(file)))) {
+    for (let folder of mirror._vacatedDirs) {
       try {
-        while (folder !== basePath && this._removeDirIfEmpty(folder)) folder = path.dirname(folder);
+        while (folder !== mirror._baseRealPath && mirror._removeDirIfEmpty(folder))
+          folder = path.dirname(folder);
       } catch {
         /* Gone already, or not ours to remove. */
       }

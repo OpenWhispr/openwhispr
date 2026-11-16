@@ -8,7 +8,6 @@ const path = require("node:path");
 // with its reason); test/helpers/localDataWipe.test.js fails until it is.
 
 const sqliteFiles = (name) => [name, `${name}-wal`, `${name}-shm`];
-const NOTES_MIRROR_FILE = "notes-mirror.json";
 const PRODUCT_EVENTS_FILE = "product-events.json";
 const WIPE_STATE_FILE = "local-data-wipe.json";
 
@@ -18,7 +17,6 @@ const USER_DATA_ENTRIES = [
   ...sqliteFiles("meta-activation.db"),
   "audio",
   "notes",
-  NOTES_MIRROR_FILE,
   "logs",
   ".env",
   "secure-keys",
@@ -96,24 +94,6 @@ function defaultRoots() {
   };
 }
 
-// The mirror's folder lives only in renderer storage, so main records every
-// folder the mirror has written to, for a wipe that runs before any window loads.
-function rememberNotesMirrorPath(basePath, userDataPath) {
-  const record = path.join(userDataPath, NOTES_MIRROR_FILE);
-  const basePaths = mirrorFolders(userDataPath);
-  if (basePaths.includes(basePath)) return;
-  // The mirror reports success even when it can't create its folder, and then
-  // writes nothing there.
-  if (!fs.statSync(basePath, { throwIfNoEntry: false })?.isDirectory()) return;
-  try {
-    fs.writeFileSync(record, JSON.stringify({ basePaths: [...basePaths, basePath] }));
-  } catch (error) {
-    require("./debugLogger").warn("Could not record the notes mirror folder", {
-      error: error.message,
-    });
-  }
-}
-
 function readJson(filePath) {
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -122,9 +102,26 @@ function readJson(filePath) {
   }
 }
 
-function mirrorFolders(userDataPath) {
-  const basePaths = readJson(path.join(userDataPath, NOTES_MIRROR_FILE))?.basePaths;
-  return Array.isArray(basePaths) ? basePaths : [];
+// What the note-file mirror wrote in each folder, the user's chosen ones
+// included, from its record in the database (named as database.js names it).
+function recordedMirrorFiles(userDataPath) {
+  const name =
+    process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db";
+  const databasePath = path.join(userDataPath, name);
+  if (!fs.statSync(databasePath, { throwIfNoEntry: false })?.isFile()) return new Map();
+  // Not read-only: that can't open a WAL database its app closed cleanly. It
+  // is deleted next anyway.
+  const db = new (require("better-sqlite3"))(databasePath, { fileMustExist: true });
+  try {
+    const rows = db
+      .prepare(
+        "SELECT base_path AS basePath, rel_path AS relPath, kind, content_hash AS hash FROM note_mirror_files"
+      )
+      .all();
+    return Map.groupBy(rows, (row) => row.basePath);
+  } finally {
+    db.close();
+  }
 }
 
 async function removeTempFiles(directory, remove) {
@@ -149,11 +146,16 @@ async function removeLocalData({ includeModels, roots = defaultRoots() }) {
     }
   };
 
-  // Before "notes" and the record of the mirror's folders are deleted below.
-  for (const basePath of mirrorFolders(roots.userData)) {
-    if (typeof basePath !== "string" || !path.isAbsolute(basePath)) continue;
+  // Before the database that records them is deleted below.
+  let mirrored = new Map();
+  try {
+    mirrored = recordedMirrorFiles(roots.userData);
+  } catch (error) {
+    errors.push(`notes mirror: ${error.message}`);
+  }
+  for (const [basePath, entries] of mirrored) {
     try {
-      require("./markdownMirror").removeMirroredFiles(basePath);
+      require("./markdownMirror").removeMirroredFiles(basePath, entries);
     } catch (error) {
       if (error.code !== "ENOENT") errors.push(`notes mirror: ${error.message}`);
     }
@@ -320,7 +322,6 @@ module.exports = {
   MODEL_USER_DATA_ENTRIES,
   TEMP_PREFIXES,
   USER_DATA_ENTRIES,
-  rememberNotesMirrorPath,
   removeLocalData,
   requestWorkspaceRemovalWipe,
   takeWipeNotice,

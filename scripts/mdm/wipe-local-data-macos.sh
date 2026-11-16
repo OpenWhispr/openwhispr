@@ -36,14 +36,15 @@ fi
 # A file that can't go (a locked one, say) is reported and the wipe carries on;
 # the script then exits non-zero so the MDM tool shows the device as failed.
 failed=0
-# Runs a command on the NUL-separated paths read from stdin. As root, a
-# home's files are removed as the home's owner, so a link the user swaps in
-# mid-run can only reach what they could delete themselves; the paths go over
-# stdin so sudo's log doesn't record them (they hold note titles). A home whose
-# account is gone has no one left to swap links, so root cleans it.
-as_owner() {
-  if [[ -n "$run_as" ]]; then sudo -u "$run_as" xargs -0 "$@"; else xargs -0 "$@"; fi
+# Runs a command as the home's owner when run as root, so a link the user
+# swaps in mid-run can only reach what they could delete themselves. A home
+# whose account is gone has no one left to swap links, so root cleans it.
+as_owner_run() {
+  if [[ -n "$run_as" ]]; then sudo -u "$run_as" "$@"; else "$@"; fi
 }
+# The same, on the NUL-separated paths read from stdin, so sudo's log doesn't
+# record them (they hold note titles).
+as_owner() { as_owner_run xargs -0 "$@"; }
 
 remove() {
   printf '%s\0' "$1" | as_owner rm -rf 2>/dev/null || {
@@ -94,65 +95,35 @@ remove_if_emptied() {
   printf '%s\0' "$dir" | as_owner rmdir 2>/dev/null
 }
 
-# The frontmatter the mirror writes: "---", "id: <id>", then title, type,
-# created and updated lines before the closing "---". An id alone is common in
-# a user's vault. Prints the id.
-mirrored_note_id() {
-  local line key n=0 id="" keys=" "
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    n=$((n + 1))
-    if ((n == 1)); then [[ "$line" == "---" ]] || return 1
-    elif ((n == 2)); then [[ "$line" =~ ^id:\ ([0-9]+)$ ]] || return 1; id="${BASH_REMATCH[1]}"
-    elif [[ "$line" == "---" ]]; then
-      for key in title type created updated; do [[ "$keys" == *" $key "* ]] || return 1; done
-      echo "$id"
-      return 0
-    else keys+="${line%%:*} "
-    fi
-  done < <(head -n 40 "$1" 2>/dev/null | LC_ALL=C sed $'1s/^\xef\xbb\xbf//' | tr -d '\r')
-  return 1
-}
-
-# A transcript opens as the app writes it: "# <title>", a blank line and the
-# date in bold in Markdown, or a rule line of "─" in text.
-looks_like_transcript() {
-  if [[ "$1" == *.md ]]; then
-    [[ "$(sed -n 1p "$1" | tr -d '\r')" == "# "* && "$(sed -n 3p "$1" | tr -d '\r')" == "**"* ]]
-  else
-    grep -q '^──────────' "$1" 2>/dev/null
-  fi
-}
-
-# In a folder of the home the user chose for the notes mirror, removes only the
-# files the mirror wrote, at any depth of its workspace, space and folder
-# layout: "<id>-<slug>.md" with the mirror's frontmatter (also when kept aside
-# as "edited-<name>"), each note's "<id>-...-transcript" beside it, and folders
-# that leaves empty. The chosen folder itself stays. Links are never followed.
+# In each folder of the home the notes mirror wrote to, the user's chosen ones
+# included, removes only the files the app's database records it writing there
+# that still hold exactly what it wrote, and folders that leaves empty. Anything
+# else, an outside edit included, is the user's. The chosen folder itself stays,
+# and nothing is reached through a link out of it. The database is read as the
+# home's owner, so root never parses a file the user could have crafted.
 remove_mirrored_files() {
-  local base="$1" file name id folder
-  local notes=() emptied=()
-  [[ -d "$base" ]] && inside_home "$base" || return 0
-  while IFS= read -r -d '' file; do
-    name="$(basename "$file")"
-    id="$(mirrored_note_id "$file")" || continue
-    [[ "$name" =~ ^(edited-([0-9]+-)?)?${id}-.*\.md$ ]] || continue
+  local database="$1" rows base rel hash file folder real_base real_dir
+  [[ -f "$database" && ! -L "$database" ]] || return 0
+  rows="$(as_owner_run sqlite3 -ascii "$database" \
+    "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir'")" || {
+    echo "Could not read the notes mirror's record in $database" >&2
+    failed=1
+    return 0
+  }
+  while IFS=$'\x1f' read -r -d $'\x1e' base rel hash; do
+    [[ "$base" == /* ]] && inside_home "$base" || continue
+    real_base="$(cd -P "$base" 2>/dev/null && pwd)" || continue
+    file="$base/$rel"
+    real_dir="$(cd -P "$(dirname "$file")" 2>/dev/null && pwd)" || continue
+    [[ "$real_dir" == "$real_base" || "$real_dir" == "$real_base"/* ]] || continue
+    [[ -f "$file" && ! -L "$file" ]] || continue
+    [[ "$(openssl dgst -sha256 -r <"$file" | cut -d " " -f 1)" == "$hash" ]] || continue
     remove "$file"
-    notes+=("$(dirname "$file")/$id")
-    emptied+=("$(dirname "$file")")
-  done < <(find "$base" -type f -name '*.md' -print0 2>/dev/null)
-  while IFS= read -r -d '' file; do
-    name="$(basename "$file")"
-    [[ "$name" =~ ^(edited-([0-9]+-)?)?([0-9]+)-.*-transcript\.(md|txt)$ ]] || continue
-    contains "$(dirname "$file")/${BASH_REMATCH[3]}" "${notes[@]}" || continue
-    looks_like_transcript "$file" || continue
-    remove "$file"
-    emptied+=("$(dirname "$file")")
-  done < <(find "$base" -type f \( -name '*-transcript.md' -o -name '*-transcript.txt' \) -print0 2>/dev/null)
-  for folder in "${emptied[@]}"; do
+    folder="$(dirname "$file")"
     while [[ "$folder" == "$base"/* ]] && remove_if_emptied "$folder"; do
       folder="$(dirname "$folder")"
     done
-  done
+  done <<<"$rows"
 }
 
 remove_temp_files() {
@@ -205,12 +176,7 @@ for home in "${homes[@]}"; do
     id -un "$owner_uid" >/dev/null 2>&1 && run_as="#$owner_uid"
   fi
   user_data="$home/Library/Application Support/OpenWhispr"
-  # Every folder the mirror wrote to, from the app's record of them.
-  index=0
-  while mirror="$(plutil -extract "basePaths.$index" raw -o - "$user_data/notes-mirror.json" 2>/dev/null)"; do
-    [[ "$mirror" == /* ]] && remove_mirrored_files "$mirror"
-    index=$((index + 1))
-  done
+  remove_mirrored_files "$user_data/transcriptions.db"
   remove_all_except "$user_data" "${kept[@]}"
   remove_all_except "$home/.cache/openwhispr" "${cache_kept[@]}"
   inside_home "$home/.openwhispr" && remove "$home/.openwhispr/cli-bridge.json"

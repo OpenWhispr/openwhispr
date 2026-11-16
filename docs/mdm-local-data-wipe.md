@@ -23,7 +23,7 @@ The wipe runs only when the app reads a valid device policy. A policy that can't
 - Recordings and temporary audio files.
 - Saved API keys and credentials, the sign-in token, and, in the production app, the keychain key that encrypted them (staging and dev builds share that key, so they leave it).
 - Settings, browser storage (localStorage, cookies, caches), connector logins and skills.
-- The Markdown copies of notes. In a folder the user chose, only the files OpenWhispr wrote are deleted, along with folders that leaves empty; the folder itself and everything else in it stay. The app learns that folder once it has opened its window with Markdown files on.
+- The Markdown copies of notes. In a folder the user chose, only the files the app's database records OpenWhispr writing there, and that still hold what it wrote, are deleted, along with folders that leaves empty; the folder itself, a file edited since, and everything else in it stay.
 - The local search index, logs, and runtime downloads (GPU packs, llama.cpp, yt-dlp).
 - Downloaded models, only with `WipeLocalDataIncludesModels`.
 
@@ -42,7 +42,7 @@ Nothing is wiped when a member leaves the workspace on their own, signs out, or 
 
 ## Scripts (app closed)
 
-Both scripts quit OpenWhispr first, then remove the in-app wipe's files for every user on the device, or only for the homes or profiles you name. They keep the audit log and `local-data-wipe.json` too. Since they run as root or SYSTEM, they never follow a symbolic link or junction out of a user's home, and they clean a Markdown notes folder only when it is inside that home, removing only the files OpenWhispr wrote there, at any depth. A file they can't remove is reported, the rest is still removed, and the script exits with an error so your MDM tool shows the device as failed.
+Both scripts quit OpenWhispr first, then remove the in-app wipe's files for every user on the device, or only for the homes or profiles you name. They keep the audit log and `local-data-wipe.json` too. Since they run as root or SYSTEM, they never follow a symbolic link or junction out of a user's home. The macOS script also cleans a Markdown notes folder inside that home as the app does, from the app's database. The Windows script leaves a notes folder the user chose alone, since Windows has no tool to read that database; to clear one, use `WipeLocalDataOnLaunch` instead, as the script deletes the database. A file they can't remove is reported, the rest is still removed, and the script exits with an error so your MDM tool shows the device as failed.
 
 **macOS** (Jamf, Kandji or Intune, as root), [`scripts/mdm/wipe-local-data-macos.sh`](../scripts/mdm/wipe-local-data-macos.sh):
 

@@ -15095,8 +15095,6 @@ class IPCHandlers {
         }
         const basePath = customPath || path.join(app.getPath("userData"), "notes");
         await this.noteFiles.enable(basePath, { skipRebuild: Boolean(options?.skipRebuild) });
-        // Only a path the mirror accepted, for the offboarding wipe (#3030).
-        require("./localDataWipe").rememberNotesMirrorPath(basePath, app.getPath("userData"));
         // Their rows are gone, and an old-layout file is only removed when it
         // matches one.
         for (const note of this.databaseManager.mergedNotes.splice(0)) {
@@ -15117,7 +15115,6 @@ class IPCHandlers {
       try {
         if (!this.noteFiles.enabled) return { success: false, error: "Note files not enabled" };
         await this.noteFiles.setPath(newPath);
-        require("./localDataWipe").rememberNotesMirrorPath(newPath, app.getPath("userData"));
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to set note-files path", { error: error.message }, "note-files");
