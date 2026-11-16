@@ -87,6 +87,7 @@ import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
+import { DictationAudioGuardRows } from "./settings/DictationAudioGuardRows";
 import { formatHotkeyLabel } from "../utils/hotkeys";
 import {
   getLinuxPasteInstallCommands,
@@ -3252,6 +3253,7 @@ export default function SettingsPage({
                     <Toggle checked={pauseMediaOnDictation} onChange={setPauseMediaOnDictation} />
                   </SettingsRow>
                 </SettingsPanelRow>
+                <DictationAudioGuardRows />
               </SettingsPanel>
             </div>
 

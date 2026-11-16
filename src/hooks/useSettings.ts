@@ -292,6 +292,29 @@ function useSettingsInternal() {
     signOuts,
   ]);
 
+  // Windows dictation audio guard: main keeps one helper for every window, and
+  // ignores a config it already applied, so each window can send its own.
+  const audioGuardConfig = useSettingsStore(
+    useShallow((state) => ({
+      duckEnabled: state.duckAudioOnDictation,
+      duckPercent: state.duckAudioPercent,
+      callMicGateEnabled: state.callMicGateEnabled,
+      callMicSourceId: state.callMicGateSourceId,
+      callMicTargetId: state.callMicGateTargetId,
+    }))
+  );
+  useEffect(() => {
+    window.electronAPI
+      ?.configureDictationAudioGuard?.(audioGuardConfig)
+      .catch((err) =>
+        logger.warn(
+          "Failed to configure dictation audio guard",
+          { error: (err as Error).message },
+          "settings"
+        )
+      );
+  }, [audioGuardConfig]);
+
   return {
     useLocalWhisper: store.useLocalWhisper,
     whisperModel: store.whisperModel,
