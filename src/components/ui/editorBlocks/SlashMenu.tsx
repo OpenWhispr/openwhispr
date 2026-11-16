@@ -23,7 +23,7 @@ export interface SlashItem {
   group: Group;
   title: () => string;
   hint?: () => string;
-  keywords?: string;
+  keywords: string;
   run: Run;
 }
 
@@ -271,7 +271,7 @@ function filterItems(query: string) {
   const q = query.toLowerCase().trim();
   if (!q) return SLASH_ITEMS;
   return SLASH_ITEMS.filter((item) =>
-    `${item.title()} ${item.keywords ?? ""} ${tb(`groups.${item.group}`)}`.toLowerCase().includes(q)
+    `${item.title()} ${item.keywords} ${tb(`groups.${item.group}`)}`.toLowerCase().includes(q)
   );
 }
 

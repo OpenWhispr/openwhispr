@@ -65,7 +65,7 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
   }, [open, replacement]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const close = () => {
-    commands.clearSearch?.();
+    commands.clearSearch();
     setOpen(false);
     editor.commands.focus();
   };
@@ -177,7 +177,7 @@ export function WordCount({ editor }: { editor: Editor }) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const compute = () => {
       const storage: any = (editor.storage as any).characterCount;
-      if (!storage || editor.isDestroyed) return;
+      if (editor.isDestroyed) return;
       setCounts({ words: storage.words(), chars: storage.characters() });
     };
     const schedule = () => {

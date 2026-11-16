@@ -63,11 +63,11 @@ export function resolveTitle(title: string): IndexedNote | null {
 }
 
 /** Picker results: titles containing every word of the query, best first. */
-export function searchTitles(query: string, limit = 8): IndexedNote[] {
+export function searchTitles(query: string): IndexedNote[] {
   const words = norm(query).split(" ").filter(Boolean);
   const titled = notes.filter((n) => n.title);
   if (!words.length) {
-    return [...titled].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)).slice(0, limit);
+    return [...titled].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)).slice(0, 8);
   }
   return titled
     .filter((n) => words.every((w) => norm(n.title).includes(w)))
@@ -77,7 +77,7 @@ export function searchTitles(query: string, limit = 8): IndexedNote[] {
         norm(n.title) === q ? 0 : norm(n.title).startsWith(q) ? 1 : 2;
       return rank(a) - rank(b) || (a.updatedAt < b.updatedAt ? 1 : -1);
     })
-    .slice(0, limit);
+    .slice(0, 8);
 }
 
 /** Notes whose body or AI summary links to this title (either saved form). */

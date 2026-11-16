@@ -100,7 +100,10 @@ export function markdownSyntax(md: any) {
     }
 
     const open = SPAN_OPEN.exec(rest);
-    if (!open || !rest.includes(`{/${open[1]}}`, open[0].length)) return false;
+    if (!open) return false;
+    // Not when the only close is inside a code span.
+    const end = rest.indexOf(`{/${open[1]}}`, open[0].length);
+    if (end < 0 || rest.slice(0, end).replace(/\\./g, "").includes("`")) return false;
     const value = unescapeMd(open[2] ?? "").trim();
     const html = spanOpenHtml(open[1], value);
     if (!html) return false;
@@ -163,13 +166,14 @@ export function markdownSyntax(md: any) {
     return true;
   });
 
-  // 4) $inline math$ (not $$, no space just inside, not followed by a digit).
+  // 4) $inline math$ (not $$, no space just inside, not followed by a digit,
+  // not running into a code span).
   md.inline.ruler.before("escape", "math_inline", (state: any, silent: boolean) => {
     const { src, pos } = state;
     if (src.charCodeAt(pos) !== 0x24 || src.charCodeAt(pos + 1) === 0x24) return false;
     if (pos > 0 && src.charCodeAt(pos - 1) === 0x24) return false;
     const m = /^\$((?:\\.|[^$\\\n])+?)\$(?![\d$])/.exec(src.slice(pos));
-    if (!m || /^\s|\s$/.test(m[1])) return false;
+    if (!m || /^\s|\s$/.test(m[1]) || m[1].replace(/\\./g, "").includes("`")) return false;
     if (!silent) {
       const latex = escapeHtml(unescapeMd(m[1]).replace(/\\\$/g, "$"));
       state.push("html_inline", "", 0).content =

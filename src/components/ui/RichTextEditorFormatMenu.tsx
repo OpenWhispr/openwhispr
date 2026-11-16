@@ -212,13 +212,7 @@ function FormatToolbar({
       {/* highlight, sub/superscript, colour, font, alignment, ruby. */}
       <FormatStyleControls editor={editor} dropdown={dropdown} />
       <Separator />
-      <DropdownMenu
-        open={dropdown.open}
-        onOpenChange={(open) => {
-          if (open) dropdown.setExtraOpen(null); // one dropdown at a time
-          dropdown.setOpen(open);
-        }}
-      >
+      <DropdownMenu open={dropdown.open} onOpenChange={dropdown.setOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"

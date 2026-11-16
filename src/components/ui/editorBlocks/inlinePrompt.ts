@@ -7,11 +7,7 @@ import { tb } from "./translate";
 
 export function promptInline(
   editor: Editor,
-  {
-    placeholder,
-    initial = "",
-    hint = tb("prompt.apply"),
-  }: { placeholder: string; initial?: string; hint?: string }
+  { placeholder }: { placeholder: string }
 ): Promise<string | null> {
   document.querySelector(".rte-inline-input")?.remove();
   const coords = editor.view.coordsAtPos(editor.state.selection.from);
@@ -24,12 +20,11 @@ export function promptInline(
   const input = document.createElement("input");
   input.type = "text";
   input.dir = "auto"; // links, names, readings in any script
-  input.value = initial;
   input.placeholder = placeholder;
   input.spellcheck = false;
   const help = document.createElement("div");
   help.className = "rte-inline-input-hint";
-  help.textContent = hint;
+  help.textContent = tb("prompt.apply");
   box.append(input, help);
   document.body.appendChild(box);
 

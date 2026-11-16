@@ -54,8 +54,8 @@ const ALIGN_ICONS = {
   right: AlignRight,
   justify: AlignJustify,
 } as const;
-const AlignIcon = ({ align }: { align: string }) => {
-  const Icon = ALIGN_ICONS[align as keyof typeof ALIGN_ICONS] ?? AlignLeft;
+const AlignIcon = ({ align }: { align: (typeof ALIGNS)[number] }) => {
+  const Icon = ALIGN_ICONS[align];
   return <Icon size={15} />;
 };
 /** Text colour icon with the current colour shown as a bar under it. */
@@ -120,10 +120,7 @@ function StyleDropdown({
   return (
     <DropdownMenu
       open={dropdown.extraOpen === id}
-      onOpenChange={(open) => {
-        if (open) dropdown.setOpen(false);
-        dropdown.setExtraOpen(open ? id : null);
-      }}
+      onOpenChange={(open) => dropdown.setExtraOpen(open ? id : null)}
     >
       <DropdownMenuTrigger asChild>
         <Button

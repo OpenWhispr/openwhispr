@@ -161,6 +161,10 @@ const MarkdownBlockMath = BlockMath.extend({
 });
 
 const MarkdownEmoji = Emoji.extend({
+  // Its plugin turns every typed or pasted emoji character into a node, which
+  // drops the character's marks (code, link, bold). Characters stay text;
+  // :shortcode: input still inserts an emoji.
+  addProseMirrorPlugins: () => [],
   addStorage() {
     return {
       ...this.parent?.(),
@@ -214,7 +218,7 @@ export const Callout = Node.create({
         serialize(state: any, node: any) {
           state.wrapBlock("> ", null, node, () => {
             state.write(`[!${String(node.attrs.type).toUpperCase()}]`);
-            if (node.firstChild?.type.name === "paragraph") state.write(" ");
+            if (node.firstChild.type.name === "paragraph") state.write(" ");
             else state.closeBlock(node);
             state.renderContent(node);
           });

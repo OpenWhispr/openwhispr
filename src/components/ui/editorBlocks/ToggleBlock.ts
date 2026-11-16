@@ -16,6 +16,7 @@
  */
 import { InputRule } from "@tiptap/core";
 import { Details, DetailsContent, DetailsSummary } from "@tiptap/extension-details";
+import { escapeMd, unescapeMd } from "./markdownSyntax";
 
 const OPEN = /^:::toggle(?:[ \t]+(.*))?$/;
 const CLOSE = /^:::[ \t]*$/;
@@ -58,7 +59,7 @@ function toggleBlockPlugin(md: any) {
 
       const tokOpen = state.push("toggle_open", "details", 1);
       tokOpen.block = true;
-      tokOpen.info = (open[1] || "").trim();
+      tokOpen.info = unescapeMd((open[1] || "").trim());
       tokOpen.map = [startLine, line + 1];
       state.md.block.tokenize(state, startLine + 1, line);
       const tokClose = state.push("toggle_close", "details", -1);
@@ -89,18 +90,16 @@ export const ToggleBlock = Details.extend({
   },
   addStorage() {
     return {
-      ...this.parent?.(),
       markdown: {
         serialize(state: any, node: any) {
-          const summary = node.firstChild?.type.name === "detailsSummary" ? node.firstChild : null;
-          const content = node.lastChild?.type.name === "detailsContent" ? node.lastChild : null;
-          const title = (summary?.textContent || "").replace(/\s*\n\s*/g, " ").trim();
+          // Escaped, as older builds save it; the parser unescapes it.
+          const title = escapeMd(node.firstChild.textContent.replace(/\s*\n\s*/g, " ").trim());
           // Each marker is its own paragraph (blank lines around the content):
           // an editor without this extension joins adjacent lines into one paragraph, which
           // would glue the markers to the content. Verified stable in Phase 0.
           state.write(title ? `:::toggle ${title}` : ":::toggle");
           state.closeBlock(node);
-          if (content && content.childCount) state.renderContent(content);
+          state.renderContent(node.lastChild);
           state.write(":::");
           state.closeBlock(node);
         },

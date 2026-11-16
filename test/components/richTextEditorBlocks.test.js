@@ -165,6 +165,9 @@ test("text that only looks like the new forms keeps its meaning", () => {
   assert.ok(featuresOf("foo==bar baz== qux").includes("mark:highlight"), "mid-word highlight");
   const video = "[▶ YouTube video](https://www.youtube.com/watch?v=dQw4w9WgXcQ)";
   assert.equal(save(video), video);
+  // A $ or {sub} whose only close is inside a code span.
+  for (const code of ["Set $HOME and `$PATH` first", "Use {sub}x in `{/sub}` docs"])
+    assert.equal(save(code), code);
   for (const citation of ["[[1]](https://example.com)", "[\\[1\\]](https://example.com)"]) {
     const found = featuresOf(citation);
     assert.ok(found.includes("mark:link") && !found.includes("noteLink"), citation);
@@ -237,6 +240,17 @@ test("a toggle inside a list item reopens as a toggle", () => {
   assert.ok(featuresOf(list).includes("details"));
 });
 
+test("a toggle title an older build saved escaped reads back as typed", () => {
+  const escaped = ":::toggle See \\[\\[Plan\\]\\]\n\nbody\n\n:::";
+  const editor = editorFor(escaped);
+  try {
+    assert.equal(editor.state.doc.firstChild.firstChild.textContent, "See [[Plan]]");
+    assert.equal(editor.storage.markdown.getMarkdown(), escaped);
+  } finally {
+    editor.destroy();
+  }
+});
+
 test("a callout that starts with a divider reopens as a callout", () => {
   const editor = editorFor("Intro");
   try {
@@ -286,6 +300,23 @@ test("an emoji renders as text, never as an image from a CDN", () => {
     assert.equal(editor.storage.markdown.getMarkdown(), "Hi🚀");
   } finally {
     editor.destroy();
+  }
+});
+
+test("typing beside an emoji in a code span or link keeps the span", () => {
+  for (const source of ["Run `echo 🚀 done` now", "[🚀 launch](https://example.com)"]) {
+    const editor = editorFor(source);
+    try {
+      let at = null;
+      editor.state.doc.descendants((node, pos) => {
+        if (at === null && node.isText && node.text.includes("🚀"))
+          at = pos + node.text.indexOf("🚀");
+      });
+      editor.commands.insertContentAt(at, "x");
+      assert.equal(editor.storage.markdown.getMarkdown(), source.replace("🚀", "x🚀"));
+    } finally {
+      editor.destroy();
+    }
   }
 });
 

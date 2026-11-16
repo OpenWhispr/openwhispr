@@ -1380,7 +1380,7 @@ test("a toggle title stays plain text: emoji, [[ and / add no nodes, Enter moves
   assert.equal(happyWindow.document.querySelector(".rte-slash-menu"), null);
   await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
   await notes.act(() => notes.editor().commands.insertContent("Next"), 50);
-  assert.equal(notes.saved(), ":::toggle Title 🚀 [[Week /\n\nNext\n\nBody\n\n:::");
+  assert.equal(notes.saved(), ":::toggle Title 🚀 \\[\\[Week /\n\nNext\n\nBody\n\n:::");
   assert.deepEqual(notes.errors, []);
 });
 
