@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, AppState, Image, PermissionsAndroid, Platform, Switch, View } from 'react-native';
+import {
+  Alert,
+  AppState,
+  Image,
+  PermissionsAndroid,
+  Platform,
+  Switch,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
@@ -72,6 +81,10 @@ export function BubbleCard({
   const { status, refresh } = useBubbleStatus();
   const bubbleSize = useConfigStore((s) => s.config?.androidBubbleSize ?? 64);
   const [switching, setSwitching] = useState(false);
+  // With enlarged text the pair can't share a row at one size; stack them full width instead.
+  const { fontScale } = useWindowDimensions();
+  const stacked = fontScale > 1.15;
+  const pairStyle = stacked ? { flex: 0, alignSelf: 'stretch' as const } : undefined;
   const missing = missingPermissions(status);
   const needsPermission = missing.length > 0;
   const on = Boolean(status?.enabled) && !needsPermission;
@@ -165,13 +178,20 @@ export function BubbleCard({
           />
         </>
       ) : (
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <PillButton icon="Mic" label={tryItLabel} disabled={tryItDisabled} onPress={onTryIt} />
+        <View style={{ flexDirection: stacked ? 'column' : 'row', gap: stacked ? 14 : 8 }}>
+          <PillButton
+            icon="Mic"
+            label={tryItLabel}
+            disabled={tryItDisabled}
+            onPress={onTryIt}
+            style={pairStyle}
+          />
           <PillButton
             icon="FileUp"
             label={uploadLabel}
             disabled={uploadDisabled}
             onPress={onUpload}
+            style={pairStyle}
           />
         </View>
       )}
