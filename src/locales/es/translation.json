@@ -212,11 +212,18 @@
     "policyAccountChanged": "Tu cuenta cambió, por lo que se detuvo esta respuesta.",
     "policyTranscriptionRestricted": "La transcripción está restringida por tu organización.",
     "policyUnresolved": "La configuración de tu organización aún no se ha cargado. Inténtalo de nuevo en un momento.",
+    "policyBlocked": "Tu organización no permite esto en este dispositivo.",
     "managedConfigLoading": "Comprobando la configuración gestionada de tu organización. Inténtalo de nuevo en un momento.",
     "managedConfigUnavailable": "El acceso empresarial gestionado no está disponible. Vuelve a iniciar sesión o contacta a tu administrador.",
     "managedConfigAmbiguous": "La configuración gestionada de tu organización es incoherente. Contacta a tu administrador.",
     "managedPolicyConflict": "El acceso gestionado está bloqueado por la política de tu espacio de trabajo. Contacta a tu administrador.",
-    "resizePanel": "Cambiar el tamaño del panel"
+    "resizePanel": "Cambiar el tamaño del panel",
+    "managedDevice": "Dispositivo administrado",
+    "managedDeviceAndWorkspace": "Dispositivo y espacio de trabajo administrados",
+    "deviceLocalOnly": "Este dispositivo solo usa procesamiento local. Las funciones en la nube no están disponibles, tampoco para cuentas que ya habían iniciado sesión.",
+    "deviceSignInRequired": "Tu organización exige iniciar sesión en este dispositivo.",
+    "devicePolicyInvalid": "No se pudo leer la política del dispositivo o no es válida. Contacta con tu administrador. OpenWhispr no se puede usar hasta que se corrija la política.",
+    "deviceWorkspaceUnavailable": "Este dispositivo requiere procesamiento local, pero la política del espacio de trabajo de la cuenta guardada no está disponible. Cierra sesión para continuar sin esa cuenta o contacta con tu administrador."
   },
   "onboarding": {
     "rehaul": {
@@ -355,34 +362,10 @@
           "features": {
             "device": "Funciona en tu dispositivo",
             "offline": "Funciona sin conexión tras la configuración",
-            "models": "Elige modelos para dictado y asistente",
+            "setup": "Configurado para este equipo",
             "free": "Gratis para siempre"
           }
         },
-        "warnings": {
-          "byok": {
-            "title": "Tu proveedor gestiona tus datos",
-            "description": "Añadirás credenciales para proveedores independientes de dictado y Assistant. Se aplican los precios y las políticas de retención del proveedor.",
-            "continue": "Configurar proveedor de API",
-            "steps": {
-              "1": "Elige proveedores para dictado y Assistant",
-              "2": "Añade credenciales con almacenamiento seguro",
-              "3": "Prueba cada conexión antes de activarla"
-            }
-          },
-          "local": {
-            "title": "La configuración local requiere algunos pasos más",
-            "description": "El procesamiento local mantiene tu voz en este dispositivo, pero requiere una configuración inicial y al menos {{minimumSpace}} GB de espacio libre.",
-            "continue": "Configurar localmente",
-            "steps": {
-              "1": "Elige un motor de transcripción",
-              "2": "Configura o descarga un modelo, unos {{modelSize}}",
-              "3": "Espera a la instalación y la activación"
-            }
-          }
-        },
-        "useCloud": "Usar Nube en su lugar",
-        "continueSetup": "Continuar la configuración",
         "showMore": "Mostrar más opciones",
         "moreOptions": {
           "title": "Elige tu configuración de API",
@@ -437,23 +420,80 @@
         }
       },
       "local": {
-        "title": "Configura los modelos locales",
-        "description": "Elige los modelos que quieres ejecutar en tu dispositivo.",
-        "descriptionLineOne": "Elige los modelos que quieres",
-        "descriptionLineTwo": "ejecutar en tu dispositivo.",
-        "providerLabel": "Proveedor",
-        "cohereLanguageLabel": "Idioma de dictado",
-        "cohereLanguageHint": "Cohere no detecta el idioma que hablas, así que elige el idioma en el que vas a dictar.",
-        "cohereLanguagePlaceholder": "Elige un idioma",
-        "download": "Descargar",
         "downloadingShort": "Descargando",
-        "selected": "Seleccionado",
-        "use": "Usar",
         "downloadInProgress": "Descarga en curso",
         "cancelDownload": "Cancelar la descarga de {{model}}",
         "downloads": "Descargas de modelos",
         "downloading": "Descargando… {{progress}}%",
+        "verifying": "Verificando",
         "installing": "Instalando"
+      },
+      "localSetup": {
+        "title": "Te recomendamos esta configuración",
+        "subtitle": "Elegida para tu {{computer}} y {{language}}. Estos modelos se ejecutan en este dispositivo.",
+        "subtitleOrganizationText": "Elegida para tu {{computer}} y {{language}}. El dictado se ejecuta en este dispositivo; el chat y las notas con IA usan el servicio que eligió tu organización.",
+        "computer": {
+          "chip": "Chip",
+          "processor": "Procesador",
+          "memory": "Memoria",
+          "graphics": "Gráficos",
+          "builtIn": "Integrados en el chip",
+          "memoryValue": "{{gb}} GB",
+          "mac": "Mac",
+          "windowsLaptop": "Portátil Windows",
+          "windowsDesktop": "Equipo de escritorio Windows",
+          "linuxLaptop": "Portátil Linux",
+          "linuxDesktop": "Equipo de escritorio Linux"
+        },
+        "rows": {
+          "dictation": "Dictado",
+          "cleanup": "Corrección",
+          "assistant": "Asistente"
+        },
+        "description": {
+          "dictation": "Convierte tu voz en texto en cualquier app",
+          "cleanup": "Elimina muletillas y corrige la gramática",
+          "assistant": "Responde preguntas y hace lo que le pides"
+        },
+        "badge": {
+          "optional": "Opcional",
+          "cloud": "Se recomienda la nube"
+        },
+        "line": {
+          "requiredByOrganization": "Exigido por tu organización",
+          "organizationModelsUnrunnable": "Ninguno de los modelos aprobados por tu organización funciona en este equipo",
+          "offToFit": "Desactivado para que quepa en el espacio libre de este equipo",
+          "failed": "No se pudo descargar. Comprueba tu conexión y reinténtalo"
+        },
+        "unavailable": {
+          "notEnoughMemory": "Memoria insuficiente",
+          "exceedsMemory": "Supera los límites de memoria de este equipo",
+          "memoryUnread": "No se pudo comprobar la memoria",
+          "organization": "No disponible en este equipo",
+          "memoryMac": "{{model}} necesita {{needed}} GB de memoria y este Mac tiene {{have}} GB",
+          "memoryComputer": "{{model}} necesita {{needed}} GB de memoria y este equipo tiene {{have}} GB",
+          "memoryUnreadLine": "{{model}} necesita {{needed}} GB de memoria. Si este equipo tiene esa cantidad, puedes activarlo más tarde en Ajustes"
+        },
+        "button": {
+          "download": "Descargar modelos",
+          "downloading": "Descargando",
+          "proceed": "Continuar",
+          "noSpace": "No hay suficiente espacio libre"
+        },
+        "retry": "Reintentar",
+        "retryRow": "Reintentar {{row}}",
+        "downloaded": "Descargado",
+        "foot": {
+          "default": "Puedes cambiar cualquiera de estos ajustes más tarde en Ajustes.",
+          "dictationFailed": "El dictado debe descargarse antes de continuar. Reinténtalo arriba o vuelve atrás y elige otra configuración.",
+          "dictationUnavailable": "El dictado no puede funcionar en este equipo con los modelos que aprobó tu organización. Vuelve atrás y elige otra configuración.",
+          "finishesInBackground": "El resto se sigue descargando después de continuar y se activa cuando esté listo.",
+          "failedStaysOff": "Lo que no se descargó queda desactivado. Puedes añadirlo más tarde en Ajustes.",
+          "needsMac": "Se necesitan {{needed}} GB y este Mac tiene {{free}} GB libres.",
+          "needsComputer": "Se necesitan {{needed}} GB y este equipo tiene {{free}} GB libres.",
+          "noSpaceMac": "El dictado necesita {{needed}} GB libres y este Mac tiene {{free}} GB. Libera espacio para continuar.",
+          "noSpaceComputer": "El dictado necesita {{needed}} GB libres y este equipo tiene {{free}} GB. Libera espacio para continuar."
+        }
       }
     },
     "steps": {
@@ -622,7 +662,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Actualización obligatoria",
-      "description": "Tu organización requiere OpenWhispr {{version}} o una versión más reciente. Actualiza la aplicación."
+      "description": "Tu organización requiere OpenWhispr {{version}} o una versión más reciente. Actualiza la aplicación.",
+      "contactIT": "Tu organización requiere OpenWhispr {{version}} o posterior. Contacta con TI para instalar una versión aprobada."
     },
     "update": {
       "readyTitle": "Actualización lista para instalar",
@@ -694,8 +735,8 @@
       "failedOffline": "Sin conexión",
       "clearAll": "Borrar todo",
       "clearAllTitle": "Borrar todas las transcripciones",
-      "clearAllDescription": "Todas las transcripciones, los archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo y de tu cuenta.",
-      "clearAllDescriptionDevice": "Todas las transcripciones, los archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo. Los recuentos ya sincronizados con una cuenta no se verán afectados.",
+      "clearAllDescription": "Todas las transcripciones de tu historial, sus archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo y de tu cuenta.",
+      "clearAllDescriptionDevice": "Todas las transcripciones de este historial, sus archivos de audio y los recuentos de Insights se eliminarán permanentemente de este dispositivo. Las que ya se hayan sincronizado con una cuenta también se eliminarán de esa cuenta la próxima vez que inicie sesión en este dispositivo.",
       "clearAllSuccess": "Historial borrado",
       "clearAllErrorTitle": "No se pudo borrar el historial",
       "clearAllErrorDescription": "Algo salió mal. Inténtalo de nuevo.",
@@ -881,6 +922,11 @@
       }
     },
     "modelRetiredTitle": "Modelo ya no disponible",
+    "modelRetiredByProvider": "{{provider}} retiró {{from}}. Se cambió a {{to}}.",
+    "modelUnavailableSwitched": "{{from}} ya no está disponible en {{provider}}. Se cambió a {{to}}.",
+    "localModelRetired": "{{from}} ya no está disponible, así que te cambiamos a {{to}}. Si aún no lo has descargado, descárgalo en Ajustes.",
+    "localModelRetiredChooseAnother": "{{from}} ya no está disponible. Elige otro modelo local en Ajustes.",
+    "localModelRetiredKept": "{{from}} se ha retirado. Sigue funcionando porque ya está descargado, pero no se puede volver a descargar. Elige otro modelo local en Ajustes.",
     "groq": {
       "modelRetired": "Groq retiró {{from}}. Se cambió a {{to}}."
     },
@@ -939,7 +985,8 @@
         "agentUnavailable": "Asistente no disponible",
         "screenContextSkipped": "Contexto de pantalla omitido",
         "cloudLimitReached": "Límite semanal de la nube alcanzado",
-        "providerRateLimited": "Límite de tasa del proveedor"
+        "providerRateLimited": "Límite de tasa del proveedor",
+        "outOfCredits": "Sin créditos"
       },
       "fallback": {
         "title": "Modo de respaldo",
@@ -951,6 +998,11 @@
       "noAudio": {
         "title": "No hemos entendido eso",
         "description": "Comprueba el micrófono e inténtalo de nuevo."
+      },
+      "commandAccountChanged": {
+        "title": "Comando sin responder",
+        "description": "La cuenta cambió antes de que terminara. Su transcripción está en el historial de la cuenta con la que lo dijiste.",
+        "descriptionNotSaved": "La cuenta cambió antes de que terminara. Dilo de nuevo para preguntar ahora."
       },
       "micDisconnected": {
         "title": "Micrófono desconectado",
@@ -970,6 +1022,7 @@
         "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
         "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan.",
         "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo.",
+        "openRouterOutOfCredits": "Tu cuenta de OpenRouter se ha quedado sin créditos. Recárgala en openrouter.ai e inténtalo de nuevo.",
         "chunkLoss": "Un problema de red hizo que se perdiera demasiada parte de la grabación. Vuelve a transcribirla desde el historial.",
         "agentReasoningFailed": "Tu asistente de voz no pudo procesar el comando; se insertó la transcripción sin procesar.",
         "screenContextSkipped": "No se pudo enviar la captura, así que tu comando se ejecutó sin contexto de pantalla.",
@@ -1075,6 +1128,7 @@
         "tlsError": "Error de certificado — tu red puede usar inspección SSL que bloquea las descargas. Intenta descargar desde otra red.",
         "unknown": "Error desconocido"
       },
+      "verifying": "Verificando {{model}}",
       "downloadFailed": {
         "title": "Descarga fallida"
       },
@@ -1189,7 +1243,8 @@
       "failedUserCheck": "No se pudo verificar la cuenta de usuario",
       "generic": "Algo salió mal. Inténtalo de nuevo.",
       "invalidCredentials": "Correo o contraseña incorrectos",
-      "invalidEmail": "Introduce un correo válido"
+      "invalidEmail": "Introduce un correo válido",
+      "signInDisabledByDevice": "Tu organización desactivó el inicio de sesión en este dispositivo."
     },
     "getStarted": "Comenzar",
     "legal": {
@@ -1817,6 +1872,9 @@
           "askOwner": "Pide a {{name}} que actualice tu espacio de trabajo."
         },
         "currentPlan": "Plan actual",
+        "yourPersonalPlan": "Tu plan personal",
+        "yourWorkspacePlan": "El plan de tu espacio de trabajo",
+        "manage": "Gestionar",
         "coveredByWorkspace": "Incluido en tu plan de espacio de trabajo",
         "upgrade": "Mejorar plan",
         "downgrade": "Reducir plan",
@@ -1927,7 +1985,7 @@
       },
       "examplesTitle": "Ejemplos",
       "helper": "Elige algo corto y natural para decir en voz alta",
-      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, el texto resaltado se reemplaza de forma segura por el resultado. Con el pegado automático activado, la respuesta se pega en el cursor de un campo editable con foco; si no, se abre en el panel flotante del asistente.",
+      "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, el texto resaltado se reemplaza de forma segura por el resultado. Las demás solicitudes se abren en la ventana del asistente.",
       "howItWorksTitle": "Cómo funciona",
       "instructionMode": "Instrucción",
       "placeholder": "p. ej. Jarvis, Nova, Atlas...",
@@ -2002,6 +2060,14 @@
       "dataManagementTitle": "Gestión de datos",
       "modelCache": "Caché de modelos",
       "open": "Abrir",
+      "retiredModels": {
+        "label": "Modelos retirados",
+        "description": "Estos modelos ya no se ofrecen, pero siguen en el disco: {{models}}.",
+        "remove": "Eliminar",
+        "confirmTitle": "¿Eliminar los modelos retirados?",
+        "confirmDescription": "Esto borra los archivos de los modelos que el catálogo ya no ofrece. Los demás modelos descargados se conservan.",
+        "failedDescription": "No se pudieron eliminar algunos archivos. Puede que un modelo siga en uso; reinicia la aplicación e inténtalo de nuevo."
+      },
       "removeModels": {
         "confirmText": "Eliminar modelos",
         "description": "Esto elimina todos los modelos de Whisper almacenados en caché local ({{path}}) y libera espacio en disco. Puedes descargarlos nuevamente desde el selector de modelos.",
@@ -2091,7 +2157,7 @@
       },
       "voiceAgentHotkey": {
         "title": "Atajo del asistente de voz",
-        "description": "Di un comando y el asistente usa tus notas, calendario y herramientas web. La respuesta se pega en un cursor editable con foco, reemplaza el texto seleccionado o se abre en el panel flotante."
+        "description": "Di una solicitud y el asistente responde en su propia ventana, usando tus notas, calendario y herramientas web. El texto que resaltes antes se envía con ella como contexto."
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
@@ -2264,7 +2330,14 @@
         "restarting": "Reiniciando...",
         "title": "Actualizaciones",
         "versionPlaceholder": "—",
-        "whatsNew": "Novedades en v{{version}}"
+        "whatsNew": "Novedades en v{{version}}",
+        "managedByOrganization": "Administrado por tu organización.",
+        "itManaged": "Tu organización administra las actualizaciones.",
+        "policyLoading": "Cargando los ajustes de actualización…",
+        "policyUnavailable": "No se pudieron cargar los ajustes de actualización. Busca actualizaciones para volver a intentarlo.",
+        "policyChanged": "La política de actualizaciones cambió. Vuelve a buscar actualizaciones.",
+        "managedBadge": "Administrado",
+        "stagedBeforePolicy": "Se preparó una actualización antes de que se aplicara esta política y puede instalarse al cerrar la aplicación. Contacta con TI antes de cerrar o reiniciar."
       },
       "translationHotkey": {
         "title": "Atajo de Traducción",
@@ -2296,9 +2369,8 @@
     "privacy": {
       "cloudBackup": "Respaldo en la nube",
       "cloudBackupDescription": "Respalda tus transcripciones y notas en la nube para acceder desde cualquier dispositivo.",
-      "cloudBackupTeamCaveat": "Las notas en teamspaces y las notas que has compartido siempre se sincronizan, independientemente de este ajuste.",
+      "cloudBackupTeamCaveat": "Las notas en teamspaces y las notas que has compartido siempre se sincronizan, independientemente de este ajuste. Los chats que usan contenido privado se quedan en este dispositivo. También se excluyen los chats de versiones anteriores y los restaurados desde un respaldo.",
       "cloudNotesMigration": "Respaldando notas… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "Todas las notas respaldadas",
       "description": "Controla qué datos salen de tu dispositivo. Todo está desactivado por defecto.",
       "title": "Privacidad",
       "insightsSync": "Sincronizar Estadísticas personales",
@@ -2310,6 +2382,8 @@
       "leaderboardRequiresHistory": "Activa la retención de datos antes de unirte a las clasificaciones.",
       "usageAnalytics": "Analíticas de uso",
       "usageAnalyticsDescription": "Ayúdanos a mejorar OpenWhispr compartiendo métricas de rendimiento anónimas. Nunca enviamos contenido de transcripciones, solo datos de tiempo y errores.",
+      "modelListUpdates": "Actualizaciones de la lista de modelos",
+      "modelListUpdatesDescription": "Consulta cada 15 minutos la lista pública de modelos de OpenWhispr en GitHub para ver modelos nuevos y retirados. Los cambios se aplican por completo tras reiniciar.",
       "dataRetention": "Retención de datos",
       "dataRetentionDescription": "Almacenar transcripciones y audio localmente en tu historial. Cuando está desactivado, las transcripciones se pegan pero no se guardan.",
       "transcriptRetention": "Retención de transcripciones",
@@ -2320,7 +2394,7 @@
       "lastSynced": "Última sincronización {{time}}",
       "minutesAgo": "hace {{count}}m",
       "audioRetention": "Retención de audio",
-      "audioRetentionDescription": "Almacena el audio de dictado localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención. El audio de las reuniones nunca se almacena.",
+      "audioRetentionDescription": "Almacena el audio de dictado localmente para volver a transcribir y descargar. Los archivos de audio de este dispositivo se eliminan automáticamente tras el periodo de retención, sea cual sea la cuenta que los grabó. El audio de las reuniones nunca se almacena.",
       "saveDiscarded": "Guardar dictados descartados",
       "saveDiscardedDescription": "Cuando cancelas un dictado con Escape, conserva su audio en el historial para poder recuperarlo. Requiere tener activadas la retención de datos y de audio.",
       "audioRetentionDisabled": "Desactivado",
@@ -2328,9 +2402,9 @@
       "retentionDays_other": "{{count}} días",
       "audioStorageUsage": "Uso de almacenamiento",
       "audioStorageUsageDescription": "Archivos de audio almacenados en este dispositivo",
-      "audioStorageFiles": "{{count}} archivos, {{size}}",
-      "audioStorageEmpty": "No hay archivos de audio almacenados",
-      "clearAllAudio": "Eliminar todo el audio",
+      "audioStorageHistoryFiles": "{{count}} archivos en este historial, {{size}}",
+      "audioStorageHistoryEmpty": "No hay archivos de audio en este historial",
+      "clearHistoryAudio": "Eliminar audio",
       "clearAllAudioConfirm": "¿Eliminar todos los archivos de audio almacenados? Esta acción no se puede deshacer."
     },
     "prompts": {
@@ -2487,8 +2561,6 @@
       "title": "Espacio de trabajo",
       "description": "Colabora con compañeros, comparte notas y administra el acceso al espacio de trabajo en un solo lugar.",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
         "create": "Crear espacio de trabajo"
       },
       "loadError": {
@@ -2501,7 +2573,8 @@
         "general": "General",
         "members": "Miembros",
         "invitations": "Invitaciones",
-        "teams": "Grupos"
+        "guests": "Invitados",
+        "teams": "Equipos"
       },
       "people": {
         "title": "Personas",
@@ -2511,7 +2584,7 @@
         "addLabel": "Invitar personas",
         "columns": {
           "name": "Nombre",
-          "team": "Grupo",
+          "team": "Equipo",
           "role": "Rol",
           "email": "Correo electrónico",
           "status": "Estado",
@@ -2519,7 +2592,6 @@
         },
         "you": "Tú",
         "teamsNone": "Ninguno",
-        "teamsMore": "+{{count}}",
         "loading": {
           "title": "Cargando miembros…",
           "body": "Los miembros de tu espacio de trabajo aparecerán aquí."
@@ -2536,8 +2608,8 @@
         },
         "roleMenuLabel": "Cambiar el rol de {{name}}",
         "roleDescription": {
-          "member": "Puede ver y editar notas.",
-          "admin": "Gestiona miembros, invitaciones, grupos y ajustes."
+          "member": "Usa el espacio de trabajo.",
+          "admin": "Gestiona miembros, invitaciones, equipos y ajustes."
         },
         "roleFailed": "No se pudo cambiar el rol de {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
         "roleNotAllowed": "Ya no tienes permiso para cambiar roles en {{workspace}}.",
@@ -2573,7 +2645,8 @@
           "resentNoEmailMany_one": "{{count}} invitación se actualizó, pero no se pudo entregar el correo y el enlace anterior ya no funciona. Sigue seleccionada para que puedas reenviarla.",
           "resentNoEmailMany_other": "{{count}} invitaciones se actualizaron, pero no se pudieron entregar los correos y los enlaces anteriores ya no funcionan. Siguen seleccionadas para que puedas reenviarlas.",
           "resendUnrenewable_one": "No se pudo renovar {{count}} invitación caducada. Cancélala e invita a esa persona de nuevo.",
-          "resendUnrenewable_other": "No se pudieron renovar {{count}} invitaciones caducadas. Cancélalas e invita a esas personas de nuevo."
+          "resendUnrenewable_other": "No se pudieron renovar {{count}} invitaciones caducadas. Cancélalas e invita a esas personas de nuevo.",
+          "statusPending": "Pendiente"
         },
         "selection": {
           "count_one": "{{count}} seleccionado",
@@ -2584,7 +2657,20 @@
           "selectAllInvitations": "Seleccionar todas las invitaciones",
           "selectRow": "Seleccionar {{name}}",
           "remove": "Quitar",
-          "addToTeamspace": "Añadir al teamspace"
+          "addToTeamspace": "Añadir al teamspace",
+          "addToTeam": "Añadir a un equipo",
+          "createTeam": "Crear equipo con la selección"
+        },
+        "teamsCount_one": "{{count}} equipo",
+        "teamsCount_other": "{{count}} equipos",
+        "addMenu": {
+          "invite": "Invitar personas",
+          "createTeam": "Crear equipo",
+          "label": "Más formas de añadir"
+        },
+        "roleMenu": {
+          "member": "Miembro del espacio de trabajo",
+          "admin": "Administrador del espacio de trabajo"
         }
       },
       "teamspaces": {
@@ -2604,7 +2690,7 @@
         "failedBody": "Comprueba tu conexión e inténtalo de nuevo.",
         "retry": "Intentar de nuevo",
         "emptyTitle": "Aún no hay teamspaces",
-        "emptyBody": "Un teamspace es un área compartida para las notas de un equipo. Añade personas o grupos, y todos los que estén en él podrán leer y editar.",
+        "emptyBody": "Un teamspace es un área compartida para las notas de un equipo. Añade personas o equipos, y todos los que estén en él podrán leer y editar.",
         "emptyBodyMember": "Los administradores de tu espacio de trabajo aún no han creado ninguno.",
         "adminCount_one": "{{count}} administrador",
         "adminCount_other": "{{count}} administradores",
@@ -2628,7 +2714,7 @@
           "descriptionLabel": "Descripción",
           "people": "Personas",
           "descriptionPlaceholder": "Grabaciones y resúmenes de llamadas de ventas y soporte, una nota por llamada.",
-          "peoplePlaceholder": "Nombres, correos o grupos",
+          "peoplePlaceholder": "Nombres, correos o equipos",
           "defaultTitle": "Teamspace predeterminado",
           "defaultBody": "Añade automáticamente a los nuevos miembros del espacio de trabajo.",
           "openTitle": "Teamspace abierto",
@@ -2642,24 +2728,24 @@
           "createdInviteFailed_other": "Se creó {{space}}. No se pudo invitar a {{count}} personas. Invítalas desde Miembros.",
           "inviteFailedWho": "Sin invitar: {{names}}.",
           "copyAddresses": "Copiar direcciones",
-          "groupsGone": "{{names}} ya no está disponible, así que no se añadió."
+          "teamsGone": "{{names}} ya no está disponible, así que no se añadió."
         },
         "picker": {
-          "groupPeople_one": "{{count}} persona",
-          "groupPeople_other": "{{count}} personas",
-          "groupChip_one": "{{name}} · {{count}} persona",
-          "groupChip_other": "{{name}} · {{count}} personas",
+          "teamPeople_one": "{{count}} persona",
+          "teamPeople_other": "{{count}} personas",
+          "teamChip_one": "{{name}} · {{count}} persona",
+          "teamChip_other": "{{name}} · {{count}} personas",
           "emailChip": "{{email}} · {{role}}",
           "noMember": "No se encontró ningún miembro",
           "inviteToWorkspace": "Invitar al espacio de trabajo",
           "newToWorkspace": "Nuevo en el espacio de trabajo",
           "select": "Seleccionar",
-          "noResultsTitle": "No se encontraron personas ni grupos",
+          "noResultsTitle": "No se encontraron personas ni equipos",
           "noResultsBody": "Prueba con otro nombre o introduce una dirección de correo completa.",
           "noResultsBodyNoInvite": "Prueba con otro nombre.",
           "hasAccess": "Ya tiene acceso",
-          "groupHasAccess_one": "Ya tiene acceso · {{count}} persona",
-          "groupHasAccess_other": "Ya tiene acceso · {{count}} personas"
+          "teamHasAccess_one": "Ya tiene acceso · {{count}} persona",
+          "teamHasAccess_other": "Ya tiene acceso · {{count}} personas"
         },
         "members": {
           "columnRole": "Rol en el teamspace",
@@ -2667,26 +2753,32 @@
           "adding": "Añadiendo…",
           "retry": "Intentar de nuevo",
           "invitationPending": "Invitación pendiente",
-          "via": "Miembro · vía {{group}}",
-          "viaAdmin": "Administrador · vía {{group}}",
+          "via": "Miembro · vía {{team}}",
+          "viaAdmin": "Administrador · vía {{team}}",
           "roleMember": "Miembro del teamspace",
           "roleMemberBody": "Puede ver y editar notas",
           "roleAdmin": "Administrador del teamspace",
-          "roleAdminBody": "Gestiona este teamspace y sus grupos asignados.",
+          "roleAdminBody": "Gestiona este teamspace y sus equipos asignados.",
+          "teamAccessMember": "Todos son miembros",
+          "teamAccessMemberBody": "Todos en el equipo pueden ver y editar notas.",
+          "teamAccessAdmin": "Los administradores del equipo son administradores",
+          "teamAccessAdminBody": "Los administradores del equipo también gestionan este teamspace. El resto del equipo son miembros.",
+          "teamAccessMemberShort": "Miembros",
+          "teamAccessAdminShort": "Admins del equipo",
           "removeItem": "Quitar del teamspace",
           "removeTitle": "¿Quitar a {{name}} de {{space}}?",
-          "removeBody": "Esto elimina la membresía directa de {{name}}. El acceso a través de un grupo se mantendrá. Seguirá en el espacio de trabajo.",
+          "removeBody": "Esto elimina la membresía directa de {{name}}. El acceso a través de un equipo se mantendrá. Seguirá en el espacio de trabajo.",
           "removeConfirm": "Quitar miembro",
           "removeFailedTitle": "No se pudo quitar a {{name}}",
           "removeFailedBody": "La membresía de {{name}} en {{space}} no ha cambiado. Comprueba tu conexión e inténtalo de nuevo.",
           "removed": "Se quitó la membresía directa de {{name}} en {{space}}.",
-          "removeGroupTitle": "¿Quitar {{group}} de {{space}}?",
-          "removeGroupBody_one": "Su {{count}} persona pierde el acceso a través de este grupo. El grupo permanece en el espacio de trabajo.",
-          "removeGroupBody_other": "Sus {{count}} personas pierden el acceso a través de este grupo. El grupo permanece en el espacio de trabajo.",
-          "removeGroupBodyNoCount": "Sus integrantes pierden el acceso a través de este grupo. El grupo permanece en el espacio de trabajo.",
+          "removeTeamTitle": "¿Quitar {{team}} de {{space}}?",
+          "removeTeamBody_one": "Su {{count}} persona pierde el acceso a través de este equipo. El equipo permanece en el espacio de trabajo.",
+          "removeTeamBody_other": "Sus {{count}} personas pierden el acceso a través de este equipo. El equipo permanece en el espacio de trabajo.",
+          "removeTeamBodyNoCount": "Sus integrantes pierden el acceso a través de este equipo. El equipo permanece en el espacio de trabajo.",
           "stagedNew": "Las personas nuevas reciben una invitación cuando las añades. El acceso al teamspace empieza cuando la aceptan.",
-          "stagedGroup": "Todos los de {{group}} heredarán acceso de miembro a {{space}}.",
-          "stagedGroups": "Todos los de estos grupos heredarán acceso de miembro a {{space}}.",
+          "stagedTeam": "Todos los de {{team}} heredarán acceso de miembro a {{space}}.",
+          "stagedTeams": "Todos los de estos equipos heredarán acceso de miembro a {{space}}.",
           "invalid": "Introduce una dirección de correo válida. Las personas que seleccionaste se conservan.",
           "progressPeople": "Añadiendo a {{names}}…",
           "progressBoth_one": "Añadiendo a {{names}} y enviando {{count}} invitación…",
@@ -2695,8 +2787,8 @@
           "progressInvites_other": "Enviando {{count}} invitaciones…",
           "resultAdded": "Se añadió a {{names}}.",
           "resultInvited": "Se envió a {{names}} una invitación al espacio de trabajo.",
-          "resultGroup": "Se añadió {{group}}. Sus integrantes ahora tienen acceso de miembro.",
-          "resultGroups": "Se añadieron {{names}}. Sus integrantes ahora tienen acceso de miembro.",
+          "resultTeam": "Se añadió {{team}}. Sus integrantes ahora tienen acceso de miembro.",
+          "resultTeams": "Se añadieron {{names}}. Sus integrantes ahora tienen acceso de miembro.",
           "failed": "No se pudo añadir a los miembros. Tu selección se conserva. Inténtalo de nuevo.",
           "partialAdded": "Se añadió a {{names}}.",
           "partialAddedMany": "Se añadió a {{names}}.",
@@ -2743,12 +2835,12 @@
           "deleteFailedBody": "El teamspace sigue disponible. Comprueba tu conexión e inténtalo de nuevo.",
           "deleted": "{{space}} se eliminó.",
           "restored": "Se restauró {{space}}",
-          "leaveBodyKeeps": "Tu membresía directa terminará. Conservarás el acceso a través de {{groups}}.",
+          "leaveBodyKeeps": "Tu membresía directa terminará. Conservarás el acceso a través de {{teams}}.",
           "leaveBodyLoses": "Perderás el acceso a {{space}} y a sus notas.",
           "leaveBodyAdmins": "Otro administrador seguirá gestionando este Teamspace.",
           "deleteNotAllowed": "No tienes permiso para eliminar {{space}}.",
-          "movedToPersonal_one": "{{count}} nota sin sincronizar se movió a tu espacio personal.",
-          "movedToPersonal_other": "{{count}} notas sin sincronizar se movieron a tu espacio personal."
+          "movedToPersonal_one": "{{count}} nota sin sincronizar se movió a Privado.",
+          "movedToPersonal_other": "{{count}} notas sin sincronizar se movieron a Privado."
         },
         "addPeople": {
           "loading": "Cargando teamspaces…",
@@ -2808,33 +2900,185 @@
         "errorTitle": "No se pudo actualizar la solicitud"
       },
       "teams": {
-        "title": "Grupos",
-        "description": "Grupos de miembros del workspace a los que se puede dar acceso a teamspaces de una vez.",
-        "new": "Nuevo grupo",
-        "empty": "Aún no hay grupos.",
-        "createFirst": "Crea tu primer grupo",
-        "addMembersLabel": "Añadir miembros",
-        "createTitle": "Crear grupo",
-        "nameLabel": "Nombre del grupo",
-        "memberCount_one": "{{count}} miembro",
-        "memberCount_other": "{{count}} miembros",
-        "membersButton": "Miembros",
-        "grantsAccessToSpaces_one": "Da acceso a {{count}} espacio",
-        "grantsAccessToSpaces_other": "Da acceso a {{count}} espacios",
-        "couldNotCreate": "No se pudo crear el grupo",
-        "created": "{{team}} creado",
-        "deleted": "{{team}} eliminado",
-        "deleteConfirmTitle": "¿Eliminar {{team}}?",
-        "deleteConfirmDescription": "Esto archiva el grupo. Sus miembros pierden el acceso que concedía.",
-        "deleteConfirmSpaceAccess_one": "Este grupo da acceso a {{count}} espacio. Sus miembros perderán ese acceso.",
-        "deleteConfirmSpaceAccess_other": "Este grupo da acceso a {{count}} espacios. Sus miembros perderán ese acceso.",
         "members": {
           "title": "Miembros de {{team}}",
-          "removeConfirm": "¿Quitar a {{name}} de {{team}}?",
-          "leave": "Salir del grupo",
-          "leftTeam": "Saliste de {{team}}",
-          "leaveConfirm": "¿Salir de {{team}}?",
-          "leaveConfirmDescription": "Perderás el acceso a los espacios asignados a este grupo salvo que te hayan añadido directamente u otro grupo te incluya."
+          "gone": "{{team}} ya no existe.",
+          "columnName": "Nombre",
+          "columnRole": "Rol en el equipo",
+          "placeholder": "Nombres o correos",
+          "add": "Añadir miembros",
+          "adding": "Añadiendo…",
+          "inviteNote": "Las personas nuevas reciben una invitación al espacio de trabajo cuando las añades.",
+          "roleMember": "Miembro del equipo",
+          "roleMemberBody": "Obtiene acceso allí donde se añada el equipo.",
+          "roleAdmin": "Administrador del equipo",
+          "roleAdminBody": "Gestiona la lista de miembros de este equipo.",
+          "remove": "Quitar del equipo",
+          "addingStatus_one": "Añadiendo a {{names}} y enviando {{count}} invitación…",
+          "addingStatus_other": "Añadiendo a {{names}} y enviando {{count}} invitaciones…",
+          "addingOnly": "Añadiendo a {{names}}…",
+          "invitingOnly_one": "Enviando {{count}} invitación…",
+          "invitingOnly_other": "Enviando {{count}} invitaciones…",
+          "addFailed": "No se pudo terminar de añadir a los miembros. Inténtalo de nuevo.",
+          "added": "Se añadió a {{names}}.",
+          "addedAndInvited": "Se añadió a {{names}} y se invitó a {{invited}}.",
+          "invited": "Se invitó a {{invited}}.",
+          "pending": "Invitación pendiente",
+          "pendingBody": "Se une al equipo tras aceptar · {{role}}",
+          "invitedPill": "Invitado",
+          "resend": "Reenviar",
+          "resent": "Se reenvió la invitación a {{email}}.",
+          "resendFailed": "No se pudo reenviar la invitación a {{email}}.",
+          "removeTitle": "¿Quitar a {{name}} de {{team}}?",
+          "removeBody": "{{name}} perderá el acceso concedido a través de este equipo. Seguirá en el espacio de trabajo y conservará el acceso concedido directamente o a través de otros equipos.",
+          "removeAction": "Quitar miembro",
+          "removeFailedTitle": "No se pudo quitar a {{name}}",
+          "removeFailedBody": "{{name}} sigue siendo miembro de {{team}}. Comprueba tu conexión e inténtalo de nuevo.",
+          "removed": "Se quitó a {{name}} de {{team}}.",
+          "roleFailed": "No se pudo cambiar el rol de {{name}}. Inténtalo de nuevo.",
+          "memberGone": "{{name}} ya no está en {{team}}.",
+          "notAllowed": "Ya no puedes gestionar {{team}}.",
+          "invitedNoEmail": "Se invitó a {{invited}}, pero el correo no se envió. Usa Reenviar más abajo.",
+          "skippedInvited": "No se añadió a {{team}}: {{names}}. Ya tienen una invitación al espacio de trabajo."
+        },
+        "columns": {
+          "name": "Nombre",
+          "members": "Miembros",
+          "teamspaces": "Teamspaces"
+        },
+        "loadingTitle": "Cargando equipos…",
+        "loadingBody": "Los equipos de tu espacio de trabajo aparecerán aquí.",
+        "failedTitle": "No se pudieron cargar los equipos",
+        "failedBody": "Comprueba tu conexión e inténtalo de nuevo.",
+        "retry": "Intentar de nuevo",
+        "emptyTitle": "Aún no hay equipos",
+        "emptyBody": "Un equipo es un atajo para añadir a varias personas a la vez. Añade un equipo a un teamspace y todos sus miembros obtienen acceso.",
+        "emptyBodyMember": "Los administradores de tu espacio de trabajo aún no han creado ninguno.",
+        "create": "Crear equipo",
+        "spacesNone": "Ninguno",
+        "people_one": "{{count}} persona",
+        "people_other": "{{count}} personas",
+        "spaces_one": "{{count}} teamspace",
+        "spaces_other": "{{count}} teamspaces",
+        "refreshFailed": "No se pudieron actualizar los equipos. Es posible que esta lista no esté al día.",
+        "cellMenuLabel": "{{team}}: {{value}}",
+        "paywall": {
+          "title": "Los equipos están en el plan Business",
+          "body": "Los teamspaces son gratis. Mejora tu plan para agrupar personas en equipos.",
+          "bodyAskOwner": "Los teamspaces son gratis. Pide a {{owner}} que mejore el plan para agrupar personas en equipos.",
+          "bodyAskOwnerUnknown": "Los teamspaces son gratis. Pide al propietario del espacio de trabajo que mejore el plan para agrupar personas en equipos.",
+          "upgrade": "Mejorar a Business",
+          "notNow": "Ahora no",
+          "lapsedTitle": "El plan de este espacio de trabajo no está activo",
+          "lapsedBody": "Actualiza la facturación para crear equipos. Tus equipos actuales siguen funcionando.",
+          "lapsedBodyAskOwner": "Pide a {{owner}} que actualice la facturación para crear equipos. Tus equipos actuales siguen funcionando.",
+          "lapsedBodyAskOwnerUnknown": "Pide al propietario del espacio de trabajo que actualice la facturación para crear equipos. Tus equipos actuales siguen funcionando.",
+          "updateBilling": "Actualizar facturación"
+        },
+        "form": {
+          "title": "Crear equipo",
+          "subtitle": "Un atajo para añadir a varias personas a la vez.",
+          "name": "Nombre",
+          "namePlaceholder": "Nombre del equipo",
+          "nameRequired": "Escribe un nombre para el equipo.",
+          "nameTaken": "Ya existe un equipo llamado {{name}}.",
+          "people": "Personas",
+          "peoplePlaceholder": "Nombres o correos",
+          "adminNote": "Se te añade como administrador del equipo. Las invitaciones se envían al crear el equipo.",
+          "adminNoteShort": "Se te añade como administrador del equipo.",
+          "invalidEmail": "Escribe una dirección de correo válida.",
+          "cancel": "Cancelar",
+          "submit": "Crear equipo",
+          "creating": "Creando…",
+          "retry": "Intentar de nuevo",
+          "creatingStatus_one": "Creando {{team}} y enviando {{count}} invitación…",
+          "creatingStatus_other": "Creando {{team}} y enviando {{count}} invitaciones…",
+          "failed": "No se pudo crear el equipo. Se conservan tus datos.",
+          "created": "{{team}} creado",
+          "createdAdded": "{{team}} creado. Se añadió a {{names}}.",
+          "createdInvited": "{{team}} creado. Se invitó a {{invited}}.",
+          "createdAddedInvited": "{{team}} creado. Se añadió a {{names}} y se invitó a {{invited}}.",
+          "createdWithMembers_one": "{{team}} creado con {{count}} miembro",
+          "createdWithMembers_other": "{{team}} creado con {{count}} miembros",
+          "createdInvitedMany_one": "{{team}} creado y {{count}} persona invitada",
+          "createdInvitedMany_other": "{{team}} creado y {{count}} personas invitadas",
+          "createdCounts_one": "{{team}} creado. Añadidos: {{added}}. Invitados: {{count}}.",
+          "createdCounts_other": "{{team}} creado. Añadidos: {{added}}. Invitados: {{count}}.",
+          "notAllowed": "No tienes permiso para crear equipos en {{workspace}}.",
+          "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para crear equipos en {{workspace}}.",
+          "createdSomeNotInvited_one": "{{team}} creado. No se pudo invitar a {{count}} persona.",
+          "createdSomeNotInvited_other": "{{team}} creado. No se pudo invitar a {{count}} personas."
+        },
+        "dialog": {
+          "tabGeneral": "General",
+          "tabMembers": "Miembros",
+          "tabSpaces": "Teamspaces",
+          "nameLabel": "Nombre del equipo",
+          "renameFailed": "No se pudo cambiar el nombre de {{team}}. Inténtalo de nuevo."
+        },
+        "spacesTab": {
+          "emptyTitle": "Aún no está en ningún teamspace",
+          "emptyBody": "Añade este equipo a un teamspace para dar acceso a todos sus miembros.",
+          "emptyAction": "Añadir a un teamspace",
+          "noSpacesTitle": "Aún no hay teamspaces",
+          "noSpacesBody": "Un teamspace es un área compartida para las notas de un equipo. Añade personas o equipos y todos podrán leer y editar.",
+          "placeholder": "Buscar teamspaces para añadir",
+          "searchPlaceholder": "Buscar teamspaces",
+          "add": "Añadir a un teamspace",
+          "adding": "Añadiendo…",
+          "selectedTitle_one": "{{count}} teamspace seleccionado",
+          "selectedTitle_other": "{{count}} teamspaces seleccionados",
+          "selectedBody": "Añadir {{team}} a {{names}}.",
+          "noMatches": "No hay teamspaces que coincidan",
+          "createNew": "Crear nuevo teamspace",
+          "failed": "No se pudo añadir {{team}}. Se conservan tus selecciones. Inténtalo de nuevo.",
+          "added_one": "Se añadió {{team}} a {{count}} teamspace.",
+          "added_other": "Se añadió {{team}} a {{count}} teamspaces.",
+          "addedPartly": "Se añadió {{team}} a {{added}}. No se pudo añadir a {{failed}}. Inténtalo de nuevo.",
+          "gone": "No se pudo añadir {{team}}. Ya no se encuentra {{names}}.",
+          "notAllowed": "Ya no puedes gestionar {{names}}."
+        },
+        "exit": {
+          "leaveTitle": "Salir del equipo",
+          "leaveBody": "Salir de este equipo.",
+          "leaveAction": "Salir del equipo",
+          "deleteTitle": "Eliminar equipo",
+          "deleteBody": "Quitar este equipo para todos.",
+          "deleteAction": "Eliminar equipo",
+          "blockedTitle": "Añade antes a otro administrador",
+          "blockedBody": "Eres el único administrador de {{team}}. Convierte a otro miembro en administrador antes de salir.",
+          "manageMembers": "Administrar miembros",
+          "leaveConfirmTitle": "¿Salir de {{team}}?",
+          "leaveConfirmBody": "Se te quitará de este equipo y perderás el acceso concedido a través de él. Otro administrador seguirá gestionando el equipo.",
+          "leaveConfirmBodyNoOtherAdmin": "Se te quitará de este equipo y perderás el acceso concedido a través de él.",
+          "leaveFailedTitle": "No se pudo salir de {{team}}",
+          "leaveFailedBody": "Sigues siendo miembro de este equipo. Comprueba tu conexión e inténtalo de nuevo.",
+          "left": "Saliste de {{team}}.",
+          "deleteConfirmTitle": "¿Eliminar {{team}}?",
+          "deleteConfirmBody": "El equipo se quitará para todos. El acceso concedido a través de {{team}} terminará. No se eliminarán personas, teamspaces ni notas.",
+          "deleted": "Se eliminó {{team}}. Sus personas y teamspaces siguen disponibles.",
+          "deleteFailedTitle": "No se pudo eliminar {{team}}",
+          "deleteFailedBody": "El equipo y su configuración de acceso no han cambiado. Comprueba tu conexión e inténtalo de nuevo.",
+          "deleteNotAllowed": "No tienes permiso para eliminar {{team}}."
+        },
+        "managedByDirectory": "Administrado por tu directorio",
+        "addPeople": {
+          "someAdded": "{{team}} · {{covered}} de {{total}} ya añadidos",
+          "none": "Aún no hay equipos",
+          "noneAddable": "No hay equipos a los que puedas añadir",
+          "addingTitle_one": "Añadiendo {{count}} persona…",
+          "addingTitle_other": "Añadiendo {{count}} personas…",
+          "addingBody": "Mantén esta ventana abierta mientras se añaden a {{team}}.",
+          "addingAction": "Añadiendo…",
+          "failedTitle_one": "No se pudo añadir a {{count}} persona",
+          "failedTitle_other": "No se pudo añadir a {{count}} personas",
+          "failedBody": "No se han añadido a {{team}}. Se conserva tu selección.",
+          "done_one": "Se añadió {{count}} miembro a {{team}}",
+          "done_other": "Se añadieron {{count}} miembros a {{team}}",
+          "someDone": "Se añadió a {{added}} a {{team}}. {{already}} ya era miembro.",
+          "someDonePlural": "Se añadió a {{added}} a {{team}}. {{already}} ya eran miembros.",
+          "left": "{{names}} dejó el espacio de trabajo, así que no se añadió a nadie.",
+          "allAlready": "Ya están en {{team}}."
         }
       },
       "invites": {
@@ -2849,6 +3093,7 @@
         "nextInvoice": "Próxima factura",
         "manageStripe": "Administrar en Stripe",
         "startSubscription": "Iniciar suscripción",
+        "provisionedPlan": "Configurado por OpenWhispr. Contacta con ventas para cambiar el plan o los puestos.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -2919,6 +3164,57 @@
         "title": "Consola Enterprise",
         "description": "Gestiona SSO, políticas y miembros desde la web",
         "open": "Abrir consola"
+      },
+      "guests": {
+        "columns": {
+          "name": "Nombre",
+          "access": "Acceso",
+          "actions": "Acciones"
+        },
+        "emptyTitle": "Aún no hay invitados",
+        "emptyBody": "Las personas ajenas a este espacio de trabajo que pueden ver tus notas compartidas aparecerán aquí.",
+        "loadingTitle": "Cargando invitados…",
+        "loadingBody": "Los invitados de tu espacio de trabajo aparecerán aquí.",
+        "failedTitle": "No se pudieron cargar los invitados",
+        "failedBody": "Comprueba tu conexión e inténtalo de nuevo.",
+        "noteCount_one": "{{count}} nota",
+        "noteCount_other": "{{count}} notas",
+        "notesTriggerLabel_one": "{{count}} nota compartida con {{name}}",
+        "notesTriggerLabel_other": "{{count}} notas compartidas con {{name}}",
+        "removeFromNote": "Quitar de {{note}}",
+        "removedFromNote": "{{name}} se quitó de {{note}}",
+        "removeFromNoteFailed": "No se pudo quitar a {{name}} de {{note}}. Comprueba tu conexión e inténtalo de nuevo.",
+        "menu": {
+          "label": "Acciones para {{name}}",
+          "invite": "Invitar al espacio de trabajo",
+          "copyEmail": "Copiar correo electrónico",
+          "remove": "Quitar como invitado"
+        },
+        "invite": {
+          "title_one": "Invitar a {{count}} invitado a {{workspace}}",
+          "title_other": "Invitar a {{count}} invitados a {{workspace}}",
+          "description": "Recibirán un enlace por correo para unirse a {{workspace}}."
+        },
+        "remove": {
+          "titleOne": "¿Quitar a {{name}} de {{workspace}}?",
+          "confirmOne": "Quitar invitado",
+          "title_one": "¿Quitar a {{count}} invitado de {{workspace}}?",
+          "title_other": "¿Quitar a {{count}} invitados de {{workspace}}?",
+          "body": "Perderán el acceso a todas las notas compartidas con ellos. Puedes volver a compartirles notas cuando quieras.",
+          "linkShared": "Los invitados pueden seguir teniendo acceso mediante enlaces o el uso compartido por dominio.",
+          "confirm_one": "Quitar {{count}} invitado",
+          "confirm_other": "Quitar {{count}} invitados",
+          "removing": "Quitando…",
+          "limit": "Selecciona hasta {{count}} invitados para eliminarlos a la vez.",
+          "failed": "No se pudo quitar a los invitados. No se quitó a nadie. Revisa tu conexión e inténtalo de nuevo.",
+          "done_one": "Se quitó {{count}} invitado",
+          "done_other": "Se quitaron {{count}} invitados"
+        },
+        "selection": {
+          "selectAll": "Seleccionar todos los invitados",
+          "invite": "Invitar al espacio de trabajo",
+          "remove": "Quitar como invitado"
+        }
       }
     },
     "enterpriseCheckout": {
@@ -2996,7 +3292,15 @@
         "assemblyai_universal_3_5_pro": "Máxima precisión en tiempo real, 18 idiomas",
         "assemblyai_universal_3_6_pro": "Máxima precisión en tiempo real, 32 idiomas",
         "mistral_voxtral_mini_transcribe_3_0": "Transcripción rápida en más de 50 idiomas (vista previa)",
-        "mistral_voxtral_small_transcribe_3_0": "El Voxtral más preciso, más de 50 idiomas (vista previa)"
+        "mistral_voxtral_small_transcribe_3_0": "El Voxtral más preciso, más de 50 idiomas (vista previa)",
+        "openrouter_mistralai_voxtral_mini_transcribe_3_0": "Transcripción multilingüe rápida y precisa de Mistral",
+        "openrouter_nvidia_nemotron_3_5_transcribe": "Transcripción económica de NVIDIA en 40 idiomas",
+        "openrouter_deepgram_nova_3": "Transcripción multilingüe rápida de Deepgram",
+        "openrouter_assemblyai_universal_3_6_pro": "La transcripción más precisa de AssemblyAI",
+        "openrouter_elevenlabs_scribe_v2": "Transcripción precisa de ElevenLabs en más de 90 idiomas",
+        "openrouter_mistralai_voxtral_small_transcribe_3_0": "El modelo de transcripción multilingüe más grande de Mistral",
+        "openrouter_nvidia_parakeet_tdt_0_6b_v3": "Transcripción económica de NVIDIA para idiomas europeos",
+        "openrouter_nvidia_nemotron_3_5_asr_streaming_multilingual_0_6b": "La transcripción multilingüe más económica de NVIDIA"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
@@ -3216,7 +3520,7 @@
       "defaultFolderImmutable": "Las carpetas predeterminadas no se pueden modificar.",
       "spaceNameRequired": "Introduce un nombre para el espacio.",
       "spaceNotFound": "No se pudo encontrar ese espacio.",
-      "privateSpaceImmutable": "Tu espacio Personal no se puede modificar.",
+      "privateSpaceImmutable": "Privado no se puede modificar.",
       "generic": "No se pudo completar el cambio. Inténtalo de nuevo."
     },
     "sidebar": {
@@ -3225,10 +3529,10 @@
       "templatesAndActions": "Plantillas y acciones"
     },
     "spaces": {
-      "privateSpaces": "Notas privadas",
+      "privateSpaces": "Privado",
       "teamSpaces": "Teamspaces",
-      "personal": "Personal",
-      "privateTooltip": "Solo tú puedes ver tu espacio personal",
+      "personal": "Privado",
+      "privateTooltip": "Solo tú puedes ver las carpetas y notas de este espacio.",
       "newSpace": "Nuevo teamspace",
       "nameAndIconLabel": "Nombre e icono",
       "changeEmoji": "Cambiar emoji",
@@ -3237,8 +3541,8 @@
       "couldNotChangeEmoji": "No se pudo cambiar el emoji",
       "deleteSpace": "Eliminar espacio",
       "deleteHintLocal": "Elimina permanentemente este espacio con sus carpetas y notas en este dispositivo.",
-      "leaveConfirmDescription": "Se te quitará de {{teams}} y perderás el acceso a cualquier otro espacio que abran esos grupos.",
-      "stillViaGroups": "Sigues teniendo acceso a {{space}} a través de {{groups}}.",
+      "leaveConfirmDescription": "Se te quitará de {{teams}} y perderás el acceso a cualquier otro espacio que abran esos equipos.",
+      "stillViaTeams": "Sigues teniendo acceso a {{space}} a través de {{teams}}.",
       "deleteConfirmTitle": "¿Eliminar espacio?",
       "deleteConfirmDescription": "Esto elimina permanentemente {{space}} con todas sus carpetas y notas en este dispositivo.",
       "deleteTypeName": "Escribe {{space}} para confirmar",
@@ -3250,6 +3554,18 @@
       "noSpacesFound": "No se encontraron espacios",
       "spaceRoot": "Raíz del espacio",
       "moveConfirm": "Mover",
+      "copyToPrivate": "Copiar a Privado",
+      "moveToWorkspacePrivate": "Mover a {{workspace}} › Privado",
+      "workspacePrivate": "{{workspace}} › Privado",
+      "confirmCopyTitle": "¿Copiar a Privado?",
+      "confirmCopy": "La nota se queda en {{space}}.",
+      "copiedToPrivate": "Copiada a Privado",
+      "couldNotCopyNote": "No se pudo copiar la nota",
+      "openCopy": "Abrir",
+      "noteAlreadyInTeam": "«{{title}}» ya está en {{space}}. Usa «Copiar a Privado» para conservar una copia privada.",
+      "folderAlreadyInTeam": "«{{name}}» ya está en {{space}}. Usa «Copiar a Privado» en sus notas para conservar copias privadas.",
+      "workspacesLoading": "Tus workspaces aún se están cargando. Inténtalo de nuevo en un momento.",
+      "cantMoveIntoLegacy": "Las notas no se pueden mover a {{space}} porque no forma parte de un workspace.",
       "confirmMoveInTitle": "¿Mover a {{space}}?",
       "confirmMoveIn": "Todos en {{space}} podrán ver y editar esta nota. Las notas no se pueden sacar de un teamspace más tarde.",
       "confirmMoveInFolder": "Todos en {{space}} podrán ver y editar esta carpeta y sus notas. Las carpetas y notas no se pueden sacar de un teamspace más tarde.",
@@ -3267,34 +3583,22 @@
       "noteCount_other": "{{count}} notas",
       "accessRevoked": "Ya no tienes acceso a {{space}}",
       "accessRevokedActiveNote": "Ya no tienes acceso a {{space}} — \"{{title}}\" ya no está disponible en este dispositivo",
-      "movedToPersonal": "Ya no tienes acceso a {{space}} — “{{title}}” se movió a tu espacio personal",
-      "updateDeniedNote": "No tienes permiso para modificar “{{title}}” — tus cambios sin sincronizar se guardaron como una copia en tu espacio personal",
+      "movedToPersonal": "Ya no tienes acceso a {{space}} — “{{title}}” se movió a Privado",
+      "updateDeniedNote": "No tienes permiso para modificar “{{title}}” — tus cambios sin sincronizar se guardaron como una copia en Privado",
       "deleteDeniedNote": "“{{title}}” no se eliminó — solo el propietario de la nota o un administrador pueden eliminarla",
-      "updateDeniedFolder": "No tienes permiso para modificar “{{name}}” — tu trabajo sin sincronizar se guardó en tu espacio personal",
+      "updateDeniedFolder": "No tienes permiso para modificar “{{name}}” — tu trabajo sin sincronizar se guardó en Privado",
       "deleteDeniedFolder": "“{{name}}” no se eliminó — solo un administrador puede eliminar una carpeta del espacio",
       "conflictBanner": "Existe una versión más reciente de esta nota.",
       "conflictRefresh": "Actualizar",
       "conflictKeep": "Seguir editando",
       "editedBy": "Editado por {{name}} · {{time}}",
       "members": {
-        "addPeople": "Añadir personas",
-        "addedToTeam": "{{name}} añadido a {{team}}",
-        "removedFromTeam": "{{name}} eliminado de {{team}}",
-        "stillViaGroups": "{{name}} sigue teniendo acceso a través de {{groups}}",
+        "stillViaTeams": "{{name}} sigue teniendo acceso a través de {{teams}}",
         "roleUpdated": "Rol actualizado",
-        "you": "Tú",
-        "addFailed": "No se pudo añadir a {{failed}} de {{total}} personas",
-        "searchPlaceholder": "Buscar personas…",
-        "noResults": "No se encontraron personas",
         "roleAdmin": "Administrador",
         "roleMember": "Miembro",
-        "roleAdminDescription": "Gestiona personas y ajustes.",
-        "roleMemberDescription": "Puede ver y editar notas.",
-        "remove": "Quitar",
-        "removeConfirmDescription": "Perderá el acceso a todas las notas de este espacio.",
-        "inviteFooter": "Invitar a {{email}} al espacio de trabajo…",
         "empty": "Aún no se ha añadido a nadie",
-        "roleFromGroup": "Administrador a través de {{group}}. Cámbialo allí."
+        "roleFromTeam": "Administrador a través de {{team}}. Cámbialo allí."
       },
       "invitedTo_one": "Te unirás a {{count}} teamspace",
       "invitedTo_other": "Te unirás a {{count}} teamspaces",
@@ -3305,14 +3609,14 @@
         "accessChanged": "Acceso de {{team}} actualizado"
       },
       "teams": {
-        "loadError": "No se pudieron cargar los grupos."
+        "loadError": "No se pudieron cargar los equipos."
       }
     },
     "structureIntro": {
       "title": "Dónde están tus notas",
       "description": "OpenWhispr separa las ideas privadas del trabajo compartido para que las notas lleguen a las personas adecuadas.",
       "personal": {
-        "title": "Espacio personal",
+        "title": "Privado",
         "description": "Solo tú puedes ver las carpetas y notas de este espacio."
       },
       "workspace": {
@@ -3321,7 +3625,7 @@
       },
       "teamSpace": {
         "title": "Teamspace",
-        "description": "Un área compartida dentro de un workspace. Añade personas o grupos para darles acceso."
+        "description": "Un área compartida dentro de un workspace. Añade personas o equipos para darles acceso."
       },
       "contents": "Cada espacio puede contener carpetas y notas.",
       "done": "Entendido",
@@ -3828,7 +4132,9 @@
       "addExisting": "Añadir existentes",
       "addCount": "Añadir {{count}} notas",
       "noResults": "No hay notas coincidentes",
-      "noNotesAvailable": "No hay otras notas disponibles"
+      "noNotesAvailable": "No hay otras notas disponibles",
+      "notAdded_one": "No se pudo añadir {{count}} nota",
+      "notAdded_other": "No se pudieron añadir {{count}} notas"
     },
     "onboarding": {
       "llm": {
@@ -3969,6 +4275,9 @@
     "wordsReady_many": "{{count}} de palabras listas",
     "wordsReady_other": "{{count}} palabras listas",
     "promptLimitNotice": "Tu diccionario tiene {{chars}} caracteres. Los modelos de Groq y Whisper solo leen los últimos cientos de caracteres, así que allí funciona mejor una lista más corta. Los demás modelos reciben la lista completa.",
+    "openRouterIgnoredNotice": "OpenRouter no envía tu diccionario a sus modelos de voz, así que estas palabras no guiarán la transcripción mientras esté seleccionado para el dictado.",
+    "localModelIgnoredNotice": "{{model}} no puede usar tu diccionario, así que estas palabras no guiarán la transcripción mientras esté seleccionado para el dictado. La limpieza con IA sigue aplicándolas cuando está activada.",
+    "localModelHotwordsLimitNotice": "{{model}} usa hasta {{limit}} entradas del diccionario como ayuda para la transcripción. Tienen prioridad las entradas personales, seguidas de las de tus teamspaces y, por último, las de tu espacio de trabajo.",
     "exportDictionary": "Exportar diccionario",
     "exportFailed": "Error al exportar",
     "editWord": "Editar {{word}}",
@@ -4349,6 +4658,10 @@
     "expand": "Expandir barra lateral"
   },
   "chat": {
+    "answering": "Respondiendo…",
+    "conversationCreateFailed": "No se pudo iniciar la conversación. Tu pregunta está de nuevo en Nuevo chat.",
+    "messageSaveFailed": "No se pudo guardar este mensaje. Inténtalo de nuevo.",
+    "conversationLoadFailed": "No se pudo cargar esta conversación. Inténtalo de nuevo.",
     "newChat": "Nuevo chat",
     "search": "Buscar conversaciones...",
     "archived": "Archivadas",
@@ -4382,7 +4695,15 @@
       "todos": "Enumera mis tareas recientes",
       "meeting": "Prepárame para mi próxima reunión",
       "sharedNotes": "Destaca mis notas compartidas"
-    }
+    },
+    "fork": "Bifurcar",
+    "forked": "Chat bifurcado",
+    "forkedFrom": "Bifurcado de «{{title}}»",
+    "forkFailed": "No se pudo bifurcar este chat",
+    "sendNotStarted": "Este chat está ocupado. Tu mensaje no se envió. Inténtalo de nuevo cuando termine la solicitud actual.",
+    "openFailed": "Este chat ya no está disponible.",
+    "localModelDownloading": "El modelo del asistente aún se está descargando. El chat se activará cuando esté listo.",
+    "localModelMissing": "Elige un modelo para Chat en Configuración para chatear en este dispositivo."
   },
   "support": {
     "documentation": "Documentación",
@@ -4465,7 +4786,6 @@
       "hotkeyToSpeak": "{{hotkey}} para hablar",
       "recording": "Grabando...",
       "processing": "Procesando...",
-      "clickToSpeak": "Haz clic para hablar",
       "waitingForMicrophone": "Esperando el micrófono…"
     },
     "buttons": {
@@ -4477,7 +4797,6 @@
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora",
       "askAssistant": "Preguntar al asistente",
-      "busyRecording": "Primero termina la grabación actual",
       "startMeetingRecording": "Iniciar grabación de reunión"
     }
   },
@@ -4580,30 +4899,153 @@
       "update_skillName": "Actualizar habilidad",
       "search_openwhispr_helpStatus": "Buscando en la ayuda de OpenWhispr...",
       "read_openwhispr_helpStatus": "Leyendo la ayuda de OpenWhispr...",
-      "get_openwhispr_contextStatus": "Leyendo los ajustes de OpenWhispr..."
+      "get_openwhispr_contextStatus": "Leyendo los ajustes de OpenWhispr...",
+      "ask_userName": "Pregunta",
+      "ask_userStatus": "Preguntándote...",
+      "request_connectionName": "Conexión",
+      "request_connectionStatus": "Pidiendo conectar...",
+      "request_accessName": "Acceso",
+      "request_accessStatus": "Pidiendo acceso...",
+      "look_at_screenName": "Mirar la pantalla",
+      "look_at_screenStatus": "Mirando tu pantalla...",
+      "request_api_keyName": "Clave de API",
+      "request_api_keyStatus": "Pidiendo una clave de API...",
+      "open_settingsName": "Ajustes",
+      "open_settingsStatus": "Indicándote Ajustes..."
+    },
+    "turn": {
+      "reasoning": "Razonamiento",
+      "stopped": "Detenido",
+      "stepLimit": "En pausa tras alcanzar el número máximo de pasos.",
+      "continue": "Continuar",
+      "continueMessage": "Continúa",
+      "failed": "Esta respuesta falló.",
+      "unbackedClaim": "No se hizo: no se ejecutó nada de lo que esta respuesta dice haber hecho."
+    },
+    "interactions": {
+      "notNow": "Ahora no",
+      "cancel": "Cancelar",
+      "questions": {
+        "recommended": "{{label}} (Recomendado)",
+        "submit": "Enviar",
+        "placeholder": "Escribe tu respuesta…",
+        "previous": "Pregunta anterior",
+        "next": "Pregunta siguiente",
+        "position": "{{current}}/{{total}}",
+        "continue": "Continuar",
+        "typedAnswer": "Tu respuesta: {{answer}}"
+      },
+      "connection": {
+        "title": "Conectar {{name}}",
+        "connect": "Conectar {{name}}",
+        "connecting": "Termina de conectar en tu navegador…",
+        "failed": "No se pudo conectar. Inténtalo de nuevo.",
+        "permissionDenied": "Se denegó el acceso al calendario. Permítelo en Ajustes del Sistema e inténtalo de nuevo.",
+        "calendarTitle": "Conectar un calendario",
+        "yes": "Sí",
+        "reasons": {
+          "gmail": "Puedo enviar el correo desde tu Gmail.",
+          "slack": "Puedo publicar el mensaje en Slack por ti.",
+          "linear": "Puedo buscar y crear incidencias de Linear por ti.",
+          "github": "Puedo buscar y crear issues de GitHub por ti.",
+          "calendar": "Puedo consultar tu disponibilidad y sugerir horarios."
+        }
+      },
+      "access": {
+        "screen": "¿Permitir el acceso a tu pantalla?",
+        "allow": "Permitir",
+        "capturing": "Capturando…"
+      },
+      "apiKey": {
+        "title": "Añade tu clave de API de {{provider}}",
+        "placeholder": "Pega o escribe aquí",
+        "save": "Guardar",
+        "label": "Clave de API de {{provider}}",
+        "saved": "Clave de {{provider}} guardada"
+      },
+      "settings": {
+        "done": "Listo",
+        "technicalDetails": "Detalles técnicos",
+        "checking": "Comprobando…"
+      },
+      "status": {
+        "answered": "Respondido",
+        "connected": "{{name}} conectado",
+        "granted": "Pantalla compartida",
+        "declined": "No permitido",
+        "saved": "Clave de API guardada",
+        "done": "De vuelta de Ajustes",
+        "cancelled": "Descartado",
+        "notAnswered": "Sin respuesta",
+        "invalid": "No se pudo mostrar la pregunta"
+      },
+      "followUp": {
+        "connected": "He conectado {{name}}.",
+        "granted": "He permitido el acceso a mi pantalla.",
+        "saved": "He guardado mi clave de API de {{provider}}.",
+        "done": "He terminado en Ajustes."
+      }
     }
   },
-  "assistant": {
-    "panel": {
-      "selectionHint": "Selecciona texto para editarlo con",
-      "selectedContext": "Texto seleccionado añadido",
-      "removeSelectedContext": "Quitar texto seleccionado",
-      "newConversation": "Nueva conversación",
-      "copyToClipboard": "Copiar al portapapeles",
-      "suggestions": {
-        "summarizeNotes": "Resume mis notas recientes",
-        "calendar": "¿Qué hay en mi calendario?",
-        "draft": "Ayúdame a redactar algo"
-      }
+  "agentWindow": {
+    "title": "Asistente",
+    "actions": {
+      "expand": "Ampliar",
+      "collapse": "Minimizar",
+      "speak": "Hablar",
+      "type": "Escribir",
+      "stop": "Detener",
+      "close": "Cerrar",
+      "regenerate": "Regenerar",
+      "readAloud": "Leer en voz alta",
+      "stopReading": "Dejar de leer"
     },
-    "toolActivity": {
-      "verbs": {
-        "invoking": "Invocando",
-        "calling": "Llamando",
-        "using": "Usando"
-      },
-      "toolFallback": "Herramienta"
-    }
+    "notices": {
+      "nothingHeard": "No te he entendido",
+      "transcriptionFailed": "No se pudo transcribir",
+      "micUnavailable": "No se pudo abrir el micrófono",
+      "regenerateFailed": "No se pudo regenerar la respuesta",
+      "dictationActive": "El dictado está usando el micrófono"
+    },
+    "composer": {
+      "placeholder": "Dicta o escribe tu pregunta…",
+      "followUpPlaceholder": "Haz una pregunta de seguimiento…",
+      "answerPlaceholder": "Responde aquí…",
+      "cardPlaceholder": "Responde en la tarjeta de arriba…"
+    },
+    "empty": {
+      "title": "¿En qué puedo ayudarte?",
+      "description": "Escribe tu petición abajo."
+    },
+    "selectedContext": {
+      "title": "Contexto seleccionado",
+      "remove": "Quitar el contexto seleccionado",
+      "fromAnswer": "De la respuesta: «{{text}}»",
+      "fromOtherApp": "De otra app: «{{text}}»"
+    },
+    "selectionHint": "Selecciona texto para preguntar o bifurcar",
+    "selectionToolbar": "Texto seleccionado",
+    "followUp": "Preguntar",
+    "forkFromHere": "Bifurcar desde aquí",
+    "chats": {
+      "title": "Chats",
+      "switch": "Cambiar de chat",
+      "new": "Nuevo chat",
+      "empty": "Aún no hay chats",
+      "untitled": "Chat sin título",
+      "fork": "Bifurcado"
+    },
+    "progress": {
+      "callingTools_one": "Llamando a {{count}} herramienta…",
+      "callingTools_other": "Llamando a {{count}} herramientas…",
+      "checkingAnswers": "Revisando las respuestas…",
+      "reasoning": "Razonando…",
+      "reasonedFor": "Razonó durante {{duration}}",
+      "workedFor": "Trabajó durante {{duration}}",
+      "steps_one": "{{count}} paso",
+      "steps_other": "{{count}} pasos"
+    },
+    "waitingForAnswer": "Esperando respuesta"
   },
   "integrations": {
     "title": "Integraciones",
@@ -4726,7 +5168,6 @@
     "approval": {
       "headers": {
         "default": "Enviar a {{destination}}",
-        "slackPost": "Publicar en {{destination}}",
         "email": "Correo para {{destination}}",
         "issue": "Crear incidencia en {{destination}}",
         "comment": "Comentar en {{destination}}"
@@ -4734,8 +5175,6 @@
       "identity": "Como {{account}}",
       "identityWithWorkspace": "Como {{account}} en {{workspace}}",
       "send": "Enviar",
-      "edit": "Editar",
-      "doneEditing": "Edición terminada",
       "cancel": "Cancelar",
       "titleLabel": "Título",
       "bodyLabel": "Mensaje",
@@ -4761,6 +5200,10 @@
         "credential_save_failed": "No se pudo guardar el inicio de sesión de Slack en este equipo. No se envió nada. Inténtalo de nuevo.",
         "dm_failed": "No se pudo abrir el mensaje directo a {{destination}}. No se envió nada.",
         "restricted": "{{destination}} es de solo lectura o está restringido para ti.",
+        "thread_mismatch": "Ese hilo está en una conversación distinta de {{destination}}. No se envió nada.",
+        "invalid_thread": "Eso no es un enlace a un mensaje de Slack. No se envió nada.",
+        "thread_closed": "Slack no permite respuestas en ese hilo. No se envió nada.",
+        "thread_only": "{{destination}} solo admite respuestas en hilos. No se envió nada.",
         "generic": "Algo salió mal. No se envió nada.",
         "github": {
           "reconnect_needed": "GitHub debe reconectarse en Configuración.",
@@ -4821,7 +5264,6 @@
         }
       },
       "email": {
-        "from": "De {{account}}",
         "toLabel": "Para",
         "ccLabel": "CC",
         "subjectLabel": "Asunto",
@@ -4834,7 +5276,8 @@
         "tooManyRecipients": "Un correo puede ir a {{max}} direcciones como máximo, entre Para y CC.",
         "subjectTooLong": "El asunto debe tener {{max}} caracteres como máximo.",
         "bodyTooLong": "El mensaje es demasiado largo para Gmail. Acórtalo para enviarlo.",
-        "unknown": "No se pudo confirmar el envío. Revisa tu carpeta de enviados."
+        "unknown": "No se pudo confirmar el envío. Revisa tu carpeta de enviados.",
+        "fromLabel": "De"
       },
       "github": {
         "notes": {
@@ -4878,7 +5321,22 @@
         "notes": {
           "targetTitle": "En «{{title}}»"
         }
-      }
+      },
+      "sentEarlier": "Ya lo intentaste antes en este chat. Comprueba si se completó antes de volver a enviarlo.",
+      "slack": {
+        "channelLabel": "Canal",
+        "asLabel": "Como",
+        "destination": "{{workspace}} · {{destination}}",
+        "notes": {
+          "replyInThread": "Respuesta en el hilo iniciado el {{started, datetime(dateStyle: medium; timeStyle: short)}}"
+        },
+        "sentOutsideThread": "Enviado a {{destination}} como mensaje nuevo, no en el hilo."
+      },
+      "sentLabel": "Enviado",
+      "identityChanged": "Ahora se enviará como {{account}}. Pulsa Enviar para enviarlo.",
+      "connectToSend": "Conecta {{name}} para enviar esto",
+      "edit": "Editar",
+      "doneEditing": "Edición terminada"
     },
     "policyOff": "Tu organización ha desactivado los conectores.",
     "email": {
@@ -4927,7 +5385,8 @@
         "connectedBody": "Puedes cerrar esta pestaña y volver a OpenWhispr.",
         "failedTitle": "Slack no se conectó",
         "failedBody": "Vuelve a OpenWhispr para intentarlo de nuevo."
-      }
+      },
+      "pickDestination": "¿Qué «{{destination}}» quieres decir?"
     },
     "github": {
       "title": "GitHub",
@@ -5103,6 +5562,10 @@
         "credential_save_failed": "No se pudo guardar el inicio de sesión de Slack en este equipo. No se envió nada.",
         "dm_failed": "No se pudo abrir el mensaje directo. No se envió nada.",
         "restricted": "Ese canal es de solo lectura o está restringido.",
+        "thread_mismatch": "Ese hilo está en otra conversación. No se envió nada.",
+        "invalid_thread": "No es un enlace a un mensaje de Slack.",
+        "thread_closed": "Slack no permite respuestas en ese hilo.",
+        "thread_only": "Ese canal solo admite respuestas en hilos.",
         "generic": "No funcionó.",
         "github": {
           "reconnect_needed": "GitHub debe reconectarse.",
@@ -5167,7 +5630,8 @@
       },
       "gmailDraftLimit": "Solo se pueden preparar {{max}} correos por solicitud.",
       "queryResults": "Resultados encontrados: {{total}}",
-      "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud."
+      "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud.",
+      "alreadySent": "Ya se hizo para esta solicitud"
     },
     "beta": "Beta",
     "upsell": "Los conectores se incluyen en los planes de pago. Mejora tu plan para que el asistente trabaje en tus herramientas.",
@@ -5578,10 +6042,13 @@
     "missingAudio": "[audio faltante {{from}}-{{to}}]"
   },
   "workspaces": {
+    "defaultName": "Espacio de trabajo de {{name}}",
+    "defaultNameFallback": "Mi espacio de trabajo",
     "switcher": {
       "workspaces": "Espacios de trabajo",
       "add": "Añadir espacio de trabajo",
-      "invitePeople": "Invitar personas"
+      "invitePeople": "Invitar personas",
+      "unavailable": "Los espacios de trabajo no están disponibles en este momento."
     },
     "create": {
       "title": "Crear espacio de trabajo",
@@ -5615,8 +6082,6 @@
       "submitOne": "Enviar invitación",
       "submit_one": "Enviar {{count}} invitación",
       "submit_other": "Enviar {{count}} invitaciones",
-      "submitting_one": "Invitando a {{count}} persona…",
-      "submitting_other": "Invitando a {{count}} personas…",
       "sentTitle_one": "{{count}} invitación enviada",
       "sentTitle_other": "{{count}} invitaciones enviadas",
       "attachedTitle_one": "{{count}} invitación actualizada",
@@ -5658,8 +6123,8 @@
         "member": "Miembro del espacio de trabajo"
       },
       "roleDescription": {
-        "admin": "Gestiona miembros, invitaciones, grupos y ajustes.",
-        "member": "Puede ver y editar notas."
+        "admin": "Gestiona miembros, invitaciones, equipos y ajustes.",
+        "member": "Usa el espacio de trabajo."
       },
       "errors": {
         "invalid": "{{email}} no es un correo válido",
@@ -5673,7 +6138,8 @@
         "rateLimited": "Hay demasiadas invitaciones en este momento. Inténtalo de nuevo más tarde.",
         "requestFailed": "No se pudo invitar a {{email}}. Revisa tu conexión e inténtalo de nuevo.",
         "refused": "No se pudo invitar a {{email}}: {{reason}}"
-      }
+      },
+      "sending": "Invitando…"
     },
     "join": {
       "title": "Únete a tu equipo",
@@ -5711,17 +6177,18 @@
     "exit": {
       "leave": {
         "title": "¿Salir de {{name}}?",
-        "body": "Perderás el acceso a este espacio de trabajo, a sus equipos y a sus teamspaces. Un administrador del espacio de trabajo puede volver a invitarte.",
+        "body": "Perderás el acceso a este espacio de trabajo, a sus equipos y a sus teamspaces. El propietario o un administrador del espacio de trabajo puede volver a invitarte.",
+        "privateNotes": "Tus notas privadas de este espacio de trabajo se moverán a {{workspace}}.",
         "failed": "No se pudo salir de {{name}}. Comprueba tu conexión e inténtalo de nuevo."
       },
       "left": {
         "title": "Saliste de {{name}}"
       },
-      "chooseAnother": "Elige otro espacio de trabajo para continuar.",
-      "chooseWorkspace": "Elegir espacio de trabajo",
+      "nowIn": "Ahora estás en {{workspace}}.",
       "delete": {
         "title": "¿Eliminar {{name}}?",
-        "body": "Esto elimina de forma permanente el espacio de trabajo, sus notas, archivos, equipos y teamspaces para todos. No se puede deshacer."
+        "body": "Esto elimina de forma permanente el espacio de trabajo, sus notas, archivos, equipos y teamspaces para todos. No se puede deshacer.",
+        "privateNotes": "Tus notas privadas de este espacio de trabajo se moverán a {{workspace}}."
       },
       "deleting": {
         "title": "Eliminando {{name}}…",
@@ -5741,9 +6208,9 @@
       "body": "Perderá el acceso a todos los teamspaces y equipos de este espacio de trabajo. Puedes volver a invitarle cuando quieras.",
       "confirm": "Quitar",
       "removing": "Quitando…",
-      "failed": "No se pudo confirmar que se quitó a {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
       "notAllowed": "Ya no tienes permiso para quitar personas de {{workspace}}.",
-      "alreadyRemoved": "{{name}} ya había sido quitado"
+      "alreadyRemoved": "{{name}} ya había sido quitado",
+      "failedTitle": "No se pudo eliminar a {{name}}"
     },
     "removeMembers": {
       "title_one": "¿Quitar {{count}} miembro de {{workspace}}?",
@@ -5751,8 +6218,6 @@
       "confirm_one": "Quitar {{count}} miembro",
       "confirm_other": "Quitar {{count}} miembros",
       "checking": "Comprobando…",
-      "failed_one": "No se pudo confirmar que se quitó {{count}} miembro. Comprueba tu conexión e inténtalo de nuevo.",
-      "failed_other": "No se pudo confirmar que se quitaron {{count}} miembros. Comprueba tu conexión e inténtalo de nuevo.",
       "body": "Estas personas perderán el acceso a todos los teamspaces y equipos de este espacio de trabajo. Puedes volver a invitarlas cuando quieras.",
       "ownerOne": "{{name}} es propietario de notas o teamspaces en este espacio de trabajo.",
       "owners_one": "{{count}} de ellos es propietario de notas o teamspaces.",
@@ -5763,24 +6228,31 @@
       "directoryManagedOneOthers": "{{name}} está asignado por tu proveedor de identidad. Quítalo allí o desmárcalo para quitar a los demás.",
       "directoryManagedOthers_one": "{{count}} de ellos está asignado por tu proveedor de identidad. Quítalo allí o desmárcalo para quitar a los demás.",
       "directoryManagedOthers_other": "{{count}} de ellos están asignados por tu proveedor de identidad. Quítalos allí o desmárcalos para quitar a los demás.",
-      "transferLabel": "Transferir a",
-      "transferBody": "Sus notas y teamspaces pasarán al nuevo propietario. Perderán el acceso a este espacio de trabajo.",
+      "transferLabel": "Reasignar a",
       "transferBodyLimited": "Sus notas y teamspaces pasarán a {{name}}, excepto las notas de teamspaces a los que {{name}} no puede acceder, que se quedarán allí. Perderán el acceso a este espacio de trabajo.",
       "you": "{{name}} (tú)",
-      "transferConfirm": "Transferir y quitar",
+      "transferConfirm": "Reasignar y eliminar",
       "transferring": "Transfiriendo…",
-      "transferFailed": "No se pudo confirmar la transferencia y la eliminación. Comprueba tu conexión e inténtalo de nuevo.",
+      "transferFailed": "No se pudo reasignar el contenido. No se eliminó a ningún miembro. Inténtalo de nuevo.",
+      "transferUnconfirmed": "No se pudo confirmar la reasignación y la eliminación. Comprueba tu conexión e inténtalo de nuevo.",
       "invalidTarget": "{{name}} ya no puede recibir la propiedad. Elige a otra persona.",
       "cannotRemoveOwner": "No se puede quitar al propietario del espacio de trabajo.",
       "cannotRemoveSelf": "No puedes quitarte a ti mismo. Sal del espacio de trabajo desde General.",
       "done_one": "{{count}} miembro quitado",
       "done_other": "{{count}} miembros quitados",
-      "transferDone_one": "Sus notas y teamspaces se movieron a {{name}} y se quitó {{count}} miembro.",
-      "transferDone_other": "Sus notas y teamspaces se movieron a {{name}} y se quitaron {{count}} miembros.",
       "transferPartial_one": "{{count}} nota se quedó en un teamspace al que {{name}} no puede acceder. Todo lo demás se movió.",
       "transferPartial_other": "{{count}} notas se quedaron en teamspaces a los que {{name}} no puede acceder. Todo lo demás se movió.",
       "alreadyRemoved_one": "{{count}} miembro ya había sido quitado",
-      "alreadyRemoved_other": "{{count}} miembros ya habían sido quitados"
+      "alreadyRemoved_other": "{{count}} miembros ya habían sido quitados",
+      "failedBody": "Su acceso al espacio de trabajo no ha cambiado. Comprueba tu conexión e inténtalo de nuevo.",
+      "unconfirmedTitle": "No se pudo confirmar la eliminación",
+      "unconfirmedBody": "Es posible que ya se hayan eliminado. Comprueba tu conexión e inténtalo de nuevo.",
+      "reassignBody": "Transfiere sus notas y asigna un administrador de teamspace antes de eliminarlos.",
+      "ownersAll": "Son propietarios de notas o administran teamspaces.",
+      "failedTitle_one": "No se pudo eliminar a {{count}} miembro",
+      "failedTitle_other": "No se pudo eliminar a {{count}} miembros",
+      "transferDone_one": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembro.",
+      "transferDone_other": "Se reasignaron el contenido y el acceso de administrador de teamspace a {{name}}. Se eliminó a {{count}} miembros."
     },
     "cancelInvitation": {
       "title": "¿Cancelar la invitación para {{email}}?",
@@ -5808,7 +6280,6 @@
       "body": "Elige a un miembro existente del espacio de trabajo. Pasarás a ser administrador tras la transferencia.",
       "newOwner": "Nuevo propietario",
       "placeholder": "Elige a un miembro del espacio de trabajo",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "¿Transferir la propiedad a {{name}}?",
       "confirmBody": "{{name}} será el propietario de {{workspace}}. Tú pasarás a ser administrador.",
       "submit": "Transferir propiedad",
@@ -6129,5 +6600,16 @@
       "bootstrapMismatch": "El archivo de arranque no coincide con tu cuenta, este espacio de trabajo o sus credenciales configuradas.",
       "testLinkOtherWorkspace": "Este enlace de prueba es para otro espacio de trabajo. Cambia a ese espacio de trabajo y vuelve a abrir el enlace."
     }
+  },
+  "affiliate": {
+    "remove": "Eliminar enlace de creador",
+    "haveLink": "¿Tienes un enlace de un creador?",
+    "label": "Enlace del creador (opcional)",
+    "placeholder": "Pega el enlace de tu creador",
+    "saved": "Enlace del creador guardado.",
+    "checking": "Comprobando tu enlace…",
+    "unavailable": "No pudimos comprobar tu enlace. Inténtalo de nuevo o borra el campo para continuar.",
+    "privacy": "Los enlaces de creadores no están disponibles con tus ajustes de seguimiento actuales. Borra el campo para continuar.",
+    "review": "Tu enlace se ha guardado para su revisión."
   }
 }

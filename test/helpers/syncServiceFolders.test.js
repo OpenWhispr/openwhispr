@@ -1,6 +1,7 @@
 // Folder half of the SyncService orchestration: real SyncService over the real
 // cloudApi/FoldersService stack, a real DatabaseManager, and the fake cloud.
 // Assertions are on the wire (cloud.log) as well as on the resulting rows.
+// Team folders sync independently of Backup; personal folders follow consent.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -17,6 +18,7 @@ const {
 } = require("./harness/browserGlobals.js");
 const { createElectronApi } = require("./harness/electronApiBridge.js");
 const { createFakeCloud } = require("./harness/fakeCloud.js");
+const { TEAM_SPACE, joinTeamSpace } = require("./harness/teamSpace.js");
 
 installBrowserGlobals();
 
@@ -29,9 +31,13 @@ async function setup(t, cloudConfig) {
   enableSync();
   const cloud = createFakeCloud(cloudConfig);
   browserWindow.electronAPI = createElectronApi(db, { cloud });
+  const team = joinTeamSpace(db, cloud);
   await establishValidatedAuth();
-  return { db, cloud };
+  return { db, cloud, team };
 }
+
+// The scope every teamspace folder push carries.
+const TEAM_SCOPE = { workspace_id: TEAM_SPACE.workspace_id, space_id: TEAM_SPACE.id };
 
 async function newSyncService(t) {
   const { SyncService } = await loadSync();
@@ -72,11 +78,11 @@ function shift(iso, hours) {
 test("a note in a folder with no cloud mapping pushes folder_id undefined, not the local row id", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
-  const { db, cloud } = ctx;
+  const { db, cloud, team } = ctx;
 
   // Folder creation fails, so nothing local ever gets a cloud_id.
   cloud.failWith("POST /api/folders/batch-create", { status: 500, error: "folder push down" });
-  const work = db.createFolder("Work").folder;
+  const work = db.createFolder("Work", team.id).folder;
   const saved = db.saveNote("Spec", "body", "personal", null, null, work.id);
 
   await (await newSyncService(t)).syncAll(true);
@@ -113,9 +119,8 @@ test("pulled notes map cloud folder ids back to local ids and park the row when 
   await (await newSyncService(t)).syncAll(true);
 
   const localWork = folderByName(db, "Work");
-  const personal = folderByName(db, "Personal");
   assert.ok(localWork, "the cloud-only folder must materialize locally");
-  assert.notEqual(localWork.id, personal.id);
+  assert.equal(localWork.space_id, ctx.team.id);
 
   assert.equal(
     noteByClientId(db, "cn-mapped").folder_id,
@@ -140,48 +145,53 @@ test("pulled notes map cloud folder ids back to local ids and park the row when 
   );
 });
 
-test("a fresh device adopts the cloud's default folders by name instead of pushing duplicates", async (t) => {
-  const ctx = await setup(t);
-  if (!ctx) return;
-  const { db, cloud } = ctx;
+test("private default folders follow Backup consent and reuse an existing cloud default", async (t) => {
+  for (const backup of [true, false]) {
+    await t.test(backup ? "Backup on" : "Backup off", async (st) => {
+      const ctx = await setup(st);
+      if (!ctx) return;
+      const { db, cloud } = ctx;
+      browserLocalStorage.setItem("cloudBackupEnabled", String(backup));
+      const remote = cloud.seedFolder({
+        client_folder_id: "cf-personal",
+        name: "Personal",
+        is_default: true,
+        sort_order: 0,
+        space_id: null,
+        workspace_id: null,
+      });
+      db.saveNote("Private", "body");
+      const privateSpaceId = db.getPrivateSpaceId();
+      const project = db.createFolder("Private projects", privateSpaceId).folder;
+      const before = allFolders(db).filter((folder) => folder.space_id === privateSpaceId);
+      assert.ok(before.some((folder) => folder.name === "Personal" && folder.is_default));
 
-  const cloudPersonal = cloud.seedFolder({
-    client_folder_id: "cf-personal",
-    name: "Personal",
-    is_default: true,
-    sort_order: 0,
-  });
-  const cloudMeetings = cloud.seedFolder({
-    client_folder_id: "cf-meetings",
-    name: "Meetings",
-    is_default: true,
-    sort_order: 1,
-  });
+      await (await newSyncService(st)).syncAll(true);
 
-  await (await newSyncService(t)).syncAll(true);
-
-  const [batch] = cloud.logFor("/api/folders/batch-create");
-  assert.deepEqual(
-    batch.body.folders.map((f) => f.name),
-    ["Videos"],
-    "adopted defaults must be gone from the push, or the cloud forks a second Personal"
-  );
-
-  assert.equal(cloud.folders().length, 3);
-  assert.equal(cloud.folders().filter((f) => f.name === "Personal").length, 1);
-  assert.equal(allFolders(db).length, 3, "adoption must not add a local row either");
-
-  const personal = folderByName(db, "Personal");
-  assert.equal(personal.client_folder_id, "cf-personal");
-  assert.equal(personal.cloud_id, cloudPersonal.id);
-  assert.equal(personal.sync_status, "synced");
-  assert.equal(folderByName(db, "Meetings").cloud_id, cloudMeetings.id);
+      const after = allFolders(db).filter((folder) => folder.space_id === privateSpaceId);
+      if (backup) {
+        assert.equal(after.find((folder) => folder.name === "Personal").cloud_id, remote.id);
+        assert.equal(cloud.folders().filter((folder) => folder.name === "Personal").length, 1);
+        assert.equal(after.find((folder) => folder.name === "Personal").sync_status, "synced");
+        const uploaded = after.find((folder) => folder.id === project.id);
+        assert.ok(uploaded.cloud_id);
+        assert.equal(uploaded.sync_status, "synced");
+      } else {
+        assert.equal(cloud.logFor("/api/folders/batch-create").length, 0);
+        assert.equal(cloud.logFor("/api/folders/create").length, 0);
+        assert.equal(cloud.folders().length, 1);
+        assert.deepEqual(after, before);
+      }
+    });
+  }
 });
 
 test("pushPendingFolders sends name/client_folder_id/is_default/sort_order in row order and links each folder on ack", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
-  const { db, cloud } = ctx;
+  const { db, cloud, team } = ctx;
+  const created = ["Videos", "Meetings", "Personal"].map((name) => db.createFolder(name, team.id));
+  setFolderRow(db, created[1].folder.id, { is_default: 1 });
 
   await (await newSyncService(t)).syncAll(true);
 
@@ -201,17 +211,26 @@ test("pushPendingFolders sends name/client_folder_id/is_default/sort_order in ro
       "is_default",
       "name",
       "sort_order",
+      "space_id",
+      "workspace_id",
     ]);
-    assert.equal(folder.is_default, true, "SQLite's 1 must be coerced to a boolean on the wire");
+    assert.equal(folder.space_id, TEAM_SPACE.id);
+    assert.equal(folder.workspace_id, TEAM_SPACE.workspace_id);
+    assert.equal(typeof folder.is_default, "boolean");
     assert.equal(typeof folder.sort_order, "number");
     assert.equal(typeof folder.client_folder_id, "string");
   }
   assert.deepEqual(
+    sent.map((f) => f.is_default),
+    [true, false, false],
+    "SQLite's 1 and 0 must be coerced to booleans on the wire"
+  );
+  assert.deepEqual(
     sent.map((f) => f.sort_order),
-    [1, 0, 2]
+    [2, 3, 1]
   );
 
-  for (const local of allFolders(db)) {
+  for (const local of allFolders(db).filter((folder) => folder.space_id === team.id)) {
     assert.equal(local.sync_status, "synced");
     const remote = cloud.folder(local.client_folder_id);
     assert.ok(remote, `cloud row missing for ${local.name}`);
@@ -222,9 +241,9 @@ test("pushPendingFolders sends name/client_folder_id/is_default/sort_order in ro
 test("a renamed linked folder PATCHes /api/folders/update instead of creating a second cloud folder", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
-  const { db, cloud } = ctx;
+  const { db, cloud, team } = ctx;
 
-  const work = db.createFolder("Work").folder;
+  const work = db.createFolder("Work", team.id).folder;
   await (await newSyncService(t)).syncAll(true);
   const cloudId = folderByName(db, "Work").cloud_id;
   assert.ok(cloudId);
@@ -238,7 +257,12 @@ test("a renamed linked folder PATCHes /api/folders/update instead of creating a 
   const patches = cloud.logFor("/api/folders/update");
   assert.equal(patches.length, 1);
   assert.equal(patches[0].method, "PATCH");
-  assert.deepEqual(patches[0].body, { id: cloudId, name: "Work Renamed", sort_order: 3 });
+  assert.deepEqual(patches[0].body, {
+    id: cloudId,
+    name: "Work Renamed",
+    sort_order: 1,
+    ...TEAM_SCOPE,
+  });
 
   assert.equal(cloud.folder(cloudId).name, "Work Renamed");
   assert.equal(
@@ -253,10 +277,10 @@ test("a renamed linked folder PATCHes /api/folders/update instead of creating a 
 test("a failed folder PATCH leaves that folder pending and does not abort the rest of the loop", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
-  const { db, cloud } = ctx;
+  const { db, cloud, team } = ctx;
 
-  const alpha = db.createFolder("Alpha").folder;
-  const beta = db.createFolder("Beta").folder;
+  const alpha = db.createFolder("Alpha", team.id).folder;
+  const beta = db.createFolder("Beta", team.id).folder;
   await (await newSyncService(t)).syncAll(true);
   const alphaCloudId = folderByName(db, "Alpha").cloud_id;
   const betaCloudId = folderByName(db, "Beta").cloud_id;
@@ -276,8 +300,18 @@ test("a failed folder PATCH leaves that folder pending and does not abort the re
     2,
     "the second folder must still be attempted after the first threw"
   );
-  assert.deepEqual(patches[0].body, { id: alphaCloudId, name: "Alpha Renamed", sort_order: 3 });
-  assert.deepEqual(patches[1].body, { id: betaCloudId, name: "Beta Renamed", sort_order: 4 });
+  assert.deepEqual(patches[0].body, {
+    id: alphaCloudId,
+    name: "Alpha Renamed",
+    sort_order: 1,
+    ...TEAM_SCOPE,
+  });
+  assert.deepEqual(patches[1].body, {
+    id: betaCloudId,
+    name: "Beta Renamed",
+    sort_order: 2,
+    ...TEAM_SCOPE,
+  });
 
   assert.equal(
     folderByName(db, "Alpha Renamed").sync_status,
@@ -292,9 +326,9 @@ test("a failed folder PATCH leaves that folder pending and does not abort the re
 test("pushFolderDeletes sends the cloud id, hard-deletes on ack, and keeps the tombstone on failure", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
-  const { db, cloud } = ctx;
+  const { db, cloud, team } = ctx;
 
-  const work = db.createFolder("Trash Me").folder;
+  const work = db.createFolder("Trash Me", team.id).folder;
   await (await newSyncService(t)).syncAll(true);
   const cloudId = folderByName(db, "Trash Me").cloud_id;
 
@@ -348,14 +382,14 @@ test("pullFolders keeps a local folder whose same-day cloud copy is older and ac
     updated_at: "2026-07-27T13:00:00.000Z",
   });
 
-  const keep = db.createFolder("Local Wins").folder;
+  const keep = db.createFolder("Local Wins", ctx.team.id).folder;
   setFolderRow(db, keep.id, {
     client_folder_id: "cf-stale",
     cloud_id: stale.id,
     sync_status: "synced",
     updated_at: "2026-07-27 12:00:00",
   });
-  const lose = db.createFolder("Local Loses").folder;
+  const lose = db.createFolder("Local Loses", ctx.team.id).folder;
   setFolderRow(db, lose.id, {
     client_folder_id: "cf-fresher",
     cloud_id: fresher.id,
@@ -377,7 +411,7 @@ test("pullFolders keeps a local folder whose same-day cloud copy is older and ac
   );
 });
 
-test("a failed folder list leaves lastSyncedAt.folders unstamped so the next pass re-pulls from scratch", async (t) => {
+test("a failed folder list retains the initial recovery cursor so the next pass replays history", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   const { cloud } = ctx;
@@ -387,7 +421,7 @@ test("a failed folder list leaves lastSyncedAt.folders unstamped so the next pas
 
   assert.equal(
     browserLocalStorage.getItem("lastSyncedAt.folders"),
-    null,
+    "1970-01-01T00:00:00.000Z",
     "stamping a failed pull would silently skip every folder change in that window"
   );
 
@@ -397,8 +431,8 @@ test("a failed folder list leaves lastSyncedAt.folders unstamped so the next pas
   const lists = cloud.logFor("/api/folders/list");
   assert.equal(
     lists[lists.length - 1].path,
-    "/api/folders/list",
-    "with no stamp the recovery pass must ask for the full snapshot"
+    "/api/folders/list?since=1970-01-01T00%3A00%3A00.000Z&scope=all",
+    "the recovery pass must include history and its tombstones"
   );
   assert.ok(browserLocalStorage.getItem("lastSyncedAt.folders"), "a clean pull must stamp");
 });
@@ -434,7 +468,7 @@ test("the folders cursor advances and the next pass only receives folders change
   const lists = cloud.logFor("/api/folders/list");
   assert.equal(
     lists[lists.length - 1].path,
-    `/api/folders/list?since=${encodeURIComponent(stamp)}`,
+    `/api/folders/list?since=${encodeURIComponent(stamp)}&scope=all`,
     "the stored stamp must be sent as the since cursor"
   );
   assert.ok(folderByName(db, "After The Stamp"), "a folder newer than the cursor must arrive");
@@ -452,9 +486,9 @@ test("the folders cursor advances and the next pass only receives folders change
 test("a folder tombstone arriving in the delta pull hard-deletes the local folder", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
-  const { db, cloud } = ctx;
+  const { db, cloud, team } = ctx;
 
-  const shared = db.createFolder("Shared").folder;
+  const shared = db.createFolder("Shared", team.id).folder;
   await (await newSyncService(t)).syncAll(true);
   const cloudId = folderByName(db, "Shared").cloud_id;
   const stamp = browserLocalStorage.getItem("lastSyncedAt.folders");
@@ -474,7 +508,7 @@ test("a folder tombstone arriving in the delta pull hard-deletes the local folde
   const lists = cloud.logFor("/api/folders/list");
   assert.equal(
     lists[lists.length - 1].path,
-    `/api/folders/list?since=${encodeURIComponent(stamp)}`,
+    `/api/folders/list?since=${encodeURIComponent(stamp)}&scope=all`,
     "only the delta list carries tombstones; a snapshot pull would never see this delete"
   );
   assert.equal(

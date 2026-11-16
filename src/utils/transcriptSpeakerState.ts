@@ -99,11 +99,37 @@ export const lockTranscriptSpeaker = (
     speakerLockSource: "user",
   });
 
-const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSegment) => {
+// Live speakers that post-call diarization split into several voices, by live
+// speaker id: the voice the speaker's name went to.
+export type SplitLiveSpeakers = Record<string, { speaker: string; name: string }>;
+
+const mergeSpeakerFields = (
+  existing: TranscriptSegment,
+  incoming: TranscriptSegment,
+  splitLiveSpeakers?: SplitLiveSpeakers
+) => {
   const merged = {
     ...incoming,
     ...(existing.recorderName ? { recorderName: existing.recorderName } : {}),
   } as TranscriptSegment;
+
+  // Naming a live speaker locks the name onto every line it labelled. When that
+  // speaker turns out to be several voices, the lock stays with the voice the
+  // name went to, and the others take diarization's result.
+  const split = existing.speaker ? splitLiveSpeakers?.[existing.speaker] : undefined;
+  if (
+    split &&
+    incoming.speaker !== split.speaker &&
+    existing.speakerName === split.name &&
+    isTranscriptSpeakerLocked(existing)
+  ) {
+    return normalizeTranscriptSegment({
+      ...merged,
+      speakerLocked: false,
+      speakerLockSource: undefined,
+    });
+  }
+
   const existingFields = existing as Record<SpeakerStateField, unknown>;
   const mergedFields = merged as Record<SpeakerStateField, unknown>;
 
@@ -129,7 +155,8 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
 
 export const mergeTranscriptSegments = (
   existingSegments: TranscriptSegment[],
-  incomingSegments: TranscriptSegment[]
+  incomingSegments: TranscriptSegment[],
+  splitLiveSpeakers?: SplitLiveSpeakers
 ) => {
   if (incomingSegments.length === 0) {
     return normalizeTranscriptSegments(existingSegments);
@@ -178,7 +205,10 @@ export const mergeTranscriptSegments = (
 
     if (matchIndex !== undefined) {
       usedIndexes.add(matchIndex);
-      enrichedByIndex.set(matchIndex, mergeSpeakerFields(existingSegments[matchIndex], segment));
+      enrichedByIndex.set(
+        matchIndex,
+        mergeSpeakerFields(existingSegments[matchIndex], segment, splitLiveSpeakers)
+      );
     } else {
       unmatchedIncoming.push(
         normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })

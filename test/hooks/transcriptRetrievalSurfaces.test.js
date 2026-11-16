@@ -6,16 +6,33 @@ const {
   createRendererServer,
   installBrowserGlobals,
   SIGNED_OUT_AUTH_MOCK,
+  userTextOf,
 } = require("../lib/rendererTestHarness");
 const { installInteractiveDom } = require("../lib/interactiveDom");
 const noop = () => {};
+
+function privacyBridge(protectedNotes) {
+  return {
+    getPrivateSpaceId: async () => 1,
+    getDatabaseAccountScope: async () => ({ accountId: null, visibleAccountId: null }),
+    getNoteWriteGuard: async () => ({ accountId: null, authGeneration: 0 }),
+    protectConversation: async (id, notes, deviceOnly, accountId) => {
+      assert.equal(id, 1);
+      assert.deepEqual(notes, [{ id: 7, space_id: 1 }]);
+      assert.equal(deviceOnly, false);
+      assert.equal(accountId, null);
+      protectedNotes.push(notes);
+      return { success: true };
+    },
+  };
+}
 // Longer than a hosted model gets whole, so the note chat sends a preview.
 const TRANSCRIPT =
   "Alex: Review the agenda. ".repeat(9000) + "Priya: The launch code is violet heron.";
 const PREVIEW_RULE = "only its start is shown (transcript_preview)";
 const REQUEST = "What is the launch code?";
 
-for (const surface of ["note chat", "assistant panel"]) {
+for (const surface of ["note chat", "agent window"]) {
   for (const provider of ["cloud", "byok"]) {
     test(`${surface}, ${provider}: bounded evidence reaches the reply and survives conversation reopen`, async (t) => {
       let root;
@@ -33,11 +50,14 @@ for (const surface of ["note chat", "assistant panel"]) {
         space_id: 1,
       };
       const savedMessages = [];
+      const protectedNotes = [];
       installBrowserGlobals(t, {
         initialStorage: { isSubscribed: "false" },
         window: {
           clearInterval: noop,
           electronAPI: {
+            // The note is in main's Private, all a chat reads with no workspace active.
+            ...privacyBridge(protectedNotes),
             getNote: async () => ({ ...stored }),
             semanticSearchNotes: async () => [],
             getConversationsForNote: async () => [],
@@ -123,11 +143,13 @@ for (const surface of ["note chat", "assistant panel"]) {
           )
       );
       let chat;
-      let settled = false;
+      let agentChat;
       const { useEmbeddedChat } = await vite.ssrLoadModule("/hooks/useEmbeddedChat.ts");
-      const { AssistantPanel } = await vite.ssrLoadModule(
-        "/components/dictation/AssistantPanel.tsx"
-      );
+      const { useAgentChat } = await vite.ssrLoadModule("/components/agent/useAgentChat.ts");
+      function AgentHarness() {
+        agentChat = useAgentChat({ onRegenerateFailed: noop });
+        return null;
+      }
       function Harness() {
         chat = useEmbeddedChat({
           noteId: 7,
@@ -141,50 +163,14 @@ for (const surface of ["note chat", "assistant panel"]) {
       }
       root = createRoot(container);
       await React.act(async () =>
-        root.render(
-          surface === "note chat"
-            ? React.createElement(Harness)
-            : React.createElement(AssistantPanel, {
-                pendingCommand: {
-                  id: 1,
-                  text: REQUEST,
-                  attachment: null,
-                  selectedContext: null,
-                  delivery: null,
-                },
-                initialConversationId: null,
-                onCommandConsumed: noop,
-                onCommandDiscarded: noop,
-                onCommandSettled: () => {
-                  settled = true;
-                },
-                onConversationIdChange: noop,
-                onClose: noop,
-                onBusyChange: noop,
-                onResponseReadyChange: noop,
-                onResponseContent: noop,
-                onConversationReset: noop,
-                onSelectionContextChange: noop,
-                skillChoice: { picked: null, pickOff: false },
-                onSkillChoiceChange: noop,
-                voiceState: "idle",
-                thinking: false,
-                open: true,
-                footerPhase: "actions",
-                horizontalDirection: "left",
-              })
-        )
+        root.render(React.createElement(surface === "note chat" ? Harness : AgentHarness))
       );
-      if (surface === "note chat") await React.act(async () => chat.sendMessage(REQUEST));
-      else {
-        for (let i = 0; !settled && i < 100; i++)
-          await React.act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          });
-        assert.equal(settled, true);
-      }
+      await React.act(async () =>
+        surface === "note chat" ? chat.sendMessage(REQUEST) : agentChat.send(REQUEST)
+      );
+      assert.ok(protectedNotes.length > 0, "local evidence protects the persisted chat");
       assert.equal(stored.transcript, TRANSCRIPT);
-      assert.equal(request.messages.at(-1).content, REQUEST);
+      assert.equal(userTextOf(request.messages.at(-1).content), REQUEST);
       assert.ok(savedMessages.some((m) => m[1] === "assistant" && m[2].includes("violet heron")));
       if (surface === "note chat") {
         await React.act(async () => chat.startNewChat());
@@ -209,113 +195,119 @@ for (const surface of ["note chat", "assistant panel"]) {
   }
 }
 
-test("switching notes during a note read drops cancelled transcript evidence before it reaches another note", async (t) => {
-  let root;
-  let reasoning;
-  t.after(async () => {
-    if (root) await React.act(async () => root.unmount());
-    reasoning?.destroy();
-  });
-  const notes = new Map(
-    [7, 8].map((id) => [
-      id,
-      {
+for (const boundary of ["grounding", "tool"]) {
+  test(`switching notes during a ${boundary} read drops cancelled transcript evidence before it reaches another note`, async (t) => {
+    let root;
+    let reasoning;
+    t.after(async () => {
+      if (root) await React.act(async () => root.unmount());
+      reasoning?.destroy();
+    });
+    const notes = new Map(
+      [7, 8].map((id) => [
         id,
-        title: `Note ${id}`,
-        content: `Personal ${id}`,
-        enhanced_content: "## Decisions Made\nKeep me",
-        transcript: "Source",
-      },
-    ])
-  );
-  let releaseRead;
-  let readStarted;
-  const started = new Promise((resolve) => {
-    readStarted = resolve;
-  });
-  const pause = async () => {
-    readStarted();
-    await new Promise((resolve) => {
-      releaseRead = resolve;
+        {
+          id,
+          title: `Note ${id}`,
+          content: `Personal ${id}`,
+          enhanced_content: "## Decisions Made\nKeep me",
+          transcript: "Source",
+          space_id: 1,
+        },
+      ])
+    );
+    let releaseRead;
+    let readStarted;
+    const started = new Promise((resolve) => {
+      readStarted = resolve;
     });
-  };
-  const writes = [];
-  let requests = 0;
-  const replies = [];
-  installBrowserGlobals(t, {
-    window: {
-      electronAPI: {
-        getConversationsForNote: async () => [],
-        createAgentConversation: async () => ({ id: 1 }),
-        addAgentMessage: async (_id, role, text) => {
-          if (role === "assistant") replies.push(text);
-        },
-        getNote: async (id) => {
-          await pause();
-          return notes.get(id);
-        },
-        updateNote: async (id, updates) => {
-          writes.push({ id, updates });
-          Object.assign(notes.get(id), updates);
-          return { success: true };
+    const pause = async () => {
+      readStarted();
+      await new Promise((resolve) => {
+        releaseRead = resolve;
+      });
+    };
+    const writes = [];
+    let requests = 0;
+    const replies = [];
+    const protectedNotes = [];
+    installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          ...privacyBridge(protectedNotes),
+          getConversationsForNote: async () => [],
+          createAgentConversation: async () => ({ id: 1 }),
+          addAgentMessage: async (_id, role, text) => {
+            if (role === "assistant") replies.push(text);
+          },
+          getNote: async (id) => {
+            if (boundary === "grounding" || requests > 0) await pause();
+            return notes.get(id);
+          },
+          updateNote: async (id, updates) => {
+            writes.push({ id, updates });
+            Object.assign(notes.get(id), updates);
+            return { success: true };
+          },
         },
       },
-    },
-  });
-  const container = installInteractiveDom(t);
-  const vite = await createRendererServer(t, { mockModules: SIGNED_OUT_AUTH_MOCK });
-  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
-  usePolicyStore.setState({ status: "unmanaged", policy: null });
-  useSettingsStore.setState({ isSignedIn: true, chatAgentMode: "openwhispr" });
-  reasoning = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
-  t.mock.method(reasoning, "processTextStreamingCloud", (_messages, config) =>
-    (async function* () {
-      requests += 1;
-      await config.executeToolCall(
-        "get_note",
-        JSON.stringify({ id: 7, transcript_query: "Source" }),
-        "read"
-      );
-      yield { type: "content", text: "Stale transcript answer." };
-      yield { type: "done", finishReason: "stop" };
-    })()
-  );
-  const { useEmbeddedChat } = await vite.ssrLoadModule("/hooks/useEmbeddedChat.ts");
-  let chat;
-  function Harness({ id }) {
-    const note = notes.get(id);
-    chat = useEmbeddedChat({
-      noteId: id,
-      folderId: null,
-      noteTitle: note.title,
-      noteContent: note.content,
-      noteSummary: note.enhanced_content,
     });
-    return null;
-  }
-  root = createRoot(container);
-  await React.act(async () => root.render(React.createElement(Harness, { id: 7 })));
-  let sending;
-  await React.act(async () => {
-    sending = chat.sendMessage("What did the source say?");
-    await started;
+    const container = installInteractiveDom(t);
+    const vite = await createRendererServer(t, { mockModules: SIGNED_OUT_AUTH_MOCK });
+    const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+    const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+    usePolicyStore.setState({ status: "unmanaged", policy: null });
+    useSettingsStore.setState({ isSignedIn: true, chatAgentMode: "openwhispr" });
+    reasoning = (await vite.ssrLoadModule("/services/ReasoningService.ts")).default;
+    t.mock.method(reasoning, "processTextStreamingCloud", (_messages, config) =>
+      (async function* () {
+        requests += 1;
+        await config.executeToolCall(
+          "get_note",
+          JSON.stringify({ id: 7, transcript_query: "Source" }),
+          "read"
+        );
+        yield { type: "content", text: "Stale transcript answer." };
+        yield { type: "done", finishReason: "stop" };
+      })()
+    );
+    const { useEmbeddedChat } = await vite.ssrLoadModule("/hooks/useEmbeddedChat.ts");
+    let chat;
+    function Harness({ id }) {
+      const note = notes.get(id);
+      chat = useEmbeddedChat({
+        noteId: id,
+        folderId: null,
+        noteTitle: note.title,
+        noteContent: note.content,
+        noteSummary: note.enhanced_content,
+      });
+      return null;
+    }
+    root = createRoot(container);
+    await React.act(async () => root.render(React.createElement(Harness, { id: 7 })));
+    let sending;
+    await React.act(async () => {
+      sending = chat.sendMessage("What did the source say?");
+      await started;
+    });
+    await React.act(async () => root.render(React.createElement(Harness, { id: 8 })));
+    // Returning to the original note must not revive its earlier submission.
+    await React.act(async () => root.render(React.createElement(Harness, { id: 7 })));
+    await React.act(async () => {
+      releaseRead();
+      await sending;
+    });
+    assert.equal(requests, boundary === "tool" ? 1 : 0);
+    assert.equal(protectedNotes.length, boundary === "tool" ? 1 : 0);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(replies, []);
+    assert.deepEqual(chat.messages, []);
+    assert.equal(chat.activeConversationId, null);
+    for (const note of notes.values())
+      assert.equal(note.enhanced_content, "## Decisions Made\nKeep me");
   });
-  await React.act(async () => root.render(React.createElement(Harness, { id: 8 })));
-  // Returning to the original note must not revive its earlier submission.
-  await React.act(async () => root.render(React.createElement(Harness, { id: 7 })));
-  await React.act(async () => {
-    releaseRead();
-    await sending;
-  });
-  assert.equal(requests, 1);
-  assert.deepEqual(writes, []);
-  assert.deepEqual(replies, []);
-  assert.deepEqual(chat.messages, []);
-  assert.equal(chat.activeConversationId, null);
-  for (const note of notes.values())
-    assert.equal(note.enhanced_content, "## Decisions Made\nKeep me");
-});
+}
 
 test("the note chat sends a transcript whole when it fits the model, else a preview", async (t) => {
   let transcript =
@@ -326,11 +318,14 @@ test("the note chat sends a transcript whole when it fits the model, else a prev
     if (root) await React.act(async () => root.unmount());
     reasoning?.destroy();
   });
+  const protectedNotes = [];
   installBrowserGlobals(t, {
     initialStorage: { isSubscribed: "false" },
     window: {
       clearInterval: noop,
       electronAPI: {
+        ...privacyBridge(protectedNotes),
+        getNote: async () => ({ id: 7, space_id: 1, transcript }),
         getConversationsForNote: async () => [],
         createAgentConversation: async () => ({ id: 1 }),
         addAgentMessage: async () => {},
@@ -370,7 +365,9 @@ test("the note chat sends a transcript whole when it fits the model, else a prev
   const ask = async (settings, options) => {
     useSettingsStore.setState({ isSignedIn: true, ...settings });
     await React.act(async () => chat.startNewChat());
+    const protectedBefore = protectedNotes.length;
     await React.act(async () => chat.sendMessage(REQUEST, options));
+    assert.equal(protectedNotes.length, protectedBefore + 1);
     return {
       whole: systemPrompt.includes(JSON.stringify(transcript)),
       preview: systemPrompt.includes('"transcript_preview":true'),

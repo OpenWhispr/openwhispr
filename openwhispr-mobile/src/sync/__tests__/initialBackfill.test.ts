@@ -353,3 +353,28 @@ describe('note client ids', () => {
     expect(mockNotesRepository.setNoteClientId).toHaveBeenCalledWith(7, expect.any(String));
   });
 });
+
+test('does not adopt a same-named default from another Private workspace', async () => {
+  mockNotesRepository.getFoldersMissingClientId.mockReturnValue([folder()]);
+  mockFetchFolders.mockResolvedValue([remoteFolder({ private_workspace_id: 'workspace-beta' })]);
+  await runInitialBackfillIfNeeded('user-1');
+  expect(mockNotesRepository.markFolderPushed).not.toHaveBeenCalled();
+  expect(mockNotesRepository.setFolderClientId).toHaveBeenCalledWith(1, expect.any(String));
+});
+
+test('adopts the actual default workspace UUID while ignoring a same-named other workspace', async () => {
+  mockNotesRepository.getSyncState.mockImplementation((key) =>
+    key === 'private_default_workspace_id' ? 'workspace-default' : null,
+  );
+  mockNotesRepository.getFoldersMissingClientId.mockReturnValue([folder()]);
+  mockFetchFolders.mockResolvedValue([
+    remoteFolder({ id: 'default-folder', private_workspace_id: 'workspace-default' }),
+    remoteFolder({ id: 'beta-folder', private_workspace_id: 'workspace-beta' }),
+  ]);
+  await runInitialBackfillIfNeeded('user-1');
+  expect(mockNotesRepository.markFolderPushed).toHaveBeenCalledWith(
+    1,
+    'default-folder',
+    expect.any(String),
+  );
+});

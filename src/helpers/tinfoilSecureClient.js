@@ -15,16 +15,18 @@ function getSecureClient() {
   return clientPromise;
 }
 
-async function createTinfoilRealtimeSocket({ model, apiKey }) {
+async function createTinfoilRealtimeSocket({ model, apiKey, signal }) {
+  signal?.throwIfAborted();
   const client = await getSecureClient();
   const path = `/v1/realtime?model=${encodeURIComponent(model)}&intent=transcription`;
   return client.createWebSocket(path, {
-    wsOptions: { headers: { Authorization: `Bearer ${apiKey}` } },
+    wsOptions: { headers: { Authorization: `Bearer ${apiKey}` }, signal },
   });
 }
 
 /** Fetches an enclave path over the attested transport. Needs no API key. */
 async function tinfoilSecureFetch(path, init) {
+  init?.signal?.throwIfAborted();
   const client = await getSecureClient();
   return client.fetch(path, init);
 }

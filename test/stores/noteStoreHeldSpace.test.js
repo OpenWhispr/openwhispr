@@ -64,6 +64,7 @@ async function fixture(t) {
   });
   const store = await vite.ssrLoadModule("/stores/noteStore.ts");
   const held = await vite.ssrLoadModule("/lib/heldSpaceDeletes.ts");
+  const heldTeams = await vite.ssrLoadModule("/lib/heldTeamDeletes.ts");
   const conflicts = await vite.ssrLoadModule("/lib/noteConflictRegistry.ts");
   await store.initializeNotesTree();
   const hide = () => {
@@ -85,6 +86,7 @@ async function fixture(t) {
   return {
     store,
     held,
+    heldTeams,
     conflicts,
     purged,
     hide,
@@ -213,6 +215,17 @@ test("an account change forgets what was held", async (t) => {
 
   assert.equal(held.isSpaceHeld(2), false);
   assert.equal(held.heldCloudSpaceIds().size, 0);
+});
+
+test("an account change forgets held teams too", async (t) => {
+  const { store, heldTeams } = await fixture(t);
+  heldTeams.holdTeam("team-1");
+  assert.equal(heldTeams.isTeamHeld("team-1"), true);
+
+  store.resetForAccountChange();
+
+  assert.equal(heldTeams.isTeamHeld("team-1"), false);
+  assert.equal(heldTeams.heldTeamIds().size, 0);
 });
 
 test("Undo leaves the user where they went in the meantime", async (t) => {

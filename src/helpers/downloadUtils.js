@@ -1,13 +1,18 @@
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
 const path = require("path");
-const { net } = require("electron");
+const { createHash } = require("node:crypto");
+const { net, session } = require("electron");
 const { execFile } = require("child_process");
 const { pipeline } = require("stream");
 const debugLogger = require("./debugLogger");
 const { runSystemTar } = require("./systemTar");
 
 const USER_AGENT = "OpenWhispr/1.0";
+// Only the main-process model/resource download helpers use this partition.
+function getAssetDownloadSession() {
+  return session.fromPartition("local-model-assets", { cache: false });
+}
 const PROGRESS_THROTTLE_MS = 100;
 const DEFAULT_MAX_RETRIES = 3;
 const MAX_BACKOFF_MS = 30000;
@@ -119,7 +124,12 @@ function downloadAttempt(url, tempPath, options) {
       signal.onAbort = onAbort;
     }
 
-    request = net.request({ url, method: "GET" });
+    request = net.request({
+      url,
+      method: "GET",
+      session: getAssetDownloadSession(),
+      useSessionCookies: false,
+    });
     for (const [name, value] of Object.entries(headers)) {
       request.setHeader(name, value);
     }
@@ -249,7 +259,7 @@ function downloadAttempt(url, tempPath, options) {
 
 async function fetchJson(url, options = {}) {
   const { headers, ...init } = options;
-  const response = await net.fetch(url, {
+  const response = await getAssetDownloadSession().fetch(url, {
     method: "GET",
     useSessionCookies: false,
     ...init,
@@ -262,6 +272,21 @@ async function fetchJson(url, options = {}) {
     throw err;
   }
   return response.json();
+}
+
+async function verifyFileSha256(filePath, expectedSha256, signal) {
+  if (!expectedSha256) return;
+  if (!/^[a-f0-9]{64}$/.test(expectedSha256)) throw new Error("Invalid expected SHA-256");
+  const hash = createHash("sha256");
+  for await (const chunk of fs.createReadStream(filePath)) {
+    if (signal?.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
+    hash.update(chunk);
+  }
+  if (hash.digest("hex") !== expectedSha256) {
+    throw Object.assign(new Error("Model SHA-256 verification failed"), {
+      code: "ERR_MODEL_INTEGRITY",
+    });
+  }
 }
 
 async function downloadFile(url, destPath, options = {}) {
@@ -304,12 +329,21 @@ async function downloadFile(url, destPath, options = {}) {
     }
 
     try {
-      await downloadAttempt(url, tempPath, {
-        onProgress,
-        signal,
-        startOffset,
-        expectedSize,
-      });
+      try {
+        await downloadAttempt(url, tempPath, {
+          onProgress,
+          signal,
+          startOffset,
+          expectedSize,
+        });
+      } catch (error) {
+        // A temp file that is already whole (the app quit while hashing it) gets 416 for
+        // a Range request past its end; the hash check below decides if it is complete.
+        if (!(error.statusCode === 416 && options.expectedSha256 && startOffset > 0)) throw error;
+      }
+
+      await verifyFileSha256(tempPath, options.expectedSha256, signal);
+      if (signal?.aborted) throw Object.assign(new Error("Download cancelled"), { isAbort: true });
 
       // Atomic move to final path
       try {
@@ -524,7 +558,9 @@ async function findFiles(dir, pattern, maxDepth = 5, depth = 0) {
 }
 
 module.exports = {
+  getAssetDownloadSession,
   downloadFile,
+  verifyFileSha256,
   fetchJson,
   createDownloadSignal,
   createDownloadInProgressError,

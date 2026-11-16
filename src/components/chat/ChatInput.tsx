@@ -26,7 +26,7 @@ interface ChatInputProps {
   onCancel?: () => void;
   autoFocus?: boolean;
   placeholder?: string;
-  /** Overrides the default wrapper padding (compact hosts like the assistant panel). */
+  /** Overrides the default wrapper padding (compact hosts). */
   className?: string;
   /** Offer a mic when the input is empty; recordings transcribe into the input. */
   voiceDraft?: boolean;

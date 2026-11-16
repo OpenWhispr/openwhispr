@@ -14,7 +14,7 @@ const CATALOG = "- meeting-prep: Briefs me before meetings.\n- weekly-recap: Rec
 test("the skill rule and catalog appear only with skills", async () => {
   const { getAgentSystemPrompt } = await load();
 
-  const prompt = getAgentSystemPrompt(["load_skill", "search_notes"], undefined, {
+  const prompt = getAgentSystemPrompt(["load_skill", "search_notes"], {
     skillCatalog: CATALOG,
   });
 
@@ -28,7 +28,7 @@ test("the skill rule and catalog appear only with skills", async () => {
 test("a fitting skill is loaded before any follow-up question", async () => {
   const { getAgentSystemPrompt } = await load();
 
-  const prompt = getAgentSystemPrompt(["load_skill"], undefined, { skillCatalog: CATALOG });
+  const prompt = getAgentSystemPrompt(["load_skill"], { skillCatalog: CATALOG });
 
   assert.match(prompt, /before you ask the user a follow-up question/);
   assert.match(prompt, /call load_skill with its name first/);
@@ -37,7 +37,7 @@ test("a fitting skill is loaded before any follow-up question", async () => {
 test("the rule appears for an attached skill without a catalog", async () => {
   const { getAgentSystemPrompt } = await load();
 
-  const prompt = getAgentSystemPrompt([], undefined, { skillContent: true });
+  const prompt = getAgentSystemPrompt([], { skillContent: true });
 
   assert.ok(prompt.includes(RULE_START));
   assert.ok(!prompt.includes("call load_skill"));
@@ -45,12 +45,12 @@ test("the rule appears for an attached skill without a catalog", async () => {
 
 test("no skills, no change", async () => {
   const { getAgentSystemPrompt } = await load();
-  const options = { toolTrace: true, userName: "Sam" };
+  const options = { toolHistory: "text", userName: "Sam" };
 
-  const today = getAgentSystemPrompt(["search_notes"], "Note: kickoff", options);
+  const today = getAgentSystemPrompt(["search_notes"], options);
 
   assert.equal(
-    getAgentSystemPrompt(["search_notes"], "Note: kickoff", {
+    getAgentSystemPrompt(["search_notes"], {
       ...options,
       skillCatalog: "",
       skillContent: false,

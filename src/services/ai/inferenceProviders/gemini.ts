@@ -1,4 +1,5 @@
 import type { InferenceProvider } from "./types";
+import { abortOnCancel, isRequestCancelled, requestCancelledError } from "../requestCancellation";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import { API_ENDPOINTS } from "../../../config/constants";
 import {
@@ -9,6 +10,7 @@ import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { chosenReasoningEffort, emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
+import { geminiCatalogThinkingFloor } from "../thinkingSuppressionDialects";
 import {
   asProviderError,
   providerHttpError,
@@ -53,6 +55,11 @@ const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> 
   "gemini-2.5-pro": { thinkingBudget: 128, includeThoughts: false },
 };
 
+// The table covers models published before the catalog's thinkingFloor existed.
+function thinkingFloor(model: string): GeminiGenerationConfig["thinkingConfig"] {
+  return geminiCatalogThinkingFloor(model) ?? minimalThinking[model];
+}
+
 export const geminiProvider: InferenceProvider = {
   id: "gemini",
   supportsImages: true,
@@ -82,8 +89,8 @@ export const geminiProvider: InferenceProvider = {
     const thinkingLevel = chosenReasoningEffort("gemini", model, config);
     if (thinkingLevel) {
       generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: false };
-    } else if (config.disableThinking === true && minimalThinking[model]) {
-      generationConfig.thinkingConfig = minimalThinking[model];
+    } else if (config.disableThinking === true && thinkingFloor(model)) {
+      generationConfig.thinkingConfig = thinkingFloor(model);
     }
 
     const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
@@ -105,6 +112,7 @@ export const geminiProvider: InferenceProvider = {
     };
 
     const response = await withRetry(async () => {
+      if (isRequestCancelled(config.requestId)) throw requestCancelledError();
       // Metadata only: body previews can leak transcript text or base64 screenshots.
       logger.logReasoning("GEMINI_REQUEST", {
         endpoint: `${API_ENDPOINTS.GEMINI}/models/${model}:generateContent`,
@@ -116,6 +124,7 @@ export const geminiProvider: InferenceProvider = {
       });
 
       const controller = new AbortController();
+      const unlinkCancel = abortOnCancel(config.requestId, controller);
       const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config.inferenceScope });
       const timeoutId = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
       try {
@@ -154,11 +163,13 @@ export const geminiProvider: InferenceProvider = {
         });
         return jsonResponse;
       } catch (error) {
+        if (isRequestCancelled(config.requestId)) throw requestCancelledError();
         if ((error as Error).name === "AbortError") {
           throw llmRequestTimeoutError(timeoutSeconds);
         }
         throw error;
       } finally {
+        unlinkCancel();
         clearTimeout(timeoutId);
       }
     }, createApiRetryStrategy()).catch((error) => {

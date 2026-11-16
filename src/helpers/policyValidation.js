@@ -4,7 +4,7 @@
 // policy as "allow everything" — so a managed response must carry a
 // structurally valid policy or the whole response is malformed.
 const { isCanonicalAppVersion } = require("./appVersion");
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 
 const POLICY_SCOPES = ["transcription", "llm"];
 const TRANSCRIPTION_MODES = new Set([
@@ -85,6 +85,11 @@ function isValidPolicyShape(policy) {
     (policy.requiredLocalModels === undefined ||
       (Array.isArray(policy.requiredLocalModels) &&
         policy.requiredLocalModels.every((item) => typeof item === "string"))) &&
+    (policy.updates === undefined ||
+      (policy.updates !== null &&
+        typeof policy.updates === "object" &&
+        !Array.isArray(policy.updates) &&
+        (policy.updates.mode === undefined || typeof policy.updates.mode === "string"))) &&
     (policy.minAppVersion === null || isCanonicalAppVersion(policy.minAppVersion))
   );
 }

@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AlertCircle, Check } from "../icons";
 import { useTranslation } from "react-i18next";
@@ -9,6 +10,7 @@ import { isPolicySettled } from "../../stores/policyRules";
 import { getASRModelOrganization } from "../../helpers/localASROrganization";
 import { getParakeetModels, getWhisperModels } from "../../models/ModelRegistry";
 import { SETUP_CARD_CLASS } from "./ProviderSetupStep";
+import { spaceSizeUnit } from "../../utils/formatBytes";
 
 type ModelFamily = "whisper" | "parakeet";
 
@@ -39,6 +41,7 @@ export function RequiredModelDownloadStep({
   onProceed,
   onRefusedChange,
 }: RequiredModelDownloadStepProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
   const whisperCatalog = getWhisperModels();
@@ -154,7 +157,7 @@ export function RequiredModelDownloadStep({
                   </span>
                 ) : (
                   <span className="mt-0.5 block truncate text-xs text-[var(--onboarding-text-secondary)]">
-                    {info?.size?.replace(/(?<=\d)(?=[A-Za-z])/, " ") ?? ""}
+                    {info?.size ? spaceSizeUnit(info.size) : ""}
                   </span>
                 )}
               </div>
@@ -170,7 +173,9 @@ export function RequiredModelDownloadStep({
                   <span className="relative whitespace-nowrap">
                     {download.isInstalling
                       ? t("onboarding.rehaul.local.installing")
-                      : t("onboarding.rehaul.local.downloadingShort")}
+                      : download.isVerifying
+                        ? t("onboarding.rehaul.local.verifying")
+                        : t("onboarding.rehaul.local.downloadingShort")}
                   </span>
                 </span>
               ) : failure && isRefused(modelId) ? null : failure ? (

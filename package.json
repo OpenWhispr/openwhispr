@@ -22,7 +22,7 @@
     "compile:calendar-listener": "node scripts/build-macos-calendar-listener.js",
     "compile:audio-tap": "node scripts/build-macos-audio-tap.js",
     "compile:window-bounds": "node scripts/build-macos-window-bounds.js",
-    "compile:native": "npm run compile:globe && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:linuxkeys && npm run compile:winpaste && npm run compile:linux-paste && npm run compile:linux-system-audio && npm run compile:text-monitor && npm run compile:media-remote && npm run compile:mediaremote-adapter && npm run compile:mic-listener && npm run compile:calendar-listener && npm run compile:audio-tap && npm run compile:window-bounds",
+    "compile:native": "npm run compile:globe && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:linuxkeys && npm run compile:winpaste && npm run compile:linux-paste && npm run compile:linux-system-audio && npm run compile:text-monitor && npm run compile:media-remote && npm run compile:mediaremote-adapter && npm run compile:mic-listener && npm run compile:managed-policy && npm run compile:calendar-listener && npm run compile:audio-tap && npm run compile:window-bounds",
     "prestart": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
     "start": "electron .",
     "dev": "concurrently -k -r \"npm:dev:renderer\" \"npm:dev:main\"",
@@ -31,7 +31,8 @@
     "dev:renderer": "cd src && vite",
     "prebuild": "npm run compile:native && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:meeting-aec-helper && npm run download:whisper-vad-model && npm run download:embedding-model -- --for-build && npm run download:diarization-models -- --output-dir resources/bin/diarization-models && npm run download:brand-fonts",
     "build": "cd src && vite build && cd .. && electron-builder",
-    "postinstall": "electron-builder install-app-deps",
+    "apply:patches": "patch-package --error-on-fail",
+    "postinstall": "npm run apply:patches && electron-builder install-app-deps",
     "build:renderer": "cd src && vite build",
     "compile:mac-icon": "node scripts/compile-macos-icon.js",
     "prebuild:mac": "npm run compile:native && npm run compile:mac-icon && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx && npm run download:yt-dlp && npm run download:qdrant && npm run download:meeting-aec-helper && npm run download:whisper-vad-model && npm run download:diarization-models -- --output-dir resources/bin/diarization-models && npm run download:brand-fonts",
@@ -77,10 +78,14 @@
     "lint": "eslint . && cd src && eslint .",
     "test": "node --import tsx --test \"test/**/*.test.js\"",
     "typecheck": "cd src && tsc --noEmit",
-    "quality-check": "npm run format:check && npm run typecheck",
+    "quality-check": "npm run model-registry:verify && npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",
     "preview": "cd src && vite preview",
-    "clean": "node cleanup.js"
+    "clean": "node cleanup.js",
+    "compile:managed-policy": "node scripts/build-macos-managed-policy.js",
+    "model-registry:verify": "node scripts/sync-model-registry.mjs --check",
+    "model-registry:sync": "node scripts/sync-model-registry.mjs",
+    "model-registry:release-check": "node scripts/sync-model-registry.mjs --release-check"
   },
   "keywords": [
     "dictation",
@@ -115,6 +120,7 @@
     "espree": "^11.2.0",
     "globals": "17.5.0",
     "happy-dom": "^21.0.4",
+    "patch-package": "8.0.1",
     "postcss": "^8.5.10",
     "prettier": "^3.8.3",
     "tailwindcss": "^4.1.10",
@@ -124,7 +130,7 @@
     "vite": "^8.1.6"
   },
   "dependencies": {
-    "@ai-sdk/amazon-bedrock": "^4.0.93",
+    "@ai-sdk/amazon-bedrock": "^4.0.129",
     "@ai-sdk/anthropic": "^3.0.58",
     "@ai-sdk/azure": "^3.0.53",
     "@ai-sdk/google": "^3.0.43",
@@ -188,6 +194,7 @@
     "ai": "^6.0.116",
     "better-auth": "1.7.14",
     "better-sqlite3": "12.11.1",
+    "builder-util-runtime": "^9.7.0",
     "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -198,7 +205,7 @@
     "highlight.js": "11.12.0",
     "https-proxy-agent": "^7.0.6",
     "i18next": "^26.3.6",
-    "js-yaml": "^4.3.2",
+    "js-yaml": "^5.5.0",
     "katex": "0.18.11",
     "kysely": "^0.28.17",
     "lowlight": "3.3.0",
@@ -255,6 +262,9 @@
     "ip-address": "10.2.0",
     "markdown-it": "14.3.3",
     "shell-quote": "1.12.0",
-    "tmp": "0.2.7"
+    "tmp": "0.2.7",
+    "tinfoil": {
+      "ehbp": "0.2.5"
+    }
   }
 }
