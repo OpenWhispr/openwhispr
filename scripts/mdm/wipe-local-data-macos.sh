@@ -103,33 +103,28 @@ read_as_owner() { printf '%s\0' "$1" | as_owner cat; }
 # that still hold what it wrote (a BOM and line endings aside, as the app
 # reads them), and folders that leaves empty. Anything else, an outside edit
 # included, is the user's. The chosen folder itself stays, and nothing is
-# reached through a link out of it. The database and the files are read as the
-# home's owner, so root never opens one a user planted. The mirror's default
-# folder, in the app's own data, goes whole below.
+# reached through a link out of it. While the home's account exists, the
+# database and the files are read as its owner, so root never opens one they
+# planted.
 remove_mirrored_files() {
-  local database="$user_data/transcriptions.db" data_real rows base rel hash file folder
-  local last_base="" real_base="" real_dir raw plain
+  local database="$user_data/transcriptions.db" rows base rel hash file folder real_base real_dir
+  local raw plain
   [[ -f "$database" && ! -L "$database" ]] || return 0
-  data_real="$(cd -P "$user_data" && pwd)" || return 0
   # A version from before the mirror kept its record names no file. Not
   # read-only: macOS's sqlite3 can't open a WAL database that way once its app
   # has closed it.
   rows="$(as_owner_run sqlite3 "$database" \
     "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'")" &&
     { [[ -z "$rows" ]] || rows="$(as_owner_run sqlite3 -ascii "$database" \
-      "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir' ORDER BY base_path")"; } || {
+      "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir'")"; } || {
     echo "Could not read the notes mirror's record in $database" >&2
     failed=1
     return 0
   }
   while IFS=$'\x1f' read -r -d $'\x1e' base rel hash; do
-    if [[ "$base" != "$last_base" ]]; then
-      last_base="$base"
-      real_base="$(cd -P "$base" 2>/dev/null && pwd)" || real_base=""
-      [[ "$base" == /* && "$real_base" == "$home_real"/* && "$real_base" != "$data_real"/* ]] ||
-        real_base=""
-    fi
-    [[ -n "$real_base" ]] || continue
+    [[ "$base" == /* ]] || continue
+    real_base="$(cd -P "$base" 2>/dev/null && pwd)" || continue
+    [[ "$real_base" == "$home_real"/* ]] || continue
     file="$base/$rel"
     real_dir="$(cd -P "$(dirname "$file")" 2>/dev/null && pwd)" || continue
     [[ "$real_dir" == "$real_base" || "$real_dir" == "$real_base"/* ]] || continue
