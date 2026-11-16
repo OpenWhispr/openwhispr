@@ -46,9 +46,19 @@ function loadModelManager() {
 async function withHome(prefix, fn) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   electronHome = home;
+  // #3244: the electron home stub alone does not contain the cache root —
+  // getPreferredCacheRoot() prefers OPENWHISPR_CACHE_ROOT, then USERPROFILE
+  // (win32) / XDG_CACHE_HOME (linux), over the stubbed home, so without this
+  // pin the fake model below lands in the user's real cache (where
+  // deleteModel would touch real files). Pin it to the temp home's own
+  // cache dir and restore it afterwards.
+  const previousCacheRoot = process.env.OPENWHISPR_CACHE_ROOT;
+  process.env.OPENWHISPR_CACHE_ROOT = path.join(home, ".cache", "openwhispr");
   try {
     return await fn(home);
   } finally {
+    if (previousCacheRoot === undefined) delete process.env.OPENWHISPR_CACHE_ROOT;
+    else process.env.OPENWHISPR_CACHE_ROOT = previousCacheRoot;
     await fs.rm(home, { recursive: true, force: true });
   }
 }
@@ -75,9 +85,16 @@ test("getDraftDownloadUrl mirrors the main URL shape", () => {
 });
 
 test("resolveDraftPath returns the path only when a valid drafter file exists", async () => {
-  await withHome("openwhispr-draft-resolve-", async () => {
+  await withHome("openwhispr-draft-resolve-", async (home) => {
     const mm = loadModelManager();
     mm.ensureInitialized();
+    // #3244 regression: modelsDir must stay inside the temp home — on base,
+    // XDG_CACHE_HOME (linux) / USERPROFILE (win32) redirects it into the
+    // user's real cache instead.
+    assert.ok(
+      mm.modelsDir.startsWith(`${home}${path.sep}`),
+      `modelsDir escaped the temp home: ${mm.modelsDir}`
+    );
     await fs.mkdir(mm.modelsDir, { recursive: true });
 
     const model = mm.findModelById(QAT_ID).model;
@@ -100,9 +117,16 @@ test("resolveDraftPath returns the path only when a valid drafter file exists", 
 });
 
 test("deleteModel removes the drafter alongside the main file, ignoring a missing drafter", async () => {
-  await withHome("openwhispr-draft-delete-", async () => {
+  await withHome("openwhispr-draft-delete-", async (home) => {
     const mm = loadModelManager();
     mm.ensureInitialized();
+    // #3244 regression: modelsDir must stay inside the temp home — on base,
+    // XDG_CACHE_HOME (linux) / USERPROFILE (win32) redirects it into the
+    // user's real cache instead.
+    assert.ok(
+      mm.modelsDir.startsWith(`${home}${path.sep}`),
+      `modelsDir escaped the temp home: ${mm.modelsDir}`
+    );
     await fs.mkdir(mm.modelsDir, { recursive: true });
 
     const model = mm.findModelById(QAT_ID).model;
