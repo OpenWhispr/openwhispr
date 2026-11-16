@@ -44,10 +44,10 @@ const { app } = require("electron");
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
 // trigger can't 400 the whole sync batch.
 const MAX_SNIPPET_TRIGGER_LENGTH = 100;
-// A skill state write that changes something Cloud backup carries (or brings a removed name
-// back). SQLite evaluates it against the row as it was before the update.
 // Skill changes are stamped to the millisecond: a pull compares them with the server's own.
 const SKILL_NOW = "strftime('%Y-%m-%d %H:%M:%f', 'now')";
+// A skill state write that changes something Cloud backup carries (or brings a removed name
+// back). SQLite evaluates it against the row as it was before the update.
 const SKILL_CHANGED =
   "(deleted_at IS NOT NULL OR (@enabled IS NOT NULL AND enabled IS NOT @enabled) OR " +
   "(@contentHash IS NOT NULL AND content_hash IS NOT @contentHash))";
@@ -3920,6 +3920,8 @@ class DatabaseManager {
              updated_at = CASE WHEN ${SKILL_CHANGED} THEN ${SKILL_NOW} ELSE updated_at END,
              cloud_id = CASE WHEN deleted_at IS NOT NULL THEN NULL ELSE cloud_id END,
              client_skill_id = CASE WHEN deleted_at IS NOT NULL THEN @clientId ELSE client_skill_id END,
+             created_at = CASE WHEN deleted_at IS NOT NULL THEN ${SKILL_NOW} ELSE created_at END,
+             last_used_at = CASE WHEN deleted_at IS NOT NULL THEN NULL ELSE last_used_at END,
              deleted_at = NULL`
         )
         .run({
@@ -3936,8 +3938,17 @@ class DatabaseManager {
 
   // Journals need tombstones and sync metadata as well as the visible skill state.
   getSkillStateForRecovery(name) {
-    if (!this.db) throw new Error("Database not initialized");
-    return this.db.prepare("SELECT * FROM skills WHERE name = ?").get(name) ?? null;
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db.prepare("SELECT * FROM skills WHERE name = ?").get(name) ?? null;
+    } catch (error) {
+      debugLogger.error(
+        "Error getting skill state for recovery",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
   }
 
   // Recovery restores the original timestamps too, without recording a new content change.
@@ -4169,14 +4180,12 @@ class DatabaseManager {
       const result = this.db
         .prepare(
           `UPDATE skills
-           SET sync_status = 'synced', cloud_id = @cloudId,
-               updated_at = COALESCE(@serverUpdatedAt, updated_at)
+           SET sync_status = 'synced', updated_at = COALESCE(@serverUpdatedAt, updated_at)
            WHERE name = @name AND deleted_at IS NULL
              AND content_hash IS @expectedHash AND enabled = @expectedEnabled`
         )
         .run({
           name,
-          cloudId,
           serverUpdatedAt: serverUpdatedAt ?? null,
           expectedHash,
           expectedEnabled: Number(expectedEnabled),

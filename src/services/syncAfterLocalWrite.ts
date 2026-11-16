@@ -1,5 +1,5 @@
-// Kick the matching cloud push once a local write has landed in SQLite. Only a pass with
-// Cloud backup on pushes anything, so the service isn't loaded while it's off.
+// Kick the matching cloud push once a local write has landed in SQLite. The backup check is a
+// cheap first canSync(), and keeps the import out of a context with no localStorage (tests).
 export function syncAfterLocalWrite(
   method: "syncDictionaryNow" | "syncSnippetsNow" | "syncSkillsNow"
 ): void {

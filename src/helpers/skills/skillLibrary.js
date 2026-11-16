@@ -176,8 +176,8 @@ function sizeProblem(files, limits = SKILL_LIMITS) {
   return bytes > limits.maxBytes ? { code: "tooLarge" } : null;
 }
 
-// Text crosses as UTF-8 when it comes back byte for byte and isn't larger as JSON than base64
-// would be (control characters escape to six bytes each); anything else as base64.
+// Text crosses as UTF-8 when it isn't larger as JSON than base64 would be (control characters
+// escape to six bytes each); anything else as base64.
 function toCloudFile({ path: relPath, data }) {
   const base64 = data.toString("base64");
   const text = data.toString("utf8");
@@ -185,7 +185,6 @@ function toCloudFile({ path: relPath, data }) {
   const asText =
     isTextFile(data) &&
     !data.includes(0) &&
-    Buffer.from(text, "utf8").equals(data) &&
     Buffer.byteLength(JSON.stringify(text)) <= base64.length + 2;
   return asText
     ? { path: relPath, encoding: "utf8", content: text }
@@ -761,11 +760,12 @@ class SkillLibrary {
   exportForCloud(name) {
     if (this._recoverInterruptedWrites().has(name)) return null;
     // skillDir refuses a link, so nothing outside the skills folder is ever sent.
-    if (!this.skillDir(name)) return null;
+    const folder = this.skillDir(name);
+    if (!folder) return null;
     const inspected = this._inspect(name);
     if (inspected.problems.length > 0) return null;
     if (inspected.tooLargeToSync) return { tooLargeToSync: true };
-    const walked = walkSkillFolder(this.skillDir(name));
+    const walked = walkSkillFolder(folder);
     // Nothing another computer would refuse to write is sent: its pull would skip the copy.
     if (
       walked.unreadable ||
@@ -791,9 +791,6 @@ class SkillLibrary {
     if (this._recoverInterruptedWrites().has(name)) {
       throw writeError(Object.assign(new Error("The skill needs recovery"), { code: "EBUSY" }));
     }
-    // One too large to back up stays as it is here; the cloud never had this copy of it. Nor
-    // does one whose files can't be read to compare: past this computer's own limits, holding
-    // a link, or not readable by the app.
     const onDisk = fs.lstatSync(path.join(this.skillsDir, name), { throwIfNoEntry: false });
     const local = this.database.getSkillForCloudMerge(entry);
     // UI writes can land between the renderer's merge decision and this IPC call. A remote
@@ -816,9 +813,13 @@ class SkillLibrary {
         local.client_skill_id !== expectedLocal?.client_skill_id)
     )
       return skip("changedLocally");
+    let here;
     if (onDisk) {
+      // One too large to back up stays as it is here; the cloud never had this copy of it. Nor
+      // does one whose files can't be read to compare: past this computer's own limits, holding
+      // a link, or not readable by the app.
       if (!onDisk.isDirectory() || onDisk.isSymbolicLink()) return skip("unreadable");
-      const here = this._inspect(name);
+      here = this._inspect(name);
       if (here.tooLargeToSync) return skip("tooLargeToSync");
       if (!here.hash) return skip("unreadable");
       // The pull waited on HTTP and IPC after its scan. Compare again in the same main-process
@@ -846,8 +847,7 @@ class SkillLibrary {
     if (problems.length > 0) return skip(problems[0].code);
     const hash = contentHash(files);
     const saveState = () => this.database.upsertSkillStateFromCloud(entry, hash);
-    if (!onDisk || this._inspect(name).hash !== hash)
-      this._writeSkillFolder(name, files, saveState);
+    if (!onDisk || here.hash !== hash) this._writeSkillFolder(name, files, saveState);
     else saveState();
     this.inspected.delete(name);
     return true;
@@ -1069,7 +1069,6 @@ class SkillLibrary {
     );
   }
 
-  // Removes a skill's folder and the versions kept for it.
   _removeSkill(name) {
     const trash = path.join(this.skillsDir, `.trash-${crypto.randomUUID()}`);
     try {

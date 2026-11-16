@@ -3677,7 +3677,8 @@ export class SyncService {
         );
       } catch (err) {
         if (isHttpStatus(err, 404)) {
-          // Purged in the cloud: the next push creates it again.
+          // Purged in the cloud, or deleted there from another device: the next push creates
+          // it again, so the skill comes back.
           await window.electronAPI.clearSkillCloudId?.(entry.name);
         } else {
           console.error("Skill update sync failed:", err);
