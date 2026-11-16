@@ -61,6 +61,21 @@ brew install --cask openwhispr
 - **Enterprise controls** — enforce organization policy, company SSO and SCIM, and centrally managed Amazon Bedrock or Azure OpenAI access without distributing cloud keys
 - **Public API & MCP** — manage notes and transcriptions programmatically or connect your AI assistant via the [MCP server](https://docs.openwhispr.com/integrations/mcp)
 
+## Free vs. paid
+
+OpenWhispr is MIT-licensed. Everything that runs on your device is free, with no account and no word limit:
+
+| Free forever | Requires OpenWhispr Cloud (free allowance, then paid) |
+| --- | --- |
+| Local transcription (Whisper, Parakeet, Cohere, Orukeet) | Hosted OpenWhispr Cloud transcription |
+| Local AI models and the local AI agent | Cloud AI and hosted inference |
+| Local speaker diarization | Sync across devices |
+| Local notes, folders, and semantic search | Public note sharing and hosted team features |
+| Custom dictionary and 100+ languages | Hosted API and MCP access |
+| Bring-your-own-key cloud providers | Meeting-recording hours beyond the free allowance |
+
+The hosted plan includes a free allowance (currently 2,000 words/week and 5 hours of meeting recordings/month). Paid plans raise or remove those Cloud limits. Teamspaces are free for signed-in users; creating a team inside a workspace requires the Business plan. See **Settings → Plans** in the app for current pricing.
+
 ## Quick start
 
 ```bash
