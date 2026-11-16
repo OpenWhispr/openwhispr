@@ -157,6 +157,11 @@ function spaceIdsArgument(value) {
 function isForOtherAccount(accountId, activeAccountId) {
   return accountId !== undefined && accountId !== activeAccountId;
 }
+const INVALID_DEVICE_NOTES_REQUEST = {
+  success: false,
+  code: "invalid_request",
+  error: "The request is malformed",
+};
 const ACCOUNT_CHANGED_RESULT = {
   success: false,
   code: "ACCOUNT_CHANGED",
@@ -1212,6 +1217,10 @@ class IPCHandlers {
     try {
       const claimed = this.databaseManager.claimSignedOutPrivateNotes();
       if (claimed.notes > 0 || claimed.folders > 0) this.notifyVectorChanges();
+      if (claimed.notes > 0) {
+        this.noteFiles.notesMoved();
+        broadcastToWindows("device-notes-changed");
+      }
       return true;
     } catch (error) {
       debugLogger.error(
@@ -3403,6 +3412,69 @@ class IPCHandlers {
 
     ipcMain.handle("db-get-folders", async (event, spaceId) => {
       return this.databaseManager.getFolders(spaceId);
+    });
+
+    // Notes that left the device-only list are filed, indexed and visible in
+    // every window, and the list itself changed.
+    const publishDeviceNoteChange = (movedNotes) => {
+      this.notifyVectorChanges();
+      this.noteFiles.notesMoved();
+      setImmediate(() => {
+        for (const note of movedNotes) broadcastToWindows("note-updated", note);
+        broadcastToWindows("device-notes-changed");
+      });
+    };
+
+    ipcMain.handle("db-get-device-notes", async () => this.databaseManager.getDeviceNotes());
+
+    ipcMain.handle("db-get-device-note", async (_event, id) =>
+      isRowIdArgument(id) ? this.databaseManager.getDeviceNote(id) : null
+    );
+
+    ipcMain.handle("db-move-device-notes", async (_event, request) => {
+      const { noteIds, folderId, workspaceId = null, accountId } = request ?? {};
+      const namesNotes = Array.isArray(noteIds) && noteIds.length > 0;
+      // The database reads a request naming neither as "move everything".
+      if (
+        !(namesNotes || isRowIdArgument(folderId)) ||
+        (noteIds !== undefined && !(namesNotes && noteIds.every(isRowIdArgument))) ||
+        (folderId !== undefined && !isRowIdArgument(folderId)) ||
+        !isWorkspaceIdArgument(workspaceId)
+      ) {
+        return INVALID_DEVICE_NOTES_REQUEST;
+      }
+      if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+        return ACCOUNT_CHANGED_RESULT;
+      }
+      const { moved, skipped } = this.databaseManager.moveDeviceNotesToPrivate({
+        noteIds,
+        folderId,
+        workspaceId,
+      });
+      if (moved.length > 0) publishDeviceNoteChange(moved);
+      return { success: true, moved, skipped };
+    });
+
+    ipcMain.handle("db-get-stand-in-ownership-candidates", async () =>
+      this.databaseManager.getStandInOwnershipCandidates()
+    );
+
+    ipcMain.handle("db-resolve-stand-in-ownership", async (_event, request) => {
+      const { noteId, cloudId, owned, accountId } = request ?? {};
+      if (
+        !isRowIdArgument(noteId) ||
+        typeof cloudId !== "string" ||
+        !cloudId ||
+        typeof owned !== "boolean"
+      ) {
+        return INVALID_DEVICE_NOTES_REQUEST;
+      }
+      if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
+        return ACCOUNT_CHANGED_RESULT;
+      }
+      const result = this.databaseManager.resolveStandInOwnership(noteId, cloudId, owned);
+      if (result.claimed) publishDeviceNoteChange([]);
+      return result;
     });
 
     ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard) =>
