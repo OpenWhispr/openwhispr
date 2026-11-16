@@ -511,13 +511,26 @@ class MarkdownMirror {
     }
   }
 
+  _isTranscriptOnlyUpload(note, segments = this.transcriptSegments(note)) {
+    return (
+      note.note_type === "upload" &&
+      !note.content?.trim() &&
+      !note.enhanced_content?.trim() &&
+      segments.some((segment) => segment?.text?.trim())
+    );
+  }
+
   writeNote(note, location) {
     if (!this._baseRealPath) return;
     try {
+      if (this._isTranscriptOnlyUpload(note)) return;
       const target = this._toLocation(location);
       const dirPath = this._resolveFolderPath(target, { create: true });
       if (!dirPath) return;
-      const body = note.enhanced_content || note.content || "";
+      const body =
+        note.note_type === "upload" && !note.enhanced_content?.trim()
+          ? note.content || ""
+          : note.enhanced_content || note.content || "";
       this._writeNoteFile(
         note.id,
         "note",
@@ -589,6 +602,12 @@ class MarkdownMirror {
         formatMd(note, segments, speakerMappings || {}),
         this._isUnchangedOldTranscript(note, speakerMappings)
       );
+      if (this._isTranscriptOnlyUpload(note, segments)) {
+        for (const entry of this._recorded(note.id, "note")) this._releaseRecordedFile(entry);
+        for (const oldPath of this._oldLayoutFiles(note.id, "note")) {
+          this._releaseOldFile(oldPath, (_filePath, text) => isUnchangedNoteFile(text, note));
+        }
+      }
     } catch (err) {
       debugLogger.error(
         "Failed to write transcript file",
@@ -848,12 +867,15 @@ class MarkdownMirror {
 
   getNotePath(noteId) {
     if (!this._baseRealPath) return null;
-    const recorded = this._recorded(noteId, "note").find(
-      (entry) => entry.hash !== null && fs.existsSync(this._absolutePath(entry.relPath))
-    );
-    if (recorded) return this._displayPath(this._absolutePath(recorded.relPath));
-    const [oldPath] = this._oldLayoutFiles(noteId, "note");
-    return oldPath ? this._displayPath(oldPath) : null;
+    for (const kind of ["note", "transcript"]) {
+      const recorded = this._recorded(noteId, kind).find(
+        (entry) => entry.hash !== null && fs.existsSync(this._absolutePath(entry.relPath))
+      );
+      if (recorded) return this._displayPath(this._absolutePath(recorded.relPath));
+      const [oldPath] = this._oldLayoutFiles(noteId, kind);
+      if (oldPath) return this._displayPath(oldPath);
+    }
+    return null;
   }
 
   getFolderPath(location) {

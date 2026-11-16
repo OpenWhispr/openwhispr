@@ -85,13 +85,19 @@ for (const collision of collisions) {
 function cloudUpsertHandler(db, broadcast, notifyVectorChanges) {
   const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
   const registration = source.match(
-    /ipcMain\.handle\("db-upsert-note-from-cloud", ([\s\S]*?)\n {4}\}\);/
+    /ipcMain\.handle\(\s*"db-upsert-note-from-cloud",\s*(\([\s\S]*?\n {6}\})\n {4}\);/
   );
   assert.ok(registration, "the cloud-note IPC callback must be present");
-  return new Function("broadcastToWindows", "setImmediate", `return (${registration[1]}\n});`).call(
+  return new Function(
+    "broadcastToWindows",
+    "setImmediate",
+    "isStaleSyncAck",
+    `return (${registration[1]});`
+  ).call(
     { databaseManager: db, notifyVectorChanges, noteFiles: { queueNote: () => {} } },
     broadcast,
-    setImmediate
+    setImmediate,
+    () => false
   );
 }
 
@@ -185,7 +191,7 @@ for (const collision of collisions) {
     const expectedProtectedId = collision.accountId === "account-a" ? protectedRow.id : null;
     assert.equal(store.getNoteFromStore(protectedRow.id)?.id ?? null, expectedProtectedId);
 
-    const complete = await service.pullNotes();
+    const complete = await service.pullNotes(false, false, false);
     await new Promise(setImmediate);
     const accepted = db.getNoteByClientId(validCloudNote.client_note_id);
     assert.ok(accepted, "the valid row after the collision must persist");
@@ -201,7 +207,7 @@ for (const collision of collisions) {
         validRendererContent: store.getNoteFromStore(accepted.id)?.content ?? null,
       },
       {
-        complete: true,
+        complete: false,
         results: [null, accepted.id],
         events: [["note-synced", accepted.id]],
         vectorChanges: 1,
@@ -209,9 +215,10 @@ for (const collision of collisions) {
         validRendererContent: "Visible to the active account",
       }
     );
-    assert.ok(
+    assert.equal(
       localStorage.getItem("lastSyncedAt.notes"),
-      "a skipped collision must not stall the cursor"
+      null,
+      "a row that was not stored must remain eligible for recovery"
     );
     assert.deepEqual(
       db.db.prepare("SELECT * FROM notes WHERE id = ?").get(protectedRow.id),

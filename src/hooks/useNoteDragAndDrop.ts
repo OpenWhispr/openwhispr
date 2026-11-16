@@ -37,9 +37,14 @@ interface UseNoteDragAndDropOptions {
    * the cross-space veto rejected — the drop would otherwise die silently
    * (no highlight, no dialog), which reads as a broken drag.
    */
-  onCrossSpaceVeto?: (note: DraggedNoteInfo) => void;
+  onCrossSpaceVeto?: (note: DraggedNoteInfo, target: NoteMoveTarget) => void;
   /** Fired after hovering a target for 500ms mid-drag (auto-expand collapsed containers). */
   onHoverTarget?: (key: string) => void;
+  /**
+   * Where a drop on a row lands for the dragged note, when that isn't the row itself (a row that
+   * stands for several containers); null refuses the drop. Every check and the move use it.
+   */
+  resolveDropTarget?: (note: DraggedNoteInfo, target: NoteMoveTarget) => NoteMoveTarget | null;
 }
 
 const HOVER_EXPAND_DELAY_MS = 500;
@@ -57,6 +62,7 @@ export function useNoteDragAndDrop({
   canCrossSpaceDrop,
   onCrossSpaceVeto,
   onHoverTarget,
+  resolveDropTarget,
 }: UseNoteDragAndDropOptions) {
   const [dragState, setDragState] = useState<DragState>({
     draggingNoteId: null,
@@ -148,17 +154,21 @@ export function useNoteDragAndDrop({
     (targetInfo: DropTargetInfo) => {
       const target: NoteMoveTarget = { spaceId: targetInfo.spaceId, folderId: targetInfo.folderId };
       const key = targetKey(target);
-      const crossSpaceVetoed = (note: DraggedNoteInfo): boolean =>
-        note.spaceId !== target.spaceId && !!canCrossSpaceDrop && !canCrossSpaceDrop(note, target);
+      const landing = (note: DraggedNoteInfo): NoteMoveTarget | null =>
+        resolveDropTarget ? resolveDropTarget(note, target) : target;
+      const crossSpaceVetoed = (note: DraggedNoteInfo, to: NoteMoveTarget): boolean =>
+        note.spaceId !== to.spaceId && !!canCrossSpaceDrop && !canCrossSpaceDrop(note, to);
       const canDrop = () => {
         const note = draggedNoteRef.current;
         if (!note) return false;
+        const to = landing(note);
+        if (!to) return false;
         const isSameContainer =
-          target.folderId != null
-            ? note.folderId === target.folderId
-            : note.folderId == null && note.spaceId === target.spaceId;
+          to.folderId != null
+            ? note.folderId === to.folderId
+            : note.folderId == null && note.spaceId === to.spaceId;
         if (isSameContainer) return false;
-        if (crossSpaceVetoed(note)) return false;
+        if (crossSpaceVetoed(note, to)) return false;
         // The default Meetings folder of the note's own space stays a non-target.
         const isOwnMeetings =
           !!targetInfo.isDefaultFolder &&
@@ -177,9 +187,10 @@ export function useNoteDragAndDrop({
           e.preventDefault();
           if (!canDrop()) {
             const note = draggedNoteRef.current;
-            if (note && crossSpaceVetoed(note) && !vetoNotifiedRef.current) {
+            const to = note ? landing(note) : null;
+            if (note && to && crossSpaceVetoed(note, to) && !vetoNotifiedRef.current) {
               vetoNotifiedRef.current = true;
-              onCrossSpaceVeto?.(note);
+              onCrossSpaceVeto?.(note, to);
             }
             return;
           }
@@ -213,6 +224,8 @@ export function useNoteDragAndDrop({
           const note = draggedNoteRef.current;
           const noteId = parseInt(e.dataTransfer.getData("application/x-note-id"), 10);
           if (!note || isNaN(noteId) || noteId !== note.id) return;
+          const to = landing(note);
+          if (!to) return;
 
           clearHoverTimeout();
           enterCounterRef.current.clear();
@@ -223,10 +236,10 @@ export function useNoteDragAndDrop({
             dragOverKey: null,
           }));
 
-          if (note.spaceId !== target.spaceId) {
-            onCrossSpaceDrop(note, target, () => commitDrop(noteId, target, key));
+          if (note.spaceId !== to.spaceId) {
+            onCrossSpaceDrop(note, to, () => commitDrop(noteId, to, key));
           } else {
-            commitDrop(noteId, target, key);
+            commitDrop(noteId, to, key);
           }
         },
       };
@@ -236,6 +249,7 @@ export function useNoteDragAndDrop({
       canCrossSpaceDrop,
       onCrossSpaceVeto,
       onHoverTarget,
+      resolveDropTarget,
       commitDrop,
       clearHoverTimeout,
     ]
