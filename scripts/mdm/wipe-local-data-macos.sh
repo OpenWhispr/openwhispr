@@ -36,15 +36,17 @@ fi
 # A file that can't go (a locked one, say) is reported and the wipe carries on;
 # the script then exits non-zero so the MDM tool shows the device as failed.
 failed=0
-# Run as root, a home's files are removed as the home's owner, so a link the
-# user swaps in mid-run can only reach what they could delete themselves. A
-# home whose account is gone has no one left to swap links, so root cleans it.
+# Runs a command on the NUL-separated paths read from stdin. As root, a
+# home's files are removed as the home's owner, so a link the user swaps in
+# mid-run can only reach what they could delete themselves; the paths go over
+# stdin so sudo's log doesn't record them (they hold note titles). A home whose
+# account is gone has no one left to swap links, so root cleans it.
 as_owner() {
-  if [[ -n "$run_as" ]]; then sudo -u "$run_as" "$@"; else "$@"; fi
+  if [[ -n "$run_as" ]]; then sudo -u "$run_as" xargs -0 "$@"; else xargs -0 "$@"; fi
 }
 
 remove() {
-  as_owner rm -rf "$1" 2>/dev/null || {
+  printf '%s\0' "$1" | as_owner rm -rf 2>/dev/null || {
     echo "Could not remove $1" >&2
     failed=1
   }
@@ -88,8 +90,8 @@ remove_if_emptied() {
       *) return 1 ;;
     esac
   done
-  as_owner rm -f "$dir/.DS_Store" "$dir/Thumbs.db" "$dir/desktop.ini"
-  as_owner rmdir "$dir" 2>/dev/null
+  printf '%s\0' "$dir/.DS_Store" "$dir/Thumbs.db" "$dir/desktop.ini" | as_owner rm -f
+  printf '%s\0' "$dir" | as_owner rmdir 2>/dev/null
 }
 
 # The frontmatter the mirror writes: "---", "id: <id>", then title, type,
@@ -196,7 +198,10 @@ for home in "${homes[@]}"; do
   if [[ $EUID -eq 0 ]]; then
     # A root-owned folder in /Users (like /Users/Shared) is no one's home, and
     # anyone may write in it.
-    [[ "$owner_uid" == 0 ]] && continue
+    if [[ "$owner_uid" == 0 ]]; then
+      echo "Skipped $home: it belongs to root, not to a user" >&2
+      continue
+    fi
     id -un "$owner_uid" >/dev/null 2>&1 && run_as="#$owner_uid"
   fi
   user_data="$home/Library/Application Support/OpenWhispr"

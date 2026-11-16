@@ -85,6 +85,11 @@ test("in a notes folder the user chose, only the mirror's own files and the fold
   const chosen = path.join(root, "Vault");
   const personal = path.join(chosen, "Personal");
   seed(path.join(personal, "12-standup.md"), mirrored(12));
+  // A title long enough to push the closing "---" past the first few KiB.
+  seed(
+    path.join(personal, "14-long.md"),
+    mirrored(14).replace('"Note 14"', `"${"x".repeat(5000)}"`)
+  );
   seed(path.join(personal, "12-standup-transcript.md"), transcriptOf("Standup"));
   seed(path.join(chosen, "Work", "7-plan.md"), `\uFEFF${mirrored(7).replaceAll("\n", "\r\n")}`);
   // The workspace and space layout nests a note's folders, and an outside
@@ -481,6 +486,8 @@ test(
     seed(path.join(home, ".openwhispr", "cli-config.json"));
     const vault = path.join(home, "Documents", "Vault");
     seed(path.join(vault, "Personal", "12-standup.md"), mirrored(12));
+    // An empty copy kept aside: the file ends at the closing "---", no newline.
+    seed(path.join(vault, "Personal", "edited-13-x.md"), mirrored(13).replace("\n\nbody", ""));
     seed(path.join(vault, "Personal", "12-standup-transcript.md"), transcriptOf("Standup"));
     seed(
       path.join(vault, "Zettel", "202311151230-idea.md"),

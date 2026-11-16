@@ -102,7 +102,7 @@ function Remove-MirroredFiles([string]$Base, [string]$Root) {
   $ids = @{}
   $emptied = @{}
   foreach ($file in $files) {
-    if ($file.Extension -ne ".md") { continue }
+    if ($file.Extension -cne ".md") { continue }
     try {
       $lines = @(Get-Content -LiteralPath $file.FullName -TotalCount 40 -Encoding UTF8)
     } catch { continue }
@@ -115,7 +115,7 @@ function Remove-MirroredFiles([string]$Base, [string]$Root) {
     if ($close -lt 0) { continue }
     $keys = @($lines[2..($close - 1)] | ForEach-Object { ($_ -split ":", 2)[0] })
     if (@("title", "type", "created", "updated" | Where-Object { $keys -cnotcontains $_ }).Count) { continue }
-    if (-not ($file.Name -match "^(edited-(\d+-)?)?$id-.*\.md$")) { continue }
+    if (-not ($file.Name -cmatch "^(edited-(\d+-)?)?$id-.*\.md$")) { continue }
     Remove-Entry $file
     $ids["$($file.DirectoryName)|$id"] = $true
     $emptied[$file.DirectoryName] = $true
@@ -123,7 +123,7 @@ function Remove-MirroredFiles([string]$Base, [string]$Root) {
   # A transcript goes only with its own note, beside it, and only when it opens
   # as the app writes one: "# <title>" then the date in bold, or a rule line.
   foreach ($file in $files) {
-    if (-not ($file.Name -match '^(edited-(\d+-)?)?(\d+)-.*-transcript\.(md|txt)$')) { continue }
+    if (-not ($file.Name -cmatch '^(edited-(\d+-)?)?(\d+)-.*-transcript\.(md|txt)$')) { continue }
     if (-not $ids.ContainsKey("$($file.DirectoryName)|$($Matches[3])")) { continue }
     try {
       $lines = @(Get-Content -LiteralPath $file.FullName -TotalCount 40 -Encoding UTF8)
@@ -183,7 +183,8 @@ $signedIn = @(Get-CimInstance Win32_Process | ForEach-Object {
   })
 $fullPath = { param($Path) [IO.Path]::GetFullPath($Path).TrimEnd("\") }
 $profileSids = @{}
-Get-CimInstance Win32_UserProfile | Where-Object { $_.LocalPath } |
+# Users' profiles only: SYSTEM and the service accounts run this script.
+Get-CimInstance Win32_UserProfile | Where-Object { -not $_.Special -and $_.LocalPath } |
   ForEach-Object { $profileSids[(& $fullPath $_.LocalPath)] = $_.SID }
 $someoneSignedIn = @($signedIn | Where-Object { $profileSids.Values -contains $_ }).Count -gt 0
 
@@ -228,11 +229,13 @@ foreach ($profilePath in $UserProfile) {
 # The ASCII-only fallbacks the app uses when a profile path has spaces or
 # non-ASCII characters; they are shared by every user of the device, so any
 # signed-in user could swap a folder there for a junction.
-if ($someoneSignedIn) {
+$sharedRoots = @($env:ProgramData, "$env:SystemDrive\")
+$sharedExists = @($sharedRoots | Where-Object { Test-Path -LiteralPath (Join-Path $_ "OpenWhispr") }).Count -gt 0
+if ($sharedExists -and $someoneSignedIn) {
   Write-Warning "Skipped the shared folders in $env:ProgramData\OpenWhispr and $env:SystemDrive\OpenWhispr while a user is signed in. Run again when no one is."
   $script:failed = $true
 } else {
-  foreach ($root in @($env:ProgramData, "$env:SystemDrive\")) {
+  foreach ($root in $sharedRoots) {
     $app = Join-Path $root "OpenWhispr"
     Remove-TempFiles (Join-Path $app "temp") $root
     Remove-AllExcept (Join-Path $app "cache") $root $cacheKept
