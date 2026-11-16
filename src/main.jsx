@@ -10,6 +10,8 @@ import GpuPackMigrationToastListener from "./components/GpuPackMigrationToastLis
 import { I18nDirectionProvider } from "./components/I18nDirectionProvider.tsx";
 import { ToastProvider } from "./components/ui/Toast.tsx";
 import { SettingsProvider } from "./hooks/useSettings";
+import { requestSavedNoteFiles } from "./helpers/noteFilesStartup";
+import { useSettingsStore } from "./stores/settingsStore";
 import { bindDocumentLanguage } from "./utils/i18nDocument";
 
 import i18n from "./i18n";
@@ -23,6 +25,10 @@ import "./brandFonts";
 import "./index.css";
 
 bindDocumentLanguage(i18n, document.documentElement, import.meta.hot);
+
+// A tray or login launch never opens the control panel. This entry still loads
+// in the dictation window, which is the window that launch does create.
+requestSavedNoteFiles(useSettingsStore.getState(), window.electronAPI);
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(

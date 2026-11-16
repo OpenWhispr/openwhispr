@@ -31,7 +31,7 @@ function markdownFiles(basePath) {
   return found;
 }
 
-function createMirror(basePath) {
+function createMirror() {
   const entries = new Map();
   const state = {
     notes: [
@@ -73,7 +73,7 @@ function createMirror(basePath) {
 
 test("a note saved while the mirror is off is not a file", async () => {
   const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-note-startup-"));
-  const sync = createMirror(basePath);
+  const sync = createMirror();
   try {
     await sync.flush();
     assert.deepEqual(markdownFiles(basePath), []);
@@ -103,7 +103,7 @@ test("the saved setting requests the mirror, and that request writes the missed 
   assert.deepEqual(calls, [[true, undefined, { skipRebuild: true }]]);
 
   const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-note-startup-"));
-  const sync = createMirror(basePath);
+  const sync = createMirror();
   try {
     const requested = requestSavedNoteFiles(
       { noteFilesEnabled: true, noteFilesPath: basePath },
