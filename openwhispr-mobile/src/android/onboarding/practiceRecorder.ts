@@ -21,21 +21,28 @@ async function formatPractice(
   signal: AbortSignal,
 ): Promise<string> {
   try {
+    // Practice runs on Cloud; send the formatting there too rather than to a saved on-device pick.
+    const cloud = job.route.provider === 'cloud';
     const result = await ReasoningService.processText({
       text,
       systemPrompt: FORMAT_PROMPTS[format],
       inferenceScope: 'cleanup',
-      inferenceRoute: job.route.cleanupRoute,
+      inferenceRoute: cloud ? { mode: 'openwhispr', scope: 'cleanup' } : job.route.cleanupRoute,
       routing:
-        job.route.cleanupRoute?.mode === 'providers'
+        job.route.cleanupRoute?.mode === 'providers' && !cloud
           ? { sendToChosenProvider: true }
           : { isPrivateNote: job.route.provider === 'local' },
       signal,
       maxTokens: 384,
     });
     return result.text.trim() || text;
-  } catch {
+  } catch (error) {
     // The cleaned dictation is still a good result; formatting is the bonus.
+    console.warn(
+      '[onboarding] practice formatting failed',
+      job.route.provider,
+      (error as Error).message,
+    );
     if (signal.aborted) throw new Error('Cancelled.');
     return text;
   }
