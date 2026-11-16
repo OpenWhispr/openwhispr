@@ -105,7 +105,17 @@ async function mountList(t, overrides = {}) {
   }
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Harness)));
-  const input = () => tree.props.children[0].props.children[1];
+  // The refresh button wraps the field in a flex row when a live catalog offers one.
+  const findCombobox = (node) => {
+    if (!node || !node.props) return null;
+    if (node.props.role === "combobox") return node;
+    for (const child of React.Children.toArray(node.props.children)) {
+      const match = findCombobox(child);
+      if (match) return match;
+    }
+    return null;
+  };
+  const input = () => findCombobox(tree);
   const rows = () =>
     tree.props.children[1]
       ? tree.props.children[1].props.children.props.children.map((row) => row.props.children)

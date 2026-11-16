@@ -807,6 +807,7 @@
       "ownerLabel": "Owner: {{owner}}",
       "unableToLoadModels": "Unable to load models from endpoint.",
       "searchPlaceholder": "Search models…",
+      "clearSearch": "Clear search",
       "selectedGroup": "Selected",
       "otherGroup": "Other",
       "noSearchResults": "No models match \"{{query}}\"",
@@ -921,6 +922,9 @@
     "localModelRetiredKept": "{{from}} has been retired. It keeps working because it's already downloaded, but it can't be downloaded again. Choose another local model in Settings.",
     "groq": {
       "modelRetired": "Groq retired {{from}}. Switched to {{to}}."
+    },
+    "opencode": {
+      "modelRetired": "OpenCode retired {{from}}. Switched to {{to}}."
     },
     "tinfoil": {
       "modelRetired": "Tinfoil retired {{from}}. Switched to {{to}}.",

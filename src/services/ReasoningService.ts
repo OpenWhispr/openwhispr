@@ -26,6 +26,7 @@ import { compactTranscriptHistory } from "./ai/transcriptHistory";
 import { getAIModel } from "./ai/providers";
 import { localServerFetch, startLocalServer } from "./ai/localServerFetch";
 import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
+import { createOpencodeChatModel, type OpenCodeProviderId } from "./ai/opencodeChatModel";
 import { getManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import type { InferenceScope } from "../config/inferenceScopes";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
@@ -86,6 +87,8 @@ const BYOK_STREAM_PROVIDERS = [
   "custom",
   "openrouter",
   "corti",
+  "opencode-go",
+  "opencode-zen",
 ] as const;
 
 type ByokStreamProvider = (typeof BYOK_STREAM_PROVIDERS)[number];
@@ -309,7 +312,16 @@ class ReasoningService extends BaseReasoningService {
 
   private async getApiKey(
     provider:
-      "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
+      | "openai"
+      | "anthropic"
+      | "gemini"
+      | "groq"
+      | "tinfoil"
+      | "custom"
+      | "openrouter"
+      | "corti"
+      | "opencode-go"
+      | "opencode-zen"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -350,6 +362,8 @@ class ReasoningService extends BaseReasoningService {
           openrouter: () => window.electronAPI.getOpenrouterKey(),
           tinfoil: () => window.electronAPI.getTinfoilKey?.(),
           corti: () => window.electronAPI.getCortiKey?.(),
+          "opencode-go": () => window.electronAPI.getOpencodeGoKey?.(),
+          "opencode-zen": () => window.electronAPI.getOpencodeZenKey?.(),
         };
         apiKey = (await keyGetters[provider]()) ?? undefined;
 
@@ -1044,6 +1058,10 @@ class ReasoningService extends BaseReasoningService {
       );
       assertStreamAllowed();
       const isEnterprise = route.kind === "enterprise";
+      // A declared self-hosted URL wins over a stale provider id
+      // (resolveChatRoute), so only a provider route may pick the OpenCode proxy.
+      const isOpencode =
+        route.kind === "provider" && (provider === "opencode-go" || provider === "opencode-zen");
       const isLocalProvider = route.kind === "local";
       const isLanChat = route.kind === "self-hosted";
 
@@ -1078,9 +1096,9 @@ class ReasoningService extends BaseReasoningService {
       let apiKey = "";
       let baseURL: string | undefined;
 
-      if (isEnterprise) {
-        // Enterprise SDKs run in the main process; the model below proxies
-        // doStream over IPC, so no key or base URL is resolved here.
+      if (isEnterprise || isOpencode) {
+        // Enterprise SDKs and OpenCode both run in the main process; the models
+        // below proxy doStream over IPC, so no key or base URL is resolved here.
       } else if (isLanChat) {
         apiKey = route.apiKey;
         baseURL = resolveSelfHostedOpenAIBase(route.baseUrl);
@@ -1115,14 +1133,16 @@ class ReasoningService extends BaseReasoningService {
       // Resolving a Tinfoil model refreshes the registry, so read model config after it.
       const aiModel = isEnterprise
         ? createEnterpriseChatModel(provider as EnterpriseProvider, model, config.inferenceScope)
-        : await resolveStreamSetup(
-            getAIModel(aiProvider, model, apiKey, baseURL, {
-              disableThinking: openrouterDisableThinking,
-              reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
-              ...(isLocalProvider ? { fetch: localServerFetch(model) } : {}),
-            }),
-            assertStreamAllowed
-          );
+        : isOpencode
+          ? createOpencodeChatModel(provider as OpenCodeProviderId, model)
+          : await resolveStreamSetup(
+              getAIModel(aiProvider, model, apiKey, baseURL, {
+                disableThinking: openrouterDisableThinking,
+                reasoningEffort: provider === "openrouter" ? reasoningEffort : undefined,
+                ...(isLocalProvider ? { fetch: localServerFetch(model) } : {}),
+              }),
+              assertStreamAllowed
+            );
 
       assertStreamAllowed();
       if (abortController.signal.aborted) {
@@ -1841,6 +1861,8 @@ class ReasoningService extends BaseReasoningService {
       | "custom"
       | "openrouter"
       | "corti"
+      | "opencode-go"
+      | "opencode-zen"
   ): void {
     if (provider) {
       if (provider !== "custom") {

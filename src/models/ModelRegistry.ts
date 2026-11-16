@@ -5,8 +5,13 @@ import {
 } from "./registryData.js";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 import { isSelectableTinfoilModel } from "../config/retiredCloudModelPolicy.js";
-import { getCloudModelProviders, setTinfoilModelOverlay } from "./cloudModelCatalog";
+import {
+  getCloudModelProviders,
+  setTinfoilModelOverlay,
+  setOpencodeModelOverlay,
+} from "./cloudModelCatalog";
 import { isUploadOnlyTranscriptionModel } from "./appTranscriptionProviders.js";
+import { isOpencodeCatalogProvider } from "../config/opencodeModelPolicy.js";
 import { pickDefaultModelId } from "./providerDefaultModel";
 import { filterMeetingStreamingProviders } from "../helpers/meetingTranscriptionRouting";
 import type { InferenceMode } from "../types/electron";
@@ -65,6 +70,10 @@ export interface CloudModelDefinition {
   supportsVision?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
+  /** OpenCode live-list routing: the native protocol this model speaks. */
+  protocol?: string;
+  /** OpenCode live-list routing: the inference base URL serving it. */
+  baseUrl?: string;
   reasoningEffort?: ReasoningEffortCapability;
   /** Lowest thinking setting the model accepts; the registry's data form of the table in gemini.ts. */
   thinkingFloor?: { level: "minimal" | "low" } | { budget: number };
@@ -275,9 +284,11 @@ export function enterpriseProviderName(provider: EnterpriseProvider | "openai-co
 }
 
 export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
+  // A missing display name renders as a blank row; the id always reads.
+  const name = typeof m.name === "string" ? m.name.trim() : "";
   return {
     value: m.id,
-    label: m.name,
+    label: name || m.id,
     description: m.description,
     descriptionKey: m.descriptionKey,
     legacy: m.legacy,
@@ -339,6 +350,28 @@ export function getTinfoilModels(): CloudModelDefinition[] {
 
 export function getCloudProviderDefaultModelId(providerId: string): string | undefined {
   return modelData.cloudProviders.find((provider) => provider.id === providerId)?.defaultModel;
+}
+
+export function getOpencodeCatalogModels(providerId: string): CloudModelDefinition[] {
+  return (
+    modelRegistry.getCloudProviders().find((provider) => provider.id === providerId)?.models ?? []
+  );
+}
+
+export function getOpencodeCatalogModel(
+  providerId: string,
+  modelId: string
+): CloudModelDefinition | undefined {
+  return getOpencodeCatalogModels(providerId).find((model) => model.id === modelId);
+}
+
+export function applyOpencodeModels(providerId: string, models: CloudModelDefinition[]): void {
+  if (models.length === 0) return;
+  setOpencodeModelOverlay(providerId, models);
+  const reasoningProvider = REASONING_PROVIDERS[providerId];
+  if (reasoningProvider) {
+    reasoningProvider.models = models.map(toReasoningModel);
+  }
 }
 
 export function applyTinfoilModels(models: CloudModelDefinition[]): void {
@@ -510,6 +543,12 @@ export function getCloudModel(
   providerId?: string
 ): CloudModelDefinition | undefined {
   for (const provider of modelRegistry.getCloudProviders()) {
+    // OpenCode's providers exist only as live lists (code seed, cache, overlay)
+    // whose public ids collide with self-hosted and custom models (glm-5.3 on
+    // Ollama Cloud): only a request to OpenCode itself may read them, so those
+    // models keep the shape, effort and suppression behavior the shared
+    // registry and family facts give them.
+    if (isOpencodeCatalogProvider(provider.id) && provider.id !== providerId) continue;
     const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
   }

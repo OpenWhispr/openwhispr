@@ -16,6 +16,8 @@ const RETIRED_MESSAGE_KEYS: Partial<Record<string, string>> & Record<RetiredMode
     groq: "reasoning.groq.modelRetired",
     tinfoil: "reasoning.tinfoil.modelRetired",
     openai: "reasoning.openai.modelRetired",
+    "opencode-go": "reasoning.opencode.modelRetired",
+    "opencode-zen": "reasoning.opencode.modelRetired",
   };
 
 /** Alerts the user when a retired cloud model was switched out from under them. */

@@ -807,6 +807,7 @@
       "ownerLabel": "Автор: {{owner}}",
       "unableToLoadModels": "Не удалось загрузить модели с конечной точки.",
       "searchPlaceholder": "Поиск моделей…",
+      "clearSearch": "Очистить поиск",
       "selectedGroup": "Выбрано",
       "otherGroup": "Другое",
       "noSearchResults": "Нет моделей по запросу «{{query}}»",
@@ -921,6 +922,9 @@
     "localModelRetiredKept": "Модель {{from}} снята с поддержки. Она продолжит работать, так как уже загружена, но загрузить её снова нельзя. Выберите другую локальную модель в настройках.",
     "groq": {
       "modelRetired": "Groq прекратил поддержку {{from}}. Выполнен переход на {{to}}."
+    },
+    "opencode": {
+      "modelRetired": "OpenCode прекратил поддержку {{from}}. Выполнен переход на {{to}}."
     },
     "tinfoil": {
       "modelRetired": "Tinfoil прекратил поддержку {{from}}. Выполнен переход на {{to}}.",

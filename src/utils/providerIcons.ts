@@ -19,6 +19,7 @@ import azureIcon from "@/assets/icons/providers/azure.svg";
 import vertexIcon from "@/assets/icons/providers/vertex.svg";
 import xaiIcon from "@/assets/icons/providers/xai.svg";
 import cortiIcon from "@/assets/icons/providers/corti.svg";
+import opencodeIcon from "@/assets/icons/providers/opencode.svg";
 import openrouterIcon from "@/assets/icons/providers/openrouter.svg";
 import tinfoilIcon from "@/assets/icons/providers/tinfoil.svg";
 import deepgramIcon from "@/assets/icons/providers/deepgram.svg";
@@ -44,6 +45,8 @@ export const PROVIDER_ICONS: Record<string, string> = {
   vertex: vertexIcon,
   xai: xaiIcon,
   corti: cortiIcon,
+  "opencode-go": opencodeIcon,
+  "opencode-zen": opencodeIcon,
   openrouter: openrouterIcon,
   tinfoil: tinfoilIcon,
   deepgram: deepgramIcon,
@@ -63,6 +66,8 @@ export const MONOCHROME_PROVIDERS = [
   "xai",
   "corti",
   "openrouter",
+  "opencode-go",
+  "opencode-zen",
   "tinfoil",
   "assemblyai",
 ] as const;

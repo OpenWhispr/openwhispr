@@ -66,6 +66,27 @@ test("self-hosted streaming sends no session id to other endpoints", async (t) =
   assert.equal("x-opencode-session" in sent[0].headers, false);
 });
 
+test("an explicit self-hosted URL wins over a stale OpenCode provider id", async (t) => {
+  // resolveChatRoute makes the declared URL the route. The OpenCode proxy must
+  // not claim a request that is really going to the user's own server.
+  const reasoningService = await loadReasoningService(t, "openwhispr-opencode-stale-test-");
+  const sent = [];
+  installStreamRecorder(t, sent);
+
+  const stream = reasoningService.processTextStreaming(
+    [{ role: "user", content: "hello" }],
+    "kimi-k2.5",
+    "opencode-go",
+    { systemPrompt: "Answer the user.", lanUrl: "http://127.0.0.1:11434/v1" }
+  );
+  let output = "";
+  for await (const chunk of stream) output += chunk;
+
+  assert.equal(output, "ok");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].endpoint, "http://127.0.0.1:11434/v1/chat/completions");
+});
+
 /** Captures the headers of the non-streaming POST and answers with a chat completion. */
 function installCompletionRecorder(t, sent) {
   const originalFetch = globalThis.fetch;
