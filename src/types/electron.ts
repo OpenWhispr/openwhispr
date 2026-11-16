@@ -223,7 +223,10 @@ export interface MeetingExistingNote {
 }
 export interface MeetingDestinationContext {
   folders: FolderItem[];
+  // The active workspace's Private and its teamspaces.
   spaces: SpaceItem[];
+  // The active workspace's Private, where a new folder goes unless the user picks another space.
+  privateSpaceId: number | null;
   defaultDestination: MeetingFolderRef | null;
   selectedDestination: MeetingFolderRef | null;
   recentDestinations: MeetingFolderRef[];
@@ -297,6 +300,11 @@ export interface AuthTokenMutationResult extends AuthTokenState {
 /** The validated account scope the main process holds, as seen by any window. */
 export interface ActiveAccountScope {
   accountId: string;
+  authGeneration: number;
+}
+
+export interface NoteWriteGuard {
+  accountId: string | null;
   authGeneration: number;
 }
 
@@ -567,6 +575,7 @@ export interface NoteCreateAckResult {
 }
 
 export interface NoteCreateAckWriteOptions {
+  expectedAuthGeneration?: number;
   settleIfUnchanged?: boolean;
   cloudRevision?: number | null;
   // The server refused the create without writing it (write_applied: false).
@@ -713,6 +722,12 @@ export interface SpaceItem {
   // Retained only for unambiguous adoption of pre-spaces team rows.
   cloud_team_id?: string | null;
   workspace_id: string | null;
+  // A private space's account: one per account and workspace. Null on team
+  // spaces and on the signed-out stand-in.
+  account_id?: string | null;
+  // 1 on the account's default private space once its default workspace is
+  // bound. Not the API's is_default on workspaces or teamspaces.
+  is_default_private?: number;
   kind: "private" | "team";
   name: string;
   emoji: string | null;
@@ -733,6 +748,22 @@ export interface SpaceItem {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Why main refused a move: a teamspace note or folder the cloud already has stays there (D31).
+export type MoveRefusalCode = "team_row_synced";
+
+export interface NoteMutationResult {
+  success: boolean;
+  note?: NoteItem;
+  error?: string;
+  code?: MoveRefusalCode;
+}
+
+export interface WorkspaceScope {
+  activeWorkspaceId: string | null;
+  defaultWorkspaceId: string | null;
+  accountId?: string | null;
 }
 
 export interface DictionaryEntryItem {
@@ -855,6 +886,10 @@ export interface Workspace {
   // Absent on API responses that predate capabilities; read through workspaceCan().
   capabilities?: WorkspaceCapabilities;
   has_subscription?: boolean;
+  // The caller's own default workspace (only the account it was made for sees true).
+  is_default: boolean;
+  // Some account's default workspace, the caller's or another member's.
+  is_account_default: boolean;
 }
 
 export interface OwnedMemberContent {
@@ -1518,6 +1553,7 @@ export type LocalLLMDownloadProgressEvent =
     };
 
 export interface ConversationPreview {
+  device_only?: number;
   id: number;
   account_id?: string | null;
   title: string;
@@ -1539,6 +1575,8 @@ export interface ConversationPreview {
   note_id?: number | null;
   note_title?: string | null;
   note_deleted_at?: string | null;
+  /** That note's space, for the Chat list's workspace scope. */
+  note_space_id?: number | null;
 }
 
 export interface AgentMessageRow {
@@ -1551,6 +1589,11 @@ export interface AgentMessageRow {
 }
 
 export interface AgentConversationWithMessages {
+  device_only?: number;
+  space_id?: number | null;
+  folder_id?: number | null;
+  note_space_id?: number | null;
+  note_deleted_at?: string | null;
   id: number;
   title: string;
   note_id?: number | null;
@@ -1587,12 +1630,28 @@ export interface ConversationCreateAckResult {
   cloud_id?: string | null;
 }
 
+export interface CloudRowWriteOptions {
+  newKeyIfTaken?: boolean;
+}
+
 // Main refused a sync write because the sign-in that read or fetched it was
 // replaced.
 export interface StaleSyncWrite {
   success: false;
   changes: 0;
   stale: true;
+}
+
+export interface PrivatePlacementBackupCandidates {
+  notes: string[];
+  folders: string[];
+}
+
+export interface PrivatePlacementBackupRow {
+  id: number;
+  cloud_id: string;
+  client_id: string;
+  workspace_id: string;
 }
 
 export type OnboardingDemoKind = "dictation" | "assistant";
@@ -1738,12 +1797,17 @@ declare global {
             clipboardCopied: true;
           }
       >;
-      captureSelectedText?: () => Promise<
+      captureSelectedText?: (options?: { probeEditable?: boolean }) => Promise<
         | {
             status: "selected";
             sessionId: string;
             text: string;
             characterCount: number;
+          }
+        | {
+            /** A writable field has the caret, with nothing selected: an answer can be typed there. */
+            status: "editable";
+            sessionId: string;
           }
         | {
             status: "none" | "unavailable" | "target_changed" | "too_large";
@@ -1773,6 +1837,10 @@ declare global {
           | "selection_manager_unavailable";
         error?: string;
       }>;
+      pasteAtCapturedTarget?: (
+        sessionId: string,
+        text: string
+      ) => Promise<{ success: boolean; code?: string }>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       openSettingsSection?: (
@@ -2054,7 +2122,8 @@ declare global {
         audioDuration?: number | null,
         folderId?: number | null,
         spaceId?: number | null,
-        transcript?: string | null
+        transcript?: string | null,
+        writeGuard?: NoteWriteGuard
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       getNote: (id: number) => Promise<NoteItem | null>;
       getNotes: (
@@ -2089,8 +2158,8 @@ declare global {
           updated_by_user_id?: string | null;
           left_team?: number;
         },
-        options?: { undoable: true; expected: NoteItem; turn?: string }
-      ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
+        options?: { undoable: true; expected: NoteItem; turn?: string; writeGuard?: NoteWriteGuard }
+      ) => Promise<NoteMutationResult>;
       getNoteUndos: () => Promise<Array<{ token: string; noteId: number; title: string }>>;
       claimNoteUndo: (token: string) => Promise<boolean>;
       undoNoteUpdate: (
@@ -2114,11 +2183,13 @@ declare global {
         folderId?: number | null,
         spaceIds?: number[] | null
       ) => Promise<NoteItem[]>;
+      // spaceIds: the spaces the assistant may read; an empty list reads nothing.
       semanticSearchNotes: (
         query: string,
         limit?: number,
         spaceId?: number | null,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceIds?: readonly number[] | null
       ) => Promise<NoteItem[]>;
       updateNoteCloudId: (id: number, cloudId: string) => Promise<NoteItem>;
       updateNoteShareState: (
@@ -2130,7 +2201,8 @@ declare global {
       getFolders: (spaceId?: number | null) => Promise<FolderItem[]>;
       createFolder: (
         name: string,
-        spaceId?: number | null
+        spaceId?: number | null,
+        writeGuard?: NoteWriteGuard
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
       renameFolder: (
@@ -2140,7 +2212,13 @@ declare global {
       moveFolderToSpace: (
         id: number,
         spaceId: number
-      ) => Promise<{ success: boolean; folder?: FolderItem; notes?: NoteItem[]; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        folder?: FolderItem;
+        notes?: NoteItem[];
+        error?: string;
+        code?: MoveRefusalCode;
+      }>;
       getFolderNoteCounts: () => Promise<
         Array<{ space_id: number; folder_id: number | null; count: number }>
       >;
@@ -2150,6 +2228,49 @@ declare global {
       hasOtherAccountRows?: () => Promise<boolean>;
       accountChangedSince?: (occurredAt?: string) => Promise<boolean>;
       hasUnclaimedLegacyRows?: () => Promise<boolean>;
+      // Main resolves where new private notes go from this. A call naming an
+      // account is refused (ACCOUNT_CHANGED) once another one has signed in.
+      setActiveWorkspaceScope?: (
+        scope: WorkspaceScope
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      // The active workspace's private space, or the named workspace's. Null
+      // for an invalid id.
+      getPrivateSpaceId?: (
+        workspaceId?: string | null,
+        expectedAuthGeneration?: number
+      ) => Promise<number | null>;
+      // The account's default workspace's private space (its pending row
+      // while that workspace isn't known yet); the stand-in signed out.
+      getDefaultPrivateSpaceId?: {
+        (): Promise<number>;
+        (expectedAuthGeneration: number | undefined): Promise<number | null>;
+      };
+      bindDefaultPrivateSpace?: (
+        defaultWorkspaceId: string,
+        accountId?: string | null
+      ) => Promise<{ success: boolean; code?: string; error?: string }>;
+      // Copy to Private: a new local note in one of the account's private
+      // spaces (in the folder given, else where a new note of its type goes).
+      // The source keeps its cloud identity and sharing; the copy has neither.
+      // Null when the note, space or folder isn't the account's to use.
+      copyNoteToSpace?: (
+        noteId: number,
+        targetSpaceId: number,
+        folderId?: number | null
+      ) => Promise<NoteItem | null>;
+      // Moves a lost workspace's Private into the default's (null) or the named
+      // workspace's, locally. The default's own Private never moves.
+      relocatePrivateSpace?: (
+        fromWorkspaceId: string,
+        toWorkspaceId: string | null,
+        accountId?: string | null
+      ) => Promise<{
+        success: boolean;
+        notes?: number;
+        folders?: number;
+        code?: string;
+        error?: string;
+      }>;
       setActiveAccountScope?: (
         accountId: string | null,
         expectedAuthGeneration?: number
@@ -2167,6 +2288,7 @@ declare global {
         setupMode: string | null;
         flowVersion: string;
       }) => Promise<void>;
+      getNoteWriteGuard?: () => Promise<NoteWriteGuard>;
       getDatabaseAccountScope?: () => Promise<DatabaseAccountScope>;
       onDatabaseAccountScopeChanged?: (
         callback: (scope: DatabaseAccountScope) => void
@@ -3219,6 +3341,7 @@ declare global {
         body?: unknown;
         public?: boolean;
         expectedAuthGeneration?: number;
+        cache?: "no-store";
       }) => Promise<
         {
           success: boolean;
@@ -3430,6 +3553,12 @@ declare global {
       onAgentConversationReleased?: (
         callback: (event: { conversationId: number }) => void
       ) => () => void;
+      protectConversation?: (
+        id: number,
+        notes: ReadonlyArray<Pick<NoteItem, "id" | "space_id">>,
+        deviceOnly: boolean,
+        expectedAccountId: string | null
+      ) => Promise<{ success: boolean }>;
       getAgentConversation?: (id: number) => Promise<AgentConversationWithMessages | null>;
       deleteAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       updateAgentConversationTitle?: (id: number, title: string) => Promise<{ success: boolean }>;
@@ -3454,9 +3583,14 @@ declare global {
       getAgentConversationsWithPreview?: (
         limit?: number,
         offset?: number,
-        includeArchived?: boolean
+        includeArchived?: boolean,
+        spaceIds?: number[]
       ) => Promise<ConversationPreview[]>;
-      searchAgentConversations?: (query: string, limit?: number) => Promise<ConversationPreview[]>;
+      searchAgentConversations?: (
+        query: string,
+        limit?: number,
+        spaceIds?: number[]
+      ) => Promise<ConversationPreview[]>;
       archiveAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       unarchiveAgentConversation?: (id: number) => Promise<{ success: boolean }>;
       updateAgentConversationCloudId?: (
@@ -3465,7 +3599,8 @@ declare global {
       ) => Promise<{ success: boolean }>;
       semanticSearchConversations?: (
         query: string,
-        limit?: number
+        limit?: number,
+        spaceIds?: number[]
       ) => Promise<ConversationPreview[]>;
 
       // Deepgram Streaming
@@ -3572,12 +3707,13 @@ declare global {
         callback: (payload: {
           requestId: string;
           chunk: {
-            type: "content" | "tool_call" | "done";
+            type: "content" | "tool_call" | "done" | "error";
             text?: string;
             id?: string;
             name?: string;
             arguments?: string;
             finishReason?: string;
+            message?: string;
           };
         }) => void
       ) => () => void;
@@ -4094,19 +4230,57 @@ declare global {
       sendDictationPreviewAudio?: (data: ArrayBuffer) => void;
 
       // Sync operations
-      getPendingNotes?: (spaceKind?: "private" | "team") => Promise<NoteItem[]>;
+      // A sync pass's upload queue: team rows (and rows that left a team), plus
+      // shared private notes for "syncable". An omitted scope includes personal Backup.
+      getPendingNotes?: (scope?: "private" | "team" | "syncable" | null) => Promise<NoteItem[]>;
       getPendingNoteDeletes?: () => Promise<NoteItem[]>;
       getNoteByClientId?: (clientNoteId: string) => Promise<NoteItem | null>;
       getNoteForCloudRow?: (
         clientNoteId: string | null | undefined,
         cloudId: string
       ) => Promise<NoteItem | null>;
-      upsertNoteFromCloud?: (
-        cloudNote: Record<string, unknown>,
-        localFolderId: number | null,
-        localSpaceId?: number | null
-      ) => Promise<NoteItem | null>;
-      markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
+      upsertNoteFromCloud?: {
+        (
+          cloudNote: Record<string, unknown>,
+          localFolderId: number | null,
+          localSpaceId?: number | null
+        ): Promise<NoteItem | null>;
+        // A pull pinned to a sign-in: refused once that sign-in is replaced.
+        // newKeyIfTaken stores a cloud row whose key is taken under a key of
+        // its own without taking over another account's local row.
+        (
+          cloudNote: Record<string, unknown>,
+          localFolderId: number | null,
+          localSpaceId: number | null | undefined,
+          expectedAuthGeneration: number | undefined,
+          options?: CloudRowWriteOptions
+        ): Promise<NoteItem | StaleSyncWrite | null>;
+      };
+      markNoteCreatesAttempted?: (
+        clientNoteIds: string[],
+        expectedAuthGeneration?: number
+      ) => Promise<string[]>;
+      renewNoteCloudIdentity?: (
+        id: number,
+        expectedClientNoteId: string,
+        expectedCloudId: string | null,
+        expectedSpaceId: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; note?: NoteItem }>;
+      getPrivatePlacementBackupCandidates?: (
+        expectedAuthGeneration: number
+      ) => Promise<PrivatePlacementBackupCandidates | StaleSyncWrite>;
+      getPrivatePlacementBackupRows?: (
+        expectedAuthGeneration: number,
+        candidates: PrivatePlacementBackupCandidates
+      ) => Promise<{
+        success: boolean;
+        notes?: PrivatePlacementBackupRow[];
+        folders?: PrivatePlacementBackupRow[];
+      }>;
+      queueUnlinkedPrivateFolders?: (
+        expectedAuthGeneration: number
+      ) => Promise<number | StaleSyncWrite>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
@@ -4114,7 +4288,7 @@ declare global {
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
         options?: NoteCreateAckWriteOptions
-      ) => Promise<NoteCreateAckResult>;
+      ) => Promise<NoteCreateAckResult | StaleSyncWrite>;
       markNoteSyncedIfUnchanged?: (
         id: number,
         snapshot: NoteUpdateSnapshot,
@@ -4122,8 +4296,9 @@ declare global {
         cloudUpdatedAt?: string | null,
         ownerUserId?: string | null,
         cloudRevision?: number | null,
-        cloudNote?: NoteCloudText | null
-      ) => Promise<NoteUpdateAckResult>;
+        cloudNote?: NoteCloudText | null,
+        expectedAuthGeneration?: number
+      ) => Promise<NoteUpdateAckResult | StaleSyncWrite>;
       setNoteCloudBase?: (
         id: number,
         cloudUpdatedAt: string | null,
@@ -4132,30 +4307,42 @@ declare global {
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       setNoteOwnerFromCloud?: (id: number, ownerUserId: string) => Promise<void>;
       countTeamNotesMissingOwner?: () => Promise<number>;
-      countNotesMissingRevision?: (spaceKind?: "private" | "team") => Promise<number>;
+      countNotesMissingRevision?: (scope?: "private" | "team" | null) => Promise<number>;
       markNoteSyncError?: (id: number) => Promise<void>;
       restoreNoteAfterDeniedDelete?: (id: number) => Promise<{ success: boolean; id: number }>;
-      hardDeleteNote?: (id: number) => Promise<void>;
+      hardDeleteNote?: (
+        id: number,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
 
-      getPendingFolders?: (spaceKind?: "private" | "team") => Promise<FolderItem[]>;
+      // An omitted scope includes personal folders for consented Backup.
+      getPendingFolders?: (scope?: "private" | "team" | null) => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
+      // The active account's folder bound to that cloud folder, under any key.
+      getFolderByCloudId?: (cloudId: string) => Promise<FolderItem | null>;
+      // Given an auth generation (a pull pinned to a sign-in), refused once
+      // that sign-in is replaced. Options as for upsertNoteFromCloud.
       upsertFolderFromCloud?: (
         cloudFolder: Record<string, unknown>,
-        localSpaceId?: number | null
-      ) => Promise<FolderItem>;
+        localSpaceId?: number | null,
+        expectedAuthGeneration?: number,
+        options?: CloudRowWriteOptions
+      ) => Promise<FolderItem | StaleSyncWrite>;
       acknowledgeFolderCreate?: (
         id: number,
         snapshot: FolderPushSnapshot,
         expectedCloudId: string | null,
         responseClientFolderId: string,
         cloudId: string,
-        cloudUpdatedAt?: string | null
-      ) => Promise<FolderAckResult>;
+        cloudUpdatedAt?: string | null,
+        expectedAuthGeneration?: number
+      ) => Promise<FolderAckResult | StaleSyncWrite>;
       markFolderSyncedIfUnchanged?: (
         id: number,
         snapshot: FolderPushSnapshot,
-        expectedCloudId: string
-      ) => Promise<FolderAckResult>;
+        expectedCloudId: string,
+        expectedAuthGeneration?: number
+      ) => Promise<FolderAckResult | StaleSyncWrite>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       restoreFolderAfterDeniedDelete?: (id: number) => Promise<{
@@ -4167,7 +4354,13 @@ declare global {
         reason?: "name-taken";
         error?: string;
       }>;
-      hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
+      hardDeleteFolder?: (
+        id: number,
+        expectedAuthGeneration?: number
+      ) => Promise<{ success: boolean; id: number } | StaleSyncWrite>;
+      // A new client identity and no cloud link: the folder's cloud row is
+      // left to whoever still has it.
+      forkFolderIdentity?: (id: number) => Promise<{ success: boolean }>;
       relocateRevokedFolder?: (
         id: number,
         privateSpaceId: number,
