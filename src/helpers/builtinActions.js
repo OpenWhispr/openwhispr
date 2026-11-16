@@ -165,6 +165,9 @@ export const SECTIONED_NOTES_FORMAT = `FORMAT:
 
 export const SECTIONED_NOTES_FOOTER = `Return only the finished Markdown notes.\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS}`;
 
+// A template with its own scope must not be told to include topics it excludes.
+export const SCOPED_NOTES_FOOTER = `Return only the finished Markdown notes.\n\n${NON_SUBSTANTIVE_NOTES_INSTRUCTIONS_1_10_3}`;
+
 // Action items must end in "— Owner" so the editor can turn owners into
 // mention chips (see tagActionItemOwners).
 const ACTION_ITEMS_SECTION = {

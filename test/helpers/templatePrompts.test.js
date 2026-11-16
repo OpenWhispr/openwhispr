@@ -142,6 +142,28 @@ test("a sectioned template puts its context before the format rules and keeps se
   assert.ok(context > 0 && context < format && format < deals && deals < risks, prompt);
 });
 
+test("sectioned templates use their own scope instead of the unrestricted notes rule", async () => {
+  const { GENERATE_NOTES_KEY, SCOPED_NOTES_FOOTER, SECTIONED_NOTES_FOOTER, compileTemplatePrompt } =
+    await load();
+  for (const { prompt, translation_key, footer } of [
+    { prompt: "", footer: SECTIONED_NOTES_FOOTER },
+    { prompt: " \n\t ", footer: SECTIONED_NOTES_FOOTER },
+    { prompt: "Exclude personal matters unrelated to work.", footer: SCOPED_NOTES_FOOTER },
+    {
+      prompt: "Only cover the sales pipeline.",
+      translation_key: GENERATE_NOTES_KEY,
+      footer: SCOPED_NOTES_FOOTER,
+    },
+  ]) {
+    const compiled = compileTemplatePrompt({
+      prompt,
+      translation_key,
+      sections: [{ heading: "Summary", instruction: "Summarize the allowed topics." }],
+    });
+    assert.ok(compiled.endsWith(footer), prompt || "unrestricted template");
+  }
+});
+
 test("sections are trimmed, lose their Markdown heading marks, and need a heading", async () => {
   const { normalizeSections } = await load();
   assert.deepEqual(normalizeSections(null), []);
