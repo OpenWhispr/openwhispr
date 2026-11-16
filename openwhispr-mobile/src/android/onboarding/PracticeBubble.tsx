@@ -78,14 +78,15 @@ export function PracticeBubble({
   );
 }
 
-const HEIGHTS = [10, 18, 26, 16, 24, 12, 20];
+const BARS = 9;
+const MAX = 28;
 
-// Bars follow the microphone level, so they stay flat until someone speaks.
+// Each bar is a recent moment of the voice, newest on the right, so the wave scrolls while
+// someone speaks and lies flat in silence. The meter learns the room: the quietest recent
+// level is the noise floor, and only sound clearly above it moves the bars.
 function Waveform() {
-  const level = useSharedValue(0);
+  const history = useSharedValue<number[]>(Array(BARS).fill(0));
   useEffect(() => {
-    // The meter learns the room: the quietest recent level is the noise floor, and only sound
-    // clearly above it moves the bars. The floor creeps up slowly so a noisy room settles too.
     // The first readings after the mic opens are artificially quiet, so they don't set the floor.
     let floor = 1;
     let samples = 0;
@@ -98,33 +99,24 @@ function Waveform() {
       }
       samples += 1;
       if (samples > 4 && next > 0) floor = Math.min(next, floor + 0.004);
-      const speech = Math.max(0, Math.min(1, (next - floor - 0.06) / 0.22));
-      level.value = withTiming(speech, { duration: 90 });
-    }, 80);
+      const speech = Math.max(0, Math.min(1, (next - floor - 0.03) / 0.16));
+      history.value = [...history.value.slice(1), speech];
+    }, 70);
     return () => clearInterval(timer);
-  }, [level]);
+  }, [history]);
   return (
     <View style={b.wave} accessible={false}>
-      {HEIGHTS.map((height, index) => (
-        <Bar key={index} height={height} index={index} level={level} />
+      {Array.from({ length: BARS }, (_, index) => (
+        <Bar key={index} index={index} history={history} />
       ))}
     </View>
   );
 }
 
-function Bar({
-  height,
-  index,
-  level,
-}: {
-  height: number;
-  index: number;
-  level: SharedValue<number>;
-}) {
-  const style = useAnimatedStyle(() => {
-    const wobble = 0.75 + 0.25 * Math.sin(index * 1.7 + level.value * 9);
-    return { height: 4 + (height - 4) * Math.min(1, level.value * 1.6) * wobble };
-  });
+function Bar({ index, history }: { index: number; history: SharedValue<number[]> }) {
+  const style = useAnimatedStyle(() => ({
+    height: withTiming(4 + (MAX - 4) * Math.sqrt(history.value[index] ?? 0), { duration: 70 }),
+  }));
   return <Animated.View style={[b.bar, style]} />;
 }
 
@@ -161,6 +153,6 @@ const b = StyleSheet.create({
     justifyContent: 'center',
   },
   stopSquare: { width: 12, height: 12, borderRadius: 2, backgroundColor: '#FFFFFF' },
-  wave: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 30 },
+  wave: { flexDirection: 'row', alignItems: 'center', gap: 3, height: 30, width: 60 },
   bar: { width: 4, borderRadius: 2, backgroundColor: colors.accent },
 });

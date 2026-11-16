@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   AppState,
+  Dimensions,
   Image,
   Keyboard,
   Pressable,
@@ -22,6 +23,15 @@ import { PracticeRecorder, requestMicrophone } from './practiceRecorder';
 import { useOnboardingT, type OnboardingKey } from './strings';
 
 export type PracticeKind = 'message' | 'email' | 'list';
+
+// Where the keyboard's top edge was last seen, in screen coordinates. The guidance and the
+// bubble (or the button) stay pinned there even while the keyboard is closed, as in Wispr Flow.
+let rememberedKeyboardTop: number | null = null;
+function anchorTop(current: number | null): number {
+  if (current !== null) return current;
+  if (rememberedKeyboardTop !== null) return rememberedKeyboardTop;
+  return Dimensions.get('screen').height * 0.58;
+}
 
 type Phase = 'blank' | 'focused' | 'listening' | 'processing' | 'inserted' | 'done';
 
@@ -85,6 +95,7 @@ export function PracticeScreen({
   useEffect(() => {
     mounted.current = true;
     const show = Keyboard.addListener('keyboardDidShow', (event: KeyboardEvent) => {
+      rememberedKeyboardTop = event.endCoordinates.screenY;
       setKeyboardTop(event.endCoordinates.screenY);
       place(event.endCoordinates.screenY);
     });
@@ -96,6 +107,7 @@ export function PracticeScreen({
     // The keyboard can stay open from the previous practice, so no show event arrives.
     const open = Keyboard.isVisible() ? Keyboard.metrics() : undefined;
     if (open) {
+      rememberedKeyboardTop = open.screenY;
       setKeyboardTop(open.screenY);
       place(open.screenY);
     }
@@ -119,7 +131,7 @@ export function PracticeScreen({
 
   // Measure again once the screen has laid out: the first measurement can run before layout.
   useEffect(() => {
-    const frame = requestAnimationFrame(() => place(keyboardTop));
+    const frame = requestAnimationFrame(() => place(anchorTop(keyboardTop)));
     return () => cancelAnimationFrame(frame);
   }, [keyboardTop, place]);
 
@@ -180,7 +192,8 @@ export function PracticeScreen({
           ? 'pulsing'
           : 'idle';
   const keyboardUp = focused && keyboardTop !== null;
-  const showBubble = keyboardUp && !success;
+  // The bubble keeps its place above the keyboard line until the button takes over.
+  const showBubble = !success && phase !== 'blank';
   const idle = showBubble && (phase === 'focused' || phase === 'inserted');
   // The bubble nudges only when someone has sat on a step for 9 s without tapping it.
   useEffect(() => {
@@ -205,7 +218,7 @@ export function PracticeScreen({
 
   return (
     <SafeAreaView style={s.page} edges={['top', 'bottom', 'left', 'right']}>
-      <View ref={root} style={{ flex: 1 }} onLayout={() => place(keyboardTop)}>
+      <View ref={root} style={{ flex: 1 }} onLayout={() => place(anchorTop(keyboardTop))}>
         <Pressable style={{ flex: 1 }} onPress={() => Keyboard.dismiss()} accessible={false}>
           <View style={s.header}>
             <CircleButton icon="back" label={t('back')} onPress={onBack} />
@@ -267,17 +280,7 @@ export function PracticeScreen({
             ) : null}
           </View>
         </Pressable>
-        {success && !keyboardUp ? (
-          <View style={s.footer}>
-            <AccentText center text={t(copy.success)} style={p.hintDone} />
-            <GlassButton
-              label={t(kind === 'message' ? 'continue' : 'next')}
-              onPress={onNext}
-              style={{ marginTop: 12 }}
-            />
-          </View>
-        ) : null}
-        {keyboardUp ? (
+        {kind !== 'message' || phase !== 'blank' ? (
           <View style={[p.overlay, { bottom: overlayBottom }]} pointerEvents="box-none">
             <View style={p.hintRow}>
               {success ? (
@@ -290,12 +293,14 @@ export function PracticeScreen({
               <GlassButton label={t(kind === 'message' ? 'continue' : 'next')} onPress={onNext} />
             ) : (
               <View style={p.bubbleRow}>
-                <PracticeBubble
-                  state={bubbleState}
-                  onPress={() => void start()}
-                  onStop={() => void stop()}
-                  onCancel={cancel}
-                />
+                {showBubble ? (
+                  <PracticeBubble
+                    state={bubbleState}
+                    onPress={() => void start()}
+                    onStop={() => void stop()}
+                    onCancel={cancel}
+                  />
+                ) : null}
               </View>
             )}
           </View>
