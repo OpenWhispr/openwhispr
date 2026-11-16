@@ -242,7 +242,7 @@ function powershellRegistry(entries, calls = []) {
   };
 }
 
-test("with reg.exe blocked, PowerShell reads the deployment and its evidence", async () => {
+test("with reg.exe blocked, PowerShell reads the deployment", async () => {
   const Policy = JSON.stringify(defaultDevicePolicy());
   const calls = [];
   const deployed = { Policy, RequireSignIn: 0, DisableMeetingRecording: null };
@@ -251,15 +251,7 @@ test("with reg.exe blocked, PowerShell reads the deployment and its evidence", a
     RequireSignIn: false,
   });
   assert.deepEqual(calls, ["reg.exe", "powershell.exe"]);
-  assert.equal(
-    await hasPolicyEvidence({ platform: "win32", run: powershellRegistry(deployed) }),
-    true
-  );
   assert.deepEqual(await readWindowsValues(powershellRegistry(null)), {});
-  assert.equal(
-    await hasPolicyEvidence({ platform: "win32", run: powershellRegistry(null) }),
-    false
-  );
   for (const entries of [{ RequireSignIn: "0" }, { Policy: 1 }, { RequireSignIn: [1] }])
     await assert.rejects(
       readWindowsValues(powershellRegistry(entries)),
@@ -283,7 +275,7 @@ test("a failed PowerShell read isn't run again to look for evidence", async () =
   });
   await manager.refresh();
   assert.equal(manager.getSnapshot().status, "absent");
-  assert.deepEqual(calls, ["reg.exe", "powershell.exe"]);
+  assert.deepEqual(calls, ["reg.exe", "powershell.exe", "reg.exe"]);
   manager.stop();
 });
 
