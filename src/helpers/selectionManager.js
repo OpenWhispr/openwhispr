@@ -100,6 +100,7 @@ const HELD_BACK_CODES = {
   "wl-copy-missing": "wl_copy_missing",
   "wl-copy-failed": "wl_copy_failed",
   cancelled: "cancelled",
+  "target-changed": "target_changed",
 };
 
 function heldBackCode(fallback, { code, reason } = {}) {
@@ -406,6 +407,7 @@ class SelectionManager {
           ...options,
           isCancelled: () => this.sessions.get(sessionId) !== session,
           signal: session.deliveryController.signal,
+          validateTarget: () => this._isCapturedCaretTarget(session, options.webContents),
           ...(session.target?.kind === "win-hwnd" ? { targetWindow: session.target.id } : {}),
         });
         await pasteResult?.restoreComplete;
@@ -420,6 +422,34 @@ class SelectionManager {
         if (this.sessions.get(sessionId) === session) this.sessions.delete(sessionId);
       }
     });
+  }
+
+  // Dispatch runs after the answer is on the clipboard. Use read-only probes:
+  // another synthetic copy here would replace the answer about to be pasted.
+  async _isCapturedCaretTarget(session, webContents) {
+    try {
+      if (webContents?.isDestroyed?.() || webContents?.isFocused()) return false;
+      const target = session.target;
+      const pid = target.kind === "mac-pid" ? target.pid : await this._linuxTargetPid(target);
+      if (
+        (await this.textEditMonitor?.isFocusedEditable?.(pid ? { ...target, pid } : target)) !==
+        "editable"
+      ) {
+        return false;
+      }
+      if ((await this._macWindowTitle(target)) !== session.windowTitle) return false;
+      const current =
+        this.platform === "darwin"
+          ? { kind: "mac-pid", pid: await this.textEditMonitor._readFrontmostPid() }
+          : await this._probeTarget();
+      return (
+        this._sameTarget(current, target) &&
+        !webContents?.isDestroyed?.() &&
+        !webContents?.isFocused()
+      );
+    } catch {
+      return false;
+    }
   }
 
   // The focused window's title for a macOS target; undefined for other targets.

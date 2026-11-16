@@ -955,6 +955,7 @@ export function createChatTurnEngine(
         requestedAttachment && isCloudAgent
           ? { data: requestedAttachment.image, mediaType: requestedAttachment.mediaType }
           : null;
+      let textOnlySystemPrompt = systemPrompt;
       if (requestedAttachment) {
         // Either way it needs its grounding instruction, as the dictation path
         // pairs the suffix with an attached image.
@@ -962,6 +963,10 @@ export function createChatTurnEngine(
       }
       if (options?.plainTextResponse) {
         systemPrompt = appendPlainTextResponseSuffix(systemPrompt, requireCaretDisposition);
+        textOnlySystemPrompt = appendPlainTextResponseSuffix(
+          textOnlySystemPrompt,
+          requireCaretDisposition
+        );
       }
       if (attachment) {
         transformLastUserMessage(history, (message) => ({
@@ -1302,7 +1307,9 @@ export function createChatTurnEngine(
                 parameters: t.parameters,
               })),
               executeToolCall,
-              ...(cloudScreenContext ? { screenContext: cloudScreenContext } : {}),
+              ...(cloudScreenContext
+                ? { screenContext: cloudScreenContext, textOnlySystemPrompt }
+                : {}),
               isUnbackedClaim: isUnbacked,
             },
             control.controller.signal
@@ -1478,9 +1485,9 @@ export function createChatTurnEngine(
             onlyRead:
               !stepLimitReached &&
               !unbackedClaim &&
+              finishReason === "stop" &&
               (!requireCaretDisposition ||
-                (readCaretResponse(rawContent).disposition === "answer" &&
-                  finishReason === "stop")) &&
+                readCaretResponse(rawContent).disposition === "answer") &&
               (calls ?? []).every(
                 (call) =>
                   !call.interaction &&

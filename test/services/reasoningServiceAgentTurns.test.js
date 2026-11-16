@@ -399,9 +399,15 @@ function cloudBridge() {
       onAgentStreamError: (cb) => ((listeners.error = cb), () => {}),
       onAgentStreamEnd: (cb) => ((listeners.end = cb), () => {}),
     },
-    step(chunks) {
+    step(
+      chunks,
+      finishReason = chunks.some((chunk) => chunk.type === "tool_call") ? "tool-calls" : "stop"
+    ) {
       const [requestId] = startCalls.at(-1);
       for (const chunk of chunks) listeners.chunk({ requestId, chunk });
+      if (finishReason !== null) {
+        listeners.chunk({ requestId, chunk: { type: "done", finishReason } });
+      }
       listeners.end({ requestId });
     },
     fail(error) {
@@ -412,6 +418,187 @@ function cloudBridge() {
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test("cloud streaming preserves completion and never executes incomplete tool steps", async (t) => {
+  const bridge = cloudBridge();
+  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
+  for (const finishReason of ["stop", "length", "content-filter", "unknown", "error", null]) {
+    const output = collect(
+      reasoningService.processTextStreamingCloud([{ role: "user", content: "Reply" }], {
+        systemPrompt: "Answer.",
+      })
+    );
+    await settle();
+    bridge.step([{ type: "content", text: "Monday works" }], finishReason);
+    assert.deepEqual((await output).at(-1), {
+      type: "done",
+      finishReason: finishReason ?? "unknown",
+    });
+  }
+  for (const finishReason of ["length", "unknown", null]) {
+    let executed = false;
+    const output = collect(
+      reasoningService.processTextStreamingCloud([{ role: "user", content: "Update my note" }], {
+        systemPrompt: "Answer.",
+        tools: [{ name: "update_note", description: "Update", parameters: {} }],
+        executeToolCall: async () => {
+          executed = true;
+          return { data: "ok", displayText: "ok" };
+        },
+      })
+    );
+    const rejected = assert.rejects(output, /before tool calls completed/);
+    await settle();
+    bridge.step(
+      [{ type: "tool_call", id: "c1", name: "update_note", arguments: "{}" }],
+      finishReason
+    );
+    // End a wrongly-started next step too, so the regression fails instead of hanging.
+    await settle();
+    if (executed) bridge.step([{ type: "content", text: "Done" }]);
+    await rejected;
+    assert.equal(executed, false);
+  }
+});
+
+test("cloud streaming rejects in-band errors instead of completing partial text", async (t) => {
+  const bridge = cloudBridge();
+  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
+  const output = collect(
+    reasoningService.processTextStreamingCloud([{ role: "user", content: "Reply" }], {
+      systemPrompt: "Answer.",
+    })
+  );
+  const rejected = assert.rejects(output, /Stream interrupted/);
+  await settle();
+  bridge.step(
+    [
+      { type: "content", text: "Monday works, but please bring the" },
+      { type: "error", message: "Stream interrupted" },
+    ],
+    null
+  );
+  await rejected;
+});
+
+test("an initial cloud screenshot failure retries once without the image and keeps tool context", async (t) => {
+  const bridge = cloudBridge();
+  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
+  const tools = [{ name: "lookup", description: "Look up", parameters: {} }];
+  let executions = 0;
+  const output = collect(
+    reasoningService.processTextStreamingCloud(
+      [
+        { role: "system", content: "Answer with the screen." },
+        { role: "user", content: "Check" },
+      ],
+      {
+        systemPrompt: "Answer with the screen.",
+        textOnlySystemPrompt: "Answer without the screen.",
+        screenContext: { data: "image", mediaType: "image/jpeg" },
+        tools,
+        executeToolCall: async () => {
+          executions++;
+          return { data: "result", displayText: "Found it" };
+        },
+      }
+    )
+  );
+  // Attach immediately so a missing retry is reported as an assertion, not an unhandled rejection.
+  const settled = output.then(
+    (chunks) => ({ chunks }),
+    (error) => ({ error })
+  );
+  await settle();
+  bridge.fail("Vision request failed");
+  await settle();
+  assert.equal(bridge.startCalls.length, 2);
+  assert.deepEqual(bridge.startCalls[1][1], [{ role: "user", content: "Check" }]);
+  assert.equal(bridge.startCalls[1][2].screenContext, undefined);
+  assert.equal(bridge.startCalls[1][2].systemPrompt, "Answer without the screen.");
+  assert.deepEqual(bridge.startCalls[1][2].tools, tools);
+  bridge.step([{ type: "tool_call", id: "c1", name: "lookup", arguments: "{}" }]);
+  await settle();
+  assert.equal(bridge.startCalls.length, 3);
+  assert.equal(bridge.startCalls[2][2].screenContext, undefined);
+  assert.equal(bridge.startCalls[2][2].systemPrompt, "Answer without the screen.");
+  assert.equal(bridge.startCalls[2][1].at(-1).role, "tool");
+  bridge.step([{ type: "content", text: "Here is the result." }]);
+  assert.equal((await settled).chunks.at(-1).finishReason, "stop");
+  assert.equal(executions, 1);
+});
+
+test("cloud screenshot recovery never replays emitted content, tool calls, later steps or cancellation", async (t) => {
+  const bridge = cloudBridge();
+  const { reasoningService } = await loadReasoningService(t, { electronAPI: bridge.electronAPI });
+  for (const scenario of [
+    "retry fails",
+    "content",
+    "tool call",
+    "later step",
+    "cancel",
+    "no image",
+  ]) {
+    const controller = new AbortController();
+    const before = bridge.startCalls.length;
+    let executions = 0;
+    const output = collect(
+      reasoningService.processTextStreamingCloud(
+        [{ role: "user", content: "Check" }],
+        {
+          systemPrompt: "Answer.",
+          textOnlySystemPrompt: "Text answer.",
+          ...(scenario === "no image"
+            ? {}
+            : { screenContext: { data: "image", mediaType: "image/jpeg" } }),
+          tools: [{ name: "lookup", description: "Look up", parameters: {} }],
+          executeToolCall: async () => {
+            executions++;
+            return { data: "ok", displayText: "ok" };
+          },
+        },
+        controller.signal
+      )
+    );
+    const settled = output.then(
+      (chunks) => ({ chunks }),
+      (error) => ({ error })
+    );
+    await settle();
+    if (scenario === "later step") {
+      bridge.step([{ type: "tool_call", id: "c1", name: "lookup", arguments: "{}" }]);
+      await settle();
+      bridge.fail("Stream interrupted");
+    } else if (scenario === "cancel") {
+      controller.abort();
+    } else if (scenario === "content" || scenario === "tool call") {
+      bridge.step(
+        [
+          scenario === "content"
+            ? { type: "content", text: "Partial" }
+            : { type: "tool_call", id: "c1", name: "lookup", arguments: "{}" },
+          { type: "error", message: "Stream interrupted" },
+        ],
+        null
+      );
+    } else {
+      bridge.fail("Stream interrupted");
+      await settle();
+      if (scenario === "retry fails" && bridge.startCalls.length === before + 2) {
+        bridge.fail("Stream interrupted");
+      }
+    }
+    const result = await settled;
+    assert.equal(
+      bridge.startCalls.length - before,
+      scenario === "retry fails" || scenario === "later step" ? 2 : 1,
+      scenario
+    );
+    assert.equal(executions, scenario === "later step" ? 1 : 0, scenario);
+    if (scenario === "cancel") assert.equal(result.chunks.at(-1).finishReason, "abort");
+    else assert.match(result.error?.message ?? "", /Stream interrupted/, scenario);
+  }
+});
 
 test("the cloud loop keeps a step's text for the next step and flags a throwing tool", async (t) => {
   const bridge = cloudBridge();

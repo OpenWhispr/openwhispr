@@ -1469,12 +1469,101 @@ test("the first Cloud request carries its screenshot without a look_at_screen st
   for (const [i, question] of ["Translate this email", "Hello"].entries()) {
     await captured.sendToAI(question, [{ id: `u${i}`, role: "user", content: question }], {
       attachment: { image: `image-${i}`, mediaType: "image/jpeg" },
+      plainTextResponse: true,
     });
     assert.deepEqual(configs[i].screenContext, { data: `image-${i}`, mediaType: "image/jpeg" });
     assert.equal(offeredTools[i].includes("look_at_screen"), false);
     assert.match(configs[i].systemPrompt, /SCREEN CONTEXT:/);
+    assert.doesNotMatch(configs[i].textOnlySystemPrompt, /SCREEN CONTEXT:/);
+    assert.match(configs[i].textOnlySystemPrompt, /OUTPUT FORMAT:[^]*own line with no marker\.$/);
   }
   assert.equal(configs.length, 2, "one provider call per request");
+});
+
+test("cloud caret delivery follows the real IPC completion and recovers a rejected first screenshot", async (t) => {
+  const listeners = {};
+  const requests = [];
+  let scenario = "stop";
+  const electronAPI = {
+    onAgentStreamChunk: (callback) => ((listeners.chunk = callback), () => {}),
+    onAgentStreamError: (callback) => ((listeners.error = callback), () => {}),
+    onAgentStreamEnd: (callback) => ((listeners.end = callback), () => {}),
+    cancelAgentStream() {},
+    startAgentStream(requestId, messages, options) {
+      requests.push({ messages, options });
+      queueMicrotask(() => {
+        if (scenario === "image failure" && options.screenContext) {
+          listeners.error({ requestId, error: "API error: 500" });
+          return;
+        }
+        listeners.chunk({
+          requestId,
+          chunk:
+            scenario === "incomplete tool"
+              ? {
+                  type: "tool_call",
+                  id: "c1",
+                  name: "create_note",
+                  arguments: '{"title":"Reply","content":"Monday"}',
+                }
+              : { type: "content", text: "Monday works." },
+        });
+        if (scenario === "stream error") {
+          listeners.chunk({ requestId, chunk: { type: "error", message: "Stream interrupted" } });
+        } else if (scenario !== "EOF") {
+          listeners.chunk({
+            requestId,
+            chunk: {
+              type: "done",
+              finishReason:
+                scenario === "length" || scenario === "incomplete tool" ? "length" : "stop",
+            },
+          });
+        }
+        listeners.end({ requestId });
+      });
+    },
+  };
+  const { captured, reasoningService, getMessages } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent", allowInteractions: true },
+    { electronAPI }
+  );
+  reasoningService.processTextStreamingCloud.mock.restore();
+  for (scenario of ["stop", "length", "EOF", "stream error", "incomplete tool", "image failure"]) {
+    const before = requests.length;
+    const completed = [];
+    const question = "Reply that Monday works";
+    await captured.sendToAI(question, [{ id: `u-${scenario}`, role: "user", content: question }], {
+      attachment: { image: "captured-image", mediaType: "image/jpeg" },
+      plainTextResponse: true,
+      onComplete: (result) => completed.push(result),
+    });
+    assert.equal(requests.length - before, scenario === "image failure" ? 2 : 1, scenario);
+    if (scenario === "stream error" || scenario === "incomplete tool") {
+      assert.deepEqual(completed, []);
+      assert.equal(getMessages().at(-1).turn.status, "error");
+      if (scenario === "incomplete tool") {
+        assert.equal(getMessages().at(-1).toolCalls[0].status, "stopped");
+      }
+    } else {
+      assert.equal(completed.length, 1, scenario);
+      assert.equal(
+        completed[0].onlyRead,
+        scenario === "stop" || scenario === "image failure",
+        scenario
+      );
+      assert.equal(completed[0].content, "Monday works.");
+    }
+    if (scenario === "image failure") {
+      const { options } = requests.at(-1);
+      assert.equal(options.screenContext, undefined);
+      assert.doesNotMatch(options.systemPrompt, /SCREEN CONTEXT:/);
+      assert.match(options.systemPrompt, /OUTPUT FORMAT:/);
+      assert.ok(options.tools.some(({ name }) => name === "ask_user"));
+      assert.equal(getMessages().at(-1).turn.status, "complete");
+    }
+  }
 });
 
 test("automatic library context includes saved summaries and prioritizes private information", async (t) => {
@@ -1781,6 +1870,9 @@ test("an answer typed at another app's caret asks for plain text as the last ins
 
 for (const [tool, onlyRead, finishReason = "stop"] of [
   [null, true],
+  [null, false, "length"],
+  [null, false, "unknown"],
+  ["search_notes", false, "length"],
   ["search_notes", true],
   ["create_note", false],
   // Paused at the step limit: the reply so far is not the whole answer.
@@ -1809,6 +1901,40 @@ for (const [tool, onlyRead, finishReason = "stop"] of [
     assert.equal(completed[0].onlyRead, onlyRead);
   });
 }
+
+test("a hosted BYOK caret answer requires a successful completion even with question tools", async (t) => {
+  const { captured, reasoningService } = await renderChatStreaming(
+    t,
+    { inferenceScope: "dictationAgent", allowInteractions: true },
+    {
+      settings: {
+        useDictationAgent: true,
+        dictationAgentMode: "providers",
+        dictationAgentProvider: "openai",
+        dictationAgentModel: "gpt-5-mini",
+      },
+    }
+  );
+  let finishReason;
+  reasoningService.processTextStreamingAI.mock.mockImplementation(
+    (_messages, _model, _provider, _config, tools) => {
+      assert.ok(tools.ask_user);
+      return (async function* () {
+        yield { type: "content", text: "Monday works." };
+        if (finishReason !== undefined) yield { type: "done", finishReason };
+      })();
+    }
+  );
+  for (finishReason of ["stop", "length", "unknown", "error", undefined]) {
+    const completed = [];
+    await captured.sendToAI("Reply that Monday works", [], {
+      plainTextResponse: true,
+      onComplete: (result) => completed.push(result),
+    });
+    assert.equal(completed.length, 1);
+    assert.equal(completed[0].onlyRead, finishReason === "stop", String(finishReason));
+  }
+});
 
 // ask_user is a read-only tool, so only its interaction keeps the turn from
 // counting as one that only read.

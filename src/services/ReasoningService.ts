@@ -1473,6 +1473,7 @@ class ReasoningService extends BaseReasoningService {
         name?: string;
         arguments?: string;
         finishReason?: string;
+        message?: string;
       },
       void,
       unknown
@@ -1486,6 +1487,7 @@ class ReasoningService extends BaseReasoningService {
       name?: string;
       arguments?: string;
       finishReason?: string;
+      message?: string;
     };
     const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
     let resolve: (() => void) | null = null;
@@ -1547,6 +1549,9 @@ class ReasoningService extends BaseReasoningService {
             const item = queue.shift()!;
             if (item.type === "__end") return;
             if (item.type === "__error") throw new Error((item as { error: string }).error);
+            if (item.type === "error") {
+              throw new Error((item as StreamEvent).message || "Stream interrupted");
+            }
             yield item as StreamEvent;
           }
         }
@@ -1570,6 +1575,8 @@ class ReasoningService extends BaseReasoningService {
         toolCallId: string
       ) => Promise<ToolExecutionResult>;
       screenContext?: { data: string; mediaType: string };
+      /** The same instructions without screenshot grounding, for a failed first image request. */
+      textOnlySystemPrompt?: string;
       /** Whether a final answer claims an action no tool call in its turn did. */
       isUnbackedClaim?: (text: string) => boolean;
     },
@@ -1589,42 +1596,66 @@ class ReasoningService extends BaseReasoningService {
       // hasn't seen yet start where the last step's pairs do.
       let latestStepStart = currentMessages.length;
       let claimRetried = false;
+      let screenContext = config.screenContext;
+      let systemPrompt = config.systemPrompt;
 
       for (let step = 0; step < maxSteps; step++) {
         if (operationWasCancelled()) return;
         currentMessages = compactTranscriptHistory(currentMessages, latestStepStart);
-        // The screenshot rides every step of the tool loop so the model keeps
-        // its vision after tool results come back.
-        const ipcStream = this.streamFromIPC(
-          currentMessages,
-          {
-            systemPrompt: config.systemPrompt,
-            tools: config.tools,
-            screenContext: config.screenContext,
-          },
-          controller.signal
-        );
-
         const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
         let stepText = "";
+        let finishReason = "unknown";
+        let emittedOutput = false;
 
-        for await (const ev of ipcStream.stream) {
-          if (ev.type === "content") {
-            stepText += ev.text as string;
-            yield { type: "content", text: ev.text as string };
-          } else if (ev.type === "tool_call") {
-            const call = {
-              id: ev.id as string,
-              name: ev.name as string,
-              arguments: ev.arguments as string,
-            };
-            pendingToolCalls.push(call);
-            yield { type: "tool_calls", calls: [call] };
+        // A rejected optional image must not lose the command. Retry only before
+        // the first visible output or tool call; later retries could replay an action.
+        while (true) {
+          const ipcStream = this.streamFromIPC(
+            currentMessages,
+            { systemPrompt, tools: config.tools, screenContext },
+            controller.signal
+          );
+          try {
+            for await (const ev of ipcStream.stream) {
+              if (ev.type === "content") {
+                emittedOutput = true;
+                stepText += ev.text as string;
+                yield { type: "content", text: ev.text as string };
+              } else if (ev.type === "tool_call") {
+                emittedOutput = true;
+                const call = {
+                  id: ev.id as string,
+                  name: ev.name as string,
+                  arguments: ev.arguments as string,
+                };
+                pendingToolCalls.push(call);
+                yield { type: "tool_calls", calls: [call] };
+              } else if (ev.type === "done") {
+                finishReason = ev.finishReason || "unknown";
+              }
+            }
+          } catch (error) {
+            if (!operationWasCancelled() && step === 0 && screenContext && !emittedOutput) {
+              screenContext = undefined;
+              systemPrompt = config.textOnlySystemPrompt ?? config.systemPrompt;
+              finishReason = "unknown";
+              continue;
+            }
+            throw error;
           }
+          if (ipcStream.wasCancelled() || operationWasCancelled()) {
+            yield { type: "done", finishReason: "abort" };
+            return;
+          }
+          break;
         }
 
-        if (ipcStream.wasCancelled() || operationWasCancelled()) {
-          yield { type: "done", finishReason: "abort" };
+        // EOF and truncation do not authorize either delivery or tool execution.
+        if (finishReason !== "stop" && finishReason !== "tool-calls") {
+          if (pendingToolCalls.length > 0) {
+            throw new Error("Cloud stream ended before tool calls completed");
+          }
+          yield { type: "done", finishReason };
           return;
         }
 
@@ -1642,7 +1673,7 @@ class ReasoningService extends BaseReasoningService {
               continue;
             }
           }
-          yield { type: "done", finishReason: "stop" };
+          yield { type: "done", finishReason };
           return;
         }
 
@@ -1707,7 +1738,7 @@ class ReasoningService extends BaseReasoningService {
       // One more step, with no tools, answers with what it has.
       const answer = this.streamFromIPC(
         [...currentMessages, { role: "user", content: STEP_LIMIT_NOTE }],
-        { systemPrompt: config.systemPrompt, screenContext: config.screenContext },
+        { systemPrompt, screenContext },
         controller.signal
       );
       let answerText = "";

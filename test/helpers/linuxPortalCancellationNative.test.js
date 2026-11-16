@@ -46,7 +46,7 @@ test(
     assert.ifError(compiled.error);
     assert.equal(compiled.status, 0, compiled.stderr);
 
-    const result = spawnSync(binary, [], { encoding: "utf8", timeout: 5000 });
+    const result = spawnSync(binary, [], { encoding: "utf8", timeout: 10_000 });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /portal cancellation and complete key-release checks passed/);

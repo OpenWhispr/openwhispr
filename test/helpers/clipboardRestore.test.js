@@ -266,6 +266,7 @@ for (const [label, platform, backend, expectedDispatches] of [
       expiresAt: Date.now() + 10000,
     });
     manager._readCurrentSelection = async () => ({ status: "editable" });
+    manager._isCapturedCaretTarget = async () => true;
     cancel = () => manager.cancelSelectionEdit("pending-dispatch");
     resetClipboard({
       text: "original",
@@ -385,7 +386,7 @@ for (const startedPosting of [false, true]) {
     let inputClosed = false;
     const dispatched = [];
     const Manager = loadClipboardManager({
-      spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1") }),
+      spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1 portal-approval-v1") }),
       spawn: () => {
         portal = new EventEmitter();
         portal.stdout = new EventEmitter();
@@ -425,6 +426,7 @@ for (const startedPosting of [false, true]) {
       expiresAt: Date.now() + 10000,
     });
     manager._readCurrentSelection = async () => ({ status: "editable" });
+    manager._isCapturedCaretTarget = async () => true;
     resetClipboard({ text: "original" });
     await withWaylandEnvironment("KDE", async () => {
       const pending = manager.pasteAtCapturedTarget("portal-caret", "Cancelled answer");
@@ -468,7 +470,7 @@ for (const committed of [false, true]) {
     let markPortalStarted;
     const portalStarted = new Promise((resolve) => (markPortalStarted = resolve));
     const Manager = loadClipboardManager({
-      spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1") }),
+      spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1 portal-approval-v1") }),
       spawn: (command, args) => {
         if (!args.includes("--portal")) return successfulSpawn(command, args);
         calls.push({ command, args });
@@ -2930,4 +2932,310 @@ test("_writePrimarySelection on KDE mirrors wl-copy to Electron's X11 selection"
     [["wl-copy", ["--primary", "--", "selection text"]]]
   );
   assert.deepEqual(fakeClipboard.writes, [["writeText", "selection text", "selection"]]);
+});
+
+for (const change of ["application", "selection", "read-only", "sender", "unchanged"]) {
+  test(`caret delivery rechecks ${change} after the Linux modifier wait`, async (t) => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    t.after(() => Object.defineProperty(process, "platform", platform));
+    const calls = [];
+    const Manager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+    const clipboardManager = new Manager();
+    clipboardManager.resolveLinuxFastPasteBinary = () => null;
+    clipboardManager.commandExists = (command) => command === "wtype";
+    clipboardManager._writeClipboardWayland = (text) => {
+      fakeClipboard.writeText(text);
+      return true;
+    };
+    clipboardManager._readWaylandClipboardText = () => fakeClipboard.text;
+    clipboardManager._readPrimarySelection = () => "";
+    clipboardManager._writePrimarySelection = () => true;
+    let finishWait;
+    let beginWait;
+    const waiting = new Promise((resolve) => (beginWait = resolve));
+    clipboardManager._awaitModifierRelease = () => {
+      beginWait();
+      return new Promise((resolve) => (finishWait = resolve));
+    };
+    let active = { kind: "atspi-pid", id: "42" };
+    let editable = true;
+    let senderFocused = false;
+    const SelectionManager = require("../../src/helpers/selectionManager");
+    const manager = new SelectionManager({
+      clipboardManager,
+      textEditMonitor: {
+        isFocusedEditable: async (target) =>
+          editable && target.pid === active.id ? "editable" : "not_editable",
+      },
+      platform: "linux",
+    });
+    manager._getLinuxTarget = async () => active;
+    manager._readLinuxAtspiSelection = async () => ({ status: "none", target: active });
+    manager._isTerminalPid = async () => active.id === "99";
+    resetClipboard({ text: "original clipboard" });
+    await withWaylandEnvironment("Sway", async () => {
+      await manager.captureTarget();
+      const capture = await manager.captureSelectedText({ probeEditable: true });
+      assert.equal(capture.status, "editable");
+      const pending = manager.pasteAtCapturedTarget(capture.sessionId, "Generated answer", {
+        webContents: { isFocused: () => senderFocused },
+      });
+      await waiting;
+      if (change === "application") active = { kind: "atspi-pid", id: "99" };
+      if (["selection", "read-only"].includes(change)) editable = false;
+      if (change === "sender") senderFocused = true;
+      finishWait({ state: "released", waitedMs: 400 });
+      assert.deepEqual(
+        await pending,
+        change === "unchanged" ? { success: true } : { success: false, code: "target_changed" }
+      );
+      assert.equal(calls.length, change === "unchanged" ? 1 : 0);
+      assert.equal(fakeClipboard.text, "original clipboard");
+    });
+  });
+}
+
+for (const allow of [false, true]) {
+  test(`portal waits for post-consent target validation (${allow ? "allowed" : "changed"})`, async () => {
+    const calls = [];
+    let portal;
+    let validations = 0;
+    const Manager = loadClipboardManager({
+      spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1 portal-approval-v1") }),
+      spawn: (command, args) => {
+        calls.push({ command, args });
+        portal = new EventEmitter();
+        portal.stdout = new EventEmitter();
+        portal.stderr = new EventEmitter();
+        portal.stdin = {
+          on() {},
+          write(value) {
+            assert.equal(value, "1");
+            process.nextTick(() => portal.emit("close", 0));
+          },
+          end() {
+            process.nextTick(() => portal.emit("close", 7));
+          },
+        };
+        process.nextTick(() => portal.stdout.emit("data", "PASTE_READY\n"));
+        return portal;
+      },
+    });
+    const manager = new Manager();
+    manager._readPortalToken = () => null;
+    manager._savePortalToken = () => assert.fail("protocol lines are not restore tokens");
+    const controller = new AbortController();
+    const pending = manager._runPortalPaste("/mock/linux-paste", {
+      signal: controller.signal,
+      validateTarget: async () => ++validations === 1 || allow,
+    });
+    // A legacy implementation cannot authorize or refuse READY; make its failure bounded.
+    const deadline = setTimeout(() => portal.emit("close", 0), 100);
+    try {
+      if (allow) await pending;
+      else await assert.rejects(pending, { code: "PASTE_TARGET_CHANGED" });
+      assert.equal(validations, 2);
+      assert.ok(calls[0].args.includes("--await-paste-approval"));
+    } finally {
+      clearTimeout(deadline);
+    }
+  });
+}
+
+for (const [label, platform, backend] of [
+  ["macOS dispatch delay", "darwin", "osascript"],
+  ["macOS retry", "darwin", "retry"],
+  ["Windows fast-paste delay", "win32", "fast"],
+  ["Windows fallback", "win32", "fallback"],
+  ["Windows nircmd delay", "win32", "nircmd"],
+  ["Windows PowerShell delay", "win32", "powershell"],
+  ["Linux tool delay", "linux", "xdotool"],
+  ["Linux fallback", "linux", "fallback"],
+]) {
+  test(`caret delivery refuses focus drift during ${label}`, async (t) => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: platform });
+    t.after(() => Object.defineProperty(process, "platform", originalPlatform));
+    const calls = [];
+    let active = true;
+    const failsFirst = ["retry", "fallback"].includes(backend);
+    const spawn = createSpawn(calls, failsFirst ? [platform === "darwin" ? 3 : 1] : []);
+    const Manager = loadClipboardManager({
+      spawn: (...args) => {
+        const child = spawn(...args);
+        if (failsFirst && calls.length === 1) setTimeout(() => (active = false), 0);
+        return child;
+      },
+      spawnSync: createSpawnSync([]),
+    });
+    const clipboardManager = new Manager();
+    clipboardManager.resolveFastPasteBinary = () =>
+      backend === "retry" ? "/mock/mac-paste" : null;
+    clipboardManager.resolveWindowsFastPasteBinary = () =>
+      ["fast", "fallback"].includes(backend) ? "/mock/windows-paste" : null;
+    clipboardManager.getNircmdPath = () => (backend === "powershell" ? null : "/mock/nircmd");
+    clipboardManager.resolveLinuxFastPasteBinary = () =>
+      backend === "fallback" ? "/mock/linux-paste" : null;
+    clipboardManager.commandExists = (command) => command === "xdotool";
+    clipboardManager._isWayland = () => false;
+    const target =
+      platform === "darwin"
+        ? { kind: "mac-pid", pid: 42 }
+        : platform === "win32"
+          ? { kind: "win-hwnd", id: "42" }
+          : { kind: "atspi-pid", id: "42" };
+    const SelectionManager = require("../../src/helpers/selectionManager");
+    const manager = new SelectionManager({
+      clipboardManager,
+      textEditMonitor: {
+        isFocusedEditable: async () => "editable",
+        _readFrontmostPid: async () => (active ? 42 : 99),
+      },
+      platform,
+    });
+    manager._readCurrentSelection = async () => ({ status: "editable" });
+    manager._probeTarget = async () => (active ? target : { ...target, id: "99" });
+    manager.sessions.set("caret", { kind: "caret", target, expiresAt: Date.now() + 10000 });
+    resetClipboard({
+      text: "original",
+      html: "<b>original</b>",
+      formats: ["text/plain", "text/html"],
+    });
+    const pending = manager.pasteAtCapturedTarget("caret", "Generated answer");
+    if (!failsFirst) setTimeout(() => (active = false), 0);
+    assert.deepEqual(await pending, { success: false, code: "target_changed" });
+    assert.equal(
+      calls.length,
+      failsFirst ? 1 : 0,
+      "no delayed or fallback input is injected after focus moves"
+    );
+    assert.equal(fakeClipboard.text, "original");
+    assert.equal(fakeClipboard.html, "<b>original</b>");
+  });
+}
+
+for (const cancel of [false, true]) {
+  test(`caret revalidation ${cancel ? "cancellation" : "refusal"} preserves a newer clipboard`, async (t) => {
+    withDarwin(t);
+    const calls = [];
+    const Manager = loadClipboardManager({ spawn: createSuccessfulSpawn(calls) });
+    const clipboardManager = new Manager();
+    clipboardManager.resolveFastPasteBinary = () => null;
+    let finishProbe;
+    let beginProbe;
+    const probing = new Promise((resolve) => (beginProbe = resolve));
+    const SelectionManager = require("../../src/helpers/selectionManager");
+    const manager = new SelectionManager({
+      clipboardManager,
+      textEditMonitor: {
+        isFocusedEditable: () => {
+          beginProbe();
+          return new Promise((resolve) => (finishProbe = resolve));
+        },
+        _readFrontmostPid: async () => 42,
+      },
+      platform: "darwin",
+    });
+    manager.sessions.set("caret", {
+      kind: "caret",
+      target: { kind: "mac-pid", pid: 42 },
+      expiresAt: Date.now() + 10000,
+    });
+    manager._readCurrentSelection = async () => ({ status: "editable" });
+    resetClipboard({ text: "original" });
+    const pending = manager.pasteAtCapturedTarget("caret", "Generated answer");
+    await probing;
+    fakeClipboard.writeText("copied meanwhile");
+    if (cancel) manager.cancelSelectionEdit("caret");
+    finishProbe(cancel ? "editable" : "not_editable");
+    assert.deepEqual(await pending, {
+      success: false,
+      code: cancel ? "cancelled" : "target_changed",
+    });
+    assert.deepEqual(calls, []);
+    assert.equal(fakeClipboard.text, "copied meanwhile");
+  });
+}
+
+test("a guarded portal refuses helpers that cannot wait for target approval", async () => {
+  const calls = [];
+  const Manager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(calls),
+    spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1") }),
+  });
+  const manager = new Manager();
+  await assert.rejects(
+    manager._runPortalPaste("/mock/old-paste", {
+      signal: new AbortController().signal,
+      validateTarget: async () => true,
+    }),
+    /portal-cancellation-unavailable/
+  );
+  assert.deepEqual(calls, []);
+});
+
+for (const native of [false, true]) {
+  test(`guarded ${native ? "native XTest" : "xdotool"} paste cannot reactivate a stale detected window`, async (t) => {
+    const platform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    t.after(() => Object.defineProperty(process, "platform", platform));
+    const calls = [];
+    const Manager = loadClipboardManager({
+      spawn: createSuccessfulSpawn(calls),
+      spawnSync: (_command, args) => ({
+        status: 0,
+        stdout: Buffer.from(args[0] === "getactivewindow" ? "99" : "editor"),
+      }),
+    });
+    const manager = new Manager();
+    manager.commandExists = (command) => command === "xdotool";
+    manager.resolveLinuxFastPasteBinary = () => (native ? "/mock/linux-paste" : null);
+    // Window 99 was briefly foreground during detection; validation has since
+    // confirmed the captured editor is foreground again. No command may restore 99.
+    await manager.pasteLinux(null, { validateTarget: async () => true });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].args.includes("--window"), false);
+    assert.equal(calls[0].args.includes("windowactivate"), false);
+  });
+}
+
+test("a portal whose helper closes during validation never receives a late approval", async () => {
+  let child;
+  let finishValidation;
+  let validationStarted;
+  const started = new Promise((resolve) => (validationStarted = resolve));
+  let validations = 0;
+  const Manager = loadClipboardManager({
+    spawnSync: () => ({ status: 0, stdout: Buffer.from("portal-cancel-v1 portal-approval-v1") }),
+    spawn: () => {
+      child = new EventEmitter();
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.stdin = {
+        on() {},
+        end() {},
+        write() {
+          assert.fail("closed helper must not receive approval");
+        },
+      };
+      process.nextTick(() => child.stdout.emit("data", "PASTE_READY\n"));
+      return child;
+    },
+  });
+  const manager = new Manager();
+  manager._readPortalToken = () => null;
+  const pending = manager._runPortalPaste("/mock/linux-paste", {
+    validateTarget: async () => {
+      if (++validations === 1) return true;
+      validationStarted();
+      return new Promise((resolve) => (finishValidation = resolve));
+    },
+  });
+  const rejected = assert.rejects(pending, { code: "PASTE_CANCELLED" });
+  await started;
+  child.emit("close", 7);
+  await rejected;
+  finishValidation(true);
+  await new Promise((resolve) => setImmediate(resolve));
 });

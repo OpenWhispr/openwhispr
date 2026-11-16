@@ -14,7 +14,9 @@ enum FixtureScenario {
   CANCEL_AT_APPROVAL,
   CANCEL_AFTER_KEYDOWN,
   ORDINARY_WITH_CLOSED_STDIN,
-  COMPLETE_WITH_OPEN_STDIN
+  COMPLETE_WITH_OPEN_STDIN,
+  GUARDED_APPROVAL_ALLOWED,
+  GUARDED_APPROVAL_DENIED
 };
 
 typedef struct {
@@ -30,6 +32,7 @@ typedef struct {
 
 static enum FixtureScenario scenario;
 static int input_writer = -1;
+static pid_t approval_writer = -1;
 static int half_close_input;
 static int input_closed;
 static FixtureKey keys[8];
@@ -67,6 +70,24 @@ static gboolean deliver_response(gpointer data)
   FixtureResponse *response = data;
   if (strcmp(response->method, "Start") == 0 && scenario == CANCEL_AT_APPROVAL)
     close_input();
+
+  if (strcmp(response->method, "Start") == 0 &&
+      (scenario == GUARDED_APPROVAL_ALLOWED || scenario == GUARDED_APPROVAL_DENIED)) {
+    approval_writer = fork();
+    require(approval_writer >= 0, "cannot fork approval writer");
+    if (approval_writer == 0) {
+      usleep(100000);
+      if (scenario == GUARDED_APPROVAL_ALLOWED)
+        require(write(input_writer, "1", 1) == 1, "cannot approve portal paste");
+      else close_input();
+      /* Keep approval's writer open until the reader has committed the chord. */
+      usleep(200000);
+      _exit(0);
+    }
+    close(input_writer);
+    input_writer = -1;
+    input_closed = 1;
+  }
 
   GVariantBuilder results;
   g_variant_builder_init(&results, G_VARIANT_TYPE("a{sv}"));
@@ -164,23 +185,37 @@ static void check_scenario(enum FixtureScenario selected, paste_mode_t mode, int
   if (scenario == ORDINARY_WITH_CLOSED_STDIN) close_input();
 
   char *arguments[] = {
-    "linux-fast-paste", "--portal", NULL, NULL, NULL
+    "linux-fast-paste", "--portal", NULL, NULL, NULL, NULL
   };
   int count = 2;
   if (scenario != ORDINARY_WITH_CLOSED_STDIN)
     arguments[count++] = "--cancel-on-stdin-close";
+  if (scenario == GUARDED_APPROVAL_ALLOWED || scenario == GUARDED_APPROVAL_DENIED)
+    arguments[count++] = "--await-paste-approval";
   if (mode == PASTE_MODE_SHIFT_INSERT) arguments[count++] = "--shift-insert";
   if (mode == PASTE_MODE_CTRL_SHIFT_V) arguments[count++] = "--terminal";
 
+  gint64 started = g_get_monotonic_time();
   int result = fast_paste_main(count, arguments);
+  gint64 elapsed = g_get_monotonic_time() - started;
+  if (approval_writer >= 0) {
+    int writer_status;
+    require(waitpid(approval_writer, &writer_status, 0) == approval_writer,
+            "cannot wait for approval writer");
+    require(WIFEXITED(writer_status) && WEXITSTATUS(writer_status) == 0,
+            "approval writer failed");
+  }
   close_input();
   if (input_writer >= 0) close(input_writer);
-  if (scenario == CANCEL_WHILE_WAITING || scenario == CANCEL_AT_APPROVAL) {
+  if (scenario == CANCEL_WHILE_WAITING || scenario == CANCEL_AT_APPROVAL ||
+      scenario == GUARDED_APPROVAL_DENIED) {
     require(key_count == 0, "cancelled portal approval still dispatched keyboard input");
     require(result == 7, "cancelled portal approval did not report cancellation");
     return;
   }
 
+  if (scenario == GUARDED_APPROVAL_ALLOWED)
+    require(elapsed >= 100000, "portal dispatched input before target validation approved it");
   require(result == 0, "a dispatched or ordinary paste did not finish successfully");
   const FixtureKey control_v[] = {
     { XK_Control_L, 1 }, { XK_v, 1 }, { XK_v, 0 }, { XK_Control_L, 0 }
@@ -208,7 +243,7 @@ int main(void)
   require(setenv("DISPLAY", "", 1) == 0, "cannot isolate the fixture display");
   /* Node closes its child's socket write side: EOF can be readable without HUP. */
   for (int socket_input = 0; socket_input <= 1; socket_input++) {
-    for (int selected = CANCEL_WHILE_WAITING; selected <= COMPLETE_WITH_OPEN_STDIN; selected++) {
+    for (int selected = CANCEL_WHILE_WAITING; selected <= GUARDED_APPROVAL_DENIED; selected++) {
       for (int mode = PASTE_MODE_CTRL_V; mode <= PASTE_MODE_SHIFT_INSERT; mode++) {
         pid_t child = fork();
         require(child >= 0, "cannot fork fixture case");

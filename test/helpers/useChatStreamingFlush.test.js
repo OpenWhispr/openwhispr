@@ -341,6 +341,7 @@ test("paced tokens flush during the stream, rearm the timer, and persist the fin
   assert.equal(harness.getDispatches(), initialDispatches + 2);
   assert.equal(harness.getCommittedMessages()[0].content, "First batch, second");
   await harness.emit({ type: "content", text: ", tail" });
+  await harness.emit({ type: "done", finishReason: "stop" });
   await harness.finish();
 
   const [assistant] = harness.getCommittedMessages();
@@ -454,6 +455,7 @@ for (const withContent of [true, false]) {
     assert.deepEqual(harness.getCommittedMessages()[0].toolCalls, toolCalls);
     assert.equal(harness.getAgentState(), "streaming");
     if (withContent) await harness.emit({ type: "content", text: "Found it." });
+    await harness.emit({ type: "done", finishReason: "stop" });
     await harness.finish();
     const [assistant] = harness.getCommittedMessages();
     assert.equal(assistant.content, withContent ? "Searching notes. Found it." : "");

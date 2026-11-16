@@ -3562,12 +3562,13 @@ declare global {
         callback: (payload: {
           requestId: string;
           chunk: {
-            type: "content" | "tool_call" | "done";
+            type: "content" | "tool_call" | "done" | "error";
             text?: string;
             id?: string;
             name?: string;
             arguments?: string;
             finishReason?: string;
+            message?: string;
           };
         }) => void
       ) => () => void;
