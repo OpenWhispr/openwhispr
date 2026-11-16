@@ -1,3 +1,4 @@
+jest.mock('@/lib/authClient', () => ({ getCachedSession: () => null }));
 jest.mock('@/lib/keyboardInferenceRoute', () => ({
   snapshotKeyboardInferenceRoute: jest.fn(),
   readKeyboardInferenceRoute: jest.fn(() => ({ provider: 'cloud' })),

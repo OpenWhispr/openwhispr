@@ -495,6 +495,11 @@ class ProductEvents {
       )
     );
     if (accepted.size > 0) {
+      const rejected = new Set(
+        (Array.isArray(result.data?.rejected) ? result.data.rejected : [])
+          .map((outcome) => String(outcome.event_id).toLowerCase())
+          .filter((id) => accepted.has(id))
+      );
       const bindings = pending
         .filter(
           (event) =>
@@ -502,13 +507,20 @@ class ProductEvents {
             accepted.has(event.event_id.toLowerCase())
         )
         .map((event) => event.event_id.toLowerCase());
-      this.persist((state) => ({
-        ...state,
-        acknowledgedBindings: [...state.acknowledgedBindings, ...bindings].slice(
-          -MAX_ACKNOWLEDGED_BINDINGS
-        ),
-        events: state.events.filter((event) => !accepted.has(event.event_id.toLowerCase())),
-      }));
+      this.persist((state) => {
+        // Accepted means stop retrying; terminal rejections contributed no words.
+        const reconciled = this.retainQueuedEvents(
+          state,
+          state.events.filter((event) => !rejected.has(event.event_id.toLowerCase()))
+        );
+        return {
+          ...reconciled,
+          acknowledgedBindings: [...reconciled.acknowledgedBindings, ...bindings].slice(
+            -MAX_ACKNOWLEDGED_BINDINGS
+          ),
+          events: reconciled.events.filter((event) => !accepted.has(event.event_id.toLowerCase())),
+        };
+      });
     }
     // A full batch taken whole may have more behind it.
     if (pending.length === BATCH_SIZE && accepted.size === pending.length) await this.runPass();

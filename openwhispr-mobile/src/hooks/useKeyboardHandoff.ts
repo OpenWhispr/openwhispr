@@ -14,6 +14,7 @@ import { useKeyboardRecoveryStore } from '@/store/useKeyboardRecoveryStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { getCachedSession } from '@/lib/authClient';
 import {
   TranscriptionService,
   isLocalModelMissingError,
@@ -175,7 +176,10 @@ function waitForAuthInitialized(): Promise<void> {
   });
 }
 
-export function useKeyboardHandoff() {
+export function useKeyboardHandoff(startupReady = true): void {
+  const startupReadyRef = useRef(startupReady);
+  startupReadyRef.current = startupReady;
+  const releaseStartupRef = useRef<(() => void) | null>(null);
   const activeRef = useRef(false);
   const startedAtRef = useRef<number | null>(null);
   const currentJobIdRef = useRef<string | null>(null);
@@ -187,10 +191,25 @@ export function useKeyboardHandoff() {
 
   useEffect(() => {
     let mounted = true;
+    let pendingUrl: string | null = null;
+    let startupReleased = false;
 
     const captureDictationForJob = (jobId: string): void => {
       if (dictationCaptureRef.current?.jobId === jobId) return;
-      dictationCaptureRef.current = { jobId, context: captureDictationContext() };
+      const { isInitialized, isGuest } = useAuthStore.getState();
+      const cached = !isInitialized && !isGuest ? getCachedSession() : null;
+      const context = isInitialized
+        ? captureDictationContext()
+        : captureDictationContext(
+            cached
+              ? {
+                  userId: cached.user.id,
+                  isAnonymous: cached.user.isAnonymous,
+                  cookie: cached.sessionCookie,
+                }
+              : null,
+          );
+      dictationCaptureRef.current = { jobId, context };
     };
 
     const begin = (jobId?: string | null) => {
@@ -587,6 +606,11 @@ export function useKeyboardHandoff() {
         if (!selfHosted) {
           void returnToHost();
         }
+        return;
+      }
+
+      if (!startupReadyRef.current) {
+        pendingUrl = incomingUrl;
         return;
       }
 
@@ -1196,10 +1220,21 @@ export function useKeyboardHandoff() {
     // dropped poke is handled by handlePendingHandoffIntent.
     const agentActionSub = addAgentActionListener(() => runAgentAction('poke'));
 
-    // The hardware-keyboard hotkey (plugins/hotkey-dictation) waits for this
-    // before a cold-start recording, so native never records before the
-    // started/stopped listeners above exist.
-    AppGroupStorage.markHotkeyJsReady();
+    // Native hotkeys also wait for local startup, so their start event snapshots
+    // the same restored preferences as a URL handoff. Auth can still be in flight.
+    releaseStartupRef.current = (): void => {
+      if (!mounted || !startupReadyRef.current || startupReleased) return;
+      startupReleased = true;
+      const url = pendingUrl;
+      pendingUrl = null;
+      if (url) {
+        if (isCancelRequested()) cleanup();
+        else handleUrl(url);
+      }
+      // A URL creates its new job first, superseding any native request queued during startup.
+      AppGroupStorage.markHotkeyJsReady();
+    };
+    releaseStartupRef.current();
 
     runOrphanCleanup('mount');
     const orphanPoll = setInterval(() => {
@@ -1231,6 +1266,8 @@ export function useKeyboardHandoff() {
 
     return () => {
       mounted = false;
+      pendingUrl = null;
+      releaseStartupRef.current = null;
       stoppedSub?.remove();
       errorSub?.remove();
       bgStartedSub?.remove();
@@ -1242,4 +1279,8 @@ export function useKeyboardHandoff() {
       clearInterval(orphanPoll);
     };
   }, []);
+
+  useEffect(() => {
+    releaseStartupRef.current?.();
+  }, [startupReady]);
 }

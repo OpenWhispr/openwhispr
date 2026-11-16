@@ -47,6 +47,8 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
     legacyBatch: false,
     offline: false,
     defer: new Set<string>(),
+    reject: new Set<string>(),
+    duplicate: new Set<string>(),
     // Runs after the server answered, before the client reads the answer.
     afterAnswer: null as (() => void) | null,
     // Holds the next batch request open until it settles.
@@ -91,9 +93,18 @@ function rig(storage = memoryStorage(), { allowed: initiallyAllowed = true } = {
           : { status: 503, body: { code: 'PRODUCT_EVENTS_LINK_PENDING' } };
       } else {
         const ids = (batch.events ?? []).map((event) => event.event_id);
+        const accepted = ids.filter((id) => !server.defer.has(id));
         response = {
           status: 200,
-          body: { accepted: ids.filter((id) => !server.defer.has(id)) },
+          body: {
+            accepted,
+            stored: accepted.filter((id) => !server.reject.has(id) && !server.duplicate.has(id)),
+            duplicates: accepted.filter((id) => server.duplicate.has(id) && !server.reject.has(id)),
+            conflicts: [],
+            rejected: accepted
+              .filter((id) => server.reject.has(id))
+              .map((event_id) => ({ event_id, reason: 'before_opt_in' })),
+          },
         };
       }
     }
@@ -705,6 +716,140 @@ function overflowDictations(client: ReturnType<typeof rig>): Promise<void>[] {
 }
 
 describe('mobile dictation', () => {
+  it.each([null, OTHER])(
+    'a cached capture identity keeps its owner while the validated session is %s',
+    async (validatedIdentity): Promise<void> => {
+      const client = rig();
+      await client.signInAs(validatedIdentity);
+      const context = client.events.captureDictationContext(ACCOUNT);
+      await client.signInAs(OTHER);
+      await client.events.recordDictationCompleted({ ...dictation(1, 200), context });
+      expect(
+        client.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+      ).toEqual([]);
+      expect(client.queued().map((event) => event.owner_user_id)).toEqual([ACCOUNT.userId]);
+
+      await client.signInAs(ACCOUNT);
+      expect(
+        client.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+      ).toEqual([expect.objectContaining({ cookie: ACCOUNT.cookie })]);
+    },
+  );
+
+  it('an explicitly absent capture identity never adopts the validated account', async (): Promise<void> => {
+    const client = rig();
+    await client.signInAs(ACCOUNT);
+    const context = client.events.captureDictationContext(null);
+    await client.events.recordDictationCompleted({ ...dictation(1, 200), context });
+    expect(
+      client.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+    ).toEqual([]);
+    await client.events.recordDictationCompleted(dictation(2, 200));
+    expect(
+      client.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+    ).toHaveLength(1);
+  });
+
+  it.each([50, null])(
+    'a rejected %s-word acknowledgement releases only its pending contribution across relaunch',
+    async (words): Promise<void> => {
+      const storage = memoryStorage();
+      const client = rig(storage);
+      await client.signInAs(ACCOUNT);
+      await client.events.recordDictationCompleted(dictation(1, 150));
+      client.server.offline = true;
+      await client.events.recordDictationCompleted(dictation(2, words));
+      client.server.reject.add(client.queued()[0].event_id);
+      client.server.offline = false;
+      await client.events.flush();
+      expect(client.queued()).toEqual([]);
+
+      const relaunched = rig(storage);
+      await relaunched.signInAs(ACCOUNT);
+      await relaunched.events.recordDictationCompleted(dictation(3, words));
+      await relaunched.events.recordDictationCompleted(dictation(4, words));
+      expect(
+        relaunched.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+      ).toEqual([
+        expect.objectContaining({ properties: expect.objectContaining({ word_count: words }) }),
+      ]);
+    },
+  );
+
+  it('a mixed acknowledgement retains stored and duplicate words while releasing rejected words', async (): Promise<void> => {
+    const storage = memoryStorage();
+    const client = rig(storage);
+    await client.signInAs(ACCOUNT);
+    await client.events.recordDictationCompleted(dictation(1, 100));
+    client.server.offline = true;
+    await client.events.recordDictationCompleted(dictation(2, 25));
+    await client.events.recordDictationCompleted(dictation(3, 25));
+    await client.events.recordDictationCompleted(dictation(4, 50));
+    client.server.duplicate.add(client.queued()[1].event_id);
+    client.server.reject.add(client.queued()[2].event_id);
+    client.server.offline = false;
+    await client.events.flush();
+    expect(client.queued()).toEqual([]);
+
+    const relaunched = rig(storage);
+    await relaunched.signInAs(ACCOUNT);
+    await relaunched.events.recordDictationCompleted(dictation(5, 49));
+    await relaunched.events.recordDictationCompleted(dictation(6, 1));
+    await relaunched.events.recordDictationCompleted(dictation(7, 1));
+    expect(
+      relaunched
+        .sentEvents()
+        .filter((event) => event.event_name === 'dictation_completed')
+        .map((event) => (event.properties as { word_count: number }).word_count),
+    ).toEqual([49, 1]);
+  });
+
+  it.each([
+    { words: 50, discard: 'consent' },
+    { words: null, discard: 'consent' },
+    { words: 50, discard: 'eviction' },
+    { words: null, discard: 'eviction' },
+  ])(
+    'a late rejected $words-word acknowledgement cannot restore a contribution removed by $discard',
+    async ({ words, discard }): Promise<void> => {
+      const storage = memoryStorage();
+      const client = rig(storage);
+      await client.signInAs(ACCOUNT);
+      await client.events.recordDictationCompleted(dictation(1, 150));
+      const upload = deferred();
+      client.server.hold = upload.promise;
+      const recording = client.events.recordDictationCompleted(dictation(2, words));
+      await new Promise<void>((resolve): void => {
+        setTimeout(resolve, 0);
+      });
+      expect(client.server.hold).toBeNull();
+      client.server.reject.add(client.queued()[0].event_id);
+      let overflow: Promise<void>[] = [];
+      if (discard === 'consent') await client.setUsageAnalytics(false);
+      else {
+        overflow = overflowDictations(client);
+        await new Promise<void>((resolve): void => {
+          setTimeout(resolve, 0);
+        });
+      }
+      expect(queuedDictation(client).filter(([, practice]) => !practice)).toEqual([]);
+      client.setIdentityQuietly(OTHER);
+      upload.release();
+      await Promise.all([recording, ...overflow]);
+      await client.events.flush();
+
+      const relaunched = rig(storage);
+      await relaunched.signInAs(ACCOUNT);
+      await relaunched.events.recordDictationCompleted(dictation(3, words));
+      await relaunched.events.recordDictationCompleted(dictation(4, words));
+      expect(
+        relaunched.sentEvents().filter((event) => event.event_name === 'dictation_completed'),
+      ).toEqual([
+        expect.objectContaining({ properties: expect.objectContaining({ word_count: words }) }),
+      ]);
+    },
+  );
+
   it.each([
     { blocked: { ...ACCOUNT, cookie: 'c-a2' }, afterBlock: null, keepsCapture: false },
     { blocked: OTHER, afterBlock: null, keepsCapture: true },

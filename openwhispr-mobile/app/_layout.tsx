@@ -52,7 +52,8 @@ runMigrations();
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayout() {
-  useKeyboardHandoff();
+  const [keyboardStartupReady, setKeyboardStartupReady] = useState(false);
+  useKeyboardHandoff(keyboardStartupReady);
   useRevenueCatIdentity();
   useAnonymousOnboardingSession();
   useAffiliateAttribution();
@@ -92,12 +93,18 @@ function RootLayout() {
   };
 
   useEffect(() => {
+    let mounted = true;
     initialize();
-    loadConfig();
-    hydrateOnboarding();
+    // Capture needs local preferences and practice state, but never waits for auth's network call.
+    Promise.allSettled([loadConfig(), hydrateOnboarding()]).then(() => {
+      if (mounted) setKeyboardStartupReady(true);
+    });
     startRetiredPromptSweep();
     // A failure leaves the install unmarked, so the next key access retries the erase.
     eraseProviderCredentialsFromPreviousInstall().catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
   }, [initialize, loadConfig, hydrateOnboarding]);
 
   useEffect(() => {

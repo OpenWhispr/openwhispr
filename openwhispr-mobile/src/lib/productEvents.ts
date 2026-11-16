@@ -475,9 +475,11 @@ export function createProductEvents({
     if (queued && active()) await flush();
   }
 
-  function captureContext(): ProductEventsCaptureContext {
+  // Startup can restore a capture owner before validation; uploads still use getIdentity.
+  function captureContext(
+    identity: ProductEventsIdentity | null = getIdentity(),
+  ): ProductEventsCaptureContext {
     const signal = consent.signal;
-    const identity = getIdentity();
     const allowed =
       mayCollect(signal) &&
       identity !== null &&
@@ -659,6 +661,12 @@ export function createProductEvents({
         (Array.isArray(body.accepted) ? body.accepted : []).map((id) => String(id).toLowerCase()),
       );
       if (response?.status === 200 && accepted.size > 0) {
+        // Accepted means stop retrying, including rejected facts that cannot count.
+        const rejected = new Set(
+          (Array.isArray(body.rejected) ? body.rejected : []).map((outcome) =>
+            String(asRecord(outcome).event_id ?? '').toLowerCase(),
+          ),
+        );
         const bindings = pending
           .filter(
             (event) =>
@@ -680,13 +688,18 @@ export function createProductEvents({
         await withState((current) => {
           const currentSession = active();
           if (!currentSession && acceptedDictationIds.size === 0) return { result: undefined };
-          const queuedIds = new Set(current.events.map((event) => event.event_id));
-          const dictationWords = { ...current.dictationWords };
-          const uncountedDictations = [...current.uncountedDictations];
+          const retained = discardQueuedEvents(current, (event) => {
+            const id = event.event_id.toLowerCase();
+            return acceptedDictationIds.has(id) && rejected.has(id);
+          });
+          const queuedIds = new Set(retained.events.map((event) => event.event_id));
+          const dictationWords = { ...retained.dictationWords };
+          const uncountedDictations = [...retained.uncountedDictations];
           for (const event of pending) {
             if (
               !discardedDictations.has(event.event_id) ||
               !accepted.has(event.event_id.toLowerCase()) ||
+              rejected.has(event.event_id.toLowerCase()) ||
               queuedIds.has(event.event_id)
             ) {
               continue;
@@ -699,15 +712,15 @@ export function createProductEvents({
           }
           return {
             next: {
-              ...current,
+              ...retained,
               dictationWords,
               uncountedDictations,
               acknowledgedBindings: currentSession
-                ? [...current.acknowledgedBindings, ...bindings].slice(-MAX_ACKNOWLEDGED_BINDINGS)
-                : current.acknowledgedBindings,
+                ? [...retained.acknowledgedBindings, ...bindings].slice(-MAX_ACKNOWLEDGED_BINDINGS)
+                : retained.acknowledgedBindings,
               // Accepted dictations settle for their original owner even if the
               // session changed, so a later consent change cannot undo that progress.
-              events: current.events.filter((event): boolean => {
+              events: retained.events.filter((event): boolean => {
                 const id = event.event_id.toLowerCase();
                 return !acceptedDictationIds.has(id) && (!currentSession || !accepted.has(id));
               }),
@@ -841,9 +854,11 @@ export function initProductEvents(): void {
   observe();
 }
 
-export function captureDictationContext(): ProductEventsCaptureContext {
+export function captureDictationContext(
+  identity?: ProductEventsIdentity | null,
+): ProductEventsCaptureContext {
   return (
-    runtime?.captureDictationContext() ?? {
+    runtime?.captureDictationContext(identity) ?? {
       identity: null,
       isPractice: true,
       consentSignal: null,

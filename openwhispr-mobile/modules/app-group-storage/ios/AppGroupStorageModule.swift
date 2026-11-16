@@ -98,6 +98,8 @@ public class AppGroupStorageModule: Module {
   private var foregroundHeartbeatTimer: Timer?
   private let containingAppForegroundKey = "containing_app_foreground_at_ms"
 
+  // Accessed only on main, like the Darwin recording observers.
+  private var recordingStartupGate = KeyboardRecordingStartupGate()
   private let returnAttemptGate = ReturnAttemptGate()
   // The host the last return resolved, kept for the "Back to <App>" button:
   // the extension keys are cleared on read and the observed host goes stale.
@@ -159,6 +161,9 @@ public class AppGroupStorageModule: Module {
       }
       defaults.removeObject(forKey: key)
       defaults.synchronize()
+      if key == self.hotkeyJsReadyAtMsKey {
+        DispatchQueue.main.async { [weak self] in self?.recordingStartupGate.reset() }
+      }
       return defaults.object(forKey: key) == nil
     }
 
@@ -192,8 +197,8 @@ public class AppGroupStorageModule: Module {
       }
     }
 
-    // Called by useKeyboardHandoff once its recording listeners are subscribed.
-    // The hotkey's cold start (plugins/hotkey-dictation) waits for this stamp, and
+    // Called once recording listeners and local preferences are ready. Both
+    // keyboard Darwin requests and the hardware hotkey wait for this stamp, and
     // only trusts one carrying this process's pid: a crash skips the hook's
     // cleanup, and the next launch's intent can read before OnCreate clears it.
     Function("markHotkeyJsReady") { () -> Void in
@@ -201,6 +206,7 @@ public class AppGroupStorageModule: Module {
       let nowMs = Int(Date().timeIntervalSince1970 * 1000)
       defaults.set("\(getpid()):\(nowMs)", forKey: self.hotkeyJsReadyAtMsKey)
       defaults.synchronize()
+      DispatchQueue.main.async { [weak self] in self?.releasePendingDarwinStart() }
     }
 
     // Drives the one-time "Using a keyboard?" nudge toward the hardware-keyboard
@@ -1519,6 +1525,34 @@ public class AppGroupStorageModule: Module {
     logMarker("darwinStopObserver.removed")
   }
 
+  private func startDarwinRecording() {
+    if startRecording(trigger: "darwin.startNotification") {
+      logMarker("darwinStartObserver.startSucceeded")
+      sendEvent("onBackgroundRecordingStarted", [:])
+    } else {
+      logMarker("darwinStartObserver.startFailed")
+    }
+  }
+
+  private func releasePendingDarwinStart() {
+    // Keep the final replay check and engine start together with JS recorder operations.
+    audioPipelineLock.lock()
+    defer { audioPipelineLock.unlock() }
+    guard let defaults = UserDefaults(suiteName: appGroupId) else { return }
+    defaults.synchronize()
+    guard defaults.string(forKey: hotkeyJsReadyAtMsKey)?.hasPrefix("\(getpid()):") == true else {
+      recordingStartupGate.reset()
+      return
+    }
+    if recordingStartupGate.release(
+      currentJobId: sharedRecordingJobId(),
+      stopRequested: defaults.string(forKey: stopRequestedKey) == "1",
+      cancelled: defaults.string(forKey: "keyboard_cancel_requested") == "1"
+    ) {
+      startDarwinRecording()
+    }
+  }
+
   private func addDarwinStartObserver() {
     guard !isObservingStartNotification else { return }
 
@@ -1533,11 +1567,17 @@ public class AppGroupStorageModule: Module {
         let module = Unmanaged<AppGroupStorageModule>.fromOpaque(observer).takeUnretainedValue()
         DispatchQueue.main.async {
           module.logMarker("darwinStartObserver.received")
-          if module.startRecording(trigger: "darwin.startNotification") {
-            module.logMarker("darwinStartObserver.startSucceeded")
-            module.sendEvent("onBackgroundRecordingStarted", [:])
-          } else {
-            module.logMarker("darwinStartObserver.startFailed")
+          guard let defaults = UserDefaults(suiteName: module.appGroupId) else { return }
+          defaults.synchronize()
+          let jobId = module.sharedRecordingJobId()
+            ?? module.resolveRecordingJobId(trigger: "darwin.startNotification")
+          let ready = defaults.string(forKey: module.hotkeyJsReadyAtMsKey)?.hasPrefix("\(getpid()):") == true
+          if module.recordingStartupGate.requestStart(
+            jobId: jobId, isReady: ready,
+            stopRequested: defaults.string(forKey: module.stopRequestedKey) == "1",
+            cancelled: defaults.string(forKey: "keyboard_cancel_requested") == "1"
+          ) {
+            module.startDarwinRecording()
           }
         }
       },

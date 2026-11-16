@@ -123,6 +123,41 @@ export async function getStoredSession(): Promise<string | null> {
   return currentCookie();
 }
 
+/** Local capture attribution only; API requests still require the restored auth store. */
+export function getCachedSession(): { user: AuthUser; sessionCookie: string } | null {
+  try {
+    if (SecureStore.getItem('openwhispr_guest_session') === 'true') return null;
+    // The Expo SDK restores this atom synchronously, including chunked Keychain values.
+    const cached = client.$store.atoms.session.get().data as {
+      user?: RawUser;
+      session?: { id?: string; userId?: string; token?: string; expiresAt?: string | Date };
+    } | null;
+    const user = mapUser(cached?.user);
+    const session = cached?.session;
+    const expiresAt = session?.expiresAt ? new Date(session.expiresAt).getTime() : NaN;
+    if (
+      !user ||
+      !session?.id ||
+      session.userId !== user.id ||
+      !session.token ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= Date.now()
+    )
+      return null;
+    const sessionCookie = client.getCookie();
+    const signedToken = sessionCookie.match(
+      /(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=([^;]+)/,
+    )?.[1];
+    // A sign-in can replace the cookie before the SDK refreshes its cached user.
+    if (!signedToken || !decodeURIComponent(signedToken).startsWith(`${session.token}.`)) {
+      return null;
+    }
+    return { user, sessionCookie };
+  } catch {
+    return null;
+  }
+}
+
 export async function clearSession(): Promise<void> {
   await Promise.all([
     SecureStore.deleteItemAsync(COOKIE_STORAGE_KEY).catch(() => undefined),
