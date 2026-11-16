@@ -163,3 +163,109 @@ test("portal registration uses the current UI language for its description", asy
   const description = bindBody[1][0][1].find(([key]) => key === "description");
   assert.equal(description[1][1], "Mantener mientras hablas");
 });
+
+const SESSION = "/org/freedesktop/portal/desktop/session/1";
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function listeningPortal({ keyRepeat = { delayMs: 20, intervalMs: 5 } } = {}) {
+  const GnomeGlobalShortcutsPortal = loadPortal(() => createBus());
+  const portal = new GnomeGlobalShortcutsPortal({ releaseGraceMs: 10 });
+  const bus = createBus();
+  const phases = [];
+  portal.bus = bus;
+  portal.sessionHandle = SESSION;
+  portal.keyRepeat = keyRepeat;
+  portal.callback = (_hotkey, phase) => phases.push(phase);
+  await portal._listenForShortcutEvents();
+  const emit = (member) =>
+    bus.signals.emit(
+      bus.mangle(
+        "/org/freedesktop/portal/desktop",
+        "org.freedesktop.portal.GlobalShortcuts",
+        member
+      ),
+      [SESSION, "dictation"]
+    );
+  return { portal, phases, emit };
+}
+
+test("a hold whose repeats stop without Deactivated is released once", async () => {
+  const { portal, phases, emit } = await listeningPortal();
+  emit("Activated");
+  emit("Activated");
+  emit("Activated");
+  await sleep(60);
+  assert.deepEqual(phases, ["down", "down", "down", "up"]);
+
+  // Later holds arm from their first press, before any repeat arrives.
+  emit("Activated");
+  await sleep(60);
+  assert.deepEqual(phases.slice(4), ["down", "up"]);
+  await portal.unregisterKeybinding();
+});
+
+test("Deactivated releases the hold without a second synthesized release", async () => {
+  const { portal, phases, emit } = await listeningPortal();
+  emit("Activated");
+  emit("Activated");
+  emit("Deactivated");
+  await sleep(60);
+  assert.deepEqual(phases, ["down", "down", "up"]);
+  await portal.unregisterKeybinding();
+});
+
+test("a hold keeps recording while repeats keep arriving", async () => {
+  const { portal, phases, emit } = await listeningPortal();
+  emit("Activated");
+  for (let i = 0; i < 8; i += 1) {
+    await sleep(5);
+    emit("Activated");
+  }
+  assert.equal(phases.includes("up"), false);
+  emit("Deactivated");
+  assert.equal(phases.at(-1), "up");
+  assert.equal(phases.filter((phase) => phase === "up").length, 1);
+  await portal.unregisterKeybinding();
+});
+
+test("without observed repeats a hold waits for Deactivated", async () => {
+  const { portal, phases, emit } = await listeningPortal();
+  emit("Activated");
+  await sleep(60);
+  assert.deepEqual(phases, ["down"]);
+  await portal.unregisterKeybinding();
+});
+
+test("with key repeat off a hold waits for Deactivated", async () => {
+  const { portal, phases, emit } = await listeningPortal({ keyRepeat: null });
+  emit("Activated");
+  emit("Activated");
+  await sleep(60);
+  assert.deepEqual(phases, ["down", "down"]);
+  await portal.unregisterKeybinding();
+});
+
+test("a new registration waits for its own shortcut to repeat", async () => {
+  const keyRepeat = { delayMs: 20, intervalMs: 5 };
+  const { portal, phases, emit } = await listeningPortal({ keyRepeat });
+  emit("Activated");
+  emit("Activated");
+  emit("Deactivated");
+
+  portal.init = async () => true;
+  portal.readKeyRepeat = () => keyRepeat;
+  portal._request = async (member) =>
+    member === "CreateSession"
+      ? [["session_handle", ["o", [SESSION]]]]
+      : [["shortcuts", ["a(sa{sv})", [[["dictation", []]]]]]];
+  assert.equal(
+    await portal.registerKeybinding("Pause", (_hotkey, phase) => phases.push(phase)),
+    true
+  );
+
+  // Pause doesn't auto-repeat, so a held press must not be released early.
+  emit("Activated");
+  await sleep(60);
+  assert.deepEqual(phases.slice(3), ["down"]);
+  await portal.unregisterKeybinding();
+});
