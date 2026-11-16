@@ -79,12 +79,16 @@ export function PracticeBubble({
 }
 
 const HEIGHTS = [10, 18, 26, 16, 24, 12, 20];
-const QUIET = 0.08;
 
 // Bars follow the microphone level, so they stay flat until someone speaks.
 function Waveform() {
   const level = useSharedValue(0);
   useEffect(() => {
+    // The meter learns the room: the quietest recent level is the noise floor, and only sound
+    // clearly above it moves the bars. The floor creeps up slowly so a noisy room settles too.
+    // The first readings after the mic opens are artificially quiet, so they don't set the floor.
+    let floor = 1;
+    let samples = 0;
     const timer = setInterval(() => {
       let next = 0;
       try {
@@ -92,7 +96,10 @@ function Waveform() {
       } catch {
         next = 0;
       }
-      level.value = withTiming(next < QUIET ? 0 : next, { duration: 90 });
+      samples += 1;
+      if (samples > 4 && next > 0) floor = Math.min(next, floor + 0.004);
+      const speech = Math.max(0, Math.min(1, (next - floor - 0.1) / 0.35));
+      level.value = withTiming(speech, { duration: 90 });
     }, 80);
     return () => clearInterval(timer);
   }, [level]);
