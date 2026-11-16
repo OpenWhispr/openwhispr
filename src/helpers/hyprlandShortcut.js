@@ -4,6 +4,7 @@ const path = require("path");
 const os = require("os");
 const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
+const { bindingIdFor, slotOfBindingId, indexOfBindingId } = require("./hotkeyBindingId");
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
@@ -391,14 +392,47 @@ class HyprlandShortcutManager {
         const cb = this.callbacks.dictation;
         if (typeof cb === "function") cb(undefined, "up");
       };
+      // Secondary rows carry their own identity, so a bind left behind for a
+      // row that no longer exists resolves to nothing rather than firing the
+      // first row. Phase comes from the method, as it does for row 0.
+      // Any process on the session bus can call these, so a row this build does
+      // not hold is refused rather than dispatched: a malformed index must not
+      // read as row 0, which is the row that is always bound.
+      const dispatchRow = (slot, index, action, phase) => {
+        if (typeof slot !== "string" || !slot) return;
+        const row =
+          typeof index === "number"
+            ? index
+            : typeof index === "string" && /^\d+$/.test(index)
+              ? Number(index)
+              : NaN;
+        if (!Number.isInteger(row) || row < 0) return;
+        const bindingId = bindingIdFor(slot, row);
+        const cb = this.callbacks[bindingId];
+        if (typeof cb !== "function") return;
+        this.onHotkeyEvent?.(bindingId, action);
+        if (phase) cb(undefined, phase);
+        else cb();
+      };
+      toggleMethods.ToggleBinding = (slot, index) => dispatchRow(slot, index, "press");
+      toggleMethods.PttDownBinding = (slot, index) => dispatchRow(slot, index, "down", "down");
+      toggleMethods.PttUpBinding = (slot, index) => dispatchRow(slot, index, "up", "up");
       this.bus.exportInterface(toggleMethods, DBUS_OBJECT_PATH, {
         name: DBUS_INTERFACE,
-        methods: Object.fromEntries(
-          [...Object.values(SLOT_TOGGLE_METHOD), "PttDown", "PttUp"].map((method) => [
-            method,
-            ["", ""],
-          ])
-        ),
+        methods: {
+          ...Object.fromEntries(
+            [...Object.values(SLOT_TOGGLE_METHOD), "PttDown", "PttUp"].map((method) => [
+              method,
+              ["", ""],
+            ])
+          ),
+          ...Object.fromEntries(
+            ["ToggleBinding", "PttDownBinding", "PttUpBinding"].map((method) => [
+              method,
+              ["su", ""],
+            ])
+          ),
+        },
       });
 
       debugLogger.log("[HyprlandShortcut] D-Bus service initialized successfully");
@@ -741,11 +775,23 @@ class HyprlandShortcutManager {
       return false;
     }
 
-    const method = SLOT_TOGGLE_METHOD[slotName];
+    // A slot holds one binding per configured row, so the method lives under
+    // the SLOT, not under the row's binding id: "dictation#1" used to match
+    // nothing here and the whole commit failed with it.
+    const slot = slotOfBindingId(slotName);
+    const method = SLOT_TOGGLE_METHOD[slot];
     if (!method) {
       debugLogger.log(`[HyprlandShortcut] Unknown slot "${slotName}"`);
       return false;
     }
+    // Row 0 keeps the argument-less methods so a bind an older build wrote
+    // stays byte-identical; later rows name themselves, because one exec line
+    // is all Hyprland gives us and Toggle() alone always means row 0. The row
+    // travels as slot plus index: a literal "#" starts a hyprlang comment.
+    const rowIndex = indexOfBindingId(slotName);
+    const rowArgs = rowIndex === 0 ? "" : ` string:${slot} uint32:${rowIndex}`;
+    const dbusMethod = (name) =>
+      `${DBUS_INTERFACE}.${name}${rowIndex === 0 ? "" : "Binding"}${rowArgs}`;
 
     if (isPtt && isModifierOnlyHotkey(hotkey)) {
       debugLogger.log(
@@ -786,8 +832,12 @@ class HyprlandShortcutManager {
       return true;
     }
 
-    const pressCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${isPtt ? "PttDown" : method}`;
-    const releaseCommand = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.PttUp`;
+    const dbusSend = (method_) =>
+      `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${method_}`;
+    const pressCommand = dbusSend(
+      dbusMethod(isPtt ? "PttDown" : rowIndex === 0 ? method : "Toggle")
+    );
+    const releaseCommand = dbusSend(dbusMethod("PttUp"));
     const persistedPressBind =
       config.format === "lua"
         ? buildLuaBindExpression(
@@ -822,7 +872,9 @@ class HyprlandShortcutManager {
     } catch (err) {
       if (previousBinding === runtimeBinding) {
         try {
-          const previousPress = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${previousIsPtt ? "PttDown" : method}`;
+          const previousPress = dbusSend(
+            dbusMethod(previousIsPtt ? "PttDown" : rowIndex === 0 ? method : "Toggle")
+          );
           this._bindRuntime(config, converted, previousIsPtt, previousPress, releaseCommand);
         } catch {}
       }
@@ -867,8 +919,8 @@ class HyprlandShortcutManager {
     return this._registerForSlot(hotkey, "dictation", null, isPushToTalk);
   }
 
-  registerSlotKeybinding(hotkey, slotName, callback) {
-    return this._registerForSlot(hotkey, slotName, callback, false);
+  registerSlotKeybinding(hotkey, slotName, callback, isPushToTalk = false) {
+    return this._registerForSlot(hotkey, slotName, callback, isPushToTalk);
   }
 
   updateKeybinding(hotkey, isPushToTalk = false) {

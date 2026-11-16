@@ -24,6 +24,7 @@ export default class FakeAudioManager {
   setVoiceAgentRequested() {}
   setAssistantSelectionContext() {}
   setTranslationRequested() {}
+  setCleanupOverride() {}
   shouldUseStreaming() {
     return false;
   }

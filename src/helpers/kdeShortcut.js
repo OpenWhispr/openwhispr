@@ -1,4 +1,5 @@
 const debugLogger = require("./debugLogger");
+const { slotOfBindingId } = require("./hotkeyBindingId");
 
 let dbus = null;
 
@@ -205,7 +206,7 @@ class KDEShortcutManager {
         const callback = slotName ? this.callbacks.get(slotName) : null;
         if (callback) {
           this.onHotkeyEvent?.(slotName, "down");
-          callback(undefined, "down");
+          callback(slotName, "down");
         } else {
           debugLogger.log("[KDEShortcut] No callback found for", {
             shortcutUnique,
@@ -216,8 +217,11 @@ class KDEShortcutManager {
       iface.on("globalShortcutReleased", (componentUnique, shortcutUnique) => {
         const slotName = this._resolveSlotName(shortcutUnique);
         if (slotName) this.onHotkeyEvent?.(slotName, "up");
-        if (slotName !== "dictation") return;
-        this.callbacks.get(slotName)?.(undefined, "up");
+        // Any dictation row, not just the first: "dictation", "dictation#1", …
+        // all hold to speak, and only the binding that started a push may end
+        // it. Other slots are tap-only and have no release semantics.
+        if (!slotName || slotOfBindingId(slotName) !== "dictation") return;
+        this.callbacks.get(slotName)?.(slotName, "up");
       });
 
       this.componentProxy = iface;
@@ -394,8 +398,22 @@ class KDEShortcutManager {
     }
   }
 
+  /**
+   * Releases one binding and REPORTS whether KGlobalAccel confirmed it.
+   *
+   * The answer is the whole point: KGlobalAccel grabs the key globally, so a
+   * refused unRegister leaves the compositor still holding a shortcut this app
+   * no longer lists. Returning nothing let every caller — the capture
+   * teardown, a row edit, a row removal, unregisterSlot — read "undefined" as
+   * a clean release and report a confirmed rollback that never happened.
+   *
+   * @returns {Promise<boolean>} true only when the key is no longer ours.
+   */
   async unregisterKeybinding(slotName = "dictation") {
-    if (!this.kglobalaccel) return;
+    // Without a connection nothing can be confirmed: if we never registered
+    // this binding there is nothing to release, but if we did, KGlobalAccel
+    // may still hold it and this is not a release.
+    if (!this.kglobalaccel) return !this.registeredSlots.has(slotName);
 
     const actionId = [COMPONENT_NAME, slotName, "OpenWhispr", `OpenWhispr ${slotName}`];
 
@@ -409,8 +427,12 @@ class KDEShortcutManager {
       this.callbacks.delete(slotName);
       this.registeredSlots.delete(slotName);
       debugLogger.log("[KDEShortcut] Unregistered", { slot: slotName });
+      return true;
     } catch (err) {
+      // The bookkeeping stays: the binding is still ours as far as anyone can
+      // tell, and a later attempt needs to know it is there.
       debugLogger.log(`[KDEShortcut] Unregister failed for "${slotName}":`, err.message);
+      return false;
     }
   }
 

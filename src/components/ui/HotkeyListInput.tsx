@@ -7,6 +7,18 @@ import { parseHotkeyList, serializeHotkeyList } from "../../utils/hotkeys";
 import { normalizeHotkey } from "../../utils/hotkeyValidator";
 import { getPlatform } from "../../utils/platform";
 
+/**
+ * Which row changed, for callers that keep per-row state. A list alone cannot
+ * say whether "F8,F9" -> "F9,F9" was a rename of row 0 or a removal, and
+ * guessing moves one row's state onto another.
+ */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+export type HotkeyListEdit =
+  | { kind: "replace"; index: number; hotkey: string; list: string }
+  | { kind: "add"; hotkey: string; list: string }
+  | { kind: "remove"; index: number; list: string };
+
 export interface HotkeyListInputProps {
   /** Comma-separated list of hotkeys (a single hotkey is just a one-item list). */
   value: string;
@@ -15,6 +27,13 @@ export interface HotkeyListInputProps {
    * If it resolves to `false`, the optimistic UI change is rolled back.
    */
   onChange: (list: string) => unknown;
+  /**
+   * Takes the place of `onChange` when given, with the exact edit rather than
+   * only its result. Same rollback contract: resolving `false` reverts the row.
+   */
+  onEdit?: (edit: HotkeyListEdit) => unknown;
+  /** Rendered under each row, e.g. that row's own cleanup control. */
+  renderRowExtra?: (hotkey: string, index: number) => ReactNode;
   /** Called when the list becomes empty (removing the last entry). Omit to make the slot required. */
   onClear?: () => unknown;
   disabled?: boolean;
@@ -37,6 +56,8 @@ export interface HotkeyListInputProps {
 export function HotkeyListInput({
   value,
   onChange,
+  onEdit,
+  renderRowExtra,
   onClear,
   disabled = false,
   required = false,
@@ -73,21 +94,25 @@ export function HotkeyListInput({
 
   // Roll back only if the optimistic value is still current — an external
   // adoption that happened while the round-trip was in flight wins.
-  const commit = async (next: string[]) => {
+  const commit = async (next: string[], edit: DistributiveOmit<HotkeyListEdit, "list">) => {
     const previous = items;
+    const list = serializeHotkeyList(next);
     setItems(next);
-    const result = await onChange(serializeHotkeyList(next));
+    const result = await (onEdit ? onEdit({ ...edit, list } as HotkeyListEdit) : onChange(list));
     if (result === false) setItems((current) => (current === next ? previous : current));
   };
 
   const replaceAt = (index: number, next: string) => {
-    void commit(items.map((h, i) => (i === index ? next : h)));
+    void commit(
+      items.map((h, i) => (i === index ? next : h)),
+      { kind: "replace", index, hotkey: next }
+    );
   };
 
   const removeAt = async (index: number) => {
     const remaining = items.filter((_, i) => i !== index);
     if (remaining.length > 0) {
-      void commit(remaining);
+      void commit(remaining, { kind: "remove", index });
       return;
     }
     const previous = items;
@@ -99,7 +124,7 @@ export function HotkeyListInput({
   const addHotkey = (hotkey: string) => {
     setAdding(false);
     if (!hotkey || items.some((existing) => isSameHotkey(existing, hotkey))) return;
-    void commit([...items, hotkey]);
+    void commit([...items, hotkey], { kind: "add", hotkey });
   };
 
   const canRemove = !required || items.length > 1;
@@ -107,16 +132,29 @@ export function HotkeyListInput({
 
   return (
     <div className="flex flex-col gap-2">
-      {items.map((hotkey, index) => (
-        <HotkeyInput
-          key={`${hotkey}-${index}`}
-          value={hotkey}
-          onChange={(next) => replaceAt(index, next)}
-          onClear={canRemove ? () => void removeAt(index) : undefined}
-          disabled={disabled}
-          validate={makeValidate(index)}
-        />
-      ))}
+      {items.map((hotkey, index) => {
+        const input = (
+          <HotkeyInput
+            value={hotkey}
+            onChange={(next) => replaceAt(index, next)}
+            onClear={canRemove ? () => void removeAt(index) : undefined}
+            disabled={disabled}
+            validate={makeValidate(index)}
+          />
+        );
+        const extra = renderRowExtra?.(hotkey, index);
+        // The key keeps the remount behaviour each row had before it could
+        // carry extras: a committed change to a row's hotkey gives it a fresh
+        // input, so no captured state survives into the new binding.
+        return extra ? (
+          <div key={`${hotkey}-${index}`} className="flex flex-col gap-1.5">
+            {input}
+            {extra}
+          </div>
+        ) : (
+          <div key={`${hotkey}-${index}`}>{input}</div>
+        );
+      })}
 
       {(items.length === 0 || adding) && (
         <HotkeyInput

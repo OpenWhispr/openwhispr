@@ -24,6 +24,8 @@ const {
 const { pathToFileURL } = require("url");
 const dockManager = require("./dockManager");
 const { i18nMain } = require("./i18nMain");
+const { modeFor } = require("./dictationHotkeyConfig");
+const { canonicalizeHotkey } = require("./hotkeyCanonical");
 const { NotificationDismissTimer, getNotificationTimeoutMs } = require("./notificationTimer");
 const {
   DICTATION_LIFECYCLE,
@@ -116,6 +118,11 @@ class WindowManager {
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
     this.winPushState = null;
+    // Native Hold paths whose press state lives in main.js (Globe, right-side
+    // modifiers, extra mouse buttons) register themselves here for the length
+    // of a press, so a row edit can see that a binding is owned.
+    this._nativePressOwners = new Set();
+    this._hotkeyCommitInFlight = false;
     this._nativeKeyListenersReady = false;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
@@ -687,8 +694,84 @@ class WindowManager {
     await this.loadWindowContent(this.mainWindow, false);
   }
 
+  /**
+   * The committed dictation rows and their per-row cleanup modes. Main owns
+   * this; dispatch reads it at an accepted start instead of capturing a mode
+   * in a closure, so changing a row's selector re-registers nothing.
+   */
+  setDictationRows(rows) {
+    this._dictationRows = Array.isArray(rows) ? rows : [];
+  }
+
+  getDictationRows() {
+    return this._dictationRows || [];
+  }
+
+  /** "raw" | "cleaned" | null for whichever row owns this hotkey. */
+  resolveCleanupOverride(hotkey) {
+    return modeFor(this.getDictationRows(), hotkey, canonicalizeHotkey);
+  }
+
+  /**
+   * Whatever currently owns a dictation binding, or null. A row edit is
+   * refused while one exists: replacing a binding under a held key strands the
+   * release that would have stopped the recording, and replacing it under a
+   * live recording changes the modes that recording was started with.
+   *
+   * hotkeyManager.getPressOwner() only sees the desktop-backend closures, so
+   * the push states and the renderer-reported lifecycle are checked too — they
+   * are the owners on Windows, on macOS and for every tap recording.
+   */
+  getDictationOwner() {
+    if (this.hotkeyManager?.getPressOwner?.()) return "binding";
+    if (this.winPushState?.active) return "windows-push";
+    if (this.macCompoundPushState?.active) return "mac-push";
+    for (const owner of this._nativePressOwners) return owner;
+    // Preparing and recording own a binding: their stop or cancel has to reach
+    // the row that started them. Processing does not — the keys are idle again
+    // and the transcript is already in the pipeline — so an edit in that
+    // window is allowed rather than refused with a misleading error.
+    const lifecycle = normalizeDictationLifecycle(this._dictationLifecycleState);
+    return lifecycle === DICTATION_LIFECYCLE.PREPARING ||
+      lifecycle === DICTATION_LIFECYCLE.RECORDING
+      ? lifecycle
+      : null;
+  }
+
+  setNativePressOwner(id) {
+    if (id) this._nativePressOwners.add(id);
+  }
+
+  clearNativePressOwner(id) {
+    this._nativePressOwners.delete(id);
+  }
+
+  /**
+   * Set for the length of a dictation row commit. It drops NEW starts only:
+   * a release, a cancel and a stop are always delivered, so nothing in flight
+   * can be stranded. A commit is refused outright while anything owns a
+   * binding (getDictationOwner), so in practice there is nothing in flight to
+   * strand — this closes the window between the owner check and the keys
+   * actually changing.
+   */
+  setHotkeyCommitInFlight(active) {
+    this._hotkeyCommitInFlight = active === true;
+  }
+
+  isHotkeyCommitInFlight() {
+    return this._hotkeyCommitInFlight === true;
+  }
+
   createHotkeyCallback() {
-    const isPress = createHotkeyRepeatGate();
+    // One repeat gate PER ROW. Autorepeat is a property of a held key, and a
+    // single shared gate treats a second row's independent press as the first
+    // row's repeat and drops it entirely, so that shortcut appears dead.
+    const gates = new Map();
+    const isPressFor = (hotkey) => {
+      const key = hotkey || "";
+      if (!gates.has(key)) gates.set(key, createHotkeyRepeatGate());
+      return gates.get(key)();
+    };
 
     // globalShortcut registrations pass the hotkey that fired; native shortcuts
     // use down/up phases and resolve their primary hotkey from the active slot.
@@ -732,13 +815,14 @@ class WindowManager {
         return;
       }
 
-      if (!isPress()) return;
-      this.sendToggleDictation();
+      if (!isPressFor(currentHotkey)) return;
+      this.sendToggleDictation({ cleanupOverride: this.resolveCleanupOverride(currentHotkey) });
     };
   }
 
   startMacCompoundPushToTalk(hotkey) {
     if (!this._isOnboardingInputAllowed("dictation")) return;
+    if (this.isHotkeyCommitInFlight()) return;
     if (this.macCompoundPushState?.active || this.isDictationProcessing()) {
       return;
     }
@@ -751,6 +835,10 @@ class WindowManager {
     const MIN_HOLD_DURATION_MS = 150;
     const MAX_PUSH_DURATION_MS = 300000; // 5 minutes max recording
     const downTime = Date.now();
+
+    // Resolved once, here at the accepted key-down: a row edit mid-hold must
+    // not change the cleanup this press asked for.
+    const cleanupOverride = this.resolveCleanupOverride(hotkey);
 
     const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
     this.showDictationPanel({ reposition: true, targetPidPromise });
@@ -770,6 +858,7 @@ class WindowManager {
       isRecording: false,
       requiredModifiers,
       safetyTimeoutId,
+      cleanupOverride,
     };
 
     setTimeout(() => {
@@ -779,7 +868,7 @@ class WindowManager {
 
       if (!this.macCompoundPushState.isRecording) {
         this.macCompoundPushState.isRecording = true;
-        this.sendStartDictation();
+        this.sendStartDictation({ cleanupOverride: this.macCompoundPushState.cleanupOverride });
       }
     }, MIN_HOLD_DURATION_MS);
   }
@@ -887,6 +976,7 @@ class WindowManager {
 
   startWindowsPushToTalk(key) {
     if (!this._isOnboardingInputAllowed("dictation")) return;
+    if (this.isHotkeyCommitInFlight()) return;
     if (this.winPushState?.active || this.isDictationProcessing()) {
       return;
     }
@@ -894,6 +984,7 @@ class WindowManager {
     const MIN_HOLD_DURATION_MS = 150;
     const MAX_PUSH_DURATION_MS = 300000;
     const downTime = Date.now();
+    const cleanupOverride = this.resolveCleanupOverride(key);
 
     this.showDictationPanel({ reposition: true });
     this.sendPrepareDictation();
@@ -910,6 +1001,7 @@ class WindowManager {
       downTime,
       isRecording: false,
       safetyTimeoutId,
+      cleanupOverride,
     };
 
     setTimeout(() => {
@@ -919,7 +1011,7 @@ class WindowManager {
 
       if (!this.winPushState.isRecording) {
         this.winPushState.isRecording = true;
-        this.sendStartDictation();
+        this.sendStartDictation({ cleanupOverride: this.winPushState.cleanupOverride });
       }
     }, MIN_HOLD_DURATION_MS);
   }
@@ -987,9 +1079,15 @@ class WindowManager {
     return Boolean(this.agentWindow?.isRecording());
   }
 
-  _sendDictationToggle(channel, inputKind) {
+  _sendDictationToggle(channel, inputKind, payload = {}) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
     if (this._shouldBlockDictationInput()) {
+      return;
+    }
+    if (this.isHotkeyCommitInFlight()) {
+      debugLogger.debug("Ignoring dictation toggle while hotkey rows are being committed", {
+        channel,
+      });
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
@@ -1028,7 +1126,7 @@ class WindowManager {
       if (isStarting) {
         this.sendPrepareDictation({ inputKind });
       }
-      this.mainWindow.webContents.send(channel);
+      this.mainWindow.webContents.send(channel, payload);
     }
   }
 
@@ -1073,8 +1171,8 @@ class WindowManager {
     return shouldIgnoreDictationHotkey(this._dictationLifecycleState);
   }
 
-  sendToggleDictation() {
-    this._sendDictationToggle("toggle-dictation", "dictation");
+  sendToggleDictation({ cleanupOverride = null } = {}) {
+    this._sendDictationToggle("toggle-dictation", "dictation", { cleanupOverride });
   }
 
   // The assistant lives in its own window. Onboarding's assistant demo is the
@@ -1104,11 +1202,12 @@ class WindowManager {
     this.agentWindow?.open({ layout: "typing" });
   }
 
-  sendStartDictation() {
+  sendStartDictation({ cleanupOverride = null } = {}) {
     if (!this._isOnboardingInputAllowed("dictation")) return;
     if (this._shouldBlockDictationInput()) {
       return;
     }
+    if (this.isHotkeyCommitInFlight()) return;
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -1119,7 +1218,7 @@ class WindowManager {
       const targetPidPromise = this.textEditMonitor?.captureTargetPid?.();
       void this.selectionManager?.captureTarget?.();
       this.showDictationPanel({ reposition: true, targetPidPromise });
-      this.mainWindow.webContents.send("start-dictation");
+      this.mainWindow.webContents.send("start-dictation", { cleanupOverride });
     }
   }
 
@@ -1137,6 +1236,7 @@ class WindowManager {
     if (this._shouldBlockDictationInput()) {
       return;
     }
+    if (this.isHotkeyCommitInFlight()) return;
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
@@ -1258,8 +1358,8 @@ class WindowManager {
     await this.hotkeyManager.initializeHotkey(this.mainWindow, this.createHotkeyCallback());
   }
 
-  async updateHotkey(hotkey) {
-    return await this.hotkeyManager.updateHotkey(hotkey, this.createHotkeyCallback());
+  async updateHotkey(hotkey, options) {
+    return await this.hotkeyManager.updateHotkey(hotkey, this.createHotkeyCallback(), options);
   }
 
   isUsingGnomeHotkeys() {

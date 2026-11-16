@@ -161,6 +161,37 @@ export function resolveWakeWordLanguage(
   return typeof uiLanguage === "string" ? uiLanguage : undefined;
 }
 
+// The raw and cleaned dictation hotkeys choose one recording's cleanup instead
+// of the global preference, without touching it: "raw" skips cleanup whatever
+// the preference says, "cleaned" runs the configured cleanup the same way.
+// `cleanupConfigured` is the ordinary reachability test minus that preference,
+// so an override replaces the preference and nothing else — a cleaned recording
+// with no model configured stays unreachable rather than manufacturing one, and
+// reports `unavailable` so the transcript can paste without looking cleaned.
+export function resolveCleanupSelection({
+  cleanupOverride,
+  useCleanupPreference,
+  cleanupConfigured,
+}) {
+  const selected =
+    cleanupOverride === "raw"
+      ? false
+      : cleanupOverride === "cleaned"
+        ? true
+        : !!useCleanupPreference;
+  return {
+    selected,
+    reachable: selected && !!cleanupConfigured,
+  };
+}
+
+// True for the two explicit dictation modes, which are dictation whatever they
+// say: the wake-word scan is skipped for them, as it already is for a
+// translation recording.
+export function isExplicitCleanupMode(cleanupOverride) {
+  return cleanupOverride === "raw" || cleanupOverride === "cleaned";
+}
+
 // Decides which reasoning path ("translation" | "agent" | "cleanup" | "skip")
 // a finished dictation takes. A recording started via the voice assistant
 // hotkey always takes the agent path — no wake word needed, and it wins over
@@ -170,7 +201,11 @@ export function resolveWakeWordLanguage(
 // agent's reachability only gates selection edits — that check happens at the
 // selection disposition, not here. A translation recording degrades to
 // cleanup instead: the transcript is still a useful dictation without the
-// translation step.
+// translation step. A raw or cleaned recording is dictation by the user's
+// explicit choice, so it never takes the wake-word agent route even when the
+// transcript happens to contain the wake phrase; its `cleanupReachable` is
+// already the override's answer, so "raw" lands on skip and "cleaned" on
+// cleanup.
 export function resolveDictationRouteKind({
   cleanupReachable,
   agentReachable,
@@ -178,12 +213,16 @@ export function resolveDictationRouteKind({
   voiceAgentRequested,
   translationRequested,
   translationReachable,
+  cleanupOverride,
 }) {
   if (voiceAgentRequested) {
     return "agent";
   }
   if (translationRequested) {
     if (translationReachable) return "translation";
+    return cleanupReachable ? "cleanup" : "skip";
+  }
+  if (isExplicitCleanupMode(cleanupOverride)) {
     return cleanupReachable ? "cleanup" : "skip";
   }
   if (agentReachable && agentInvoked) {

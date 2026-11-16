@@ -149,7 +149,11 @@ test("portal registration uses the current UI language for its description", asy
   const portal = new GnomeGlobalShortcutsPortal();
   let bindBody;
   portal.init = async () => true;
-  portal.unregisterKeybinding = async () => undefined;
+  // The release now REPORTS whether the compositor let go: a bind over an
+  // unconfirmed Close is refused rather than opening a second session beside
+  // the one still holding the keys. This fixture has nothing bound, so its
+  // stand-in says so explicitly instead of returning undefined.
+  portal.unregisterKeybinding = async () => true;
   portal._listenForShortcutEvents = () => undefined;
   portal._request = async (member, _signature, body) => {
     if (member === "CreateSession") {

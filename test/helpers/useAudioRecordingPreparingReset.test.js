@@ -61,6 +61,7 @@ export default class FakeAudioManager {
   setCallbacks(callbacks) { this.callbacks = callbacks; }
   setVoiceAgentRequested(value) { this.voiceAgentRequested = value; }
   setTranslationRequested(value) { this.translationRequested = value; }
+  setCleanupOverride() {}
   shouldUseStreaming() { return false; }
   isSttConfigStale() { return false; }
   getRecordingAudioLevel() { return 0; }
