@@ -281,6 +281,8 @@
         "openai_whisper_1": "نموذج Whisper الأصلي",
         "groq_whisper_large_v3": "تعرف على الكلام بدقة عالية",
         "groq_whisper_large_v3_turbo": "أسرع من الوقت الفعلي بـ216 ضعفًا",
+        "sarvam_v4": "22 لغة هندية والإنجليزية العالمية وتلميحات القاموس",
+        "sarvam_v3": "22 لغة هندية والإنجليزية الهندية",
         "mistral_voxtral_mini_latest": "تفريغ سريع متعدد اللغات",
         "gemini_3_5_transcribe": "تحويل الكلام إلى نص من Google Gemini",
         "gemini_3_5_transcribe_live": "تحويل الكلام إلى نص بالبث في الوقت الفعلي",

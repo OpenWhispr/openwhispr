@@ -11,6 +11,7 @@ export const MEETING_STREAMING_PROVIDER_IDS = [
   "deepgram",
   "corti",
   "tinfoil",
+  "sarvam",
 ];
 
 export function filterMeetingStreamingProviders(providers) {
@@ -101,5 +102,6 @@ export function resolveMeetingTranscriptionOptions({
     };
   }
 
+  if (provider.id === "sarvam" && options.model === "saaras:v4") return { ...options, keyterms };
   return options;
 }

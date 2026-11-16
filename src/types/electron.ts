@@ -1972,6 +1972,7 @@ declare global {
           cloudTranscriptionProvider: string;
           cloudTranscriptionModel: string;
           cloudTranscriptionBaseUrl?: string;
+          keyterms?: string[];
           cortiEnvironment?: string;
           cortiTenant?: string;
           parakeetModel: string;
@@ -2881,6 +2882,14 @@ declare global {
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
 
+      getSarvamKey: () => Promise<string | null>;
+      saveSarvamKey: (key: string) => Promise<void>;
+      proxySarvamTranscription: (data: {
+        audioBuffer: ArrayBuffer;
+        model: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<ProxyTranscriptionResult>;
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
@@ -3341,6 +3350,7 @@ declare global {
 
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
+        keyterms?: string[];
         filePath: string;
         requestId?: string;
         purpose?: "dictation" | "upload";

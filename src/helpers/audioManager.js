@@ -1,3 +1,4 @@
+import { sarvamKeyterms } from "../utils/sarvam.js";
 import i18n from "../i18n";
 import ReasoningService from "../services/ReasoningService";
 import {
@@ -511,6 +512,11 @@ const STREAMING_PROVIDERS = {
     onSessionEnd: (cb) => window.electronAPI.onAssemblyAiSessionEnd(cb),
   },
   "openai-realtime": makeDictationRealtimeProvider("openai-realtime"),
+  sarvam: {
+    ...makeDictationRealtimeProvider("sarvam"),
+    finalizeAcknowledged: true,
+    finalize: () => window.electronAPI.dictationRealtimeFinalize(),
+  },
   orukeet: {
     ...makeDictationRealtimeProvider("orukeet"),
     finalizeAcknowledged: true,
@@ -588,6 +594,20 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       language,
       prompt: dictionaryPrompt || undefined,
     }),
+  },
+  sarvam: {
+    displayName: "Sarvam AI",
+    ipc: () => window.electronAPI?.proxySarvamTranscription,
+    buildPayload: ({ audioBuffer, model, language, apiSettings }) => ({
+      audioBuffer,
+      model,
+      language,
+      ...(model === "saaras:v4" && {
+        keyterms: sarvamKeyterms(getEffectiveDictionaryWords(apiSettings)),
+      }),
+    }),
+    echoPrompt: ({ apiSettings }) =>
+      sarvamKeyterms(getEffectiveDictionaryWords(apiSettings)).join(", "),
   },
   mistral: {
     displayName: "Mistral",
@@ -4096,7 +4116,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
       unsubscribePolicy = usePolicyStore.subscribe(stopIfDisallowed);
       stopIfDisallowed();
-      const apiKey = managedResolution ? null : await this.getAPIKey();
+      const apiKey =
+        managedResolution || route.provider === "sarvam" ? null : await this.getAPIKey();
       requestController?.signal.throwIfAborted();
       const optimizedAudio = audioBlob;
 
@@ -4138,6 +4159,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             : asProviderError(err, { provider: proxySpec.displayName, surface: "transcription" });
         let result;
         try {
+          requestController.signal.throwIfAborted();
+          if (wasCancelled()) throw new DOMException("Dictation cancelled", "AbortError");
           result = await call(proxyPayload);
         } catch (err) {
           throw classifyProxyFailure(err);
@@ -5047,6 +5070,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return route === "orukeet" && Boolean(isSignedInOverride ?? s.isSignedIn);
     }
 
+    if (s.cloudTranscriptionMode === "byok" && s.cloudTranscriptionProvider === "sarvam") {
+      return Boolean(s.sarvamApiKey);
+    }
+
     // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
     if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
       return !!(s.cortiClientId && s.cortiClientSecret);
@@ -5354,7 +5381,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (res.code === "FEATURE_NOT_ENABLED") this.invalidateSttConfig();
       this.streamingFallbackReason = fallbackReason;
       logger.warn(
-        "Managed Orukeet session unavailable, falling back to batch recording",
+        "Streaming session unavailable, falling back to batch recording",
         { code: res.code, status: res.status, reason: fallbackReason, error: res.error },
         "streaming"
       );
@@ -5428,6 +5455,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       providerName = this.getStreamingProviderName();
       this._activeStreamingProviderName = providerName;
       this._activeStreamingConfig = { ...this.sttConfig };
+      if (providerName === "sarvam")
+        this._activeStreamingConfig.sarvamModel = getSettings().cloudTranscriptionModel;
       const ownsSession = () => this._activeStreamingSessionId === sessionId;
       const cancellationGeneration = this._streamingCancellationGeneration;
       startWasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
@@ -5500,11 +5529,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         providerName,
         cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
       });
-      const failsOver = Boolean(this.streamingFallbackRecorder) && managedOrukeet;
+      const holdUntilConnected = managedOrukeet || providerName === "sarvam";
+      const failsOver = Boolean(this.streamingFallbackRecorder) && holdUntilConnected;
       // Managed Orukeet cues the user before its session exists, and main can drop
       // what reaches a connection it replaces (a warmup for another route, a failed
       // one, a session retry). So its audio waits here until the session has started.
-      let heldFrames = managedOrukeet ? [] : null;
+      let heldFrames = holdUntilConnected ? [] : null;
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
@@ -5672,8 +5702,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.streamingFallbackReason = null;
         heldFrames = null;
         logger.info(
-          "Managed Orukeet unavailable, recording for the Cloud upload",
-          { reason: this._streamingFailoverReason },
+          "Streaming unavailable, keeping audio for batch transcription",
+          { providerName, reason: this._streamingFailoverReason },
           "streaming"
         );
         if (this.stopRequestedDuringStreamingStart) {
@@ -6108,7 +6138,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (provider.finalizeAcknowledged) {
       const result = await (acknowledgedFinal || provider.finalize());
       finalAcknowledged = result?.success === true;
-      if (finalAcknowledged) orukeetFinal = result;
+      if (finalAcknowledged && providerName === "orukeet") orukeetFinal = result;
       if (finalAcknowledged && typeof result.text === "string") {
         this.streamingFinalText = result.text;
       }
@@ -6148,6 +6178,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
     }
 
+    if (providerName === "sarvam") {
+      // A partial or an earlier utterance omits the tail when the socket drops.
+      finalText = finalAcknowledged ? this.streamingFinalText : "";
+      if (!finalAcknowledged) this._streamingFailoverReason ??= "stream_no_final";
+    }
     this.cleanupStreamingListeners(sessionId);
     if (wasCancelled()) return true;
 
@@ -6509,8 +6544,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       (failoverReason ? !failoverSilent : !finalAcknowledged && durationSeconds > 2) &&
       fallbackBlob?.size > 0
     ) {
-      const target = resolveStreamingFallbackTarget(getSettings());
-      if (target === "skip") {
+      const current = getSettings();
+      const target = resolveStreamingFallbackTarget(current);
+      if (
+        providerName === "sarvam" &&
+        (target !== "byok" ||
+          current.cloudTranscriptionProvider !== "sarvam" ||
+          current.cloudTranscriptionModel !== this._activeStreamingConfig?.sarvamModel ||
+          current.useLocalWhisper ||
+          isSelfHostedTranscription(current) ||
+          getManagedTranscriptionResolution())
+      ) {
+        failBatchFallback(new Error("Transcription settings changed during recording"));
+      } else if (target === "skip") {
         logger.warn(
           "Skipping batch fallback: OpenWhispr Cloud session signed out",
           {},

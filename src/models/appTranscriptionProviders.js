@@ -3,6 +3,28 @@
 // here. Once the catalog is synced from a publication that lists one, remove it below.
 const APP_TRANSCRIPTION_PROVIDERS = [
   {
+    id: "sarvam",
+    name: "Sarvam AI",
+    baseUrl: "https://api.sarvam.ai",
+    defaultModel: "saaras:v4",
+    models: [
+      {
+        id: "saaras:v4",
+        name: "Saaras v4",
+        streaming: true,
+        description: "22 Indian languages, global English and dictionary hints",
+        descriptionKey: "models.descriptions.transcription.sarvam_v4",
+      },
+      {
+        id: "saaras:v3",
+        name: "Saaras v3",
+        streaming: true,
+        description: "22 Indian languages and Indian English",
+        descriptionKey: "models.descriptions.transcription.sarvam_v3",
+      },
+    ],
+  },
+  {
     id: "openrouter",
     name: "OpenRouter",
     baseUrl: "https://openrouter.ai/api/v1",

@@ -185,6 +185,31 @@ function runFFmpegConversion(args, outputPath, { signal } = {}) {
   });
 }
 
+// Exact sample counts for duration-limited STT requests, including headerless WebM.
+function convertToPcm16(inputPath, outputPath, options = {}) {
+  return runFFmpegConversion(
+    // Only self-contained media: a playlist disguised as audio must never load another file.
+    [
+      "-protocol_whitelist",
+      "file",
+      "-format_whitelist",
+      "wav,w64,mp3,aac,aiff,ogg,flac,mov,matroska,webm,amr,asf,caf,avi,mpeg,mpegts",
+      "-i",
+      inputPath,
+      "-map",
+      "0:a:0",
+      "-ar",
+      "16000",
+      "-ac",
+      "1",
+      "-f",
+      "s16le",
+    ],
+    outputPath,
+    options
+  );
+}
+
 function convertToWav(inputPath, outputPath, options = {}) {
   const { sampleRate = 16000, channels = 1, signal } = options;
 
@@ -554,6 +579,7 @@ module.exports = {
   parseWavFormat,
   isPcm16Mono16kWav,
   convertToWav,
+  convertToPcm16,
   convertBufferToWav,
   convertToMp3,
   splitAudioFile,

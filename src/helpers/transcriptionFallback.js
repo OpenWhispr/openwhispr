@@ -32,16 +32,16 @@ export function isManagedOrukeetStream({ providerName, cloudTranscriptionMode })
   return providerName === "orukeet" && cloudTranscriptionMode === "openwhispr";
 }
 
-// Every other managed Orukeet start failure goes to batch rather than losing
-// the dictation: the rollout was turned off for this account, its mint window
-// is exhausted, or the session service, the network, the WebSocket or the
-// session response failed. Scoped to the managed Orukeet route so no other
-// provider's start-failure behavior changes.
+// These routes can transcribe the whole recording over their own batch API
+// when the streaming endpoint is unavailable. Policy and account refusals still apply.
 export function resolveStreamingStartFallback({ providerName, cloudTranscriptionMode, result }) {
-  if (!isManagedOrukeetStream({ providerName, cloudTranscriptionMode })) return null;
   if (USER_ACTIONABLE_START_FAILURES.has(result.code) || isTranscriptionPolicyRefusal(result)) {
     return null;
   }
+  if (providerName === "sarvam" && cloudTranscriptionMode === "byok") {
+    return result.code === "API_KEY_MISSING" ? null : "session_unavailable";
+  }
+  if (!isManagedOrukeetStream({ providerName, cloudTranscriptionMode })) return null;
   if (result.code === "FEATURE_NOT_ENABLED") return "feature_disabled";
   if (result.code === "RATE_LIMITED") return "rate_limited";
   return "session_unavailable";

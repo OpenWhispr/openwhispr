@@ -95,6 +95,31 @@ test("a payload without a noteId is dropped", () => {
 
 const seg = (id) => ({ id, text: id, source: "mic" });
 
+test("late note finals stay in capture order within the recording that produced them", async () => {
+  const { mergeSessionDiarization } = await import("../../src/utils/diarizationCompletion.ts");
+  const row = (text, source, timestamp) => ({ id: text, text, source, timestamp });
+  const previous = row("previous recording", "mic", 50);
+  const remote = row("system audio", "system", 2);
+  const earlier = row("microphone", "mic", 1);
+  const tail = row("last words", "mic", 3);
+  const resumed = row("next recording", "mic", 0);
+
+  for (const existing of [[previous], [previous, remote, resumed]]) {
+    const { segments, removedCount } = mergeSessionDiarization({
+      existing,
+      seedLength: 1,
+      segments: [remote, tail, earlier],
+    });
+    const expected = [previous, earlier, remote, tail];
+    if (existing.includes(resumed)) expected.push(resumed);
+    assert.deepEqual(
+      segments.map((s) => s.text),
+      expected.map((s) => s.text)
+    );
+    assert.equal(removedCount, existing.length - segments.length);
+  }
+});
+
 test("persisted segments of the target note win over live segments", () => {
   const persisted = [seg("p1")];
   const result = selectBaseSegments({

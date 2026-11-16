@@ -1,3 +1,4 @@
+import { getEffectiveDictionaryWords } from "../utils/snippets";
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -818,6 +819,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           cloudTranscriptionProvider: s.cloudTranscriptionProvider,
           cloudTranscriptionModel: s.cloudTranscriptionModel,
           cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
+          ...(s.cloudTranscriptionProvider === "sarvam" && {
+            keyterms: getEffectiveDictionaryWords(s),
+          }),
           cortiEnvironment: s.cortiEnvironment,
           cortiTenant: s.cortiTenant,
           parakeetModel: s.parakeetModel,

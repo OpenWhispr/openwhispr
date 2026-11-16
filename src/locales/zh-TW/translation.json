@@ -3228,6 +3228,8 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍即時速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
+        "sarvam_v4": "支援 22 種印度語言、全球英語口音和詞典提示",
+        "sarvam_v3": "支援 22 種印度語言和印度英語",
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "gemini_3_5_transcribe": "Google Gemini 語音轉文字",
         "gemini_3_5_transcribe_live": "即時串流語音轉文字",

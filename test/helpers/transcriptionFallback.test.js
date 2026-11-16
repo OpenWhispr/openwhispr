@@ -127,7 +127,7 @@ test("denials the user must act on do not fall back", async () => {
   }
 });
 
-test("only the managed Orukeet route falls back on session failures", async () => {
+test("self-hosted Orukeet and managed Deepgram keep their session failures", async () => {
   const { resolveStreamingStartFallback } =
     await import("../../src/helpers/transcriptionFallback.js");
   const result = { success: false, status: 503 };

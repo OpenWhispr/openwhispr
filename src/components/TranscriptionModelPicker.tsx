@@ -283,6 +283,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "groq", name: "Groq" },
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
+  { id: "sarvam", name: "Sarvam AI" },
   { id: "gemini", name: "Gemini" },
   { id: "corti", name: "Corti" },
   { id: "tinfoil", name: "Tinfoil" },
@@ -298,6 +299,7 @@ interface ProviderCredentialField {
     | "groqApiKey"
     | "xaiApiKey"
     | "mistralApiKey"
+    | "sarvamApiKey"
     | "geminiApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
@@ -328,6 +330,10 @@ const PROVIDER_CREDENTIALS: Record<
   xai: {
     consoleUrl: "https://console.x.ai",
     fields: [{ key: "xaiApiKey", input: "secret" }],
+  },
+  sarvam: {
+    consoleUrl: "https://indus.sarvam.ai/key-management",
+    fields: [{ key: "sarvamApiKey", input: "secret" }],
   },
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
@@ -494,7 +500,9 @@ export default function TranscriptionModelPicker({
   const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
+  const sarvamApiKey = useSettingsStore((s) => s.sarvamApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const setSarvamApiKey = useSettingsStore((s) => s.setSarvamApiKey);
   const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
   const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
@@ -1224,6 +1232,7 @@ export default function TranscriptionModelPicker({
     groqApiKey: keyDraft.value("groqApiKey", groqApiKey),
     xaiApiKey: keyDraft.value("xaiApiKey", xaiApiKey),
     mistralApiKey: keyDraft.value("mistralApiKey", mistralApiKey),
+    sarvamApiKey: keyDraft.value("sarvamApiKey", sarvamApiKey),
     geminiApiKey: keyDraft.value("geminiApiKey", geminiApiKey),
     cortiClientId: keyDraft.value("cortiClientId", cortiClientId),
     cortiClientSecret: keyDraft.value("cortiClientSecret", cortiClientSecret),
@@ -1240,6 +1249,7 @@ export default function TranscriptionModelPicker({
     groqApiKey: setGroqApiKey,
     xaiApiKey: setXaiApiKey,
     mistralApiKey: setMistralApiKey,
+    sarvamApiKey: setSarvamApiKey,
     geminiApiKey: setGeminiApiKey,
     cortiClientId: setCortiClientId,
     cortiClientSecret: setCortiClientSecret,

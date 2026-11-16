@@ -1137,3 +1137,24 @@ test("a model list whose body never arrives is no verdict, not a missing model",
   );
   assert.equal(unreadable.errorCode, "modelNotFound", "a list that can't be read offers nothing");
 });
+
+test("Sarvam checks a subscription key with a file-less transcription request", async () => {
+  for (const [status, error, success] of [
+    [400, { code: "invalid_request_error", message: "body.file : Field required" }, true],
+    [400, { code: "invalid_request_error", message: "invalid model" }, false],
+    [403, { code: "invalid_api_key_error" }, false],
+  ]) {
+    const result = await testProviderConnection(
+      { provider: "sarvam", apiKey: "supplied", model: "saaras:v3" },
+      async (url, request) => {
+        assert.equal(url, "https://api.sarvam.ai/speech-to-text");
+        assert.equal(request.headers["api-subscription-key"], "supplied");
+        assert.equal(request.redirect, "error");
+        assert.deepEqual([...request.body], [["model", "saaras:v3"]]);
+        return Response.json({ error }, { status });
+      }
+    );
+    assert.equal(result.success, success);
+    if (status === 403) assert.equal(result.errorCode, "credentialsRejected");
+  }
+});

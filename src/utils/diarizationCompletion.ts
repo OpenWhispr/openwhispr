@@ -118,11 +118,9 @@ export function mergeSessionDiarization(params: {
     };
   }
   const keptRows = withoutRemovedSegments(sessionRows, removedSegments);
+  const mergedRows = mergeTranscriptSegments(keptRows, incoming, splitLiveSpeakers);
   return {
-    segments: [
-      ...existing.slice(0, seededCount),
-      ...mergeTranscriptSegments(keptRows, incoming, splitLiveSpeakers),
-    ],
-    removedCount: sessionRows.length - keptRows.length,
+    segments: [...existing.slice(0, seededCount), ...mergedRows],
+    removedCount: sessionRows.length - mergedRows.length,
   };
 }

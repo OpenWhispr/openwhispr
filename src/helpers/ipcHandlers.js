@@ -212,6 +212,8 @@ const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { TINFOIL_REALTIME_MODEL } = require("./tinfoilRealtimeStreaming");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const { transcribeWithTinfoil } = require("./tinfoilTranscription");
+const { SarvamRealtimeStreaming } = require("./sarvamRealtimeStreaming");
+const { transcribeWithSarvam } = require("./sarvamTranscription");
 const { transcribeWithGemini } = require("./geminiTranscription");
 const AudioStorageManager = require("./audioStorage");
 const { SkillLibrary } = require("./skills/skillLibrary");
@@ -2103,6 +2105,8 @@ class IPCHandlers {
         const controller = new AbortController();
         operation.signal = controller.signal;
         this._productRequests.set(controller, operation);
+        // Track the sender before policy resolution so Escape also cancels a pending dictation.
+        if (channel === "proxy-sarvam-transcription") operation.dictationSender = event.sender.id;
         try {
           void this.refreshEffectivePolicy(event);
           if (operation.remote && this.effectivePolicyManager.getCurrent().status === "loading")
@@ -6511,6 +6515,21 @@ class IPCHandlers {
     );
 
     handleProviderTranscription(
+      "proxy-sarvam-transcription",
+      serializeIpcError(async (event, { audioBuffer, model, language, keyterms }, signal) => {
+        return transcribeWithSarvam({
+          audioBuffer,
+          model,
+          language,
+          keyterms,
+          signal,
+          apiKey: this.environmentManager.getSarvamKey(),
+          fetchImpl: proxyFetch,
+        });
+      })
+    );
+
+    handleProviderTranscription(
       "proxy-mistral-transcription",
       serializeIpcError(async (event, { audioBuffer, model, language, contextBias }, signal) => {
         const apiKey = this.environmentManager.getMistralKey();
@@ -8981,6 +9000,9 @@ class IPCHandlers {
 
     ipcMain.on("cloud-transcribe-cancel", (event) => {
       this._cloudTranscriptionRequests.cancelSender(event.sender.id);
+      for (const [controller, operation] of this._productRequests) {
+        if (operation.dictationSender === event.sender.id) controller.abort();
+      }
     });
 
     handleRemoteProduct("cloud-health-check", async () => {
@@ -9245,6 +9267,19 @@ class IPCHandlers {
             language: route.language,
           });
           result = { text, source: "corti", model: route.model };
+        } else if (route.transport === "proxied" && route.provider === "sarvam") {
+          if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes)
+            throw new Error(byokSizeCapError(route.sizeCapBytes));
+          const { text } = await transcribeWithSarvam({
+            audioBuffer: buffer,
+            model: route.model,
+            language: route.language,
+            keyterms: settings.keyterms,
+            apiKey: this.environmentManager.getSarvamKey(),
+            signal,
+            fetchImpl: proxyFetch,
+          });
+          result = { text, source: "sarvam", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "gemini") {
           if (route.sizeCapBytes && buffer.byteLength > route.sizeCapBytes) {
             throw new Error(byokSizeCapError(route.sizeCapBytes));
@@ -11422,10 +11457,11 @@ class IPCHandlers {
     };
 
     const setupDictationCallbacks = (streaming, event) => {
-      const isOrukeet = streaming instanceof OrukeetStreaming;
+      const ownsCallbacks =
+        streaming instanceof OrukeetStreaming || streaming instanceof SarvamRealtimeStreaming;
       const canNotify = () =>
-        !event.sender.isDestroyed?.() && (!isOrukeet || this._dictationStreaming === streaming);
-      if (isOrukeet) {
+        !event.sender.isDestroyed?.() && (!ownsCallbacks || this._dictationStreaming === streaming);
+      if (ownsCallbacks) {
         const ownerGone = () => {
           streaming.disconnect().catch(() => {});
           if (this._dictationStreaming === streaming) this._dictationStreaming = null;
@@ -11434,6 +11470,7 @@ class IPCHandlers {
         streaming.onClose = () => event.sender.removeListener?.("destroyed", ownerGone);
       }
       streaming.onPartialTranscript = (text) => {
+        if (!canNotify()) return;
         event.sender.send("dictation-realtime-partial", text);
         if (this._dictationPreviewEnabled && text) {
           this.windowManager.showTranscriptionPreview(text);
@@ -11451,6 +11488,7 @@ class IPCHandlers {
         if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
       };
       streaming.onSessionEnd = (data) => {
+        if (!canNotify()) return;
         event.sender.send("dictation-realtime-session-end", data || {});
         if (this._dictationPreviewEnabled) this.windowManager.hideTranscriptionPreview();
       };
@@ -11558,7 +11596,9 @@ class IPCHandlers {
         const streaming =
           provider === "orukeet"
             ? new OrukeetStreaming(isCloud ? MANAGED_STREAM_OPTIONS : {})
-            : new OpenAIRealtimeStreaming();
+            : provider === "sarvam"
+              ? new SarvamRealtimeStreaming()
+              : new OpenAIRealtimeStreaming();
         if (provider === "orukeet")
           streaming.onUsageError = (metadata) =>
             debugLogger.error("Combined cleanup usage could not be recorded", metadata);
@@ -11566,11 +11606,21 @@ class IPCHandlers {
         // Assign before the token fetch (a real network round trip) so
         // dictation-realtime-send has a live instance to buffer into instead
         // of silently dropping the start of the recording.
-        streaming.beginConnecting();
+        streaming.beginConnecting?.();
         streaming.connectionKey = dictationConnectionKey(options);
         this._dictationStreaming = streaming;
         ownProductStream(streaming);
         try {
+          if (provider === "sarvam") {
+            if (isCloud) throw new Error("Sarvam dictation requires a personal API key");
+            await streaming.connect({
+              apiKey: this.environmentManager.getSarvamKey(),
+              model: options.model,
+              language: options.language,
+              keyterms: options.keyterms,
+            });
+            return;
+          }
           if (provider === "orukeet") {
             if (isCloud) {
               await connectManagedOrukeet({
@@ -11618,7 +11668,8 @@ class IPCHandlers {
             });
           }
         } catch (err) {
-          if (provider === "orukeet") await streaming.disconnect().catch(() => {});
+          if (provider === "orukeet" || provider === "sarvam")
+            await streaming.disconnect().catch(() => {});
           if (this._dictationStreaming === streaming) this._dictationStreaming = null;
           throw err;
         }
@@ -12413,6 +12464,8 @@ class IPCHandlers {
       streaming.connectionKey === dictationConnectionKey(options);
 
     const warmupDictationStreaming = async (event, options) => {
+      // Sarvam sessions are per recording. The renderer still warms its microphone and worklet.
+      if (options.provider === "sarvam") return { success: true };
       await this._dictationConnectPromise?.catch(() => {});
       if (dictationRecordingActive) {
         ownProductStream(this._dictationStreaming);
@@ -12438,9 +12491,11 @@ class IPCHandlers {
     });
 
     handleRemoteProduct("dictation-realtime-start", async (event, options = {}) => {
-      const managedOrukeet = options.provider === "orukeet" && options.mode !== "byok";
+      const ownsConnection =
+        options.provider === "sarvam" ||
+        (options.provider === "orukeet" && options.mode !== "byok");
       const stopGeneration = dictationStopGeneration;
-      if (managedOrukeet) {
+      if (ownsConnection) {
         dictationRecordingActive = true;
         releaseRecordingWithRenderer(event.sender);
       }
@@ -12449,13 +12504,14 @@ class IPCHandlers {
         this._dictationPreviewEnabled = !!options.preview;
         // A warmup still connecting may be the connection this start wants. Managed audio
         // waits in the renderer; other routes need the connection before this tick ends.
-        if (managedOrukeet && this._dictationConnectPromise) {
+        if (ownsConnection && this._dictationConnectPromise) {
           await this._dictationConnectPromise.catch(() => {});
           if (stopGeneration !== dictationStopGeneration) {
             throw new Error("Dictation start was cancelled");
           }
         }
         if (
+          options.provider === "sarvam" ||
           !this._dictationStreaming?.isConnected ||
           this._dictationStreaming.connectionKey !== dictationConnectionKey(options)
         ) {
@@ -12474,8 +12530,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-finalize", async () => {
-      if (!(this._dictationStreaming instanceof OrukeetStreaming)) {
-        return { success: false, error: "No Orukeet recording is active" };
+      if (!this._dictationStreaming?.finalize) {
+        return { success: false, error: "No realtime recording to finalize" };
       }
       try {
         return { success: true, ...(await this._dictationStreaming.finalize()) };
@@ -13448,6 +13504,7 @@ class IPCHandlers {
           model,
           diarize,
           timestamps,
+          keyterms,
           provider,
           language,
           environment,
@@ -13577,6 +13634,23 @@ class IPCHandlers {
                 text,
                 ...(warning ? { warning, failedChunks, totalChunks } : {}),
               };
+            }
+
+            if (route.transport === "proxied" && route.provider === "sarvam") {
+              if (route.sizeCapBytes && fs.statSync(sourcePath).size > route.sizeCapBytes) {
+                return { success: false, error: byokSizeCapError(route.sizeCapBytes) };
+              }
+              providerErrorContext = byokErrorContext;
+              const { text } = await transcribeWithSarvam({
+                filePath: sourcePath,
+                model: route.model,
+                language: route.language,
+                keyterms,
+                apiKey: this.environmentManager.getSarvamKey(),
+                signal,
+                fetchImpl: proxyFetch,
+              });
+              return { success: true, text };
             }
 
             const upload = await prepareProviderUpload(sourcePath, { signal });

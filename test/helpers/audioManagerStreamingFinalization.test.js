@@ -802,6 +802,44 @@ test("a no-final stream whose upload transcribed but failed its selection edit k
   );
 });
 
+for (const selectedProvider of ["sarvam", "openai"]) {
+  test(`an interrupted Sarvam recording with ${selectedProvider} selected at stop only retries its original route`, async (t) => {
+    const AudioManager = await loadManagerClass(t);
+    Object.assign(globalThis.__streamingFinalizationSettings, {
+      cloudTranscriptionProvider: selectedProvider,
+      cloudTranscriptionModel: "saaras:v4",
+    });
+    const { manager } = createFinalizingManager(AudioManager);
+    const results = [],
+      errors = [];
+    let uploads = 0;
+    Object.assign(manager, {
+      _activeStreamingProviderName: "sarvam",
+      _activeStreamingConfig: { sarvamModel: "saaras:v4" },
+      streamingFinalText: "first utterance",
+      streamingPartialText: "incomplete tail",
+      getStreamingProvider: () => ({
+        finalizeAcknowledged: true,
+        finalize: async () => ({ success: false, error: "Connection lost" }),
+        stop: async () => ({ success: true, text: "first utterance" }),
+      }),
+      mergeRecordedSegments: async () => new Blob(["whole recording"]),
+      processWithOpenAIAPI: async (blob) => {
+        assert.equal(await blob.text(), "whole recording");
+        uploads++;
+        return { text: "complete transcript", source: "sarvam" };
+      },
+      saveFailedTranscription: () => {},
+      onError: (error) => errors.push(error),
+      onTranscriptionComplete: (result) => results.push(result.text),
+    });
+    await manager.stopStreamingRecording();
+    assert.equal(uploads, selectedProvider === "sarvam" ? 1 : 0);
+    assert.deepEqual(results, selectedProvider === "sarvam" ? ["complete transcript"] : []);
+    assert.equal(errors.length, selectedProvider === "sarvam" ? 0 : 1);
+  });
+}
+
 test("Orukeet uses the acknowledged final even if the transcript event is delayed", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { manager } = createFinalizingManager(AudioManager);

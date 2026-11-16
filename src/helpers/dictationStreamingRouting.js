@@ -4,6 +4,8 @@
 // call sites is what broke default dictation in 1.8.2 (#1624: the
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
+import { getEffectiveDictionaryWords } from "../utils/snippets.ts";
+import { sarvamKeyterms } from "../utils/sarvam.js";
 import { isOrukeetStreaming } from "./selfHostedTranscription.js";
 import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
 import { registryData as modelRegistryData, subscribeRegistry } from "../models/registryData.js";
@@ -204,6 +206,12 @@ export function resolveStreamingProviderName({ settings, context, sttConfig, lan
   ) {
     return "corti";
   }
+  if (
+    context === "dictation" &&
+    settings.cloudTranscriptionMode === "byok" &&
+    settings.cloudTranscriptionProvider === "sarvam"
+  )
+    return "sarvam";
   if (isGeminiLiveSelection(settings)) {
     return "gemini";
   }
@@ -250,6 +258,12 @@ export function buildStreamingSessionOptions({
     environment: settings.cortiEnvironment,
     tenant: settings.cortiTenant,
   };
+  if (providerName === "sarvam") {
+    options.keyterms =
+      options.model === "saaras:v4"
+        ? sarvamKeyterms(getEffectiveDictionaryWords(settings))
+        : undefined;
+  }
   // Tinfoil realtime shows the live preview for normal dictation (#1120), but
   // assistant voice skips it because the agent window owns that surface.
   if (providerName === "tinfoil-realtime" && !voiceAgentRequested) {

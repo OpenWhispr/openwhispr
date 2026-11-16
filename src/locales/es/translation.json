@@ -3280,6 +3280,8 @@
         "openai_whisper_1": "Modelo Whisper original",
         "groq_whisper_large_v3": "Reconocimiento de voz de alta precisión",
         "groq_whisper_large_v3_turbo": "Velocidad 216x en tiempo real",
+        "sarvam_v4": "22 idiomas de la India, inglés global y términos del diccionario",
+        "sarvam_v3": "22 idiomas de la India e inglés de la India",
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
         "gemini_3_5_transcribe": "Voz a texto con Gemini de Google",
         "gemini_3_5_transcribe_live": "Voz a texto en streaming en tiempo real",

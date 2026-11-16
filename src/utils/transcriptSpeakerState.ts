@@ -161,12 +161,6 @@ export const mergeTranscriptSegments = (
   if (incomingSegments.length === 0) {
     return normalizeTranscriptSegments(existingSegments);
   }
-  if (existingSegments.length === 0) {
-    return incomingSegments.map((segment, index) =>
-      normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })
-    );
-  }
-
   const existingById = new Map<string, number>();
   const existingByKey = new Map<string, number[]>();
 
@@ -216,11 +210,34 @@ export const mergeTranscriptSegments = (
     }
   });
 
-  const preserved = existingSegments.map(
-    (segment, index) => enrichedByIndex.get(index) ?? normalizeTranscriptSegment(segment)
+  // Stopping drains the mic and system sockets independently. A late final
+  // can precede an already saved row. Only compare rows from this session:
+  // later recordings in a resumed note can use a different timestamp origin.
+  const late = unmatchedIncoming.sort(
+    (a, b) => (a.timestamp ?? Infinity) - (b.timestamp ?? Infinity)
   );
-
-  return [...preserved, ...unmatchedIncoming];
+  const merged: TranscriptSegment[] = [];
+  let next = 0;
+  let remainingMatches = enrichedByIndex.size;
+  for (const [index, existing] of existingSegments.entries()) {
+    const enriched = enrichedByIndex.get(index);
+    if (!enriched) {
+      merged.push(normalizeTranscriptSegment(existing));
+      continue;
+    }
+    while (
+      next < late.length &&
+      (late[next].timestamp ?? Infinity) < (enriched.timestamp ?? -Infinity)
+    ) {
+      merged.push(late[next++]);
+    }
+    merged.push(enriched);
+    if (--remainingMatches === 0) {
+      merged.push(...late.slice(next));
+      next = late.length;
+    }
+  }
+  return merged.concat(late.slice(next));
 };
 
 export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>

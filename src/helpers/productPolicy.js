@@ -149,7 +149,7 @@ function productOperationAllowed(snapshot, appVersion, channel, args = []) {
     ].includes(channel)
   )
     return transcription({ mode: "local", provider: "" });
-  const proxy = /^proxy-(xai|mistral|corti|tinfoil|gemini)-transcription$/.exec(channel);
+  const proxy = /^proxy-(xai|mistral|sarvam|corti|tinfoil|gemini)-transcription$/.exec(channel);
   if (proxy) return transcription({ mode: "providers", provider: proxy[1] });
   if (channel === "cloud-agent-stream-start")
     return rules.isAgentAllowed(state) && llm("openwhispr");

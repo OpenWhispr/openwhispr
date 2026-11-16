@@ -268,6 +268,7 @@ function buildFakeThis() {
       getOpenAIKey: () => "sk-openai",
       getGroqKey: () => "gk-groq",
       getMistralKey: () => "mk-mistral",
+      getSarvamKey: () => "saved-sarvam-key",
       getXaiKey: () => "xk-xai",
       getTinfoilKey: () => "tk-tinfoil",
       getOpenrouterKey: () => "ork-openrouter",
@@ -948,6 +949,53 @@ const invokeUpload = (payload, bytes = Buffer.from([1, 2, 3, 4])) => {
     { filePath: uploadTempFile, ...payload }
   );
 };
+
+test("Sarvam uploads and history retries use normal transcription even with stale output settings", async (t) => {
+  if (!require("../../src/helpers/ffmpegUtils").getFFmpegPath()) return t.skip("ffmpeg unavailable");
+  const { pcm16ToWav } = require("../../src/utils/audioUtils");
+  const wav = pcm16ToWav(Buffer.alloc(32000));
+  t.mock.method(fakeThis.audioStorageManager, "getAudioBuffer", () => wav);
+  const previousResponse = fetchResponse;
+  t.after(() => {
+    fetchResponse = previousResponse;
+  });
+  fetchResponse = () => Response.json({ transcript: "कल meeting है" });
+  fetches.length = 0;
+
+  const upload = await invokeUpload(
+    {
+      provider: "sarvam",
+      model: "saaras:v4",
+      sarvamMode: "codemix",
+      keyterms: ["OpenWhispr"],
+      language: "hi",
+      transcriptionMode: "providers",
+    },
+    wav
+  );
+  const retry = await invoke({
+    cloudTranscriptionProvider: "sarvam",
+    cloudTranscriptionModel: "saaras:v3",
+    cloudTranscriptionMode: "byok",
+    transcriptionMode: "providers",
+    sarvamMode: "verbatim",
+    preferredLanguage: "auto",
+    keyterms: ["OpenWhispr"],
+  });
+  assert.equal(upload.text, "कल meeting है");
+  assert.equal(retry.success, true);
+  assert.equal(fetches.length, 2);
+  for (const { url, init } of fetches) {
+    assert.equal(url, "https://api.sarvam.ai/speech-to-text");
+    assert.equal(init.headers["api-subscription-key"], "saved-sarvam-key");
+  }
+  const fields = ({ init: { body } }) =>
+    ["model", "mode", "language_code", "keyterms"].map((field) => body.get(field));
+  assert.deepEqual(fetches.map(fields), [
+    ["saaras:v4", "transcribe", "hi-IN", '["OpenWhispr"]'],
+    ["saaras:v3", "transcribe", null, null],
+  ]);
+});
 
 test("upload: mistral sends x-api-key with a provider-validated model and no language on auto", async () => {
   fetches.length = 0;
