@@ -24,15 +24,25 @@ OPENWHISPR_LOG_LEVEL=debug
 
 **Env file locations:**
 
-- macOS: `~/Library/Application Support/OpenWhispr/.env`
-- Windows: `%APPDATA%\OpenWhispr\.env`
-- Linux: `~/.config/OpenWhispr/.env`
+- macOS: `~/Library/Application Support/open-whispr/.env`
+- Windows: `%APPDATA%\open-whispr\.env`
+- Linux: `~/.config/open-whispr/.env` (`$XDG_CONFIG_HOME/open-whispr/.env` when `XDG_CONFIG_HOME` is set)
+
+These are the release-build folders; development and staging builds use their own (see [Log File Locations](#log-file-locations)).
+
+### Option 3: In-App Toggle
+
+Open **Settings → System → Debug Logging** and turn on **Debug mode**. It takes effect right away in every window, with no restart, and is saved to the `.env` file above. The panel then shows the current log file and an **Open Logs Folder** button.
+
+A `--log-level` flag (Option 1) takes precedence over the `.env` file and the toggle for as long as the app runs with it, so the toggle can't change the level in that session.
 
 ## Log File Locations
 
-- **macOS**: `~/Library/Application Support/OpenWhispr/logs/debug-*.log`
-- **Windows**: `%APPDATA%\OpenWhispr\logs\debug-*.log`
-- **Linux**: `~/.config/OpenWhispr/logs/debug-*.log`
+- **macOS**: `~/Library/Application Support/open-whispr/logs/debug-*.log`
+- **Windows**: `%APPDATA%\open-whispr\logs\debug-*.log`
+- **Linux**: `~/.config/open-whispr/logs/debug-*.log` (`$XDG_CONFIG_HOME/open-whispr/logs/` when `XDG_CONFIG_HOME` is set)
+
+These folders are for release builds. Development and staging builds use `OpenWhispr-development` and `OpenWhispr-staging` in the same parent folder instead. The **Open Logs Folder** button (Option 3) always opens the folder for the build you are running.
 
 ## What Gets Logged
 
@@ -55,16 +65,16 @@ OPENWHISPR_LOG_LEVEL=debug
 
 Look for:
 
-- `maxLevel < 0.01` → Audio too quiet
-- `Audio appears to be silent` → Microphone issue
+- `Speech gate skipped transcription` with `reason: "silence"` → Audio too quiet; `peakRms` shows how loud the recording got
+- `No text transcribed` → Audio too short, silent, or in an unsupported format
 - `FFmpeg not available` → Path resolution failed
 
 ### Transcription Fails
 
 Look for:
 
-- `Whisper stderr:` → whisper.cpp/FFmpeg errors
-- `Process closed with code: [non-zero]` → Process failure
+- `whisper-server stderr` → whisper.cpp errors
+- `whisper-server process exited` with a non-zero `code` → Process failure
 - `Failed to parse Whisper output` → Invalid JSON
 
 ### Permission Issues
@@ -87,5 +97,6 @@ When reporting issues:
 
 Debug mode is off by default. To ensure it's disabled:
 
+- Turn off **Debug mode** in **Settings → System → Debug Logging** (this sets `OPENWHISPR_LOG_LEVEL=info` in `.env`)
 - Remove `--log-level=debug` from command
 - Remove `OPENWHISPR_LOG_LEVEL` from `.env`

@@ -58,7 +58,10 @@ test("shows the count, Clear and the actions", async (t) => {
     markup,
     /settingsPage\.workspace\.people\.selection\.count\|\{&quot;count&quot;:3\}/
   );
-  const labels = buttons(markup).map((button) => button.replace(/<[^>]*>/g, ""));
+  // The text between the tags, not a tag-stripping replace, which CodeQL flags.
+  const labels = buttons(markup).map((button) =>
+    [...button.matchAll(/>([^<>]+)</g)].map((match) => match[1]).join("")
+  );
   assert.deepEqual(labels, [
     "settingsPage.workspace.people.selection.clear",
     "Resend invites",
@@ -127,8 +130,43 @@ test("the bar wraps inside a narrow pane and its labels never truncate", async (
 
   const bar = markup.match(/<div[^>]*role="region"[^>]*class="([^"]*)"/)?.[1] ?? "";
   const classes = bar.split(/\s+/);
-  for (const name of ["flex-wrap", "justify-center", "max-w-full"]) {
+  // Full width, as the design docks it: the count on one side, the actions on the other.
+  for (const name of ["flex-wrap", "justify-between"]) {
     assert.ok(classes.includes(name), `missing ${name} in "${bar}"`);
   }
   assert.doesNotMatch(markup, /truncate/);
+});
+
+test("a trailing control comes after the actions and isn't dimmed by a busy one", async (t) => {
+  const { SelectionBar } = await loadBar(t);
+
+  const markup = renderToStaticMarkup(
+    React.createElement(SelectionBar, {
+      count: 2,
+      onClear: () => {},
+      actions: [{ id: "Remove", label: "Remove", onClick: () => {}, busy: true }],
+      trailing: React.createElement("span", { "data-menu": "" }, "Add to teamspace"),
+    })
+  );
+
+  const trailing = markup.indexOf('<span data-menu="">Add to teamspace</span>');
+  assert.ok(trailing > markup.lastIndexOf("</button>"), "after the last action");
+  // The bar's busy state is for its own actions; the menu holds the screen when it needs to.
+  assert.doesNotMatch(markup.slice(trailing), /aria-disabled/);
+  assert.match(buttons(markup)[1], /aria-disabled="true"/);
+});
+
+test("without a trailing control the bar is just the count, Clear and the actions", async (t) => {
+  const { SelectionBar } = await loadBar(t);
+
+  const markup = renderToStaticMarkup(
+    React.createElement(SelectionBar, {
+      count: 1,
+      onClear: () => {},
+      actions: [{ id: "Remove", label: "Remove", onClick: () => {} }],
+    })
+  );
+
+  assert.equal(buttons(markup).length, 2);
+  assert.ok(markup.trimEnd().endsWith("</button></div></div></div>"));
 });

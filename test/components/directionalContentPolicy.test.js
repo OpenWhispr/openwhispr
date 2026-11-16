@@ -45,7 +45,7 @@ test("dynamic prose and identity values keep their own direction", () => {
     ["src/components/SettingsPage.tsx", /<bdi dir="ltr">\{user\.email\}<\/bdi>/],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",
-      /<p\s+dir="auto"[^>]*>\s*\{member\.name \|\| member\.email\}/,
+      /<p\s+dir="auto"[^>]*>\s*<HighlightMatch\s+text=\{member\.name \|\| member\.email\}/,
     ],
     [
       "src/components/settings/WorkspaceMembersTab.tsx",
@@ -87,14 +87,13 @@ test("technical output values remain LTR inside an Arabic document", () => {
       "src/components/settings/WorkspaceBillingCard.tsx",
       /<span\s+dir="ltr"[^>]*>\s*\{seatsUsed\} \/ \{seatsTotal\}/,
     ],
-    ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{member\.email\}<\/bdi>/],
+    [
+      "src/components/settings/WorkspaceMembersTab.tsx",
+      /<bdi dir="ltr">\s*<HighlightMatch text=\{member\.email\}/,
+    ],
     [
       "src/components/settings/WorkspaceInvitationsTab.tsx",
       /<bdi dir="ltr">\{invitation\.email\}<\/bdi>/,
-    ],
-    [
-      "src/components/dictation/AssistantPanel.tsx",
-      /<kbd\s+dir="ltr"[\s\S]*?\{readableVoiceHotkey\}/,
     ],
     [
       "src/components/EnterpriseProviderConfig.tsx",
@@ -155,14 +154,6 @@ test("localized sentences isolate technical interpolations without changing word
       /<BidiInterpolatedText[\s\S]*?updates\.whatsNew[\s\S]*?value=\{updateInfo\.version\}/,
     ],
     [
-      "src/components/MemberRoster.tsx",
-      /<BidiInterpolatedText[\s\S]*?members\.inviteFooter[\s\S]*?value=\{addSearch\.trim\(\)\}/,
-    ],
-    [
-      "src/components/notes/SpaceMembersPanel.tsx",
-      /<BidiInterpolatedText[\s\S]*?members\.invited[\s\S]*?value=\{invitedEmails\[0\]\}/,
-    ],
-    [
       "src/components/integrations/CalendarsPane.tsx",
       /<BidiInterpolatedText[\s\S]*?googleCalendar\.disconnectConfirm[\s\S]*?value=\{confirmDisconnectEmail\}/,
     ],
@@ -221,9 +212,9 @@ test("user-authored names and previews detect direction at their display boundar
     ],
     ["src/components/notes/CreateSpaceDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{item\.name\}/],
     ["src/components/notes/CreateSpaceDialog.tsx", /<p\s+dir="auto"[^>]*>\s*\{workspace\.name\}/],
-    ["src/components/notes/CreateSpaceDialog.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
-    ["src/components/notes/SpaceGroupsSection.tsx", /<span\s+dir="auto"[^>]*>\s*\{teamRef\.name\}/],
-    ["src/components/notes/SpaceGroupsSection.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
+    ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{member\.name\}/],
+    ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{team\.name\}/],
+    ["src/components/notes/SpaceMembersTable.tsx", /<span\s+dir="auto"[^>]*>\s*\{row\.teamName\}/],
     // The page shows the name only in its input.
     [
       "src/components/settings/WorkspaceGeneralSection.tsx",

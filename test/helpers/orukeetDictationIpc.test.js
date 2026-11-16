@@ -543,7 +543,7 @@ test("a start in another language still rides the warm socket", async () => {
   await handlers.get("dictation-realtime-stop")();
 });
 
-test("a warmup never reuses a socket that has already carried audio", async () => {
+test("after a renderer reload, a warmup never reuses a socket that has already carried audio", async () => {
   await handlers.get("dictation-realtime-stop")();
   let mints = 0;
   backendResponse = async () => {
@@ -554,6 +554,8 @@ test("a warmup never reuses a socket that has already carried audio", async () =
   await handlers.get("dictation-realtime-start")(event, managedOptions);
   handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
   const used = target._dictationStreaming;
+  // Only a renderer reloaded mid-recording leaves a used socket with no stop.
+  event.sender.emit("did-start-loading");
   const warmup = await handlers.get("dictation-realtime-warmup")(event, managedOptions);
 
   assert.equal(warmup.success, true);
@@ -675,4 +677,201 @@ test("server telemetry survives streaming usage, fallback upload and cloud clean
   assert.ok(multipart.includes(JSON.stringify(metadata.orukeetCleanup)));
   assert.match(multipart, /language_supported_score_low/);
   assert.doesNotMatch(multipart, /\[object Object\]/);
+});
+
+const nextTick = () => new Promise((resolve) => setImmediate(resolve));
+const until = async (condition) => {
+  for (let attempt = 0; attempt < 2000 && !condition(); attempt++) await nextTick();
+  assert.ok(condition());
+};
+// Each mint waits until the test answers it, so a warmup can be held mid-connect.
+const holdMints = () => {
+  const mints = [];
+  backendResponse = () => new Promise((resolve) => mints.push(resolve));
+  return { mints, answered: 0 };
+};
+const answerNext = (held) => {
+  held.answered += 1;
+  held.mints.shift()(Response.json(cloudSession));
+};
+
+test("a start during a warmup rides that connection", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const warmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, managedOptions);
+  answerNext(held);
+  await warmup;
+  assert.equal((await start).success, true);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+
+  const final = await handlers.get("dictation-realtime-finalize")();
+  assert.equal(final.text, "Recorded 640 bytes");
+  assert.equal(held.answered, 1);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a start redials when the warmup it waited for was opened for another route", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const warmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, {
+    ...managedOptions,
+    baseUrl: "https://another-route.test",
+  });
+  answerNext(held);
+  await warmup;
+  await until(() => held.mints.length === 1);
+  answerNext(held);
+  assert.equal((await start).success, true);
+  assert.equal(held.answered, 2);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a start redials when the warmup it waited for failed", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const warmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, managedOptions);
+  held.mints.shift()(Response.json({ error: "outage" }, { status: 503 }));
+  assert.equal((await warmup).success, false);
+  await until(() => held.mints.length === 1);
+  answerNext(held);
+  assert.equal((await start).success, true);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("re-warms queued behind a start leave its recording alone", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const firstWarmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  const secondWarmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, managedOptions);
+  answerNext(held);
+  await firstWarmup;
+  assert.equal((await start).success, true);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(32000));
+  const recording = target._dictationStreaming;
+
+  assert.equal((await secondWarmup).success, true);
+  assert.equal(target._dictationStreaming, recording);
+  assert.equal(held.answered, 1);
+  assert.equal(target._dictationIdleTimer, null, "a recording must not expire as idle");
+
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  assert.equal((await handlers.get("dictation-realtime-finalize")()).text, "Recorded 32640 bytes");
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a warmup during a recording changes nothing, and warmups resume after its stop", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+  assert.equal(
+    (await handlers.get("dictation-realtime-start")(event, managedOptions)).success,
+    true
+  );
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  const recording = target._dictationStreaming;
+
+  await handlers.get("dictation-realtime-warmup")(event, {
+    ...managedOptions,
+    baseUrl: "https://another-route.test",
+  });
+  assert.equal(target._dictationStreaming, recording);
+  assert.equal(target._dictationIdleTimer, null);
+  assert.equal(mints, 1);
+
+  await handlers.get("dictation-realtime-stop")();
+  await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  assert.equal(mints, 2);
+  assert.notEqual(target._dictationIdleTimer, null);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a failed start hands the connection back to warmups", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  backendResponse = async () => Response.json({ error: "outage" }, { status: 503 });
+  assert.equal(
+    (await handlers.get("dictation-realtime-start")(event, managedOptions)).success,
+    false
+  );
+
+  let mints = 0;
+  backendResponse = async () => {
+    mints += 1;
+    return Response.json(cloudSession);
+  };
+  await handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  assert.equal(mints, 1);
+  await handlers.get("dictation-realtime-stop")();
+});
+
+test("a stop during a start waiting on a warmup opens no new session", async () => {
+  await handlers.get("dictation-realtime-stop")();
+  const held = holdMints();
+  const socketsBefore = opened;
+  const warmup = handlers.get("dictation-realtime-warmup")(event, managedOptions);
+  await until(() => held.mints.length === 1);
+
+  const start = handlers.get("dictation-realtime-start")(event, managedOptions);
+  await nextTick();
+  await handlers.get("dictation-realtime-stop")();
+  answerNext(held);
+  await warmup;
+
+  assert.equal((await start).success, false);
+  assert.equal(held.mints.length, 0);
+  assert.equal(opened, socketsBefore);
+  assert.equal(target._dictationStreaming, null);
+});
+
+const selfHostedOptions = { ...managedOptions, mode: "byok", baseUrl: cloudSession.baseUrl };
+
+test("self-hosted Orukeet: a start during a warmup still replaces that warmup", async (t) => {
+  await handlers.get("dictation-realtime-stop")();
+  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  t.after(async () => {
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+  const socketsBefore = opened;
+
+  const warmup = handlers.get("dictation-realtime-warmup")(event, selfHostedOptions);
+  await until(() => target._dictationConnectPromise);
+  const warming = target._dictationStreaming;
+  const start = await handlers.get("dictation-realtime-start")(event, selfHostedOptions);
+  await warmup;
+
+  assert.equal(start.success, true);
+  assert.notEqual(target._dictationStreaming, warming);
+  assert.equal(opened, socketsBefore + 2);
+});
+
+test("self-hosted Orukeet: a warmup still replaces a socket that carried audio", async (t) => {
+  await handlers.get("dictation-realtime-stop")();
+  target.environmentManager = { getCustomTranscriptionKey: () => "test-key" };
+  t.after(async () => {
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+
+  await handlers.get("dictation-realtime-start")(event, selfHostedOptions);
+  handlers.get("dictation-realtime-send")(event, Buffer.alloc(640));
+  const used = target._dictationStreaming;
+  const warmup = await handlers.get("dictation-realtime-warmup")(event, selfHostedOptions);
+
+  assert.equal(warmup.alreadyWarm, undefined);
+  assert.notEqual(target._dictationStreaming, used);
 });

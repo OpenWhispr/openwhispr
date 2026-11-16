@@ -1,10 +1,14 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const identifierModulePath = require.resolve("../../src/helpers/liveSpeakerIdentifier");
 const originalLoad = Module._load;
+const handlers = new Map();
 
 const electronStub = {
   app: {
@@ -15,7 +19,11 @@ const electronStub = {
     on: () => {},
     requestSingleInstanceLock: () => true,
   },
-  ipcMain: { handle: () => {}, on: () => {}, removeHandler: () => {} },
+  ipcMain: {
+    handle: (channel, fn) => handlers.set(channel, fn),
+    on: () => {},
+    removeHandler: () => {},
+  },
   BrowserWindow: class BrowserWindow {
     static getAllWindows() {
       return [];
@@ -133,6 +141,106 @@ test("reconciliation migrates the mapping when the offline id differs", () => {
   assert.deepEqual(calls.remove, [{ noteId: NOTE_ID, speakerId: "speaker_3" }]);
 });
 
+// A permissive `this` for setupHandlers: registration only stores closures.
+function anything() {
+  return new Proxy(function () {}, {
+    get: (t, prop) => {
+      if (prop === Symbol.toPrimitive || prop === "toString") return () => "";
+      if (prop === "then") return undefined;
+      return anything();
+    },
+    apply: () => anything(),
+  });
+}
+
+// Live speaker ids restart with every meeting, so another note's speaker_0 is
+// not the live speaker_0.
+test("labeling another note during a recording leaves the live speaker unnamed", async () => {
+  const { IPCHandlers, liveSpeakerIdentifier } = loadHandlers();
+  liveSpeakerIdentifier._assignSpeakerId(new Float32Array(embedding));
+  const target = {
+    _activeMeetingNoteId: NOTE_ID,
+    databaseManager: {
+      getNoteSpeakerEmbeddings: () => [],
+      linkSpeakerProfile: () => null,
+      setSpeakerMapping: () => {},
+    },
+  };
+  IPCHandlers.prototype.setupHandlers.call(
+    new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) })
+  );
+
+  await handlers.get("set-speaker-mapping")({}, NOTE_ID + 1, "speaker_0", "Alice");
+
+  const { displayName, noteId } = liveSpeakerIdentifier.getTransientState().speaker_0;
+  assert.deepEqual({ displayName, noteId }, { displayName: null, noteId: null });
+});
+
+// A finished one-on-one's diarization can land while the next meeting records.
+test("auto-labeling a finished one-on-one leaves the live speaker unnamed", async () => {
+  const { IPCHandlers, liveSpeakerIdentifier } = loadHandlers();
+  liveSpeakerIdentifier._assignSpeakerId(new Float32Array(embedding));
+  const note = {
+    participants: JSON.stringify([{ displayName: "Ann", email: "ann@example.com" }]),
+    transcript: JSON.stringify([{ source: "system", speaker: "speaker_0", text: "hi" }]),
+  };
+  const mappings = [];
+  const fakeThis = Object.assign(Object.create(IPCHandlers.prototype), {
+    _activeMeetingNoteId: NOTE_ID,
+    databaseManager: {
+      getNote: () => note,
+      getGoogleAccounts: () => [],
+      getNoteSpeakerEmbeddings: () => [
+        { speaker_id: "speaker_0", embedding: Buffer.from(new Float32Array(embedding).buffer) },
+      ],
+      getSpeakerMappings: () => [],
+      upsertSpeakerProfile: (name) => ({ id: 7, display_name: name }),
+      setSpeakerMapping: (...args) => mappings.push(args),
+      updateNote: () => {},
+    },
+  });
+
+  fakeThis._tryAutoLabelOneOnOne(NOTE_ID + 1);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(mappings, [[NOTE_ID + 1, "speaker_0", 7, "Ann"]]);
+  const { displayName, noteId } = liveSpeakerIdentifier.getTransientState().speaker_0;
+  assert.deepEqual({ displayName, noteId }, { displayName: null, noteId: null });
+});
+
+// A note recorded before the current embeddings has no voice to enroll, but the
+// label still belongs to the profile the person already has.
+test("labeling a speaker without a usable voice links the person's profile", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const calls = { link: [], set: [] };
+  const target = {
+    _activeMeetingNoteId: null,
+    databaseManager: {
+      getNoteSpeakerEmbeddings: () => [],
+      linkSpeakerProfile: (...args) => {
+        calls.link.push(args);
+        return { id: 9 };
+      },
+      setSpeakerMapping: (...args) => calls.set.push(args),
+    },
+  };
+  IPCHandlers.prototype.setupHandlers.call(
+    new Proxy(target, { get: (t, prop) => (prop in t ? t[prop] : anything()) })
+  );
+
+  const result = await handlers.get("set-speaker-mapping")(
+    {},
+    NOTE_ID,
+    "speaker_1",
+    "Ann",
+    "ann@example.com"
+  );
+
+  assert.deepEqual(calls.link, [["Ann", "ann@example.com", null]]);
+  assert.deepEqual(calls.set, [[NOTE_ID, "speaker_1", 9, "Ann"]]);
+  assert.deepEqual(result, { success: true, profileId: 9 });
+});
+
 const THREE_ATTENDEES = [
   { email: "one@example.com" },
   { email: "two@example.com" },
@@ -195,64 +303,60 @@ test("a shrinking roster leaves the speaker cap untouched", () => {
   assert.deepEqual(emptied.broadcasts, []);
 });
 
-function makeExpectationResolver() {
+function makeCapResolver() {
   const { IPCHandlers } = loadHandlers();
   return (args) =>
-    IPCHandlers.prototype._resolveSpeakerExpectation.call(
+    IPCHandlers.prototype._resolveSpeakerCap.call(
       Object.assign(Object.create(IPCHandlers.prototype), {
         databaseManager: { getNote: () => args.note ?? null },
       }),
       {
         sessionConfig: args.sessionConfig ?? null,
         noteId: args.noteId ?? null,
-        observedSpeakerIds: args.observedSpeakerIds ?? new Set(),
         diarizedSource: args.diarizedSource,
       }
     );
 }
 
 // System mode: only system audio reaches the diarizer (the mic track is "you"),
-// so every branch must report `cap` as a count of other speakers (total - 1).
-// The no-signal fallback used to return the total itself, which let one remote
-// voice split across two labels.
-test("speaker expectation reports cap as other-speaker count in every system-mode branch", () => {
-  const resolve = makeExpectationResolver();
+// so the cap counts other speakers (total - 1).
+test("the speaker cap counts other speakers in system mode", () => {
+  const resolve = makeCapResolver();
 
-  assert.deepEqual(
+  assert.equal(
     resolve({ sessionConfig: { expectedCount: 3, explicit: true } }),
-    { numSpeakers: 2, cap: 2 },
+    2,
     "an explicit count of 3 means 2 other speakers"
   );
-  assert.deepEqual(
+  assert.equal(
     resolve({ noteId: NOTE_ID, note: { expected_speaker_count: 4 } }),
-    { numSpeakers: 3, cap: 3 },
+    3,
     "a note count outranks a non-explicit session config"
   );
-  assert.deepEqual(
-    resolve({ observedSpeakerIds: new Set(["speaker_0", "speaker_1"]) }),
-    { numSpeakers: 2, cap: 2 },
-    "observed ids are already other-speaker ids"
-  );
-  assert.deepEqual(
-    resolve({}),
-    { numSpeakers: -1, cap: 1 },
-    "the default total of 2 means a single other speaker, not 2"
-  );
+});
+
+// With no count, the stepper's default of 2 is a guess: it must not cap a
+// group call's remote voices at one (#2641).
+test("with no count, the remote side gets no count-derived cap", () => {
+  const resolve = makeCapResolver();
+
+  assert.equal(resolve({}), null);
+  assert.equal(resolve({ sessionConfig: { expectedCount: 2, explicit: false } }), null);
 });
 
 // Mic mode (in-person session): the user is one of the diarized voices, so the
 // expected total applies without the -1 the system-mode branches use.
 test("mic mode counts the user among the expected speakers", () => {
-  const resolve = makeExpectationResolver();
+  const resolve = makeCapResolver();
 
-  assert.deepEqual(
+  assert.equal(
     resolve({ sessionConfig: { expectedCount: 3, explicit: true }, diarizedSource: "mic" }),
-    { numSpeakers: 3, cap: 3 },
+    3,
     "an explicit total of 3 stays 3, not total - 1"
   );
-  assert.deepEqual(
+  assert.equal(
     resolve({ diarizedSource: "mic" }),
-    { numSpeakers: -1, cap: 2 },
+    2,
     "the no-signal fallback caps at the default expected total, user included"
   );
 });
@@ -308,8 +412,17 @@ test("a stopped session's diarization reserves its speaker ids until its result 
   const DiarizationManager = loadDiarizationManager();
   const speakerEmbeddings = require("../../src/helpers/speakerEmbeddings");
   t.mock.method(speakerEmbeddings, "isAvailable", () => true);
-  t.mock.method(speakerEmbeddings, "extractEmbedding", async () => new Float32Array([1, 0]));
-  t.mock.method(speakerEmbeddings, "computeCentroid", (embeddings) => embeddings[0]);
+  t.mock.method(
+    speakerEmbeddings,
+    "extractClusterCentroids",
+    async (_wav, segments) =>
+      new Map(
+        [...new Set(segments.map((s) => s.speaker))].map((speaker, i) => [
+          speaker,
+          new Float32Array(i === 0 ? [1, 0] : [0, 1]),
+        ])
+      )
+  );
 
   let releaseDiarization;
   const diarizationGate = new Promise((resolve) => {
@@ -318,7 +431,12 @@ test("a stopped session's diarization reserves its speaker ids until its result 
   const diarizationManager = new DiarizationManager();
   Object.assign(diarizationManager, {
     isAvailable: () => true,
-    convertRawPcmToWav: async () => "/nonexistent/ow-reserve-test.wav",
+    // The diarized path reads the WAV's size for its duration.
+    convertRawPcmToWav: async () => {
+      const wavPath = path.join(os.tmpdir(), `ow-reserve-test-${process.pid}-${Date.now()}.wav`);
+      fs.writeFileSync(wavPath, Buffer.alloc(32000 * 10));
+      return wavPath;
+    },
     diarize: async () => {
       await diarizationGate;
       return [
@@ -379,4 +497,39 @@ test("a stopped session's diarization reserves its speaker ids until its result 
   assert.deepEqual(Object.keys(payload.speakerEmbeddings).sort(), ["speaker_2", "speaker_3"]);
   // Landed: narrowed to the two ids the result actually names.
   assert.equal(handlers._resolveMeetingSpeakerIndexBase(NOTE_ID, 0), 4);
+});
+
+// A label spreads to other notes' unnamed speakers by voice. A speaker that
+// another profile matches as closely isn't this profile's to name.
+test("retroactive labeling names only the speakers its profile matches best", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const { EMBEDDING_VERSION } = require("../../src/constants/speakerDetection.json");
+  const voice = (values) => Buffer.from(new Float32Array(values).buffer);
+  const profile = (id, name, values) => ({
+    id,
+    display_name: name,
+    embedding_version: EMBEDDING_VERSION,
+    embedding: voice(values),
+  });
+  const alice = profile(1, "Alice", [1, 0]);
+  const noteSpeakers = {
+    10: [{ speaker_id: "speaker_0", embedding: voice([0.95, 0.31]) }],
+    11: [{ speaker_id: "speaker_0", embedding: voice([0.9, -0.44]) }],
+  };
+  const mappings = [];
+  const fakeThis = Object.assign(Object.create(IPCHandlers.prototype), {
+    databaseManager: {
+      getSpeakerProfiles: () => [alice, profile(2, "Bob", [0.8, 0.6])],
+      getNotesWithUnmappedSpeakers: () => [10, 11],
+      getNoteSpeakerEmbeddings: (noteId) => noteSpeakers[noteId],
+      getSpeakerMappings: () => [],
+      setSpeakerMapping: (...args) => mappings.push(args),
+      getNote: () => null,
+    },
+  });
+
+  fakeThis._retroactiveMapping(alice);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(mappings, [[11, "speaker_0", 1, "Alice"]]);
 });

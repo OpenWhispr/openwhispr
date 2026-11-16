@@ -249,7 +249,7 @@ test("reopening a pre-v2 database clears microsoft sync tokens once", (t) => {
   assert.equal(calendar.sync_token, null);
   assert.equal(calendar.sync_token_expires_at, null);
   // Reopening runs every later migration too.
-  assert.equal(reopened.db.pragma("user_version", { simple: true }), 5);
+  assert.equal(reopened.db.pragma("user_version", { simple: true }), 6);
   reopened.db.close();
 });
 
@@ -305,7 +305,7 @@ test("Google shared RSVP repair is scoped, preserves notes, and runs once", (t) 
     assert.equal(repaired.getCalendarEventById(id).self_response_status, "declined");
   }
   // Reopening also runs the v5 lookback reset, which clears every REST token.
-  assert.equal(repaired.db.pragma("user_version", { simple: true }), 5);
+  assert.equal(repaired.db.pragma("user_version", { simple: true }), 6);
   const calendars = repaired.getGoogleCalendars();
   assert.equal(calendars.find((c) => c.id === "shared").sync_token, null);
   assert.equal(calendars.find((c) => c.id === "shared").sync_token_expires_at, null);
@@ -715,6 +715,112 @@ test("all-day mirrors pair whichever end EventKit reports, and a longer namesake
       .map((event) => event.id)
       .sort(),
     ["apple-vacation-4d", "google-offsite", "google-vacation"]
+  );
+  db.db.close();
+});
+
+test("the assistant's upcoming events add all-day ones on the local days its window touches", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCalendar(db, "google", "google-calendar");
+  const now = new Date();
+  const day = (offset) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+  const localDate = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const allDay = (id, first, after) =>
+    restEvent("google", "google-calendar", id, {
+      start_time: localDate(day(first)),
+      end_time: localDate(day(after)),
+      is_all_day: true,
+    });
+  db.upsertCalendarEvents([
+    allDay("yesterday", -1, 0),
+    allDay("today", 0, 1),
+    allDay("all-week", -2, 5),
+    allDay("in-three-days", 3, 4),
+    allDay("in-ten-days", 10, 11),
+    // Calendar.app writes local midnights as instants.
+    appleEvent("apple-tomorrow", {
+      start_time: day(1).toISOString(),
+      end_time: day(2).toISOString(),
+      is_all_day: true,
+    }),
+  ]);
+  const ids = (events) => events.map((event) => event.id).sort();
+
+  assert.deepEqual(
+    ids(db.getUpcomingEvents(10080)),
+    [],
+    "reminders and the meeting list skip them"
+  );
+  assert.deepEqual(ids(db.getUpcomingEvents(10080, { includeAllDay: true })), [
+    "all-week",
+    "apple-tomorrow",
+    "in-three-days",
+    "today",
+  ]);
+  db.db.close();
+});
+
+test("today's window, rounded up past midnight as the calendar tool does, keeps tomorrow's all-day events out", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCalendar(db, "google", "google-calendar");
+  const now = new Date();
+  const day = (offset) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+  const localDate = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  db.upsertCalendarEvents([
+    restEvent("google", "google-calendar", "today", {
+      start_time: localDate(day(0)),
+      end_time: localDate(day(1)),
+      is_all_day: true,
+    }),
+    restEvent("google", "google-calendar", "tomorrow", {
+      start_time: localDate(day(1)),
+      end_time: localDate(day(2)),
+      is_all_day: true,
+    }),
+  ]);
+  // calendarTool's "today": the minutes to 23:59:59.999, rounded up.
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+  const today = Math.max(1, Math.ceil((endOfToday.getTime() - now.getTime()) / 60000));
+  const ids = (events) => events.map((event) => event.id).sort();
+
+  assert.deepEqual(ids(db.getUpcomingEvents(today, { includeAllDay: true })), ["today"]);
+  assert.deepEqual(ids(db.getUpcomingEvents(today + 1440, { includeAllDay: true })), [
+    "today",
+    "tomorrow",
+  ]);
+  db.db.close();
+});
+
+test("the week's window, to the end of the sixth day after today, covers that day's all-day events and no later", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertCalendar(db, "google", "google-calendar");
+  const now = new Date();
+  const day = (offset) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+  const localDate = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  db.upsertCalendarEvents(
+    [6, 7].map((offset) =>
+      restEvent("google", "google-calendar", `day-${offset}`, {
+        start_time: localDate(day(offset)),
+        end_time: localDate(day(offset + 1)),
+        is_all_day: true,
+      })
+    )
+  );
+  // calendarTool's "week": the minutes to the end of the sixth day after today.
+  const end = day(6);
+  end.setHours(23, 59, 59, 999);
+  const week = Math.ceil((end.getTime() - now.getTime()) / 60000);
+
+  assert.deepEqual(
+    db.getUpcomingEvents(week, { includeAllDay: true }).map((event) => event.id),
+    ["day-6"]
   );
   db.db.close();
 });

@@ -32,7 +32,7 @@ const MEMBER = { id: "w1", name: "Acme", role: "member" };
 
 const mountedRoots = new Map();
 
-async function loadSection(t, { storedTab } = {}) {
+async function loadSection(t, { storedTab, realTeamsTab = false } = {}) {
   t.after(async () => {
     const root = mountedRoots.get(t);
     mountedRoots.delete(t);
@@ -72,6 +72,7 @@ async function loadSection(t, { storedTab } = {}) {
           retry: () => {},
         });
       `,
+      "/ui/useToast": "export const useToast = () => ({ toast: () => '' });",
       "/useWorkspaceInvitations": `
         export const useWorkspaceInvitations = (workspaceId, enabled) => {
           globalThis.__invitationsArgs = { workspaceId, enabled };
@@ -85,6 +86,13 @@ async function loadSection(t, { storedTab } = {}) {
           return React.createElement("div", { "data-tab-panel": "members" });
         }
       `,
+      "/WorkspaceGuestsTab": `
+        import React from "react";
+        export default function Mock(props) {
+          globalThis.__guestsTabProps = props;
+          return React.createElement("div", { "data-tab-panel": "guests" });
+        }
+      `,
       "/WorkspaceInvitationsTab": `
         import React from "react";
         export default function Mock(props) {
@@ -92,11 +100,52 @@ async function loadSection(t, { storedTab } = {}) {
           return React.createElement("div", { "data-tab-panel": "invitations" });
         }
       `,
-      "/WorkspaceTeamsTab": `
+      ...(realTeamsTab
+        ? {
+            "/i18n": "export default { t: (key) => key };",
+            "/services/TeamsService": "export const TeamsService = {};",
+            "/hooks/useWorkspaceTeams": `
+              export const useWorkspaceTeams = () => ({
+                status: "ready",
+                teams: [],
+                stale: false,
+                loads: 1,
+                reload: async () => [],
+              });
+            `,
+            "/CreateTeamDialog": `
+              export default function CreateTeamDialog(props) {
+                globalThis.__createDialog = props;
+                return null;
+              }
+            `,
+            "/TeamPaywallDialog": `
+              export default function TeamPaywallDialog(props) {
+                globalThis.__paywallDialog = props;
+                return null;
+              }
+            `,
+            "/TeamSettingsDialog": "export default function TeamSettingsDialog() { return null; }",
+            "/ui/useToast": "export const useToast = () => ({ toast: () => {} });",
+          }
+        : {
+            "/WorkspaceTeamsTab": `
+              import React from "react";
+              export default function Mock(props) {
+                globalThis.__teamsTabProps = props;
+                return React.createElement("div", { "data-tab-panel": "teams" });
+              }
+            `,
+          }),
+      // Menus render open, so a test reads their items; their handlers ride on the nodes.
+      "/ui/dropdown-menu": `
         import React from "react";
-        export default function Mock() {
-          return React.createElement("div", { "data-tab-panel": "teams" });
-        }
+        const h = React.createElement;
+        export const DropdownMenu = ({ children }) => h("div", { "data-menu": "" }, children);
+        export const DropdownMenuTrigger = ({ children }) => children;
+        export const DropdownMenuContent = ({ children }) => h("div", { "data-menu-content": "" }, children);
+        export const DropdownMenuItem = ({ children, onSelect }) =>
+          h("button", { "data-menu-item": "", onClick: onSelect }, children);
       `,
       "/InviteTeammateDialog": `
         import React from "react";
@@ -145,10 +194,14 @@ async function loadSection(t, { storedTab } = {}) {
       "__invitationsState",
       "__membersProps",
       "__invitationsTabProps",
+      "__guestsTabProps",
       "__dialogProps",
       "__inviteViewProps",
       "__sendCalls",
       "__reloadCalls",
+      "__teamsTabProps",
+      "__createDialog",
+      "__paywallDialog",
     ]) {
       delete globalThis[key];
     }
@@ -174,8 +227,11 @@ function render(WorkspacePeopleSection, workspace, props = {}) {
   return renderToStaticMarkup(React.createElement(WorkspacePeopleSection, props));
 }
 
+// Each tab is an icon and its label; the label is the text after the icon.
 function tabLabels(markup) {
-  return [...markup.matchAll(/role="tab"[^>]*>([^<]*)</g)].map((match) => match[1]);
+  return [...markup.matchAll(/role="tab"[^>]*>(?:<svg[\s\S]*?<\/svg>)?([^<]*)</g)].map(
+    (match) => match[1]
+  );
 }
 
 function findNode(node, predicate) {
@@ -203,12 +259,13 @@ async function mount(t, WorkspacePeopleSection, workspace, props = {}) {
   return container;
 }
 
-test("member sees Members and Groups only, with the view subtitle", async (t) => {
+test("member sees Members, Guests and Teams, with the view subtitle", async (t) => {
   const Section = await loadSection(t);
   const markup = render(Section, MEMBER);
 
   assert.deepEqual(tabLabels(markup), [
     "settingsPage.workspace.tab.members",
+    "settingsPage.workspace.tab.guests",
     "settingsPage.workspace.tab.teams",
   ]);
   assert.match(markup, /settingsPage\.workspace\.people\.subtitleView/);
@@ -216,13 +273,14 @@ test("member sees Members and Groups only, with the view subtitle", async (t) =>
   assert.equal(globalThis.__invitationsArgs.enabled, false);
 });
 
-test("admin sees Invitations between Members and Groups", async (t) => {
+test("Guests sits between Invitations and Teams", async (t) => {
   const Section = await loadSection(t);
   const markup = render(Section, ADMIN);
 
   assert.deepEqual(tabLabels(markup), [
     "settingsPage.workspace.tab.members",
     "settingsPage.workspace.tab.invitations",
+    "settingsPage.workspace.tab.guests",
     "settingsPage.workspace.tab.teams",
   ]);
   assert.match(markup, /settingsPage\.workspace\.people\.description/);
@@ -244,6 +302,24 @@ test("a stored invitations tab falls back to members without manage_members", as
   assert.equal(globalThis.__invitationsTabProps.invitations, globalThis.__invitationsState);
 });
 
+test("a stored guests tab reopens it, for members too", async (t) => {
+  const Section = await loadSection(t, { storedTab: "guests" });
+  assert.match(render(Section, MEMBER), /data-tab-panel="guests"/);
+  assert.match(render(Section, ADMIN), /data-tab-panel="guests"/);
+});
+
+test("an invite sent from Guests reloads the invitations list", async (t) => {
+  const Section = await loadSection(t, { storedTab: "guests" });
+  render(Section, ADMIN);
+  await globalThis.__guestsTabProps.onInvitationsChanged();
+  assert.equal(globalThis.__reloadCalls, 1);
+});
+
+test("Add stays off the Guests tab, since guests come from note shares, not invites", async (t) => {
+  const Section = await loadSection(t, { storedTab: "guests" });
+  assert.doesNotMatch(render(Section, ADMIN), /settingsPage\.workspace\.people\.addLabel/);
+});
+
 test("a deep-linked invitations tab shows members without manage_members", async (t) => {
   const Section = await loadSection(t);
   const markup = render(Section, MEMBER, { initialSubTab: "invitations" });
@@ -262,6 +338,14 @@ test("Add appears only with manage_members", async (t) => {
   const memberMarkup = render(Section, MEMBER);
   assert.doesNotMatch(memberMarkup, /settingsPage\.workspace\.people\.addLabel/);
   assert.equal(globalThis.__dialogProps, undefined);
+});
+
+test("the Members tab is told where Open teamspace goes", async (t) => {
+  const Section = await loadSection(t);
+  const onOpenTeamspace = () => {};
+
+  render(Section, ADMIN, { onOpenTeamspace });
+  assert.equal(globalThis.__membersProps.onOpenTeamspace, onOpenTeamspace);
 });
 
 test("Add hands the roster and pending invitations to the invite dialog", async (t) => {
@@ -447,4 +531,171 @@ test("Add wraps under the tabs rather than scroll a narrow pane sideways", async
   const row = markup.match(/<div class="([^"]*)"><div role="tablist"/);
   assert.ok(row, "the row holding the tab list and Add");
   assert.ok(row[1].split(" ").includes("flex-wrap"));
+});
+
+// A workspace whose capabilities come from the server: the role is never what decides.
+const withCapabilities = (overrides) => ({
+  ...ADMIN,
+  capabilities: {
+    manage_members: true,
+    manage_teams: true,
+    create_teams: true,
+    create_spaces: true,
+    manage_settings: true,
+    manage_billing: false,
+    delete_workspace: false,
+    transfer_ownership: false,
+    leave: true,
+    ...overrides,
+  },
+});
+
+const menuItems = (container) => {
+  const items = [];
+  const walk = (node) => {
+    if (node.nodeType === 1 && node.getAttribute?.("data-menu-item") === "") items.push(node);
+    for (const child of node.childNodes ?? []) walk(child);
+  };
+  walk(container);
+  return items;
+};
+const itemTexts = (container) => menuItems(container).map((node) => textOfNode(node));
+const textOfNode = (node) =>
+  node.nodeType === 3 ? node.nodeValue : [...node.childNodes].map(textOfNode).join("");
+
+test("every Create entry point opens the paywall below Business", async (t) => {
+  const Section = await loadSection(t, { realTeamsTab: true });
+  const container = await mount(t, Section, withCapabilities({ create_teams: false }));
+
+  assert.deepEqual(itemTexts(container), [
+    "settingsPage.workspace.people.addMenu.invite",
+    "settingsPage.workspace.people.addMenu.createTeam",
+  ]);
+  const create = menuItems(container)[1];
+  await React.act(async () => propsOf(create).onClick());
+
+  assert.equal(localStorage.getItem("settings.workspacePeopleTab"), '"teams"');
+  assert.equal(globalThis.__paywallDialog.open, true);
+  assert.equal(globalThis.__createDialog.open, false);
+});
+
+test("every Create entry point opens the form on Business", async (t) => {
+  const Section = await loadSection(t, { realTeamsTab: true });
+  const container = await mount(t, Section, withCapabilities({}));
+
+  await React.act(async () => propsOf(menuItems(container)[1]).onClick());
+
+  assert.equal(localStorage.getItem("settings.workspacePeopleTab"), '"teams"');
+  assert.equal(globalThis.__createDialog.open, true);
+  assert.equal(globalThis.__paywallDialog.open, false);
+});
+
+test("the label still invites and the chevron holds the menu", async (t) => {
+  const Section = await loadSection(t);
+  const container = await mount(t, Section, withCapabilities({}));
+
+  const chevron = findNode(
+    container,
+    (node) => node.getAttribute?.("aria-label") === "settingsPage.workspace.people.addMenu.label"
+  );
+  assert.ok(chevron, "the chevron is labelled");
+  const label = findNode(
+    container,
+    (node) => node.getAttribute?.("title") === "settingsPage.workspace.people.addLabel"
+  );
+  await React.act(async () => propsOf(label).onClick());
+  assert.equal(globalThis.__dialogProps.open, true);
+
+  // Invite people from the menu does the same.
+  await React.act(async () => globalThis.__dialogProps.onOpenChange(false));
+  await React.act(async () => propsOf(menuItems(container)[0]).onClick());
+  assert.equal(globalThis.__dialogProps.open, true);
+});
+
+test("a member has no Create", async (t) => {
+  const Section = await loadSection(t);
+  const markup = render(Section, MEMBER);
+
+  assert.doesNotMatch(markup, /addMenu/);
+  assert.doesNotMatch(markup, /data-menu/);
+  const container = await mount(
+    t,
+    Section,
+    withCapabilities({ manage_members: false, manage_teams: false })
+  );
+  assert.deepEqual(itemTexts(container), []);
+});
+
+test("the menu is gone on the Teams tab while no team exists", async (t) => {
+  const Section = await loadSection(t, { storedTab: "teams" });
+  const container = await mount(t, Section, withCapabilities({}));
+  assert.equal(itemTexts(container).length, 2);
+
+  await React.act(async () => globalThis.__teamsTabProps.onTeamsEmptyChange(true));
+  assert.deepEqual(itemTexts(container), []);
+  assert.equal(
+    findNode(
+      container,
+      (node) => node.getAttribute?.("title") === "settingsPage.workspace.people.addLabel"
+    ),
+    null,
+    "the empty state has its own Create"
+  );
+});
+
+// ---- the search field, in the toolbar beside the tabs
+
+test("the search field sits in the toolbar on the Members tab, for members too", async (t) => {
+  const Section = await loadSection(t);
+  const markup = render(Section, MEMBER);
+
+  assert.match(markup, /type="search"/);
+  assert.match(markup, /placeholder="settingsPage\.workspace\.people\.search\.placeholder"/);
+  assert.doesNotMatch(markup, /aria-label="settingsPage\.workspace\.people\.search\.clear"/);
+  // An empty field lets Escape close the Settings dialog.
+  assert.doesNotMatch(markup, /data-escape-clears/);
+});
+
+test("the search field is only on the Members tab", async (t) => {
+  const Section = await loadSection(t, { storedTab: "teams" });
+  const markup = render(Section, ADMIN);
+
+  assert.doesNotMatch(markup, /type="search"/);
+});
+
+test("a query shows Clear, holds Escape, and Escape clears it", async (t) => {
+  const Section = await loadSection(t);
+  const container = await mount(t, Section, ADMIN);
+  const input = () => findNode(container, (node) => node.localName === "input");
+  const keydown = (events) => ({
+    key: "Escape",
+    preventDefault: () => events.push("preventDefault"),
+    stopPropagation: () => events.push("stopPropagation"),
+  });
+
+  // An empty field leaves Escape alone so it can still close the Settings dialog.
+  const emptyEvents = [];
+  propsOf(input()).onKeyDown(keydown(emptyEvents));
+  assert.deepEqual(emptyEvents, []);
+
+  await React.act(async () => propsOf(input()).onChange({ target: { value: "zed" } }));
+  assert.equal(globalThis.__membersProps.searchQuery, "zed");
+  assert.ok(input().hasAttribute("data-escape-clears"), "a query to clear holds Escape");
+  assert.ok(
+    findNode(
+      container,
+      (node) => node.getAttribute?.("aria-label") === "settingsPage.workspace.people.search.clear"
+    )
+  );
+
+  const filledEvents = [];
+  await React.act(async () => propsOf(input()).onKeyDown(keydown(filledEvents)));
+  assert.deepEqual(filledEvents.sort(), ["preventDefault", "stopPropagation"]);
+  assert.equal(globalThis.__membersProps.searchQuery, "");
+
+  // The Members tab clears it the same way, from its no-results state.
+  await React.act(async () => propsOf(input()).onChange({ target: { value: "abc" } }));
+  await React.act(async () => globalThis.__membersProps.onClearSearch());
+  assert.equal(globalThis.__membersProps.searchQuery, "");
+  assert.equal(globalThis.__membersProps.searchInputRef.current, input());
 });

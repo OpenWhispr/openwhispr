@@ -71,6 +71,23 @@ function createFileStore(file, fsImpl = fs) {
       fsImpl.writeFileSync(temp, JSON.stringify(state), { mode: 0o600 });
       fsImpl.renameSync(temp, file);
     },
+    erase() {
+      fsImpl.rmSync(file, { force: true });
+      const directory = path.dirname(file);
+      const prefix = `${path.basename(file)}.`;
+      let entries;
+      try {
+        entries = fsImpl.readdirSync(directory);
+      } catch (error) {
+        if (error.code === "ENOENT") return;
+        throw error;
+      }
+      for (const entry of entries) {
+        if (entry.startsWith(prefix) && /^\d+\.tmp$/.test(entry.slice(prefix.length))) {
+          fsImpl.rmSync(path.join(directory, entry), { force: true });
+        }
+      }
+    },
   };
 }
 
@@ -120,6 +137,8 @@ class ProductEvents {
     // Scopes whose organization refused cloud records; left alone until the
     // scope changes or the app restarts.
     this.blockedScopes = new Set();
+    this.purgedAccounts = new Set();
+    this.disposed = false;
     this.flushAgain = false;
   }
 
@@ -158,7 +177,14 @@ class ProductEvents {
    */
   async recordAppSession(context) {
     const scope = this.getScope();
-    if (!sameScope(scope, context) || this.boundScopes.has(this.scopeKey(scope))) return;
+    if (
+      this.disposed ||
+      !sameScope(scope, context) ||
+      this.purgedAccounts.has(scope.accountId) ||
+      this.boundScopes.has(this.scopeKey(scope))
+    ) {
+      return;
+    }
     this.boundScopes.add(this.scopeKey(scope));
     let result;
     try {
@@ -185,7 +211,13 @@ class ProductEvents {
       if (!result?.status || result.status >= 500) this.boundScopes.delete(this.scopeKey(scope));
       return;
     }
-    if (!sameScope(this.getScope(), scope)) return;
+    if (
+      this.disposed ||
+      this.purgedAccounts.has(scope.accountId) ||
+      !sameScope(this.getScope(), scope)
+    ) {
+      return;
+    }
     if (this.state.acknowledgedBindings.includes(bindingId.toLowerCase())) return;
     this.enqueue({
       // One binding is one event: retries and relaunches resend the same id.
@@ -205,6 +237,7 @@ class ProductEvents {
   /** The final onboarding completion was persisted (AppRouter's handleOnboardingComplete). */
   recordOnboardingCompleted({ setupMode = null, flowVersion = null } = {}) {
     const scope = this.getScope();
+    if (this.disposed || this.purgedAccounts.has(scope?.accountId)) return;
     const replay = this.state.onboardingCompletions > 0;
     this.persist((state) => ({ ...state, onboardingCompletions: state.onboardingCompletions + 1 }));
     if (!scope) return;
@@ -232,7 +265,15 @@ class ProductEvents {
    */
   recordDictationCompleted({ captureId, words, mode, practice }) {
     const scope = this.getScope();
-    if (!scope || !UUID_PATTERN.test(String(captureId)) || !Number.isSafeInteger(words)) return;
+    if (
+      this.disposed ||
+      !scope ||
+      this.purgedAccounts.has(scope.accountId) ||
+      !UUID_PATTERN.test(String(captureId)) ||
+      !Number.isSafeInteger(words)
+    ) {
+      return;
+    }
     const counted = this.state.dictationWords[scope.accountId] ?? 0;
     if (
       words < 1 ||
@@ -276,6 +317,10 @@ class ProductEvents {
 
   /** Drops what an erased account left queued here. */
   purge(accountId) {
+    if (this.disposed) return;
+    // The bearer is still active during local cleanup. Retire it here before
+    // a delayed binding answer can repopulate the erased account's queue.
+    this.purgedAccounts.add(accountId);
     this.persist((state) => {
       const { [accountId]: _erased, ...dictationWords } = state.dictationWords;
       return {
@@ -287,6 +332,7 @@ class ProductEvents {
   }
 
   async flush() {
+    if (this.disposed) return;
     if (this.running) {
       // The running pass read the queue before whatever asked for this one.
       this.flushAgain = true;
@@ -306,7 +352,7 @@ class ProductEvents {
   }
 
   scheduleRetry() {
-    if (this.retryTimer) return;
+    if (this.disposed || this.retryTimer) return;
     const delay = RETRY_DELAYS_MS[Math.min(this.retryAttempt, RETRY_DELAYS_MS.length - 1)];
     this.retryAttempt += 1;
     this.retryTimer = this.setTimer(() => {
@@ -327,7 +373,7 @@ class ProductEvents {
 
   async runPass() {
     const scope = this.getScope();
-    if (!scope) return;
+    if (!scope || this.purgedAccounts.has(scope.accountId)) return;
     const key = this.scopeKey(scope);
     if (this.blockedScopes.has(key)) return;
     this.dropExpired();
@@ -365,7 +411,13 @@ class ProductEvents {
     });
     // The request handler fences the credential; the scope must still name
     // the same account, or the answer belongs to a session that is gone.
-    if (!sameScope(this.getScope(), scope)) return;
+    if (
+      this.disposed ||
+      this.purgedAccounts.has(scope.accountId) ||
+      !sameScope(this.getScope(), scope)
+    ) {
+      return;
+    }
 
     if (result?.status === 403 && String(result.code ?? "").startsWith("POLICY_")) {
       // The organization keeps this account unobserved (cloud backup off, or
@@ -415,6 +467,7 @@ class ProductEvents {
   }
 
   dispose() {
+    this.disposed = true;
     if (this.retryTimer) this.clearTimer(this.retryTimer);
     this.retryTimer = null;
   }

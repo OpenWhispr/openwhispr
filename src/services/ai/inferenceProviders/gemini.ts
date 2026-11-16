@@ -9,6 +9,7 @@ import { extractGeminiText } from "../../../helpers/geminiResponse.js";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import { chosenReasoningEffort, emptyOutputError, truncatedOutputError } from "../chatRequestBody";
 import logger from "../../../utils/logger";
+import { geminiCatalogThinkingFloor } from "../thinkingSuppressionDialects";
 import {
   asProviderError,
   providerHttpError,
@@ -53,6 +54,11 @@ const minimalThinking: Record<string, GeminiGenerationConfig["thinkingConfig"]> 
   "gemini-2.5-pro": { thinkingBudget: 128, includeThoughts: false },
 };
 
+// The table covers models published before the catalog's thinkingFloor existed.
+function thinkingFloor(model: string): GeminiGenerationConfig["thinkingConfig"] {
+  return geminiCatalogThinkingFloor(model) ?? minimalThinking[model];
+}
+
 export const geminiProvider: InferenceProvider = {
   id: "gemini",
   supportsImages: true,
@@ -82,8 +88,8 @@ export const geminiProvider: InferenceProvider = {
     const thinkingLevel = chosenReasoningEffort("gemini", model, config);
     if (thinkingLevel) {
       generationConfig.thinkingConfig = { thinkingLevel, includeThoughts: false };
-    } else if (config.disableThinking === true && minimalThinking[model]) {
-      generationConfig.thinkingConfig = minimalThinking[model];
+    } else if (config.disableThinking === true && thinkingFloor(model)) {
+      generationConfig.thinkingConfig = thinkingFloor(model);
     }
 
     const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [

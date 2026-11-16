@@ -2,13 +2,14 @@ import { useLayoutEffect, useRef } from "react";
 import { ASSISTANT_PANEL_SIZE_LIMITS } from "../../helpers/voiceSurfaceGeometry.mjs";
 import { ToastCard, type ToastCardProps } from "../ui/ToastCard";
 
-type DictationErrorCardProps = Omit<ToastCardProps, "children" | "role" | "ref"> & {
+type DictationErrorCardProps = Omit<ToastCardProps, "children" | "ref"> & {
   onPreferredHeightChange?: (height: number) => void;
 };
 
 /** The toast card in the floating dictation window, which sizes its window to the card. */
 export function DictationErrorCard({
   onPreferredHeightChange,
+  role = "alert",
   ...cardProps
 }: DictationErrorCardProps) {
   const cardRef = useRef<HTMLElement | null>(null);
@@ -17,6 +18,7 @@ export function DictationErrorCard({
   useLayoutEffect(() => {
     const card = cardRef.current;
     if (!card || !onPreferredHeightChange) return;
+    const stack = card.closest<HTMLElement>("[data-toast-stack]");
 
     let frame = 0;
     const measure = () => {
@@ -41,7 +43,12 @@ export function DictationErrorCard({
         )
       );
       if (Math.abs(card.getBoundingClientRect().width - expectedWidth) > 1) return;
-      const preferredHeight = Math.ceil(Math.max(card.offsetHeight, card.scrollHeight));
+      // Standard toasts stack above the card, and the window has to fit them too
+      // or the bottom-anchored stack pushes the card out of its top.
+      const stackedToastsHeight = stack ? stack.offsetHeight - card.offsetHeight : 0;
+      const preferredHeight = Math.ceil(
+        Math.max(card.offsetHeight, card.scrollHeight) + stackedToastsHeight
+      );
       if (Math.abs(preferredHeight - lastPreferredHeightRef.current) < 1) return;
       lastPreferredHeightRef.current = preferredHeight;
       onPreferredHeightChange(preferredHeight);
@@ -53,6 +60,7 @@ export function DictationErrorCard({
 
     const resizeObserver = new ResizeObserver(scheduleMeasure);
     resizeObserver.observe(card);
+    if (stack) resizeObserver.observe(stack);
     scheduleMeasure();
 
     return () => {
@@ -61,5 +69,5 @@ export function DictationErrorCard({
     };
   }, [onPreferredHeightChange]);
 
-  return <ToastCard ref={cardRef} role="alert" {...cardProps} />;
+  return <ToastCard ref={cardRef} role={role} {...cardProps} />;
 }

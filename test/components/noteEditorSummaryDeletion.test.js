@@ -198,7 +198,7 @@ async function loadNoteEditor(t, permission, options = {}) {
         export function SelectionBar() { return null; }
       `,
       "/EmbeddedChat": `export default function EmbeddedChat() { return null; }`,
-      "/hooks/useAuth": `
+      "/useAuth": `
         export function useAuth() {
           return globalThis.__noteEditorAuth ?? { isSignedIn: false, user: null };
         }
@@ -223,8 +223,11 @@ async function loadNoteEditor(t, permission, options = {}) {
       "/services/NoteSharingService": `
         export const NoteSharingService = {
           fetchAcl: async () => null,
-          // A signed-in cloud note loads its sharing state; never answered here.
-          getShareSettings: () => new Promise(() => {}),
+          // A signed-in cloud note loads its sharing state; unanswered unless a test answers.
+          getShareSettings: (cloudId) =>
+            globalThis.__noteEditorShareSettings?.[cloudId]
+              ? Promise.resolve(globalThis.__noteEditorShareSettings[cloudId])
+              : new Promise(() => {}),
         };
       `,
       "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }
@@ -232,6 +235,7 @@ export function useSpaceRoster(cloudSpaceId) {
   globalThis.__noteEditorRosterId = cloudSpaceId;
   return globalThis.__noteEditorRoster ? new Map(globalThis.__noteEditorRoster.map(member => [member.user_id, member])) : null;
 }`,
+      ...options.mockModules,
     },
   });
 
@@ -1403,6 +1407,7 @@ test("diarization keeps stored recorder labels separate from viewer-local self m
 test("only the org's meeting switch shows a banner; other restrictions explain themselves on the record button", async (t) => {
   const { render, latest, unmount, vite } = await loadNoteEditor(t);
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const messages = () => {
     const out = [];
     walk(latest(), (node) => {
@@ -1410,11 +1415,18 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     });
     return out;
   };
+  // The editor reads the policy-effective selection, which needs both sections.
+  const scope = {
+    allowedModes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"],
+    allowedByokProviders: [],
+    allowedEnterpriseProviders: [],
+  };
+  const sections = { transcription: scope, llm: scope };
   for (const audioUploadEnabled of [true, false]) {
     await React.act(async () => {
       usePolicyStore.setState({
         status: "managed",
-        policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled } },
+        policy: { ...sections, features: { meetingRecordingEnabled: false, audioUploadEnabled } },
       });
     });
     await render(undefined, { recordingAllowed: false });
@@ -1422,7 +1434,7 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     assert.ok(collectEditorValues(latest()).includes(NOTE.content), "saved notes remain readable");
     await React.act(async () => {
       usePolicyStore.setState({
-        policy: { features: { meetingRecordingEnabled: true, audioUploadEnabled } },
+        policy: { ...sections, features: { meetingRecordingEnabled: true, audioUploadEnabled } },
       });
     });
     await render(undefined, { recordingAllowed: true });
@@ -1438,7 +1450,7 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
   for (const [policy, expected] of [
     [{ status: "loading", policy: null }, "common.policyUnresolved"],
     [
-      { status: "managed", policy: { features: { meetingRecordingEnabled: true } } },
+      { status: "managed", policy: { ...sections, features: { meetingRecordingEnabled: true } } },
       "notes.meeting.restrictedByOrg",
     ],
   ]) {
@@ -1447,5 +1459,162 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     assert.deepEqual(messages(), [], `${policy.status}: no banner`);
     assert.equal(recordReason(), expected);
   }
+
+  // A refused local model is fixed in Settings, so it says so and links there.
+  await React.act(async () => {
+    useSettingsStore.setState({
+      meetingTranscriptionMode: "local",
+      meetingLocalTranscriptionProvider: "whisper",
+      meetingWhisperModel: "small",
+    });
+    usePolicyStore.setState({
+      status: "managed",
+      policy: {
+        ...sections,
+        transcription: { ...scope, allowedLocalModels: ["base"] },
+        features: { meetingRecordingEnabled: true },
+      },
+    });
+  });
+  await render(undefined, { recordingAllowed: false });
+  assert.deepEqual(messages(), ["models.policy.modelBlocked"]);
+  assert.equal(recordReason(), "models.policy.modelBlocked");
+  const links = [];
+  walk(latest(), (node) => {
+    if (node.props.children === "providerErrors.openSettings") links.push(node);
+  });
+  assert.equal(links.length, 1);
   await unmount();
+});
+
+test("the copy-link segment opens sharing in place for Private and team notes", async (t) => {
+  const { render, latest, unmount, vite } = await loadNoteEditor(t);
+  const { loadSpaces } = await vite.ssrLoadModule("/stores/noteStore.ts");
+  globalThis.window.electronAPI.getSpaces = async () => [
+    { id: 1, kind: "team", cloud_space_id: "team", workspace_id: "ws-1", teams: [] },
+    { id: 2, kind: "private", cloud_space_id: null, workspace_id: "ws-1", teams: [] },
+  ];
+  await loadSpaces();
+  const linkSegment = () => {
+    let found = null;
+    walk(latest(), (node) => {
+      if (node.props["aria-label"] === "noteEditor.share.dialog.copyLink") found = node;
+    });
+    return found;
+  };
+
+  for (const note of [
+    { space_id: 2, cloud_id: null, is_shared: 0 },
+    { space_id: 2, cloud_id: "backup-copy", is_shared: 0 },
+    { space_id: 2, cloud_id: "shared-note", is_shared: 1 },
+    { space_id: 1, cloud_id: null, is_shared: 0 },
+  ]) {
+    await render(undefined, { note: { ...NOTE, ...note } });
+    assert.ok(linkSegment(), JSON.stringify(note));
+    await React.act(async () => linkSegment().props.onClick());
+    let dialog = null;
+    walk(latest(), (node) => {
+      if ("copyLinkOnOpen" in node.props) dialog = node;
+    });
+    assert.equal(dialog.props.open, true);
+    assert.equal(dialog.props.copyLinkOnOpen, true);
+    assert.equal(dialog.props.note.space_id, note.space_id);
+    assert.equal(dialog.props.note.cloud_id, note.cloud_id);
+  }
+  await unmount();
+});
+
+test("a Private note's share flag follows server visibility independently of its audience", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "me", name: "Me", email: "me@example.com" },
+  };
+  const invited = { visibility: "invited", token_prefix: "ow_share_abc1234" };
+  const owner = { my_permission: "owner", can_manage_access: true, grants: [] };
+  globalThis.__noteEditorShareSettings = {
+    "nobody-left": { share: invited, invitations: [], access: owner },
+    "shared-elsewhere": {
+      share: invited,
+      invitations: [{ id: "inv-1", email: "guest@example.com" }],
+      access: owner,
+    },
+    "sharing-stopped": {
+      share: { visibility: "private", token_prefix: null },
+      invitations: [],
+      access: owner,
+    },
+  };
+  t.after(() => {
+    delete globalThis.__noteEditorAuth;
+    delete globalThis.__noteEditorShareSettings;
+  });
+  const { render, unmount, vite } = await loadNoteEditor(t);
+  const { loadSpaces } = await vite.ssrLoadModule("/stores/noteStore.ts");
+  globalThis.window.electronAPI.getSpaces = async () => [
+    { id: 2, kind: "private", cloud_space_id: null, workspace_id: "ws-1", teams: [] },
+  ];
+  await loadSpaces();
+  const written = [];
+  globalThis.window.electronAPI.updateNoteShareState = async (id, state) =>
+    written.push({ id, state });
+  const settle = () => React.act(() => new Promise((resolve) => setImmediate(resolve)));
+
+  for (const [cloudId, isShared] of [
+    ["nobody-left", 0],
+    ["shared-elsewhere", 0],
+    ["sharing-stopped", 1],
+  ]) {
+    await render(undefined, {
+      note: { ...NOTE, space_id: 2, cloud_id: cloudId, owner_user_id: "me", is_shared: isShared },
+    });
+    await settle();
+  }
+
+  assert.deepEqual(written, [
+    { id: NOTE.id, state: { is_shared: 1 } },
+    { id: NOTE.id, state: { is_shared: 1 } },
+    { id: NOTE.id, state: { is_shared: 0, share_token: null } },
+  ]);
+  await unmount();
+});
+
+test("speaker corrections and recording protect the open note before asynchronous work", async (t) => {
+  const edits = [];
+  globalThis.__noteUserEdits = edits;
+  t.after(() => delete globalThis.__noteUserEdits);
+  const { render, click, latest, unmount } = await loadNoteEditor(t, undefined, {
+    mockModules: {
+      "/stores/noteStore": `export * from "/stores/noteStore.ts";
+        export const markNoteEdited = (id) => globalThis.__noteUserEdits.push(id);`,
+    },
+  });
+  let release;
+  globalThis.window.electronAPI.setSpeakerMapping = () =>
+    new Promise((resolve) => {
+      release = resolve;
+    });
+  globalThis.window.electronAPI.updateNote = async () => ({ success: true });
+  try {
+    await render(undefined, {
+      note: { ...NOTE, transcript: JSON.stringify([{ speaker: "speaker_0", text: "Hello" }]) },
+      onStartRecording: () => assert.deepEqual(edits, [NOTE.id, NOTE.id]),
+    });
+    await click("transcript");
+    let chat;
+    let recording;
+    walk(latest(), (node) => {
+      if (node.props.onMapSpeaker) chat = node;
+      if (node.props.onStart) recording = node;
+    });
+    assert.deepEqual(edits, [], "background loads do not adopt a tree pick");
+    await React.act(async () => {
+      const saving = chat.props.onMapSpeaker("speaker_0", "Dana");
+      assert.deepEqual(edits, [NOTE.id], "adopted before awaiting speaker mapping");
+      release();
+      await saving;
+    });
+    await React.act(async () => recording.props.onStart());
+  } finally {
+    await unmount();
+  }
 });

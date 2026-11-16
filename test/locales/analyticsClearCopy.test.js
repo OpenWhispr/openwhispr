@@ -14,5 +14,9 @@ test("Clear History discloses that synced Insights are removed from the account"
   }
   assert.doesNotMatch(privacyCopy, /won't remove/);
   assert.match(signedOutConfirmationCopy, /device/);
-  assert.match(signedOutConfirmationCopy, /not affected/);
+  assert.match(signedOutConfirmationCopy, /this history/);
+  assert.match(
+    signedOutConfirmationCopy,
+    /deleted from that account the next time it signs in here/
+  );
 });

@@ -9,6 +9,7 @@ import {
   isAccountScopeRetryWaiting,
   markAccountScopePurgeRequired,
   reconcileAccountScope,
+  requestActiveAccountScope,
   resetAccountScopeRetry,
   scheduleAccountScopeRetry,
   shouldBlockAccountScope,
@@ -55,20 +56,23 @@ async function loadAccountDependencies() {
     { invalidateSpaceRoster },
     { resetForAccountChange },
     { useWorkspaceStore },
+    { resetForAccountChange: resetChatForAccountChange, prepareChatAccountScope },
   ] = await Promise.all([
     import("../services/SyncService.js"),
     import("../lib/spaceRosterCache"),
     import("../stores/noteStore"),
     import("../stores/workspaceStore"),
+    import("../stores/chatTurnStore"),
   ]);
 
   const resetRendererCaches = () => {
+    resetChatForAccountChange();
     clearOfflineAccountProfile();
     invalidateSpaceRoster();
     resetForAccountChange();
     useWorkspaceStore.getState().resetForAccountChange();
   };
-  return { syncService, resetRendererCaches };
+  return { syncService, resetRendererCaches, prepareChatAccountScope };
 }
 
 async function refreshManagedEnterpriseIdentity(accountId: string, authGeneration: number) {
@@ -206,11 +210,11 @@ export function useAuth() {
 
     let cancelled = false;
     const run = async () => {
-      const { syncService, resetRendererCaches } = await loadAccountDependencies();
-      const scopeResult = await window.electronAPI?.setActiveAccountScope?.(
-        resolvedUserId,
-        boundGeneration
-      );
+      const { syncService, resetRendererCaches, prepareChatAccountScope } =
+        await loadAccountDependencies();
+      if (getAuthRequestContextSnapshot().observedGeneration !== boundGeneration) return;
+      prepareChatAccountScope(resolvedUserId);
+      const scopeResult = await requestActiveAccountScope(resolvedUserId, boundGeneration);
       if (!scopeResult?.success) {
         throw new Error(scopeResult?.error ?? "Could not establish the local account scope");
       }

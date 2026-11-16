@@ -21,13 +21,14 @@ const reconciledFor = (userId, profileUser = USER_A) => ({
   [PROFILE_KEY]: JSON.stringify({ ...profileUser, emailVerified: true, validatedAt: Date.now() }),
 });
 
-async function mountUseAuth(t, { initialStorage }) {
+async function mountUseAuth(t, { initialStorage, extraConsumers = 0 }) {
   // Registered first: the root must unmount while the browser globals exist.
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
   const calls = {
+    chatPrepared: [],
     fetchPolicy: [],
     setActiveAccountScope: [],
     purge: 0,
@@ -58,6 +59,11 @@ async function mountUseAuth(t, { initialStorage }) {
             ? { accountId: binding.accountId, authGeneration: token.generation }
             : null,
         setActiveAccountScope: async (accountId, generation) => {
+          assert.equal(
+            calls.chatPrepared.at(-1),
+            accountId,
+            "chat ownership is fenced before main scope changes"
+          );
           calls.setActiveAccountScope.push([accountId, generation]);
           return { success: true };
         },
@@ -110,6 +116,10 @@ async function mountUseAuth(t, { initialStorage }) {
         };
       `,
       "/lib/spaceRosterCache": "export const invalidateSpaceRoster = () => {};",
+      "/stores/chatTurnStore": `
+        export function prepareChatAccountScope(accountId) { globalThis.__authTest.calls.chatPrepared.push(accountId); }
+        export function resetForAccountChange() {}
+      `,
       "/stores/noteStore": "export const resetForAccountChange = () => {};",
       "/stores/workspaceStore": `
         const calls = globalThis.__authTest.calls;
@@ -138,8 +148,18 @@ async function mountUseAuth(t, { initialStorage }) {
     });
     return null;
   }
+  // Other components of the window that read the account (a window has dozens).
+  function Consumer() {
+    useAuth();
+    return null;
+  }
+  const consumers = Array.from({ length: extraConsumers }, (_, index) =>
+    React.createElement(Consumer, { key: index })
+  );
   root = createRoot(container);
-  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () =>
+    root.render(React.createElement(React.Fragment, null, React.createElement(Harness), consumers))
+  );
 
   const settle = async () => {
     for (let i = 0; i < 10; i += 1) {
@@ -183,6 +203,21 @@ async function mountUseAuth(t, { initialStorage }) {
       isPending: false,
       error: null,
     });
+    if (user) {
+      // Reconciliation loads modules asynchronously; timer ticks alone do not
+      // establish the validated session the next test action depends on.
+      const deadline = performance.now() + 5000;
+      while (
+        authContext.getValidatedAuthGeneration() !== token.generation ||
+        result?.user?.id !== user.id ||
+        result?.isOfflineAccount !== false
+      ) {
+        assert.ok(performance.now() < deadline, "session reconciliation did not finish");
+        await settle();
+      }
+      // Committing validation notifies both useAuth consumers and reruns their effects.
+      await settle();
+    }
   };
   const reject = async () => {
     await React.act(() =>
@@ -213,10 +248,35 @@ async function mountUseAuth(t, { initialStorage }) {
     await setSession({ data, isPending: false, error: new TypeError("network down") });
   };
 
+  // A TLS-inspecting proxy answers a refetch with its own 200 HTML page.
+  const proxyBlocks = async () => {
+    const data = globalThis.__authTest.session.data;
+    const request = await authContext.prepareAuthRequest({
+      url: SESSION_URL,
+      headers: new Headers(),
+    });
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response("<html>Blocked</html>", { headers: { "Content-Type": "text/html" } });
+    let error = null;
+    try {
+      await React.act(() =>
+        authContext.authContextFetch(request.url, request).catch((caught) => {
+          error = caught;
+        })
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+    await setSession({ data, isPending: false, error });
+    return error;
+  };
+
   return {
     calls,
     history,
     loseNetwork,
+    proxyBlocks,
     storage,
     authContext,
     goOffline,
@@ -294,6 +354,25 @@ test("back online, the same account is confirmed without a purge", async (t) => 
   for (const call of auth.calls.setActiveAccountScope) assert.deepEqual(call, ["user-a", 5]);
   assert.equal(auth.authContext.getValidatedAuthGeneration(), 5);
   assert.equal(JSON.parse(auth.storage.getItem(PROFILE_KEY)).name, "Ada L.");
+});
+
+test("a window's useAuth consumers share each scope request to main", async (t) => {
+  const consumers = 20;
+  const auth = await mountUseAuth(t, {
+    initialStorage: reconciledFor("user-a"),
+    extraConsumers: consumers,
+  });
+  await auth.goOffline();
+  await auth.answer(USER_A);
+
+  assert.equal(auth.result().isSignedIn, true);
+  assert.equal(auth.calls.purge, 0);
+  // Each pass ran in every consumer at once. One request per consumer per pass made a sign-in
+  // or sign-out cost hundreds of calls across the windows.
+  const requests = auth.calls.setActiveAccountScope.length;
+  assert.ok(requests > 0);
+  assert.ok(requests < consumers, `${requests} scope requests from ${consumers + 2} consumers`);
+  for (const call of auth.calls.setActiveAccountScope) assert.deepEqual(call, ["user-a", 5]);
 });
 
 test("back online, a different account purges the offline account's caches", async (t) => {
@@ -384,4 +463,28 @@ test("losing the network mid-session shows the account read-only until the serve
     []
   );
   assert.equal(auth.storage.getItem("isSubscribed"), "true");
+});
+
+test("a proxy's 200 HTML page keeps the account signed in and purges nothing", async (t) => {
+  const auth = await mountUseAuth(t, { initialStorage: reconciledFor("user-a") });
+  await auth.answer(USER_A);
+  auth.history.length = 0;
+
+  assert.ok(await auth.proxyBlocks());
+
+  assert.equal(auth.result().isSignedIn, true);
+  assert.equal(auth.result().user.id, "user-a");
+  assert.equal(auth.authContext.getValidatedAuthGeneration(), null);
+  assert.equal(auth.calls.purge, 0);
+  assert.equal(auth.storage.getItem("openwhispr:accountScopeUserId"), "user-a");
+  assert.equal(JSON.parse(auth.storage.getItem(PROFILE_KEY)).id, "user-a");
+  assert.ok(!auth.calls.setIsSignedIn.includes(false));
+  assert.deepEqual(
+    auth.history.filter((state) => !state.isSignedIn),
+    []
+  );
+
+  await auth.answer(USER_A);
+  assert.equal(auth.authContext.getValidatedAuthGeneration(), 5);
+  assert.equal(auth.result().isOfflineAccount, false);
 });

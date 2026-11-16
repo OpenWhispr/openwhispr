@@ -71,6 +71,11 @@ async function setupChain(t, respond) {
     let raw = "";
     req.on("data", (chunk) => (raw += chunk));
     req.on("end", () => {
+      if (req.url === "/slots") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end("[]");
+        return;
+      }
       requests.push(JSON.parse(raw));
       const reply = respond();
       // null leaves the request hanging, like a model still generating.
@@ -259,6 +264,36 @@ test("a second request while one is in flight is refused with a typed code", asy
 
   release();
   assert.equal(await first, "first reply");
+});
+
+test("a caller's busy wait reaches runInference", async (t) => {
+  // This object is rebuilt field by field, which is how contextSize once got lost.
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
+  let received;
+  modelManager.runInference = async (_modelId, _text, options) => {
+    received = options.busyWaitMs;
+    return "ok";
+  };
+
+  await bridge.processText("text", modelId, { busyWaitMs: 1234 });
+  assert.equal(received, 1234);
+});
+
+test("cancel reaches a request still waiting for the server, and frees the slot", async (t) => {
+  // A note action waiting out a chat answer on another model would otherwise
+  // swap its model in and run once the answer finished, long after the cancel.
+  const { bridge, modelManager, modelId } = await setupChain(t, () => completion("stop", "ok"));
+  modelManager.runInference = (_modelId, _text, { signal }) =>
+    new Promise((_, reject) => {
+      signal.addEventListener("abort", () =>
+        reject(Object.assign(new Error("cancelled"), { code: "LOCAL_MODEL_CANCELLED" }))
+      );
+    });
+
+  const waiting = bridge.processText("text", modelId, { requestId: "note-1" });
+  bridge.cancel("note-1");
+  await assert.rejects(waiting, { code: "LOCAL_MODEL_CANCELLED" });
+  assert.equal(bridge.isProcessing, false);
 });
 
 test("cancel aborts only the in-flight request carrying that id, and frees the slot", async (t) => {

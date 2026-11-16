@@ -97,6 +97,32 @@ test("each address gets its own outcome", async () => {
   );
 });
 
+test("an invitation that took the teamspace says so, and an older API's answer doesn't", async () => {
+  const { createInvitePeople } = await load();
+  const results = [];
+  await createInvitePeople({
+    sendBatch: async () => ({
+      results: [
+        { email: "a@x.com", status: "already_invited", grants_added: true },
+        { email: "b@x.com", status: "already_invited" },
+      ],
+      seats_used: 1,
+      seat_limit: 500,
+    }),
+    authGeneration: () => 7,
+  }).sendInvitations({
+    workspaceId: "ws-1",
+    role: "member",
+    emails: ["a@x.com", "b@x.com"],
+    spaceIds: ["s1"],
+    onResult: (email, outcome) => results.push([email, outcome]),
+  });
+  assert.deepEqual(results, [
+    ["a@x.com", { ok: false, kind: "alreadyInvited", grantsAdded: true }],
+    ["b@x.com", { ok: false, kind: "alreadyInvited" }],
+  ]);
+});
+
 test("results match addresses regardless of case", async () => {
   const { createInvitePeople } = await load();
   const results = [];

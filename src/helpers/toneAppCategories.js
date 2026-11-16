@@ -2,8 +2,8 @@
 // Tone & Style can apply the tone the user picked for it: "personal" messages,
 // "work" messages, "email", or "other" for every app not listed here.
 //
-// App identities match by whole token or phrase, never bare substring, as in
-// markdownTargets.js. The identity per platform:
+// App identities match by whole token or phrase, never bare substring. The
+// identity per platform:
 //   macOS:   the app's name + bundle id ("Mail com.apple.mail"); the name is
 //            localized (WeChat is 微信 on a Chinese system), so apps that
 //            translate it are listed by their bundle id's token too

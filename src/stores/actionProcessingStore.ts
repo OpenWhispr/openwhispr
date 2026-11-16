@@ -8,6 +8,8 @@ import {
   selectResolvedNoteFormatting,
   type ResolvedNoteFormatting,
 } from "./settingsStore";
+import { localModelRefusal } from "./policyRules";
+import { usePolicyStore } from "./policyStore";
 import { appendDictionarySuffix } from "../config/prompts";
 import { getLlmDictionaryWords } from "../utils/snippets";
 import { generateNoteTitle } from "../utils/generateTitle";
@@ -527,7 +529,17 @@ export function runBackgroundAction(
 
   const modelId = options.modelId;
   if (!modelId && !options.isCloudMode) {
-    pushErrorEvent({ noteId, message: labels.noModel });
+    const blocked = getSettings().policyBlockedLocalScopes?.includes("noteFormatting");
+    pushErrorEvent({
+      noteId,
+      message: labels.noModel,
+      ...(blocked
+        ? {
+            messageKey: localModelRefusal(usePolicyStore.getState(), "llm").messageKey,
+            settingsTarget: "noteFormatting",
+          }
+        : {}),
+    });
     return;
   }
 

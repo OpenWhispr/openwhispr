@@ -13,7 +13,12 @@ import {
 import { requestMeetingRecordingAutoEnd } from "../helpers/meetingRecordingSession";
 import logger from "../utils/logger";
 import { usePolicySnapshot } from "../hooks/usePolicy";
-import { isAudioFeatureAllowed } from "../stores/policyRules";
+import {
+  isAudioFeatureDenied,
+  isLocalChoiceRefusal,
+  LOCAL_MODEL_REFUSAL_MESSAGE_KEYS,
+} from "../stores/policyRules";
+import { providerErrorActions } from "../utils/describeProviderError";
 import { requestSignIn } from "../utils/requestSignIn";
 
 const EMA_PREV = 0.5;
@@ -29,7 +34,10 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   POLICY_MEETING_RECORDING_DISABLED: "notes.meeting.recordingDisabledByOrg",
   AUDIO_PURPOSE_REQUIRED: "notes.meeting.restrictedByOrg",
   POLICY_UNRESOLVABLE: "common.policyUnresolved",
-  // A running recording stopped because the policy couldn't be checked.
+  POLICY_MODEL_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_MODEL_BLOCKED,
+  POLICY_LOCAL_MODE_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_LOCAL_MODE_BLOCKED,
+  POLICY_APP_VERSION_BLOCKED: LOCAL_MODEL_REFUSAL_MESSAGE_KEYS.POLICY_APP_VERSION_BLOCKED,
+  // Main ended a running recording because the policy couldn't be checked.
   policyUnresolvedStop: "notes.meeting.stoppedPolicyUnresolved",
   // The main process ended the recording because it belonged to the previous account.
   accountChanged: "notes.meeting.stoppedAccountChanged",
@@ -47,7 +55,7 @@ export default function MeetingRecordingMount(): null {
   const { t } = useTranslation();
   const { toast, dismiss } = useToast();
   const policy = usePolicySnapshot();
-  const meetingAllowed = isAudioFeatureAllowed(policy, "meeting");
+  const meetingDenied = isAudioFeatureDenied(policy, "meeting");
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
   const isTranscribing = useMeetingRecordingStore((s) => s.isTranscribing);
   const error = useMeetingRecordingStore((s) => s.error);
@@ -59,8 +67,8 @@ export default function MeetingRecordingMount(): null {
   );
   const micCaptureStatus = useMeetingRecordingStore((s) => s.micCaptureStatus);
   useEffect(() => {
-    if (isRecording && !meetingAllowed) void stopRecordingForPolicy();
-  }, [isRecording, meetingAllowed]);
+    if (isRecording && meetingDenied) void stopRecordingForPolicy();
+  }, [isRecording, meetingDenied]);
   const wasMicUnavailable = useRef(false);
   const wasSystemAudioSilent = useRef(false);
 
@@ -104,7 +112,11 @@ export default function MeetingRecordingMount(): null {
       description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
       duration: needsSignIn || sentinel === "signInExpired" ? 8000 : undefined,
-      actions: needsSignIn ? [{ label: t("common.signIn"), onClick: requestSignIn }] : undefined,
+      actions: needsSignIn
+        ? [{ label: t("common.signIn"), onClick: requestSignIn }]
+        : isLocalChoiceRefusal(sentinel)
+          ? providerErrorActions({ settingsTarget: "noteRecording" }, t)
+          : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
   }, [error, errorNonce, toast, t]);

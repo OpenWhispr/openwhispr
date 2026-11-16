@@ -3,6 +3,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
+const { isLocalModelPolicyRefusal } = require("../../src/helpers/localModelPolicyGate");
+const {
+  fragmentFilterLanguages,
+  isWrongScriptFragment,
+} = require("../../src/helpers/meetingFragmentFilter");
 
 const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
 
@@ -15,8 +20,12 @@ const sliceBetween = (startMarker, endMarker) => {
 
 const deferred = () => {
   let resolve;
-  const promise = new Promise((done) => (resolve = done));
-  return { promise, resolve };
+  let reject;
+  const promise = new Promise((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 };
 
 // Arrays made inside the vm context have another realm's prototype.
@@ -201,6 +210,7 @@ function harness({
 
   return {
     api: context.api,
+    context,
     policy: context._audioFeaturePolicy,
     events,
     sent,
@@ -320,12 +330,16 @@ function chunkHarness() {
     finals,
     debugLogger: { debug() {}, error() {} },
     Buffer,
+    isLocalModelPolicyRefusal: (error) => error?.code?.startsWith("POLICY_"),
+    fragmentFilterLanguages,
+    isWrongScriptFragment,
   };
   vm.createContext(context);
   vm.runInContext(
     `
+    const meetingConnectionOptions = { language: "en" };
     const meetingLocalBuffers = { mic: [], system: [Buffer.alloc(4)] };
-    const meetingLocalWin = null;
+    const meetingLocalWin = { isDestroyed: () => false, webContents: { send: (channel, payload) => finals.push({ channel, payload }) } };
     const meetingLocalProvider = "nvidia";
     const meetingLocalModel = "parakeet";
     const meetingLocalLanguage = "en";
@@ -335,6 +349,9 @@ function chunkHarness() {
     const computeChunkStats = () => ({ rms: 1, peak: 1, sampleCount: 2 });
     const resolveMicChunkAction = () => ({ action: "send" });
     const pcm16ToWav = (pcm) => pcm;
+    const assertMeetingAllowed = () => {
+      if (this._activeLocalMeetingLease) this._localModelPolicy.assertCurrent(this._activeLocalMeetingLease);
+    };
     const isSherpaLocalProvider = () => true;
     const removePendingMicFinalsFor = () => [];
     const removeRacingMicEntriesFor = () => [];
@@ -349,6 +366,95 @@ function chunkHarness() {
   );
   return { context, decode, finals };
 }
+
+test("local meeting admission authorizes its selected model before capturing or loading", async () => {
+  const { api, context, events } = harness();
+  context._localModelPolicy = {
+    authorize: async () => {
+      throw Object.assign(new Error("blocked"), { code: "POLICY_MODEL_BLOCKED" });
+    },
+  };
+  const result = await api.start({ provider: "local", localModel: "base", sessionId: "blocked" });
+  assert.equal(result.success, false);
+  assert.equal(
+    events.some((event) => event.startsWith("strategy:")),
+    false
+  );
+});
+
+test("a typed local chunk refusal stops the meeting and sends its code", async () => {
+  const { context, decode, finals } = chunkHarness();
+  const stopped = [];
+  context.isLocalModelPolicyRefusal = (error) => error?.code === "POLICY_MODEL_BLOCKED";
+  context._stopMeetingForPolicy = (code) => stopped.push(code);
+  const pending = context.transcribe();
+  decode.reject(Object.assign(new Error("blocked"), { code: "POLICY_MODEL_BLOCKED" }));
+  await pending;
+  assert.deepEqual(stopped, ["POLICY_MODEL_BLOCKED"]);
+  assert.deepEqual(plain(finals), [
+    { channel: "meeting-transcription-error", payload: "POLICY_MODEL_BLOCKED" },
+  ]);
+});
+
+test("a chunk cut off by the meeting's revocation adds nothing raw after the stop's own reason", async () => {
+  const { context, decode, finals } = chunkHarness();
+  context._activeLocalMeetingLease = { signal: { aborted: false } };
+  context._localModelPolicy = { assertCurrent() {}, runWithLease: (_lease, run) => run() };
+  const pending = context.transcribe();
+  context._activeLocalMeetingLease.signal.aborted = true;
+  decode.reject(new Error("whisper-server request cancelled"));
+  await pending;
+  assert.deepEqual(plain(finals), []);
+});
+
+test("a local meeting lease invalidated during admission is released before returning", async () => {
+  const { api, context } = harness();
+  let released = 0;
+  context._localModelPolicy = {
+    authorize: async () => ({ modelId: "base" }),
+    assertCurrent: () => {
+      throw Object.assign(new Error("account changed"), { code: "POLICY_UNRESOLVABLE" });
+    },
+    release: () => {
+      released++;
+    },
+  };
+  assert.equal(
+    (await api.start({ provider: "local", localModel: "base", sessionId: "invalid" })).success,
+    false
+  );
+  assert.equal(released, 1);
+  assert.equal(context._activeLocalMeetingLease, null);
+});
+
+test("model policy refresh stops only the active local meeting selection before its first native load", () => {
+  const callback = sliceBetween("onChange: () => {", "    for (const manager of [");
+  for (const activeModel of [null, "base"]) {
+    const stopped = [];
+    const context = {
+      localServers: activeModel
+        ? []
+        : [["transcription", { stop: async () => {}, isRemote: false }, () => "small"]],
+      _activeLocalMeetingLease: activeModel ? { modelId: activeModel } : null,
+      _localModelPolicy: {
+        failure: () => ({ code: "POLICY_MODEL_BLOCKED" }),
+        assertCurrent: () => {
+          throw Object.assign(new Error("blocked"), { code: "POLICY_MODEL_BLOCKED" });
+        },
+      },
+      _stopMeetingForPolicy: (code) => stopped.push(code),
+      debugLogger: { warn() {} },
+      isLocalModelPolicyRefusal,
+    };
+    vm.createContext(context);
+    vm.runInContext(
+      `const config = capture({ ${callback}`,
+      Object.assign(context, { capture: (value) => value })
+    );
+    vm.runInContext("config.onChange()", context);
+    assert.deepEqual(stopped, activeModel ? ["POLICY_MODEL_BLOCKED"] : []);
+  }
+});
 
 test("a local decode that finishes after revocation delivers no text", async () => {
   for (const revoked of [false, true]) {

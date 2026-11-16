@@ -8,6 +8,8 @@ export interface WorkspaceActionDialogProps {
   icon: "info" | "trash";
   title: string;
   body: string;
+  /** A second sentence under the body, read with it. */
+  detail?: string;
   /** Destructive-text line under the field slot. */
   error?: string | null;
   /** Field slot, e.g. the owner picker. */
@@ -35,6 +37,7 @@ export function WorkspaceActionDialog({
   icon,
   title,
   body,
+  detail,
   error,
   children,
   primary,
@@ -76,7 +79,10 @@ export function WorkspaceActionDialog({
           <DialogTitle className="text-lg font-medium tracking-normal leading-snug">
             {title}
           </DialogTitle>
-          <DialogDescription className="text-sm leading-normal">{body}</DialogDescription>
+          <DialogDescription className="text-sm leading-normal">
+            {body}
+            {detail ? <span className="mt-2 block">{detail}</span> : null}
+          </DialogDescription>
         </div>
 
         {children}

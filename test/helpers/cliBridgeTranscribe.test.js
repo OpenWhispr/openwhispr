@@ -5,6 +5,8 @@ const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
 const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+const { managedPolicy } = require("./harness/policyFixtures");
 const { deferred } = require("./harness/deferred");
 
 const originalLoad = Module._load;
@@ -31,6 +33,25 @@ function createBridge(models = MODELS, snapshot = { success: true, managed: fals
   const bridge = new CliBridge({
     databaseManager: {},
     _audioFeaturePolicy: policy,
+    _localModelPolicy: createLocalModelPolicyGate({
+      getPolicy: async () =>
+        snapshot.policy
+          ? {
+              ...snapshot,
+              policy: {
+                ...managedPolicy({ transcription: { allowedModes: ["local"] } }),
+                ...snapshot.policy,
+                features: {
+                  agentEnabled: false,
+                  webSearchEnabled: false,
+                  ...snapshot.policy.features,
+                },
+              },
+            }
+          : snapshot,
+      getIdentity: () => 1,
+      getAppVersion: () => "1.11.1",
+    }),
     listLocalTranscriptionModels: () => models,
     approveAudioPath: (p) => calls.approved.push(p),
     transcribeLocalFile: async (p, options) => {
@@ -48,9 +69,43 @@ function audioFile() {
   return { dir, file };
 }
 
-test("GET /v1/transcribe/models lists every local model with its state", () => {
+test("GET /v1/transcribe/models lists every local model with its state", async () => {
   const { bridge } = createBridge();
-  assert.deepEqual(call(bridge, "GET", "/v1/transcribe/models"), { data: MODELS });
+  assert.deepEqual(await call(bridge, "GET", "/v1/transcribe/models"), { data: MODELS });
+});
+
+test("CLI filters approvals and refuses a blocked default without switching models", async () => {
+  const { bridge, calls } = createBridge(MODELS, {
+    success: true,
+    managed: true,
+    policy: managedPolicy({
+      transcription: { allowedModes: ["local"], allowedLocalModels: ["parakeet-tdt-0.6b-v3"] },
+    }),
+  });
+  assert.deepEqual((await call(bridge, "GET", "/v1/transcribe/models")).data, [MODELS[2]]);
+  const { file } = audioFile();
+  await assert.rejects(call(bridge, "POST", "/v1/transcribe", { path: file }), {
+    code: "POLICY_MODEL_BLOCKED",
+  });
+  await assert.rejects(call(bridge, "POST", "/v1/transcribe", { path: file, model: "large" }), {
+    code: "POLICY_MODEL_BLOCKED",
+  });
+  assert.equal(calls.transcribed.length, 0);
+});
+
+test("with Local off, the CLI refuses a transcription and lists no local models", async () => {
+  const { bridge, calls } = createBridge(MODELS, {
+    success: true,
+    managed: true,
+    policy: managedPolicy({ transcription: { allowedModes: ["openwhispr"] } }),
+  });
+  const { file } = audioFile();
+
+  await assert.rejects(call(bridge, "POST", "/v1/transcribe", { path: file }), {
+    code: "POLICY_LOCAL_MODE_BLOCKED",
+  });
+  assert.deepEqual((await call(bridge, "GET", "/v1/transcribe/models")).data, []);
+  assert.equal(calls.transcribed.length, 0);
 });
 
 test("POST /v1/transcribe approves the real path and runs the app's default model", async () => {
@@ -115,7 +170,7 @@ test("POST /v1/transcribe refuses models that are unknown or not downloaded", as
   });
   await assert.rejects(call(bridge, "POST", "/v1/transcribe", { path: file, model: "nope" }), {
     code: "VALIDATION",
-    message: /Unknown model 'nope'. Available: base, large, parakeet-tdt-0.6b-v3/,
+    message: /Unknown model 'nope'. Known models: base, large, parakeet-tdt-0.6b-v3/,
   });
   assert.equal(calls.approved.length, 0);
 });

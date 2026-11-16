@@ -661,6 +661,38 @@ test("erasing an account purges its dictation and its word count, and only its o
   assert.deepEqual(r.events.state.dictationWords, { b: 120 });
 });
 
+test("a late dictation cannot restore an erased account's queue or word count", async () => {
+  const client = rig();
+  client.server.batchStatus = 503;
+  dictate(client, 1, 150);
+  await client.events.flush();
+
+  client.events.purge("a");
+  const requestsBefore = client.calls.length;
+  dictate(client, 2, 50);
+  await client.events.flush();
+
+  assert.deepEqual(client.queued(), []);
+  assert.deepEqual(client.events.state.dictationWords, {});
+  assert.equal(client.calls.length, requestsBefore);
+});
+
+test("a dictation completing after disposal leaves the persisted queue untouched", async () => {
+  const client = rig();
+  client.server.batchStatus = 503;
+  dictate(client, 1, 150);
+  await client.events.flush();
+  const savedBefore = structuredClone(client.store.saved());
+  const requestsBefore = client.calls.length;
+
+  client.events.dispose();
+  dictate(client, 2, 50);
+  await client.events.flush();
+
+  assert.deepEqual(client.store.saved(), savedBefore);
+  assert.equal(client.calls.length, requestsBefore);
+});
+
 test("the file store writes atomically and starts fresh from an unreadable file", (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "product-events-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

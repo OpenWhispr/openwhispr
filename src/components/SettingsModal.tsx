@@ -17,12 +17,14 @@ import {
   SquareSparkle,
   Settings,
   Key,
+  Office,
 } from "./icons";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage from "./SettingsPage";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { useAuth } from "../hooks/useAuth";
 import { workspaceCan } from "../lib/capabilities";
+import { settingsWorkspace } from "../lib/workspaceSwitcher";
 import {
   buildSettingsNav,
   resolveSettingsSection,
@@ -40,6 +42,7 @@ const SECTION_ICONS: Record<SettingsSectionType, React.ComponentType<{ className
   plansBilling: CreditCard,
   workspaceGeneral: Settings,
   workspacePeople: Users,
+  workspaceTeamspaces: Office,
   workspaceDeveloper: Key,
   speechToText: Mic,
   llms: Brain,
@@ -51,12 +54,15 @@ interface SettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialSection?: string;
+  /** Takes the user to a teamspace in Notes; the host closes Settings. */
+  onOpenTeamspace?: (localSpaceId: number) => void;
 }
 
 export default function SettingsModal({
   open,
   onOpenChange,
   initialSection,
+  onOpenTeamspace,
 }: SettingsModalProps): React.ReactElement {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
@@ -68,8 +74,7 @@ export default function SettingsModal({
       workspacesLoaded: s.loaded,
     }))
   );
-  const activeWorkspace =
-    workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null;
+  const activeWorkspace = settingsWorkspace(workspaces, activeWorkspaceId);
   const hasWorkspace = activeWorkspace !== null;
   const canManageSettings = activeWorkspace
     ? workspaceCan(activeWorkspace, "manage_settings")
@@ -110,8 +115,6 @@ export default function SettingsModal({
     initialSection ? LEGACY_SUB_TAB[initialSection] : undefined
   );
   const [prevOpen, setPrevOpen] = useState(open);
-  // The picker menu is also opened from the General page's "Choose workspace".
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   if (open && !prevOpen && initialSection) {
     setPrevOpen(open);
@@ -142,21 +145,8 @@ export default function SettingsModal({
       sidebarItems={sidebarItems}
       activeSection={activeSection}
       onSectionChange={handleSectionChange}
-      header={
-        signedIn ? (
-          <WorkspaceSwitcher placement="settings" open={pickerOpen} onOpenChange={setPickerOpen} />
-        ) : undefined
-      }
-      compactHeader={
-        signedIn ? (
-          <WorkspaceSwitcher
-            placement="settings"
-            compact
-            open={pickerOpen}
-            onOpenChange={setPickerOpen}
-          />
-        ) : undefined
-      }
+      header={signedIn ? <WorkspaceSwitcher placement="settings" /> : undefined}
+      compactHeader={signedIn ? <WorkspaceSwitcher placement="settings" compact /> : undefined}
       notice={
         policyManaged
           ? {
@@ -171,7 +161,7 @@ export default function SettingsModal({
         activeSection={activeSection}
         onNavigateToSection={handleSectionChange}
         initialSubTab={initialSubTab}
-        onChooseWorkspace={() => setPickerOpen(true)}
+        onOpenTeamspace={onOpenTeamspace}
       />
     </SidebarModal>
   );
