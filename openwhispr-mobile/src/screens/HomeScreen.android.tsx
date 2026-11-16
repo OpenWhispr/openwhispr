@@ -303,7 +303,7 @@ export default function AndroidHome() {
   useEffect(() => {
     if (uploadCard !== null || !revealNewest.current || !newestId) return;
     revealNewest.current = false;
-    // The row waits faded until the slow scroll has brought it to the top, then animates in.
+    // Highlight the new row only once the slow scroll has brought it to the top.
     setHighlight({ id: newestId, arriving: false });
     let arrive: ReturnType<typeof setTimeout> | undefined;
     let stop = () => {};

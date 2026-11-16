@@ -195,43 +195,37 @@ export function Stats({ stats, feedback }: { stats: HomeStats; feedback?: ReactN
 }
 
 /**
- * A row just added by an upload waits faded and tinted while Home scrolls to it, then slides
- * in and its light accent tint fades to white.
+ * A row just added by an upload looks like any other while Home scrolls to it; once it is in
+ * view a soft accent highlight eases in, holds briefly and fades away.
  */
-function useArrival(active: boolean, arriving: boolean) {
-  const value = useRef(new Animated.Value(active ? 0 : 1)).current;
+function useArrival(arriving: boolean) {
+  const tint = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (!active) return;
-    value.setValue(0);
     if (!arriving) return;
-    const animation = Animated.timing(value, {
-      toValue: 1,
-      duration: 1300,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: false,
-    });
+    tint.setValue(0);
+    const animation = Animated.sequence([
+      Animated.timing(tint, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }),
+      Animated.delay(350),
+      Animated.timing(tint, {
+        toValue: 0,
+        duration: 750,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]);
     animation.start();
     return () => animation.stop();
-  }, [active, arriving, value]);
+  }, [arriving, tint]);
   return {
-    backgroundColor: value.interpolate({
-      inputRange: [0, 0.15, 1],
-      outputRange: ['rgba(21,85,212,0.12)', 'rgba(21,85,212,0.12)', 'rgba(21,85,212,0)'],
+    backgroundColor: tint.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['rgba(21,85,212,0)', 'rgba(21,85,212,0.10)'],
     }),
-    opacity: value.interpolate({
-      inputRange: [0, 0.22],
-      outputRange: [0.25, 1],
-      extrapolate: 'clamp',
-    }),
-    transform: [
-      {
-        translateY: value.interpolate({
-          inputRange: [0, 0.22],
-          outputRange: [-10, 0],
-          extrapolate: 'clamp',
-        }),
-      },
-    ],
   };
 }
 
@@ -257,7 +251,7 @@ function HistoryRow({
   const text = failed ? item.errorMessage || '' : item.text;
   const when = relativeDate(item.createdAt, t);
   const canRetry = failed && Boolean(item.audioUrl) && !busy;
-  const arrival = useArrival(highlighted, arriving);
+  const arrival = useArrival(highlighted && arriving);
   return (
     <View>
       <Animated.View
