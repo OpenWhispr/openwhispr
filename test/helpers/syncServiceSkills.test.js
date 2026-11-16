@@ -275,6 +275,27 @@ test("a switch flipped here doesn't overwrite a newer edit from another device",
   assert.deepEqual(pendingNames(ctx.db), []);
 });
 
+test("an edit undone while its push is in flight stays undone", async (t) => {
+  const ctx = await setup(t);
+  if (!ctx) return;
+  const name = create(ctx.library, "Meeting prep");
+  await ctx.service.syncSkillsNow();
+  const original = skillFile(ctx.skillsDir, name);
+  const write = (text) => {
+    writeFolder(ctx.skillsDir, name, { "SKILL.md": text });
+    ctx.library.scan();
+  };
+  write(skillText(name, "Use it.", "My edit.\n"));
+  whileSending(ctx, "PATCH /api/skills/update", () => write(original));
+
+  await ctx.service.syncSkillsNow();
+  await ctx.service.syncSkillsNow();
+  await ctx.service.syncSkillsNow();
+
+  assert.equal(skillFile(ctx.skillsDir, name), original);
+  assert.equal(cloudByName(ctx.cloud)[name].files[0].content, original);
+});
+
 test("a skill from another device appears here, and its delete removes it", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;

@@ -3661,14 +3661,6 @@ export class SyncService {
     }
 
     for (const { cloudId, entry, switchOnly } of updates) {
-      const markSynced = (id: string, updatedAt?: string) =>
-        window.electronAPI.markSkillSynced?.(
-          entry.name,
-          id,
-          updatedAt,
-          entry.content_hash,
-          entry.enabled
-        );
       try {
         const { name: _name, ...fields } = entry;
         // Files unchanged here go unsent, so they can't replace a newer copy from another device.
@@ -3676,7 +3668,13 @@ export class SyncService {
           cloudId,
           switchOnly ? { enabled: entry.enabled } : fields
         );
-        await markSynced(server.id, server.updated_at);
+        await window.electronAPI.markSkillSynced?.(
+          entry.name,
+          server.id,
+          server.updated_at,
+          entry.content_hash,
+          entry.enabled
+        );
       } catch (err) {
         if (isHttpStatus(err, 404)) {
           // Purged in the cloud: the next push creates it again.
@@ -3735,13 +3733,13 @@ export class SyncService {
   }
 
   private async pullSkills(): Promise<SkillPullResult> {
+    let changed = false;
     try {
       // Listing rescans the skills folder, so an edit made outside the app since it was last
       // read is a pending change here, which the cloud's copy doesn't replace.
       await window.electronAPI.skillsList?.();
       const since = localStorage.getItem("lastSyncedAt.skills") ?? undefined;
       const sinceId = localStorage.getItem("lastSyncedAt.skills.id") ?? undefined;
-      let changed = false;
       // A skill that couldn't be written holds the cursor back, so the next pass tries it again.
       const unwritten = new Set<string>();
 
@@ -3814,12 +3812,14 @@ export class SyncService {
         if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.skills", maxUpdatedAt);
         if (maxId) localStorage.setItem("lastSyncedAt.skills.id", maxId);
       }
-      if (changed) await window.electronAPI.broadcastSkillsUpdated?.();
       return { unwritten };
     } catch (err) {
       if (isHttpStatus(err, 404)) return "unsupported";
       console.error("Skill pull failed:", err);
       return "failed";
+    } finally {
+      // Also after a pull that stopped early: the skills it wrote are on disk already.
+      if (changed) await window.electronAPI.broadcastSkillsUpdated?.();
     }
   }
 

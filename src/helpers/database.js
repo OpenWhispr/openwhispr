@@ -4156,17 +4156,20 @@ class DatabaseManager {
   }
 
   // Synced only if the row still holds what was pushed: an edit that landed meanwhile stays
-  // pending, and keeps the cloud id so the next pass sends it as an update.
+  // pending, and keeps the cloud id and the hash the cloud now holds, so the next pass sends it
+  // as an update.
   markSkillSynced(name, cloudId, serverUpdatedAt, expectedHash, expectedEnabled) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       this.db
-        .prepare("UPDATE skills SET cloud_id = ? WHERE name = ? AND deleted_at IS NULL")
-        .run(cloudId, name);
+        .prepare(
+          "UPDATE skills SET cloud_id = ?, synced_hash = ? WHERE name = ? AND deleted_at IS NULL"
+        )
+        .run(cloudId, expectedHash, name);
       const result = this.db
         .prepare(
           `UPDATE skills
-           SET sync_status = 'synced', cloud_id = @cloudId, synced_hash = @expectedHash,
+           SET sync_status = 'synced', cloud_id = @cloudId,
                updated_at = COALESCE(@serverUpdatedAt, updated_at)
            WHERE name = @name AND deleted_at IS NULL
              AND content_hash IS @expectedHash AND enabled = @expectedEnabled`
