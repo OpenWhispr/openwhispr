@@ -46,7 +46,11 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
       setTimeout(() => findRef.current?.select(), 0);
     };
     window.addEventListener(OPEN_FIND_EVENT, onOpen);
-    return () => window.removeEventListener(OPEN_FIND_EVENT, onOpen);
+    return () => {
+      window.removeEventListener(OPEN_FIND_EVENT, onOpen);
+      // Unmounted while open (the note became read-only): leave no highlights behind.
+      editor.commands.clearSearch();
+    };
   }, [editor]);
 
   const commands = editor.commands as any;
@@ -68,13 +72,13 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
   if (!open) return null;
   const plugin: any = FindAndReplacePluginKey.getState(editor.state);
   const total = plugin?.results?.length ?? 0;
-  const current = total ? (plugin?.resultIndex ?? 0) + 1 : 0;
+  const current = total ? (plugin?.currentIndex ?? 0) + 1 : 0;
 
   return (
     <div
       className="rte-find-panel"
       onKeyDown={(event) => {
-        if (event.key === "Escape") {
+        if (event.key === "Escape" && !event.nativeEvent.isComposing) {
           event.preventDefault();
           close();
         }
@@ -90,7 +94,7 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
           aria-label={tb("find.find")}
           onChange={(event) => setTerm(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter") {
+            if (event.key === "Enter" && !event.nativeEvent.isComposing) {
               event.preventDefault();
               if (event.shiftKey) commands.goToPreviousResult();
               else commands.goToNextResult();

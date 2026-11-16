@@ -241,6 +241,35 @@ test("a list item whose text is $$…$$ stays in its list", () => {
   for (const list of ["- a\n- $$x^2$$\n- c", "- [ ] $$y$$"]) assert.equal(save(list), list);
 });
 
+test("a formula containing $ reopens unchanged", () => {
+  for (const latex of ["a$b", "\\$5"]) {
+    const editor = editorFor("Cost ");
+    editor.chain().setTextSelection(6).insertInlineMath({ latex }).run();
+    const reopened = editorFor(editor.storage.markdown.getMarkdown());
+    try {
+      const formulas = [];
+      reopened.state.doc.descendants((node) => {
+        if (node.type.name === "inlineMath") formulas.push(node.attrs.latex);
+      });
+      assert.deepEqual(formulas, [latex]);
+    } finally {
+      editor.destroy();
+      reopened.destroy();
+    }
+  }
+});
+
+test("an emoji renders as text, never as an image from a CDN", () => {
+  const editor = editorFor("Hi");
+  try {
+    editor.chain().setTextSelection(3).setEmoji("rocket").run();
+    assert.equal(editor.view.dom.querySelector("img"), null);
+    assert.equal(editor.storage.markdown.getMarkdown(), "Hi🚀");
+  } finally {
+    editor.destroy();
+  }
+});
+
 test("a [[…]] longer than a note title keeps every character", () => {
   const long = "a".repeat(250);
   assert.ok(save(`[[${long}]]`).includes(long));

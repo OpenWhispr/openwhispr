@@ -53,10 +53,6 @@ export function loadNotes(maxAgeMs = 15000): Promise<IndexedNote[]> {
   return inflight;
 }
 
-export function invalidateNotes() {
-  loadedAt = 0;
-}
-
 /** The note a [[title]] points at: exact title match, case-insensitive, newest first. */
 export function resolveTitle(title: string): IndexedNote | null {
   const key = norm(title);

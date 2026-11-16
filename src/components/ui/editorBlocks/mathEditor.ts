@@ -47,6 +47,7 @@ export function editLatex(editor: Editor, node: any, pos: number) {
   };
 
   input.addEventListener("keydown", (event) => {
+    if (event.isComposing) return;
     if (event.key === "Enter") {
       event.preventDefault();
       finish(true);

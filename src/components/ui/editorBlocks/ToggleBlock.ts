@@ -111,7 +111,7 @@ export const ToggleBlock = Details.extend({
       },
     };
   },
-}).configure({ persist: true, HTMLAttributes: { class: "rte-toggle" } });
+}).configure({ HTMLAttributes: { class: "rte-toggle" } });
 
 /** Everything the editor needs for toggles. The title takes no marks: it is saved as plain text. */
 export const toggleBlockExtensions = [

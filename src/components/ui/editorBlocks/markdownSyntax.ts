@@ -31,7 +31,6 @@ export const escapeMd = (s: string) => s.replace(/[`*\\~[\]_]/g, (c) => `\\${c}`
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-const CALLOUT_TYPES = ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"];
 const CALLOUT_RAW_RE = /^\\?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\?\][ \t]*/i;
 const CALLOUT_TEXT_RE = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*/i;
 const ALIGN_RE = /[ \t]\{align:(left|center|right|justify)\}[ \t]*$/;
@@ -172,7 +171,7 @@ export function markdownSyntax(md: any) {
     const m = /^\$((?:\\.|[^$\\\n])+?)\$(?![\d$])/.exec(src.slice(pos));
     if (!m || /^\s|\s$/.test(m[1])) return false;
     if (!silent) {
-      const latex = escapeHtml(unescapeMd(m[1]));
+      const latex = escapeHtml(unescapeMd(m[1]).replace(/\\\$/g, "$"));
       state.push("html_inline", "", 0).content =
         `<span data-type="inline-math" data-latex="${latex}"></span>`;
     }
@@ -287,5 +286,3 @@ function replaceParagraph(state: any, inlineIndex: number, html: string) {
   token.block = true;
   state.tokens.splice(inlineIndex - 1, 3, token);
 }
-
-export { CALLOUT_TYPES };

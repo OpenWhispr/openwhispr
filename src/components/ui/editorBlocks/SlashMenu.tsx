@@ -8,6 +8,7 @@ import { Extension, type Editor, type Range } from "@tiptap/core";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
 import { PluginKey } from "@tiptap/pm/state";
+import { isInTable } from "@tiptap/pm/tables";
 import { insertEmptyTable } from "../RichTextEditorTable";
 import { promptInline } from "./inlinePrompt";
 import { OPEN_FIND_EVENT } from "./events";
@@ -327,7 +328,8 @@ export const SlashMenu = Extension.create({
         editor: this.editor,
         pluginKey: new PluginKey("slashMenu"),
         char: "/",
-        allow: ({ state, range }) => !state.doc.resolve(range.from).parent.type.spec.code,
+        allow: ({ state, range }) =>
+          !isInTable(state) && !state.doc.resolve(range.from).parent.type.spec.code,
         items: ({ query }) => filterItems(query),
         command: ({ editor, range, props }: { editor: Editor; range: Range; props: SlashItem }) => {
           editor.chain().focus().deleteRange(range).run();

@@ -43,6 +43,7 @@ export function promptInline(
       resolve(value && value.trim() ? value.trim() : null);
     };
     input.addEventListener("keydown", (event) => {
+      if (event.isComposing) return;
       if (event.key === "Enter") {
         event.preventDefault();
         finish(input.value);

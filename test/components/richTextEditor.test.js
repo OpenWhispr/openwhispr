@@ -1365,3 +1365,10 @@ test("[[ and / in a code block stay code: Enter is a new line", async (t) => {
   }
   assert.equal(notes.saved(), "```\ncode [[\n /\n```");
 });
+
+test("/ in a table cell opens no menu: its blocks would split the table", async (t) => {
+  const notes = await mountNotes(t);
+  await notes.act(() => caretInCell(notes.editor(), "Budget", "Budget".length));
+  await notes.act(() => notes.editor().commands.insertContent(" /"), 120);
+  assert.equal(happyWindow.document.querySelector(".rte-slash-menu"), null);
+});

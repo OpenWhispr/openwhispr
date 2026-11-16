@@ -13,10 +13,9 @@ import Typography from "@tiptap/extension-typography";
 import { TableOfContents, getHierarchicalIndexes } from "@tiptap/extension-table-of-contents";
 import Highlight from "@tiptap/extension-highlight";
 import { InlineMath, BlockMath } from "@tiptap/extension-mathematics";
-import UniqueID from "@tiptap/extension-unique-id";
 import { FindAndReplace } from "@tiptap/extension-find-and-replace";
 import InvisibleCharacters from "@tiptap/extension-invisible-characters";
-import { CharacterCount, Focus } from "@tiptap/extensions";
+import { CharacterCount } from "@tiptap/extensions";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -143,7 +142,7 @@ const MarkdownInlineMath = InlineMath.extend({
     return {
       markdown: {
         serialize(state: any, node: any) {
-          state.write(`$${escapeMd(String(node.attrs.latex ?? ""))}$`);
+          state.write(`$${escapeMd(String(node.attrs.latex ?? "")).replace(/\$/g, "\\$")}$`);
         },
         parse: {},
       },
@@ -353,7 +352,10 @@ export function createEditorBlockExtensions() {
     FontFamily,
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     MarkdownRubyText,
-    MarkdownEmoji.configure({ emojis: gitHubEmojis }),
+    // No fallback images: they load from a CDN the app's CSP blocks.
+    MarkdownEmoji.configure({
+      emojis: gitHubEmojis.map((emoji) => ({ ...emoji, fallbackImage: undefined })),
+    }),
     // ">>" is the toggle shortcut and "---" a divider / literal text in tables,
     // so keep Typography from turning them into "»" and "—". (c), (r), (tm) and
     // (sm) are common in ordinary text, so they stay as typed.
@@ -366,12 +368,10 @@ export function createEditorBlockExtensions() {
       trademark: false,
       servicemark: false,
     }),
-    UniqueID.configure({ types: ["heading", "paragraph", "taskItem", "listItem"] }),
     FindAndReplace,
     FindShortcut,
     InvisibleCharacters.configure({ visible: false }),
     CharacterCount,
-    Focus.configure({ className: "rte-has-focus", mode: "deepest" }),
     NoteLink,
     SlashMenu,
   ];
