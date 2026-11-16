@@ -41,7 +41,7 @@ describe('resolveDefaultPrivateWorkspaceId', () => {
     expect(resolveDefaultPrivateWorkspaceId([OWN, TEAM], 'server-default')).toBe('server-default');
   });
 
-  it('falls back to the listed own default, then an entitled Enterprise workspace', () => {
+  it('falls back to the listed own default, then the oldest Enterprise workspace', (): void => {
     expect(resolveDefaultPrivateWorkspaceId([TEAM, OWN], null)).toBe('own');
     expect(resolveDefaultPrivateWorkspaceId([TEAM, ENTERPRISE], null)).toBe('enterprise');
     expect(
@@ -49,7 +49,28 @@ describe('resolveDefaultPrivateWorkspaceId', () => {
         [TEAM, workspace({ id: 'lapsed', plan: 'enterprise', status: 'canceled' })],
         null,
       ),
-    ).toBeNull();
+    ).toBe('lapsed');
+    expect(resolveDefaultPrivateWorkspaceId([TEAM], null)).toBeNull();
+  });
+
+  it('keeps legacy folders in the oldest Enterprise when a newer one is entitled', (): void => {
+    const oldestEnterprise = workspace({
+      id: 'oldest-enterprise',
+      plan: 'enterprise',
+      status: 'canceled',
+    });
+    const workspaces = [oldestEnterprise, ENTERPRISE];
+    const defaultId = resolveDefaultPrivateWorkspaceId(workspaces, null);
+    const legacyFolder = folder({ id: 1 });
+    const newerFolder = folder({ id: 2, privateWorkspaceId: 'enterprise' });
+    const folders = [legacyFolder, newerFolder];
+
+    expect(defaultId).toBe('oldest-enterprise');
+    expect(foldersInPrivateWorkspace(folders, 'oldest-enterprise', defaultId)).toEqual([
+      legacyFolder,
+    ]);
+    expect(foldersInPrivateWorkspace(folders, 'enterprise', defaultId)).toEqual([newerFolder]);
+    expect(defaultActiveWorkspaceId(workspaces)).toBe('enterprise');
   });
 });
 

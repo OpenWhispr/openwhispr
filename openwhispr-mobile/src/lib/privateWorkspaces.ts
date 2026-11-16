@@ -26,9 +26,8 @@ function isEnterpriseWorkspaceEntitled(workspace: PrivateWorkspace): boolean {
 
 /**
  * The workspace whose Private holds unplaced content: the default the server reported, else
- * the listed own default, else an entitled Enterprise workspace (the server makes no default
- * for an Enterprise member). Mirrors desktop's resolveDefaultWorkspaceId and the API's
- * legacyPlacementWorkspaceId.
+ * the listed own default, else the oldest Enterprise workspace in the API's oldest-first list.
+ * Like the API's legacyPlacementWorkspaceId, subscription status never relocates legacy content.
  */
 export function resolveDefaultPrivateWorkspaceId(
   workspaces: PrivateWorkspace[],
@@ -37,8 +36,8 @@ export function resolveDefaultPrivateWorkspaceId(
   if (serverDefaultId) return serverDefaultId;
   return (
     (
-      workspaces.find((w) => w.is_default === true) ??
-      workspaces.find(isEnterpriseWorkspaceEntitled)
+      workspaces.find((workspace): boolean => workspace.is_default === true) ??
+      workspaces.find((workspace): boolean => workspace.plan === 'enterprise')
     )?.id ?? null
   );
 }
