@@ -39,6 +39,7 @@ import {
 import { COLORS, FONTS } from "./SlashMenu";
 import { promptInline } from "./inlinePrompt";
 import { tb } from "./translate";
+import { formatHotkeyLabel } from "../../../utils/hotkeys";
 
 type Dropdown = ReturnType<typeof useMenuDropdown>;
 const ALIGNS = ["left", "center", "right", "justify"] as const;
@@ -167,21 +168,21 @@ export function FormatStyleControls({ editor, dropdown }: { editor: Editor; drop
   return (
     <>
       <IconButton
-        title={`${tb("toolbar.highlight")} (⌘⇧H)`}
+        title={`${tb("toolbar.highlight")} (${formatHotkeyLabel("CommandOrControl+Shift+H")})`}
         active={state.highlight}
         onClick={() => run((ch) => c(ch).toggleHighlight())}
       >
         <Highlighter size={15} />
       </IconButton>
       <IconButton
-        title={`${tb("toolbar.subscript")} (⌘,)`}
+        title={tb("toolbar.subscript")}
         active={state.subscript}
         onClick={() => run((ch) => c(ch).toggleSubscript())}
       >
         <Subscript size={15} />
       </IconButton>
       <IconButton
-        title={`${tb("toolbar.superscript")} (⌘.)`}
+        title={`${tb("toolbar.superscript")} (${formatHotkeyLabel("CommandOrControl+.")})`}
         active={state.superscript}
         onClick={() => run((ch) => c(ch).toggleSuperscript())}
       >

@@ -119,7 +119,7 @@ export function markdownSyntax(md: any) {
     const { src, pos } = state;
     const c = src.charCodeAt(pos);
     if (c !== 0x5b && c !== 0x5c) return false; // "[" or "\" (escaped form)
-    const m = /^\\?\[\\?\[((?:\\[^\]]|[^\]\\\n]){1,400}?)\\?\]\\?\]/.exec(src.slice(pos));
+    const m = /^\\?\[\\?\[((?:\\[^\]]|[^\]\\\n]){1,200}?)\\?\]\\?\]/.exec(src.slice(pos));
     if (!m || src.startsWith("(http", pos + m[0].length)) return false;
     const title = unescapeMd(m[1]).trim();
     if (!title) return false;
@@ -224,7 +224,11 @@ export function markdownSyntax(md: any) {
       if (t.type !== "inline") continue;
       const open = tokens[i - 1];
       const close = tokens[i + 1];
-      const own = open?.type === "paragraph_open" && close?.type === "paragraph_close";
+      // A list item's first block must stay a paragraph, so its text is never a block.
+      const own =
+        open?.type === "paragraph_open" &&
+        close?.type === "paragraph_close" &&
+        tokens[i - 2]?.type !== "list_item_open";
       const text = t.content.trim();
 
       if (own && /^\\?\[TOC\\?\]$/.test(text)) {

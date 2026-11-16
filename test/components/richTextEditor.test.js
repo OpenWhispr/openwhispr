@@ -1339,3 +1339,29 @@ test("Enter after a closed [[ in the text is a new line, not a note link", async
   assert.equal(notes.saved().trim(), "matrix \\[\\[1, 2\\], \\[3, 4\\]\\] in numpy");
   assert.equal(happyWindow.document.querySelector(".note-link"), null);
 });
+
+test("Mod-, is left to the app's Settings shortcut, not subscript", () => {
+  const editor = createEditor("Hello world");
+  editor.commands.setTextSelection({ from: 1, to: 6 });
+  const mod = /Mac|iP(hone|[oa]d)/.test(happyWindow.navigator.platform)
+    ? { metaKey: true }
+    : { ctrlKey: true };
+  pressKey(editor, ",", mod);
+  assert.equal(markdownOf(editor), "Hello world");
+});
+
+test("[[ and / in a code block stay code: Enter is a new line", async (t) => {
+  happyWindow.electronAPI = {
+    ...happyWindow.electronAPI,
+    getNotes: async () => [
+      { id: 7, title: "Weekly sync", content: "", enhanced_content: "", updated_at: "2026-11-04" },
+    ],
+  };
+  const notes = await mountNotes(t, "```\ncode\n```");
+  await notes.act(() => notes.editor().commands.setTextSelection(5));
+  for (const typed of [" [[", " /"]) {
+    await notes.act(() => notes.editor().commands.insertContent(typed), 120);
+    await notes.act(() => pressKey(notes.editor(), "Enter"), 80);
+  }
+  assert.equal(notes.saved(), "```\ncode [[\n /\n```");
+});

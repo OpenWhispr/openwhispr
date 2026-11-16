@@ -12,6 +12,7 @@ import { insertEmptyTable } from "../RichTextEditorTable";
 import { promptInline } from "./inlinePrompt";
 import { OPEN_FIND_EVENT } from "./events";
 import { tb } from "./translate";
+import { formatHotkeyLabel } from "../../../utils/hotkeys";
 import { SlashMenuList, type ListHandle, type ListProps } from "./SlashMenuList";
 
 type Run = (editor: Editor) => unknown;
@@ -39,9 +40,9 @@ export const COLORS: [string, string][] = [
 ];
 /** [translation key under notes.editor.blocks.fonts, CSS font family] */
 export const FONTS: [string, string][] = [
-  ["serif", "Georgia"],
-  ["monospace", "Menlo"],
-  ["rounded", "Arial Rounded MT Bold"],
+  ["serif", "Georgia, serif"],
+  ["monospace", "Menlo, monospace"],
+  ["rounded", "Arial Rounded MT Bold, sans-serif"],
 ];
 const CALLOUTS = ["note", "tip", "important", "warning", "caution"] as const;
 const ALIGNS = ["left", "center", "right", "justify"] as const;
@@ -174,7 +175,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     id: "highlight",
     group: "style",
     title: label("slash.highlight"),
-    hint: () => "⌘⇧H",
+    hint: () => formatHotkeyLabel("CommandOrControl+Shift+H"),
     keywords: "highlight marker mark",
     run: (e) => chain(e).toggleHighlight().run(),
   },
@@ -182,7 +183,6 @@ export const SLASH_ITEMS: SlashItem[] = [
     id: "sub",
     group: "style",
     title: label("slash.subscript"),
-    hint: () => "⌘,",
     keywords: "subscript sub",
     run: (e) => chain(e).toggleSubscript().run(),
   },
@@ -190,7 +190,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     id: "sup",
     group: "style",
     title: label("slash.superscript"),
-    hint: () => "⌘.",
+    hint: () => formatHotkeyLabel("CommandOrControl+."),
     keywords: "superscript sup power",
     run: (e) => chain(e).toggleSuperscript().run(),
   },
@@ -254,7 +254,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     id: "find",
     group: "tools",
     title: label("slash.find"),
-    hint: () => "⌘F",
+    hint: () => formatHotkeyLabel("CommandOrControl+F"),
     keywords: "find search replace",
     run: (e) => window.dispatchEvent(new CustomEvent(OPEN_FIND_EVENT, { detail: { editor: e } })),
   },
@@ -327,6 +327,7 @@ export const SlashMenu = Extension.create({
         editor: this.editor,
         pluginKey: new PluginKey("slashMenu"),
         char: "/",
+        allow: ({ state, range }) => !state.doc.resolve(range.from).parent.type.spec.code,
         items: ({ query }) => filterItems(query),
         command: ({ editor, range, props }: { editor: Editor; range: Range; props: SlashItem }) => {
           editor.chain().focus().deleteRange(range).run();

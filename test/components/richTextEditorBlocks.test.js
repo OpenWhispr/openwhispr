@@ -237,6 +237,15 @@ test("an aligned list item keeps its alignment, and the list stays tight", () =>
   assert.ok(featuresOf(list).includes("align:center"));
 });
 
+test("a list item whose text is $$…$$ stays in its list", () => {
+  for (const list of ["- a\n- $$x^2$$\n- c", "- [ ] $$y$$"]) assert.equal(save(list), list);
+});
+
+test("a [[…]] longer than a note title keeps every character", () => {
+  const long = "a".repeat(250);
+  assert.ok(save(`[[${long}]]`).includes(long));
+});
+
 test("notes without the new forms keep the editor's existing Markdown", () => {
   // The form the editor already wrote before these extensions (task items are
   // separated by a blank line), so stored notes don't change on the next save.

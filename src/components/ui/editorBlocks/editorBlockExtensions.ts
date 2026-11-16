@@ -97,7 +97,11 @@ const markSpec = (open: any, close: any) => ({
 });
 
 const MarkdownHighlight = Highlight.extend({ addStorage: () => markSpec("==", "==") });
-const MarkdownSubscript = Subscript.extend({ addStorage: () => markSpec("{sub}", "{/sub}") });
+// No Mod-, shortcut: that is the app's Settings shortcut.
+const MarkdownSubscript = Subscript.extend({
+  addKeyboardShortcuts: () => ({}),
+  addStorage: () => markSpec("{sub}", "{/sub}"),
+});
 const MarkdownSuperscript = Superscript.extend({ addStorage: () => markSpec("{sup}", "{/sup}") });
 const MarkdownRubyText = RubyText.extend({
   addStorage: () =>
@@ -267,7 +271,7 @@ export const TableOfContentsBlock = Node.create({
           const link = document.createElement("button");
           link.type = "button";
           link.className = "table-of-contents-item";
-          link.style.paddingLeft = `${(item.level - 1) * 14}px`;
+          link.style.paddingInlineStart = `${(item.level - 1) * 14}px`;
           link.textContent = item.textContent;
           link.addEventListener("click", (event) => {
             event.preventDefault();
