@@ -185,10 +185,15 @@ test("a skill with a path the cloud can't store is not exported", (t) => {
     "SKILL.md": skillText("long-path"),
     [`references/${"d/".repeat(260)}a.md`]: "x",
   });
+  writeFolder(ctx.skillsDir, "unsafe-path", {
+    "SKILL.md": skillText("unsafe-path"),
+    "references/why?.md": "x",
+  });
   ctx.library.scan();
 
   assert.equal(ctx.library.exportForCloud("odd-path"), null);
   assert.equal(ctx.library.exportForCloud("long-path"), null);
+  assert.equal(ctx.library.exportForCloud("unsafe-path"), null);
 });
 
 test("a skill folder that is a link is never exported", (t) => {

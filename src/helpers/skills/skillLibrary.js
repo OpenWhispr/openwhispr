@@ -192,8 +192,8 @@ function toCloudFile({ path: relPath, data }) {
     : { path: relPath, encoding: "base64", content: base64 };
 }
 
-// The server stores paths of at most 512 characters, with forward slashes only.
-const isCloudPath = (relPath) => relPath.length <= 512 && !relPath.includes("\\");
+// The server stores paths of at most 512 characters, and fromCloudFiles refuses an unsafe one.
+const isCloudPath = (relPath) => relPath.length <= 512 && isSafeArchivePath(relPath);
 
 // A cloud skill's files as bytes, or null when the list isn't one this library would write.
 function fromCloudFiles(files) {
@@ -766,7 +766,13 @@ class SkillLibrary {
     if (inspected.problems.length > 0) return null;
     if (inspected.tooLargeToSync) return { tooLargeToSync: true };
     const walked = walkSkillFolder(this.skillDir(name));
-    if (walked.unreadable || !walked.files.every((file) => isCloudPath(file.path))) return null;
+    // Nothing another computer would refuse to write is sent: its pull would skip the copy.
+    if (
+      walked.unreadable ||
+      !walked.files.every((file) => isCloudPath(file.path)) ||
+      hasClashingPaths(walked.files.map((file) => file.path))
+    )
+      return null;
     const files = walked.files
       .sort(byPath)
       .map((file) => ({ path: file.path, data: fs.readFileSync(file.fullPath) }));
