@@ -16,8 +16,9 @@ const MOCKS = {
     export function createChatTurnEngine(getOptions) {
       return {
         async send(text) {
-          const { openNote } = getOptions();
+          const { openNote, openNoteSpaceId } = getOptions();
           globalThis.__chatTurnOpenNote = openNote;
+          globalThis.__chatTurnOpenNoteSpaceId = openNoteSpaceId;
           globalThis.__engineSends = (globalThis.__engineSends ?? 0) + 1;
           if (globalThis.__holdGrounding) await globalThis.__holdGrounding.promise;
           if (text !== "__probe") {
@@ -210,6 +211,13 @@ test("follow-ups in a note chat are grounded in the note", async (t) => {
   assert.match(context.text, /Decisions: three-step flow\./);
   assert.match(context.text, /We agreed to ship the three-step flow\./);
   assert.equal(globalThis.__chatInput.placeholder, "Ask about Q3 planning sync...");
+});
+
+test("a note chat names its note's space, so a turn outside that workspace leaves it out", async (t) => {
+  await renderChatView(t, { noteId: NOTE.id, note: NOTE });
+
+  assert.equal(typeof (await openNoteNow()), "function");
+  assert.equal(globalThis.__chatTurnOpenNoteSpaceId, NOTE.space_id);
 });
 
 test("a deleted source note is named but not linked or used", async (t) => {
