@@ -88,7 +88,11 @@ export function PracticeScreen({
       setKeyboardTop(event.endCoordinates.screenY);
       place(event.endCoordinates.screenY);
     });
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardTop(null));
+    // Closing the keyboard (back gesture) leaves the box focused; treat it as leaving the box.
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardTop(null);
+      input.current?.blur();
+    });
     // The keyboard can stay open from the previous practice, so no show event arrives.
     const open = Keyboard.isVisible() ? Keyboard.metrics() : undefined;
     if (open) {
