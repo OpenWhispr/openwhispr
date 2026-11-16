@@ -98,7 +98,7 @@ function Waveform() {
       }
       samples += 1;
       if (samples > 4 && next > 0) floor = Math.min(next, floor + 0.004);
-      const speech = Math.max(0, Math.min(1, (next - floor - 0.1) / 0.35));
+      const speech = Math.max(0, Math.min(1, (next - floor - 0.06) / 0.22));
       level.value = withTiming(speech, { duration: 90 });
     }, 80);
     return () => clearInterval(timer);
