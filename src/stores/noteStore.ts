@@ -260,7 +260,7 @@ function reconcileWorkspaceScope(
         revealContainer(context.spaceId, context.folderId);
       } else {
         // Never left on a container the workspace hides while its Private is on its way.
-        useNoteStore.setState({ activeContext: null, notes: [] });
+        clearActiveContext();
       }
     }
     if (decision.context !== "keep") pickedContext = useNoteStore.getState().activeContext;
@@ -842,6 +842,11 @@ export function setActiveContext(spaceId: number, folderId: number | null): void
     notes: state.notesByContainer[key] ?? [],
   });
   void ensureContainerLoaded(key);
+}
+
+// Nothing open in the tree: the pane shows whatever replaces it (the device note view).
+export function clearActiveContext(): void {
+  useNoteStore.setState({ activeContext: null, notes: [] });
 }
 
 // The active workspace's Private, on its default folder.

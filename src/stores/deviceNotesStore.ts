@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { DeviceNoteFolder, DeviceNoteSummary, NoteItem } from "../types/electron";
-import { loadFolders, subscribeNoteView } from "./noteStore";
+import { clearActiveContext, loadFolders, setActiveNoteId, subscribeNoteView } from "./noteStore";
 
 export type DeviceNotesMoveResult = { moved: NoteItem[] } | { error: string };
 
@@ -48,7 +48,13 @@ export const useDeviceNotesStore = create<DeviceNotesState>()((set, get) => ({
     }
   },
 
-  openView: (id) => set({ viewNoteId: id }),
+  // Clears what the tree had open first, so the listener below doesn't close the view at once and
+  // only the device note's row reads as selected.
+  openView: (id) => {
+    setActiveNoteId(null);
+    clearActiveContext();
+    set({ viewNoteId: id });
+  },
   closeView: () => set({ viewNoteId: null }),
 
   move: async (request, { workspaceId }) => {
@@ -62,7 +68,8 @@ export const useDeviceNotesStore = create<DeviceNotesState>()((set, get) => ({
     if (!result.success) return { error: result.code };
     // Awaited so a caller opening the moved note finds its folder.
     await Promise.allSettled([loadFolders(), get().load()]);
-    return result.moved.length > 0 ? { moved: result.moved } : { error: "nothing_moved" };
+    // Nothing moved means another window moved them first; the reload above drops their rows.
+    return { moved: result.moved };
   },
 
   startListening: () => {
@@ -80,8 +87,10 @@ export const useDeviceNotesStore = create<DeviceNotesState>()((set, get) => ({
       accountId = scope.accountId;
       void get().load();
     });
+    // A move or claim in any window can make folders and change counts in this one's tree.
     const stopChanged = api?.onDeviceNotesChanged?.(() => {
       void get().load();
+      void loadFolders().catch(() => {});
       const id = get().viewNoteId;
       if (id == null) return;
       void noteStillListed(id).then((listed) => {

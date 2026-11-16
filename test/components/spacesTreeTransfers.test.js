@@ -56,6 +56,7 @@ async function mountTree(
     inScopeIds = [1, 2],
     defaultWorkspaceId = "a",
     onFlushPendingSaves,
+    deviceNotes = { folders: [], notes: [] },
   } = {}
 ) {
   let root;
@@ -116,6 +117,10 @@ async function mountTree(
     // What onMoveNote and moveFolderToSpace answer next; empty means success.
     moveResults: [],
     folderMoveResults: [],
+    deviceMoves: [],
+    // What a device-note move answers next; empty means one moved note.
+    deviceMoveResults: [],
+    deviceNotes: structuredClone(deviceNotes),
     spaces: structuredClone(spaces),
     folders: structuredClone(folders),
     notes: structuredClone(notes),
@@ -206,7 +211,17 @@ async function mountTree(
         });
       `,
       "/stores/deviceNotesStore": `
-        const state = { folders: [], notes: [], viewNoteId: null, load: async () => {}, startListening: () => () => {} };
+        const state = {
+          ...globalThis.__tree.deviceNotes,
+          viewNoteId: null,
+          load: async () => {},
+          startListening: () => () => {},
+          openView: () => {},
+          move: async (request) => {
+            globalThis.__tree.deviceMoves.push(request);
+            return globalThis.__tree.deviceMoveResults.shift() ?? { moved: [{ id: 1 }] };
+          },
+        };
         export const useDeviceNotesStore = Object.assign((selector) => selector(state), { getState: () => state });
       `,
       "/stores/settingsStore": `
@@ -572,3 +587,42 @@ for (const route of ["menu", "drop"]) {
     assert.equal(tree.state.calls.filter((call) => call[0] === "copyNoteToSpace").length, 1);
   });
 }
+
+const DEVICE_NOTES = {
+  folders: [{ id: 7, name: "Old plans", is_default: 0, noteCount: 1 }],
+  notes: [
+    { id: 70, title: "Device plan", folder_id: 7 },
+    { id: 72, title: "Device loose note", folder_id: null },
+  ],
+};
+
+test("a device folder that fails to move says the notes couldn't move", async (t) => {
+  const tree = await mountTree(t, { deviceNotes: DEVICE_NOTES });
+  tree.state.deviceMoveResults.push({ error: "unavailable" });
+
+  await tree.choose("Old plans", "Move folder to my Private");
+  assert.deepEqual(tree.state.deviceMoves, [{ folderId: 7 }]);
+  assert.deepEqual(
+    tree.state.toasts.map(({ title, variant }) => [title, variant]),
+    [["Couldn't move these notes", "destructive"]]
+  );
+});
+
+test("a device note another window already moved shows no toast", async (t) => {
+  const tree = await mountTree(t, { deviceNotes: DEVICE_NOTES });
+  tree.state.deviceMoveResults.push({ moved: [] });
+
+  await tree.choose("Device loose note", "Move to my Private");
+  assert.deepEqual(tree.state.deviceMoves, [{ noteIds: [72] }]);
+  assert.deepEqual(tree.state.toasts, []);
+});
+
+test("a moved device note toasts like the tree's other moves", async (t) => {
+  const tree = await mountTree(t, { deviceNotes: DEVICE_NOTES });
+
+  await tree.choose("Device loose note", "Move to my Private");
+  assert.deepEqual(
+    tree.state.toasts.map(({ title, variant }) => [title, variant]),
+    [["Moved to your Private", undefined]]
+  );
+});

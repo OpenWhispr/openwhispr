@@ -4135,6 +4135,7 @@
       "movedCount_one": "{{count}} note déplacée vers votre Privé",
       "movedCount_other": "{{count}} notes déplacées vers votre Privé",
       "moveFailed": "Impossible de déplacer cette note",
+      "moveFolderFailed": "Impossible de déplacer ces notes",
       "banner": "Cette note n'est encore associée à aucun compte.",
       "notesHeading": "Notes",
       "summaryHeading": "Résumé IA",

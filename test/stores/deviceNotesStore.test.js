@@ -27,7 +27,14 @@ const LIST = {
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 // The real note store drives the view's navigation, so its own dependencies are stubbed.
-async function fixture(t, { list = LIST, deviceNote = (id) => ({ id }) } = {}) {
+async function fixture(
+  t,
+  {
+    list = LIST,
+    deviceNote = (id) => ({ id }),
+    moveResult = { success: true, moved: [{ id: 70, space_id: 1, folder_id: null }], skipped: 0 },
+  } = {}
+) {
   const calls = { lists: 0, folders: 0, moves: [] };
   const listeners = {};
   installBrowserGlobals(t);
@@ -39,7 +46,7 @@ async function fixture(t, { list = LIST, deviceNote = (id) => ({ id }) } = {}) {
     getDeviceNote: async (id) => deviceNote(id),
     moveDeviceNotes: async (request) => {
       calls.moves.push(request);
-      return { success: true, moved: [{ id: 70, space_id: 1, folder_id: null }], skipped: 0 };
+      return moveResult;
     },
     onDeviceNotesChanged: (callback) => {
       listeners.changed = callback;
@@ -174,4 +181,33 @@ test("move() refreshes folders and the list", async (t) => {
   assert.equal(result.moved[0].id, 70);
   assert.equal(calls.folders, 1);
   assert.equal(calls.lists, listsBefore + 1);
+});
+
+test("device-notes-changed reloads the note store's folders too", async (t) => {
+  const { calls, listeners } = await listening(t);
+  const foldersBefore = calls.folders;
+
+  listeners.changed();
+  await settle();
+  assert.equal(calls.folders, foldersBefore + 1);
+});
+
+test("a move that finds the notes already moved is not an error", async (t) => {
+  const { state } = await listening(t, {
+    moveResult: { success: true, moved: [], skipped: 1 },
+  });
+  assert.deepEqual(await state().move({ noteIds: [70] }, { workspaceId: null }), { moved: [] });
+});
+
+test("opening a device note clears the open container, so only its row reads as selected", async (t) => {
+  const { state, notes } = await listening(t);
+  notes.setActiveContext(1, null);
+  notes.setActiveNoteId(42);
+  let view = null;
+  t.after(notes.subscribeNoteView((next) => (view = next)));
+
+  state().openView(70);
+  assert.equal(state().viewNoteId, 70);
+  assert.equal(view.activeContext, null);
+  assert.equal(notes.getActiveNoteIdValue(), null);
 });

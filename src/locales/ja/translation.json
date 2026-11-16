@@ -3489,7 +3489,7 @@
       }
     },
     "deviceNotes": {
-      "title": "このデバイス上",
+      "title": "このデバイス",
       "info": "これらのノートはどのアカウントにも割り当てられていません。ノートを残して編集するには移動してください。",
       "infoLabel": "このデバイス上のノートについて",
       "moveNote": "自分のプライベートに移動",
@@ -3498,6 +3498,7 @@
       "movedCount_one": "{{count}} 件のノートをプライベートに移動しました",
       "movedCount_other": "{{count}} 件のノートをプライベートに移動しました",
       "moveFailed": "このノートを移動できませんでした",
+      "moveFolderFailed": "これらのノートを移動できませんでした",
       "banner": "このノートはまだアカウントに割り当てられていません。",
       "notesHeading": "ノート",
       "summaryHeading": "AI要約",

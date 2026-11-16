@@ -1289,12 +1289,24 @@ function DeviceNotesSection({ workspaceId }: { workspaceId: string | null }) {
   const move = async (request: { noteIds?: number[]; folderId?: number }) => {
     const result = await useDeviceNotesStore.getState().move(request, { workspaceId });
     if ("error" in result) {
-      toast({ title: t("notes.deviceNotes.moveFailed"), variant: "destructive" });
-    } else if (request.folderId != null) {
-      toast({ title: t("notes.deviceNotes.movedCount", { count: result.moved.length }) });
-    } else {
-      toast({ title: t("notes.deviceNotes.moved") });
+      toast({
+        title: t(
+          request.folderId != null
+            ? "notes.deviceNotes.moveFolderFailed"
+            : "notes.deviceNotes.moveFailed"
+        ),
+        variant: "destructive",
+      });
+      return;
     }
+    // Nothing moved: another window moved them first, and the refreshed list no longer shows them.
+    if (result.moved.length === 0) return;
+    toast({
+      title:
+        request.folderId != null
+          ? t("notes.deviceNotes.movedCount", { count: result.moved.length })
+          : t("notes.deviceNotes.moved"),
+    });
   };
 
   const toggleFolder = (id: number) =>
@@ -1321,10 +1333,7 @@ function DeviceNotesSection({ workspaceId }: { workspaceId: string | null }) {
       isActive={note.id === viewNoteId}
       menuLabel={t("notes.deviceNotes.moveNote")}
       indentClassName={level === 1 ? "ps-[30px]" : "ps-8"}
-      onActivate={() => {
-        setActiveNoteId(null);
-        useDeviceNotesStore.getState().openView(note.id);
-      }}
+      onActivate={() => useDeviceNotesStore.getState().openView(note.id)}
       onMove={() => void move({ noteIds: [note.id] })}
     />
   );
@@ -1353,7 +1362,8 @@ function DeviceNotesSection({ workspaceId }: { workspaceId: string | null }) {
           onMove={() => void move({ folderId: folder.id })}
         />
         <TreeChildren open={isExpanded}>
-          <div className="space-y-px">
+          {/* Collapsed rows stay mounted for the animation, out of Tab order and screen readers. */}
+          <div className="space-y-px" inert={!isExpanded}>
             {notes
               .filter((note) => note.folder_id === folder.id)
               .map((note) => renderNote(note, 2))}
@@ -1364,21 +1374,19 @@ function DeviceNotesSection({ workspaceId }: { workspaceId: string | null }) {
   };
 
   return (
-    <div role="none" className="group/section">
+    <div role="none">
       <SectionHeader
         label={t("notes.deviceNotes.title")}
         className="mt-4"
         action={
           <Popover>
             <PopoverTrigger asChild>
+              {/* Always shown: it is the only place the section explains itself. */}
               <Button
                 variant="ghost"
                 size="icon"
                 aria-label={t("notes.deviceNotes.infoLabel")}
-                className={cn(
-                  HOVER_REVEAL_BUTTON_CLASS,
-                  "group-hover/section:opacity-100 data-[state=open]:opacity-100"
-                )}
+                className={cn(HOVER_REVEAL_BUTTON_CLASS, "opacity-100")}
               >
                 <Info size={11} />
               </Button>
@@ -1391,7 +1399,7 @@ function DeviceNotesSection({ workspaceId }: { workspaceId: string | null }) {
           </Popover>
         }
       />
-      <div role="none" className="space-y-px">
+      <div role="group" aria-label={t("notes.deviceNotes.title")} className="space-y-px">
         {folders.map(renderFolder)}
         {rootNotes.map((note) => renderNote(note, 1))}
       </div>

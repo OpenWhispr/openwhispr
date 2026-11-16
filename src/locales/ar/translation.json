@@ -3110,6 +3110,7 @@
       "movedCount_many": "تم نقل {{count}} ملاحظةً إلى خاص",
       "movedCount_other": "تم نقل {{count}} ملاحظة إلى خاص",
       "moveFailed": "تعذّر نقل هذه الملاحظة",
+      "moveFolderFailed": "تعذّر نقل هذه الملاحظات",
       "banner": "هذه الملاحظة غير مخصّصة لأي حساب بعد.",
       "notesHeading": "الملاحظات",
       "summaryHeading": "الملخص بالذكاء الاصطناعي",

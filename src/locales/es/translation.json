@@ -3622,6 +3622,7 @@
       "movedCount_one": "Se movió {{count}} nota a tu Privado",
       "movedCount_other": "Se movieron {{count}} notas a tu Privado",
       "moveFailed": "No se pudo mover esta nota",
+      "moveFolderFailed": "No se pudieron mover estas notas",
       "banner": "Esta nota aún no está asignada a ninguna cuenta.",
       "notesHeading": "Notas",
       "summaryHeading": "Resumen con IA",

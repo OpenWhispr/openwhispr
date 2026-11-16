@@ -3576,6 +3576,7 @@
       "movedCount_one": "{{count}} nota movida para seu Privado",
       "movedCount_other": "{{count}} notas movidas para seu Privado",
       "moveFailed": "Não foi possível mover esta nota",
+      "moveFolderFailed": "Não foi possível mover estas notas",
       "banner": "Esta nota ainda não está atribuída a uma conta.",
       "notesHeading": "Notas",
       "summaryHeading": "Resumo com IA",

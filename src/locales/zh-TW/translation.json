@@ -3570,6 +3570,7 @@
       "movedCount_one": "已將 {{count}} 則筆記移動到你的私人",
       "movedCount_other": "已將 {{count}} 則筆記移動到你的私人",
       "moveFailed": "無法移動此筆記",
+      "moveFolderFailed": "無法移動這些筆記",
       "banner": "此筆記尚未指派給任何帳號。",
       "notesHeading": "筆記",
       "summaryHeading": "AI 摘要",

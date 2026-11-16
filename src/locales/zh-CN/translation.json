@@ -3570,6 +3570,7 @@
       "movedCount_one": "已将 {{count}} 条笔记移动到你的私密",
       "movedCount_other": "已将 {{count}} 条笔记移动到你的私密",
       "moveFailed": "无法移动此笔记",
+      "moveFolderFailed": "无法移动这些笔记",
       "banner": "此笔记尚未分配给任何账户。",
       "notesHeading": "笔记",
       "summaryHeading": "AI 摘要",

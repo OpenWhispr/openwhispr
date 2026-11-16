@@ -4,7 +4,6 @@ import { Button } from "../ui/button";
 import { MarkdownRenderer } from "../ui/MarkdownRenderer";
 import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { useToast } from "../ui/useToast";
-import { MeetingTranscriptChat } from "./MeetingTranscriptChat";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import { openNote, useSpaces } from "../../stores/noteStore";
 import { useDeviceNotesStore } from "../../stores/deviceNotesStore";
@@ -12,6 +11,7 @@ import { useSpacesInWorkspaceScope } from "../../hooks/useWorkspace";
 import { privateSectionSpaces } from "../../lib/privateSection";
 import { formatNoteDate } from "../../utils/dateFormatting";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
+import { resolveLlmSpeakerLabel } from "../../utils/llmTranscript";
 import type { DeviceNote } from "../../types/electron";
 
 interface DeviceNoteViewProps {
@@ -63,7 +63,16 @@ export function DeviceNoteView({ id }: DeviceNoteViewProps) {
   }, [id, closeView]);
 
   const transcript = note?.transcript ?? "";
-  const segments = useMemo(() => parseTranscriptSegments(transcript), [transcript]);
+  // Plain "Speaker: text" lines, labelled as the assistant reads them: nobody owns the note, so
+  // no line is the viewer's and no speaker can be named here.
+  const transcriptLines = useMemo(() => {
+    const noteTaker = t("notes.speaker.noteTaker");
+    return parseTranscriptSegments(transcript).map((segment) => ({
+      id: segment.id,
+      speaker: resolveLlmSpeakerLabel(segment, {}, noteTaker, t),
+      text: segment.text,
+    }));
+  }, [transcript, t]);
 
   const handleMove = useCallback(async () => {
     setMoving(true);
@@ -73,9 +82,14 @@ export function DeviceNoteView({ id }: DeviceNoteViewProps) {
       toast({ title: t("notes.deviceNotes.moveFailed"), variant: "destructive" });
       return;
     }
-    closeView();
-    openNote(result.moved[0]);
-    toast({ title: t("notes.deviceNotes.moved"), variant: "success" });
+    const [movedNote] = result.moved;
+    // The user may have opened something else while the move ran.
+    if (useDeviceNotesStore.getState().viewNoteId === id) {
+      closeView();
+      if (movedNote) openNote(movedNote);
+    }
+    // Nothing moved: another window got there first, and the list refresh drops the row.
+    if (movedNote) toast({ title: t("notes.deviceNotes.moved") });
   }, [move, id, workspaceId, closeView, toast, t]);
 
   if (!note) return null;
@@ -110,8 +124,15 @@ export function DeviceNoteView({ id }: DeviceNoteViewProps) {
         )}
         {transcript && (
           <Section heading={t("notes.deviceNotes.transcriptHeading")}>
-            {segments.length > 0 ? (
-              <MeetingTranscriptChat segments={segments} />
+            {transcriptLines.length > 0 ? (
+              <div className="space-y-1.5 text-sm text-foreground">
+                {transcriptLines.map((line) => (
+                  <p key={line.id} dir="auto">
+                    <span className="font-medium text-muted-foreground">{line.speaker}:</span>{" "}
+                    {line.text}
+                  </p>
+                ))}
+              </div>
             ) : (
               <p className="whitespace-pre-wrap text-sm text-foreground">{transcript}</p>
             )}

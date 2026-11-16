@@ -226,3 +226,37 @@ test("the section shows its title, folder rows with counts and root notes", asyn
     "1",
   ]);
 });
+
+test("the section is one labelled group, its collapsed folders' notes out of reach", async (t) => {
+  const markup = await renderTree(t, {
+    folders: [{ id: 7, name: "Old plans", is_default: 0, noteCount: 1 }],
+    notes: [
+      { id: 70, title: "Device plan", folder_id: 7 },
+      { id: 72, title: "Device loose note", folder_id: null },
+    ],
+    viewNoteId: null,
+  });
+  const { Window } = await import("happy-dom");
+  const page = new Window();
+  t.after(() => page.happyDOM.close());
+  page.document.body.innerHTML = markup;
+  const row = (title) => page.document.querySelector(`[role="treeitem"][title="${title}"]`);
+  const group = row("Device loose note").closest('[role="group"]');
+  assert.equal(group?.getAttribute("aria-label"), "On this device");
+  assert.equal(row("Device plan").closest('[role="group"][aria-label]'), group);
+  // Folders start collapsed: their notes sit in an inert wrapper, out of Tab order.
+  assert.ok(row("Device plan").closest("[inert]"), "a collapsed folder's notes are inert");
+  assert.equal(row("Device loose note").closest("[inert]"), null);
+});
+
+test("the section's info button is always visible", async (t) => {
+  const markup = await renderTree(t, {
+    folders: [],
+    notes: [{ id: 72, title: "Device loose note", folder_id: null }],
+    viewNoteId: null,
+  });
+  const button = markup.match(/<button[^>]*aria-label="notes\.deviceNotes\.infoLabel"[^>]*>/)?.[0];
+  assert.ok(button, "the info button renders");
+  assert.match(button, /opacity-100/);
+  assert.doesNotMatch(button, /\bopacity-0\b/);
+});

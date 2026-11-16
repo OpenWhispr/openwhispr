@@ -3570,6 +3570,7 @@
       "movedCount_one": "{{count}} nota spostata nel tuo Privato",
       "movedCount_other": "{{count}} note spostate nel tuo Privato",
       "moveFailed": "Impossibile spostare questa nota",
+      "moveFolderFailed": "Impossibile spostare queste note",
       "banner": "Questa nota non è ancora assegnata a un account.",
       "notesHeading": "Note",
       "summaryHeading": "Riepilogo AI",
