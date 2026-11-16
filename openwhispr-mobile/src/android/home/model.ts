@@ -2,6 +2,17 @@ import type { BubbleStatus } from '../../../modules/android-dictation/src';
 import type { InsightEvent } from '../insights';
 import type { HomeKey } from './strings';
 
+/**
+ * How many lines a short label may take so it wraps only between words: a word too wide for
+ * its box then shrinks instead of splitting. Chinese, Japanese and Korean break between
+ * characters anyway, so they are left alone.
+ */
+export function wordSafeLines(text: string): number | undefined {
+  if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text))
+    return undefined;
+  return Math.max(1, text.trim().split(/\s+/).length);
+}
+
 export type Permission = 'overlay' | 'accessibility' | 'microphone';
 
 /** Missing permissions in the order the person is asked for them. */

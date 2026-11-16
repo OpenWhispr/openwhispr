@@ -6,6 +6,7 @@ import {
   localDate,
   missingPermissions,
   relativeDate,
+  wordSafeLines,
 } from '../home/model';
 
 const event = (
@@ -130,4 +131,12 @@ describe('relativeDate', () => {
 
 it('formats the local calendar date', () => {
   expect(localDate(new Date(2026, 0, 5, 23, 30))).toBe('2026-01-05');
+});
+
+it('lets a label wrap only between words, except in Chinese, Japanese and Korean', () => {
+  expect(wordSafeLines('gesprochene Wörter')).toBe(2);
+  expect(wordSafeLines('words per minute')).toBe(3);
+  expect(wordSafeLines('Wörterbuch')).toBe(1);
+  expect(wordSafeLines('1分あたりの単語')).toBeUndefined();
+  expect(wordSafeLines('連續天數')).toBeUndefined();
 });

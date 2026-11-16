@@ -57,6 +57,9 @@ export function SectionHeader({ title }: { title: string }) {
   );
 }
 
+/** Horizontal room a PillButton with an icon needs besides its label: padding, icon slot, gap, border. */
+export const PILL_ICON_CHROME = 8 * 2 + 28 + 4 + 2;
+
 /** Small pill button. The icon sits in a 28 px slot and follows the label colour. */
 export function PillButton({
   label,

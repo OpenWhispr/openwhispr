@@ -7,7 +7,7 @@ import { SystemIcon } from '@/components/ui/SystemIcon';
 import type { Transcript } from '@/types';
 import { useHomeT, type HomeKey } from './strings';
 import { home, SectionHeader, type } from './kit';
-import { relativeDate, type HomeStats } from './model';
+import { relativeDate, wordSafeLines, type HomeStats } from './model';
 
 const TIPS: { video: number; poster: number; title: HomeKey; body: HomeKey }[] = [
   {
@@ -156,7 +156,14 @@ function Stat({ value, label }: { value: string; label: string }) {
       >
         {value}
       </Text>
-      <Text style={type.footnote}>{label}</Text>
+      <Text
+        numberOfLines={wordSafeLines(label)}
+        adjustsFontSizeToFit={wordSafeLines(label) !== undefined}
+        minimumFontScale={0.7}
+        style={type.footnote}
+      >
+        {label}
+      </Text>
     </View>
   );
 }

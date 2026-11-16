@@ -20,7 +20,7 @@ import {
   type BubbleStatus,
 } from '../../../modules/android-dictation/src';
 import { useHomeT } from './strings';
-import { home, PillButton, type } from './kit';
+import { home, PILL_ICON_CHROME, PillButton, type } from './kit';
 import { missingPermissions, PERMISSION_LABEL, type Permission } from './model';
 
 const GLOSSY_ICON = require('./assets/glossy-icon.png');
@@ -81,9 +81,14 @@ export function BubbleCard({
   const { status, refresh } = useBubbleStatus();
   const bubbleSize = useConfigStore((s) => s.config?.androidBubbleSize ?? 64);
   const [switching, setSwitching] = useState(false);
-  // With enlarged text the pair can't share a row at one size; stack them full width instead.
+  // Try it and Upload audio share a row only when every label they can show fits at full
+  // size; otherwise (enlarged text, longer translations) they stack full width.
   const { fontScale } = useWindowDimensions();
-  const stacked = fontScale > 1.15;
+  const [rowWidth, setRowWidth] = useState(0);
+  const [labelWidth, setLabelWidth] = useState(0);
+  const pairLabels = [t('tryIt'), t('processing'), t('uploadAudio'), t('writingItUp')];
+  const fits = !rowWidth || !labelWidth || labelWidth <= (rowWidth - 8) / 2 - PILL_ICON_CHROME;
+  const stacked = fontScale > 1.15 || !fits;
   const pairStyle = stacked ? { flex: 0, alignSelf: 'stretch' as const } : undefined;
   const missing = missingPermissions(status);
   const needsPermission = missing.length > 0;
@@ -130,6 +135,18 @@ export function BubbleCard({
         boxShadow: home.cardShadow,
       }}
     >
+      <View
+        pointerEvents="none"
+        importantForAccessibility="no-hide-descendants"
+        onLayout={({ nativeEvent }) => setLabelWidth(Math.ceil(nativeEvent.layout.width))}
+        style={{ position: 'absolute', top: 0, left: 0, opacity: 0, alignItems: 'flex-start' }}
+      >
+        {pairLabels.map((label) => (
+          <Text key={label} numberOfLines={1} style={type.subhead}>
+            {label}
+          </Text>
+        ))}
+      </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Image
           source={GLOSSY_ICON}
@@ -178,7 +195,10 @@ export function BubbleCard({
           />
         </>
       ) : (
-        <View style={{ flexDirection: stacked ? 'column' : 'row', gap: stacked ? 14 : 8 }}>
+        <View
+          onLayout={({ nativeEvent }) => setRowWidth(Math.round(nativeEvent.layout.width))}
+          style={{ flexDirection: stacked ? 'column' : 'row', gap: stacked ? 14 : 8 }}
+        >
           <PillButton
             icon="Mic"
             label={tryItLabel}
