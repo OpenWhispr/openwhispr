@@ -63,9 +63,9 @@ Folders shown are the stand-in folders (live, `deleted_at IS NULL`) that hold at
 
 Chad's pick ("ask the cloud"). On a Mac other accounts have used, stand-in notes with `account_id IS NULL`, `cloud_id` set and `owner_user_id IS NULL` are asked about once per account:
 - After sign-in, once the account's sync can make authenticated requests, the renderer asks main for the candidate cloud ids it hasn't asked about for this account, then calls `GET /api/notes/:cloud_id/access` (existing, editor-gated; returns `my_permission`) through the existing authenticated cloud request path. No API change.
-- `200` with `my_permission === "owner"`: main claims that note for the account (same placement as the sign-in proof claim: the account's default Private, its folder of that name), sets `owner_user_id` to the account, re-checking in the transaction that it is still an unclaimed candidate.
-- `404`/`403`, or `200` with `editor`/`viewer` (shared with, not owned by, this account): recorded as "not this account's" so it isn't asked again for this account; the note stays where it is.
-- Network error, 401, 5xx, or a sign-out/account switch mid-check: nothing recorded; asked again on a later pass.
+- `200` with `my_permission === "owner"` and `owner.id` this account: main claims that note for the account (same placement as the sign-in proof claim: the account's default Private, its folder of that name), sets `owner_user_id` to the account, re-checking in the transaction that it is still an unclaimed candidate.
+- `404`, `403` with `code: "note_access_denied"`, `200` with `editor`/`viewer` (shared with, not owned by, this account), or an owner's `200` whose `grants` hold a `space` grant (a teamspace note, which the owner's team sync brings in): recorded as "not this account's" so it isn't asked again for this account; the note stays where it is.
+- Any other 403 (`SSO_REQUIRED` refuses even the owner of a workspace note), a `200` with a missing or unknown `my_permission` or another owner id, network error, 401, 5xx, or a sign-out/account switch mid-check: nothing recorded; asked again on a later pass. One note that fails is logged and skipped.
 - The record is per `(note, account)` in SQLite (a small table; the builder names it), cleared for an account by account deletion.
 - Requests run a few at a time, not all at once; a Mac rarely has more than a handful of these notes.
 - After claims: the same follow-ups as a move (vector notify, `notesMoved()`, broadcasts).
