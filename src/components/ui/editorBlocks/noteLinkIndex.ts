@@ -3,6 +3,8 @@
  * resolving a title to a note, the [[ picker, and backlinks. Reads through the
  * renderer's existing note IPC (signed-out and signed-in scopes alike).
  */
+import { unescapeMd } from "./markdownSyntax";
+
 export interface IndexedNote {
   id: number;
   title: string;
@@ -89,7 +91,7 @@ export function backlinksTo(title: string, selfId: number | null): IndexedNote[]
     if (n.id === selfId) return false;
     for (const text of [n.content, n.enhanced]) {
       for (const m of text.matchAll(pattern)) {
-        if (norm(m[1].replace(/\\(.)/g, "$1")) === key) return true;
+        if (norm(unescapeMd(m[1])) === key) return true;
       }
     }
     return false;

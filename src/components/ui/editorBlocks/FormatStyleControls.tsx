@@ -36,15 +36,12 @@ import {
   type ChainCommand,
   useMenuDropdown,
 } from "../RichTextEditorMenus";
-import { COLORS, FONTS } from "./SlashMenu";
-import { promptInline } from "./inlinePrompt";
+import { ToolbarButton } from "../RichTextEditorFormatMenu";
+import { ALIGNS, COLORS, FONTS, promptRuby } from "./SlashMenu";
 import { tb } from "./translate";
 import { formatHotkeyLabel } from "../../../utils/hotkeys";
 
 type Dropdown = ReturnType<typeof useMenuDropdown>;
-const ALIGNS = ["left", "center", "right", "justify"] as const;
-const BUTTON =
-  "h-7 w-7 rounded-md text-muted-foreground hover:bg-foreground/5 hover:text-foreground";
 const TRIGGER =
   "h-7 gap-0.5 rounded-md px-1.5 text-muted-foreground hover:bg-foreground/5 hover:text-foreground";
 
@@ -71,34 +68,6 @@ const ColorIcon = ({ color }: { color?: string }) => (
     )}
   </span>
 );
-
-function IconButton({
-  label,
-  title = label,
-  active,
-  onClick,
-  children,
-}: {
-  label: string;
-  title?: string;
-  active?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <Button
-      size="icon"
-      variant="ghost"
-      title={title}
-      aria-label={label}
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(BUTTON, active && "bg-foreground/10 text-foreground")}
-    >
-      {children}
-    </Button>
-  );
-}
 
 function StyleDropdown({
   id,
@@ -166,7 +135,7 @@ export function FormatStyleControls({ editor, dropdown }: { editor: Editor; drop
 
   return (
     <>
-      <IconButton
+      <ToolbarButton
         label={tb("toolbar.highlight")}
         title={t("notes.editor.format.withShortcut", {
           action: tb("toolbar.highlight"),
@@ -176,15 +145,15 @@ export function FormatStyleControls({ editor, dropdown }: { editor: Editor; drop
         onClick={() => run((ch) => c(ch).toggleHighlight())}
       >
         <Highlighter size={15} />
-      </IconButton>
-      <IconButton
+      </ToolbarButton>
+      <ToolbarButton
         label={tb("toolbar.subscript")}
         active={state.subscript}
         onClick={() => run((ch) => c(ch).toggleSubscript())}
       >
         <Subscript size={15} />
-      </IconButton>
-      <IconButton
+      </ToolbarButton>
+      <ToolbarButton
         label={tb("toolbar.superscript")}
         title={t("notes.editor.format.withShortcut", {
           action: tb("toolbar.superscript"),
@@ -194,7 +163,7 @@ export function FormatStyleControls({ editor, dropdown }: { editor: Editor; drop
         onClick={() => run((ch) => c(ch).toggleSuperscript())}
       >
         <Superscript size={15} />
-      </IconButton>
+      </ToolbarButton>
 
       <StyleDropdown
         id="color"
@@ -271,32 +240,13 @@ export function FormatStyleControls({ editor, dropdown }: { editor: Editor; drop
         ))}
       </StyleDropdown>
 
-      <IconButton
+      <ToolbarButton
         label={tb("toolbar.ruby")}
         active={state.ruby}
-        onClick={async () => {
-          if (state.ruby) return run((ch) => c(ch).unsetRubyText());
-          const hasSelection = !editor.state.selection.empty;
-          const answer = await promptInline(editor, {
-            placeholder: tb(hasSelection ? "prompt.reading" : "prompt.textReading"),
-          });
-          if (!answer) return;
-          if (hasSelection) return run((ch) => c(ch).setRubyText({ rt: answer }));
-          const [base, rt] = answer.split("|").map((s) => s.trim());
-          if (base && rt)
-            editor
-              .chain()
-              .focus()
-              .insertContent({
-                type: "text",
-                text: base,
-                marks: [{ type: "rubyText", attrs: { rt } }],
-              })
-              .run();
-        }}
+        onClick={() => (state.ruby ? run((ch) => c(ch).unsetRubyText()) : void promptRuby(editor))}
       >
         <RubyText size={15} />
-      </IconButton>
+      </ToolbarButton>
     </>
   );
 }

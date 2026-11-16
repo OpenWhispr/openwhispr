@@ -129,7 +129,7 @@ const shouldShowOnEmptyLine: FloatingMenuProps["shouldShow"] = ({ editor, state 
 const LINE_MENU_OPTIONS: FloatingMenuProps["options"] = { placement: "bottom-start" };
 
 /** A toggle when `active` is set, a plain button otherwise. */
-function ToolbarButton({
+export function ToolbarButton({
   label,
   title = label,
   active,

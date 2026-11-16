@@ -23,9 +23,11 @@
 
 // Characters prosemirror-markdown's esc() escapes in text. Latex and attribute
 // values are written in this escaped form and unescaped on read, so the stored
-// text is identical whichever editor saved it.
+// text is identical whichever editor saved it. That editor also writes < and >
+// as &lt; and &gt;.
 const ESCAPED = /\\([`*\\~[\]_])/g;
-export const unescapeMd = (s: string) => s.replace(ESCAPED, "$1");
+export const unescapeMd = (s: string) =>
+  s.replace(ESCAPED, "$1").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 export const escapeMd = (s: string) => s.replace(/[`*\\~[\]_]/g, (c) => `\\${c}`);
 
 const escapeHtml = (s: string) =>
@@ -150,7 +152,12 @@ export function markdownSyntax(md: any) {
     // with letters on both outer sides (x==y and y==z).
     const next = src.charAt(pos + 2);
     const close = src.indexOf("==", pos + 3);
-    if (!next || /\s|=/.test(next) || close < 0 || src.slice(pos, close).includes("`"))
+    if (
+      !next ||
+      /\s|=/.test(next) ||
+      close < 0 ||
+      src.slice(pos, close).replace(/\\./g, "").includes("`")
+    )
       return false;
     if (
       /\w/.test(src.charAt(pos - 1)) &&

@@ -1390,3 +1390,26 @@ test("/ in a table cell opens no menu: its blocks would split the table", async 
   await notes.act(() => notes.editor().commands.insertContent(" /"), 120);
   assert.equal(happyWindow.document.querySelector(".rte-slash-menu"), null);
 });
+
+test("find counts matches, and clicking its fields keeps focus out of the note", async (t) => {
+  const { OPEN_FIND_EVENT } = await import("../../src/components/ui/editorBlocks/events.ts");
+  const notes = await mountNotes(t, "Hello world hello");
+  await notes.act(() => notes.editor().commands.setTextSelection({ from: 1, to: 6 }));
+  await notes.act(() =>
+    happyWindow.dispatchEvent(
+      new happyWindow.CustomEvent(OPEN_FIND_EVENT, { detail: { editor: notes.editor() } })
+    )
+  );
+  // The search runs 250 ms after the term is set.
+  await notes.act(() => {}, 300);
+  assert.equal(happyWindow.document.querySelector(".rte-find-count").textContent, "1/2");
+  const replace = happyWindow.document.querySelector(
+    'input[aria-label="notes.editor.blocks.find.replace"]'
+  );
+  await notes.act(() => {
+    replace.focus();
+    replace.click();
+  });
+  assert.equal(happyWindow.document.activeElement, replace);
+  assert.deepEqual(notes.errors, []);
+});

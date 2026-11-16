@@ -4,24 +4,11 @@
  */
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
-import type { Editor } from "@tiptap/react";
+import { useEditorState, type Editor } from "@tiptap/react";
 import { FindAndReplacePluginKey } from "@tiptap/extension-find-and-replace";
 import { OPEN_FIND_EVENT } from "./events";
 import { tb } from "./translate";
 import { formatHotkeyLabel } from "../../../utils/hotkeys";
-
-/** Re-render on editor transactions, but only while `active`. */
-function useEditorTick(editor: Editor, active: boolean) {
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    if (!active) return;
-    const bump = () => setTick((t) => t + 1);
-    editor.on("transaction", bump);
-    return () => {
-      editor.off("transaction", bump);
-    };
-  }, [editor, active]);
-}
 
 export function FindReplacePanel({ editor }: { editor: Editor }) {
   const { t } = useTranslation();
@@ -30,7 +17,14 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
   const [replacement, setReplacement] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
   const findRef = useRef<HTMLInputElement>(null);
-  useEditorTick(editor, open); // a closed panel costs nothing per keystroke
+  const { total, current } = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      const plugin: any = FindAndReplacePluginKey.getState(e.state);
+      const count = plugin?.results?.length ?? 0;
+      return { total: count, current: count ? (plugin?.currentIndex ?? 0) + 1 : 0 };
+    },
+  });
 
   useEffect(() => {
     // Listen on window, not editor.view.dom: the view may not be mounted yet when
@@ -50,7 +44,7 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
     return () => {
       window.removeEventListener(OPEN_FIND_EVENT, onOpen);
       // Unmounted while open (the note became read-only): leave no highlights behind.
-      editor.commands.clearSearch();
+      if (!editor.isDestroyed) editor.commands.clearSearch();
     };
   }, [editor]);
 
@@ -71,13 +65,12 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
   };
 
   if (!open) return null;
-  const plugin: any = FindAndReplacePluginKey.getState(editor.state);
-  const total = plugin?.results?.length ?? 0;
-  const current = total ? (plugin?.currentIndex ?? 0) + 1 : 0;
 
   return (
     <div
       className="rte-find-panel"
+      // The editor's container focuses the editor on click.
+      onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !event.nativeEvent.isComposing) {
           event.preventDefault();

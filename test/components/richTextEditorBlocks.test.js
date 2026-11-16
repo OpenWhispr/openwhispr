@@ -163,6 +163,7 @@ test("a highlight opener in one paragraph does not leak into the next", () => {
 test("text that only looks like the new forms keeps its meaning", () => {
   assert.equal(save("x==y and y==z"), "x==y and y==z");
   assert.ok(featuresOf("foo==bar baz== qux").includes("mark:highlight"), "mid-word highlight");
+  assert.ok(featuresOf("==a \\` b==").includes("mark:highlight"), "escaped backtick");
   const video = "[▶ YouTube video](https://www.youtube.com/watch?v=dQw4w9WgXcQ)";
   assert.equal(save(video), video);
   // A $ or {sub} whose only close is inside a code span.
@@ -251,6 +252,20 @@ test("a toggle title an older build saved escaped reads back as typed", () => {
   }
 });
 
+test("< and > an older build saved as &lt; and &gt; read back as typed", () => {
+  const editor = editorFor("$x &gt; 0$ see [[A -&gt; B]]");
+  try {
+    const found = [];
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === "inlineMath") found.push(node.attrs.latex);
+      if (node.type.name === "noteLink") found.push(node.attrs.title);
+    });
+    assert.deepEqual(found, ["x > 0", "A -> B"]);
+  } finally {
+    editor.destroy();
+  }
+});
+
 test("a callout that starts with a divider reopens as a callout", () => {
   const editor = editorFor("Intro");
   try {
@@ -333,7 +348,7 @@ test("notes without the new forms keep the editor's existing Markdown", () => {
   assert.equal(save(plain), plain);
 });
 
-test("the find panel mounts before the editor view does (no early editor.view access)", async () => {
+test("the find panel mounts before the editor view does and unmounts after it is destroyed", async () => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   const React = require("react");
   const { createRoot } = require("react-dom/client");
@@ -360,8 +375,9 @@ test("the find panel mounts before the editor view does (no early editor.view ac
       );
     });
   } finally {
+    // useEditor can hand the panel an editor it already destroyed.
+    editor.destroy();
     await React.act(async () => root.unmount());
     host.remove();
-    editor.destroy();
   }
 });

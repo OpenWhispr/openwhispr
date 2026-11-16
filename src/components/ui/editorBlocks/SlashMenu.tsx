@@ -45,8 +45,23 @@ export const FONTS: [string, string][] = [
   ["monospace", "Menlo, monospace"],
 ];
 const CALLOUTS = ["note", "tip", "important", "warning", "caution"] as const;
-const ALIGNS = ["left", "center", "right", "justify"] as const;
+export const ALIGNS = ["left", "center", "right", "justify"] as const;
 const label = (key: string, params?: Record<string, unknown>) => () => tb(key, params);
+
+/** Ruby text: a reading for the selection, or "text|reading" inserted at the caret. */
+export async function promptRuby(e: Editor) {
+  const hasSelection = !e.state.selection.empty;
+  const answer = await promptInline(e, {
+    placeholder: tb(hasSelection ? "prompt.reading" : "prompt.textReading"),
+  });
+  if (!answer) return;
+  if (hasSelection) return chain(e).setRubyText({ rt: answer }).run();
+  const [base, rt] = answer.split("|").map((s) => s.trim());
+  if (!base || !rt) return;
+  chain(e)
+    .insertContent({ type: "text", text: base, marks: [{ type: "rubyText", attrs: { rt } }] })
+    .run();
+}
 
 export const SLASH_ITEMS: SlashItem[] = [
   ...([1, 2, 3] as const).map((level) => ({
@@ -228,19 +243,7 @@ export const SLASH_ITEMS: SlashItem[] = [
     title: label("slash.ruby"),
     hint: label("slash.rubyHint"),
     keywords: "ruby furigana pronunciation japanese",
-    run: async (e) => {
-      const hasSelection = !e.state.selection.empty;
-      const answer = await promptInline(e, {
-        placeholder: tb(hasSelection ? "prompt.reading" : "prompt.textReading"),
-      });
-      if (!answer) return;
-      if (hasSelection) return chain(e).setRubyText({ rt: answer }).run();
-      const [base, rt] = answer.split("|").map((s) => s.trim());
-      if (!base || !rt) return;
-      chain(e)
-        .insertContent({ type: "text", text: base, marks: [{ type: "rubyText", attrs: { rt } }] })
-        .run();
-    },
+    run: promptRuby,
   },
   ...ALIGNS.map((dir) => ({
     id: `align-${dir}`,
