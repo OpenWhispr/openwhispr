@@ -25,12 +25,22 @@ jest.mock('@/data/remote/notesApi', () => ({
   batchCreateFolders: jest.fn(),
   batchCreateNotes: jest.fn(),
   deleteNote: jest.fn(),
+  fetchNotes: jest.fn(),
+  updateNote: jest.fn(),
 }));
 
-import { batchCreateFolders, batchCreateNotes, deleteNote } from '@/data/remote/notesApi';
+import {
+  batchCreateFolders,
+  batchCreateNotes,
+  deleteNote,
+  fetchNotes,
+  updateNote,
+  type NoteCreateResponse,
+} from '@/data/remote/notesApi';
 import { deletePrivateNoteCloudCopy } from '../privateNoteDeletion';
 import { pushFolders } from '../pushFolders';
 import { pushNotes } from '../pushNotes';
+import { pullNotesTeam } from '../pullNotesTeam';
 
 const SERVER_TIME = '2026-11-13T12:00:00.000Z';
 
@@ -208,3 +218,213 @@ it.each(['unsupported', 'filed', 'team', 'unplaced'])(
     expect(payload.space_id).toBe(kind === 'team' ? 'team-space' : null);
   },
 );
+
+function refusePrivateWorkspaceOnce(): void {
+  jest.mocked(batchCreateNotes).mockImplementationOnce(
+    async (items): Promise<NoteCreateResponse> => ({
+      created: [],
+      refused: items.map((item): { client_note_id: string; code: string } => ({
+        client_note_id: item.client_note_id,
+        code: 'private_workspace_not_found',
+      })),
+    }),
+  );
+}
+
+it('uploads recovered team edits after the API refuses their former Private workspace', async (): Promise<void> => {
+  const team = mockSpaces.upsertFromRemote({
+    id: 'team-B',
+    workspace_id: 'workspace-B',
+    name: 'B team',
+    my_role: 'admin',
+  });
+  const remote = remoteNote();
+  mockRepo.applyRemoteNote(remote, () => null);
+  const local = mockRepo.getNoteForRemote(remote)!;
+  mockRepo.moveNoteToSpace(local.id, team.id);
+  jest.mocked(updateNote).mockResolvedValue({
+    ...remote,
+    private_workspace_id: null,
+    workspace_id: 'workspace-B',
+    space_id: 'team-B',
+  });
+  await pushNotes();
+
+  mockRepo.updateNote(local.id, { content: 'Offline team edit' });
+  mockSpaces.softDeleteByCloudId('team-B');
+  jest.mocked(fetchNotes).mockResolvedValue({
+    notes: [{ ...remote, access_removed: true, space_id: 'team-B' }],
+    hasMore: false,
+  });
+  await pullNotesTeam();
+  const recoveredClientId = mockRepo.getNoteById(local.id)!.clientNoteId;
+  refusePrivateWorkspaceOnce();
+
+  await pushNotes();
+
+  expect(mockRepo.getNoteById(local.id)).toMatchObject({
+    content: 'Offline team edit',
+    privateWorkspaceId: null,
+    clientNoteId: recoveredClientId,
+    remoteId: null,
+    pendingSync: 1,
+  });
+  await pushNotes();
+  expect(jest.mocked(batchCreateNotes).mock.calls[1][0][0]).not.toHaveProperty(
+    'private_workspace_id',
+  );
+  expect(mockRepo.getNoteById(local.id)).toMatchObject({
+    privateWorkspaceId: null,
+    clientNoteId: recoveredClientId,
+    remoteId: 'created-note-0',
+    pendingSync: 0,
+  });
+  await pushNotes();
+  expect(batchCreateNotes).toHaveBeenCalledTimes(2);
+});
+
+it('republishes a folderless device-only note in the default after a placement refusal', async (): Promise<void> => {
+  const remote = remoteNote();
+  mockRepo.applyRemoteNote(remote, () => null);
+  const local = mockRepo.getNoteForRemote(remote)!;
+  mockRepo.setNotePrivacy(local.id, true);
+  await deletePrivateNoteCloudCopy(mockRepo.getNoteById(local.id)!);
+  mockRepo.setNotePrivacy(local.id, false);
+  const publishedClientId = mockRepo.getNoteById(local.id)!.clientNoteId;
+  // Cached membership may still list B; only the write refusal proves it cannot be used.
+  mockRepo.setSyncState('private_workspaces', JSON.stringify([{ id: 'workspace-B', name: 'B' }]));
+  refusePrivateWorkspaceOnce();
+
+  await pushNotes();
+  expect(mockRepo.getNoteById(local.id)).toMatchObject({
+    privateWorkspaceId: null,
+    clientNoteId: publishedClientId,
+    pendingSync: 1,
+  });
+  await pushNotes();
+
+  expect(jest.mocked(batchCreateNotes).mock.calls[1][0][0]).toMatchObject({
+    client_note_id: publishedClientId,
+    folder_id: null,
+    space_id: null,
+  });
+  expect(jest.mocked(batchCreateNotes).mock.calls[1][0][0]).not.toHaveProperty(
+    'private_workspace_id',
+  );
+  expect(mockRepo.getNoteById(local.id)).toMatchObject({
+    privateWorkspaceId: null,
+    clientNoteId: publishedClientId,
+    remoteId: 'created-note-0',
+    pendingSync: 0,
+  });
+});
+
+it.each(['private', 'folder', 'team', 'republished'])(
+  'does not apply a stale placement refusal after the note becomes %s in flight',
+  async (change): Promise<void> => {
+    const remote = remoteNote();
+    mockRepo.applyRemoteNote(remote, () => null);
+    const local = mockRepo.getNoteForRemote(remote)!;
+    mockRepo.setNotePrivacy(local.id, false);
+    jest
+      .mocked(batchCreateNotes)
+      .mockImplementationOnce(async (items): Promise<NoteCreateResponse> => {
+        if (change === 'private') mockRepo.setNotePrivacy(local.id, true);
+        if (change === 'republished') mockRepo.setNotePrivacy(local.id, false);
+        if (change === 'folder') {
+          const folder = mockRepo.createFolder('New destination');
+          mockRepo.moveNoteToFolder(local.id, folder.id);
+        }
+        if (change === 'team') {
+          const team = mockSpaces.upsertFromRemote({
+            id: 'team-C',
+            workspace_id: 'workspace-C',
+            name: 'C team',
+            my_role: 'admin',
+          });
+          mockRepo.moveNoteToSpace(local.id, team.id);
+        }
+        return {
+          created: [],
+          refused: [
+            { client_note_id: items[0].client_note_id, code: 'private_workspace_not_found' },
+          ],
+        };
+      });
+
+    await pushNotes();
+
+    expect(mockRepo.getNoteById(local.id)?.privateWorkspaceId).toBe('workspace-B');
+  },
+);
+
+it('preserves an edit made while the rejected placement create was in flight', async (): Promise<void> => {
+  const remote = remoteNote();
+  mockRepo.applyRemoteNote(remote, () => null);
+  const local = mockRepo.getNoteForRemote(remote)!;
+  mockRepo.setNotePrivacy(local.id, false);
+  jest
+    .mocked(batchCreateNotes)
+    .mockImplementationOnce(async (items): Promise<NoteCreateResponse> => {
+      mockRepo.updateNote(local.id, { content: 'Newer edit' });
+      return {
+        created: [],
+        refused: [{ client_note_id: items[0].client_note_id, code: 'private_workspace_not_found' }],
+      };
+    });
+
+  await pushNotes();
+
+  expect(mockRepo.getNoteById(local.id)).toMatchObject({
+    privateWorkspaceId: null,
+    content: 'Newer edit',
+    pendingSync: 1,
+  });
+  await pushNotes();
+  expect(mockRepo.getNoteById(local.id)).toMatchObject({
+    content: 'Newer edit',
+    remoteId: 'created-note-0',
+    pendingSync: 0,
+  });
+});
+
+it('recovers only the refused placement row in a mixed create response', async (): Promise<void> => {
+  const localIds = ['accepted', 'lost', 'other-refusal'].map((identity): number => {
+    const remote = remoteNote({ id: identity, client_note_id: identity });
+    mockRepo.applyRemoteNote(remote, () => null);
+    const local = mockRepo.getNoteForRemote(remote)!;
+    mockRepo.setNotePrivacy(local.id, false);
+    return local.id;
+  });
+  jest.mocked(batchCreateNotes).mockImplementationOnce(
+    async (items): Promise<NoteCreateResponse> => ({
+      created: [
+        { id: 'accepted-cloud', client_note_id: items[0].client_note_id, updated_at: SERVER_TIME },
+      ],
+      refused: [
+        // A matching acknowledgment wins even if a backend also labels that input refused.
+        { client_note_id: items[0].client_note_id, code: 'private_workspace_not_found' },
+        { client_note_id: items[1].client_note_id, code: 'private_workspace_not_found' },
+        { client_note_id: items[2].client_note_id, code: 'note_scope_change_denied' },
+      ],
+    }),
+  );
+
+  await pushNotes();
+
+  expect(mockRepo.getNoteById(localIds[0])).toMatchObject({
+    privateWorkspaceId: 'workspace-B',
+    remoteId: 'accepted-cloud',
+    pendingSync: 0,
+  });
+  expect(mockRepo.getNoteById(localIds[1])).toMatchObject({
+    privateWorkspaceId: null,
+    remoteId: null,
+    pendingSync: 1,
+  });
+  expect(mockRepo.getNoteById(localIds[2])).toMatchObject({
+    privateWorkspaceId: 'workspace-B',
+    remoteId: null,
+    pendingSync: 1,
+  });
+});

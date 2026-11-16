@@ -1050,6 +1050,32 @@ export class LocalNotesRepository implements NotesRepository {
       .run();
   }
 
+  resetRejectedNotePrivateWorkspace(pushed: Note): void {
+    const current = this.getNoteById(pushed.id);
+    // The refusal describes the create we sent, never a later move, privacy change, or identity.
+    if (
+      !pushed.privateWorkspaceId ||
+      !pushed.clientNoteId ||
+      pushed.remoteId ||
+      pushed.folderId != null ||
+      !current ||
+      current.clientNoteId !== pushed.clientNoteId ||
+      current.privateWorkspaceId !== pushed.privateWorkspaceId ||
+      current.remoteId ||
+      current.folderId != null ||
+      current.isPrivate === 1 ||
+      current.deletedAt ||
+      (current.spaceId != null && current.spaceId !== this.getPrivateSpaceId())
+    ) {
+      return;
+    }
+    this.database
+      .update(notes)
+      .set({ privateWorkspaceId: null, pendingSync: 1, updatedAt: sql`datetime('now')` })
+      .where(eq(notes.id, current.id))
+      .run();
+  }
+
   applyRemoteNote(
     remote: RemoteNote,
     resolveFolder: (serverFolderId: string | null) => number | null,

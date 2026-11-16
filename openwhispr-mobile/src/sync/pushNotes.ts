@@ -419,7 +419,7 @@ export async function pushNotes(
         recordNoteCreateAttempts(chunk.map((create) => create.payload.client_note_id));
         const { created, refused = [] } = await batchCreateNotes(chunk.map((c) => c.payload));
         checkpoint();
-        const refusedIds = new Set(refused.map((row) => row.client_note_id));
+        const refusedByClientId = new Map(refused.map((row) => [row.client_note_id, row.code]));
         const byClientId = new Map(
           created
             .filter((server) => server.client_note_id)
@@ -428,10 +428,16 @@ export async function pushNotes(
         let unmatched = 0;
         for (let j = 0; j < chunk.length; j += 1) {
           const create = chunk[j];
-          if (
-            refusedIds.has(create.payload.client_note_id) &&
-            !byClientId.has(create.payload.client_note_id)
-          ) {
+          const refusal = refusedByClientId.get(create.payload.client_note_id);
+          if (refusal !== undefined && !byClientId.has(create.payload.client_note_id)) {
+            if (
+              personalScope &&
+              create.payload.private_workspace_id &&
+              refusal === 'private_workspace_not_found'
+            ) {
+              // Membership caches may be stale. Only the API's refusal authorizes a default retry.
+              notesRepository.resetRejectedNotePrivateWorkspace(create.pushed);
+            }
             unmatched += 1;
             continue;
           }

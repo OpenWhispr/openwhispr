@@ -199,6 +199,9 @@ export class SyncedNotesRepository implements NotesRepository {
   forkNoteToPrivate(noteId: number): void {
     this.local.forkNoteToPrivate(noteId);
   }
+  resetRejectedNotePrivateWorkspace(pushed: Note): void {
+    this.local.resetRejectedNotePrivateWorkspace(pushed);
+  }
   markFolderPushed(
     localId: number,
     remoteId: string,
