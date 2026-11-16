@@ -4887,7 +4887,7 @@ EOF`,
                 )}
               </SettingsPanel>
               {organizationManagesUpdates && updateStatus.stagedUpdate && (
-                <p role="status" className="mt-3 text-xs text-amber-solid">
+                <p role="status" className="mt-3 text-xs text-amber">
                   {t("settingsPage.general.updates.stagedBeforePolicy")}
                 </p>
               )}
