@@ -206,7 +206,7 @@ function useArrival(active: boolean, arriving: boolean) {
     if (!arriving) return;
     const animation = Animated.timing(value, {
       toValue: 1,
-      duration: 2000,
+      duration: 1300,
       easing: Easing.out(Easing.quad),
       useNativeDriver: false,
     });
@@ -215,7 +215,7 @@ function useArrival(active: boolean, arriving: boolean) {
   }, [active, arriving, value]);
   return {
     backgroundColor: value.interpolate({
-      inputRange: [0, 0.2, 1],
+      inputRange: [0, 0.15, 1],
       outputRange: ['rgba(21,85,212,0.12)', 'rgba(21,85,212,0.12)', 'rgba(21,85,212,0)'],
     }),
     opacity: value.interpolate({
