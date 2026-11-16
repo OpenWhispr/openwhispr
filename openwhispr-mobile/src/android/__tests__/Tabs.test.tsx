@@ -79,6 +79,12 @@ it('drops stale large-font measurements after the display scale and width change
   expect(normalHeight).toBeGreaterThanOrEqual(64 + 8);
 });
 
+it('wraps tab labels between words but never splits a word', () => {
+  render(<AndroidTabs />);
+  expect(screen.getByText('dictionary').props.numberOfLines).toBe(1);
+  expect(screen.getByText('dictionary').props.adjustsFontSizeToFit).toBe(true);
+});
+
 it('hides the Chat tab on Android while keeping its route registered', () => {
   render(<AndroidTabs />);
   expect(screen.queryByTestId('tab-(chat)')).toBeNull();
