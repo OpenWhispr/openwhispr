@@ -4,19 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Text } from '@/components/ui/Text';
-import { AppFont } from '@/lib/fonts';
-import { SystemIcon } from '@/components/ui/SystemIcon';
-import {
-  AccentText,
-  BubbleIcon,
-  Card,
-  GlassButton,
-  Screen,
-  WhiteButton,
-  colors,
-  plain,
-  s,
-} from './kit';
+import { AccentText, BubbleIcon, GlassButton, Screen, WhiteButton, colors, plain, s } from './kit';
 import { useOnboardingT } from './strings';
 
 const APP_ICON = require('./assets/app-icon.png');
@@ -183,11 +171,6 @@ function HowVideo({ video }: { video: ExpoVideo }) {
 export function HowItWorksScreen({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
   const t = useOnboardingT();
   const video = loadExpoVideo();
-  const rows = [
-    { icon: 'Keyboard' as const, title: t('howStep1'), body: t('howStep1Body') },
-    { icon: 'Mic' as const, title: t('howStep2'), body: t('howStep2Body') },
-    { icon: 'Check' as const, title: t('howStep3'), body: t('howStep3Body') },
-  ];
   return (
     <Screen onBack={onBack} footer={<GlassButton label={t('giveItATry')} onPress={onNext} />}>
       <AccentText text={t('howTitle')} />
@@ -205,27 +188,6 @@ export function HowItWorksScreen({ onBack, onNext }: { onBack: () => void; onNex
           </View>
         )}
       </View>
-      <Card style={{ paddingVertical: 4 }}>
-        {rows.map((row, index) => (
-          <View
-            key={row.title}
-            style={[local.row, index > 0 && { borderTopWidth: 1, borderColor: colors.divider }]}
-          >
-            <SystemIcon
-              name="circle"
-              mdName={row.icon}
-              size={20}
-              color={row.icon === 'Check' ? colors.accent : colors.ink}
-            />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontSize: 17, color: colors.ink, fontFamily: AppFont.medium }}>
-                {row.title}
-              </Text>
-              <Text style={s.caption}>{row.body}</Text>
-            </View>
-          </View>
-        ))}
-      </Card>
     </Screen>
   );
 }
@@ -258,5 +220,4 @@ const local = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
 });

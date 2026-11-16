@@ -19,11 +19,8 @@ export const onboardingEnglish = {
   howBody:
     'A small OpenWhispr bubble floats over your keyboard whenever you’re typing. Tap it and talk.',
   howStep1: 'Tap any text box',
-  howStep1Body: 'The bubble appears next to your keyboard',
   howStep2: 'Tap the bubble and talk',
-  howStep2Body: 'Tap stop when you’re done',
   howStep3: 'Your words land where you were typing',
-  howStep3Body: 'Cleaned up, ready to send',
   giveItATry: 'Give it a try',
   appWhatsApp: 'WhatsApp',
   appGmail: 'Gmail',
