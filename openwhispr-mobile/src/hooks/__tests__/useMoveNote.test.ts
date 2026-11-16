@@ -1,10 +1,13 @@
 import { act, renderHook } from '@testing-library/react-native';
-import type { Folder, Space } from '@/data';
+import type { Folder, Note, Space } from '@/data';
 import { useMoveNote, type UseMoveNoteResult } from '@/hooks/useMoveNote';
 import type { PrivateWorkspace } from '@/lib/privateWorkspaces';
 
 const mockState = {
   spaces: [] as Space[],
+  notes: [] as Note[],
+  getNoteById: jest.fn((): Note | null => null),
+  getSpaceFolders: jest.fn((): Folder[] => []),
   folders: [] as Folder[],
   folderCounts: { 1: 4 } as Record<number, number>,
   privateWorkspaces: [] as PrivateWorkspace[],
