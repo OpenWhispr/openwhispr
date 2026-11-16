@@ -696,6 +696,19 @@ class DatabaseManager {
     `);
   }
 
+  // Which accounts the cloud already answered "not yours" for, per backed-up
+  // stand-in note, so each account asks once.
+  _initStandInOwnershipChecks() {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS stand_in_ownership_checks (
+        note_id INTEGER NOT NULL,
+        account_id TEXT NOT NULL,
+        checked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (note_id, account_id)
+      )
+    `);
+  }
+
   // Signed-out rows normally join an account when they sync. These never sync
   // (failed or empty dictations, container chats), so they join at sign-in or
   // they'd stay visible to every later account.
@@ -2411,6 +2424,7 @@ class DatabaseManager {
       );
       this._initDeviceAccounts();
       this._initWorkspaceScopes();
+      this._initStandInOwnershipChecks();
 
       // Cloud-backed rows that just LEFT a team must keep pushing their scope
       // retraction (D6) even in the backup-off team-only pass, where the
@@ -5743,6 +5757,7 @@ class DatabaseManager {
       }
       this.db.prepare("DELETE FROM device_accounts WHERE account_id = ?").run(accountId);
       this.db.prepare("DELETE FROM account_workspace_scopes WHERE account_id = ?").run(accountId);
+      this.db.prepare("DELETE FROM stand_in_ownership_checks WHERE account_id = ?").run(accountId);
       this.db
         .prepare(
           `DELETE FROM workspace_names WHERE workspace_id NOT IN
@@ -6556,11 +6571,12 @@ class DatabaseManager {
       if (standInId == null) return claimed;
       const claimsNotes = !this.hasOtherAccountRows();
       this.db.transaction(() => {
-        const notesToClaim =
-          claimsNotes &&
-          this.db
-            .prepare("SELECT 1 FROM notes WHERE space_id = ? AND account_id IS NULL LIMIT 1")
-            .get(standInId);
+        const notesToClaim = this.db
+          .prepare(
+            `SELECT 1 FROM notes WHERE space_id = ? AND account_id IS NULL
+               ${claimsNotes ? "" : "AND owner_user_id = ?"} LIMIT 1`
+          )
+          .get(...(claimsNotes ? [standInId] : [standInId, accountId]));
         const strayChats = this.db
           .prepare(
             `SELECT 1 FROM agent_conversations
@@ -6574,9 +6590,13 @@ class DatabaseManager {
         // Stand-in folders that stay, and the account's folder their rows joined.
         const joined = new Map();
         if (notesToClaim) {
-          const moved = this._claimStandInNotes(standInId, homeId, accountId, joined);
-          claimed.notes = moved.notes;
-          claimed.folders = moved.folders;
+          if (claimsNotes) {
+            const moved = this._claimStandInNotes(standInId, homeId, accountId, joined);
+            claimed.notes = moved.notes;
+            claimed.folders = moved.folders;
+          } else {
+            claimed.notes = this._claimProvenStandInNotes(standInId, homeId, accountId);
+          }
         }
         const moveFolderChats = this.db.prepare(
           "UPDATE agent_conversations SET space_id = ?, folder_id = ? WHERE account_id = ? AND folder_id = ?"
@@ -6601,6 +6621,18 @@ class DatabaseManager {
       );
       throw error;
     }
+  }
+
+  // On a shared Mac only notes the cloud named this account as owner of leave
+  // the stand-in; deleted ones go too, so their tombstones still sync.
+  _claimProvenStandInNotes(standInId, homeId, accountId) {
+    const ids = this.db
+      .prepare(
+        "SELECT id FROM notes WHERE space_id = ? AND account_id IS NULL AND owner_user_id = ?"
+      )
+      .all(standInId, accountId);
+    for (const { id } of ids) this._placeStandInNote(id, homeId, accountId);
+    return ids.length;
   }
 
   // The notes half of claimSignedOutPrivateNotes. Moves are local: sync
@@ -6710,6 +6742,69 @@ class DatabaseManager {
       return { folders, notes };
     } catch (error) {
       debugLogger.error("Error getting device notes", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  // Backed-up stand-in notes no owner is recorded for, which only the cloud
+  // can place; each account is asked once per note.
+  getStandInOwnershipCandidates() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this._deviceNotesApply()) return [];
+      return this.db
+        .prepare(
+          `SELECT n.id, n.cloud_id FROM notes n
+           WHERE ${this._standInOwnershipCandidateSql("n")}
+             AND NOT EXISTS (SELECT 1 FROM stand_in_ownership_checks c
+                             WHERE c.note_id = n.id AND c.account_id = ?)
+           ORDER BY n.id`
+        )
+        .all(this.activeAccountId);
+    } catch (error) {
+      debugLogger.error(
+        "Error getting stand-in ownership candidates",
+        { error: error.message },
+        "notes"
+      );
+      throw error;
+    }
+  }
+
+  _standInOwnershipCandidateSql(alias) {
+    return `${alias}.space_id = (SELECT id FROM spaces WHERE kind = 'private' AND account_id IS NULL AND workspace_id IS NULL AND deleted_at IS NULL ORDER BY id LIMIT 1)
+      AND ${alias}.account_id IS NULL AND ${alias}.cloud_id IS NOT NULL AND ${alias}.owner_user_id IS NULL`;
+  }
+
+  // Records the cloud's answer for a candidate: an owned note joins the
+  // account's default Private, any other is not asked about again.
+  resolveStandInOwnership(noteId, cloudId, owned) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!this._deviceNotesApply()) return { claimed: false };
+      const accountId = this.activeAccountId;
+      return this.db.transaction(() => {
+        const candidate = this.db
+          .prepare(
+            `SELECT 1 FROM notes n WHERE n.id = ? AND n.cloud_id = ?
+               AND ${this._standInOwnershipCandidateSql("n")}`
+          )
+          .get(noteId, cloudId);
+        if (!candidate) return { claimed: false };
+        if (!owned) {
+          this.db
+            .prepare(
+              "INSERT OR IGNORE INTO stand_in_ownership_checks (note_id, account_id) VALUES (?, ?)"
+            )
+            .run(noteId, accountId);
+          return { claimed: false };
+        }
+        this._placeStandInNote(noteId, this.getDefaultPrivateSpaceId(), accountId);
+        this.db.prepare("UPDATE notes SET owner_user_id = ? WHERE id = ?").run(accountId, noteId);
+        return { claimed: true };
+      })();
+    } catch (error) {
+      debugLogger.error("Error resolving stand-in ownership", { error: error.message }, "notes");
       throw error;
     }
   }
