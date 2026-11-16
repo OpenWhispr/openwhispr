@@ -27,6 +27,8 @@ import { missingPermissions, PERMISSION_LABEL, uploadProgress, type Permission }
 
 const GLOSSY_ICON = require('./assets/glossy-icon.png');
 const FULL_WIDTH = { flex: 0, alignSelf: 'stretch' as const };
+/** Screen width (dp) at or below which the two bubble-card buttons always stack. */
+export const STACK_BUTTONS_AT_OR_BELOW = 411;
 
 const readStatus = (): BubbleStatus | null => AndroidDictation?.getStatus() ?? null;
 
@@ -79,14 +81,15 @@ export function BubbleCard({
   const { status, refresh } = useBubbleStatus();
   const bubbleSize = useConfigStore((s) => s.config?.androidBubbleSize ?? 64);
   const [switching, setSwitching] = useState(false);
-  // Tap to dictate and Upload audio share a row only when both labels fit on one line;
-  // otherwise (small phones, enlarged text, longer translations) they stack full width.
-  const { fontScale } = useWindowDimensions();
+  // Tap to dictate and Upload audio share a row only on screens wider than 411 dp, and only
+  // when both labels fit on one line; otherwise (phones up to 411 dp such as the Galaxy A73,
+  // enlarged text, longer translations) they stack full width.
+  const { fontScale, width } = useWindowDimensions();
   const [rowWidth, setRowWidth] = useState(0);
   const [labelWidth, setLabelWidth] = useState(0);
   const pairLabels = [t('tapToDictate'), t('uploadAudio')];
   const fits = !rowWidth || !labelWidth || labelWidth <= (rowWidth - 8) / 2 - PILL_ICON_CHROME;
-  const stacked = fontScale > 1.15 || !fits;
+  const stacked = width <= STACK_BUTTONS_AT_OR_BELOW || fontScale > 1.15 || !fits;
   const pairStyle = stacked ? FULL_WIDTH : undefined;
   const missing = missingPermissions(status);
   const needsPermission = missing.length > 0;

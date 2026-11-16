@@ -586,3 +586,45 @@ it('says Added to History once an upload is written up', async () => {
   expect(mockSaveUpload).toHaveBeenCalled();
   expect(screen.getByText('addedToHistory', { includeHiddenElements: true })).toBeTruthy();
 });
+
+describe('bubble card buttons by screen width', () => {
+  // The container holding both buttons: the nearest ancestor of one that also holds the other.
+  const pairDirection = () => {
+    const { StyleSheet } = require('react-native');
+    const upload = screen.getByLabelText('uploadAudio');
+    let node = screen.getByLabelText('tapToDictate').parent;
+    const contains = (root: any, target: any): boolean =>
+      root === target || (root.children ?? []).some((child: any) => contains(child, target));
+    while (node && !contains(node, upload)) node = node.parent;
+    while (node && !StyleSheet.flatten(node.props.style)?.flexDirection) node = node.parent;
+    return StyleSheet.flatten(node?.props.style)?.flexDirection;
+  };
+  const withWidth = (width: number) =>
+    jest
+      .spyOn(require('react-native'), 'useWindowDimensions')
+      .mockReturnValue({ width, height: 800, scale: 2.8, fontScale: 1 });
+
+  it('stacks them on a 384 dp phone like the Galaxy A73', () => {
+    withWidth(384);
+    render(<AndroidHome />);
+    expect(pairDirection()).toBe('column');
+  });
+
+  it('stacks them at exactly 411 dp', () => {
+    withWidth(411);
+    render(<AndroidHome />);
+    expect(pairDirection()).toBe('column');
+  });
+
+  it('puts them side by side from 412 dp when the labels fit', () => {
+    withWidth(412);
+    render(<AndroidHome />);
+    expect(pairDirection()).toBe('row');
+  });
+
+  it('puts them side by side on a wider screen when the labels fit', () => {
+    withWidth(600);
+    render(<AndroidHome />);
+    expect(pairDirection()).toBe('row');
+  });
+});
