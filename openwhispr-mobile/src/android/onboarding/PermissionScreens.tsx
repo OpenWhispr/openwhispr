@@ -3,6 +3,7 @@ import { AppState, Image, Modal, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
+import { AppFont } from '@/lib/fonts';
 import {
   AndroidDictation,
   dictationEvents,
@@ -75,7 +76,9 @@ function SettingCard({ header, label, on }: { header?: string; label: string; on
     <View style={p.settingCard}>
       {header ? (
         <View style={p.settingHeader}>
-          <Text style={{ fontSize: 16, color: colors.ink, fontWeight: '500' }}>{header}</Text>
+          <Text style={{ fontSize: 16, color: colors.ink, fontFamily: AppFont.medium }}>
+            {header}
+          </Text>
         </View>
       ) : null}
       <View style={p.settingRow}>
@@ -109,16 +112,25 @@ export function OverlayScreen({ onBack, onNext }: { onBack: () => void; onNext: 
           <PulseRings size={72} />
           <BubbleIcon size={60} />
         </View>
-        <Svg width="100%" height="100%" viewBox="0 0 361 300" style={StyleSheet.absoluteFill}>
+        <View style={p.overlayCard}>
+          <SettingCard header="OpenWhispr" label={t('overlaySetting')} on />
+        </View>
+        <Svg
+          width="100%"
+          height="100%"
+          viewBox="0 0 361 300"
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        >
           <Path
-            d="M 214 62 C 300 62 352 120 336 190 C 330 214 318 226 300 236"
+            d="M 214 62 C 322 62 360 150 348 206 C 342 234 330 246 312 248"
             stroke={colors.accent}
             strokeWidth={2}
             fill="none"
             strokeLinecap="round"
           />
           <Path
-            d="M 312 222 L 298 237 L 318 241"
+            d="M 324 238 L 312 248 L 326 258"
             stroke={colors.accent}
             strokeWidth={2}
             fill="none"
@@ -126,9 +138,6 @@ export function OverlayScreen({ onBack, onNext }: { onBack: () => void; onNext: 
             strokeLinejoin="round"
           />
         </Svg>
-        <View style={p.overlayCard}>
-          <SettingCard header="OpenWhispr" label={t('overlaySetting')} on />
-        </View>
       </View>
     </Screen>
   );
@@ -196,11 +205,11 @@ export function AccessibilityScreen({
           <View key={step.title} style={{ gap: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <View style={p.number}>
-                <Text style={{ color: colors.accent, fontSize: 13, fontWeight: '600' }}>
+                <Text style={{ color: colors.accent, fontSize: 13, fontFamily: AppFont.semibold }}>
                   {index + 1}
                 </Text>
               </View>
-              <Text style={{ fontSize: 17, color: colors.ink, fontWeight: '500' }}>
+              <Text style={{ fontSize: 17, color: colors.ink, fontFamily: AppFont.medium }}>
                 {step.title}
               </Text>
             </View>
@@ -227,7 +236,7 @@ export function AccessibilityScreen({
             </View>
             <Text style={s.body}>{t('disclosureBody')}</Text>
             <View style={p.disclosure}>
-              <Text style={{ fontSize: 19, color: colors.ink, fontWeight: '600' }}>
+              <Text style={{ fontSize: 19, color: colors.ink, fontFamily: AppFont.semibold }}>
                 {t('disclosureWhat')}
               </Text>
               {(['disclosure1', 'disclosure2', 'disclosure3'] as const).map((key) => (
@@ -457,6 +466,6 @@ const p = StyleSheet.create({
   },
   notificationIcon: { width: 40, height: 40, borderRadius: 10 },
   notificationMeta: { fontSize: 13, color: colors.tertiary },
-  notificationTitle: { fontSize: 17, color: colors.ink, fontWeight: '600' },
+  notificationTitle: { fontSize: 17, color: colors.ink, fontFamily: AppFont.semibold },
   notificationBody: { fontSize: 14, color: colors.secondary },
 });

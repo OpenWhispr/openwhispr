@@ -10,6 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
+import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import {
   ANDROID_MODELS,
@@ -93,6 +94,7 @@ function ModeCard({
 }) {
   return (
     <Pressable
+      cssInterop={false}
       accessibilityRole="radio"
       accessibilityState={{ selected, disabled: Boolean(disabled) }}
       accessibilityLabel={`${title}. ${lead}`}
@@ -102,7 +104,9 @@ function ModeCard({
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <SystemIcon name="circle" mdName={icon} size={20} color={colors.accent} />
-        <Text style={{ flex: 1, fontSize: 19, fontWeight: '600', color: colors.ink }}>{title}</Text>
+        <Text style={{ flex: 1, fontSize: 19, fontFamily: AppFont.semibold, color: colors.ink }}>
+          {title}
+        </Text>
         <View style={[e.radio, selected && e.radioOn]}>
           {selected ? (
             <SystemIcon name="checkmark" mdName="Check" size={14} color="#FFFFFF" />
@@ -156,7 +160,9 @@ function ModelRow({
           />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 18, fontWeight: '500', color: colors.ink }}>{title}</Text>
+          <Text style={{ fontSize: 18, fontFamily: AppFont.medium, color: colors.ink }}>
+            {title}
+          </Text>
           <Text style={s.caption}>{body}</Text>
         </View>
       </View>

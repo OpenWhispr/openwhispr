@@ -5,6 +5,7 @@ import {
   Image,
   Keyboard,
   Pressable,
+  StatusBar,
   StyleSheet,
   TextInput,
   View,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
+import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { AccentText, CircleButton, GlassButton, PillButton, colors, s } from './kit';
@@ -74,7 +76,9 @@ export function PracticeScreen({
   const place = useCallback((top: number | null) => {
     if (top === null) return;
     root.current?.measureInWindow((_x, y, _w, height) => {
-      if (mounted.current) setOverlayBottom(Math.max(12, y + height - top + 12));
+      // The keyboard reports screen coordinates; window coordinates start below the status bar.
+      const bottom = y + height + (StatusBar.currentHeight ?? 0);
+      if (mounted.current) setOverlayBottom(Math.max(12, bottom - top + 12));
     });
   }, []);
 
@@ -85,6 +89,12 @@ export function PracticeScreen({
       place(event.endCoordinates.screenY);
     });
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardTop(null));
+    // The keyboard can stay open from the previous practice, so no show event arrives.
+    const open = Keyboard.isVisible() ? Keyboard.metrics() : undefined;
+    if (open) {
+      setKeyboardTop(open.screenY);
+      place(open.screenY);
+    }
     const app = AppState.addEventListener('change', (state) => {
       if (state !== 'active' && recorder.current.active) {
         void recorder.current.cancel();
@@ -102,6 +112,12 @@ export function PracticeScreen({
     // Recording stops on leaving the app regardless of what was typed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [place]);
+
+  // Measure again once the screen has laid out: the first measurement can run before layout.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => place(keyboardTop));
+    return () => cancelAnimationFrame(frame);
+  }, [keyboardTop, place]);
 
   const success = phase === 'done';
   const start = async () => {
@@ -155,7 +171,6 @@ export function PracticeScreen({
     if (kind === 'message' && text && phase === 'inserted') setPhase('done');
   };
 
-  const busy = phase === 'listening' || phase === 'processing';
   const bubbleState: BubbleState =
     phase === 'listening'
       ? 'listening'
@@ -211,7 +226,13 @@ export function PracticeScreen({
                     <Text style={p.label}>{t('to')}</Text>
                     <View style={p.chip}>
                       <View style={p.avatar}>
-                        <Text style={{ fontSize: 11, color: colors.accent, fontWeight: '600' }}>
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: colors.accent,
+                            fontFamily: AppFont.semibold,
+                          }}
+                        >
                           {t('emailRecipient').slice(0, 1)}
                         </Text>
                       </View>
@@ -236,7 +257,6 @@ export function PracticeScreen({
                   multiline
                   value={text}
                   onChangeText={setText}
-                  editable={!busy}
                   placeholder={kind === 'message' && phase === 'blank' ? '' : t(copy.placeholder)}
                   placeholderTextColor={colors.tertiary}
                   accessibilityLabel={t(copy.placeholder)}
@@ -251,6 +271,7 @@ export function PracticeScreen({
                 />
                 {kind === 'message' && phase === 'blank' && !text ? (
                   <Pressable
+                    cssInterop={false}
                     accessibilityRole="button"
                     accessibilityLabel={t('tapHere')}
                     onPress={() => input.current?.focus()}
@@ -314,7 +335,7 @@ const p = StyleSheet.create({
     backgroundColor: colors.surface2,
   },
   appIcon: { width: 24, height: 24, borderRadius: 6 },
-  appName: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.ink },
+  appName: { flex: 1, fontSize: 16, fontFamily: AppFont.semibold, color: colors.ink },
   send: {
     width: 28,
     height: 28,
@@ -333,7 +354,7 @@ const p = StyleSheet.create({
     borderColor: colors.divider,
   },
   label: { fontSize: 15, color: colors.tertiary },
-  value: { fontSize: 15, color: colors.ink, fontWeight: '500' },
+  value: { fontSize: 15, color: colors.ink, fontFamily: AppFont.medium },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -371,6 +392,6 @@ const p = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 12,
   },
-  hint: { flex: 1, fontSize: 18, lineHeight: 24, textAlign: 'right', fontWeight: '500' },
-  hintDone: { fontSize: 20, lineHeight: 26, fontWeight: '500' },
+  hint: { flex: 1, fontSize: 18, lineHeight: 24, textAlign: 'right', fontFamily: AppFont.medium },
+  hintDone: { fontSize: 20, lineHeight: 26, fontFamily: AppFont.medium },
 });

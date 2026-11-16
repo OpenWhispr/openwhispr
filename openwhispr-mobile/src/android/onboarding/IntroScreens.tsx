@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { Text } from '@/components/ui/Text';
+import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import {
   AccentText,
@@ -43,6 +45,7 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
   const t = useOnboardingT();
   return (
     <BrandBackground>
+      <StatusBar style="light" />
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={[s.center, { flex: 1 }]}>
           <View style={[s.center, { width: 280, height: 280 }]}>
@@ -215,7 +218,7 @@ export function HowItWorksScreen({ onBack, onNext }: { onBack: () => void; onNex
               color={row.icon === 'Check' ? colors.accent : colors.ink}
             />
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontSize: 17, color: colors.ink, fontWeight: '500' }}>
+              <Text style={{ fontSize: 17, color: colors.ink, fontFamily: AppFont.medium }}>
                 {row.title}
               </Text>
               <Text style={s.caption}>{row.body}</Text>

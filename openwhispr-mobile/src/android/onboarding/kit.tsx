@@ -21,6 +21,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
+import { AppFont } from '@/lib/fonts';
 import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useOnboardingT } from './strings';
@@ -91,6 +92,7 @@ type ButtonProps = {
 export function GlassButton({ label, onPress, disabled, busy, style }: ButtonProps) {
   return (
     <Pressable
+      cssInterop={false}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: Boolean(disabled || busy), busy: Boolean(busy) }}
@@ -121,6 +123,7 @@ export function GlassButton({ label, onPress, disabled, busy, style }: ButtonPro
 export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonProps) {
   return (
     <Pressable
+      cssInterop={false}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: Boolean(disabled || busy), busy: Boolean(busy) }}
@@ -147,6 +150,7 @@ export function WhiteButton({ label, onPress, disabled, busy, style }: ButtonPro
 export function SecondaryButton({ label, onPress, disabled, style }: ButtonProps) {
   return (
     <Pressable
+      cssInterop={false}
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
@@ -169,6 +173,7 @@ export function LinkButton({
 }) {
   return (
     <Pressable
+      cssInterop={false}
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
@@ -191,6 +196,7 @@ export function CircleButton({
 }) {
   return (
     <Pressable
+      cssInterop={false}
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
@@ -210,6 +216,7 @@ export function CircleButton({
 export function PillButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable
+      cssInterop={false}
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
@@ -350,7 +357,7 @@ export const s = StyleSheet.create({
   title: {
     fontSize: 32,
     lineHeight: 38,
-    fontWeight: '700',
+    fontFamily: AppFont.bold,
     color: colors.ink,
     letterSpacing: -0.6,
   },
@@ -388,7 +395,7 @@ export const s = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.18)',
     borderTopColor: 'rgba(255,255,255,0.6)',
   },
-  glassLabel: { color: '#FFFFFF', fontSize: 17, fontWeight: '500' },
+  glassLabel: { color: '#FFFFFF', fontSize: 17, fontFamily: AppFont.medium },
   secondary: {
     minHeight: 54,
     borderRadius: 999,
@@ -399,9 +406,9 @@ export const s = StyleSheet.create({
     borderColor: colors.divider,
     marginTop: 8,
   },
-  secondaryLabel: { color: colors.ink, fontSize: 17, fontWeight: '500' },
+  secondaryLabel: { color: colors.ink, fontSize: 17, fontFamily: AppFont.medium },
   link: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  linkLabel: { color: colors.accent, fontSize: 17, fontWeight: '500' },
+  linkLabel: { color: colors.accent, fontSize: 17, fontFamily: AppFont.medium },
   circle: {
     width: 40,
     height: 40,
@@ -418,7 +425,7 @@ export const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pillLabel: { color: colors.ink, fontSize: 16, fontWeight: '500' },
+  pillLabel: { color: colors.ink, fontSize: 16, fontFamily: AppFont.medium },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 20,

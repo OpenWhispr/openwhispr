@@ -11,6 +11,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
+import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { BubbleIcon, PulseRings, colors } from './kit';
 import { useOnboardingT } from './strings';
@@ -34,6 +35,7 @@ export function PracticeBubble({
     return (
       <View style={b.pill}>
         <Pressable
+          cssInterop={false}
           accessibilityRole="button"
           accessibilityLabel={t('cancelLabel')}
           onPress={onCancel}
@@ -44,6 +46,7 @@ export function PracticeBubble({
         </Pressable>
         <Waveform />
         <Pressable
+          cssInterop={false}
           accessibilityRole="button"
           accessibilityLabel={t('stopLabel')}
           onPress={onStop}
@@ -58,13 +61,14 @@ export function PracticeBubble({
     return (
       <View style={[b.pill, { paddingHorizontal: 18, gap: 10 }]} accessibilityLiveRegion="polite">
         <ActivityIndicator size="small" color={colors.accent} />
-        <Text style={{ fontSize: 17, color: colors.ink, fontWeight: '500' }}>
+        <Text style={{ fontSize: 17, color: colors.ink, fontFamily: AppFont.medium }}>
           {t('hintWriting')}
         </Text>
       </View>
     );
   return (
     <Pressable
+      cssInterop={false}
       accessibilityRole="button"
       accessibilityLabel={t('bubbleLabel')}
       onPress={onPress}

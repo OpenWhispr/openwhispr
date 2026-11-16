@@ -1,5 +1,6 @@
 import i18n from '../strings';
 import { useTranslation } from 'react-i18next';
+import { onboardingTranslations } from './translations';
 
 // Onboarding copy lives here rather than in the shared locale files, which the iOS app loads.
 // Words wrapped in [brackets] are drawn in the accent colour.
@@ -137,6 +138,8 @@ export type OnboardingKey = keyof typeof onboardingEnglish;
 export const ONBOARDING_NAMESPACE = 'androidOnboarding';
 
 i18n.addResourceBundle('en', ONBOARDING_NAMESPACE, onboardingEnglish, true, false);
+for (const [language, strings] of Object.entries(onboardingTranslations))
+  i18n.addResourceBundle(language, ONBOARDING_NAMESPACE, strings, true, false);
 
 export function useOnboardingT() {
   const { t } = useTranslation(ONBOARDING_NAMESPACE);

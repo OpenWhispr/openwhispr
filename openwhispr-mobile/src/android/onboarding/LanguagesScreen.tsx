@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
+import { AppFont } from '@/lib/fonts';
 import { SystemIcon } from '@/components/ui/SystemIcon';
 import { useConfigStore } from '@/store/useConfigStore';
 import { LANGUAGES, byCode, initialLanguages } from './languages';
@@ -42,6 +43,7 @@ export function LanguagesScreen({ onBack, onNext }: { onBack: () => void; onNext
               <Text style={{ fontSize: 18 }}>{language.flag}</Text>
               <Text style={l.label}>{language.label}</Text>
               <Pressable
+                cssInterop={false}
                 accessibilityRole="button"
                 accessibilityLabel={t('removeLanguage', { language: language.label })}
                 onPress={() => setCodes((current) => current.filter((item) => item !== code))}
@@ -94,12 +96,13 @@ function AddLanguageSheet({
           <View style={[s.header, { paddingHorizontal: 0 }]}>
             <Text style={l.sheetTitle}>{t('addLanguageTitle')}</Text>
             <Pressable
+              cssInterop={false}
               accessibilityRole="button"
               accessibilityLabel={t('cancel')}
               onPress={onClose}
               style={l.cancel}
             >
-              <Text style={{ color: colors.accent, fontSize: 16, fontWeight: '500' }}>
+              <Text style={{ color: colors.accent, fontSize: 16, fontFamily: AppFont.medium }}>
                 {t('cancel')}
               </Text>
             </Pressable>
@@ -123,6 +126,7 @@ function AddLanguageSheet({
               ItemSeparatorComponent={() => <View style={l.separator} />}
               renderItem={({ item }) => (
                 <Pressable
+                  cssInterop={false}
                   accessibilityRole="button"
                   accessibilityLabel={t('addThisLanguage', { language: item.label })}
                   onPress={() => {
@@ -180,7 +184,7 @@ const l = StyleSheet.create({
     backgroundColor: '#C9C6C0',
     alignSelf: 'center',
   },
-  sheetTitle: { fontSize: 22, fontWeight: '700', color: colors.ink },
+  sheetTitle: { fontSize: 22, fontFamily: AppFont.bold, color: colors.ink },
   cancel: {
     backgroundColor: colors.surface,
     borderRadius: 18,

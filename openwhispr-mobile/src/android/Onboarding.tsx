@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, BackHandler, PermissionsAndroid, Platform } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import AuthScreen from '@/screens/AuthScreen';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -138,7 +139,12 @@ export function Onboarding({ onFinish }: { onFinish: () => void }) {
     case 'splash':
       return <SplashScreen onStart={() => go(user && !user.isAnonymous ? 'pitch' : 'signin')} />;
     case 'signin':
-      return <AuthScreen onClose={() => go('splash')} onGuestContinue={() => go('pitch')} />;
+      return (
+        <>
+          <StatusBar style="light" />
+          <AuthScreen onClose={() => go('splash')} onGuestContinue={() => go('pitch')} />
+        </>
+      );
     case 'pitch':
       return <PitchScreen onBack={back} onNext={advance} />;
     case 'how':
