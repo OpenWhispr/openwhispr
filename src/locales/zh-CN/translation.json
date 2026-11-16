@@ -788,7 +788,11 @@
     },
     "custom": {
       "endpointWithProtocol": "请输入包含协议的完整 URL（例如 https://server/v1）。",
-      "httpsRequired": "需要 HTTPS（仅本地网络允许 HTTP）。",
+      "httpsRequired": "需要 HTTPS（仅本地网络允许 HTTP）。如需在公网地址上使用未加密的 HTTP，请在端点 URL 下方开启“允许不安全的 HTTP”。",
+      "allowInsecureHttp": {
+        "label": "允许不安全的 HTTP",
+        "help": "允许此端点在公网地址上使用未加密的 http://。API 密钥和文本将以明文发送，因此仅用于您可控网络中的可信服务器。"
+      },
       "endpointInvalid": "自定义端点无效或未配置。请在设置 → AI 模型中检查端点 URL。",
       "endpointUnauthorized": "端点拒绝了请求（401/403）。请添加 API Key 或调整服务器认证设置。",
       "endpointTitle": "端点 URL",

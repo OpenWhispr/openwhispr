@@ -40,7 +40,9 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
   t.after(() => reasoningService.destroy());
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
-  const { resolveConfiguredOpenAIBase } = await vite.ssrLoadModule("/services/ai/openaiBase.ts");
+  const { resolveConfiguredOpenAIBase, resolveSelfHostedOpenAIBase } = await vite.ssrLoadModule(
+    "/services/ai/openaiBase.ts"
+  );
   const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
   await i18n.changeLanguage("en");
 
@@ -239,6 +241,35 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
       resolveConfiguredOpenAIBase("custom", "http://192.168.1.20:11434/v1"),
       "http://192.168.1.20:11434/v1"
     );
+  });
+
+  await t.test("allowInsecureCustomReasoningHttp opts custom endpoints into public http", () => {
+    usePolicyStore.setState({ status: "unmanaged", appVersion: "1.8.1", policy: null });
+    const CUSTOM_ENDPOINT_INVALID = enTranslations.reasoning.custom.endpointInvalid;
+    const publicHttp = "http://public.example.com/v1";
+    try {
+      useSettingsStore.setState({ allowInsecureCustomReasoningHttp: false });
+      assert.throws(() => resolveConfiguredOpenAIBase("custom", publicHttp), {
+        message: CUSTOM_ENDPOINT_INVALID,
+      });
+      assert.throws(() => resolveSelfHostedOpenAIBase(publicHttp), { message: HTTPS_REQUIRED });
+
+      useSettingsStore.setState({ allowInsecureCustomReasoningHttp: true });
+      assert.equal(resolveConfiguredOpenAIBase("custom", publicHttp), publicHttp);
+      assert.equal(resolveSelfHostedOpenAIBase(publicHttp), publicHttp);
+      // The opt-in never widens schemes or the known-provider block.
+      assert.throws(() => resolveConfiguredOpenAIBase("custom", "ftp://public.example.com/v1"), {
+        message: CUSTOM_ENDPOINT_INVALID,
+      });
+      assert.throws(() => resolveSelfHostedOpenAIBase("ftp://public.example.com/v1"), {
+        message: HTTPS_REQUIRED,
+      });
+      assert.throws(() => resolveConfiguredOpenAIBase("custom", "http://api.groq.com/openai/v1"), {
+        message: CUSTOM_ENDPOINT_INVALID,
+      });
+    } finally {
+      useSettingsStore.setState({ allowInsecureCustomReasoningHttp: false });
+    }
   });
 
   await t.test("a scope's custom endpoint never borrows the cleanup key", async () => {

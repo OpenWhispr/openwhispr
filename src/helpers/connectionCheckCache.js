@@ -15,6 +15,7 @@ const CHECK_FIELDS = [
   "clientSecret",
   "environment",
   "tenant",
+  "allowInsecureHttp",
 ];
 
 // Everything that decides a check's answer. Only this digest is kept, never a credential.

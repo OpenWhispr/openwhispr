@@ -1761,6 +1761,8 @@ declare global {
         provider: string;
         apiKey?: string;
         baseUrl?: string;
+        /** Reasoning scope only: the user's opt-in for plain http:// on public hosts. */
+        allowInsecureHttp?: boolean;
         model?: string;
         clientId?: string;
         clientSecret?: string;

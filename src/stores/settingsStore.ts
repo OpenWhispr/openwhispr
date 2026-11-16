@@ -546,6 +546,7 @@ const BOOLEAN_SETTINGS = new Set([
   "saveDiscardedTranscriptions",
   "noteFilesEnabled",
   "showTranscriptionPreview",
+  "allowInsecureCustomReasoningHttp",
   "cleanupDisableThinking",
   "dictationAgentDisableThinking",
   "dictationAgentVisionDisableThinking",
@@ -1269,6 +1270,8 @@ export interface SettingsState
   dictationAgentVisionCloudBaseUrl: string;
   dictationAgentVisionCustomApiKey: string;
 
+  // Off by default: lets reasoning custom/self-hosted endpoints use plain http:// on public hosts.
+  allowInsecureCustomReasoningHttp: boolean;
   cleanupDisableThinking: boolean;
   dictationAgentDisableThinking: boolean;
   dictationAgentVisionDisableThinking: boolean;
@@ -1359,6 +1362,7 @@ export interface SettingsState
   setTranslationTargetLanguage: (value: string) => void;
   setTranslationTargets: (targets: string[]) => void;
 
+  setAllowInsecureCustomReasoningHttp: (value: boolean) => void;
   setCleanupDisableThinking: (value: boolean) => void;
   setDictationAgentDisableThinking: (value: boolean) => void;
   setNoteFormattingDisableThinking: (value: boolean) => void;
@@ -2234,6 +2238,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentVisionCloudBaseUrl: readString("dictationAgentVisionCloudBaseUrl", ""),
   dictationAgentVisionCustomApiKey: readString("dictationAgentVisionCustomApiKey", ""),
 
+  allowInsecureCustomReasoningHttp: readBoolean("allowInsecureCustomReasoningHttp", false),
   cleanupDisableThinking: readBoolean("cleanupDisableThinking", true),
   dictationAgentDisableThinking: readBoolean("dictationAgentDisableThinking", true),
   dictationAgentVisionDisableThinking: readBoolean("dictationAgentVisionDisableThinking", true),
@@ -2287,6 +2292,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "custom"
   ),
 
+  setAllowInsecureCustomReasoningHttp: createBooleanSetter("allowInsecureCustomReasoningHttp"),
   setCleanupDisableThinking: createBooleanSetter("cleanupDisableThinking"),
   setDictationAgentDisableThinking: createBooleanSetter("dictationAgentDisableThinking"),
   setDictationAgentVisionDisableThinking: createBooleanSetter(

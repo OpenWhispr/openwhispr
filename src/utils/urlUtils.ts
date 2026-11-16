@@ -47,12 +47,23 @@ function isPrivateHost(hostname: string): boolean {
   return false;
 }
 
-export function isSecureHttpEndpoint(url: string): boolean {
+export interface SecureHttpEndpointOptions {
+  /**
+   * Accept plain http:// on public hosts too. Off unless the caller passes the user's explicit
+   * opt-in (only the reasoning/cleanup custom endpoint offers one). Other schemes stay rejected.
+   */
+  allowInsecureHttp?: boolean;
+}
+
+export function isSecureHttpEndpoint(
+  url: string,
+  { allowInsecureHttp = false }: SecureHttpEndpointOptions = {}
+): boolean {
   try {
     const parsed = new URL(url);
     return (
       parsed.protocol === "https:" ||
-      (parsed.protocol === "http:" && isPrivateHost(parsed.hostname))
+      (parsed.protocol === "http:" && (allowInsecureHttp || isPrivateHost(parsed.hostname)))
     );
   } catch {
     return false;
