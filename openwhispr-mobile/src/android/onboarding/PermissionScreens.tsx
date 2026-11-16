@@ -106,7 +106,9 @@ export function OverlayScreen({ onBack, onNext }: { onBack: () => void; onNext: 
       }
     >
       <AccentText center text={t('overlayTitle')} />
-      <Text style={[s.body, { textAlign: 'center' }]}>{t('overlayBody')}</Text>
+      <Text textBreakStrategy="balanced" style={[s.body, { textAlign: 'center' }]}>
+        {t('overlayBody')}
+      </Text>
       <View style={p.overlayArt} importantForAccessibility="no-hide-descendants">
         <View style={[p.overlayBubble, s.center]}>
           <Halo size={88} />
@@ -198,7 +200,10 @@ export function AccessibilityScreen({
       footer={
         <>
           {opened && !status.accessibility ? (
-            <Text style={[s.caption, { textAlign: 'center', marginBottom: 8 }]}>
+            <Text
+              textBreakStrategy="balanced"
+              style={[s.caption, { textAlign: 'center', marginBottom: 8 }]}
+            >
               {t('waitingForSetting')}
             </Text>
           ) : null}
@@ -210,7 +215,9 @@ export function AccessibilityScreen({
       }
     >
       <AccentText center text={t('accessibilityTitle')} />
-      <Text style={[s.body, { textAlign: 'center' }]}>{t('accessibilityBody')}</Text>
+      <Text textBreakStrategy="balanced" style={[s.body, { textAlign: 'center' }]}>
+        {t('accessibilityBody')}
+      </Text>
       <View style={{ gap: 14 }}>
         {steps.map((step, index) => (
           <View key={step.title} style={{ gap: 10 }}>
@@ -245,7 +252,9 @@ export function AccessibilityScreen({
               />
               <CircleButton icon="close" label={t('notNow')} onPress={() => setNotice(false)} />
             </View>
-            <Text style={s.body}>{t('disclosureBody')}</Text>
+            <Text textBreakStrategy="balanced" style={s.body}>
+              {t('disclosureBody')}
+            </Text>
             <View style={p.disclosure}>
               <Text style={{ fontSize: 19, color: colors.ink, fontFamily: AppFont.semibold }}>
                 {t('disclosureWhat')}
@@ -294,7 +303,9 @@ export function BatteryScreen({ onBack, onNext }: { onBack: () => void; onNext: 
       }
     >
       <AccentText center text={t('batteryTitle')} />
-      <Text style={[s.body, { textAlign: 'center' }]}>{t('batteryBody')}</Text>
+      <Text textBreakStrategy="balanced" style={[s.body, { textAlign: 'center' }]}>
+        {t('batteryBody')}
+      </Text>
       <View style={p.keyboardArt} importantForAccessibility="no-hide-descendants">
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={p.fakeField}>
@@ -345,7 +356,9 @@ export function NotificationsScreen({
       }
     >
       <AccentText center text={t('notificationsTitle')} />
-      <Text style={[s.body, { textAlign: 'center' }]}>{t('notificationsBody')}</Text>
+      <Text textBreakStrategy="balanced" style={[s.body, { textAlign: 'center' }]}>
+        {t('notificationsBody')}
+      </Text>
       <View style={{ height: 170, marginTop: 8 }} importantForAccessibility="no-hide-descendants">
         <View style={[p.notification, p.notificationBack]}>
           <Image source={appIcon('whatsapp')} style={p.notificationIcon} />

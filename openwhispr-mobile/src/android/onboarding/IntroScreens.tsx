@@ -69,7 +69,10 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
               accent={LIGHT_ACCENT}
               style={{ color: '#FFFFFF', fontSize: 36, lineHeight: 42 }}
             />
-            <Text style={[s.body, { color: 'rgba(255,255,255,0.78)', textAlign: 'center' }]}>
+            <Text
+              textBreakStrategy="balanced"
+              style={[s.body, { color: 'rgba(255,255,255,0.78)', textAlign: 'center' }]}
+            >
               {t('splashBody')}
             </Text>
           </View>
@@ -186,7 +189,9 @@ export function HowItWorksScreen({ onBack, onNext }: { onBack: () => void; onNex
   return (
     <Screen onBack={onBack} footer={<GlassButton label={t('giveItATry')} onPress={onNext} />}>
       <AccentText text={t('howTitle')} />
-      <Text style={s.body}>{t('howBody')}</Text>
+      <Text textBreakStrategy="balanced" style={s.body}>
+        {t('howBody')}
+      </Text>
       <View
         style={local.video}
         accessible

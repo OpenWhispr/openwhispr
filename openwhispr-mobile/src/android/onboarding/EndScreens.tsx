@@ -51,7 +51,9 @@ export function ModeScreen({
       footer={<GlassButton label={t('continue')} busy={busy} onPress={() => onChoose(selected)} />}
     >
       <AccentText text={t('modeTitle')} />
-      <Text style={s.body}>{t('modeBody')}</Text>
+      <Text textBreakStrategy="balanced" style={s.body}>
+        {t('modeBody')}
+      </Text>
       <ModeCard
         {...option('cloud')}
         icon="AudioLines"
@@ -116,7 +118,9 @@ function ModeCard({
         </View>
       </View>
       <View style={{ paddingLeft: 32, gap: 8 }}>
-        <Text style={[s.body, { fontSize: 16 }]}>{lead}</Text>
+        <Text textBreakStrategy="balanced" style={[s.body, { fontSize: 16 }]}>
+          {lead}
+        </Text>
         {points.map((point) => (
           <View key={point} style={e.point}>
             <SystemIcon name="checkmark" mdName="Check" size={15} color={colors.green} />
@@ -129,7 +133,11 @@ function ModeCard({
             <Text style={e.pointText}>{caution}</Text>
           </View>
         ) : null}
-        {footnote ? <Text style={[s.caption, { fontSize: 13 }]}>{footnote}</Text> : null}
+        {footnote ? (
+          <Text textBreakStrategy="balanced" style={[s.caption, { fontSize: 13 }]}>
+            {footnote}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -168,9 +176,13 @@ function ModelRow({
             <Text style={{ fontSize: 18, fontFamily: AppFont.medium, color: colors.ink }}>
               {title}
             </Text>
-            <Text style={s.caption}>{size}</Text>
+            <Text textBreakStrategy="balanced" style={s.caption}>
+              {size}
+            </Text>
           </View>
-          <Text style={s.caption}>{body}</Text>
+          <Text textBreakStrategy="balanced" style={s.caption}>
+            {body}
+          </Text>
         </View>
       </View>
       <View style={e.track}>
@@ -183,7 +195,7 @@ function ModelRow({
         />
       </View>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={s.caption}>
+        <Text textBreakStrategy="balanced" style={s.caption}>
           {done
             ? t('ready')
             : state === 'downloading'
@@ -192,7 +204,9 @@ function ModelRow({
                 ? t('tryAgain')
                 : t('waiting')}
         </Text>
-        <Text style={s.caption}>{Math.round(progress * 100)}%</Text>
+        <Text textBreakStrategy="balanced" style={s.caption}>
+          {Math.round(progress * 100)}%
+        </Text>
       </View>
     </View>
   );
@@ -270,7 +284,9 @@ export function PrivateSetupScreen({
       }
     >
       <AccentText text={t('privateSetupTitle')} />
-      <Text style={s.body}>{t('privateSetupBody')}</Text>
+      <Text textBreakStrategy="balanced" style={s.body}>
+        {t('privateSetupBody')}
+      </Text>
       <ModelRow
         title={t('speechModel')}
         size={megabytes(SPEECH)}
@@ -299,7 +315,9 @@ export function PrivateReadyScreen({ onBack, onNext }: { onBack: () => void; onN
   return (
     <Screen onBack={onBack} footer={<GlassButton label={t('continue')} onPress={onNext} />}>
       <AccentText text={t('privateReadyTitle')} />
-      <Text style={s.body}>{t('privateReadyBody')}</Text>
+      <Text textBreakStrategy="balanced" style={s.body}>
+        {t('privateReadyBody')}
+      </Text>
       <ModelRow
         title={t('speechModel')}
         size={megabytes(SPEECH)}
@@ -362,7 +380,9 @@ export function ReadyScreen({ onDone }: { onDone: () => void }) {
         <Marquee apps={TOP_ROW} />
         <View style={{ paddingHorizontal: 24, gap: 12 }}>
           <AccentText center text={t('readyTitle')} />
-          <Text style={[s.body, { textAlign: 'center' }]}>{t('readyBody')}</Text>
+          <Text textBreakStrategy="balanced" style={[s.body, { textAlign: 'center' }]}>
+            {t('readyBody')}
+          </Text>
         </View>
         <Marquee apps={BOTTOM_ROW} reverse />
       </View>

@@ -33,7 +33,9 @@ export function LanguagesScreen({ onBack, onNext }: { onBack: () => void; onNext
       }
     >
       <AccentText text={t('languagesTitle')} />
-      <Text style={s.body}>{t(codes.length ? 'languagesBody' : 'autoDetect')}</Text>
+      <Text textBreakStrategy="balanced" style={s.body}>
+        {t(codes.length ? 'languagesBody' : 'autoDetect')}
+      </Text>
       <View style={{ gap: 12 }}>
         {codes.map((code) => {
           const language = byCode.get(code);

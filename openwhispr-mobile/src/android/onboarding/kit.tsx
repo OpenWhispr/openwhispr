@@ -60,9 +60,15 @@ export function AccentText({
   accent?: string;
   center?: boolean;
 }) {
-  const parts = text.split(/(\[[^\]]+\])/g).filter(Boolean);
+  const parts = keepLastWordsTogether(text)
+    .split(/(\[[^\]]+\])/g)
+    .filter(Boolean);
   return (
-    <Text accessibilityRole="header" style={[s.title, center && { textAlign: 'center' }, style]}>
+    <Text
+      accessibilityRole="header"
+      textBreakStrategy="balanced"
+      style={[s.title, center && { textAlign: 'center' }, style]}
+    >
       {parts.map((part, index) =>
         part.startsWith('[') ? (
           <Text key={index} style={{ color: accent }}>
@@ -74,6 +80,11 @@ export function AccentText({
       )}
     </Text>
   );
+}
+
+// No word left alone on the last line: the last two words share a no-break space.
+export function keepLastWordsTogether(text: string): string {
+  return text.replace(/ (?=\S+$)/, '\u00A0');
 }
 
 export function plain(text: string): string {
