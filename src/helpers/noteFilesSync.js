@@ -182,7 +182,9 @@ function createNoteFilesSync({ getDatabase, getSpeakerMappings, mirror = default
   // From a note's summary row (no content), so checking every note stays cheap.
   const isInPlace = (summary, placements, entries) => {
     const location = placements.forNote(summary);
-    const expected = [mirror.relPathFor(summary, location, "note")];
+    const expected = summary.is_transcript_only_upload
+      ? []
+      : [mirror.relPathFor(summary, location, "note")];
     if (summary.has_transcript) {
       expected.push(mirror.relPathFor(summary, location, "transcript"));
     }

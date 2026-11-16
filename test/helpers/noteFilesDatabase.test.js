@@ -6,6 +6,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const Module = require("node:module");
 
 let userDataDir;
@@ -112,10 +113,18 @@ test("real rows land in the layout and follow renames, moves and deletes", async
   assert.equal(dirOf(basePath, acmeNote.id), "Workspaces/Acme/Teamspaces/Engineering/Archive");
   assert.equal(dirOf(basePath, betaNote.id), "Workspaces/Beta/Teamspaces/Engineering/General");
 
-  db.moveFolderToSpace(betaFolder.id, acme);
+  const rejected = db.moveFolderToSpace(betaFolder.id, acme);
+  assert.equal(rejected.success, false, "a team move cannot cross workspace boundaries");
   noteFiles.containersChanged();
   await noteFiles.flush();
-  assert.equal(dirOf(basePath, betaNote.id), "Workspaces/Acme/Teamspaces/Engineering/General");
+  assert.equal(dirOf(basePath, betaNote.id), "Workspaces/Beta/Teamspaces/Engineering/General");
+
+  const betaDesign = teamSpace(db, "Design", "w-2");
+  const moved = db.moveFolderToSpace(betaFolder.id, betaDesign);
+  assert.equal(moved.success, true);
+  noteFiles.containersChanged();
+  await noteFiles.flush();
+  assert.equal(dirOf(basePath, betaNote.id), "Workspaces/Beta/Teamspaces/Design/General");
 
   const { noteIds } = db.deleteFolder(acmeFolder.id);
   assert.deepEqual(noteIds, [acmeNote.id]);
@@ -152,6 +161,133 @@ test("the mirror keeps an edit made outside the app when it writes the note agai
 
   assert.match(fs.readFileSync(path.join(dir, `edited-${note.id}-kept.md`), "utf8"), /mine$/);
   assert.equal(fs.existsSync(path.join(dir, `${note.id}-renamed.md`)), true);
+});
+
+test("startup removes a recorded empty upload companion and reveals its transcript", async (t) => {
+  const context = setup(t);
+  if (!context) return;
+  const { db, noteFiles, basePath } = context;
+  const note = db.saveNote(
+    "Uploaded audio",
+    "",
+    "upload",
+    null,
+    null,
+    null,
+    null,
+    JSON.stringify([{ text: "A recorded transcript." }])
+  ).note;
+  await noteFiles.enable(basePath);
+  const transcriptPath = noteFiles.notePath(note.id);
+  const companionPath = path.join(path.dirname(transcriptPath), `${note.id}-uploaded-audio.md`);
+  const contents = `---\nid: ${note.id}\ntitle: "Uploaded audio"\ntype: upload\nspace: "Private"\nfolder: "Personal"\ncreated: ${note.created_at}\nupdated: ${note.updated_at}\n---\n\n`;
+  // Seed the recorded pair written before transcript-only exports were supported.
+  fs.writeFileSync(companionPath, contents);
+  db.recordMirrorFile(fs.realpathSync(basePath), {
+    relPath: path.relative(basePath, companionPath).split(path.sep).join("/"),
+    ownerId: note.id,
+    kind: "note",
+    hash: crypto.createHash("sha256").update(contents).digest("hex"),
+  });
+
+  noteFiles.disable();
+  await noteFiles.enable(basePath, { skipRebuild: true });
+  await noteFiles.flush();
+
+  assert.equal(fs.existsSync(companionPath), false);
+  assert.equal(noteFiles.notePath(note.id), transcriptPath);
+  assert.deepEqual(allFiles(basePath), [transcriptPath]);
+});
+
+test("unrelated folder changes and restart leave an edited upload transcript in place", async (t) => {
+  const context = setup(t);
+  if (!context) return;
+  const { db, noteFiles, basePath } = context;
+  const note = db.saveNote(
+    "Uploaded audio",
+    "",
+    "upload",
+    null,
+    null,
+    null,
+    null,
+    JSON.stringify([{ text: "A recorded transcript." }])
+  ).note;
+  await noteFiles.enable(basePath);
+  const transcriptPath = noteFiles.notePath(note.id);
+  const edited = `${fs.readFileSync(transcriptPath, "utf8")}\nExternal correction.`;
+  fs.writeFileSync(transcriptPath, edited);
+
+  db.createFolder("Unrelated");
+  noteFiles.containersChanged();
+  await noteFiles.flush();
+  assert.equal(fs.readFileSync(transcriptPath, "utf8"), edited);
+  assert.deepEqual(allFiles(basePath), [transcriptPath]);
+
+  noteFiles.disable();
+  await noteFiles.enable(basePath, { skipRebuild: true });
+  await noteFiles.flush();
+  assert.equal(fs.readFileSync(transcriptPath, "utf8"), edited);
+  assert.deepEqual(allFiles(basePath), [transcriptPath]);
+});
+
+test("mirror summaries distinguish transcript-only uploads from notes, drafts and empty transcripts", (t) => {
+  const context = setup(t);
+  if (!context) return;
+  const { db } = context;
+  const transcript = JSON.stringify([{ text: "Spoken words" }]);
+  const cases = [
+    { name: "upload", expected: 1 },
+    { name: "notes", content: "Notes", expected: 0 },
+    { name: "summary", enhanced_content: "Summary", expected: 0 },
+    {
+      name: "whitespace",
+      content:
+        "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f",
+      enhanced_content: "\ufeff\u3000",
+      expected: 1,
+    },
+    { name: "zero-width content", content: "\u200b", expected: 0 },
+    { name: "NUL content", content: "\0", expected: 0 },
+    { name: "personal", note_type: "personal", expected: 0 },
+    { name: "meeting", note_type: "meeting", expected: 0 },
+    { name: "draft", transcript: null, expected: 0 },
+    { name: "empty array", transcript: "[]", expected: 0 },
+    {
+      name: "blank transcript",
+      transcript: JSON.stringify([{ text: "\n\u00a0\ufeff" }]),
+      expected: 0,
+    },
+    {
+      name: "later text",
+      transcript: JSON.stringify([{ text: "" }, { text: "Spoken words" }]),
+      expected: 1,
+    },
+    { name: "invalid JSON", transcript: "invalid", expected: 0 },
+    { name: "object", transcript: JSON.stringify({ text: "Spoken words" }), expected: 0 },
+    {
+      name: "primitive segments",
+      transcript: JSON.stringify(["Spoken words", null, 1]),
+      expected: 0,
+    },
+  ];
+  const rows = cases.map((fields) => {
+    const note = db.saveNote(fields.name, "", fields.note_type || "upload").note;
+    db.db
+      .prepare("UPDATE notes SET content = ?, enhanced_content = ?, transcript = ? WHERE id = ?")
+      .run(
+        fields.content ?? "",
+        fields.enhanced_content ?? "",
+        "transcript" in fields ? fields.transcript : transcript,
+        note.id
+      );
+    return { id: note.id, ...fields };
+  });
+  const summaries = db.getMirrorNoteSummaries();
+  for (const row of rows) {
+    const summary = summaries.find((candidate) => candidate.id === row.id);
+    assert.equal(summary.is_transcript_only_upload, row.expected, row.name);
+  }
 });
 
 test("the old layout moves over without touching another account's files", async (t) => {
