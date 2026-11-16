@@ -50,6 +50,7 @@ interface NativeDictation {
   insert(text: string): Promise<boolean>;
   startRecording(): Promise<void>;
   stopRecording(cancel: boolean): Promise<Recording>;
+  getRecordingLevel?(): number;
   startLocalMeeting(noteId: number, captureId: string, audioNamespace: string): Promise<void>;
   stopLocalMeeting(noteId: number, captureId: string): Promise<void>;
   decodeAudio(uri: string): Promise<Recording>;

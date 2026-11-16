@@ -38,6 +38,9 @@ class WavRecorder internal constructor(
   private var task: Future<*>? = null
   private var file: File? = null
   private var peak = 0
+  /** Loudness of the latest buffer, 0..1 (-60..-20 dBFS), for an in-app meter. */
+  @Volatile var level = 0f
+    private set
   private var samples = 0L
 
   @Synchronized fun start() {
@@ -76,6 +79,10 @@ class WavRecorder internal constructor(
               if (count == 0) continue
               val bytes = ByteBuffer.allocate(count * 2).order(ByteOrder.LITTLE_ENDIAN)
               for (i in 0 until count) { bytes.putShort(buffer[i]); peak = maxOf(peak, abs(buffer[i].toInt())) }
+              var sum = 0.0
+              for (i in 0 until count) { val v = buffer[i] / 32768.0; sum += v * v }
+              val db = 20 * Math.log10(Math.sqrt(sum / count).coerceAtLeast(1e-6))
+              level = ((db + 60) / 40).toFloat().coerceIn(0f, 1f)
               val data = bytes.array()
               out.write(data)
               val startedAt = samples * 1000 / sampleRate
@@ -98,6 +105,7 @@ class WavRecorder internal constructor(
   @Synchronized fun stop(cancel: Boolean): Map<String, Any> {
     check(recorder != null) { "No recording is active." }
     recording = false
+    level = 0f
     try {
       recorder?.stop(); task?.get(5, TimeUnit.SECONDS)
       val result = mapOf("uri" to "file://${file!!.absolutePath}", "durationMs" to samples * 1000 / sampleRate,
