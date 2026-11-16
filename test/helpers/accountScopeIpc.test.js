@@ -495,6 +495,7 @@ function restoreUpdaterState(t) {
     databaseManager: fakeThis.databaseManager,
     windowManager: fakeThis.windowManager,
     metaActivation: fakeThis.metaActivation,
+    productEvents: fakeThis.productEvents,
   };
   const previousTokenState = tokenState;
   t.after(() => {
@@ -587,8 +588,12 @@ async function signOutUpdater(t, generation) {
     webContents: { session: { cookies: { get: async () => [] } } },
   };
   fakeThis.windowManager = { controlPanelWindow: win, retireMeetingNotificationScope() {} };
+  // Setting the fixture's signed-in scope starts collectors and a policy read.
+  // Keep that setup work separate from the sign-out behavior under test.
+  fakeThis.metaActivation = { flush: async () => {}, close: async () => {} };
+  fakeThis.productEvents = { flush: async () => {} };
   await setScope("departing-account", generation);
-  fakeThis.metaActivation = { close: async () => {} };
+  await fakeThis.refreshEffectivePolicy();
   fakeThis.updateManager = createUpdater();
   fakeThis.updateManager.updatePolicy({
     success: true,
@@ -599,10 +604,11 @@ async function signOutUpdater(t, generation) {
 }
 
 test("local sign-out restores guest updater readiness without a server or renderer response", async (t) => {
+  useTestApi(t);
   const { manager } = await signOutUpdater(t, 100);
-  let requests = 0;
-  t.mock.method(electronStub.net, "fetch", async () => {
-    requests++;
+  const requests = [];
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    requests.push({ url, headers: init.headers, tokenState: { ...tokenState } });
     throw new Error("offline");
   });
   const result = await handlers.get("auth-clear-session")({ sender: {} });
@@ -613,8 +619,70 @@ test("local sign-out restores guest updater readiness without a server or render
   assert.equal(fakeThis.databaseManager.activeAccountId, null);
   assert.equal((await manager.getUpdateStatus()).policyReady, true);
   assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
-  assert.equal(requests, 0);
+  assert.deepEqual(requests, []);
 });
+
+test(
+  "local sign-out retires both collectors after close settles and prevents later dispatch",
+  { timeout: 10_000 },
+  async (t) => {
+    const collectors = [
+      { request: fakeThis.metaActivation.request, path: "/api/activation/device" },
+      { request: fakeThis.productEvents.request, path: "/api/product-events/batch" },
+    ];
+    useTestApi(t);
+    const { manager } = await signOutUpdater(t, 110);
+    const uploaded = deferred();
+    const response = deferred();
+    const closing = deferred();
+    const close = deferred();
+    const requests = [];
+    fakeThis.metaActivation.close = async () => {
+      closing.resolve();
+      await close.promise;
+    };
+    t.mock.method(electronStub.net, "fetch", async (url, init) => {
+      requests.push({
+        path: new URL(url).pathname,
+        authorization: init.headers.Authorization,
+        generation: tokenState.generation,
+        signal: init.signal,
+      });
+      if (requests.length === collectors.length) uploaded.resolve();
+      return response.promise;
+    });
+    const options = { method: "POST", body: {}, expectedAuthGeneration: 110 };
+    const pending = collectors.map(({ request, path }) => request({ ...options, path }));
+    t.after(async () => {
+      close.resolve();
+      response.resolve(Response.json({ accepted: [] }));
+      await Promise.all(pending);
+    });
+    await uploaded.promise;
+    const signOut = handlers.get("auth-clear-session")({ sender: {} });
+    await closing.promise;
+    assert.equal(tokenState.token, "sign-out-token-110");
+    assert.deepEqual(
+      requests.map(({ path, authorization, generation }) => ({ path, authorization, generation })),
+      collectors.map(({ path }) => ({
+        path,
+        authorization: "Bearer sign-out-token-110",
+        generation: 110,
+      }))
+    );
+
+    close.resolve();
+    assert.equal((await signOut).success, true);
+    assert.deepEqual(tokenState, { token: null, generation: 111 });
+    assert.ok(requests.every(({ signal }) => signal.aborted));
+    assert.equal((await manager.getUpdateStatus()).policyReady, true);
+    response.resolve(Response.json({ accepted: [] }));
+    assert.ok((await Promise.all(pending)).every((result) => result.success === false));
+    for (const { request, path } of collectors)
+      assert.equal((await request({ ...options, path })).success, false);
+    assert.equal(requests.length, 2, "no collector dispatches after the bearer is cleared");
+  }
+);
 
 test("completed cookie sign-out discards a pending cookie-authorized updater policy", async (t) => {
   const { deferred } = require("./harness/deferred");
