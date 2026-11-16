@@ -848,7 +848,8 @@ class SkillLibrary {
     if (problems.length > 0) return skip(problems[0].code);
     const hash = contentHash(files);
     const saveState = () => this.database.upsertSkillStateFromCloud(entry, hash);
-    if (this._diskHash(name) !== hash) this._writeSkillFolder(name, files, saveState);
+    if (!onDisk || this._inspect(name).hash !== hash)
+      this._writeSkillFolder(name, files, saveState);
     else saveState();
     this.inspected.delete(name);
     return true;
@@ -1068,15 +1069,6 @@ class SkillLibrary {
     return contentHash(
       walked.files.map((file) => ({ path: file.path, data: fs.readFileSync(file.fullPath) }))
     );
-  }
-
-  // The hash of what is on disk, or null when there's no readable skill folder.
-  _diskHash(name) {
-    try {
-      return this.skillDir(name) ? this._folderHash(name) : null;
-    } catch {
-      return null;
-    }
   }
 
   // Removes a skill's folder and the versions kept for it.

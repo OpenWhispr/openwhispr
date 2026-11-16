@@ -301,7 +301,7 @@ test("uninstalling a synced skill deletes it in the cloud, then forgets it", asy
   );
 });
 
-test("a 409 stops the retry and a 404 clears cloud_id", async (t) => {
+test("a 404 clears cloud_id", async (t) => {
   const ctx = await setup(t);
   if (!ctx) return;
   silence(t);
@@ -310,11 +310,6 @@ test("a 409 stops the retry and a 404 clears cloud_id", async (t) => {
   const cloudId = cloudByName(ctx.cloud)[name].id;
 
   ctx.library.setEnabled(name, false);
-  ctx.cloud.failNext("PATCH /api/skills/update", { status: 409 });
-  await ctx.service.syncSkillsNow();
-  assert.deepEqual(pendingNames(ctx.db), [], "a refused update isn't sent again and again");
-
-  ctx.library.setEnabled(name, true);
   ctx.cloud.failNext("PATCH /api/skills/update", { status: 404 });
   await ctx.service.syncSkillsNow();
   const row = ctx.db.getSkillForCloudMerge({ name });

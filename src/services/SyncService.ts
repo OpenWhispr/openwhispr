@@ -3675,9 +3675,6 @@ export class SyncService {
         if (isHttpStatus(err, 404)) {
           // Purged in the cloud: the next push creates it again.
           await window.electronAPI.clearSkillCloudId?.(entry.name);
-        } else if (isHttpStatus(err, 409)) {
-          // The server keeps refusing this change; stop re-sending it.
-          await markSynced(cloudId);
         } else {
           console.error("Skill update sync failed:", err);
         }
