@@ -44,7 +44,14 @@ export function SplashScreen({ onStart }: { onStart: () => void }) {
       onLayout={(event) => setSize(event.nativeEvent.layout)}
     >
       <StatusBar style="light" />
-      <Image source={SPLASH_BG} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      {size.height > 0 ? (
+        <Image
+          source={SPLASH_BG}
+          style={{ position: 'absolute', top: 0, left: 0, width: size.width, height: size.height }}
+          resizeMode="cover"
+          accessible={false}
+        />
+      ) : null}
       {size.height > 0 ? (
         <>
           <Image
