@@ -6777,7 +6777,8 @@ class DatabaseManager {
   }
 
   // Records the cloud's answer for a candidate: an owned note joins the
-  // account's default Private, any other is not asked about again.
+  // account's default Private (returned, for the windows to show it), any
+  // other is not asked about again.
   resolveStandInOwnership(noteId, cloudId, owned) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -6801,7 +6802,10 @@ class DatabaseManager {
         }
         this._placeStandInNote(noteId, this.getDefaultPrivateSpaceId(), accountId);
         this.db.prepare("UPDATE notes SET owner_user_id = ? WHERE id = ?").run(accountId, noteId);
-        return { claimed: true };
+        return {
+          claimed: true,
+          note: this.db.prepare("SELECT * FROM notes WHERE id = ?").get(noteId),
+        };
       })();
     } catch (error) {
       debugLogger.error("Error resolving stand-in ownership", { error: error.message }, "notes");
@@ -6869,35 +6873,40 @@ class DatabaseManager {
   }
 
   // Files a stand-in note in the account's Private space, in its folder of
-  // the same name (made with the stand-in folder's settings when the account
-  // has none); a root note stays at the root. The stand-in's folders stay
-  // where they are, since signed-out notes may still use them. Callers check
-  // eligibility.
+  // the same name (made with the stand-in folder's settings, under a free
+  // name, when the account has none); a root note, or one whose stand-in
+  // folder is deleted, stays at the root. A deleted note only joins a folder
+  // that exists, since a tombstone never makes one. The stand-in's folders
+  // stay where they are, since signed-out notes may still use them. Callers
+  // check eligibility.
   _placeStandInNote(noteId, targetSpaceId, accountId) {
-    const standInFolder = this.db
+    const source = this.db
       .prepare(
-        `SELECT f.name, f.is_default, f.sort_order FROM notes n
-         JOIN folders f ON f.id = n.folder_id WHERE n.id = ?`
+        `SELECT n.deleted_at AS note_deleted_at, f.name, f.is_default, f.sort_order FROM notes n
+         LEFT JOIN folders f ON f.id = n.folder_id AND f.deleted_at IS NULL WHERE n.id = ?`
       )
       .get(noteId);
-    const targetFolderId = standInFolder
-      ? (this._privateFolderNamed(targetSpaceId, accountId, standInFolder.name) ??
-        Number(
-          this.db
-            .prepare(
-              `INSERT INTO folders (name, is_default, sort_order, client_folder_id, sync_status, space_id, account_id)
-               VALUES (?, ?, ?, ?, 'synced', ?, ?)`
-            )
-            .run(
-              standInFolder.name,
-              standInFolder.is_default,
-              standInFolder.sort_order,
-              randomUUID(),
-              targetSpaceId,
-              accountId
-            ).lastInsertRowid
-        ))
-      : null;
+    const existingFolderId =
+      source?.name != null ? this._privateFolderNamed(targetSpaceId, accountId, source.name) : null;
+    const targetFolderId =
+      existingFolderId ??
+      (source?.name != null && !source.note_deleted_at
+        ? Number(
+            this.db
+              .prepare(
+                `INSERT INTO folders (name, is_default, sort_order, client_folder_id, sync_status, space_id, account_id)
+                 VALUES (?, ?, ?, ?, 'synced', ?, ?)`
+              )
+              .run(
+                this._uniqueFolderName(targetSpaceId, accountId, source.name),
+                source.is_default,
+                source.sort_order,
+                randomUUID(),
+                targetSpaceId,
+                accountId
+              ).lastInsertRowid
+          )
+        : null);
     this.db
       .prepare("UPDATE notes SET space_id = ?, folder_id = ?, account_id = ? WHERE id = ?")
       .run(targetSpaceId, targetFolderId, accountId, noteId);

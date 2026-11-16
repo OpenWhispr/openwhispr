@@ -3472,9 +3472,13 @@ class IPCHandlers {
       if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
         return ACCOUNT_CHANGED_RESULT;
       }
-      const result = this.databaseManager.resolveStandInOwnership(noteId, cloudId, owned);
-      if (result.claimed) publishDeviceNoteChange([]);
-      return result;
+      const { claimed, note } = this.databaseManager.resolveStandInOwnership(
+        noteId,
+        cloudId,
+        owned
+      );
+      if (claimed) publishDeviceNoteChange(note ? [note] : []);
+      return { claimed };
     });
 
     ipcMain.handle("db-create-folder", (_event, name, spaceId, writeGuard) =>

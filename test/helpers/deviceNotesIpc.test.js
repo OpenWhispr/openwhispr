@@ -200,10 +200,13 @@ test("db-resolve-stand-in-ownership broadcasts only when claimed", async () => {
   assert.deepEqual(sent, []);
   assert.equal(calls.notesMoved, 0);
 
-  claimResult = { claimed: true };
+  claimResult = { claimed: true, note: MOVED_ROW };
   assert.deepEqual(await invoke("db-resolve-stand-in-ownership", request), { claimed: true });
   assert.deepEqual(calls.database.at(-1), ["resolve", [4, "cloud-4", true]]);
-  assert.deepEqual(sent, [["device-notes-changed", undefined]]);
+  assert.deepEqual(sent, [
+    ["note-updated", MOVED_ROW],
+    ["device-notes-changed", undefined],
+  ]);
   assert.equal(calls.notesMoved, 1);
   assert.equal(calls.vectors, 1);
 });
