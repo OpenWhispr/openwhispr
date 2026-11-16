@@ -74,7 +74,7 @@ function IntroArt() {
           <div
             key={index}
             className={cn(
-              "flex size-[68px] items-center justify-center rounded-[18px] border border-brand-solid/15 bg-surface-primary dark:bg-surface-primary",
+              "flex size-[68px] items-center justify-center rounded-[18px] border border-brand-solid/15 bg-surface-primary",
               tile?.tileClassName
             )}
           >

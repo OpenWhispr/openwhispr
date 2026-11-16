@@ -194,7 +194,7 @@ export function ContainerOverview({
           <p className="text-[13px] text-primary/50 dark:text-primary/45">
             {t(`notes.overview.subtitle.${space.kind === "team" ? "team" : "private"}`)}
           </p>
-          <p className="text-xs text-primary/45 dark:text-primary/45">{metaParts.join(" · ")}</p>
+          <p className="text-xs text-primary/45">{metaParts.join(" · ")}</p>
           <div className="mt-1 flex items-center gap-2">
             {/* The empty state keeps its own focal create CTA in the list. */}
             {notes.length > 0 && (

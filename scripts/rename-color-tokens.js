@@ -4,9 +4,9 @@
 // var(--color-primary)) to the names scripts/generate-theme-tokens.js writes.
 //
 // Run it once, on code that still uses only the old names. It is not
-// idempotent: text-primary and text-accent exist under both schemes with
-// different meanings (the brand blue and accent purple before, body text and
-// accent/text after), so a second pass would rename the new names again. A
+// idempotent: text-primary, text-secondary and text-accent exist under both
+// schemes with different meanings (the brand blue, a grey surface and the accent
+// purple before; body text, secondary text and accent/text after), so a second pass would rename the new names again. A
 // branch cut before the rename therefore runs it BEFORE merging main, which
 // then merges cleanly because main made the same edits:
 //
@@ -93,6 +93,9 @@ const UTILITY_NAMESPACES = {
   shadow: null,
   decoration: null,
   caret: null,
+  accent: null,
+  "inset-ring": null,
+  "inset-shadow": null,
 };
 
 // Utilities that share a name with an old color token but are not colors.

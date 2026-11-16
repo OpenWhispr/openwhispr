@@ -123,7 +123,7 @@ export default function DeveloperSection() {
       </div>
 
       {/* Debug Toggle */}
-      <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary dark:bg-surface-primary divide-y divide-default/60 dark:divide-default">
+      <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary divide-y divide-default/60 dark:divide-default">
         <div className="px-5 py-4">
           <div className="flex items-center justify-between gap-6">
             <div className="min-w-0 flex-1">
@@ -195,7 +195,7 @@ export default function DeveloperSection() {
             {t("developerSection.whatGetsLogged.title")}
           </h3>
         </div>
-        <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary dark:bg-surface-primary">
+        <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary">
           <div className="px-5 py-4">
             <div
               className={`grid gap-y-2 ${isCompact ? "grid-cols-1 gap-x-0" : "grid-cols-2 gap-x-6"}`}
@@ -240,7 +240,7 @@ export default function DeveloperSection() {
               {t("developerSection.sharing.title")}
             </h3>
           </div>
-          <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary dark:bg-surface-primary">
+          <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary">
             <div className="px-5 py-4">
               <div className="space-y-2">
                 {[

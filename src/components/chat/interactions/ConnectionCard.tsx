@@ -83,7 +83,7 @@ export function ConnectRow({
             src={logo.src}
             alt=""
             monochrome={logo.monochrome}
-            className="agent:size-8 agent:rounded-full agent:bg-surface-primary agent:*:size-4 dark:agent:border-0"
+            className="agent:size-8 agent:rounded-full agent:bg-surface-primary agent:*:size-4 agent:dark:bg-surface-tertiary dark:agent:border-0"
           />
         )}
         <div className="min-w-0 flex-1">

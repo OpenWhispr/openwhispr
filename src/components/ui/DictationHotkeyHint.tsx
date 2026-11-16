@@ -27,7 +27,7 @@ export default function DictationHotkeyHint({
             {parseHotkeyList(hotkey).map((hk, index) => (
               <Fragment key={hk}>
                 {index > 0 && <span className="text-primary/45">/</span>}
-                <kbd className="rounded-md bg-surface-primary px-1.5 py-px font-sans text-[11px] font-medium text-primary/80 shadow-sm dark:bg-surface-primary">
+                <kbd className="rounded-md bg-surface-primary px-1.5 py-px font-sans text-[11px] font-medium text-primary/80 shadow-sm">
                   {formatHotkeyLabel(hk)}
                 </kbd>
               </Fragment>

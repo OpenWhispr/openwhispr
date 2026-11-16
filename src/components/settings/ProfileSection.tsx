@@ -306,7 +306,7 @@ function ChangePasswordDialog({
                 checked={revokeOtherSessions}
                 onChange={(e) => setRevokeOtherSessions(e.target.checked)}
                 disabled={submitting || readOnly}
-                className="h-3.5 w-3.5 rounded border-default accent-primary cursor-pointer"
+                className="h-3.5 w-3.5 rounded border-default accent-brand-solid cursor-pointer"
               />
               <span className="text-xs text-primary">
                 {t("settingsPage.account.profile.password.revokeOthers")}

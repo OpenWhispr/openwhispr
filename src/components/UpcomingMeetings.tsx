@@ -255,7 +255,7 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
         <span
           // Overlaid so the row keeps its full width until hovered; the scrim fades the
           // covered end of a long title out instead of slicing it.
-          className="pointer-events-none absolute inset-y-0 end-0 flex items-center bg-linear-to-r from-transparent to-surface-primary to-[2rem] ps-8 pe-1 opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 has-[:focus-visible]:opacity-100 dark:to-surface-primary"
+          className="pointer-events-none absolute inset-y-0 end-0 flex items-center bg-linear-to-r from-transparent to-surface-primary to-[2rem] ps-8 pe-1 opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 has-[:focus-visible]:opacity-100"
         >
           {joinButton}
         </span>

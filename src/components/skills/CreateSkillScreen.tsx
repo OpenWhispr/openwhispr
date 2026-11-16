@@ -306,7 +306,7 @@ export function CreateSkillScreen({
                 {draft.files.map((file, index) => (
                   <li
                     key={`${file.fileName}-${index}`}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-default/70 bg-surface-primary ps-2.5 pe-1 text-xs text-primary dark:bg-surface-primary"
+                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-default/70 bg-surface-primary ps-2.5 pe-1 text-xs text-primary"
                   >
                     <FileText size={12} className="text-secondary/70" />
                     <span dir="ltr" className="font-mono text-[11px]">

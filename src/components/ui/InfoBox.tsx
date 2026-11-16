@@ -5,13 +5,10 @@ import { cva, type VariantProps } from "class-variance-authority";
 const infoBoxVariants = cva("rounded-md border p-4 transition-colors", {
   variants: {
     variant: {
-      default:
-        "bg-brand-solid/8 border-brand-solid/20 dark:bg-brand-solid/10 dark:border-brand-solid/20",
-      success:
-        "bg-green-solid/8 border-green-solid/20 dark:bg-green-solid/10 dark:border-green-solid/20",
-      warning:
-        "bg-amber-solid/8 border-amber-solid/20 dark:bg-amber-solid/10 dark:border-amber-solid/20",
-      info: "bg-brand-solid/8 border-brand-solid/20 dark:bg-brand-solid/10 dark:border-brand-solid/20",
+      default: "bg-brand-solid/8 border-brand-solid/20 dark:bg-brand-solid/10",
+      success: "bg-green-solid/8 border-green-solid/20 dark:bg-green-solid/10",
+      warning: "bg-amber-solid/8 border-amber-solid/20 dark:bg-amber-solid/10",
+      info: "bg-brand-solid/8 border-brand-solid/20 dark:bg-brand-solid/10",
       muted: "bg-surface-secondary border-default",
     },
   },

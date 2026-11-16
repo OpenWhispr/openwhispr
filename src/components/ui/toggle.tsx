@@ -14,7 +14,7 @@ export const Toggle = ({ checked, onChange, disabled = false, ariaLabel }: Toggl
     }
     return checked
       ? "bg-brand-solid hover:bg-brand-solid/90"
-      : "bg-text-secondary/30 hover:bg-text-secondary/40 dark:bg-surface-tertiary dark:hover:bg-surface-tertiary";
+      : "bg-text-secondary/30 hover:bg-text-secondary/40";
   };
 
   return (

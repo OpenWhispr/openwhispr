@@ -387,7 +387,7 @@ function CreateKeyDialog({
                         type="checkbox"
                         checked={scopes.has(scope)}
                         onChange={() => toggleScope(scope)}
-                        className="h-3.5 w-3.5 rounded border-default accent-primary cursor-pointer"
+                        className="h-3.5 w-3.5 rounded border-default accent-brand-solid cursor-pointer"
                       />
                       <span className="text-xs text-primary">
                         {t(`apiKeysSection.scopes.${API_SCOPE_I18N_KEY[scope]}`)}

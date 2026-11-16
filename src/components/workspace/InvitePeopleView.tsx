@@ -392,7 +392,7 @@ export function InvitePeopleView({
                 <div
                   onClick={() => inputRef.current?.focus()}
                   className={cn(
-                    "flex max-h-[104px] min-h-[38px] cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl bg-surface-secondary px-2 py-1 ring-1 ring-inset ring-border-default transition-shadow dark:bg-surface-secondary dark:ring-0",
+                    "flex max-h-[104px] min-h-[38px] cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl bg-surface-secondary px-2 py-1 ring-1 ring-inset ring-border-default transition-shadow dark:ring-0",
                     "focus-within:ring-2 focus-within:ring-focus/40 dark:focus-within:ring-2",
                     sending && "opacity-60"
                   )}

@@ -1,6 +1,6 @@
 // The class tokens the workspace settings tables share, so a table and its loading and failed
 // frames look alike across People and Teamspaces.
-export const TABLE_FRAME = "rounded-xl border border-default/70 dark:border-default/70";
+export const TABLE_FRAME = "rounded-xl border border-default/70";
 export const ROW_DIVIDER = "border-t border-default/60 dark:border-default/50";
 // The header sticks over the rows on a surface of its own, as the design draws it.
 export const HEADER_CELL =
@@ -15,7 +15,7 @@ export const COLUMN_DIVIDER = "border-s border-default/60 dark:border-default/50
 export const PLAIN_MENU_TRIGGER =
   "inline-flex h-7 max-w-full items-center gap-1 rounded-lg px-1.5 text-sm text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5";
 export const CONTACTS_TRIGGER =
-  "inline-flex h-7 max-w-full items-center gap-1.5 rounded-md border border-default/70 px-2 text-xs text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5 dark:border-default/70";
+  "inline-flex h-7 max-w-full items-center gap-1.5 rounded-md border border-default/70 px-2 text-xs text-primary outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5";
 
 // A workspace settings page's own title and description, as the design sets them (People,
 // Teamspaces, General, Developer).

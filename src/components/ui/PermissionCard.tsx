@@ -29,7 +29,7 @@ export default function PermissionCard({
         "group relative rounded-md p-3 transition-colors duration-150",
         "border",
         granted
-          ? "bg-green-solid/5 border-green-solid/20 dark:bg-green-solid/5 dark:border-green-solid/15"
+          ? "bg-green-solid/5 border-green-solid/20 dark:border-green-solid/15"
           : "bg-surface-secondary border-default hover:bg-surface-primary hover:border-hover"
       )}
     >

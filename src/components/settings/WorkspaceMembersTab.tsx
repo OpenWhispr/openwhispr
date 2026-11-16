@@ -302,7 +302,7 @@ export default function WorkspaceMembersTab({
           <h4 className="text-xs font-semibold text-primary mb-2">
             {t("settingsPage.workspace.joinRequests.title")}
           </h4>
-          <div className="rounded-lg border border-default/70 dark:border-default/70 divide-y divide-default/60 dark:divide-default/50 bg-surface-primary/50 dark:bg-surface-primary/50">
+          <div className="rounded-lg border border-default/70 divide-y divide-default/60 dark:divide-default/50 bg-surface-primary/50">
             {joinRequests.map((request) => (
               <div key={request.id} className="flex items-center gap-3 px-4 h-12">
                 <MemberAvatar

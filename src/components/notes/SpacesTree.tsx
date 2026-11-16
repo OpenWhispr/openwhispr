@@ -141,7 +141,7 @@ const ROW_BASE_CLASS =
 // Button forces svg children to 16px; these 20px controls want the 12px icon they pass.
 const KEBAB_BUTTON_CLASS =
   "h-5 w-5 rounded-sm [&_svg]:size-3! opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 " +
-  "transition-opacity text-secondary/70 dark:text-secondary/70 " +
+  "transition-opacity text-secondary/70 " +
   "hover:text-primary/60 hover:bg-text-primary/5 active:bg-text-primary/8";
 
 const KEBAB_TRIGGER_CLASS = cn(KEBAB_BUTTON_CLASS, "absolute end-1.5");

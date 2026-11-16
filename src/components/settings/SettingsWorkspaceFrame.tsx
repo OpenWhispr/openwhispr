@@ -54,7 +54,7 @@ export default function SettingsWorkspaceFrame({
           </p>
         </div>
         {/* Unavailable: the list holds no default workspace yet; Retry asks the server for it. */}
-        <div className="rounded-lg border border-default/70 dark:border-default/70 bg-surface-primary/50 dark:bg-surface-primary/50 p-6 text-center">
+        <div className="rounded-lg border border-default/70 bg-surface-primary/50 p-6 text-center">
           <p className="text-xs font-medium text-primary mb-1">
             {status === "error"
               ? t("settingsPage.workspace.loadError.title")

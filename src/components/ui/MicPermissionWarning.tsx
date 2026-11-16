@@ -63,7 +63,7 @@ export default function MicPermissionWarning({
     <div
       className={cn(
         "rounded-md p-2.5 border",
-        "bg-amber-solid/8 border-amber-solid/20 dark:bg-amber-solid/10 dark:border-amber-solid/20"
+        "bg-amber-solid/8 border-amber-solid/20 dark:bg-amber-solid/10"
       )}
     >
       <div className="flex items-center gap-2.5">

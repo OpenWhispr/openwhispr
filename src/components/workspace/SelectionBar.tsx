@@ -50,7 +50,7 @@ export function SelectionBar({
       <div
         role="region"
         aria-label={t("settingsPage.workspace.people.selection.label")}
-        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-default bg-surface-secondary px-3 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.08)] dark:border-default"
+        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-default bg-surface-secondary px-3 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.08)]"
       >
         <div className={cn("flex h-[34px] items-center rounded-full", RAISED_PILL)}>
           <span className="ps-4 pe-2 text-xs font-medium tabular-nums text-secondary">
@@ -63,7 +63,7 @@ export function SelectionBar({
             className={cn(
               PILL,
               WHILE_BUSY,
-              "h-full rounded-e-full border-s border-default ps-2.5 pe-3 text-brand hover:bg-text-primary/5 dark:border-default"
+              "h-full rounded-e-full border-s border-default ps-2.5 pe-3 text-brand hover:bg-text-primary/5"
             )}
           >
             <X className="size-3.5" aria-hidden="true" />

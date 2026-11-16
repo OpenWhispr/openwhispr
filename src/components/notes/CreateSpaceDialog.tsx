@@ -438,7 +438,7 @@ export default function CreateSpaceDialog({
           </DialogHeader>
 
           {workspacesFailed ? (
-            <div className="rounded-lg border border-default/70 dark:border-default/70 bg-surface-primary/50 dark:bg-surface-primary/50 px-4 py-6 flex items-center justify-between gap-3">
+            <div className="rounded-lg border border-default/70 bg-surface-primary/50 px-4 py-6 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-medium text-primary">
                   {t("settingsPage.workspace.loadError.title")}

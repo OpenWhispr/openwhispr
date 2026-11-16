@@ -303,7 +303,7 @@ export function RemoveMembersDialog({
       ) : null}
       {transferring ? (
         // The note, the label and the picker sit on one inset card, as the design draws them.
-        <div className="flex flex-col gap-3 rounded-xl bg-surface-secondary p-3 ring-1 ring-inset ring-border-default dark:bg-surface-secondary dark:ring-0">
+        <div className="flex flex-col gap-3 rounded-xl bg-surface-secondary p-3 ring-1 ring-inset ring-border-default dark:ring-0">
           <p className="text-sm text-secondary">{ownerNote}</p>
           <div className="flex flex-col gap-2">
             <span id={pickerLabelId} className="text-sm font-medium text-secondary">

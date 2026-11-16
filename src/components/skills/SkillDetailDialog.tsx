@@ -241,7 +241,7 @@ export function SkillDetailDialog({
               )}
               {/* A read that found nothing, as for a skill whose files can't be read, has no box. */}
               {shown?.markdown && (
-                <div className="rounded-lg border border-default/70 dark:border-default/70 bg-surface-primary/60 dark:bg-surface-secondary/60 px-4 py-3">
+                <div className="rounded-lg border border-default/70 bg-surface-primary/60 dark:bg-surface-secondary/60 px-4 py-3">
                   <MarkdownRenderer
                     hideFrontmatter
                     content={shown.markdown}
@@ -287,7 +287,7 @@ export function SkillDetailDialog({
                   variant="ghost"
                   size="sm"
                   onClick={() => setConfirmChoice(true)}
-                  className="-ms-2 text-red hover:bg-red-solid/10 dark:text-red dark:hover:bg-red-solid/10"
+                  className="-ms-2 text-red hover:bg-red-solid/10 dark:hover:bg-red-solid/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {t("skills.detail.uninstall")}

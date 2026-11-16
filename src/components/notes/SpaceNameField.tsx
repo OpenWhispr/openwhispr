@@ -8,7 +8,7 @@ import { cn } from "../lib/utils";
 // Two borderless boxes side by side, as the design draws them: the emoji tile's own 38px box and
 // the name's field. `input-inline` keeps the global input rules in index.css off the input.
 const BOX_CLASS =
-  "flex h-[38px] items-center rounded-xl bg-surface-secondary ring-1 ring-inset ring-border-default dark:bg-surface-secondary dark:ring-0";
+  "flex h-[38px] items-center rounded-xl bg-surface-secondary ring-1 ring-inset ring-border-default dark:ring-0";
 const BOX_EDITABLE_CLASS =
   "transition-shadow duration-200 focus-within:ring-2 focus-within:ring-focus/40 dark:focus-within:ring-2";
 

@@ -148,7 +148,7 @@ export function DictionaryAddField({
         placeholder={t("dictionary.shared.add.placeholder")}
         aria-invalid={notice !== null || undefined}
         aria-describedby={notice !== null ? noticeId : undefined}
-        className="input-inline h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-xs shadow-none placeholder:text-primary/45 hover:border-0 focus-visible:ring-0 dark:bg-transparent"
+        className="input-inline h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-xs shadow-none placeholder:text-primary/45 hover:border-0 focus-visible:ring-0"
       />
       {notice !== null ? (
         <>

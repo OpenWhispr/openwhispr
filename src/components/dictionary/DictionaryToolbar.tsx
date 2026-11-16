@@ -158,7 +158,7 @@ export function DictionaryToolbar({
             }}
             placeholder={t("dictionary.shared.toolbar.searchPlaceholder")}
             aria-label={t("dictionary.shared.toolbar.search")}
-            className="input-inline h-[26px] w-full rounded-md border-0 bg-transparent py-0 ps-0 pe-6 text-xs hover:border-0 focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
+            className="input-inline h-[26px] w-full rounded-md border-0 bg-transparent py-0 ps-0 pe-6 text-xs hover:border-0 focus-visible:border-0 focus-visible:ring-0"
           />
           <button
             type="button"

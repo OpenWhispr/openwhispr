@@ -15,7 +15,7 @@ export function AppMarkStack({ marks, size }: { marks: string[]; size: number })
           height={size}
           decoding="async"
           draggable={false}
-          className="select-none rounded-full ring-2 ring-surface-primary dark:ring-surface-primary"
+          className="select-none rounded-full ring-2 ring-surface-primary"
           style={{ marginInlineStart: index === 0 ? 0 : -size * 0.24 }}
         />
       ))}

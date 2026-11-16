@@ -28,7 +28,7 @@ export default function EmptyStateCard({
         className
       )}
     >
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-tertiary text-primary/70 dark:bg-surface-tertiary">
+      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-tertiary text-primary/70">
         <Icon size={20} />
       </span>
       {title && (

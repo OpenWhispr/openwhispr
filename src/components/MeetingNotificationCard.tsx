@@ -43,7 +43,7 @@ export function MeetingNotificationCard({
     <div
       className={[
         "relative",
-        "bg-surface-primary/95 dark:bg-surface-primary/95 backdrop-blur-xl",
+        "bg-surface-primary/95 backdrop-blur-xl",
         "border border-default/70 dark:border-default/60",
         "rounded-xl shadow-lg p-2.5",
         picker ? "min-h-[60px] flex flex-col justify-center" : "",
@@ -61,7 +61,7 @@ export function MeetingNotificationCard({
           className={[
             "absolute -left-2.5 -top-2.5 z-10 size-6 rounded-full",
             "flex items-center justify-center",
-            "bg-surface-primary dark:bg-surface-primary border border-default/70 dark:border-default/60 shadow-sm",
+            "bg-surface-primary border border-default/70 dark:border-default/60 shadow-sm",
             "text-secondary/70 hover:text-primary hover:bg-surface-secondary",
             "transition-all duration-150",
             closeVisible ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none",

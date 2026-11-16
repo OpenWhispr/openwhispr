@@ -91,7 +91,7 @@ export default function EmbeddedChat({
         // Fills the gutter between the note and the chat.
         className="w-3"
       />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-default/60 bg-surface-secondary dark:bg-surface-secondary">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-default/60 bg-surface-secondary">
         <div className={cn("flex min-h-0 flex-1 flex-col", slashMenuOpen && "hidden")}>
           <div className="flex h-14 shrink-0 items-center px-5">
             <ConversationPicker

@@ -317,7 +317,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       />
 
       {/* Tab Navigation + Content in a single panel */}
-      <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary dark:bg-surface-primary overflow-hidden">
+      <div className="rounded-xl border border-default/70 dark:border-default bg-surface-primary overflow-hidden">
         <div className="flex border-b border-default/70 dark:border-default">
           {tabs.map((tab) => {
             const Icon = tab.icon;

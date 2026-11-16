@@ -2629,7 +2629,7 @@ export default function SettingsPage({
                           !usage?.isTrial &&
                           !isWorkspaceCovered
                           ? "border-2 border-brand-solid/30 bg-brand-solid/3 dark:border-brand-solid/20 dark:bg-brand-solid/5"
-                          : "border border-default/70 dark:border-default/60 bg-surface-primary/30 dark:bg-surface-primary/30"
+                          : "border border-default/70 dark:border-default/60 bg-surface-primary/30"
                       )}
                     >
                       <p className="text-xs font-semibold text-primary">
@@ -2910,7 +2910,7 @@ export default function SettingsPage({
                         "rounded-md p-2.5 flex flex-col",
                         workspacePlans.has("enterprise")
                           ? "border-2 border-brand-solid/40 bg-brand-solid/5 dark:border-brand-solid/30 dark:bg-brand-solid/8"
-                          : "border border-default/70 dark:border-default/60 bg-surface-primary/30 dark:bg-surface-primary/30"
+                          : "border border-default/70 dark:border-default/60 bg-surface-primary/30"
                       )}
                     >
                       <p className="text-xs font-semibold text-primary">
@@ -5034,7 +5034,7 @@ EOF`,
         <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-default p-3">
           <input
             type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-default accent-destructive"
+            className="mt-1 h-4 w-4 rounded border-default accent-red-solid"
             checked={eraseDeviceData}
             onChange={(event) => setEraseDeviceData(event.target.checked)}
           />

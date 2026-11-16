@@ -180,7 +180,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         </Button>
       </div>
 
-      <div className="rounded-lg border border-default/70 dark:border-default/70 divide-y divide-default/60 dark:divide-default/50 bg-surface-primary/50 dark:bg-surface-primary/50">
+      <div className="rounded-lg border border-default/70 divide-y divide-default/60 dark:divide-default/50 bg-surface-primary/50">
         {loadError && (
           <div className="px-4 py-6 flex items-center justify-between gap-2">
             <p className="text-xs text-secondary">

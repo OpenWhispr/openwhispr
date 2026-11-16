@@ -120,7 +120,7 @@ export default function JoinYourTeamModal({
             return (
               <div
                 key={entry.workspace_id}
-                className="flex items-center gap-3 rounded-md border border-default/70 dark:border-default/70 bg-surface-primary/50 dark:bg-surface-primary/50 px-3 py-2.5"
+                className="flex items-center gap-3 rounded-md border border-default/70 bg-surface-primary/50 px-3 py-2.5"
               >
                 <span className="w-8 h-8 shrink-0 rounded-md bg-brand-solid/10 text-brand-solid text-[11px] font-semibold flex items-center justify-center">
                   {workspaceMonogram(entry.workspace_name)}
@@ -136,7 +136,7 @@ export default function JoinYourTeamModal({
                         {entry.members.map((member) => (
                           <span
                             key={member.email}
-                            className="ring-1 ring-surface-primary dark:ring-surface-primary rounded-full"
+                            className="ring-1 ring-surface-primary rounded-full"
                           >
                             <MemberAvatar
                               name={member.name}

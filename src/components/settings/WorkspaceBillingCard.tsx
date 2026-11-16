@@ -103,7 +103,7 @@ export default function WorkspaceBillingCard({ workspace, onRefreshEntitlement }
   }
 
   return (
-    <div className="rounded-lg border border-default/70 dark:border-default/70 bg-surface-primary/50 dark:bg-surface-primary/50 p-4 space-y-3">
+    <div className="rounded-lg border border-default/70 bg-surface-primary/50 p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p dir="auto" className="text-xs font-semibold text-primary truncate">

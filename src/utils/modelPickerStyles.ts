@@ -22,7 +22,7 @@ export const MODEL_PICKER_COLORS: Record<ColorScheme, ModelPickerStyles> = {
     badges: {
       selected: "text-[10px] text-on-solid bg-brand-solid px-1.5 py-0.5 rounded-sm font-medium",
       downloaded:
-        "text-[10px] text-green dark:text-green bg-green-solid/10 dark:bg-green-solid/12 px-1.5 py-0.5 rounded-sm",
+        "text-[10px] text-green bg-green-solid/10 dark:bg-green-solid/12 px-1.5 py-0.5 rounded-sm",
       recommended:
         "text-[10px] text-brand-solid bg-brand-solid/10 dark:bg-brand-solid/12 px-1.5 py-0.5 rounded-sm font-medium",
     },

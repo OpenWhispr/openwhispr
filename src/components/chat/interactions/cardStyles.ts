@@ -4,7 +4,7 @@ import { cn } from "../../lib/utils";
 
 /** A round icon button: the dismiss X, the ↑ submit. */
 export const ROUND_BUTTON =
-  "flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-primary text-secondary transition-colors hover:bg-surface-tertiary hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40 disabled:opacity-40 disabled:hover:bg-surface-primary agent:dark:bg-surface-secondary agent:dark:disabled:hover:bg-surface-secondary";
+  "flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-primary text-secondary transition-colors hover:bg-surface-tertiary hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40 disabled:opacity-40 disabled:hover:bg-surface-primary agent:dark:bg-surface-tertiary agent:dark:hover:bg-text-primary/15 agent:dark:disabled:hover:bg-surface-tertiary";
 
 /** A borderless round icon button: the composer's Close and Mic, a question card's ‹ ›. */
 export const ICON_BUTTON =
@@ -12,7 +12,7 @@ export const ICON_BUTTON =
 
 /** A small pill action: Yes, Not now, Continue, Copy. */
 export const PILL_BUTTON =
-  "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-primary px-3 text-[13px] font-medium text-primary transition-colors hover:bg-surface-tertiary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40 disabled:opacity-50 disabled:hover:bg-surface-primary agent:text-[14px] agent:dark:bg-surface-secondary agent:dark:disabled:hover:bg-surface-secondary";
+  "inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-primary px-3 text-[13px] font-medium text-primary transition-colors hover:bg-surface-tertiary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40 disabled:opacity-50 disabled:hover:bg-surface-primary agent:text-[14px] agent:dark:bg-surface-tertiary agent:dark:hover:bg-text-primary/15 agent:dark:disabled:hover:bg-surface-tertiary";
 
 /** The card's main action: Allow, Send. */
 export const PRIMARY_PILL_BUTTON =
@@ -29,7 +29,7 @@ export const INLINE_FIELD =
  * window, as in its composer, the caret alone shows it has focus.
  */
 export const CARD_FIELD =
-  "input-inline h-8 min-w-0 flex-1 rounded-full bg-surface-primary px-3 text-[13px] text-primary outline-none placeholder:text-secondary/70 focus-visible:ring-1 focus-visible:ring-focus/40 agent:text-[15px] agent:focus-visible:ring-0 agent:dark:bg-surface-secondary";
+  "input-inline h-8 min-w-0 flex-1 rounded-full bg-surface-primary px-3 text-[13px] text-primary outline-none placeholder:text-secondary/70 focus-visible:ring-1 focus-visible:ring-focus/40 agent:text-[15px] agent:focus-visible:ring-0 agent:dark:bg-surface-tertiary";
 
 /** A card's title, edited in place across the card. */
 export const INLINE_TITLE_FIELD = cn(INLINE_FIELD, "mb-1 block w-[calc(100%+0.5rem)] font-medium");

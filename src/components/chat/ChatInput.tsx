@@ -277,7 +277,7 @@ export function ChatInput({
             : "rounded-3xl ps-4 pe-1.5 py-1.5",
           isCompactNote && "h-12 overflow-hidden",
           variant === "assistant"
-            ? "min-h-12 bg-surface-primary shadow-sm dark:bg-surface-primary"
+            ? "min-h-12 bg-surface-primary shadow-sm"
             : variant === "note"
               ? outlined
                 ? "min-h-12 bg-surface-primary/55 dark:bg-text-primary/[0.035]"

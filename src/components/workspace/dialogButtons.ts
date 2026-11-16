@@ -50,7 +50,7 @@ const SPLIT_PILL_PART =
 export const SPLIT_PILL_LABEL = cn(SPLIT_PILL_PART, "gap-1.5 rounded-s-full ps-4 pe-2");
 export const SPLIT_PILL_CHEVRON = cn(
   SPLIT_PILL_PART,
-  "rounded-e-full border-s border-default ps-2.5 pe-3 dark:border-default"
+  "rounded-e-full border-s border-default ps-2.5 pe-3"
 );
 
 // The settings dialogs' tab triggers, inline-edited header fields and General-row pills.
