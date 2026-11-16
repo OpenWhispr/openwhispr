@@ -16,7 +16,7 @@ function encodeVersion(version) {
   return (major << 16) | (minor << 8) | patch;
 }
 
-function buildMachOImage({ minos = "13.3", sdk = "26.5" } = {}) {
+function buildMachOImage({ minos = "13.3" } = {}) {
   const commands = minos === null ? 1 : 2;
   const commandsSize = UUID_COMMAND_SIZE + (minos === null ? 0 : BUILD_VERSION_COMMAND_SIZE);
   const image = Buffer.alloc(HEADER_SIZE + commandsSize);
@@ -36,7 +36,7 @@ function buildMachOImage({ minos = "13.3", sdk = "26.5" } = {}) {
     image.writeUInt32LE(BUILD_VERSION_COMMAND_SIZE, offset + 4);
     image.writeUInt32LE(PLATFORM_MACOS, offset + 8);
     image.writeUInt32LE(encodeVersion(minos), offset + 12);
-    image.writeUInt32LE(encodeVersion(sdk), offset + 16);
+    image.writeUInt32LE(encodeVersion("26.5"), offset + 16);
   }
 
   return image;
