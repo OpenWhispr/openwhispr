@@ -40,6 +40,10 @@ export default function AndroidTabs() {
         tabBarLabel: ({ color, children }) => (
           <Text
             key={`${layoutKey}:${children}`}
+            // Wrap between words only: a word too wide for its tab shrinks rather than splitting.
+            numberOfLines={Math.max(1, String(children).trim().split(/\s+/).length)}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
             style={{
               fontSize: 12,
               lineHeight: 15,

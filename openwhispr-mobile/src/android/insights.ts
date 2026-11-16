@@ -18,6 +18,9 @@ export interface InsightEvent {
 interface Summary {
   totalWords: number;
   totalDictations: number;
+  // Absent in summaries saved before Home showed them, and null when nothing was timed.
+  averageWpm?: number | null;
+  currentStreakDays?: number;
 }
 interface Ledger {
   events: InsightEvent[];
@@ -42,6 +45,8 @@ const eventSchema = z
 const summarySchema = z.object({
   totalWords: z.number().int().nonnegative(),
   totalDictations: z.number().int().nonnegative(),
+  averageWpm: z.number().int().nonnegative().nullable().optional(),
+  currentStreakDays: z.number().int().nonnegative().optional(),
 });
 
 function parseLedger(raw: string | null): { ledger: Ledger; damaged: boolean } {
@@ -322,10 +327,20 @@ export function refreshInsights(): Promise<void> {
         )
       )
         throw new Error('Invalid analytics summary');
-      write(scope, {
-        ...read(scope),
-        summary: { totalWords: response.totalWords, totalDictations: response.totalDictations },
-      });
+      // Older servers send neither; a server that measured no speaking time sends null.
+      const summary: Summary = {
+        totalWords: response.totalWords,
+        totalDictations: response.totalDictations,
+      };
+      if (response.averageWpm === null) summary.averageWpm = null;
+      else if (Number.isSafeInteger(response.averageWpm) && Number(response.averageWpm) >= 0)
+        summary.averageWpm = response.averageWpm;
+      if (
+        Number.isSafeInteger(response.currentStreakDays) &&
+        Number(response.currentStreakDays) >= 0
+      )
+        summary.currentStreakDays = response.currentStreakDays;
+      write(scope, { ...read(scope), summary });
       useInsights.setState({ status: 'idle' });
     } catch (error) {
       if (isCurrent(run))
