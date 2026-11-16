@@ -206,7 +206,7 @@ async function probeGeminiLive(key) {
       streaming.sendAudio(pcm.subarray(offset, offset + LIVE_FRAME_BYTES));
       await new Promise((resolve) => setTimeout(resolve, LIVE_FRAME_MS));
     }
-    const { text } = await streaming.disconnect(true);
+    const { text } = await streaming.disconnect();
     if (!/quick brown fox/i.test(text)) {
       return { ok: false, detail: `no usable transcript: ${JSON.stringify(text)}` };
     }

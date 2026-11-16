@@ -94,6 +94,76 @@ test("calendar managers do not add an account after authorization was cancelled"
   }
 });
 
+for (const stage of ["calendar fetch", "event sync"]) {
+  for (const cancelled of [false, true]) {
+    test(`saved calendar authorization ${cancelled ? "retires" : "completes"} during ${stage}`, async (t) => {
+      for (const provider of ["google", "microsoft"]) {
+        await t.test(provider, async (t) => {
+          const file = require.resolve(`../../src/helpers/${provider}CalendarManager`);
+          Module._load = function (request, parent, isMain) {
+            if (request === "electron")
+              return { net: {}, BrowserWindow: { getAllWindows: () => [] } };
+            return originalLoad.call(this, request, parent, isMain);
+          };
+          let Manager;
+          try {
+            delete require.cache[file];
+            Manager = require(file);
+          } finally {
+            Module._load = originalLoad;
+          }
+          const manager = provider === "google" ? new Manager({}, {}, {}) : new Manager({}, {});
+          t.after(() => manager.stop());
+          const entered = deferred(),
+            finish = deferred();
+          const controller = new AbortController();
+          const result = { success: true, email: "saved@test" };
+          let syncs = 0,
+            reminders = 0,
+            broadcasts = 0;
+          manager.oauth.startOAuthFlow = async () => result;
+          manager.fetchCalendars = async () => {
+            if (stage === "calendar fetch") {
+              entered.resolve();
+              await finish.promise;
+            }
+          };
+          manager.syncEvents = async () => {
+            syncs++;
+            if (stage === "event sync") {
+              entered.resolve();
+              await finish.promise;
+            }
+          };
+          manager.reminderScheduler.scheduleNextMeeting = () => reminders++;
+          manager._broadcastAccountsChanged = () => broadcasts++;
+          const pending = manager.startOAuth({ signal: controller.signal });
+          await entered.promise;
+          if (cancelled) {
+            controller.abort();
+            manager.stop();
+          }
+          finish.resolve();
+          assert.equal(await pending, result, "an account already saved still reports connected");
+          assert.equal(manager.isConnected(), true);
+          assert.equal(Boolean(manager.syncRunner.timer), !cancelled, provider);
+          assert.equal(syncs, cancelled && stage === "calendar fetch" ? 0 : 1);
+          assert.equal(reminders, cancelled ? 0 : 1);
+          assert.equal(broadcasts, cancelled ? 0 : 1);
+          manager.stop();
+          const before = syncs;
+          await manager.syncEvents();
+          assert.equal(
+            syncs,
+            before + 1,
+            "explicit sync remains available without a running timer"
+          );
+        });
+      }
+    });
+  }
+}
+
 test("Apple cancellation stops the authorization helper and ignores its late snapshot", async (t) => {
   const file = require.resolve("../../src/helpers/appleCalendarManager");
   const platform = process.platform;

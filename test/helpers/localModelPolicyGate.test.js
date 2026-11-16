@@ -246,6 +246,41 @@ test("a token rotation holds new work, keeps running work, and the next verdict 
   assert.deepEqual(onChange, ["POLICY_MODEL_BLOCKED"]);
 });
 
+test("known pending model restrictions revoke only denied leases without authorizing new work", async () => {
+  const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
+  let identity = 1;
+  const gate = createLocalModelPolicyGate({
+    getPolicy: () => new Promise(() => {}),
+    getIdentity: () => identity,
+    getAppVersion: () => "1.11.2",
+  });
+  gate.update(state(["base", "small"]));
+  await settleRules(gate);
+  const allowed = gate.authorizeCached("transcription", "base");
+  const denied = gate.authorizeCached("transcription", "small");
+  identity = 2;
+  gate.invalidate();
+  gate.update({ ...state(["base", "small"], 2, 2), success: false, status: "loading" });
+  assert.doesNotThrow(() => gate.assertCurrent(allowed));
+  assert.doesNotThrow(() => gate.assertCurrent(denied));
+  gate.update({ ...state(["base"], 3, 2), success: false, status: "loading" });
+  assert.equal(denied.signal.reason?.code, "POLICY_MODEL_BLOCKED");
+  assert.doesNotThrow(() => gate.assertCurrent(allowed));
+  assert.equal(allowed.signal.aborted, false);
+  assert.throws(() => gate.authorizeCached("transcription", "base"), {
+    code: "POLICY_UNRESOLVABLE",
+  });
+  let warmups = 0;
+  gate.runOnceVerdictSettles(() => warmups++);
+  gate.update({ ...state(["base"], 4, 2), success: false, status: "loading" });
+  assert.equal(warmups, 0);
+  gate.update(state(["base"], 5, 2));
+  assert.equal(warmups, 1);
+  gate.release(gate.authorizeCached("transcription", "base"));
+  gate.cancelJobs();
+  assert.equal(allowed.signal.aborted, true);
+});
+
 test("an account change cancels running work before the new verdict, which then authorizes only new work", async () => {
   const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
   let identity = 1;

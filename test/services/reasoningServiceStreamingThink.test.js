@@ -135,6 +135,7 @@ test("local streams reject buffered old-policy and old-identity deltas on both t
 });
 
 test("a same-account token rotation never ends a running stream, whatever its transport", async (t) => {
+  let broadcastPolicy;
   const { reasoningService, vite } = await loadReasoningService(
     t,
     "openwhispr-rotation-stream-test-",
@@ -143,7 +144,11 @@ test("a same-account token rotation never ends a running stream, whatever its tr
         electronAPI: {
           llamaServerStart: async () => ({ success: true, port: 11434 }),
           // A rotated credential's verdict is still on its way.
-          getWorkspacePolicy: () => new Promise(() => {}),
+          getEffectivePolicy: () => new Promise(() => {}),
+          onEffectivePolicyChanged: (callback) => {
+            broadcastPolicy = callback;
+            return () => {};
+          },
           getAppVersion: async () => ({ version: "1.11.1" }),
         },
       },
@@ -193,7 +198,19 @@ test("a same-account token rotation never ends a running stream, whatever its tr
         assert.equal(sdk ? first.value.text : first.value, "first");
 
         generation += 1;
-        void usePolicyStore.getState().fetchPolicy("same", generation);
+        void usePolicyStore.getState().bootstrap();
+        broadcastPolicy({
+          success: false,
+          status: "loading",
+          code: "POLICY_LOADING",
+          accountId: "same",
+          authGeneration: generation,
+          revision: generation,
+          managed: false,
+          policy: null,
+          deviceReady: true,
+        });
+        await new Promise(setImmediate);
         assert.equal(usePolicyStore.getState().authGeneration, generation);
         assert.equal(usePolicyStore.getState().status, "unmanaged");
         const second = await stream.next();
@@ -222,12 +239,17 @@ test("a stream ends only on a settled denial or a lost account, and then closes 
     globalThis.fetch = originalFetch;
   });
   for (const sdk of [false, true]) {
+    const accountLost = { code: "POLICY_UNRESOLVABLE", messageKey: "common.policyAccountChanged" };
     for (const [label, change, ending] of [
-      ["an unresolved verdict keeps it", () => ({ status: "error" }), null],
+      [
+        "a settled error ends it",
+        () => ({ status: "error" }),
+        { message: require("../../src/locales/en/translation.json").common.policyAgentRestricted },
+      ],
       ["a suspended policy keeps it", () => ({ status: "loading", accountId: null }), null],
       ["signing in from a guest keeps it", () => ({ accountId: "new" }), null],
-      ["signing out ends it", () => ({ status: "idle", accountId: null }), "POLICY_UNRESOLVABLE"],
-      ["another account ends it", () => ({ accountId: "other" }), "POLICY_UNRESOLVABLE"],
+      ["signing out ends it", () => ({ status: "idle", accountId: null }), accountLost],
+      ["another account ends it", () => ({ accountId: "other" }), accountLost],
     ]) {
       await t.test(`${sdk ? "SDK" : "raw"}: ${label}`, async () => {
         const startsAsGuest = label.startsWith("signing in");
@@ -260,11 +282,7 @@ test("a stream ends only on a settled denial or a lost account, and then closes 
 
         usePolicyStore.setState(change());
         if (ending) {
-          await assert.rejects(stream.next(), (error) => {
-            assert.equal(error.code, ending);
-            assert.equal(error.messageKey, "common.policyAccountChanged");
-            return true;
-          });
+          await assert.rejects(stream.next(), ending);
           assert.equal(requestSignal?.aborted, true);
         } else {
           const second = await stream.next();
@@ -344,6 +362,8 @@ test("an identity switch during local stream setup prevents either transport fro
               finishSetup = resolve;
             });
           },
+          // The raw transport's policy subscription cancels the pending start.
+          llamaServerCancelStart: () => {},
         },
       },
     }

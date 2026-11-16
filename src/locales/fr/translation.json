@@ -212,11 +212,18 @@
     "policyAccountChanged": "Votre compte a changé : cette réponse a donc été interrompue.",
     "policyTranscriptionRestricted": "La transcription est restreinte par votre organisation.",
     "policyUnresolved": "Les paramètres de votre organisation ne sont pas encore chargés. Réessayez dans un instant.",
+    "policyBlocked": "Votre organisation n'autorise pas cette action sur cet appareil.",
     "managedConfigLoading": "Vérification de la configuration gérée de votre organisation en cours. Réessayez dans un instant.",
     "managedConfigUnavailable": "L'accès d'entreprise géré est indisponible. Reconnectez-vous ou contactez votre administrateur.",
     "managedConfigAmbiguous": "La configuration gérée de votre organisation est incohérente. Contactez votre administrateur.",
     "managedPolicyConflict": "L'accès géré est bloqué par la politique de votre espace de travail. Contactez votre administrateur.",
-    "resizePanel": "Redimensionner le panneau"
+    "resizePanel": "Redimensionner le panneau",
+    "managedDevice": "Appareil géré",
+    "managedDeviceAndWorkspace": "Appareil et espace de travail gérés",
+    "deviceLocalOnly": "Cet appareil utilise uniquement le traitement local. Les fonctions cloud sont indisponibles, même pour les comptes déjà connectés.",
+    "deviceSignInRequired": "Votre organisation exige une connexion sur cet appareil.",
+    "devicePolicyInvalid": "La politique de l’appareil est illisible ou invalide. Contactez votre administrateur. OpenWhispr reste inutilisable jusqu’à sa correction.",
+    "deviceWorkspaceUnavailable": "Cet appareil exige un traitement local, mais la politique de l’espace de travail du compte enregistré est indisponible. Déconnectez-vous pour continuer sans ce compte ou contactez votre administrateur."
   },
   "onboarding": {
     "rehaul": {
@@ -1236,7 +1243,8 @@
       "failedUserCheck": "Échec de la vérification du compte utilisateur",
       "generic": "Une erreur est survenue. Veuillez réessayer.",
       "invalidCredentials": "E-mail ou mot de passe incorrect",
-      "invalidEmail": "Entrez une adresse e-mail valide"
+      "invalidEmail": "Entrez une adresse e-mail valide",
+      "signInDisabledByDevice": "Votre organisation a désactivé la connexion sur cet appareil."
     },
     "getStarted": "Commencer",
     "legal": {

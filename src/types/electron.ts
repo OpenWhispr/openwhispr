@@ -4,7 +4,7 @@ import type { PermissionGuideState, PermissionGuideAction } from "./permissionGu
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
-import type { OrgPolicy } from "./policy";
+import type { EffectivePolicySnapshot } from "./policy";
 import type { SplitLiveSpeakers } from "../utils/transcriptSpeakerState";
 import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
@@ -1879,47 +1879,9 @@ declare global {
       >;
 
       // Org policy (see src/types/policy.ts)
-      getWorkspacePolicy?: (
-        accountId?: string,
-        expectedAuthGeneration?: number
-      ) => Promise<{
-        success: boolean;
-        status?: "network" | "cached" | "current" | "unsupported" | "restricted" | "error";
-        revision?: number;
-        accountId?: string | null;
-        authGeneration?: number | null;
-        managed?: boolean;
-        policy?: OrgPolicy | null;
-        policyUpdatedAt?: string | null;
-        endpointSupported?: boolean;
-        code?: string;
-        error?: string;
-        enforcementRequired?: boolean;
-      }>;
-      onWorkspacePolicyChanged?: (
-        callback: (
-          snapshot:
-            | {
-                success: true;
-                status: "network" | "cached" | "current" | "unsupported";
-                revision: number;
-                accountId: string | null;
-                authGeneration: number;
-                managed: boolean;
-                policy: OrgPolicy | null;
-                policyUpdatedAt: string | null;
-                endpointSupported: boolean;
-              }
-            | {
-                success: false;
-                status: "error";
-                revision: number;
-                accountId: string | null;
-                authGeneration: number;
-                code: "POLICY_UNRESOLVABLE";
-                error: string;
-              }
-        ) => void
+      getEffectivePolicy?: () => Promise<EffectivePolicySnapshot>;
+      onEffectivePolicyChanged?: (
+        callback: (snapshot: EffectivePolicySnapshot) => void
       ) => () => void;
 
       getNoteRecordingConfig?: () => Promise<NoteRecordingConfigResult | null>;
@@ -3887,6 +3849,7 @@ declare global {
           speakerIndexBase?: number;
         } & PolicyFailureMetadata
       >;
+      isMeetingRecordingDisabled?: () => Promise<boolean>;
       meetingTranscriptionSend?: (
         buffer: ArrayBuffer,
         source: "mic" | "system",
