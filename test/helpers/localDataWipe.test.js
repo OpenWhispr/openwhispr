@@ -110,7 +110,7 @@ test("in a notes folder the user chose, only the files the mirror recorded and t
   wrote("Personal/12-standup-transcript.md", transcriptOf("Standup"), "transcript");
   // Re-saved by an editor with a BOM and Windows line endings: still the mirror's.
   wrote("Work/7-plan.md", mirrored(7));
-  seed(path.join(chosen, "Work", "7-plan.md"), `﻿${mirrored(7).replaceAll("\n", "\r\n")}`);
+  seed(path.join(chosen, "Work", "7-plan.md"), `\uFEFF${mirrored(7).replaceAll("\n", "\r\n")}`);
   // The workspace and space layout nests a note's folders.
   const space = path.join(chosen, "Workspaces", "Acme", "Teamspaces", "Sales");
   wrote("Workspaces/Acme/Teamspaces/Sales/Calls/21-call.md", mirrored(21, 'space: "Sales"\n'));
@@ -154,6 +154,15 @@ test("in a notes folder the user chose, only the files the mirror recorded and t
   assert.deepEqual(fs.readdirSync(path.join(chosen, "Zettel")), ["202311151230-idea.md"]);
   assert.deepEqual(fs.readdirSync(outside), ["3-plan.md"]);
   assert.deepEqual(fs.readdirSync(earlier), []);
+});
+
+test("a database from before the mirror kept its record wipes without an error", async () => {
+  fs.mkdirSync(roots.userData, { recursive: true });
+  new (require("better-sqlite3"))(path.join(roots.userData, "transcriptions.db"))
+    .exec("CREATE TABLE notes (id INTEGER)")
+    .close();
+  assert.deepEqual(await removeLocalData({ includeModels: false, roots }), []);
+  assert.equal(exists(roots.userData, "transcriptions.db"), false);
 });
 
 // One note that can't go (a folder another tool locked) doesn't keep the rest.
@@ -483,6 +492,9 @@ test(
     const wrote = (base, relPath, text, kind) => mirrorWrote(userData, base, relPath, text, kind);
     wrote(vault, "Personal/12-standup.md", mirrored(12));
     wrote(vault, "Personal/12-standup-transcript.md", transcriptOf("Standup"), "transcript");
+    // Re-saved by an editor with a BOM and Windows line endings, alone in its folder.
+    wrote(vault, "Work/7-plan.md", mirrored(7));
+    seed(path.join(vault, "Work", "7-plan.md"), `\uFEFF${mirrored(7).replaceAll("\n", "\r\n")}`);
     // Edited since the mirror wrote it, and the user's own note with exactly
     // the mirror's frontmatter.
     wrote(vault, "Personal/15-retro.md", mirrored(15));
@@ -519,6 +531,15 @@ test(
       );
 
     run(home);
+    // From a version before the mirror kept its record: nothing to name, no failure.
+    const older = path.join(root, "older-home");
+    const olderData = path.join(older, "Library", "Application Support", "OpenWhispr");
+    fs.mkdirSync(olderData, { recursive: true });
+    new (require("better-sqlite3"))(path.join(olderData, "transcriptions.db"))
+      .exec("CREATE TABLE notes (id INTEGER)")
+      .close();
+    run(older);
+    assert.deepEqual(fs.readdirSync(olderData), []);
     assert.deepEqual(
       fs.readdirSync(userData).sort(),
       [...KEPT_USER_DATA_ENTRIES, ...MODEL_USER_DATA_ENTRIES].sort()

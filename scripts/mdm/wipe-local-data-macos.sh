@@ -95,29 +95,49 @@ remove_if_emptied() {
   printf '%s\0' "$dir" | as_owner rmdir 2>/dev/null
 }
 
+# A file's bytes, read as the home's owner.
+read_as_owner() { printf '%s\0' "$1" | as_owner cat; }
+
 # In each folder of the home the notes mirror wrote to, the user's chosen ones
 # included, removes only the files the app's database records it writing there
-# that still hold exactly what it wrote, and folders that leaves empty. Anything
-# else, an outside edit included, is the user's. The chosen folder itself stays,
-# and nothing is reached through a link out of it. The database is read as the
-# home's owner, so root never parses a file the user could have crafted.
+# that still hold what it wrote (a BOM and line endings aside, as the app
+# reads them), and folders that leaves empty. Anything else, an outside edit
+# included, is the user's. The chosen folder itself stays, and nothing is
+# reached through a link out of it. The database and the files are read as the
+# home's owner, so root never opens one a user planted. The mirror's default
+# folder, in the app's own data, goes whole below.
 remove_mirrored_files() {
-  local database="$1" rows base rel hash file folder real_base real_dir
+  local database="$user_data/transcriptions.db" data_real rows base rel hash file folder
+  local last_base="" real_base="" real_dir raw plain
   [[ -f "$database" && ! -L "$database" ]] || return 0
-  rows="$(as_owner_run sqlite3 -ascii "$database" \
-    "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir'")" || {
+  data_real="$(cd -P "$user_data" && pwd)" || return 0
+  # A version from before the mirror kept its record names no file. Not
+  # read-only: macOS's sqlite3 can't open a WAL database that way once its app
+  # has closed it.
+  rows="$(as_owner_run sqlite3 "$database" \
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'")" &&
+    { [[ -z "$rows" ]] || rows="$(as_owner_run sqlite3 -ascii "$database" \
+      "SELECT base_path, rel_path, content_hash FROM note_mirror_files WHERE kind != 'dir' ORDER BY base_path")"; } || {
     echo "Could not read the notes mirror's record in $database" >&2
     failed=1
     return 0
   }
   while IFS=$'\x1f' read -r -d $'\x1e' base rel hash; do
-    [[ "$base" == /* ]] && inside_home "$base" || continue
-    real_base="$(cd -P "$base" 2>/dev/null && pwd)" || continue
+    if [[ "$base" != "$last_base" ]]; then
+      last_base="$base"
+      real_base="$(cd -P "$base" 2>/dev/null && pwd)" || real_base=""
+      [[ "$base" == /* && "$real_base" == "$home_real"/* && "$real_base" != "$data_real"/* ]] ||
+        real_base=""
+    fi
+    [[ -n "$real_base" ]] || continue
     file="$base/$rel"
     real_dir="$(cd -P "$(dirname "$file")" 2>/dev/null && pwd)" || continue
     [[ "$real_dir" == "$real_base" || "$real_dir" == "$real_base"/* ]] || continue
     [[ -f "$file" && ! -L "$file" ]] || continue
-    [[ "$(openssl dgst -sha256 -r <"$file" | cut -d " " -f 1)" == "$hash" ]] || continue
+    raw="$(read_as_owner "$file" | openssl dgst -sha256 -r)" &&
+      plain="$(read_as_owner "$file" | LC_ALL=C sed $'1s/^\xef\xbb\xbf//; s/\r$//' | openssl dgst -sha256 -r)" ||
+      continue
+    [[ "$hash" == "${raw%% *}" || "$hash" == "${plain%% *}" ]] || continue
     remove "$file"
     folder="$(dirname "$file")"
     while [[ "$folder" == "$base"/* ]] && remove_if_emptied "$folder"; do
@@ -176,7 +196,7 @@ for home in "${homes[@]}"; do
     id -un "$owner_uid" >/dev/null 2>&1 && run_as="#$owner_uid"
   fi
   user_data="$home/Library/Application Support/OpenWhispr"
-  remove_mirrored_files "$user_data/transcriptions.db"
+  remove_mirrored_files
   remove_all_except "$user_data" "${kept[@]}"
   remove_all_except "$home/.cache/openwhispr" "${cache_kept[@]}"
   inside_home "$home/.openwhispr" && remove "$home/.openwhispr/cli-bridge.json"

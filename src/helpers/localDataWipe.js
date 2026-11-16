@@ -104,15 +104,16 @@ function readJson(filePath) {
 
 // What the note-file mirror wrote in each folder, the user's chosen ones
 // included, from its record in the database (named as database.js names it).
+// A database from before the mirror kept that record names no file.
 function recordedMirrorFiles(userDataPath) {
   const name =
     process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db";
   const databasePath = path.join(userDataPath, name);
   if (!fs.statSync(databasePath, { throwIfNoEntry: false })?.isFile()) return new Map();
-  // Not read-only: that can't open a WAL database its app closed cleanly. It
-  // is deleted next anyway.
-  const db = new (require("better-sqlite3"))(databasePath, { fileMustExist: true });
+  const db = new (require("better-sqlite3"))(databasePath, { readonly: true, fileMustExist: true });
   try {
+    const table = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'note_mirror_files'";
+    if (!db.prepare(table).get()) return new Map();
     const rows = db
       .prepare(
         "SELECT base_path AS basePath, rel_path AS relPath, kind, content_hash AS hash FROM note_mirror_files"

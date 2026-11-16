@@ -895,7 +895,7 @@ class MarkdownMirror {
     mirror._baseRealPath = fs.realpathSync.native(basePath);
     let failure = null;
     for (const entry of entries) {
-      if (entry.kind === "dir" || !mirror._isPristine(entry)) continue;
+      if (!mirror._isPristine(entry)) continue;
       try {
         mirror._removeFile(mirror._absolutePath(entry.relPath));
       } catch (error) {
