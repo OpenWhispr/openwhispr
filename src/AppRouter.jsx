@@ -6,6 +6,7 @@ import { PermissionGuideOverlay } from "./components/onboarding/PermissionGuideO
 import ReauthenticationScreen from "./components/ReauthenticationScreen.tsx";
 import BackgroundModelDownloadTray from "./components/onboarding/BackgroundModelDownloadTray.tsx";
 import {
+  createOnboardingSession,
   keepsOnboardingStepThroughPolicyRefetch,
   LEGACY_ONBOARDING_STEP_KEY,
   ONBOARDING_FLOW_VERSION,
@@ -173,6 +174,10 @@ function MainApp() {
 
     if (isControlPanel) {
       if (!resolved) {
+        // Required sign-in mounts before the flow, but OAuth reloads still need its progress marker.
+        if (requireSignIn && !onboardingInProgress) {
+          localStorage.setItem(ONBOARDING_SESSION_KEY, JSON.stringify(createOnboardingSession()));
+        }
         setShowOnboarding(true);
       } else if (!isSignedIn && !localOnly && (requireSignIn || !authSkipped)) {
         setNeedsReauth(true);

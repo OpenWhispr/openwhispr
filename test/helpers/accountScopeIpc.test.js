@@ -168,11 +168,20 @@ test.before(() => {
   };
 });
 
-test.after(() => {
-  fakeThis.metaActivation?.dispose?.();
-  fakeThis.productEvents?.dispose?.();
-  Module._load = originalLoad;
-  fs.rmSync(userDataDirectory, { recursive: true, force: true });
+test.after(async () => {
+  try {
+    await Promise.all([fakeThis.metaActivation?.running, fakeThis.productEvents?.running]);
+    assert.equal(
+      fakeThis._productRequests.size,
+      0,
+      "no foreground or background operation is left pending"
+    );
+  } finally {
+    fakeThis.metaActivation?.dispose?.();
+    fakeThis.productEvents?.dispose?.();
+    Module._load = originalLoad;
+    fs.rmSync(userDataDirectory, { recursive: true, force: true });
+  }
 });
 
 const getScope = () => handlers.get("get-active-account-scope")();
@@ -1192,6 +1201,7 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
       return { success: true };
     });
     await entered.promise;
+    lookup.resolve(allowed);
     lookup = deferred();
 
     tokenState = { token: "rotation-token-b", generation: 61 };
@@ -1542,6 +1552,8 @@ test("account deletion still deletes the note mirrors when the enterprise vault 
 });
 
 test("a repeated validated account scope keeps its settled policy while refreshing", async (t) => {
+  t.mock.method(fakeThis.metaActivation, "flush", async () => {});
+  t.mock.method(fakeThis.productEvents, "flush", async () => {});
   // A private-note claim that fails leaves the scope unapplied, so each repeat
   // runs in full and refreshes; a repeat of an applied scope changes nothing.
   const claim = fakeThis._claimSignedOutPrivateNotes;
@@ -2095,7 +2107,12 @@ for (const stage of ["admission", "streaming"]) {
       if (stage === "streaming")
         assert.ok(outputs.every((output) => output.cancelled === !permitted));
       assert.equal(sender.listenerCount("destroyed"), 0);
-      assert.equal(fakeThis._productRequests.size, 0);
+      assert.equal(
+        [...fakeThis._productRequests.values()].some(
+          (operation) => operation.channel === "cloud-agent-stream-start"
+        ),
+        false
+      );
       assert.equal(fakeThis._agentStreamRequests.requestsBySender.size, 0);
     });
   }
@@ -2120,7 +2137,12 @@ test("cloud agent admission preserves typed API failures and releases ownership"
   assert.equal(messages[0][0], "cloud-agent-stream-error");
   assert.equal(messages[0][1].code, "AUTH_EXPIRED");
   assert.equal(sender.listenerCount("destroyed"), 0);
-  assert.equal(fakeThis._productRequests.size, 0);
+  assert.equal(
+    [...fakeThis._productRequests.values()].some(
+      (operation) => operation.channel === "cloud-agent-stream-start"
+    ),
+    false
+  );
   assert.equal(fakeThis._agentStreamRequests.requestsBySender.size, 0);
 });
 
@@ -2808,6 +2830,124 @@ test("account deletion still clears audio and note mirrors when product-event er
   assert.deepEqual(mirrored, [11, 12]);
   assert.deepEqual(credentials, ["deleted-account"]);
 });
+
+test("device backup restrictions stop the real background collectors without blocking usage or erasure", async (t) => {
+  useProductLifecycle(t);
+  const {
+    defaultDevicePolicy,
+    normalizeDeviceValues,
+  } = require("../../src/helpers/managedDevicePolicy");
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.cloudBackupAllowed = false;
+  t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () =>
+    normalizeDeviceValues({ RequireSignIn: true, Policy: JSON.stringify(policy) })
+  );
+  const requests = [];
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    if (url.endsWith("/api/workspace-policy"))
+      return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+    requests.push({ path: new URL(url).pathname, method: init.method || "GET" });
+    return Response.json({
+      binding_id: "aa60c433-6827-40ea-887e-3015b53b7f82",
+      authenticated_at: new Date().toISOString(),
+      accepted: [],
+      deferred: [],
+      status: "awaiting_permission",
+    });
+  });
+  handleAuthTokenChange({ token: "backup-disabled", generation: tokenState.generation + 1 });
+  await setScope("backup-disabled", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  assert.equal(
+    fakeThis.effectivePolicyManager.getCurrent().policy.dataRetention.cloudBackupAllowed,
+    false
+  );
+  await handlers.get("product-events-record-app-session")({}, await getScope());
+  await handlers.get("product-events-record-onboarding-completed")({}, { setupMode: "managed" });
+  await fakeThis.productEvents.flush();
+  await fakeThis.metaActivation.flush();
+  assert.deepEqual(requests, [], "neither collector may upload under the device restriction");
+
+  for (const request of [
+    { path: "/api/product-events/batch", method: "GET" },
+    { path: "/api/transcriptions/delete", method: "DELETE" },
+    { path: "/api/analytics/participation", method: "PATCH", body: { enabled: false } },
+  ]) {
+    const result = await handlers.get("cloud-api-request")(
+      {},
+      {
+        ...request,
+        expectedAuthGeneration: tokenState.generation,
+      }
+    );
+    assert.equal(result.success, true);
+  }
+  assert.equal((await handlers.get("cloud-usage")({ sender: {} })).success, true);
+  assert.equal(requests.length, 4);
+});
+
+for (const [collector, path] of [
+  ["productEvents", "/api/product-events/app-session"],
+  ["productEvents", "/api/product-events/batch"],
+  ["metaActivation", "/api/activation/device"],
+  ["metaActivation", "/api/activation/batch"],
+]) {
+  test(`${path} retires an in-flight background upload when device backup is revoked`, async (t) => {
+    useProductLifecycle(t);
+    const {
+      defaultDevicePolicy,
+      normalizeDeviceValues,
+    } = require("../../src/helpers/managedDevicePolicy");
+    const policy = defaultDevicePolicy();
+    let device = normalizeDeviceValues({ RequireSignIn: true, Policy: JSON.stringify(policy) });
+    t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () => device);
+    t.mock.method(electronStub.net, "fetch", async () =>
+      Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } })
+    );
+    const accountId = `telemetry-${path}`;
+    handleAuthTokenChange({ token: accountId, generation: tokenState.generation + 1 });
+    await setScope(accountId, tokenState.generation);
+    await fakeThis.refreshEffectivePolicy();
+    await fakeThis.productEvents.flush();
+    await fakeThis.metaActivation.flush();
+    const entered = deferred();
+    const response = deferred();
+    let signal;
+    let sent = 0;
+    t.mock.method(electronStub.net, "fetch", async (url, init) => {
+      if (url.endsWith("/api/workspace-policy"))
+        return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+      assert.equal(new URL(url).pathname, path);
+      signal = init.signal;
+      sent += 1;
+      entered.resolve();
+      return response.promise;
+    });
+    const request = {
+      path,
+      method: "POST",
+      body: {},
+      expectedAuthGeneration: tokenState.generation,
+    };
+    const pending = fakeThis[collector].request(request);
+    t.after(() => response.resolve(Response.json({ accepted: [] })));
+    await entered.promise;
+    policy.dataRetention.cloudBackupAllowed = false;
+    device = normalizeDeviceValues({ RequireSignIn: true, Policy: JSON.stringify(policy) });
+    fakeThis.effectivePolicyManager.getCurrent();
+    assert.equal(signal.aborted, true, "the in-flight transport must be cancelled");
+    response.resolve(Response.json({ accepted: [] }));
+    assert.equal((await pending).success, false, "a late success cannot acknowledge retired work");
+    assert.equal((await fakeThis[collector].request(request)).success, false);
+    assert.equal(sent, 1, "revoked policy prevents the next upload too");
+
+    policy.dataRetention.cloudBackupAllowed = true;
+    device = normalizeDeviceValues({ RequireSignIn: true, Policy: JSON.stringify(policy) });
+    fakeThis.effectivePolicyManager.getCurrent();
+    assert.equal((await fakeThis[collector].request(request)).success, true);
+    assert.equal(sent, 2, "relaxing the policy permits telemetry again");
+  });
+}
 
 test("a late product event binding cannot recreate the queue for an erased account", async (t) => {
   const originalApiUrl = process.env.OPENWHISPR_API_URL;

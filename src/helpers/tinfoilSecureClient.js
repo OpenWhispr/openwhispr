@@ -26,6 +26,7 @@ async function createTinfoilRealtimeSocket({ model, apiKey, signal }) {
 
 /** Fetches an enclave path over the attested transport. Needs no API key. */
 async function tinfoilSecureFetch(path, init) {
+  init?.signal?.throwIfAborted();
   const client = await getSecureClient();
   return client.fetch(path, init);
 }

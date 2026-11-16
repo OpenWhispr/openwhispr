@@ -2067,8 +2067,8 @@ class IPCHandlers {
         productOperationAllowed(policy, app.getVersion(), operation.channel, operation.args)
       );
     };
-    const handleProduct = (channel, handler, remote = false) =>
-      ipcMain.handle(channel, async (event, ...args) => {
+    const createProductHandler = (channel, handler, remote = false) => {
+      return async (event, ...args) => {
         const startedPolicy = this.effectivePolicyManager.getCurrent();
         const operation = { channel, args, remote, accountId: startedPolicy.accountId };
         if (channel === "cloud-api-request")
@@ -2194,7 +2194,10 @@ class IPCHandlers {
               this._remoteStreamPolicies.delete(streamProperty);
           }
         }
-      });
+      };
+    };
+    const handleProduct = (channel, handler, remote = false) =>
+      ipcMain.handle(channel, createProductHandler(channel, handler, remote));
     const handleRemoteProduct = (channel, handler) => handleProduct(channel, handler, true);
     const ownProductStream = (streaming) => {
       const operation = this._productRequestContext.getStore();
@@ -8137,6 +8140,19 @@ class IPCHandlers {
       tokenStore,
       logger: debugLogger,
     });
+    const backgroundCloudApiRequest = createCloudApiRequestHandler({
+      getApiUrl,
+      getAppVersion: () => app.getVersion(),
+      tokenStore,
+      proxyFetch: (url, init) => proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
+    });
+    // Collectors have no renderer IPC operation to own their policy checks or
+    // cancellation, but their uploads follow the same backup rules as sync.
+    const handleBackgroundCloudApiRequest = createProductHandler(
+      "cloud-api-request",
+      (_event, opts) => backgroundCloudApiRequest(opts),
+      true
+    );
     try {
       const ActivationDatabase = require("better-sqlite3");
       const activationDb = new ActivationDatabase(
@@ -8150,13 +8166,7 @@ class IPCHandlers {
             ...tokenStore.getState(),
             binding: accountScopeBinding.read(),
           }),
-        request: createCloudApiRequestHandler({
-          getApiUrl,
-          getAppVersion: () => app.getVersion(),
-          tokenStore,
-          proxyFetch: (url, init) =>
-            proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
-        }),
+        request: (opts) => handleBackgroundCloudApiRequest(undefined, opts),
         logger: debugLogger,
       });
       this.metaActivation.start();
@@ -8177,13 +8187,7 @@ class IPCHandlers {
             ...tokenStore.getState(),
             binding: accountScopeBinding.read(),
           }),
-        request: createCloudApiRequestHandler({
-          getApiUrl,
-          getAppVersion: () => app.getVersion(),
-          tokenStore,
-          proxyFetch: (url, init) =>
-            proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
-        }),
+        request: (opts) => handleBackgroundCloudApiRequest(undefined, opts),
         getAppVersion: () => app.getVersion(),
         logger: debugLogger,
       });
