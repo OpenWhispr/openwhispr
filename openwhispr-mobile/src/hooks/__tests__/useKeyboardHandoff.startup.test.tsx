@@ -199,7 +199,7 @@ jest.mock('@/store/useOnboardingStore', () => ({
     hydrate: () => mockHydrate(),
   })),
 }));
-jest.mock('@/lib/authClient', () => ({ getCachedSession: () => mockCachedSession }));
+jest.mock('@/lib/authClient', () => ({ getCachedSession: () => mockReadCachedSession() }));
 jest.mock('@/lib/apiClient', () => ({
   BASE_URL: 'https://test.invalid',
   getClientVersionHeader: () => ({}),
@@ -295,6 +295,7 @@ const ACCOUNT: AuthUser = {
   isAnonymous: false,
 };
 let mockCachedSession: { user: AuthUser; sessionCookie: string } | null;
+const mockReadCachedSession = jest.fn(async () => mockCachedSession);
 let configReady: ReturnType<typeof deferred<void>>;
 let onboardingReady: ReturnType<typeof deferred<void>>;
 let authReady: ReturnType<typeof deferred<void>>;
@@ -353,6 +354,7 @@ async function stopRecording(): Promise<void> {
 
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockReadCachedSession.mockImplementation(async () => mockCachedSession);
   configReady = deferred<void>();
   onboardingReady = deferred<void>();
   authReady = deferred<void>();
@@ -588,4 +590,22 @@ it('does not revive an ordinary native job after the keyboard times out waiting 
   await restoreLocal();
   expect(storage.markHotkeyJsReady).toHaveBeenCalledTimes(1);
   expect(nativeReplays).toBe(0);
+});
+
+it('waits for the asynchronous local cached session before releasing cold recording', async () => {
+  const cacheReady = deferred<typeof mockCachedSession>();
+  mockReadCachedSession.mockReturnValueOnce(cacheReady.promise);
+  render(<RootLayout />);
+  await restoreLocal();
+  expect(storage.startNativeRecording).not.toHaveBeenCalled();
+  expect(storage.markHotkeyJsReady).not.toHaveBeenCalled();
+  expect(useAuthStore.getState().isInitialized).toBe(false);
+  await act(async () => {
+    cacheReady.resolve(mockCachedSession);
+  });
+  expect(storage.startNativeRecording).toHaveBeenCalledTimes(1);
+  expect(useAuthStore.getState().isInitialized).toBe(false);
+  await restoreAccount();
+  await stopRecording();
+  expect(dictations()).toHaveLength(1);
 });

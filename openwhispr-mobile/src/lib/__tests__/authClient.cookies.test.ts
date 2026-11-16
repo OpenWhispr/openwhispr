@@ -7,7 +7,7 @@ function loadAuthClient() {
     error: null,
   };
   const client = {
-    getCookie: jest.fn().mockReturnValue('better-auth.session_token=test-session.signature'),
+    getCookie: jest.fn().mockResolvedValue('better-auth.session_token=test-session.signature'),
     $store: { atoms: { session: { get: jest.fn(() => ({ data: null })) } } },
     signIn: {
       email: jest.fn().mockResolvedValue(result),
@@ -19,18 +19,31 @@ function loadAuthClient() {
   const mockFetch = jest.fn().mockResolvedValue({ ok: true });
   jest.doMock('better-auth/client', () => ({ createAuthClient: () => client }));
   jest.doMock('better-auth/client/plugins', () => ({ anonymousClient: () => ({}) }));
-  jest.doMock('@better-auth/expo/client', () => ({ expoClient: () => ({}) }));
+  jest.doMock('@better-auth/expo/client', () => ({
+    expoClient: () => ({}),
+    storageAdapter: (storage: { getItemAsync: (key: string) => Promise<string | null> }) => storage,
+  }));
   jest.doMock('expo-application', () => ({ applicationId: 'com.gizmolabs.openwhispr' }));
   jest.doMock('expo-constants', () => ({
     __esModule: true,
     default: { expoConfig: { scheme: 'openwhispr' } },
   }));
-  const secureStore = { getItem: jest.fn(() => null) };
+  const stored = new Map<string, string>();
+  const secureStore = {
+    getItem: jest.fn((key: string): string | null => stored.get(key) ?? null),
+    getItemAsync: jest.fn(async (key: string): Promise<string | null> => stored.get(key) ?? null),
+  };
   jest.doMock('expo-secure-store', () => secureStore);
   jest.doMock('expo/fetch', () => ({ fetch: mockFetch }));
   jest.doMock('../apiClient', () => ({ getClientVersionHeader: () => ({}) }));
 
-  return { auth: require('../authClient') as AuthClientModule, client, mockFetch, secureStore };
+  return {
+    auth: require('../authClient') as AuthClientModule,
+    client,
+    mockFetch,
+    secureStore,
+    stored,
+  };
 }
 
 afterEach(() => jest.resetModules());
@@ -102,12 +115,12 @@ describe('cached capture identity', () => {
   it.each([
     'better-auth.session_token=test-session.signature',
     '__Secure-better-auth.session_token=test-session.signature%2Bencoded%3D',
-  ])('reads the SDK cached session synchronously for %s', (cookie) => {
-    const { auth, client, mockFetch } = loadAuthClient();
-    client.$store.atoms.session.get.mockReturnValue({ data: cachedSession() } as never);
-    client.getCookie.mockReturnValue(cookie);
+  ])('reads the SDK cached session asynchronously for %s', async (cookie) => {
+    const { auth, client, mockFetch, stored } = loadAuthClient();
+    stored.set('openwhispr_session_data', JSON.stringify(cachedSession()));
+    client.getCookie.mockResolvedValue(cookie);
 
-    expect(auth.getCachedSession()).toEqual({
+    await expect(auth.getCachedSession()).resolves.toEqual({
       user: { id: 'user-1', email: 'user@example.com', emailVerified: true, isAnonymous: false },
       sessionCookie: cookie,
     });
@@ -149,31 +162,32 @@ describe('cached capture identity', () => {
         },
       }),
     ],
-  ])('excludes %s cached sessions', (_name, data) => {
-    const { auth, client } = loadAuthClient();
-    client.$store.atoms.session.get.mockReturnValue({ data } as never);
-    expect(auth.getCachedSession()).toBeNull();
+  ])('excludes %s cached sessions', async (_name, data) => {
+    const { auth, stored } = loadAuthClient();
+    stored.set('openwhispr_session_data', JSON.stringify(data));
+    await expect(auth.getCachedSession()).resolves.toBeNull();
   });
 
-  it('excludes persisted guest sessions and cleared cookies', () => {
-    const { auth, client, secureStore } = loadAuthClient();
-    client.$store.atoms.session.get.mockReturnValue({ data: cachedSession() } as never);
-    secureStore.getItem.mockReturnValue('true' as never);
-    expect(auth.getCachedSession()).toBeNull();
-    secureStore.getItem.mockReturnValue(null);
-    client.getCookie.mockReturnValue('');
-    expect(auth.getCachedSession()).toBeNull();
+  it('excludes persisted guest sessions and cleared cookies', async () => {
+    const { auth, client, stored } = loadAuthClient();
+    stored.set('openwhispr_session_data', JSON.stringify(cachedSession()));
+    stored.set('openwhispr_guest_session', 'true');
+    await expect(auth.getCachedSession()).resolves.toBeNull();
+    stored.delete('openwhispr_guest_session');
+    client.getCookie.mockResolvedValue('');
+    await expect(auth.getCachedSession()).resolves.toBeNull();
   });
 
-  it('retains the anonymous marker and fails closed when secure storage is unavailable', () => {
-    const { auth, client, secureStore } = loadAuthClient();
-    client.$store.atoms.session.get.mockReturnValue({
-      data: cachedSession({ user: { id: 'user-1', email: 'guest@anon.openwhispr.invalid' } }),
-    } as never);
-    expect(auth.getCachedSession()?.user?.isAnonymous).toBe(true);
-    secureStore.getItem.mockImplementation(() => {
-      throw new Error('Keychain unavailable');
-    });
-    expect(auth.getCachedSession()).toBeNull();
+  it('retains the anonymous marker and fails closed when secure storage is unavailable', async () => {
+    const { auth, secureStore, stored } = loadAuthClient();
+    stored.set(
+      'openwhispr_session_data',
+      JSON.stringify(
+        cachedSession({ user: { id: 'user-1', email: 'guest@anon.openwhispr.invalid' } }),
+      ),
+    );
+    expect((await auth.getCachedSession())?.user?.isAnonymous).toBe(true);
+    secureStore.getItemAsync.mockRejectedValue(new Error('Keychain unavailable'));
+    await expect(auth.getCachedSession()).resolves.toBeNull();
   });
 });

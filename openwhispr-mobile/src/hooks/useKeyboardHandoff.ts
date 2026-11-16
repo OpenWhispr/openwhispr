@@ -14,7 +14,7 @@ import { useKeyboardRecoveryStore } from '@/store/useKeyboardRecoveryStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { useTranscriptStore } from '@/store/useTranscriptStore';
 import { useAuthStore } from '@/store/useAuthStore';
-import { getCachedSession } from '@/lib/authClient';
+import type { CachedSession } from '@/lib/authClient';
 import {
   TranscriptionService,
   isLocalModelMissingError,
@@ -176,7 +176,12 @@ function waitForAuthInitialized(): Promise<void> {
   });
 }
 
-export function useKeyboardHandoff(startupReady = true): void {
+export function useKeyboardHandoff(
+  startupReady = true,
+  cachedSession: CachedSession | null = null,
+): void {
+  const cachedSessionRef = useRef(cachedSession);
+  cachedSessionRef.current = cachedSession;
   const startupReadyRef = useRef(startupReady);
   startupReadyRef.current = startupReady;
   const releaseStartupRef = useRef<(() => void) | null>(null);
@@ -196,19 +201,20 @@ export function useKeyboardHandoff(startupReady = true): void {
 
     const captureDictationForJob = (jobId: string): void => {
       if (dictationCaptureRef.current?.jobId === jobId) return;
-      const { isInitialized, isGuest } = useAuthStore.getState();
-      const cached = !isInitialized && !isGuest ? getCachedSession() : null;
-      const context = isInitialized
-        ? captureDictationContext()
-        : captureDictationContext(
-            cached
-              ? {
-                  userId: cached.user.id,
-                  isAnonymous: cached.user.isAnonymous,
-                  cookie: cached.sessionCookie,
-                }
-              : null,
-          );
+      const { isInitialized, isGuest, user } = useAuthStore.getState();
+      const cached = !isInitialized && !isGuest && !user ? cachedSessionRef.current : null;
+      const context =
+        isInitialized || user
+          ? captureDictationContext()
+          : captureDictationContext(
+              cached
+                ? {
+                    userId: cached.user.id,
+                    isAnonymous: cached.user.isAnonymous,
+                    cookie: cached.sessionCookie,
+                  }
+                : null,
+            );
       dictationCaptureRef.current = { jobId, context };
     };
 

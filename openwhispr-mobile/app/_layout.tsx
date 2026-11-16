@@ -38,6 +38,7 @@ import {
 } from '@/lib/appsflyer';
 import { initSyncTriggers } from '@/sync/syncEngine';
 import { initProductEvents } from '@/lib/productEvents';
+import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
@@ -52,8 +53,11 @@ runMigrations();
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayout() {
-  const [keyboardStartupReady, setKeyboardStartupReady] = useState(false);
-  useKeyboardHandoff(keyboardStartupReady);
+  const [keyboardStartup, setKeyboardStartup] = useState<{
+    ready: boolean;
+    session: CachedSession | null;
+  }>({ ready: false, session: null });
+  useKeyboardHandoff(keyboardStartup.ready, keyboardStartup.session);
   useRevenueCatIdentity();
   useAnonymousOnboardingSession();
   useAffiliateAttribution();
@@ -94,10 +98,16 @@ function RootLayout() {
 
   useEffect(() => {
     let mounted = true;
+    const cachedSession = getCachedSession();
     initialize();
-    // Capture needs local preferences and practice state, but never waits for auth's network call.
-    Promise.allSettled([loadConfig(), hydrateOnboarding()]).then(() => {
-      if (mounted) setKeyboardStartupReady(true);
+    // Restore local capture state before starting, independently of auth's network request.
+    Promise.allSettled([loadConfig(), hydrateOnboarding(), cachedSession]).then((results) => {
+      if (!mounted) return;
+      const session = results[2];
+      setKeyboardStartup({
+        ready: true,
+        session: session.status === 'fulfilled' ? session.value : null,
+      });
     });
     startRetiredPromptSweep();
     // A failure leaves the install unmarked, so the next key access retries the erase.
