@@ -108,6 +108,8 @@ async function downloadBinary(key, config, release, isForce = false) {
   try {
     await downloadFile(asset.url, zipPath);
 
+    // A tree left by an earlier failed or killed run would add its old libraries.
+    fs.rmSync(extractDir, { recursive: true, force: true });
     fs.mkdirSync(extractDir, { recursive: true });
     await extractArchive(zipPath, extractDir);
 
@@ -141,8 +143,6 @@ async function downloadBinary(key, config, release, isForce = false) {
     return true;
   } catch (error) {
     console.error(`  ${key}: Failed - ${error.message}`);
-    // A rerun would otherwise extract over this tree and pick up its libraries.
-    fs.rmSync(extractDir, { recursive: true, force: true });
     if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
     return false;
   }

@@ -7,7 +7,10 @@ const vm = require("node:vm");
 const { createRequire } = require("node:module");
 
 const { buildMachOImage } = require("../helpers/harness/machoFixture");
-const { MACOS_DEPLOYMENT_TARGET, assertRunsOnMacOS } = require("../../scripts/download-llama-server");
+const {
+  MACOS_DEPLOYMENT_TARGET,
+  assertRunsOnMacOS,
+} = require("../../scripts/download-llama-server");
 
 function writeImages(t, minimums) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llama-macho-"));
@@ -34,7 +37,7 @@ test("compares versions numerically, not as strings", (t) => {
   assert.doesNotThrow(() => assertRunsOnMacOS(writeImages(t, ["9.0"])));
 });
 
-test("a refused macOS build leaves nothing in resources/bin, and other platforms skip the check", async (t) => {
+test("a refused macOS build copies nothing into resources/bin, and other platforms skip the check", async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "llama-download-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const binDir = path.join(root, "resources", "bin");
@@ -86,8 +89,12 @@ test("a refused macOS build leaves nothing in resources/bin, and other platforms
   };
 
   assert.equal(await downloadBinary("darwin-arm64", BINARIES["darwin-arm64"], release), false);
-  assert.deepEqual(fs.readdirSync(binDir), []);
+  assert.deepEqual(fs.readdirSync(binDir), ["temp-llama-darwin-arm64"]);
 
   assert.equal(await downloadBinary("linux-x64-cpu", BINARIES["linux-x64-cpu"], release), true);
-  assert.deepEqual(fs.readdirSync(binDir).sort(), ["libggml.so", "llama-server-linux-x64-cpu"]);
+  assert.deepEqual(fs.readdirSync(binDir).sort(), [
+    "libggml.so",
+    "llama-server-linux-x64-cpu",
+    "temp-llama-darwin-arm64",
+  ]);
 });
