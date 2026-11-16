@@ -1533,3 +1533,183 @@ test("restored conversation privacy is account-bound and rejects late pulls afte
     0
   );
 });
+
+function collectDictationFacts(t) {
+  const { ProductEvents } = require("../../src/helpers/productEvents");
+  const previousEvents = target.productEvents;
+  const previousWindows = target.windowManager;
+  const uploads = [];
+  const events = new ProductEvents({
+    store: { load: () => ({ events: [] }), save: () => {} },
+    getScope: () => invoke("get-active-account-scope"),
+    request: async (request) => {
+      uploads.push(request);
+      return {
+        success: true,
+        data: { accepted: request.body.events.map((event) => event.event_id) },
+      };
+    },
+  });
+  target.productEvents = events;
+  target.windowManager = new Proxy(
+    { isOnboardingActive: () => false },
+    { get: (value, property) => (property in value ? value[property] : anything()) }
+  );
+  t.after(() => {
+    events.dispose();
+    target.productEvents = previousEvents;
+    target.windowManager = previousWindows;
+  });
+  return { events, uploads };
+}
+
+const FACT_CAPTURE = "11111111-2222-4333-8444-555555555555";
+
+test("a dictation fact finishing after an account switch waits for the original account", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const { events, uploads } = collectDictationFacts(t);
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  await tick();
+  const startedAt = new Date().toISOString();
+  await tick();
+  tokenState = { token: "token-b", generation: 4 };
+  await invoke("set-active-account-scope", "account-b", tokenState.generation);
+
+  await invoke("product-events-record-dictation", {
+    captureId: FACT_CAPTURE,
+    words: 25,
+    mode: "byok",
+    startedAt,
+  });
+  await events.flush();
+  assert.deepEqual(events.state.dictationWords, { "account-a": 25 });
+  assert.equal(events.state.events[0].account_id, "account-a");
+  assert.equal(events.state.events[0].identity_generation, null);
+  assert.equal(uploads.flatMap((upload) => upload.body.events).length, 0);
+
+  tokenState = { token: "token-a-again", generation: 5 };
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  await events.flush();
+  const sent = uploads.filter((upload) => upload.body.events.length > 0);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].expectedAuthGeneration, 5);
+  assert.equal(sent[0].body.events[0].event_id, FACT_CAPTURE);
+});
+
+test("a guest dictation fact remains excluded when sign-in wins the completion race", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const { events, uploads } = collectDictationFacts(t);
+  await invoke("set-active-account-scope", null, tokenState.generation);
+  await tick();
+  const startedAt = new Date().toISOString();
+  await tick();
+  await invoke("set-active-account-scope", "account-b", tokenState.generation);
+
+  await invoke("product-events-record-dictation", {
+    captureId: FACT_CAPTURE,
+    words: 25,
+    mode: "local",
+    startedAt,
+  });
+  await events.flush();
+  assert.deepEqual(events.state.dictationWords, {});
+  assert.deepEqual(events.state.events, []);
+  assert.equal(uploads.flatMap((upload) => upload.body.events).length, 0);
+});
+
+test("a dictation fact with an unknown or recovered origin cannot adopt the current account", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const { events, uploads } = collectDictationFacts(t);
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+
+  for (const startedAt of [
+    undefined,
+    "invalid",
+    new Date(db._accountTrackedSince - 1).toISOString(),
+  ]) {
+    await invoke("product-events-record-dictation", {
+      captureId: FACT_CAPTURE,
+      words: 25,
+      mode: "local",
+      startedAt,
+    });
+  }
+  await events.flush();
+  assert.deepEqual(events.state.dictationWords, {});
+  assert.deepEqual(events.state.events, []);
+  assert.equal(uploads.flatMap((upload) => upload.body.events).length, 0);
+});
+
+test("a captured dictation without generation metadata still honors the active account's policy block", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const { events } = collectDictationFacts(t);
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  await events.flush();
+  await tick();
+  const startedAt = new Date().toISOString();
+  let requests = 0;
+  events.request = async () => {
+    requests += 1;
+    return { success: false, status: 403, code: "POLICY_CLOUD_BACKUP_BLOCKED" };
+  };
+  await invoke("product-events-record-dictation", {
+    captureId: FACT_CAPTURE,
+    words: 25,
+    mode: "local",
+    startedAt,
+  });
+  await events.flush();
+  await invoke("product-events-record-dictation", {
+    captureId: "11111111-2222-4333-8444-555555555556",
+    words: 30,
+    mode: "local",
+    startedAt,
+  });
+  await events.flush();
+
+  assert.equal(requests, 1);
+  assert.deepEqual(events.state.events, []);
+  assert.equal(events.state.dictationWords["account-a"], 0);
+
+  await tick();
+  tokenState = { token: "token-b", generation: 4 };
+  await invoke("set-active-account-scope", "account-b", tokenState.generation);
+  await events.flush();
+  await invoke("product-events-record-dictation", {
+    captureId: "11111111-2222-4333-8444-555555555557",
+    words: 35,
+    mode: "local",
+    startedAt,
+  });
+  assert.deepEqual(events.state.events, []);
+  assert.equal(events.state.dictationWords["account-a"], 0);
+});
+
+test("an erased account's delayed dictation cannot charge the replacement account", async (t) => {
+  const db = setup(t);
+  if (!db) return;
+  const { events, uploads } = collectDictationFacts(t);
+  await invoke("set-active-account-scope", "account-a", tokenState.generation);
+  await tick();
+  const startedAt = new Date().toISOString();
+  await tick();
+  events.purge("account-a");
+  tokenState = { token: "token-b", generation: 4 };
+  await invoke("set-active-account-scope", "account-b", tokenState.generation);
+
+  await invoke("product-events-record-dictation", {
+    captureId: FACT_CAPTURE,
+    words: 25,
+    mode: "byok",
+    startedAt,
+  });
+  await events.flush();
+
+  assert.deepEqual(events.state.dictationWords, {});
+  assert.deepEqual(events.state.events, []);
+  assert.equal(uploads.flatMap((upload) => upload.body.events).length, 0);
+});

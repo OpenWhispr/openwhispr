@@ -4732,6 +4732,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           captureId: result.clientTranscriptionId,
           words,
           mode: resolveAnalyticsMode(getSettings(), this.lastAudioMetadata?.provider),
+          ...(result.analyticsOccurredAt ? { startedAt: result.analyticsOccurredAt } : {}),
         })
         .catch(() => {});
     } catch {
@@ -6562,7 +6563,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       };
       await this._completeActivationCapture(delivery.activationCapture, completion);
       if (wasCancelled()) return true;
-      this._recordDictationCompleted({ ...completion, clientTranscriptionId });
+      this._recordDictationCompleted({
+        ...completion,
+        clientTranscriptionId,
+        analyticsOccurredAt: resultAnalyticsOccurredAt,
+      });
       delivery.resultHandled = this.onTranscriptionComplete?.({
         success: true,
         text: finalText,

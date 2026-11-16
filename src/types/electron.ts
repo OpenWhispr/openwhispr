@@ -2284,6 +2284,7 @@ declare global {
         captureId: string;
         words: number;
         mode: string;
+        startedAt?: string;
       }) => Promise<void>;
       getNoteWriteGuard?: () => Promise<NoteWriteGuard>;
       getDatabaseAccountScope?: () => Promise<DatabaseAccountScope>;

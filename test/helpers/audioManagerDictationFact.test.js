@@ -323,12 +323,18 @@ test("a streamed recording reports under the capture id its completion carries",
   const completions = [];
   const manager = streamingManager(AudioManager, completions);
   manager.streamingFinalText = "same event";
+  const startedAt = new Date(manager.recordingStartTime).toISOString();
 
   await manager.stopStreamingRecording();
 
   assert.match(completions[0].clientTranscriptionId, UUID);
   assert.deepEqual(facts, [
-    { captureId: completions[0].clientTranscriptionId, words: 2, mode: "byok" },
+    {
+      captureId: completions[0].clientTranscriptionId,
+      words: 2,
+      mode: "byok",
+      startedAt,
+    },
   ]);
 });
 
@@ -345,4 +351,37 @@ test("a streamed assistant command reports nothing", async (t) => {
 
   assert.equal(completions.length, 1);
   assert.deepEqual(facts, []);
+});
+
+test("a batch fact carries the recording start through delayed recognition", async (t) => {
+  const { AudioManager, window } = await load(t);
+  const facts = recordFacts(window);
+  const transcription = deferred();
+  const manager = batchManager(AudioManager, transcription, []);
+  const startedAt = "2026-11-16T08:00:00.000Z";
+
+  const run = manager.processAudio(new Blob(["audio"]), { analyticsOccurredAt: startedAt });
+  transcription.resolve({
+    success: true,
+    text: "two words",
+    rawText: "two words",
+    source: "local",
+  });
+  await run;
+
+  assert.equal(facts[0].startedAt, startedAt);
+});
+
+test("a streaming fact carries the original recording start", async (t) => {
+  const { AudioManager, window } = await load(t, STREAMING_SETTINGS);
+  const facts = recordFacts(window);
+  globalThis.window.dispatchEvent = () => true;
+  const manager = streamingManager(AudioManager, []);
+  const startedAt = "2026-11-16T08:00:00.000Z";
+  manager.recordingStartTime = Date.parse(startedAt);
+  manager.streamingFinalText = "two words";
+
+  await manager.stopStreamingRecording();
+
+  assert.equal(facts[0].startedAt, startedAt);
 });

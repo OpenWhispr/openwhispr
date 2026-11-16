@@ -30,7 +30,11 @@ import {
 } from '@/lib/keyboardAgentSync';
 import { generateForJob, handleAgentAction } from '@/services/agent/AgentComposerService';
 import { expandSnippets } from '@/lib/snippets';
-import { recordDictationCompleted } from '@/lib/productEvents';
+import {
+  captureDictationContext,
+  recordDictationCompleted,
+  type ProductEventsCaptureContext,
+} from '@/lib/productEvents';
 import { countSpokenWords } from '@/lib/wordCount';
 import { useSnippetsStore } from '@/store/useSnippetsStore';
 import { analyzeSpeechActivity, serializeSpeechActivityMetrics } from '@/lib/speechActivity';
@@ -176,9 +180,18 @@ export function useKeyboardHandoff() {
   const startedAtRef = useRef<number | null>(null);
   const currentJobIdRef = useRef<string | null>(null);
   const orphanCleanupInFlightRef = useRef(false);
+  const dictationCaptureRef = useRef<{
+    jobId: string;
+    context: ProductEventsCaptureContext;
+  } | null>(null);
 
   useEffect(() => {
     let mounted = true;
+
+    const captureDictationForJob = (jobId: string): void => {
+      if (dictationCaptureRef.current?.jobId === jobId) return;
+      dictationCaptureRef.current = { jobId, context: captureDictationContext() };
+    };
 
     const begin = (jobId?: string | null) => {
       activeRef.current = true;
@@ -632,6 +645,7 @@ export function useKeyboardHandoff() {
       const trimmedHost = hostBundle?.trim();
       if (trimmedHost) AppGroupStorage.setItem('keyboard_return_bundle', trimmedHost);
 
+      captureDictationForJob(jobId);
       const started = AppGroupStorage.startNativeRecording();
       if (!started) {
         if (__DEV__) console.log('[keyboard-handoff] startNativeRecording failed');
@@ -725,6 +739,9 @@ export function useKeyboardHandoff() {
           return;
         }
 
+        // A recovered stop without an observed start has no trustworthy capture owner.
+        const captureContext =
+          dictationCaptureRef.current?.jobId === jobId ? dictationCaptureRef.current.context : null;
         setCurrentJobId(jobId);
         begin(jobId);
         markTiming('recording_stopped_event');
@@ -1053,8 +1070,9 @@ export function useKeyboardHandoff() {
             return;
           }
           const delivered = writePendingTranscript(finalText, jobId);
-          if (delivered) {
+          if (delivered && captureContext) {
             recordDictationCompleted({
+              context: captureContext,
               captureId: jobId,
               words: countSpokenWords(processed.originalText),
               provider: processed.transcription.provider,
@@ -1139,6 +1157,7 @@ export function useKeyboardHandoff() {
       const bgJobId = readActiveJobId();
       begin(bgJobId);
       if (bgJobId) {
+        captureDictationForJob(bgJobId);
         snapshotKeyboardTone(bgJobId);
         // Mirror the tone snapshot: capture a pending agent request for this
         // job. No-op (null) when none is pending; idempotent per jobId.

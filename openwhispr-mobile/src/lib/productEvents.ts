@@ -19,7 +19,8 @@ const BATCH_SIZE = 50;
 // The queue only ever holds a handful of milestones and the dictations of the
 // first 200 words; these bound what a server that never acknowledges
 // (deferring an event forever, or unreachable) leaves behind.
-const MAX_QUEUED_EVENTS = 200;
+// Milestones retain their original capacity independently of dictation traffic.
+const MAX_QUEUED_EVENTS_PER_KIND = 200;
 const MAX_EVENT_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 30 * 60_000];
 // Sign-ins the server already took. A relaunch restores the same session and
@@ -50,6 +51,13 @@ export interface ProductEventsIdentity {
   cookie: string;
 }
 
+/** Capture-time session and consent scope; never persisted with the event. */
+export interface ProductEventsCaptureContext {
+  readonly identity: ProductEventsIdentity | null;
+  readonly isPractice: boolean;
+  readonly consentSignal: AbortSignal | null;
+}
+
 interface QueuedEvent {
   event_id: string;
   event_name: string;
@@ -78,8 +86,8 @@ interface State {
   /** Counted dictation words recorded here, per account. */
   dictationWords: Record<string, number>;
   /**
-   * Accounts that sent a dictation this device couldn't count. One is enough
-   * to mark the account's 200 words uncertain, so no second is sent.
+   * One entry per uncountable contribution, queued or acknowledged. Usually
+   * one per account; a late acknowledgement can overlap its replacement.
    */
   uncountedDictations: string[];
 }
@@ -154,8 +162,8 @@ export function createProductEvents({
   // Every read-modify-write runs here in turn, so two writers never race.
   let chain: Promise<unknown> = Promise.resolve();
   let running: Promise<void> | null = null;
-  // A consent change can discard facts while the server is still acknowledging them.
-  const consentDiscardedDictations = new Set<string>();
+  // Queue discards can race with the server acknowledging an in-flight fact.
+  const discardedDictations = new Set<string>();
   let flushAgain = false;
   let retryPending = false;
   let retryAttempt = 0;
@@ -197,6 +205,43 @@ export function createProductEvents({
     return run;
   }
 
+  function discardQueuedEvents(
+    current: State,
+    shouldDiscard: (event: QueuedEvent, index: number) => boolean,
+  ): State {
+    const discarded = current.events.filter(shouldDiscard);
+    if (discarded.length === 0) return current;
+    const discardedIds = new Set(discarded.map((event) => event.event_id));
+    const dictationWords = { ...current.dictationWords };
+    const uncountedDictations = [...current.uncountedDictations];
+    for (const event of discarded) {
+      if (
+        event.event_name !== 'dictation_completed' ||
+        event.properties.is_practice !== false ||
+        event.properties.is_retranscribe !== false
+      ) {
+        continue;
+      }
+      if (running) discardedDictations.add(event.event_id);
+      const words = event.properties.word_count;
+      if (words === null) {
+        const contribution = uncountedDictations.indexOf(event.owner_user_id);
+        if (contribution !== -1) uncountedDictations.splice(contribution, 1);
+      } else if (typeof words === 'number') {
+        dictationWords[event.owner_user_id] = Math.max(
+          0,
+          (dictationWords[event.owner_user_id] ?? 0) - words,
+        );
+      }
+    }
+    return {
+      ...current,
+      events: current.events.filter((event) => !discardedIds.has(event.event_id)),
+      dictationWords,
+      uncountedDictations,
+    };
+  }
+
   /**
    * Queues an event once. `admit` decides, in the same write, whether it is
    * still wanted and what else changes with it; null leaves it unqueued.
@@ -208,18 +253,34 @@ export function createProductEvents({
   ): Promise<boolean> {
     return withState((current) => {
       if (!mayRecord()) return { result: false };
+      const cutoff = now() - MAX_EVENT_AGE_MS;
+      const fresh = discardQueuedEvents(
+        current,
+        (queued) => Date.parse(queued.captured_at) < cutoff,
+      );
+      const trimmed = fresh !== current ? fresh : undefined;
       if (
-        current.events.some((queued) => queued.event_id === event.event_id) ||
-        current.acknowledgedBindings.includes(event.event_id.toLowerCase())
+        fresh.events.some((queued) => queued.event_id === event.event_id) ||
+        fresh.acknowledgedBindings.includes(event.event_id.toLowerCase())
       ) {
-        return { result: true };
+        return { next: trimmed, result: true };
       }
-      const changes = admit(current);
-      if (!changes) return { result: false };
-      const events = [...current.events, { ...event, identity_generation: current.generation }];
+      const changes = admit(fresh);
+      if (!changes) return { next: trimmed, result: false };
+      const events = [...fresh.events, { ...event, identity_generation: fresh.generation }];
+      const isDictation = event.event_name === 'dictation_completed';
+      const sameKind = events.filter(
+        (queued) => (queued.event_name === 'dictation_completed') === isDictation,
+      );
+      const overflow = new Set(
+        sameKind
+          .slice(0, Math.max(0, sameKind.length - MAX_QUEUED_EVENTS_PER_KIND))
+          .map((queued) => queued.event_id),
+      );
       return {
-        // Oldest first out when full.
-        next: { ...current, ...changes, events: events.slice(-MAX_QUEUED_EVENTS) },
+        next: discardQueuedEvents({ ...fresh, ...changes, events }, (queued) =>
+          overflow.has(queued.event_id),
+        ),
         result: true,
       };
     });
@@ -294,41 +355,10 @@ export function createProductEvents({
     }
     const signal = consent.signal;
     if (purgeNeeded) {
-      purging ??= withState((current) => {
-        const dictationWords = { ...current.dictationWords };
-        const uncountedDictations = new Set(current.uncountedDictations);
-        // Discarded facts cannot satisfy the reporting ceiling. Keep the
-        // progress of facts already acknowledged by the server.
-        for (const event of current.events) {
-          if (
-            event.event_name !== 'dictation_completed' ||
-            event.properties.is_practice !== false ||
-            event.properties.is_retranscribe !== false
-          ) {
-            continue;
-          }
-          if (running) consentDiscardedDictations.add(event.event_id);
-          const words = event.properties.word_count;
-          if (words === null) {
-            uncountedDictations.delete(event.owner_user_id);
-          } else if (typeof words === 'number') {
-            dictationWords[event.owner_user_id] = Math.max(
-              0,
-              (dictationWords[event.owner_user_id] ?? 0) - words,
-            );
-          }
-        }
-        return {
-          next: {
-            ...current,
-            events: [],
-            links: {},
-            dictationWords,
-            uncountedDictations: [...uncountedDictations],
-          },
-          result: undefined,
-        };
-      })
+      purging ??= withState((current) => ({
+        next: { ...discardQueuedEvents(current, () => true), links: {} },
+        result: undefined,
+      }))
         .then(() => {
           purgeNeeded = false;
         })
@@ -445,6 +475,20 @@ export function createProductEvents({
     if (queued && active()) await flush();
   }
 
+  function captureContext(): ProductEventsCaptureContext {
+    const signal = consent.signal;
+    const identity = getIdentity();
+    const allowed =
+      mayCollect(signal) &&
+      identity !== null &&
+      !blockedSessions.has(identityKey(identity) as string);
+    return {
+      identity: allowed ? { ...identity } : null,
+      isPractice: isOnboarding(),
+      consentSignal: allowed ? signal : null,
+    };
+  }
+
   /**
    * An original dictation finished: its word count, never its words. Only an
    * account records one; words spoken before sign-up never count.
@@ -452,25 +496,36 @@ export function createProductEvents({
    * failed, recorded as such and never counted.
    */
   async function recordDictation({
+    context,
     captureId,
     words,
     provider,
     source,
     retranscribe,
   }: {
+    context: ProductEventsCaptureContext;
     captureId: string;
     words: number | null;
     provider: TranscriptionProvider;
     source: 'dictation' | 'keyboard';
     retranscribe: boolean;
   }): Promise<void> {
-    const identity = getIdentity();
-    const signal = consent.signal;
-    const active = (): boolean => mayCollect(signal);
-    if (!identity || identity.isAnonymous || words === 0 || !active()) return;
-    // An organization that keeps the account unobserved gets nothing queued for later.
-    if (blockedSessions.has(identityKey(identity) as string)) return;
-    const practice = isOnboarding();
+    const { identity, consentSignal: signal, isPractice: practice } = context;
+    if (!identity || identity.isAnonymous || signal === null || words === 0) return;
+    const active = (): boolean => {
+      const currentIdentity = getIdentity();
+      const accountBlocked =
+        currentIdentity?.userId === identity.userId
+          ? blockedSessions.has(identityKey(currentIdentity) as string)
+          : [...blockedSessions].some((key) => key.startsWith(`${identity.userId}\n`));
+      return (
+        mayCollect(signal) &&
+        !blockedSessions.has(identityKey(identity) as string) &&
+        !accountBlocked
+      );
+    };
+    // A refreshed session can learn the original account's policy while capture is in flight.
+    if (!active()) return;
     const counts = !practice && !retranscribe;
     const occurredAt = new Date(now()).toISOString();
     const queued = await enqueue(
@@ -521,7 +576,7 @@ export function createProductEvents({
     running = runPass()
       .catch(() => scheduleRetry())
       .finally(() => {
-        consentDiscardedDictations.clear();
+        discardedDictations.clear();
         running = null;
         if (flushAgain) flush().catch(() => undefined);
       });
@@ -538,7 +593,10 @@ export function createProductEvents({
 
     const batches = await withState((current) => {
       const cutoff = now() - MAX_EVENT_AGE_MS;
-      const events = current.events.filter((event) => !(Date.parse(event.captured_at) < cutoff));
+      const fresh = active()
+        ? discardQueuedEvents(current, (event) => Date.parse(event.captured_at) < cutoff)
+        : current;
+      const { events } = fresh;
       // Own events go first. Each candidate anonymous origin needs a separate
       // request so the API can verify its link without blocking other origins.
       const groups = new Map<string | null, QueuedEvent[]>([[null, []]]);
@@ -555,8 +613,7 @@ export function createProductEvents({
         groups.set(origin, group);
       }
       return {
-        next:
-          active() && events.length !== current.events.length ? { ...current, events } : undefined,
+        next: fresh !== current ? fresh : undefined,
         result: [...groups].filter(
           ([, pending]) => pending.length > 0 || !reportedSessions.has(key),
         ),
@@ -618,24 +675,24 @@ export function createProductEvents({
             )
             .map((event) => event.event_id.toLowerCase()),
         );
-        // Settle acknowledgements and consent rollbacks in the same write, so
-        // a consent change cannot discard progress between those operations.
+        // Settle acknowledgements and discarded contributions in the same write,
+        // so a queue discard cannot lose progress between those operations.
         await withState((current) => {
           const currentSession = active();
           if (!currentSession && acceptedDictationIds.size === 0) return { result: undefined };
           const queuedIds = new Set(current.events.map((event) => event.event_id));
           const dictationWords = { ...current.dictationWords };
-          const uncountedDictations = new Set(current.uncountedDictations);
+          const uncountedDictations = [...current.uncountedDictations];
           for (const event of pending) {
             if (
-              !consentDiscardedDictations.has(event.event_id) ||
+              !discardedDictations.has(event.event_id) ||
               !accepted.has(event.event_id.toLowerCase()) ||
               queuedIds.has(event.event_id)
             ) {
               continue;
             }
             const words = event.properties.word_count;
-            if (words === null) uncountedDictations.add(event.owner_user_id);
+            if (words === null) uncountedDictations.push(event.owner_user_id);
             else if (typeof words === 'number')
               dictationWords[event.owner_user_id] =
                 (dictationWords[event.owner_user_id] ?? 0) + words;
@@ -644,7 +701,7 @@ export function createProductEvents({
             next: {
               ...current,
               dictationWords,
-              uncountedDictations: [...uncountedDictations],
+              uncountedDictations,
               acknowledgedBindings: currentSession
                 ? [...current.acknowledgedBindings, ...bindings].slice(-MAX_ACKNOWLEDGED_BINDINGS)
                 : current.acknowledgedBindings,
@@ -658,15 +715,18 @@ export function createProductEvents({
             result: undefined,
           };
         });
-        for (const event of pending) consentDiscardedDictations.delete(event.event_id);
+        for (const event of pending) discardedDictations.delete(event.event_id);
       }
       if (!active()) return;
       if (response?.status === 403 && String(body.code ?? '').startsWith('POLICY_')) {
         blockedSessions.add(key);
-        const sent = new Set(pending.map((event) => event.event_id));
         await withState((current) => ({
           next: active()
-            ? { ...current, events: current.events.filter((event) => !sent.has(event.event_id)) }
+            ? discardQueuedEvents(
+                current,
+                (event) =>
+                  event.owner_user_id === identity.userId || event.owner_user_id === origin,
+              )
             : undefined,
           result: undefined,
         }));
@@ -704,6 +764,7 @@ export function createProductEvents({
     observeIdentity,
     observeConsent,
     recordOnboardingCompleted: recordOnboarding,
+    captureDictationContext: captureContext,
     recordDictationCompleted: recordDictation,
     flush,
     installationId,
@@ -780,12 +841,23 @@ export function initProductEvents(): void {
   observe();
 }
 
+export function captureDictationContext(): ProductEventsCaptureContext {
+  return (
+    runtime?.captureDictationContext() ?? {
+      identity: null,
+      isPractice: true,
+      consentSignal: null,
+    }
+  );
+}
+
 /**
  * dictation_completed, from a dictation that delivered its text: the app's
  * own recorder (useAudioRecording) and the keyboard (useKeyboardHandoff).
  * Fire-and-forget, so it never holds up or breaks the dictation.
  */
 export function recordDictationCompleted(dictation: {
+  context: ProductEventsCaptureContext;
   captureId: string;
   words: number | null;
   provider: TranscriptionProvider;

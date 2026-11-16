@@ -7693,14 +7693,28 @@ class IPCHandlers {
     ipcMain.handle("product-events-record-onboarding-completed", (_event, completion) =>
       this.productEvents?.recordOnboardingCompleted(completion)
     );
-    ipcMain.handle("product-events-record-dictation", (_event, dictation) =>
-      this.productEvents?.recordDictationCompleted({
-        ...dictation,
-        // While onboarding holds the app only its try-it dictation can run,
-        // and it holds the app from startup until the normal app is committed.
-        practice: this.windowManager?.isOnboardingActive() !== false,
-      })
-    );
+    ipcMain.handle("product-events-record-dictation", (_event, dictation) => {
+      const startedAt = Date.parse(dictation?.startedAt);
+      // History's recovery fallback uses the current account. A funnel fact
+      // needs a proven live origin instead, including an explicitly guest one.
+      if (
+        !Number.isFinite(startedAt) ||
+        startedAt < this.databaseManager._accountTrackedSince ||
+        startedAt > Date.now()
+      ) {
+        return;
+      }
+      const accountId = this.databaseManager._accountSpokenUnder(dictation.startedAt);
+      if (!accountId) return;
+      return this.productEvents?.recordDictationCompleted(
+        {
+          ...dictation,
+          // While onboarding holds the app only its try-it dictation can run.
+          practice: this.windowManager?.isOnboardingActive() !== false,
+        },
+        { accountId, authGeneration: null }
+      );
+    });
     ipcMain.handle("activation-close", async () => {
       await Promise.race([
         this.metaActivation?.close(),

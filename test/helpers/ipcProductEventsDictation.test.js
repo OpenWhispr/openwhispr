@@ -76,7 +76,10 @@ test.before(() => {
       get: (value, property) => (property in value ? value[property] : anything()),
     })
   );
-  assert.ok(handlers.get("product-events-record-dictation"), "the dictation fact must be registered");
+  assert.ok(
+    handlers.get("product-events-record-dictation"),
+    "the dictation fact must be registered"
+  );
 });
 
 test.after(() => {
@@ -88,13 +91,22 @@ test.after(() => {
 function recordDictation(onboardingActive, dictation) {
   const recorded = [];
   target.productEvents = { recordDictationCompleted: (fact) => recorded.push(fact) };
+  target.databaseManager = {
+    _accountTrackedSince: 0,
+    _accountSpokenUnder: () => "account-a",
+  };
   target.windowManager =
     onboardingActive === undefined ? undefined : { isOnboardingActive: () => onboardingActive };
   handlers.get("product-events-record-dictation")({}, dictation);
   return recorded;
 }
 
-const DICTATION = { captureId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", words: 12, mode: "local" };
+const DICTATION = {
+  captureId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  words: 12,
+  mode: "local",
+  startedAt: new Date().toISOString(),
+};
 
 test("a dictation in the normal app is recorded as dictation", () => {
   assert.deepEqual(recordDictation(false, DICTATION), [{ ...DICTATION, practice: false }]);

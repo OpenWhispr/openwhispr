@@ -1,13 +1,15 @@
 // The dashboard's dictation_completed fact as the app's own recorder reports it.
 import { act, renderHook } from '@testing-library/react-native';
-import * as FileSystem from 'expo-file-system/legacy';
 import { useAudioRecording, type UseAudioRecordingOptions } from '../useAudioRecording';
 import { transcribeAndCleanup } from '@/lib/transcribeAndCleanup';
-import { analyzeSpeechActivity } from '@/lib/speechActivity';
-import { deleteManagedTranscriptAudio, retainTranscriptAudio } from '@/lib/transcriptAudio';
 import { isLocalModelMissingError } from '@/services/transcription/TranscriptionService';
 import { isUsageLimitError } from '@/lib/usageLimitError';
 import { recordDictationCompleted } from '@/lib/productEvents';
+import {
+  CAPTURE_ACCOUNT,
+  NEXT_ACCOUNT,
+  createProductEventsCaptureRig,
+} from './helpers/productEventsCaptureRig';
 
 jest.mock('expo-file-system/legacy', () => ({
   getInfoAsync: jest.fn(async () => ({ exists: true, size: 1024 })),
@@ -44,7 +46,22 @@ jest.mock('@/lib/transcriptAudio', () => ({
   deleteManagedTranscriptAudio: jest.fn(async () => undefined),
 }));
 jest.mock('@/lib/usageLimitError', () => ({ isUsageLimitError: jest.fn(() => false) }));
-jest.mock('@/lib/productEvents', () => ({ recordDictationCompleted: jest.fn() }));
+let mockProductEvents: ReturnType<typeof createProductEventsCaptureRig>;
+jest.mock('@/lib/productEvents', () => ({
+  ...jest.requireActual('@/lib/productEvents'),
+  captureDictationContext: () => mockProductEvents.events.captureDictationContext(),
+  recordDictationCompleted: jest.fn(
+    (dictation: Parameters<typeof recordDictationCompleted>[0]): void => {
+      mockProductEvents.pending.push(mockProductEvents.events.recordDictationCompleted(dictation));
+    },
+  ),
+}));
+jest.mock('expo-crypto', () => ({
+  CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+  digestStringAsync: async (_algorithm: string, value: string): Promise<string> =>
+    jest.requireActual('node:crypto').createHash('sha256').update(value).digest('hex'),
+  randomUUID: jest.requireActual('node:crypto').randomUUID,
+}));
 jest.mock('@/lib/transcriptionLanguage', () => ({
   getPreferredTranscriptionLanguage: jest.fn(() => 'en'),
 }));
@@ -73,7 +90,6 @@ jest.mock('@/utils/expoAudio', () => ({
   getDefaultRecorderOptions: () => ({}),
 }));
 
-const RETAINED_URI = 'file:///docs/transcript-audio/test-id.wav';
 const mockTranscribe = jest.mocked(transcribeAndCleanup);
 
 const transcribed = (
@@ -103,11 +119,16 @@ async function recordAndStop(options: UseAudioRecordingOptions): Promise<{ stopE
 }
 
 beforeEach(() => {
+  mockProductEvents = createProductEventsCaptureRig();
   jest.clearAllMocks();
   mockTranscribe.mockReset();
   jest.mocked(isLocalModelMissingError).mockReturnValue(false);
   jest.mocked(isUsageLimitError).mockReturnValue(false);
   mockRecorder.isRecording = false;
+});
+
+afterEach(async (): Promise<void> => {
+  await mockProductEvents.settle();
 });
 
 const mockRecordDictation = jest.mocked(recordDictationCompleted);
@@ -121,6 +142,7 @@ it('original dictation reports its words as heard, before cleanup and snippets',
 
   expect(mockRecordDictation).toHaveBeenCalledTimes(1);
   expect(mockRecordDictation).toHaveBeenCalledWith({
+    context: expect.any(Object),
     captureId: expect.stringMatching(/^recording-[0-9a-f-]{36}$/),
     words: 4,
     provider: 'local',
@@ -175,4 +197,88 @@ it('a cancelled, failed or silent recording reports nothing', async () => {
   await recordAndStop({ recordsDictation: true, onError: jest.fn() });
 
   expect(mockRecordDictation).not.toHaveBeenCalled();
+});
+
+it.each([null, { userId: 'anonymous', isAnonymous: true, cookie: 'anonymous-cookie' }])(
+  'does not count words captured before signup after their delayed completion',
+  async (guest): Promise<void> => {
+    await mockProductEvents.signInAs(guest);
+    let finishTranscribing!: (result: Awaited<ReturnType<typeof transcribeAndCleanup>>) => void;
+    mockTranscribe.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishTranscribing = resolve;
+        }),
+    );
+    const onComplete = jest.fn();
+    const hook = renderHook(() => useAudioRecording({ recordsDictation: true, onComplete }));
+    await act(async () => {
+      await hook.result.current.startRecording();
+    });
+    mockRecorder.isRecording = true;
+    let stopping!: Promise<void>;
+    await act(async () => {
+      stopping = hook.result.current.stopRecording();
+    });
+    hook.unmount();
+    await mockProductEvents.signInAs(NEXT_ACCOUNT);
+    await act(async () => {
+      finishTranscribing(transcribed('Saved words.', 'spoken before signup'));
+      await stopping;
+    });
+    await mockProductEvents.settle();
+
+    expect(onComplete).toHaveBeenCalledWith('Saved words.');
+    expect(mockProductEvents.dictations()).toEqual([]);
+    expect(mockProductEvents.countedWords()).toEqual({});
+  },
+);
+
+it('keeps the account from recording start when another account owns stop and completion', async (): Promise<void> => {
+  mockTranscribe.mockResolvedValue(transcribed('Saved words.', 'spoken by first account'));
+  const hook = renderHook(() => useAudioRecording({ recordsDictation: true }));
+  await act(async () => {
+    await hook.result.current.startRecording();
+  });
+  mockRecorder.isRecording = true;
+  await mockProductEvents.signInAs(NEXT_ACCOUNT);
+  await act(async () => {
+    await hook.result.current.stopRecording();
+  });
+  await mockProductEvents.settle();
+
+  expect(mockProductEvents.dictations()).toEqual([]);
+  expect(mockProductEvents.queuedDictations()).toEqual([
+    expect.objectContaining({ owner_user_id: 'capture-account' }),
+  ]);
+  expect(mockProductEvents.countedWords()).toEqual({ 'capture-account': 4 });
+  await mockProductEvents.signInAs(CAPTURE_ACCOUNT);
+  await mockProductEvents.settle();
+  expect(mockProductEvents.dictations()).toEqual([
+    {
+      owner: 'capture-account',
+      cookie: 'capture-cookie',
+      properties: expect.objectContaining({ word_count: 4 }),
+    },
+  ]);
+});
+
+it('keeps a practice capture excluded after onboarding finishes', async (): Promise<void> => {
+  mockProductEvents.setPractice(true);
+  mockTranscribe.mockResolvedValue(transcribed('Practice words.'));
+  const hook = renderHook(() => useAudioRecording({ recordsDictation: true }));
+  await act(async () => {
+    await hook.result.current.startRecording();
+  });
+  mockRecorder.isRecording = true;
+  mockProductEvents.setPractice(false);
+  await act(async () => {
+    await hook.result.current.stopRecording();
+  });
+  await mockProductEvents.settle();
+
+  expect(mockProductEvents.dictations()).toEqual([
+    expect.objectContaining({ properties: expect.objectContaining({ is_practice: true }) }),
+  ]);
+  expect(mockProductEvents.countedWords()).toEqual({});
 });
