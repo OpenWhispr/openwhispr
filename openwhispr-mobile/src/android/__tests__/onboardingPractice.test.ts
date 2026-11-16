@@ -28,7 +28,7 @@ jest.mock('@/services/reasoning/ReasoningService', () => ({
   },
 }));
 jest.mock('../pipeline', () => ({
-  createAndroidJob: (mode: string) => ({ mode, route: { provider: 'cloud' } }),
+  createAndroidJob: (mode: string) => ({ mode, route: { provider: 'local' } }),
   processAndroidAudio: (...args: unknown[]) => mockProcess(...(args as [])),
 }));
 
@@ -43,7 +43,10 @@ describe('practice recorder', () => {
     expect(mockStop).toHaveBeenCalledWith(false);
     expect(mockProcess).toHaveBeenCalledWith(
       expect.objectContaining({ uri: 'file:///cache/practice.wav' }),
-      expect.objectContaining({ mode: 'dictate' }),
+      expect.objectContaining({
+        mode: 'dictate',
+        route: { provider: 'cloud', cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' } },
+      }),
       expect.any(Object),
       expect.any(Function),
     );

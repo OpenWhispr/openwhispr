@@ -4,13 +4,19 @@ import { AndroidDictation } from '../../../modules/android-dictation/src';
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import { createAndroidJob, processAndroidAudio, type AndroidJob } from '../pipeline';
 
+// Onboarding practice is the free Cloud trial, whatever mode the phone has saved.
+const PRACTICE_ROUTE: AndroidJob['route'] = {
+  provider: 'cloud',
+  cleanupRoute: { mode: 'openwhispr', scope: 'cleanup' },
+};
+
 export type PracticeFormat = 'email' | 'list';
 
 // The cleanup request carries no hint about the field, so the email and list practices
 // ask the cleanup model for the shape the practice shows.
 const FORMAT_PROMPTS: Record<PracticeFormat, string> = {
   email:
-    'Format the dictated text as a short email. Put the greeting on its own line, then a blank line, the body, a blank line, and the sign-off and name on separate lines. When the speaker corrects themselves, keep only the corrected version. Keep the speaker’s language and wording otherwise. Return only the email, with no subject line and no introduction.',
+    'Format the dictated text as a short email. Put the greeting on its own line, then a blank line, then the body starting with a capital letter, then a blank line. End with the closing word (such as Thanks or Best) on its own line followed by a comma, and the sender’s name on the line after it. When the speaker corrects themselves, keep only the corrected version. Keep the speaker’s language and wording otherwise. Return only the email, with no subject line and no introduction.',
   list: 'Format the dictated text as a list. If it starts with a heading such as "Things to do today", keep it as the first line ending with a colon. Put each item on its own line starting with "- ", capitalised, without trailing punctuation. Keep the speaker’s language and words. Return only the list, with no introduction.',
 };
 
@@ -21,17 +27,11 @@ async function formatPractice(
   signal: AbortSignal,
 ): Promise<string> {
   try {
-    // Practice runs on Cloud; send the formatting there too rather than to a saved on-device pick.
-    const cloud = job.route.provider === 'cloud';
     const result = await ReasoningService.processText({
       text,
       systemPrompt: FORMAT_PROMPTS[format],
       inferenceScope: 'cleanup',
-      inferenceRoute: cloud ? { mode: 'openwhispr', scope: 'cleanup' } : job.route.cleanupRoute,
-      routing:
-        job.route.cleanupRoute?.mode === 'providers' && !cloud
-          ? { sendToChosenProvider: true }
-          : { isPrivateNote: job.route.provider === 'local' },
+      inferenceRoute: job.route.cleanupRoute,
       signal,
       maxTokens: 384,
     });
@@ -88,7 +88,7 @@ export class PracticeRecorder {
     const controller = new AbortController();
     this.controller = controller;
     try {
-      const job = createAndroidJob('dictate');
+      const job: AndroidJob = { ...createAndroidJob('dictate'), route: PRACTICE_ROUTE };
       const text = await processAndroidAudio(audio, job, controller.signal, () => {});
       return format ? await formatPractice(text, format, job, controller.signal) : text;
     } finally {
