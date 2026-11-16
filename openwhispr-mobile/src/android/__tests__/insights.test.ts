@@ -169,6 +169,37 @@ it('rejects malformed summary totals without replacing a previous snapshot', asy
   expect(useInsights.getState().ledger.summary?.totalWords).toBe(10);
   expect(useInsights.getState().status).toBe('offline');
 });
+it('keeps the account words per minute and streak, and drops malformed ones', async () => {
+  mockConfig.insightsSyncEnabled = true;
+  jest.mocked(api.get).mockResolvedValue({
+    totalWords: 10,
+    totalDictations: 3,
+    averageWpm: 142,
+    currentStreakDays: 5,
+  });
+  await refreshInsights();
+  expect(useInsights.getState().ledger.summary).toEqual({
+    totalWords: 10,
+    totalDictations: 3,
+    averageWpm: 142,
+    currentStreakDays: 5,
+  });
+  jest.mocked(api.get).mockResolvedValue({
+    totalWords: 12,
+    totalDictations: 4,
+    averageWpm: null,
+    currentStreakDays: -1,
+  });
+  await refreshInsights();
+  expect(useInsights.getState().ledger.summary).toEqual({
+    totalWords: 12,
+    totalDictations: 4,
+    averageWpm: null,
+  });
+  // A summary saved before Home showed these still reads back.
+  await refreshInsights();
+  expect(useInsights.getState().ledger.summary?.totalWords).toBe(12);
+});
 it('matches desktop counting including whitespace and CJK segmentation', () => {
   expect(countSpokenWords('  one\n two  three ')).toBe(3);
   expect(countSpokenWords('')).toBe(0);

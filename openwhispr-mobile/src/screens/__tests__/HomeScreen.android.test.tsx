@@ -13,6 +13,42 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { useFocusEffect } from 'expo-router';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, useFocusEffect: jest.fn() }));
+jest.mock('@react-navigation/native', () => ({ useIsFocused: () => true }));
+const mockStatus = {
+  overlay: true,
+  accessibility: true,
+  microphone: true,
+  enabled: true,
+  batteryExempt: true,
+};
+const mockOpenSettings = jest.fn();
+jest.mock('../../../modules/android-dictation/src', () => ({
+  AndroidDictation: {
+    getStatus: () => ({ ...mockStatus }),
+    openSettings: (...args: unknown[]) => mockOpenSettings(...args),
+  },
+  dictationEvents: null,
+}));
+jest.mock('@/android/home/TryItRecorder', () => {
+  const { Pressable, Text } = require('react-native');
+  return {
+    TryItRecorder: ({ onDone }: { onDone: (recording: unknown) => void }) => (
+      <Pressable
+        onPress={() => onDone({ uri: 'file://cache/try.wav', durationMs: 2000, noSpeech: false })}
+      >
+        <Text>recorder-done</Text>
+      </Pressable>
+    ),
+  };
+});
+jest.mock('@/android/home/strings', () => ({ useHomeT: () => (key: string) => key }));
+// The tip videos need the native player; the row is covered on the phone.
+jest.mock('@/android/home/Sections', () => ({
+  ...jest.requireActual('@/android/home/Sections'),
+  Tips: () => null,
+}));
+jest.mock('expo-video', () => ({ useVideoPlayer: jest.fn(), VideoView: () => null }));
+jest.mock('@/components/ui/SystemIcon', () => ({ SystemIcon: () => null }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 const mockRetryTranscript = jest.fn();
 let mockUser: { id: string } | null = null;
@@ -21,9 +57,13 @@ let mockInsights = {
   consentPaused: false,
   scope: 'device',
   ledger: {
-    events: [{ event_id: 'one', word_count: 42 }],
+    events: [
+      { event_id: 'one', word_count: 42, local_date: '2020-01-01', spoken_duration_ms: null },
+    ],
     acknowledged: [] as string[],
-    summary: undefined as { totalWords: number; totalDictations: number } | undefined,
+    summary: undefined as
+      | { totalWords: number; totalDictations: number; averageWpm?: number | null }
+      | undefined,
   },
   status: 'idle',
 };
@@ -37,7 +77,13 @@ jest.mock('@/store/useConfigStore', () => ({
 }));
 jest.mock('@/android/bubbleResult', () => ({ useBubbleResult: () => ({}) }));
 jest.mock('@/android/Practice', () => ({ Practice: () => null }));
-jest.mock('@/android/pipeline', () => ({ applyHistoryRetention: jest.fn(async () => {}) }));
+jest.mock('@/android/pipeline', () => ({
+  applyHistoryRetention: jest.fn(async () => {}),
+  AndroidCleanupError: class extends Error {},
+  createAndroidJob: jest.fn(),
+  ensureAndroidModels: jest.fn(),
+  processAndroidAudio: jest.fn(),
+}));
 jest.mock('@/hooks/useAppInit', () => ({ useAppInit: jest.fn() }));
 const mockPickFile = jest.fn();
 const mockProcessUpload = jest.fn();
@@ -144,10 +190,11 @@ import AndroidHome from '../HomeScreen.android';
 
 it('uses durable dictation statistics rather than retained transcripts and keeps failed audio retryable', () => {
   render(<AndroidHome />);
-  expect(screen.getByText('1')).toBeTruthy();
   expect(screen.getByText('42')).toBeTruthy();
   expect(screen.getByText('Unreadable audio')).toBeTruthy();
-  expect(screen.getByText('retry')).toBeTruthy();
+  expect(screen.getByLabelText('retry')).toBeTruthy();
+  // History rows carry no provider or source tag.
+  expect(screen.queryByText(/local|cloud|byok/)).toBeNull();
 });
 
 beforeEach(() => {
@@ -173,7 +220,13 @@ beforeEach(() => {
   mockInsights = {
     consentPaused: false,
     scope: 'device',
-    ledger: { events: [{ event_id: 'one', word_count: 42 }], acknowledged: [], summary: undefined },
+    ledger: {
+      events: [
+        { event_id: 'one', word_count: 42, local_date: '2020-01-01', spoken_duration_ms: null },
+      ],
+      acknowledged: [],
+      summary: undefined,
+    },
     status: 'idle',
   };
 });
@@ -193,8 +246,9 @@ it('aborts an initial upload when Home loses focus, without saving a late result
   act(() => {
     onBlur = onFocus();
   });
-  await act(async () => fireEvent.press(screen.getByText('upload')));
-  expect(screen.getByText('processing')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
+  expect(screen.getAllByText('writingItUp').length).toBeGreaterThan(0);
+  expect(screen.getByText('input.wav')).toBeTruthy();
   expect(signal?.aborted).toBe(false);
   act(() => {
     if (typeof onBlur === 'function') onBlur();
@@ -208,7 +262,7 @@ it('aborts an initial upload when Home loses focus, without saving a late result
     });
   });
   expect(abortedOnBlur).toBe(true);
-  expect(screen.queryByText('processing')).toBeNull();
+  expect(screen.queryByText('writingItUp')).toBeNull();
   expect(mockSaveUpload).not.toHaveBeenCalled();
   expect(mockSaveFailedUpload).not.toHaveBeenCalled();
 });
@@ -231,7 +285,7 @@ it('does not start processing a picker result after Home loses focus', async () 
   act(() => {
     onBlur = onFocus();
   });
-  await act(async () => fireEvent.press(screen.getByText('upload')));
+  await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
   act(() => {
     if (typeof onBlur === 'function') onBlur();
   });
@@ -244,7 +298,7 @@ it('does not start processing a picker result after Home loses focus', async () 
   expect(mockProcessUpload).not.toHaveBeenCalled();
   expect(mockSaveUpload).not.toHaveBeenCalled();
   expect(mockSaveFailedUpload).not.toHaveBeenCalled();
-  expect(screen.queryByText('processing')).toBeNull();
+  expect(screen.queryByText('writingItUp')).toBeNull();
 });
 
 it('ignores a deferred Cloud upload grant from an earlier Home visit', async () => {
@@ -266,7 +320,7 @@ it('ignores a deferred Cloud upload grant from an earlier Home visit', async () 
   act(() => {
     onBlur = onFocus();
   });
-  await act(async () => fireEvent.press(screen.getByText('upload')));
+  await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
   act(() => {
     if (typeof onBlur === 'function') onBlur();
     onFocus();
@@ -287,11 +341,11 @@ it('allows a new Cloud upload after returning to Home', async () => {
     if (typeof onBlur === 'function') onBlur();
     onFocus();
   });
-  await act(async () => fireEvent.press(screen.getByText('upload')));
+  await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
   expect(mockSaveUpload).toHaveBeenCalledWith(
     expect.objectContaining({ text: 'Fresh upload', provider: 'cloud' }),
   );
-  expect(screen.queryByText('processing')).toBeNull();
+  expect(screen.queryByText('writingItUp')).toBeNull();
 });
 it('shows unavailable account counts while loading rather than local counts presented as account totals', () => {
   mockUser = { id: 'a' };
@@ -299,7 +353,7 @@ it('shows unavailable account counts while loading rather than local counts pres
   mockInsights.scope = 'account:a';
   mockInsights.status = 'loading';
   render(<AndroidHome />);
-  expect(screen.getAllByText('—')).toHaveLength(2);
+  expect(screen.getAllByText('—')).toHaveLength(3);
   expect(screen.queryByText('42')).toBeNull();
   expect(screen.getByText('statsLoading')).toBeTruthy();
 });
@@ -311,7 +365,6 @@ it('keeps cached account totals visible offline without adding pending local wor
   mockInsights.ledger.summary = { totalWords: 100, totalDictations: 5 };
   render(<AndroidHome />);
   expect(screen.getByText('100')).toBeTruthy();
-  expect(screen.getByText('5')).toBeTruthy();
   expect(screen.getByText('statsOffline')).toBeTruthy();
   expect(screen.queryByText('142')).toBeNull();
 });
@@ -321,7 +374,7 @@ it('distinguishes a confirmed zero from unavailable account totals and labels pe
   mockInsights.scope = 'account:a';
   mockInsights.ledger.summary = { totalWords: 0, totalDictations: 0 };
   render(<AndroidHome />);
-  expect(screen.getAllByText('0')).toHaveLength(2);
+  expect(screen.getAllByText('0')).toHaveLength(1);
   expect(screen.getByText('statsPending')).toBeTruthy();
 });
 it('hides the previous account totals immediately when the account changes', () => {
@@ -331,7 +384,7 @@ it('hides the previous account totals immediately when the account changes', () 
   mockInsights.ledger.summary = { totalWords: 100, totalDictations: 5 };
   render(<AndroidHome />);
   expect(screen.queryByText('100')).toBeNull();
-  expect(screen.getAllByText('—')).toHaveLength(2);
+  expect(screen.getAllByText('—')).toHaveLength(3);
   expect(screen.getByText('statsLoading')).toBeTruthy();
 });
 it('labels unavailable offline totals without inventing zero', () => {
@@ -340,7 +393,7 @@ it('labels unavailable offline totals without inventing zero', () => {
   mockInsights.scope = 'account:a';
   mockInsights.status = 'offline';
   render(<AndroidHome />);
-  expect(screen.getAllByText('—')).toHaveLength(2);
+  expect(screen.getAllByText('—')).toHaveLength(3);
   expect(screen.getByText('statsUnavailable')).toBeTruthy();
 });
 
@@ -371,17 +424,17 @@ describe('history retry controls', () => {
 
   it('shows Cancel during a history retry and aborts that request', async () => {
     render(<AndroidHome />);
-    await act(async () => fireEvent.press(screen.getByText('retry')));
-    expect(screen.getByText('processing')).toBeTruthy();
+    await act(async () => fireEvent.press(screen.getByLabelText('retry')));
+    expect(screen.getByText('writingItUp')).toBeTruthy();
     await act(async () => fireEvent.press(screen.getByText('cancel')));
     expect(signal?.aborted).toBe(true);
-    expect(screen.queryByText('processing')).toBeNull();
+    expect(screen.queryByText('writingItUp')).toBeNull();
     expect(screen.getByText('Unreadable audio')).toBeTruthy();
   });
 
   it('aborts a pending retry when the screen unmounts', async () => {
     const view = render(<AndroidHome />);
-    await act(async () => fireEvent.press(screen.getByText('retry')));
+    await act(async () => fireEvent.press(screen.getByLabelText('retry')));
     await act(async () => view.unmount());
     expect(signal?.aborted).toBe(true);
   });
@@ -389,7 +442,7 @@ describe('history retry controls', () => {
   it('aborts a pending retry when the account changes', async () => {
     mockUser = { id: 'a' };
     const view = render(<AndroidHome />);
-    await act(async () => fireEvent.press(screen.getByText('retry')));
+    await act(async () => fireEvent.press(screen.getByLabelText('retry')));
     mockUser = { id: 'b' };
     await act(async () => view.rerender(<AndroidHome />));
     expect(signal?.aborted).toBe(true);
@@ -416,12 +469,70 @@ it('shows connection recovery guidance when a saved upload retry cannot resolve 
     new Error('Unable to resolve host "preview.example.test": No address associated with hostname'),
   );
   render(<AndroidHome />);
-  await act(async () => fireEvent.press(screen.getByText('retry')));
+  await act(async () => fireEvent.press(screen.getByLabelText('retry')));
   expect(alert).toHaveBeenCalledWith(
     'errorTitle',
     'No internet connection. Check your connection and try again.',
   );
-  expect(screen.queryByText('processing')).toBeNull();
-  expect(screen.getByText('retry')).toBeTruthy();
+  expect(screen.queryByText('writingItUp')).toBeNull();
+  expect(screen.getByLabelText('retry')).toBeTruthy();
   alert.mockRestore();
+});
+
+describe('bubble card', () => {
+  afterEach(() => Object.assign(mockStatus, { overlay: true, accessibility: true }));
+
+  it('turns orange with one button for the missing permission and keeps Upload audio', () => {
+    mockStatus.accessibility = false;
+    render(<AndroidHome />);
+    expect(screen.getByText('bubbleOff')).toBeTruthy();
+    expect(screen.getByText('needsOnePermission')).toBeTruthy();
+    expect(screen.queryByText('tryIt')).toBeNull();
+    expect(screen.getByText('uploadAudio')).toBeTruthy();
+    fireEvent.press(screen.getByText('turnOnAccessibility'));
+    expect(mockOpenSettings).toHaveBeenCalledWith('accessibility');
+  });
+
+  it('asks for display over other apps first when two permissions are missing', () => {
+    mockStatus.overlay = false;
+    mockStatus.accessibility = false;
+    render(<AndroidHome />);
+    expect(screen.getByText('needsPermissions')).toBeTruthy();
+    expect(screen.getByText('turnOnOverlay')).toBeTruthy();
+  });
+
+  it('shows the bubble is on with Try it and Upload audio side by side', () => {
+    render(<AndroidHome />);
+    expect(screen.getByText('bubbleOn')).toBeTruthy();
+    expect(screen.getByText('tryIt')).toBeTruthy();
+    expect(screen.getByText('uploadAudio')).toBeTruthy();
+  });
+});
+
+it('copies a Try it dictation to the clipboard and says so at the bottom', async () => {
+  const pipeline = jest.requireMock('@/android/pipeline');
+  const clipboard = jest.requireMock('expo-clipboard');
+  clipboard.setStringAsync.mockResolvedValue(undefined);
+  pipeline.createAndroidJob.mockReturnValue({ route: { provider: 'local' } });
+  pipeline.ensureAndroidModels.mockResolvedValue(undefined);
+  let finish!: (text: string) => void;
+  pipeline.processAndroidAudio.mockImplementation(
+    () => new Promise<string>((resolve) => (finish = resolve)),
+  );
+  render(<AndroidHome />);
+  await act(async () => fireEvent.press(screen.getByText('tryIt')));
+  await act(async () => fireEvent.press(screen.getByText('recorder-done')));
+  expect(screen.queryByText('recorder-done')).toBeNull();
+  expect(screen.getByText('processing')).toBeTruthy();
+  await act(async () => finish('Testing this out.'));
+  expect(clipboard.setStringAsync).toHaveBeenCalledWith('Testing this out.');
+  expect(screen.getByText('copied', { includeHiddenElements: true })).toBeTruthy();
+  expect(screen.getByText('tryIt')).toBeTruthy();
+});
+
+it('says Added to History once an upload is written up', async () => {
+  render(<AndroidHome />);
+  await act(async () => fireEvent.press(screen.getByText('uploadAudio')));
+  expect(mockSaveUpload).toHaveBeenCalled();
+  expect(screen.getByText('addedToHistory', { includeHiddenElements: true })).toBeTruthy();
 });

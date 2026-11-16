@@ -1,13 +1,13 @@
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import { StorageService } from '@/services/storage/StorageService.android';
 import type { Transcript } from '@/types';
-import { AppState } from 'react-native';
+import { AppState, Modal, Alert, ScrollView, View } from 'react-native';
 import { useBubbleResult } from '@/android/bubbleResult';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Modal, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useTranscriptStore } from '@/store/useTranscriptStore.android';
@@ -15,8 +15,14 @@ import { useAppInit } from '@/hooks/useAppInit';
 import { Page, Card, Button, Row, styles } from '@/android/ui';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useInsights, refreshInsights } from '@/android/insights';
-import { Practice } from '@/android/Practice';
-import { applyHistoryRetention } from '@/android/pipeline';
+import {
+  AndroidCleanupError,
+  applyHistoryRetention,
+  createAndroidJob,
+  ensureAndroidModels,
+  processAndroidAudio,
+  type AndroidJob,
+} from '@/android/pipeline';
 import { useFileUpload } from '@/hooks/useFileUpload.android';
 import { getTranscriptionProvider } from '@/lib/inferenceRouting';
 import { accountRequiredForCloud, showAccountRequiredAlert } from '@/lib/accountAccess';
@@ -24,11 +30,27 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { buildUsageGateParams, SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import type { Recording } from '../../modules/android-dictation/src';
+import { useHomeT } from '@/android/home/strings';
+import {
+  AccountAvatar,
+  HomeToast,
+  home,
+  PillButton,
+  SectionHeader,
+  type,
+} from '@/android/home/kit';
+import { BubbleCard, UploadProgress } from '@/android/home/BubbleCard';
+import { HistoryCard, Stats, Tips } from '@/android/home/Sections';
+import { TryItRecorder } from '@/android/home/TryItRecorder';
+import { homeStats, localDate } from '@/android/home/model';
+
+const GUTTER = 16;
 
 export default function AndroidHome() {
   useAppInit();
   const { t } = useTranslation();
-  const [practice, setPractice] = useState(false);
+  const h = useHomeT();
   const [archive, setArchive] = useState<Transcript[] | null>(null);
   const pending = useBubbleResult();
   const insights = useInsights();
@@ -44,9 +66,64 @@ export default function AndroidHome() {
   const retryController = useRef<AbortController | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [working, setWorking] = useState(false);
-  const { isProcessing, currentText, stage, cancel, pickAndTranscribeFile } = useFileUpload({
+  const [uploadName, setUploadName] = useState<string | null>(null);
+  const [toast, setToast] = useState({ message: '', id: 0 });
+  const showToast = useCallback(
+    (message: string) => setToast((previous) => ({ message, id: previous.id + 1 })),
+    [],
+  );
+  const { isProcessing, stage, cancel, pickAndTranscribeFile } = useFileUpload({
     onError: (error) => Alert.alert(t('errorTitle'), error.message),
+    onPicked: (name) => setUploadName(name),
+    onComplete: () => showToast(h('addedToHistory')),
   });
+
+  // Try it: record over Home, then transcribe exactly as the bubble does.
+  const [recorderOpen, setRecorderOpen] = useState(false);
+  const [trying, setTrying] = useState(false);
+  const tryJob = useRef<AndroidJob | null>(null);
+  const tryController = useRef<AbortController | null>(null);
+  const openTryIt = async () => {
+    if (trying || recorderOpen) return;
+    try {
+      const job = createAndroidJob('dictate');
+      if (job.route.provider === 'cloud' && accountRequiredForCloud(user)) {
+        showAccountRequiredAlert(h('tryIt'));
+        return;
+      }
+      await ensureAndroidModels(job);
+      tryJob.current = job;
+      setRecorderOpen(true);
+    } catch (error) {
+      Alert.alert(t('errorTitle'), (error as Error).message);
+    }
+  };
+  const finishTryIt = async (recording: Recording) => {
+    setRecorderOpen(false);
+    const job = tryJob.current;
+    tryJob.current = null;
+    if (!job) return;
+    setTrying(true);
+    const controller = new AbortController();
+    tryController.current = controller;
+    try {
+      const text = await processAndroidAudio(recording, job, controller.signal, () => undefined);
+      if (controller.signal.aborted) return;
+      await Clipboard.setStringAsync(text);
+      showToast(h('copied'));
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      if (error instanceof AndroidCleanupError)
+        useBubbleResult.getState().setResult(error.transcript, t('cleanupRecovery'));
+      else Alert.alert(t('errorTitle'), (error as Error).message);
+    } finally {
+      void FileSystem.deleteAsync(recording.uri, { idempotent: true }).catch(() => undefined);
+      if (tryController.current === controller) tryController.current = null;
+      setTrying(false);
+    }
+  };
+  useEffect(() => () => tryController.current?.abort(), []);
+
   const upload = async () => {
     if (action.current) return;
     const startedOnVisit = navigationRevision.current;
@@ -59,6 +136,7 @@ export default function AndroidHome() {
       if (action.current || startedOnVisit !== navigationRevision.current) return;
       action.current = true;
       setWorking(true);
+      setUploadName(null);
       try {
         await pickAndTranscribeFile();
       } catch {
@@ -67,6 +145,7 @@ export default function AndroidHome() {
         await applyHistoryRetention().catch(() => undefined);
         action.current = false;
         setWorking(false);
+        setUploadName(null);
       }
     };
     if (provider === 'cloud' && user) {
@@ -105,6 +184,11 @@ export default function AndroidHome() {
       setWorking(false);
     }
   };
+  const copy = (text: string) => {
+    Clipboard.setStringAsync(text)
+      .then(() => showToast(h('copied')))
+      .catch((error: Error) => Alert.alert(t('errorTitle'), error.message));
+  };
   useEffect(() => {
     setArchive(null);
     return () => retryController.current?.abort();
@@ -128,16 +212,14 @@ export default function AndroidHome() {
     });
     return () => subscription.remove();
   }, []);
+
   const expectedScope = user && !user.isAnonymous ? `account:${user.id}` : 'device';
   const ledger =
     insights.scope === expectedScope ? insights.ledger : { events: [], summary: undefined };
   const accountRequested = syncInsights && historyEnabled && expectedScope.startsWith('account:');
   const accountStats = accountRequested && !insights.consentPaused;
   const accountSummary = accountStats ? ledger.summary : undefined;
-  const words = accountStats
-    ? accountSummary?.totalWords
-    : ledger.events.reduce((total, item) => total + item.word_count, 0);
-  const dictations = accountStats ? accountSummary?.totalDictations : ledger.events.length;
+  const stats = homeStats(ledger.events, accountSummary, accountStats, localDate());
   const status = insights.scope === expectedScope ? insights.status : 'loading';
   const acknowledged = new Set('acknowledged' in ledger ? ledger.acknowledged : []);
   const hasPending = ledger.events.some((event) => !acknowledged.has(event.event_id));
@@ -157,150 +239,181 @@ export default function AndroidHome() {
               : hasPending
                 ? 'statsPending'
                 : undefined;
+  const statsRetry = accountStats && (status === 'offline' || status === 'blocked');
+  const uploading = isProcessing && uploadName !== null;
+  const recent = [...history].sort((a, b) => b.createdAt - a.createdAt).slice(0, 30);
+
   return (
-    <Page title="OpenWhispr">
-      <Text style={styles.title}>{t('greeting')}</Text>
-      <Card>
-        <Text accessibilityRole="header" style={styles.heading}>
-          {t('acrossTitle')}
-        </Text>
-        <Text style={styles.body}>{t('acrossBody')}</Text>
-        <Button disabled={working} label={t('practiceTitle')} onPress={() => setPractice(true)} />
-      </Card>
-      {(isProcessing || retrying) && (
-        <Card>
-          <Text>{t(!retrying && stage === 'cleaning' ? 'cleanup' : 'processing')}</Text>
-          {!retrying && currentText ? <Text>{currentText}</Text> : null}
-          <Button
-            secondary
-            label={t('cancel')}
-            onPress={() => {
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: home.canvas }}
+      edges={['top', 'left', 'right']}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'flex-end',
+          paddingHorizontal: GUTTER - 8,
+          minHeight: 52,
+          alignItems: 'center',
+        }}
+      >
+        <AccountAvatar />
+      </View>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: GUTTER,
+          paddingTop: 8,
+          paddingBottom: 96,
+          gap: 20,
+          width: '100%',
+          maxWidth: 680,
+          alignSelf: 'center',
+        }}
+      >
+        <BubbleCard
+          tryItLabel={trying ? h('processing') : h('tryIt')}
+          tryItDisabled={trying || recorderOpen}
+          onTryIt={() => {
+            void openTryIt();
+          }}
+          uploadLabel={uploading ? h('writingItUp') : h('uploadAudio')}
+          uploadDisabled={working}
+          onUpload={() => {
+            void upload();
+          }}
+        />
+        {uploading || retrying ? (
+          <UploadProgress
+            fileName={retrying ? '' : (uploadName ?? '')}
+            cleaning={!retrying && stage === 'cleaning'}
+            onCancel={() => {
               if (retryController.current) retryController.current.abort();
               else cancel();
             }}
           />
-        </Card>
-      )}
-      {pending.text || pending.error ? (
-        <Card>
-          {pending.error ? <Text accessibilityRole="alert">{pending.error}</Text> : null}
-          {pending.text ? (
-            <>
-              <Text>{pending.text}</Text>
+        ) : null}
+        {pending.text || pending.error ? (
+          <View
+            style={{
+              backgroundColor: home.surface,
+              borderRadius: 20,
+              padding: 16,
+              gap: 12,
+              boxShadow: home.cardShadow,
+            }}
+          >
+            {pending.error ? (
+              <Text accessibilityRole="alert" style={type.footnote}>
+                {pending.error}
+              </Text>
+            ) : null}
+            {pending.text ? (
+              <Text selectable style={[type.subhead, { fontSize: 17, lineHeight: 24 }]}>
+                {pending.text}
+              </Text>
+            ) : null}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {pending.text ? (
+                <PillButton primary label={h('copy')} onPress={() => copy(pending.text)} />
+              ) : null}
+              <PillButton label={t('close')} onPress={pending.dismiss} />
+            </View>
+          </View>
+        ) : null}
+        <Tips gutter={GUTTER} />
+        <Stats
+          stats={stats}
+          feedback={
+            statsFeedback || statsRetry ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                {statsFeedback ? (
+                  <Text accessibilityLiveRegion="polite" style={[type.footnote, { flex: 1 }]}>
+                    {t(statsFeedback)}
+                  </Text>
+                ) : (
+                  <View style={{ flex: 1 }} />
+                )}
+                {statsRetry ? (
+                  <Text
+                    accessibilityRole="button"
+                    suppressHighlighting
+                    onPress={() => {
+                      void refreshInsights();
+                    }}
+                    style={[type.footnote, { color: home.accent, paddingVertical: 8 }]}
+                  >
+                    {h('retry')}
+                  </Text>
+                ) : null}
+              </View>
+            ) : undefined
+          }
+        />
+        <View style={{ gap: 12 }}>
+          <SectionHeader title={h('history')} />
+          {historyError ? (
+            <Card>
+              <Text accessibilityRole="alert">{historyError}</Text>
               <Button
-                label={t('copy')}
+                secondary
+                label={t('retry')}
                 onPress={() => {
-                  Clipboard.setStringAsync(pending.text).then(() => Alert.alert(t('copied')));
+                  useTranscriptStore
+                    .getState()
+                    .loadTranscripts()
+                    .catch(() => undefined);
                 }}
               />
-            </>
+            </Card>
           ) : null}
-          <Button secondary label={t('close')} onPress={pending.dismiss} />
-        </Card>
-      ) : null}
-      <View style={styles.row}>
-        <Card style={{ flex: 1 }}>
-          <Text style={styles.heading}>{words ?? '—'}</Text>
-          <Text style={styles.caption}>{t('wordsDictated')}</Text>
-        </Card>
-        <Card style={{ flex: 1 }}>
-          <Text style={styles.heading}>{dictations ?? '—'}</Text>
-          <Text style={styles.caption}>{t('recordings')}</Text>
-        </Card>
-      </View>
-      <Text style={styles.caption}>{t(accountStats ? 'accountStats' : 'deviceStats')}</Text>
-      {statsFeedback ? (
-        <Text accessibilityLiveRegion="polite" style={styles.caption}>
-          {t(statsFeedback)}
-        </Text>
-      ) : null}
-      {accountStats && (status === 'offline' || status === 'blocked') ? (
-        <Row
-          title={t('retry')}
-          onPress={() => {
-            void refreshInsights();
-          }}
-        />
-      ) : null}
-      <Text accessibilityRole="header" style={styles.heading}>
-        {t('recent')}
-      </Text>
-      <Row
-        title={t('upload')}
-        onPress={() => {
-          void upload();
-        }}
-      />
-      {historyError && (
-        <Card>
-          <Text accessibilityRole="alert">{historyError}</Text>
-          <Button
-            secondary
-            label={t('retry')}
-            onPress={() => {
-              useTranscriptStore
-                .getState()
-                .loadTranscripts()
-                .catch(() => undefined);
-            }}
-          />
-        </Card>
-      )}
-      {!history.length && !historyError && (
-        <Card>
-          <Text style={styles.heading}>{t('emptyHistory')}</Text>
-          <Text style={styles.body}>{t('emptyHistoryBody')}</Text>
-        </Card>
-      )}
-      {[...history]
-        .sort((a, b) => b.createdAt - a.createdAt)
-        .slice(0, 30)
-        .map((item) => (
-          <Card key={item.id}>
-            <Text style={{ fontSize: 17, lineHeight: 25 }}>
-              {item.status === 'failed' ? item.errorMessage : item.text}
-            </Text>
-            {item.cleanupWarning ? (
-              <Text accessibilityRole="alert">{item.cleanupWarning}</Text>
-            ) : null}
-            <View style={[styles.row, { flexWrap: 'wrap' }]}>
-              <Text style={[styles.caption, { flexShrink: 1 }]}>
-                {new Date(item.createdAt).toLocaleDateString()} ·{' '}
-                {t(
-                  item.provider === 'local' ? 'local' : item.provider === 'byok' ? 'byok' : 'cloud',
-                )}
-              </Text>
-              {item.status === 'failed' ? (
-                <Button
-                  secondary
-                  disabled={working || !item.audioUrl}
-                  label={t('retry')}
-                  onPress={() => {
-                    void retry(item.id);
-                  }}
-                />
-              ) : (
-                <Button
-                  secondary
-                  label={t('copy')}
-                  onPress={() => {
-                    Clipboard.setStringAsync(item.text).then(() => Alert.alert(t('copied')));
-                  }}
-                />
-              )}
+          {!history.length && !historyError ? (
+            <View
+              style={{
+                backgroundColor: home.surface,
+                borderRadius: 14,
+                padding: 16,
+                gap: 4,
+                boxShadow: home.cardShadow,
+              }}
+            >
+              <Text style={type.headline}>{t('emptyHistory')}</Text>
+              <Text style={type.footnote}>{t('emptyHistoryBody')}</Text>
             </View>
-          </Card>
-        ))}
-      {!user && (
-        <Row
-          title={t('olderDeviceHistory')}
-          onPress={() => {
-            StorageService.getUnassignedTranscripts()
-              .then(setArchive)
-              .catch((error: Error) => Alert.alert(t('errorTitle'), error.message));
+          ) : null}
+          {recent.length ? (
+            <HistoryCard
+              items={recent}
+              busy={working}
+              onCopy={copy}
+              onRetry={(id) => {
+                void retry(id);
+              }}
+            />
+          ) : null}
+          {!user && (
+            <Row
+              title={t('olderDeviceHistory')}
+              onPress={() => {
+                StorageService.getUnassignedTranscripts()
+                  .then(setArchive)
+                  .catch((error: Error) => Alert.alert(t('errorTitle'), error.message));
+              }}
+            />
+          )}
+        </View>
+      </ScrollView>
+      <HomeToast message={toast.message} showId={toast.id} />
+      {recorderOpen ? (
+        <TryItRecorder
+          onCancel={() => {
+            tryJob.current = null;
+            setRecorderOpen(false);
+          }}
+          onDone={(recording) => {
+            void finishTryIt(recording);
           }}
         />
-      )}
+      ) : null}
       <Modal
         visible={!user && archive !== null}
         animationType="slide"
@@ -331,17 +444,6 @@ export default function AndroidHome() {
           </Page>
         </SafeAreaView>
       </Modal>
-      <Modal visible={practice} animationType="slide" onRequestClose={() => setPractice(false)}>
-        <SafeAreaView style={styles.page}>
-          <Page
-            title={t('dictate')}
-            showAccount={false}
-            footer={<Button secondary label={t('close')} onPress={() => setPractice(false)} />}
-          >
-            {practice && <Practice />}
-          </Page>
-        </SafeAreaView>
-      </Modal>
-    </Page>
+    </SafeAreaView>
   );
 }

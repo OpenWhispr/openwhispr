@@ -54,6 +54,8 @@ interface NativeDictation {
   insert(text: string): Promise<boolean>;
   startRecording(): Promise<void>;
   stopRecording(cancel: boolean): Promise<Recording>;
+  /** Loudness of the in-app recording, 0..1. Missing on builds before the Home recorder. */
+  getRecordingLevel?(): number;
   startLocalMeeting(noteId: number, captureId: string, audioNamespace: string): Promise<void>;
   stopLocalMeeting(noteId: number, captureId: string): Promise<void>;
   decodeAudio(uri: string): Promise<Recording>;

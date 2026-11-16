@@ -40,6 +40,9 @@ class WavRecorder internal constructor(
   private var task: Future<*>? = null
   private var file: File? = null
   private var peak = 0
+  /** Loudness of the latest buffer, 0..1, for an in-app meter. */
+  @Volatile var level = 0f
+    private set
   private var samples = 0L
 
   @Synchronized fun start() {
@@ -76,7 +79,9 @@ class WavRecorder internal constructor(
               if (count < 0 && !recording) break
               check(count >= 0) { "Microphone interrupted ($count)." }
               if (count == 0) continue
-              onLevel?.invoke(BubblePolicy.level(buffer, count))
+              val loudness = BubblePolicy.level(buffer, count)
+              level = loudness
+              onLevel?.invoke(loudness)
               val bytes = ByteBuffer.allocate(count * 2).order(ByteOrder.LITTLE_ENDIAN)
               for (i in 0 until count) { bytes.putShort(buffer[i]); peak = maxOf(peak, abs(buffer[i].toInt())) }
               val data = bytes.array()
@@ -101,6 +106,7 @@ class WavRecorder internal constructor(
   @Synchronized fun stop(cancel: Boolean): Map<String, Any> {
     check(recorder != null) { "No recording is active." }
     recording = false
+    level = 0f
     try {
       recorder?.stop(); task?.get(5, TimeUnit.SECONDS)
       val result = mapOf("uri" to "file://${file!!.absolutePath}", "durationMs" to samples * 1000 / sampleRate,
