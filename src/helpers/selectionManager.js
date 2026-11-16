@@ -321,6 +321,7 @@ class SelectionManager {
         const pasteResult = await this.clipboardManager._pasteText(replacement, {
           ...options,
           restoreClipboard: options.restoreClipboard !== false,
+          ...(session.target?.kind === "win-hwnd" ? { targetWindow: session.target.id } : {}),
         });
         await pasteResult?.restoreComplete;
         if (pasteResult?.pasted === false) {
@@ -753,7 +754,13 @@ class SelectionManager {
   }
 
   _sameTarget(a, b) {
-    return !!a && !!b && a.kind === b.kind && String(a.id ?? a.pid) === String(b.id ?? b.pid);
+    if (!a || !b || a.kind !== b.kind) return false;
+    if (a.kind === "win-hwnd") {
+      const hA = parseWindowHandle(a.id);
+      const hB = parseWindowHandle(b.id);
+      if (hA !== null && hB !== null) return hA === hB;
+    }
+    return String(a.id ?? a.pid) === String(b.id ?? b.pid);
   }
 }
 
