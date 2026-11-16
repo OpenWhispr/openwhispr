@@ -1,185 +1,199 @@
-import { useCallback, useEffect, useState } from 'react';
-import { View, ScrollView, Modal } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
-import { Text } from '@/components/ui/Text';
-import { OpenWhisprMark } from '@/components/ui/OpenWhisprMark';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, AppState, BackHandler, PermissionsAndroid, Platform } from 'react-native';
 import AuthScreen from '@/screens/AuthScreen';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useConfigStore } from '@/store/useConfigStore';
-import { Button, styles, palette, Card } from './ui';
-import { LanguageSheet } from './LanguageSheet';
-import { ModelsContent } from './ModelsScreen';
-import { PermissionsContent } from './PermissionsScreen';
-import { Practice } from './Practice';
+import { useSuperwallGate } from '@/hooks/useSuperwallGate';
+import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
+import { AndroidDictation } from '../../modules/android-dictation/src';
+import {
+  clearProgress,
+  nextStep,
+  previousStep,
+  saveProgress,
+  savedMode,
+  savedStep,
+  type OnboardingMode,
+  type OnboardingStep,
+} from './onboarding/flow';
+import { HowItWorksScreen, PitchScreen, SplashScreen } from './onboarding/IntroScreens';
+import { PracticeScreen } from './onboarding/PracticeScreen';
+import { LanguagesScreen } from './onboarding/LanguagesScreen';
+import { AppsScreen } from './onboarding/AppsScreen';
+import {
+  AccessibilityScreen,
+  BatteryScreen,
+  NotificationsScreen,
+  OverlayScreen,
+  readStatus,
+} from './onboarding/PermissionScreens';
+import {
+  ModeScreen,
+  PrivateReadyScreen,
+  PrivateSetupScreen,
+  ReadyScreen,
+} from './onboarding/EndScreens';
+import { applyCloudConfig } from './onboarding/setup';
+import { useOnboardingT } from './onboarding/strings';
 
 export { PlanContent as ProContent } from './PlanContent';
-import { PlanContent as ProContent } from './PlanContent';
+
+const BEFORE_SESSION: OnboardingStep[] = ['splash', 'signin'];
+
 export function Onboarding({ onFinish }: { onFinish: () => void }) {
-  const { t } = useTranslation();
-  const [step, setStep] = useState(Number(localStorage.getItem('android-onboarding-step') || 0));
-  const [language, setLanguage] = useState(false);
-  const [models, setModels] = useState(false);
-  const [passed, setPassed] = useState(false);
-  const user = useAuthStore((s) => s.user);
-  const config = useConfigStore((s) => s.config);
-  const advance = useCallback(() => {
-    const next = step + 1;
-    localStorage.setItem('android-onboarding-step', String(next));
-    setPassed(false);
-    setStep(next);
-  }, [step]);
-  useEffect(() => {
-    if (step === 1 && user && !user.isAnonymous) advance();
-  }, [user, step, advance]);
-  const local = async () => {
-    await useAuthStore.getState().continueAsGuest();
-    await useConfigStore.getState().updateConfig({
-      defaultMode: 'private',
-      cleanupEnabled: true,
-      cloudBackupEnabled: false,
-      inference: {
-        dictation: { mode: 'local' },
-        cleanup: { mode: 'local' },
-        notes: { mode: 'local' },
-        agent: { mode: 'local' },
-      },
-    });
-    advance();
-  };
-  if (step === 1)
-    return (
-      <AuthScreen
-        onClose={() => setStep(0)}
-        onGuestContinue={() => {
-          void local();
-        }}
-      />
-    );
-  const practice = step >= 3 && step <= 6;
-  return (
-    <SafeAreaView style={styles.page}>
-      <View style={[styles.row, { padding: 24 }]}>
-        <OpenWhisprMark size={28} color={palette.blue} />
-        <Text style={{ fontWeight: '600' }}>OpenWhispr</Text>
-        <Text style={styles.caption}>{step + 1} / 10</Text>
-      </View>
-      <View style={{ height: 3, marginHorizontal: 24, backgroundColor: palette.line }}>
-        <View style={{ height: 3, backgroundColor: palette.blue, width: `${(step + 1) * 10}%` }} />
-      </View>
-      <ScrollView
-        contentContainerStyle={[styles.content, { flexGrow: 1, paddingTop: 32 }]}
-        keyboardShouldPersistTaps="handled"
-      >
-        {step === 0 && (
-          <>
-            <View style={{ marginVertical: 30 }}>
-              <OpenWhisprMark size={90} color={palette.blue} />
-            </View>
-            <Text style={styles.title}>{t('title')}</Text>
-            <Text style={styles.body}>{t('intro')}</Text>
-            <Card style={{ marginTop: 24 }}>
-              <Text style={styles.heading}>{t('private')}</Text>
-              <Text style={styles.body}>{t('privateBody')}</Text>
-            </Card>
-          </>
-        )}
-        {step === 2 && (
-          <>
-            <Text style={styles.title}>{t('setupTitle')}</Text>
-            <Text style={styles.body}>{t('setupBody')}</Text>
-            <Button
-              secondary
-              label={`${t('language')} · ${config?.preferredLanguage ?? t('auto')}`}
-              onPress={() => setLanguage(true)}
-            />
-            <Card>
-              <Text style={styles.body}>{t('downloadNeeded')}</Text>
-              <Button label={t('openModels')} onPress={() => setModels(true)} />
-            </Card>
-          </>
-        )}
-        {practice && (
-          <>
-            <Text style={styles.heading}>{t('practiceTitle')}</Text>
-            <Text style={styles.caption}>{t('practiceBody')}</Text>
-            <Practice
-              visible={!models && !language}
-              key={step}
-              initialMode={(['dictate', 'translate', 'write', 'edit'] as const)[step - 3]}
-              onSuccess={() => setPassed(true)}
-            />
-            <Button secondary label={t('openModels')} onPress={() => setModels(true)} />
-          </>
-        )}
-        {step === 7 && (
-          <>
-            <Text style={styles.title}>{t('acrossTitle')}</Text>
-            <PermissionsContent />
-          </>
-        )}
-        {step === 8 && <ProContent />}
-        {step >= 9 && (
-          <>
-            <OpenWhisprMark size={80} color={palette.blue} />
-            <Text style={styles.title}>{t('ready')}</Text>
-            <Text style={styles.body}>{t('readyBody')}</Text>
-            <Card>
-              <Text style={styles.heading}>Messages · Gmail · Slack</Text>
-              <Text style={styles.body}>{t('acrossBody')}</Text>
-            </Card>
-          </>
-        )}
-      </ScrollView>
-      <View style={{ padding: 24, gap: 10 }}>
-        <Button
-          label={t(
-            step === 0
-              ? 'getStarted'
-              : step === 7
-                ? 'next'
-                : step === 8
-                  ? 'continueFree'
-                  : step >= 9
-                    ? 'startWriting'
-                    : 'next',
-          )}
-          disabled={practice && !passed}
-          onPress={step >= 9 ? onFinish : advance}
-        />
-        {step > 1 && (
-          <Button
-            secondary
-            label={t('back')}
-            onPress={() => {
-              localStorage.setItem('android-onboarding-step', String(step - 1));
-              setStep(step - 1);
-              setPassed(false);
-            }}
-          />
-        )}
-      </View>
-      <LanguageSheet
-        visible={language}
-        selected={config?.preferredLanguage ?? 'auto'}
-        onClose={() => setLanguage(false)}
-        onSelect={(code) => {
-          useConfigStore
-            .getState()
-            .updateConfig({ preferredLanguage: code, languages: code === 'auto' ? [] : [code] });
-        }}
-      />
-      <Modal visible={models} animationType="slide" onRequestClose={() => setModels(false)}>
-        <SafeAreaView style={styles.page}>
-          <ScrollView contentContainerStyle={styles.content}>
-            <Text style={styles.heading}>{t('models')}</Text>
-            <ModelsContent onNavigate={() => setModels(false)} />
-          </ScrollView>
-          <View style={{ padding: 24 }}>
-            <Button label={t('done')} onPress={() => setModels(false)} />
-          </View>
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
+  const t = useOnboardingT();
+  const [step, setStep] = useState<OnboardingStep>(savedStep);
+  const [mode, setMode] = useState<OnboardingMode>(savedMode);
+  const [finishing, setFinishing] = useState(false);
+  const user = useAuthStore((state) => state.user);
+  const { register } = useSuperwallGate();
+  const stepRef = useRef(step);
+  stepRef.current = step;
+
+  const go = useCallback(
+    (next: OnboardingStep, nextMode: OnboardingMode = mode) => {
+      saveProgress(next, nextMode);
+      setMode(nextMode);
+      setStep(next);
+    },
+    [mode],
   );
+  const advance = useCallback(() => {
+    const next = nextStep(stepRef.current, mode);
+    if (next) go(next);
+  }, [go, mode]);
+  const back = useCallback(() => {
+    const previous = previousStep(stepRef.current, mode);
+    // Someone already signed in has nothing to do on the sign-in screen.
+    if (previous === 'signin' && user && !user.isAnonymous) go('splash');
+    else if (previous) go(previous);
+  }, [go, mode, user]);
+
+  // The system back gesture walks back through the steps, as the on-screen back button does.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (stepRef.current === 'splash') return false;
+      back();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [back]);
+
+  // A real sign-in on the sign-in screen moves straight on.
+  useEffect(() => {
+    if (step === 'signin' && user && !user.isAnonymous) go('pitch');
+  }, [go, step, user]);
+
+  // Practice runs on Cloud for free before anyone signs up, as on iOS: someone who skipped
+  // sign-in gets an anonymous session that a later sign-up links to.
+  useEffect(() => {
+    if (BEFORE_SESSION.includes(step) || user) return;
+    const ensure = () => void useAuthStore.getState().ensureAnonymousSession();
+    ensure();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') ensure();
+    });
+    return () => subscription.remove();
+  }, [step, user]);
+
+  const enableBubble = useCallback(
+    async (askNotifications: boolean) => {
+      if (askNotifications && Number(Platform.Version) >= 33)
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(
+          () => undefined,
+        );
+      const status = readStatus();
+      if (!status.overlay || !status.accessibility) return;
+      if (!status.microphone) {
+        const mic = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        ).catch(() => undefined);
+        if (mic !== PermissionsAndroid.RESULTS.GRANTED) return;
+      }
+      try {
+        AndroidDictation?.setEnabled(
+          true,
+          useConfigStore.getState().config?.androidBubbleSize ?? 64,
+        );
+      } catch (error) {
+        Alert.alert('', t('bubbleCouldNotStart', { message: (error as Error).message }));
+      }
+    },
+    [t],
+  );
+
+  const finish = useCallback(async () => {
+    if (finishing) return;
+    setFinishing(true);
+    try {
+      if (mode === 'cloud')
+        await register({ placement: SUPERWALL_PLACEMENTS.onboardingPaywall }).catch(() => false);
+    } finally {
+      clearProgress();
+      onFinish();
+    }
+  }, [finishing, mode, onFinish, register]);
+
+  switch (step) {
+    case 'splash':
+      return <SplashScreen onStart={() => go(user && !user.isAnonymous ? 'pitch' : 'signin')} />;
+    case 'signin':
+      return <AuthScreen onClose={() => go('splash')} onGuestContinue={() => go('pitch')} />;
+    case 'pitch':
+      return <PitchScreen onBack={back} onNext={advance} />;
+    case 'how':
+      return <HowItWorksScreen onBack={back} onNext={advance} />;
+    case 'practiceMessage':
+      return <PracticeScreen key="message" kind="message" onBack={back} onNext={advance} />;
+    case 'practiceEmail':
+      return <PracticeScreen key="email" kind="email" onBack={back} onNext={advance} />;
+    case 'practiceList':
+      return <PracticeScreen key="list" kind="list" onBack={back} onNext={advance} />;
+    case 'languages':
+      return <LanguagesScreen onBack={back} onNext={advance} />;
+    case 'apps':
+      return <AppsScreen onBack={back} onNext={advance} />;
+    case 'overlay':
+      return <OverlayScreen onBack={back} onNext={advance} />;
+    case 'accessibility':
+      return <AccessibilityScreen onBack={back} onNext={advance} />;
+    case 'battery':
+      return <BatteryScreen onBack={back} onNext={advance} />;
+    case 'notifications':
+      return (
+        <NotificationsScreen
+          onBack={back}
+          onAllow={() => void enableBubble(true).finally(advance)}
+          onSkip={() => void enableBubble(false).finally(advance)}
+        />
+      );
+    case 'mode':
+      return (
+        <ModeScreen
+          mode={mode}
+          onBack={back}
+          onChoose={(chosen) => {
+            if (chosen === 'cloud') {
+              void applyCloudConfig();
+              go('ready', 'cloud');
+            } else go('privateSetup', 'private');
+          }}
+        />
+      );
+    case 'privateSetup':
+      return (
+        <PrivateSetupScreen
+          onBack={back}
+          onReady={advance}
+          onUseCloud={() => {
+            void applyCloudConfig();
+            go('ready', 'cloud');
+          }}
+        />
+      );
+    case 'privateReady':
+      return <PrivateReadyScreen onBack={back} onNext={advance} />;
+    case 'ready':
+      return <ReadyScreen onDone={() => void finish()} />;
+  }
 }
