@@ -5917,6 +5917,8 @@ class IPCHandlers {
           "globe-preference-state.json",
           ".system-audio-permission",
           "account-scope-binding.json",
+          "affiliate-candidate.json",
+          "affiliate-candidate.json.tmp",
           "installed-models.json",
           "model-registry.json",
           "model-registry.json.backup",

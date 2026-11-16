@@ -20,6 +20,11 @@ interface AffiliateState extends Candidate {
 }
 const empty = { link: "", clickId: null, saved: false };
 let revision = 0;
+let failedWrite: {
+  revision: number;
+  link: string;
+  userId: string | null | undefined;
+} | null = null;
 let writes: Promise<unknown> = Promise.resolve();
 let loading: Promise<void> | null = null;
 let submitting: Promise<boolean> | null = null;
@@ -52,11 +57,18 @@ export const useAffiliateStore = create<AffiliateState>((set) => ({
   enabled: false,
   checking: false,
   error: null,
-  setLink(link) {
+  setLink(link): void {
     if (useAffiliateStore.getState().saved) return;
     const version = ++revision;
     set({ link, clickId: null, error: null });
-    const generation = getAuthRequestContextSnapshot().observedGeneration ?? nativeGeneration;
+    const context = getAuthRequestContextSnapshot();
+    const generation = context.observedGeneration ?? nativeGeneration;
+    const userId = context.sessionResolved
+      ? context.sessionUserId
+      : context.observedGeneration != null && !context.hasToken
+        ? null
+        : undefined;
+    if (failedWrite?.revision === version - 1) failedWrite = { revision: version, link, userId };
     if (generation == null) return;
     writes = writes
       .catch(() => {})
@@ -68,6 +80,7 @@ export const useAffiliateStore = create<AffiliateState>((set) => ({
               generation,
               nativeCandidate
             );
+            if (version === revision) failedWrite = null;
             return;
           } catch (error: unknown) {
             if (version !== revision) return;
@@ -79,6 +92,7 @@ export const useAffiliateStore = create<AffiliateState>((set) => ({
             const { link: currentLink, clickId, saved } = result.candidate ?? empty;
             nativeCandidate = { link: currentLink, clickId, saved };
             if (saved) {
+              failedWrite = null;
               set(nativeCandidate);
               return;
             }
@@ -86,7 +100,10 @@ export const useAffiliateStore = create<AffiliateState>((set) => ({
         }
       })
       .catch(() => {
-        if (version === revision) set({ error: "unavailable" });
+        if (version === revision) {
+          failedWrite = { revision: version, link, userId };
+          set({ error: "unavailable" });
+        }
       });
   },
 }));
@@ -99,13 +116,19 @@ async function refresh(): Promise<void> {
       version = revision;
       try {
         await writes;
+        if (revision !== version) continue;
         const result = await window.electronAPI?.getAffiliateCandidate?.();
         if (!result) return;
         if (revision !== version) continue;
         nativeGeneration = result.generation;
         const { link, clickId, saved } = result.candidate ?? empty;
         nativeCandidate = { link, clickId, saved };
-        useAffiliateStore.setState({ enabled: !!result.config, ...nativeCandidate });
+        // Preserve a failed edit, but a creator already saved for this account still wins.
+        if (saved) failedWrite = null;
+        useAffiliateStore.setState({
+          enabled: !!result.config,
+          ...(failedWrite?.revision === version ? {} : nativeCandidate),
+        });
         const generation = getValidatedAuthGeneration();
         if (!result.config || generation == null) continue;
         const response = await cloudGetForAuthGeneration<{
@@ -113,6 +136,7 @@ async function refresh(): Promise<void> {
         }>("/api/affiliate/status", generation);
         if (revision !== version || generation !== getValidatedAuthGeneration()) continue;
         if (response.data.persisted) {
+          failedWrite = null;
           useAffiliateStore.setState({
             saved: true,
             error: response.data.status === "review" ? "review" : null,
@@ -145,7 +169,14 @@ export async function prepareAffiliateCheckout(): Promise<boolean> {
       await refresh();
       if (generation !== getValidatedAuthGeneration()) return false;
       const state = useAffiliateStore.getState();
-      if (!state.enabled || state.saved || (!state.link.trim() && !state.clickId)) return true;
+      if (!state.enabled || state.saved) return true;
+      if (failedWrite?.revision === revision) {
+        state.setLink(state.link);
+        await writes;
+        if (failedWrite?.revision === revision) return false;
+        continue;
+      }
+      if (!state.link.trim() && !state.clickId) return true;
       const version = revision;
       const current = (): boolean =>
         version === revision && generation === getValidatedAuthGeneration();
@@ -222,17 +253,42 @@ let users = 0;
 let stop: (() => void) | null = null;
 export function startAffiliateAttribution(): () => void {
   if (users++ === 0) {
-    const reconcile = () => {
+    const reconcile = (): void => {
       const context = getAuthRequestContextSnapshot();
+      const failedEdit = failedWrite?.revision === revision ? failedWrite : null;
+      const signedOut =
+        (context.observedGeneration != null && !context.hasToken) ||
+        (context.sessionResolved && context.sessionUserId === null);
+      const discardFailedEdit =
+        failedEdit?.userId != null &&
+        (signedOut || (context.sessionResolved && context.sessionUserId !== failedEdit.userId));
       if (
         context.observedGeneration !== observedGeneration ||
-        (context.sessionResolved && context.sessionUserId !== observedUser)
+        (context.sessionResolved && context.sessionUserId !== observedUser) ||
+        discardFailedEdit
       ) {
         observedGeneration = context.observedGeneration;
         observedUser = context.sessionUserId;
         revision++;
-        useAffiliateStore.setState({ ...empty, checking: false, error: null });
+        failedWrite =
+          failedEdit && failedEdit.userId !== undefined && !discardFailedEdit
+            ? { ...failedEdit, revision }
+            : null;
+        // Keep an account's failed edit private until its rotated credentials resolve.
+        const failedLink =
+          failedWrite &&
+          (failedWrite.userId === null || failedWrite.userId === context.sessionUserId)
+            ? failedWrite.link
+            : null;
+        useAffiliateStore.setState({
+          ...empty,
+          link: failedLink ?? "",
+          checking: false,
+          error: failedLink === null ? null : "unavailable",
+        });
       }
+      if (failedWrite && getValidatedAuthGeneration() != null)
+        failedWrite.userId = context.sessionUserId;
       void refresh().then(() => {
         if (getValidatedAuthGeneration() != null && useSettingsStore.getState().telemetryEnabled)
           void prepareAffiliateCheckout();

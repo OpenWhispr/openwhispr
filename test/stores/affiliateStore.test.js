@@ -394,3 +394,248 @@ test("an edit made after a native arrival survives its still-pending refresh", a
   assert.equal(setupState.native.candidate.link, latestEdit);
   assert.equal(setupState.useAffiliateStore.getState().link, latestEdit);
 });
+
+for (const previousLink of ["", "https://try.openwhispr.com/previous"]) {
+  test(`a failed creator edit preserves the entered link instead of ${previousLink || "an empty candidate"}`, async (t) => {
+    const state = await setupLifecycle(t);
+    state.startAffiliateAttribution();
+    await settle();
+    if (previousLink) {
+      state.useAffiliateStore.getState().setLink(previousLink);
+      await settle();
+    }
+    globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+      throw new Error("ENOSPC: no space left on device");
+    };
+    const link = "https://try.openwhispr.com/entered";
+    state.useAffiliateStore.getState().setLink(link);
+    await settle();
+    state.focus();
+    await settle();
+
+    assert.equal(await state.prepareAffiliateCheckout(), false);
+    assert.equal(state.useAffiliateStore.getState().link, link);
+    assert.equal(state.useAffiliateStore.getState().error, "unavailable");
+    assert.deepEqual(state.calls.posts, []);
+  });
+}
+
+test("checkout retries a failed creator edit when local storage recovers", async (t) => {
+  const state = await setupLifecycle(t);
+  state.startAffiliateAttribution();
+  await settle();
+  const save = globalThis.window.electronAPI.saveAffiliateCandidate;
+  globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+    throw new Error("ENOSPC");
+  };
+  const link = "https://try.openwhispr.com/entered";
+  state.useAffiliateStore.getState().setLink(link);
+  await settle();
+  globalThis.window.electronAPI.saveAffiliateCandidate = save;
+
+  assert.equal(await state.prepareAffiliateCheckout(), true);
+  assert.equal(state.native.candidate.link, link);
+  assert.equal(state.native.candidate.saved, true);
+  assert.equal(state.calls.posts.find((call) => call[0].endsWith("/claim"))[1].link, link);
+});
+
+test("explicitly removing a failed creator edit permits checkout after the clear is saved", async (t) => {
+  const state = await setupLifecycle(t);
+  state.startAffiliateAttribution();
+  await settle();
+  const save = globalThis.window.electronAPI.saveAffiliateCandidate;
+  globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+    throw new Error("ENOSPC");
+  };
+  state.useAffiliateStore.getState().setLink("https://try.openwhispr.com/entered");
+  await settle();
+  globalThis.window.electronAPI.saveAffiliateCandidate = save;
+  state.useAffiliateStore.getState().setLink("");
+  await settle();
+
+  assert.equal(await state.prepareAffiliateCheckout(), true);
+  assert.equal(state.native.candidate.link, "");
+  assert.deepEqual(state.calls.posts, []);
+});
+
+test("a failed creator edit cannot follow a replacement account", async (t) => {
+  const state = await setupLifecycle(t);
+  state.startAffiliateAttribution();
+  await settle();
+  globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+    throw new Error("ENOSPC");
+  };
+  state.useAffiliateStore.getState().setLink("https://try.openwhispr.com/entered");
+  await settle();
+  state.native.generation++;
+  state.native.token = "token-b";
+  await state.sessionAnswer("user-b");
+  await settle();
+
+  assert.equal(await state.prepareAffiliateCheckout(), true);
+  assert.equal(state.useAffiliateStore.getState().link, "");
+  assert.deepEqual(state.calls.posts, []);
+});
+
+test("a saved account referral wins while a local creator edit cannot be written", async (t) => {
+  const state = await setupLifecycle(t);
+  state.startAffiliateAttribution();
+  await settle();
+  globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+    throw new Error("ENOSPC");
+  };
+  state.useAffiliateStore.getState().setLink("https://try.openwhispr.com/entered");
+  await settle();
+  state.setStatus(async () => ({ data: { persisted: true, status: "registered" } }));
+  state.focus();
+  await settle();
+
+  assert.equal(await state.prepareAffiliateCheckout(), true);
+  assert.equal(state.useAffiliateStore.getState().saved, true);
+  assert.equal(state.useAffiliateStore.getState().error, null);
+  assert.deepEqual(state.calls.posts, []);
+});
+
+test("a failed signed-out edit is retried for its first validated account", async (t) => {
+  const state = await setupLifecycle(t, { signedIn: false });
+  await state.sessionAnswer(null);
+  state.startAffiliateAttribution();
+  await settle();
+  const save = globalThis.window.electronAPI.saveAffiliateCandidate;
+  globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+    throw new Error("ENOSPC");
+  };
+  const link = "https://try.openwhispr.com/entered";
+  state.useAffiliateStore.getState().setLink(link);
+  await settle();
+  globalThis.window.electronAPI.saveAffiliateCandidate = save;
+  state.native.generation++;
+  state.native.token = "token-a";
+  await state.sessionAnswer("user-a");
+  await settle();
+
+  assert.equal(await state.prepareAffiliateCheckout(), true);
+  assert.equal(state.native.candidate?.link, link);
+  assert.equal(state.native.candidate?.saved, true);
+  assert.equal(state.calls.posts.find((call) => call[0].endsWith("/claim"))[1].link, link);
+});
+
+test("a failed signed-out edit stops at the first account even if storage is still unavailable", async (t) => {
+  const state = await setupLifecycle(t, { signedIn: false });
+  await state.sessionAnswer(null);
+  state.startAffiliateAttribution();
+  await settle();
+  globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+    throw new Error("ENOSPC");
+  };
+  const link = "https://try.openwhispr.com/entered";
+  state.useAffiliateStore.getState().setLink(link);
+  await settle();
+  state.native.generation++;
+  state.native.token = "token-a";
+  await state.sessionAnswer("user-a");
+  await settle();
+  assert.equal(await state.prepareAffiliateCheckout(), false);
+  assert.equal(state.useAffiliateStore.getState().link, link);
+
+  state.native.generation++;
+  state.native.token = "token-b";
+  await state.sessionAnswer("user-b");
+  await settle();
+  assert.equal(await state.prepareAffiliateCheckout(), true);
+  assert.equal(state.useAffiliateStore.getState().link, "");
+  assert.deepEqual(state.calls.posts, []);
+});
+
+test("a failed account edit survives credential rotation only after the same account validates", async (t) => {
+  const state = await setupLifecycle(t);
+  state.startAffiliateAttribution();
+  await settle();
+  const save = globalThis.window.electronAPI.saveAffiliateCandidate;
+  globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+    throw new Error("ENOSPC");
+  };
+  const link = "https://try.openwhispr.com/entered";
+  state.useAffiliateStore.getState().setLink(link);
+  await settle();
+  state.native.generation++;
+  state.native.token = "token-a-rotated";
+  state.auth.observeAuthTokenStateEvent({ generation: state.native.generation, hasToken: true });
+  await settle();
+  assert.equal(state.useAffiliateStore.getState().link, "");
+  assert.equal(await state.prepareAffiliateCheckout(), false);
+  assert.deepEqual(state.calls.posts, []);
+
+  await state.sessionAnswer("user-a");
+  await settle();
+  assert.equal(await state.prepareAffiliateCheckout(), false);
+  assert.equal(state.useAffiliateStore.getState().link, link);
+  assert.equal(state.useAffiliateStore.getState().error, "unavailable");
+  globalThis.window.electronAPI.saveAffiliateCandidate = save;
+  assert.equal(await state.prepareAffiliateCheckout(), true);
+  assert.equal(state.native.candidate?.saved, true);
+  assert.equal(state.calls.posts.find((call) => call[0].endsWith("/claim"))[1].link, link);
+});
+
+test("a signed-out session during credential rotation discards a failed account edit", async (t) => {
+  const state = await setupLifecycle(t);
+  state.startAffiliateAttribution();
+  await settle();
+  globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+    throw new Error("ENOSPC");
+  };
+  state.useAffiliateStore.getState().setLink("https://try.openwhispr.com/entered");
+  await settle();
+  state.native.generation++;
+  state.native.token = "token-a-expired";
+  state.auth.observeAuthTokenStateEvent({ generation: state.native.generation, hasToken: true });
+  await state.sessionAnswer(null);
+  await settle();
+  state.native.generation++;
+  state.native.token = "token-a-new-session";
+  await state.sessionAnswer("user-a");
+  await settle();
+
+  assert.equal(await state.prepareAffiliateCheckout(), true);
+  assert.equal(state.useAffiliateStore.getState().link, "");
+  assert.deepEqual(state.calls.posts, []);
+});
+
+for (const user of ["user-a", "user-b"]) {
+  test(`an in-flight failed edit retry retains its owner when credentials resolve to ${user}`, async (t) => {
+    const state = await setupLifecycle(t);
+    state.startAffiliateAttribution();
+    await settle();
+    const save = globalThis.window.electronAPI.saveAffiliateCandidate;
+    globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+      throw new Error("ENOSPC");
+    };
+    const link = "https://try.openwhispr.com/entered";
+    state.useAffiliateStore.getState().setLink(link);
+    await settle();
+    const entered = deferred();
+    const release = deferred();
+    globalThis.window.electronAPI.saveAffiliateCandidate = async () => {
+      entered.resolve();
+      await release.promise;
+      throw new Error("AUTH_CONTEXT_CHANGED");
+    };
+    const oldCheckout = state.prepareAffiliateCheckout();
+    await entered.promise;
+    state.native.generation++;
+    state.native.token = "rotated-token";
+    await state.sessionAnswer(user);
+    release.resolve();
+    assert.equal(await oldCheckout, false);
+    await settle();
+    assert.equal(await state.prepareAffiliateCheckout(), user !== "user-a");
+    assert.equal(state.useAffiliateStore.getState().link, user === "user-a" ? link : "");
+    assert.deepEqual(state.calls.posts, []);
+
+    globalThis.window.electronAPI.saveAffiliateCandidate = save;
+    assert.equal(await state.prepareAffiliateCheckout(), true);
+    const claims = state.calls.posts.filter((call) => call[0].endsWith("/claim"));
+    assert.equal(claims.length, user === "user-a" ? 1 : 0);
+    if (user === "user-a") assert.equal(claims[0][1].link, link);
+  });
+}

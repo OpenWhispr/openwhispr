@@ -870,13 +870,19 @@ app.on("open-url", (event, url) => {
   windowManager?.showControlPanel();
 });
 
-let pendingAffiliateDeepLink = false;
+const pendingAffiliateDeepLinks = [];
 let affiliateWindowReady = false;
 
 async function flushPendingAffiliateDeepLink() {
-  if (!pendingAffiliateDeepLink || !affiliateWindowReady || !windowManager) return;
-  pendingAffiliateDeepLink = false;
+  if (!pendingAffiliateDeepLinks.length || !affiliateWindowReady || !windowManager) return;
+  const urls = pendingAffiliateDeepLinks.splice(0);
   try {
+    const affiliateLinks = require("./src/helpers/affiliateLinks");
+    let captured = false;
+    for (const url of urls) {
+      if (affiliateLinks.capture(url, OAUTH_PROTOCOL)) captured = true;
+    }
+    if (!captured) return;
     await windowManager.createControlPanelWindow();
     windowManager.showControlPanel();
     if (isLiveWindow(windowManager.controlPanelWindow)) {
@@ -889,8 +895,11 @@ async function flushPendingAffiliateDeepLink() {
 
 function handleAffiliateDeepLink(url) {
   try {
-    if (!require("./src/helpers/affiliateLinks").capture(url, OAUTH_PROTOCOL)) return false;
-    pendingAffiliateDeepLink = true;
+    if (url.length > 4096) return false;
+    const parsed = new URL(url);
+    if (parsed.protocol !== `${OAUTH_PROTOCOL}:` || parsed.hostname !== "affiliate") return false;
+    // Packaged configuration may not be loaded when macOS first delivers open-url.
+    pendingAffiliateDeepLinks.push(url);
     void flushPendingAffiliateDeepLink();
     return true;
   } catch {

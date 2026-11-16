@@ -3127,3 +3127,39 @@ test("a confirmed signed-out scope preserves a newly entered creator link throug
   assert.equal((await setScope("creator-account", 9002)).success, true);
   assert.equal(handlers.get("affiliate-get-candidate")().candidate.link, link);
 });
+
+test("Reset App Data removes guest creator links and interrupted candidate writes", async (t) => {
+  const previousEnabled = process.env.OPENWHISPR_AFFILIATE_ENABLED;
+  const previousDomain = process.env.OPENWHISPR_AFFILIATE_DOMAIN;
+  const previousRevoke = connectorManager.revokeAllStored;
+  const previousTokenState = tokenState;
+  process.env.OPENWHISPR_AFFILIATE_ENABLED = "true";
+  process.env.OPENWHISPR_AFFILIATE_DOMAIN = "try.openwhispr.com";
+  connectorManager.revokeAllStored = async () => {};
+  t.after(() => {
+    if (previousEnabled === undefined) delete process.env.OPENWHISPR_AFFILIATE_ENABLED;
+    else process.env.OPENWHISPR_AFFILIATE_ENABLED = previousEnabled;
+    if (previousDomain === undefined) delete process.env.OPENWHISPR_AFFILIATE_DOMAIN;
+    else process.env.OPENWHISPR_AFFILIATE_DOMAIN = previousDomain;
+    if (previousRevoke === undefined) delete connectorManager.revokeAllStored;
+    else connectorManager.revokeAllStored = previousRevoke;
+    tokenState = previousTokenState;
+  });
+  tokenState = { token: null, generation: 9010 };
+  await setScope(null, 9010);
+  const link = "https://try.openwhispr.com/creator";
+  handlers.get("affiliate-save-candidate")({}, { link, generation: 9010 });
+  const file = path.join(userDataDirectory, "affiliate-candidate.json");
+  fs.copyFileSync(file, `${file}.tmp`);
+  assert.equal(handlers.get("affiliate-get-candidate")().candidate.link, link);
+
+  const result = await handlers.get("cleanup-app")({ sender: {} });
+
+  assert.equal(result.success, true);
+  assert.equal(fs.existsSync(file), false);
+  assert.equal(fs.existsSync(`${file}.tmp`), false);
+  assert.equal(handlers.get("affiliate-get-candidate")().candidate, null);
+  tokenState = { token: "next-account-token", generation: 9012 };
+  assert.equal((await setScope("next-account", 9012)).success, true);
+  assert.equal(handlers.get("affiliate-get-candidate")().candidate, null);
+});
