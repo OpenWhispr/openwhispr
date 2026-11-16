@@ -82,6 +82,7 @@ export function BubbleCard({
       await grantPermission(missing[0]).catch((error: Error) =>
         Alert.alert(tAndroid('errorTitle'), error.message),
       );
+      refresh();
       return;
     }
     setSwitching(true);
@@ -149,9 +150,9 @@ export function BubbleCard({
             primary
             label={t(PERMISSION_LABEL[missing[0]])}
             onPress={() => {
-              grantPermission(missing[0]).catch((error: Error) =>
-                Alert.alert(tAndroid('errorTitle'), error.message),
-              );
+              grantPermission(missing[0])
+                .then(refresh)
+                .catch((error: Error) => Alert.alert(tAndroid('errorTitle'), error.message));
             }}
             style={{ flex: 0, alignSelf: 'stretch' }}
           />

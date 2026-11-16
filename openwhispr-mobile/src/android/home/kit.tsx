@@ -110,7 +110,12 @@ export function PillButton({
           <SystemIcon name="circle" mdName={icon} size={19} color={color} />
         </View>
       ) : null}
-      <Text numberOfLines={1} style={[type.subhead, { color, flexShrink: 1 }]}>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+        style={[type.subhead, { color, flexShrink: 1 }]}
+      >
         {label}
       </Text>
     </Pressable>

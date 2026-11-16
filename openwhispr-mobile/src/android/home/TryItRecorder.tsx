@@ -11,6 +11,10 @@ import { home, type } from './kit';
 const BARS = 48;
 const BAR_MAX = 48;
 
+// The recorder reports -60..-20 dBFS as 0..1; a quiet room sits near 0.3, so start the bars there.
+const barHeight = (level: number) =>
+  Math.max(4, Math.round(Math.min(1, Math.max(0, (level - 0.3) / 0.6)) * BAR_MAX));
+
 const formatElapsed = (ms: number) => {
   const seconds = Math.floor(ms / 1000);
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -169,7 +173,7 @@ export function TryItRecorder({
                   key={index}
                   style={{
                     width: 3,
-                    height: Math.max(4, Math.round(Math.pow(level, 0.6) * BAR_MAX)),
+                    height: barHeight(level),
                     borderRadius: 999,
                     backgroundColor: home.accent,
                   }}

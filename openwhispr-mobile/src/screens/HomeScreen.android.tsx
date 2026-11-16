@@ -1,7 +1,7 @@
 import { toFriendlyTranscriptionErrorMessage } from '@/lib/transcriptionErrors';
 import { StorageService } from '@/services/storage/StorageService.android';
 import type { Transcript } from '@/types';
-import { AppState, Modal, Alert, ScrollView, View } from 'react-native';
+import { AppState, Modal, Alert, Platform, ScrollView, View } from 'react-native';
 import { useBubbleResult } from '@/android/bubbleResult';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,6 +46,9 @@ import { TryItRecorder } from '@/android/home/TryItRecorder';
 import { homeStats, localDate } from '@/android/home/model';
 
 const GUTTER = 16;
+// Android 13 and later confirm every copy with their own pill at the bottom of the screen;
+// a second one from the app would sit on top of it.
+const SYSTEM_CONFIRMS_COPY = Platform.OS === 'android' && Number(Platform.Version) >= 33;
 
 export default function AndroidHome() {
   useAppInit();
@@ -110,7 +113,7 @@ export default function AndroidHome() {
       const text = await processAndroidAudio(recording, job, controller.signal, () => undefined);
       if (controller.signal.aborted) return;
       await Clipboard.setStringAsync(text);
-      showToast(h('copied'));
+      if (!SYSTEM_CONFIRMS_COPY) showToast(h('copied'));
     } catch (error) {
       if (controller.signal.aborted) return;
       if (error instanceof AndroidCleanupError)
@@ -186,7 +189,9 @@ export default function AndroidHome() {
   };
   const copy = (text: string) => {
     Clipboard.setStringAsync(text)
-      .then(() => showToast(h('copied')))
+      .then(() => {
+        if (!SYSTEM_CONFIRMS_COPY) showToast(h('copied'));
+      })
       .catch((error: Error) => Alert.alert(t('errorTitle'), error.message));
   };
   useEffect(() => {
