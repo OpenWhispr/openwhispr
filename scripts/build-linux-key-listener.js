@@ -4,6 +4,7 @@ const { spawnSync } = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { linuxBaselineFlags } = require("./lib/linux-baseline-flags");
 
 const isLinux = process.platform === "linux";
 if (!isLinux) {
@@ -84,7 +85,15 @@ function attemptCompile(command, args) {
   });
 }
 
-const compileArgs = ["-O2", "-Wall", "-Wextra", cSource, "-o", outputBinary];
+const compileArgs = [
+  "-O2",
+  ...linuxBaselineFlags(),
+  "-Wall",
+  "-Wextra",
+  cSource,
+  "-o",
+  outputBinary,
+];
 
 let result = attemptCompile("gcc", compileArgs);
 

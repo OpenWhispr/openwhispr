@@ -264,6 +264,38 @@ test("the action menu lists every action, then Manage Actions", async (t) => {
   assert.deepEqual(ran, ["Create outline", "manage"]);
 });
 
+test("the action menu shows each action's name and description, without a destination tag", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, {
+    cachePrefix: "openwhispr-note-action-menu-items-",
+    mockModules: {
+      "/ui/dropdown-menu": `
+        import React from "react";
+        export const DropdownMenuItem = ({ children }) => React.createElement("li", null, children);
+        export const DropdownMenuSeparator = () => React.createElement("hr");
+      `,
+    },
+  });
+  const ActionMenuItems = (await vite.ssrLoadModule("/components/notes/ActionMenuItems.tsx"))
+    .default;
+  const markup = renderToStaticMarkup(
+    React.createElement(ActionMenuItems, {
+      actions: [
+        action({ id: 4, name: "Create to-dos", description: "List every to-do" }),
+        action({ id: 8, name: "Trim", description: "Shorten the summary", output: "summary" }),
+      ],
+      canRun: () => true,
+      onRunAction: () => {},
+      onManageActions: () => {},
+    })
+  );
+
+  for (const text of ["Create to-dos", "List every to-do", "Trim", "Shorten the summary"]) {
+    assert.ok(markup.includes(text), `shows "${text}"`);
+  }
+  assert.doesNotMatch(markup, /notes\.actions\.output\./, "no Chat / AI summary tag");
+});
+
 test("the collapsed ask bar's picker runs the first action until one is picked, and remembers the pick", async (t) => {
   const ActionPicker = await load(t, "/components/notes/ActionPicker.tsx");
   const ran = [];

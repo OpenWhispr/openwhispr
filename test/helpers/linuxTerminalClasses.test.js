@@ -63,3 +63,13 @@ test("ordinary GUI apps are not terminals", () => {
   assert.equal(clipboard.isLinuxTerminalWindowClass(""), false);
   assert.equal(clipboard.isLinuxTerminalWindowClass(null), false);
 });
+
+test("Omarchy terminal app IDs match their prefixes case-insensitively", () => {
+  const clipboard = new ClipboardManager();
+  for (const signature of ["org.omarchy.agent", "org.omarchy.btop", "TUI.float"]) {
+    assert.equal(clipboard.isLinuxTerminalWindowClass(signature), true, signature);
+  }
+  for (const signature of ["com.example.org.omarchy.editor", "com.example.tui.editor"]) {
+    assert.equal(clipboard.isLinuxTerminalWindowClass(signature), false, signature);
+  }
+});

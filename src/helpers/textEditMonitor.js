@@ -19,6 +19,13 @@ const TARGET_CAPTURE_FRESHNESS_MS = 250;
 // killed run's verdict is discarded, so a tighter timeout means the app below is
 // never learned and every read pays the full ladder.
 const SELECTED_TEXT_TIMEOUT_MS = 1600;
+// `--app-context` output keys and the context field each one fills.
+const APP_CONTEXT_FIELDS = {
+  APP_NAME: "appName",
+  BUNDLE_ID: "bundleId",
+  WINDOW_TITLE: "windowTitle",
+  URL_HOST: "urlHost",
+};
 // AXError -25212 (kAXErrorNoValue) on the focused-element read is how
 // Chromium/Electron apps respond while their AX tree is dormant, making the
 // native binary's 5-attempt retry (~1.2s) dead time on every read. A single
@@ -218,11 +225,9 @@ class TextEditMonitor extends EventEmitter {
           { timeout: timeoutMs },
           (error, stdout, stderr) => {
             const output = stdout.replace(/\n$/, "");
-            if (output === "EDITABLE_NONE:") {
-              resolve({ state: "none", editable: true });
-              return;
-            }
-            if (output === "NONE:") {
+            // The helper marks an empty but editable field EDITABLE_NONE:;
+            // nothing here needs the difference.
+            if (output === "NONE:" || output === "EDITABLE_NONE:") {
               resolve({ state: "none" });
               return;
             }
@@ -289,9 +294,6 @@ class TextEditMonitor extends EventEmitter {
           return;
         }
 
-        // The AppleScript never reports an editable caret (only the native
-        // binary emits EDITABLE_NONE:), so this fallback can read selections
-        // but never produce a caret delivery target — panel-first by design.
         const output = stdout.replace(/\n$/, "");
         if (output === "NONE:") {
           resolve({ state: "none" });
@@ -302,56 +304,6 @@ class TextEditMonitor extends EventEmitter {
         }
       }
     );
-  }
-
-  // Resolves "editable" | "not_editable" | "unknown". "unknown" is macOS-only:
-  // the dormant-Chromium signature, where accessibility cannot inspect the
-  // focused field at all. The default timeout reuses SELECTED_TEXT_TIMEOUT_MS
-  // because a dormant tree's verdict only arrives after the same retry ladder.
-  async isFocusedEditable(target, timeoutMs = SELECTED_TEXT_TIMEOUT_MS) {
-    const resolved = this.resolveBinary();
-    if (!resolved) return "not_editable";
-
-    let args;
-    if (process.platform === "darwin") {
-      const pid = target?.kind === "mac-pid" ? target.pid : this.lastTargetPid;
-      if (!pid) return "not_editable";
-      args = [...resolved.args, "--editable-target", String(pid)];
-    } else {
-      args = [...resolved.args, "--probe-editable"];
-    }
-
-    // The verdict is the first output line. A stale binary that predates the
-    // probe flag falls into monitor mode instead: it blocks reading stdin,
-    // then emits its monitor output and keeps running — closing stdin and
-    // resolving on that first line keeps the stale case a fast "not editable"
-    // rather than a hang until the timeout.
-    const toVerdict = (line) =>
-      line === "EDITABLE" ? "editable" : line === "UNKNOWN" ? "unknown" : "not_editable";
-    return new Promise((resolve) => {
-      const child = spawn(resolved.command, args, { stdio: ["pipe", "pipe", "ignore"] });
-      let buffered = "";
-      let settled = false;
-      const settle = (verdict) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        try {
-          child.kill();
-        } catch {}
-        resolve(verdict);
-      };
-      const timer = setTimeout(() => settle("not_editable"), timeoutMs);
-      child.stdin.on("error", () => {});
-      child.stdin.end();
-      child.stdout.on("data", (data) => {
-        buffered += data.toString();
-        const newline = buffered.indexOf("\n");
-        if (newline !== -1) settle(toVerdict(buffered.slice(0, newline).trim()));
-      });
-      child.on("error", () => settle("not_editable"));
-      child.on("close", () => settle(toVerdict(buffered.trim())));
-    });
   }
 
   /**
@@ -396,6 +348,38 @@ class TextEditMonitor extends EventEmitter {
 
     this._windowBounds = { pid, bounds, at: Date.now() };
     return bounds;
+  }
+
+  /**
+   * macOS: the target app's name and bundle id, its focused window's title and,
+   * for a browser page, the URL's host. Feeds the Tone & Style classifier; any
+   * part the helper can't read is missing, and nothing read resolves to null.
+   * The name comes first, so a run killed while accessibility hangs still
+   * names the app.
+   */
+  async getAppContext(pid, timeoutMs = 1000) {
+    if (process.platform !== "darwin" || !pid) return null;
+    const resolved = this.resolveBinary();
+    if (!resolved) return null;
+
+    return new Promise((resolve) => {
+      execFile(
+        resolved.command,
+        [...resolved.args, "--app-context", String(pid)],
+        { timeout: timeoutMs },
+        (_error, stdout) => {
+          const context = {};
+          for (const line of (stdout || "").split("\n")) {
+            const match = line.match(/^([A-Z_]+?)(_B64)?:(.*)$/);
+            const field = match && APP_CONTEXT_FIELDS[match[1]];
+            if (!field) continue;
+            const value = match[2] ? this._decodeBase64Payload(match[3]) : match[3];
+            if (value) context[field] = value;
+          }
+          resolve(Object.keys(context).length ? context : null);
+        }
+      );
+    });
   }
 
   /**

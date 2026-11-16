@@ -523,7 +523,10 @@ it('discards interrupted provider data when keyboard cancellation rejects transc
       recordingDurationMs: 1000,
     });
   });
-  expect(mockTranscribeAndCleanup).toHaveBeenCalled();
+  expect(mockTranscribeAndCleanup).toHaveBeenCalledWith(
+    expect.objectContaining({ requestContext: 'keyboard', purpose: 'dictation' }),
+    expect.anything(),
+  );
   expect(mockAddFailedTranscript).not.toHaveBeenCalled();
   expect(mockAddTranscript).not.toHaveBeenCalled();
   expect(clearKeyboardProviderRecovery).toHaveBeenCalledWith('100-job');
@@ -561,6 +564,9 @@ describe('keyboard agent job', () => {
       });
     });
     expect(mockTranscribe).toHaveBeenCalledWith(expect.not.objectContaining({ jobId: '100-job' }));
+    expect(mockTranscribe).toHaveBeenCalledWith(
+      expect.objectContaining({ requestContext: 'keyboard', purpose: 'dictation' }),
+    );
     expect(generateForJob).toHaveBeenCalledWith(
       agentJob,
       'write an email to Bob',

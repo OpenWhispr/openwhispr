@@ -3,6 +3,19 @@ const assert = require("node:assert/strict");
 
 const TextEditMonitor = require("../../src/helpers/textEditMonitor");
 
+test.beforeEach((t) => {
+  t.mock.method(TextEditMonitor.prototype, "resolveBinary", () => ({
+    command: "/bin/sh",
+    args: ["-c", 'echo "NO_ELEMENT"'],
+  }));
+  t.mock.method(
+    TextEditMonitor.prototype,
+    "_getSelectedTextViaAppleScript",
+    (_pid, _timeoutMs, resolve) => resolve({ state: "unavailable" })
+  );
+  t.mock.method(TextEditMonitor.prototype, "_queryMacOSValue", async () => null);
+});
+
 test("activateTargetPid resolves false when no target PID was captured", async () => {
   const m = new TextEditMonitor();
   m.lastTargetPid = null;
@@ -92,47 +105,11 @@ test("getSelectedText skips the native binary for a cached PID", darwinOnly, asy
   assert.deepEqual(await m.getSelectedText(42), { state: "none" });
 });
 
-test("getSelectedText identifies an empty writable field", darwinOnly, async () => {
+test("getSelectedText reads an empty writable field as no selection", darwinOnly, async () => {
   const m = new TextEditMonitor();
   m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", 'echo "EDITABLE_NONE:"'] });
 
-  assert.deepEqual(await m.getSelectedText(42), { state: "none", editable: true });
-});
-
-test("isFocusedEditable maps the native verdicts, including the dormant-tree UNKNOWN", darwinOnly, async () => {
-  const withOutput = (line) => {
-    const m = new TextEditMonitor();
-    m.resolveBinary = () => ({ command: "/bin/sh", args: ["-c", `echo "${line}"`] });
-    return m;
-  };
-
-  assert.equal(
-    await withOutput("EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
-    "editable"
-  );
-  assert.equal(
-    await withOutput("NOT_EDITABLE").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
-    "not_editable"
-  );
-  assert.equal(
-    await withOutput("UNKNOWN").isFocusedEditable({ kind: "mac-pid", pid: 42 }),
-    "unknown"
-  );
-});
-
-test("isFocusedEditable answers from a stale binary's first monitor line", darwinOnly, async () => {
-  const m = new TextEditMonitor();
-  // A binary that predates the probe flag falls into monitor mode: one
-  // initial-value line, then it keeps running. The probe must settle on that
-  // first line instead of hanging until the timeout.
-  m.resolveBinary = () => ({
-    command: "/bin/sh",
-    args: ["-c", 'echo "INITIAL_VALUE:stale"; sleep 2'],
-  });
-
-  const startedAt = Date.now();
-  assert.equal(await m.isFocusedEditable({ kind: "mac-pid", pid: 42 }), "not_editable");
-  assert.ok(Date.now() - startedAt < 900, "must resolve on the first output line");
+  assert.deepEqual(await m.getSelectedText(42), { state: "none" });
 });
 
 // The bare window as the focused element is the dormant-Chromium signature —

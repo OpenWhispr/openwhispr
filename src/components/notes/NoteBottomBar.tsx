@@ -1,10 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChatInput } from "../chat/ChatInput";
 import type { SlashCommand } from "../chat/slashCommands";
 import { cn } from "../lib/utils";
 import { hasLayerAbove } from "../ui/useDismissGuard";
-import { observeFloatingChatMaxHeight } from "./floatingChatLayout";
+import { observeBottomBarHeight, observeFloatingChatMaxHeight } from "./floatingChatLayout";
 
 const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
 // One curve for everything that moves as the chat opens, so it unfolds as one piece:
@@ -55,6 +55,14 @@ export default function NoteBottomBar({
 }: NoteBottomBarProps) {
   const { t } = useTranslation();
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const bar = barRef.current;
+    const container = bar?.parentElement;
+    if (!bar || !container) return;
+    return observeBottomBarHeight({ bar, container });
+  }, []);
 
   const attachPanel = useCallback(
     (panel: HTMLDivElement | null) => {
@@ -114,6 +122,7 @@ export default function NoteBottomBar({
 
   return (
     <div
+      ref={barRef}
       className={cn(
         "pointer-events-none absolute inset-x-0 bottom-0 z-20 px-5 pt-6",
         footnote ? "pb-1.5" : "pb-7"

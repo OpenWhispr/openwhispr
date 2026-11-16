@@ -7,17 +7,21 @@ test("source fidelity instructions reach chat and every note-generation entry po
   const { compileTemplatePrompt, compileSummaryActionPrompt, compileChatActionPrompt } =
     await import("../../src/helpers/templatePrompts.js");
   const prompts = [getAgentSystemPrompt([]), getAgentSystemPrompt(["get_note", "update_note"])];
-  for (const isMeetingNote of [true, false]) {
-    prompts.push(compileTemplatePrompt({ prompt: "Custom instructions" }, { isMeetingNote }));
+  for (const options of [
+    { isMeetingNote: true },
+    { isMeetingNote: false },
+    { hasPlainTranscript: true },
+  ]) {
+    prompts.push(compileTemplatePrompt({ prompt: "Custom instructions" }, options));
     prompts.push(
       compileTemplatePrompt(
         { sections: [{ heading: "Decisions", instruction: "List decisions" }] },
-        { isMeetingNote }
+        options
       )
     );
     for (const fromSummary of [true, false]) {
       prompts.push(
-        compileSummaryActionPrompt({ prompt: "Shorten this" }, { fromSummary, isMeetingNote })
+        compileSummaryActionPrompt({ prompt: "Shorten this" }, { fromSummary, ...options })
       );
       prompts.push(
         getAgentSystemPrompt([]) +

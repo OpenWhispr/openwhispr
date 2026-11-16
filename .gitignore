@@ -297,6 +297,9 @@ $RECYCLE.BIN/
 .windsurf/
 .zencoder/
 skills/
+# The app's own Skills code
+!/src/**/skills/
+!/test/**/skills/
 
 # OS generated files
 .DS_Store

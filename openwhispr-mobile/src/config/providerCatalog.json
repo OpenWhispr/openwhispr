@@ -11,6 +11,18 @@
           "supportsTemperature": false
         },
         {
+          "id": "gpt-6.1-sol",
+          "name": "GPT-6.1 Sol",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-6-luna",
+          "name": "GPT-6 Luna",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
           "id": "gpt-5.6-sol",
           "name": "GPT-5.6 Sol",
           "tokenParam": "max_completion_tokens",
@@ -44,31 +56,29 @@
           "id": "gpt-5-mini",
           "name": "GPT-5 Mini",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "legacy": true
         },
         {
           "id": "gpt-5-nano",
           "name": "GPT-5 Nano",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "legacy": true
         },
         {
           "id": "gpt-4.1",
           "name": "GPT-4.1",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true
+          "supportsTemperature": true,
+          "legacy": true
         },
         {
           "id": "gpt-4.1-mini",
           "name": "GPT-4.1 Mini",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true
-        },
-        {
-          "id": "gpt-4.1-nano",
-          "name": "GPT-4.1 Nano",
-          "tokenParam": "max_completion_tokens",
-          "supportsTemperature": true
+          "supportsTemperature": true,
+          "legacy": true
         }
       ]
     },
@@ -81,16 +91,12 @@
           "name": "GPT-OSS 120B"
         },
         {
+          "id": "qwen/qwen3.8-27b",
+          "name": "Qwen3.8 27B"
+        },
+        {
           "id": "openai/gpt-oss-20b",
           "name": "GPT-OSS 20B"
-        },
-        {
-          "id": "groq/compound",
-          "name": "Compound"
-        },
-        {
-          "id": "groq/compound-mini",
-          "name": "Compound Mini"
         }
       ]
     }

@@ -14,26 +14,29 @@ const seededRow = (builtin) => ({
   translation_key: builtin.translationKey,
 });
 
-test("Detailed Notes compiled from its sections is the prompt it replaced, but for its closing rule", async () => {
+test("AI Summary compiled from its sections is the Detailed Notes prompt it replaced, but for its closing rule", async () => {
   const {
     BUILTIN_ACTIONS,
-    DETAILED_NOTES_KEY,
+    LEGACY_DETAILED_NOTES,
+    GENERATE_NOTES_KEY,
     SOURCE_FIDELITY_RULE,
     MEETING_INPUT_PREAMBLE,
     NOTE_INPUT_PREAMBLE,
+    PLAIN_TRANSCRIPT_INPUT_PREAMBLE,
     compileTemplatePrompt,
   } = await load();
-  const detailed = BUILTIN_ACTIONS.find((action) => action.translationKey === DETAILED_NOTES_KEY);
-  const flat = detailed.previousPrompts.at(-1);
+  const summary = BUILTIN_ACTIONS.find((action) => action.translationKey === GENERATE_NOTES_KEY);
+  const flat = LEGACY_DETAILED_NOTES.previousPrompts.at(-1);
   // The closing rule is its last paragraph: a note with nothing to summarize now
   // answers with a marker instead of a sentence that was saved as its summary.
   const body = flat.slice(0, flat.lastIndexOf("\n\n"));
 
-  for (const [isMeetingNote, preamble] of [
-    [true, MEETING_INPUT_PREAMBLE],
-    [false, NOTE_INPUT_PREAMBLE],
+  for (const [options, preamble] of [
+    [{ isMeetingNote: true }, MEETING_INPUT_PREAMBLE],
+    [{ isMeetingNote: false }, NOTE_INPUT_PREAMBLE],
+    [{ hasPlainTranscript: true }, PLAIN_TRANSCRIPT_INPUT_PREAMBLE],
   ]) {
-    const compiled = compileTemplatePrompt(seededRow(detailed), { isMeetingNote }).slice(
+    const compiled = compileTemplatePrompt(seededRow(summary), options).slice(
       (SOURCE_FIDELITY_RULE + "\n\n").length
     );
     assert.ok(compiled.startsWith(preamble + body), "everything before the rule is unchanged");
@@ -46,7 +49,6 @@ test("Detailed Notes compiled from its sections is the prompt it replaced, but f
 
 test("a template without sections retains its instructions after the shared fidelity rule", async () => {
   const {
-    BUILTIN_ACTIONS,
     DETAILED_NOTES_KEY,
     GENERATE_NOTES_KEY,
     SOURCE_FIDELITY_RULE,
@@ -55,7 +57,11 @@ test("a template without sections retains its instructions after the shared fide
     BASE_SYSTEM_PROMPT,
     compileTemplatePrompt,
   } = await load();
-  const generate = BUILTIN_ACTIONS.find((action) => action.translationKey === GENERATE_NOTES_KEY);
+  const generate = {
+    prompt: "My own summary instructions.",
+    sections: null,
+    translationKey: GENERATE_NOTES_KEY,
+  };
   assert.equal(
     compileTemplatePrompt(seededRow(generate), { isMeetingNote: true }),
     SOURCE_FIDELITY_RULE + "\n\n" + MEETING_SYSTEM_PROMPT + generate.prompt
@@ -71,6 +77,48 @@ test("a template without sections retains its instructions after the shared fide
   assert.equal(
     compileTemplatePrompt(custom),
     SOURCE_FIDELITY_RULE + "\n\n" + BASE_SYSTEM_PROMPT + custom.prompt
+  );
+});
+
+test("a transcript in plain text asks for a checklist with owners and deadlines only where stated", async () => {
+  const {
+    GENERATE_NOTES_KEY,
+    SOURCE_FIDELITY_RULE,
+    MEETING_SYSTEM_PROMPT,
+    PLAIN_TRANSCRIPT_SYSTEM_PROMPT,
+    compileTemplatePrompt,
+  } = await load();
+  const generate = {
+    prompt: "My own summary instructions.",
+    sections: null,
+    translationKey: GENERATE_NOTES_KEY,
+  };
+  const prompt = compileTemplatePrompt(seededRow(generate), { hasPlainTranscript: true });
+
+  assert.match(prompt, /`- \[ \] Action — Owner`/);
+  assert.match(prompt, /never a table unless the instructions ask for one/);
+  assert.match(prompt, /only when the transcript or the user's notes state it/);
+  assert.match(prompt, /`- \[ \] Fix the build by Friday — Alice`/);
+  assert.match(prompt, /`- \[ \] Send the revised proposal`/);
+  assert.match(prompt, /never write a placeholder such as "Owner not specified" or "TBD"/);
+  assert.doesNotMatch(
+    prompt,
+    /Do NOT list or guess participant names/,
+    "not the personal-note rule"
+  );
+  assert.doesNotMatch(
+    prompt,
+    /speaker's label|Meeting Context/,
+    "no labels or context it doesn't have"
+  );
+  assert.equal(
+    prompt,
+    SOURCE_FIDELITY_RULE + "\n\n" + PLAIN_TRANSCRIPT_SYSTEM_PROMPT + generate.prompt
+  );
+  assert.equal(
+    compileTemplatePrompt(seededRow(generate), { isMeetingNote: true, hasPlainTranscript: true }),
+    SOURCE_FIDELITY_RULE + "\n\n" + MEETING_SYSTEM_PROMPT + generate.prompt,
+    "speaker segments win"
   );
 });
 
@@ -175,6 +223,68 @@ test("a summary action revises the summary, or writes one from the material firs
     fromMaterial,
     /reply with exactly NOTHING_TO_SUMMARIZE/,
     "a first summary can decline too"
+  );
+});
+
+test("standalone templates and a first summary describe a plain transcript instead of claiming there is none", async () => {
+  const {
+    DETAILED_NOTES_KEY,
+    SOURCE_FIDELITY_RULE,
+    MEETING_INPUT_PREAMBLE,
+    PLAIN_TRANSCRIPT_INPUT_PREAMBLE,
+    SUMMARY_ACTION_FROM_MATERIAL_PROMPT,
+    compileTemplatePrompt,
+    compileSummaryActionPrompt,
+  } = await load();
+  assert.match(PLAIN_TRANSCRIPT_INPUT_PREAMBLE, /no speaker labels/);
+  assert.match(
+    PLAIN_TRANSCRIPT_INPUT_PREAMBLE,
+    /Never guess or invent who said something/,
+    "sections that attribute by speaker can't guess one"
+  );
+  assert.match(
+    PLAIN_TRANSCRIPT_INPUT_PREAMBLE,
+    /only when the transcript or the user's notes state it/
+  );
+  assert.match(
+    PLAIN_TRANSCRIPT_INPUT_PREAMBLE,
+    /Where an instruction below says to use "You" or "Them" when no name is available, end the line after the action instead/,
+    "it outranks the Action Items section's You or Them fallback"
+  );
+  assert.match(
+    PLAIN_TRANSCRIPT_INPUT_PREAMBLE,
+    /Where an instruction below asks to attribute points by label or to each person, attribute a point only to someone the transcript or the user's notes name, and group the rest by topic/,
+    "it outranks sections that attribute by label, such as Stand-up's Updates by Person"
+  );
+  assert.match(
+    PLAIN_TRANSCRIPT_INPUT_PREAMBLE,
+    /Never write "\[name unclear\]" in place of who said or owns something/,
+    "the unclear-name rule never becomes an owner or a heading"
+  );
+  assert.doesNotMatch(PLAIN_TRANSCRIPT_INPUT_PREAMBLE, /There is no transcript/);
+
+  const editedDetailed = { prompt: "My own notes rules.", translation_key: DETAILED_NOTES_KEY };
+  assert.equal(
+    compileTemplatePrompt(editedDetailed, { hasPlainTranscript: true }),
+    SOURCE_FIDELITY_RULE + "\n\n" + PLAIN_TRANSCRIPT_INPUT_PREAMBLE + editedDetailed.prompt
+  );
+  assert.equal(
+    compileTemplatePrompt(editedDetailed, { isMeetingNote: true, hasPlainTranscript: true }),
+    SOURCE_FIDELITY_RULE + "\n\n" + MEETING_INPUT_PREAMBLE + editedDetailed.prompt,
+    "speaker segments win"
+  );
+  assert.equal(
+    compileSummaryActionPrompt(ACTION, { fromSummary: false, hasPlainTranscript: true }),
+    SOURCE_FIDELITY_RULE +
+      "\n\n" +
+      PLAIN_TRANSCRIPT_INPUT_PREAMBLE +
+      SUMMARY_ACTION_FROM_MATERIAL_PROMPT +
+      ACTION.prompt
+  );
+  assert.equal(
+    compileSummaryActionPrompt(ACTION, { fromSummary: true, hasPlainTranscript: true }),
+    compileSummaryActionPrompt(ACTION, { fromSummary: true }),
+    "rewriting an existing summary never reads the transcript"
   );
 });
 

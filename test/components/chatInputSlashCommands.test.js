@@ -203,3 +203,37 @@ test("each / row shows its command's icon in the tile", async (t) => {
   );
   assert.ok(html.includes('data-icon="mail"'));
 });
+
+test("disabling sends keeps an editable draft and does not clear it on Enter", async (t) => {
+  const { root, container, ChatInput } = await mountChatInput(t);
+  const sent = [];
+  const drafts = [];
+  const props = {
+    variant: "assistant",
+    agentState: "idle",
+    partialTranscript: "",
+    draftText: "Question about the note",
+    onDraftChange: (text) => drafts.push(text),
+    onTextSubmit: (text) => sent.push(text),
+    focusOnIdle: false,
+  };
+  const render = (sendDisabled) =>
+    React.act(async () => root.render(React.createElement(ChatInput, { ...props, sendDisabled })));
+  await render(true);
+  const textarea = findElement(container, (element) => element.nodeName === "TEXTAREA");
+  const enter = () => key(textarea, "Enter");
+  await enter();
+  assert.deepEqual(sent, []);
+  assert.deepEqual(drafts, [], "a blocked submit must preserve the draft");
+  assert.equal(textarea.getAttribute("readOnly"), null);
+  const send = findElement(
+    container,
+    (element) => element.getAttribute?.("aria-label") === "agentMode.input.send"
+  );
+  assert.equal(send.getAttribute("disabled"), "");
+
+  await render(false);
+  await enter();
+  assert.deepEqual(sent, ["Question about the note"]);
+  assert.deepEqual(drafts, [""]);
+});

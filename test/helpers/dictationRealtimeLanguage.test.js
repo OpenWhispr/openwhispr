@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { deferred } = require("./harness/deferred");
 
 // #2050: the dictation language must reach the realtime session on every path
 // the dictation-realtime-* handlers own — the BYOK session.update, the cloud
@@ -47,6 +48,7 @@ const electronStub = {
 
 const calls = { connects: [], disconnects: [], tokens: [], audio: [], sent: [], instances: [] };
 let nextInstance = 0;
+let tokenGate = null;
 
 class FakeRealtimeStreaming {
   constructor() {
@@ -84,6 +86,7 @@ Module._load = function loadWithMocks(request, parent, isMain) {
         ...originalLoad.call(this, request, parent, isMain),
         fetchRealtimeTokenForProvider: async (provider, _deps, options) => {
           calls.tokens.push({ provider, options });
+          await tokenGate?.promise;
           return "secret";
         },
       };
@@ -247,3 +250,51 @@ test("after stop, the next start dials fresh", async (t) => {
   await s.invoke("dictation-realtime-start", byok());
   assert.equal(calls.connects.length, 2);
 });
+
+// Managed Orukeet alone shares a connection between warmups and its recording.
+// These pin every other route to redialling, as it always has.
+for (const [label, options] of [
+  ["openai-realtime (byok)", byok()],
+  ["openai-realtime (openwhispr)", byok({ mode: "openwhispr" })],
+  ["tinfoil-realtime (byok)", byok({ provider: "tinfoil-realtime" })],
+]) {
+  // Leaves a warmup waiting on its token, so the connection is still in flight.
+  const warmupInFlight = async (t, s) => {
+    tokenGate = deferred();
+    t.after(() => {
+      tokenGate = null;
+    });
+    const warmup = s.invoke("dictation-realtime-warmup", options);
+    while (calls.tokens.length === 0) await new Promise((resolve) => setImmediate(resolve));
+    return { warmup };
+  };
+
+  test(`${label}: a start during a warmup still replaces that warmup`, async (t) => {
+    const s = scenario(t);
+    const { warmup } = await warmupInFlight(t, s);
+    const start = s.invoke("dictation-realtime-start", options);
+    tokenGate.resolve();
+    await warmup;
+    assert.equal((await start).success, true);
+    assert.equal(calls.connects.length, 2);
+    assert.deepEqual(calls.disconnects, [{ id: calls.instances[0].id, commit: false }]);
+  });
+
+  test(`${label}: a warmup during a recording still redials`, async (t) => {
+    const s = scenario(t);
+    await s.invoke("dictation-realtime-start", options);
+    await s.invoke("dictation-realtime-warmup", options);
+    assert.equal(calls.connects.length, 2);
+  });
+
+  test(`${label}: a stop during a start waiting on a warmup still lets the start connect`, async (t) => {
+    const s = scenario(t);
+    const { warmup } = await warmupInFlight(t, s);
+    const start = s.invoke("dictation-realtime-start", options);
+    await s.invoke("dictation-realtime-stop");
+    tokenGate.resolve();
+    await warmup;
+    assert.equal((await start).success, true);
+    assert.equal(calls.connects.length, 2);
+  });
+}

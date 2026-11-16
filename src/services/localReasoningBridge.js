@@ -5,6 +5,7 @@ class LocalReasoningService {
   constructor() {
     this.isProcessing = false;
     this.activeRequestId = null;
+    this.abortController = null;
   }
 
   async isAvailable() {
@@ -33,6 +34,8 @@ class LocalReasoningService {
 
     this.isProcessing = true;
     this.activeRequestId = config.requestId ?? null;
+    const abortController = new AbortController();
+    this.abortController = abortController;
     const startTime = Date.now();
 
     try {
@@ -51,6 +54,8 @@ class LocalReasoningService {
         // field-by-field is what silently orphaned it before #2142: it was
         // declared, written by selection editing, and never forwarded.
         contextSize: config.contextSize,
+        // How long to wait for another model's answer before giving up.
+        busyWaitMs: config.busyWaitMs,
       };
 
       debugLogger.logReasoning("LOCAL_BRIDGE_INFERENCE", {
@@ -58,7 +63,10 @@ class LocalReasoningService {
         config: inferenceConfig,
       });
 
-      const result = await modelManager.runInference(modelId, text, inferenceConfig);
+      const result = await modelManager.runInference(modelId, text, {
+        ...inferenceConfig,
+        signal: abortController.signal,
+      });
       let cleanResult = result;
       // Thinking tags inside a JSON string are document data. The caller
       // validates the complete envelope instead of stripping anything from it.
@@ -93,13 +101,18 @@ class LocalReasoningService {
     } finally {
       this.isProcessing = false;
       this.activeRequestId = null;
+      this.abortController = null;
     }
   }
 
   // Only the caller that tagged the request can abort it, so a cancelled note
-  // never kills a dictation cleanup that took the slot after it.
+  // never kills a dictation cleanup that took the slot after it. The abort also
+  // reaches a request still waiting for the server, which would otherwise swap
+  // its model in and run anyway once the other model's answer is done.
   cancel(requestId) {
-    if (requestId && requestId === this.activeRequestId) modelManager.cancelInference();
+    if (!requestId || requestId !== this.activeRequestId) return;
+    this.abortController?.abort();
+    modelManager.cancelInference();
   }
 
   calculateMaxTokens(textLength, minTokens = 512, maxTokens = 2048, multiplier = 2) {

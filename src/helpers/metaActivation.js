@@ -1,0 +1,433 @@
+const { randomUUID } = require("node:crypto");
+
+// performance.now() is not corrected by network time sync and drifts from
+// server time (on Windows it ran 30 s ahead within 1-7 days of registering), so the
+// server time is fetched again hourly.
+const ANCHOR_TTL_MS = 60 * 60_000;
+
+// A small dedicated queue. It never reads transcription/Insights tables and
+// never stores text, audio, model names, titles or application context.
+class MetaActivation {
+  constructor({ db, getScope, request, monotonicNow = () => performance.now(), logger = null }) {
+    this.db = db;
+    this.getScope = getScope;
+    this.request = request;
+    this.monotonicNow = monotonicNow;
+    this.logger = logger;
+    this.anchor = null;
+    this.rejectedStreams = new Set();
+    this.running = null;
+    this.failedCaptures = new Set();
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS streams (
+        id TEXT PRIMARY KEY, account_id TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'new',
+        registered_at TEXT, complete_through TEXT, last_seq INTEGER NOT NULL DEFAULT 0,
+        total_words INTEGER NOT NULL DEFAULT 0, gap INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS captures (
+        id TEXT PRIMARY KEY, stream_id TEXT NOT NULL REFERENCES streams(id) ON DELETE CASCADE,
+        generation INTEGER NOT NULL, started_at TEXT NOT NULL, occurred_at TEXT,
+        seq INTEGER, words INTEGER
+      );
+    `);
+    // A process died before persisting a result. Do not certify that interval
+    // complete, even if a recovered recording later appears in ordinary history.
+    this.db
+      .exec(`UPDATE streams SET gap=1 WHERE id IN (SELECT stream_id FROM captures WHERE words IS NULL);
+      DELETE FROM captures WHERE words IS NULL;`);
+  }
+
+  start() {
+    this.timer = setInterval(() => void this.flush(true), 30_000);
+    this.timer.unref?.();
+    void this.flush();
+  }
+
+  current(scope = this.getScope()) {
+    if (!scope) return null;
+    return this.db
+      .prepare("SELECT * FROM streams WHERE account_id=? ORDER BY rowid DESC LIMIT 1")
+      .get(scope.accountId);
+  }
+
+  clock(scope) {
+    if (
+      !this.anchor ||
+      this.anchor.accountId !== scope?.accountId ||
+      this.anchor.generation !== scope?.authGeneration
+    )
+      return null;
+    return this.anchor.serverTime + (this.monotonicNow() - this.anchor.monotonicTime);
+  }
+
+  // A stale anchor still stamps captures (a null clock would be a coverage gap);
+  // only the next pass re-registers to refresh it. A closing stream skips the
+  // hourly refresh: its pass races the quit/sign-out deadline, and the timer
+  // has kept the anchor under an hour old.
+  needsRegistration(scope, stream) {
+    if (stream.state === "new" || this.clock(scope) === null || this.anchor.stale) return true;
+    return (
+      stream.state !== "closing" && this.monotonicNow() - this.anchor.monotonicTime >= ANCHOR_TTL_MS
+    );
+  }
+
+  // Waking is not activity: a stream with no clock has nothing to refresh, and
+  // the timer's permission gate still applies.
+  async resync() {
+    if (!this.anchor) return;
+    this.anchor.stale = true;
+    await this.flush(true);
+  }
+
+  begin() {
+    const scope = this.getScope();
+    let stream = this.current(scope);
+    if (!scope) return null;
+    if (!stream || stream.state === "closed") {
+      this.db
+        .prepare("INSERT INTO streams(id,account_id) VALUES(?,?)")
+        .run(randomUUID(), scope.accountId);
+      stream = this.current(scope);
+    }
+    if (stream.state === "done") return null;
+    const time = this.clock(scope);
+    if (time === null || stream.state !== "open") {
+      // The cohort starts only after permitted registration. Earlier usage
+      // is intentionally untracked; a missing clock after enrollment is a gap.
+      if (stream.registered_at)
+        this.db.prepare("UPDATE streams SET gap=1 WHERE id=?").run(stream.id);
+      void this.flush();
+      return null;
+    }
+    if (stream.total_words >= 200) return null;
+    const id = randomUUID();
+    this.db
+      .prepare("INSERT INTO captures(id,stream_id,generation,started_at) VALUES(?,?,?,?)")
+      .run(
+        id,
+        stream.id,
+        scope.authGeneration,
+        new Date(afterWatermark(time, stream)).toISOString()
+      );
+    return id;
+  }
+
+  stopCapture(id) {
+    const row = this.db
+      .prepare(
+        "SELECT c.*,s.account_id,s.complete_through FROM captures c JOIN streams s ON s.id=c.stream_id WHERE c.id=?"
+      )
+      .get(id);
+    if (!row || row.occurred_at) return;
+    const scope = this.getScope();
+    const time = this.clock(scope);
+    if (
+      !scope ||
+      scope.accountId !== row.account_id ||
+      scope.authGeneration !== row.generation ||
+      time === null
+    ) {
+      this.db.prepare("UPDATE streams SET gap=1 WHERE id=?").run(row.stream_id);
+      return;
+    }
+    this.db
+      .prepare("UPDATE captures SET occurred_at=? WHERE id=?")
+      .run(
+        new Date(Math.max(afterWatermark(time, row), Date.parse(row.started_at) + 1)).toISOString(),
+        id
+      );
+  }
+
+  finish(id, wordCount) {
+    if (typeof id !== "string" || !Number.isSafeInteger(wordCount) || wordCount < 0) return;
+    try {
+      this.db.transaction(() => {
+        const row = this.db
+          .prepare(
+            "SELECT c.*,s.account_id,s.total_words,s.last_seq FROM captures c JOIN streams s ON s.id=c.stream_id WHERE c.id=?"
+          )
+          .get(id);
+        if (!row || row.words !== null) return;
+        const scope = this.getScope();
+        if (
+          !scope ||
+          scope.accountId !== row.account_id ||
+          scope.authGeneration !== row.generation
+        ) {
+          this.db.prepare("UPDATE streams SET gap=1 WHERE id=?").run(row.stream_id);
+          this.db.prepare("DELETE FROM captures WHERE id=?").run(id);
+          return;
+        }
+        const words = Math.min(wordCount, 200 - row.total_words);
+        if (words === 0) {
+          this.db.prepare("DELETE FROM captures WHERE id=?").run(id);
+          return;
+        }
+        if (!row.occurred_at) {
+          this.db.prepare("UPDATE streams SET gap=1 WHERE id=?").run(row.stream_id);
+          this.db.prepare("DELETE FROM captures WHERE id=?").run(id);
+          return;
+        }
+        this.db
+          .prepare("UPDATE captures SET words=?,seq=? WHERE id=?")
+          .run(words, row.last_seq + 1, id);
+        this.db
+          .prepare("UPDATE streams SET last_seq=last_seq+1,total_words=total_words+? WHERE id=?")
+          .run(words, row.stream_id);
+      })();
+    } catch (error) {
+      // Keep the unresolved capture across renderer cleanup. On restart it
+      // becomes a durable coverage gap instead of silently losing spoken words.
+      this.failedCaptures.add(id);
+      throw error;
+    }
+    void this.flush();
+  }
+
+  cancel(id) {
+    if (typeof id !== "string" || this.failedCaptures.has(id)) return;
+    this.db.prepare("DELETE FROM captures WHERE id=? AND words IS NULL").run(id);
+    void this.flush();
+  }
+
+  async flush(scheduled = false) {
+    if (this.disposed) return;
+    if (this.running) return this.running;
+    this.running = this.runPass(scheduled)
+      .catch(() => {})
+      .finally(() => {
+        this.running = null;
+      });
+    return this.running;
+  }
+
+  async runPass(scheduled) {
+    const scope = this.getScope();
+    if (!scope) return;
+    const assertCurrent = () => {
+      const current = this.getScope();
+      if (this.disposed) throw new Error("Activation storage closed");
+      if (
+        !current ||
+        current.accountId !== scope.accountId ||
+        current.authGeneration !== scope.authGeneration
+      )
+        throw new Error("Account changed");
+    };
+    let stream = this.current(scope);
+    if (!stream || stream.state === "closed") {
+      const id = randomUUID();
+      this.db.prepare("INSERT INTO streams(id,account_id) VALUES(?,?)").run(id, scope.accountId);
+      stream = this.current(scope);
+    }
+    if (stream.state === "done") return;
+    // Once the server answers awaiting_permission or refuses (403, e.g. org
+    // policy) an unregistered stream, only activity posts again. A registered
+    // stream keeps certifying its watermark, and a lost answer may have
+    // committed a device, so the timer retries both.
+    if (scheduled && this.unpermittedStream === stream.id) return;
+    const post = async (path, body) => {
+      assertCurrent();
+      this.unpermittedStream = null;
+      const result = await this.request({
+        path,
+        method: "POST",
+        body,
+        expectedAuthGeneration: scope.authGeneration,
+      });
+      assertCurrent();
+      if (!result?.success) {
+        if (result?.status === 403 && !stream.registered_at) this.unpermittedStream = stream.id;
+        // The server refuses a watermark it reads as future or backdated; a
+        // drifted clock is the likely cause, so the next pass re-registers.
+        // Every batch error is a 409, so a clock taken after a rejection isn't
+        // refreshed again until a batch succeeds or the hour is up.
+        if (result?.status === 409 && this.anchor && !this.anchor.afterRejection) {
+          this.anchor.stale = true;
+          this.anchor.rejected = true;
+        }
+        throw new Error("Activation sync unavailable");
+      }
+      return result.data;
+    };
+    if (this.needsRegistration(scope, stream)) {
+      const response = await post("/api/activation/device", {
+        accountId: scope.accountId,
+        deviceId: stream.id,
+      });
+      if (response.status === "awaiting_permission") {
+        this.unpermittedStream = stream.id;
+        return;
+      }
+      if (response.status !== "collecting") {
+        this.retire(stream.id);
+        return;
+      }
+      if (!response.device || !Number.isFinite(Date.parse(response.serverTime)))
+        throw new Error("Invalid registration");
+      if (response.device.closed) {
+        this.db.prepare("UPDATE streams SET state='closed' WHERE id=?").run(stream.id);
+        return;
+      }
+      const serverTime = Date.parse(response.serverTime);
+      const localNow = this.clock(scope);
+      const afterRejection = localNow !== null && Boolean(this.anchor.rejected);
+      if (localNow !== null) {
+        const driftMs = Math.round(localNow - serverTime);
+        if (afterRejection && !this.rejectedStreams.has(stream.id)) {
+          this.rejectedStreams.add(stream.id);
+          this.logger?.warn("Activation batch rejected; clock re-synced", { driftMs });
+        } else if (Math.abs(driftMs) >= 1000) {
+          this.logger?.debug("Activation clock re-synced", { driftMs });
+        }
+      }
+      this.anchor = {
+        accountId: scope.accountId,
+        generation: scope.authGeneration,
+        serverTime,
+        monotonicTime: this.monotonicNow(),
+        afterRejection,
+      };
+      // Adopt the server's watermark when it is ahead (a batch committed but
+      // its answer was lost), so new stamps and batches never land behind it.
+      // ISO-8601 UTC strings compare in time order.
+      const serverThrough = new Date(response.device.complete_through).toISOString();
+      this.db
+        .prepare(
+          "UPDATE streams SET state=CASE WHEN state='closing' THEN state ELSE 'open' END,registered_at=?,complete_through=MAX(IFNULL(complete_through,?),?) WHERE id=?"
+        )
+        .run(
+          new Date(response.device.registered_at).toISOString(),
+          serverThrough,
+          serverThrough,
+          stream.id
+        );
+      stream = this.current(scope);
+      if (Number.isSafeInteger(response.device.last_seq)) {
+        // Only advance backdated events: the server cannot accept them at or
+        // below its watermark. Future stamps may still commit after this
+        // snapshot, so preserve them and wait for server time to catch up.
+        this.db
+          .prepare(
+            "UPDATE captures SET occurred_at=? WHERE stream_id=? AND (seq IS NULL OR seq>?) AND occurred_at<=?"
+          )
+          .run(
+            new Date(Date.parse(stream.complete_through) + 1).toISOString(),
+            stream.id,
+            response.device.last_seq,
+            stream.complete_through
+          );
+      }
+    }
+    const pending = this.db
+      .prepare("SELECT * FROM captures WHERE stream_id=? ORDER BY seq")
+      .all(stream.id);
+    // Stop times belong to unfinished STT/cleanup work. Don't advance a device
+    // checkpoint while that work could still add an earlier contribution.
+    if (pending.some((row) => row.words === null) && !stream.gap) return;
+    const completeThrough = new Date(
+      Math.max(
+        Math.ceil(this.clock(scope)),
+        Date.parse(stream.complete_through),
+        ...pending.map((row) => Date.parse(row.occurred_at))
+      )
+    ).toISOString();
+    const events = pending
+      .filter((row) => row.words !== null)
+      .map((row) => ({
+        eventId: row.id,
+        seq: row.seq,
+        words: row.words,
+        occurredAt: row.occurred_at,
+      }));
+    const result = await post("/api/activation/batch", {
+      deviceId: stream.id,
+      events,
+      completeThrough,
+      close: stream.state === "closing",
+      gap: Boolean(stream.gap),
+    });
+    if (result.status !== "collecting") {
+      this.retire(stream.id);
+      return;
+    }
+    if (!Number.isSafeInteger(result.acceptedThrough) || result.acceptedThrough > stream.last_seq)
+      throw new Error("Invalid acknowledgement");
+    if (this.anchor) this.anchor.afterRejection = false;
+    this.db.transaction(() => {
+      this.db
+        .prepare("DELETE FROM captures WHERE stream_id=? AND seq<=?")
+        .run(stream.id, result.acceptedThrough);
+      this.db
+        .prepare(
+          "UPDATE streams SET complete_through=?,state=CASE WHEN ? AND state='closing' THEN 'closed' ELSE state END WHERE id=?"
+        )
+        .run(completeThrough, stream.state === "closing" ? 1 : 0, stream.id);
+    })();
+  }
+
+  retire(id) {
+    for (const row of this.db.prepare("SELECT id FROM captures WHERE stream_id=?").all(id))
+      this.failedCaptures.delete(row.id);
+    this.db.transaction(() => {
+      this.db.prepare("UPDATE streams SET state='done' WHERE id=?").run(id);
+      this.db.prepare("DELETE FROM captures WHERE stream_id=?").run(id);
+    })();
+  }
+
+  async close() {
+    const stream = this.current();
+    if (
+      !stream ||
+      stream.state === "done" ||
+      stream.state === "closed" ||
+      this.unpermittedStream === stream.id
+    )
+      return;
+    const unresolved = this.db
+      .prepare("SELECT 1 FROM captures WHERE stream_id=? AND words IS NULL LIMIT 1")
+      .get(stream.id);
+    if (unresolved) {
+      this.db.prepare("UPDATE streams SET gap=1 WHERE id=?").run(stream.id);
+    }
+    this.db.prepare("DELETE FROM captures WHERE stream_id=? AND words IS NULL").run(stream.id);
+    this.db.prepare("UPDATE streams SET state='closing' WHERE id=?").run(stream.id);
+    await this.flush();
+    // An already-running pass may have read the pre-close state.
+    if (this.current()?.state === "closing" && this.unpermittedStream !== stream.id)
+      await this.flush();
+    this.anchor = null;
+  }
+
+  purge(accountId) {
+    const captures = this.db
+      .prepare(
+        "SELECT c.id FROM captures c JOIN streams s ON s.id=c.stream_id WHERE s.account_id=?"
+      )
+      .all(accountId);
+    for (const row of captures) this.failedCaptures.delete(row.id);
+    this.db.prepare("DELETE FROM streams WHERE account_id=?").run(accountId);
+    this.anchor = null;
+  }
+
+  dispose() {
+    this.disposed = true;
+    clearInterval(this.timer);
+    this.anchor = null;
+    this.failedCaptures.clear();
+    this.db.close();
+  }
+
+  async shutdown() {
+    clearInterval(this.timer);
+    await this.close();
+  }
+}
+
+// The server refuses a contribution at or before the stream's acknowledged
+// watermark, which a re-sync can move the clock behind.
+function afterWatermark(time, stream) {
+  return Math.max(Math.ceil(time), (Date.parse(stream.complete_through) || 0) + 1);
+}
+
+module.exports = { MetaActivation };

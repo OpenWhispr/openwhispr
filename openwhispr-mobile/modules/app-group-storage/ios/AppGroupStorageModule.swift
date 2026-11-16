@@ -92,6 +92,7 @@ public class AppGroupStorageModule: Module {
   private var backgroundObserverToken: NSObjectProtocol?
   private var audioInterruptionObserverToken: NSObjectProtocol?
   private var mediaServicesResetObserverToken: NSObjectProtocol?
+  private var engineConfigurationObserverToken: NSObjectProtocol?
   // Refreshed while OpenWhispr is foreground so the keyboard can tell it is
   // hosted by our own app (record in place) rather than another app (hand off).
   private var foregroundHeartbeatTimer: Timer?
@@ -1163,6 +1164,10 @@ public class AppGroupStorageModule: Module {
     } catch {
       logMarker("audioEngine.deactivateSessionFailed", extra: "reason=\(reason) error=\(error.localizedDescription)")
     }
+    // A backgrounded app can suspend now, so LiveActivityController drops the idle
+    // session card before iOS can kill the app without warning.
+    NotificationCenter.default.post(
+      name: Notification.Name("\(Self.notificationPrefix).warmMicReleased"), object: nil)
 
     logMarker("audioEngine.stopped", extra: "reason=\(reason)")
   }
@@ -1706,6 +1711,13 @@ public class AppGroupStorageModule: Module {
     ) { [weak self] _ in
       self?.handleMediaServicesReset()
     }
+    engineConfigurationObserverToken = center.addObserver(
+      forName: .AVAudioEngineConfigurationChange,
+      object: nil,
+      queue: .main
+    ) { [weak self] notification in
+      self?.handleAudioEngineConfigurationChange(notification)
+    }
     logMarker("audioSessionObservers.added")
   }
 
@@ -1718,6 +1730,10 @@ public class AppGroupStorageModule: Module {
     if let token = mediaServicesResetObserverToken {
       center.removeObserver(token)
       mediaServicesResetObserverToken = nil
+    }
+    if let token = engineConfigurationObserverToken {
+      center.removeObserver(token)
+      engineConfigurationObserverToken = nil
     }
   }
 
@@ -1780,6 +1796,26 @@ public class AppGroupStorageModule: Module {
     }
     shutdownAudioPipeline(reason: "audioSession.mediaServicesReset")
     armWarmMic(reason: "mediaServicesReset")
+  }
+
+  /// The engine stops itself when the input format changes (a Bluetooth headset
+  /// connecting, another audio client changing the category), with no other signal.
+  /// Left alone, the shared flags would keep claiming a warm mic: the keyboard skips
+  /// Activate, and a backgrounded app keeps its Live Activity until it suspends and
+  /// dies. Rebuild on the current session, or release so the flags tell the truth.
+  private func handleAudioEngineConfigurationChange(_ notification: Notification) {
+    audioPipelineLock.lock()
+    defer { audioPipelineLock.unlock() }
+    guard let engine = notification.object as? AVAudioEngine, engine === audioEngine else { return }
+    audioStateLock.lock()
+    let recording = isClipRecording
+    audioStateLock.unlock()
+    logMarker("audioEngine.configurationChange", extra: "recording=\(recording)")
+    // stopRecording reads the dead engine and clears the warm flag itself.
+    guard !recording else { return }
+    if !ensureAudioEngineRunning(reason: "configurationChange") {
+      releaseWarmMic(reason: "configurationChange")
+    }
   }
 
   private func handleAppDidBecomeActive() {

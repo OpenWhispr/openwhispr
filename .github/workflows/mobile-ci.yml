@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -55,7 +55,7 @@ jobs:
       run:
         working-directory: openwhispr-mobile
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -106,9 +106,11 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Run background upload recovery tests
+        run: python3 openwhispr-mobile/modules/background-uploader/tests/run-background-recovery-tests.py
       - name: Run native provider transport tests
         run: python3 openwhispr-mobile/modules/background-uploader/tests/run-provider-transport-tests.py
       - name: Run keyboard return resolver tests
@@ -119,6 +121,8 @@ jobs:
         run: sh openwhispr-mobile/modules/live-activity/tests/run-resolver-tests.sh
       - name: Run keyboard touch routing tests
         run: python3 openwhispr-mobile/plugins/keyboard-extension/tests/run-keyboard-touch-tests.py
+      - name: Run keyboard capitalization tests
+        run: sh openwhispr-mobile/scripts/test-keyboard-capitalization.sh
 
   mobile-status:
     name: Mobile CI

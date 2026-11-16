@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePolicySnapshot } from "./usePolicy";
+import { useRegistryVersion } from "./useRegistryVersion";
+import { getRegistryVersion } from "../models/registryData";
 import { LOCAL_MODELS_CHANGED_EVENT } from "./useModelDownload";
 import { missingRequiredLocalModels, requiredLocalModelIds } from "../stores/policyRules";
 
@@ -15,29 +17,36 @@ export interface RequiredLocalModelsState {
 }
 
 /**
- * Joins the org's required-download policy with disk truth — the same
- * listWhisperModels/listParakeetModels fan-out LocalModelSetupStep uses.
+ * Joins the org's required-download policy with disk truth (the
+ * listWhisperModels/listParakeetModels fan-out).
  * Policy updates arrive reactively (workspace-policy-changed → policy store →
  * usePolicySnapshot) and re-run the disk check. Shared by the onboarding
  * required-models step and the ControlPanel fleet banner.
  */
 export function useRequiredLocalModels(): RequiredLocalModelsState {
   const snapshot = usePolicySnapshot();
+  const registryVersion = useRegistryVersion();
   // Key on content: policy refreshes swap object identities every few minutes
   // without changing the list, and the disk fan-out shouldn't rerun for that.
-  const requiredKey = useMemo(() => requiredLocalModelIds(snapshot).join("\n"), [snapshot]);
+  const requiredKey = requiredLocalModelIds(snapshot).join("\n");
   const required = useMemo(() => (requiredKey ? requiredKey.split("\n") : []), [requiredKey]);
-  const [installed, setInstalled] = useState<string[] | null>(null);
+  // Tagged with the catalog it was checked against, so a catalog update never compares
+  // new required models with an old disk listing (a flashing banner).
+  const [installed, setInstalled] = useState<{ version: number; ids: string[] } | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
+    const version = getRegistryVersion();
     const [whisper, parakeet] = await Promise.all([
       window.electronAPI?.listWhisperModels?.().catch(() => undefined),
       window.electronAPI?.listParakeetModels?.().catch(() => undefined),
     ]);
-    setInstalled([
-      ...(whisper?.models ?? []).filter((model) => model.downloaded).map((model) => model.model),
-      ...(parakeet?.models ?? []).filter((model) => model.downloaded).map((model) => model.model),
-    ]);
+    setInstalled({
+      version,
+      ids: [
+        ...(whisper?.models ?? []).filter((model) => model.downloaded).map((model) => model.model),
+        ...(parakeet?.models ?? []).filter((model) => model.downloaded).map((model) => model.model),
+      ],
+    });
   }, []);
 
   useEffect(() => {
@@ -54,20 +63,21 @@ export function useRequiredLocalModels(): RequiredLocalModelsState {
       window.removeEventListener(LOCAL_MODELS_CHANGED_EVENT, handleModelsChanged);
       window.removeEventListener("openwhispr-models-cleared", handleModelsChanged);
     };
-  }, [requiredKey, refresh]);
+  }, [requiredKey, refresh, registryVersion]);
 
+  const current = installed?.version === registryVersion ? installed.ids : null;
   const missing = useMemo(
     () =>
-      required.length === 0 || installed === null
+      required.length === 0 || current === null
         ? []
-        : missingRequiredLocalModels(required, installed),
-    [required, installed]
+        : missingRequiredLocalModels(required, current),
+    [required, current]
   );
 
   return {
     required,
     missing,
-    loading: required.length > 0 && installed === null,
+    loading: required.length > 0 && current === null,
     refresh,
   };
 }

@@ -1,3 +1,9 @@
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  bindLocalModelDownload,
+  isLocalModelPolicyRefusal,
+} = require("./localModelPolicyGate");
 const path = require("path");
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
@@ -9,9 +15,10 @@ const {
   checkDiskSpace,
 } = require("./downloadUtils");
 
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 const LlamaServerManager = require("./llamaServer");
 const debugLogger = require("./debugLogger");
+const { rememberInstalledModel, forgetInstalledModels } = require("./installedModels");
 const { readGgufMetadataFromFile } = require("./ggufMetadata");
 const {
   estimateTokens,
@@ -21,7 +28,12 @@ const {
   BASELINE_CONTEXT_SIZE,
 } = require("./llamaContextPolicy");
 
+// start() refused to touch the running server: it was busy, or the caller gave up.
+const SERVER_LEFT_ALONE_CODES = new Set(["LOCAL_MODEL_BUSY", "LOCAL_MODEL_CANCELLED"]);
+
 const MIN_FILE_SIZE = 1_000_000; // 1MB minimum for valid model files
+// Room a download reserves: the model file(s) plus headroom.
+const LLM_DISK_SPACE_FACTOR = 1.2;
 
 // The context every server still STARTS at. Requests that need more grow it
 // on demand, bounded by a per-machine, per-model ceiling (llamaContextPolicy).
@@ -303,6 +315,12 @@ class ModelManager {
   }
 
   async downloadModel(modelId, onProgress) {
+    return runLocalModelOperation(this, "llm", modelId, () =>
+      this._policyAllowedDownloadModel(modelId, onProgress)
+    );
+  }
+
+  async _policyAllowedDownloadModel(modelId, onProgress) {
     this.ensureInitialized();
     const modelInfo = this.findModelById(modelId);
     if (!modelInfo) {
@@ -313,6 +331,7 @@ class ModelManager {
     const modelPath = path.join(this.modelsDir, model.fileName);
 
     if (await this.checkModelValid(modelPath)) {
+      rememberInstalledModel("localProviders", provider.id, modelId);
       return modelPath;
     }
 
@@ -322,9 +341,11 @@ class ModelManager {
       });
     }
 
+    // Binding refuses a revoked lease, so it goes before anything takes the slot.
+    const { signal, abort } = createDownloadSignal();
+    const unbindPolicy = bindLocalModelDownload(this, abort);
     this.activeDownloads.set(modelId, true);
     this.downloadLifecycleVersion += 1;
-    const { signal, abort } = createDownloadSignal();
     this.activeRequests.set(modelId, { abort });
 
     try {
@@ -337,7 +358,7 @@ class ModelManager {
         requiredBytes += model.draftSizeBytes;
       }
       if (requiredBytes > 0) {
-        this.downloadReservations.set(modelId, requiredBytes * 1.2);
+        this.downloadReservations.set(modelId, requiredBytes * LLM_DISK_SPACE_FACTOR);
         const reservedBytes = this.getReservedDownloadBytes();
         const spaceCheck = await checkDiskSpace(this.modelsDir, reservedBytes);
         if (!spaceCheck.ok) {
@@ -371,8 +392,10 @@ class ModelManager {
         if (onProgress) onProgress(progress, combined, combinedTotal);
       };
 
+      assertLocalModelOperation(this);
       await sharedDownloadFile(downloadUrl, modelPath, {
         signal,
+        expectedSha256: model.sha256,
         onProgress: hasDrafter
           ? (downloadedBytes) => emitCombined(downloadedBytes)
           : (downloadedBytes, totalBytes) => {
@@ -404,8 +427,10 @@ class ModelManager {
       if (hasDrafter) {
         const draftPath = path.join(this.modelsDir, model.draftFileName);
         try {
+          assertLocalModelOperation(this);
           await sharedDownloadFile(this.getDraftDownloadUrl(provider, model), draftPath, {
             signal,
+            expectedSha256: model.draftSha256,
             onProgress: (downloadedBytes) => emitCombined(stats.size + downloadedBytes),
           });
           const draftStats = await fsPromises.stat(draftPath);
@@ -415,7 +440,7 @@ class ModelManager {
           }
         } catch (draftError) {
           await fsPromises.unlink(draftPath).catch(() => {});
-          if (draftError.isAbort) throw draftError;
+          if (draftError.isAbort || isLocalModelPolicyRefusal(draftError)) throw draftError;
           debugLogger.warn("MTP drafter download failed, keeping model without it", {
             modelId,
             error: draftError.message,
@@ -423,6 +448,7 @@ class ModelManager {
         }
       }
 
+      rememberInstalledModel("localProviders", provider.id, modelId);
       return modelPath;
     } catch (error) {
       if (error.isAbort) {
@@ -433,6 +459,11 @@ class ModelManager {
           statusCode: error.statusCode,
         });
       }
+      if (error.code === "ERR_MODEL_INTEGRITY") {
+        throw new ModelError(`Download corrupted: ${error.message}`, "INTEGRITY_ERROR", {
+          error: error.message,
+        });
+      }
       if (!(error instanceof ModelError)) {
         throw new ModelError(`Network error: ${error.message}`, "NETWORK_ERROR", {
           error: error.message,
@@ -440,6 +471,7 @@ class ModelManager {
       }
       throw error;
     } finally {
+      unbindPolicy();
       if (this.activeDownloads.delete(modelId)) {
         this.downloadLifecycleVersion += 1;
       }
@@ -451,12 +483,12 @@ class ModelManager {
 
   getDownloadUrl(provider, model) {
     const baseUrl = provider.baseUrl || "https://huggingface.co";
-    return `${baseUrl}/${model.hfRepo}/resolve/main/${model.fileName}`;
+    return `${baseUrl}/${model.hfRepo}/resolve/${model.revision || "main"}/${model.fileName}`;
   }
 
   getDraftDownloadUrl(provider, model) {
     const baseUrl = provider.baseUrl || "https://huggingface.co";
-    return `${baseUrl}/${model.draftHfRepo}/resolve/main/${model.draftFileName}`;
+    return `${baseUrl}/${model.draftHfRepo}/resolve/${model.draftRevision || "main"}/${model.draftFileName}`;
   }
 
   modelHasDrafter(model) {
@@ -501,6 +533,7 @@ class ModelManager {
       const draftPath = path.join(this.modelsDir, modelInfo.model.draftFileName);
       await fsPromises.unlink(draftPath).catch(() => {});
     }
+    forgetInstalledModels("localProviders", modelInfo.provider.id, modelId);
   }
 
   async deleteAllModels() {
@@ -521,6 +554,7 @@ class ModelManager {
           }
         }
       }
+      forgetInstalledModels("localProviders");
     } catch (error) {
       throw new ModelError(
         `Failed to delete models directory: ${error.message}`,
@@ -637,6 +671,16 @@ class ModelManager {
   }
 
   async runInference(modelId, prompt, options = {}) {
+    return runLocalModelOperation(
+      this,
+      "llm",
+      modelId,
+      () => this._policyAllowedRunInference(modelId, prompt, options),
+      { onAbort: () => this.cancelInference() }
+    );
+  }
+
+  async _policyAllowedRunInference(modelId, prompt, options = {}) {
     this.ensureInitialized();
     const startTime = Date.now();
     debugLogger.logReasoning("INFERENCE_START", {
@@ -735,7 +779,12 @@ class ModelManager {
       const startAt = async (size) =>
         this.serverManager.start(
           modelPath,
-          await this.serverStartOptions(modelInfo, { contextSize: size, cacheRamMiB })
+          await this.serverStartOptions(modelInfo, {
+            contextSize: size,
+            cacheRamMiB,
+            busyWaitMs: options.busyWaitMs,
+            signal: options.signal,
+          })
         );
       // llama.cpp's startup dump is the diagnostic, so it goes to the log here
       // and nowhere else: details crosses IPC to the renderer, which neither
@@ -761,6 +810,10 @@ class ModelManager {
         // be stepped down again.
         if (this.serverManager.contextSize < contextSize) refuse(contextSize);
       } catch (error) {
+        // The running server was left alone, which says nothing about this window.
+        if (isLocalModelPolicyRefusal(error) || SERVER_LEFT_ALONE_CODES.has(error.code)) {
+          throw error;
+        }
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the
@@ -778,6 +831,12 @@ class ModelManager {
         try {
           await startAt(restorableContextSize);
         } catch (restoreError) {
+          if (
+            isLocalModelPolicyRefusal(restoreError) ||
+            SERVER_LEFT_ALONE_CODES.has(restoreError.code)
+          ) {
+            throw restoreError;
+          }
           throw unavailable(restoreError);
         }
       }
@@ -838,6 +897,7 @@ class ModelManager {
         disableThinking: options.disableThinking,
         requireCompleteOutput: options.requireCompleteOutput || refuseWindowClip,
         responseFormat: options.responseFormat,
+        signal: options.signal,
       });
 
       const totalTime = Date.now() - startTime;
@@ -886,6 +946,10 @@ class ModelManager {
     this.currentServerModelId = null;
   }
 
+  async stopServerWhenIdle(options) {
+    if (await this.serverManager.stopWhenIdle(options)) this.currentServerModelId = null;
+  }
+
   getServerStatus() {
     return this.serverManager.getStatus();
   }
@@ -895,6 +959,42 @@ class ModelManager {
   }
 
   async prewarmServer(modelId) {
+    try {
+      return await runLocalModelOperation(
+        this,
+        "llm",
+        modelId,
+        () => this._policyAllowedPrewarmServer(modelId),
+        {
+          memoryOnly: true,
+          // The pre-warm may be checking whether another model is answering, so
+          // only a server that is, or is becoming, this model is stopped.
+          onAbort: () => {
+            const modelInfo = this.findModelById(modelId);
+            if (!modelInfo) return;
+            return this.serverManager.stopIfServing(
+              path.join(this.modelsDir, modelInfo.model.fileName)
+            );
+          },
+        }
+      );
+    } catch (error) {
+      if (error.code === "POLICY_UNRESOLVABLE") {
+        this.localModelPolicy?.runOnceVerdictSettles(() => {
+          // A request in the meantime already started what it needs.
+          if (this.serverManager.ready || this.serverManager.startupPromise) return;
+          this.prewarmServer(modelId).catch((resumeError) => {
+            debugLogger.warn("Resumed llama-server pre-warm failed", {
+              error: resumeError.message,
+            });
+          });
+        });
+      }
+      throw error;
+    }
+  }
+
+  async _policyAllowedPrewarmServer(modelId) {
     if (!modelId) return false;
     this.ensureInitialized();
 
@@ -907,7 +1007,11 @@ class ModelManager {
     if (!this.serverManager.isAvailable()) return false;
 
     try {
-      await this.serverManager.start(modelPath, await this.serverStartOptions(modelInfo));
+      // Nobody is waiting on a pre-warm, so it never gets in an answer's way.
+      await this.serverManager.start(
+        modelPath,
+        await this.serverStartOptions(modelInfo, { busyWaitMs: 0 })
+      );
       this.currentServerModelId = modelId;
       debugLogger.info("llama-server pre-warmed", { modelId });
       return true;
@@ -922,4 +1026,5 @@ module.exports = {
   default: new ModelManager(),
   ModelError,
   ModelNotFoundError,
+  LLM_DISK_SPACE_FACTOR,
 };

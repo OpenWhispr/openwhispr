@@ -2,6 +2,7 @@ import { useGoogleCalendarStore } from '@/store/useGoogleCalendarStore';
 import { useHandoffStore } from '@/store/useHandoffStore';
 import { isRecoveryDeepLinkFresh, isRecoveryHolding } from '@/store/useKeyboardRecoveryStore';
 import { useUsageStore } from '@/store/useUsageStore';
+import { isAffiliateArrivalFresh } from './affiliateLink';
 
 export interface ResumeDecision {
   /** Reset the stack to Home — the default for a warm resume. */
@@ -42,6 +43,9 @@ export function resolveResumeAction(alreadyOnHome: boolean): ResumeDecision {
   if (useUsageStore.getState().isBillingSessionActive) {
     return { resetToHome: false, refreshUsage: true };
   }
+
+  // A creator link just arrived: the app opened for it, so leave the screen alone.
+  if (isAffiliateArrivalFresh()) return STAY;
 
   // Already on Home → skip the redundant replace that would slide Home over itself.
   return { resetToHome: !alreadyOnHome, refreshUsage: false };

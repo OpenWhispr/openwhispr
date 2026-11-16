@@ -12,6 +12,7 @@ const baseSettings = {
   dictationAgentCloudBaseUrl: "",
   dictationAgentCustomApiKey: "",
   dictationAgentDisableThinking: true,
+  dictationAgentReasoningEffort: "high",
 };
 
 test("uses the dictation agent scope, not the cleanup scope", async () => {
@@ -22,10 +23,12 @@ test("uses the dictation agent scope, not the cleanup scope", async () => {
     // Cleanup is configured completely differently; it must not leak through.
     cleanupProvider: "openai",
     cleanupModel: "gpt-4.1-mini",
+    cleanupReasoningEffort: "low",
   });
 
   assert.equal(result.model, "gpt-5-mini");
   assert.equal(result.config.provider, "openai");
+  assert.equal(result.config.reasoningEffort, "high");
 });
 
 test("a model-required agent is unreachable without an explicit model", async () => {
@@ -242,9 +245,11 @@ test("vision override runs as the dictation agent scope and inherits key with en
     dictationAgentVisionModel: "vision-model",
     dictationAgentVisionCloudBaseUrl: "",
     dictationAgentVisionCustomApiKey: "",
+    dictationAgentVisionReasoningEffort: "low",
   });
 
   assert.equal(result.config.inferenceScope, "dictationAgent");
+  assert.equal(result.config.reasoningEffort, "low", "the vision scope keeps its own effort");
   assert.equal(result.config.baseUrl, "https://agent.example.com/v1");
   assert.equal(
     result.config.customApiKey,
@@ -452,4 +457,64 @@ test("a vision override that cannot see images drops the screenshot instead of r
 
   assert.equal(config.scope, "dictationAgent");
   assert.equal(attachScreenContext, false);
+});
+
+// A policy-blocked assistant is refused where it stands: the panel must not move
+// a request the org denied onto Chat, or a screenshot onto the vision override,
+// either of which can be remote.
+const blockedAgent = {
+  ...panelSettings,
+  dictationAgentMode: "local",
+  dictationAgentProvider: "qwen",
+  dictationAgentModel: "",
+  policyBlockedLocalScopes: ["dictationAgent"],
+};
+
+test("a policy-blocked Voice Assistant stays on its own scope instead of falling back to Chat", async () => {
+  // Unreachable is what sends a selection edit to the panel with its text quoted.
+  const { resolveDictationAgentInference } = await load();
+  assert.equal(resolveDictationAgentInference(blockedAgent).reachable, false);
+
+  const { config, attachScreenContext } = panel(blockedAgent);
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.mode, "local");
+  assert.equal(config.model, "");
+  assert.equal(attachScreenContext, false);
+});
+
+test("a policy-blocked Voice Assistant's screenshot goes to neither Chat nor the vision override", () => {
+  const { config, attachScreenContext } = panel(
+    {
+      ...blockedAgent,
+      useDictationAgentVisionModel: true,
+      dictationAgentVisionMode: "providers",
+      dictationAgentVisionProvider: "openai",
+      dictationAgentVisionModel: "gpt-5-mini",
+    },
+    { hasScreenContext: true }
+  );
+
+  assert.equal(config.scope, "dictationAgent");
+  assert.equal(config.model, "");
+  assert.equal(attachScreenContext, false);
+});
+
+test("a switched-off assistant was never going to answer, so a blocked model on it changes nothing", () => {
+  const { config } = panel({ ...blockedAgent, useDictationAgent: false });
+
+  assert.equal(config.scope, "chatIntelligence");
+  assert.equal(config.model, "claude-sonnet-4-5");
+});
+
+test("another scope's block doesn't hold an unreachable assistant back from Chat", () => {
+  const { config } = panel({
+    ...panelSettings,
+    dictationAgentMode: "providers",
+    dictationAgentProvider: "",
+    dictationAgentModel: "",
+    policyBlockedLocalScopes: ["dictationCleanup"],
+  });
+
+  assert.equal(config.scope, "chatIntelligence");
 });
