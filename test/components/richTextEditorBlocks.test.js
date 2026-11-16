@@ -35,7 +35,7 @@ const DOM_GLOBALS = [
 ];
 // tiptap-markdown's placeholder for a node it can't write as Markdown.
 const LOST_NODE =
-  /\[(table|tableRow|tableHeader|tableCell|hardBreak|details|detailsSummary|detailsContent|callout|noteLink|tableOfContentsBlock|inlineMath|blockMath|youtube|twitch|emoji)\]/;
+  /\[(table|tableRow|tableHeader|tableCell|hardBreak|details|detailsSummary|detailsContent|callout|noteLink|tableOfContentsBlock|inlineMath|blockMath|emoji)\]/;
 const CHECKBOX = /^\s*[-*+]\s+\[[ xX]\]\s+\S.*$/gm;
 
 let win;
@@ -124,7 +124,6 @@ test("every editor block and mark is recognized", () => {
     "codeBlock",
     "inlineMath",
     "tableOfContentsBlock",
-    "youtube",
     "mark:highlight",
     "mark:rubyText",
     "mark:subscript",
@@ -158,7 +157,54 @@ test("escaped forms (\\[\\[Title\\]\\], \\[!NOTE\\], \\[TOC\\]) read as links, c
 });
 
 test("a highlight opener in one paragraph does not leak into the next", () => {
-  assert.match(save("a ==b `==` c\n\nNext ==x== here"), /Next ==x== here/);
+  assert.equal(save("a ==b `==` c\n\nNext ==x== here"), "a ==b `==` c\n\nNext ==x== here");
+});
+
+test("text that only looks like the new forms keeps its meaning", () => {
+  assert.equal(save("x==y and y==z"), "x==y and y==z");
+  const video = "[▶ YouTube video](https://www.youtube.com/watch?v=dQw4w9WgXcQ)";
+  assert.equal(save(video), video);
+  for (const citation of ["[[1]](https://example.com)", "[\\[1\\]](https://example.com)"]) {
+    const found = featuresOf(citation);
+    assert.ok(found.includes("mark:link") && !found.includes("noteLink"), citation);
+  }
+});
+
+test("pasted colours and fonts are not kept", () => {
+  const editor = editorFor("");
+  try {
+    editor.view.pasteHTML(
+      '<p><span style="color: rgb(31, 35, 40); font-family: -apple-system, &quot;Segoe UI&quot;">Pasted</span></p>'
+    );
+    assert.equal(editor.storage.markdown.getMarkdown(), "Pasted");
+  } finally {
+    editor.destroy();
+  }
+});
+
+test("an empty line that inherits alignment saves without a marker", () => {
+  const editor = editorFor("Title line {align:center}");
+  try {
+    editor
+      .chain()
+      .setTextSelection(editor.state.doc.content.size - 1)
+      .splitBlock()
+      .run();
+    assert.equal(editor.storage.markdown.getMarkdown().trim(), "Title line {align:center}");
+  } finally {
+    editor.destroy();
+  }
+});
+
+test("clicking a formula opens its editor", () => {
+  const editor = editorFor("Formula $x^2$ here");
+  try {
+    editor.view.dom.querySelector(".tiptap-mathematics-render").click();
+    assert.ok(win.document.querySelector(".rte-inline-input"), "math editor did not open");
+  } finally {
+    win.document.querySelector(".rte-inline-input")?.remove();
+    editor.destroy();
+  }
 });
 
 test("alignment is never written inside a table cell", () => {

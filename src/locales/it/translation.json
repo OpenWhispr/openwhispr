@@ -3391,8 +3391,6 @@
           "mathBlock": "Blocco matematico",
           "inlineMath": "Formula in linea",
           "inlineMathHint": "oppure digita $$x^2$$",
-          "youtube": "Video YouTube",
-          "twitch": "Video Twitch",
           "emoji": "Emoji",
           "emojiHint": "oppure digita :smile:",
           "highlight": "Evidenzia",
@@ -3438,8 +3436,6 @@
         "prompt": {
           "latexBlock": "LaTeX, es. \\sum_{i=1}^n x_i",
           "latexInline": "LaTeX, es. x^2",
-          "youtube": "Link YouTube",
-          "twitch": "Link Twitch",
           "emoji": "Nome emoji, es. rocket",
           "reading": "Lettura, es. かんじ",
           "textReading": "Testo|lettura, es. 漢字|かんじ",

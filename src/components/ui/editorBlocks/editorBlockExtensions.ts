@@ -3,6 +3,7 @@
  * Markdown form that survives a save in builds without these extensions (see markdownSyntax.ts).
  */
 import { Extension, Node, mergeAttributes, type Editor } from "@tiptap/core";
+import type { TagParseRule } from "@tiptap/pm/model";
 import Paragraph from "@tiptap/extension-paragraph";
 import Heading from "@tiptap/extension-heading";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
@@ -12,8 +13,6 @@ import Typography from "@tiptap/extension-typography";
 import { TableOfContents, getHierarchicalIndexes } from "@tiptap/extension-table-of-contents";
 import Highlight from "@tiptap/extension-highlight";
 import { InlineMath, BlockMath } from "@tiptap/extension-mathematics";
-import Youtube from "@tiptap/extension-youtube";
-import Twitch from "@tiptap/extension-twitch";
 import UniqueID from "@tiptap/extension-unique-id";
 import { FindAndReplace } from "@tiptap/extension-find-and-replace";
 import InvisibleCharacters from "@tiptap/extension-invisible-characters";
@@ -46,7 +45,13 @@ const MarkdownSyntaxExtras = Extension.create({
 // so it would come back as literal text.
 const alignSuffix = (node: any, parent?: any) => {
   const a = node.attrs.textAlign;
-  if (!a || a === "left" || /^table(Cell|Header)$/.test(parent?.type?.name ?? "")) return "";
+  if (
+    !a ||
+    a === "left" ||
+    !node.content.size ||
+    /^table(Cell|Header)$/.test(parent?.type?.name ?? "")
+  )
+    return "";
   return ` {align:${a}}`;
 };
 
@@ -102,7 +107,15 @@ const MarkdownRubyText = RubyText.extend({
       "{/ruby}"
     ),
 });
+// Only spans the Markdown parser or this editor wrote: colours and fonts in pasted
+// web HTML would be saved as {color:…}/{font:…} markers.
 const MarkdownTextStyle = TextStyle.extend({
+  parseHTML() {
+    return this.parent!().map((rule) => ({
+      ...(rule as TagParseRule),
+      tag: "span[data-text-style]",
+    }));
+  },
   addStorage: () =>
     markSpec(
       (_s: any, mark: any) =>
@@ -118,8 +131,9 @@ const MarkdownTextStyle = TextStyle.extend({
 // ---- Nodes ------------------------------------------------------------------
 // Click a formula to edit it (needs the editor, which configure() can't see).
 const MarkdownInlineMath = InlineMath.extend({
-  onCreate() {
+  addNodeView() {
     this.options.onClick = (node: any, pos: number) => editLatex(this.editor, node, pos);
+    return this.parent!();
   },
   addStorage() {
     return {
@@ -134,8 +148,9 @@ const MarkdownInlineMath = InlineMath.extend({
 });
 
 const MarkdownBlockMath = BlockMath.extend({
-  onCreate() {
+  addNodeView() {
     this.options.onClick = (node: any, pos: number) => editLatex(this.editor, node, pos);
+    return this.parent!();
   },
   addStorage() {
     return {
@@ -151,18 +166,6 @@ const MarkdownBlockMath = BlockMath.extend({
     };
   },
 });
-
-const embedSpec = (label: string) => ({
-  markdown: {
-    serialize(state: any, node: any) {
-      state.write(`[▶ ${label}](${node.attrs.src})`);
-      state.closeBlock(node);
-    },
-    parse: {},
-  },
-});
-const MarkdownYoutube = Youtube.extend({ addStorage: () => embedSpec("YouTube video") });
-const MarkdownTwitch = Twitch.extend({ addStorage: () => embedSpec("Twitch video") });
 
 const MarkdownEmoji = Emoji.extend({
   addStorage() {
@@ -334,17 +337,24 @@ export function createEditorBlockExtensions() {
     MarkdownHighlight.configure({ multicolor: false }),
     MarkdownSubscript,
     MarkdownSuperscript,
-    MarkdownTextStyle,
+    MarkdownTextStyle.configure({ HTMLAttributes: { "data-text-style": "" } }),
     Color,
     FontFamily,
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     MarkdownRubyText,
-    MarkdownEmoji.configure({ emojis: gitHubEmojis, enableEmoticons: true }),
+    MarkdownEmoji.configure({ emojis: gitHubEmojis }),
     // ">>" is the toggle shortcut and "---" a divider / literal text in tables,
-    // so keep Typography from turning them into "»" and "—".
-    Typography.configure({ laquo: false, raquo: false, emDash: false }),
-    MarkdownYoutube.configure({ nocookie: true, controls: true, width: 560, height: 315 }),
-    MarkdownTwitch.configure({ width: 560, height: 315 }),
+    // so keep Typography from turning them into "»" and "—". (c), (r), (tm) and
+    // (sm) are common in ordinary text, so they stay as typed.
+    Typography.configure({
+      laquo: false,
+      raquo: false,
+      emDash: false,
+      copyright: false,
+      registeredTrademark: false,
+      trademark: false,
+      servicemark: false,
+    }),
     UniqueID.configure({ types: ["heading", "paragraph", "taskItem", "listItem"] }),
     FindAndReplace,
     FindShortcut,

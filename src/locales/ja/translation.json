@@ -3286,8 +3286,6 @@
           "mathBlock": "数式ブロック",
           "inlineMath": "インライン数式",
           "inlineMathHint": "または $$x^2$$ と入力",
-          "youtube": "YouTube 動画",
-          "twitch": "Twitch 動画",
           "emoji": "絵文字",
           "emojiHint": "または :smile: と入力",
           "highlight": "ハイライト",
@@ -3333,8 +3331,6 @@
         "prompt": {
           "latexBlock": "LaTeX（例: \\sum_{i=1}^n x_i）",
           "latexInline": "LaTeX（例: x^2）",
-          "youtube": "YouTube のリンク",
-          "twitch": "Twitch のリンク",
           "emoji": "絵文字名（例: rocket）",
           "reading": "読み（例: かんじ）",
           "textReading": "文字|読み（例: 漢字|かんじ）",

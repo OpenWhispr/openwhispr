@@ -159,26 +159,6 @@ export const SLASH_ITEMS: SlashItem[] = [
     },
   },
   {
-    id: "youtube",
-    group: "blocks",
-    title: label("slash.youtube"),
-    keywords: "youtube embed video",
-    run: async (e) => {
-      const src = await promptInline(e, { placeholder: tb("prompt.youtube") });
-      if (src) chain(e).setYoutubeVideo({ src }).run();
-    },
-  },
-  {
-    id: "twitch",
-    group: "blocks",
-    title: label("slash.twitch"),
-    keywords: "twitch embed stream clip video",
-    run: async (e) => {
-      const src = await promptInline(e, { placeholder: tb("prompt.twitch") });
-      if (src) chain(e).setTwitchVideo({ src }).run();
-    },
-  },
-  {
     id: "emoji",
     group: "blocks",
     title: label("slash.emoji"),

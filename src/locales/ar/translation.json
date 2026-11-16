@@ -3029,8 +3029,6 @@
           "mathBlock": "كتلة رياضية",
           "inlineMath": "معادلة ضمن السطر",
           "inlineMathHint": "أو اكتب $$x^2$$",
-          "youtube": "فيديو YouTube",
-          "twitch": "فيديو Twitch",
           "emoji": "رمز تعبيري",
           "emojiHint": "أو اكتب :smile:",
           "highlight": "تمييز",
@@ -3076,8 +3074,6 @@
         "prompt": {
           "latexBlock": "LaTeX، مثل \\sum_{i=1}^n x_i",
           "latexInline": "LaTeX، مثل x^2",
-          "youtube": "رابط YouTube",
-          "twitch": "رابط Twitch",
           "emoji": "اسم الرمز التعبيري، مثل rocket",
           "reading": "القراءة، مثل かんじ",
           "textReading": "النص|القراءة، مثل 漢字|かんじ",

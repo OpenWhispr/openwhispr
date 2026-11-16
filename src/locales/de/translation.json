@@ -3931,8 +3931,6 @@
           "mathBlock": "Formelblock",
           "inlineMath": "Formel im Text",
           "inlineMathHint": "oder $$x^2$$ tippen",
-          "youtube": "YouTube-Video",
-          "twitch": "Twitch-Video",
           "emoji": "Emoji",
           "emojiHint": "oder :smile: tippen",
           "highlight": "Hervorheben",
@@ -3978,8 +3976,6 @@
         "prompt": {
           "latexBlock": "LaTeX, z. B. \\sum_{i=1}^n x_i",
           "latexInline": "LaTeX, z. B. x^2",
-          "youtube": "YouTube-Link",
-          "twitch": "Twitch-Link",
           "emoji": "Emoji-Name, z. B. rocket",
           "reading": "Lesung, z. B. かんじ",
           "textReading": "Text|Lesung, z. B. 漢字|かんじ",

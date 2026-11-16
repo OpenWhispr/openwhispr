@@ -84,6 +84,7 @@ export function FindReplacePanel({ editor }: { editor: Editor }) {
         <input
           dir="auto"
           ref={findRef}
+          autoFocus
           value={term}
           placeholder={tb("find.find")}
           aria-label={tb("find.find")}

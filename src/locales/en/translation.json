@@ -3931,8 +3931,6 @@
           "mathBlock": "Math block",
           "inlineMath": "Inline math",
           "inlineMathHint": "or type $$x^2$$",
-          "youtube": "YouTube video",
-          "twitch": "Twitch video",
           "emoji": "Emoji",
           "emojiHint": "or type :smile:",
           "highlight": "Highlight",
@@ -3978,8 +3976,6 @@
         "prompt": {
           "latexBlock": "LaTeX, e.g. \\sum_{i=1}^n x_i",
           "latexInline": "LaTeX, e.g. x^2",
-          "youtube": "YouTube link",
-          "twitch": "Twitch link",
           "emoji": "Emoji name, e.g. rocket",
           "reading": "Reading, e.g. かんじ",
           "textReading": "Text|reading, e.g. 漢字|かんじ",

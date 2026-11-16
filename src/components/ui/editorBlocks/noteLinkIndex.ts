@@ -87,7 +87,7 @@ export function searchTitles(query: string, limit = 8): IndexedNote[] {
 export function backlinksTo(title: string, selfId: number | null): IndexedNote[] {
   const key = norm(title);
   if (!key) return [];
-  const pattern = /\\?\[\\?\[((?:\\.|[^\]\\\n])+?)\\?\]\\?\]/g;
+  const pattern = /\\?\[\\?\[((?:\\.|[^\]\\\n])+?)\\?\]\\?\](?!\(http)/g;
   return notes.filter((n) => {
     if (n.id === selfId) return false;
     for (const text of [n.content, n.enhanced]) {

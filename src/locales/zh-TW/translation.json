@@ -3391,8 +3391,6 @@
           "mathBlock": "數學公式區塊",
           "inlineMath": "行內公式",
           "inlineMathHint": "或輸入 $$x^2$$",
-          "youtube": "YouTube 影片",
-          "twitch": "Twitch 影片",
           "emoji": "表情符號",
           "emojiHint": "或輸入 :smile:",
           "highlight": "醒目提示",
@@ -3438,8 +3436,6 @@
         "prompt": {
           "latexBlock": "LaTeX，例如 \\sum_{i=1}^n x_i",
           "latexInline": "LaTeX，例如 x^2",
-          "youtube": "YouTube 連結",
-          "twitch": "Twitch 連結",
           "emoji": "表情符號名稱，例如 rocket",
           "reading": "讀音，例如 かんじ",
           "textReading": "文字|讀音，例如 漢字|かんじ",

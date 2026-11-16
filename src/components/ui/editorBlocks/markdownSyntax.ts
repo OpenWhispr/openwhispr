@@ -19,8 +19,6 @@
  *   Ruby         {ruby:かんじ}漢字{/ruby}
  *   Alignment    paragraph text {align:center}   (left|center|right|justify)
  *   Note link    [[Note title]]
- *   Video embed  [▶ YouTube video](https://www.youtube-nocookie.com/embed/…)
- *                [▶ Twitch video](https://player.twitch.tv/?…)
  */
 
 // Characters prosemirror-markdown's esc() escapes in text. Latex and attribute
@@ -52,9 +50,13 @@ function spanOpenHtml(key: string, value: string): string | null {
     case "sup":
       return "<sup>";
     case "color":
-      return SAFE_COLOR.test(value) ? `<span style="color: ${escapeHtml(value)}">` : null;
+      return SAFE_COLOR.test(value)
+        ? `<span data-text-style style="color: ${escapeHtml(value)}">`
+        : null;
     case "font":
-      return SAFE_FONT.test(value) ? `<span style="font-family: ${escapeHtml(value)}">` : null;
+      return SAFE_FONT.test(value)
+        ? `<span data-text-style style="font-family: ${escapeHtml(value)}">`
+        : null;
     case "ruby":
       return value ? "<ruby><rb>" : null;
     default:
@@ -73,15 +75,6 @@ function spanCloseHtml(frame: SpanFrame): string {
     default:
       return "</span>";
   }
-}
-
-// Any YouTube / Twitch link written as the editor's "▶ … video" link (the node
-// stores the link as given and converts it to an embed URL when rendering).
-function isYoutubeEmbed(href: string) {
-  return /^https:\/\/((www|m)\.)?(youtube\.com|youtube-nocookie\.com|youtu\.be)\//.test(href);
-}
-function isTwitchEmbed(href: string) {
-  return /^https:\/\/((www|player|clips|m)\.)?twitch\.tv\//.test(href);
 }
 
 export function markdownSyntax(md: any) {
@@ -120,13 +113,14 @@ export function markdownSyntax(md: any) {
     return true;
   });
 
-  // 2b) [[Note title]] -> note link (before markdown-it's own [link] rule).
+  // 2b) [[Note title]] -> note link (before markdown-it's own [link] rule). A
+  // citation [[1]](https://…) is a web link whose text is "[1]".
   md.inline.ruler.before("escape", "note_link", (state: any, silent: boolean) => {
     const { src, pos } = state;
     const c = src.charCodeAt(pos);
     if (c !== 0x5b && c !== 0x5c) return false; // "[" or "\" (escaped form)
     const m = /^\\?\[\\?\[((?:\\[^\]]|[^\]\\\n]){1,400}?)\\?\]\\?\]/.exec(src.slice(pos));
-    if (!m) return false;
+    if (!m || src.startsWith("(http", pos + m[0].length)) return false;
     const title = unescapeMd(m[1]).trim();
     if (!title) return false;
     if (!silent) {
@@ -150,8 +144,13 @@ export function markdownSyntax(md: any) {
       state.pos += 2;
       return true;
     }
+    // Not when the only closing "==" is inside a code span, nor across words
+    // after a letter (x==y and y==z).
     const next = src.charAt(pos + 2);
-    if (!next || /\s|=/.test(next) || src.indexOf("==", pos + 3) < 0) return false;
+    const close = src.indexOf("==", pos + 3);
+    if (!next || /\s|=/.test(next) || close < 0 || src.slice(pos, close).includes("`"))
+      return false;
+    if (/\w/.test(src.charAt(pos - 1)) && /\s/.test(src.slice(pos, close))) return false;
     if (!silent) {
       state.push("html_inline", "", 0).content = "<mark>";
       state.highlightOpen = true;
@@ -236,35 +235,6 @@ export function markdownSyntax(md: any) {
         continue;
       }
       const kids = t.children || [];
-      if (
-        own &&
-        kids.length === 3 &&
-        kids[0].type === "link_open" &&
-        kids[2].type === "link_close"
-      ) {
-        const href = kids[0].attrGet("href") || "";
-        const label = kids[1]?.content || "";
-        if (!label.startsWith("▶")) {
-          // ordinary link that happens to point at a video: leave it a link
-        } else if (isYoutubeEmbed(href)) {
-          replaceParagraph(
-            state,
-            i,
-            `<div data-youtube-video><iframe src="${escapeHtml(href)}"></iframe></div>\n`
-          );
-          i--;
-          continue;
-        }
-        if (isTwitchEmbed(href)) {
-          replaceParagraph(
-            state,
-            i,
-            `<div data-twitch-video><iframe src="${escapeHtml(href)}"></iframe></div>\n`
-          );
-          i--;
-          continue;
-        }
-      }
 
       // Alignment suffix on paragraphs and headings.
       if (

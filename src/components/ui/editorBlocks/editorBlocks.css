@@ -194,7 +194,7 @@
   opacity: 0.55;
 }
 
-/* ---- Highlight, ruby, embeds ------------------------------------------- */
+/* ---- Highlight, ruby -------------------------------------------------- */
 .ProseMirror mark {
   background: color-mix(in srgb, #facc15 45%, transparent);
   color: inherit;
@@ -204,16 +204,6 @@
 .ProseMirror ruby rt {
   font-size: 0.6em;
   opacity: 0.75;
-}
-.ProseMirror div[data-youtube-video],
-.ProseMirror div[data-twitch-video] {
-  margin: 0.6rem 0;
-}
-.ProseMirror div[data-youtube-video] iframe,
-.ProseMirror div[data-twitch-video] iframe {
-  max-width: 100%;
-  border: 0;
-  border-radius: 8px;
 }
 
 /* ---- Code block syntax colours (lowlight / highlight.js classes) -------- */
