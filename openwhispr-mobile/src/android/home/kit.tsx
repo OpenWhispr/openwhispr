@@ -73,8 +73,8 @@ export function SectionHeader({ title }: { title: string }) {
   );
 }
 
-/** Horizontal room a PillButton with an icon needs besides its label: padding, icon slot, gap, border. */
-export const PILL_ICON_CHROME = 14 * 2 + 28 + 8 + 2;
+/** Horizontal room a compact PillButton with an icon needs besides its label (padding, icon slot, gap, border); two share a row on a narrow phone. */
+export const PILL_ICON_CHROME_COMPACT = 8 * 2 + 28 + 4 + 2;
 
 /**
  * Figma Button, medium (44 tall). Inside a card it is flat: secondary has a border and no
@@ -87,6 +87,7 @@ export function PillButton({
   onPress,
   primary,
   disabled,
+  compact,
   style,
 }: {
   label: string;
@@ -94,6 +95,8 @@ export function PillButton({
   onPress: () => void;
   primary?: boolean;
   disabled?: boolean;
+  /** Tighter side padding and icon gap, so two fit side by side on a narrow phone. */
+  compact?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const color = primary ? '#FFFFFF' : disabled ? home.disabled : home.text;
@@ -111,12 +114,12 @@ export function PillButton({
           flex: 1,
           minHeight: 44,
           borderRadius: 999,
-          paddingHorizontal: 14,
+          paddingHorizontal: compact ? 8 : 14,
           paddingVertical: 8,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 8,
+          gap: compact ? 4 : 8,
           backgroundColor: primary ? undefined : home.surface,
           borderWidth: primary ? 0 : 1,
           borderColor: home.borderSubtle,

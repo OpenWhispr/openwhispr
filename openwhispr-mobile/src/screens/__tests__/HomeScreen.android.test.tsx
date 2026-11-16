@@ -604,26 +604,14 @@ describe('bubble card buttons by screen width', () => {
       .spyOn(require('react-native'), 'useWindowDimensions')
       .mockReturnValue({ width, height: 800, scale: 2.8, fontScale: 1 });
 
-  it('stacks them on a 384 dp phone like the Galaxy A73', () => {
+  it('stacks them on a 360 dp phone', () => {
+    withWidth(360);
+    render(<AndroidHome />);
+    expect(pairDirection()).toBe('column');
+  });
+
+  it('puts them side by side on the Galaxy A73 at its default display size (384 dp)', () => {
     withWidth(384);
-    render(<AndroidHome />);
-    expect(pairDirection()).toBe('column');
-  });
-
-  it('stacks them at exactly 411 dp', () => {
-    withWidth(411);
-    render(<AndroidHome />);
-    expect(pairDirection()).toBe('column');
-  });
-
-  it('puts them side by side from 412 dp when the labels fit', () => {
-    withWidth(412);
-    render(<AndroidHome />);
-    expect(pairDirection()).toBe('row');
-  });
-
-  it('puts them side by side on a wider screen when the labels fit', () => {
-    withWidth(600);
     render(<AndroidHome />);
     expect(pairDirection()).toBe('row');
   });
