@@ -105,7 +105,11 @@ export default function AndroidHome() {
     done: boolean;
   } | null>(null);
   const uploadDone = useRef(false);
-  const revealNewest = useRef(false);
+  const uploadStartedAt = useRef(0);
+  // Set when an upload or dictation finished: take the person to its new History row once
+  // the progress card has gone. Holds the time the work started, so an older row (history
+  // off, nothing saved) is never mistaken for the new one.
+  const revealNewest = useRef<number | null>(null);
   const historyY = useRef(0);
   const historyRef = useRef<View>(null);
   const [highlight, setHighlight] = useState<{ id: string; arriving: boolean } | null>(null);
@@ -120,7 +124,7 @@ export default function AndroidHome() {
     onPicked: (name, size) => setUploadCard({ name, size, done: false }),
     onComplete: () => {
       uploadDone.current = true;
-      revealNewest.current = true;
+      revealNewest.current = uploadStartedAt.current;
       setUploadCard((current) => current && { ...current, done: true });
       showToast(h('addedToHistory'));
     },
@@ -156,6 +160,7 @@ export default function AndroidHome() {
     setTrying(true);
     // 16 kHz mono 16-bit WAV: 32 bytes a millisecond, for the progress estimate.
     setDictationCard({ size: recording.durationMs * 32, done: false });
+    const startedAt = Date.now();
     let finished = false;
     const controller = new AbortController();
     tryController.current = controller;
@@ -163,6 +168,7 @@ export default function AndroidHome() {
       const text = await processAndroidAudio(recording, job, controller.signal, () => undefined);
       if (controller.signal.aborted) return;
       finished = true;
+      revealNewest.current = startedAt;
       setDictationCard((current) => current && { ...current, done: true });
       await Clipboard.setStringAsync(text);
       if (!SYSTEM_CONFIRMS_COPY) showToast(h('copied'));
@@ -195,6 +201,7 @@ export default function AndroidHome() {
       setWorking(true);
       setUploadCard(null);
       uploadDone.current = false;
+      uploadStartedAt.current = Date.now();
       try {
         await pickAndTranscribeFile();
       } catch {
@@ -326,10 +333,13 @@ export default function AndroidHome() {
   const busy = trying || recorderOpen || working || dictationCard !== null;
   const recent = [...history].sort((a, b) => b.createdAt - a.createdAt).slice(0, 30);
   const newestId = recent[0]?.id;
-  // Once a finished upload's card has gone, take the person to the new History row.
+  const newestAt = recent[0]?.createdAt ?? 0;
+  // Once a finished upload's or dictation's card has gone, take the person to the new row.
   useEffect(() => {
-    if (uploadCard !== null || !revealNewest.current || !newestId) return;
-    revealNewest.current = false;
+    const since = revealNewest.current;
+    if (uploadCard !== null || dictationCard !== null || since === null || !newestId) return;
+    revealNewest.current = null;
+    if (newestAt < since) return;
     // Highlight the new row only once the slow scroll has brought it to the top.
     setHighlight({ id: newestId, arriving: false });
     let arrive: ReturnType<typeof setTimeout> | undefined;
@@ -356,7 +366,7 @@ export default function AndroidHome() {
       stop();
       if (arrive) clearTimeout(arrive);
     };
-  }, [uploadCard, newestId]);
+  }, [uploadCard, dictationCard, newestId, newestAt]);
 
   return (
     <SafeAreaView
