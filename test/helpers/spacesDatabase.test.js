@@ -4910,9 +4910,9 @@ test("a backed-up note keeps its identity after a team move and database reopen"
   assert.equal(db.getNote(note.id).space_id, team.id);
 });
 
-// Ownerless notes on a shared Mac (device notes).
+// Ownerless notes on a shared device (device notes).
 
-// A Mac another account ("b") has used, signed out so a test can seed stand-in
+// A device another account ("b") has used, signed out so a test can seed stand-in
 // notes before an account signs in.
 function createSharedMacDb(t) {
   const db = createFreshDeviceDb(t);
@@ -4922,7 +4922,7 @@ function createSharedMacDb(t) {
   return db;
 }
 
-test("getDeviceNotes lists only eligible stand-in notes on a shared Mac", (t) => {
+test("getDeviceNotes lists only eligible stand-in notes on a shared device", (t) => {
   const db = createSharedMacDb(t);
   if (!db) return;
   const standInId = db._standInPrivateSpaceId();
@@ -4941,7 +4941,7 @@ test("getDeviceNotes lists only eligible stand-in notes on a shared Mac", (t) =>
   assert.deepEqual(folders, [{ id: meetings, name: "Meetings", is_default: 1, noteCount: 1 }]);
 });
 
-test("getDeviceNotes is empty signed out and on a single-account Mac", (t) => {
+test("getDeviceNotes is empty signed out and on a single-account device", (t) => {
   const db = createSharedMacDb(t);
   if (!db) return;
   const standInId = db._standInPrivateSpaceId();
@@ -5071,7 +5071,7 @@ test("moveDeviceNotesToPrivate into a workspace main doesn't know uses the defau
   assert.equal(known.moved[0].space_id, db.getPrivateSpaceId("w2"));
 });
 
-test("moveDeviceNotesToPrivate does nothing signed out or on a single-account Mac", (t) => {
+test("moveDeviceNotesToPrivate does nothing signed out or on a single-account device", (t) => {
   const db = createSharedMacDb(t);
   if (!db) return;
   const id = seedNote(db.db, db._standInPrivateSpaceId(), { title: "n" });
@@ -5288,7 +5288,7 @@ test("the sole-account claim joins a stand-in folder into the account's copy of 
   assertEveryRowInItsFolderSpace(db.db);
 });
 
-test("on a shared Mac the sign-in claim takes only notes the cloud says are the account's", (t) => {
+test("on a shared device the sign-in claim takes only notes the cloud says are the account's", (t) => {
   const db = createSharedMacDb(t);
   if (!db) return;
   const standInId = db._standInPrivateSpaceId();
@@ -5560,7 +5560,7 @@ test("a multi-note move makes one folder while a namesake's delete is pending", 
   assertOneFolderHoldsAll(db, seeded);
 });
 
-test("the shared-Mac sign-in claim makes one folder while a namesake's delete is pending", (t) => {
+test("the shared-device sign-in claim makes one folder while a namesake's delete is pending", (t) => {
   const db = createSharedMacDb(t);
   if (!db) return;
   // Seeded after sign-in so the claim runs once the pending delete exists.
@@ -5585,7 +5585,7 @@ test("the shared-Mac sign-in claim makes one folder while a namesake's delete is
   assertOneFolderHoldsAll(db, { noteIds, home, held });
 });
 
-test("ownership checks are empty signed out and on a single-account Mac", (t) => {
+test("ownership checks are empty signed out and on a single-account device", (t) => {
   const db = createSharedMacDb(t);
   if (!db) return;
   seedNote(db.db, db._standInPrivateSpaceId(), { title: "n", cloudId: "c1" });

@@ -1353,7 +1353,7 @@ function MoveAllDeviceNotesMenu({
 }
 
 /**
- * Notes no account owns on a Mac other accounts have used: view-only until moved into the
+ * Notes no account owns on a device other accounts have used: view-only until moved into the
  * on-screen Private (`workspaceId` is its workspace; `folderRows` its folders, which "Move all
  * to" offers, and `privateSpaceId` where a new one goes). Kept out of the tree's arrow-key rows.
  */

@@ -75,7 +75,7 @@ function anything() {
   });
 }
 
-const MOVED_ROW = { id: 4, title: "Kept on this Mac" };
+const MOVED_ROW = { id: 4, title: "Kept on this device" };
 const calls = { database: [], notesMoved: 0, vectors: 0 };
 let activeAccountId = "account-1";
 let moveResult;

@@ -6623,7 +6623,7 @@ class DatabaseManager {
     }
   }
 
-  // On a shared Mac only notes the cloud named this account as owner of leave
+  // On a shared device only notes the cloud named this account as owner of leave
   // the stand-in; deleted ones go too, so their tombstones still sync.
   _claimProvenStandInNotes(standInId, homeId, accountId) {
     const ids = this.db
@@ -6719,7 +6719,7 @@ class DatabaseManager {
     return { notes, folders };
   }
 
-  // Notes written signed out stay in the stand-in on a Mac other accounts
+  // Notes written signed out stay in the stand-in on a device other accounts
   // have used, since no account owns them. They are listed and moved to an
   // account's Private only while nothing has put them in a cloud (a cloud id,
   // another owner, a create that may have reached it).
