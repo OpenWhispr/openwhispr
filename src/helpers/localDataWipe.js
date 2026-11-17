@@ -262,7 +262,8 @@ async function wipeLocalDataOnLaunch({
   const includeModels = device?.wipeLocalDataIncludesModels ?? false;
   logger.warn("Wiping local data", { trigger, includeModels });
   // main.js loaded .env into this process, and the relaunch inherits its
-  // environment: what came from the file goes with the file.
+  // environment: what came from the file goes with the file. So do the saved
+  // keys a relaunch or update restart carried in from the app that decrypted them.
   let loaded = {};
   try {
     loaded = require("dotenv").parse(fs.readFileSync(path.join(userDataPath, ".env")));
@@ -273,6 +274,7 @@ async function wipeLocalDataOnLaunch({
   logger.close();
   const errors = await removeLocalData({ includeModels, roots });
   for (const [key, value] of Object.entries(loaded)) if (env[key] === value) delete env[key];
+  for (const key of require("./environment").SECRET_KEYS) delete env[key];
   for (const [name, step] of [
     ["browser data", clearBrowserData],
     ["launch at login", disableAutoStart],

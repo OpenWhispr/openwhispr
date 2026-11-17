@@ -588,3 +588,4 @@ for (const k of BYOK_API_KEYS) {
 }
 
 module.exports = EnvironmentManager;
+module.exports.SECRET_KEYS = SECRET_KEYS;

@@ -267,7 +267,14 @@ test("settings main loaded from .env don't follow the relaunch into the fresh in
   fs.rmSync(path.join(roots.userData, ".env"), { recursive: true });
   seed(path.join(roots.userData, ".env"), "DICTATION_KEY=F8\nUI_LANGUAGE=fr\n");
   // UI_LANGUAGE came from the shell: dotenv never overrides what is already set.
-  const env = { DICTATION_KEY: "F8", UI_LANGUAGE: "de", PATH: "/usr/bin" };
+  // The API key came from the app that relaunched into the wipe, which had
+  // decrypted it from the deleted secure-keys.
+  const env = {
+    DICTATION_KEY: "F8",
+    UI_LANGUAGE: "de",
+    PATH: "/usr/bin",
+    OPENAI_API_KEY: "sk-leaver",
+  };
   assert.equal(await launchHarness({ snapshot: managed("offboard-1"), env }).wipe(), true);
   assert.deepEqual(env, { UI_LANGUAGE: "de", PATH: "/usr/bin" });
 });
