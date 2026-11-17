@@ -546,7 +546,10 @@ class ModelManager {
           server.cancelDeferredStop();
           return;
         }
-        if (!this._isOccupied(server)) return;
+        if (!this._isOccupied(server)) {
+          server.modelId = null;
+          return;
+        }
         debugLogger.debug("Stopping llama-server: no scope needs its model", {
           loadedModel: server.modelId,
         });

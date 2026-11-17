@@ -413,6 +413,16 @@ test("stopping the servers stops both, and only unneeded ones when asked", async
   assert.deepEqual(modelManager.loadedModelIds(), []);
 });
 
+test("a sync forgets the model of an idle-stopped server no scope needs", async (t) => {
+  // The GPU reset re-warms currentServerModelId, so a stale one loads a model nobody uses.
+  const { modelManager } = await setup(t);
+  await cleanup(modelManager);
+  await modelManager.servers[0].stop();
+
+  await modelManager.stopServersNotNeeded(() => true);
+  assert.equal(modelManager.currentServerModelId, null);
+});
+
 test("Keep model loaded reaches both servers", async (t) => {
   const { modelManager } = await setup(t);
   modelManager.setKeepResident(true);
