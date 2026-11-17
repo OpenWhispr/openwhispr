@@ -106,18 +106,54 @@ export function findSnippetTriggerRanges(
     }));
 }
 
+const SNIPPET_VARIABLES = new Set(["date", "time", "datetime", "locale"]);
+
 /**
- * Replace every spoken trigger with its saved text in a single pass.
+ * Fill a small allowlist of variables after a trigger has been expanded.
+ * Unknown placeholders are left untouched, so existing literal text remains
+ * byte-for-byte identical.
  */
-export function expandSnippets(text: string, snippets?: Snippet[] | null): string {
+export function resolveSnippetVariables(text: string, now: Date = new Date()): string {
+  if (!text.includes("{{")) return text;
+  const date = new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const time = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(now);
+  const locale = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en";
+  const values: Record<string, string> = {
+    date,
+    time,
+    datetime: `${date} ${time}`,
+    locale,
+  };
+  return text.replace(/\{\{([A-Za-z][A-Za-z0-9_]*)\}\}/g, (full, key: string) =>
+    SNIPPET_VARIABLES.has(key) ? values[key] : full
+  );
+}
+
+/**
+ * Replace every spoken trigger with its saved text in a single pass,
+ * then fill supported variables in that replacement.
+ */
+export function expandSnippets(
+  text: string,
+  snippets?: Snippet[] | null,
+  now: Date = new Date()
+): string {
   if (!text) return text;
   const matcher = getMatcher(snippets);
   if (!matcher) return text;
   const { regex, replacements } = matcher;
   // NFC so a decomposed "I" + U+0307 in the transcript recombines into İ.
-  return text
+  const expanded = text
     .normalize("NFC")
     .replace(regex, (match) => resolveReplacement(match, replacements) ?? match);
+  return resolveSnippetVariables(expanded, now);
 }
 
 interface DictionaryHintSettings {

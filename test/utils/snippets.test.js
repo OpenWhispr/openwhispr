@@ -16,7 +16,37 @@ const {
   splitSharedDictionaryWords,
   toCloudDictionaryFields,
   getCloudLlmDictionaryFields,
+  resolveSnippetVariables,
 } = require("../../src/utils/snippets.ts");
+
+test("snippet replacements fill date, time, datetime, and locale variables", () => {
+  const now = new Date("2026-11-18T09:05:00Z");
+  const snippets = [
+    { trigger: "stamp", replacement: "Logged {{date}} at {{time}} ({{datetime}}) [{{locale}}]" },
+  ];
+  const result = expandSnippets("stamp", snippets, now);
+  const date = new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const time = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(now);
+  const locale = typeof navigator !== "undefined" && navigator.language ? navigator.language : "en";
+  assert.equal(result, `Logged ${date} at ${time} (${date} ${time}) [${locale}]`);
+  assert.doesNotMatch(result, /\{\{/);
+});
+
+test("unknown snippet variables are left literal", () => {
+  assert.equal(resolveSnippetVariables("{{clipboard}} {{unknown}}"), "{{clipboard}} {{unknown}}");
+});
+
+test("variable filling is a no-op without placeholders", () => {
+  const plain = "Best regards,\nUmut";
+  assert.equal(resolveSnippetVariables(plain), plain);
+});
 
 test("expands a trigger containing Turkish capital İ", () => {
   const snippets = [{ trigger: "İmza", replacement: "Best regards,\nUmut" }];
