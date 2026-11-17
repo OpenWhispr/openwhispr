@@ -14,6 +14,7 @@ const mockAttributionListeners = new Set<() => void>();
 const mockConfirm = jest.fn<Promise<boolean>, [string, Record<string, unknown>?]>();
 const mockInstallationTime = jest.fn<Promise<Date>, []>();
 const mockPlatform = { OS: 'ios' };
+let mockConsent = 'granted';
 
 jest.mock('expo-sqlite/localStorage/install', () => ({}));
 jest.mock('react-native', () => ({ Platform: mockPlatform }));
@@ -21,6 +22,7 @@ jest.mock('expo-application', () => ({
   getInstallationTimeAsync: (): Promise<Date> => mockInstallationTime(),
 }));
 jest.mock('@/lib/appsflyer', () => ({
+  getAppsFlyerAttributionConsent: (): string => mockConsent,
   logAppsFlyerEventConfirmed: (name: string, values?: Record<string, unknown>): Promise<boolean> =>
     mockConfirm(name, values),
   subscribeAppsFlyerAttribution: (listener: () => void): (() => void) => {
@@ -93,6 +95,7 @@ beforeEach(() => {
   stored.clear();
   mockConfig = { defaultMode: 'cloud', usageAnalyticsEnabled: true };
   mockPlatform.OS = 'ios';
+  mockConsent = 'granted';
   mockConfirm.mockReset().mockResolvedValue(true);
   mockInstallationTime.mockReset().mockResolvedValue(new Date(INSTALLED_AT));
   jest.spyOn(Date, 'now').mockReturnValue(INSTALLED_AT + 2 * DAY_MS);
@@ -323,13 +326,30 @@ describe('dictated_200_words milestone', () => {
     );
   });
 
-  it('keeps working for the session when storage throws, and never throws itself', async () => {
+  it('neither counts nor sends when the stored state cannot be read, and never throws', async () => {
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: {
         getItem: (): string | null => {
           throw new Error('disk');
         },
+        setItem: (): void => undefined,
+        removeItem: (): void => undefined,
+      },
+    });
+    const milestone = load();
+
+    expect(() => milestone.recordDictationMilestone(dictation(200))).not.toThrow();
+    await milestone.flushDictationMilestone();
+
+    expect(mockConfirm).not.toHaveBeenCalled();
+  });
+
+  it('keeps the milestone for the session when storage writes fail', async () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (): string | null => null,
         setItem: (): void => {
           throw new Error('disk');
         },
@@ -338,15 +358,20 @@ describe('dictated_200_words milestone', () => {
     });
     const milestone = load();
 
-    expect(() => milestone.recordDictationMilestone(dictation(200))).not.toThrow();
+    milestone.recordDictationMilestone(dictation(200));
     await flushPromises();
     await milestone.flushDictationMilestone();
 
     expect(mockConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('starts from zero: words dictated before this update are never counted', () => {
-    load();
-    expect(storedState()).toBeNull();
+  it('holds the milestone on iOS without an explicit tracking Allow', async () => {
+    mockConsent = 'undecided';
+    const milestone = load();
+    milestone.recordDictationMilestone(dictation(200));
+    await flushPromises();
+
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(storedState()).toMatchObject({ status: 'pending' });
   });
 });

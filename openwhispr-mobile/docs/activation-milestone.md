@@ -28,10 +28,11 @@ Only the event and three values: `transcription_mode` (`local`, `cloud` or `byok
 
 - Nothing is counted while Usage Analytics is off. Turning it off cancels a milestone
   that hasn't been sent yet, for good.
-- The event goes through AppsFlyer, which on iOS runs only after the person allows
+- The event goes through AppsFlyer and is sent on iOS only after the person allows
   tracking. Until then the milestone waits on the device.
 - Android has no tracking prompt yet, so there the milestone is counted but not sent.
 - The milestone is kept on the device until AppsFlyer's server confirms it, and is
   retried each time the SDK becomes ready, including after a relaunch. It is sent at
-  most once per install; in rare cases (the app killed mid-send) AppsFlyer may see it
-  twice.
+  most once per install; in rare cases (the app killed mid-send, or a send slower than
+  15 seconds) AppsFlyer may see it twice. If the stored state can't be read, nothing is
+  counted or sent that session.

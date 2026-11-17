@@ -1,7 +1,11 @@
 import 'expo-sqlite/localStorage/install';
 import { Platform } from 'react-native';
 import { getInstallationTimeAsync } from 'expo-application';
-import { logAppsFlyerEventConfirmed, subscribeAppsFlyerAttribution } from '@/lib/appsflyer';
+import {
+  getAppsFlyerAttributionConsent,
+  logAppsFlyerEventConfirmed,
+  subscribeAppsFlyerAttribution,
+} from '@/lib/appsflyer';
 import type { recordDictationCompleted } from '@/lib/productEvents';
 import { isUsageAnalyticsAllowed } from '@/lib/usageAnalytics';
 import { useConfigStore } from '@/store/useConfigStore';
@@ -43,11 +47,16 @@ function readState(): MilestoneState {
   try {
     const json = localStorage.getItem(STORAGE_KEY);
     const parsed = json ? (JSON.parse(json) as MilestoneState) : null;
-    state = parsed && typeof parsed.words === 'number' ? parsed : null;
+    state =
+      parsed && typeof parsed.words === 'number'
+        ? parsed
+        : { words: 0, status: 'counting', recentCaptureIds: [] };
   } catch (error) {
+    // The stored state may say the milestone was already sent, so an unreadable
+    // one neither counts nor sends this session; the next launch reads again.
     console.warn('[dictation-milestone] read failed', error);
+    state = { words: 0, status: 'suppressed', recentCaptureIds: [] };
   }
-  state ??= { words: 0, status: 'counting', recentCaptureIds: [] };
   return state;
 }
 
@@ -142,8 +151,16 @@ export function flushDictationMilestone(): Promise<void> {
 
 async function sendPending(): Promise<void> {
   const current = readState();
-  // Android has no tracking prompt yet, so nothing is sent there until it asks.
-  if (current.status !== 'pending' || !current.crossing || Platform.OS !== 'ios') return;
+  // Only after an explicit tracking Allow; Android has no tracking prompt yet,
+  // so nothing is sent there until it asks.
+  if (
+    current.status !== 'pending' ||
+    !current.crossing ||
+    Platform.OS !== 'ios' ||
+    getAppsFlyerAttributionConsent() !== 'granted'
+  ) {
+    return;
+  }
   const delivered = await logAppsFlyerEventConfirmed(
     EVENT_NAME,
     await eventValues(current.crossing),
