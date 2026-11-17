@@ -33,6 +33,7 @@ const DEV_KEY = process.env.EXPO_PUBLIC_APPSFLYER_DEV_KEY?.trim();
 const IOS_APP_ID = '6763804420';
 const MAX_PENDING_EVENTS = 20;
 const REVENUE_ID_LOOKUP_TIMEOUT_MS = 2_000;
+const CONFIRMED_EVENT_TIMEOUT_MS = 15_000;
 
 let didSetUp = false;
 let didInit = false;
@@ -382,6 +383,37 @@ export function logAppsFlyerEvent(
   }
 
   sendEventWhenReady(eventName, eventValues);
+}
+
+// A once-only milestone the caller keeps until delivery is confirmed: true only
+// once AppsFlyer's server accepted the event. Never queues, so a false result
+// means "send again later" and an unsent milestone survives a relaunch.
+export async function logAppsFlyerEventConfirmed(
+  eventName: string,
+  eventValues: Record<string, unknown> = {},
+): Promise<boolean> {
+  const readiness = sdkReady;
+  if (!DEV_KEY || !didInit || !didStartCurrentSession || !readiness || !collectionAllowed()) {
+    return false;
+  }
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const ready = await readiness;
+    if (!ready || readiness !== sdkReady || !collectionAllowed()) return false;
+    return await Promise.race([
+      invokeSdk(() => getAppsFlyer().logEvent({ eventName, eventValues, awaitResponse: true })).then(
+        (): boolean => true,
+      ),
+      new Promise<boolean>((resolve) => {
+        timeout = setTimeout(() => resolve(false), CONFIRMED_EVENT_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (error) {
+    warn(`failed to confirm ${eventName}`)(error);
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function logTutorialCompletion({

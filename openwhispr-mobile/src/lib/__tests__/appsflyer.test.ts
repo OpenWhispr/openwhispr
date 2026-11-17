@@ -1039,3 +1039,92 @@ it('keeps the af_subscribe client event on Android', async () => {
   }
   expect(mockLogEvent).toHaveBeenCalledWith(expect.objectContaining({ eventName: 'af_subscribe' }));
 });
+
+describe('AppsFlyer confirmed events', () => {
+  it('sends with awaitResponse and resolves true once AppsFlyer accepts', async () => {
+    const appsFlyer = await loadStartedAppsFlyer();
+
+    await expect(
+      appsFlyer.logAppsFlyerEventConfirmed('dictated_200_words', { input_source: 'keyboard' }),
+    ).resolves.toBe(true);
+    expect(mockLogEvent).toHaveBeenCalledWith({
+      eventName: 'dictated_200_words',
+      eventValues: { input_source: 'keyboard' },
+      awaitResponse: true,
+    });
+  });
+
+  it('returns false without touching the SDK before the session starts', async () => {
+    const appsFlyer = await loadInitializedAppsFlyer();
+
+    await expect(appsFlyer.logAppsFlyerEventConfirmed('dictated_200_words')).resolves.toBe(false);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+  });
+
+  it('returns false while Usage Analytics is unknown or off', async () => {
+    const unknown = loadAppsFlyer();
+    unknown.initAppsFlyer();
+    await expect(unknown.logAppsFlyerEventConfirmed('dictated_200_words')).resolves.toBe(false);
+
+    const appsFlyer = await loadStartedAppsFlyer();
+    setConfigState({
+      config: { defaultMode: 'cloud', usageAnalyticsEnabled: false },
+      isLoading: false,
+    });
+    await expect(appsFlyer.logAppsFlyerEventConfirmed('dictated_200_words')).resolves.toBe(false);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+  });
+
+  it('returns false when tracking was not allowed', async () => {
+    mockGetTrackingAuthorizationStatus.mockResolvedValue('denied');
+    const appsFlyer = await loadStartedAppsFlyer();
+
+    await expect(appsFlyer.logAppsFlyerEventConfirmed('dictated_200_words')).resolves.toBe(false);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+  });
+
+  it('returns false when AppsFlyer rejects the send', async () => {
+    const appsFlyer = await loadStartedAppsFlyer();
+    mockLogEvent.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(appsFlyer.logAppsFlyerEventConfirmed('dictated_200_words')).resolves.toBe(false);
+    expect(console.warn).toHaveBeenCalledWith(
+      '[appsflyer] failed to confirm dictated_200_words',
+      expect.objectContaining({ message: 'offline' }),
+    );
+  });
+
+  it('returns false when the send is not confirmed in time', async () => {
+    const appsFlyer = await loadStartedAppsFlyer();
+    mockLogEvent.mockReturnValueOnce(new Promise<void>(() => undefined));
+    jest.useFakeTimers();
+    try {
+      const result = appsFlyer.logAppsFlyerEventConfirmed('dictated_200_words');
+      await jest.advanceTimersByTimeAsync(15_000);
+      await expect(result).resolves.toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('returns false when the SDK is paused while the send waits for readiness', async () => {
+    const appsFlyer = await loadStartedAppsFlyer();
+    const status = deferred<TrackingAuthorizationStatus>();
+    mockGetTrackingAuthorizationStatus.mockReturnValueOnce(status.promise);
+    const refresh = appsFlyer.refreshAppsFlyerTrackingAuthorization();
+
+    await expect(appsFlyer.logAppsFlyerEventConfirmed('dictated_200_words')).resolves.toBe(false);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+    status.resolve('authorized');
+    await refresh;
+  });
+
+  it('returns false and does nothing when the dev key is missing', async () => {
+    delete process.env.EXPO_PUBLIC_APPSFLYER_DEV_KEY;
+    const appsFlyer = loadAppsFlyer();
+    appsFlyer.initAppsFlyer();
+
+    await expect(appsFlyer.logAppsFlyerEventConfirmed('dictated_200_words')).resolves.toBe(false);
+    expect(mockLogEvent).not.toHaveBeenCalled();
+  });
+});
