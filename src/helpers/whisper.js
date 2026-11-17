@@ -120,6 +120,12 @@ class WhisperManager {
     // Server manager for HTTP-based transcription
     this.serverManager = new WhisperServerManager();
     this.currentServerModel = null;
+    // An idle-unloaded server is gone on purpose: a wake from sleep must not
+    // load it back onto the GPU (onWakeFromSleep keys off currentServerModel).
+    // The next dictation starts it again and sets the model.
+    this.serverManager.on("idle-stop", () => {
+      this.currentServerModel = null;
+    });
     this.cachedVadModelPath = undefined;
     this._transcribing = false;
     this._rewarmInFlight = false;
@@ -468,6 +474,23 @@ class WhisperManager {
   async stopServer() {
     await this.serverManager.stop();
     this.currentServerModel = null;
+  }
+
+  // A dictation that starts while the server is down (idle unload, a failed or
+  // skipped pre-warm) starts it in the background, so the cold start runs while
+  // the user speaks rather than after the recording stops. The last start options
+  // (VAD, threads) are replayed so the transcription's own start is a no-op; GPU
+  // flags are re-resolved like any start. A running or starting server is left alone.
+  async warmForDictation(modelName) {
+    const sm = this.serverManager;
+    if (!modelName || sm.isRemote || sm.ready || sm.startupPromise) {
+      return { success: true, skipped: true };
+    }
+    debugLogger.info("Warming whisper-server for a starting dictation", { model: modelName });
+    return this.startServer(modelName, {
+      ...sm.lastStartOptions,
+      ...this.resolveGpuStartOptions(),
+    });
   }
 
   async onWakeFromSleep() {

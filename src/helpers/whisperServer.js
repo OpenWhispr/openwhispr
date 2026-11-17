@@ -34,6 +34,9 @@ const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const PROCESS_EXIT_WAIT_MS = 2000;
 const PROCESS_EXIT_POLL_INTERVAL_MS = 50;
+// With "unload when idle" on, a local server with no request for this long is
+// stopped so its model leaves VRAM/RAM and a laptop dGPU can power down.
+const IDLE_UNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_WHISPER_THREADS = 4;
 const MAX_AUTO_WHISPER_THREADS = 12;
 const MAX_MANUAL_WHISPER_THREADS = 64;
@@ -322,6 +325,10 @@ class WhisperServerManager extends EventEmitter {
     // Output and exit of the last spawned server, read when a GPU server that
     // started fine dies mid-transcription (_fallbackAndRetry). See #1736.
     this._lastProcessInfo = null;
+    // Off by default: the model stays resident between dictations (#766).
+    this.unloadWhenIdle = false;
+    this.idleTimer = null;
+    this._activeTranscriptions = 0;
   }
 
   getFFmpegPath() {
@@ -552,6 +559,7 @@ class WhisperServerManager extends EventEmitter {
       this.threadSignature === nextThreadSignature &&
       (this.gpuSignature === nextGpuSignature || this.gpuFallbackActive)
     ) {
+      this.resetIdleTimer();
       return;
     }
 
@@ -569,6 +577,46 @@ class WhisperServerManager extends EventEmitter {
     } finally {
       this.startupPromise = null;
     }
+    this.resetIdleTimer();
+  }
+
+  // The "Unload transcription model when idle" setting. Every window resends it,
+  // so only a change may touch the timer.
+  setUnloadWhenIdle(enabled) {
+    if (this.unloadWhenIdle === enabled) return;
+    this.unloadWhenIdle = enabled;
+    if (!enabled) this.clearIdleTimer();
+    // A start in progress arms the timer itself once the server is ready.
+    else if (!this.startupPromise) this.resetIdleTimer();
+  }
+
+  clearIdleTimer() {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  resetIdleTimer() {
+    this.clearIdleTimer();
+    if (!this.unloadWhenIdle || this.isRemote || !this.process || this._activeTranscriptions > 0)
+      return;
+    const timer = setTimeout(() => {
+      if (this.idleTimer !== timer) return;
+      this.idleTimer = null;
+      if (this._activeTranscriptions > 0 || this.startupPromise) return;
+      debugLogger.info("whisper-server idle timeout reached, stopping to free GPU/RAM", {
+        timeoutMs: IDLE_UNLOAD_TIMEOUT_MS,
+        model: this.modelPath ? path.basename(this.modelPath) : null,
+      });
+      this.emit("idle-stop");
+      this.stop().catch((error) => {
+        debugLogger.warn("Failed to stop idle whisper-server", { error: error.message });
+      });
+    }, IDLE_UNLOAD_TIMEOUT_MS);
+    // Freeing an idle server is housekeeping; it must never hold the process open.
+    timer.unref?.();
+    this.idleTimer = timer;
   }
 
   async _doStart(modelPath, options = {}) {
@@ -915,6 +963,18 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async transcribe(audioBuffer, options = {}) {
+    // No idle stop while a request runs; the next one counts from its end.
+    this._activeTranscriptions += 1;
+    this.clearIdleTimer();
+    try {
+      return await this._transcribeTracked(audioBuffer, options);
+    } finally {
+      this._activeTranscriptions -= 1;
+      this.resetIdleTimer();
+    }
+  }
+
+  async _transcribeTracked(audioBuffer, options = {}) {
     // Nothing to authorize once stopped, which clears the model: that's the
     // ordinary not-running error, not a refusal of a model nobody named.
     if (this.isRemote || !this.ready || !this.process)
@@ -1260,6 +1320,7 @@ class WhisperServerManager extends EventEmitter {
 
   async stop() {
     this._stopRequested = true;
+    this.clearIdleTimer();
     this.gpuFallbackActive = false;
     this.activeGpuBackend = null;
     this.stopHealthCheck();
@@ -1331,6 +1392,7 @@ class WhisperServerManager extends EventEmitter {
 }
 
 module.exports = WhisperServerManager;
+module.exports.IDLE_UNLOAD_TIMEOUT_MS = IDLE_UNLOAD_TIMEOUT_MS;
 module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
 module.exports.INFERENCE_DECODER_FIELDS = INFERENCE_DECODER_FIELDS;
 module.exports.parseVulkanDevices = parseVulkanDevices;

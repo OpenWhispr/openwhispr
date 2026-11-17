@@ -7,6 +7,7 @@ import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check, CircleAlert } from "./icons";
 import { ProviderIcon } from "./ui/ProviderIcon";
+import { Toggle } from "./ui/toggle";
 import { LocalModelPolicyNotice } from "./ui/LocalModelPolicyNotice";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -486,6 +487,12 @@ export default function TranscriptionModelPicker({
   const { t } = useTranslation();
   const switchCloudTranscriptionProvider = useSettingsStore(
     (s) => s.switchCloudTranscriptionProvider
+  );
+  const unloadTranscriptionModelWhenIdle = useSettingsStore(
+    (s) => s.unloadTranscriptionModelWhenIdle
+  );
+  const setUnloadTranscriptionModelWhenIdle = useSettingsStore(
+    (s) => s.setUnloadTranscriptionModelWhenIdle
   );
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
   const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
@@ -1888,6 +1895,23 @@ export default function TranscriptionModelPicker({
             {internalLocalProvider === "whisper" && renderLocalModels()}
             {usesParakeetManager(internalLocalProvider) && renderParakeetModels()}
           </div>
+
+          {internalLocalProvider === "whisper" && (
+            <div className="flex items-start justify-between gap-3 pt-1">
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-medium text-foreground">
+                  {t("transcription.unloadWhenIdle.label")}
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  {t("transcription.unloadWhenIdle.help")}
+                </p>
+              </div>
+              <Toggle
+                checked={unloadTranscriptionModelWhenIdle}
+                onChange={setUnloadTranscriptionModelWhenIdle}
+              />
+            </div>
+          )}
         </>
       )}
 
