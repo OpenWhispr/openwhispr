@@ -22,7 +22,8 @@ function shapeRect(region, bounds) {
 // list restores the full window. Chromium keeps the region in window-relative
 // physical pixels through resizes and moves, so a resize leaves it covering the
 // wrong part of the window and a move to another display's scale leaves it the
-// wrong size. revalidate() repairs both after the window's bounds change.
+// wrong size. revalidate() repairs both after the window's bounds change, and
+// prepareResize() clears ahead of the app's own resizes.
 function createWin32WindowShape(win) {
   // The narrow shape and the window size it was measured for, or null while
   // the whole window is shown.
@@ -45,7 +46,12 @@ function createWin32WindowShape(win) {
 
   const set = (region) => {
     if (region === null) return clear();
-    if (!isValidWindowInputRegion(region)) throw new Error("Invalid input region");
+    if (!isValidWindowInputRegion(region)) {
+      // The renderer stops shaping after a failure, so leave the whole window
+      // rather than a shape the pill may outgrow.
+      clear();
+      throw new Error("Invalid input region");
+    }
     const bounds = win.getBounds();
     // A viewport that doesn't match the window was measured before a resize.
     if (
@@ -65,7 +71,13 @@ function createWin32WindowShape(win) {
     else clear();
   };
 
-  return { set, revalidate };
+  // revalidate() only runs once the window has its new size, so a resize the
+  // app makes clears a shape that won't fit before setBounds.
+  const prepareResize = (bounds) => {
+    if (shape && !fitsWindow(shape.width, shape.height, bounds)) clear();
+  };
+
+  return { set, revalidate, prepareResize };
 }
 
 module.exports = { createWin32WindowShape };

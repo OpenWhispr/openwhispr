@@ -48,11 +48,23 @@ test("the shape is clamped to the window", () => {
   assert.deepEqual(shapes, [[{ x: 0, y: 100, width: 208, height: 20 }]]);
 });
 
-test("an invalid region throws without touching the shape", () => {
+test("an invalid region restores the whole window and throws", () => {
   const { shape, shapes } = fakeShapedWindow();
+  shape.set(PILL);
   assert.throws(() => shape.set({ ...PILL, width: -1 }), /Invalid input region/);
   assert.throws(() => shape.set({ ...PILL, viewportWidth: 0 }), /Invalid input region/);
-  assert.deepEqual(shapes, []);
+  assert.deepEqual(shapes, [[PILL_RECT], []]);
+});
+
+test("a resize the app makes clears a shape before the window changes size", () => {
+  const { shape, shapes } = fakeShapedWindow();
+  shape.prepareResize({ x: 0, y: 0, width: 400, height: 500 });
+  shape.set(PILL);
+  shape.prepareResize({ x: 2000, y: 0, width: 209, height: 120 });
+  assert.deepEqual(shapes, [[PILL_RECT]]);
+  shape.prepareResize({ x: 0, y: 0, width: 400, height: 500 });
+  shape.prepareResize({ x: 0, y: 0, width: 400, height: 500 });
+  assert.deepEqual(shapes, [[PILL_RECT], []]);
 });
 
 test("bounds changes reapply the shape at the same size and restore the window at another", () => {

@@ -529,6 +529,13 @@ class WindowManager {
     }
   }
 
+  _setResizedMainWindowBounds(bounds) {
+    // A Windows shape measured at the old size would cover the wrong part of
+    // the resized window, or none of it, until the resize event clears it.
+    if (process.platform === "win32") this._win32MainWindowShape().prepareResize(bounds);
+    this.mainWindow.setBounds(bounds);
+  }
+
   async _performMainWindowResize(sizeKey, request) {
     // The queue can drain after the window is gone (quit, recreate); the
     // caller's guard ran before enqueueing.
@@ -595,7 +602,7 @@ class WindowManager {
         return { success: false, message: "Window not available" };
       }
       this._lastResizeBounds = restored;
-      this.mainWindow.setBounds(restored);
+      this._setResizedMainWindowBounds(restored);
       this._activeHorizontalDirection = null;
       this._notifyMainWindowHorizontalDirection();
       return { success: true, bounds: restored, changed: true };
@@ -669,7 +676,7 @@ class WindowManager {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return { success: false, message: "Window not available" };
     }
-    this.mainWindow.setBounds(newBounds);
+    this._setResizedMainWindowBounds(newBounds);
     this._lastResizeBounds = newBounds;
     if (sizeKey === "BASE") {
       this._activeHorizontalDirection = null;
@@ -1967,9 +1974,10 @@ class WindowManager {
 
     if (process.platform === "win32") {
       const win = this.mainWindow;
-      win.on("hide", () => this._win32MainWindowShape().set(null));
+      const shape = this._win32MainWindowShape();
+      win.on("hide", () => shape.set(null));
       for (const event of ["resize", "move"]) {
-        win.on(event, () => this._win32MainWindowShape().revalidate());
+        win.on(event, shape.revalidate);
       }
     }
 

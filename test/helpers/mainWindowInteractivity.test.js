@@ -187,6 +187,36 @@ test("Windows tells the renderer when the pill shows or hides and keeps the shap
   });
 });
 
+test("Windows clears a shape that won't fit before the app resizes the window", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await withPlatform("win32", async () => {
+    const win = fakePillWindow();
+    const calls = [];
+    const setBounds = win.setBounds;
+    win.setShape = (rects) => calls.push(["setShape", rects]);
+    win.setBounds = (bounds) => {
+      calls.push(["setBounds", bounds.width, bounds.height]);
+      setBounds(bounds);
+    };
+    const manager = Object.assign(Object.create(WindowManager.prototype), {
+      mainWindow: win,
+      dragManager: { cleanup: () => undefined },
+    });
+    manager.registerMainWindowEvents();
+    win.state.visible = true;
+    await manager.setMainWindowInputRegion(PILL_REGION);
+    manager._setResizedMainWindowBounds({ ...win.state.bounds, x: 40 });
+    manager._setResizedMainWindowBounds({ ...win.state.bounds, width: 400, height: 500 });
+    assert.deepEqual(calls, [
+      ["setShape", PILL_SHAPE],
+      ["setBounds", 208, 120],
+      ["setShape", PILL_SHAPE],
+      ["setShape", []],
+      ["setBounds", 400, 500],
+    ]);
+  });
+});
+
 test("Windows keeps the shape through the show nudge", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   await withPlatform("win32", async () => {

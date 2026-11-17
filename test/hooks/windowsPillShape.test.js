@@ -175,14 +175,28 @@ test("Windows gives a growing pill the whole window until it settles", async (t)
 test("Windows watches DOM changes and window resizes, and ignores changes inside the shape", async (t) => {
   const mounted = await mountPill(t);
   await mounted.frame(3);
-  for (const type of [undefined, "resize", "animationstart"]) {
+  // A DOM change is measured at once and then for three frames.
+  for (const [type, count] of [
+    [undefined, 4],
+    ["resize", 3],
+    ["animationstart", 3],
+  ]) {
     const before = mounted.measurements();
     await mounted.wake(type);
     await mounted.frame(3);
-    assert.equal(mounted.measurements() - before, 3, type ?? "mutation");
+    assert.equal(mounted.measurements() - before, count, type ?? "mutation");
   }
   assert.deepEqual(mounted.regions, [null, IDLE_SHAPE]);
   assert.equal(mounted.pendingFrames(), 0);
+});
+
+test("Windows restores the whole window before a DOM change paints", async (t) => {
+  const mounted = await mountPill(t);
+  await mounted.frame(3);
+  // The tooltip mounts at full opacity above the shape.
+  mounted.setRect(box(150, 46, 200, 108));
+  await mounted.wake();
+  assert.deepEqual(mounted.regions, [null, IDLE_SHAPE, null]);
 });
 
 test("Windows keeps the whole window while a resize mask carries the pill out of view", async (t) => {
@@ -232,6 +246,52 @@ test("Windows pauses while the window is hidden and resumes when main reports it
   await mounted.setVisible(true);
   await mounted.frame(3);
   assert.deepEqual(mounted.regions.slice(3), [
+    null,
+    { x: 86, y: 60, width: 122, height: 60, ...VIEWPORT },
+  ]);
+});
+
+test("Windows ignores a hidden reply from before the window was shown again", async (t) => {
+  const mounted = await mountPill(t);
+  await mounted.frame(3);
+  let replyHidden;
+  mounted.setRegionWriter(
+    () =>
+      new Promise((resolve) => {
+        replyHidden = () => resolve(false);
+      })
+  );
+  mounted.setRect(box(98, 72, 196, 108));
+  await mounted.tick();
+  mounted.setRegionWriter(async () => true);
+  await mounted.setVisible(true);
+  await React.act(async () => replyHidden());
+  await mounted.frame(3);
+  assert.deepEqual(mounted.regions.at(-1), {
+    x: 86,
+    y: 60,
+    width: 122,
+    height: 60,
+    ...VIEWPORT,
+  });
+});
+
+test("Windows stops shaping after main rejects a region, until the window shows again", async (t) => {
+  const mounted = await mountPill(t);
+  await mounted.frame(3);
+  mounted.setRegionWriter(() => Promise.reject(new Error("Invalid input region")));
+  await mounted.tick();
+  const rejected = mounted.regions.length;
+  mounted.setRect(box(98, 72, 196, 108));
+  await mounted.tick();
+  await mounted.frame(3);
+  assert.equal(mounted.regions.length, rejected);
+  assert.equal(mounted.pendingFrames(), 0);
+
+  mounted.setRegionWriter(async () => true);
+  await mounted.setVisible(true);
+  await mounted.frame(3);
+  assert.deepEqual(mounted.regions.slice(rejected), [
     null,
     { x: 86, y: 60, width: 122, height: 60, ...VIEWPORT },
   ]);

@@ -141,6 +141,13 @@ export function useWindowsPillShape({
       if (!frame) frame = requestAnimationFrame(onFrame);
     };
 
+    // A DOM change paints in the frame that commits it (a tooltip, a snapped
+    // grow), so measure before that paint, not a frame later.
+    const onMutation = (): void => {
+      sample(false);
+      watch();
+    };
+
     const stop = (): void => {
       generation += 1;
       clearInterval(timer);
@@ -161,7 +168,7 @@ export function useWindowsPillShape({
       }
       lastBox = null;
       moving = false;
-      observer = new MutationObserver(watch);
+      observer = new MutationObserver(onMutation);
       observer.observe(document.documentElement, {
         attributes: true,
         characterData: true,
