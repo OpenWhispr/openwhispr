@@ -225,6 +225,31 @@ test("never claims a teamspace note the account owns", async () => {
   assert.deepEqual(result, { claimed: 0, notOwned: 1 });
 });
 
+test("claims an owned note scoped to a whole workspace, as the notes pull files it", async () => {
+  const { checkStandInOwnership } = await load();
+  const { api, resolved } = makeApi([{ id: 1, cloud_id: "legacy" }]);
+  const result = await run(checkStandInOwnership, {
+    api,
+    get: async () =>
+      ownerAccess({
+        grants: [
+          {
+            id: "scope:workspace:w1",
+            principal: { type: "workspace", id: "w1" },
+            permission: "editor",
+            source: "workspace",
+            inherited: true,
+          },
+        ],
+      }),
+  });
+  assert.deepEqual(
+    resolved.map((r) => [r.noteId, r.owned]),
+    [[1, true]]
+  );
+  assert.deepEqual(result, { claimed: 1, notOwned: 0 });
+});
+
 test("asks nothing once the account has already changed", async () => {
   const { checkStandInOwnership } = await load();
   const { api, resolved } = makeApi([{ id: 1, cloud_id: "a" }]);

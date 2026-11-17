@@ -24,7 +24,8 @@ export interface StandInOwnershipResult {
 /**
  * The cloud's answer for this account: true/false, or null when it did not
  * say. A teamspace note counts as not owned, since the owner's team sync
- * brings it in.
+ * brings it in. An owned note scoped to a whole workspace (no teamspace) is
+ * claimed: the notes pull files any note without a teamspace in Private.
  */
 function ownershipFromAccess(access: NoteAccessState, accountId: string): boolean | null {
   switch (access?.my_permission) {
