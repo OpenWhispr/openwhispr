@@ -476,6 +476,10 @@ test("joining or leaving drops the leaderboards this session kept", async (t) =>
   const { context, store } = await loadStore(t, {
     cloudApiRequest: async () => participation(true),
   });
+  // The mounted board follows the participation answer itself: a forced re-read
+  // would flash a skeleton and race the write.
+  const invalidations = [];
+  t.after(cache.subscribeToInsightsCacheInvalidation((scope) => invalidations.push(scope)));
 
   cache.cacheLeaderboard("user_1", "board", { scope: { key: "workspace:1" } });
   await store.getState().join(context);
@@ -484,6 +488,7 @@ test("joining or leaving drops the leaderboards this session kept", async (t) =>
   cache.cacheLeaderboard("user_1", "board", { scope: { key: "workspace:1" } });
   await store.getState().leave(context);
   assert.equal(cache.readCachedLeaderboard("user_1", "board"), undefined);
+  assert.deepEqual(invalidations, []);
 });
 
 test("signing out drops the previous account's answer", async (t) => {

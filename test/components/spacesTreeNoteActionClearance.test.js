@@ -94,6 +94,10 @@ async function renderTree(t, direction) {
       "/ui/useToast": `
         export const useToast = () => ({ toast: () => "toast", dismiss: () => {} });
       `,
+      "/stores/deviceNotesStore": `
+        const state = { folders: [], notes: [], viewNoteId: null, load: async () => {}, startListening: () => () => {} };
+        export const useDeviceNotesStore = Object.assign((selector) => selector(state), { getState: () => state });
+      `,
       "/stores/settingsStore": `
         export const useSettingsStore = (selector) => selector({ noteFilesEnabled: true });
       `,
@@ -105,7 +109,7 @@ async function renderTree(t, direction) {
       "/lib/spacePermissions": `
         export const canChangeSpaceNoteScope = () => true;
         export const canDeleteSpaceNote = () => true;
-        export const canMoveBetweenSpaces = () => true;
+        export const spaceTransferAction = () => "move";
         export const canMoveOrDeleteSpaceFolder = () => true;
       `,
       "/lib/capabilities": `

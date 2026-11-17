@@ -194,7 +194,8 @@ const SELECTION = { provider: "whisper", modelId: "base", accountId: "first" };
 for (const unresolved of [
   { status: "loading", accountId: "first", authGeneration: 5 },
   { status: "error", accountId: "first", authGeneration: 5 },
-  // suspendPolicy and a relaunch before the first fetch both blank the account.
+  // A verdict loading before the session names its account, and a relaunch
+  // before the first read, both blank the account.
   { status: "loading", accountId: null, authGeneration: null },
   { status: "idle", accountId: null, authGeneration: null },
 ]) {

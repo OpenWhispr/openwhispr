@@ -15,6 +15,24 @@ function createHandler(state, proxyFetch) {
   });
 }
 
+test("migration snapshot requests bypass the HTTP cache without changing ordinary requests", async () => {
+  const state = { current: { token: "token-a", generation: 1 } };
+  const options = [];
+  const handler = createHandler(state, async (_url, init) => {
+    options.push(init);
+    return new Response("{}");
+  });
+  for (const cache of [undefined, "no-store"]) {
+    assert.equal(
+      (await handler({ method: "GET", path: "/api/notes/list", expectedAuthGeneration: 1, cache }))
+        .success,
+      true
+    );
+  }
+  assert.equal(options[0].cache, undefined);
+  assert.equal(options[1].cache, "no-store");
+});
+
 test("an unvalidated or stale generation never reaches the network", async () => {
   const state = { current: { token: "token-b", generation: 2 } };
   let fetchCalls = 0;
@@ -142,6 +160,46 @@ test("a stable authenticated request is bearer-only and returns parsed data", as
   });
 });
 
+test("every notes and folders request names the client's capabilities", async () => {
+  const state = { current: { token: "token-a", generation: 1 } };
+  const sent = [];
+  const handler = createHandler(state, async (url, init) => {
+    sent.push([url, init.headers["x-openwhispr-capabilities"]]);
+    return new Response("{}");
+  });
+  const routes = [
+    ["GET", "/api/notes/list"],
+    ["GET", "/api/folders/list"],
+    ["POST", "/api/notes/batch-create"],
+    ["PATCH", "/api/notes/update"],
+    ["POST", "/api/folders/batch-create"],
+    ["PATCH", "/api/folders/update"],
+    ["POST", "/api/notes/create"],
+    ["POST", "/api/notes/search"],
+    ["GET", "/api/notes/list?limit=50&since=2026-01-01T00%3A00%3A00.000Z&scope=all&since_id=n1"],
+    ["GET", "/api/notes/list?limit=50&before=2026-01-01T00%3A00%3A00.000Z&before_id=n1"],
+    ["GET", "/api/folders/list?since=2026-01-01T00%3A00%3A00.000Z"],
+    ["POST", "/api/folders/create"],
+    ["DELETE", "/api/notes/delete"],
+    ["DELETE", "/api/notes/delete-all"],
+    ["DELETE", "/api/folders/delete"],
+    ["GET", "/api/notes/cloud-note/share"],
+    ["GET", "/api/notes/cloud-note/access"],
+  ];
+  for (const [method, path] of routes) {
+    await handler({
+      method,
+      path,
+      body: method === "GET" ? undefined : {},
+      expectedAuthGeneration: 1,
+    });
+  }
+  assert.equal(sent.length, routes.length);
+  for (const [, capabilities] of sent) {
+    assert.ok(capabilities.split(",").includes("private-workspace-placement"));
+  }
+});
+
 test("public requests carry neither bearer nor cookies", async () => {
   const state = { current: { token: "token-a", generation: 21 } };
   const handler = createHandler(state, async (_url, options) => {
@@ -244,4 +302,33 @@ test("a 400 keeps its status with or without a code, so callers can tell it from
   );
   assert.deepEqual([uncoded.status, uncoded.code], [400, undefined]);
   assert.equal(uncoded.success, false);
+});
+
+test("a response's Date header reaches the renderer, answered or refused", async () => {
+  const state = { current: { token: "token-a", generation: 3 } };
+  const date = "Tue, 10 Nov 2026 12:00:00 GMT";
+  const responses = [
+    new Response(JSON.stringify({ notes: [] }), { headers: { date } }),
+    new Response(
+      JSON.stringify({ error: "Note was modified", code: "note_version_conflict", data: {} }),
+      { status: 409, headers: { date } }
+    ),
+  ];
+  const handler = createHandler(state, async () => responses.shift());
+
+  const answered = await handler({
+    method: "GET",
+    path: "/api/notes/list",
+    expectedAuthGeneration: 3,
+  });
+  const refused = await handler({
+    method: "PATCH",
+    path: "/api/notes/update",
+    body: { id: "note-a" },
+    expectedAuthGeneration: 3,
+  });
+
+  assert.equal(answered.serverDate, date);
+  assert.equal(refused.serverDate, date);
+  assert.equal(refused.code, "note_version_conflict");
 });

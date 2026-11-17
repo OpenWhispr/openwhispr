@@ -85,6 +85,11 @@ function isValidPolicyShape(policy) {
     (policy.requiredLocalModels === undefined ||
       (Array.isArray(policy.requiredLocalModels) &&
         policy.requiredLocalModels.every((item) => typeof item === "string"))) &&
+    (policy.updates === undefined ||
+      (policy.updates !== null &&
+        typeof policy.updates === "object" &&
+        !Array.isArray(policy.updates) &&
+        (policy.updates.mode === undefined || typeof policy.updates.mode === "string"))) &&
     (policy.minAppVersion === null || isCanonicalAppVersion(policy.minAppVersion))
   );
 }

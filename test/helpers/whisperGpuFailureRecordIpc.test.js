@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -40,6 +41,7 @@ const electronStub = {
         isDestroyed: () => false,
         webContents: {
           send: (channel, data) =>
+            channel !== "effective-policy-changed" &&
             broadcasts.push({ window, channel, data, failed: process.env.WHISPER_GPU_FAILED }),
         },
       }));
@@ -166,7 +168,7 @@ function createHandlers({ downloadError = null } = {}) {
   const context = new Proxy(target, {
     get: (value, property) => (property in value ? value[property] : anything()),
   });
-  IPCHandlers.prototype.setupHandlers.call(context);
+  IPCHandlers.prototype.setupHandlers.call(withDevicePolicy(context));
   context._attachWhisperServerListeners(serverManager);
   const invoke = (channel) => handlers.get(channel)({ sender: { isDestroyed: () => true } });
   return { serverManager, invoke, envWrites };

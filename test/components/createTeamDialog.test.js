@@ -308,6 +308,20 @@ test("a new address says what it costs before the team is made, and Create still
   assert.equal(createButton().disabled, false);
 });
 
+test("Create reads as not ready while People holds text that isn't a chip yet", async (t) => {
+  await mount(t);
+  await type(nameInput(), "Sales");
+  assert.ok(!createButton().className.includes("opacity-60"));
+
+  await type(peopleInput(), "Eth");
+  assert.ok(createButton().className.includes("opacity-60"));
+  // Still pressable: the press stages what was typed.
+  assert.equal(createButton().disabled, false);
+
+  await pickPerson("Ethan");
+  assert.ok(!createButton().className.includes("opacity-60"));
+});
+
 test("an empty name says so and sends nothing", async (t) => {
   const { calls } = await mount(t);
   assert.match(text(dialog()), /Create team A shortcut for adding several people at once\./);

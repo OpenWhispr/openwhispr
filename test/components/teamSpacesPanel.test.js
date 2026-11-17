@@ -215,7 +215,7 @@ test("the assigned list shows the team's teamspaces", async (t) => {
     ["📞", "🔧"]
   );
   assert.equal(field().getAttribute("placeholder"), "Find teamspaces to add");
-  assert.ok(buttonNamed("Add teamspaces"));
+  assert.ok(buttonNamed("Add to teamspace"));
 });
 
 test("only teamspaces the caller administers are offered", async (t) => {
@@ -238,7 +238,7 @@ test("someone who administers none reads the list", async (t) => {
 
   assert.deepEqual(rows(), ["Customer Calls"]);
   assert.equal(field(), null);
-  assert.equal(buttonNamed("Add teamspaces"), undefined);
+  assert.equal(buttonNamed("Add to teamspace"), undefined);
 });
 
 test("no teamspaces at all offers Create with create_spaces", async (t) => {
@@ -297,7 +297,7 @@ test("Add assigns each teamspace in one call, clears, reloads and tells the tabl
   await openPicker();
   await choose("Planning");
   await choose("Product");
-  await ui.click(buttonNamed("Add teamspaces"));
+  await ui.click(buttonNamed("Add to teamspace"));
   await ui.settle();
 
   assert.deepEqual(calls[0], ["assign", "t1", ["s3", "s4"]]);
@@ -306,6 +306,18 @@ test("Add assigns each teamspace in one call, clears, reloads and tells the tabl
   assert.ok(calls.some(([name]) => name === "reload"));
   assert.deepEqual(events, [["changed"]]);
   assert.equal(field().value, "");
+});
+
+test("after Add the field takes focus back with its list closed", async (t) => {
+  await mount(t, { spaces: SPACES });
+  await openPicker();
+  await choose("Planning");
+  await ui.click(buttonNamed("Add to teamspace"));
+  await ui.settle();
+
+  // Product and Other Team Only are still offered, so the field stays.
+  assert.equal(doc().activeElement, field());
+  assert.equal(field().getAttribute("aria-expanded"), "false");
 });
 
 test("all failed keeps the selections", async (t) => {
@@ -318,14 +330,14 @@ test("all failed keeps the selections", async (t) => {
   await openPicker();
   await choose("Planning");
   await choose("Product");
-  await ui.click(buttonNamed("Add teamspaces"));
+  await ui.click(buttonNamed("Add to teamspace"));
   await ui.settle();
 
   // Inline while the panel is there, not a second time as a toast.
   assert.deepEqual(toasts(), []);
   assert.match(panelText(), /Couldn't add Sales\. Your selections are kept\. Try again\./);
   assert.match(panelText(), /2 teamspaces selected/);
-  assert.ok(buttonNamed("Add teamspaces"));
+  assert.ok(buttonNamed("Add to teamspace"));
   assert.deepEqual(events, []);
 });
 
@@ -342,7 +354,7 @@ test("some failed keeps only those and names them", async (t) => {
   await openPicker();
   await choose("Planning");
   await choose("Product");
-  await ui.click(buttonNamed("Add teamspaces"));
+  await ui.click(buttonNamed("Add to teamspace"));
   await ui.settle();
 
   assert.deepEqual(toasts(), []);
@@ -353,7 +365,7 @@ test("some failed keeps only those and names them", async (t) => {
   assert.equal(field().value, "Product");
 
   // Try again sends only what failed.
-  await ui.click(buttonNamed("Add teamspaces"));
+  await ui.click(buttonNamed("Add to teamspace"));
   await ui.settle();
   assert.deepEqual(calls.filter(([name]) => name === "assign").at(-1), ["assign", "t1", ["s4"]]);
 });
@@ -370,7 +382,7 @@ test("a team that is gone is reported and closes the dialog", async (t) => {
   });
   await openPicker();
   await choose("Planning");
-  await ui.click(buttonNamed("Add teamspaces"));
+  await ui.click(buttonNamed("Add to teamspace"));
   await ui.settle();
 
   assert.deepEqual(titles(toasts()), ["Sales no longer exists."]);
@@ -389,7 +401,7 @@ test("losing space admin is worded as that, not as a connection problem", async 
   });
   await openPicker();
   await choose("Planning");
-  await ui.click(buttonNamed("Add teamspaces"));
+  await ui.click(buttonNamed("Add to teamspace"));
   await ui.settle();
 
   assert.deepEqual(toasts(), []);
@@ -415,7 +427,7 @@ test("an answer that lands after the tab closed is still reported, and closes no
   });
   await openPicker();
   await choose("Planning");
-  await ui.click(buttonNamed("Add teamspaces"));
+  await ui.click(buttonNamed("Add to teamspace"));
   await unmount();
   release();
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -458,7 +470,7 @@ test("a failed directory read offers Try again", async (t) => {
 const addPlanning = async () => {
   await openPicker();
   await choose("Planning");
-  await ui.click(buttonNamed("Add teamspaces"));
+  await ui.click(buttonNamed("Add to teamspace"));
 };
 
 test("a teamspace just added reads as assigned while the directory read is still out", async (t) => {

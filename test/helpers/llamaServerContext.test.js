@@ -763,21 +763,32 @@ function withPolicy(manager) {
 
 // runInference and pre-warm call start() inside their own operation for the same model.
 for (const nested of [false, true]) {
-  test(`revoking a model waiting behind another model's answer leaves that answer running${nested ? ", nested in an operation" : ""}`, async () => {
+  test(`revoking a model waiting behind another model's answer leaves that answer running${nested ? ", nested in an operation" : ""}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
     let answering = true;
-    const { manager, starts, stops } = makeRunningManager(() => (answering ? BUSY : IDLE));
+    const busyRead = Promise.withResolvers();
+    const { manager, starts, stops } = makeRunningManager(() => {
+      busyRead.resolve();
+      return answering ? BUSY : IDLE;
+    });
     const gate = withPolicy(manager);
     const start = () => manager.start("/models/other.gguf", { busyWaitMs: 60000 });
 
     const waiting = nested ? runLocalModelOperation(manager, "llm", OTHER_ID, start) : start();
-    await pause(300);
-    const revokedAt = Date.now();
+    const outcome = waiting.then(
+      () => "started",
+      (error) => error.code
+    );
+    await busyRead.promise;
+    await new Promise((resolve) => setImmediate(resolve));
     gate.update(llmPolicy([RUNNING_ID], 2));
     answering = false;
 
-    await assert.rejects(waiting, { code: "POLICY_MODEL_BLOCKED" });
-    assert.ok(Date.now() - revokedAt < 100, "the revoke, not the deadline, ended the wait");
-    await pause(300);
+    // Neither polling nor the deadline can end the wait while time is frozen.
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(await Promise.race([outcome, Promise.resolve("pending")]), "POLICY_MODEL_BLOCKED");
+    t.mock.timers.tick(60000);
+    await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(stops, []);
     assert.equal(starts.length, 0);
     assert.equal(manager.modelPath, "/models/running.gguf");

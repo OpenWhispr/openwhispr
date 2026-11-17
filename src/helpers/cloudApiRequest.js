@@ -108,6 +108,7 @@ function createCloudApiRequestHandler({
         headers,
         useSessionCookies: false,
       };
+      if (method === "GET" && opts.cache === "no-store") fetchOptions.cache = "no-store";
       if (opts.body !== undefined) {
         headers["Content-Type"] = "application/json";
         fetchOptions.body = JSON.stringify(opts.body);
@@ -152,6 +153,9 @@ function createCloudApiRequestHandler({
       const data = fence
         ? await fence.awaitBound(() => response.json().catch(() => null))
         : await response.json().catch(() => null);
+      // Sync stamps its pull cursors on the server's clock, read from here.
+      const serverDate = response.headers.get("date");
+      const dated = serverDate ? { serverDate } : {};
 
       if (!response.ok) {
         fence?.assertCurrent();
@@ -166,11 +170,12 @@ function createCloudApiRequestHandler({
             data?.data ??
             (data?.conflicts !== undefined ? { conflicts: data.conflicts } : undefined),
           minAppVersion: data?.minAppVersion ?? data?.data?.minAppVersion,
+          ...dated,
         };
       }
 
       fence?.assertCurrent();
-      return { success: true, data };
+      return { success: true, data, ...dated };
     } catch (error) {
       if (error instanceof AuthContextError) return authFailure(error, requestSent);
       logger?.error?.(

@@ -212,11 +212,18 @@
     "policyAccountChanged": "Your account changed, so this answer was stopped.",
     "policyTranscriptionRestricted": "Transcription is restricted by your organization.",
     "policyUnresolved": "Your organization's settings haven't loaded yet. Try again in a moment.",
+    "policyBlocked": "Your organization doesn't allow this on this device.",
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
     "managedConfigAmbiguous": "Your organization's managed setup is inconsistent. Contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
-    "resizePanel": "Resize panel"
+    "resizePanel": "Resize panel",
+    "managedDevice": "Managed device",
+    "managedDeviceAndWorkspace": "Managed device and workspace",
+    "deviceLocalOnly": "This device uses local processing only. Cloud features are unavailable, including for previously signed-in accounts.",
+    "deviceSignInRequired": "Your organization requires sign-in on this device.",
+    "devicePolicyInvalid": "The device policy could not be read or is invalid. Contact your administrator. OpenWhispr can't be used until the policy is corrected.",
+    "deviceWorkspaceUnavailable": "This device requires local processing, but the saved account's workspace policy is unavailable. Log out to continue without that account, or contact your administrator."
   },
   "onboarding": {
     "rehaul": {
@@ -655,7 +662,8 @@
   "controlPanel": {
     "updateRequiredByOrg": {
       "title": "Update required",
-      "description": "Your organization requires OpenWhispr {{version}} or newer. Please update the app."
+      "description": "Your organization requires OpenWhispr {{version}} or newer. Please update the app.",
+      "contactIT": "Your organization requires OpenWhispr {{version}} or newer. Contact IT to install an approved version."
     },
     "update": {
       "readyTitle": "Update ready to install",
@@ -1235,7 +1243,8 @@
       "failedUserCheck": "Failed to check user account",
       "generic": "Something went wrong. Please try again.",
       "invalidCredentials": "Invalid email or password",
-      "invalidEmail": "Enter a valid email address"
+      "invalidEmail": "Enter a valid email address",
+      "signInDisabledByDevice": "Sign-in is turned off on this device by your organization."
     },
     "getStarted": "Get Started",
     "legal": {
@@ -1752,13 +1761,7 @@
       "title": "Workspace",
       "description": "Collaborate with teammates, share notes, and manage workspace access in one place.",
       "empty": {
-        "title": "Create your first workspace",
-        "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
-      },
-      "personal": {
-        "title": "You're in Personal",
-        "description": "Choose a workspace to manage its settings."
       },
       "loadError": {
         "title": "Couldn't load workspaces",
@@ -1805,7 +1808,7 @@
         },
         "roleMenuLabel": "Change {{name}}'s role",
         "roleDescription": {
-          "member": "Can view and edit notes.",
+          "member": "Uses the workspace.",
           "admin": "Manages members, invites, teams, and settings."
         },
         "roleFailed": "Couldn't change {{name}}'s role. Check your connection and try again.",
@@ -1842,7 +1845,8 @@
           "resentNoEmailMany_one": "{{count}} invitation was updated, but its email couldn't be delivered and the old link no longer works. It's still selected, so you can resend it.",
           "resentNoEmailMany_other": "{{count}} invitations were updated, but the emails couldn't be delivered and the old links no longer work. They're still selected, so you can resend them.",
           "resendUnrenewable_one": "Couldn't renew {{count}} expired invitation. Cancel it and invite that person again.",
-          "resendUnrenewable_other": "Couldn't renew {{count}} expired invitations. Cancel them and invite those people again."
+          "resendUnrenewable_other": "Couldn't renew {{count}} expired invitations. Cancel them and invite those people again.",
+          "statusPending": "Pending"
         },
         "selection": {
           "count_one": "{{count}} selected",
@@ -1863,6 +1867,10 @@
           "invite": "Invite people",
           "createTeam": "Create team",
           "label": "More ways to add"
+        },
+        "roleMenu": {
+          "member": "Workspace Member",
+          "admin": "Workspace Admin"
         }
       },
       "teamspaces": {
@@ -1951,6 +1959,12 @@
           "roleMemberBody": "Can view and edit notes",
           "roleAdmin": "Teamspace Admin",
           "roleAdminBody": "Manages this teamspace and its assigned teams.",
+          "teamAccessMember": "Everyone is a member",
+          "teamAccessMemberBody": "Everyone on the team can view and edit notes.",
+          "teamAccessAdmin": "Team admins are admins",
+          "teamAccessAdminBody": "The team's admins also manage this teamspace. Everyone else on the team is a member.",
+          "teamAccessMemberShort": "Members",
+          "teamAccessAdminShort": "Team admins",
           "removeItem": "Remove from teamspace",
           "removeTitle": "Remove {{name}} from {{space}}?",
           "removeBody": "This removes {{name}}'s direct membership. Access through a team will remain. They'll stay in the workspace.",
@@ -2025,8 +2039,8 @@
           "leaveBodyLoses": "You'll lose access to {{space}} and its notes.",
           "leaveBodyAdmins": "Another admin will continue managing this teamspace.",
           "deleteNotAllowed": "You don't have permission to delete {{space}}.",
-          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to your Personal space.",
-          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to your Personal space."
+          "movedToPersonal_one": "{{count}} note that hadn't synced was moved to Private.",
+          "movedToPersonal_other": "{{count}} notes that hadn't synced were moved to Private."
         },
         "addPeople": {
           "loading": "Loading teamspaces…",
@@ -2210,7 +2224,7 @@
           "noSpacesBody": "A teamspace is a shared area for a team's notes. Add people or teams, and everyone in it can read and edit.",
           "placeholder": "Find teamspaces to add",
           "searchPlaceholder": "Find teamspaces",
-          "add": "Add teamspaces",
+          "add": "Add to teamspace",
           "adding": "Adding…",
           "selectedTitle_one": "{{count}} teamspace selected",
           "selectedTitle_other": "{{count}} teamspaces selected",
@@ -2279,6 +2293,7 @@
         "nextInvoice": "Next invoice",
         "manageStripe": "Manage in Stripe",
         "startSubscription": "Start subscription",
+        "provisionedPlan": "Set up by OpenWhispr. Contact sales to change the plan or seats.",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
@@ -2378,9 +2393,7 @@
         "invite": {
           "title_one": "Invite {{count}} guest to {{workspace}}",
           "title_other": "Invite {{count}} guests to {{workspace}}",
-          "description": "They'll get an email link to join {{workspace}}.",
-          "sent_one": "Sent {{count}} invite to join {{workspace}}",
-          "sent_other": "Sent {{count}} invites to join {{workspace}}"
+          "description": "They'll get an email link to join {{workspace}}."
         },
         "remove": {
           "titleOne": "Remove {{name}} from {{workspace}}?",
@@ -2561,6 +2574,9 @@
           "askOwner": "Ask {{name}} to upgrade your workspace."
         },
         "currentPlan": "Current plan",
+        "yourPersonalPlan": "Your personal plan",
+        "yourWorkspacePlan": "Your workspace's plan",
+        "manage": "Manage",
         "coveredByWorkspace": "Included with your workspace plan",
         "upgrade": "Upgrade",
         "downgrade": "Downgrade",
@@ -3016,7 +3032,14 @@
         "restarting": "Restarting...",
         "title": "Updates",
         "versionPlaceholder": "—",
-        "whatsNew": "What's new in v{{version}}"
+        "whatsNew": "What's new in v{{version}}",
+        "managedByOrganization": "Managed by your organization.",
+        "itManaged": "Your organization manages updates.",
+        "policyLoading": "Loading update settings…",
+        "policyUnavailable": "Update settings couldn’t be loaded. Check for updates to try again.",
+        "policyChanged": "Update policy changed. Check for updates again.",
+        "managedBadge": "Managed",
+        "stagedBeforePolicy": "An update was staged before this policy applied and may install when the app quits. Contact IT before quitting or restarting."
       },
       "translationHotkey": {
         "title": "Translation Hotkey",
@@ -3048,9 +3071,8 @@
     "privacy": {
       "cloudBackup": "Cloud backup",
       "cloudBackupDescription": "Back up your transcriptions and notes to the cloud for seamless access across devices.",
-      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting.",
+      "cloudBackupTeamCaveat": "Notes in teamspaces and notes you've shared always sync, regardless of this setting. Chats that use Private content stay on this device. Chats from earlier versions and chats restored from Backup are also excluded.",
       "cloudNotesMigration": "Backing up notes… {{done}} / {{total}}",
-      "cloudNotesMigrationDone": "All notes backed up",
       "description": "Control what data leaves your device. Everything is off by default.",
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
@@ -3612,10 +3634,13 @@
     }
   },
   "workspaces": {
+    "defaultName": "{{name}}'s workspace",
+    "defaultNameFallback": "My workspace",
     "switcher": {
       "workspaces": "Workspaces",
       "add": "Add workspace",
-      "invitePeople": "Invite people"
+      "invitePeople": "Invite people",
+      "unavailable": "Workspaces aren't available right now."
     },
     "create": {
       "title": "Create workspace",
@@ -3646,11 +3671,9 @@
       "seatCostMany_other": "If all are accepted, adds {{count}} seats to your plan · estimated prorated charge {{amount}}.",
       "seatCostManyUnpriced_one": "If all are accepted, adds {{count}} seat to your plan.",
       "seatCostManyUnpriced_other": "If all are accepted, adds {{count}} seats to your plan.",
-      "submitOne": "Send invite",
+      "submitOne": "Send invitation",
       "submit_one": "Send {{count}} invite",
       "submit_other": "Send {{count}} invites",
-      "submitting_one": "Inviting {{count}}…",
-      "submitting_other": "Inviting {{count}}…",
       "sentTitle_one": "{{count}} invitation sent",
       "sentTitle_other": "{{count}} invitations sent",
       "attachedTitle_one": "{{count}} invitation updated",
@@ -3693,7 +3716,7 @@
       },
       "roleDescription": {
         "admin": "Manages members, invites, teams, and settings.",
-        "member": "Can view and edit notes."
+        "member": "Uses the workspace."
       },
       "errors": {
         "invalid": "{{email}} isn't a valid email",
@@ -3707,7 +3730,8 @@
         "rateLimited": "Too many invitations right now. Try again later.",
         "requestFailed": "Couldn't invite {{email}}. Check your connection and try again.",
         "refused": "Couldn't invite {{email}}: {{reason}}"
-      }
+      },
+      "sending": "Inviting…"
     },
     "join": {
       "title": "Join your team",
@@ -3745,17 +3769,18 @@
     "exit": {
       "leave": {
         "title": "Leave {{name}}?",
-        "body": "You'll lose access to this workspace, its teams, and its teamspaces. A workspace admin can invite you back.",
+        "body": "You'll lose access to this workspace, its teams, and its teamspaces. The workspace Owner or an Admin can invite you back.",
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}}.",
         "failed": "Couldn't leave {{name}}. Check your connection and try again."
       },
       "left": {
         "title": "You left {{name}}"
       },
-      "chooseAnother": "Choose another workspace to continue.",
-      "chooseWorkspace": "Choose workspace",
+      "nowIn": "You're now in {{workspace}}.",
       "delete": {
         "title": "Delete {{name}}?",
-        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone."
+        "body": "This permanently deletes the workspace, its notes, files, teams, and teamspaces for everyone. This can't be undone.",
+        "privateNotes": "Your private notes in this workspace will move to {{workspace}}."
       },
       "deleting": {
         "title": "Deleting {{name}}…",
@@ -3775,9 +3800,9 @@
       "body": "They'll lose access to every teamspace and team in this workspace. You can invite them again anytime.",
       "confirm": "Remove",
       "removing": "Removing…",
-      "failed": "Couldn't confirm that {{name}} was removed. Check your connection and try again.",
       "notAllowed": "You no longer have permission to remove people from {{workspace}}.",
-      "alreadyRemoved": "{{name}} was already removed"
+      "alreadyRemoved": "{{name}} was already removed",
+      "failedTitle": "Couldn't remove {{name}}"
     },
     "removeMembers": {
       "title_one": "Remove {{count}} member from {{workspace}}?",
@@ -3785,9 +3810,7 @@
       "confirm_one": "Remove {{count}} member",
       "confirm_other": "Remove {{count}} members",
       "checking": "Checking…",
-      "failed_one": "Couldn't confirm that {{count}} member was removed. Check your connection and try again.",
-      "failed_other": "Couldn't confirm that {{count}} members were removed. Check your connection and try again.",
-      "body": "These people will lose access to every teamspace and team in this workspace. You can invite them again anytime.",
+      "body": "They'll lose access to every teamspace and team in this workspace. You can invite them again anytime.",
       "ownerOne": "{{name}} owns notes or teamspaces in this workspace.",
       "owners_one": "{{count}} of them owns notes or teamspaces.",
       "owners_other": "{{count}} of them own notes or teamspaces.",
@@ -3797,24 +3820,31 @@
       "directoryManagedOneOthers": "{{name}} is assigned by your identity provider. Remove them there, or untick them to remove the others.",
       "directoryManagedOthers_one": "{{count}} of them is assigned by your identity provider. Remove them there, or untick them to remove the others.",
       "directoryManagedOthers_other": "{{count}} of them are assigned by your identity provider. Remove them there, or untick them to remove the others.",
-      "transferLabel": "Transfer to",
-      "transferBody": "Their notes and teamspaces will move to the new owner. They'll lose access to this workspace.",
+      "transferLabel": "Reassign to",
       "transferBodyLimited": "Their notes and teamspaces will move to {{name}}, except notes in teamspaces {{name}} can't access, which stay in those teamspaces. They'll lose access to this workspace.",
       "you": "{{name}} (you)",
-      "transferConfirm": "Transfer and remove",
+      "transferConfirm": "Reassign and remove",
       "transferring": "Transferring…",
-      "transferFailed": "Couldn't confirm the transfer and removal. Check your connection and try again.",
+      "transferFailed": "Couldn't reassign content. No members were removed. Try again.",
+      "transferUnconfirmed": "Couldn't confirm the reassignment and removal. Check your connection and try again.",
       "invalidTarget": "{{name}} can't receive ownership anymore. Choose someone else.",
       "cannotRemoveOwner": "The workspace owner can't be removed.",
       "cannotRemoveSelf": "You can't remove yourself. Leave the workspace from General.",
       "done_one": "Removed {{count}} member",
       "done_other": "Removed {{count}} members",
-      "transferDone_one": "Moved their notes and teamspaces to {{name}} and removed {{count}} member.",
-      "transferDone_other": "Moved their notes and teamspaces to {{name}} and removed {{count}} members.",
       "transferPartial_one": "{{count}} note stayed in a teamspace {{name}} can't access. Everything else moved to them.",
       "transferPartial_other": "{{count}} notes stayed in teamspaces {{name}} can't access. Everything else moved to them.",
       "alreadyRemoved_one": "{{count}} member was already removed",
-      "alreadyRemoved_other": "{{count}} members were already removed"
+      "alreadyRemoved_other": "{{count}} members were already removed",
+      "failedBody": "Their workspace access is unchanged. Check your connection and try again.",
+      "unconfirmedTitle": "Couldn't confirm the removal",
+      "unconfirmedBody": "They may already have been removed. Check your connection and try again.",
+      "reassignBody": "Transfer their notes and assign a teamspace Admin before removing them.",
+      "ownersAll": "They own notes or manage teamspaces.",
+      "failedTitle_one": "Couldn't remove {{count}} member",
+      "failedTitle_other": "Couldn't remove {{count}} members",
+      "transferDone_one": "Reassigned content and teamspace Admin access to {{name}}. Removed {{count}} member.",
+      "transferDone_other": "Reassigned content and teamspace Admin access to {{name}}. Removed {{count}} members."
     },
     "cancelInvitation": {
       "title": "Cancel the invitation for {{email}}?",
@@ -3842,7 +3872,6 @@
       "body": "Choose an existing workspace member. You'll become an Admin after the transfer.",
       "newOwner": "New Owner",
       "placeholder": "Choose a workspace member",
-      "candidate": "{{name}} · {{role}}",
       "confirmTitle": "Transfer ownership to {{name}}?",
       "confirmBody": "{{name}} will become the Owner of {{workspace}}. You'll become an Admin.",
       "submit": "Transfer ownership",
@@ -3998,7 +4027,7 @@
       "defaultFolderImmutable": "Default folders cannot be changed.",
       "spaceNameRequired": "Enter a space name.",
       "spaceNotFound": "That space could not be found.",
-      "privateSpaceImmutable": "Your Personal space cannot be changed.",
+      "privateSpaceImmutable": "Private can't be changed.",
       "generic": "The change could not be completed. Please try again."
     },
     "sidebar": {
@@ -4007,10 +4036,10 @@
       "templatesAndActions": "Templates & Actions"
     },
     "spaces": {
-      "privateSpaces": "Private notes",
+      "privateSpaces": "Private",
       "teamSpaces": "Teamspaces",
-      "personal": "Personal",
-      "privateTooltip": "Only you can see your Personal space",
+      "personal": "Private",
+      "privateTooltip": "Only you can see the folders and notes here.",
       "newSpace": "New teamspace",
       "nameAndIconLabel": "Name and icon",
       "changeEmoji": "Change emoji",
@@ -4032,6 +4061,18 @@
       "noSpacesFound": "No spaces found",
       "spaceRoot": "Space root",
       "moveConfirm": "Move",
+      "copyToPrivate": "Copy to Private",
+      "moveToWorkspacePrivate": "Move to {{workspace}} › Private",
+      "workspacePrivate": "{{workspace}} › Private",
+      "confirmCopyTitle": "Copy to Private?",
+      "confirmCopy": "The note stays in {{space}}.",
+      "copiedToPrivate": "Copied to Private",
+      "couldNotCopyNote": "Couldn't copy note",
+      "openCopy": "Open",
+      "noteAlreadyInTeam": "“{{title}}” is already in {{space}}. Use Copy to Private to keep a private copy.",
+      "folderAlreadyInTeam": "“{{name}}” is already in {{space}}. Use Copy to Private on its notes to keep private copies.",
+      "workspacesLoading": "Your workspaces are still loading. Try again in a moment.",
+      "cantMoveIntoLegacy": "Notes can't move into {{space}}: it isn't part of a workspace.",
       "confirmMoveInTitle": "Move to {{space}}?",
       "confirmMoveIn": "Everyone in {{space}} will be able to view and edit this note. Notes can't be moved back out of a teamspace later.",
       "confirmMoveInFolder": "Everyone in {{space}} will be able to view and edit this folder and its notes. Folders and notes can't be moved back out of a teamspace later.",
@@ -4049,10 +4090,10 @@
       "noteCount_other": "{{count}} notes",
       "accessRevoked": "You no longer have access to {{space}}",
       "accessRevokedActiveNote": "You no longer have access to {{space}} — \"{{title}}\" is no longer available on this device",
-      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to your Personal space",
-      "updateDeniedNote": "You don't have permission to change “{{title}}” — your unsynced edits were saved as a copy in your Personal space",
+      "movedToPersonal": "You no longer have access to {{space}} — “{{title}}” was moved to Private",
+      "updateDeniedNote": "You don't have permission to change “{{title}}” — your unsynced edits were saved as a copy in Private",
       "deleteDeniedNote": "“{{title}}” wasn't deleted — only the note's owner or an admin can delete it",
-      "updateDeniedFolder": "You don't have permission to change “{{name}}” — your unsynced work was saved to your Personal space",
+      "updateDeniedFolder": "You don't have permission to change “{{name}}” — your unsynced work was saved to Private",
       "deleteDeniedFolder": "“{{name}}” wasn't deleted — only an admin can delete a space folder",
       "conflictBanner": "A newer version of this note exists.",
       "conflictRefresh": "Refresh",
@@ -4078,11 +4119,29 @@
         "loadError": "Couldn't load teams."
       }
     },
+    "deviceNotes": {
+      "title": "On this device",
+      "info": "These notes have not been assigned to an account. Move a note to keep it and edit.",
+      "infoLabel": "About notes on this device",
+      "moveNote": "Move to my Private",
+      "moveFolder": "Move folder to my Private",
+      "moveAll": "Move all to my Private",
+      "moveAllTo": "Move all to folder",
+      "moved": "Moved to your Private",
+      "movedCount_one": "Moved {{count}} note to your Private",
+      "movedCount_other": "Moved {{count}} notes to your Private",
+      "moveFailed": "Couldn't move this note",
+      "moveFolderFailed": "Couldn't move these notes",
+      "banner": "This note isn't assigned to an account yet.",
+      "notesHeading": "Notes",
+      "summaryHeading": "AI summary",
+      "transcriptHeading": "Transcript"
+    },
     "structureIntro": {
       "title": "Where your notes live",
       "description": "OpenWhispr separates private thoughts from shared work so the right people see the right notes.",
       "personal": {
-        "title": "Personal space",
+        "title": "Private",
         "description": "Only you can see the folders and notes here."
       },
       "workspace": {
@@ -4350,7 +4409,9 @@
       "addExisting": "Add existing",
       "addCount": "Add {{count}} notes",
       "noResults": "No matching notes",
-      "noNotesAvailable": "No other notes available"
+      "noNotesAvailable": "No other notes available",
+      "notAdded_one": "{{count}} note couldn't be added",
+      "notAdded_other": "{{count}} notes couldn't be added"
     },
     "context": {
       "moveToFolder": "Move to folder",
@@ -4628,6 +4689,8 @@
     "wordsReady_other": "{{count}} words ready",
     "promptLimitNotice": "Your dictionary is {{chars}} characters. Groq and Whisper models read only the last few hundred characters of it, so a shorter list works better there. Other models get the full list.",
     "openRouterIgnoredNotice": "OpenRouter doesn't pass your dictionary to its speech models, so these words won't guide transcription while it's selected for dictation.",
+    "localModelIgnoredNotice": "{{model}} can't use your dictionary, so these words won't guide transcription while it's selected for dictation. AI cleanup still applies them when it's on.",
+    "localModelHotwordsLimitNotice": "{{model}} uses up to {{limit}} dictionary entries as transcription hints. Personal entries come first, followed by entries from your teamspaces, then your workspace.",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
     "editWord": "Edit {{word}}",
@@ -4787,7 +4850,6 @@
       },
       "locked": {
         "noWorkspace": "Shared dictionaries are included with Business. Share your team's jargon, product names and acronyms with everyone.",
-        "chooseWorkspace": "You're in Personal. Switch to a workspace to use its shared words.",
         "upgradeAdmin": "Shared dictionaries are included with Business. Upgrade {{workspace}} so everyone gets the same words.",
         "upgradeMember": "Shared dictionaries are included with Business. Ask an admin to upgrade {{workspace}}.",
         "paused_one": "{{workspace}}'s {{count}} shared word is paused. Upgrade to Business to use it in dictation again.",
@@ -5040,8 +5102,6 @@
       "request_accessStatus": "Asking for access...",
       "look_at_screenName": "Look at screen",
       "look_at_screenStatus": "Looking at your screen...",
-      "look_at_screenSuccess": "Read the screen.",
-      "look_at_screenFailed": "The screen couldn't be read.",
       "request_api_keyName": "API key",
       "request_api_keyStatus": "Asking for an API key...",
       "open_settingsName": "Settings",
@@ -6326,6 +6386,7 @@
       "saveChanges": "Save Changes",
       "saved": "Tone & Style saved",
       "cleanupOff": "AI cleanup is off, so these tones aren't applied to your dictation. The assistant and chats still use them.",
+      "customPrompt": "You're using a custom cleanup prompt, so these tones aren't applied to your dictation. The assistant and chats still use them.",
       "turnOnCleanup": "Turn on AI cleanup",
       "enabled": "Tones & voices enabled",
       "enabledDescription": "AI cleanup, the assistant and chats use your tone for each kind of app. When this is off, they use the standard tone."
@@ -6426,5 +6487,16 @@
       "bootstrapMismatch": "The bootstrap file doesn't match your account, this workspace or its configured credentials.",
       "testLinkOtherWorkspace": "This test link is for a different workspace. Switch to that workspace and open the link again."
     }
+  },
+  "affiliate": {
+    "remove": "Remove creator link",
+    "haveLink": "Have a creator link?",
+    "label": "Creator link (optional)",
+    "placeholder": "Paste your creator’s link",
+    "saved": "Creator link saved.",
+    "checking": "Checking your link…",
+    "unavailable": "We couldn’t check your link. Try again, or clear the field to continue.",
+    "privacy": "Creator links are unavailable with your current tracking settings. Clear the field to continue.",
+    "review": "Your referral is saved for review."
   }
 }

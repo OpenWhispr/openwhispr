@@ -51,7 +51,7 @@ test("joining, leaving or deleting a workspace drops the kept leaderboards", () 
   const section = read("src/components/LeaderboardSection.tsx");
   const requestJoin = section.slice(section.indexOf("const requestJoin = async"));
   assert.ok(
-    requestJoin.indexOf("clearCachedLeaderboards();") <
+    requestJoin.indexOf("clearCachedLeaderboards({ revalidate: false });") <
       requestJoin.indexOf("setAccess((current) =>"),
     "a join request changes the access answer a reopened Insights would show"
   );

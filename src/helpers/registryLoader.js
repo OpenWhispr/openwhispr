@@ -53,7 +53,13 @@ function createRegistryLoader({
   trustedKeys,
   appVersion,
   applySnapshot,
-  fetch,
+  // The session the device network guard exempts, as model downloads use: a
+  // local-only device still needs the catalog of local models, and the first
+  // refresh can run before the device policy has been read.
+  fetch = (...args) =>
+    require("./downloadUtils")
+      .getAssetDownloadSession()
+      .fetch(...args),
   isEnabled = () => process.env.OPENWHISPR_MODEL_REGISTRY_MODE !== "bundled",
   onError = () => {},
   startupDelayMs = 5000,
