@@ -392,7 +392,7 @@ test("a stop whose line can't be written is written before the next recording st
 // One attempt: a stop that can't be written still drops the marker, so it never
 // holds up later recordings; the start line shows the recording didn't end cleanly.
 test("an interrupted stop the launch can't write is dropped, with a warning", async () => {
-  const blocked = path.join(userData, "not-a-folder");
+  const blocked = path.join(userData, "audit");
   fs.writeFileSync(blocked, "");
   fs.writeFileSync(
     marker(),
@@ -439,7 +439,7 @@ test("a quit closes a live recording as app-quit, and does nothing otherwise", a
 // Every user of a shared AuditLogPath can create files in it, so another user could
 // plant this user's daily file as a link to a file of theirs.
 test(
-  "a daily file planted as a symlink or hard link is refused, leaving its target untouched",
+  "a daily file planted as a symlink or hard link is refused, and its line goes to the default folder",
   { skip: process.platform === "win32" },
   async () => {
     const shared = path.join(userData, "shared");
@@ -456,6 +456,7 @@ test(
       assert.equal(fs.readFileSync(target, "utf8"), "original\n", plant.name);
       assert.equal(warnings.length, 1, plant.name);
     }
+    assert.equal(lines().length, 2);
   }
 );
 

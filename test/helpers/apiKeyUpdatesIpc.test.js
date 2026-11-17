@@ -1925,6 +1925,12 @@ test("meeting starts, stops and refusals reach the audit log with their source a
   await invoke("meeting-transcription-stop", "audit-1b", "app-quit");
   assert.equal((await start("audit-1c")).success, true);
   await invoke("meeting-transcription-stop", "audit-1c", "window-lost");
+  assert.equal((await start("audit-1d")).success, true);
+  target._stopMeetingForPolicy("accountChanged");
+  await invoke("meeting-transcription-stop", "audit-1d");
+  assert.equal((await start("audit-1e")).success, true);
+  target._stopMeetingForPolicy("workspaceChanged");
+  await invoke("meeting-transcription-stop", "audit-1e");
   assert.equal((await start("audit-2")).success, true);
   setWorkspacePolicy(REVOKED_MEETINGS);
   await invoke("meeting-transcription-stop", "audit-2");
@@ -1944,6 +1950,10 @@ test("meeting starts, stops and refusals reach the audit log with their source a
     ["stopped", { sessionId: "audit-1b", reason: null }],
     ["started", { sessionId: "audit-1c", noteId: 12, trigger: "record-button" }],
     ["stopped", { sessionId: "audit-1c", reason: null }],
+    ["started", { sessionId: "audit-1d", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-1d", reason: "account-change" }],
+    ["started", { sessionId: "audit-1e", noteId: 12, trigger: "record-button" }],
+    ["stopped", { sessionId: "audit-1e", reason: "account-change" }],
     ["started", { sessionId: "audit-2", noteId: 12, trigger: "record-button" }],
     ["stopped", { sessionId: "audit-2", reason: "policy" }],
     ["refused", { noteId: 12, trigger: "record-button", reason: disabled }],
