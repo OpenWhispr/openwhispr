@@ -148,6 +148,7 @@ function createDatabaseManager() {
   manager._registerKeyFolding();
   manager._initDeviceAccounts();
   manager._initWorkspaceScopes();
+  manager._initStandInOwnershipChecks();
   return { manager, sqlite };
 }
 
