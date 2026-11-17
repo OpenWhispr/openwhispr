@@ -47,7 +47,10 @@ test("a workspace list that failed to load retries when the app reconnects", asy
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-use-workspace-reconnect-",
     mockModules: {
-      "/useAuth": "export const useAuth = () => ({ isSignedIn: globalThis.__state.isSignedIn });",
+      "/useAuth": `export const useAuth = () => ({
+        isSignedIn: globalThis.__state.isSignedIn,
+        isOfflineAccount: globalThis.__state.isOfflineAccount,
+      });`,
       "/stores/workspaceStore": `
         export const useWorkspaceStore = (selector) => selector(globalThis.__state.store);
       `,
@@ -72,7 +75,12 @@ test("a workspace list that failed to load retries when the app reconnects", asy
     setActiveWorkspaceId: () => {},
   };
   const render = async (state) => {
-    globalThis.__state = { isSignedIn: true, ...state, store: { ...store, ...state.store } };
+    globalThis.__state = {
+      isSignedIn: true,
+      isOfflineAccount: false,
+      ...state,
+      store: { ...store, ...state.store },
+    };
     await React.act(async () => {
       root.render(React.createElement(Harness));
     });
@@ -100,4 +108,18 @@ test("a workspace list that failed to load retries when the app reconnects", asy
   await render({ isSignedIn: false });
   events.fire("online");
   assert.equal(refreshes, 3);
+
+  // A presented offline account cannot retry until the session validates again.
+  await render({ isOfflineAccount: true });
+  assert.equal(events.count("online"), 0);
+  assert.equal(events.count("focus"), 0);
+  events.fire("online");
+  events.fire("focus");
+  assert.equal(refreshes, 3);
+
+  // The same guard applies before the first list has loaded. Validation starts it.
+  await render({ isOfflineAccount: true, store: { loaded: false } });
+  assert.equal(refreshes, 3);
+  await render({ store: { loaded: false } });
+  assert.equal(refreshes, 4);
 });

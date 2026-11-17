@@ -206,6 +206,28 @@ function readWorkspaceListCache(
   }
 }
 
+/** Restore an offline account's list without attempting an authenticated request. */
+export function hydrateCachedWorkspaces(accountId: string): void {
+  if (
+    accountId !== usePolicyStore.getState().accountId ||
+    useWorkspaceStore.getState().workspaces.length > 0
+  ) {
+    return;
+  }
+  const cached = readWorkspaceListCache(accountId);
+  if (!cached) {
+    useWorkspaceStore.setState({ loaded: true, error: true });
+    return;
+  }
+  const defaultWorkspaceId = resolveDefaultWorkspaceId(cached);
+  useWorkspaceStore.setState({
+    workspaces: withDefaultFirst(cached, defaultWorkspaceId),
+    defaultWorkspaceId,
+    listAccountId: accountId,
+    loaded: true,
+  });
+}
+
 /**
  * The default workspace of the last list the signed-in account saw, for a window that loads no
  * list of its own (the dictation window). Null when there is no recent list, or it names none.
