@@ -80,4 +80,39 @@ class BubblePolicyTest {
     assertTrue(BubblePolicy.bars(0f, 0f).all { it >= 0.15f })
     assertTrue(bars.all { it in 0.15f..1f })
   }
+
+  @Test fun theReadyBubbleShrinksWhenIdleOrOverASearchFieldOnlyWhenThoseAreOn() {
+    fun shrunk(ready: Boolean = true, idle: Boolean = false, whenIdle: Boolean = true, search: Boolean = false, inSearch: Boolean = false) =
+      BubblePolicy.shrunk(ready, idle, whenIdle, search, inSearch)
+    assertFalse(shrunk())
+    assertTrue(shrunk(idle = true))
+    assertFalse(shrunk(idle = true, whenIdle = false))
+    assertTrue(shrunk(search = true, inSearch = true))
+    assertFalse(shrunk(search = true))
+    // Dictating, writing and results are always full size.
+    assertFalse(shrunk(ready = false, idle = true, search = true, inSearch = true))
+  }
+
+  @Test fun searchFieldsAreFoundByIdHintDescriptionOrSearchView() {
+    fun search(vararg labels: String?, classes: List<String?> = listOf("android.widget.EditText")) =
+      BubblePolicy.searchField(labels.toList(), classes)
+    assertTrue(search("com.app:id/search_src_text"))
+    assertTrue(search("com.app:id/editSearch"))
+    assertTrue(search("com.app:id/searchbox"))
+    assertTrue(search(null, "Search contacts"))
+    assertTrue(search("com.app:id/input", classes = listOf("android.widget.EditText", "androidx.appcompat.widget.SearchView")))
+    assertFalse(search("com.app:id/research_notes"))
+    assertFalse(search("com.app:id/message", "Type a message"))
+    assertFalse(search())
+  }
+
+  @Test fun appearanceIsClampedToWhatTheBubbleCanShow() {
+    assertEquals(0.8f, BubbleAppearance().alpha, 0f)
+    assertEquals(1f, BubbleAppearance().scale, 0f)
+    assertEquals(0.2f, BubbleAppearance(opacity = 0.05f).alpha, 0f)
+    assertEquals(1f, BubbleAppearance(opacity = 3f).alpha, 0f)
+    assertEquals(0.8f, BubbleAppearance(opacity = Float.NaN).alpha, 0f)
+    assertEquals(48 / 64f, BubbleAppearance(size = 10).scale, 0f)
+    assertEquals(88 / 64f, BubbleAppearance(size = 200).scale, 0f)
+  }
 }

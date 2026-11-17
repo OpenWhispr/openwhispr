@@ -3,7 +3,7 @@
   <string name="ow_insertion_description">A acessibilidade permite que o OpenWhispr leia o campo selecionado ao ditar e insira o resultado. Ele nunca envia mensagens nem lê campos de senha. Também verifica se há um campo de texto ativo, para mostrar a bolha apenas enquanto você digita.</string>
   <string name="ow_bubble_ready">OpenWhispr está pronto</string>
   <string name="ow_bubble_recording">OpenWhispr · Ouvindo…</string>
-  <string name="ow_bubble_notice">Toque para abrir. Desative o botão flutuante em Conta.</string>
+  <string name="ow_bubble_notice">Toque para abrir. Desative o botão flutuante em Configurações.</string>
   <string name="ow_bubble_channel">Mostrar botão flutuante</string>
   <string name="ow_audio_unreadable">Não foi possível ler este arquivo de áudio. Tente um arquivo WAV, MP3 ou M4A válido.</string>
   <string name="ow_meeting_notice">O áudio da reunião está sendo gravado.</string>

@@ -1,1 +1,1 @@
-export { default } from '@/android/PermissionsScreen';
+export { default } from '@/android/settings/PermissionsScreen';

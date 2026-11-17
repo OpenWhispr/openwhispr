@@ -35,6 +35,16 @@ jest.mock('../deviceCheck', () => ({
   deviceGuidance: () => 'deviceTestFirst',
   runLocalBenchmark: jest.fn(),
 }));
+jest.mock('../settings/ResultTimes', () => ({
+  ResultTimes: ({ times }: { times: Record<string, number> }) =>
+    require('react').createElement(
+      require('react-native').Text,
+      null,
+      Object.entries(times)
+        .map(([key, ms]) => `${key} ${ms}`)
+        .join(' '),
+    ),
+}));
 jest.mock('../ui', () => ({
   Page: ({ children }: any) => children,
   Card: ({ children }: any) => children,

@@ -95,6 +95,7 @@ jest.mock('@/android/ui', () => ({
   palette: {},
 }));
 jest.mock('@/hooks/useRevenueCatIdentity', () => ({ useRevenueCatIdentity: () => {} }));
+jest.mock('../settings/kit', () => ({ SettingsToastHost: () => null }));
 jest.mock('@/android/billing', () => ({ observeAndroidPurchaseUpdates: () => () => {} }));
 jest.mock('@/android/useBubblePipeline', () => ({ useBubblePipeline: () => {} }));
 jest.mock('expo-sqlite/localStorage/install', () => ({}));

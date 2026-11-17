@@ -165,6 +165,19 @@ class AndroidDictationModule : Module() {
         context.startForegroundService(Intent(context, DictationService::class.java).putExtra("size", size))
       } else context.stopService(Intent(context, DictationService::class.java))
     }
+    // Stored so the service has it after a restart, and applied live when the bubble is running.
+    Function("setAppearance") { options: Map<String, Any?> ->
+      val defaults = BubbleAppearance()
+      val value = BubbleAppearance(
+        size = (options["size"] as? Number)?.toInt() ?: defaults.size,
+        opacity = (options["opacity"] as? Number)?.toFloat() ?: defaults.opacity,
+        shrinkWhenIdle = options["shrinkWhenIdle"] as? Boolean ?: defaults.shrinkWhenIdle,
+        shrinkToDot = options["shrinkToDot"] as? Boolean ?: defaults.shrinkToDot,
+        shrinkInSearch = options["shrinkInSearch"] as? Boolean ?: defaults.shrinkInSearch,
+      ).let { it.copy(size = it.size.coerceIn(48, 88), opacity = it.alpha) }
+      DictationService.writeAppearance(context.getSharedPreferences(DictationService.PREFERENCES, android.content.Context.MODE_PRIVATE), value)
+      android.os.Handler(android.os.Looper.getMainLooper()).post { DictationService.instance?.applyAppearance(value) }
+    }
     AsyncFunction("setPractice") { visible: Boolean ->
       DictationService.practiceVisible = visible
       DictationService.instance?.let { service ->

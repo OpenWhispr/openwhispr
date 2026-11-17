@@ -135,14 +135,14 @@ describe('ReferralScreen with an anonymous session', () => {
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
-  it('still signs a guest out to reach the sign-in screen', () => {
+  it('opens sign-in for a guest, since Android has no auth gate a sign-out would reach', () => {
     mockAuthState = { user: null, sessionCookie: null, signOut: mockSignOut };
     const { getByText } = render(<ReferralScreen />);
 
     fireEvent.press(getByText('Sign in to get your link'));
 
-    expect(mockSignOut).toHaveBeenCalledTimes(1);
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith('/auth');
+    expect(mockSignOut).not.toHaveBeenCalled();
   });
 });
 

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { AndroidDictation, dictationEvents } from '../../modules/android-dictation/src';
-import { Page, Card, Button, Row, styles } from './ui';
+import { Card, Button, Row, styles } from './ui';
 export function PermissionsContent() {
   const { t } = useTranslation();
   const [status, setStatus] = useState(AndroidDictation!.getStatus());
@@ -103,13 +103,5 @@ export function PermissionsContent() {
         />
       </Card>
     </>
-  );
-}
-export default function PermissionsScreen() {
-  const { t } = useTranslation();
-  return (
-    <Page title={t('permissions')} back>
-      <PermissionsContent />
-    </Page>
   );
 }

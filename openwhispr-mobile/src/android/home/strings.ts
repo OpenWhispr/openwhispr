@@ -29,7 +29,7 @@ export const homeEnglish = {
   tip1Title: 'Start dictating',
   tip1Body: 'Tap a text box, tap the bubble, talk.',
   tip2Title: 'Change the bubble size',
-  tip2Body: 'Account → Preferences → Bubble size.',
+  tip2Body: 'Settings → Size & look.',
   tip3Title: 'Hide the bubble',
   tip3Body: 'Drag it onto “Hide for 1 hour”.',
   yourStats: 'Your stats',

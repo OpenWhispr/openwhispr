@@ -17,7 +17,7 @@ import {
   modelSupported,
   type AndroidModelId,
 } from './models';
-import { Button, Card, Page, Row, styles } from './ui';
+import { Button, Card, Row, styles } from './ui';
 import type { AndroidSpeechModelId } from './speechSelection';
 import type { UserConfig } from '@/types';
 import { speechModelSupportsLanguages } from './speechCapabilities';
@@ -254,31 +254,5 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
         </View>
       ))}
     </>
-  );
-}
-export default function ModelsScreen() {
-  const { t } = useTranslation();
-  return (
-    <Page title={t('models')} back>
-      <ModelsContent />
-      <Card>
-        <Text style={styles.heading}>{t('workflow')}</Text>
-        {(['dictation', 'upload', 'cleanup', 'notes', 'agent'] as const).map((scope) => (
-          <Row
-            key={scope}
-            title={t(
-              scope === 'dictation'
-                ? 'dictate'
-                : scope === 'notes'
-                  ? 'formatting'
-                  : scope === 'agent'
-                    ? 'assistant'
-                    : scope,
-            )}
-            onPress={() => router.push({ pathname: '/(account)/ai-workflow', params: { scope } })}
-          />
-        ))}
-      </Card>
-    </Page>
   );
 }

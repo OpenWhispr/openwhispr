@@ -1,1 +1,1 @@
-export { default } from '@/android/ModelsScreen';
+export { default } from '@/android/settings/ProcessingScreen';

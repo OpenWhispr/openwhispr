@@ -17,6 +17,8 @@ object BubbleColors {
   val secondary = Color.parseColor("#6E6D69")
   val error = Color.parseColor("#D70015")
   val errorBackground = Color.parseColor("#FDECEC")
+  /** The icon's blue, for the bubble shrunk to a dot. */
+  val dot = Color.parseColor("#2457C5")
 }
 
 /**
@@ -36,10 +38,13 @@ class BubbleRoot(context: Context) : FrameLayout(context) {
   }
 }
 
-/** The glossy app icon, cropped to a circle. */
+/** The glossy app icon, cropped to a circle. [dot] fades it into a solid blue dot as the bubble shrinks to one. */
 class IconBubble(context: Context) : View(context) {
   private val bitmap = BitmapFactory.decodeResource(resources, R.drawable.ow_bubble_icon)
   private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+  private val solid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleColors.dot }
+  var dot = 0f
+    set(value) { if (field != value) { field = value; invalidate() } }
   init {
     importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     outlineProvider = object : android.view.ViewOutlineProvider() {
@@ -52,7 +57,12 @@ class IconBubble(context: Context) : View(context) {
     shader.setLocalMatrix(Matrix().apply { setScale(w / bitmap.width.toFloat(), h / bitmap.height.toFloat()) })
     paint.shader = shader
   }
-  override fun onDraw(canvas: Canvas) { canvas.drawOval(0f, 0f, width.toFloat(), height.toFloat(), paint) }
+  override fun onDraw(canvas: Canvas) {
+    paint.alpha = ((1f - dot) * 255).toInt()
+    solid.alpha = (dot * 255).toInt()
+    if (dot < 1f) canvas.drawOval(0f, 0f, width.toFloat(), height.toFloat(), paint)
+    if (dot > 0f) canvas.drawOval(0f, 0f, width.toFloat(), height.toFloat(), solid)
+  }
 }
 
 /** A round button with a drawn glyph, so the overlay needs no icon font. */

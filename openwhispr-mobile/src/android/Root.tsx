@@ -31,6 +31,7 @@ import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
 import { observeAndroidPurchaseUpdates } from './billing';
 import { useBubblePipeline } from './useBubblePipeline';
 import { useAccountData } from './accountData';
+import { SettingsToastHost } from './settings/kit';
 
 export default function AndroidRoot() {
   const { t } = useTranslation();
@@ -98,7 +99,10 @@ export default function AndroidRoot() {
               />
             </View>
           ) : ready && !accountBlocked && (fonts || fontError) ? (
-            <Stack key={accountRevision} screenOptions={{ headerShown: false }} />
+            <>
+              <Stack key={accountRevision} screenOptions={{ headerShown: false }} />
+              <SettingsToastHost />
+            </>
           ) : (
             <View
               style={[

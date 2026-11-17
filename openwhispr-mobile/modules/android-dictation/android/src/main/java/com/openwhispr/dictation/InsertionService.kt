@@ -2,6 +2,7 @@ package com.openwhispr.dictation
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -36,8 +37,25 @@ class InsertionService : AccessibilityService() {
     val top = keyboard?.let { Rect().also(it::getBoundsInScreen).top }
     val field = if (keyboard == null) null else runCatching { focusedField() }.getOrNull()
     val typing = field != null && BubblePolicy.canDictate(field.isEditable, field.isPassword)
+    // The focused node's identity (window and source id) tells a newly focused field from typing in the same one.
+    val key = field?.hashCode()
+    val search = typing && runCatching { searchField(field!!) }.getOrDefault(false)
     field?.recycle()
-    service.onTyping(typing, top)
+    service.onTyping(typing, top, key, search)
+  }
+  /** Reads the field's id, hint and description, and its nearest ancestors' ids and classes. */
+  private fun searchField(field: AccessibilityNodeInfo): Boolean {
+    val labels = mutableListOf<CharSequence?>(field.viewIdResourceName, field.contentDescription)
+    if (Build.VERSION.SDK_INT >= 26) { labels += field.hintText; if (field.isShowingHintText) labels += field.text }
+    val classes = mutableListOf<CharSequence?>(field.className)
+    var parent = field.parent
+    repeat(3) {
+      val node = parent ?: return@repeat
+      labels += node.viewIdResourceName; classes += node.className
+      parent = node.parent; node.recycle()
+    }
+    parent?.recycle()
+    return BubblePolicy.searchField(labels, classes)
   }
   override fun onInterrupt() { clearTarget() }
   override fun onDestroy() { handler.removeCallbacks(typingCheck); clearTarget(); instance = null; DictationService.instance?.onTyping(false, null); DictationService.emit?.invoke("onStatusChange", emptyMap()); super.onDestroy() }

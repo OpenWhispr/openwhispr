@@ -49,7 +49,7 @@ export default function AccountLayout() {
       <Stack.Screen name="device-check" options={customHeaderStackOptions} />
       <Stack.Screen name="help" options={customHeaderStackOptions} />
       <Stack.Screen name="index" options={customHeaderStackOptions} />
-      <Stack.Screen name="profile" options={{ title: 'Profile', headerLargeTitle: false }} />
+      <Stack.Screen name="profile" options={customHeaderStackOptions} />
       <Stack.Screen
         name="referral"
         options={{ title: 'Referral', headerLargeTitle: false, ...androidPageHeader }}
@@ -95,7 +95,7 @@ export default function AccountLayout() {
       />
       <Stack.Screen
         name="transcription-language"
-        options={{ title: 'Transcription Language', headerLargeTitle: false }}
+        options={{ title: 'Transcription Language', ...androidPageHeader }}
       />
       <Stack.Screen
         name="privacy"
