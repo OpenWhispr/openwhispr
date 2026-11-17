@@ -333,7 +333,7 @@ class LlamaServerManager {
   // Frees this server for another one's memory, waiting for an answer in
   // progress no longer than a restart would. Throws LOCAL_MODEL_BUSY and leaves
   // the server running if it is still working at the deadline.
-  async stopUnlessBusy(busyWaitMs = DEFAULT_BUSY_WAIT_MS, { signal } = {}) {
+  async stopUnlessBusy(busyWaitMs = DEFAULT_BUSY_WAIT_MS, { signal }) {
     const deadline = Date.now() + busyWaitMs;
     for (;;) {
       if (this.startupPromise) {

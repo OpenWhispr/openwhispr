@@ -80,7 +80,7 @@ export type ChineseScriptPreference = "simplified" | "traditional" | "as-transcr
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
-/** Each LLM scope's resolved mode and model, from which the main process decides the shared llama-server. */
+/** Each LLM scope's resolved mode and model, from which the main process decides the local llama-servers. */
 export interface LocalServerPrefs {
   useCleanupModel: boolean;
   cleanupMode: InferenceMode;

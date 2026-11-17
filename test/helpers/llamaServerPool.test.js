@@ -253,10 +253,10 @@ test("a failed second server retries the inference on one server too", async (t)
   modelManager.servers[1].failNextStart = true;
 
   assert.equal(await cleanup(modelManager), "done");
-  assert.deepEqual(
-    starts.map((start) => `${start.server}:${start.model}`),
-    [`0:${findModel(ASSISTANT).fileName}`, `0:${findModel(CLEANUP).fileName}`]
-  );
+  assert.deepEqual(startedModels(starts), [
+    `0:${findModel(ASSISTANT).fileName}`,
+    `0:${findModel(CLEANUP).fileName}`,
+  ]);
 });
 
 test("beside another server a model's context ceiling leaves that server its memory", async (t) => {

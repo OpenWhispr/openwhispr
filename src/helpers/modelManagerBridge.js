@@ -428,7 +428,7 @@ class ModelManager {
    * otherwise the server used longest ago, which swaps its model as before.
    * A swap that still leaves too little room frees the other server first.
    */
-  async _serverFor(modelId, modelInfo, modelPath, { contextSize, busyWaitMs, signal } = {}) {
+  async _serverFor(modelId, modelInfo, modelPath, { contextSize, busyWaitMs, signal }) {
     const chosen = await (async () => {
       const holding = this.servers.find((server) => this._holdsModel(server, modelId, modelPath));
       if (holding) return holding;
@@ -942,7 +942,7 @@ class ModelManager {
     }
   }
 
-  async _runInferenceOnce(modelId, prompt, options = {}) {
+  async _runInferenceOnce(modelId, prompt, options) {
     options.signal?.throwIfAborted();
     this.ensureInitialized();
     const startTime = Date.now();

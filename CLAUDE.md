@@ -145,7 +145,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - `_serverFor` picks a request's server: the one holding its model, else a free one when another model's server runs and `fitsBesideResidentServers` (`llamaContextPolicy.js`) says both fit the budget one server gets alone (half the machine less 2 GiB; Qwen3.5 2B + 4B fit from 24 GB), else the least recently used one swaps its model as before
   - Beside another server, a model's context ceiling is charged that server's memory (`residentBytes`); a request needing more than that frees the other server once idle
   - A second server that fails to start drops the session back to one server and retries the request
-  - Streaming chat gets its port from `serverForModel` (`llama-server-start`) before every request
+  - Streaming chat gets its port from `serverForModel` (`llama-server-start`)
 - **windowsKeyManager.js**: Windows Push-to-Talk support with native key listener
   - Spawns native `windows-key-listener.exe` binary for low-level keyboard hooks
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`, `CommandOrControl+Space`)

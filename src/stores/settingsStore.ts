@@ -3363,7 +3363,7 @@ export function isCloudChatAgentMode() {
   return selectIsCloudChatAgentMode(getSettings());
 }
 
-// What resolveLocalServerNeeds (main process) decides the shared llama-server
+// What resolveLocalServerNeeds (main process) decides the local llama-servers
 // from. The policy-effective resolved configs carry fallback inheritance,
 // enterprise overrides and policy clamps, so they match what requests run on.
 export function selectLocalServerPrefs(
