@@ -5,6 +5,7 @@ const { buildSlackConnector } = require("./slackConnector");
 const { buildGmailConnector } = require("./gmailConnector");
 const { buildLinearConnector } = require("./linearConnector");
 const { buildGithubConnector } = require("./githubConnector");
+const { buildSalesforceConnector } = require("./salesforceConnector");
 
 const CONNECTOR_FACTORIES = [
   buildEmailConnector,
@@ -12,6 +13,7 @@ const CONNECTOR_FACTORIES = [
   buildGmailConnector,
   buildLinearConnector,
   buildGithubConnector,
+  buildSalesforceConnector,
 ];
 
 // Two connectors with one id would share login slots and receipts: a build

@@ -151,7 +151,7 @@ function estimateModelSizeB(modelId: string): number {
   return match ? parseFloat(match[1]) : 0;
 }
 
-const CONNECTOR_CONNECTION_TARGETS = ["gmail", "slack", "linear", "github"] as const;
+const CONNECTOR_CONNECTION_TARGETS = ["gmail", "slack", "linear", "github", "salesforce"] as const;
 
 // What the user can connect from the chat: connectors this build can connect
 // that aren't ready, and a calendar while none is connected.

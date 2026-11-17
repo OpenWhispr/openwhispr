@@ -68,11 +68,12 @@ export const CONNECTOR_NAMES: Readonly<Record<string, string>> = {
   slack: "Slack",
   linear: "Linear",
   github: "GitHub",
+  salesforce: "Salesforce",
 };
 
 // Connectors the user connects one by one. Email always works (it falls back to
 // the user's mail app) and the email_draft tool reports Gmail's own state.
-const CONNECTED_ONE_BY_ONE: ConnectionTarget[] = ["slack", "linear", "github"];
+const CONNECTED_ONE_BY_ONE: ConnectionTarget[] = ["slack", "linear", "github", "salesforce"];
 
 /**
  * What request_connection can connect, as the model reads it. Cards use these
@@ -83,6 +84,7 @@ export const CONNECTION_TARGET_NAMES: Readonly<Record<ConnectionTarget, string>>
   slack: CONNECTOR_NAMES.slack,
   linear: CONNECTOR_NAMES.linear,
   github: CONNECTOR_NAMES.github,
+  salesforce: CONNECTOR_NAMES.salesforce,
   google: "Google Calendar",
   microsoft: "Microsoft Calendar",
   apple: "Apple Calendar",

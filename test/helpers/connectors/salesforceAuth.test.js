@@ -1,0 +1,241 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const {
+  createSalesforceAuth,
+  SALESFORCE_CALLBACK_URL,
+} = require("../../../src/helpers/connectors/salesforceAuth");
+const { FakeFlowError, memoryCredentials } = require("./linearFixtures");
+const INSTANCE = "https://acme.my.salesforce.com";
+const NOW = 1700000000000;
+const CONNECTED = {
+  userId: "005000000000001",
+  userName: "Dana",
+  organizationId: "00D000000000001",
+  organizationName: "acme.my.salesforce.com",
+  instanceUrl: INSTANCE,
+  loginUrl: "https://login.salesforce.com",
+  clientId: "client",
+  accessToken: "access-1",
+  refreshToken: "refresh-1",
+  expiresAt: null,
+  scope: "api openid refresh_token",
+  needsReconnect: false,
+};
+const BINDING = {
+  ownerAccountId: "acct-1",
+  accountId: CONNECTED.userId,
+  workspaceId: CONNECTED.organizationId,
+  generation: 1,
+  instanceUrl: INSTANCE,
+};
+const TOKENS = {
+  access_token: "access-2",
+  refresh_token: "refresh-2",
+  instance_url: INSTANCE,
+  scope: "api openid refresh_token",
+};
+const IDENTITY = {
+  user_id: CONNECTED.userId,
+  organization_id: CONNECTED.organizationId,
+  preferred_username: "Dana",
+};
+
+function setup({
+  credential = CONNECTED,
+  refresh,
+  identity = IDENTITY,
+  tokens = TOKENS,
+  clientId = "client",
+  loginUrl = "https://login.salesforce.com",
+} = {}) {
+  const credentials = memoryCredentials(credential, { connectorId: "salesforce" });
+  const calls = [];
+  const flows = [];
+  const api = {
+    exchangeToken: async (...args) => {
+      calls.push(["exchange", ...args]);
+      return { ok: true, data: tokens };
+    },
+    refreshToken: async (...args) => {
+      calls.push(["refresh", ...args]);
+      return refresh ? refresh(credentials) : { ok: true, data: tokens };
+    },
+    revokeToken: async (...args) => {
+      calls.push(["revoke", ...args]);
+      return { ok: true };
+    },
+    request: async (...args) => {
+      calls.push(["identity", ...args]);
+      return { ok: true, data: identity };
+    },
+  };
+  const auth = createSalesforceAuth({
+    api,
+    credentials,
+    getClientId: () => clientId,
+    getLoginUrl: () => loginUrl,
+    OAuthFlowError: FakeFlowError,
+    now: () => NOW,
+    runOAuthLoopbackFlow: async (options) => {
+      flows.push(options);
+      return options.handleCallback("code", SALESFORCE_CALLBACK_URL, "verifier");
+    },
+  });
+  return { auth, credentials, calls, flows };
+}
+
+test("authorization delegates validated state and PKCE to loopback, with fixed callback and no client secret", async () => {
+  const { auth, calls, flows, credentials } = setup({ credential: null });
+  const controller = new AbortController();
+  const credential = await auth.authorize({ signal: controller.signal });
+  const options = flows[0];
+  const url = new URL(options.buildAuthUrl(SALESFORCE_CALLBACK_URL, "state", "challenge"));
+  assert.equal(url.origin, "https://login.salesforce.com");
+  assert.equal(url.pathname, "/services/oauth2/authorize");
+  assert.equal(url.searchParams.get("state"), "state");
+  assert.equal(url.searchParams.get("code_challenge"), "challenge");
+  assert.equal(url.searchParams.get("code_challenge_method"), "S256");
+  assert.equal(url.searchParams.get("scope"), "api refresh_token openid");
+  assert.equal(url.searchParams.get("redirect_uri"), "http://localhost:1718/salesforce/callback");
+  assert.deepEqual(options.ports, [1718]);
+  assert.equal(options.redirectHost, "localhost");
+  assert.equal(options.callbackPath, "/salesforce/callback");
+  assert.equal(options.signal, controller.signal);
+  assert.equal(calls[0][1].client_secret, undefined);
+  assert.equal(calls[0][1].code_verifier, "verifier");
+  assert.equal(credential.organizationId, CONNECTED.organizationId);
+  assert.equal(credential.userId, CONNECTED.userId);
+  assert.equal(credential.instanceUrl, INSTANCE);
+  assert.equal(credentials.saves.length, 0);
+});
+
+test("invalid client or login configuration cannot open a browser", async () => {
+  for (const config of [
+    { clientId: "" },
+    { loginUrl: "https://evil.test" },
+    { loginUrl: "https://999.999.999.999" },
+    { loginUrl: INSTANCE + "/path" },
+  ]) {
+    const { auth, flows } = setup(config);
+    assert.equal(auth.isConfigured(), false);
+    await assert.rejects(auth.authorize(), { code: "not_configured" });
+    assert.equal(flows.length, 0);
+  }
+});
+
+test("refuses and revokes grants missing refresh, API scope, valid instance or identity", async () => {
+  for (const config of [
+    { tokens: { ...TOKENS, refresh_token: null } },
+    { tokens: { ...TOKENS, scope: "openid" } },
+    { tokens: { ...TOKENS, instance_url: "https://evil.test" } },
+    { identity: { ...IDENTITY, organization_id: "bad" } },
+  ]) {
+    const { auth, calls } = setup(config);
+    await assert.rejects(auth.authorize());
+    assert.ok(calls.some(([kind]) => kind === "revoke"));
+    if (config.tokens?.instance_url === "https://evil.test")
+      assert.ok(!calls.some(([kind]) => kind === "identity"));
+  }
+});
+
+test("binding checks include account owner, org, instance and connection generation before token use", async () => {
+  const { auth, calls } = setup();
+  assert.equal((await auth.getAccessToken(BINDING)).token, "access-1");
+  for (const changes of [
+    { ownerAccountId: "acct-2" },
+    { accountId: "005000000000002" },
+    { workspaceId: "00D000000000002" },
+    { instanceUrl: "https://other.my.salesforce.com" },
+    { generation: 2 },
+  ]) {
+    assert.deepEqual(await auth.getAccessToken({ ...BINDING, ...changes }), {
+      ok: false,
+      errorCode: "connection_changed",
+    });
+  }
+  assert.equal(calls.length, 0);
+  const switched = setup();
+  switched.credentials.switchAccount("acct-2");
+  assert.equal((await switched.auth.getAccessToken(BINDING)).errorCode, "connection_changed");
+});
+
+test("refresh rotates and persists tokens before use, retaining refresh when omitted", async () => {
+  for (const tokens of [TOKENS, { ...TOKENS, refresh_token: undefined }]) {
+    const { auth, credentials } = setup({ tokens });
+    const result = await auth.getAccessToken(BINDING, { forceRefresh: true });
+    assert.equal(result.token, "access-2");
+    const stored = credentials.read("acct-1", "salesforce").credential;
+    assert.equal(stored.refreshToken, tokens.refresh_token ?? "refresh-1");
+    assert.equal(stored.accessToken, result.token);
+  }
+});
+
+test("refresh cannot replace a newer login or cross an org or instance boundary", async () => {
+  const swapped = setup({
+    refresh: async (credentials) => {
+      credentials.replace("acct-1", "salesforce", { ...CONNECTED, accessToken: "other" }, 1);
+      return { ok: true, data: TOKENS };
+    },
+  });
+  assert.equal(
+    (await swapped.auth.getAccessToken(BINDING, { forceRefresh: true })).errorCode,
+    "connection_changed"
+  );
+  assert.equal(swapped.credentials.saves.length, 0);
+  for (const config of [
+    { tokens: { ...TOKENS, instance_url: "https://other.my.salesforce.com" } },
+    { identity: { ...IDENTITY, organization_id: "00D000000000002" } },
+  ]) {
+    const { auth, credentials } = setup(config);
+    assert.equal(
+      (await auth.getAccessToken(BINDING, { forceRefresh: true })).errorCode,
+      "reconnect_needed"
+    );
+    assert.equal(credentials.read("acct-1", "salesforce").credential.accessToken, "access-1");
+  }
+});
+
+test("revoked or uncertain rotated refresh tokens require reconnect without automatic retry", async () => {
+  for (const response of [
+    { ok: false, errorCode: "invalid_grant", refused: true, outcome: "failed" },
+    { ok: false, errorCode: "timeout", outcome: "unknown" },
+  ]) {
+    const { auth, calls, credentials } = setup({ refresh: async () => response });
+    assert.equal(
+      (await auth.getAccessToken(BINDING, { forceRefresh: true })).errorCode,
+      "reconnect_needed"
+    );
+    assert.equal(calls.filter(([kind]) => kind === "refresh").length, 1);
+    assert.equal(credentials.read("acct-1", "salesforce").credential.needsReconnect, true);
+  }
+});
+
+test("simultaneous refreshes share one request and save failure never exposes the new token", async () => {
+  const { auth, calls } = setup();
+  const results = await Promise.all([
+    auth.getAccessToken(BINDING, { forceRefresh: true }),
+    auth.getAccessToken(BINDING, { forceRefresh: true }),
+  ]);
+  assert.ok(results.every((result) => result.token === "access-2"));
+  assert.equal(calls.filter(([kind]) => kind === "refresh").length, 1);
+  const failed = setup();
+  failed.credentials.save = () => {
+    throw new Error("disk unavailable");
+  };
+  assert.deepEqual(await failed.auth.getAccessToken(BINDING, { forceRefresh: true }), {
+    ok: false,
+    errorCode: "credential_save_failed",
+  });
+});
+
+test("disconnect revokes at the saved OAuth host and status contains only display identity", async () => {
+  const { auth, calls } = setup();
+  await auth.revoke({ ...CONNECTED, loginUrl: "https://test.salesforce.com" });
+  assert.deepEqual(calls, [["revoke", "refresh-1", "https://test.salesforce.com"]]);
+  assert.deepEqual(auth.statusOf(CONNECTED), {
+    connected: true,
+    accountLabel: "Dana",
+    workspaceLabel: "acme.my.salesforce.com",
+    needsReconnect: false,
+  });
+});

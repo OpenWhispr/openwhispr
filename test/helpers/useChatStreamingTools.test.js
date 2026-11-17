@@ -975,7 +975,7 @@ test("signed out, the model is told to point the user at signing in", async (t) 
   );
   assert.match(
     prompt,
-    /- Integrations \(Email, Slack, Linear, GitHub\): needs the user to sign in/
+    /- Integrations \(Email, Slack, Linear, GitHub, Salesforce\): needs the user to sign in/
   );
 });
 
@@ -987,7 +987,7 @@ test("on a free plan, the model still writes the email and says sending it needs
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /still write it in full in your reply, then end with one short sentence on what sending it needs, as its line below says, never on connecting it[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
+    /still write it in full in your reply, then end with one short sentence on what sending it needs, as its line below says, never on connecting it[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub, Salesforce\): needs a paid OpenWhispr plan in Settings → Plan & Billing\./
   );
   assert.doesNotMatch(prompt, /Connect Slack and I can post this/);
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);

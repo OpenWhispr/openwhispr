@@ -5105,7 +5105,19 @@
       "request_api_keyName": "API key",
       "request_api_keyStatus": "Asking for an API key...",
       "open_settingsName": "Settings",
-      "open_settingsStatus": "Pointing you to Settings..."
+      "open_settingsStatus": "Pointing you to Settings...",
+      "salesforce_search_recordsName": "Search Salesforce",
+      "salesforce_search_recordsStatus": "Searching Salesforce…",
+      "salesforce_get_recordName": "Salesforce record",
+      "salesforce_get_recordStatus": "Reading Salesforce record…",
+      "salesforce_describe_fieldsName": "Opportunity fields",
+      "salesforce_describe_fieldsStatus": "Reading Opportunity fields…",
+      "salesforce_get_briefingName": "Customer briefing",
+      "salesforce_get_briefingStatus": "Preparing customer briefing…",
+      "salesforce_export_conversationName": "Salesforce activity",
+      "salesforce_export_conversationStatus": "Preparing Salesforce activity…",
+      "salesforce_update_fieldsName": "Salesforce field updates",
+      "salesforce_update_fieldsStatus": "Preparing Salesforce field updates…"
     },
     "turn": {
       "reasoning": "Reasoning",
@@ -5142,7 +5154,8 @@
           "slack": "I can post the message to Slack for you.",
           "linear": "I can find and file Linear issues for you.",
           "github": "I can find and file GitHub issues for you.",
-          "calendar": "I can check your availability and suggest times."
+          "calendar": "I can check your availability and suggest times.",
+          "salesforce": "To read Salesforce records and save reviewed meeting notes."
         }
       },
       "access": {
@@ -5364,7 +5377,9 @@
         "default": "Send to {{destination}}",
         "email": "Email to {{destination}}",
         "issue": "Create issue in {{destination}}",
-        "comment": "Comment on {{destination}}"
+        "comment": "Comment on {{destination}}",
+        "salesforceActivity": "Save conversation to {{destination}}",
+        "salesforceFields": "Review Opportunity fields on {{destination}}"
       },
       "identity": "As {{account}}",
       "identityWithWorkspace": "As {{account}} in {{workspace}}",
@@ -5455,6 +5470,30 @@
           "refused": "Linear refused the request. Nothing was sent.",
           "unknown_action": "OpenWhispr can't do that in Linear. Nothing was sent.",
           "generic": "Something went wrong. Nothing was sent to Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce needs to be reconnected in Settings.",
+          "connection_changed": "The Salesforce connection changed before sending, so nothing was sent.",
+          "credential_save_failed": "The Salesforce login couldn't be saved on this computer. Nothing was sent. Try again.",
+          "network": "Salesforce couldn't be reached. Nothing was sent.",
+          "rate_limited": "Salesforce is busy. Try again shortly.",
+          "forbidden": "Your Salesforce account isn't allowed to do that. Nothing was sent.",
+          "invalid_input": "Salesforce couldn't accept this as written. Nothing was sent.",
+          "too_long": "Too long for Salesforce. Nothing was sent.",
+          "refused": "Salesforce refused the request. Nothing was sent.",
+          "unknown_action": "OpenWhispr can't do that in Salesforce. Nothing was sent.",
+          "generic": "Something went wrong. Nothing was sent to Salesforce.",
+          "stale_record": "Salesforce changed since this review. Refresh and review again.",
+          "source_unavailable": "The source note is missing or inaccessible.",
+          "export_required": "Save the activity to this Opportunity before updating its fields.",
+          "uncertain_operation": "A previous write is unconfirmed. Check Salesforce before trying again.",
+          "duplicate_operation": "A previous write is unconfirmed. Check Salesforce before trying again.",
+          "invalid_field": "Choose up to three writable custom Opportunity text fields.",
+          "storage_unavailable": "Local export history is unavailable. No new write was started.",
+          "task_status_unavailable": "Salesforce has no available completed Task status. Ask your Salesforce administrator.",
+          "not_found": "Salesforce couldn't accept this as written. Nothing was sent.",
+          "invalid_reference": "Salesforce couldn't accept this as written. Nothing was sent.",
+          "no_fields_selected": "Select at least one field, or cancel."
         }
       },
       "email": {
@@ -5483,11 +5522,14 @@
       "openIn": {
         "github": "Open in GitHub",
         "gmail": "Open in Gmail",
-        "linear": "Open in Linear"
+        "linear": "Open in Linear",
+        "salesforce": "Open in Salesforce"
       },
       "sendLabel": {
         "issue": "Create issue",
-        "comment": "Comment"
+        "comment": "Comment",
+        "salesforceActivity": "Save activity",
+        "salesforceFields": "Save fields"
       },
       "issue": {
         "created": "Created {{result}}.",
@@ -5530,7 +5572,27 @@
       "identityChanged": "Now sending as {{account}}. Press Send to send it.",
       "connectToSend": "Connect {{name}} to send this",
       "edit": "Edit",
-      "doneEditing": "Done editing"
+      "doneEditing": "Done editing",
+      "salesforce": {
+        "include": "Include {{field}}",
+        "omitted": "Omitted — this field will not change",
+        "before": "Current value",
+        "after": "Proposed replacement",
+        "empty": "Empty",
+        "value": "Proposed value for {{field}}",
+        "limit": "{{count}} / {{max}} characters",
+        "invalidPreview": "This field preview is incomplete. Request a new review.",
+        "noneSelected": "Select at least one field, or cancel.",
+        "tooLong": "A selected field exceeds its character limit.",
+        "salesforceActivity": {
+          "sent": "Activity saved to {{destination}}.",
+          "unknown": "Couldn't confirm the changes. Check {{destination}} in Salesforce before trying again."
+        },
+        "salesforceFields": {
+          "sent": "Fields saved on {{destination}}.",
+          "unknown": "Couldn't confirm the changes. Check {{destination}} in Salesforce before trying again."
+        }
+      }
     },
     "policyOff": "Connectors are turned off by your organization.",
     "email": {
@@ -5706,7 +5768,9 @@
         "slack_send_message": "Message to {{destination}}",
         "gmail_send": "Email to {{destination}}",
         "linear_create_issue": "New issue in {{destination}}",
-        "linear_comment": "Comment on {{destination}}"
+        "linear_comment": "Comment on {{destination}}",
+        "salesforce_export_conversation": "Save conversation to {{destination}}",
+        "salesforce_update_fields": "Review Opportunity fields on {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "Email draft",
@@ -5715,7 +5779,9 @@
         "slack_send_message": "Slack message",
         "gmail_send": "Gmail email",
         "linear_create_issue": "Linear issue",
-        "linear_comment": "Linear comment"
+        "linear_comment": "Linear comment",
+        "salesforce_export_conversation": "Salesforce activity",
+        "salesforce_update_fields": "Salesforce field updates"
       },
       "states": {
         "pending": "Waiting",
@@ -5817,6 +5883,30 @@
           "refused": "Linear refused the request.",
           "unknown_action": "Not available in Linear.",
           "generic": "That didn't work in Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce needs to be reconnected.",
+          "connection_changed": "The Salesforce connection changed. Nothing was sent.",
+          "credential_save_failed": "Couldn't save the Salesforce login on this computer.",
+          "network": "Couldn't reach Salesforce.",
+          "rate_limited": "Salesforce is busy.",
+          "forbidden": "Not allowed in Salesforce.",
+          "invalid_input": "Salesforce couldn't accept it.",
+          "too_long": "Too long for Salesforce.",
+          "refused": "Salesforce refused the request.",
+          "unknown_action": "Not available in Salesforce.",
+          "generic": "That didn't work in Salesforce.",
+          "stale_record": "Salesforce changed since this review. Refresh and review again.",
+          "source_unavailable": "The source note is missing or inaccessible.",
+          "export_required": "Save the activity to this Opportunity before updating its fields.",
+          "uncertain_operation": "A previous write is unconfirmed. Check Salesforce before trying again.",
+          "duplicate_operation": "A previous write is unconfirmed. Check Salesforce before trying again.",
+          "invalid_field": "Choose up to three writable custom Opportunity text fields.",
+          "storage_unavailable": "Local export history is unavailable. No new write was started.",
+          "task_status_unavailable": "Salesforce has no available completed Task status. Ask your Salesforce administrator.",
+          "not_found": "Salesforce couldn't accept it.",
+          "invalid_reference": "Salesforce couldn't accept it.",
+          "no_fields_selected": "Select at least one field, or cancel."
         }
       },
       "unknownSent": {
@@ -5829,7 +5919,41 @@
     },
     "beta": "Beta",
     "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",
-    "locked": "Included with paid plans"
+    "locked": "Included with paid plans",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "Export reviewed conversations and prepare briefings for a selected customer. Note associations are stored only on this device.",
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "connecting": "Finish connecting in your browser…",
+      "connectedAs": "Connected as {{account}} in {{workspace}}",
+      "needsReconnect": "Salesforce needs to be reconnected.",
+      "errors": {
+        "connect_failed": "Couldn't connect Salesforce. Try again.",
+        "disconnect_failed": "Couldn't disconnect Salesforce. Try again.",
+        "oauth_denied": "Salesforce wasn't connected because access wasn't allowed.",
+        "oauth_timeout": "Connecting took too long. Try again.",
+        "oauth_state_mismatch": "That sign-in link was out of date. Try again.",
+        "ports_busy": "Another app is using the ports OpenWhispr needs to connect. Close it and try again.",
+        "token_exchange_failed": "Salesforce didn't finish connecting. Try again.",
+        "not_configured": "Salesforce isn't available in this build.",
+        "connection_changed": "Your account or Salesforce connection changed while connecting. Try again.",
+        "signed_out": "Sign in to OpenWhispr to connect Salesforce.",
+        "policy_blocked": "Connectors are turned off by your organization.",
+        "policy_unavailable": "Couldn't check your organization's settings. Try again.",
+        "permission_not_granted": "Salesforce wasn't connected because not every permission was granted. Connect again and allow all of them."
+      },
+      "browser": {
+        "connectedTitle": "Salesforce is connected",
+        "connectedBody": "You can close this tab and return to OpenWhispr.",
+        "failedTitle": "Salesforce wasn't connected",
+        "failedBody": "Return to OpenWhispr to try again."
+      },
+      "notes": {
+        "updateExisting": "Update the previously saved activity; this will not create another Task."
+      }
+    }
   },
   "skills": {
     "pane": {

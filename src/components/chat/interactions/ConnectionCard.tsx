@@ -133,6 +133,7 @@ const DEFAULT_REASONS: Record<ConnectionTarget, string> = {
   slack: "agentMode.interactions.connection.reasons.slack",
   linear: "agentMode.interactions.connection.reasons.linear",
   github: "agentMode.interactions.connection.reasons.github",
+  salesforce: "agentMode.interactions.connection.reasons.salesforce",
   google: "agentMode.interactions.connection.reasons.calendar",
   microsoft: "agentMode.interactions.connection.reasons.calendar",
   apple: "agentMode.interactions.connection.reasons.calendar",

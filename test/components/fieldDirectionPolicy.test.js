@@ -118,6 +118,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   // An API key, always LTR; a typed answer in any script.
   "src/components/chat/interactions/ApiKeyCard.tsx": ["ltr"],
   "src/components/chat/interactions/QuestionsCard.tsx": ["auto"],
+  // A selection checkbox inherits layout direction; replacement text accepts any script.
+  "src/components/chat/SalesforceApprovalFields.tsx": ["inherit", "auto"],
   // A proposed skill's name and when it's used, and an update's description: prose.
   "src/components/chat/SkillApprovalCard.tsx": ["auto", "auto", "auto", "auto", "auto", "auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto"],

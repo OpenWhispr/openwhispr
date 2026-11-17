@@ -4818,7 +4818,19 @@
       "request_api_keyName": "Clave de API",
       "request_api_keyStatus": "Pidiendo una clave de API...",
       "open_settingsName": "Ajustes",
-      "open_settingsStatus": "Indicándote Ajustes..."
+      "open_settingsStatus": "Indicándote Ajustes...",
+      "salesforce_search_recordsName": "Buscar en Salesforce",
+      "salesforce_search_recordsStatus": "Buscando en Salesforce…",
+      "salesforce_get_recordName": "Registro de Salesforce",
+      "salesforce_get_recordStatus": "Leyendo registro de Salesforce…",
+      "salesforce_describe_fieldsName": "Campos de oportunidad",
+      "salesforce_describe_fieldsStatus": "Leyendo campos de oportunidad…",
+      "salesforce_get_briefingName": "Informe del cliente",
+      "salesforce_get_briefingStatus": "Preparando informe del cliente…",
+      "salesforce_export_conversationName": "Actividad de Salesforce",
+      "salesforce_export_conversationStatus": "Preparando actividad de Salesforce…",
+      "salesforce_update_fieldsName": "Actualizaciones de campos de Salesforce",
+      "salesforce_update_fieldsStatus": "Preparando actualizaciones de campos de Salesforce…"
     },
     "turn": {
       "reasoning": "Razonamiento",
@@ -4855,7 +4867,8 @@
           "slack": "Puedo publicar el mensaje en Slack por ti.",
           "linear": "Puedo buscar y crear incidencias de Linear por ti.",
           "github": "Puedo buscar y crear issues de GitHub por ti.",
-          "calendar": "Puedo consultar tu disponibilidad y sugerir horarios."
+          "calendar": "Puedo consultar tu disponibilidad y sugerir horarios.",
+          "salesforce": "To read Salesforce records and save reviewed meeting notes."
         }
       },
       "access": {
@@ -5077,7 +5090,9 @@
         "default": "Enviar a {{destination}}",
         "email": "Correo para {{destination}}",
         "issue": "Crear incidencia en {{destination}}",
-        "comment": "Comentar en {{destination}}"
+        "comment": "Comentar en {{destination}}",
+        "salesforceActivity": "Guardar conversación en {{destination}}",
+        "salesforceFields": "Revisar campos de oportunidad en {{destination}}"
       },
       "identity": "Como {{account}}",
       "identityWithWorkspace": "Como {{account}} en {{workspace}}",
@@ -5168,6 +5183,30 @@
           "refused": "Linear rechazó la solicitud. No se envió nada.",
           "unknown_action": "OpenWhispr no puede hacer eso en Linear. No se envió nada.",
           "generic": "Algo salió mal. No se envió nada a Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce debe reconectarse en Configuración.",
+          "connection_changed": "La conexión de Salesforce cambió antes de enviar, así que no se envió nada.",
+          "credential_save_failed": "No se pudo guardar el inicio de sesión de Salesforce en este equipo. No se envió nada. Inténtalo de nuevo.",
+          "network": "No se pudo conectar con Salesforce. No se envió nada.",
+          "rate_limited": "Salesforce está ocupado. Vuelve a intentarlo en breve.",
+          "forbidden": "Tu cuenta de Salesforce no tiene permiso para hacerlo. No se envió nada.",
+          "invalid_input": "Salesforce no pudo aceptarlo tal como está escrito. No se envió nada.",
+          "too_long": "Demasiado largo para Salesforce. No se envió nada.",
+          "refused": "Salesforce rechazó la solicitud. No se envió nada.",
+          "unknown_action": "OpenWhispr no puede hacer eso en Salesforce. No se envió nada.",
+          "generic": "Algo salió mal. No se envió nada a Salesforce.",
+          "stale_record": "Salesforce cambió desde esta revisión. Actualiza y revisa de nuevo.",
+          "source_unavailable": "La nota de origen no existe o no es accesible.",
+          "export_required": "Guarda la actividad en esta oportunidad antes de actualizar sus campos.",
+          "uncertain_operation": "Una escritura anterior no está confirmada. Revisa Salesforce antes de reintentar.",
+          "duplicate_operation": "Una escritura anterior no está confirmada. Revisa Salesforce antes de reintentar.",
+          "invalid_field": "Elige hasta tres campos de texto personalizados y editables de oportunidad.",
+          "storage_unavailable": "El historial local de exportaciones no está disponible. No se inició ninguna escritura.",
+          "task_status_unavailable": "Salesforce no tiene un estado de tarea completada disponible. Consulta a tu administrador de Salesforce.",
+          "not_found": "Salesforce no pudo aceptarlo tal como está escrito. No se envió nada.",
+          "invalid_reference": "Salesforce no pudo aceptarlo tal como está escrito. No se envió nada.",
+          "no_fields_selected": "Selecciona al menos un campo o cancela."
         }
       },
       "email": {
@@ -5196,11 +5235,14 @@
       "openIn": {
         "github": "Abrir en GitHub",
         "gmail": "Abrir en Gmail",
-        "linear": "Abrir en Linear"
+        "linear": "Abrir en Linear",
+        "salesforce": "Abrir en Salesforce"
       },
       "sendLabel": {
         "issue": "Crear incidencia",
-        "comment": "Comentar"
+        "comment": "Comentar",
+        "salesforceActivity": "Guardar actividad",
+        "salesforceFields": "Guardar campos"
       },
       "issue": {
         "created": "Se creó {{result}}.",
@@ -5243,7 +5285,27 @@
       "identityChanged": "Ahora se enviará como {{account}}. Pulsa Enviar para enviarlo.",
       "connectToSend": "Conecta {{name}} para enviar esto",
       "edit": "Editar",
-      "doneEditing": "Edición terminada"
+      "doneEditing": "Edición terminada",
+      "salesforce": {
+        "include": "Incluir {{field}}",
+        "omitted": "Omitido: este campo no cambiará",
+        "before": "Valor actual",
+        "after": "Reemplazo propuesto",
+        "empty": "Vacío",
+        "value": "Valor propuesto para {{field}}",
+        "limit": "{{count}} / {{max}} caracteres",
+        "invalidPreview": "Esta vista previa está incompleta. Solicita una nueva revisión.",
+        "noneSelected": "Selecciona al menos un campo o cancela.",
+        "tooLong": "Un campo seleccionado supera su límite de caracteres.",
+        "salesforceActivity": {
+          "sent": "Actividad guardada en {{destination}}.",
+          "unknown": "No se pudieron confirmar los cambios. Revisa {{destination}} en Salesforce antes de volver a intentarlo."
+        },
+        "salesforceFields": {
+          "sent": "Campos guardados en {{destination}}.",
+          "unknown": "No se pudieron confirmar los cambios. Revisa {{destination}} en Salesforce antes de volver a intentarlo."
+        }
+      }
     },
     "policyOff": "Tu organización ha desactivado los conectores.",
     "email": {
@@ -5419,7 +5481,9 @@
         "slack_send_message": "Mensaje a {{destination}}",
         "gmail_send": "Correo a {{destination}}",
         "linear_create_issue": "Nueva incidencia en {{destination}}",
-        "linear_comment": "Comentario en {{destination}}"
+        "linear_comment": "Comentario en {{destination}}",
+        "salesforce_export_conversation": "Guardar conversación en {{destination}}",
+        "salesforce_update_fields": "Revisar campos de oportunidad en {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "Borrador de correo",
@@ -5428,7 +5492,9 @@
         "slack_send_message": "Mensaje de Slack",
         "gmail_send": "Correo de Gmail",
         "linear_create_issue": "Incidencia de Linear",
-        "linear_comment": "Comentario de Linear"
+        "linear_comment": "Comentario de Linear",
+        "salesforce_export_conversation": "Actividad de Salesforce",
+        "salesforce_update_fields": "Actualizaciones de campos de Salesforce"
       },
       "states": {
         "pending": "Esperando",
@@ -5530,6 +5596,30 @@
           "refused": "Linear rechazó la solicitud.",
           "unknown_action": "No disponible en Linear.",
           "generic": "No funcionó en Linear."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce debe reconectarse.",
+          "connection_changed": "La conexión de Salesforce cambió. No se envió nada.",
+          "credential_save_failed": "No se pudo guardar el inicio de sesión de Salesforce en este equipo.",
+          "network": "No se pudo conectar con Salesforce.",
+          "rate_limited": "Salesforce está ocupado.",
+          "forbidden": "No permitido en Salesforce.",
+          "invalid_input": "Salesforce no pudo aceptarlo.",
+          "too_long": "Demasiado largo para Salesforce.",
+          "refused": "Salesforce rechazó la solicitud.",
+          "unknown_action": "No disponible en Salesforce.",
+          "generic": "No funcionó en Salesforce.",
+          "stale_record": "Salesforce cambió desde esta revisión. Actualiza y revisa de nuevo.",
+          "source_unavailable": "La nota de origen no existe o no es accesible.",
+          "export_required": "Guarda la actividad en esta oportunidad antes de actualizar sus campos.",
+          "uncertain_operation": "Una escritura anterior no está confirmada. Revisa Salesforce antes de reintentar.",
+          "duplicate_operation": "Una escritura anterior no está confirmada. Revisa Salesforce antes de reintentar.",
+          "invalid_field": "Elige hasta tres campos de texto personalizados y editables de oportunidad.",
+          "storage_unavailable": "El historial local de exportaciones no está disponible. No se inició ninguna escritura.",
+          "task_status_unavailable": "Salesforce no tiene un estado de tarea completada disponible. Consulta a tu administrador de Salesforce.",
+          "not_found": "Salesforce no pudo aceptarlo.",
+          "invalid_reference": "Salesforce no pudo aceptarlo.",
+          "no_fields_selected": "Selecciona al menos un campo o cancela."
         }
       },
       "unknownSent": {
@@ -5542,7 +5632,41 @@
     },
     "beta": "Beta",
     "upsell": "Los conectores se incluyen en los planes de pago. Mejora tu plan para que el asistente trabaje en tus herramientas.",
-    "locked": "Incluido en los planes de pago"
+    "locked": "Incluido en los planes de pago",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "Exporta conversaciones revisadas y prepara informes para un cliente seleccionado. Las asociaciones de notas se guardan solo en este dispositivo.",
+      "connect": "Conectar",
+      "reconnect": "Reconectar",
+      "disconnect": "Desconectar",
+      "connecting": "Termina de conectar en tu navegador…",
+      "connectedAs": "Conectado como {{account}} en {{workspace}}",
+      "needsReconnect": "Salesforce debe reconectarse.",
+      "errors": {
+        "connect_failed": "No se pudo conectar Salesforce. Inténtalo de nuevo.",
+        "disconnect_failed": "No se pudo desconectar Salesforce. Inténtalo de nuevo.",
+        "oauth_denied": "Salesforce no se conectó porque no se concedió el acceso.",
+        "oauth_timeout": "La conexión tardó demasiado. Inténtalo de nuevo.",
+        "oauth_state_mismatch": "Ese enlace de inicio de sesión estaba caducado. Inténtalo de nuevo.",
+        "ports_busy": "Otra aplicación está usando los puertos que OpenWhispr necesita para conectarse. Ciérrala e inténtalo de nuevo.",
+        "token_exchange_failed": "Salesforce no terminó de conectarse. Inténtalo de nuevo.",
+        "not_configured": "Salesforce no está disponible en esta versión.",
+        "connection_changed": "Tu cuenta o la conexión de Salesforce cambiaron durante la conexión. Inténtalo de nuevo.",
+        "signed_out": "Inicia sesión en OpenWhispr para conectar Salesforce.",
+        "policy_blocked": "Tu organización ha desactivado los conectores.",
+        "policy_unavailable": "No se pudieron comprobar los ajustes de tu organización. Inténtalo de nuevo.",
+        "permission_not_granted": "Salesforce no se conectó porque no se concedieron todos los permisos. Vuelve a conectar y permítelos todos."
+      },
+      "browser": {
+        "connectedTitle": "Salesforce está conectado",
+        "connectedBody": "Puedes cerrar esta pestaña y volver a OpenWhispr.",
+        "failedTitle": "Salesforce no se conectó",
+        "failedBody": "Vuelve a OpenWhispr para intentarlo de nuevo."
+      },
+      "notes": {
+        "updateExisting": "Actualizar la actividad guardada anteriormente; no se creará otra tarea."
+      }
+    }
   },
   "skills": {
     "pane": {

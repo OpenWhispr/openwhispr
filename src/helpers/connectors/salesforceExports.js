@@ -1,0 +1,116 @@
+// Associations contain identifiers and outcomes only. CRM content and tokens
+// stay out of this table; a receipt never grants access to its source note.
+function createSalesforceExports(databaseManager) {
+  let initializedDatabase = null;
+  function database() {
+    const db = databaseManager?.db;
+    if (!db)
+      throw Object.assign(new Error("Salesforce export storage unavailable"), {
+        code: "storage_unavailable",
+      });
+    if (db !== initializedDatabase) {
+      db.exec(`CREATE TABLE IF NOT EXISTS salesforce_exports (
+        account_id TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        instance_url TEXT NOT NULL,
+        note_id INTEGER NOT NULL,
+        object_type TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        activity_id TEXT,
+        activity_state TEXT NOT NULL DEFAULT 'idle',
+        fields_state TEXT NOT NULL DEFAULT 'idle',
+        operation_id TEXT,
+        version INTEGER NOT NULL DEFAULT 0,
+        confirmed_at TEXT,
+        PRIMARY KEY (account_id, organization_id, instance_url, note_id, object_type, record_id)
+      )`);
+      // A process can stop after dispatch and before saving its receipt.
+      // Only a new store's initialization reconciles, never an active read.
+      db.exec(`UPDATE salesforce_exports SET
+        activity_state = CASE WHEN activity_state = 'committing' THEN 'unknown' ELSE activity_state END,
+        fields_state = CASE WHEN fields_state = 'committing' THEN 'unknown' ELSE fields_state END
+        WHERE activity_state = 'committing' OR fields_state = 'committing'`);
+      initializedDatabase = db;
+    }
+    return db;
+  }
+  const where =
+    "account_id = ? AND organization_id = ? AND instance_url = ? AND note_id = ? AND object_type = ? AND record_id = ?";
+  function values(key) {
+    return [
+      key.ownerAccountId,
+      key.organizationId,
+      key.instanceUrl,
+      key.noteId,
+      key.objectType,
+      key.recordId,
+    ];
+  }
+  function column(kind) {
+    if (kind !== "activity" && kind !== "fields")
+      throw new Error("Invalid Salesforce operation kind");
+    return `${kind}_state`;
+  }
+  return {
+    get(key) {
+      return (
+        database()
+          .prepare(`SELECT * FROM salesforce_exports WHERE ${where}`)
+          .get(...values(key)) ?? null
+      );
+    },
+    list(key, limit = 11) {
+      return database()
+        .prepare(
+          `SELECT note_id, confirmed_at FROM salesforce_exports
+        WHERE account_id = ? AND organization_id = ? AND instance_url = ? AND object_type = ? AND record_id = ?
+          AND activity_id IS NOT NULL AND confirmed_at IS NOT NULL
+        ORDER BY confirmed_at DESC LIMIT ?`
+        )
+        .all(
+          key.ownerAccountId,
+          key.organizationId,
+          key.instanceUrl,
+          key.objectType,
+          key.recordId,
+          limit
+        );
+    },
+    begin(key, kind, operationId, expectedVersion) {
+      const db = database();
+      const stateColumn = column(kind);
+      db.prepare(
+        `INSERT OR IGNORE INTO salesforce_exports
+        (account_id, organization_id, instance_url, note_id, object_type, record_id) VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(...values(key));
+      return (
+        db
+          .prepare(
+            `UPDATE salesforce_exports SET ${stateColumn} = 'committing', operation_id = ?, version = version + 1
+        WHERE ${where} AND version = ? AND ${stateColumn} != 'unknown'
+          AND activity_state != 'committing' AND fields_state != 'committing'`
+          )
+          .run(operationId, ...values(key), expectedVersion).changes === 1
+      );
+    },
+    finish(key, kind, operationId, state, activityId = null) {
+      if (!["succeeded", "failed", "unknown"].includes(state))
+        throw new Error("Invalid Salesforce outcome");
+      const stateColumn = column(kind);
+      const activityPatch =
+        kind === "activity" && state === "succeeded"
+          ? ", activity_id = ?, confirmed_at = CURRENT_TIMESTAMP"
+          : "";
+      return (
+        database()
+          .prepare(
+            `UPDATE salesforce_exports SET ${stateColumn} = ?${activityPatch}
+        WHERE ${where} AND operation_id = ? AND ${stateColumn} = 'committing'`
+          )
+          .run(state, ...(activityPatch ? [activityId] : []), ...values(key), operationId)
+          .changes === 1
+      );
+    },
+  };
+}
+module.exports = { createSalesforceExports };

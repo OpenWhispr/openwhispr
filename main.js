@@ -523,6 +523,7 @@ function initializeCoreManagers() {
   const { createCredentialStore } = require("./src/helpers/connectors/credentialStore");
   const { createConnectorCredentials } = require("./src/helpers/connectors/connectorCredentials");
   const { createConnectors } = require("./src/helpers/connectors/createConnectors");
+  const { createSalesforceNoteReader } = require("./src/helpers/connectors/salesforceNotes");
   const { runOAuthLoopbackFlow, OAuthFlowError } = require("./src/helpers/oauthLoopbackFlow");
   const { broadcastToWindows } = require("./src/helpers/windowBroadcast");
   const { connectorAccountIdFrom } = require("./src/helpers/connectors/connectorIpc");
@@ -550,6 +551,11 @@ function initializeCoreManagers() {
       runOAuthLoopbackFlow,
       OAuthFlowError,
       credentials: connectorCredentials,
+      database: databaseManager,
+      getSalesforceNote: createSalesforceNoteReader({
+        database: databaseManager,
+        getAccountId: getConnectorAccountId,
+      }),
       logger: debugLogger,
       env: process.env,
       openExternal: (url) => require("./src/helpers/externalUrlOpener").openExternalUrl(url),

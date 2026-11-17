@@ -12,6 +12,65 @@ const ACCOUNT = "account-a";
 const ALLOWED = { policyState: "allowed", accountId: ACCOUNT };
 const SIGNED_OUT = { policyState: "signed_out", accountId: null };
 
+test("Salesforce field previews retain before/after metadata without exposing payload fields", async () => {
+  const metadata = [
+    { key: "value0", name: "Summary__c", label: "Summary", before: "Old", maxLength: 500 },
+  ];
+  const { manager } = await setup({
+    actions: { post: { kind: "approval", editable: { value0: "text", include0: "line" } } },
+    async prepare() {
+      return {
+        status: "ready",
+        payload: { secret: "main-only" },
+        preview: {
+          verbKey: "salesforceFields",
+          destinationLabel: "Acme",
+          accountLabel: "Chad",
+          body: "",
+          fields: { value0: "New", include0: "yes" },
+          salesforceFields: metadata,
+          secret: "never render",
+        },
+      };
+    },
+  });
+  const prepared = await manager.prepare("fake", "post", {}, ALLOWED);
+  assert.equal(prepared.status, "ready");
+  assert.deepEqual(prepared.preview.salesforceFields, metadata);
+  assert.equal(prepared.preview.secret, undefined);
+  assert.equal(prepared.payload, undefined);
+});
+
+test("Salesforce field previews fail closed without matching editable values and field metadata", async () => {
+  for (const metadata of [
+    undefined,
+    [],
+    [{ key: "value0", name: "Summary__c", label: "Summary", before: "Old", maxLength: -1 }],
+  ]) {
+    const { manager, log } = await setup({
+      actions: { post: { kind: "approval", editable: { value0: "text", include0: "line" } } },
+      async prepare() {
+        return {
+          status: "ready",
+          payload: {},
+          preview: {
+            verbKey: "salesforceFields",
+            destinationLabel: "Acme",
+            accountLabel: "Chad",
+            body: "",
+            fields: { value0: "New", include0: "yes" },
+            salesforceFields: metadata,
+          },
+        };
+      },
+    });
+    const result = await manager.prepare("fake", "post", {}, ALLOWED);
+    assert.equal(result.status, "failed");
+    assert.equal(result.errorCode, "invalid_result");
+    assert.equal(log.rows.size, 0);
+  }
+});
+
 function deferred() {
   let resolve;
   const promise = new Promise((r) => {

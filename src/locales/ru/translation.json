@@ -4909,7 +4909,19 @@
       "request_api_keyName": "Ключ API",
       "request_api_keyStatus": "Запрашиваю ключ API...",
       "open_settingsName": "Настройки",
-      "open_settingsStatus": "Направляю в настройки..."
+      "open_settingsStatus": "Направляю в настройки...",
+      "salesforce_search_recordsName": "Поиск в Salesforce",
+      "salesforce_search_recordsStatus": "Поиск в Salesforce…",
+      "salesforce_get_recordName": "Запись Salesforce",
+      "salesforce_get_recordStatus": "Чтение записи Salesforce…",
+      "salesforce_describe_fieldsName": "Поля сделки",
+      "salesforce_describe_fieldsStatus": "Чтение полей сделки…",
+      "salesforce_get_briefingName": "Сводка по клиенту",
+      "salesforce_get_briefingStatus": "Подготовка сводки по клиенту…",
+      "salesforce_export_conversationName": "Активность Salesforce",
+      "salesforce_export_conversationStatus": "Подготовка активности Salesforce…",
+      "salesforce_update_fieldsName": "Обновления полей Salesforce",
+      "salesforce_update_fieldsStatus": "Подготовка обновлений полей Salesforce…"
     },
     "turn": {
       "reasoning": "Рассуждение",
@@ -4946,7 +4958,8 @@
           "slack": "Я смогу опубликовать сообщение в Slack за вас.",
           "linear": "Я смогу находить и создавать задачи в Linear за вас.",
           "github": "Я смогу находить и создавать issues в GitHub за вас.",
-          "calendar": "Я смогу проверить, когда вы свободны, и предложить время."
+          "calendar": "Я смогу проверить, когда вы свободны, и предложить время.",
+          "salesforce": "To read Salesforce records and save reviewed meeting notes."
         }
       },
       "access": {
@@ -5172,7 +5185,9 @@
         "default": "Отправить в {{destination}}",
         "email": "Письмо для {{destination}}",
         "issue": "Создать задачу в {{destination}}",
-        "comment": "Комментарий к {{destination}}"
+        "comment": "Комментарий к {{destination}}",
+        "salesforceActivity": "Сохранить беседу в {{destination}}",
+        "salesforceFields": "Проверить поля сделки {{destination}}"
       },
       "identity": "От имени {{account}}",
       "identityWithWorkspace": "От имени {{account}} в {{workspace}}",
@@ -5263,6 +5278,30 @@
           "refused": "Linear отклонил запрос. Ничего не отправлено.",
           "unknown_action": "OpenWhispr не может сделать это в Linear. Ничего не отправлено.",
           "generic": "Что-то пошло не так. В Linear ничего не отправлено."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce нужно переподключить в настройках.",
+          "connection_changed": "Подключение к Salesforce изменилось перед отправкой, поэтому ничего не было отправлено.",
+          "credential_save_failed": "Не удалось сохранить вход в Salesforce на этом компьютере. Ничего не отправлено. Попробуйте снова.",
+          "network": "Не удалось связаться с Salesforce. Ничего не отправлено.",
+          "rate_limited": "Salesforce сейчас перегружен. Повторите попытку чуть позже.",
+          "forbidden": "Вашему аккаунту Salesforce это не разрешено. Ничего не отправлено.",
+          "invalid_input": "Salesforce не смог принять это в таком виде. Ничего не отправлено.",
+          "too_long": "Слишком длинно для Salesforce. Ничего не отправлено.",
+          "refused": "Salesforce отклонил запрос. Ничего не отправлено.",
+          "unknown_action": "OpenWhispr не может сделать это в Salesforce. Ничего не отправлено.",
+          "generic": "Что-то пошло не так. В Salesforce ничего не отправлено.",
+          "stale_record": "Данные Salesforce изменились после проверки. Обновите и проверьте снова.",
+          "source_unavailable": "Исходная заметка отсутствует или недоступна.",
+          "export_required": "Сначала сохраните активность в этой сделке, затем обновите поля.",
+          "uncertain_operation": "Предыдущая запись не подтверждена. Проверьте Salesforce перед повторной попыткой.",
+          "duplicate_operation": "Предыдущая запись не подтверждена. Проверьте Salesforce перед повторной попыткой.",
+          "invalid_field": "Выберите до трёх доступных для изменения пользовательских текстовых полей сделки.",
+          "storage_unavailable": "Локальная история экспорта недоступна. Новая запись не началась.",
+          "task_status_unavailable": "В Salesforce нет доступного статуса завершённой задачи. Обратитесь к администратору Salesforce.",
+          "not_found": "Salesforce не смог принять это в таком виде. Ничего не отправлено.",
+          "invalid_reference": "Salesforce не смог принять это в таком виде. Ничего не отправлено.",
+          "no_fields_selected": "Выберите хотя бы одно поле или отмените."
         }
       },
       "email": {
@@ -5291,11 +5330,14 @@
       "openIn": {
         "github": "Открыть в GitHub",
         "gmail": "Открыть в Gmail",
-        "linear": "Открыть в Linear"
+        "linear": "Открыть в Linear",
+        "salesforce": "Открыть в Salesforce"
       },
       "sendLabel": {
         "issue": "Создать задачу",
-        "comment": "Комментировать"
+        "comment": "Комментировать",
+        "salesforceActivity": "Сохранить активность",
+        "salesforceFields": "Сохранить поля"
       },
       "issue": {
         "created": "Создано: {{result}}.",
@@ -5338,7 +5380,27 @@
       "identityChanged": "Теперь будет отправлено от имени {{account}}. Нажмите «Отправить», чтобы отправить.",
       "connectToSend": "Подключите {{name}}, чтобы отправить это",
       "edit": "Изменить",
-      "doneEditing": "Готово"
+      "doneEditing": "Готово",
+      "salesforce": {
+        "include": "Включить {{field}}",
+        "omitted": "Пропущено — поле не изменится",
+        "before": "Текущее значение",
+        "after": "Предлагаемая замена",
+        "empty": "Пусто",
+        "value": "Предлагаемое значение для {{field}}",
+        "limit": "{{count}} / {{max}} символов",
+        "invalidPreview": "Предпросмотр полей неполон. Запросите новую проверку.",
+        "noneSelected": "Выберите хотя бы одно поле или отмените.",
+        "tooLong": "Выбранное поле превышает ограничение длины.",
+        "salesforceActivity": {
+          "sent": "Активность сохранена в {{destination}}.",
+          "unknown": "Не удалось подтвердить изменения. Проверьте {{destination}} в Salesforce перед повторной попыткой."
+        },
+        "salesforceFields": {
+          "sent": "Поля сохранены в {{destination}}.",
+          "unknown": "Не удалось подтвердить изменения. Проверьте {{destination}} в Salesforce перед повторной попыткой."
+        }
+      }
     },
     "policyOff": "Ваша организация отключила коннекторы.",
     "email": {
@@ -5514,7 +5576,9 @@
         "slack_send_message": "Сообщение для {{destination}}",
         "gmail_send": "Письмо для {{destination}}",
         "linear_create_issue": "Новая задача в {{destination}}",
-        "linear_comment": "Комментарий к {{destination}}"
+        "linear_comment": "Комментарий к {{destination}}",
+        "salesforce_export_conversation": "Сохранить беседу в {{destination}}",
+        "salesforce_update_fields": "Проверить поля сделки {{destination}}"
       },
       "unlabeledActions": {
         "email_draft": "Черновик письма",
@@ -5523,7 +5587,9 @@
         "slack_send_message": "Сообщение в Slack",
         "gmail_send": "Письмо Gmail",
         "linear_create_issue": "Задача в Linear",
-        "linear_comment": "Комментарий в Linear"
+        "linear_comment": "Комментарий в Linear",
+        "salesforce_export_conversation": "Активность Salesforce",
+        "salesforce_update_fields": "Обновления полей Salesforce"
       },
       "states": {
         "pending": "Ожидание",
@@ -5625,6 +5691,30 @@
           "refused": "Linear отклонил запрос.",
           "unknown_action": "Недоступно в Linear.",
           "generic": "В Linear не получилось."
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforce нужно переподключить.",
+          "connection_changed": "Подключение к Salesforce изменилось. Ничего не было отправлено.",
+          "credential_save_failed": "Не удалось сохранить вход в Salesforce на этом компьютере.",
+          "network": "Не удалось связаться с Salesforce.",
+          "rate_limited": "Salesforce сейчас перегружен.",
+          "forbidden": "Не разрешено в Salesforce.",
+          "invalid_input": "Salesforce не смог это принять.",
+          "too_long": "Слишком длинно для Salesforce.",
+          "refused": "Salesforce отклонил запрос.",
+          "unknown_action": "Недоступно в Salesforce.",
+          "generic": "В Salesforce не получилось.",
+          "stale_record": "Данные Salesforce изменились после проверки. Обновите и проверьте снова.",
+          "source_unavailable": "Исходная заметка отсутствует или недоступна.",
+          "export_required": "Сначала сохраните активность в этой сделке, затем обновите поля.",
+          "uncertain_operation": "Предыдущая запись не подтверждена. Проверьте Salesforce перед повторной попыткой.",
+          "duplicate_operation": "Предыдущая запись не подтверждена. Проверьте Salesforce перед повторной попыткой.",
+          "invalid_field": "Выберите до трёх доступных для изменения пользовательских текстовых полей сделки.",
+          "storage_unavailable": "Локальная история экспорта недоступна. Новая запись не началась.",
+          "task_status_unavailable": "В Salesforce нет доступного статуса завершённой задачи. Обратитесь к администратору Salesforce.",
+          "not_found": "Salesforce не смог это принять.",
+          "invalid_reference": "Salesforce не смог это принять.",
+          "no_fields_selected": "Выберите хотя бы одно поле или отмените."
         }
       },
       "unknownSent": {
@@ -5637,7 +5727,41 @@
     },
     "beta": "Бета",
     "upsell": "Коннекторы входят в платные тарифы. Перейдите на платный тариф, чтобы ассистент работал в ваших инструментах.",
-    "locked": "Входит в платные тарифы"
+    "locked": "Входит в платные тарифы",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "Экспортируйте проверенные беседы и готовьте сводки по выбранному клиенту. Связи с заметками хранятся только на этом устройстве.",
+      "connect": "Подключить",
+      "reconnect": "Переподключить",
+      "disconnect": "Отключить",
+      "connecting": "Завершите подключение в браузере…",
+      "connectedAs": "Подключено как {{account}} в {{workspace}}",
+      "needsReconnect": "Salesforce нужно переподключить.",
+      "errors": {
+        "connect_failed": "Не удалось подключить Salesforce. Попробуйте снова.",
+        "disconnect_failed": "Не удалось отключить Salesforce. Попробуйте снова.",
+        "oauth_denied": "Salesforce не был подключён, так как доступ не был разрешён.",
+        "oauth_timeout": "Подключение заняло слишком много времени. Попробуйте снова.",
+        "oauth_state_mismatch": "Эта ссылка для входа устарела. Попробуйте снова.",
+        "ports_busy": "Другое приложение использует порты, которые нужны OpenWhispr для подключения. Закройте его и попробуйте снова.",
+        "token_exchange_failed": "Salesforce не завершил подключение. Попробуйте снова.",
+        "not_configured": "Salesforce недоступен в этой сборке.",
+        "connection_changed": "Ваш аккаунт или подключение к Salesforce изменились во время подключения. Попробуйте снова.",
+        "signed_out": "Войдите в OpenWhispr, чтобы подключить Salesforce.",
+        "policy_blocked": "Ваша организация отключила коннекторы.",
+        "policy_unavailable": "Не удалось проверить настройки вашей организации. Попробуйте снова.",
+        "permission_not_granted": "Salesforce не был подключён, так как были выданы не все разрешения. Подключите снова и разрешите их все."
+      },
+      "browser": {
+        "connectedTitle": "Salesforce подключён",
+        "connectedBody": "Вы можете закрыть эту вкладку и вернуться в OpenWhispr.",
+        "failedTitle": "Salesforce не был подключён",
+        "failedBody": "Вернитесь в OpenWhispr, чтобы попробовать снова."
+      },
+      "notes": {
+        "updateExisting": "Обновить ранее сохранённую активность; новая задача не будет создана."
+      }
+    }
   },
   "skills": {
     "pane": {

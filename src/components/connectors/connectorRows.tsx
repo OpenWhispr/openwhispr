@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
+import { Cloud } from "../icons";
 import gmailMark from "../../assets/icons/gmail.svg";
 import slackMark from "../../assets/icons/slack.svg";
 import linearMark from "../../assets/icons/linear.svg";
@@ -105,4 +106,9 @@ export const CONNECTOR_ROWS: readonly ConnectorRowSpec[] = [
     accountSummary: accountWorkspaceSummary,
   },
   githubRow,
+  {
+    id: "salesforce",
+    icon: <Cloud className="h-4 w-4" aria-hidden="true" />,
+    accountSummary: accountWorkspaceSummary,
+  },
 ];

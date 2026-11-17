@@ -4745,7 +4745,19 @@
       "request_api_keyName": "API 金鑰",
       "request_api_keyStatus": "正在請求 API 金鑰...",
       "open_settingsName": "設定",
-      "open_settingsStatus": "正在引導你前往設定..."
+      "open_settingsStatus": "正在引導你前往設定...",
+      "salesforce_search_recordsName": "搜尋Salesforce",
+      "salesforce_search_recordsStatus": "正在搜尋Salesforce…",
+      "salesforce_get_recordName": "Salesforce記錄",
+      "salesforce_get_recordStatus": "正在讀取Salesforce記錄…",
+      "salesforce_describe_fieldsName": "商機欄位",
+      "salesforce_describe_fieldsStatus": "正在讀取商機欄位…",
+      "salesforce_get_briefingName": "客戶簡報",
+      "salesforce_get_briefingStatus": "正在準備客戶簡報…",
+      "salesforce_export_conversationName": "Salesforce活動",
+      "salesforce_export_conversationStatus": "正在準備Salesforce活動…",
+      "salesforce_update_fieldsName": "Salesforce欄位更新",
+      "salesforce_update_fieldsStatus": "正在準備Salesforce欄位更新…"
     },
     "turn": {
       "reasoning": "推理過程",
@@ -4782,7 +4794,8 @@
           "slack": "我可以替你把訊息發到 Slack。",
           "linear": "我可以替你搜尋和建立 Linear 問題。",
           "github": "我可以替你搜尋和建立 GitHub Issue。",
-          "calendar": "我可以查看你的空閒時間並建議時段。"
+          "calendar": "我可以查看你的空閒時間並建議時段。",
+          "salesforce": "To read Salesforce records and save reviewed meeting notes."
         }
       },
       "access": {
@@ -5004,7 +5017,9 @@
         "default": "傳送至 {{destination}}",
         "email": "寄送郵件給 {{destination}}",
         "issue": "在 {{destination}} 中建立問題",
-        "comment": "留言於 {{destination}}"
+        "comment": "留言於 {{destination}}",
+        "salesforceActivity": "將對話儲存至{{destination}}",
+        "salesforceFields": "審核{{destination}}的商機欄位"
       },
       "identity": "以 {{account}} 身分",
       "identityWithWorkspace": "以 {{account}}（{{workspace}}）身分",
@@ -5095,6 +5110,30 @@
           "refused": "Linear 拒絕了請求，未傳送任何內容。",
           "unknown_action": "OpenWhispr 無法在 Linear 中執行此操作，未傳送任何內容。",
           "generic": "發生問題，未向 Linear 傳送任何內容。"
+        },
+        "salesforce": {
+          "reconnect_needed": "需要在設定中重新連接 Salesforce。",
+          "connection_changed": "傳送前 Salesforce 連線發生了變化，因此未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Salesforce 登入資訊，未傳送任何內容。請再試一次。",
+          "network": "無法連線到 Salesforce，未傳送任何內容。",
+          "rate_limited": "Salesforce 忙碌中，請稍後再試。",
+          "forbidden": "您的 Salesforce 帳戶無權執行此操作，未傳送任何內容。",
+          "invalid_input": "Salesforce 無法接受目前的內容，未傳送任何內容。",
+          "too_long": "對 Salesforce 來說太長，未傳送任何內容。",
+          "refused": "Salesforce 拒絕了請求，未傳送任何內容。",
+          "unknown_action": "OpenWhispr 無法在 Salesforce 中執行此操作，未傳送任何內容。",
+          "generic": "發生問題，未向 Salesforce 傳送任何內容。",
+          "stale_record": "審核後Salesforce資料已變更，請重新整理並審核。",
+          "source_unavailable": "來源筆記不存在或無法存取。",
+          "export_required": "請先將活動儲存至此商機，再更新其欄位。",
+          "uncertain_operation": "先前的寫入尚未確認。重試前請檢查Salesforce。",
+          "duplicate_operation": "先前的寫入尚未確認。重試前請檢查Salesforce。",
+          "invalid_field": "請選擇最多三個可編輯的商機自訂文字欄位。",
+          "storage_unavailable": "本機匯出歷史無法使用，尚未開始新的寫入。",
+          "task_status_unavailable": "Salesforce沒有可用的已完成工作狀態。請聯絡Salesforce管理員。",
+          "not_found": "Salesforce 無法接受目前的內容，未傳送任何內容。",
+          "invalid_reference": "Salesforce 無法接受目前的內容，未傳送任何內容。",
+          "no_fields_selected": "請至少選擇一個欄位，或取消。"
         }
       },
       "email": {
@@ -5123,11 +5162,14 @@
       "openIn": {
         "github": "在 GitHub 中開啟",
         "gmail": "在 Gmail 中開啟",
-        "linear": "在 Linear 中開啟"
+        "linear": "在 Linear 中開啟",
+        "salesforce": "在Salesforce中開啟"
       },
       "sendLabel": {
         "issue": "建立問題",
-        "comment": "留言"
+        "comment": "留言",
+        "salesforceActivity": "儲存活動",
+        "salesforceFields": "儲存欄位"
       },
       "issue": {
         "created": "已建立 {{result}}。",
@@ -5170,7 +5212,27 @@
       "identityChanged": "現在將以 {{account}} 身分傳送。按「傳送」即可傳送。",
       "connectToSend": "連接 {{name}} 以傳送此內容",
       "edit": "編輯",
-      "doneEditing": "編輯完成"
+      "doneEditing": "編輯完成",
+      "salesforce": {
+        "include": "包含{{field}}",
+        "omitted": "已省略 — 此欄位不會變更",
+        "before": "目前的值",
+        "after": "建議替換值",
+        "empty": "空白",
+        "value": "{{field}}的建議值",
+        "limit": "{{count}} / {{max}}個字元",
+        "invalidPreview": "欄位預覽不完整，請重新申請審核。",
+        "noneSelected": "請至少選擇一個欄位，或取消。",
+        "tooLong": "選定欄位超出字元數限制。",
+        "salesforceActivity": {
+          "sent": "活動已儲存至{{destination}}。",
+          "unknown": "無法確認變更。重試前請在Salesforce中檢查{{destination}}。"
+        },
+        "salesforceFields": {
+          "sent": "已儲存{{destination}}的欄位。",
+          "unknown": "無法確認變更。重試前請在Salesforce中檢查{{destination}}。"
+        }
+      }
     },
     "policyOff": "您的組織已關閉連接器。",
     "email": {
@@ -5346,7 +5408,9 @@
         "slack_send_message": "傳送給 {{destination}} 的訊息",
         "gmail_send": "傳送給 {{destination}} 的郵件",
         "linear_create_issue": "{{destination}} 中的新議題",
-        "linear_comment": "對 {{destination}} 的留言"
+        "linear_comment": "對 {{destination}} 的留言",
+        "salesforce_export_conversation": "將對話儲存至{{destination}}",
+        "salesforce_update_fields": "審核{{destination}}的商機欄位"
       },
       "unlabeledActions": {
         "email_draft": "郵件草稿",
@@ -5355,7 +5419,9 @@
         "slack_send_message": "Slack 訊息",
         "gmail_send": "Gmail 郵件",
         "linear_create_issue": "Linear 議題",
-        "linear_comment": "Linear 留言"
+        "linear_comment": "Linear 留言",
+        "salesforce_export_conversation": "Salesforce活動",
+        "salesforce_update_fields": "Salesforce欄位更新"
       },
       "states": {
         "pending": "等待中",
@@ -5457,6 +5523,30 @@
           "refused": "Linear 拒絕了請求。",
           "unknown_action": "在 Linear 中無法使用。",
           "generic": "在 Linear 中操作未成功。"
+        },
+        "salesforce": {
+          "reconnect_needed": "需要重新連接 Salesforce。",
+          "connection_changed": "Salesforce 連線已變更。未傳送任何內容。",
+          "credential_save_failed": "無法在這台電腦上儲存 Salesforce 登入資訊。",
+          "network": "無法連線到 Salesforce。",
+          "rate_limited": "Salesforce 忙碌中。",
+          "forbidden": "在 Salesforce 中無權執行。",
+          "invalid_input": "Salesforce 無法接受。",
+          "too_long": "對 Salesforce 來說太長。",
+          "refused": "Salesforce 拒絕了請求。",
+          "unknown_action": "在 Salesforce 中無法使用。",
+          "generic": "在 Salesforce 中操作未成功。",
+          "stale_record": "審核後Salesforce資料已變更，請重新整理並審核。",
+          "source_unavailable": "來源筆記不存在或無法存取。",
+          "export_required": "請先將活動儲存至此商機，再更新其欄位。",
+          "uncertain_operation": "先前的寫入尚未確認。重試前請檢查Salesforce。",
+          "duplicate_operation": "先前的寫入尚未確認。重試前請檢查Salesforce。",
+          "invalid_field": "請選擇最多三個可編輯的商機自訂文字欄位。",
+          "storage_unavailable": "本機匯出歷史無法使用，尚未開始新的寫入。",
+          "task_status_unavailable": "Salesforce沒有可用的已完成工作狀態。請聯絡Salesforce管理員。",
+          "not_found": "Salesforce 無法接受。",
+          "invalid_reference": "Salesforce 無法接受。",
+          "no_fields_selected": "請至少選擇一個欄位，或取消。"
         }
       },
       "unknownSent": {
@@ -5469,7 +5559,41 @@
     },
     "beta": "測試版",
     "upsell": "連接器包含在付費方案中。升級後，助理即可在您的工具中執行操作。",
-    "locked": "付費方案包含此功能"
+    "locked": "付費方案包含此功能",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "匯出已審核的對話，並為選定客戶準備簡報。 筆記關聯僅儲存在此裝置上。",
+      "connect": "連接",
+      "reconnect": "重新連接",
+      "disconnect": "中斷連接",
+      "connecting": "請在瀏覽器中完成連接…",
+      "connectedAs": "已以 {{account}} 身分連接到 {{workspace}}",
+      "needsReconnect": "需要重新連接 Salesforce。",
+      "errors": {
+        "connect_failed": "無法連接 Salesforce，請重試。",
+        "disconnect_failed": "無法中斷 Salesforce 連接，請重試。",
+        "oauth_denied": "由於未獲得授權，Salesforce 未連接。",
+        "oauth_timeout": "連接耗時過長，請重試。",
+        "oauth_state_mismatch": "該登入連結已過期，請重試。",
+        "ports_busy": "另一個應用程式正在使用 OpenWhispr 連接所需的連接埠。請關閉它後重試。",
+        "token_exchange_failed": "Salesforce 未完成連接，請重試。",
+        "not_configured": "此版本中 Salesforce 不可用。",
+        "connection_changed": "連接過程中您的帳戶或 Salesforce 連接發生了變化，請重試。",
+        "signed_out": "請登入 OpenWhispr 以連接 Salesforce。",
+        "policy_blocked": "您的組織已關閉連接器。",
+        "policy_unavailable": "無法檢查您的組織設定，請重試。",
+        "permission_not_granted": "由於未授予全部權限，Salesforce 未連接。請重新連接並允許所有權限。"
+      },
+      "browser": {
+        "connectedTitle": "Salesforce 已連接",
+        "connectedBody": "您可以關閉此分頁並返回 OpenWhispr。",
+        "failedTitle": "Salesforce 未連接",
+        "failedBody": "請返回 OpenWhispr 重試。"
+      },
+      "notes": {
+        "updateExisting": "更新先前儲存的活動，不會建立另一個工作。"
+      }
+    }
   },
   "skills": {
     "pane": {

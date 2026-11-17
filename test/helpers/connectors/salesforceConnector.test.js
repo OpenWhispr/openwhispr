@@ -1,0 +1,649 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { DatabaseSync } = require("node:sqlite");
+const { createSalesforceExports } = require("../../../src/helpers/connectors/salesforceExports");
+const {
+  createSalesforceConnector,
+} = require("../../../src/helpers/connectors/salesforceConnector");
+const instanceUrl = "https://tenant.my.salesforce.com";
+const binding = {
+  ownerAccountId: "owner",
+  accountId: "user",
+  workspaceId: "org",
+  instanceUrl,
+  generation: 1,
+};
+const recordId = "006000000000001";
+const activityId = "00T000000000001";
+const args = {
+  objectType: "Opportunity",
+  recordId,
+  noteId: 1,
+  title: "Meeting",
+  body: "Customer needs and agreed next steps",
+};
+const modified = "2026-11-02T10:00:00.000+0000";
+function field(name, extra = {}) {
+  return {
+    name,
+    label: name,
+    type: "string",
+    length: 255,
+    createable: true,
+    updateable: true,
+    ...extra,
+  };
+}
+function fixture() {
+  const calls = [];
+  let current = true;
+  const notes = new Map([
+    [1, { id: 1, title: "Conversation", account_id: "owner" }],
+    [2, { id: 2, title: "Extra", account_id: "owner" }],
+  ]);
+  const record = {
+    Id: recordId,
+    Name: "Selected deal",
+    LastModifiedDate: modified,
+    Notes__c: "Before",
+    StageName: "Discovery",
+  };
+  const task = {
+    Id: activityId,
+    Subject: args.title,
+    Description: args.body,
+    WhatId: recordId,
+    WhoId: null,
+    LastModifiedDate: modified,
+  };
+  const metadata = {
+    Opportunity: {
+      queryable: true,
+      updateable: true,
+      fields: [
+        field("Id"),
+        field("Name"),
+        field("LastModifiedDate"),
+        field("StageName"),
+        field("Notes__c", { custom: true, length: 500 }),
+        field("Rich__c", { custom: true, htmlFormatted: true }),
+        field("Formula__c", { custom: true, calculated: true }),
+        field("Number__c", { custom: true, type: "double" }),
+      ],
+    },
+    Task: {
+      createable: true,
+      updateable: true,
+      fields: [
+        field("Subject"),
+        field("Description", { type: "textarea", length: 32000 }),
+        field("Status", { picklistValues: [{ value: "Done", active: true }] }),
+        field("WhatId", { referenceTo: ["Opportunity", "Account"] }),
+        field("WhoId", { referenceTo: ["Contact", "Lead"] }),
+      ],
+    },
+  };
+  const db = new DatabaseSync(":memory:");
+  const store = createSalesforceExports({ db });
+  const credential = {
+    userId: "user",
+    organizationId: "org",
+    instanceUrl,
+    userName: "Sales user",
+    organizationName: "Org",
+  };
+  const auth = {
+    boundCredential: () => (current ? credential : null),
+    stillBound: () => current,
+    getAccessToken: async () =>
+      current
+        ? { ok: true, token: "token", credential }
+        : { ok: false, errorCode: "connection_changed" },
+    isConfigured: () => true,
+  };
+  let writeResult = null;
+  const api = {
+    request: async (request) => {
+      calls.push(request);
+      if (request.method && request.method !== "GET")
+        return (
+          writeResult ?? {
+            ok: true,
+            data: request.method === "POST" ? { id: activityId, success: true } : null,
+          }
+        );
+      if (request.path.includes("/describe"))
+        return { ok: true, data: metadata[request.path.split("/").at(-2)] };
+      if (request.path.includes("/query?")) {
+        const query = new URL(request.path, instanceUrl).searchParams.get("q");
+        return {
+          ok: true,
+          data: {
+            records: query.includes("FROM TaskStatus") ? [{ ApiName: "Done" }] : [record],
+            done: true,
+          },
+        };
+      }
+      return { ok: true, data: { ...(request.path.includes("/Task/") ? task : record) } };
+    },
+  };
+  const credentials = {
+    activeAccountId: () => "owner",
+    read: () => ({ credential, generation: 1 }),
+  };
+  const connector = createSalesforceConnector({
+    api,
+    auth,
+    credentials,
+    exports: store,
+    getNote: async (id, owner) => (owner === "owner" ? (notes.get(id) ?? null) : null),
+  });
+  return {
+    connector,
+    api,
+    auth,
+    calls,
+    notes,
+    record,
+    task,
+    metadata,
+    db,
+    store,
+    disconnect: () => {
+      current = false;
+    },
+    setWriteResult: (result) => {
+      writeResult = result;
+    },
+  };
+}
+const prepare = (fixture, action = "export_conversation", input = args) =>
+  fixture.connector.prepare(action, input, { binding });
+const commit = (fixture, preview, action = "export_conversation", edits = {}) =>
+  fixture.connector.commit(action, preview.payload, edits, { binding });
+const writes = (fixture) => fixture.calls.filter((call) => call.method && call.method !== "GET");
+
+test("explicit object and record validation rejects mismatches without network calls", async () => {
+  const fixtureState = fixture();
+  for (const input of [
+    { ...args, objectType: "Task" },
+    { ...args, recordId: "001000000000001" },
+    { ...args, recordId: "006000000000001'" },
+  ]) {
+    assert.equal((await prepare(fixtureState, "export_conversation", input)).status, "failed");
+  }
+  assert.equal(fixtureState.calls.length, 0);
+});
+test("search is bounded and escapes SOQL wildcard, quote and slash input", async () => {
+  const fixtureState = fixture();
+  const result = await fixtureState.connector.query(
+    "search_records",
+    { objectType: "Opportunity", query: "O'Hare_%\\" },
+    { binding }
+  );
+  assert.equal(result.status, "ok");
+  const query = new URL(
+    fixtureState.calls.find((call) => call.path.includes("query?")).path,
+    instanceUrl
+  ).searchParams.get("q");
+  assert.ok(query.includes("O\\'Hare\\_\\%\\\\"));
+  assert.match(query, /LIMIT 11$/);
+  assert.equal(writes(fixtureState).length, 0);
+});
+test("prepare reads only; approved save creates one completed Task and links note", async () => {
+  const fixtureState = fixture();
+  const preview = await prepare(fixtureState);
+  assert.equal(preview.status, "ready");
+  assert.equal(writes(fixtureState).length, 0);
+  const result = await commit(fixtureState, preview, "export_conversation", {
+    title: "Reviewed",
+    body: "Approved body",
+    recordId: "006000000000002",
+  });
+  assert.equal(result.state, "sent");
+  assert.deepEqual(writes(fixtureState)[0].body, {
+    Subject: "Reviewed",
+    Description: "Approved body",
+    Status: "Done",
+    WhatId: recordId,
+  });
+  const briefing = await fixtureState.connector.query(
+    "get_briefing",
+    { objectType: "Opportunity", recordId, noteIds: [2] },
+    { binding }
+  );
+  assert.deepEqual(
+    briefing.items.filter((item) => item.kind === "note").map((item) => item.noteId),
+    [1, 2]
+  );
+});
+test("concurrent approved cards create only one activity", async () => {
+  const fixtureState = fixture();
+  const previews = await Promise.all([prepare(fixtureState), prepare(fixtureState)]);
+  const outcomes = await Promise.all(previews.map((preview) => commit(fixtureState, preview)));
+  assert.equal(outcomes.filter((result) => result.state === "sent").length, 1);
+  assert.equal(writes(fixtureState).length, 1);
+});
+test("uncertain writes persist and cannot be automatically retried", async () => {
+  const fixtureState = fixture();
+  const preview = await prepare(fixtureState);
+  fixtureState.setWriteResult({ ok: false, outcome: "unknown", errorCode: "network" });
+  assert.equal((await commit(fixtureState, preview)).state, "unknown");
+  assert.equal((await prepare(fixtureState)).errorCode, "uncertain_operation");
+  const restarted = createSalesforceExports({ db: fixtureState.db });
+  assert.equal(
+    restarted.get({ ownerAccountId: "owner", organizationId: "org", instanceUrl, ...args })
+      .activity_state,
+    "unknown"
+  );
+  assert.equal(writes(fixtureState).length, 1);
+});
+test("repeat export updates known activity with concurrency condition", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  const repeat = await prepare(fixtureState);
+  assert.equal(repeat.payload.activityId, activityId);
+  assert.equal((await commit(fixtureState, repeat)).state, "sent");
+  const update = writes(fixtureState)[1];
+  assert.equal(update.method, "PATCH");
+  assert.ok(update.path.endsWith(`/Task/${activityId}`));
+  assert.equal(update.headers["If-Unmodified-Since"], new Date(modified).toUTCString());
+});
+test("changed Task and missing source reject a repeat before dispatch", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  const repeat = await prepare(fixtureState);
+  fixtureState.task.Subject = "Someone else's change";
+  assert.equal((await commit(fixtureState, repeat)).errorCode, "stale_record");
+  fixtureState.notes.delete(1);
+  assert.equal((await prepare(fixtureState)).errorCode, "source_unavailable");
+  assert.equal(writes(fixtureState).length, 1);
+});
+test("account or connection switches and source removal after approval prevent dispatch", async () => {
+  for (const change of [(state) => state.disconnect(), (state) => state.notes.delete(1)]) {
+    const fixtureState = fixture();
+    const preview = await prepare(fixtureState);
+    change(fixtureState);
+    assert.equal((await commit(fixtureState, preview)).state, "failed");
+    assert.equal(writes(fixtureState).length, 0);
+  }
+});
+test("field updates require a successful activity and only expose safe custom text fields", async () => {
+  const fixtureState = fixture();
+  const input = { ...args, fields: [{ name: "Notes__c", value: "After" }] };
+  assert.equal((await prepare(fixtureState, "update_fields", input)).errorCode, "export_required");
+  const described = await fixtureState.connector.query("describe_fields", args, { binding });
+  assert.deepEqual(
+    described.items.map((item) => item.name),
+    ["Notes__c"]
+  );
+  await commit(fixtureState, await prepare(fixtureState));
+  for (const name of ["StageName", "Rich__c", "Formula__c", "Number__c", "Name,Amount"]) {
+    assert.equal(
+      (await prepare(fixtureState, "update_fields", { ...input, fields: [{ name, value: "bad" }] }))
+        .errorCode,
+      "invalid_field"
+    );
+  }
+  const preview = await prepare(fixtureState, "update_fields", input);
+  assert.equal(preview.preview.salesforceFields[0].before, "Before");
+  assert.equal(
+    (await commit(fixtureState, preview, "update_fields", { value0: "Reviewed", include0: "yes" }))
+      .state,
+    "sent"
+  );
+  assert.deepEqual(writes(fixtureState)[1].body, { Notes__c: "Reviewed" });
+});
+test("field stale checks, live metadata limits and omissions prevent unintended writes", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  const input = { ...args, fields: [{ name: "Notes__c", value: "After" }] };
+  const preview = await prepare(fixtureState, "update_fields", input);
+  fixtureState.record.Notes__c = "Changed";
+  assert.equal((await commit(fixtureState, preview, "update_fields")).errorCode, "stale_record");
+  fixtureState.record.Notes__c = "Before";
+  assert.equal(
+    (await commit(fixtureState, preview, "update_fields", { value0: "x".repeat(501) })).errorCode,
+    "too_long"
+  );
+  assert.equal(
+    (await commit(fixtureState, preview, "update_fields", { include0: "no" })).state,
+    "failed"
+  );
+  assert.equal(writes(fixtureState).length, 1);
+});
+test("briefing excludes inaccessible linked notes and exposes only explicitly selected additional ids", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  fixtureState.notes.delete(1);
+  const result = await fixtureState.connector.query("get_briefing", args, { binding });
+  assert.equal(result.items.filter((item) => item.kind === "note").length, 0);
+  assert.equal(result.items[0].unavailableNotes, 1);
+  assert.equal(writes(fixtureState).length, 1);
+});
+
+test("15- and 18-character destination IDs share one association and read Salesforce's canonical response", async () => {
+  const fixtureState = fixture();
+  fixtureState.record.Id = `${recordId}AAA`;
+  fixtureState.task.WhatId = `${recordId}AAA`;
+  const first = await prepare(fixtureState);
+  assert.equal(first.status, "ready");
+  assert.equal((await commit(fixtureState, first)).state, "sent");
+  const repeat = await prepare(fixtureState, "export_conversation", {
+    ...args,
+    recordId: `${recordId}AAA`,
+  });
+  assert.equal(repeat.status, "ready");
+  assert.equal(repeat.payload.activityId, activityId);
+  assert.equal((await commit(fixtureState, repeat)).state, "sent");
+  assert.deepEqual(
+    writes(fixtureState).map((call) => call.method),
+    ["POST", "PATCH"]
+  );
+});
+
+test("live Task relationship and field permissions are checked again before writing", async () => {
+  const fixtureState = fixture();
+  const preview = await prepare(fixtureState);
+  fixtureState.metadata.Task.fields.find((field) => field.name === "WhatId").createable = false;
+  assert.equal((await commit(fixtureState, preview)).errorCode, "forbidden");
+  assert.equal(writes(fixtureState).length, 0);
+  fixtureState.metadata.Task.fields.find((field) => field.name === "WhatId").createable = true;
+  await commit(fixtureState, preview);
+  const repeat = await prepare(fixtureState);
+  fixtureState.task.WhatId = "006000000000002";
+  assert.equal((await commit(fixtureState, repeat)).errorCode, "stale_record");
+  assert.equal(writes(fixtureState).length, 1);
+});
+
+test("field-write failure and uncertainty preserve the saved activity", async () => {
+  for (const outcome of ["failed", "unknown"]) {
+    const fixtureState = fixture();
+    await commit(fixtureState, await prepare(fixtureState));
+    const input = { ...args, fields: [{ name: "Notes__c", value: "After" }] };
+    const preview = await prepare(fixtureState, "update_fields", input);
+    fixtureState.setWriteResult({
+      ok: false,
+      errorCode: outcome === "failed" ? "FIELD_CUSTOM_VALIDATION_EXCEPTION" : "network",
+      outcome,
+    });
+    assert.equal((await commit(fixtureState, preview, "update_fields")).state, outcome);
+    const saved = fixtureState.store.get({
+      ownerAccountId: "owner",
+      organizationId: "org",
+      instanceUrl,
+      ...args,
+    });
+    assert.equal(saved.activity_id, activityId);
+    assert.equal(saved.activity_state, "succeeded");
+    assert.equal(saved.fields_state, outcome);
+    if (outcome === "unknown")
+      assert.equal(
+        (await prepare(fixtureState, "update_fields", input)).errorCode,
+        "uncertain_operation"
+      );
+  }
+});
+
+test("payload account, org and instance must match the bound login", async () => {
+  const fixtureState = fixture();
+  const preview = await prepare(fixtureState);
+  for (const changed of [
+    { ownerAccountId: "other" },
+    { organizationId: "other" },
+    { instanceUrl: "https://other.my.salesforce.com" },
+  ]) {
+    const result = await commit(fixtureState, {
+      ...preview,
+      payload: { ...preview.payload, ...changed },
+    });
+    assert.equal(result.errorCode, "connection_changed");
+  }
+  assert.equal(writes(fixtureState).length, 0);
+});
+
+test("activity preview exposes the complete reviewed title and source provenance", async () => {
+  const fixtureState = fixture();
+  fixtureState.notes.get(1).created_at = "2026-11-01T09:00:00Z";
+  const preview = await prepare(fixtureState);
+  assert.equal(preview.preview.title, args.title);
+  assert.equal(preview.preview.fields, undefined);
+  assert.match(preview.preview.body, /Source: OpenWhispr — Conversation \(2026-11-01\)/);
+  assert.equal(preview.payload.body, preview.preview.body);
+  await commit(fixtureState, preview);
+  assert.equal(writes(fixtureState)[0].body.Description, preview.preview.body);
+});
+
+test("Account/Opportunity use WhatId and Contact/Lead use WhoId", async () => {
+  for (const [objectType, prefix, relationship] of [
+    ["Account", "001", "WhatId"],
+    ["Opportunity", "006", "WhatId"],
+    ["Contact", "003", "WhoId"],
+    ["Lead", "00Q", "WhoId"],
+  ]) {
+    const fixtureState = fixture();
+    const id = `${prefix}000000000001`;
+    fixtureState.record.Id = id;
+    fixtureState.metadata[objectType] = fixtureState.metadata.Opportunity;
+    const preview = await prepare(fixtureState, "export_conversation", {
+      ...args,
+      objectType,
+      recordId: id,
+    });
+    assert.equal(preview.status, "ready");
+    assert.equal((await commit(fixtureState, preview)).state, "sent");
+    assert.equal(writes(fixtureState)[0].body[relationship], id);
+    assert.equal(
+      Object.keys(writes(fixtureState)[0].body).filter((name) => ["WhoId", "WhatId"].includes(name))
+        .length,
+      1
+    );
+  }
+});
+
+test("source removed during token acquisition is rejected immediately before dispatch", async () => {
+  const fixtureState = fixture();
+  const preview = await prepare(fixtureState);
+  const begin = fixtureState.store.begin;
+  const getAccessToken = fixtureState.auth.getAccessToken;
+  fixtureState.store.begin = (...params) => {
+    const result = begin(...params);
+    fixtureState.auth.getAccessToken = async () => {
+      fixtureState.notes.delete(1);
+      return getAccessToken();
+    };
+    return result;
+  };
+  assert.equal((await commit(fixtureState, preview)).errorCode, "source_unavailable");
+  assert.equal(writes(fixtureState).length, 0);
+});
+
+test("in-flight query cannot return CRM data after switching the login", async () => {
+  const fixtureState = fixture();
+  const request = fixtureState.api.request;
+  fixtureState.api.request = async (input) => {
+    const result = await request(input);
+    fixtureState.disconnect();
+    return result;
+  };
+  const result = await fixtureState.connector.query("get_record", args, { binding });
+  assert.equal(result.errorCode, "connection_changed");
+  assert.equal(result.items, undefined);
+});
+
+test("ambiguous invalid-session failures are not retried", async () => {
+  const fixtureState = fixture();
+  const preview = await prepare(fixtureState);
+  fixtureState.setWriteResult({ ok: false, errorCode: "INVALID_SESSION_ID", outcome: "unknown" });
+  assert.equal((await commit(fixtureState, preview)).state, "unknown");
+  assert.equal(writes(fixtureState).length, 1);
+});
+
+test("field permissions are re-read and server concurrency refusals remain definite failures", async () => {
+  const fixtureState = fixture();
+  await commit(fixtureState, await prepare(fixtureState));
+  const input = { ...args, fields: [{ name: "Notes__c", value: "After" }] };
+  const preview = await prepare(fixtureState, "update_fields", input);
+  const field = fixtureState.metadata.Opportunity.fields.find((field) => field.name === "Notes__c");
+  field.updateable = false;
+  assert.equal((await commit(fixtureState, preview, "update_fields")).errorCode, "invalid_field");
+  assert.equal(writes(fixtureState).length, 1);
+  field.updateable = true;
+  fixtureState.setWriteResult({ ok: false, errorCode: "http_412", outcome: "failed" });
+  const result = await commit(fixtureState, preview, "update_fields");
+  assert.equal(result.state, "failed");
+  assert.equal(result.errorCode, "stale_record");
+});
+
+test("default search preserves accessible matches and reports unavailable object scope", async () => {
+  const fixtureState = fixture();
+  const { normalizeQueryResult } = require("../../../src/helpers/connectors/queryResult");
+  const request = fixtureState.api.request;
+  fixtureState.api.request = async (input) => {
+    if (input.path.includes("/Contact/describe"))
+      return { ok: false, errorCode: "INVALID_TYPE", outcome: "failed" };
+    if (input.path.includes("/Lead/describe"))
+      return { ok: false, errorCode: "INSUFFICIENT_ACCESS", outcome: "failed" };
+    if (input.path.includes("/Account/describe"))
+      return { ok: true, data: fixtureState.metadata.Opportunity };
+    if (input.path.includes("/query?") && decodeURIComponent(input.path).includes("FROM Account"))
+      return {
+        ok: true,
+        data: { records: [{ Id: "001000000000001", Name: "Account match" }], done: true },
+      };
+    return request(input);
+  };
+  const result = normalizeQueryResult(
+    await fixtureState.connector.query("search_records", { query: "match" }, { binding })
+  );
+  assert.equal(result.status, "ok");
+  assert.deepEqual(
+    result.items.filter((item) => item.kind === "record").map((item) => item.objectType),
+    ["Account", "Opportunity"]
+  );
+  const scope = result.items.find((item) => item.kind === "search_scope");
+  assert.deepEqual(scope.unavailableObjects, ["Contact", "Lead"]);
+  assert.equal(scope.unavailableObjectCount, 2);
+  assert.equal(result.truncated, true);
+  const explicit = await fixtureState.connector.query(
+    "search_records",
+    { query: "match", objectType: "Contact" },
+    { binding }
+  );
+  assert.equal(explicit.errorCode, "INVALID_TYPE");
+});
+
+test("cross-object search skips local query permission errors but preserves auth and network failures", async () => {
+  for (const errorCode of [
+    "INVALID_FIELD",
+    "INVALID_SESSION_ID",
+    "network",
+    "REQUEST_LIMIT_EXCEEDED",
+  ]) {
+    const fixtureState = fixture();
+    const request = fixtureState.api.request;
+    fixtureState.api.request = async (input) => {
+      if (input.path.includes("/Account/describe"))
+        return { ok: true, data: fixtureState.metadata.Opportunity };
+      if (input.path.includes("/query?") && decodeURIComponent(input.path).includes("FROM Account"))
+        return { ok: false, errorCode, outcome: "failed" };
+      return request(input);
+    };
+    const result = await fixtureState.connector.query(
+      "search_records",
+      { query: "match" },
+      { binding }
+    );
+    if (errorCode === "INVALID_FIELD") {
+      assert.equal(result.status, "ok");
+      assert.equal(
+        result.items.some((item) => item.kind === "record" && item.objectType === "Opportunity"),
+        true
+      );
+      assert.ok(
+        result.items
+          .find((item) => item.kind === "search_scope")
+          .unavailableObjects.includes("Account")
+      );
+    } else {
+      assert.equal(result.status, "failed");
+      assert.equal(result.errorCode, errorCode);
+    }
+  }
+});
+
+test("field-name and label filtering can reach metadata beyond the first twenty fields", async () => {
+  const fixtureState = fixture();
+  fixtureState.metadata.Opportunity.fields.push(
+    ...Array.from({ length: 24 }, (_, index) =>
+      field(`Custom${index}__c`, {
+        custom: true,
+        label: index === 23 ? "Customer requests" : `Custom ${index}`,
+      })
+    )
+  );
+  const first = await fixtureState.connector.query("describe_fields", args, { binding });
+  assert.equal(first.items.length, 20);
+  assert.equal(first.truncated, true);
+  for (const query of ["  CUSTOM23  ", "customer REQUESTS"]) {
+    const result = await fixtureState.connector.query(
+      "describe_fields",
+      { ...args, query },
+      { binding }
+    );
+    assert.equal(result.status, "ok");
+    assert.equal(result.truncated, false);
+    assert.deepEqual(
+      result.items.map((item) => item.name),
+      ["Custom23__c"]
+    );
+  }
+  for (const query of ["x".repeat(201), 42, { name: "Notes__c" }]) {
+    const result = await fixtureState.connector.query(
+      "describe_fields",
+      { ...args, query },
+      { binding }
+    );
+    assert.equal(result.errorCode, "invalid_input");
+  }
+  const empty = await fixtureState.connector.query(
+    "describe_fields",
+    { ...args, query: "  " },
+    { binding }
+  );
+  assert.equal(empty.items.length, 20);
+});
+
+test("search completeness marker survives the twenty-item result bound", async () => {
+  const fixtureState = fixture();
+  const { normalizeQueryResult } = require("../../../src/helpers/connectors/queryResult");
+  fixtureState.api.request = async (input) => {
+    if (input.path.includes("/Contact/describe"))
+      return { ok: false, errorCode: "INVALID_TYPE", outcome: "failed" };
+    if (input.path.includes("/describe"))
+      return { ok: true, data: fixtureState.metadata.Opportunity };
+    const objectType = /FROM (Account|Lead|Opportunity)/.exec(decodeURIComponent(input.path))[1];
+    const prefix = { Account: "001", Lead: "00Q", Opportunity: "006" }[objectType];
+    return {
+      ok: true,
+      data: {
+        records: Array.from({ length: 10 }, (_, index) => ({
+          Id: `${prefix}${String(index).padStart(12, "0")}`,
+          Name: `Record ${index}`,
+        })),
+        done: true,
+      },
+    };
+  };
+  const result = normalizeQueryResult(
+    await fixtureState.connector.query("search_records", { query: "Record" }, { binding })
+  );
+  assert.equal(result.items.length, 20);
+  assert.equal(result.items.filter((item) => item.kind === "record").length, 19);
+  assert.deepEqual(result.items.at(-1), {
+    kind: "search_scope",
+    unavailableObjects: ["Contact"],
+    unavailableObjectCount: 1,
+  });
+  assert.equal(result.truncated, true);
+});

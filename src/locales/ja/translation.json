@@ -4745,7 +4745,19 @@
       "request_api_keyName": "API キー",
       "request_api_keyStatus": "API キーを依頼しています...",
       "open_settingsName": "設定",
-      "open_settingsStatus": "設定を案内しています..."
+      "open_settingsStatus": "設定を案内しています...",
+      "salesforce_search_recordsName": "Salesforceを検索",
+      "salesforce_search_recordsStatus": "Salesforceを検索中…",
+      "salesforce_get_recordName": "Salesforceレコード",
+      "salesforce_get_recordStatus": "Salesforceレコードを読み取り中…",
+      "salesforce_describe_fieldsName": "商談項目",
+      "salesforce_describe_fieldsStatus": "商談項目を読み取り中…",
+      "salesforce_get_briefingName": "顧客の概要",
+      "salesforce_get_briefingStatus": "顧客の概要を作成中…",
+      "salesforce_export_conversationName": "Salesforceの活動",
+      "salesforce_export_conversationStatus": "Salesforceの活動を準備中…",
+      "salesforce_update_fieldsName": "Salesforceの項目更新",
+      "salesforce_update_fieldsStatus": "Salesforceの項目更新を準備中…"
     },
     "turn": {
       "reasoning": "推論",
@@ -4782,7 +4794,8 @@
           "slack": "代わりに Slack へメッセージを投稿できます。",
           "linear": "Linear の課題を検索・作成できます。",
           "github": "GitHub の Issue を検索・作成できます。",
-          "calendar": "空き時間を確認して、候補の時間を提案できます。"
+          "calendar": "空き時間を確認して、候補の時間を提案できます。",
+          "salesforce": "To read Salesforce records and save reviewed meeting notes."
         }
       },
       "access": {
@@ -5004,7 +5017,9 @@
         "default": "{{destination}} に送信",
         "email": "{{destination}} 宛てのメール",
         "issue": "{{destination}} に Issue を作成",
-        "comment": "{{destination}} にコメント"
+        "comment": "{{destination}} にコメント",
+        "salesforceActivity": "会話を{{destination}}に保存",
+        "salesforceFields": "{{destination}}の商談項目を確認"
       },
       "identity": "{{account}} として",
       "identityWithWorkspace": "{{workspace}} の {{account}} として",
@@ -5095,6 +5110,30 @@
           "refused": "Linearがリクエストを拒否しました。何も送信されていません。",
           "unknown_action": "OpenWhisprはLinearでその操作を行えません。何も送信されていません。",
           "generic": "問題が発生しました。Linearには何も送信されていません。"
+        },
+        "salesforce": {
+          "reconnect_needed": "設定でSalesforceを再接続する必要があります。",
+          "connection_changed": "送信前にSalesforceの接続が変わったため、何も送信されませんでした。",
+          "credential_save_failed": "このコンピューターにSalesforceのログイン情報を保存できませんでした。何も送信されていません。もう一度お試しください。",
+          "network": "Salesforceに接続できませんでした。何も送信されていません。",
+          "rate_limited": "Salesforceが混み合っています。しばらくしてからもう一度お試しください。",
+          "forbidden": "お使いのSalesforceアカウントにはその操作が許可されていません。何も送信されていません。",
+          "invalid_input": "Salesforceはこの内容を受け付けませんでした。何も送信されていません。",
+          "too_long": "Salesforceには長すぎます。何も送信されていません。",
+          "refused": "Salesforceがリクエストを拒否しました。何も送信されていません。",
+          "unknown_action": "OpenWhisprはSalesforceでその操作を行えません。何も送信されていません。",
+          "generic": "問題が発生しました。Salesforceには何も送信されていません。",
+          "stale_record": "確認後にSalesforceのデータが変更されました。更新して再確認してください。",
+          "source_unavailable": "元のノートが見つからないか、アクセスできません。",
+          "export_required": "項目を更新する前に、この商談に活動を保存してください。",
+          "uncertain_operation": "以前の書き込みが未確認です。再試行する前にSalesforceを確認してください。",
+          "duplicate_operation": "以前の書き込みが未確認です。再試行する前にSalesforceを確認してください。",
+          "invalid_field": "編集可能な商談のカスタムテキスト項目を最大3つ選択してください。",
+          "storage_unavailable": "ローカルのエクスポート履歴を利用できません。新しい書き込みは開始されていません。",
+          "task_status_unavailable": "Salesforceに利用可能な完了済みタスクの状況がありません。Salesforce管理者にお問い合わせください。",
+          "not_found": "Salesforceはこの内容を受け付けませんでした。何も送信されていません。",
+          "invalid_reference": "Salesforceはこの内容を受け付けませんでした。何も送信されていません。",
+          "no_fields_selected": "項目を1つ以上選択するか、キャンセルしてください。"
         }
       },
       "email": {
@@ -5123,11 +5162,14 @@
       "openIn": {
         "github": "GitHubで開く",
         "gmail": "Gmailで開く",
-        "linear": "Linearで開く"
+        "linear": "Linearで開く",
+        "salesforce": "Salesforceで開く"
       },
       "sendLabel": {
         "issue": "Issue を作成",
-        "comment": "コメント"
+        "comment": "コメント",
+        "salesforceActivity": "活動を保存",
+        "salesforceFields": "項目を保存"
       },
       "issue": {
         "created": "{{result}} を作成しました。",
@@ -5170,7 +5212,27 @@
       "identityChanged": "{{account}} として送信されます。送信するには「送信」を押してください。",
       "connectToSend": "送信するには {{name}} を接続してください",
       "edit": "編集",
-      "doneEditing": "編集完了"
+      "doneEditing": "編集完了",
+      "salesforce": {
+        "include": "{{field}}を含める",
+        "omitted": "除外 — この項目は変更されません",
+        "before": "現在の値",
+        "after": "変更後の値",
+        "empty": "空欄",
+        "value": "{{field}}の変更後の値",
+        "limit": "{{count}} / {{max}}文字",
+        "invalidPreview": "項目のプレビューが不完全です。再度確認を依頼してください。",
+        "noneSelected": "項目を1つ以上選択するか、キャンセルしてください。",
+        "tooLong": "選択した項目が文字数制限を超えています。",
+        "salesforceActivity": {
+          "sent": "活動を{{destination}}に保存しました。",
+          "unknown": "変更を確認できませんでした。再試行する前にSalesforceで{{destination}}を確認してください。"
+        },
+        "salesforceFields": {
+          "sent": "{{destination}}の項目を保存しました。",
+          "unknown": "変更を確認できませんでした。再試行する前にSalesforceで{{destination}}を確認してください。"
+        }
+      }
     },
     "policyOff": "組織によってコネクタが無効にされています。",
     "email": {
@@ -5346,7 +5408,9 @@
         "slack_send_message": "{{destination}} 宛てのメッセージ",
         "gmail_send": "{{destination}} 宛てのメール",
         "linear_create_issue": "{{destination}} の新しいIssue",
-        "linear_comment": "{{destination}} へのコメント"
+        "linear_comment": "{{destination}} へのコメント",
+        "salesforce_export_conversation": "会話を{{destination}}に保存",
+        "salesforce_update_fields": "{{destination}}の商談項目を確認"
       },
       "unlabeledActions": {
         "email_draft": "メール下書き",
@@ -5355,7 +5419,9 @@
         "slack_send_message": "Slackメッセージ",
         "gmail_send": "Gmailのメール",
         "linear_create_issue": "LinearのIssue",
-        "linear_comment": "Linearのコメント"
+        "linear_comment": "Linearのコメント",
+        "salesforce_export_conversation": "Salesforceの活動",
+        "salesforce_update_fields": "Salesforceの項目更新"
       },
       "states": {
         "pending": "待機中",
@@ -5457,6 +5523,30 @@
           "refused": "Linearがリクエストを拒否しました。",
           "unknown_action": "Linearでは利用できません。",
           "generic": "Linearでうまくいきませんでした。"
+        },
+        "salesforce": {
+          "reconnect_needed": "Salesforceを再接続する必要があります。",
+          "connection_changed": "Salesforceの接続が変わりました。何も送信されていません。",
+          "credential_save_failed": "このコンピューターにSalesforceのログイン情報を保存できませんでした。",
+          "network": "Salesforceに接続できませんでした。",
+          "rate_limited": "Salesforceが混み合っています。",
+          "forbidden": "Salesforceで許可されていません。",
+          "invalid_input": "Salesforceが受け付けませんでした。",
+          "too_long": "Salesforceには長すぎます。",
+          "refused": "Salesforceがリクエストを拒否しました。",
+          "unknown_action": "Salesforceでは利用できません。",
+          "generic": "Salesforceでうまくいきませんでした。",
+          "stale_record": "確認後にSalesforceのデータが変更されました。更新して再確認してください。",
+          "source_unavailable": "元のノートが見つからないか、アクセスできません。",
+          "export_required": "項目を更新する前に、この商談に活動を保存してください。",
+          "uncertain_operation": "以前の書き込みが未確認です。再試行する前にSalesforceを確認してください。",
+          "duplicate_operation": "以前の書き込みが未確認です。再試行する前にSalesforceを確認してください。",
+          "invalid_field": "編集可能な商談のカスタムテキスト項目を最大3つ選択してください。",
+          "storage_unavailable": "ローカルのエクスポート履歴を利用できません。新しい書き込みは開始されていません。",
+          "task_status_unavailable": "Salesforceに利用可能な完了済みタスクの状況がありません。Salesforce管理者にお問い合わせください。",
+          "not_found": "Salesforceが受け付けませんでした。",
+          "invalid_reference": "Salesforceが受け付けませんでした。",
+          "no_fields_selected": "項目を1つ以上選択するか、キャンセルしてください。"
         }
       },
       "unknownSent": {
@@ -5469,7 +5559,41 @@
     },
     "beta": "ベータ",
     "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。",
-    "locked": "有料プランに含まれます"
+    "locked": "有料プランに含まれます",
+    "salesforce": {
+      "title": "Salesforce",
+      "description": "確認済みの会話をエクスポートし、選択した顧客の概要を作成します。 ノートの関連付けはこのデバイスにのみ保存されます。",
+      "connect": "接続",
+      "reconnect": "再接続",
+      "disconnect": "接続を解除",
+      "connecting": "ブラウザで接続を完了してください…",
+      "connectedAs": "{{workspace}} の {{account}} として接続済み",
+      "needsReconnect": "Salesforceを再接続する必要があります。",
+      "errors": {
+        "connect_failed": "Salesforceを接続できませんでした。もう一度お試しください。",
+        "disconnect_failed": "Salesforceの接続を解除できませんでした。もう一度お試しください。",
+        "oauth_denied": "アクセスが許可されなかったため、Salesforceは接続されませんでした。",
+        "oauth_timeout": "接続に時間がかかりすぎました。もう一度お試しください。",
+        "oauth_state_mismatch": "そのサインインリンクは期限切れでした。もう一度お試しください。",
+        "ports_busy": "OpenWhisprが接続に必要なポートを別のアプリが使用しています。そのアプリを閉じてから、もう一度お試しください。",
+        "token_exchange_failed": "Salesforceの接続が完了しませんでした。もう一度お試しください。",
+        "not_configured": "このビルドではSalesforceを利用できません。",
+        "connection_changed": "接続中にアカウントまたはSalesforceの接続が変わりました。もう一度お試しください。",
+        "signed_out": "Salesforceを接続するにはOpenWhisprにサインインしてください。",
+        "policy_blocked": "組織によってコネクタが無効にされています。",
+        "policy_unavailable": "組織の設定を確認できませんでした。もう一度お試しください。",
+        "permission_not_granted": "すべての権限が許可されなかったため、Salesforceは接続されませんでした。もう一度接続し、すべて許可してください。"
+      },
+      "browser": {
+        "connectedTitle": "Salesforceが接続されました",
+        "connectedBody": "このタブを閉じてOpenWhisprに戻ることができます。",
+        "failedTitle": "Salesforceは接続されませんでした",
+        "failedBody": "OpenWhisprに戻ってもう一度お試しください。"
+      },
+      "notes": {
+        "updateExisting": "保存済みの活動を更新します。別のタスクは作成されません。"
+      }
+    }
   },
   "skills": {
     "pane": {

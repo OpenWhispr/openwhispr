@@ -5742,6 +5742,15 @@ class DatabaseManager {
         .prepare("DELETE FROM analytics_account_clear_state WHERE account_scope = ?")
         .run(accountId);
       this.db.prepare("DELETE FROM connector_actions WHERE account_id = ?").run(accountId);
+      if (
+        this.db
+          .prepare(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'salesforce_exports'"
+          )
+          .get()
+      ) {
+        this.db.prepare("DELETE FROM salesforce_exports WHERE account_id = ?").run(accountId);
+      }
       this.db.prepare("DELETE FROM space_accounts WHERE account_id = ?").run(accountId);
       // Earlier preview builds kept import metadata; account deletion still clears it.
       if (

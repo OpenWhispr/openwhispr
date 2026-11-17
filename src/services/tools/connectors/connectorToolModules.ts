@@ -6,6 +6,7 @@ import { requireConnection } from "../interactionTools";
 import { emailToolModule } from "./emailDraftTool";
 import { linearToolModule } from "./linearTools";
 import { slackToolModule } from "./slackSendMessageTool";
+import { salesforceToolModule } from "./salesforceTools";
 import { githubToolModule } from "./githubTools";
 
 /** What a module may need to build its tools for this send. */
@@ -38,6 +39,7 @@ export const CONNECTOR_TOOL_MODULES: readonly ConnectorToolModule[] = [
   slackToolModule,
   linearToolModule,
   githubToolModule,
+  salesforceToolModule,
 ];
 
 export function registerConnectorTools(
