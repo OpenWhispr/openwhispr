@@ -131,7 +131,9 @@ const MarkdownInlineMath = InlineMath.extend({
     return {
       markdown: {
         serialize(state: any, node: any) {
-          state.write(`$${escapeMd(String(node.attrs.latex ?? "")).replace(/\$/g, "\\$")}$`);
+          // escapeMd's characters plus $, which would end the formula early.
+          const latex = String(node.attrs.latex ?? "").replace(/[`*\\~[\]_$]/g, (c) => `\\${c}`);
+          state.write(`$${latex}$`);
         },
         parse: {},
       },
