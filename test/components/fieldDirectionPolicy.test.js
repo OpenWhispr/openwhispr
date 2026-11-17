@@ -131,8 +131,7 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/notes/SpaceNameField.tsx": ["auto"],
   // A teamspace's name and description, edited in place in the settings header: prose in any script.
   "src/components/notes/SpaceSettingsDialog.tsx": ["auto", "auto"],
-  // Folder names (rename, new, and the device section's Move all to a new folder): any script.
-  "src/components/notes/SpacesTree.tsx": ["auto", "auto", "auto", "auto", "auto"],
+  "src/components/notes/SpacesTree.tsx": ["auto", "auto", "auto", "auto"],
   "src/components/notes/UploadAudioView.tsx": ["ltr", "ltr", "inherit"],
   "src/components/onboarding/DemoStep.tsx": ["auto"],
   "src/components/onboarding/LanguageSelectionStep.tsx": ["auto"],

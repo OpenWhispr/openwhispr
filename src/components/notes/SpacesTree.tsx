@@ -430,6 +430,51 @@ function SearchableMoveSubmenu({
   );
 }
 
+/** A folder picker's New folder row: asks for the name in place, then hands it on. */
+function NewFolderMenuFooter({ onCreate }: { onCreate: (name: string) => void }) {
+  const { t } = useTranslation();
+  const [isCreating, setIsCreating] = useState(false);
+  const [name, setName] = useState("");
+  if (!isCreating) {
+    return (
+      <DropdownMenuItem
+        onSelect={(e) => {
+          e.preventDefault();
+          setIsCreating(true);
+        }}
+        className={cn(MENU_ITEM_CLASS, "text-foreground/70")}
+      >
+        <Plus size={10} />
+        {t("notes.context.newFolder")}
+      </DropdownMenuItem>
+    );
+  }
+  return (
+    <div className="px-1">
+      <input
+        dir="auto"
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter" && name.trim()) {
+            onCreate(name.trim());
+            setName("");
+            setIsCreating(false);
+          }
+          if (e.key === "Escape") {
+            setIsCreating(false);
+            setName("");
+          }
+        }}
+        placeholder={t("notes.folders.folderName")}
+        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+      />
+    </div>
+  );
+}
+
 function SpaceMenuIcon({ space }: { space: SpaceItem }) {
   if (space.kind === "private") {
     return <Lock size={11} className="text-muted-foreground/70 shrink-0" />;
@@ -879,8 +924,6 @@ function NoteLeaf({
   t: TFn;
 }) {
   const [moveSearch, setMoveSearch] = useState("");
-  const [newFolderName, setNewFolderName] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
 
   const multiSpace = spaces.length > 1;
 
@@ -995,11 +1038,7 @@ function NoteLeaf({
       {hasActions && (
         <DropdownMenu
           onOpenChange={(open) => {
-            if (!open) {
-              setMoveSearch("");
-              setIsCreating(false);
-              setNewFolderName("");
-            }
+            if (!open) setMoveSearch("");
           }}
         >
           <DropdownMenuTrigger asChild>
@@ -1038,41 +1077,7 @@ function NoteLeaf({
                 onSearchChange={setMoveSearch}
                 searchPlaceholder={t("notes.context.searchFolders")}
                 footer={
-                  isCreating ? (
-                    <div className="px-1">
-                      <input
-                        dir="auto"
-                        autoFocus
-                        value={newFolderName}
-                        onChange={(e) => setNewFolderName(e.target.value)}
-                        onKeyDown={(e) => {
-                          e.stopPropagation();
-                          if (e.key === "Enter" && newFolderName.trim()) {
-                            onCreateFolderAndMove(note.id, newFolderName.trim());
-                            setNewFolderName("");
-                            setIsCreating(false);
-                          }
-                          if (e.key === "Escape") {
-                            setIsCreating(false);
-                            setNewFolderName("");
-                          }
-                        }}
-                        placeholder={t("notes.folders.folderName")}
-                        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
-                      />
-                    </div>
-                  ) : (
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setIsCreating(true);
-                      }}
-                      className={cn(MENU_ITEM_CLASS, "text-foreground/70")}
-                    >
-                      <Plus size={10} />
-                      {t("notes.context.newFolder")}
-                    </DropdownMenuItem>
-                  )
+                  <NewFolderMenuFooter onCreate={(name) => onCreateFolderAndMove(note.id, name)} />
                 }
               >
                 {moveSearch ? (
@@ -1276,12 +1281,11 @@ function MoveAllDeviceNotesMenu({
   folderRows: FolderRowGroup[];
   onMoveAll: () => void;
   onMoveAllTo: (folderId: number) => void;
-  onCreateFolderAndMoveAll: (name: string) => void;
+  /** Absent while the on-screen Private has no row to make a folder in. */
+  onCreateFolderAndMoveAll?: (name: string) => void;
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
   const options = folderRows.map(({ folder }) => ({
     id: folder.id,
     label: defaultFolderDisplayName(folder, t),
@@ -1294,11 +1298,7 @@ function MoveAllDeviceNotesMenu({
   return (
     <DropdownMenu
       onOpenChange={(open) => {
-        if (!open) {
-          setSearch("");
-          setIsCreating(false);
-          setNewFolderName("");
-        }
+        if (!open) setSearch("");
       }}
     >
       <DropdownMenuTrigger asChild>
@@ -1327,41 +1327,7 @@ function MoveAllDeviceNotesMenu({
           onSearchChange={setSearch}
           searchPlaceholder={t("notes.context.searchFolders")}
           footer={
-            isCreating ? (
-              <div className="px-1">
-                <input
-                  dir="auto"
-                  autoFocus
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === "Enter" && newFolderName.trim()) {
-                      onCreateFolderAndMoveAll(newFolderName.trim());
-                      setNewFolderName("");
-                      setIsCreating(false);
-                    }
-                    if (e.key === "Escape") {
-                      setIsCreating(false);
-                      setNewFolderName("");
-                    }
-                  }}
-                  placeholder={t("notes.folders.folderName")}
-                  className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
-                />
-              </div>
-            ) : (
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  setIsCreating(true);
-                }}
-                className={cn(MENU_ITEM_CLASS, "text-foreground/70")}
-              >
-                <Plus size={10} />
-                {t("notes.context.newFolder")}
-              </DropdownMenuItem>
-            )
+            onCreateFolderAndMoveAll && <NewFolderMenuFooter onCreate={onCreateFolderAndMoveAll} />
           }
         >
           {shown.map((option) => (
@@ -1375,7 +1341,7 @@ function MoveAllDeviceNotesMenu({
               </span>
             </DropdownMenuItem>
           ))}
-          {shown.length === 0 && (
+          {query && shown.length === 0 && (
             <p className="text-xs text-foreground/50 text-center py-1.5">
               {t("notes.context.noResults")}
             </p>
@@ -1442,15 +1408,14 @@ function DeviceNotesSection({
     void move(targetFolderId == null ? { noteIds } : { noteIds, targetFolderId });
   };
 
-  const createFolderAndMoveAll = async (name: string) => {
-    if (privateSpaceId == null) return;
-    const created = await createFolder(name, privateSpaceId);
+  const createFolderAndMoveAll = async (spaceId: number, name: string) => {
+    const created = await createFolder(name, spaceId);
     if (created.success && created.folder) {
       moveAll(created.folder.id);
-    } else {
+    } else if (created.error) {
       toast({
         title: t("notes.folders.couldNotCreate"),
-        description: created.error,
+        description: t(localMutationErrorKey(created.error)),
         variant: "destructive",
       });
     }
@@ -1580,7 +1545,11 @@ function DeviceNotesSection({
               folderRows={folderRows}
               onMoveAll={() => moveAll()}
               onMoveAllTo={moveAll}
-              onCreateFolderAndMoveAll={(name) => void createFolderAndMoveAll(name)}
+              onCreateFolderAndMoveAll={
+                privateSpaceId == null
+                  ? undefined
+                  : (name) => void createFolderAndMoveAll(privateSpaceId, name)
+              }
             />
           </div>
         }
