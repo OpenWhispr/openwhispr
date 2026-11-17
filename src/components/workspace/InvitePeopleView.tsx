@@ -10,6 +10,7 @@ import {
 import { useTranslation } from "react-i18next";
 import {
   MAX_INVITE_RECIPIENTS,
+  inviteConfirmed,
   inviteSummary,
   isRetryableFailure,
   seatsWarningMessage,
@@ -18,8 +19,20 @@ import {
   type InviteRecipient,
 } from "../../lib/inviteFlow";
 import type { InviteErrorKind } from "../../lib/workspaceErrors";
-import { AlertCircle, CheckCircle2, ChevronDown, Loader2, X } from "../icons";
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Loader2,
+  Mail,
+  User,
+  UserSettings,
+  X,
+  type IconComponent,
+} from "../icons";
 import { cn } from "../lib/utils";
+import MemberAvatar from "../MemberAvatar";
 import { isolate } from "../../utils/bidiIsolate";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
 import { DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
@@ -31,6 +44,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { WorkspaceErrorBar } from "./WorkspaceErrorBar";
+import { FIELD_GROUP, FIELD_LABEL } from "./dialogButtons";
 import { CHIP_REMOVE_BUTTON, CHIP_TONE_DEFAULT, CHIP_TONE_ERROR } from "./recipientChipStyles";
 
 export interface InviteSuggestion {
@@ -55,16 +69,27 @@ export interface InvitePeopleViewProps {
   /** Accepting adds the invitee to a team or teamspace too, which a skipped address misses. */
   addsToContainer: boolean;
   cancelLabel: string;
+  /** Who an address is, by lowercase address, so a chip can show a name and picture. */
+  profiles?: ReadonlyMap<string, InviteProfile>;
   onCancel: () => void;
   onSend: () => void;
   onDone: () => void;
 }
 
+export interface InviteProfile {
+  name: string | null;
+  image: string | null;
+}
+
 const ROLES = ["member", "admin"] as const;
+const ROLE_ICON: Record<(typeof ROLES)[number], IconComponent> = {
+  member: User,
+  admin: UserSettings,
+};
 export const SUGGESTION_MIN_CHARS = 2;
 
 const BUTTON_BASE =
-  "flex h-10 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
+  "flex h-[38px] w-full items-center justify-center gap-2 rounded-full px-4 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
 const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-primary text-primary-foreground hover:bg-primary/90");
 const SECONDARY_BUTTON = cn(
   BUTTON_BASE,
@@ -112,6 +137,7 @@ export function InvitePeopleView({
   onUpgrade,
   addsToContainer,
   cancelLabel,
+  profiles,
   onCancel,
   onSend,
   onDone,
@@ -130,6 +156,10 @@ export function InvitePeopleView({
 
   const summary = inviteSummary(state);
   const sending = state.phase === "sending";
+  const RoleIcon = ROLE_ICON[state.role];
+  // A clean run keeps the form on screen with Send turned into its confirmation, until the host
+  // closes the dialog.
+  const confirmed = inviteConfirmed(state);
   const listOpen =
     state.phase === "editing" &&
     !listDismissed &&
@@ -244,9 +274,6 @@ export function InvitePeopleView({
       message: t("workspaces.invite.noEmail", { count: summary.noEmailCount }),
     });
   }
-  const sendingCount = state.recipients.filter(
-    (recipient) => recipient.state.status === "sending"
-  ).length;
 
   // The field and Send are disabled while sending, which drops focus to the page; a run that
   // leaves chips to fix returns it to the field (the Done screen focuses its own button).
@@ -283,6 +310,12 @@ export function InvitePeopleView({
       event.preventDefault();
       if (active >= 0) pick(suggestions[active]);
       else dispatch({ type: "commit" });
+      return;
+    }
+    // In an empty field, Backspace takes back the last chip.
+    if (event.key === "Backspace" && state.draft === "" && state.recipients.length > 0) {
+      event.preventDefault();
+      dispatch({ type: "remove", email: state.recipients[state.recipients.length - 1].email });
     }
   };
 
@@ -314,9 +347,9 @@ export function InvitePeopleView({
       onOpenAutoFocus={focusField}
       onEscapeKeyDown={handleEscapeKeyDown}
       onInteractOutside={blockWhileSending}
-      className="max-h-[calc(100vh-32px)] w-[440px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-6 overflow-y-auto rounded-[28px] p-5 sm:max-w-[440px]"
+      className="max-h-[calc(100vh-32px)] w-[441px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-7 overflow-y-auto rounded-[28px] p-5 sm:max-w-[441px]"
     >
-      {state.phase === "done" ? (
+      {state.phase === "done" && !confirmed ? (
         <InviteDoneContent
           workspaceName={workspaceName}
           sent={state.sent}
@@ -343,11 +376,6 @@ export function InvitePeopleView({
             </DialogDescription>
             {seatLine ? <p className="text-xs text-muted-foreground">{seatLine}</p> : null}
             {seatCostLine ? <p className="text-xs text-muted-foreground">{seatCostLine}</p> : null}
-            {state.sent.length > 0 ? (
-              <p role="status" className="text-xs font-medium text-foreground">
-                {sentHeadline}
-              </p>
-            ) : null}
             {state.attached.length > 0 ? (
               <p role="status" className="text-xs font-medium text-foreground">
                 {t("workspaces.invite.attachedBody", { count: state.attached.length })}
@@ -356,16 +384,16 @@ export function InvitePeopleView({
           </div>
 
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <label htmlFor={inputId} className="text-xs font-medium text-muted-foreground">
+            <div className={FIELD_GROUP}>
+              <label htmlFor={inputId} className={FIELD_LABEL}>
                 {t("workspaces.invite.emailLabel")}
               </label>
               <div className="relative">
                 <div
                   onClick={() => inputRef.current?.focus()}
                   className={cn(
-                    "flex max-h-40 min-h-10 cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-1 px-2 py-1.5 transition-colors",
-                    "focus-within:border-border focus-within:ring-2 focus-within:ring-ring/40",
+                    "flex max-h-[104px] min-h-[38px] cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl bg-surface-1 px-2 py-1 ring-1 ring-inset ring-black/[0.06] transition-shadow dark:bg-surface-window dark:ring-0",
+                    "focus-within:ring-2 focus-within:ring-ring/40 dark:focus-within:ring-2",
                     sending && "opacity-60"
                   )}
                 >
@@ -373,6 +401,7 @@ export function InvitePeopleView({
                     <RecipientChip
                       key={recipient.email}
                       recipient={recipient}
+                      profile={profiles?.get(recipient.email.toLowerCase())}
                       workspaceName={workspaceName}
                       disabled={sending}
                       onRemove={() => dispatch({ type: "remove", email: recipient.email })}
@@ -390,9 +419,11 @@ export function InvitePeopleView({
                     aria-expanded={listOpen}
                     aria-controls={listOpen ? listId : undefined}
                     aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-                    aria-describedby={errorBar ? `${hintId} ${errorId}` : hintId}
+                    aria-describedby={
+                      errorBar ? errorId : warningBars.length > 0 ? undefined : hintId
+                    }
                     aria-invalid={errorBar ? true : undefined}
-                    disabled={sending}
+                    disabled={sending || confirmed}
                     value={state.draft}
                     placeholder={
                       state.recipients.length === 0
@@ -413,7 +444,7 @@ export function InvitePeopleView({
                     }}
                     onKeyDown={handleKeyDown}
                     onBlur={() => dispatch({ type: "commit" })}
-                    className="h-7 min-w-[8rem] flex-1 bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    className="input-inline h-7 min-w-[8rem] flex-1 bg-transparent px-1 text-base text-foreground outline-none placeholder:text-muted-foreground"
                   />
                 </div>
                 {listOpen ? (
@@ -434,35 +465,44 @@ export function InvitePeopleView({
                         onMouseEnter={() => setActiveIndex(index)}
                         onClick={() => pick(suggestion)}
                         className={cn(
-                          "flex cursor-pointer flex-col rounded-lg px-2.5 py-1.5 text-sm",
+                          "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm",
                           index === active && "bg-muted"
                         )}
                       >
-                        {suggestion.name ? (
-                          <span dir="auto" className="truncate text-foreground">
-                            {suggestion.name}
+                        <Mail
+                          className="size-3.5 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <span className="flex min-w-0 flex-col">
+                          {suggestion.name ? (
+                            <span dir="auto" className="truncate text-foreground">
+                              {suggestion.name}
+                            </span>
+                          ) : null}
+                          <span
+                            className={cn(
+                              "truncate",
+                              suggestion.name ? "text-xs text-muted-foreground" : "text-foreground"
+                            )}
+                          >
+                            <bdi dir="ltr">{suggestion.email}</bdi>
                           </span>
-                        ) : null}
-                        <span
-                          className={cn(
-                            "truncate",
-                            suggestion.name ? "text-xs text-muted-foreground" : "text-foreground"
-                          )}
-                        >
-                          <bdi dir="ltr">{suggestion.email}</bdi>
                         </span>
                       </div>
                     ))}
                   </div>
                 ) : null}
               </div>
-              <p id={hintId} className="text-xs text-muted-foreground">
-                {t("workspaces.invite.emailHint")}
-              </p>
+              {/* The hint steps aside while a bar has something more specific to say. */}
+              {errorBar || warningBars.length > 0 ? null : (
+                <p id={hintId} className="text-xs text-muted-foreground">
+                  {t("workspaces.invite.emailHint")}
+                </p>
+              )}
             </div>
 
-            <div className="flex flex-col gap-2">
-              <span id={roleLabelId} className="text-xs font-medium text-muted-foreground">
+            <div className={FIELD_GROUP}>
+              <span id={roleLabelId} className={FIELD_LABEL}>
                 {t("workspaces.invite.roleLabel")}
               </span>
               <DropdownMenu>
@@ -470,13 +510,22 @@ export function InvitePeopleView({
                   // The label names the field and the trigger's own text says the current role.
                   // Radix owns the trigger's id, which its menu is labelled by.
                   aria-labelledby={`${roleLabelId} ${roleValueId}`}
-                  disabled={sending}
-                  className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-border/70 bg-surface-1 px-3 text-sm text-foreground outline-none transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={sending || confirmed}
+                  className="flex min-h-[52px] w-full items-center gap-2.5 rounded-xl bg-surface-1 px-3 py-2 text-start text-foreground outline-none ring-1 ring-inset ring-black/[0.06] transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-window dark:ring-0 dark:hover:bg-surface-1"
                 >
-                  <span id={roleValueId} className="truncate">
-                    {t(`workspaces.invite.role.${state.role}`)}
+                  <RoleIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span id={roleValueId} className="truncate text-sm">
+                      {t(`workspaces.invite.role.${state.role}`)}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {t(`workspaces.invite.roleDescription.${state.role}`)}
+                    </span>
                   </span>
-                  <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
+                  <ChevronDown
+                    className="size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   aria-labelledby={roleLabelId}
@@ -489,22 +538,35 @@ export function InvitePeopleView({
                       dispatch({ type: "role", role: value === "admin" ? "admin" : "member" })
                     }
                   >
-                    {ROLES.map((role) => (
-                      <DropdownMenuRadioItem
-                        key={role}
-                        value={role}
-                        className="items-start rounded-lg py-2 [&>span:first-child]:top-3"
-                      >
-                        <span className="flex min-w-0 flex-col gap-0.5">
-                          <span className="text-sm text-foreground">
-                            {t(`workspaces.invite.role.${role}`)}
+                    {ROLES.map((role) => {
+                      const Icon = ROLE_ICON[role];
+                      return (
+                        <DropdownMenuRadioItem
+                          key={role}
+                          value={role}
+                          className="items-start gap-2.5 rounded-lg px-2.5 py-2 ps-2.5 pe-2.5 data-[state=checked]:bg-muted focus:bg-muted [&>span:first-child]:hidden"
+                        >
+                          <Icon
+                            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span className="text-sm text-foreground">
+                              {t(`workspaces.invite.role.${role}`)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {t(`workspaces.invite.roleDescription.${role}`)}
+                            </span>
                           </span>
-                          <span className="text-xs text-muted-foreground">
-                            {t(`workspaces.invite.roleDescription.${role}`)}
-                          </span>
-                        </span>
-                      </DropdownMenuRadioItem>
-                    ))}
+                          {role === state.role ? (
+                            <Check
+                              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                        </DropdownMenuRadioItem>
+                      );
+                    })}
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -532,13 +594,21 @@ export function InvitePeopleView({
             <button
               type="button"
               onClick={onSend}
-              disabled={sending || !summary.canSend}
-              className={PRIMARY_BUTTON}
+              disabled={sending || confirmed || !summary.canSend}
+              className={cn(
+                PRIMARY_BUTTON,
+                confirmed && "bg-success text-success-foreground disabled:opacity-100"
+              )}
             >
-              {sending ? (
+              {confirmed ? (
+                <>
+                  <CheckCircle2 className="size-4" aria-hidden="true" />
+                  {t("workspaces.invite.sentTitle", { count: state.sent.length })}
+                </>
+              ) : sending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  {t("workspaces.invite.submitting", { count: sendingCount })}
+                  {t("workspaces.invite.sending")}
                 </>
               ) : summary.sendable.length > 1 ? (
                 t("workspaces.invite.submit", { count: summary.sendable.length })
@@ -548,7 +618,7 @@ export function InvitePeopleView({
                 t("workspaces.invite.submitOne")
               )}
             </button>
-            {sending ? null : (
+            {sending || confirmed ? null : (
               <button
                 type="button"
                 // Keeps focus in the field: its blur would chip a half-typed address, and the error
@@ -569,11 +639,13 @@ export function InvitePeopleView({
 
 function RecipientChip({
   recipient,
+  profile,
   workspaceName,
   disabled,
   onRemove,
 }: {
   recipient: InviteRecipient;
+  profile?: InviteProfile;
   workspaceName: string;
   disabled: boolean;
   onRemove: () => void;
@@ -589,15 +661,33 @@ function RecipientChip({
 
   return (
     <span
-      title={error}
+      title={error ?? (profile?.name ? recipient.email : undefined)}
       className={cn(
-        "inline-flex h-7 max-w-full items-center gap-0.5 rounded-full border ps-2.5 pe-0.5 text-xs",
+        "inline-flex h-[29px] max-w-full items-center gap-0.5 rounded-full pe-0.5 text-xs",
+        profile?.name ? "ps-1" : "ps-2.5",
         error ? CHIP_TONE_ERROR : CHIP_TONE_DEFAULT
       )}
     >
-      <bdi dir="ltr" className="truncate">
-        {recipient.email}
-      </bdi>
+      {profile?.name ? (
+        <>
+          <MemberAvatar
+            name={profile.name}
+            email={recipient.email}
+            image={profile.image}
+            size="row"
+          />
+          <span dir="auto" className="ms-1 truncate">
+            {profile.name}
+          </span>
+        </>
+      ) : (
+        <>
+          <Mail className="me-1 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <bdi dir="ltr" className="truncate">
+            {recipient.email}
+          </bdi>
+        </>
+      )}
       <button
         type="button"
         disabled={disabled}

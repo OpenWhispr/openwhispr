@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -90,7 +91,7 @@ test.before(() => {
     { sessionId: "test-session" },
     { get: (value, property) => (property in value ? value[property] : anything()) }
   );
-  Ctor.prototype.setupHandlers.call(fakeThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
 });
 
 test.after(() => {

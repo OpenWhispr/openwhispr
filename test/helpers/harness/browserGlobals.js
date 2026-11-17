@@ -55,12 +55,22 @@ async function requestLock(name, optionsOrCallback, maybeCallback) {
     throw new TypeError("navigator.locks.request requires a callback");
   }
 
+  if (options.signal?.aborted) throw options.signal.reason;
   if (held.has(String(name))) {
     // ifAvailable hands the caller a null lock instead of queueing, which is how
     // an ambient sync pass bows out while another window holds the lock.
     if (options.ifAvailable) return callback(null);
     return new Promise((resolve, reject) => {
-      queueFor(String(name)).push(() => holdAndRun(String(name), callback).then(resolve, reject));
+      const queue = queueFor(String(name));
+      const waiter = () => holdAndRun(String(name), callback).then(resolve, reject);
+      queue.push(waiter);
+      // As in the browser, an abort drops a request that is still waiting.
+      options.signal?.addEventListener("abort", () => {
+        const index = queue.indexOf(waiter);
+        if (index === -1) return;
+        queue.splice(index, 1);
+        reject(options.signal.reason);
+      });
     });
   }
   return holdAndRun(String(name), callback);
@@ -160,9 +170,13 @@ async function establishValidatedAuth(userId = "user-harness") {
 
 // A failed team-spaces probe schedules a real-timer retry that would fire long
 // after the test closed its database; every SyncService a test creates must be
-// swept before the test ends.
+// swept before the test ends. A teamspace push also asks for a pass of its own
+// ("team-push"), which can still be running then: once swept, a service starts
+// no further pass and schedules no retry.
 function stopSyncTimers(service) {
   if (!service) return;
+  service.requestSyncAll = () => {};
+  service.scheduleTeamSpacesRetry = () => {};
   if (service.teamSpacesRetryTimer) {
     clearTimeout(service.teamSpacesRetryTimer);
     service.teamSpacesRetryTimer = null;

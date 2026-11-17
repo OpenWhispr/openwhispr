@@ -20,12 +20,13 @@ import {
   FileText,
   Loader2,
   MoreHorizontal,
-  Trash2,
+  Plus,
+  UserMinus,
   UserPlus,
-  Users,
   X,
 } from "../icons";
 import { RowCheckbox } from "../dictionary/RowCheckbox";
+import { EmptyStateArt } from "../workspace/EmptyStateArt";
 import InviteTeammateDialog from "../InviteTeammateDialog";
 import MemberAvatar from "../MemberAvatar";
 import { Button } from "../ui/button";
@@ -40,7 +41,13 @@ import { RemoveGuestsDialog } from "../workspace/RemoveGuestsDialog";
 import { SelectionBar } from "../workspace/SelectionBar";
 import { cn } from "../lib/utils";
 import type { Workspace, WorkspaceGuest } from "../../types/electron";
-import { CONTACTS_TRIGGER, HEADER_CELL, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
+import {
+  COLUMN_DIVIDER,
+  HEADER_CELL,
+  PLAIN_MENU_TRIGGER,
+  ROW_DIVIDER,
+  TABLE_FRAME,
+} from "./tableTokens";
 
 const KEY = "settingsPage.workspace.guests";
 const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
@@ -90,7 +97,7 @@ function WorkspaceGuestsBody({
     setSelection((current) => keepRows(current, emails));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailKey]);
-  // Addresses invited since the invite dialog opened, for the toast when it closes.
+  // Addresses invited since the invite dialog opened, dropped from the selection when it closes.
   const sentRef = useRef<string[]>([]);
   const columnCount = canManage ? 4 : 2;
   const frameRef = useRef<HTMLDivElement>(null);
@@ -173,15 +180,10 @@ function WorkspaceGuestsBody({
     }
   };
 
+  // The invite dialog announces what it sent, so closing it only updates the selection.
   const closeInvite = (): void => {
     const invited = sentRef.current;
     if (invited.length > 0) {
-      toast({
-        title: t(`${KEY}.invite.sent`, {
-          count: invited.length,
-          workspace: isolate(workspace.name),
-        }),
-      });
       // Invited guests move to Invitations, so those are no longer there to act on.
       setSelection((current) => setRows(current, invited, false));
     }
@@ -198,6 +200,14 @@ function WorkspaceGuestsBody({
           workspaceId={workspace.id}
           workspaceName={workspace.name}
           initialEmails={inviting.map((guest) => guest.email)}
+          initialProfiles={
+            new Map(
+              inviting.map((guest) => [
+                guest.email.toLowerCase(),
+                { name: guest.name?.trim() || null, image: guest.image },
+              ])
+            )
+          }
           heading={{
             title: t(`${KEY}.invite.title`, {
               count: inviting.length,
@@ -272,15 +282,19 @@ function WorkspaceGuestsBody({
               ) : null}
               <th
                 scope="col"
-                className={cn(HEADER_CELL, canManage ? "ps-3" : "ps-4", "pe-3 text-start")}
+                className={cn(
+                  HEADER_CELL,
+                  canManage ? cn("ps-3", COLUMN_DIVIDER) : "ps-4",
+                  "pe-3 text-start"
+                )}
               >
                 {t(`${KEY}.columns.name`)}
               </th>
-              <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-start")}>
+              <th scope="col" className={cn(HEADER_CELL, COLUMN_DIVIDER, "ps-3 pe-4 text-start")}>
                 {t(`${KEY}.columns.access`)}
               </th>
               {canManage ? (
-                <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-end")}>
+                <th scope="col" className={cn(HEADER_CELL, COLUMN_DIVIDER, "ps-3 pe-4 text-end")}>
                   {t(`${KEY}.columns.actions`)}
                 </th>
               ) : null}
@@ -351,11 +365,13 @@ function WorkspaceGuestsBody({
               id: "remove",
               label: t(`${KEY}.selection.remove`),
               tone: "destructive",
+              icon: UserMinus,
               onClick: () => setRemoving(selectedGuests),
             },
             {
               id: "invite",
               label: t(`${KEY}.selection.invite`),
+              icon: Plus,
               onClick: () => setInviting(selectedGuests),
             },
           ]}
@@ -381,18 +397,13 @@ function EmptyGuests({ ref }: { ref: React.Ref<HTMLDivElement> }): React.ReactEl
       ref={ref}
       tabIndex={-1}
       data-guests-empty=""
-      className="flex flex-col items-center px-6 py-14 text-center outline-none"
+      className="flex flex-col items-center px-6 py-10 text-center outline-none"
     >
-      <span
-        aria-hidden="true"
-        className="flex size-11 items-center justify-center rounded-xl bg-surface-3 text-foreground/70"
-      >
-        <Users size={20} />
-      </span>
-      <p className="mt-4 text-sm font-medium text-foreground">{t(`${KEY}.emptyTitle`)}</p>
-      <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
-        {t(`${KEY}.emptyBody`)}
+      <EmptyStateArt kind="guests" />
+      <p className="mt-2 text-lg font-medium leading-[1.4] text-foreground">
+        {t(`${KEY}.emptyTitle`)}
       </p>
+      <p className="mt-1.5 max-w-[339px] text-sm text-muted-foreground">{t(`${KEY}.emptyBody`)}</p>
     </div>
   );
 }
@@ -436,7 +447,7 @@ function GuestRow({
           />
         </td>
       ) : null}
-      <td className={cn(canManage ? "ps-3" : "ps-4", "pe-3 max-w-0")}>
+      <td className={cn(canManage ? cn("ps-3", COLUMN_DIVIDER) : "ps-4", "pe-3 max-w-0")}>
         <div className="flex min-w-0 items-center gap-3">
           <MemberAvatar name={guest.name} email={guest.email} image={guest.image} />
           <div className="min-w-0">
@@ -457,7 +468,7 @@ function GuestRow({
           </div>
         </div>
       </td>
-      <td className="ps-3 pe-4 max-w-0">
+      <td className={cn(COLUMN_DIVIDER, "ps-3 pe-4 max-w-0")}>
         <AccessCell
           guest={guest}
           canManage={canManage}
@@ -466,7 +477,7 @@ function GuestRow({
         />
       </td>
       {canManage ? (
-        <td className="ps-3 pe-4 text-end">
+        <td className={cn(COLUMN_DIVIDER, "ps-3 pe-4 text-end")}>
           <RowMenu guest={guest} onInvite={onInvite} onCopy={onCopy} onRemove={onRemove} />
         </td>
       ) : null}
@@ -542,14 +553,14 @@ function AccessCell({
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
-        className={CONTACTS_TRIGGER}
+        className={PLAIN_MENU_TRIGGER}
         aria-label={t(`${KEY}.notesTriggerLabel`, {
           count: guest.notes.length,
           name: isolate(guestDisplayName(guest)),
         })}
       >
         <span className="truncate">{label}</span>
-        <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         ref={contentRef}
@@ -650,7 +661,7 @@ function RowMenu({
           className="text-xs text-destructive focus:text-destructive"
           onSelect={onRemove}
         >
-          <Trash2 className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          <UserMinus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t(`${KEY}.menu.remove`)}
         </DropdownMenuItem>
       </DropdownMenuContent>

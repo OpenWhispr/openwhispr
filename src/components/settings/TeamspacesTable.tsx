@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, FolderRounded, Loader2, MoreHorizontal, Plus, Trash2, Users } from "../icons";
+import { ChevronDown, Loader2, MoreHorizontal, Plus, Trash2, Users } from "../icons";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -11,11 +11,20 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import MemberAvatar from "../MemberAvatar";
 import { TileGlyph } from "../notes/SpaceNameField";
+import { EmptyStateArt } from "../workspace/EmptyStateArt";
+import { EMPTY_CREATE_BUTTON } from "../workspace/dialogButtons";
 import { cn } from "../lib/utils";
 import type { WorkspaceSpacesState } from "../../hooks/useWorkspaceSpaces";
 import type { SpaceAdminContact, WorkspaceSpace } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
-import { CONTACTS_TRIGGER, HEADER_CELL, NAME_TILE, ROW_DIVIDER, TABLE_FRAME } from "./tableTokens";
+import {
+  COLUMN_DIVIDER,
+  CONTACTS_TRIGGER,
+  HEADER_CELL,
+  NAME_TILE,
+  ROW_DIVIDER,
+  TABLE_FRAME,
+} from "./tableTokens";
 
 const YOU_CHIP = "shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-primary/10 text-primary";
 
@@ -72,20 +81,21 @@ export default function TeamspacesTable({
   return (
     <div className={TABLE_FRAME}>
       <table className="w-full table-fixed border-collapse">
+        {/* Actions holds only the row menu, so Admins takes its room and "Workspace admins" fits. */}
         <colgroup>
-          <col className="w-[46%]" />
-          <col className="w-[27%]" />
-          <col className="w-[27%]" />
+          <col className={canCreate ? "w-[42%]" : "w-[46%]"} />
+          <col className={canCreate ? "w-[42%]" : "w-[27%]"} />
+          <col className={canCreate ? "w-[16%]" : "w-[27%]"} />
         </colgroup>
         <thead>
           <tr>
             <th scope="col" className={cn(HEADER_CELL, "ps-4 pe-3 text-start")}>
               {t("settingsPage.workspace.teamspaces.columns.name")}
             </th>
-            <th scope="col" className={cn(HEADER_CELL, "px-3 text-start")}>
+            <th scope="col" className={cn(HEADER_CELL, COLUMN_DIVIDER, "px-3 text-start")}>
               {t("settingsPage.workspace.teamspaces.columns.admins")}
             </th>
-            <th scope="col" className={cn(HEADER_CELL, "ps-3 pe-4 text-start")}>
+            <th scope="col" className={cn(HEADER_CELL, COLUMN_DIVIDER, "ps-3 pe-4 text-start")}>
               {canCreate
                 ? t("settingsPage.workspace.teamspaces.columns.actions")
                 : t("settingsPage.workspace.teamspaces.columns.members")}
@@ -153,26 +163,21 @@ function EmptyTeamspaces({
 }): React.ReactElement {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col items-center px-6 py-14 text-center">
-      <span
-        aria-hidden="true"
-        className="flex size-11 items-center justify-center rounded-xl bg-surface-3 text-foreground/70"
-      >
-        <FolderRounded size={20} />
-      </span>
-      <p className="mt-4 text-sm font-medium text-foreground">
+    <div className="flex flex-col items-center px-6 py-10 text-center">
+      <EmptyStateArt kind="teamspaces" />
+      <p className="mt-2 text-lg font-medium leading-[1.4] text-foreground">
         {t("settingsPage.workspace.teamspaces.emptyTitle")}
       </p>
-      <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+      <p className="mt-1.5 max-w-[339px] text-sm text-muted-foreground">
         {canCreate
           ? t("settingsPage.workspace.teamspaces.emptyBody")
           : t("settingsPage.workspace.teamspaces.emptyBodyMember")}
       </p>
       {canCreate && (
-        <Button size="sm" className="mt-5" onClick={onCreate}>
-          <Plus aria-hidden="true" />
+        <button type="button" className={cn(EMPTY_CREATE_BUTTON, "mt-5")} onClick={onCreate}>
+          <Plus className="size-3.5" aria-hidden="true" />
           {t("settingsPage.workspace.teamspaces.create")}
-        </Button>
+        </button>
       )}
     </div>
   );
@@ -230,7 +235,7 @@ function TeamspaceRow({
   return (
     <tr
       className={cn(
-        "h-14",
+        "h-12",
         ROW_DIVIDER,
         opensSettings && "cursor-pointer transition-colors hover:bg-foreground/3"
       )}
@@ -246,18 +251,18 @@ function TeamspaceRow({
             <button
               type="button"
               dir="auto"
-              className="min-w-0 truncate rounded-sm text-start text-xs font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="min-w-0 truncate rounded-sm text-start text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               {space.name}
             </button>
           ) : (
-            <span dir="auto" className="min-w-0 truncate text-xs font-medium text-foreground">
+            <span dir="auto" className="min-w-0 truncate text-sm text-foreground">
               {space.name}
             </span>
           )}
         </div>
       </td>
-      <td className="px-3 max-w-0" onClick={stopRowClick}>
+      <td className={cn(COLUMN_DIVIDER, "px-3 max-w-0")} onClick={stopRowClick}>
         <AdminsCell
           admins={space.admins ?? []}
           workspaceAdmins={workspaceAdmins}
@@ -266,7 +271,7 @@ function TeamspaceRow({
         />
       </td>
       {canCreate ? (
-        <td className="ps-3 pe-4" onClick={stopRowClick}>
+        <td className={cn(COLUMN_DIVIDER, "ps-3 pe-4")} onClick={stopRowClick}>
           <DropdownMenu>
             <DropdownMenuTrigger
               ref={actionsButtonRef}
@@ -295,14 +300,14 @@ function TeamspaceRow({
           </DropdownMenu>
         </td>
       ) : (
-        <td className="ps-3 pe-4 max-w-0">
+        <td className={cn(COLUMN_DIVIDER, "ps-3 pe-4 max-w-0")}>
           {belongs ? (
             <div className="flex min-w-0 items-center gap-2">
               <MemberAvatar
                 name={currentUser?.name ?? null}
                 email={currentUser?.email ?? null}
                 image={currentUser?.image}
-                size="sm"
+                size="row"
               />
               <span dir="auto" className="min-w-0 truncate text-xs text-foreground">
                 <PersonLabel name={currentUser?.name} email={currentUser?.email} />
@@ -346,29 +351,32 @@ function AdminsCell({
 }: AdminsCellProps): React.ReactElement {
   const { t } = useTranslation();
 
-  if (admins.length === 1) {
-    const [admin] = admins;
+  // A teamspace with no admin of its own is administered by the workspace's owner and admins, who
+  // are shown the same way as its own: one person by name, several as a count with the list.
+  const shown = admins.length > 0 ? admins : workspaceAdmins;
+
+  if (shown.length === 1) {
+    const [admin] = shown;
     return (
       <div className="flex min-w-0 items-center gap-2">
-        <MemberAvatar name={admin.name} email={admin.email} image={admin.image} size="sm" />
-        <span dir="auto" className="min-w-0 truncate text-xs text-foreground">
+        <MemberAvatar name={admin.name} email={admin.email} image={admin.image} size="row" />
+        <span dir="auto" className="min-w-0 truncate text-sm text-foreground">
           <PersonLabel name={admin.name} email={admin.email} />
         </span>
       </div>
     );
   }
 
-  if (admins.length > 1) {
+  if (shown.length > 1) {
     return (
       <ContactsMenu
-        label={t("settingsPage.workspace.teamspaces.adminCount", { count: admins.length })}
-        contacts={admins}
+        label={t("settingsPage.workspace.teamspaces.adminCount", { count: shown.length })}
+        contacts={shown}
       />
     );
   }
 
-  // Nobody to ask in this teamspace, so the people who can reach it anyway stand in. Their roster
-  // is read when the menu opens, since this page doesn't otherwise need it.
+  // The roster is still being read (or couldn't be), so there is nobody to name yet.
   return (
     <ContactsMenu
       label={t("settingsPage.workspace.teamspaces.noAdmins")}
@@ -394,7 +402,7 @@ function ContactsMenu({
 }: ContactsMenuProps): React.ReactElement {
   return (
     <Popover onOpenChange={(open) => open && onOpen?.()}>
-      <PopoverTrigger className={CONTACTS_TRIGGER}>
+      <PopoverTrigger className={CONTACTS_TRIGGER} title={label}>
         <Users className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="truncate">{label}</span>
         <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />

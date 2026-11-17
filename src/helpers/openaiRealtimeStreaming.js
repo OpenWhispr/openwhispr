@@ -37,11 +37,12 @@ const turnDetectionFor = (model, vadThreshold) =>
 
 // A socket factory does network work before the socket exists, so the dial
 // must be bounded; a socket resolving after the deadline is closed, not leaked.
-async function createSocketWithTimeout(createSocket, timeoutMs) {
-  const socketPromise = createSocket();
+async function createSocketWithTimeout(createSocket, timeoutMs, controller) {
+  const socketPromise = createSocket(controller.signal);
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => {
+      controller.abort();
       socketPromise.then((socket) => socket?.close?.()).catch(() => {});
       reject(new Error("Realtime socket setup timeout"));
     }, timeoutMs);
@@ -171,14 +172,22 @@ class OpenAIRealtimeStreaming {
 
     // Attested providers (Tinfoil) supply their socket via an async factory.
     let ws;
+    const setupController = new AbortController();
+    this._socketSetupAbort = setupController;
     try {
       ws = createSocket
-        ? await createSocketWithTimeout(createSocket, this.connectTimeoutMs)
+        ? await createSocketWithTimeout(createSocket, this.connectTimeoutMs, setupController)
         : new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+      if (setupController.signal.aborted) {
+        ws.close();
+        setupController.signal.throwIfAborted();
+      }
     } catch (err) {
       this.isConnecting = false;
       this.cleanup();
       throw this._safeError(err);
+    } finally {
+      if (this._socketSetupAbort === setupController) this._socketSetupAbort = null;
     }
 
     return new Promise((resolve, reject) => {
@@ -634,6 +643,7 @@ class OpenAIRealtimeStreaming {
   }
 
   async disconnect({ commit = true } = {}) {
+    this._socketSetupAbort?.abort();
     debugLogger.debug(
       `${this.providerLabel} disconnect`,
       this._logContext({
@@ -723,6 +733,8 @@ class OpenAIRealtimeStreaming {
   }
 
   cleanup() {
+    this._socketSetupAbort?.abort();
+    this._socketSetupAbort = null;
     clearTimeout(this.connectionTimeout);
     this.connectionTimeout = null;
     clearTimeout(this._sessionTimer);

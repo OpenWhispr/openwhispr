@@ -1061,6 +1061,7 @@ for (const [ending, mode, writeFails, partialText] of [
           if (ipcStep++ > 0) throw new Error("Network connection lost after Save");
           if (partialText) yield { type: "content", text: "Working on it." };
           yield { type: "tool_call", ...call };
+          yield { type: "done", finishReason: "tool-calls" };
         })(),
         wasCancelled: () => false,
       }));

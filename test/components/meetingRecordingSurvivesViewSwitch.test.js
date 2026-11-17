@@ -75,6 +75,9 @@ const MOCKS = {
   "/hooks/useTeamSpacesCapability": `export const useTeamSpacesCapability = () => false;`,
   "/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: false, user: null });`,
   // Just enough of the note store for setActiveNoteId to drive note switches.
+  "/stores/deviceNotesStore": `
+    export const useDeviceNotesStore = (select) => select({ viewNoteId: null });
+  `,
   "/stores/noteStore": `
     import { useSyncExternalStore } from "react";
     const state = { activeNoteId: 11 };

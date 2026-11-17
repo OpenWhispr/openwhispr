@@ -118,7 +118,7 @@ test("a stop before the socket exists drops the audio the start was holding", as
   streaming.beginConnecting();
   streaming.sendAudio(Buffer.alloc(FRAME_BYTES));
 
-  await streaming.disconnect(true);
+  await streaming.disconnect();
 
   assert.equal(
     streaming.sendAudio(Buffer.alloc(FRAME_BYTES)),

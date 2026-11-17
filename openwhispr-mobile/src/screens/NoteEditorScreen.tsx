@@ -756,6 +756,7 @@ export default function NoteEditorScreen({
       // A declined cloud retry keeps the recording, which the failed history row holds for a retry.
       onLocalModelMissing: (retryWithCloud) => promptLocalModelFallback(retryWithCloud),
       onUsageLimitReached: handleUsageLimitReached,
+      recordsDictation: true,
     });
 
   const handleDictate = useCallback(async () => {

@@ -33,13 +33,13 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { Input } from "../ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover";
 import {
   CHIP_REMOVE_BUTTON,
   CHIP_TONE_DEFAULT,
   CHIP_TONE_ERROR,
 } from "../workspace/recipientChipStyles";
+import { FIELD_CONTROL } from "../workspace/dialogButtons";
 import { TileGlyph } from "./SpaceNameField";
 
 type InviteRole = "admin" | "member";
@@ -69,6 +69,8 @@ export interface SpacePeopleFieldProps {
    * a run: the list is for someone who came to pick, and would cover what the run just said.
    */
   focusRequest?: number;
+  /** Told what is typed but not yet staged as a chip, for a form that waits on it. */
+  onQueryChange?: (query: string) => void;
 }
 
 type PickerRow =
@@ -128,11 +130,15 @@ export function SpacePeopleField({
   action,
   note,
   focusRequest = 0,
+  onQueryChange,
 }: SpacePeopleFieldProps): ReactElement {
   const { t } = useTranslation();
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  useEffect(() => {
+    onQueryChange?.(query);
+  }, [query, onQueryChange]);
   const [focused, setFocused] = useState(false);
   // Escape closes the list until the person types, arrows or clicks the field again.
   const [dismissed, setDismissed] = useState(false);
@@ -349,11 +355,12 @@ export function SpacePeopleField({
       >
         <PopoverAnchor asChild>
           <div ref={setFieldElement}>
-            <Input
+            <input
               ref={inputRef}
               id={id}
               dir="auto"
               type="text"
+              className={FIELD_CONTROL}
               autoComplete="off"
               spellCheck={false}
               role="combobox"
@@ -741,7 +748,7 @@ function RecipientChip({
         invalid ? t("workspaces.invite.errors.invalid", { email: isolate(removeName) }) : undefined
       }
       className={cn(
-        "inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border ps-1 pe-0.5 text-xs",
+        "inline-flex h-[29px] max-w-full items-center gap-1.5 rounded-full ps-1 pe-0.5 text-xs",
         invalid ? CHIP_TONE_ERROR : CHIP_TONE_DEFAULT
       )}
     >
