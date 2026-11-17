@@ -372,11 +372,6 @@ test("a resident server is charged its weights, fixed costs and window", () => {
       policy.BASELINE_CONTEXT_SIZE * (QWEN35_4B.kvBytesPerToken + policy.COMPUTE_BYTES_PER_TOKEN)
   );
   assert.ok(policy.residentServerBytes(QWEN35_4B, 65536) > atBaseline);
-  assert.equal(
-    policy.residentServerBytes({ ...QWEN35_4B, kvBytesPerToken: null }, 0),
-    Infinity,
-    "an unknown KV cost leaves no room beside it"
-  );
 });
 
 test("the cleanup and assistant pair fits from 24 GB, not on 16 or 18 GB", () => {

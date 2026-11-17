@@ -110,9 +110,9 @@ class ModelManager {
     }
     this._memoryProfiles = new Map();
     this._loggedCeilings = new Map();
-    // Model files whose server failed to start beside another, so for the rest
-    // of the session they swap onto one server rather than failing again.
-    this._secondServerRefusedPaths = new Set();
+    // Set once a server failed to start beside another, so the rest of the
+    // session goes back to one swapping server rather than failing again.
+    this._secondServerFailed = false;
     this._initialized = false;
 
     // IMPORTANT: Do NOT call app.getPath() here!
@@ -435,14 +435,12 @@ class ModelManager {
 
       const [primary] = this.servers;
       const occupied = this.servers.filter((server) => this._isOccupied(server));
-      if (occupied.length === 0 || !this._unifiedMemory()) {
+      if (occupied.length === 0 || !this._unifiedMemory() || this._secondServerFailed) {
         return occupied.length === 1 ? occupied[0] : primary;
       }
 
-      // A model whose second server would not start runs alone.
-      const refused = this._secondServerRefusedPaths.has(modelPath);
       const free = this.servers.find((server) => !this._isOccupied(server));
-      if (!refused && free && (await this._fitsBeside(free, modelInfo, modelPath, window))) {
+      if (free && (await this._fitsBeside(free, modelInfo, modelPath, window))) {
         debugLogger.info("Starting a second llama-server beside the running one", {
           model: modelId,
           running: occupied.map((server) => server.modelId),
@@ -452,7 +450,7 @@ class ModelManager {
 
       const target = [...occupied].sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0];
       if (
-        (refused || !(await this._fitsBeside(target, modelInfo, modelPath, window))) &&
+        !(await this._fitsBeside(target, modelInfo, modelPath, window)) &&
         !(await this._releaseOtherServers(target, busyWaitMs, signal))
       ) {
         // Loading beside a server still answering would overrun the budget.
@@ -482,18 +480,16 @@ class ModelManager {
     return true;
   }
 
-  // A second server that would not start may mean this machine won't hold two,
-  // or only that this model won't load: either way this model drops back to one
-  // server for the session, and other models keep their second server.
+  // A second server that would not start says nothing about the model, only
+  // that this machine won't hold two: drop back to one server for the session.
   // Only a fresh start counts: a running server that fails to grow keeps its
   // own restore path. Stopped before returning, or the retry would pick it again.
-  async _secondServerRefused(server, error, { freshStart, modelPath }) {
-    if (this._secondServerRefusedPaths.has(modelPath) || !freshStart) return false;
+  async _secondServerRefused(server, error, { freshStart }) {
+    if (this._secondServerFailed || !freshStart) return false;
     if (isLocalModelPolicyRefusal(error) || SERVER_LEFT_ALONE_CODES.has(error.code)) return false;
     if (!this.servers.some((other) => other !== server && this._isOccupied(other))) return false;
-    this._secondServerRefusedPaths.add(modelPath);
-    debugLogger.warn("A second llama-server failed to start; using one server for this model", {
-      model: path.basename(modelPath),
+    this._secondServerFailed = true;
+    debugLogger.warn("A second llama-server failed to start; using one server", {
       error: error.message,
     });
     await server.stop().catch(() => {});
@@ -517,7 +513,7 @@ class ModelManager {
       try {
         await server.start(modelPath, options);
       } catch (error) {
-        if (await this._secondServerRefused(server, error, { freshStart: !wasServing, modelPath }))
+        if (await this._secondServerRefused(server, error, { freshStart: !wasServing }))
           return null;
         throw error;
       }
@@ -1100,10 +1096,7 @@ class ModelManager {
         }
         options.signal?.throwIfAborted();
         if (
-          await this._secondServerRefused(server, error, {
-            freshStart: !restorableContextSize,
-            modelPath,
-          })
+          await this._secondServerRefused(server, error, { freshStart: !restorableContextSize })
         ) {
           throw Object.assign(new Error(error.message), { code: SECOND_SERVER_REFUSED });
         }

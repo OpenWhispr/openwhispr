@@ -5269,17 +5269,15 @@ class IPCHandlers {
           }
           if (purpose === "intelligence") {
             const modelManager = require("./modelManagerBridge").default;
-            if (modelManager.serverManager?.process) {
+            const modelIds = modelManager.loadedModelIds();
+            if (modelIds.length > 0) {
               debugLogger.info(
                 "Restarting llama-server for GPU change",
                 { from: oldUuid, to: uuid },
                 "gpu"
               );
-              const modelId = modelManager.currentServerModelId;
-              await modelManager.serverManager.stop();
-              if (modelId) {
-                await modelManager.prewarmServer(modelId);
-              }
+              await modelManager.stopServer();
+              for (const modelId of modelIds) await modelManager.prewarmServer(modelId);
             }
           }
         } catch (err) {
@@ -7553,6 +7551,11 @@ class IPCHandlers {
       if (requestId) this.llamaServerStartAborts.set(requestId, abortController);
       try {
         const modelManager = require("./modelManagerBridge").default;
+        modelManager.ensureInitialized();
+        if (!modelManager.findModelById(modelId)) {
+          return { success: false, error: `Model "${modelId}" not found` };
+        }
+
         const server = await modelManager.serverForModel(modelId, {
           signal: abortController.signal,
         });

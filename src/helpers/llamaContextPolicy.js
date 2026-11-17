@@ -215,14 +215,12 @@ function resolveContextCeiling({
  * Memory one running server takes out of the shared budget: its weights,
  * drafter, fixed compute and recurrent state, plus KV and compute at its
  * window (never below the baseline every server starts at). Same terms as
- * resolveContextCeiling, so the two can never disagree about what fits. An
- * unknown KV cost can't be priced, so it leaves no room for another server.
+ * resolveContextCeiling, so the two can never disagree about what fits.
  */
 function residentServerBytes(
   { weightsBytes = 0, draftWeightsBytes = 0, kvBytesPerToken, hasRecurrentState = false },
   contextSize = 0
 ) {
-  if (!Number.isFinite(kvBytesPerToken) || kvBytesPerToken <= 0) return Infinity;
   return (
     weightsBytes +
     draftWeightsBytes +
