@@ -4556,6 +4556,7 @@
         "finalizing": "Sprecher werden finalisiert…",
         "justYou": "Nur du",
         "assumedHint": "Standard: 2 — bei Bedarf anpassen",
+        "assumedHintAuto": "Standard: 2 — weitere werden automatisch erkannt",
         "speakersLabel": "Sprecher",
         "labelToggle": "Sprecher beschriften",
         "toggleAria": "Sprechererkennung für diese Aufnahme umschalten",

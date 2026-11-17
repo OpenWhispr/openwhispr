@@ -4004,6 +4004,7 @@
         "finalizing": "Finalizzazione dei partecipanti…",
         "justYou": "Solo tu",
         "assumedHint": "si presumono 2 — modifica se sono di più",
+        "assumedHintAuto": "si presumono 2 — gli altri vengono rilevati automaticamente",
         "speakersLabel": "Partecipanti",
         "labelToggle": "Etichetta i partecipanti",
         "toggleAria": "Attiva/disattiva l'identificazione dei partecipanti per questa registrazione",

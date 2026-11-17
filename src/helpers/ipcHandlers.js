@@ -174,6 +174,7 @@ const AgentStreamRequestRegistry = require("./agentStreamRequestRegistry");
 const createMeetingTranscriptionLifecycle = require("./meetingTranscriptionLifecycle");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const { supportsLiveSpeakerIdentification } = require("./liveSpeakerIdPolicy");
+const { resolveLiveSpeakerLimit, autoDisplayCount } = require("./liveSpeakerLimit");
 const {
   rangeOverlapMs,
   pickSpeakerForRange,
@@ -1432,10 +1433,8 @@ class IPCHandlers {
     return null;
   }
 
-  _resolveNoteExpectedSpeakerCount(note) {
-    return this._noteExpectedSpeakerCountOrNull(note) ?? DEFAULT_EXPECTED_SPEAKER_COUNT;
-  }
-
+  // A note with neither a stored count nor attendees starts in automatic mode:
+  // `expectedCount` is then only the number the stepper shows.
   _resolveInitialMeetingSpeakerConfig(noteId) {
     let note = null;
     if (noteId != null) {
@@ -1449,7 +1448,59 @@ class IPCHandlers {
       (note?.diarization_enabled == null
         ? this.speakerDiarizationEnabled
         : note.diarization_enabled !== 0) !== false;
-    return { enabled, expectedCount: this._resolveNoteExpectedSpeakerCount(note) };
+    const noteCount = this._noteExpectedSpeakerCountOrNull(note);
+    return {
+      enabled,
+      expectedCount: noteCount ?? DEFAULT_EXPECTED_SPEAKER_COUNT,
+      auto: noteCount == null,
+    };
+  }
+
+  _applyLiveSpeakerLimit() {
+    const config = this.activeMeetingSpeakerConfig;
+    if (!config) return;
+    liveSpeakerIdentifier.setSpeakerLimit(
+      resolveLiveSpeakerLimit(config, liveSpeakerIdentifier.getConfirmedSpeakerCount())
+    );
+  }
+
+  _setSessionSpeakerConfig(payload) {
+    const enabled = payload?.enabled !== false;
+    if (payload?.countIsExplicit === true) {
+      const expectedCount = Math.max(
+        1,
+        Math.min(MAX_SPEAKER_COUNT, Number(payload.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT)
+      );
+      this.activeMeetingSpeakerConfig = { enabled, expectedCount, explicit: true };
+    } else if (this.activeMeetingSpeakerConfig) {
+      // The diarization toggle reuses this channel and only carries the count
+      // along, so it changes `enabled` alone: it must neither end automatic mode
+      // nor freeze the count against roster-driven refreshes.
+      this.activeMeetingSpeakerConfig = { ...this.activeMeetingSpeakerConfig, enabled };
+    }
+    // A toggle push with no session config is a debounced one landing after stop
+    // (or before start): building a config then would hand the next session a
+    // stale one, since start keeps a config it finds. Start resolves its own.
+    liveSpeakerIdentifier.setEnabled(enabled);
+    this._applyLiveSpeakerLimit();
+  }
+
+  // In automatic mode the stepper follows the speakers live identification has
+  // confirmed, down as well as up. The number is never written to the note:
+  // only a stepper press sets the note's count.
+  _syncAutoSpeakerDisplayCount() {
+    const config = this.activeMeetingSpeakerConfig;
+    if (!config?.auto) return;
+
+    const expectedCount = autoDisplayCount(liveSpeakerIdentifier.getConfirmedSpeakerCount());
+    if (expectedCount === config.expectedCount) return;
+
+    this.activeMeetingSpeakerConfig = { ...config, expectedCount };
+    broadcastToWindows("meeting-session-speaker-config-updated", {
+      enabled: config.enabled,
+      expectedCount,
+      auto: true,
+    });
   }
 
   // Participants added mid-meeting must raise the speaker cap that was derived
@@ -1460,16 +1511,32 @@ class IPCHandlers {
   // _assignOrForceCluster fold every later voice onto an existing speaker — the
   // exact identity collapse this refresh exists to prevent. A roster that shrinks
   // (or empties) mid-meeting therefore leaves the cap where it is.
+  //
+  // In automatic mode the count is only a display number, so any count the note
+  // yields ends automatic mode. The stepper then never shows fewer than the
+  // speakers already on screen (new placeholder ids are minted from it), and the
+  // live cap never drops below the speakers already confirmed
+  // (resolveLiveSpeakerLimit). The after-call cap still reads the note.
+  //
+  // A stepper press from automatic mode also lands here first: the renderer's
+  // note write arrives before its debounced explicit push (150 ms), so for that
+  // moment the config is attendee-style until _setSessionSpeakerConfig makes it
+  // explicit.
   _refreshMeetingSpeakerConfigFromNote(noteId, note) {
     const config = this.activeMeetingSpeakerConfig;
     if (!config || config.explicit) return;
     if (noteId == null || this._activeMeetingNoteId !== noteId) return;
 
-    const expectedCount = this._noteExpectedSpeakerCountOrNull(note);
-    if (expectedCount == null || expectedCount <= config.expectedCount) return;
+    const noteCount = this._noteExpectedSpeakerCountOrNull(note);
+    if (noteCount == null) return;
+    if (!config.auto && noteCount <= config.expectedCount) return;
 
-    this.activeMeetingSpeakerConfig = { ...config, expectedCount };
-    liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+    const expectedCount = config.auto
+      ? Math.max(noteCount, autoDisplayCount(liveSpeakerIdentifier.getConfirmedSpeakerCount()))
+      : noteCount;
+
+    this.activeMeetingSpeakerConfig = { ...config, expectedCount, auto: false };
+    this._applyLiveSpeakerLimit();
     broadcastToWindows("meeting-session-speaker-config-updated", {
       enabled: config.enabled,
       expectedCount,
@@ -9500,11 +9567,12 @@ class IPCHandlers {
     const resolveDiarizationEnabled = () =>
       (this.activeMeetingSpeakerConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
-    const resolveSessionMaxSpeakers = () => {
-      const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
-      return Math.max(1, total - 1);
-    };
+    // A new session has confirmed no speakers yet, so only the config decides.
+    const resolveSessionSpeakerLimit = () =>
+      resolveLiveSpeakerLimit(
+        this.activeMeetingSpeakerConfig ??
+          this._resolveInitialMeetingSpeakerConfig(this._activeMeetingNoteId)
+      );
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
       if (!meetingOneOnOneAttendee || meetingOneOnOneProfileBound || !speakerId) return;
@@ -9798,10 +9866,11 @@ class IPCHandlers {
             win.webContents.send("meeting-speaker-identified", enrichedIdentification);
 
             applyLiveIdentificationToRows(enrichedIdentification);
+            this._syncAutoSpeakerDisplayCount();
           },
           {
             getSpeakerProfiles: getLiveSpeakerProfiles,
-            maxSpeakers: resolveSessionMaxSpeakers(),
+            ...resolveSessionSpeakerLimit(),
             enabled: true,
             speakerIndexBase: meetingSpeakerIndexBase,
           }
@@ -9829,6 +9898,7 @@ class IPCHandlers {
           remapMergedSpeakers(merges);
 
           win.webContents.send("meeting-speakers-merged", merges);
+          this._syncAutoSpeakerDisplayCount();
         }, 30_000);
       } else {
         meetingLiveSpeakerStartedAt = null;
@@ -14197,25 +14267,7 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-set-session-speaker-config", async (_event, payload) => {
       try {
-        const enabled = payload?.enabled !== false;
-        const expectedCount = Math.max(
-          1,
-          Math.min(
-            MAX_SPEAKER_COUNT,
-            Number(payload?.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT
-          )
-        );
-        // Only a stepper-set count is explicit; the diarization toggle reuses this
-        // channel and must not freeze the count against roster-driven refreshes.
-        this.activeMeetingSpeakerConfig = {
-          enabled,
-          expectedCount,
-          explicit: payload?.countIsExplicit === true,
-        };
-        liveSpeakerIdentifier.setEnabled(enabled);
-        // Live identification only labels other speakers (the mic track is "you"),
-        // so cap at expectedCount - 1 to match resolveSessionMaxSpeakers().
-        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+        this._setSessionSpeakerConfig(payload);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -14972,8 +15024,9 @@ class IPCHandlers {
 
     // Only system audio reaches the diarizer (the mic track is "you"), so a cap
     // would count other speakers. With no count there's none: live
-    // identification folds every remote voice into one then, so its speaker ids
-    // can't tell how many people spoke (#2641).
+    // identification ran in automatic mode then, where a voice may stay a
+    // candidate and similar voices can share an id, so its speaker ids can't
+    // tell how many people spoke; clustering decides (#2641).
     return null;
   }
 

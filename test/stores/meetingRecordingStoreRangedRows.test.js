@@ -154,14 +154,19 @@ test("a ranged row heard by no identification yet is labelled by the next one", 
   assert.equal(rows()[0].speakerStatus, "confirmed");
 });
 
-test("a row the user locked is never relabelled", async (t) => {
+// Naming a speaker names their ranged rows without locking them: a row picked for
+// Ana from a sliver of her window can still be someone else, and main moves its own
+// copy when that voice's window arrives, so the row must follow it.
+test("a ranged row named after its speaker still moves to the voice that fills its range", async (t) => {
   const { store, identify, final, rows } = await startMeeting(t);
   identify(A(T, T + 1000));
   final({ text: "hello", source: "system", timestamp: T + 500, endTimestamp: T + 8000 });
   store.lockSpeaker("speaker_0", "Ana");
-  identify(B(T + 1000, T + 8500));
-  assert.equal(rows()[0].speaker, "speaker_0");
   assert.equal(rows()[0].speakerName, "Ana");
+  assert.notEqual(rows()[0].speakerLocked, true);
+  identify(B(T + 1000, T + 8500));
+  assert.equal(rows()[0].speaker, "speaker_1");
+  assert.notEqual(rows()[0].speakerName, "Ana");
 });
 
 test("a row without a range keeps the point-in-window rule", async (t) => {

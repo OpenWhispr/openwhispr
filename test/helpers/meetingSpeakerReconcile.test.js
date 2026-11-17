@@ -303,6 +303,188 @@ test("a shrinking roster leaves the speaker cap untouched", () => {
   assert.deepEqual(emptied.broadcasts, []);
 });
 
+// With no count from the stepper or the note, main runs live identification
+// uncapped and gated, and the stepper follows the speakers it confirms.
+test.describe("automatic speaker mode", () => {
+  const EMPTY_NOTE_ID = NOTE_ID + 1;
+  const TWO_OTHERS_NOTE_ID = NOTE_ID + 2;
+  const noteWithTwoOthers = {
+    participants: JSON.stringify([{ email: "one@example.com" }, { email: "two@example.com" }]),
+  };
+  const notes = { [NOTE_ID]: {}, [EMPTY_NOTE_ID]: {}, [TWO_OTHERS_NOTE_ID]: noteWithTwoOthers };
+
+  let self;
+  let liveSpeakerIdentifier;
+  let broadcasts;
+  let limits;
+  let noteWrites;
+  let confirmed;
+
+  const call = (method, ...args) => self[method](...args);
+
+  test.beforeEach(() => {
+    let IPCHandlers;
+    ({ IPCHandlers, liveSpeakerIdentifier, broadcasts } = loadHandlers());
+    limits = [];
+    noteWrites = [];
+    confirmed = 0;
+    liveSpeakerIdentifier.setSpeakerLimit = (limit) => limits.push(limit);
+    liveSpeakerIdentifier.getConfirmedSpeakerCount = () => confirmed;
+    self = Object.assign(Object.create(IPCHandlers.prototype), {
+      activeMeetingSpeakerConfig: { enabled: true, expectedCount: 2, auto: true },
+      _activeMeetingNoteId: NOTE_ID,
+      speakerDiarizationEnabled: true,
+      databaseManager: {
+        getNote: (id) => notes[id] ?? null,
+        getGoogleAccounts: () => [],
+        updateNote: (...args) => noteWrites.push(args),
+      },
+    });
+  });
+
+  test("a note with no count and no attendees starts in automatic mode", () => {
+    assert.deepEqual(call("_resolveInitialMeetingSpeakerConfig", EMPTY_NOTE_ID), {
+      enabled: true,
+      expectedCount: 2,
+      auto: true,
+    });
+  });
+
+  test("a note with attendees is not automatic", () => {
+    assert.equal(call("_resolveInitialMeetingSpeakerConfig", TWO_OTHERS_NOTE_ID).auto, false);
+  });
+
+  test("automatic mode runs the identifier uncapped and gated", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
+    call("_applyLiveSpeakerLimit");
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 7, gated: true });
+  });
+
+  test("the diarization toggle keeps automatic mode", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
+    call("_setSessionSpeakerConfig", { enabled: false, expectedCount: 2, countIsExplicit: false });
+    assert.deepEqual(self.activeMeetingSpeakerConfig, {
+      enabled: false,
+      expectedCount: 2,
+      auto: true,
+    });
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 7, gated: true });
+  });
+
+  test("a stepper press ends automatic mode with an exact count, even below the speakers found", () => {
+    confirmed = 4;
+    call("_setSessionSpeakerConfig", { enabled: true, expectedCount: 3, countIsExplicit: true });
+    assert.deepEqual(self.activeMeetingSpeakerConfig, {
+      enabled: true,
+      expectedCount: 3,
+      explicit: true,
+    });
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: false });
+  });
+
+  // The stepper must not show fewer speakers than are on screen, and new
+  // placeholder ids are minted from it.
+  test("attendees ending automatic mode never lower the count or the cap below the speakers found", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 5, auto: true };
+    confirmed = 4;
+    call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
+    assert.equal(self.activeMeetingSpeakerConfig.auto, false);
+    assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 5);
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 4, gated: false });
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [{ enabled: true, expectedCount: 5 }]
+    );
+  });
+
+  test("attendees ending automatic mode take the note's count when it is higher", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
+    confirmed = 1;
+    call("_refreshMeetingSpeakerConfigFromNote", NOTE_ID, noteWithTwoOthers);
+    assert.equal(self.activeMeetingSpeakerConfig.auto, false);
+    assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 3);
+    assert.deepEqual(limits.at(-1), { maxSpeakers: 2, gated: false });
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [{ enabled: true, expectedCount: 3 }]
+    );
+  });
+
+  // The renderer's diarization toggle push is debounced, so it can land after
+  // stop cleared the session config; building one then from a note id that may
+  // already be gone would hand the next session a stale automatic config.
+  test("a diarization toggle push with no session config stores none", () => {
+    const enabledCalls = [];
+    liveSpeakerIdentifier.setEnabled = (enabled) => enabledCalls.push(enabled);
+    self.activeMeetingSpeakerConfig = null;
+    self._activeMeetingNoteId = null;
+    call("_setSessionSpeakerConfig", { enabled: false, expectedCount: 2, countIsExplicit: false });
+    assert.equal(self.activeMeetingSpeakerConfig, null);
+    assert.deepEqual(enabledCalls, [false]);
+    assert.deepEqual(limits, []);
+  });
+
+  test("an explicit push with no session config still stores the user's count", () => {
+    self.activeMeetingSpeakerConfig = null;
+    call("_setSessionSpeakerConfig", { enabled: true, expectedCount: 4, countIsExplicit: true });
+    assert.deepEqual(self.activeMeetingSpeakerConfig, {
+      enabled: true,
+      expectedCount: 4,
+      explicit: true,
+    });
+  });
+
+  test("the display count follows promotions and merges, never below 2, and is broadcast as automatic", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 2, auto: true };
+    confirmed = 3;
+    call("_syncAutoSpeakerDisplayCount");
+    confirmed = 2;
+    call("_syncAutoSpeakerDisplayCount");
+    confirmed = 0;
+    call("_syncAutoSpeakerDisplayCount");
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.channel),
+      Array(3).fill("meeting-session-speaker-config-updated")
+    );
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [
+        { enabled: true, expectedCount: 4, auto: true },
+        { enabled: true, expectedCount: 3, auto: true },
+        { enabled: true, expectedCount: 2, auto: true },
+      ]
+    );
+    assert.equal(noteWrites.length, 0);
+  });
+
+  test("the display count is not synced once a count is known, and is never written to the note", () => {
+    self.activeMeetingSpeakerConfig = { enabled: true, expectedCount: 3, explicit: true };
+    confirmed = 5;
+    call("_syncAutoSpeakerDisplayCount");
+    assert.equal(broadcasts.length, 0);
+    assert.equal(noteWrites.length, 0);
+  });
+
+  // A resumed note's live ids start past its earlier sessions' (speaker_3 here),
+  // but only the voices confirmed in this session count toward the display.
+  test("a resumed note counts only this session's speakers", async () => {
+    delete liveSpeakerIdentifier.getConfirmedSpeakerCount;
+    await liveSpeakerIdentifier.start({ speakerIndexBase: 3, maxSpeakers: 7, gated: true });
+
+    assert.equal(liveSpeakerIdentifier._assignSpeakerId(new Float32Array([1, 0])), "speaker_3");
+    call("_syncAutoSpeakerDisplayCount");
+    assert.equal(self.activeMeetingSpeakerConfig.expectedCount, 2);
+    assert.deepEqual(broadcasts, []);
+
+    assert.equal(liveSpeakerIdentifier._assignSpeakerId(new Float32Array([0, 1])), "speaker_4");
+    call("_syncAutoSpeakerDisplayCount");
+    assert.deepEqual(
+      broadcasts.map((broadcast) => broadcast.payload),
+      [{ enabled: true, expectedCount: 3, auto: true }]
+    );
+  });
+});
+
 function makeCapResolver() {
   const { IPCHandlers } = loadHandlers();
   return (args) =>

@@ -3766,6 +3766,7 @@ declare global {
           displayName?: string | null;
           startTime: number;
           endTime: number;
+          retroactive?: boolean;
         }) => void
       ) => () => void;
       onMeetingSpeakersMerged?: (
@@ -3779,7 +3780,7 @@ declare global {
         ) => void
       ) => () => void;
       onMeetingSessionSpeakerConfigUpdated?: (
-        callback: (config: { enabled: boolean; expectedCount: number }) => void
+        callback: (config: { enabled: boolean; expectedCount: number; auto?: boolean }) => void
       ) => () => void;
       onMeetingTranscriptionError?: (callback: (error: string) => void) => () => void;
       onMeetingTranscriptionFatalError?: (callback: (error: string) => void) => () => void;

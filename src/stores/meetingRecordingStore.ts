@@ -94,6 +94,8 @@ interface SpeakerIdentification {
   displayName?: string | null;
   startTime: number;
   endTime: number;
+  /** An earlier window of a voice main just confirmed; it relabels rows but isn't the current speaker. */
+  retroactive?: boolean;
 }
 
 interface RecentSystemSpeaker {
@@ -125,6 +127,8 @@ interface MeetingRecordingState {
   sessionDiarizationEnabled: boolean;
   sessionExpectedCount: number;
   userTouchedStepper: boolean;
+  /** Whether this session captures system audio, which live speaker detection reads. */
+  sessionSystemAudioActive: boolean;
   error: string | null;
   /** Bumped on every error report so identical repeated errors still re-notify. */
   errorNonce: number;
@@ -536,6 +540,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
     (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ?? true,
   sessionExpectedCount: DEFAULT_EXPECTED_SPEAKER_COUNT,
   userTouchedStepper: false,
+  sessionSystemAudioActive: false,
   error: null,
   errorNonce: 0,
   systemAudioSilentWarning: false,
@@ -546,6 +551,15 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   micCaptureStatus: "inactive",
   windowWidth: typeof window !== "undefined" ? window.innerWidth : SIDE_PANEL_BREAKPOINT_PX,
 }));
+
+// The UI reads it from the store (the stepper hint); the module copy serves the
+// IPC handlers, which run outside React.
+function setSessionSystemAudioActive(active: boolean): void {
+  sessionSystemAudioActive = active;
+  if (useMeetingRecordingStore.getState().sessionSystemAudioActive !== active) {
+    useMeetingRecordingStore.setState({ sessionSystemAudioActive: active });
+  }
+}
 
 // Org-policy refusals: the main process's own sentinel and the refusal codes it
 // forwards. Each ends the recording; MeetingRecordingMount explains it.
@@ -745,13 +759,47 @@ function applySpeakerIdentification(
     return segment;
   }
 
+  // A provisional row can carry the previous speaker's name; it stays with that speaker.
+  const keptName = segment.speaker === identification.speakerId ? segment.speakerName : undefined;
   return normalizeTranscriptSegment({
     ...segment,
     speaker: identification.speakerId,
-    speakerName: identification.displayName ?? segment.speakerName,
+    speakerName: identification.displayName ?? keptName,
     speakerIsPlaceholder: false,
     speakerStatus: "confirmed",
   });
+}
+
+// A system row this session hasn't confirmed was only carried onto its speaker,
+// so it shows the user's name for them but stays movable until an identification
+// confirms it. A local-model row is never locked either, even once confirmed: it
+// is picked from whichever identifications overlap it so far, and a new voice
+// answering inside the previous speaker's window is picked for them until its own
+// (retroactive) window arrives; the re-pick keeps or drops the name. Other
+// confirmed and already locked system rows, an earlier session's rows (nothing can
+// confirm them now), and mic rows are locked under the name.
+function nameSpeakerRow(segment: TranscriptSegment, name: string): TranscriptSegment {
+  const patch = {
+    speakerName: name,
+    speakerIsPlaceholder: false,
+    suggestedName: undefined,
+    suggestedProfileId: undefined,
+  };
+  if (
+    segment.source === "system" &&
+    !segment.speakerLocked &&
+    (segment.speakerStatus !== "confirmed" || segmentRangeEnds.has(segment.id)) &&
+    !isEarlierSessionSpeaker(segment.speaker)
+  ) {
+    return normalizeTranscriptSegment({ ...segment, ...patch });
+  }
+  return lockTranscriptSpeaker(segment, patch);
+}
+
+function applyUserSpeakerName(segment: TranscriptSegment): TranscriptSegment {
+  if (segment.speakerLocked || !segment.speaker) return segment;
+  const lockedName = speakerLocks.get(segment.speaker);
+  return lockedName ? nameSpeakerRow(segment, lockedName) : segment;
 }
 
 function rememberSystemSpeaker(
@@ -794,9 +842,10 @@ function adoptSpeakerIndexBase(base: number | undefined): void {
   nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, base);
 }
 
-// Other-speaker cap is expectedCount - 1 (the mic track is "you"); mirrors the
-// backend cap so live labels can't climb past the count the user expects. The
-// cap counts this session's speakers, so it starts at the session's base.
+// Other-speaker cap is expectedCount - 1 (the mic track is "you"), so live labels
+// can't climb past the count on the stepper. With no count set the stepper follows
+// main's confirmed speakers, so the cap only reaches ids main already confirmed.
+// The cap counts this session's speakers, so it starts at the session's base.
 function mintPlaceholderSpeakerId(): string {
   const expected = useMeetingRecordingStore.getState().sessionExpectedCount;
   const cap = Math.max(1, expected - 1);
@@ -913,7 +962,7 @@ async function cleanup(): Promise<void> {
   isPrepared = false;
   isRecordingFlag = false;
   isStartingFlag = false;
-  sessionSystemAudioActive = false;
+  setSessionSystemAudioActive(false);
 }
 
 export async function prepareTranscription(): Promise<void> {
@@ -1070,7 +1119,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
     recentSystemSpeaker = null;
     speakerLocks = locks;
     systemPartialSpeakerIdValue = null;
-    sessionSystemAudioActive = false;
+    setSessionSystemAudioActive(false);
     recordingNoteDeleted = false;
 
     useMeetingRecordingStore.setState({
@@ -1464,17 +1513,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
                 }
                 const provisional = assignProvisionalSpeaker(decorated);
                 reserveSpeakerIndex(provisional.speaker);
-                const lockedName = provisional.speaker
-                  ? speakerLocks.get(provisional.speaker)
-                  : undefined;
-                return lockedName
-                  ? lockTranscriptSpeaker(provisional, {
-                      speakerName: lockedName,
-                      speakerIsPlaceholder: false,
-                      suggestedName: undefined,
-                      suggestedProfileId: undefined,
-                    })
-                  : provisional;
+                return applyUserSpeakerName(provisional);
               },
             }
           );
@@ -1534,15 +1573,18 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       const speakerCleanup = window.electronAPI?.onMeetingSpeakerIdentified?.((data) => {
         if (activeRecordingSessionId !== sessionId) return;
         reserveSpeakerIndex(data.speakerId);
-        setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
-        rememberSystemSpeaker(data.speakerId, data.displayName ?? null, false, data.endTime);
+        if (!data.retroactive) {
+          setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
+          rememberSystemSpeaker(data.speakerId, data.displayName ?? null, false, data.endTime);
+        }
         speakerIdentifications = [
           ...pruneIdentifications(speakerIdentifications, data.endTime),
           data,
         ];
-        const next = useMeetingRecordingStore
-          .getState()
-          .segments.map((segment) => applySpeakerIdentification(segment, data));
+        const next = useMeetingRecordingStore.getState().segments.map((segment) => {
+          const identified = applySpeakerIdentification(segment, data);
+          return identified === segment ? segment : applyUserSpeakerName(identified);
+        });
         segmentsRefValue = next;
         useMeetingRecordingStore.setState({ segments: next });
       });
@@ -1628,10 +1670,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       if (systemAudioSilentCleanup) ipcCleanups.push(systemAudioSilentCleanup);
 
       // Main re-derives the expected count when participants are added mid-meeting
-      // (never for a count set explicitly via the stepper — main skips those).
+      // (never for a count set explicitly via the stepper — main skips those), and
+      // with no count set it follows the confirmed speakers (`auto`) until a press.
       const speakerConfigCleanup = window.electronAPI?.onMeetingSessionSpeakerConfigUpdated?.(
         (config) => {
           if (activeRecordingSessionId !== sessionId) return;
+          if (config.auto && useMeetingRecordingStore.getState().userTouchedStepper) return;
           const clamped = Math.max(1, Math.min(MAX_SPEAKER_COUNT, config.expectedCount));
           useMeetingRecordingStore.setState({ sessionExpectedCount: clamped });
         }
@@ -1769,7 +1813,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
                 reason: "loopback_takeover_failed",
                 recovering: false,
               });
-              sessionSystemAudioActive = false;
+              setSessionSystemAudioActive(false);
               void window.electronAPI
                 ?.meetingTranscriptionSetSystemAudioAvailable?.(sessionId, false)
                 .catch(() => undefined);
@@ -1811,7 +1855,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       }
 
       const systemAudioAvailable = systemAudioHandledInMain || systemStream !== null;
-      sessionSystemAudioActive = systemAudioAvailable;
+      setSessionSystemAudioActive(systemAudioAvailable);
       systemAudioAvailabilityResolved = true;
       if (systemAudioAvailable && pendingSystemAudioInterruption) {
         publishSystemAudioInterruption(pendingSystemAudioInterruption);
@@ -2093,16 +2137,13 @@ export function lockSpeaker(speakerId: string, displayName: string, recorderName
   if (speakerId !== "you" || recorderName === sessionRecorderName) {
     speakerLocks.set(speakerId, displayName);
   }
-  const next = useMeetingRecordingStore.getState().segments.map((s) =>
-    s.speaker === speakerId && (speakerId !== "you" || s.recorderName === recorderName)
-      ? lockTranscriptSpeaker(s, {
-          speakerName: displayName,
-          speakerIsPlaceholder: false,
-          suggestedName: undefined,
-          suggestedProfileId: undefined,
-        })
-      : s
-  );
+  const next = useMeetingRecordingStore
+    .getState()
+    .segments.map((s) =>
+      s.speaker === speakerId && (speakerId !== "you" || s.recorderName === recorderName)
+        ? nameSpeakerRow(s, displayName)
+        : s
+    );
   segmentsRefValue = next;
   useMeetingRecordingStore.setState({ segments: next });
   if (recentSystemSpeaker?.speakerId === speakerId) {
