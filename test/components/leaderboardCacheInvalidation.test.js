@@ -30,10 +30,26 @@ const cases = [
     removeMembers: true,
     refreshFails: true,
   },
+  {
+    name: "a mounted first-access clear that notifies no view",
+    title: "a mounted first-access read retired by a silent clear reads again",
+    firstAccess: true,
+    silentClear: true,
+  },
+  {
+    name: "a failed re-read of an older kept board",
+    title: "an older kept board that fails to refresh shows the error, not the old board",
+    staleBoard: true,
+  },
+  {
+    name: "a session revalidating after a token renewal",
+    title: "a token renewal keeps the board on screen instead of asking to sign in",
+    renewal: true,
+  },
 ];
 
 for (const scenario of cases) {
-  test(`late leaderboard replies cannot undo ${scenario.name}`, async (t) => {
+  test(scenario.title ?? `late leaderboard replies cannot undo ${scenario.name}`, async (t) => {
     let root;
     t.after(() => act(() => root?.unmount()));
     installBrowserGlobals(t, { window: { clearInterval() {} } });
@@ -152,6 +168,11 @@ for (const scenario of cases) {
     if (!scenario.firstAccess) cache.cacheLeaderboardAccess("user-a", access);
     const keptAccess = cache.readCachedLeaderboardAccess("user-a");
     if (keptAccess) keptAccess.fetchedAt -= 61_000;
+    const requestKey = JSON.stringify([scope.key, "total_words", "week", null, 0]);
+    if (scenario.staleBoard) {
+      cache.cacheLeaderboard("user-a", requestKey, board);
+      cache.readCachedLeaderboard("user-a", requestKey).fetchedAt -= 61_000;
+    }
     const props = {
       accountId: "user-a",
       authGeneration: 7,
@@ -179,7 +200,9 @@ for (const scenario of cases) {
     await act(async () => root.render(createElement(Section, props)));
     assert.equal(state.accessReads, 1);
     if (scenario.firstAccess) {
-      await act(async () => cache.clearCachedLeaderboards());
+      await act(async () =>
+        cache.clearCachedLeaderboards(scenario.silentClear ? { revalidate: false } : undefined)
+      );
       await act(async () => state.access.resolve(access));
       assert.equal(state.accessReads, 2, "mounted access is re-read without a remount");
       assert.ok(container.textContent.includes("Create your team leaderboard"));
@@ -197,6 +220,33 @@ for (const scenario of cases) {
       return;
     }
     assert.equal(state.boardReads, 1);
+
+    if (scenario.staleBoard) {
+      assert.ok(container.textContent.includes(member.name), "the kept board paints at once");
+      await act(async () => {
+        state.access.resolve(access);
+        state.board.reject(new CloudApiError("Offline", 503));
+      });
+      assert.ok(container.textContent.includes("The leaderboard couldn't be loaded."));
+      assert.ok(
+        !container.textContent.includes(member.name),
+        "the old board is not shown as current"
+      );
+      return;
+    }
+
+    if (scenario.renewal) {
+      await act(async () => {
+        state.access.resolve(access);
+        state.board.resolve(board);
+      });
+      for (const authGeneration of [null, 7]) {
+        await act(async () => root.render(createElement(Section, { ...props, authGeneration })));
+        assert.ok(container.textContent.includes(member.name), "the board stays on screen");
+        assert.ok(!container.textContent.includes("Sign in"));
+      }
+      return;
+    }
 
     if (scenario.removeMembers) {
       await act(async () => {
@@ -253,7 +303,6 @@ for (const scenario of cases) {
       root = null;
     }
     if (scenario.invalidate) cache[scenario.invalidate]();
-    const requestKey = JSON.stringify([scope.key, "total_words", "week", null, 0]);
     if (scenario.reject) {
       cache.cacheLeaderboardAccess("user-a", currentAccess);
       cache.cacheLeaderboard("user-a", requestKey, currentBoard);
