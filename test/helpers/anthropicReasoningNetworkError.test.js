@@ -209,3 +209,83 @@ for (const maxTokens of [128, 8192]) {
     assert.equal(result.messageKey, "hooks.audioRecording.errorDescriptions.cleanupTruncated");
   });
 }
+
+// The deadline comes from AbortSignal.timeout; swapping it for a controller's
+// signal lets a test expire it at once instead of waiting 30 seconds.
+function stubDeadline(t) {
+  const controller = new AbortController();
+  const requestedMs = [];
+  t.mock.method(AbortSignal, "timeout", (ms) => {
+    requestedMs.push(ms);
+    return controller.signal;
+  });
+  return {
+    requestedMs,
+    expire: () => controller.abort(new DOMException("The operation timed out.", "TimeoutError")),
+  };
+}
+
+// Electron's net.fetch rejects an aborted request with an AbortError.
+function rejectWhenAborted(init) {
+  return new Promise((_resolve, reject) => {
+    init.signal.addEventListener(
+      "abort",
+      () => reject(new DOMException("The operation was aborted.", "AbortError")),
+      { once: true }
+    );
+  });
+}
+
+// Without a deadline the handler waits forever, so fail fast instead of hanging.
+test("a request that never answers times out as PROVIDER_TIMEOUT", { timeout: 5000 }, async (t) => {
+  const deadline = stubDeadline(t);
+  fetchBehavior = async (_url, init) => {
+    setImmediate(deadline.expire);
+    return rejectWhenAborted(init);
+  };
+
+  const result = await anthropicHandler({ sender: {} }, "hello", "claude-sonnet-5-5", null, {
+    inferenceScope: "dictationCleanup",
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, "PROVIDER_TIMEOUT");
+  assert.equal(result.messageKey, "providerErrors.timeout");
+});
+
+for (const [scope, expectedMs] of [
+  ["dictationCleanup", 30_000],
+  ["noteFormatting", 600_000],
+  [undefined, 30_000],
+]) {
+  test(`the ${scope ?? "default"} scope gets a ${expectedMs / 1000}s deadline`, async (t) => {
+    const deadline = stubDeadline(t);
+    let sentSignal;
+    fetchBehavior = async (_url, init) => {
+      sentSignal = init.signal;
+      return Response.json({ content: [{ type: "text", text: "ok" }], stop_reason: "end_turn" });
+    };
+
+    const result = await anthropicHandler({ sender: {} }, "hello", "claude-sonnet-5-5", null, {
+      inferenceScope: scope,
+    });
+
+    assert.equal(result.success, true);
+    assert.deepEqual(deadline.requestedMs, [expectedMs]);
+    assert.ok(sentSignal instanceof AbortSignal, "the request must carry an abort signal");
+  });
+}
+
+test("an abort before the deadline is not reported as a timeout", async (t) => {
+  stubDeadline(t);
+  fetchBehavior = async () => {
+    throw new DOMException("The operation was aborted.", "AbortError");
+  };
+
+  const result = await anthropicHandler({ sender: {} }, "hello", "claude-sonnet-5-5", null, {
+    inferenceScope: "dictationCleanup",
+  });
+
+  assert.equal(result.success, false);
+  assert.notEqual(result.code, "PROVIDER_TIMEOUT");
+});

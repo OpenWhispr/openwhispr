@@ -45,6 +45,7 @@ const {
   asProviderError,
   redactProviderBody,
 } = require("./providerHttpErrors");
+const { getLlmRequestTimeoutSeconds, llmRequestTimeoutError } = require("./llmRequestTimeout");
 const {
   registerConnectorIpc,
   createConnectorPolicyResolver,
@@ -5984,6 +5985,8 @@ class IPCHandlers {
     ipcMain.handle(
       "process-anthropic-reasoning",
       async (event, text, modelId, _agentName, config) => {
+        const timeoutSeconds = getLlmRequestTimeoutSeconds({ scope: config?.inferenceScope });
+        const timeoutSignal = AbortSignal.timeout(timeoutSeconds * 1000);
         try {
           const apiKey = this.environmentManager.getAnthropicKey();
 
@@ -6035,6 +6038,7 @@ class IPCHandlers {
               "anthropic-version": "2023-06-01",
             },
             body: JSON.stringify(requestBody),
+            signal: timeoutSignal,
           });
 
           if (!response.ok) {
@@ -6072,12 +6076,15 @@ class IPCHandlers {
           }
           return { success: true, text: outputText };
         } catch (error) {
-          debugLogger.error("Anthropic reasoning error:", error);
+          // proxyFetch also aborts on device-policy signals, so only our own
+          // deadline counts as a timeout.
+          const failure = timeoutSignal.aborted ? llmRequestTimeoutError(timeoutSeconds) : error;
+          debugLogger.error("Anthropic reasoning error:", failure);
           // A network failure rejects proxyFetch before any response.
           return {
             success: false,
             ...ipcErrorFields(
-              asProviderError(error, { provider: "Anthropic", model: modelId, surface: "llm" })
+              asProviderError(failure, { provider: "Anthropic", model: modelId, surface: "llm" })
             ),
           };
         }
