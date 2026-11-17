@@ -3,7 +3,7 @@
  * Markdown form that survives a save in builds without these extensions (see markdownSyntax.ts).
  */
 import { Extension, Node, mergeAttributes, type Editor } from "@tiptap/core";
-import type { TagParseRule } from "@tiptap/pm/model";
+import { Mark, type TagParseRule } from "@tiptap/pm/model";
 import Paragraph from "@tiptap/extension-paragraph";
 import Heading from "@tiptap/extension-heading";
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
@@ -47,8 +47,13 @@ const AlignedParagraph = Paragraph.extend({
   addStorage() {
     return {
       markdown: {
-        serialize(state: any, node: any) {
+        serialize(state: any, node: any, parent: any, index: number) {
+          // A list item's first paragraph never becomes a block (see markdownSyntax).
+          const listFirst = index === 0 && /^(listItem|taskItem)$/.test(parent?.type?.name);
+          state.blockMathText =
+            !listFirst && /^\$\$[\s\S]+?\$\$$/.test(node.textContent.trim()) ? node : null;
           state.renderInline(node);
+          state.blockMathText = null;
           const suffix = alignSuffix(node);
           if (suffix) state.write(suffix);
           state.closeBlock(node);
@@ -83,17 +88,33 @@ const markSpec = (open: any, close: any) => ({
     parse: {},
   },
 });
+// {sub}…{/sub}, {color:…}…{/color} and the like open and close anywhere, so they
+// leave edge spaces in place and stay out of tiptap-markdown's delimiter mover.
+// That mover shifts a delimiter past spaces and punctuation until CommonMark would
+// accept it, and it assumes the same fixed string at both ends: it wrote the
+// source of the {color:…} function into the note, and cut {/sub} short.
+const braceMarkSpec = (open: any, close: any) => ({
+  markdown: { serialize: { open, close, mixable: true }, parse: {} },
+});
+// Written outside **, *, ~~ and == (as text styles already are), so those land
+// next to the text and never get moved into a {sub}.
+const BRACE_MARK_PRIORITY = 101;
 
 const MarkdownHighlight = Highlight.extend({ addStorage: () => markSpec("==", "==") });
 // No Mod-, shortcut: that is the app's Settings shortcut.
 const MarkdownSubscript = Subscript.extend({
+  priority: BRACE_MARK_PRIORITY,
   addKeyboardShortcuts: () => ({}),
-  addStorage: () => markSpec("{sub}", "{/sub}"),
+  addStorage: () => braceMarkSpec("{sub}", "{/sub}"),
 });
-const MarkdownSuperscript = Superscript.extend({ addStorage: () => markSpec("{sup}", "{/sup}") });
+const MarkdownSuperscript = Superscript.extend({
+  priority: BRACE_MARK_PRIORITY,
+  addStorage: () => braceMarkSpec("{sup}", "{/sup}"),
+});
 const MarkdownRubyText = RubyText.extend({
+  priority: BRACE_MARK_PRIORITY,
   addStorage: () =>
-    markSpec(
+    braceMarkSpec(
       (_s: any, mark: any) =>
         `{ruby:${escapeMd(String(mark.attrs.rt ?? "")).replace(/[{}]/g, "")}}`,
       "{/ruby}"
@@ -109,7 +130,7 @@ const MarkdownTextStyle = TextStyle.extend({
     }));
   },
   addStorage: () =>
-    markSpec(
+    braceMarkSpec(
       (_s: any, mark: any) =>
         (mark.attrs.color ? `{color:${mark.attrs.color}}` : "") +
         (mark.attrs.fontFamily
@@ -118,6 +139,131 @@ const MarkdownTextStyle = TextStyle.extend({
       (_s: any, mark: any) =>
         (mark.attrs.fontFamily ? "{/font}" : "") + (mark.attrs.color ? "{/color}" : "")
     ),
+});
+
+// ---- Text -------------------------------------------------------------------
+// tiptap-markdown's text serializer, plus "$". The parser reads two "$" in a block
+// as a formula, so text like "$HOME/$USER", or a "$" against a formula, would
+// reopen as math. Only a "$" that could pair is written "\$" (every Markdown reader
+// takes it as "$"): prices, "$$" and a single "$" save as typed.
+const isInlineMath = (node: any) => node?.type.name === "inlineMath";
+
+// The character beside node `i` of `parent` in direction `dir` (block edges
+// count as a space). Another node's character only counts when nothing is
+// written between the two (same marks); otherwise it is unknown ("x").
+const besideText = (parent: any, i: number, dir: 1 | -1) => {
+  const j = i + dir;
+  if (j < 0 || j >= parent.childCount) return " ";
+  const other = parent.child(j);
+  if (!other.isText || !Mark.sameSet(other.marks, parent.child(i).marks)) return "x";
+  return dir < 0 ? other.text.slice(-1) : other.text.charAt(0);
+};
+
+// Whether a formula is written straight against node `i` (same marks, so no
+// delimiter between them).
+const touchesFormula = (parent: any, i: number, dir: 1 | -1) => {
+  const other = parent.maybeChild(i + dir);
+  return isInlineMath(other) && Mark.sameSet(other.marks, parent.child(i).marks);
+};
+
+// "index:offset" of every "$" in `parent`'s text to write as "\$". Nodes are
+// immutable, so a block's answer holds as long as the block does.
+const escapedDollars = new WeakMap<object, Map<boolean, Set<string>>>();
+const dollarsToEscape = (parent: any, blockMath: boolean): Set<string> => {
+  let byMode = escapedDollars.get(parent);
+  if (!byMode) escapedDollars.set(parent, (byMode = new Map()));
+  let found = byMode.get(blockMath);
+  if (found) return found;
+  found = new Set();
+  byMode.set(blockMath, found);
+
+  // Each "$" (or run of "$", which can neither open nor close) in reading order:
+  // whether it could open or close a formula, and its line. A hard break or a code
+  // span ends the line for this purpose: no formula reaches across either. The
+  // opening "$" of a real formula can close an earlier "$" too, except after a
+  // space (the parser takes no pair with a space just inside it).
+  type Dollar = { keys?: string[]; open: boolean; close: boolean; forced?: boolean; line: number };
+  const dollars: Dollar[] = [];
+  let line = 0;
+  parent.forEach((child: any, _offset: number, i: number) => {
+    if (isInlineMath(child)) {
+      const close = /\S/.test(besideText(parent, i, -1));
+      return void dollars.push({ open: false, close, line });
+    }
+    if (child.type.name === "hardBreak") return void line++;
+    if (!child.isText) return;
+    if (child.marks.some((m: any) => m.type.name === "code")) return void line++;
+    const text: string = child.text;
+    for (let at = text.indexOf("$"); at >= 0;) {
+      let end = at;
+      while (text[end + 1] === "$") end++;
+      const single = end === at;
+      const before = at > 0 ? text[at - 1] : besideText(parent, i, -1);
+      const after = end + 1 < text.length ? text[end + 1] : besideText(parent, i, 1);
+      const keys: string[] = [];
+      for (let k = at; k <= end; k++) keys.push(`${i}:${k}`);
+      dollars.push({
+        keys,
+        line,
+        open: single && /\S/.test(after) && after !== "$" && before !== "$",
+        close: single && /\S/.test(before) && before !== "$" && !/[\d$]/.test(after),
+        // Straight against a formula: "a$$x$" stops it opening, "$x$$5" stops it
+        // closing. And "$$x$$" on its own would read back as block math.
+        forced:
+          blockMath ||
+          (at === 0 && touchesFormula(parent, i, -1)) ||
+          (end === text.length - 1 && touchesFormula(parent, i, 1)),
+      });
+      at = text.indexOf("$", end + 1);
+    }
+  });
+  const closeAfter: boolean[] = [];
+  for (let k = dollars.length - 1, any = false; k >= 0; k--) {
+    if (k + 1 < dollars.length && dollars[k + 1].line !== dollars[k].line) any = false;
+    closeAfter[k] = any;
+    any ||= dollars[k].close;
+  }
+  let openBefore = false;
+  dollars.forEach((d, k) => {
+    if (k > 0 && dollars[k - 1].line !== d.line) openBefore = false;
+    if (d.keys && (d.forced || (d.open && closeAfter[k]) || (d.close && openBefore)))
+      d.keys.forEach((key) => found.add(key));
+    if (d.keys) openBefore ||= d.open;
+  });
+  return found;
+};
+
+const MarkdownText = Node.create({
+  name: "text",
+  group: "inline",
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: any, node: any, parent: any, index: number) {
+          const html = (s: string) => s.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const text: string = node.text;
+          const escape = state.inAutolink
+            ? null
+            : dollarsToEscape(parent, state.blockMathText === parent);
+          if (!escape?.size) return state.text(html(text));
+          // Marked text arrives without its edge spaces; offsets are the node's own.
+          const shift = parent.child(index).text.indexOf(text);
+          // state.text escapes "\" itself, so each "\$" is written unescaped. Only
+          // the first piece is at the start of the line.
+          let from = 0;
+          for (let at = text.indexOf("$"); at >= 0; at = text.indexOf("$", at + 1)) {
+            if (!escape.has(`${index}:${at + shift}`)) continue;
+            if (at > from) state.text(html(text.slice(from, at)));
+            state.text("\\$", false);
+            state.atBlockStart = false;
+            from = at + 1;
+          }
+          state.text(html(text.slice(from)));
+        },
+        parse: {},
+      },
+    };
+  },
 });
 
 // ---- Nodes ------------------------------------------------------------------
@@ -331,6 +477,7 @@ const lowlight = createLowlight(common);
 export function createEditorBlockExtensions() {
   return [
     MarkdownSyntaxExtras,
+    MarkdownText,
     AlignedParagraph,
     AlignedHeading.configure({ levels: [1, 2, 3] }),
     // Unlabelled blocks stay plain: auto-detecting the language re-scans the whole

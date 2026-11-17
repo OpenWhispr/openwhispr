@@ -305,6 +305,115 @@ test("a formula containing $ reopens unchanged", () => {
   }
 });
 
+// Saves one paragraph built from `content` and reopens it: the Markdown, plus
+// each text run and atom of the reopened paragraph with its marks.
+function roundTrip(content) {
+  const editor = editorFor("");
+  editor.commands.setContent({ type: "doc", content: [{ type: "paragraph", content }] });
+  const md = editor.storage.markdown.getMarkdown();
+  editor.destroy();
+  const reopened = editorFor(md);
+  try {
+    const parts = [];
+    reopened.state.doc.descendants((node) => {
+      if (!node.isInline) return;
+      const marks = node.marks.map((m) => m.type.name).sort();
+      const what = node.isText ? node.text : `${node.type.name}(${node.attrs.latex ?? ""})`;
+      parts.push(marks.length ? `${what}[${marks}]` : what);
+    });
+    return { md, parts };
+  } finally {
+    reopened.destroy();
+  }
+}
+const text = (t, ...marks) => ({ type: "text", text: t, ...(marks.length ? { marks } : {}) });
+const formula = (latex) => ({ type: "inlineMath", attrs: { latex } });
+const color = { type: "textStyle", attrs: { color: "red" } };
+const ruby = { type: "rubyText", attrs: { rt: "kan" } };
+
+test("a coloured or ruby word beside a formatted space saves as Markdown", () => {
+  const cases = [
+    [[text("q"), text("red", color), text(" ", { type: "bold" }), text("z")], "red"],
+    [[text("q"), text("漢", ruby), text(" ", { type: "italic" }), text("z")], "漢"],
+    [[text("hi "), text("!", color), text(" ", { type: "bold" }), text("there")], "!"],
+  ];
+  for (const [content, styled] of cases) {
+    const { md, parts } = roundTrip(content);
+    assert.doesNotMatch(md, /native code|\{\/?(color|ruby)\b[^}]*$/, md);
+    assert.ok(
+      parts.some((p) => p.startsWith(styled) && /textStyle|rubyText/.test(p)),
+      `${md} -> ${parts}`
+    );
+  }
+});
+
+test("a subscript or superscript inside bold text keeps both", () => {
+  const sub = roundTrip([text("H"), text("x", { type: "bold" }, { type: "subscript" }), text("2")]);
+  assert.deepEqual(sub.parts, ["H", "x[bold,subscript]", "2"], sub.md);
+  const sup = roundTrip([
+    text("E=mc"),
+    text("2", { type: "bold" }, { type: "superscript" }),
+    text("!"),
+  ]);
+  assert.deepEqual(sup.parts, ["E=mc", "2[bold,superscript]", "!"], sup.md);
+});
+
+test("a $ in text never reopens as a formula", () => {
+  for (const line of ["Run echo $HOME/$USER now", "I said $a$ literally", "$$x$$", "<b> $a/$c"]) {
+    const { md, parts } = roundTrip([text(line)]);
+    assert.deepEqual(parts, [line], md);
+  }
+  // Beside a formula, and a price before one.
+  const { md, parts } = roundTrip([
+    text("a$"),
+    formula("x"),
+    text("$5, "),
+    text("$20,"),
+    formula("y"),
+  ]);
+  assert.deepEqual(parts, ["a$", "inlineMath(x)", "$5, $20,", "inlineMath(y)"], md);
+  // "$$" beside a formula, with and without a delimiter between them.
+  const bold = { type: "bold" };
+  for (const [content, want] of [
+    [
+      [text("a$$", bold), formula("x")],
+      ["a$$[bold]", "inlineMath(x)"],
+    ],
+    [
+      [formula("y"), text("$$x$", bold)],
+      ["inlineMath(y)", "$$x$[bold]"],
+    ],
+    [
+      [text("a$$"), formula("y")],
+      ["a$$", "inlineMath(y)"],
+    ],
+    [
+      [formula("y"), text("$$x$")],
+      ["inlineMath(y)", "$$x$"],
+    ],
+  ]) {
+    const trip = roundTrip(content);
+    assert.deepEqual(trip.parts, want, trip.md);
+  }
+  // A $ that cannot pair is saved as typed (a code span or line break between
+  // two "$" keeps them apart).
+  for (const line of [
+    "Paid $5 then $6.50 today",
+    "costs $5-$10",
+    "a $ b",
+    "pay $$ now",
+    "$a `b` c$",
+  ])
+    assert.equal(save(line), line);
+});
+
+test("a paragraph of unclosed {sub} markers opens quickly and keeps its text", () => {
+  const line = "{sub}".repeat(40000);
+  const started = Date.now();
+  assert.equal(save(line), line);
+  assert.ok(Date.now() - started < 2000, `took ${Date.now() - started} ms`);
+});
+
 test("an emoji renders as text, never as an image from a CDN", () => {
   const editor = editorFor("Hi");
   try {
