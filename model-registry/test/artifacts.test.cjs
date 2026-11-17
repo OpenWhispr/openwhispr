@@ -15,9 +15,11 @@ const gguf = {
 
 function fakeFetch({ tree = [], magic = "GGUF", release = null, bytes = "" }) {
   return async (url) => {
-    if (url.includes("/api/models/")) return Response.json(tree);
-    if (url.includes("api.github.com")) return release ? Response.json(release) : new Response("", { status: 404 });
-    if (url.includes("huggingface.co")) return new Response(magic);
+    const { hostname, pathname } = new URL(url);
+    if (pathname.startsWith("/api/models/")) return Response.json(tree);
+    if (hostname === "api.github.com")
+      return release ? Response.json(release) : new Response("", { status: 404 });
+    if (hostname === "huggingface.co") return new Response(magic);
     return new Response(bytes);
   };
 }
