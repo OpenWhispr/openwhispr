@@ -139,7 +139,7 @@ for (const { unmount, rejectionTicks } of [
   });
 }
 
-test("focus recovery shows uploaded totals instead of the API's older copy", async (t) => {
+test("focus recovery shows uploaded totals instead of the API's older copy, and a check after the cache expires sends allow", async (t) => {
   let root;
   t.after(() => act(() => root?.unmount()));
   t.mock.method(console, "error", () => {});

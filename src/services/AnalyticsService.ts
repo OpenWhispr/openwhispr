@@ -359,7 +359,7 @@ export async function getAccountAnalyticsSummary(
   accountId: string | null = null,
   cache: AccountSummaryCache = "refresh"
 ): Promise<AnalyticsSummary> {
-  // A retry can send local changes during a background check. Even an uncertain
+  // A background check's sync pass can re-send pending rows. Even an uncertain
   // write may have landed, so keep reads fresh until one acknowledges it.
   const changeGeneration = pendingSummaryChanges.get(accountId);
   const requestHistoryBackfill = Boolean(
