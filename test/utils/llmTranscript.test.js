@@ -155,7 +155,7 @@ test("buildMeetingContext names the owner and invited participants", async () =>
     buildMeetingContext(identity, "Gabriel Stein"),
     [
       "## Meeting Context",
-      'The user taking these notes ("Gabriel Stein" in the transcript) is Gabriel Stein <gabe@openwhispr.com>.',
+      'The note taker ("Gabriel Stein" in the transcript) is Gabriel Stein <gabe@openwhispr.com>.',
       "Invited participants: Michael Chen <michael@acme.com>, sean@acme.com.",
     ].join("\n")
   );
@@ -269,4 +269,54 @@ test("a You saved in another UI language still labels the note owner", async () 
   const segment = { source: "mic", speaker: "speaker_0", text: "hi" };
   assert.equal(resolveLlmSpeakerLabel(segment, { speaker_0: "You" }, "Casey", german), "Casey");
   assert.equal(resolveLlmSpeakerLabel(segment, { speaker_0: "Du" }, "Casey", german), "Casey");
+});
+
+test("a previous recorder's self mapping cannot rename a later recorder", async () => {
+  const { buildLlmTranscript } = await load();
+  const segments = [
+    { source: "mic", speaker: "you", text: "old" },
+    { source: "mic", speaker: "you", recorderName: "Bob", text: "new" },
+  ];
+  assert.equal(buildLlmTranscript(segments, { you: "Alice" }, "Alice", t), "Alice: old\nBob: new");
+});
+
+test("local self mappings name the viewer while stored self corrections name their recorder", async () => {
+  const { buildLlmTranscript } = await load();
+  const segments = [
+    { source: "mic", speaker: "speaker_0", text: "viewer" },
+    {
+      source: "mic",
+      speaker: "speaker_1",
+      speakerName: "You",
+      speakerLocked: true,
+      text: "original",
+    },
+    {
+      source: "mic",
+      speaker: "you",
+      recorderName: "Later Recorder",
+      speakerName: "You",
+      text: "later",
+    },
+    {
+      source: "mic",
+      speaker: "speaker_2",
+      speakerName: "Corrected",
+      speakerLocked: true,
+      text: "fixed",
+    },
+  ];
+  for (const selfName of ["You", "Du"]) {
+    const german = (key, options) => (key === "notes.speaker.you" ? "Du" : t(key, options));
+    assert.equal(
+      buildLlmTranscript(
+        segments,
+        { speaker_0: selfName, speaker_1: selfName, speaker_2: selfName, you: selfName },
+        "Original Recorder",
+        german,
+        "Bob Viewer"
+      ),
+      "Bob Viewer: viewer\nOriginal Recorder: original\nLater Recorder: later\nCorrected: fixed"
+    );
+  }
 });

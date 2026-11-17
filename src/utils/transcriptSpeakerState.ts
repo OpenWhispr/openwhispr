@@ -99,8 +99,37 @@ export const lockTranscriptSpeaker = (
     speakerLockSource: "user",
   });
 
-const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSegment) => {
-  const merged = { ...incoming } as TranscriptSegment;
+// Live speakers that post-call diarization split into several voices, by live
+// speaker id: the voice the speaker's name went to.
+export type SplitLiveSpeakers = Record<string, { speaker: string; name: string }>;
+
+const mergeSpeakerFields = (
+  existing: TranscriptSegment,
+  incoming: TranscriptSegment,
+  splitLiveSpeakers?: SplitLiveSpeakers
+) => {
+  const merged = {
+    ...incoming,
+    ...(existing.recorderName ? { recorderName: existing.recorderName } : {}),
+  } as TranscriptSegment;
+
+  // Naming a live speaker locks the name onto every line it labelled. When that
+  // speaker turns out to be several voices, the lock stays with the voice the
+  // name went to, and the others take diarization's result.
+  const split = existing.speaker ? splitLiveSpeakers?.[existing.speaker] : undefined;
+  if (
+    split &&
+    incoming.speaker !== split.speaker &&
+    existing.speakerName === split.name &&
+    isTranscriptSpeakerLocked(existing)
+  ) {
+    return normalizeTranscriptSegment({
+      ...merged,
+      speakerLocked: false,
+      speakerLockSource: undefined,
+    });
+  }
+
   const existingFields = existing as Record<SpeakerStateField, unknown>;
   const mergedFields = merged as Record<SpeakerStateField, unknown>;
 
@@ -126,7 +155,8 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
 
 export const mergeTranscriptSegments = (
   existingSegments: TranscriptSegment[],
-  incomingSegments: TranscriptSegment[]
+  incomingSegments: TranscriptSegment[],
+  splitLiveSpeakers?: SplitLiveSpeakers
 ) => {
   if (incomingSegments.length === 0) {
     return normalizeTranscriptSegments(existingSegments);
@@ -175,7 +205,10 @@ export const mergeTranscriptSegments = (
 
     if (matchIndex !== undefined) {
       usedIndexes.add(matchIndex);
-      enrichedByIndex.set(matchIndex, mergeSpeakerFields(existingSegments[matchIndex], segment));
+      enrichedByIndex.set(
+        matchIndex,
+        mergeSpeakerFields(existingSegments[matchIndex], segment, splitLiveSpeakers)
+      );
     } else {
       unmatchedIncoming.push(
         normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })
@@ -198,6 +231,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
       timestamp: segment.timestamp,
       speaker: segment.speaker,
       speakerName: segment.speakerName,
+      recorderName: segment.recorderName,
       speakerIsPlaceholder: segment.speakerIsPlaceholder,
       suggestedName: segment.suggestedName,
       suggestedProfileId: segment.suggestedProfileId,
@@ -211,14 +245,22 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
 // user correcting one stretch of it. The correction has to outrank the cluster,
 // or reassigning part of a mis-split block appears to do nothing (#1533). This
 // mirrors the precedence the exporter already applies in transcriptFormatter.js.
-export const resolveSegmentSpeakerName = (
+export const resolveMappedSpeakerName = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string | undefined => {
-  if (segment.speakerName && isTranscriptSpeakerLocked(segment)) return segment.speakerName;
-  const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
-  return mapped || segment.speakerName;
+  if (segment.speakerName && isTranscriptSpeakerLocked(segment)) return undefined;
+  // A legacy self mapping belongs to the original recorder, not a teammate
+  // who subsequently recorded into the note. Explicit row corrections win above.
+  return segment.speaker && !(segment.speaker === "you" && segment.recorderName)
+    ? speakerMappings?.[segment.speaker]
+    : undefined;
 };
+
+export const resolveSegmentSpeakerName = (
+  segment: TranscriptSegment,
+  speakerMappings?: Record<string, string>
+): string | undefined => resolveMappedSpeakerName(segment, speakerMappings) || segment.speakerName;
 
 // Naming a speaker "You" is how the user marks their own voice. The name is
 // stored in the UI language it was saved in, so English "You" counts in every

@@ -1,5 +1,5 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
-import { mergeTranscriptSegments } from "./transcriptSpeakerState";
+import { mergeTranscriptSegments, type SplitLiveSpeakers } from "./transcriptSpeakerState";
 
 // Routing rules for meeting-diarization-complete events (issue #1495): a result
 // must be persisted to the note that owns the recording session, never to
@@ -97,8 +97,10 @@ export function mergeSessionDiarization(params: {
   fallbackTranscript?: string;
   segments: Array<Omit<TranscriptSegment, "id"> & { id?: string }>;
   removedSegments?: RemovedTranscriptSegment[];
+  splitLiveSpeakers?: SplitLiveSpeakers;
 }): { segments: TranscriptSegment[]; removedCount: number } {
-  const { existing, seedLength, fallbackTranscript, segments, removedSegments } = params;
+  const { existing, seedLength, fallbackTranscript, segments, removedSegments, splitLiveSpeakers } =
+    params;
   const seededCount = Math.min(seedLength, existing.length);
   const sessionRows = existing.slice(seededCount);
   const incoming = segments.map((segment, index) => ({
@@ -117,7 +119,10 @@ export function mergeSessionDiarization(params: {
   }
   const keptRows = withoutRemovedSegments(sessionRows, removedSegments);
   return {
-    segments: [...existing.slice(0, seededCount), ...mergeTranscriptSegments(keptRows, incoming)],
+    segments: [
+      ...existing.slice(0, seededCount),
+      ...mergeTranscriptSegments(keptRows, incoming, splitLiveSpeakers),
+    ],
     removedCount: sessionRows.length - keptRows.length,
   };
 }

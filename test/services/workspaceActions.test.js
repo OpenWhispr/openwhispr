@@ -1,0 +1,381 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const load = () => import("../../src/services/workspaceActionsCore.ts");
+
+// `server` is what the API holds; an API call changes it, then `failures` decides whether its
+// answer reaches the caller (`lost`: it happened but the client saw an error) or it was refused.
+function makeHarness({
+  failures = {},
+  lost = {},
+  refreshFails = false,
+  relocateFails = false,
+  removal = { removed: ["user-2"], already_removed: [], transferred: null },
+} = {}) {
+  const calls = [];
+  const server = {
+    workspaces: ["ws-1", "ws-2"],
+    roles: { "user-1": "owner", "user-2": "admin" },
+  };
+  // Like useWorkspaceStore: a failed refresh never rejects; it flags `error` and keeps the old list.
+  const list = { workspaces: [...server.workspaces], error: false };
+  let members = { ...server.roles };
+  const call = (name, args, apply) => {
+    calls.push([name, ...args]);
+    if (failures[name]) throw failures[name];
+    apply();
+    if (lost[name]) throw lost[name];
+  };
+  const deps = {
+    captureAccountGuard: () => () => true,
+    api: {
+      removeMember: async (workspaceId, userId) =>
+        call("removeMember", [workspaceId, userId], () => {
+          server.workspaces = server.workspaces.filter((id) => id !== workspaceId);
+        }),
+      removeMembers: async (workspaceId, input) => {
+        call("removeMembers", [workspaceId, input], () => {});
+        return removal;
+      },
+      remove: async (workspaceId) =>
+        call("remove", [workspaceId], () => {
+          server.workspaces = server.workspaces.filter((id) => id !== workspaceId);
+        }),
+      updateMemberRole: async (workspaceId, userId, role) =>
+        call("updateMemberRole", [workspaceId, userId, role], () => {
+          server.roles = { ...server.roles, "user-1": "admin", [userId]: role };
+        }),
+    },
+    store: {
+      forgetWorkspace: (id) => {
+        calls.push(["forget", id]);
+        list.workspaces = list.workspaces.filter((workspaceId) => workspaceId !== id);
+      },
+      refresh: async (options) => {
+        call("refresh", [options], () => {
+          if (refreshFails) list.error = true;
+          else Object.assign(list, { workspaces: [...server.workspaces], error: false });
+        });
+      },
+      refreshMembers: async (workspaceId) =>
+        call("refreshMembers", [workspaceId], () => {
+          members = { ...server.roles };
+        }),
+      listedWorkspaceIds: () => (list.error ? null : list.workspaces),
+      memberRole: (workspaceId, userId) => members[userId] ?? null,
+    },
+    privateNotes: {
+      relocateLostWorkspace: async (workspaceId) => {
+        calls.push(["relocate", workspaceId]);
+        if (relocateFails) throw new Error("main refused");
+      },
+    },
+    sync: { requestSyncAll: (reason) => calls.push(["requestSyncAll", reason]) },
+    notifyUsageChanged: () => calls.push(["usageChanged"]),
+  };
+  return { calls, deps, list };
+}
+
+const names = (calls) => calls.map(([name]) => name);
+const FRESH = { fresh: true };
+
+test("leave calls the API, forgets the workspace, then reads a fresh list", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  await createWorkspaceActions(deps).leaveWorkspace("ws-1", "user-1");
+  assert.deepEqual(calls, [
+    ["removeMember", "ws-1", "user-1"],
+    ["forget", "ws-1"],
+    ["relocate", "ws-1"],
+    ["refresh", FRESH],
+    ["usageChanged"],
+    ["requestSyncAll", "manual"],
+  ]);
+});
+
+test("leave succeeds even when the workspace refresh fails", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness({ failures: { refresh: new Error("offline") } });
+  await createWorkspaceActions(deps).leaveWorkspace("ws-1", "user-1");
+  assert.deepEqual(calls.at(-1), ["requestSyncAll", "manual"]);
+  assert.ok(calls.some(([name]) => name === "refresh"));
+});
+
+test("a left workspace is gone from the list even when the refresh fails", async () => {
+  const { createWorkspaceActions } = await load();
+  const { deps, list } = makeHarness({ refreshFails: true });
+  await createWorkspaceActions(deps).leaveWorkspace("ws-1", "user-1");
+  assert.equal(list.error, true);
+  assert.deepEqual(list.workspaces, ["ws-2"]);
+});
+
+test("a deleted workspace is gone from the list even when the refresh fails", async () => {
+  const { createWorkspaceActions } = await load();
+  const { deps, list } = makeHarness({ refreshFails: true });
+  await createWorkspaceActions(deps).deleteWorkspace("ws-1");
+  assert.equal(list.error, true);
+  assert.deepEqual(list.workspaces, ["ws-2"]);
+});
+
+test("a refused leave only reads the list again", async () => {
+  const { createWorkspaceActions } = await load();
+  const failure = new Error("server said no");
+  const { calls, deps, list } = makeHarness({ failures: { removeMember: failure } });
+  await assert.rejects(createWorkspaceActions(deps).leaveWorkspace("ws-1", "user-1"), failure);
+  assert.deepEqual(calls, [
+    ["removeMember", "ws-1", "user-1"],
+    ["refresh", FRESH],
+  ]);
+  assert.deepEqual(list.workspaces, ["ws-1", "ws-2"]);
+});
+
+test("a leave whose answer was lost counts as done, so Try again isn't refused", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps, list } = makeHarness({ lost: { removeMember: new Error("timed out") } });
+  await createWorkspaceActions(deps).leaveWorkspace("ws-1", "user-1");
+  assert.deepEqual(list.workspaces, ["ws-2"]);
+  assert.deepEqual(calls.at(-1), ["requestSyncAll", "manual"]);
+});
+
+test("a failed leave stays failed when the check can't read the list", async () => {
+  const { createWorkspaceActions } = await load();
+  const failure = new Error("offline");
+  const { calls, deps } = makeHarness({ failures: { removeMember: failure }, refreshFails: true });
+  await assert.rejects(createWorkspaceActions(deps).leaveWorkspace("ws-1", "user-1"), failure);
+  assert.equal(names(calls).includes("forget"), false);
+  assert.equal(names(calls).includes("relocate"), false);
+});
+
+test("leaving a workspace relocates its Private immediately", async () => {
+  const { createWorkspaceActions } = await load();
+  // The refresh that follows fails, so it can't be the one that notices the workspace is gone.
+  const { calls, deps } = makeHarness({ refreshFails: true });
+  await createWorkspaceActions(deps).leaveWorkspace("ws-1", "user-1");
+  const order = names(calls);
+  assert.ok(order.indexOf("forget") < order.indexOf("relocate"));
+  assert.ok(order.indexOf("relocate") < order.indexOf("refresh"));
+  assert.deepEqual(
+    calls.filter(([name]) => name === "relocate"),
+    [["relocate", "ws-1"]]
+  );
+});
+
+test("a refused leave relocates nothing", async () => {
+  const { createWorkspaceActions } = await load();
+  const failure = new Error("server said no");
+  const { calls, deps } = makeHarness({ failures: { removeMember: failure } });
+  await assert.rejects(createWorkspaceActions(deps).leaveWorkspace("ws-1", "user-1"), failure);
+  assert.equal(names(calls).includes("relocate"), false);
+});
+
+test("a delete succeeds even when its Private can't be relocated", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness({ relocateFails: true });
+  await createWorkspaceActions(deps).deleteWorkspace("ws-1");
+  assert.deepEqual(calls.at(-1), ["requestSyncAll", "manual"]);
+});
+
+test("delete follows the same order", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  await createWorkspaceActions(deps).deleteWorkspace("ws-1");
+  assert.deepEqual(calls, [
+    ["remove", "ws-1"],
+    ["forget", "ws-1"],
+    ["relocate", "ws-1"],
+    ["refresh", FRESH],
+    ["usageChanged"],
+    ["requestSyncAll", "manual"],
+  ]);
+});
+
+test("a refused delete only reads the list again", async () => {
+  const { createWorkspaceActions } = await load();
+  const failure = new Error("server said no");
+  const { calls, deps } = makeHarness({ failures: { remove: failure } });
+  await assert.rejects(createWorkspaceActions(deps).deleteWorkspace("ws-1"), failure);
+  assert.deepEqual(names(calls), ["remove", "refresh"]);
+});
+
+test("a delete whose answer was lost counts as done", async () => {
+  const { createWorkspaceActions } = await load();
+  const { deps, list } = makeHarness({ lost: { remove: new Error("timed out") } });
+  await createWorkspaceActions(deps).deleteWorkspace("ws-1");
+  assert.deepEqual(list.workspaces, ["ws-2"]);
+});
+
+test("delete succeeds even when the workspace refresh fails", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness({ failures: { refresh: new Error("offline") } });
+  await createWorkspaceActions(deps).deleteWorkspace("ws-1");
+  assert.deepEqual(calls.at(-1), ["requestSyncAll", "manual"]);
+});
+
+test("transfer refreshes workspaces and members, and requests no sync", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  await createWorkspaceActions(deps).transferOwnership("ws-1", "user-2");
+  assert.deepEqual(calls, [
+    ["updateMemberRole", "ws-1", "user-2", "owner"],
+    ["refresh", FRESH],
+    ["refreshMembers", "ws-1"],
+  ]);
+});
+
+test("transfer succeeds even when the refreshes fail", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness({
+    failures: { refresh: new Error("offline"), refreshMembers: new Error("offline") },
+  });
+  await createWorkspaceActions(deps).transferOwnership("ws-1", "user-2");
+  assert.deepEqual(names(calls), ["updateMemberRole", "refresh", "refreshMembers"]);
+});
+
+test("a refused transfer only reads the members again", async () => {
+  const { createWorkspaceActions } = await load();
+  const failure = new Error("server said no");
+  const { calls, deps } = makeHarness({ failures: { updateMemberRole: failure } });
+  await assert.rejects(createWorkspaceActions(deps).transferOwnership("ws-1", "user-2"), failure);
+  assert.deepEqual(calls, [
+    ["updateMemberRole", "ws-1", "user-2", "owner"],
+    ["refreshMembers", "ws-1"],
+  ]);
+});
+
+test("a transfer whose answer was lost counts as done once the roster shows the new owner", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness({ lost: { updateMemberRole: new Error("timed out") } });
+  await createWorkspaceActions(deps).transferOwnership("ws-1", "user-2");
+  assert.deepEqual(names(calls), [
+    "updateMemberRole",
+    "refreshMembers",
+    "refresh",
+    "refreshMembers",
+  ]);
+});
+
+test("a failed transfer stays failed when the roster can't be read", async () => {
+  const { createWorkspaceActions } = await load();
+  const failure = new Error("offline");
+  const { deps } = makeHarness({
+    failures: { updateMemberRole: failure, refreshMembers: new Error("offline") },
+  });
+  await assert.rejects(createWorkspaceActions(deps).transferOwnership("ws-1", "user-2"), failure);
+});
+
+test("remove members refreshes the roster and the workspace list", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness();
+  const input = { userIds: ["user-2"] };
+
+  const result = await createWorkspaceActions(deps).removeMembers("ws-1", input);
+
+  assert.deepEqual(result, { removed: ["user-2"], already_removed: [], transferred: null });
+  assert.deepEqual(calls, [
+    ["removeMembers", "ws-1", input],
+    ["refreshMembers", "ws-1"],
+    ["refresh", FRESH],
+  ]);
+});
+
+test("a transfer also syncs", async () => {
+  const { createWorkspaceActions } = await load();
+  const removal = {
+    removed: ["user-2"],
+    already_removed: [],
+    transferred: { to: "user-1", notes: 4, spaces: 1 },
+  };
+  const { calls, deps } = makeHarness({ removal });
+  const input = { userIds: ["user-2"], transferTo: "user-1" };
+
+  const result = await createWorkspaceActions(deps).removeMembers("ws-1", input);
+
+  assert.equal(result, removal);
+  assert.deepEqual(calls, [
+    ["removeMembers", "ws-1", input],
+    ["refreshMembers", "ws-1"],
+    ["refresh", FRESH],
+    ["requestSyncAll", "manual"],
+  ]);
+});
+
+test("a transfer whose answer comes back empty still syncs", async () => {
+  // A retry after a lost answer finds the content already moved, so it reports no transfer.
+  const { createWorkspaceActions } = await load();
+  const removal = { removed: [], already_removed: ["user-2"], transferred: null };
+  const { calls, deps } = makeHarness({ removal });
+  const input = { userIds: ["user-2"], transferTo: "user-1" };
+
+  await createWorkspaceActions(deps).removeMembers("ws-1", input);
+
+  assert.deepEqual(calls.at(-1), ["requestSyncAll", "manual"]);
+});
+
+test("a refused removal changes nothing locally", async () => {
+  const { createWorkspaceActions } = await load();
+  const { CloudApiError } = await import("../../src/services/cloudApi.ts");
+  const { calls, deps } = makeHarness({
+    failures: { removeMembers: new CloudApiError("Forbidden", 403) },
+  });
+
+  await assert.rejects(
+    createWorkspaceActions(deps).removeMembers("ws-1", { userIds: ["user-2"] }),
+    { status: 403 }
+  );
+
+  assert.deepEqual(names(calls), ["removeMembers"]);
+});
+
+test("a removal with no answer reads the roster and list again, since it may have gone through", async () => {
+  const { createWorkspaceActions } = await load();
+  const input = { userIds: ["user-2"], transferTo: "user-1" };
+  const { calls, deps } = makeHarness({ lost: { removeMembers: new Error("timed out") } });
+
+  await assert.rejects(createWorkspaceActions(deps).removeMembers("ws-1", input), /timed out/);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(names(calls), ["removeMembers", "refreshMembers", "refresh", "requestSyncAll"]);
+});
+
+test("a removal with no answer doesn't wait on those reads to report the failure", async () => {
+  const { createWorkspaceActions } = await load();
+  const { deps } = makeHarness({ lost: { removeMembers: new Error("timed out") } });
+  deps.store.refreshMembers = () => new Promise(() => {});
+
+  await assert.rejects(
+    createWorkspaceActions(deps).removeMembers("ws-1", { userIds: ["user-2"] }),
+    /timed out/
+  );
+});
+
+test("a removal succeeds even when the refreshes fail", async () => {
+  const { createWorkspaceActions } = await load();
+  const { calls, deps } = makeHarness({
+    failures: { refreshMembers: new Error("offline"), refresh: new Error("offline") },
+  });
+
+  const result = await createWorkspaceActions(deps).removeMembers("ws-1", { userIds: ["user-2"] });
+
+  assert.deepEqual(result.removed, ["user-2"]);
+  assert.deepEqual(names(calls), ["removeMembers", "refreshMembers", "refresh"]);
+});
+
+for (const action of ["leaveWorkspace", "deleteWorkspace"]) {
+  for (const rejected of [false, true]) {
+    test(`${action} stops local effects when the account changes during the server action (${rejected})`, async () => {
+      const { createWorkspaceActions } = await load();
+      const { deps, calls } = makeHarness();
+      let current = true;
+      deps.captureAccountGuard = () => () => current;
+      const method = action === "leaveWorkspace" ? "removeMember" : "remove";
+      deps.api[method] = async () => {
+        current = false;
+        if (rejected) throw new Error("offline");
+      };
+      const result = createWorkspaceActions(deps)[action]("ws-1", "user-1");
+      if (rejected) await assert.rejects(result, /offline/);
+      else await result;
+      assert.deepEqual(calls, []);
+    });
+  }
+}

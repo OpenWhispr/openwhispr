@@ -83,6 +83,8 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
   const events = windowEvents();
   const calls = { policy: [], config: [], clears: [] };
   let onScopeChanged = null;
+  // Main resolves the effective policy for the scope it holds.
+  let mainScope = scope;
   const electronAPI = {
     getAppVersion: async () => ({ version: "1.10.0" }),
     getActiveAccountScope: readScope ?? (async () => scope),
@@ -92,15 +94,18 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
         onScopeChanged = null;
       };
     },
-    getWorkspacePolicy: async (accountId, authGeneration) => {
-      calls.policy.push([accountId, authGeneration]);
+    getEffectivePolicy: async () => {
+      if (!mainScope) return { success: true, status: "unmanaged", revision: 0, deviceReady: true };
+      calls.policy.push([mainScope.accountId, mainScope.authGeneration]);
       return {
         success: true,
+        status: "managed",
         revision: calls.policy.length,
-        accountId,
-        authGeneration,
+        accountId: mainScope.accountId,
+        authGeneration: mainScope.authGeneration,
         managed: true,
         policy,
+        deviceReady: true,
       };
     },
     getManagedEnterpriseConfig: async (accountId, workspaceId, authGeneration) => {
@@ -137,7 +142,10 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
     calls,
     events,
     stop,
-    broadcast: (next) => onScopeChanged?.(next),
+    broadcast: (next) => {
+      mainScope = next;
+      onScopeChanged?.(next);
+    },
     listeningForBroadcasts: () => onScopeChanged !== null,
     // Browser semantics: the other window's write has landed before the event fires here.
     setActiveWorkspace: (id) => {
@@ -148,7 +156,7 @@ async function boot(t, { scope = null, activeWorkspaceId = null, readScope } = {
 }
 
 test("a window without a session hydrates managed transcription from the main process scope", async (t) => {
-  const { managed, calls, broadcast, usePolicyStore, useEnterpriseIdentityStore } = await boot(t, {
+  const { managed, calls, broadcast, useEnterpriseIdentityStore } = await boot(t, {
     scope: { accountId: "account-a", authGeneration: 1 },
     activeWorkspaceId: "workspace-a",
   });
@@ -167,6 +175,8 @@ test("a window without a session hydrates managed transcription from the main pr
   );
   assert.deepEqual(calls.policy, [["account-a", 1]]);
   assert.deepEqual(calls.config, [["account-a", "workspace-a", 1]]);
+  // Main's disk cache is what an offline launch falls back to.
+  assert.deepEqual(calls.clears, []);
 
   await t.test("a new credential generation re-resolves policy and identity", async () => {
     broadcast({ accountId: "account-a", authGeneration: 2 });
@@ -177,13 +187,13 @@ test("a window without a session hydrates managed transcription from the main pr
     assert.deepEqual(calls.policy.at(-1), ["account-a", 2]);
     assert.deepEqual(calls.config.at(-1), ["account-a", "workspace-a", 2]);
     assert.equal(managed.isManagedTranscriptionActive(), true);
+    assert.deepEqual(calls.clears, []);
   });
 
   await t.test("a cleared scope (sign-out) clears the mirrored identity at once", () => {
     broadcast(null);
     assert.equal(managed.isManagedTranscriptionActive(), false);
     assert.equal(managed.getManagedTranscriptionResolution(), undefined);
-    assert.equal(usePolicyStore.getState().status, "idle");
     assert.equal(useEnterpriseIdentityStore.getState().status, "idle");
     assert.equal(useEnterpriseIdentityStore.getState().accountId, null);
   });
@@ -211,29 +221,33 @@ test("a scope validated after boot arrives by broadcast and the workspace by sto
   assert.deepEqual(calls.config, [["account-a", "workspace-a", 1]]);
 });
 
-test("the mirror names the scope it moves to, and nothing when the scope is gone", async (t) => {
+test("the mirror moves scopes through main's config lookup, and clears only a gone scope", async (t) => {
   const { managed, calls, broadcast, setActiveWorkspace } = await boot(t, {
     scope: { accountId: "account-a", authGeneration: 1 },
     activeWorkspaceId: "workspace-a",
   });
   await waitFor(() => managed.isManagedTranscriptionActive(), "managed transcription");
-  const moves = [{ next: { accountId: "account-a", workspaceId: "workspace-a" } }];
-  assert.deepEqual(calls.clears, moves);
+  // A move never clears: main's config lookup retires another scope's
+  // enterprise audio itself, and a clear would delete the cache an offline
+  // launch falls back to.
+  assert.deepEqual(calls.clears, []);
 
-  // A rotation names the same scope, so main keeps an enterprise meeting running.
+  // A rotation keeps the scope, so main keeps an enterprise meeting running.
   broadcast({ accountId: "account-a", authGeneration: 2 });
-  moves.push({ next: { accountId: "account-a", workspaceId: "workspace-a" } });
-  assert.deepEqual(calls.clears, moves);
-
+  await waitFor(() => calls.config.some(([, , generation]) => generation === 2), "rotation");
   setActiveWorkspace("workspace-b");
-  moves.push({ next: { accountId: "account-a", workspaceId: "workspace-b" } });
-  assert.deepEqual(calls.clears, moves);
+  await waitFor(() => calls.config.some(([, workspace]) => workspace === "workspace-b"), "move");
+  assert.deepEqual(calls.config, [
+    ["account-a", "workspace-a", 1],
+    ["account-a", "workspace-a", 2],
+    ["account-a", "workspace-b", 2],
+  ]);
+  assert.deepEqual(calls.clears, []);
 
   // An unresolved scope (a window booting mid-rotation, or a sign-out) names
   // nothing: main ends the work when it learns the account changed.
   broadcast(null);
-  moves.push(undefined);
-  assert.deepEqual(calls.clears, moves);
+  assert.deepEqual(calls.clears, [undefined]);
 });
 
 test("a broadcast that lands while the boot read is in flight is not overwritten by it", async (t) => {

@@ -519,3 +519,45 @@ for (const completionTiming of ["while recording", "during stop", "after stop"])
     ]);
   });
 }
+
+test("late diarization names the session recorder even when no live row arrived", async (t) => {
+  const { api, state, notes } = createElectronAPI({ stopDiarizationSessionId: "bobs-session" });
+  state.stopTranscript = "Bob's words";
+  const { store, parseTranscriptSegments } = await loadModules(t, api);
+  await store.startRecording({ ...START_ARGS, recorderName: "Bob Viewer" });
+  await store.stopRecording();
+  state.diarizationCallback({
+    noteId: NOTE_ID,
+    sessionId: "bobs-session",
+    segments: [{ source: "mic", speaker: "you", text: "Bob's words", timestamp: 1 }],
+  });
+  await settle();
+  const segments = parseTranscriptSegments(notes.get(NOTE_ID).transcript);
+  assert.equal(segments.length, 1);
+  assert.equal(segments[0].recorderName, "Bob Viewer");
+});
+
+test("a self correction during resumed recording leaves earlier recorders alone", async (t) => {
+  const { api } = createElectronAPI();
+  const store = await loadStore(t, api);
+  await store.startRecording({
+    ...START_ARGS,
+    recorderName: "Bob Viewer",
+    seedSegments: [
+      {
+        id: "alice",
+        source: "mic",
+        speaker: "you",
+        text: "Alice",
+        speakerName: "Alice Owner",
+        speakerLocked: true,
+      },
+      { id: "bob", source: "mic", speaker: "you", text: "Bob", recorderName: "Bob Viewer" },
+    ],
+  });
+  store.lockSpeaker("you", "Bob Corrected", "Bob Viewer");
+  const segments = store.useMeetingRecordingStore.getState().segments;
+  assert.equal(segments[0].speakerName, "Alice Owner");
+  assert.equal(segments[1].speakerName, "Bob Corrected");
+  await store.stopRecording();
+});

@@ -280,7 +280,7 @@ class TrayManager {
       },
       {
         label: i18nMain.t("app.commandMenu.askAssistant"),
-        click: () => this.windowManager?.sendOpenAssistantPanel(),
+        click: () => this.windowManager?.openAgentWindow(),
       },
       {
         // Starts in the main process, like the meeting hotkey, which refuses

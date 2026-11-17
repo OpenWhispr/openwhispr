@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -6,6 +7,7 @@ const { deferred } = require("./harness/deferred");
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
+const defaultMicLookups = [];
 
 const electronStub = {
   app: {
@@ -47,6 +49,13 @@ Module._load = function loadWithElectronStub(request, parent, isMain) {
   if (parent?.filename === handlersModulePath && request === "./debugLogger") {
     return new Proxy({}, { get: () => () => {} });
   }
+  if (parent?.filename === handlersModulePath && request === "./systemDefaultMicrophone") {
+    return {
+      resolveSystemDefaultMicrophone: (options) => {
+        defaultMicLookups.push(options);
+      },
+    };
+  }
   return originalLoad.call(this, request, parent, isMain);
 };
 
@@ -68,9 +77,11 @@ test.before(() => {
   const Ctor = IPCHandlers.default || IPCHandlers;
   target = { textEditMonitor: null, selectionManager: null };
   Ctor.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
   assert.ok(
     handlers.get("capture-dictation-target"),
@@ -112,4 +123,20 @@ test("capture-dictation-target awaits the target PID but not the window probe", 
   assert.equal(settled, true, "the handler must not wait for the window probe");
   probe.resolve(null);
   assert.deepEqual(await pending, { success: true, pid: 4242 });
+});
+
+// Opening the mic asks not to wait for the default-mic lookup (#2765). If this
+// handler dropped the option, that fix would silently do nothing.
+test("get-system-default-microphone forwards wait: false and otherwise waits", async () => {
+  const lookup = handlers.get("get-system-default-microphone");
+
+  await lookup({}, { refresh: true, wait: false });
+  await lookup({}, { refresh: true });
+  await lookup({});
+
+  assert.deepEqual(defaultMicLookups, [
+    { refresh: true, wait: false },
+    { refresh: true, wait: true },
+    { refresh: false, wait: true },
+  ]);
 });

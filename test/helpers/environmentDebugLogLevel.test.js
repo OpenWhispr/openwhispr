@@ -110,7 +110,7 @@ function trackSaves(environmentManager) {
   return tracked;
 }
 
-function loadDebugLoggingHandler(environmentManager, envPath) {
+function loadDebugLoggingHandler(environmentManager, envPath, onLogLevelChanged = () => {}) {
   const source = fs.readFileSync(require.resolve("../../src/helpers/ipcHandlers.js"), "utf8");
   const start = source.indexOf('    ipcMain.handle("set-debug-logging",');
   const end = source.indexOf('    ipcMain.handle("open-logs-folder",', start);
@@ -127,6 +127,10 @@ function loadDebugLoggingHandler(environmentManager, envPath) {
       },
     },
     app: { getPath: () => path.dirname(envPath) },
+    broadcastToWindows(channel) {
+      assert.equal(channel, "log-level-changed");
+      onLogLevelChanged();
+    },
     debugLogger: require("../../src/helpers/debugLogger"),
     require,
     process,
@@ -184,11 +188,18 @@ test("debug logging turned off persists as info; never enabled writes no line", 
 
 test("the debug toggle creates a missing settings file", async (t) => {
   const { EnvironmentManager, envPath } = setup(t);
-  const toggleDebugLogging = loadDebugLoggingHandler(new EnvironmentManager(), envPath);
+  const notifications = [];
+  const toggleDebugLogging = loadDebugLoggingHandler(new EnvironmentManager(), envPath, () => {
+    notifications.push({
+      savedLevel: parseDotenv(fs.readFileSync(envPath, "utf8")).OPENWHISPR_LOG_LEVEL,
+      loggerLevel: require("../../src/helpers/debugLogger").getLevel(),
+    });
+  });
 
   const result = await toggleDebugLogging(null, true);
 
   assert.equal(result.success, true);
+  assert.deepEqual(notifications, [{ savedLevel: "debug", loggerLevel: "debug" }]);
   assert.equal(parseDotenv(fs.readFileSync(envPath, "utf8")).OPENWHISPR_LOG_LEVEL, "debug");
 });
 
@@ -196,7 +207,10 @@ test("a failed debug save reports failure and the next toggle can still persist"
   const { EnvironmentManager, envPath } = setup(t);
   process.env.OPENWHISPR_LOG_LEVEL = "info";
   const environmentManager = new EnvironmentManager();
-  const toggleDebugLogging = loadDebugLoggingHandler(environmentManager, envPath);
+  const notifications = [];
+  const toggleDebugLogging = loadDebugLoggingHandler(environmentManager, envPath, () => {
+    notifications.push(require("../../src/helpers/debugLogger").getLevel());
+  });
   t.mock.method(require("../../src/helpers/debugLogger"), "error", () => {});
   t.mock.method(
     fsPromises,
@@ -210,6 +224,7 @@ test("a failed debug save reports failure and the next toggle can still persist"
   const failed = await toggleDebugLogging(null, true);
   assert.equal(failed.success, false);
   assert.equal(failed.error, "Disk write failed");
+  assert.deepEqual(notifications, [], "failed saves must not notify windows");
   assert.equal(fs.existsSync(envPath), false);
 
   await environmentManager.saveAllKeysToEnvFile();
@@ -217,6 +232,7 @@ test("a failed debug save reports failure and the next toggle can still persist"
 
   const retried = await toggleDebugLogging(null, false);
   assert.equal(retried.success, true);
+  assert.deepEqual(notifications, ["info"]);
   assert.equal(parseDotenv(fs.readFileSync(envPath, "utf8")).OPENWHISPR_LOG_LEVEL, "info");
 });
 

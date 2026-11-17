@@ -270,4 +270,26 @@ describe('runMigrations — spaces', () => {
     ).map((column) => column.name);
     expect(conversationColumns).toEqual(['id', 'title', 'created_at', 'updated_at']);
   });
+  it('adds Private folder association and replays its personal cursor only once', () => {
+    createLegacyNotesAndFolders();
+    raw.exec(
+      "CREATE TABLE sync_state (key TEXT PRIMARY KEY, value TEXT); INSERT INTO sync_state VALUES ('folders.last_sync_at', 'old-cursor'), ('notes.last_sync_at', 'keep-notes');",
+    );
+    const { runMigrations } = loadMigrate();
+    runMigrations();
+    expect(
+      raw.prepare("SELECT value FROM sync_state WHERE key='folders.last_sync_at'").get(),
+    ).toBeUndefined();
+    expect(
+      raw.prepare("SELECT value FROM sync_state WHERE key='notes.last_sync_at'").get(),
+    ).toEqual({ value: 'keep-notes' });
+    expect(raw.prepare('SELECT private_workspace_id FROM folders LIMIT 1').get()).toEqual({
+      private_workspace_id: null,
+    });
+    raw.exec("INSERT INTO sync_state VALUES ('folders.last_sync_at', 'new-cursor');");
+    runMigrations();
+    expect(
+      raw.prepare("SELECT value FROM sync_state WHERE key='folders.last_sync_at'").get(),
+    ).toEqual({ value: 'new-cursor' });
+  });
 });

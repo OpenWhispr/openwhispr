@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ToastActionButton } from "../components/ui/Toast";
 import { useToast } from "../components/ui/useToast";
 import { selectPolicyEffectiveSettings, useSettingsStore } from "../stores/settingsStore";
 import { SIGN_IN_PROMPTED_AT_KEY } from "../utils/requestSignIn";
@@ -17,7 +16,7 @@ export function useSignInCloudNudge(
   onOpenTranscriptionSettings: () => void
 ): void {
   const { t } = useTranslation();
-  const { toast, dismiss } = useToast();
+  const { toast } = useToast();
   const policy = usePolicySnapshot();
   // Policy-effective, because a managed user the policy already clamps onto Cloud is
   // there whatever their own preference still says.
@@ -39,20 +38,17 @@ export function useSignInCloudNudge(
     localStorage.removeItem(SIGN_IN_PROMPTED_AT_KEY);
     if (decision === "skip") return;
 
-    const toastId = toast({
+    toast({
       title: t("controlPanel.cloudNudge.title"),
       description: t("controlPanel.cloudNudge.description"),
       duration: 10000,
-      action: (
-        <ToastActionButton
-          onClick={() => {
-            dismiss(toastId);
-            onOpenTranscriptionSettings();
-          }}
-        >
-          {t("controlPanel.cloudNudge.action")}
-        </ToastActionButton>
-      ),
+      actions: [
+        {
+          label: t("controlPanel.cloudNudge.action"),
+          icon: "settings",
+          onClick: onOpenTranscriptionSettings,
+        },
+      ],
     });
-  }, [dismiss, isSignedIn, onOpenTranscriptionSettings, policy, t, toast, transcriptionMode]);
+  }, [isSignedIn, onOpenTranscriptionSettings, policy, t, toast, transcriptionMode]);
 }

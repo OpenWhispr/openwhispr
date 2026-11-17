@@ -24,11 +24,6 @@ export const LISTENING_ENTRANCE_TIMING = Object.freeze({
   // grow; BASE and RECORDING now share one box (windowConfig.js), so the
   // floating pill's hold is purely the design beat.
   thinkingMs: 260,
-  // A recording that starts under the open assistant panel first hands the
-  // footer from final actions back to the pill (actions retreat + pill
-  // entrance — getAssistantFooterTransitionTimeline). The expansion must not
-  // start until that handoff settles, or both animate the same control.
-  assistantFooterThinkingMs: 420,
   expansionMs: 300,
   // Hold the finished footprint briefly so the waveform reveal cannot be
   // perceived as part of the width animation.
@@ -41,57 +36,6 @@ export const LISTENING_ENTRANCE_TIMING = Object.freeze({
 // one definition keeps them from diverging.
 export const VOICE_PILL_GROW_EASING = "cubic-bezier(0.2, 0, 0, 1)";
 export const VOICE_PILL_GROW_TRANSITION = `${LISTENING_ENTRANCE_TIMING.expansionMs}ms ${VOICE_PILL_GROW_EASING}`;
-
-export const ASSISTANT_FOOTER_TRANSITION_TIMING = Object.freeze({
-  pillRetreatMs: 180,
-  actionsRetreatMs: 220,
-  pillEntranceMs: 180,
-  actionsEntranceMs: 220,
-});
-
-export function getAssistantFooterTransitionTimeline(
-  responseReady,
-  timing = ASSISTANT_FOOTER_TRANSITION_TIMING
-) {
-  if (responseReady) {
-    return {
-      initialPhase: "pill-exiting",
-      handoffPhase: "actions-entering",
-      settledPhase: "actions",
-      handoffAtMs: timing.pillRetreatMs,
-      settledAtMs: timing.pillRetreatMs + timing.actionsEntranceMs,
-    };
-  }
-
-  return {
-    initialPhase: "actions-exiting",
-    handoffPhase: "pill-entering",
-    settledPhase: "pill",
-    handoffAtMs: timing.actionsRetreatMs,
-    settledAtMs: timing.actionsRetreatMs + timing.pillEntranceMs,
-  };
-}
-
-export function resolveAssistantFooterPresentation(phase) {
-  return {
-    pillVisible: phase === "pill" || phase === "pill-entering" || phase === "pill-exiting",
-    actionsMounted:
-      phase === "actions" || phase === "actions-entering" || phase === "actions-exiting",
-    collapsePillToLogo: phase === "pill-exiting",
-  };
-}
-
-export function resolveAssistantResponseReady({
-  responseContent,
-  isBusy,
-  isStreaming,
-  voiceState,
-  requestPending,
-}) {
-  return Boolean(
-    responseContent && !isBusy && !isStreaming && voiceState === "idle" && !requestPending
-  );
-}
 
 export const LIVE_TRANSCRIPT_ENTRANCE_TIMING = Object.freeze({
   encapsulateMs: 180,
@@ -152,7 +96,6 @@ export function resolveVoiceHorizontalDirection(panelStartPosition) {
 export function resolveVoicePillDock({
   liveTranscriptOpen,
   liveTranscriptEntrancePhase,
-  assistantOpen,
   panelStartPosition,
   horizontalDirection = resolveVoiceHorizontalDirection(panelStartPosition),
 }) {
@@ -166,21 +109,14 @@ export function resolveVoicePillDock({
     // anchor, so keep it fixed while the footer grows rightward around it.
     return "live-transcript-bottom-left";
   }
-  if (assistantOpen) return `assistant-bottom-${horizontalDirection}`;
   if (panelStartPosition === "center") return "center";
   return `bottom-${horizontalDirection}`;
 }
 
-export function getListeningEntranceTimeline({
-  afterAssistantFooterHandoff = false,
-  timing = LISTENING_ENTRANCE_TIMING,
-} = {}) {
-  const thinkingMs = afterAssistantFooterHandoff
-    ? timing.assistantFooterThinkingMs
-    : timing.thinkingMs;
-  const settleAtMs = thinkingMs + timing.expansionMs;
+export function getListeningEntranceTimeline(timing = LISTENING_ENTRANCE_TIMING) {
+  const settleAtMs = timing.thinkingMs + timing.expansionMs;
   return {
-    expandAtMs: thinkingMs,
+    expandAtMs: timing.thinkingMs,
     settleAtMs,
     waveformAtMs: settleAtMs + timing.waveformDelayMs,
   };
@@ -260,51 +196,6 @@ export function resolveVoiceActivityPresentation({
 }
 
 /**
- * Keep Agent identity for the complete request/panel lifecycle, but do not let
- * the audio manager's last routing flag brand a later idle dictation pill.
- */
-export function resolveAgentModeActive({
-  isAssistantVoice,
-  isRecording,
-  isProcessing,
-  assistantPanelMounted,
-}) {
-  return Boolean((isAssistantVoice && (isRecording || isProcessing)) || assistantPanelMounted);
-}
-
-/**
- * Select the content hosted by the persistent expanded voice surface. An open
- * mode outranks a sibling that is only mounted to finish its exit animation,
- * which lets the same core hand off without flashing the stale mode.
- */
-export function resolveVoicePanelCorePresentation({
-  assistantOpen,
-  assistantMounted,
-  liveTranscriptOpen,
-  liveTranscriptMounted,
-}) {
-  const mode = assistantOpen
-    ? "assistant"
-    : liveTranscriptOpen
-      ? "live-transcript"
-      : assistantMounted
-        ? "assistant"
-        : liveTranscriptMounted
-          ? "live-transcript"
-          : null;
-
-  return {
-    mode,
-    open:
-      mode === "assistant"
-        ? Boolean(assistantOpen)
-        : mode === "live-transcript"
-          ? Boolean(liveTranscriptOpen)
-          : false,
-  };
-}
-
-/**
  * A collapsed Live Transcript can be reopened only while its owning dictation
  * is still recording or finalizing. Completed and Agent sessions must return
  * the pill to its normal identity instead of inheriting a stale chevron.
@@ -326,16 +217,11 @@ export function shouldOfferLiveTranscriptReopen({
  * exposes a distinct discard action while recording or processing.
  */
 export function resolveVoicePillInteraction({
-  assistantMounted,
   liveTranscriptMounted,
   isRecording,
   isProcessing,
   isHovered = false,
 }) {
-  if (assistantMounted) {
-    return { pillInteractive: false, cancelVisible: false };
-  }
-
   const active = Boolean(isRecording) || Boolean(isProcessing);
   return {
     pillInteractive: !liveTranscriptMounted || Boolean(isRecording),
@@ -343,58 +229,6 @@ export function resolveVoicePillInteraction({
     // it on hover so a stalled processing step can still be cancelled.
     cancelVisible: active && (Boolean(liveTranscriptMounted) || Boolean(isHovered)),
   };
-}
-
-// The companion pill defers to the main process's interactivity verdict and
-// keeps toggle clicks away from a transcript still processing — except to
-// reopen a manually collapsed transcript, which must stay reachable until the
-// final text lands (activatePill routes the reopen before any toggle).
-export function resolveCompanionPillInteractive({
-  mainProcessInteractive,
-  surfaceInteractive,
-  isProcessing,
-  canReopenLiveTranscript,
-}) {
-  if (!mainProcessInteractive || !surfaceInteractive) return false;
-  if (!isProcessing) return true;
-  return Boolean(canReopenLiveTranscript);
-}
-
-// Final Agent actions own the footer, so the pill node stays mounted but
-// hidden until the panel finishes closing. Live activity handed back at close
-// INTENT is the exception: the companion hides on that same tick, so keeping
-// the pill hidden until the fade completes would leave a running recording
-// with no visible owner at all.
-export function shouldSuppressPillForAssistantActions({
-  assistantOpen,
-  footerPillVisible,
-  assistantClosing,
-  hasLiveActivity,
-}) {
-  if (!assistantOpen || footerPillVisible) return false;
-  return !(assistantClosing && hasLiveActivity);
-}
-
-/**
- * Compose the persistent pill root's visibility from every owner that can hide
- * it. `assistantClosing` folds the pill into the panel's exit — but never while
- * the pill owns live activity: ownership returns to it at close INTENT (see
- * voicePillOwnsActivity in App.jsx) and beginClose hides the companion on that
- * same tick, so suppressing here would leave a running recording with no
- * visible owner for the whole close. The panel-return mask stays unconditional
- * like the dictation-error handoff — it is bounded by the native shrink it
- * covers, not by the panel's full exit choreography.
- */
-export function resolvePillVisualSuppression({
-  dictationErrorSuppressed,
-  assistantActionsSuppressed,
-  assistantClosing,
-  panelReturnResizeActive,
-  hasLiveActivity,
-}) {
-  if (dictationErrorSuppressed || assistantActionsSuppressed) return true;
-  if (panelReturnResizeActive) return true;
-  return Boolean(assistantClosing) && !hasLiveActivity;
 }
 
 export function shouldActivateVoicePill({
@@ -408,31 +242,4 @@ export function shouldActivateVoicePill({
 
 export function isVoicePillActivationKey(key) {
   return key === "Enter" || key === " ";
-}
-
-/**
- * A fresh request thinks in the floating logo circle. A follow-up that starts
- * from an open response panel keeps that surface mounted so its footer pill
- * can own the thinking feedback without a close/reopen transition.
- */
-export function resolveAssistantThinkingTransition(panelOpen) {
-  return {
-    panelOpen: Boolean(panelOpen),
-    panelMounted: true,
-    responseReady: false,
-    thinking: true,
-  };
-}
-
-/**
- * A streaming cancel reports processing while it tears the stream down, but
- * nothing will answer it, so it must not start the open panel's thinking.
- */
-export function shouldBeginAssistantFollowUpThinking({
-  isAssistantVoice,
-  isProcessing,
-  isCancelling,
-  panelOpen,
-}) {
-  return Boolean(isAssistantVoice && isProcessing && !isCancelling && panelOpen);
 }

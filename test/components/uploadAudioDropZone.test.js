@@ -78,12 +78,13 @@ function dispatch(element, type, init = {}) {
 
 const settle = () => React.act(async () => new Promise((resolve) => setImmediate(resolve)));
 
-async function renderUploadAudio(t) {
+async function renderUploadAudio(t, { affiliate = false } = {}) {
   let root = null;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
   });
-  const calls = { browses: [], added: [] };
+  const calls = { browses: [], added: [], checkouts: 0 };
+  let candidate = { link: "", clickId: "creator-click", saved: false };
   globalThis.__uploadBatch = {
     isProcessing: false,
     hasQueue: false,
@@ -102,6 +103,14 @@ async function renderUploadAudio(t) {
         getDiarizationModelStatus: async () => ({ modelsDownloaded: false }),
         cancelUrlDownload() {},
         deleteTempFile() {},
+        getAffiliateCandidate: async () => ({
+          config: { domain: "try.openwhispr.com" },
+          candidate,
+          generation: 7,
+        }),
+        saveAffiliateCandidate: async (input) => {
+          candidate = input;
+        },
       },
     },
   });
@@ -110,8 +119,32 @@ async function renderUploadAudio(t) {
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-upload-audio-drop-zone-test-",
     noExternal: ["react-i18next"],
-    mockModules: MOCKS,
+    mockModules: {
+      ...MOCKS,
+      ...(affiliate
+        ? {
+            "/hooks/useAuth": `export const useAuth = () => ({ isLoaded: true, isSignedIn: true, user: {id:'a'} });`,
+            "/hooks/useUsage": `export const useUsage = () => ({ hasPaidAccessOptimistic: false, openCheckout: () => globalThis.__uploadCheckout() });`,
+            "/services/managedTranscription": `export const isManagedTranscriptionActive = () => false;`,
+            "/stores/enterpriseIdentityStore": `export const useManagedScopeResolution = () => ({kind: "unmanaged"});`,
+            "/stores/settingsStore":
+              MOCKS["/stores/settingsStore"] +
+              `\nuseSettingsStore.getState = () => ({telemetryEnabled: false});`,
+            "/lib/authRequestContext": `export const getValidatedAuthGeneration=()=>7; export const getAuthRequestContextSnapshot=()=>({observedGeneration:7}); export const subscribeAuthRequestContext=()=>()=>{};`,
+            "/services/cloudApi": `export const cloudGetForAuthGeneration=async()=>({data:{persisted:false,status:null}}); export const cloudPostForAuthGeneration=async()=>{throw new Error('No tracking consent');};`,
+          }
+        : {}),
+    },
   });
+  if (affiliate) {
+    const { prepareAffiliateCheckout } = await vite.ssrLoadModule("/stores/affiliateStore.ts");
+    globalThis.__uploadCheckout = async () => {
+      if (!(await prepareAffiliateCheckout())) return { success: false };
+      calls.checkouts++;
+      return { success: true };
+    };
+    t.after(() => delete globalThis.__uploadCheckout);
+  }
   const { default: UploadAudioView } = await vite.ssrLoadModule(
     "/components/notes/UploadAudioView.tsx"
   );
@@ -127,6 +160,26 @@ async function renderUploadAudio(t) {
     );
   return { container, calls, zone, usePolicyStore };
 }
+
+test("an upload upgrade exposes and clears a click-only referral before retrying checkout", async (t) => {
+  const { container, calls, zone } = await renderUploadAudio(t, { affiliate: true });
+  await React.act(async () =>
+    dispatch(zone(), "drop", {
+      dataTransfer: { files: [{ name: "meeting.mp3", size: 30 * 1024 * 1024 }] },
+    })
+  );
+  const button = (label) =>
+    findElement(container, (node) => node.tagName === "BUTTON" && node.textContent === label);
+  assert.ok(button("notes.upload.upgrade"));
+  await React.act(async () => dispatch(button("notes.upload.upgrade"), "click"));
+  assert.equal(calls.checkouts, 0);
+  assert.match(container.textContent, /affiliate\.privacy/);
+  assert.ok(button("affiliate.remove"));
+  await React.act(async () => dispatch(button("affiliate.remove"), "click"));
+  assert.doesNotMatch(container.textContent, /affiliate\.privacy/);
+  await React.act(async () => dispatch(button("notes.upload.upgrade"), "click"));
+  assert.equal(calls.checkouts, 1);
+});
 
 test("the upload drop zone is a keyboard button that browses on Enter and Space", async (t) => {
   const { calls, zone } = await renderUploadAudio(t);

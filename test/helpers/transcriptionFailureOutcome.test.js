@@ -39,3 +39,15 @@ test("a transcript that outlived the failure reaches the pill", async () => {
   Object.defineProperty(error, "transcript", { value: "kept text" });
   assert.equal(transcriptionFailureOutcome(error).report.transcript, "kept text");
 });
+
+test("a policy refusal reads as its own message, without the failure prefix", async () => {
+  const { transcriptionFailureOutcome } = await load();
+  const error = Object.assign(new Error("Your organization does not approve this local model."), {
+    code: "POLICY_MODEL_BLOCKED",
+    settingsTarget: "speechToText",
+  });
+  const { report, keepAudio } = transcriptionFailureOutcome(error);
+  assert.equal(keepAudio, true);
+  assert.equal(report.description, error.message);
+  assert.equal(report.code, "POLICY_MODEL_BLOCKED");
+});

@@ -1,3 +1,5 @@
+import { clearOfflineAccountProfile } from "./offlineAccountProfile";
+
 export type LocalCleanupFailure =
   "local-account-data" | "workspace-session-state" | "auth-session" | "device-data";
 
@@ -35,6 +37,9 @@ export async function executeAccountDeletion({
   dependencies,
 }: ExecuteAccountDeletionOptions): Promise<AccountDeletionResult> {
   await dependencies.deleteRemoteAccount();
+  // First, so a crash before sign-out can't leave the deleted account
+  // presentable offline.
+  clearOfflineAccountProfile();
 
   const localCleanupFailures: LocalCleanupFailure[] = [];
   await recordLocalFailure(

@@ -5,7 +5,10 @@ import {
   SharedDictionaryService,
 } from "./SharedDictionaryService";
 import { syncService } from "./SyncService";
-import { getValidatedAuthGeneration } from "../lib/authRequestContext";
+import {
+  getAuthRequestContextSnapshot,
+  getValidatedAuthGeneration,
+} from "../lib/authRequestContext";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useSharedDictionaryStore } from "../stores/sharedDictionaryStore";
 import { readActiveWorkspaceId, useWorkspaceStore } from "../stores/workspaceStore";
@@ -196,6 +199,7 @@ async function applyHides(workspaceId: string, hides: CloudSharedHide[]): Promis
 // its request is in flight; writing the old account's rows into the cleared
 // tables would publish them, so its local apply is left to the next pass.
 interface ActionScope {
+  authGeneration: number | null;
   isCurrent: () => boolean;
 }
 
@@ -204,6 +208,7 @@ function captureActionScope(): ActionScope {
   const { generation } = useSharedDictionaryStore.getState();
   const workspaceId = readActiveWorkspaceId();
   return {
+    authGeneration,
     isCurrent: () =>
       getValidatedAuthGeneration() === authGeneration &&
       useSharedDictionaryStore.getState().generation === generation &&
@@ -293,6 +298,7 @@ async function retireFallbacks(
       candidates.length > 0
         ? await api.retireMovedDictionaryWords(candidates, {
             includeSynced: !syncService.canSync(),
+            expectedAuthGeneration: scope.authGeneration,
           })
         : { retired: [] };
     await reconcilePersonal(scope, retired.length > 0);
@@ -305,7 +311,9 @@ async function reviveFallbacks(scope: ActionScope, words: string[]): Promise<voi
   if (words.length === 0) return;
   await applyAccepted(scope, "fallback revival", async () => {
     const api = requireApi();
-    const { revived } = (await api.reviveRetiredDictionaryWords?.(words)) ?? { revived: [] };
+    const { revived } = (await api.reviveRetiredDictionaryWords?.(words, {
+      expectedAuthGeneration: scope.authGeneration,
+    })) ?? { revived: [] };
     await reconcilePersonal(scope, revived.length > 0);
   });
 }
@@ -635,6 +643,7 @@ export async function sharePersonalWords(
   }
 
   const scope = captureActionScope();
+  const accountId = getAuthRequestContextSnapshot().sessionUserId;
   let failed: ActionFailure | null = null;
   let mirrorChanged = 0;
   for (const [index, batch] of chunks.entries()) {
@@ -650,9 +659,13 @@ export async function sharePersonalWords(
       // server's refusals map back to it.
       const sentById = new Map<string, string>();
       const sentByLower = new Map<string, string>();
+      // Words with a cloud id that went as plain words all the same: the row is
+      // unattributed, so the id may be another account's, and the server
+      // refuses the whole request over a personal id it can't find.
+      const unprovenWords = new Set<string>();
       for (const word of batch) {
         const row = byLower.get(word.toLowerCase());
-        if (row?.cloudId) {
+        if (row?.cloudId && accountId !== null && row.accountId === accountId) {
           // Sent as stored, since the server compares it with the cloud row; it
           // refuses an unshareable one per word (`rejected`), but a word over
           // the length cap fails the whole request.
@@ -672,6 +685,7 @@ export async function sharePersonalWords(
           }
           plain.push(sendable);
           sentByLower.set(sendable.toLowerCase(), word);
+          if (row?.cloudId) unprovenWords.add(word);
         }
         sent.push(word);
       }
@@ -696,14 +710,17 @@ export async function sharePersonalWords(
       );
       rejected.push(...refusedHere);
       const accepted = sent.filter((word) => !refusedHere.has(word));
-      const demotedWords = new Set(
-        [...demotedIds].flatMap((id) => (sentById.has(id) ? [sentById.get(id)!] : []))
-      );
+      // Either way the server marked no personal row for these.
+      const demotedWords = new Set([
+        ...[...demotedIds].flatMap((id) => (sentById.has(id) ? [sentById.get(id)!] : [])),
+        ...unprovenWords,
+      ]);
       const sharedAt = new Date().toISOString();
       if (accepted.length > 0) {
         await applyAccepted(scope, "share mark", async () => {
           await api.markDictionaryWordsShared?.(accepted, sharedAt, {
             pendingWords: accepted.filter((word) => demotedWords.has(word)),
+            expectedAuthGeneration: scope.authGeneration,
           });
         });
       }

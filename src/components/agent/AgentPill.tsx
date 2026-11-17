@@ -1,0 +1,115 @@
+import { useTranslation } from "react-i18next";
+import { Keyboard, Maximize, Mic, Square, X, type IconComponent } from "../icons";
+import { cn } from "../lib/utils";
+import { ICON_BUTTON } from "../chat/interactions/cardStyles";
+import { PillWaveform } from "../dictation/PillWaveform";
+import type { AgentPillButton, AgentPillControls } from "./agentWindowState";
+import { useAgentWindowDrag } from "./useAgentWindowDrag";
+
+const BUTTONS: Record<AgentPillButton, { icon: IconComponent; label: string }> = {
+  expand: { icon: Maximize, label: "agentWindow.actions.expand" },
+  mic: { icon: Mic, label: "agentWindow.actions.speak" },
+  keyboard: { icon: Keyboard, label: "agentWindow.actions.type" },
+  stop: { icon: Square, label: "agentWindow.actions.stop" },
+  close: { icon: X, label: "agentWindow.actions.close" },
+};
+
+interface AgentPillProps {
+  controls: AgentPillControls;
+  /** The waveform moves only while the take records. */
+  recording: boolean;
+  readLevel: () => number;
+  /** Shown in place of the waveform (already translated). */
+  notice?: string | null;
+  /** The provider or microphone failure behind a voice notice. */
+  noticeDetail?: string;
+  /** Voice input is unavailable with this transcription provider: Mic is off. */
+  micUnavailableHint?: string;
+  /** A take is still transcribing, or a reply is running. */
+  micDisabled?: boolean;
+  /** A card waits on the user: Expand pulses blue until the modal opens to it. */
+  expandCue?: boolean;
+  /** Inside the modal the pill is a shade apart from the panel it sits on. */
+  inModal?: boolean;
+  onAction: (button: AgentPillButton) => void;
+  className?: string;
+}
+
+/** The agent's pill: what it is doing, then its controls. */
+export function AgentPill({
+  controls,
+  recording,
+  readLevel,
+  notice,
+  noticeDetail,
+  micUnavailableHint,
+  micDisabled = false,
+  expandCue = false,
+  inModal = false,
+  onAction,
+  className,
+}: AgentPillProps) {
+  const { t } = useTranslation();
+  const dragHandlers = useAgentWindowDrag();
+  const hasStatus = Boolean(notice || controls.waiting || controls.thinking || controls.waveform);
+  return (
+    <div
+      className={cn(
+        "flex h-10 max-w-full cursor-grab items-center rounded-full border border-border pe-1.25 select-none active:cursor-grabbing text-muted-foreground shadow-[var(--shadow-card)]",
+        hasStatus ? "ps-2.5" : "ps-1.25",
+        inModal ? "bg-surface-1 dark:bg-surface-2" : "agent-panel bg-surface-0",
+        className
+      )}
+      {...dragHandlers}
+    >
+      {notice ? (
+        <span
+          className="ms-2.5 max-w-30 truncate text-xs text-foreground/80"
+          title={noticeDetail ? `${notice}\n${noticeDetail}` : notice}
+        >
+          {notice}
+        </span>
+      ) : controls.waiting ? (
+        // Truncates where a translation outgrows the window.
+        <span
+          className="ms-2.5 min-w-0 truncate text-sm text-foreground/80 select-none"
+          title={t("agentWindow.waitingForAnswer")}
+        >
+          {t("agentWindow.waitingForAnswer")}
+        </span>
+      ) : controls.thinking ? (
+        <span className="agent-shimmer-text ms-3.5 me-2 min-w-0 truncate text-sm select-none">
+          {t("agentMode.input.thinking")}
+        </span>
+      ) : controls.waveform ? (
+        <PillWaveform
+          getLevel={readLevel}
+          active={recording}
+          className="h-6 shrink-0 text-foreground"
+        />
+      ) : null}
+      {hasStatus && !controls.thinking && (
+        <span className="mx-3 h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />
+      )}
+      <div className="flex items-center gap-0.5">
+        {controls.buttons.map((button) => {
+          const { icon: Icon, label } = BUTTONS[button];
+          const unavailable = button === "mic" ? micUnavailableHint : undefined;
+          return (
+            <button
+              key={button}
+              type="button"
+              onClick={() => onAction(button)}
+              disabled={button === "mic" && (micDisabled || Boolean(unavailable))}
+              aria-label={t(label)}
+              title={unavailable ?? t(label)}
+              className={cn(ICON_BUTTON, button === "expand" && expandCue && "agent-expand-cue")}
+            >
+              <Icon size={button === "stop" ? 14 : 16} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -1,4 +1,12 @@
-import { useId, useState, type ReactElement, type Ref } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, CornerDownLeft, Upload } from "../icons";
 import { Input } from "../ui/input";
@@ -23,7 +31,8 @@ interface DictionaryAddFieldProps {
   target: AddTarget;
   targets: AddTargetOption[];
   onTargetChange: (target: AddTarget) => void;
-  // Resolves true once the words were added, which clears the field.
+  // Resolves false when the words weren't added, which puts them back in the
+  // field. The field clears as soon as they're submitted.
   onAdd: (text: string) => Promise<boolean>;
   // Whether one typed word is already in the target list.
   isInTarget: (word: string) => boolean;
@@ -32,6 +41,7 @@ interface DictionaryAddFieldProps {
   // Resolves true once the hidden copy is back, which clears the field.
   onUnhide: (word: string) => Promise<boolean>;
   onImport: () => void;
+  importMenu?: ReactNode;
   inputRef?: Ref<HTMLInputElement>;
   // A list that takes no new words (paused) keeps the field, dimmed and inert.
   disabled?: boolean;
@@ -46,6 +56,7 @@ export function DictionaryAddField({
   isHiddenInTarget,
   onUnhide,
   onImport,
+  importMenu,
   inputRef,
   disabled = false,
 }: DictionaryAddFieldProps): ReactElement {
@@ -53,6 +64,12 @@ export function DictionaryAddField({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const noticeId = useId();
+  // The list an add was sent to may no longer be the one the field adds to
+  // when its answer comes back.
+  const currentTarget = useRef(target);
+  useEffect(() => {
+    currentTarget.current = target;
+  }, [target]);
 
   const targetLabel =
     targets.find((option) => option.target === target)?.label ?? t("dictionary.shared.personal");
@@ -87,9 +104,23 @@ export function DictionaryAddField({
     }
   };
 
+  // A shared add waits on the API, so the field clears at once and the next
+  // word can be typed while it runs. A refused add puts its text back, unless
+  // something new was typed meanwhile or the field now adds to another list,
+  // where Enter would send it; its toast names the words either way.
   const submit = async (): Promise<void> => {
     if (!canAdd) return;
-    await runBusy(() => onAdd(text));
+    const submitted = text;
+    const submittedTarget = target;
+    setText("");
+    let added = false;
+    try {
+      added = await onAdd(submitted);
+    } finally {
+      if (!added && currentTarget.current === submittedTarget) {
+        setText((current) => (current.trim() === "" ? submitted : current));
+      }
+    }
   };
 
   const unhide = async (): Promise<void> => {
@@ -111,7 +142,8 @@ export function DictionaryAddField({
         value={text}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Enter") void submit();
+          // Enter that commits an IME composition isn't a submit.
+          if (event.key === "Enter" && !event.nativeEvent.isComposing) void submit();
         }}
         placeholder={t("dictionary.shared.add.placeholder")}
         aria-invalid={notice !== null || undefined}
@@ -186,15 +218,17 @@ export function DictionaryAddField({
         </DropdownMenuContent>
       </DropdownMenu>
       <div className="h-4 w-px bg-foreground/10 dark:bg-white/8" />
-      <button
-        type="button"
-        onClick={onImport}
-        disabled={disabled}
-        aria-label={t("dictionary.importWords")}
-        className="grid size-6 shrink-0 place-items-center rounded-[5px] text-foreground/45 transition-colors enabled:hover:bg-foreground/5 enabled:hover:text-foreground/70"
-      >
-        <Upload size={13} />
-      </button>
+      {importMenu ?? (
+        <button
+          type="button"
+          onClick={onImport}
+          disabled={disabled}
+          aria-label={t("dictionary.importWords")}
+          className="grid size-6 shrink-0 place-items-center rounded-[5px] text-foreground/45 transition-colors enabled:hover:bg-foreground/5 enabled:hover:text-foreground/70"
+        >
+          <Upload size={13} />
+        </button>
+      )}
     </div>
   );
 }

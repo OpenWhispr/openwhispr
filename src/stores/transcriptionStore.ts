@@ -14,6 +14,7 @@ const useTranscriptionStore = create<TranscriptionState>()(() => ({
 let hasBoundIpcListeners = false;
 const DEFAULT_LIMIT = 50;
 let currentLimit = DEFAULT_LIMIT;
+let loadGeneration = 0;
 
 function ensureIpcListeners() {
   if (hasBoundIpcListeners || typeof window === "undefined") {
@@ -62,6 +63,31 @@ function ensureIpcListeners() {
     }
   }
 
+  if (window.electronAPI?.onDatabaseAccountScopeChanged) {
+    // History holds whose rows main's database has in view: a token rotation
+    // keeps them, and so does signing out of a device only one account has used.
+    let visibleAccountId: string | null | undefined;
+    let broadcastReceived = false;
+    void window.electronAPI
+      .getDatabaseAccountScope?.()
+      .then((scope) => {
+        if (!broadcastReceived) visibleAccountId = scope.visibleAccountId;
+      })
+      .catch((error) => {
+        console.error("Failed to read the history's account scope:", error);
+      });
+    const dispose = window.electronAPI.onDatabaseAccountScopeChanged((scope) => {
+      broadcastReceived = true;
+      if (scope.visibleAccountId === visibleAccountId) return;
+      visibleAccountId = scope.visibleAccountId;
+      clearTranscriptions();
+      void initializeTranscriptions().catch((error) => {
+        console.error("Failed to reload transcription history after an account change:", error);
+      });
+    });
+    disposers.push(dispose);
+  }
+
   hasBoundIpcListeners = true;
 
   window.addEventListener("beforeunload", () => {
@@ -75,7 +101,9 @@ export async function initializeTranscriptions(
 ) {
   currentLimit = limit;
   ensureIpcListeners();
+  const gen = ++loadGeneration;
   const items = await window.electronAPI.getTranscriptions(limit, { includeDiscarded });
+  if (gen !== loadGeneration) return items;
   useTranscriptionStore.setState({ transcriptions: items, includeDiscarded });
   return items;
 }

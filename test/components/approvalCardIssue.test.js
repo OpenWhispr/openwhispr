@@ -131,9 +131,11 @@ async function mountCard(
         messageId: "m1",
         toolCallId: "call-1",
         signal: new AbortController().signal,
-        onApprovalRequested() {},
-        onHoldDelivery() {},
         claimTurnSlot: () => true,
+        claimAction: () => true,
+        releaseAction() {},
+        sentEarlier: () => false,
+        recordCompletedAction() {},
         releaseTurnSlot() {},
       },
       "linear",
@@ -147,7 +149,6 @@ async function mountCard(
 
 test("an issue card blocks Send on a missing or long title and a long description, and says why", async (t) => {
   const { container, calls } = await mountCard(t, { preview: ISSUE_PREVIEW });
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
 
   for (const [labelKey, value, reason] of [
     ["issue.titleLabel", "   ", "issue.missingTitle"],
@@ -173,7 +174,6 @@ test("an issue card blocks Send on a missing or long title and a long descriptio
 
 test("Send commits the edited title and description, and the model hears what was created", async (t) => {
   const { container, calls, toolResult } = await mountCard(t, { preview: ISSUE_PREVIEW });
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
   await React.act(async () => type(field(container, "issue.titleLabel"), "Fix login\non Safari"));
   await React.act(async () => type(field(container, "issue.bodyLabel"), "Steps:\n1. Open Safari"));
 
@@ -189,8 +189,6 @@ test("Send commits the edited title and description, and the model hears what wa
 
 test("a comment card edits only its text and won't send an empty comment", async (t) => {
   const { container, calls } = await mountCard(t, { preview: COMMENT_PREVIEW });
-  assert.match(container.textContent, /Fixed in 1\.9\./);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
 
   assert.ok(!field(container, "issue.titleLabel"), "a comment has no title");
   await React.act(async () => type(field(container, "comment.bodyLabel"), " \n "));
@@ -206,8 +204,6 @@ test("an issue preview without a usable title falls back to the plain layout", a
   const { container } = await mountCard(t, {
     preview: { ...ISSUE_PREVIEW, body: "Only a body", fields: { body: "Only a body" } },
   });
-  assert.match(container.textContent, /Only a body/);
-  await React.act(async () => click(button(container, "connectors.approval.edit")));
 
   assert.ok(!field(container, "issue.titleLabel"));
   assert.ok(field(container, "bodyLabel"), "the plain layout's message field");

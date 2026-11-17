@@ -2,7 +2,57 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const Module = require("node:module");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installMicCaptureGlobals,
+} = require("../lib/rendererTestHarness");
+
+test("suppressed automatic requests finish once without restoring layout; only hotkey bypasses", async () => {
+  const { handleMeetingRecordingRequest } =
+    await import("../../src/helpers/meetingRecordingRequest.ts");
+  for (const trigger of [undefined, "calendar-join", "manual", "future", "hotkey"]) {
+    const calls = [];
+    await handleMeetingRecordingRequest({
+      args: { noteId: 1, noteTitle: "Meeting", folderId: null, autoEndEligible: true },
+      trigger,
+      canAutoStart: () => false,
+      startRecording: async () => {
+        calls.push("record");
+        return true;
+      },
+      restoreFromMeetingMode: () => calls.push("restore"),
+      onSuppressed: () => calls.push("note-only"),
+      onHandled: () => calls.push("handled"),
+    });
+    assert.deepEqual(
+      calls,
+      trigger === "hotkey" ? ["handled", "record"] : ["handled", "note-only"]
+    );
+  }
+});
+
+test("policy refusal during preparation cannot replay or restore an automatic request", async () => {
+  const { handleMeetingRecordingRequest } =
+    await import("../../src/helpers/meetingRecordingRequest.ts");
+  let allowed = true;
+  const calls = [];
+  await handleMeetingRecordingRequest({
+    args: { noteId: 1, noteTitle: "Meeting", folderId: null, autoEndEligible: true },
+    canAutoStart: () => allowed,
+    startRecording: async (args) => {
+      allowed = false;
+      assert.equal(args.canAutoStart(), false);
+      allowed = true;
+      assert.equal(args.canAutoStart(), false);
+      return false;
+    },
+    restoreFromMeetingMode: () => calls.push("restore"),
+    onSuppressed: () => calls.push("note-only"),
+    onHandled: () => calls.push("handled"),
+  });
+  assert.deepEqual(calls, ["handled", "note-only"]);
+});
 
 function loadMeetingDetectionEngine() {
   const originalLoad = Module._load;
@@ -43,7 +93,7 @@ const blockedMeetingPolicy = {
   minAppVersion: null,
 };
 
-test("a policy-rejected automatic meeting start restores manager mode before clearing", async (t) => {
+test("a policy-rejected automatic meeting start consumes the request and restores manager mode", async (t) => {
   const MeetingDetectionEngine = loadMeetingDetectionEngine();
   const reminderScheduler = { getActiveMeetingState: () => ({}) };
   const processDetector = new EventEmitter();
@@ -112,7 +162,7 @@ test("a policy-rejected automatic meeting start restores manager mode before cle
   });
 
   assert.equal(engine._meetingModeActive, false);
-  assert.deepEqual(lifecycle, ["restored", "handled"]);
+  assert.deepEqual(lifecycle, ["handled", "restored"]);
   assert.equal(
     useMeetingRecordingStore.getState().error,
     "policyRestricted",
@@ -165,4 +215,236 @@ test("a repeated policy denial re-notifies the toast effect", async (t) => {
     first.errorNonce + 1,
     "an identical repeated denial must still produce a distinct notification"
   );
+});
+
+for (const cancel of [false, true]) {
+  test(`overlapping automatic joins each release their note when the pending start is ${cancel ? "cancelled" : "suppressed"}`, async (t) => {
+    const MeetingDetectionEngine = loadMeetingDetectionEngine();
+    const checking = Promise.withResolvers();
+    const access = Promise.withResolvers();
+    let allowed = true;
+    let captures = 0;
+    installMicCaptureGlobals(t);
+    navigator.mediaDevices.getUserMedia = async () => {
+      captures++;
+      throw new Error("unexpected microphone capture");
+    };
+    installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          checkSystemAudioAccess: () => {
+            checking.resolve();
+            return access.promise;
+          },
+          meetingTranscriptionStart: async () => {
+            captures++;
+            throw new Error("unexpected main capture");
+          },
+        },
+      },
+    });
+    const navigations = [];
+    const shown = [];
+    const engine = new MeetingDetectionEngine(
+      { getActiveMeetingState: () => ({}) },
+      Object.assign(new EventEmitter(), { stop() {} }),
+      Object.assign(new EventEmitter(), { stop() {}, resetPrompt() {} }),
+      {
+        notificationPrefs: {},
+        queueMeetingNoteNavigation: async (payload) => navigations.push(payload),
+        showMeetingNotification: (payload) => shown.push(payload),
+      },
+      {
+        getCalendarEventById: (id) => ({ id, summary: id }),
+        getOwnNoteByCalendarEventId: (id) => ({ id: id === "first" ? 1 : 2, folder_id: 7 }),
+      }
+    );
+    t.after(() => engine.stop());
+    const vite = await createRendererServer(t, { cachePrefix: "meeting-overlapping-start-" });
+    const { startRecording, stopRecording, useMeetingRecordingStore } = await vite.ssrLoadModule(
+      "/stores/meetingRecordingStore.ts"
+    );
+    const { handleMeetingRecordingRequest } = await vite.ssrLoadModule(
+      "/helpers/meetingRecordingRequest.ts"
+    );
+    const handled = [];
+    const results = [];
+    const request = (note) =>
+      handleMeetingRecordingRequest({
+        args: { noteId: note.noteId, noteTitle: "Meeting", folderId: 7, autoEndEligible: true },
+        trigger: "calendar-join",
+        canAutoStart: () => allowed,
+        startRecording: async (args) => {
+          const result = await startRecording(args);
+          results.push(result);
+          return result;
+        },
+        onSuppressed: () => engine.markMeetingNoteOnly(note.noteSessionId),
+        onHandled: () => handled.push(note.noteSessionId),
+        restoreFromMeetingMode: () => assert.fail("suppression must preserve the layout"),
+      });
+    await engine.joinCalendarMeeting("first");
+    const first = request(navigations[0]);
+    await checking.promise;
+    await engine.joinCalendarMeeting("second");
+    const second = request(navigations[1]);
+    const stopping = cancel ? stopRecording() : null;
+    if (!cancel) allowed = false;
+    access.resolve({
+      mode: "unsupported",
+      strategy: "unsupported",
+      status: "unsupported",
+      granted: false,
+    });
+    await Promise.all([first, second, stopping]);
+    assert.deepEqual(results, cancel ? ["cancelled", "cancelled"] : [false, false]);
+    assert.equal(captures, 0);
+    assert.equal(useMeetingRecordingStore.getState().isRecording, false);
+    assert.equal(engine._meetingModeActive, false);
+    assert.equal(engine._meetingNoteSession.id, navigations[1].noteSessionId);
+    assert.equal(engine._meetingNoteSession.noteOnly, true);
+    assert.deepEqual(new Set(handled), new Set(navigations.map((note) => note.noteSessionId)));
+    assert.equal(handled.length, 2);
+    engine.handleCalendarReminder({ id: "third", summary: "Third" });
+    assert.equal(shown.length, 1, "a later meeting prompts with the second note still open");
+  });
+}
+
+for (const cancel of [false, true]) {
+  test(`${cancel ? "cancellation during microphone permission" : "suppression during microphone selection"} keeps the joined event's note identity`, async (t) => {
+    const MeetingDetectionEngine = loadMeetingDetectionEngine();
+    const selecting = Promise.withResolvers();
+    const devices = Promise.withResolvers();
+    const microphoneRequested = Promise.withResolvers();
+    const permission = Promise.withResolvers();
+    let allowed = true;
+    let store;
+    let request;
+    t.after(async () => {
+      devices.resolve([]);
+      permission.resolve();
+      await request;
+      await store?.stopRecording();
+    });
+    installMicCaptureGlobals(t);
+    const acquire = navigator.mediaDevices.getUserMedia;
+    navigator.mediaDevices.getUserMedia = async (...args) => {
+      microphoneRequested.resolve();
+      await permission.promise;
+      return acquire(...args);
+    };
+    navigator.mediaDevices.enumerateDevices = () => {
+      selecting.resolve();
+      return devices.promise;
+    };
+    const navigations = [];
+    const shown = [];
+    const engine = new MeetingDetectionEngine(
+      { getActiveMeetingState: () => ({}) },
+      Object.assign(new EventEmitter(), { stop() {} }),
+      Object.assign(new EventEmitter(), { start() {}, stop() {}, resetPrompt() {} }),
+      {
+        notificationPrefs: {},
+        queueMeetingNoteNavigation: async (payload) => navigations.push(payload),
+        showMeetingNotification: (payload) => shown.push(payload),
+      },
+      {
+        getCalendarEventById: (id) => ({
+          id,
+          end_time: new Date(Date.now() + 60_000).toISOString(),
+        }),
+        getOwnNoteByCalendarEventId: () => ({ id: 1, folder_id: 7 }),
+      }
+    );
+    t.after(() => engine.stop());
+    engine.preferences.audioDetection = true;
+    installBrowserGlobals(t, {
+      window: {
+        electronAPI: {
+          checkSystemAudioAccess: async () => ({
+            mode: "unsupported",
+            strategy: "unsupported",
+            status: "unsupported",
+            granted: false,
+          }),
+          meetingTranscriptionStart: async (args) => {
+            await engine.beginRecordingSession(args);
+            return {
+              success: true,
+              systemAudioMode: "unsupported",
+              systemAudioStrategy: "unsupported",
+            };
+          },
+          meetingTranscriptionStop: async (id) => {
+            engine.endRecordingSession(id);
+            return { success: true };
+          },
+        },
+      },
+    });
+    const vite = await createRendererServer(t, { cachePrefix: "meeting-note-selection-consent-" });
+    store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+    const { handleMeetingRecordingRequest } = await vite.ssrLoadModule(
+      "/helpers/meetingRecordingRequest.ts"
+    );
+    await engine.joinCalendarMeeting("joined");
+    const note = navigations[0];
+    request = handleMeetingRecordingRequest({
+      args: { noteId: note.noteId, noteTitle: "Meeting", folderId: 7, autoEndEligible: true },
+      trigger: "calendar-join",
+      canAutoStart: () => allowed,
+      startRecording: store.startRecording,
+      onSuppressed: () => engine.markMeetingNoteOnly(note.noteSessionId),
+      onHandled() {},
+      restoreFromMeetingMode: () => assert.fail("suppression must preserve the layout"),
+    });
+    await selecting.promise;
+    if (cancel) {
+      devices.resolve([]);
+      await microphoneRequested.promise;
+    }
+    const stopping = cancel ? store.stopRecording() : null;
+    allowed = cancel;
+    devices.resolve([]);
+    permission.resolve();
+    await request;
+    await stopping;
+    assert.equal(engine._meetingNoteSession?.id, note.noteSessionId);
+    assert.equal(engine._meetingModeActive, false);
+    engine.handleCalendarReminder({ id: "joined", summary: "Joined" });
+    engine._handleDetection("audio", "sustained-audio", { attributed: true });
+    assert.equal(shown.length, 0, "the note's own reminder and first call stay quiet");
+    engine.handleCalendarReminder({ id: "next", summary: "Next" });
+    assert.equal(shown.length, 1, "a later meeting still prompts");
+  });
+}
+
+test("a suppressed request is consumed before delayed IPC so remount cannot replay it", async () => {
+  const { handleMeetingRecordingRequest } =
+    await import("../../src/helpers/meetingRecordingRequest.ts");
+  const notification = Promise.withResolvers();
+  let requestPending = true;
+  let allowed = false;
+  let captures = 0;
+  const request = () =>
+    handleMeetingRecordingRequest({
+      args: { noteId: 1, noteTitle: "Meeting", folderId: null, autoEndEligible: true },
+      canAutoStart: () => allowed,
+      startRecording: async () => {
+        captures++;
+        return true;
+      },
+      onSuppressed: () => notification.promise,
+      onHandled: () => {
+        requestPending = false;
+      },
+      restoreFromMeetingMode: () => assert.fail("unexpected layout restoration"),
+    });
+  const pending = request();
+  allowed = true;
+  // A fresh view only receives the parent's still-pending request.
+  if (requestPending) await request();
+  notification.resolve();
+  await pending;
+  assert.equal(captures, 0);
 });
