@@ -5149,6 +5149,145 @@ test("moveDeviceNotesToPrivate moves nothing into a folder that isn't the accoun
   assert.deepEqual(noteRow(db.db, id), before);
 });
 
+// A cloud copy of folder "Ideas" whose client key the signed-out stand-in's
+// folder holds here: the folder this account backed up before the split.
+const CLOUD_IDEAS = {
+  id: "cloud-ideas",
+  client_folder_id: "key-ideas",
+  name: "Ideas",
+  is_default: false,
+  sort_order: 4,
+  space_id: null,
+  created_at: "2026-01-01T00:00:00.000Z",
+  updated_at: "2026-02-01T00:00:00.000Z",
+};
+
+function seedStandInIdeas(db) {
+  return Number(
+    db.db
+      .prepare(
+        `INSERT INTO folders (name, is_default, sort_order, client_folder_id, cloud_id, sync_status, space_id)
+         VALUES ('Ideas', 0, 4, 'key-ideas', 'cloud-ideas', 'synced', ?)`
+      )
+      .run(db._standInPrivateSpaceId()).lastInsertRowid
+  );
+}
+
+function teamSpaceWithMembers(db, cloudSpaceId, members) {
+  const id = Number(
+    db.db
+      .prepare(
+        `INSERT INTO spaces (client_space_id, cloud_space_id, kind, name, sort_order, workspace_id)
+         VALUES (?, ?, 'team', ?, 5, 'w1')`
+      )
+      .run(`client-${cloudSpaceId}`, cloudSpaceId, cloudSpaceId).lastInsertRowid
+  );
+  for (const member of members) {
+    db.db
+      .prepare("INSERT INTO space_accounts (space_id, account_id) VALUES (?, ?)")
+      .run(id, member);
+  }
+  return id;
+}
+
+test("a pull moves a team folder from a teamspace the account isn't in, without a copy", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const left = teamSpaceWithMembers(db, "team-left", ["b"]);
+  const joined = teamSpaceWithMembers(db, "team-joined", ["a", "b"]);
+  const moved = seedFolder(db.db, left, { name: "Plans", cloudId: "cloud-plans" });
+  db.db.prepare("UPDATE folders SET client_folder_id = 'key-plans' WHERE id = ?").run(moved);
+  signIn(db, "a", W1_ACTIVE);
+
+  // Another member moved the folder into the teamspace both accounts are in.
+  db.upsertFolderFromCloud(
+    {
+      id: "cloud-plans",
+      client_folder_id: "key-plans",
+      name: "Plans",
+      space_id: "team-joined",
+      sort_order: 1,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: "2026-02-01T00:00:00.000Z",
+    },
+    joined
+  );
+
+  const linked = db.db.prepare("SELECT * FROM folders WHERE cloud_id = 'cloud-plans'").all();
+  assert.equal(linked.length, 1, "one row stands for the cloud folder");
+  assert.equal(linked[0].id, moved);
+  assert.equal(linked[0].space_id, joined);
+});
+
+test("a pull takes over an empty stand-in folder the account has no copy of", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standInIdeas = seedStandInIdeas(db);
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+
+  db.upsertFolderFromCloud(CLOUD_IDEAS, home);
+
+  const linked = db.db.prepare("SELECT * FROM folders WHERE cloud_id = 'cloud-ideas'").all();
+  assert.equal(linked.length, 1);
+  assert.equal(linked[0].id, standInIdeas);
+  assert.equal(linked[0].space_id, home);
+  assert.equal(linked[0].account_id, "a");
+});
+
+test("a pull leaves a stand-in folder that holds notes, filing the cloud folder under a key of its own", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInIdeas = seedStandInIdeas(db);
+  const note = seedNote(db.db, db._standInPrivateSpaceId(), { title: "n", folderId: standInIdeas });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const standInBefore = folderRow(db.db, standInIdeas);
+
+  db.upsertFolderFromCloud(CLOUD_IDEAS, home);
+
+  assert.deepEqual(folderRow(db.db, standInIdeas), standInBefore);
+  assert.equal(noteRow(db.db, note).folder_id, standInIdeas);
+  const own = db.db
+    .prepare("SELECT * FROM folders WHERE cloud_id = 'cloud-ideas' AND account_id = 'a'")
+    .all();
+  assert.equal(own.length, 1);
+  assert.equal(own[0].space_id, home);
+  assert.notEqual(own[0].client_folder_id, "key-ideas");
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("the sole-account claim joins a stand-in folder into the account's copy of that cloud folder", (t) => {
+  const db = createFreshDeviceDb(t);
+  if (!db) return;
+  const standInIdeas = seedStandInIdeas(db);
+  const note = seedNote(db.db, db._standInPrivateSpaceId(), { title: "n", folderId: standInIdeas });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  // The account's copy, linked by cloud id under a key of its own and renamed since.
+  const copy = seedFolder(db.db, home, {
+    name: "Ideas renamed",
+    accountId: "a",
+    cloudId: "cloud-ideas",
+  });
+
+  db.claimSignedOutPrivateNotes();
+
+  assert.equal(noteRow(db.db, note).folder_id, copy);
+  assert.equal(noteRow(db.db, note).account_id, "a");
+  assert.equal(
+    db.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM folders WHERE cloud_id = 'cloud-ideas' AND account_id = 'a'"
+      )
+      .get().n,
+    1,
+    "no second folder of the account stands for the cloud folder"
+  );
+  assert.equal(folderRow(db.db, standInIdeas).space_id, db._standInPrivateSpaceId());
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
 test("on a shared Mac the sign-in claim takes only notes the cloud says are the account's", (t) => {
   const db = createSharedMacDb(t);
   if (!db) return;

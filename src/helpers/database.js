@@ -6669,9 +6669,22 @@ class DatabaseManager {
          ORDER BY f.id`
       )
       .all(standInId, standInId);
+    // The account's live folder in its home Private linked to the same cloud
+    // folder (one a pull stored under a key of its own while the stand-in's
+    // copy held the cloud key): the stand-in folder's rows join it, so two of
+    // the account's folders never stand for one cloud folder.
+    const linkedFolder = this.db.prepare(
+      `SELECT id FROM folders WHERE space_id = ? AND cloud_id = ? AND deleted_at IS NULL
+         AND (account_id IS NULL OR account_id IS ?) ORDER BY id LIMIT 1`
+    );
     for (const folder of standInFolders) {
-      if (folder.is_default) {
+      const linked =
+        folder.cloud_id == null
+          ? null
+          : (linkedFolder.get(homeId, folder.cloud_id, accountId)?.id ?? null);
+      if (linked != null || folder.is_default) {
         const target =
+          linked ??
           this._privateFolderNamed(homeId, accountId, folder.name) ??
           Number(
             insertFolder.run(
@@ -11685,47 +11698,69 @@ class DatabaseManager {
   // newKeyIfTaken: a cloud folder
   // whose client key another account's folder holds here is stored under a
   // key of its own, where the upsert would otherwise take that folder over.
-  // A folder with no account that the signed-in account can't see holding the
-  // key (the signed-out stand-in's copy of a folder backed up before the
-  // split) is always left that way: taking it over would move it out of the
-  // stand-in under its ownerless notes, and the account's own copy, linked by
-  // cloud id under its own key, would collide with it on the key.
+  // A private folder with no account that the signed-in account can't see
+  // holding the key (the signed-out stand-in's copy of a folder backed up
+  // before the split) is left that way too while the account already has its
+  // own copy, linked by cloud id under its own key (taking the holder over
+  // would collide with it on the key), or while the holder still has notes or
+  // chats (they would be left in the stand-in under a folder that moved out).
+  // An empty one is taken over, as is a team folder of a teamspace the
+  // account isn't in (a folder another member moved between teamspaces).
   upsertFolderFromCloud(cloudFolder, localSpaceId = null, { newKeyIfTaken = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       // A cloud row with no space is a personal folder: the default's Private.
       let spaceId = localSpaceId ?? this.getDefaultPrivateSpaceId();
       const current = this.db
-        .prepare("SELECT id, space_id, account_id FROM folders WHERE client_folder_id = ?")
+        .prepare(
+          `SELECT f.id, f.space_id, f.account_id, s.kind AS space_kind FROM folders f
+           LEFT JOIN spaces s ON s.id = f.space_id WHERE f.client_folder_id = ?`
+        )
         .get(cloudFolder.client_folder_id);
       const accountScope = this._accountScopeCondition("folders");
-      const heldOutOfView =
+      const ownCopy = () =>
+        this.db
+          .prepare(
+            `SELECT client_folder_id FROM folders WHERE cloud_id = ? AND ${accountScope.sql}
+             ORDER BY deleted_at IS NOT NULL, id LIMIT 1`
+          )
+          .get(cloudFolder.id, ...accountScope.params);
+      const hiddenPrivateHolder =
         current != null &&
         current.account_id == null &&
+        current.space_kind === "private" &&
         this.activeAccountId != null &&
         !this.db
           .prepare(`SELECT 1 FROM folders WHERE id = ? AND ${accountScope.sql}`)
           .get(current.id, ...accountScope.params);
+      const own = hiddenPrivateHolder ? ownCopy() : undefined;
+      const keepsHolder =
+        hiddenPrivateHolder &&
+        (own != null ||
+          Boolean(
+            this.db
+              .prepare(
+                `SELECT 1 FROM notes WHERE folder_id = ?
+                 UNION ALL SELECT 1 FROM agent_conversations WHERE folder_id = ? LIMIT 1`
+              )
+              .get(current.id, current.id)
+          ));
       if (
         cloudFolder.private_workspace_id == null &&
-        !heldOutOfView &&
+        !keepsHolder &&
         this._keepsPrivatePlacement(current?.space_id, spaceId)
       )
         spaceId = current.space_id;
       const accountId = this._accountIdForSpace(spaceId);
       if (
-        heldOutOfView ||
+        keepsHolder ||
         (newKeyIfTaken && current?.account_id && accountId && current.account_id !== accountId)
       ) {
         // That folder is left as it is. This account's own copy of the cloud
         // folder keeps its key; otherwise the folder gets a new one.
-        const own = this.db
-          .prepare(
-            `SELECT client_folder_id FROM folders WHERE cloud_id = ? AND ${accountScope.sql}`
-          )
-          .get(cloudFolder.id, ...accountScope.params);
+        const copy = keepsHolder ? own : ownCopy();
         return this.upsertFolderFromCloud(
-          { ...cloudFolder, client_folder_id: own?.client_folder_id ?? randomUUID() },
+          { ...cloudFolder, client_folder_id: copy?.client_folder_id ?? randomUUID() },
           localSpaceId
         );
       }
