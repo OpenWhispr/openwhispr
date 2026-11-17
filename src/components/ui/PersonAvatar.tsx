@@ -66,7 +66,7 @@ export default function PersonAvatar({
         backgroundColor: getInitialColor(email || displayName || "?"),
       }}
       className={cn(
-        "shrink-0 rounded-full flex items-center justify-center font-medium text-white",
+        "shrink-0 rounded-full flex items-center justify-center font-medium text-on-solid",
         className
       )}
     >

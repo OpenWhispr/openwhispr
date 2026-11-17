@@ -199,16 +199,16 @@ test("the field brings its look, falling back to the app theme outside onboardin
     css.indexOf(".onboarding-provider-icon-monochrome")
   );
   for (const [token, fallback] of [
-    ["--onboarding-control-border", "--color-border"],
-    ["--onboarding-surface-secondary", "--color-muted"],
-    ["--onboarding-text-primary", "--color-foreground"],
-    ["--onboarding-text-secondary", "--color-muted-foreground"],
+    ["--onboarding-control-border", "--color-border-default"],
+    ["--onboarding-surface-secondary", "--color-surface-secondary"],
+    ["--onboarding-text-primary", "--color-text-primary"],
+    ["--onboarding-text-secondary", "--color-text-secondary"],
   ]) {
     assert.match(rule, new RegExp(`var\\(${token}, var\\(${fallback}\\)\\)`), token);
   }
   const field = source("src/components/ui/ProviderCheckField.tsx");
-  assert.match(field, /var\(--onboarding-accent,var\(--color-primary\)\)/);
-  assert.match(field, /var\(--onboarding-text-primary,var\(--color-foreground\)\)/);
+  assert.match(field, /var\(--onboarding-accent,var\(--color-brand-solid\)\)/);
+  assert.match(field, /var\(--onboarding-text-primary,var\(--color-text-primary\)\)/);
 });
 
 test("Settings names a field from its heading; onboarding keeps its caption", async (t) => {
@@ -323,6 +323,6 @@ test("no verdict shows its reason in amber with Retry, and the value stays valid
   }
   assert.match(
     markup(Field, failed("credentialsRejected")),
-    /<p class="mt-1 px-1 text-xs leading-\[1\.4\] text-destructive">/
+    /<p class="mt-1 px-1 text-xs leading-\[1\.4\] text-red-solid">/
   );
 });

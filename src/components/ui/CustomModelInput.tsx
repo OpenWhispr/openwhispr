@@ -12,7 +12,7 @@ export default function CustomModelInput({ value, onChange, placeholder }: Custo
 
   return (
     <div className="space-y-1.5 pt-2">
-      <label className="text-xs font-medium text-muted-foreground">
+      <label className="text-xs font-medium text-secondary">
         {t("reasoning.enterprise.customModelId", { defaultValue: "Custom Model ID" })}
       </label>
       <Input

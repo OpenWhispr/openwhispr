@@ -931,7 +931,7 @@ export default function PersonalNotesView({
       >
         <div
           ref={notesListResize.panelRef}
-          className="relative max-w-full shrink-0 border-e border-border dark:border-white/10 flex flex-col h-full"
+          className="relative max-w-full shrink-0 border-e border-default flex flex-col h-full"
           style={{ width: notesListWidth }}
         >
           <PanelResizeHandle
@@ -944,9 +944,9 @@ export default function PersonalNotesView({
               onClick={() => setManagerKind("template")}
               className={cn(
                 "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs",
-                "text-foreground/85 hover:text-foreground hover:bg-foreground/5",
+                "text-primary/85 hover:text-primary hover:bg-text-primary/5",
                 "transition-colors duration-150",
-                "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               )}
             >
               <Sparkles size={14} className="shrink-0" />
@@ -1033,7 +1033,7 @@ export default function PersonalNotesView({
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center -mt-6">
             <svg
-              className="text-foreground dark:text-white mb-5"
+              className="text-primary mb-5"
               width="72"
               height="64"
               viewBox="0 0 72 64"
@@ -1130,16 +1130,16 @@ export default function PersonalNotesView({
             </svg>
             {notes.length === 0 ? (
               <>
-                <h3 className="text-xs font-semibold text-foreground/60 mb-1">
+                <h3 className="text-xs font-semibold text-primary/60 mb-1">
                   {t(notesEmptyTitleKey(activeFolderId != null))}
                 </h3>
-                <p className="text-xs text-foreground/50 dark:text-foreground/45 text-center max-w-55 mb-4">
+                <p className="text-xs text-primary/50 dark:text-primary/45 text-center max-w-55 mb-4">
                   {t("notes.empty.description")}
                 </p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={createNote}
-                    className="flex items-center gap-1.5 px-4 h-7 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
+                    className="flex items-center gap-1.5 px-4 h-7 rounded-md bg-brand-solid/8 dark:bg-brand-solid/10 border border-brand-solid/12 dark:border-brand-solid/15 text-xs font-medium text-brand-solid/70 hover:bg-brand-solid/12 hover:text-brand-solid hover:border-brand-solid/20 transition-colors"
                   >
                     <Plus size={11} />
                     {t("notes.empty.createNote")}
@@ -1149,7 +1149,7 @@ export default function PersonalNotesView({
                   {activeFolderId != null && (
                     <button
                       onClick={() => setShowAddNotesDialog(true)}
-                      className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/10 text-xs text-foreground/45 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
+                      className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-text-primary/8 text-xs text-primary/45 hover:text-primary/60 hover:border-text-primary/15 hover:bg-text-primary/3 transition-colors"
                     >
                       {t("notes.addToFolder.addExisting")}
                     </button>
@@ -1158,10 +1158,10 @@ export default function PersonalNotesView({
               </>
             ) : (
               <>
-                <h3 className="text-xs font-semibold text-foreground/60 mb-1">
+                <h3 className="text-xs font-semibold text-primary/60 mb-1">
                   {t("notes.empty.selectTitle")}
                 </h3>
-                <p className="text-xs text-foreground/50 dark:text-foreground/45 text-center max-w-50">
+                <p className="text-xs text-primary/50 dark:text-primary/45 text-center max-w-50">
                   {t("notes.empty.selectDescription")}
                 </p>
               </>

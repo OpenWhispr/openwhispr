@@ -1100,7 +1100,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   };
 
   return (
-    <div className="h-screen bg-surface-window flex flex-col">
+    <div className="h-screen bg-surface-secondary flex flex-col">
       <MeetingRecordingMount />
       <MeetingRecordingPill
         activeView={activeView}
@@ -1260,7 +1260,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           />
         </div>
         <main className="flex-1 flex flex-col overflow-hidden p-2">
-          <div className="flex min-h-0 flex-1 flex-col overflow-clip rounded-(--radius-shell) border border-border bg-background dark:border-white/10">
+          <div className="flex min-h-0 flex-1 flex-col overflow-clip rounded-(--radius-shell) border border-default bg-surface-primary">
             <ControlPanelTopBar
               title={navItems.find((item) => item.id === activeView)?.label ?? ""}
               sidebarCollapsed={sidebarCollapsed}
@@ -1297,16 +1297,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             <div className="scrollbar-hidden flex-1 overflow-y-auto">
               {updateRequiredByOrg && (
                 <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
-                  <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
+                  <div className="rounded-lg border border-amber bg-amber-surface p-3">
                     <div className="flex items-start gap-3">
-                      <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+                      <div className="shrink-0 w-8 h-8 rounded-md bg-amber-surface flex items-center justify-center">
+                        <AlertTriangle size={16} className="text-amber" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
+                        <p className="text-xs font-medium text-amber mb-0.5">
                           {t("controlPanel.updateRequiredByOrg.title")}
                         </p>
-                        <p className="text-xs text-amber-700 dark:text-amber-300/80">
+                        <p className="text-xs text-amber">
                           <BidiInterpolatedText
                             text={t(
                               updateStatus.updateMode === "it_managed"
@@ -1327,16 +1327,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               <RequiredModelsBanner />
               {usage?.isPastDue && activeView === "home" && (
                 <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
-                  <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
+                  <div className="rounded-lg border border-amber bg-amber-surface p-3">
                     <div className="flex items-start gap-3">
-                      <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+                      <div className="shrink-0 w-8 h-8 rounded-md bg-amber-surface flex items-center justify-center">
+                        <AlertTriangle size={16} className="text-amber" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
+                        <p className="text-xs font-medium text-amber mb-0.5">
                           {t("controlPanel.billing.pastDueTitle")}
                         </p>
-                        <p className="text-xs text-amber-700 dark:text-amber-300/80 mb-2">
+                        <p className="text-xs text-amber mb-2">
                           {t("controlPanel.billing.bannerDescription", {
                             limit: usage.limit.toLocaleString(),
                           })}
@@ -1361,16 +1361,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 activeView === "home" &&
                 !gpuBannerDismissed && (
                   <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
-                    <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
+                    <div className="rounded-lg border border-brand-solid/20 dark:border-brand-solid/15 bg-brand-solid/5 p-3">
                       <div className="flex items-start gap-3">
-                        <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
-                          <Zap size={16} className="text-primary" />
+                        <div className="shrink-0 w-8 h-8 rounded-md bg-brand-solid/10 dark:bg-brand-solid/15 flex items-center justify-center">
+                          <Zap size={16} className="text-brand-solid" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground mb-0.5">
+                          <p className="text-xs font-medium text-primary mb-0.5">
                             {t("controlPanel.gpu.bannerTitle")}
                           </p>
-                          <p className="text-xs text-muted-foreground mb-2">
+                          <p className="text-xs text-secondary mb-2">
                             {t("controlPanel.gpu.bannerDescription")}
                           </p>
                           <div className="flex items-center gap-3">
@@ -1396,7 +1396,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                                 setGpuBannerDismissed(true);
                                 localStorage.setItem("gpuBannerDismissedUnified", "true");
                               }}
-                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                              className="text-xs text-secondary hover:text-primary transition-colors"
                             >
                               {t("controlPanel.gpu.dismissButton")}
                             </button>

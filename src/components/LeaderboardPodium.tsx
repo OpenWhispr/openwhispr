@@ -43,11 +43,11 @@ function PodiumFrame({
   return (
     <div className="px-5 pb-5 pt-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+        <div className="flex items-center gap-2 text-xs font-medium text-primary">
           <Medal size={14} className="text-amber-500" />
           {title}
         </div>
-        <p className="text-[11px] text-muted-foreground">{detail}</p>
+        <p className="text-[11px] text-secondary">{detail}</p>
       </div>
 
       <div
@@ -156,7 +156,7 @@ export default function LeaderboardPodium({
             placement={placement}
             rank={member.rank}
           >
-            <div className="rounded-full ring-4 ring-background/70">
+            <div className="rounded-full ring-4 ring-surface-primary/70">
               <MemberAvatar
                 name={member.name}
                 email={member.email}

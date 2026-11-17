@@ -57,7 +57,7 @@ interface AssistantMessageProps {
 }
 
 const ACTION_BUTTON =
-  "flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-40 disabled:hover:bg-transparent";
+  "flex size-7 items-center justify-center rounded-full text-secondary transition-colors hover:bg-text-primary/10 hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40 disabled:opacity-40 disabled:hover:bg-transparent";
 
 function ResponseActions({
   message,
@@ -98,9 +98,9 @@ function ResponseActions({
         onClick={() => void copy()}
         aria-label={t(copied ? "common.copied" : "common.copy")}
         title={t(copied ? "common.copied" : "common.copy")}
-        className={cn(ACTION_BUTTON, copied && "w-auto gap-1 px-2 text-foreground")}
+        className={cn(ACTION_BUTTON, copied && "w-auto gap-1 px-2 text-primary")}
       >
-        {copied ? <Check size={15} className="text-success" /> : <CopyRounded size={15} />}
+        {copied ? <Check size={15} className="text-green-solid" /> : <CopyRounded size={15} />}
         {copied && (
           <span className="text-xs" aria-live="polite">
             {t("common.copied")}
@@ -128,13 +128,13 @@ function ResponseActions({
             speaking ? "agentWindow.actions.stopReading" : "agentWindow.actions.readAloud"
           )}
           title={t(speaking ? "agentWindow.actions.stopReading" : "agentWindow.actions.readAloud")}
-          className={cn(ACTION_BUTTON, speaking && "bg-primary/15 text-primary")}
+          className={cn(ACTION_BUTTON, speaking && "bg-brand-solid/15 text-brand-solid")}
         >
           <Volume size={15} />
         </button>
       )}
       {latest && (
-        <span className="ms-auto flex items-center gap-1.5 text-[13px] text-muted-foreground/80">
+        <span className="ms-auto flex items-center gap-1.5 text-[13px] text-secondary/80">
           <TextSelect size={14} />
           {t("agentWindow.selectionHint")}
         </span>
@@ -203,7 +203,7 @@ const AssistantMessage = memo(function AssistantMessage(props: AssistantMessageP
           <div key={`text-${part.start}`} data-agent-answer>
             <MarkdownRenderer
               content={part.text}
-              className="text-[15px] leading-snug text-foreground selection:bg-primary selection:text-primary-foreground [&_li]:text-[15px] [&_ol]:space-y-0 [&_p]:text-[15px] [&_ul]:space-y-0"
+              className="text-[15px] leading-snug text-primary selection:bg-brand-solid selection:text-on-solid [&_li]:text-[15px] [&_ol]:space-y-0 [&_p]:text-[15px] [&_ul]:space-y-0"
             />
           </div>
         )
@@ -213,7 +213,7 @@ const AssistantMessage = memo(function AssistantMessage(props: AssistantMessageP
         <button
           type="button"
           onClick={() => openProviderSettings(message.error!.settingsTarget!)}
-          className="self-start rounded-sm text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="self-start rounded-sm text-xs font-medium text-brand-solid hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
         >
           {t("providerErrors.openSettings")}
         </button>
@@ -248,7 +248,7 @@ function UserMessage({ message }: { message: Message }) {
       )}
       <div
         dir="auto"
-        className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-3 px-3 py-2 dark:bg-surface-2 text-[14px] leading-5 text-foreground"
+        className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-tertiary px-3 py-2 text-[14px] leading-5 text-primary"
       >
         {message.content}
       </div>
@@ -305,7 +305,7 @@ function SelectionToolbar({
     if (toolbar) setPosition(placeSelectionToolbar(target, toolbar.getBoundingClientRect()));
   }, [target, forkable]);
   const item =
-    "flex h-full items-center gap-2 px-3.5 text-[15px] text-foreground transition-colors hover:bg-foreground/10 focus:outline-none focus-visible:bg-foreground/10 disabled:opacity-40";
+    "flex h-full items-center gap-2 px-3.5 text-[15px] text-primary transition-colors hover:bg-text-primary/10 focus:outline-none focus-visible:bg-text-primary/10 disabled:opacity-40";
   return (
     <div
       ref={toolbarRef}
@@ -313,7 +313,7 @@ function SelectionToolbar({
       aria-label={t("agentWindow.selectionToolbar")}
       // Keeps the selection while a button is pressed.
       onMouseDown={(event) => event.preventDefault()}
-      className="fixed z-30 flex h-10 items-center overflow-hidden rounded-full border border-border bg-popover shadow-[var(--shadow-card)]"
+      className="fixed z-30 flex h-10 items-center overflow-hidden rounded-full border border-default bg-surface-primary shadow-[var(--shadow-card)] dark:bg-surface-secondary"
       style={position ?? { top: 0, left: 0, visibility: "hidden" }}
     >
       <button type="button" onClick={onFollowUp} className={item}>
@@ -322,7 +322,7 @@ function SelectionToolbar({
       </button>
       {onForkFrom && (
         <>
-          <span className="h-4 w-px bg-border" aria-hidden="true" />
+          <span className="h-4 w-px bg-border-default" aria-hidden="true" />
           <button type="button" onClick={onForkFrom} disabled={busy} className={item}>
             <GitFork size={15} />
             {t("agentWindow.forkFromHere")}

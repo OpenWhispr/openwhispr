@@ -634,7 +634,7 @@ export function HotkeyInput({
           e.stopPropagation();
           onClear();
         }}
-        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 transition-opacity duration-150 text-muted-foreground/70 hover:text-destructive cursor-pointer"
+        className="rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-focus/30 transition-opacity duration-150 text-secondary/70 hover:text-red cursor-pointer"
       >
         <Trash2 className="w-3.5 h-3.5" />
       </button>
@@ -653,7 +653,7 @@ export function HotkeyInput({
         onMouseDown={handleMouseDown}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        className="absolute inset-0 z-10 cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20"
+        className="absolute inset-0 z-10 cursor-pointer rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-focus/20"
       >
         <span className="sr-only">
           {validationWarning ??
@@ -683,10 +683,10 @@ export function HotkeyInput({
           transition-colors duration-150
           ${
             disabled
-              ? "bg-muted/30 border-border cursor-not-allowed opacity-50"
+              ? "bg-surface-secondary/30 border-default cursor-not-allowed opacity-50"
               : isCapturing
-                ? "bg-primary/5 border-primary/30 shadow-[0_0_0_2px_rgba(37,99,212,0.1)]"
-                : "bg-surface-1 border-border hover:border-border-hover hover:bg-surface-2"
+                ? "bg-brand-solid/5 border-brand-solid/30 shadow-[0_0_0_2px_rgba(37,99,212,0.1)]"
+                : "bg-surface-secondary border-default hover:border-hover hover:bg-surface-primary"
           }
         `}
       >
@@ -694,8 +694,10 @@ export function HotkeyInput({
         {isCapturing ? (
           <div className="flex flex-col items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-              <span className="text-xs font-medium text-primary">{t("hotkeyInput.listening")}</span>
+              <div className="w-2 h-2 bg-brand-solid rounded-full animate-pulse" />
+              <span className="text-xs font-medium text-brand-solid">
+                {t("hotkeyInput.listening")}
+              </span>
             </div>
             {activeModifiers.length > 0 ? (
               <div className="flex flex-col items-center gap-1.5">
@@ -703,30 +705,26 @@ export function HotkeyInput({
                   {activeModifiers.map((token) => (
                     <kbd
                       key={token}
-                      className="px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-sm text-xs font-semibold text-primary"
+                      className="px-2.5 py-1 bg-brand-solid/10 border border-brand-solid/20 rounded-sm text-xs font-semibold text-brand-solid"
                     >
                       {heldModifierLabel(token, platform)}
                     </kbd>
                   ))}
-                  <span className="text-primary/50 text-sm font-medium">+</span>
+                  <span className="text-brand-solid/50 text-sm font-medium">+</span>
                 </div>
                 {isFnHeld && (
-                  <span className="text-xs text-muted-foreground">
-                    {t("hotkeyInput.fnHeldHint")}
-                  </span>
+                  <span className="text-xs text-secondary">{t("hotkeyInput.fnHeldHint")}</span>
                 )}
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-secondary">
                 {isMac ? t("hotkeyInput.pressAnyKeyMac") : t("hotkeyInput.pressAnyKey")}
               </span>
             )}
             {validationWarning && (
-              <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-md bg-warning/8 border border-warning/20 dark:bg-warning/12 dark:border-warning/25">
-                <AlertTriangle className="w-3 h-3 text-warning shrink-0" />
-                <span className="text-xs text-warning dark:text-amber-400">
-                  {validationWarning}
-                </span>
+              <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-md bg-amber-solid/8 border border-amber-solid/20 dark:bg-amber-solid/12 dark:border-amber-solid/25">
+                <AlertTriangle className="w-3 h-3 text-amber-solid shrink-0" />
+                <span className="text-xs text-amber">{validationWarning}</span>
               </div>
             )}
           </div>
@@ -737,10 +735,8 @@ export function HotkeyInput({
               {hotkeyParts.length > 0 ? (
                 hotkeyParts.map((part, i) => (
                   <React.Fragment key={part}>
-                    {i > 0 && (
-                      <span className="text-muted-foreground/70 text-lg font-light">+</span>
-                    )}
-                    <kbd className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-sm font-semibold text-foreground shadow-sm">
+                    {i > 0 && <span className="text-secondary/70 text-lg font-light">+</span>}
+                    <kbd className="px-3 py-1.5 bg-surface-tertiary border border-default rounded-sm text-sm font-semibold text-primary shadow-sm">
                       {part}
                     </kbd>
                   </React.Fragment>
@@ -748,26 +744,26 @@ export function HotkeyInput({
               ) : isGlobe ? (
                 <kbd
                   dir="ltr"
-                  className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-lg shadow-sm"
+                  className="px-3 py-1.5 bg-surface-tertiary border border-default rounded-sm text-lg shadow-sm"
                 >
                   🌐
                 </kbd>
               ) : (
                 <kbd
                   dir="ltr"
-                  className="px-3 py-1.5 bg-surface-raised border border-border rounded-sm text-sm font-semibold text-foreground shadow-sm"
+                  className="px-3 py-1.5 bg-surface-tertiary border border-default rounded-sm text-sm font-semibold text-primary shadow-sm"
                 >
                   {displayValue}
                 </kbd>
               )}
             </div>
-            <span className="text-xs text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
+            <span className="text-xs text-secondary/70 group-hover:text-secondary transition-colors">
               {t("hotkeyInput.clickToChange")}
             </span>
           </div>
         ) : (
           /* Empty state */
-          <div className="flex flex-col items-center gap-1.5 text-muted-foreground">
+          <div className="flex flex-col items-center gap-1.5 text-secondary">
             <span className="text-sm font-medium">{t("hotkeyInput.clickToSet")}</span>
           </div>
         )}
@@ -794,15 +790,15 @@ export function HotkeyInput({
         transition-colors duration-150 cursor-pointer select-none focus:outline-none
         ${
           disabled
-            ? "bg-muted/30 border-border cursor-not-allowed opacity-50"
+            ? "bg-surface-secondary/30 border-default cursor-not-allowed opacity-50"
             : isCapturing
-              ? "bg-primary/5 border-primary/30 shadow-[0_0_0_2px_rgba(37,99,212,0.1)]"
-              : "bg-surface-1 border-border hover:border-border-hover hover:bg-surface-2"
+              ? "bg-brand-solid/5 border-brand-solid/30 shadow-[0_0_0_2px_rgba(37,99,212,0.1)]"
+              : "bg-surface-secondary border-default hover:border-hover hover:bg-surface-primary"
         }
       `}
     >
       {isCapturing && (
-        <div className="absolute top-0 start-0 end-0 h-0.5 bg-primary animate-pulse" />
+        <div className="absolute top-0 start-0 end-0 h-0.5 bg-brand-solid animate-pulse" />
       )}
 
       <div className="px-4 py-3">
@@ -810,8 +806,8 @@ export function HotkeyInput({
           <>
             <div className="flex items-center justify-center gap-3">
               <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-                <span className="text-xs font-medium text-muted-foreground">
+                <div className="w-1.5 h-1.5 bg-brand-solid rounded-full animate-pulse" />
+                <span className="text-xs font-medium text-secondary">
                   {t("hotkeyInput.recording")}
                 </span>
               </div>
@@ -821,34 +817,32 @@ export function HotkeyInput({
                     {activeModifiers.map((token) => (
                       <kbd
                         key={token}
-                        className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded-sm text-xs font-semibold text-primary"
+                        className="px-2 py-0.5 bg-brand-solid/10 border border-brand-solid/20 rounded-sm text-xs font-semibold text-brand-solid"
                       >
                         {heldModifierLabel(token, platform)}
                       </kbd>
                     ))}
                   </span>
-                  <span className="text-primary/40 text-xs">
+                  <span className="text-brand-solid/40 text-xs">
                     {isFnHeld ? t("hotkeyInput.fnCaptureHint") : t("hotkeyInput.keyHint")}
                   </span>
                 </div>
               ) : (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-secondary">
                   {isMac ? t("hotkeyInput.tryShortcutMac") : t("hotkeyInput.tryShortcut")}
                 </span>
               )}
             </div>
             {validationWarning && (
-              <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1.5 rounded-md bg-warning/8 border border-warning/20 dark:bg-warning/12 dark:border-warning/25">
-                <AlertTriangle className="w-3 h-3 text-warning shrink-0" />
-                <span className="text-xs text-warning dark:text-amber-400">
-                  {validationWarning}
-                </span>
+              <div className="flex items-center gap-1.5 mt-1.5 px-3 py-1.5 rounded-md bg-amber-solid/8 border border-amber-solid/20 dark:bg-amber-solid/12 dark:border-amber-solid/25">
+                <AlertTriangle className="w-3 h-3 text-amber-solid shrink-0" />
+                <span className="text-xs text-amber">{validationWarning}</span>
               </div>
             )}
           </>
         ) : value ? (
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-xs font-medium text-secondary">
               {t("hotkeyInput.hotkeyLabel")}
             </span>
             <div className="flex items-center gap-2">
@@ -856,8 +850,8 @@ export function HotkeyInput({
                 <div dir="ltr" className="flex items-center gap-1">
                   {hotkeyParts.map((part, i) => (
                     <React.Fragment key={part}>
-                      {i > 0 && <span className="text-muted-foreground/70 text-xs">+</span>}
-                      <kbd className="px-2 py-0.5 bg-surface-raised border border-border rounded-sm text-xs font-semibold text-foreground">
+                      {i > 0 && <span className="text-secondary/70 text-xs">+</span>}
+                      <kbd className="px-2 py-0.5 bg-surface-tertiary border border-default rounded-sm text-xs font-semibold text-primary">
                         {part}
                       </kbd>
                     </React.Fragment>
@@ -867,28 +861,28 @@ export function HotkeyInput({
                 <div className="flex items-center gap-1.5">
                   <kbd
                     dir="ltr"
-                    className="px-2 py-0.5 bg-surface-raised border border-border rounded-sm text-base"
+                    className="px-2 py-0.5 bg-surface-tertiary border border-default rounded-sm text-base"
                   >
                     🌐
                   </kbd>
-                  <span className="text-xs text-muted-foreground">{t("hotkeyInput.globe")}</span>
+                  <span className="text-xs text-secondary">{t("hotkeyInput.globe")}</span>
                 </div>
               ) : (
                 <kbd
                   dir="ltr"
-                  className="px-2.5 py-1 bg-surface-raised border border-border rounded-sm text-xs font-semibold text-foreground"
+                  className="px-2.5 py-1 bg-surface-tertiary border border-default rounded-sm text-xs font-semibold text-primary"
                 >
                   {displayValue}
                 </kbd>
               )}
-              <span className="text-xs text-muted-foreground/70">
+              <span className="text-xs text-secondary/70">
                 {t("hotkeyInput.clickToChangeLower")}
               </span>
               {clearButton}
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 text-secondary">
             <span className="text-sm font-medium">{t("hotkeyInput.clickToSet")}</span>
           </div>
         )}

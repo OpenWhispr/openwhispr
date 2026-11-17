@@ -173,11 +173,11 @@ export function UploadTranscriptionPanel() {
     <div className="space-y-3">
       <EnterpriseAudioSettings />
       {managedActive && (
-        <div className="rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
+        <div className="rounded-lg border border-brand-solid/20 bg-brand-solid/[0.03] p-3">
           <p className="text-sm font-medium">
             {t("settingsPage.aiModels.managedEnterprise.title")}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-secondary">
             {enterpriseProviderName(managed.provider)} · {managed.model}
           </p>
           {!managedRequired && (
@@ -194,7 +194,7 @@ export function UploadTranscriptionPanel() {
         </div>
       )}
       {managed.kind === "error" ? (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-red">
           {managed.messageKey ? t(managed.messageKey) : managed.message}
         </p>
       ) : (

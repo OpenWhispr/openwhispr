@@ -21,14 +21,14 @@ const BUBBLE_STYLES = {
   mic: {
     align: "justify-start",
     radius: "rounded-es-sm",
-    bg: "bg-primary/60 text-primary-foreground/80",
-    cursor: "bg-primary-foreground/60",
+    bg: "bg-brand-solid/60 text-on-solid/80",
+    cursor: "bg-text-on-solid/60",
   },
   system: {
     align: "justify-end",
     radius: "rounded-ee-sm",
-    bg: "bg-surface-2/70 border border-border/70 text-foreground/80",
-    cursor: "bg-foreground/40",
+    bg: "bg-surface-primary/70 border border-default/70 text-primary/80",
+    cursor: "bg-text-primary/40",
   },
 } as const;
 
@@ -111,11 +111,11 @@ function PartialBubble({
       <div className="max-w-[80%] flex flex-col">
         {speakerLabel && (
           <div className="mb-0.5 flex items-center gap-1 px-1">
-            <span dir="auto" className="text-[11px] font-medium text-muted-foreground/70">
+            <span dir="auto" className="text-[11px] font-medium text-secondary/70">
               {speakerLabel}
             </span>
             {speakerState === "provisional" && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground/70">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-secondary/70">
                 <Sparkles size={9} />
                 {getSpeakerStateLabel("provisional", t)}
               </span>
@@ -194,16 +194,16 @@ function AddContactButton({
         <button
           className={cn(
             "inline-flex items-center mb-0.5 px-1.5 py-0.5 rounded-md text-[11px] outline-none cursor-pointer",
-            "border border-dashed border-border/70 dark:border-white/15",
-            "text-foreground/50 hover:text-foreground hover:border-border/90 dark:hover:border-white/30",
-            "transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring"
+            "border border-dashed border-default/70",
+            "text-primary/50 hover:text-primary hover:border-default/90",
+            "transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-focus"
           )}
         >
           {t("notes.speaker.addContact")}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-3">
-        <div dir="auto" className="text-xs font-medium text-foreground truncate mb-2">
+        <div dir="auto" className="text-xs font-medium text-primary truncate mb-2">
           {profile.display_name}
         </div>
         <input
@@ -220,9 +220,9 @@ function AddContactButton({
           }}
           placeholder={t("notes.speaker.emailPlaceholder")}
           className={cn(
-            "w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground",
-            "placeholder:text-foreground/45 outline-none",
-            "border border-border/70 focus:border-border/90 transition-colors"
+            "w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-primary",
+            "placeholder:text-primary/45 outline-none",
+            "border border-default/70 focus:border-default/90 transition-colors"
           )}
           autoFocus
           type="email"
@@ -230,7 +230,7 @@ function AddContactButton({
         <div className="flex justify-end gap-1 mt-2">
           <button
             onClick={() => setOpen(false)}
-            className="px-2 py-1 rounded text-[11px] text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors cursor-pointer"
+            className="px-2 py-1 rounded text-[11px] text-primary/50 hover:text-primary hover:bg-text-primary/5 transition-colors cursor-pointer"
           >
             {t("notes.speaker.cancel")}
           </button>
@@ -239,8 +239,8 @@ function AddContactButton({
             disabled={!canSave}
             className={cn(
               "px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer",
-              "bg-primary text-primary-foreground hover:bg-primary/90",
-              "disabled:bg-primary/20 disabled:text-primary-foreground/40 disabled:pointer-events-none"
+              "bg-brand-solid text-on-solid hover:bg-brand-solid/90",
+              "disabled:bg-brand-solid/20 disabled:text-on-solid/40 disabled:pointer-events-none"
             )}
           >
             {t("notes.speaker.save")}
@@ -348,23 +348,23 @@ function SpeakerPicker({
 
   return (
     <>
-      <div className="p-2 border-b border-border/70">
+      <div className="p-2 border-b border-default/70">
         <input
           dir="auto"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t("notes.speaker.nameOrEmailPlaceholder")}
-          className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+          className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-primary placeholder:text-primary/45 outline-none border-none appearance-none"
           autoFocus
         />
       </div>
       <div className="max-h-52 overflow-y-auto">
         {showSelf && (
-          <div className="p-1 border-b border-border/70">
+          <div className="p-1 border-b border-default/70">
             <button
               onClick={selectSelf}
-              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-primary/70 hover:bg-text-primary/5 transition-colors cursor-pointer"
             >
               <span dir="auto" className="truncate flex-1 text-start">
                 {thisIsMe}
@@ -373,21 +373,21 @@ function SpeakerPicker({
           </div>
         )}
         {filteredParticipants.length > 0 && (
-          <div className="p-1 border-b border-border/70">
-            <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+          <div className="p-1 border-b border-default/70">
+            <div className="px-2 py-1 text-[11px] font-medium text-secondary">
               {t("notes.speaker.meetingAttendees")}
             </div>
             {filteredParticipants.slice(0, 5).map((p) => (
               <button
                 key={p.email}
                 onClick={() => onSelectName(p.displayName || p.email.split("@")[0], p.email)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-primary/70 hover:bg-text-primary/5 transition-colors cursor-pointer"
               >
                 <span dir="auto" className="truncate flex-1 text-start">
                   {p.displayName || p.email}
                 </span>
                 {p.displayName && (
-                  <span dir="ltr" className="text-foreground/45 truncate text-[11px]">
+                  <span dir="ltr" className="text-primary/45 truncate text-[11px]">
                     {p.email}
                   </span>
                 )}
@@ -396,21 +396,21 @@ function SpeakerPicker({
           </div>
         )}
         {filteredProfiles.length > 0 && (
-          <div className="p-1 border-b border-border/70">
-            <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+          <div className="p-1 border-b border-default/70">
+            <div className="px-2 py-1 text-[11px] font-medium text-secondary">
               {t("notes.speaker.knownSpeakers")}
             </div>
             {filteredProfiles.slice(0, 5).map((p) => (
               <button
                 key={p.id ?? `name-${p.display_name}`}
                 onClick={() => onSelectName(p.display_name, p.email, p.id)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-primary/70 hover:bg-text-primary/5 transition-colors cursor-pointer"
               >
                 <span dir="auto" className="truncate flex-1 text-start">
                   {p.display_name}
                 </span>
                 {p.email && (
-                  <span dir="ltr" className="text-foreground/45 truncate text-[11px]">
+                  <span dir="ltr" className="text-primary/45 truncate text-[11px]">
                     {p.email}
                   </span>
                 )}
@@ -422,22 +422,20 @@ function SpeakerPicker({
           <div className="p-1">
             <button
               onClick={submitCreate}
-              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-primary/70 hover:bg-text-primary/5 transition-colors cursor-pointer"
             >
-              <span className="text-foreground/50 shrink-0">
-                {t("notes.speaker.createNewPrefix")}
-              </span>
+              <span className="text-primary/50 shrink-0">{t("notes.speaker.createNewPrefix")}</span>
               {inputIsEmail ? (
                 <>
-                  <span dir="auto" className="text-foreground truncate">
+                  <span dir="auto" className="text-primary truncate">
                     {nameFromEmail(trimmed)}
                   </span>
-                  <span dir="ltr" className="text-foreground/45 truncate text-[11px]">
+                  <span dir="ltr" className="text-primary/45 truncate text-[11px]">
                     {trimmed.toLowerCase()}
                   </span>
                 </>
               ) : (
-                <span dir="auto" className="text-foreground truncate">
+                <span dir="auto" className="text-primary truncate">
                   {trimmed}
                 </span>
               )}
@@ -445,7 +443,7 @@ function SpeakerPicker({
           </div>
         )}
         {isEmpty && (
-          <div className="px-3 py-4 text-center text-[11px] text-foreground/45">
+          <div className="px-3 py-4 text-center text-[11px] text-primary/45">
             {t("notes.speaker.nameOrEmailPlaceholder")}
           </div>
         )}
@@ -509,7 +507,7 @@ function SpeakerLabel({
   if (hasSuggestion) {
     return (
       <span className="group inline-flex items-center gap-1 mb-0.5 px-1">
-        <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/70">
+        <span dir="auto" className="text-[11px] font-medium italic text-secondary/70">
           {isYouSpeakerName(segment.suggestedName!, t("notes.speaker.you"))
             ? recorderLabel
             : segment.suggestedName}
@@ -523,13 +521,13 @@ function SpeakerLabel({
               segment.recorderName
             )
           }
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-emerald-500"
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-secondary hover:text-green"
         >
           <Check size={12} />
         </button>
         <button
           onClick={() => onDismiss?.(speakerId)}
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-destructive"
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-secondary hover:text-red"
         >
           <X size={12} />
         </button>
@@ -557,9 +555,9 @@ function SpeakerLabel({
         <button
           className={cn(
             "inline-flex items-center text-[11px] font-medium mb-0.5 px-1.5 py-0.5 rounded-md outline-none cursor-pointer",
-            "border border-border/70 dark:border-white/20",
-            "hover:bg-foreground/5 hover:border-border/90 dark:hover:border-white/30",
-            "transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring",
+            "border border-default/70",
+            "hover:bg-text-primary/5 hover:border-default/90",
+            "transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-focus",
             SPEAKER_COLORS[colorIdx],
             isUnmapped && "border-dashed",
             speakerState === "provisional" && "italic"
@@ -605,8 +603,8 @@ function SelectCheckbox({
       className={cn(
         "w-4 h-4 rounded-full border flex items-center justify-center transition-all cursor-pointer",
         isSelected
-          ? "border-primary bg-primary text-primary-foreground opacity-100"
-          : "border-border/70 bg-background/80 opacity-0 group-hover:opacity-100 hover:border-foreground/50",
+          ? "border-brand-solid bg-brand-solid text-on-solid opacity-100"
+          : "border-default/70 bg-surface-primary/80 opacity-0 group-hover:opacity-100 hover:border-text-primary/50",
         className
       )}
     >
@@ -638,15 +636,15 @@ export function SelectionBar({
   );
   return (
     <div
-      className="flex items-center gap-3 rounded-md border border-border/70 bg-surface-2/95 backdrop-blur px-3 py-1.5 text-xs shadow-lg"
+      className="flex items-center gap-3 rounded-md border border-default/70 bg-surface-primary/95 backdrop-blur px-3 py-1.5 text-xs shadow-lg"
       style={{ animation: "agent-message-in 150ms ease-out both" }}
     >
-      <span className="text-foreground/70 tabular-nums">
+      <span className="text-primary/70 tabular-nums">
         {t("notes.speaker.selected", { n: selectedSegments.length })}
       </span>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-foreground hover:bg-foreground/10 transition-colors cursor-pointer">
+          <button className="inline-flex items-center gap-1 px-2 py-1 rounded text-primary hover:bg-text-primary/10 transition-colors cursor-pointer">
             <Users size={12} />
             {t("notes.speaker.assignTo")}
           </button>
@@ -666,7 +664,7 @@ export function SelectionBar({
       </Popover>
       <button
         onClick={onClear}
-        className="px-2 py-1 rounded text-muted-foreground hover:bg-foreground/5 hover:text-foreground transition-colors cursor-pointer"
+        className="px-2 py-1 rounded text-secondary hover:bg-text-primary/5 hover:text-primary transition-colors cursor-pointer"
       >
         {t("notes.speaker.deselectAll")}
       </button>
@@ -813,15 +811,15 @@ const SegmentRow = memo(function SegmentRow({
             "text-[13px] leading-relaxed",
             selfSide
               ? cn(
-                  "bg-primary/90 text-primary-foreground",
+                  "bg-brand-solid/90 text-on-solid",
                   sameSpeaker ? "rounded-lg rounded-ss-sm" : "rounded-lg rounded-es-sm"
                 )
               : cn(
-                  "bg-surface-2 border border-border/70 text-foreground",
+                  "bg-surface-primary border border-default/70 text-primary",
                   sameSpeaker ? "rounded-lg rounded-se-sm" : "rounded-lg rounded-ee-sm",
                   isSystemSpeaker && cn("border-s-2", SPEAKER_BORDER_COLORS[colorIdx])
                 ),
-            isSelected && "ring-2 ring-primary/60"
+            isSelected && "ring-2 ring-brand-solid/60"
           )}
         >
           <span dir="auto">{segment.text}</span>
@@ -986,7 +984,7 @@ export function MeetingTranscriptChat({
     return (
       <div className="h-full flex flex-col">
         <div className="flex-1 flex items-center justify-center px-5">
-          <p className="text-xs text-muted-foreground/70 select-none">
+          <p className="text-xs text-secondary/70 select-none">
             {t("notes.editor.conversationWillAppear")}
           </p>
         </div>
@@ -1005,16 +1003,16 @@ export function MeetingTranscriptChat({
     <div className="h-full flex flex-col">
       {(isRecording || isDiarizing) && (
         <div className={cn("shrink-0 px-4 pt-2 mb-1.5", contentClassName)}>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 rounded-lg border border-border/70 bg-surface-2/40 text-xs text-foreground">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 rounded-lg border border-default/70 bg-surface-primary/40 text-xs text-primary">
             <div className="flex items-center gap-1.5 min-w-0">
               {isDiarizing ? (
-                <Loader2 size={12} className="animate-spin text-muted-foreground shrink-0" />
+                <Loader2 size={12} className="animate-spin text-secondary shrink-0" />
               ) : (
                 <Sparkles
                   size={12}
                   className={cn(
                     "shrink-0",
-                    sessionDiarizationEnabled ? "text-primary" : "text-muted-foreground"
+                    sessionDiarizationEnabled ? "text-brand-solid" : "text-secondary"
                   )}
                 />
               )}
@@ -1026,7 +1024,7 @@ export function MeetingTranscriptChat({
                     : t("notes.speaker.pill.notLabeled")}
               </span>
               {showAssumedHint && (
-                <span className="text-muted-foreground truncate">
+                <span className="text-secondary truncate">
                   {t("notes.speaker.pill.assumedHint")}
                 </span>
               )}
@@ -1034,14 +1032,12 @@ export function MeetingTranscriptChat({
             <div className="flex-1" />
             {!isDiarizing && sessionDiarizationEnabled && (
               <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground">
-                  {t("notes.speaker.pill.speakersLabel")}
-                </span>
-                <div className="flex items-center gap-0.5 rounded-md border border-border bg-surface-2/60">
+                <span className="text-secondary">{t("notes.speaker.pill.speakersLabel")}</span>
+                <div className="flex items-center gap-0.5 rounded-md border border-default bg-surface-primary/60">
                   <button
                     onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount - 1)}
                     disabled={sessionExpectedCount <= 1}
-                    className="px-1.5 py-0.5 rounded-s-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    className="px-1.5 py-0.5 rounded-s-md hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                     aria-label={t("notes.speaker.pill.decAria")}
                   >
                     −
@@ -1054,7 +1050,7 @@ export function MeetingTranscriptChat({
                   <button
                     onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount + 1)}
                     disabled={sessionExpectedCount >= MAX_SPEAKER_COUNT}
-                    className="px-1.5 py-0.5 rounded-e-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    className="px-1.5 py-0.5 rounded-e-md hover:bg-state-hover focus-visible:bg-state-hover focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                     aria-label={t("notes.speaker.pill.incAria")}
                   >
                     +
@@ -1066,7 +1062,7 @@ export function MeetingTranscriptChat({
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => onSetSessionDiarizationEnabled?.(!sessionDiarizationEnabled)}
-                  className="text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:underline"
+                  className="text-secondary hover:text-primary transition-colors focus-visible:outline-none focus-visible:underline"
                   aria-label={t("notes.speaker.pill.toggleAria")}
                 >
                   {t("notes.speaker.pill.labelToggle")}

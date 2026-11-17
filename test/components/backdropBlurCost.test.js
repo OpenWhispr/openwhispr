@@ -27,15 +27,15 @@ function cardClass(html) {
 }
 
 for (const [state, tint] of [
-  ["processing", "accent"],
-  ["success", "success"],
+  ["processing", "accent-solid"],
+  ["success", "green-solid"],
 ]) {
   test(`on Linux the ${state} overlay draws no backdrop blur and an opaque ${tint} card`, async (t) => {
     const html = await renderActionOverlay(t, "linux", state);
     const card = cardClass(html);
 
     assert.doesNotMatch(html, /backdrop-blur/);
-    assert.match(html, /bg-background\/90/);
+    assert.match(html, /bg-surface-primary\/90/);
     // The tint is mixed into the background, so the unblurred scanner line can't run through
     // the label.
     assert.match(card, new RegExp(`bg-\\[color-mix\\(in_oklab,var\\(--color-${tint}\\)_6%`));
@@ -48,9 +48,9 @@ test("on macOS a running action keeps its blur and translucent tints", async (t)
   const html = await renderActionOverlay(t, "darwin", "processing");
   const card = cardClass(html);
 
-  assert.match(html, /bg-background\/60/);
+  assert.match(html, /bg-surface-primary\/60/);
   assert.match(html, /backdrop-blur-md/);
-  assert.match(card, /bg-accent\/6(?!\d)/);
+  assert.match(card, /bg-accent-solid\/6(?!\d)/);
   assert.match(card, /backdrop-blur-xl/);
   assert.doesNotMatch(card, /color-mix/);
 });

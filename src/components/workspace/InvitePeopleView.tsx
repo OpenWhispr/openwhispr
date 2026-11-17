@@ -89,11 +89,11 @@ const ROLE_ICON: Record<(typeof ROLES)[number], IconComponent> = {
 export const SUGGESTION_MIN_CHARS = 2;
 
 const BUTTON_BASE =
-  "flex h-[38px] w-full items-center justify-center gap-2 rounded-full px-4 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
-const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-primary text-primary-foreground hover:bg-primary/90");
+  "flex h-[38px] w-full items-center justify-center gap-2 rounded-full px-4 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50";
+const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-brand-solid text-on-solid hover:bg-brand-solid/90");
 const SECONDARY_BUTTON = cn(
   BUTTON_BASE,
-  "bg-surface-1 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
+  "bg-surface-secondary text-secondary hover:bg-surface-tertiary hover:text-primary"
 );
 
 // The interpolation values of a chip's error line. `email` is left to the caller, which isolates
@@ -374,10 +374,10 @@ export function InvitePeopleView({
               {heading?.description ??
                 t("workspaces.invite.description", { workspace: isolate(workspaceName) })}
             </DialogDescription>
-            {seatLine ? <p className="text-xs text-muted-foreground">{seatLine}</p> : null}
-            {seatCostLine ? <p className="text-xs text-muted-foreground">{seatCostLine}</p> : null}
+            {seatLine ? <p className="text-xs text-secondary">{seatLine}</p> : null}
+            {seatCostLine ? <p className="text-xs text-secondary">{seatCostLine}</p> : null}
             {state.attached.length > 0 ? (
-              <p role="status" className="text-xs font-medium text-foreground">
+              <p role="status" className="text-xs font-medium text-primary">
                 {t("workspaces.invite.attachedBody", { count: state.attached.length })}
               </p>
             ) : null}
@@ -392,8 +392,8 @@ export function InvitePeopleView({
                 <div
                   onClick={() => inputRef.current?.focus()}
                   className={cn(
-                    "flex max-h-[104px] min-h-[38px] cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl bg-surface-1 px-2 py-1 ring-1 ring-inset ring-black/[0.06] transition-shadow dark:bg-surface-window dark:ring-0",
-                    "focus-within:ring-2 focus-within:ring-ring/40 dark:focus-within:ring-2",
+                    "flex max-h-[104px] min-h-[38px] cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl bg-surface-secondary px-2 py-1 ring-1 ring-inset ring-border-default transition-shadow dark:ring-0",
+                    "focus-within:ring-2 focus-within:ring-focus/40 dark:focus-within:ring-2",
                     sending && "opacity-60"
                   )}
                 >
@@ -444,7 +444,7 @@ export function InvitePeopleView({
                     }}
                     onKeyDown={handleKeyDown}
                     onBlur={() => dispatch({ type: "commit" })}
-                    className="input-inline h-7 min-w-[8rem] flex-1 bg-transparent px-1 text-base text-foreground outline-none placeholder:text-muted-foreground"
+                    className="input-inline h-7 min-w-[8rem] flex-1 bg-transparent px-1 text-base text-primary outline-none placeholder:text-secondary"
                   />
                 </div>
                 {listOpen ? (
@@ -452,7 +452,7 @@ export function InvitePeopleView({
                     id={listId}
                     role="listbox"
                     aria-label={t("workspaces.invite.suggestions")}
-                    className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg"
+                    className="absolute inset-x-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-default bg-surface-primary p-1.5 text-primary shadow-lg"
                   >
                     {suggestions.map((suggestion, index) => (
                       <div
@@ -466,23 +466,20 @@ export function InvitePeopleView({
                         onClick={() => pick(suggestion)}
                         className={cn(
                           "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm",
-                          index === active && "bg-muted"
+                          index === active && "bg-surface-secondary"
                         )}
                       >
-                        <Mail
-                          className="size-3.5 shrink-0 text-muted-foreground"
-                          aria-hidden="true"
-                        />
+                        <Mail className="size-3.5 shrink-0 text-secondary" aria-hidden="true" />
                         <span className="flex min-w-0 flex-col">
                           {suggestion.name ? (
-                            <span dir="auto" className="truncate text-foreground">
+                            <span dir="auto" className="truncate text-primary">
                               {suggestion.name}
                             </span>
                           ) : null}
                           <span
                             className={cn(
                               "truncate",
-                              suggestion.name ? "text-xs text-muted-foreground" : "text-foreground"
+                              suggestion.name ? "text-xs text-secondary" : "text-primary"
                             )}
                           >
                             <bdi dir="ltr">{suggestion.email}</bdi>
@@ -495,7 +492,7 @@ export function InvitePeopleView({
               </div>
               {/* The hint steps aside while a bar has something more specific to say. */}
               {errorBar || warningBars.length > 0 ? null : (
-                <p id={hintId} className="text-xs text-muted-foreground">
+                <p id={hintId} className="text-xs text-secondary">
                   {t("workspaces.invite.emailHint")}
                 </p>
               )}
@@ -511,21 +508,18 @@ export function InvitePeopleView({
                   // Radix owns the trigger's id, which its menu is labelled by.
                   aria-labelledby={`${roleLabelId} ${roleValueId}`}
                   disabled={sending || confirmed}
-                  className="flex min-h-[52px] w-full items-center gap-2.5 rounded-xl bg-surface-1 px-3 py-2 text-start text-foreground outline-none ring-1 ring-inset ring-black/[0.06] transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-window dark:ring-0 dark:hover:bg-surface-1"
+                  className="flex min-h-[52px] w-full items-center gap-2.5 rounded-xl bg-surface-secondary px-3 py-2 text-start text-primary outline-none ring-1 ring-inset ring-border-default transition-colors hover:bg-surface-primary focus-visible:ring-2 focus-visible:ring-focus/40 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-secondary dark:ring-0 dark:hover:bg-surface-secondary"
                 >
-                  <RoleIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <RoleIcon className="size-4 shrink-0 text-secondary" aria-hidden="true" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span id={roleValueId} className="truncate text-sm">
                       {t(`workspaces.invite.role.${state.role}`)}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="truncate text-xs text-secondary">
                       {t(`workspaces.invite.roleDescription.${state.role}`)}
                     </span>
                   </span>
-                  <ChevronDown
-                    className="size-4 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
+                  <ChevronDown className="size-4 shrink-0 text-secondary" aria-hidden="true" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   aria-labelledby={roleLabelId}
@@ -544,23 +538,23 @@ export function InvitePeopleView({
                         <DropdownMenuRadioItem
                           key={role}
                           value={role}
-                          className="items-start gap-2.5 rounded-lg px-2.5 py-2 ps-2.5 pe-2.5 data-[state=checked]:bg-muted focus:bg-muted [&>span:first-child]:hidden"
+                          className="items-start gap-2.5 rounded-lg px-2.5 py-2 ps-2.5 pe-2.5 data-[state=checked]:bg-surface-secondary focus:bg-surface-secondary [&>span:first-child]:hidden"
                         >
                           <Icon
-                            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                            className="mt-0.5 size-3.5 shrink-0 text-secondary"
                             aria-hidden="true"
                           />
                           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                            <span className="text-sm text-foreground">
+                            <span className="text-sm text-primary">
                               {t(`workspaces.invite.role.${role}`)}
                             </span>
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-xs text-secondary">
                               {t(`workspaces.invite.roleDescription.${role}`)}
                             </span>
                           </span>
                           {role === state.role ? (
                             <Check
-                              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                              className="mt-0.5 size-3.5 shrink-0 text-secondary"
                               aria-hidden="true"
                             />
                           ) : null}
@@ -597,7 +591,7 @@ export function InvitePeopleView({
               disabled={sending || confirmed || !summary.canSend}
               className={cn(
                 PRIMARY_BUTTON,
-                confirmed && "bg-success text-success-foreground disabled:opacity-100"
+                confirmed && "bg-green-solid text-on-solid disabled:opacity-100"
               )}
             >
               {confirmed ? (
@@ -682,7 +676,7 @@ function RecipientChip({
         </>
       ) : (
         <>
-          <Mail className="me-1 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Mail className="me-1 size-3.5 shrink-0 text-secondary" aria-hidden="true" />
           <bdi dir="ltr" className="truncate">
             {recipient.email}
           </bdi>
@@ -731,7 +725,7 @@ function InviteDoneContent({
         <div
           className={cn(
             "flex size-[42px] items-center justify-center rounded-full",
-            undelivered ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
+            undelivered ? "bg-amber-solid/10 text-amber" : "bg-green-solid/10 text-green"
           )}
         >
           {undelivered ? (
@@ -767,7 +761,7 @@ function InviteDoneContent({
         </DialogDescription>
       </div>
       {sent.length > 0 && attachedCount > 0 ? (
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-xs text-secondary">
           {t("workspaces.invite.attachedBody", { count: attachedCount })}
         </p>
       ) : null}
@@ -779,7 +773,7 @@ function InviteDoneContent({
       ) : null}
       {skippedMessage ? <WorkspaceErrorBar tone="warning" message={skippedMessage} /> : null}
       {skippedEmails.length > 0 ? (
-        <ul className="max-h-24 overflow-y-auto text-xs text-muted-foreground">
+        <ul className="max-h-24 overflow-y-auto text-xs text-secondary">
           {skippedEmails.map((email) => (
             <li key={email} className="truncate">
               <bdi dir="ltr">{email}</bdi>

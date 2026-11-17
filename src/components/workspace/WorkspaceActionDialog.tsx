@@ -30,7 +30,7 @@ export interface WorkspaceActionDialogProps {
 }
 
 const BUTTON_BASE =
-  "flex h-10 w-full items-center justify-center rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
+  "flex h-10 w-full items-center justify-center rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary disabled:pointer-events-none disabled:opacity-50";
 
 export function WorkspaceActionDialog({
   open,
@@ -73,7 +73,7 @@ export function WorkspaceActionDialog({
         className="w-[420px] max-w-[calc(100vw-32px)] items-stretch gap-7 rounded-[28px] p-5 sm:max-w-[420px]"
       >
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">
+          <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-tertiary text-primary">
             <Icon className="size-3.5" aria-hidden="true" />
           </div>
           <DialogTitle className="text-lg font-medium tracking-normal leading-snug">
@@ -88,7 +88,7 @@ export function WorkspaceActionDialog({
         {children}
 
         {error ? (
-          <p role="alert" className="text-center text-sm text-destructive">
+          <p role="alert" className="text-center text-sm text-red">
             {error}
           </p>
         ) : null}
@@ -101,8 +101,8 @@ export function WorkspaceActionDialog({
             className={cn(
               BUTTON_BASE,
               primary.tone === "destructive"
-                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                : "bg-primary text-primary-foreground hover:bg-primary/90"
+                ? "bg-red-solid text-on-solid hover:bg-red-solid/90"
+                : "bg-brand-solid text-on-solid hover:bg-brand-solid/90"
             )}
           >
             {primary.pending ? (
@@ -117,7 +117,7 @@ export function WorkspaceActionDialog({
               onClick={onDismiss}
               className={cn(
                 BUTTON_BASE,
-                "bg-surface-1 text-muted-foreground hover:bg-surface-3 hover:text-foreground"
+                "bg-surface-secondary text-secondary hover:bg-surface-tertiary hover:text-primary"
               )}
             >
               {cancelLabel}

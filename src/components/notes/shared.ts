@@ -141,21 +141,21 @@ export function notesEmptyTitleKey(inFolder: boolean): string {
 
 export const notesInputClass = cn(
   "w-full h-8 px-3 rounded-md text-xs",
-  "bg-foreground/3 dark:bg-white/4 border border-border/70 dark:border-white/10",
-  "text-foreground/80 placeholder:text-foreground/45 outline-none",
-  "focus:border-primary/30 transition-colors duration-150"
+  "bg-text-primary/3 border border-default/70",
+  "text-primary/80 placeholder:text-primary/45 outline-none",
+  "focus:border-brand-solid/30 transition-colors duration-150"
 );
 
 export const notesTextareaClass = cn(
   "w-full px-3 py-2 rounded-md text-xs leading-relaxed resize-none",
-  "bg-foreground/3 dark:bg-white/4 border border-border/70 dark:border-white/10",
-  "text-foreground/80 placeholder:text-foreground/45 outline-none",
-  "focus:border-primary/30 transition-colors duration-150"
+  "bg-text-primary/3 border border-default/70",
+  "text-primary/80 placeholder:text-primary/45 outline-none",
+  "focus:border-brand-solid/30 transition-colors duration-150"
 );
 
 /** Neutral capsule for note header facts (date + attendees, folder, space). */
 export const NOTE_META_CHIP_CLASS = cn(
-  "inline-flex h-[26px] items-center gap-2 rounded-full bg-surface-3 px-2.5 text-xs font-medium text-foreground/70",
-  "hover:bg-surface-raised hover:text-foreground dark:bg-surface-2 dark:hover:bg-surface-3",
-  "cursor-pointer outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring/30"
+  "inline-flex h-[26px] items-center gap-2 rounded-full bg-surface-tertiary px-2.5 text-xs font-medium text-primary/70",
+  "hover:bg-surface-tertiary hover:text-primary dark:bg-surface-primary dark:hover:bg-surface-tertiary",
+  "cursor-pointer outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-focus/30"
 );

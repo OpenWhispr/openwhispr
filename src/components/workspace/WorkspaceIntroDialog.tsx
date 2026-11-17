@@ -16,11 +16,11 @@ export const WORKSPACE_INTRO_STEPS: ReadonlyArray<{ id: IntroStepId; image: stri
 ];
 
 const MOCK_CARD =
-  "absolute overflow-hidden rounded-xl border border-border bg-surface-1 text-start shadow-[0_4px_10px_rgba(0,0,0,0.12)]";
+  "absolute overflow-hidden rounded-xl border border-default bg-surface-secondary text-start shadow-[0_4px_10px_rgba(0,0,0,0.12)]";
 const MOCK_ICON =
-  "flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-3 text-foreground";
+  "flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-tertiary text-primary";
 const PILL_BUTTON =
-  "flex h-10 items-center justify-center gap-2 rounded-full text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "flex h-10 items-center justify-center gap-2 rounded-full text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary";
 
 function WorkspaceMock({ workspaceName }: { workspaceName: string }): ReactElement {
   const { t } = useTranslation();
@@ -33,22 +33,22 @@ function WorkspaceMock({ workspaceName }: { workspaceName: string }): ReactEleme
           <span className={MOCK_ICON}>
             <Building2 size={16} />
           </span>
-          <span dir="auto" className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          <span dir="auto" className="min-w-0 flex-1 truncate text-sm font-medium text-primary">
             {workspaceName}
           </span>
-          <Check size={16} className="shrink-0 text-primary" />
+          <Check size={16} className="shrink-0 text-brand-solid" />
         </div>
       </div>
       <div
         className={cn(
           MOCK_CARD,
-          "bottom-[70px] left-[calc(50%+97px)] flex -translate-x-1/2 items-center gap-1 border-border-hover py-1.5 ps-1 pe-3.5"
+          "bottom-[70px] left-[calc(50%+97px)] flex -translate-x-1/2 items-center gap-1 border-hover py-1.5 ps-1 pe-3.5"
         )}
       >
-        <span className="flex p-1.5 text-muted-foreground">
+        <span className="flex p-1.5 text-secondary">
           <Plus size={16} />
         </span>
-        <span className="whitespace-nowrap text-base font-medium text-muted-foreground">
+        <span className="whitespace-nowrap text-base font-medium text-secondary">
           {t("workspaces.switcher.add")}
         </span>
       </div>
@@ -59,8 +59,8 @@ function WorkspaceMock({ workspaceName }: { workspaceName: string }): ReactEleme
 function SkeletonRow(): ReactElement {
   return (
     <div className="flex flex-col gap-1.5 py-1">
-      <span className="h-2.5 w-28 rounded-full bg-foreground/15" />
-      <span className="h-2 w-12 rounded-full bg-foreground/8" />
+      <span className="h-2.5 w-28 rounded-full bg-text-primary/15" />
+      <span className="h-2 w-12 rounded-full bg-text-primary/8" />
     </div>
   );
 }
@@ -78,13 +78,13 @@ function TeamspacesMock({ workspaceName }: { workspaceName: string }): ReactElem
         <span className={MOCK_ICON}>
           <Building2 size={16} />
         </span>
-        <span dir="auto" className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+        <span dir="auto" className="min-w-0 flex-1 truncate text-sm font-medium text-primary">
           {workspaceName}
         </span>
-        <ChevronDown size={16} className="shrink-0 text-muted-foreground" />
+        <ChevronDown size={16} className="shrink-0 text-secondary" />
       </div>
       <div className="flex flex-col gap-3 py-3 ps-[52px] pe-3">
-        <span className="truncate text-sm font-medium text-foreground">
+        <span className="truncate text-sm font-medium text-primary">
           {t("notes.spaces.personal")}
         </span>
         <SkeletonRow />
@@ -137,7 +137,7 @@ export function WorkspaceIntroCard({
           <DialogTitle className="text-lg font-medium leading-[1.4] tracking-normal">
             {t(`workspaces.intro.${id}.title`)}
           </DialogTitle>
-          <DialogDescription className="text-sm leading-normal text-muted-foreground">
+          <DialogDescription className="text-sm leading-normal text-secondary">
             {t(`workspaces.intro.${id}.body`)}
           </DialogDescription>
         </div>
@@ -154,7 +154,7 @@ export function WorkspaceIntroCard({
                 data-intro-progress={index === step ? "active" : "inactive"}
                 className={cn(
                   "h-1 w-[15px] rounded-full",
-                  index <= step ? "bg-primary" : "bg-surface-3"
+                  index <= step ? "bg-brand-solid" : "bg-surface-tertiary"
                 )}
               />
             ))}
@@ -165,7 +165,7 @@ export function WorkspaceIntroCard({
               <button
                 type="button"
                 onClick={onFinish}
-                className={cn(PILL_BUTTON, "px-4 text-muted-foreground hover:text-foreground")}
+                className={cn(PILL_BUTTON, "px-4 text-secondary hover:text-primary")}
               >
                 {t("common.skip")}
               </button>
@@ -177,7 +177,7 @@ export function WorkspaceIntroCard({
               onClick={isLast ? onFinish : onNext}
               className={cn(
                 PILL_BUTTON,
-                "bg-primary px-5 text-primary-foreground hover:bg-primary/90"
+                "bg-brand-solid px-5 text-on-solid hover:bg-brand-solid/90"
               )}
             >
               {isLast ? t("workspaces.intro.getStarted") : t("common.next")}

@@ -297,12 +297,15 @@ export default function SpaceSettingsDialog({
   const general = (
     <div className="space-y-3">
       {cloudSpaceId && directoryFailed && (
-        <div className="flex items-center justify-between gap-3 rounded-xl bg-surface-1 px-3.5 py-2.5 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between gap-3 rounded-xl bg-surface-secondary px-3.5 py-2.5 text-xs text-secondary">
           <p role="alert">{t("settingsPage.workspace.teamspaces.settings.flagsFailed")}</p>
           <button
             type="button"
             onClick={() => void directory.reload()}
-            className={cn(ROW_BUTTON_CLASS, "bg-surface-3 text-foreground hover:bg-surface-raised")}
+            className={cn(
+              ROW_BUTTON_CLASS,
+              "bg-surface-tertiary text-primary hover:bg-surface-tertiary"
+            )}
           >
             {t("settingsPage.workspace.teamspaces.retry")}
           </button>
@@ -357,7 +360,7 @@ export default function SpaceSettingsDialog({
               aria-busy={checkingLeave}
               className={cn(
                 ROW_BUTTON_CLASS,
-                "gap-1.5 bg-surface-3 text-foreground hover:bg-surface-raised"
+                "gap-1.5 bg-surface-tertiary text-primary hover:bg-surface-tertiary"
               )}
             >
               {checkingLeave && <Loader2 className="size-3 animate-spin" aria-hidden="true" />}
@@ -393,7 +396,7 @@ export default function SpaceSettingsDialog({
               }}
               className={cn(
                 ROW_BUTTON_CLASS,
-                "bg-destructive/10 text-destructive hover:bg-destructive/20 disabled:cursor-not-allowed disabled:opacity-50"
+                "bg-red-solid/10 text-red hover:bg-red-solid/20 disabled:cursor-not-allowed disabled:opacity-50"
               )}
             >
               {t("settingsPage.workspace.teamspaces.settings.deleteAction")}
@@ -440,7 +443,7 @@ export default function SpaceSettingsDialog({
                       if (event.key === "Enter" && !event.nativeEvent.isComposing)
                         void commitName();
                     }}
-                    className={cn(INLINE_FIELD_CLASS, "h-8 text-lg font-medium text-foreground")}
+                    className={cn(INLINE_FIELD_CLASS, "h-8 text-lg font-medium text-primary")}
                   />
                   {cloudSpaceId && !directoryFailed && (
                     <textarea
@@ -468,7 +471,7 @@ export default function SpaceSettingsDialog({
                       }}
                       className={cn(
                         INLINE_FIELD_CLASS,
-                        "max-h-28 overflow-y-auto py-0.5 text-sm text-muted-foreground [field-sizing:content]"
+                        "max-h-28 overflow-y-auto py-0.5 text-sm text-secondary [field-sizing:content]"
                       )}
                     />
                   )}
@@ -559,7 +562,7 @@ function HeaderTile({ emoji, name, editable, onEmojiChange }: HeaderTileProps): 
   const { t } = useTranslation();
   const [pickerOpen, setPickerOpen] = useState(false);
   const tileClass =
-    "flex size-[42px] shrink-0 items-center justify-center rounded-full bg-surface-3";
+    "flex size-[42px] shrink-0 items-center justify-center rounded-full bg-surface-tertiary";
 
   if (!editable) {
     return (
@@ -577,7 +580,7 @@ function HeaderTile({ emoji, name, editable, onEmojiChange }: HeaderTileProps): 
           title={t("notes.spaces.changeEmoji")}
           className={cn(
             tileClass,
-            "outline-none transition-colors hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-primary/20 data-[state=open]:bg-surface-raised"
+            "outline-none transition-colors hover:bg-surface-tertiary focus-visible:ring-2 focus-visible:ring-brand-solid/20 data-[state=open]:bg-surface-tertiary"
           )}
         >
           <TileGlyph emoji={emoji} name={name} />

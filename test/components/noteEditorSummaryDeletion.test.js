@@ -41,11 +41,11 @@ function collectEditorValues(tree) {
 
 function activeSegment(segments) {
   // The active tab is the one rendered with the full-strength label colour;
-  // the inactive ones get text-foreground/60.
+  // the inactive ones get text-primary/60.
   const active = [];
   for (const [value, node] of segments) {
     const className = String(node.props.className ?? "");
-    if (/(^|\s)text-foreground($|\s)/.test(className)) active.push(value);
+    if (/(^|\s)text-primary($|\s)/.test(className)) active.push(value);
   }
   return active;
 }

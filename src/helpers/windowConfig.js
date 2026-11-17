@@ -248,8 +248,9 @@ const CONTROL_PANEL_CONFIG = {
   height: 800,
   // macOS: fully transparent, so nothing paints into the compact onboarding
   // frame's rounded corners. Windows/Linux keep an opaque backing (the renderer
-  // paints its own background on top) — see the transparent flag below.
-  backgroundColor: process.platform === "darwin" ? "#00000000" : "#1c1c2e",
+  // paints its own background on top) — see the transparent flag below. The
+  // backing is surface/secondary in Dark, the window chrome's own fill.
+  backgroundColor: process.platform === "darwin" ? "#00000000" : "#1a1a1a",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,
@@ -276,7 +277,7 @@ const CONTROL_PANEL_CONFIG = {
   // macOS only: transparent so a renderer that insets or rounds itself shows
   // the desktop rather than a square page backing bleeding out behind it. Safe
   // for the other control panel screens because each paints its own opaque
-  // background (ControlPanel's root is `bg-background`); only the compact
+  // background (ControlPanel's root is `bg-surface-primary`); only the compact
   // onboarding steps clear body/#root — see index.css. Not on Windows/Linux:
   // transparency is creation-time-only and this window outlives onboarding, and
   // on Windows `transparent` forces thickFrame:false (no maximize/Aero-snap)

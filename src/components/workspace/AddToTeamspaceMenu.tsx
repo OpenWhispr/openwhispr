@@ -233,7 +233,7 @@ export function useAddToTeamspace({
           className={MENU_PANEL}
         >
           {directory.status === "ready" && directory.spaces.length === 0 ? (
-            <DropdownMenuItem disabled className="text-sm text-muted-foreground">
+            <DropdownMenuItem disabled className="text-sm text-secondary">
               {t("settingsPage.workspace.teamspaces.addPeople.none")}
             </DropdownMenuItem>
           ) : directory.status === "ready" ? (
@@ -267,7 +267,7 @@ export function useAddToTeamspace({
             </div>
           ) : directory.status === "failed" ? (
             <>
-              <p role="status" className="px-2.5 py-2 text-sm text-muted-foreground">
+              <p role="status" className="px-2.5 py-2 text-sm text-secondary">
                 {t("settingsPage.workspace.teamspaces.addPeople.failed")}
               </p>
               <DropdownMenuItem
@@ -282,7 +282,7 @@ export function useAddToTeamspace({
               </DropdownMenuItem>
             </>
           ) : (
-            <p role="status" className="px-2.5 py-2 text-sm text-muted-foreground">
+            <p role="status" className="px-2.5 py-2 text-sm text-secondary">
               {t("settingsPage.workspace.teamspaces.addPeople.loading")}
             </p>
           )}

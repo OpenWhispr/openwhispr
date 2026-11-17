@@ -24,7 +24,7 @@ interface NoteEventPickerProps {
 }
 
 const ROW_CLASS =
-  "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-start text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer";
+  "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-start text-xs text-primary/70 hover:bg-text-primary/5 transition-colors cursor-pointer";
 
 export function EventDot({ color }: { color: string | null }) {
   return (
@@ -33,7 +33,7 @@ export function EventDot({ color }: { color: string | null }) {
       className={
         color
           ? "size-2.5 shrink-0 rounded-[3px]"
-          : "size-2.5 shrink-0 rounded-[3px] bg-foreground/30"
+          : "size-2.5 shrink-0 rounded-[3px] bg-text-primary/30"
       }
       style={color ? { backgroundColor: color } : undefined}
     />
@@ -102,12 +102,12 @@ export default function NoteEventPicker({
 
   return (
     <div ref={pickerRef} onKeyDown={handleKeyDown}>
-      <div className="flex items-center gap-1 p-2 border-b border-border/70">
+      <div className="flex items-center gap-1 p-2 border-b border-default/70">
         <button
           type="button"
           onClick={onBack}
           aria-label={t("notes.eventLink.back")}
-          className="shrink-0 p-1 rounded-md text-foreground/50 hover:bg-foreground/5 hover:text-foreground/70 transition-colors cursor-pointer"
+          className="shrink-0 p-1 rounded-md text-primary/50 hover:bg-text-primary/5 hover:text-primary/70 transition-colors cursor-pointer"
         >
           <ChevronLeft size={14} className="rtl:rotate-180" />
         </button>
@@ -117,7 +117,7 @@ export default function NoteEventPicker({
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("notes.eventLink.searchPlaceholder")}
           aria-label={t("notes.eventLink.searchPlaceholder")}
-          className="w-full px-1 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+          className="w-full px-1 py-1.5 rounded-md bg-transparent text-xs text-primary placeholder:text-primary/45 outline-none border-none appearance-none"
           autoFocus
         />
       </div>
@@ -125,7 +125,7 @@ export default function NoteEventPicker({
       <div className="max-h-64 overflow-y-auto p-1">
         {linkedEventId && (
           <button type="button" onClick={onRemove} data-event-row className={ROW_CLASS}>
-            <Unlink size={14} className="shrink-0 text-foreground/50" />
+            <Unlink size={14} className="shrink-0 text-primary/50" />
             <span>{t("notes.eventLink.removeEvent")}</span>
           </button>
         )}
@@ -141,15 +141,15 @@ export default function NoteEventPicker({
           >
             <EventDot color={event.calendar_color} />
             <span className="flex-1 min-w-0">
-              <span dir="auto" className="block truncate text-foreground/80">
+              <span dir="auto" className="block truncate text-primary/80">
                 {event.summary || t("upcoming.untitledEvent")}
               </span>
-              <span className="block truncate text-[11px] text-foreground/45">
+              <span className="block truncate text-[11px] text-primary/45">
                 {formatEventWhen(event, locale, t("notes.eventLink.allDay"))}
               </span>
             </span>
             {event.id === linkedEventId && (
-              <Check size={14} className="shrink-0 text-primary" aria-hidden="true" />
+              <Check size={14} className="shrink-0 text-brand-solid" aria-hidden="true" />
             )}
           </button>
         ))}
@@ -157,7 +157,7 @@ export default function NoteEventPicker({
         {loading && (
           <div
             role="status"
-            className="flex items-center justify-center gap-1.5 px-3 py-4 text-[11px] text-foreground/45"
+            className="flex items-center justify-center gap-1.5 px-3 py-4 text-[11px] text-primary/45"
           >
             <Loader2 size={12} className="animate-spin" aria-hidden="true" />
             {t("common.loading")}
@@ -165,7 +165,7 @@ export default function NoteEventPicker({
         )}
 
         {emptyState && (
-          <div className="px-3 py-4 text-center text-[11px] text-foreground/45">
+          <div className="px-3 py-4 text-center text-[11px] text-primary/45">
             <p>{emptyState.message}</p>
             {emptyState.hint && <p className="mt-1">{emptyState.hint}</p>}
           </div>

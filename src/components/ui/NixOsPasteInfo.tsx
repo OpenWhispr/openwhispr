@@ -30,9 +30,9 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span dir="ltr" className="inline-flex items-center gap-1 text-xs">
       {ok ? (
-        <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
+        <CircleCheck className="h-3.5 w-3.5 text-green-solid" />
       ) : (
-        <CircleX className="h-3.5 w-3.5 text-red-500" />
+        <CircleX className="h-3.5 w-3.5 text-red-solid" />
       )}
       <span className="font-mono">{label}</span>
     </span>
@@ -42,12 +42,12 @@ function StatusPill({ ok, label }: { ok: boolean; label: string }) {
 function CodeBlock({ code, copyLabel }: { code: string; copyLabel: string }) {
   return (
     <div dir="ltr" className="flex items-start gap-1.5">
-      <pre className="flex-1 text-[11px] bg-muted/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto">
+      <pre className="flex-1 text-[11px] bg-surface-secondary/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto">
         {code}
       </pre>
       <button
         onClick={() => navigator.clipboard.writeText(code).catch(() => {})}
-        className="shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+        className="shrink-0 p-1.5 rounded-md hover:bg-surface-secondary transition-colors text-secondary hover:text-primary"
         title={copyLabel}
       >
         <Copy className="w-3.5 h-3.5" />
@@ -61,8 +61,8 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
   const copyLabel = t("settingsPage.general.waylandPaste.copy", { defaultValue: "Copy" });
 
   return (
-    <div className="rounded-xl border border-border p-4 space-y-4">
-      <p className="text-sm text-muted-foreground">
+    <div className="rounded-xl border border-default p-4 space-y-4">
+      <p className="text-sm text-secondary">
         {t("settingsPage.general.waylandPaste.nixos.intro", {
           defaultValue:
             "You're on NixOS. Auto-paste needs ydotool and /dev/uinput access, which NixOS grants declaratively.",
@@ -70,7 +70,7 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
       </p>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-secondary">
           {t("settingsPage.general.waylandPaste.nixos.detected", {
             defaultValue: "Detected",
           })}
@@ -88,7 +88,7 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
             defaultValue: "Add this to your configuration",
           })}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-secondary">
           {t("settingsPage.general.waylandPaste.nixos.manualDesc", {
             defaultValue: "Configure it yourself, then rebuild.",
           })}
@@ -102,7 +102,7 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
             defaultValue: "Installing via our flake?",
           })}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-secondary">
           {t("settingsPage.general.waylandPaste.nixos.flakeDesc", {
             defaultValue:
               "If you install OpenWhispr from the flake, programs.openwhispr.enable turns on ydotool, the uinput module and the group memberships for you.",
@@ -111,7 +111,7 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
         <CodeBlock code={FLAKE_CONFIG} copyLabel={copyLabel} />
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-secondary">
         {t("settingsPage.general.waylandPaste.nixos.rebuildNote", {
           defaultValue:
             "Run sudo nixos-rebuild switch, then log out and back in so the group change and the /dev/uinput rule take effect. Replace <you> with your username.",
@@ -120,7 +120,7 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
 
       <button
         onClick={onRecheck}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        className="flex items-center gap-1.5 text-xs text-secondary hover:text-primary transition-colors"
       >
         <RotateCw className="w-3 h-3" />
         {t("settingsPage.general.waylandPaste.recheck", { defaultValue: "Re-check" })}

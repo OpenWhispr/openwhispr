@@ -27,7 +27,7 @@ import gmailMark from "../../assets/icons/gmail.svg";
  * settling in about a second: an acknowledgement, not a continuous stream.
  */
 const CONFETTI_BASE = {
-  // --color-primary and two lighter tints of it, plus one warm accent.
+  // --color-brand-solid and two lighter tints of it, plus one warm accent.
   colors: ["#4577e9", "#7da2f2", "#b9cdf8", "#f5c518"],
   shapes: ["circle", "square"] as ("circle" | "square")[],
   particleCount: 36,

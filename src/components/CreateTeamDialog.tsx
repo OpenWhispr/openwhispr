@@ -296,11 +296,11 @@ function CreateTeamForm({
   // A selection arrives with its people chosen, so the note leads and the chips follow it.
   const note =
     isCreating && emails.length > 0 ? (
-      <p role="status" className="text-xs leading-snug text-muted-foreground">
+      <p role="status" className="text-xs leading-snug text-secondary">
         {t(`${FORM_KEY}.creatingStatus`, { team: isolate(name.trim()), count: emails.length })}
       </p>
     ) : (
-      <p className="text-xs leading-snug text-muted-foreground">
+      <p className="text-xs leading-snug text-secondary">
         {t(selectionFirst ? `${FORM_KEY}.adminNoteShort` : `${FORM_KEY}.adminNote`)}
       </p>
     );
@@ -314,7 +314,7 @@ function CreateTeamForm({
   return (
     <>
       <DialogHeader className="items-center gap-3 space-y-0 text-center sm:text-center">
-        <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">
+        <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-tertiary text-primary">
           <Users className="size-3.5" aria-hidden="true" />
         </div>
         <div className="flex flex-col items-center gap-1.5">
@@ -359,8 +359,8 @@ function CreateTeamForm({
             {t(`${FORM_KEY}.people`)}
           </label>
           {loadFailed ? (
-            <div className="flex items-center justify-between gap-2 rounded border border-border/70 px-3 py-2.5 dark:border-border-subtle/60">
-              <p className="text-xs text-muted-foreground">
+            <div className="flex items-center justify-between gap-2 rounded border border-default/70 px-3 py-2.5 dark:border-default/60">
+              <p className="text-xs text-secondary">
                 {t("settingsPage.workspace.members.loadError")}
               </p>
               <Button
@@ -394,7 +394,7 @@ function CreateTeamForm({
               {selectionFirst ? null : note}
             </>
           ) : loadFailed ? null : (
-            <div className="h-[38px] animate-pulse rounded-xl bg-foreground/5 dark:bg-white/5" />
+            <div className="h-[38px] animate-pulse rounded-xl bg-text-primary/5" />
           )}
           {peopleError}
           {emails.length > 0 && !isCreating && (

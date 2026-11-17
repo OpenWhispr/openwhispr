@@ -44,14 +44,14 @@ export default function LeaderboardPreview({
     <section
       data-leaderboard-state={dataState}
       className={cn(
-        "relative min-h-96 overflow-hidden rounded-2xl border border-border/70 bg-card/70 dark:border-white/10",
+        "relative min-h-96 overflow-hidden rounded-2xl border border-default/70 bg-surface-primary/70",
         className
       )}
     >
       <div className="pointer-events-none select-none opacity-35 blur-[1px]" aria-hidden="true">
-        <div className="flex items-center gap-2 border-b border-border/70 px-5 py-4">
-          <Trophy size={17} className="text-amber-500" />
-          <div className="h-4 w-28 rounded bg-foreground/20" />
+        <div className="flex items-center gap-2 border-b border-default/70 px-5 py-4">
+          <Trophy size={17} className="text-amber-solid" />
+          <div className="h-4 w-28 rounded bg-text-primary/20" />
         </div>
 
         <div className="grid grid-cols-3 items-end gap-3 px-8 py-6">
@@ -59,21 +59,21 @@ export default function LeaderboardPreview({
             <div
               key={rank}
               className={cn(
-                "flex flex-col items-center rounded-xl border border-border/70 bg-background/40 px-3 py-4",
+                "flex flex-col items-center rounded-xl border border-default/70 bg-surface-primary/40 px-3 py-4",
                 rank === 1 && "py-6"
               )}
             >
-              <div className="flex size-10 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+              <div className="flex size-10 items-center justify-center rounded-full bg-surface-secondary text-xs font-semibold text-secondary">
                 {rank}
               </div>
-              <div className="mt-3 h-3 w-20 rounded bg-foreground/20" />
-              <div className="mt-2 h-4 w-14 rounded bg-foreground/25" />
+              <div className="mt-3 h-3 w-20 rounded bg-text-primary/20" />
+              <div className="mt-2 h-4 w-14 rounded bg-text-primary/25" />
             </div>
           ))}
         </div>
 
-        <div className="border-t border-border/70 px-5 py-3">
-          <div className="mb-2 grid grid-cols-[3rem_1fr_6rem] gap-3 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <div className="border-t border-default/70 px-5 py-3">
+          <div className="mb-2 grid grid-cols-[3rem_1fr_6rem] gap-3 text-[10px] uppercase tracking-wide text-secondary">
             <span>{t("insights.leaderboard.rank")}</span>
             <span>{t("insights.leaderboard.member")}</span>
             <span className="text-right">{t("insights.leaderboard.metrics.total_words")}</span>
@@ -81,22 +81,22 @@ export default function LeaderboardPreview({
           {PREVIEW_ROWS.map((width, index) => (
             <div
               key={width}
-              className="grid grid-cols-[3rem_1fr_6rem] items-center gap-3 border-t border-border/70 py-3"
+              className="grid grid-cols-[3rem_1fr_6rem] items-center gap-3 border-t border-default/70 py-3"
             >
-              <span className="text-xs tabular-nums text-muted-foreground">{index + 1}</span>
+              <span className="text-xs tabular-nums text-secondary">{index + 1}</span>
               <div className="flex items-center gap-2.5">
-                <div className="size-7 rounded-full bg-muted" />
-                <div className="h-3 rounded bg-foreground/20" style={{ width: `${width}px` }} />
+                <div className="size-7 rounded-full bg-surface-secondary" />
+                <div className="h-3 rounded bg-text-primary/20" style={{ width: `${width}px` }} />
               </div>
-              <div className="ml-auto h-3 w-12 rounded bg-foreground/25" />
+              <div className="ml-auto h-3 w-12 rounded bg-text-primary/25" />
             </div>
           ))}
         </div>
       </div>
 
-      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-background/20 via-background/60 to-background/90 p-6 backdrop-blur-[2px]">
-        <div className="w-full max-w-sm rounded-2xl border border-border/70 bg-background/95 p-6 text-center shadow-xl">
-          <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-surface-primary/20 via-surface-primary/60 to-surface-primary/90 p-6 backdrop-blur-[2px]">
+        <div className="w-full max-w-sm rounded-2xl border border-default/70 bg-surface-primary/95 p-6 text-center shadow-xl">
+          <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-brand-solid/10 text-brand-solid">
             <Icon size={20} />
           </div>
           {badge && (
@@ -105,14 +105,14 @@ export default function LeaderboardPreview({
             </Badge>
           )}
           <h2 className={cn("text-base font-semibold", badge ? "mt-3" : "mt-4")}>{title}</h2>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{description}</p>
+          <p className="mt-2 text-xs leading-relaxed text-secondary">{description}</p>
           {actionLabel && onAction && (
             <Button className="mt-5 w-full" onClick={onAction} disabled={actionDisabled}>
               {ActionIcon && <ActionIcon size={14} className={actionIconClassName} />}
               {actionLabel}
             </Button>
           )}
-          {helperText && <p className="mt-3 text-[11px] text-muted-foreground">{helperText}</p>}
+          {helperText && <p className="mt-3 text-[11px] text-secondary">{helperText}</p>}
           {children}
         </div>
       </div>

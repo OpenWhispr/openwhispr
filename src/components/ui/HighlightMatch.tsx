@@ -20,7 +20,7 @@ export function HighlightMatch({ text, query }: HighlightMatchProps): ReactEleme
     if (at > from) parts.push(<Fragment key={key++}>{text.slice(from, at)}</Fragment>);
     from = at + needle.length;
     parts.push(
-      <mark key={key++} className="rounded-[3px] bg-foreground/10 text-inherit">
+      <mark key={key++} className="rounded-[3px] bg-text-primary/10 text-inherit">
         {text.slice(at, from)}
       </mark>
     );

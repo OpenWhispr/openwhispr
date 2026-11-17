@@ -358,6 +358,8 @@ Offline semantic search that finds notes by meaning, not just keywords. Used by 
 - **download-minilm.js**: Downloads all-MiniLM-L6-v2 ONNX model + tokenizer for local embeddings
 - **download-brand-fonts.js**: Fetches the licensed Yowza font files from the private `OpenWhispr/brand-assets` release into the git-ignored `src/assets/fonts/yowza/`. Runs in `predev:main` and every `prebuild*` chain; skips (Noto Sans fallback) without repo access, fails only when `BRAND_FONTS_REQUIRED=1` (release CI)
 - **sync-nucleo-icons.js**: Regenerates `src/components/icons/` from `nucleo-map.json` using the local Nucleo install (`~/.nucleo/skills`); only the icons the app uses are vendored
+- **generate-theme-tokens.js**: Writes `src/styles/theme-tokens.css` from `design/tokens/colors.json`, the copy of the Figma `Colors` collection (see Colors under Image and Icon Assets). `test/scripts/themeTokens.test.js` fails when the CSS and the JSON disagree
+- **rename-color-tokens.js**: One-time codemod from the color names used before the Figma names. Not idempotent (`text-primary` and `text-accent` exist under both schemes), so a branch cut before the rename runs it on its own files before merging main
 - **build-globe-listener.js**: Compiles macOS Globe key listener from Swift source
 - **build-macos-mic-listener.js**: Compiles macOS mic listener from Swift source
 - **build-macos-window-bounds.js**: Compiles the System Settings window reporter from Swift source
@@ -935,6 +937,14 @@ const { t } = useTranslation();
 Raster UI assets live in `src/assets/` (onboarding ones are named `onboarding-*`). Vector provider/brand marks live in `src/assets/icons/`.
 
 UI icons come from `src/components/icons/` (vendored Nucleo core outline components behind lucide-style names, e.g. `import { Check, Loader2 } from "../icons"`). To add one, map a name to a Nucleo label in `src/components/icons/nucleo-map.json` and run `node scripts/sync-nucleo-icons.js`; never import from `lucide-react` or a machine-local Nucleo path. Icons outside that set — the status marks, the note toolbar's formatting glyphs, the note chat's rounded copy and "/" glyphs, the design's action icons (`ListEnd`, `FolderRounded`), the agent window's and fork glyphs (`Maximize`, `Minimize`, `Volume`, `TextSelect`, `GitFork`, `SkillStack`), its progress row's `Lightbulb` and `MessageCircleQuestion`, and the question card's submit arrow (`ArrowUp`), which have no vendored Nucleo source yet — are drawn by hand in `src/components/icons/primitives.tsx`, which the generated `index.ts` re-exports.
+
+**Colors**: every color comes from the `Colors` collection in the OpenWhispr UI Kit Figma file (30 variables, Light and Dark), copied into `design/tokens/colors.json` and generated into `src/styles/theme-tokens.css`. Never edit that CSS by hand or add a color there: change the Figma variable, update the JSON, run `node scripts/generate-theme-tokens.js`. Utilities carry the Figma names:
+
+- Any variable works on any property as `<group>-<name>`: `bg-surface-primary`, `bg-brand-solid`, `bg-red-surface`, `bg-text-primary/5`, `ring-surface-primary`, `var(--color-border-default)`
+- On the one property a group belongs to, the group is dropped: `text-primary`, `text-secondary`, `text-tertiary`, `text-on-solid`, `border-default`, `border-hover`, `border-focus`, `ring-focus`, and per hue `text-red` (red/text) and `border-red` (red/border). `text-text-primary` and `border-red-border` are the same colors spelled the long way; don't write them
+- Hues are `brand`, `green`, `red`, `amber` (each `solid`, `surface`, `border`, `text`) and `accent` (`solid`, `text`). A solid is for fills, icons and dots (`bg-red-solid`, `text-red-solid`); text on a page or on the hue's surface is `text-red`
+- The tokens switch with the theme, so a `dark:` color override is almost never needed. No raw Tailwind palette classes (`text-amber-600`, `bg-gray-100`): the same test fails on them outside the few files it lists, whose colors have no Figma variable yet (medal and speaker hues, share-card artwork)
+- Onboarding keeps its own `--onboarding-*` palette and remaps the shared tokens onto it inside `.onboarding-canvas`
 
 **Typography**: `--font-family-sans` is Yowza (brand, Latin only) falling back to the bundled Noto Sans; `--font-family-display` is Yowza Soft for headings. The font files are licensed and never committed — `src/brandFonts.ts` registers whatever `scripts/download-brand-fonts.js` fetched at build time, and a build without them silently uses Noto Sans.
 

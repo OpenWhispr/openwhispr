@@ -144,7 +144,7 @@ export function SpectrogramCard({ referralCode }: SpectrogramCardProps) {
   }, [play]);
 
   return (
-    <div className="relative w-full h-55 rounded-lg border overflow-hidden bg-surface-1 border-border dark:border-foreground/6">
+    <div className="relative w-full h-55 rounded-lg border overflow-hidden bg-surface-secondary border-default dark:border-text-primary/6">
       {/* Noise texture */}
       <div
         className="absolute inset-0 rounded-lg opacity-[0.03] pointer-events-none mix-blend-overlay"
@@ -153,14 +153,14 @@ export function SpectrogramCard({ referralCode }: SpectrogramCardProps) {
 
       {/* Brand + Signal ID */}
       <div className="absolute top-0 inset-x-0 px-5 pt-3.5 flex items-center justify-between z-10">
-        <span className="text-xs font-medium uppercase tracking-[0.2em] text-foreground/45 select-none">
+        <span className="text-xs font-medium uppercase tracking-[0.2em] text-primary/45 select-none">
           {t("referral.card.brand")}
         </span>
         <div className="flex flex-col items-end">
-          <span className="text-xs font-mono text-foreground/45 tracking-wider select-all">
+          <span className="text-xs font-mono text-primary/45 tracking-wider select-all">
             {referralCode}
           </span>
-          <span className="text-[7px] uppercase tracking-[0.15em] text-foreground/45 select-none">
+          <span className="text-[7px] uppercase tracking-[0.15em] text-primary/45 select-none">
             {t("referral.card.signalId")}
           </span>
         </div>
@@ -215,10 +215,10 @@ export function SpectrogramCard({ referralCode }: SpectrogramCardProps) {
               onClick={playing ? resetPlayback : play}
               className={cn(
                 "w-8 h-8 rounded-full flex items-center justify-center transition-[background-color,color,transform] duration-200",
-                "border border-foreground/10 active:scale-[0.93]",
+                "border border-text-primary/10 active:scale-[0.93]",
                 playing
-                  ? "bg-foreground/12 text-foreground/80"
-                  : "bg-foreground/6 text-foreground/45 hover:bg-foreground/10 hover:text-foreground/70"
+                  ? "bg-text-primary/12 text-primary/80"
+                  : "bg-text-primary/6 text-primary/45 hover:bg-text-primary/10 hover:text-primary/70"
               )}
               aria-label={playing ? t("referral.card.stop") : t("referral.card.playSignal")}
             >
@@ -233,7 +233,7 @@ export function SpectrogramCard({ referralCode }: SpectrogramCardProps) {
               )}
             </button>
             <div>
-              <span className="text-xs font-medium text-foreground/70 leading-tight block">
+              <span className="text-xs font-medium text-primary/70 leading-tight block">
                 {t("referral.card.audioSignature")}
               </span>
             </div>

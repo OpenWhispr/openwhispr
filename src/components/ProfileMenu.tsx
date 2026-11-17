@@ -15,9 +15,9 @@ import { useUsage } from "../hooks/useUsage";
 import { useAccountPlan } from "../hooks/useAccountPlan";
 
 const triggerClass =
-  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full outline-none transition-opacity duration-150 hover:opacity-85 active:opacity-75 focus-visible:ring-2 focus-visible:ring-primary/40";
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full outline-none transition-opacity duration-150 hover:opacity-85 active:opacity-75 focus-visible:ring-2 focus-visible:ring-brand-solid/40";
 const itemClass = "gap-2.5 px-2 py-1.5 text-[13px]";
-const itemIconClass = "shrink-0 text-foreground/60";
+const itemIconClass = "shrink-0 text-primary/60";
 
 interface ProfileMenuProps {
   onOpenSettings: (section: string) => void;
@@ -49,7 +49,7 @@ export default function ProfileMenu({
         title={t("common.signIn")}
         className={triggerClass}
       >
-        <UserCircle size={20} className="text-foreground/55" />
+        <UserCircle size={20} className="text-primary/55" />
       </button>
     );
   }
@@ -66,7 +66,7 @@ export default function ProfileMenu({
           <MemberAvatar name={user.name} email={user.email} image={user.image} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <p dir="auto" className="min-w-0 truncate text-[13px] font-medium text-foreground">
+              <p dir="auto" className="min-w-0 truncate text-[13px] font-medium text-primary">
                 {name}
               </p>
               {(isOfflineAccount || planLabel) && (
@@ -76,7 +76,7 @@ export default function ProfileMenu({
               )}
             </div>
             {user.email && (
-              <p className="truncate text-[11px] text-muted-foreground">
+              <p className="truncate text-[11px] text-secondary">
                 <bdi dir="ltr">{user.email}</bdi>
               </p>
             )}

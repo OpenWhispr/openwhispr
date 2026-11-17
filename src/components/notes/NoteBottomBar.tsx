@@ -6,7 +6,7 @@ import { cn } from "../lib/utils";
 import { hasLayerAbove } from "../ui/useDismissGuard";
 import { observeBottomBarHeight, observeFloatingChatMaxHeight } from "./floatingChatLayout";
 
-const RECORDING_SURFACE = "bg-surface-2/95 shadow-(--shadow-glass)";
+const RECORDING_SURFACE = "bg-surface-primary/95 shadow-(--shadow-glass)";
 // One curve for everything that moves as the chat opens, so it unfolds as one piece:
 // a soft spring that settles just past its mark.
 const UNFOLD =
@@ -131,7 +131,7 @@ export default function NoteBottomBar({
       <div
         aria-hidden="true"
         className={cn(
-          "pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background from-45% to-transparent transition-opacity duration-200",
+          "pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-surface-primary from-45% to-transparent transition-opacity duration-200",
           chatOpen && "opacity-0"
         )}
       />
@@ -155,14 +155,14 @@ export default function NoteBottomBar({
             "absolute border transition-[inset,border-radius,box-shadow,background-color,border-color,opacity]",
             UNFOLD,
             chatOpen
-              ? "-inset-2 rounded-[32px] bg-background shadow-(--shadow-chat-card)"
+              ? "-inset-2 rounded-[32px] bg-surface-primary shadow-(--shadow-chat-card)"
               : cn(
                   "inset-0 rounded-3xl",
-                  isRecording ? RECORDING_SURFACE : "bg-background shadow-(--shadow-glass)",
-                  "group-hover/chat:border-black/15 dark:group-hover/chat:border-white/22"
+                  isRecording ? RECORDING_SURFACE : "bg-surface-primary shadow-(--shadow-glass)",
+                  "group-hover/chat:border-hover"
                 ),
-            "border-black/[0.08] dark:border-white/12",
-            "group-focus-within/chat:border-black/15 group-focus-within/chat:ring-[3px] group-focus-within/chat:ring-primary/8 dark:group-focus-within/chat:border-white/22",
+            "border-default",
+            "group-focus-within/chat:border-hover group-focus-within/chat:ring-[3px] group-focus-within/chat:ring-brand-solid/8",
             hideInput ? "pointer-events-none opacity-0" : "pointer-events-auto"
           )}
         />
@@ -221,7 +221,7 @@ export default function NoteBottomBar({
       {footnote && (
         <div
           className={cn(
-            "relative mt-1.5 flex h-4 select-none items-center justify-center gap-1 text-[10px] text-muted-foreground/70 transition-opacity duration-200",
+            "relative mt-1.5 flex h-4 select-none items-center justify-center gap-1 text-[10px] text-secondary/70 transition-opacity duration-200",
             // The open card reaches over it.
             chatOpen && "opacity-0"
           )}

@@ -54,8 +54,8 @@ interface ChatInputProps {
 function RecordingIndicator() {
   return (
     <div className="relative flex items-center justify-center w-5 h-5 shrink-0">
-      <div className="absolute inset-0 rounded-full border-2 border-primary/40 animate-pulse" />
-      <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+      <div className="absolute inset-0 rounded-full border-2 border-brand-solid/40 animate-pulse" />
+      <div className="w-2.5 h-2.5 rounded-full bg-brand-solid" />
     </div>
   );
 }
@@ -67,7 +67,7 @@ function ProcessingIndicator() {
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className="w-0.5 bg-accent rounded-full"
+            className="w-0.5 bg-accent-solid rounded-full"
             style={{
               height: "8px",
               animation: `waveform-bar 0.6s ease-in-out ${i * 0.1}s infinite`,
@@ -273,25 +273,25 @@ export function ChatInput({
           "flex items-center gap-2 min-h-11",
           leadingRow && "flex-wrap",
           variant === "sidebar"
-            ? "h-12 items-end rounded-2xl bg-background ps-3.5 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-1"
+            ? "h-12 items-end rounded-2xl bg-surface-primary ps-3.5 pe-2 py-1.5 focus-within:h-40 dark:bg-surface-secondary"
             : "rounded-3xl ps-4 pe-1.5 py-1.5",
           isCompactNote && "h-12 overflow-hidden",
           variant === "assistant"
-            ? "min-h-12 bg-card shadow-sm dark:bg-surface-2"
+            ? "min-h-12 bg-surface-primary shadow-sm"
             : variant === "note"
               ? outlined
-                ? "min-h-12 bg-white/55 dark:bg-white/[0.035]"
+                ? "min-h-12 bg-surface-primary/55 dark:bg-text-primary/[0.035]"
                 : "min-h-12 bg-transparent"
               : variant === "default" && GLASS_SURFACE,
           // The outlined note composer draws an inset ring, which takes no room and sits where
           // the bar's outline was, so nothing in it moves as the chat opens.
           variant === "sidebar"
-            ? "border border-black/[0.08] dark:border-white/[0.08]"
+            ? "border border-default"
             : variant === "note"
               ? outlined
-                ? "border-0 ring-1 ring-inset ring-primary/20 focus-within:ring-primary/45 dark:ring-primary/25 dark:focus-within:ring-primary/50"
+                ? "border-0 ring-1 ring-inset ring-brand-solid/20 focus-within:ring-brand-solid/45 dark:ring-brand-solid/25 dark:focus-within:ring-brand-solid/50"
                 : "border-0"
-              : "border border-black/10 dark:border-white/14",
+              : "border border-default",
           variant === "sidebar"
             ? "transition-[height,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
             : expands
@@ -304,13 +304,13 @@ export function ChatInput({
               : "transition-[border-color,box-shadow,background-color] duration-200",
           isIdle &&
             (variant === "assistant"
-              ? "focus-within:border-foreground/15 focus-within:ring-2 focus-within:ring-foreground/5"
+              ? "focus-within:border-text-primary/15 focus-within:ring-2 focus-within:ring-text-primary/5"
               : variant === "note"
                 ? ""
                 : variant === "sidebar"
                   ? // The tray around it already frames it; a ring would read as a second border.
-                    "focus-within:border-black/15 dark:focus-within:border-white/15"
-                  : "focus-within:border-black/15 dark:focus-within:border-white/22 focus-within:ring-[3px] focus-within:ring-primary/8")
+                    "focus-within:border-hover"
+                  : "focus-within:border-hover focus-within:ring-[3px] focus-within:ring-brand-solid/8")
         )}
       >
         {leadingRow && <div className="flex min-w-0 basis-full">{leadingRow}</div>}
@@ -318,7 +318,7 @@ export function ChatInput({
         {isListening && (
           <>
             <RecordingIndicator />
-            <span className="text-[12px] text-foreground/80 truncate flex-1">
+            <span className="text-[12px] text-primary/80 truncate flex-1">
               {/* A live transcript's informative part is its tail — show the
                   latest words once the line fills instead of a frozen start. */}
               {partialTranscript.length > 60
@@ -331,7 +331,7 @@ export function ChatInput({
         {isTranscribing && (
           <>
             <ProcessingIndicator />
-            <span className="text-[12px] text-muted-foreground select-none">
+            <span className="text-[12px] text-secondary select-none">
               {t("agentMode.input.transcribing")}
             </span>
           </>
@@ -344,7 +344,7 @@ export function ChatInput({
               bars="auto"
               className="flex-1 overflow-hidden"
             />
-            <span className="text-[13px] font-semibold tabular-nums tracking-[0.08em] text-foreground/85 shrink-0">
+            <span className="text-[13px] font-semibold tabular-nums tracking-[0.08em] text-primary/85 shrink-0">
               {formatMmSs(voice.elapsed)}
             </span>
             <button
@@ -353,8 +353,8 @@ export function ChatInput({
               title={t("common.cancel")}
               className={cn(
                 "flex items-center justify-center w-7 h-7 rounded-full shrink-0",
-                "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
-                "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+                "text-secondary/70 hover:text-primary hover:bg-text-primary/8",
+                "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30",
                 "transition-colors duration-100"
               )}
             >
@@ -369,7 +369,7 @@ export function ChatInput({
                 "animate-[scale-in_0.15s_ease-out_backwards]",
                 GRADIENT_CIRCLE,
                 "hover:brightness-110 active:scale-95",
-                "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+                "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30",
                 "transition-all duration-100"
               )}
             >
@@ -381,7 +381,7 @@ export function ChatInput({
         {isVoiceTranscribing && (
           <>
             <ProcessingIndicator />
-            <span className="text-[12px] text-muted-foreground select-none">
+            <span className="text-[12px] text-secondary select-none">
               {t("agentMode.input.transcribing")}
             </span>
           </>
@@ -421,14 +421,14 @@ export function ChatInput({
               autoFocus={autoFocus}
               placeholder={placeholder ?? t("agentMode.input.typeMessage")}
               className={cn(
-                "input-inline flex-1 outline-none bg-transparent caret-primary",
+                "input-inline flex-1 outline-none bg-transparent caret-brand-solid",
                 variant === "default" ? "text-[13px]" : "text-sm",
-                "text-foreground placeholder:text-muted-foreground/70",
+                "text-primary placeholder:text-secondary/70",
                 "min-w-0 min-h-8 max-h-32 resize-none overflow-y-auto border-0 px-0 py-1.5 leading-5",
                 // One line fills the 36px row, as the bare note composer's does.
                 outlined && "min-h-9",
                 (expands || variant === "sidebar" || isCompactNote) && "min-h-0 max-h-none",
-                isBusy && "text-muted-foreground/70 cursor-not-allowed"
+                isBusy && "text-secondary/70 cursor-not-allowed"
               )}
             />
             {isBusy && onCancel ? (
@@ -442,8 +442,8 @@ export function ChatInput({
                   expands && COLLAPSED_ROW_CENTER,
                   // The 28px stop's share of the same centering.
                   centersFirstLine && "mb-1",
-                  "text-muted-foreground/70 hover:text-foreground hover:bg-foreground/8",
-                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+                  "text-secondary/70 hover:text-primary hover:bg-text-primary/8",
+                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30",
                   "transition-colors duration-100"
                 )}
               >
@@ -462,7 +462,7 @@ export function ChatInput({
                   "rounded-full shrink-0",
                   rowCenter,
                   voiceDraft && "animate-[scale-in_0.15s_ease-out_backwards]",
-                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30",
                   "transition-all duration-100",
                   inputText.trim() && !sendDisabled
                     ? "hover:brightness-110 active:scale-95"
@@ -477,7 +477,7 @@ export function ChatInput({
                       "flex size-8 items-center justify-center rounded-full",
                       inputText.trim() && !sendDisabled
                         ? GRADIENT_CIRCLE
-                        : "bg-muted text-muted-foreground"
+                        : "bg-surface-secondary text-secondary"
                     )}
                   >
                     <ArrowRight size={18} className="-rotate-90" />
@@ -503,7 +503,7 @@ export function ChatInput({
                   rowCenter,
                   "animate-[scale-in_0.15s_ease-out_backwards]",
                   GRADIENT_CIRCLE,
-                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+                  "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30",
                   "transition-all duration-100",
                   voice.streamingOnlyProvider
                     ? "opacity-30 saturate-0 cursor-default"

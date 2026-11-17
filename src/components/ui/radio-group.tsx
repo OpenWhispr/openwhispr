@@ -68,16 +68,16 @@ export function RadioGroup({
             onClick={() => onValueChange(option.value)}
             onFocus={() => setFocusIndex(index)}
             onKeyDown={(event) => onKeyDown(event, index)}
-            className="flex w-full items-center gap-3 rounded-md py-1.5 text-start text-[14px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring/40 agent:min-h-10 agent:gap-3.5 agent:px-1.5 agent:py-2 agent:text-[15px] agent:font-medium"
+            className="flex w-full items-center gap-3 rounded-md py-1.5 text-start text-[14px] text-primary outline-none focus-visible:ring-1 focus-visible:ring-focus/40 agent:min-h-10 agent:gap-3.5 agent:px-1.5 agent:py-2 agent:text-[15px] agent:font-medium"
           >
             <span
               aria-hidden="true"
               className={cn(
                 "flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors",
-                checked ? "border-foreground/40" : "border-foreground/20"
+                checked ? "border-text-primary/40" : "border-text-primary/20"
               )}
             >
-              {checked && <span className="size-2 rounded-full bg-foreground" />}
+              {checked && <span className="size-2 rounded-full bg-text-primary" />}
             </span>
             <span dir="auto" className="min-w-0 flex-1">
               {option.label}

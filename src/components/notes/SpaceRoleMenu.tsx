@@ -26,12 +26,12 @@ const ROLE_ICON: Record<TeamRole, IconComponent> = { member: User, admin: UserSe
 // Quiet trigger: reads as the cell's role text with a chevron, not as a button. The negative
 // margin keeps the text on the column header's edge.
 const TRIGGER_CLASS =
-  "-ms-2 inline-flex h-7 max-w-full items-center gap-1 rounded-md px-2 text-sm text-foreground outline-none transition-colors " +
-  "hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/40 data-[state=open]:bg-foreground/5 " +
-  "disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent dark:hover:bg-white/5";
+  "-ms-2 inline-flex h-7 max-w-full items-center gap-1 rounded-md px-2 text-sm text-primary outline-none transition-colors " +
+  "hover:bg-text-primary/5 focus-visible:ring-2 focus-visible:ring-focus/40 data-[state=open]:bg-text-primary/5 " +
+  "disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent dark:hover:bg-text-primary/5";
 
 const ITEM_CLASS =
-  "items-start gap-2.5 rounded-lg px-2.5 py-2 ps-2.5 pe-2.5 data-[state=checked]:bg-muted focus:bg-muted " +
+  "items-start gap-2.5 rounded-lg px-2.5 py-2 ps-2.5 pe-2.5 data-[state=checked]:bg-surface-secondary focus:bg-surface-secondary " +
   "[&>span:first-child]:hidden";
 
 /** Translation keys for the menu's wording; a team's menu says "team" where a teamspace's says "teamspace". */
@@ -109,9 +109,9 @@ export function SpaceRoleMenu({
               : t("notes.spaces.members.roleMember")}
         </span>
         {pending ? (
-          <Loader2 className="size-3 animate-spin text-muted-foreground" aria-hidden="true" />
+          <Loader2 className="size-3 animate-spin text-secondary" aria-hidden="true" />
         ) : (
-          <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
+          <ChevronDown className="size-3 text-secondary" aria-hidden="true" />
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-32px)]">
@@ -131,23 +131,17 @@ export function SpaceRoleMenu({
                 disabled={lockedByTeam}
                 className={ITEM_CLASS}
               >
-                <Icon
-                  className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
+                <Icon className="mt-0.5 size-3.5 shrink-0 text-secondary" aria-hidden="true" />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-sm font-medium text-foreground">{t(labelKey[option])}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm font-medium text-primary">{t(labelKey[option])}</span>
+                  <span className="text-xs text-secondary">
                     {lockedByTeam
                       ? t("notes.spaces.members.roleFromTeam", { team: adminThrough })
                       : t(bodyKey[option])}
                   </span>
                 </span>
                 {option === role ? (
-                  <Check
-                    className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
+                  <Check className="mt-0.5 size-3.5 shrink-0 text-secondary" aria-hidden="true" />
                 ) : null}
               </DropdownMenuRadioItem>
             );
@@ -155,7 +149,7 @@ export function SpaceRoleMenu({
         </DropdownMenuRadioGroup>
         {onRemove ? (
           <DropdownMenuItem
-            className="gap-2.5 text-sm text-destructive focus:bg-destructive/10 focus:text-destructive"
+            className="gap-2.5 text-sm text-red focus:bg-red-solid/10 focus:text-red"
             onSelect={onRemove}
           >
             <UserXmark className="size-3.5 shrink-0" aria-hidden="true" />

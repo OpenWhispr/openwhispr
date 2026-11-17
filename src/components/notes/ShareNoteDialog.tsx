@@ -845,11 +845,11 @@ export default function ShareNoteDialog({
             <DialogDescription className="sr-only">
               {t("noteEditor.share.dialog.description")}
             </DialogDescription>
-            <Loader2 size={14} className="animate-spin text-foreground/45" />
+            <Loader2 size={14} className="animate-spin text-primary/45" />
           </div>
         ) : !cloudId && !isTeamNote ? (
           <>
-            <DialogDescription className="text-xs text-foreground/50">
+            <DialogDescription className="text-xs text-primary/50">
               {sharingRestrictedByPolicy
                 ? t("common.managedByOrg")
                 : t("noteEditor.share.dialog.syncPrompt")}
@@ -868,7 +868,7 @@ export default function ShareNoteDialog({
           </>
         ) : loadError ? (
           <div className="flex items-center justify-between gap-2 py-1">
-            <p className="text-xs text-foreground/50">
+            <p className="text-xs text-primary/50">
               {t("noteEditor.share.dialog.error.loadFailed")}
             </p>
             <Button
@@ -923,14 +923,14 @@ export default function ShareNoteDialog({
                 {access &&
                   emailInput.trim() &&
                   (searchingSuggestions || suggestions.length > 0 || suggestionsSettled) && (
-                    <div className="absolute z-20 top-9 start-0 end-[72px] max-h-44 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg">
+                    <div className="absolute z-20 top-9 start-0 end-[72px] max-h-44 overflow-y-auto rounded-lg border border-default bg-surface-primary p-1 shadow-lg">
                       {searchingSuggestions && suggestions.length === 0 ? (
                         <div className="h-8 flex items-center justify-center">
-                          <Loader2 size={12} className="animate-spin text-foreground/45" />
+                          <Loader2 size={12} className="animate-spin text-primary/45" />
                         </div>
                       ) : suggestions.length === 0 ? (
                         <div className="h-8 flex items-center justify-center">
-                          <span className="text-xs text-foreground/45">
+                          <span className="text-xs text-primary/45">
                             {t("noteEditor.share.dialog.noResults")}
                           </span>
                         </div>
@@ -940,7 +940,7 @@ export default function ShareNoteDialog({
                             key={`${principal.type}:${principal.id ?? principal.email}`}
                             type="button"
                             onClick={() => void handlePrincipalGrant(principal)}
-                            className="flex items-center gap-2 w-full min-w-0 px-2 h-9 rounded-md text-start hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            className="flex items-center gap-2 w-full min-w-0 px-2 h-9 rounded-md text-start hover:bg-text-primary/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus"
                           >
                             {principal.type === "team" ||
                             principal.type === "folder" ||
@@ -954,13 +954,13 @@ export default function ShareNoteDialog({
                               />
                             )}
                             <span className="min-w-0 flex-1">
-                              <span dir="auto" className="block text-xs text-foreground truncate">
+                              <span dir="auto" className="block text-xs text-primary truncate">
                                 {principal.name || principal.email}
                               </span>
                               {principal.name && principal.email && (
                                 <span
                                   dir="ltr"
-                                  className="block text-[11px] text-foreground/45 truncate"
+                                  className="block text-[11px] text-primary/45 truncate"
                                 >
                                   {principal.email}
                                 </span>
@@ -978,7 +978,7 @@ export default function ShareNoteDialog({
               <p
                 id="share-invite-error"
                 aria-live="polite"
-                className={cn("text-xs text-red-500/90 -mt-1", !inputError && "sr-only")}
+                className={cn("text-xs text-red/90 -mt-1", !inputError && "sr-only")}
               >
                 {inputError}
               </p>
@@ -1000,7 +1000,7 @@ export default function ShareNoteDialog({
                   }
                   secondaryDir="ltr"
                   trailing={
-                    <span className="text-[11px] text-foreground/45">
+                    <span className="text-[11px] text-primary/45">
                       {t("noteEditor.share.dialog.owner")}
                     </span>
                   }
@@ -1036,7 +1036,7 @@ export default function ShareNoteDialog({
                     primary={space.name}
                     secondary={t("noteEditor.share.dialog.teamAudience")}
                     trailing={
-                      <span className="text-[11px] text-foreground/45">
+                      <span className="text-[11px] text-primary/45">
                         {t("noteEditor.share.dialog.editor")}
                       </span>
                     }
@@ -1062,13 +1062,13 @@ export default function ShareNoteDialog({
                             type="button"
                             className={cn(
                               "h-6 w-6 flex items-center justify-center rounded-md",
-                              "hover:bg-foreground/8 dark:hover:bg-white/8",
-                              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                              "hover:bg-text-primary/8",
+                              "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus",
                               "transition-colors"
                             )}
                             aria-label={t("noteEditor.share.dialog.invitationActions")}
                           >
-                            <MoreHorizontal size={13} className="text-foreground/50" />
+                            <MoreHorizontal size={13} className="text-primary/50" />
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" sideOffset={4}>
@@ -1082,7 +1082,7 @@ export default function ShareNoteDialog({
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem
-                            className="text-xs text-red-500"
+                            className="text-xs text-red"
                             onClick={() => void handleRevoke(invitation)}
                           >
                             {t("noteEditor.share.dialog.revoke")}
@@ -1090,7 +1090,7 @@ export default function ShareNoteDialog({
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : (
-                      <span className="text-[11px] text-foreground/45">
+                      <span className="text-[11px] text-primary/45">
                         {t("noteEditor.share.dialog.viewer")}
                       </span>
                     )
@@ -1099,7 +1099,7 @@ export default function ShareNoteDialog({
               ))}
             </div>
 
-            <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/70">
+            <div className="flex items-center gap-2 pt-3 mt-1 border-t border-default/70">
               <ShareVisibilityMenu
                 value={share?.visibility ?? "private"}
                 ownerDomain={ownerDomain}
@@ -1147,8 +1147,8 @@ export default function ShareNoteDialog({
         )}
 
         {exportOptions.length > 0 && (
-          <div className="mt-1 border-t border-border/70 pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground/55">
+          <div className="mt-1 border-t border-default/70 pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-primary/55">
               {t("noteEditor.share.dialog.export")}
             </p>
             <div className="mt-2 grid grid-cols-2 gap-2">
@@ -1160,9 +1160,9 @@ export default function ShareNoteDialog({
                     option.onSelect();
                     onOpenChange(false);
                   }}
-                  className="flex items-center gap-2.5 rounded-xl border border-border/70 px-3 py-2.5 text-start text-xs font-medium text-foreground/80 transition-colors hover:bg-surface-3 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 dark:border-white/10 dark:hover:bg-surface-2"
+                  className="flex items-center gap-2.5 rounded-xl border border-default/70 px-3 py-2.5 text-start text-xs font-medium text-primary/80 transition-colors hover:bg-surface-tertiary hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 dark:hover:bg-surface-primary"
                 >
-                  <FileText size={14} className="shrink-0 text-foreground/55" />
+                  <FileText size={14} className="shrink-0 text-primary/55" />
                   {option.label}
                 </button>
               ))}
@@ -1206,11 +1206,11 @@ function MemberRow({
     <div className="flex items-center gap-2 py-1.5 px-1">
       {leading}
       <div className="flex-1 min-w-0">
-        <p dir={primaryDir} className="text-xs text-foreground truncate">
+        <p dir={primaryDir} className="text-xs text-primary truncate">
           {primary}
         </p>
         {secondary && (
-          <p dir={secondaryDir} className="text-[11px] text-foreground/45 truncate">
+          <p dir={secondaryDir} className="text-[11px] text-primary/45 truncate">
             {secondary}
           </p>
         )}
@@ -1222,7 +1222,7 @@ function MemberRow({
 
 function AudienceIcon() {
   return (
-    <span className="w-7 h-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
+    <span className="w-7 h-7 rounded-md bg-brand-solid/10 text-brand-solid flex items-center justify-center shrink-0">
       <Users size={14} />
     </span>
   );
@@ -1293,9 +1293,9 @@ function AccessGrantRow({
                 disabled={busy}
                 aria-label={t("noteEditor.share.dialog.invitationActions")}
                 className={cn(
-                  "h-7 px-2 flex items-center gap-1 rounded-md text-[11px] text-foreground/50",
-                  "hover:bg-foreground/8 dark:hover:bg-white/8",
-                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  "h-7 px-2 flex items-center gap-1 rounded-md text-[11px] text-primary/50",
+                  "hover:bg-text-primary/8",
+                  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus",
                   "disabled:opacity-50 transition-colors"
                 )}
               >
@@ -1325,7 +1325,7 @@ function AccessGrantRow({
                 </>
               )}
               <DropdownMenuItem
-                className="text-xs text-red-500"
+                className="text-xs text-red"
                 disabled={!canRemove}
                 onClick={onRemove}
               >
@@ -1334,7 +1334,7 @@ function AccessGrantRow({
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <span className="text-[11px] text-foreground/45">{permissionLabel}</span>
+          <span className="text-[11px] text-primary/45">{permissionLabel}</span>
         )
       }
     />

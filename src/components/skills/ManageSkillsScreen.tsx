@@ -45,7 +45,7 @@ export function ManageSkillsScreen({ onOpenSkill, onBack }: ManageSkillsScreenPr
       actions={<SkillSearchInput value={query} onChange={setQuery} />}
     >
       {shown.length === 0 ? (
-        <p className="ps-1 text-xs text-muted-foreground">
+        <p className="ps-1 text-xs text-secondary">
           {skills.length > 0
             ? t("skills.manage.noMatches", { query: query.trim() })
             : t("skills.manage.none")}
@@ -53,24 +53,21 @@ export function ManageSkillsScreen({ onOpenSkill, onBack }: ManageSkillsScreenPr
       ) : (
         <SettingsPanel>
           {shown.map((skill) => (
-            <div
-              key={skill.name}
-              className="px-4 py-3 transition-colors hover:bg-foreground/3 dark:hover:bg-white/3"
-            >
+            <div key={skill.name} className="px-4 py-3 transition-colors hover:bg-text-primary/3">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => onOpenSkill(skill.name, false)}
-                  className="flex flex-1 min-w-0 items-center gap-3 text-start rounded-md outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+                  className="flex flex-1 min-w-0 items-center gap-3 text-start rounded-md outline-none focus-visible:ring-1 focus-visible:ring-brand-solid/30"
                 >
                   <SkillTile name={skill.name} on={skill.enabled && skill.valid} />
                   <div className="flex-1 min-w-0">
-                    <p dir="auto" className="text-xs font-semibold text-foreground truncate">
+                    <p dir="auto" className="text-xs font-semibold text-primary truncate">
                       {skill.displayName}
                     </p>
                     <p
                       dir="auto"
-                      className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed line-clamp-1"
+                      className="text-xs text-secondary/70 mt-0.5 leading-relaxed line-clamp-1"
                     >
                       {skill.description}
                     </p>

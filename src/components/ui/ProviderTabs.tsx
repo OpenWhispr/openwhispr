@@ -76,7 +76,7 @@ export function ProviderTabs({
     >
       <div
         ref={indicatorRef}
-        className="absolute top-0 left-0 rounded-full bg-primary/10 dark:bg-primary/15 ring-1 ring-primary/30 dark:ring-primary/25 transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
+        className="absolute top-0 left-0 rounded-full bg-brand-solid/10 dark:bg-brand-solid/15 ring-1 ring-brand-solid/30 dark:ring-brand-solid/25 transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
         style={{ opacity: 0 }}
       />
 
@@ -99,21 +99,21 @@ export function ProviderTabs({
             className={cn(
               "relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs whitespace-nowrap transition-colors duration-150",
               isDisabled
-                ? "text-muted-foreground/70 cursor-not-allowed ring-1 ring-border/40 dark:ring-white/5"
+                ? "text-secondary/70 cursor-not-allowed ring-1 ring-border-default/40"
                 : isSelected
-                  ? "text-foreground [&_svg]:text-primary"
-                  : "text-muted-foreground ring-1 ring-border/60 dark:ring-white/10 hover:text-foreground hover:bg-foreground/4 dark:hover:bg-white/5"
+                  ? "text-primary [&_svg]:text-brand-solid"
+                  : "text-secondary ring-1 ring-border-default/60 hover:text-primary hover:bg-text-primary/4"
             )}
           >
             {renderIcon ? renderIcon(provider.id) : <ProviderIcon provider={provider.id} />}
             <span>{provider.name}</span>
             {provider.recommended && (
-              <span className="text-[10px] text-primary/70 font-medium">
+              <span className="text-[10px] text-brand-solid/70 font-medium">
                 {t("common.recommended")}
               </span>
             )}
             {isDisabled && provider.disabledLabel && (
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+              <span className="text-[10px] uppercase tracking-wide text-secondary/70">
                 {provider.disabledLabel}
               </span>
             )}

@@ -72,16 +72,14 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
       <SettingsPanel>
         <SettingsPanelRow>
           <div className={`flex flex-wrap items-center gap-3 ${locked ? "opacity-60" : ""}`}>
-            <div className="w-9 h-9 rounded-lg bg-primary/5 dark:bg-primary/10 flex items-center justify-center shrink-0">
-              <Mail className="h-4 w-4 text-primary/80" strokeWidth={2} aria-hidden="true" />
+            <div className="w-9 h-9 rounded-lg bg-brand-solid/5 dark:bg-brand-solid/10 flex items-center justify-center shrink-0">
+              <Mail className="h-4 w-4 text-brand-solid/80" strokeWidth={2} aria-hidden="true" />
             </div>
             <div className="flex-1 basis-52 min-w-0">
-              <p className="text-xs font-semibold text-foreground">{t("connectors.email.title")}</p>
-              <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-                {description}
-              </p>
+              <p className="text-xs font-semibold text-primary">{t("connectors.email.title")}</p>
+              <p className="text-xs text-secondary/70 mt-0.5 leading-relaxed">{description}</p>
               {showActions && (shownTarget === "auto" || shownTarget === "mailto") && (
-                <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed">
+                <p className="text-xs text-secondary/70 mt-1 leading-relaxed">
                   {shownTarget === "auto"
                     ? t("connectors.email.automaticHint", {
                         target: t(`connectors.email.targets.${currentTarget}`),
@@ -119,7 +117,7 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
                 size={14}
                 role="img"
                 aria-label={t("connectors.locked")}
-                className="shrink-0 text-muted-foreground"
+                className="shrink-0 text-secondary"
               />
             )}
           </div>

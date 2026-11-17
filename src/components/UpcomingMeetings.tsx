@@ -76,15 +76,15 @@ function groupEventsByDay(events: CalendarEvent[], now: Date): DayGroup[] {
 
 // The quiet grey buttons inside a day card: join a meeting, touch grass.
 const DAY_CARD_BUTTON_CLASS =
-  "h-7 bg-surface-3 hover:bg-surface-raised dark:bg-surface-2 dark:hover:bg-surface-3";
+  "h-7 bg-surface-tertiary hover:bg-surface-tertiary dark:bg-surface-primary dark:hover:bg-surface-tertiary";
 
 const ATTENDEE_COUNT_PILL_CLASS =
-  "flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-surface-3 px-0.5 text-[9px] font-medium tabular-nums text-muted-foreground ring-1 ring-background";
+  "flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-surface-tertiary px-0.5 text-[9px] font-medium tabular-nums text-secondary ring-1 ring-surface-primary";
 
 const RSVP_DOT: Record<string, string> = {
-  accepted: "bg-green-500",
-  declined: "bg-red-400",
-  tentative: "bg-amber-400",
+  accepted: "bg-green-solid",
+  declined: "bg-red-solid",
+  tentative: "bg-amber-solid",
 };
 
 function AttendeePopover({
@@ -105,7 +105,7 @@ function AttendeePopover({
       <PopoverTrigger asChild>
         <button
           aria-label={`${attendees.length} ${t("notes.participants.attendees")}`}
-          className="flex shrink-0 items-center -space-x-1 rounded-full outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-ring/40"
+          className="flex shrink-0 items-center -space-x-1 rounded-full outline-none transition-opacity hover:opacity-80 focus-visible:ring-1 focus-visible:ring-focus/40"
         >
           {attendees.slice(0, MAX_STACKED_AVATARS).map((a) => (
             <PersonAvatar
@@ -113,7 +113,7 @@ function AttendeePopover({
               email={a.email}
               displayName={a.displayName}
               size={18}
-              className="ring-1 ring-background"
+              className="ring-1 ring-surface-primary"
             />
           ))}
           {attendees.length > MAX_STACKED_AVATARS && (
@@ -124,41 +124,41 @@ function AttendeePopover({
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 p-0">
-        <div className="border-b border-border/70 px-3 py-2.5">
-          <p dir="auto" className="text-xs font-medium leading-snug text-foreground">
+        <div className="border-b border-default/70 px-3 py-2.5">
+          <p dir="auto" className="text-xs font-medium leading-snug text-primary">
             {event.summary || t("upcoming.untitledEvent")}
           </p>
-          <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">{timeRange}</p>
+          <p className="mt-0.5 text-[11px] tabular-nums text-secondary">{timeRange}</p>
         </div>
         <div className="max-h-56 overflow-y-auto p-1">
           {attendees.map((a) => (
             <div key={a.email} className="flex items-center gap-2 rounded-md px-2 py-1.5">
               <PersonAvatar email={a.email} displayName={a.displayName} />
               <div className="min-w-0 flex-1">
-                <p dir="auto" className="truncate text-xs text-foreground/80">
+                <p dir="auto" className="truncate text-xs text-primary/80">
                   {a.displayName || a.email.split("@")[0]}
                   {a.self && (
-                    <span className="ms-1 text-foreground/45">{t("notes.participants.me")}</span>
+                    <span className="ms-1 text-primary/45">{t("notes.participants.me")}</span>
                   )}
                 </p>
-                <p dir="ltr" className="truncate text-[11px] text-foreground/45">
+                <p dir="ltr" className="truncate text-[11px] text-primary/45">
                   {a.email}
                 </p>
               </div>
               <span
                 className={cn(
                   "h-1.5 w-1.5 shrink-0 rounded-full",
-                  RSVP_DOT[a.responseStatus ?? ""] ?? "bg-muted-foreground/25"
+                  RSVP_DOT[a.responseStatus ?? ""] ?? "bg-text-secondary/25"
                 )}
               />
             </div>
           ))}
         </div>
         {joinUrl && (
-          <div className="border-t border-border/70 p-1">
+          <div className="border-t border-default/70 p-1">
             <button
               onClick={() => openJoinUrl(joinUrl)}
-              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground/70 transition-colors hover:bg-foreground/5"
+              className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs text-primary/70 transition-colors hover:bg-text-primary/5"
             >
               <ExternalLink size={12} className="shrink-0" />
               {t("upcoming.openMeetingLink")}
@@ -233,21 +233,19 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
         <span className={ATTENDEE_COUNT_PILL_CLASS}>+{event.attendees_count - 1}</span>
       ) : null}
       <div className="min-w-0 flex-1">
-        <p dir="auto" className="truncate text-sm font-medium leading-tight text-foreground">
+        <p dir="auto" className="truncate text-sm font-medium leading-tight text-primary">
           {event.summary || t("upcoming.untitledEvent")}
         </p>
         {isNow ? (
           <span className="mt-1 flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-green-500 opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+              <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-green-solid opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-solid" />
             </span>
-            <span className="text-xs font-medium text-green-600 dark:text-green-400">
-              {t("upcoming.now")}
-            </span>
+            <span className="text-xs font-medium text-green">{t("upcoming.now")}</span>
           </span>
         ) : (
-          <p className="mt-0.5 truncate text-xs tabular-nums text-muted-foreground">{timeRange}</p>
+          <p className="mt-0.5 truncate text-xs tabular-nums text-secondary">{timeRange}</p>
         )}
       </div>
       {/* Always shown once the meeting is live; otherwise revealed on hover so you can join early. */}
@@ -257,7 +255,7 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
         <span
           // Overlaid so the row keeps its full width until hovered; the scrim fades the
           // covered end of a long title out instead of slicing it.
-          className="pointer-events-none absolute inset-y-0 end-0 flex items-center bg-linear-to-r from-transparent to-background to-[2rem] ps-8 pe-1 opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 has-[:focus-visible]:opacity-100 dark:to-surface-2"
+          className="pointer-events-none absolute inset-y-0 end-0 flex items-center bg-linear-to-r from-transparent to-surface-primary to-[2rem] ps-8 pe-1 opacity-0 transition-opacity duration-150 group-hover/event:opacity-100 has-[:focus-visible]:opacity-100"
         >
           {joinButton}
         </span>
@@ -300,17 +298,17 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
   return (
     <div
       className={cn(
-        "overflow-clip rounded-xl border border-border/70 bg-clip-padding dark:border-white/10",
+        "overflow-clip rounded-xl border border-default/70 bg-clip-padding",
         // Out on the grass the header goes quiet grey, so the lawn carries the colour.
         group.isToday && !rustle
           ? "bg-[image:var(--gradient-calendar-today)]"
-          : "bg-surface-3 dark:bg-surface-2"
+          : "bg-surface-tertiary dark:bg-surface-primary"
       )}
     >
       <div
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium",
-          group.isToday && !rustle ? "calendar-today-header text-white" : "text-foreground"
+          group.isToday && !rustle ? "calendar-today-header text-on-solid" : "text-primary"
         )}
       >
         <Calendar size={12} className="shrink-0" />
@@ -333,8 +331,8 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
       </div>
       {/* The list sits on the header colour with its own rounded top, so that colour shows
           around its corners. The opaque layer keeps the dark tint from mixing with it. */}
-      <div className="rounded-t-xl bg-background">
-        <div className="rounded-t-xl px-2 dark:bg-surface-2/60">
+      <div className="rounded-t-xl bg-surface-primary">
+        <div className="rounded-t-xl px-2 dark:bg-surface-primary/60">
           {group.items.length === 0 && rustle ? (
             <TouchGrass
               rustle={rustle}
@@ -353,12 +351,10 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
                 height={120}
                 className="-my-8"
               />
-              <p className="mt-2 text-[15px] font-medium text-foreground">
+              <p className="mt-2 text-[15px] font-medium text-primary">
                 {t("upcoming.noEventsToday")}
               </p>
-              <p className="mt-1 text-[13px] text-muted-foreground">
-                {t("upcoming.emptyDayDescription")}
-              </p>
+              <p className="mt-1 text-[13px] text-secondary">{t("upcoming.emptyDayDescription")}</p>
               <Button
                 ref={tryButtonRef}
                 variant="ghost"
@@ -366,14 +362,14 @@ function DayCard({ group, isNowFn }: { group: DayGroup; isNowFn: (e: CalendarEve
                 className={cn(
                   "mt-3",
                   DAY_CARD_BUTTON_CLASS,
-                  "h-9 rounded-full px-5 text-primary hover:text-primary dark:text-primary"
+                  "h-9 rounded-full px-5 text-brand-solid hover:text-brand-solid dark:text-brand-solid"
                 )}
               >
                 {t("upcoming.touchGrass")}
               </Button>
             </div>
           ) : (
-            <div className="divide-y divide-border/60">
+            <div className="divide-y divide-default/60">
               {group.items.map((event) => (
                 <EventRow key={event.id} event={event} isNow={isNowFn(event)} />
               ))}
@@ -409,7 +405,7 @@ export default function UpcomingMeetings({
       {/* Loading state */}
       {isLoading && (
         <div className="flex items-center justify-center gap-2 py-6">
-          <Loader2 size={14} className="animate-spin text-primary" />
+          <Loader2 size={14} className="animate-spin text-brand-solid" />
         </div>
       )}
 
@@ -458,13 +454,13 @@ export default function UpcomingMeetings({
               width={316}
               height={120}
             />
-            <p className="mt-3 text-sm font-semibold text-foreground">
+            <p className="mt-3 text-sm font-semibold text-primary">
               {t("upcoming.noUpcomingEvents")}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">{t("upcoming.moreCalendarsHint")}</p>
+            <p className="mt-1 text-xs text-secondary">{t("upcoming.moreCalendarsHint")}</p>
             <button
               onClick={onConnectCalendar}
-              className="mt-3 cursor-pointer text-xs text-primary underline-offset-2 outline-none hover:underline focus-visible:underline"
+              className="mt-3 cursor-pointer text-xs text-brand-solid underline-offset-2 outline-none hover:underline focus-visible:underline"
             >
               {t("upcoming.connectHere")}
             </button>

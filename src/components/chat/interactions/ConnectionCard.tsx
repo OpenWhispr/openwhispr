@@ -83,21 +83,21 @@ export function ConnectRow({
             src={logo.src}
             alt=""
             monochrome={logo.monochrome}
-            className="agent:size-8 agent:rounded-full agent:bg-surface-2 agent:*:size-4 dark:agent:border-0"
+            className="agent:size-8 agent:rounded-full agent:bg-surface-primary agent:*:size-4 agent:dark:bg-surface-tertiary dark:agent:border-0"
           />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium text-foreground agent:text-[15px]" dir="auto">
+          <p className="text-[14px] font-medium text-primary agent:text-[15px]" dir="auto">
             {title}
           </p>
           {reason && (
-            <p className="text-xs text-muted-foreground agent:text-[13px]" dir="auto">
+            <p className="text-xs text-secondary agent:text-[13px]" dir="auto">
               {reason}
             </p>
           )}
         </div>
         {onConnect && !working && (
-          <button type="button" onClick={onConnect} className={cn(PILL_BUTTON, "text-primary")}>
+          <button type="button" onClick={onConnect} className={cn(PILL_BUTTON, "text-brand-solid")}>
             <Check size={14} />
             {t("agentMode.interactions.connection.yes")}
           </button>
@@ -117,11 +117,9 @@ export function ConnectRow({
       <div role="status" className="text-xs agent:text-[13px]">
         {/* Apple Calendar asks for macOS permission; the others finish in the browser. */}
         {working && target !== "apple" && (
-          <p className="mt-2 text-muted-foreground">
-            {t("agentMode.interactions.connection.connecting")}
-          </p>
+          <p className="mt-2 text-secondary">{t("agentMode.interactions.connection.connecting")}</p>
         )}
-        {errorText && <p className="mt-2 text-destructive">{errorText}</p>}
+        {errorText && <p className="mt-2 text-red">{errorText}</p>}
       </div>
     </div>
   );

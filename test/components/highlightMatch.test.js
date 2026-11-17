@@ -40,6 +40,6 @@ test("the match is a soft fill, never a colour", async (t) => {
   const render = await loadHighlight(t);
 
   const markup = render("rowan@example.com", "rowan");
-  assert.match(markup, /bg-foreground\/10/);
-  assert.doesNotMatch(markup, /text-(primary|link|blue)/);
+  assert.match(markup, /bg-text-primary\/10/);
+  assert.doesNotMatch(markup, /text-(brand|blue)/);
 });

@@ -33,18 +33,18 @@ const toDrafts = (sections: TemplateSection[] | null): SectionDraft[] =>
   (sections ?? []).map((section) => ({ ...section, key: crypto.randomUUID() }));
 
 const TEXTAREA_CLASS = cn(
-  "w-full rounded border border-border/70 bg-input px-3.5 py-3 text-sm text-foreground leading-relaxed transition-colors duration-200 outline-none resize-none",
-  "placeholder:text-muted-foreground/70",
-  "hover:border-border-hover",
-  "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/10",
-  "dark:bg-surface-1 dark:border-border-subtle/60",
-  "dark:focus-visible:border-border-active dark:focus-visible:ring-ring/10",
-  "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-muted",
+  "w-full rounded border border-default/70 bg-surface-primary px-3.5 py-3 text-sm text-primary leading-relaxed transition-colors duration-200 outline-none resize-none",
+  "placeholder:text-secondary/70",
+  "hover:border-hover",
+  "focus-visible:border-brand-solid focus-visible:ring-2 focus-visible:ring-brand-solid/10",
+  "dark:bg-surface-secondary dark:border-default/60",
+  "dark:focus-visible:border-focus dark:focus-visible:ring-focus/10",
+  "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-surface-secondary",
   "font-mono text-[13px]"
 );
 
 const ICON_BUTTON_CLASS =
-  "p-1 rounded-md text-muted-foreground/70 hover:text-foreground/70 hover:bg-foreground/5 dark:hover:bg-white/6 transition-colors duration-150 disabled:opacity-30 disabled:pointer-events-none";
+  "p-1 rounded-md text-secondary/70 hover:text-primary/70 hover:bg-text-primary/5 transition-colors duration-150 disabled:opacity-30 disabled:pointer-events-none";
 
 export default function ActionManagerDialog({
   open,
@@ -214,7 +214,7 @@ export default function ActionManagerDialog({
             // Keep the draft selected until the save has finished.
             inert={isSaving}
             className={cn(
-              "w-56 shrink-0 border-e border-border dark:border-white/10 flex flex-col bg-card/50 dark:bg-surface-1/30",
+              "w-56 shrink-0 border-e border-default flex flex-col bg-surface-primary/50 dark:bg-surface-secondary/30",
               isSaving && "opacity-60"
             )}
           >
@@ -238,9 +238,9 @@ export default function ActionManagerDialog({
                 onClick={handleNewAction}
                 className={cn(
                   "p-1 rounded-md",
-                  "text-muted-foreground/70 hover:text-foreground/70",
-                  "hover:bg-foreground/5 dark:hover:bg-white/6",
-                  "active:bg-foreground/8 dark:active:bg-white/8",
+                  "text-secondary/70 hover:text-primary/70",
+                  "hover:bg-text-primary/5",
+                  "active:bg-text-primary/8",
                   "transition-colors duration-150"
                 )}
                 aria-label={t(
@@ -255,13 +255,13 @@ export default function ActionManagerDialog({
             <div className="flex-1 overflow-y-auto px-1.5 pb-2">
               {items.length === 0 && !isCreating ? (
                 <div className="flex flex-col items-center justify-center h-full px-4 text-center">
-                  <Zap size={20} className="text-muted-foreground/70 mb-2" />
-                  <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                  <Zap size={20} className="text-secondary/70 mb-2" />
+                  <p className="text-xs text-secondary/70 leading-relaxed">
                     {t(isTemplate ? "notes.templates.noTemplates" : "notes.actions.noActions")}
                   </p>
                   <button
                     onClick={handleNewAction}
-                    className="text-xs text-accent/60 hover:text-accent/80 mt-2 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 rounded"
+                    className="text-xs text-accent-solid/60 hover:text-accent-solid/80 mt-2 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 rounded"
                   >
                     {t(isTemplate ? "notes.templates.addTemplate" : "notes.actions.addAction")}
                   </button>
@@ -278,8 +278,8 @@ export default function ActionManagerDialog({
                           "flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-start group cursor-pointer",
                           "transition-colors duration-150",
                           selectedId === action.id && !isCreating
-                            ? "bg-accent/8 dark:bg-accent/10"
-                            : "hover:bg-foreground/3 dark:hover:bg-white/3"
+                            ? "bg-accent-solid/8 dark:bg-accent-solid/10"
+                            : "hover:bg-text-primary/3"
                         )}
                       >
                         <Icon
@@ -287,8 +287,8 @@ export default function ActionManagerDialog({
                           className={cn(
                             "shrink-0 transition-colors duration-150",
                             selectedId === action.id && !isCreating
-                              ? "text-accent/60"
-                              : "text-muted-foreground/70"
+                              ? "text-accent-solid/60"
+                              : "text-secondary/70"
                           )}
                         />
                         <div className="flex-1 min-w-0">
@@ -297,19 +297,19 @@ export default function ActionManagerDialog({
                               className={cn(
                                 "text-xs font-medium truncate",
                                 selectedId === action.id && !isCreating
-                                  ? "text-foreground"
-                                  : "text-foreground/70"
+                                  ? "text-primary"
+                                  : "text-primary/70"
                               )}
                             >
                               {getActionName(action, t)}
                             </span>
                             {action.is_builtin === 1 && (
-                              <span className="text-[10px] font-medium px-1 py-px rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/70 shrink-0">
+                              <span className="text-[10px] font-medium px-1 py-px rounded bg-text-primary/5 text-secondary/70 shrink-0">
                                 {t("notes.actions.builtIn")}
                               </span>
                             )}
                             {action.client_id === defaultTemplate?.client_id && (
-                              <span className="text-[10px] font-medium px-1 py-px rounded bg-accent/10 text-accent shrink-0">
+                              <span className="text-[10px] font-medium px-1 py-px rounded bg-accent-solid/10 text-accent-solid shrink-0">
                                 {t("notes.templates.defaultBadge")}
                               </span>
                             )}
@@ -324,9 +324,9 @@ export default function ActionManagerDialog({
                             aria-label={t("notes.context.delete")}
                             className={cn(
                               "p-1 rounded-md shrink-0",
-                              "text-muted-foreground/0 group-hover:text-muted-foreground/70",
-                              "hover:text-destructive/60! hover:bg-destructive/5",
-                              "active:bg-destructive/8",
+                              "text-secondary/0 group-hover:text-secondary/70",
+                              "hover:text-red/60! hover:bg-red-solid/5",
+                              "active:bg-red-solid/8",
                               "transition-all duration-150"
                             )}
                           >
@@ -346,8 +346,8 @@ export default function ActionManagerDialog({
             {showEditor ? (
               <>
                 {/* Editor header — pe-12 clears the dialog close X button */}
-                <div className="flex items-center justify-between ps-5 pe-12 pt-4 pb-3 border-b border-border/70 dark:border-white/10">
-                  <span className="text-xs font-medium text-muted-foreground/70">
+                <div className="flex items-center justify-between ps-5 pe-12 pt-4 pb-3 border-b border-default/70">
+                  <span className="text-xs font-medium text-secondary/70">
                     {isTemplate
                       ? t(
                           isCreating
@@ -394,14 +394,14 @@ export default function ActionManagerDialog({
                 <div className="flex flex-1 flex-col overflow-y-auto px-5 py-4 space-y-3">
                   {isTemplate &&
                     (isCreating ? (
-                      <p className="text-xs text-muted-foreground/70">
+                      <p className="text-xs text-secondary/70">
                         {t("notes.templates.saveBeforeDefault")}
                       </p>
                     ) : (
                       <div className="flex items-center justify-between gap-3">
                         <div className="space-y-1">
                           <p className="text-xs font-medium">{t("notes.templates.defaultLabel")}</p>
-                          <p className="text-xs text-muted-foreground/70">
+                          <p className="text-xs text-secondary/70">
                             {t("notes.templates.defaultHint")}
                           </p>
                         </div>
@@ -445,7 +445,7 @@ export default function ActionManagerDialog({
                     className="h-9"
                   />
 
-                  <p className="text-xs text-muted-foreground/70">
+                  <p className="text-xs text-secondary/70">
                     {t(
                       isTemplate
                         ? "notes.templates.outputHint"
@@ -457,7 +457,7 @@ export default function ActionManagerDialog({
 
                   {/* Prompt — a template's context, or what an action does */}
                   <div className="flex flex-col flex-1 space-y-1.5">
-                    <label className="text-xs font-medium text-foreground/50">
+                    <label className="text-xs font-medium text-primary/50">
                       {t(isTemplate ? "notes.templates.contextLabel" : "notes.actions.promptLabel")}
                     </label>
                     <textarea
@@ -477,18 +477,18 @@ export default function ActionManagerDialog({
 
                   {isTemplate && (
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-foreground/50">
+                      <label className="text-xs font-medium text-primary/50">
                         {t("notes.templates.sectionsLabel")}
                       </label>
                       {sections.length === 0 && (
-                        <p className="text-xs text-muted-foreground/70">
+                        <p className="text-xs text-secondary/70">
                           {t("notes.templates.noSectionsHint")}
                         </p>
                       )}
                       {sections.map((section, index) => (
                         <div
                           key={section.key}
-                          className="flex gap-2 rounded border border-border/70 p-2 dark:border-border-subtle/60"
+                          className="flex gap-2 rounded border border-default/70 p-2 dark:border-default/60"
                         >
                           <div className="flex-1 min-w-0 space-y-1.5">
                             <Input
@@ -572,17 +572,17 @@ export default function ActionManagerDialog({
             ) : (
               /* Empty state — nothing selected */
               <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-                <div className="w-10 h-10 rounded-xl bg-accent/5 dark:bg-accent/8 flex items-center justify-center mb-3">
-                  <Sparkles size={18} className="text-accent/30" />
+                <div className="w-10 h-10 rounded-xl bg-accent-solid/5 dark:bg-accent-solid/8 flex items-center justify-center mb-3">
+                  <Sparkles size={18} className="text-accent-solid/30" />
                 </div>
-                <p className="text-sm font-medium text-foreground/45 mb-1">
+                <p className="text-sm font-medium text-primary/45 mb-1">
                   {t(
                     isTemplate
                       ? "notes.templates.emptyEditorTitle"
                       : "notes.actions.emptyEditorTitle"
                   )}
                 </p>
-                <p className="text-xs text-muted-foreground/70 mb-4 max-w-52 leading-relaxed">
+                <p className="text-xs text-secondary/70 mb-4 max-w-52 leading-relaxed">
                   {t(
                     isTemplate
                       ? "notes.templates.emptyEditorDescription"

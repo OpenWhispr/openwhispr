@@ -18,12 +18,12 @@ const OPTIONS = [
 
 const STYLES = {
   default: {
-    track: "rounded-md border p-0.5 bg-surface-1 border-border-subtle",
-    indicator: "rounded border bg-surface-raised border-border-subtle",
+    track: "rounded-md border p-0.5 bg-surface-secondary border-default",
+    indicator: "rounded border bg-surface-tertiary border-default",
     button: "gap-1.5 rounded px-3.5 py-1.5 text-xs",
     icon: "size-3.5",
-    selected: "text-foreground",
-    unselected: "text-muted-foreground enabled:hover:text-foreground",
+    selected: "text-primary",
+    unselected: "text-secondary enabled:hover:text-primary",
   },
   onboarding: {
     track: "rounded-full p-1 bg-[var(--onboarding-surface-tertiary)]",

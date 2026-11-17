@@ -70,11 +70,11 @@ const ROLE_MENU_COPY: SpaceRoleMenuCopy = {
   remove: `${MEMBERS}.remove`,
 };
 
-const COLUMN_DIVIDER = "border-s border-border/60 dark:border-border-subtle/50";
+const COLUMN_DIVIDER = "border-s border-default/60 dark:border-default/50";
 // Seven rows fit with the header; a longer list scrolls inside the table, and on a short window
 // the cap shrinks so the dialog around it never has to scroll as a whole.
 const ROWS_SCROLLER = "max-h-[clamp(9rem,calc(85vh-25rem),22rem)] overflow-y-auto";
-const PILL = "bg-primary/10 text-primary hover:bg-primary/15";
+const PILL = "bg-brand-solid/10 text-brand-solid hover:bg-brand-solid/15";
 
 type EmailRecipient = Extract<PickedRecipient, { kind: "email" }>;
 
@@ -728,8 +728,8 @@ export default function TeamMembersPanel({
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 {rosterFailed ? (
-                  <div className="flex h-10 items-center justify-between gap-2 rounded border border-border/70 px-3 dark:border-border-subtle/60">
-                    <p className="truncate text-xs text-muted-foreground">
+                  <div className="flex h-10 items-center justify-between gap-2 rounded border border-default/70 px-3 dark:border-default/60">
+                    <p className="truncate text-xs text-secondary">
                       {t("settingsPage.workspace.members.loadError")}
                     </p>
                     <Button
@@ -744,7 +744,7 @@ export default function TeamMembersPanel({
                 ) : (
                   <div
                     aria-hidden="true"
-                    className="h-10 animate-pulse rounded-lg bg-foreground/5 dark:bg-white/5"
+                    className="h-10 animate-pulse rounded-lg bg-text-primary/5"
                   />
                 )}
               </div>
@@ -753,16 +753,14 @@ export default function TeamMembersPanel({
           )}
           {!line && summary.emails.length > 0 && (
             // Below the chips, and gone once the line has something else to say.
-            <p className="text-xs leading-snug text-muted-foreground">
-              {t(`${MEMBERS}.inviteNote`)}
-            </p>
+            <p className="text-xs leading-snug text-secondary">{t(`${MEMBERS}.inviteNote`)}</p>
           )}
           {line && (
             <p
               role={line.tone === "error" ? "alert" : "status"}
               className={cn(
                 "text-[11px] leading-snug",
-                line.tone === "error" ? "text-destructive" : "text-muted-foreground"
+                line.tone === "error" ? "text-red" : "text-secondary"
               )}
             >
               {line.text}
@@ -866,7 +864,7 @@ function MembersTable({
         aria-label={label}
         className={cn(
           ROWS_SCROLLER,
-          "outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          "outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
         )}
       >
         <table className="w-full table-fixed border-collapse">
@@ -923,9 +921,7 @@ function TableMessage({
   if (status === "failed") {
     return (
       <div className="flex flex-col items-center gap-3">
-        <p className="text-xs text-muted-foreground">
-          {t("settingsPage.workspace.members.loadError")}
-        </p>
+        <p className="text-xs text-secondary">{t("settingsPage.workspace.members.loadError")}</p>
         <Button variant="outline" size="sm" onClick={onRetry}>
           {t("settingsPage.workspace.loadError.retry")}
         </Button>
@@ -933,9 +929,9 @@ function TableMessage({
     );
   }
   if (status === "loading") {
-    return <div aria-hidden="true" className="h-10 animate-pulse rounded-lg bg-foreground/5" />;
+    return <div aria-hidden="true" className="h-10 animate-pulse rounded-lg bg-text-primary/5" />;
   }
-  return <p className="text-xs text-muted-foreground">{t("notes.spaces.members.empty")}</p>;
+  return <p className="text-xs text-secondary">{t("notes.spaces.members.empty")}</p>;
 }
 
 interface MemberRowProps {
@@ -986,7 +982,7 @@ function MemberRow({
             copy={ROLE_MENU_COPY}
           />
         ) : (
-          <span className="text-xs text-foreground">
+          <span className="text-xs text-primary">
             {member.role === "admin"
               ? t("notes.spaces.members.roleAdmin")
               : t("notes.spaces.members.roleMember")}
@@ -1012,9 +1008,9 @@ function NameCell({
         {lead}
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-xs font-medium text-foreground">{primary}</span>
+        <span className="truncate text-xs font-medium text-primary">{primary}</span>
         {secondary ? (
-          <span className="truncate text-[11px] text-muted-foreground">{secondary}</span>
+          <span className="truncate text-[11px] text-secondary">{secondary}</span>
         ) : null}
       </span>
     </div>
@@ -1041,7 +1037,7 @@ function PendingInvitations({
 
   return (
     <section aria-labelledby={headingId} className="space-y-2">
-      <h3 id={headingId} className="text-xs font-normal text-muted-foreground">
+      <h3 id={headingId} className="text-xs font-normal text-secondary">
         {t(`${MEMBERS}.pending`)}
       </h3>
       <ul className={cn(TABLE_FRAME, "overflow-hidden")}>
@@ -1055,15 +1051,15 @@ function PendingInvitations({
           >
             <span
               aria-hidden="true"
-              className="flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/5 text-muted-foreground dark:bg-white/6"
+              className="flex size-5 shrink-0 items-center justify-center rounded-full bg-text-primary/5 text-secondary"
             >
               <EnvelopePlus className="size-3" aria-hidden="true" />
             </span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-xs font-medium text-foreground">
+              <span className="truncate text-xs font-medium text-primary">
                 <bdi dir="ltr">{invitation.email}</bdi>
               </span>
-              <span className="truncate text-[11px] text-muted-foreground">
+              <span className="truncate text-[11px] text-secondary">
                 {t(`${MEMBERS}.pendingBody`, {
                   role:
                     invitation.workspace_role === "admin"

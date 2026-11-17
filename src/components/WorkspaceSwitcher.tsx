@@ -30,13 +30,13 @@ import type { Workspace } from "../types/electron";
 const InviteTeammateDialog = React.lazy(() => import("./InviteTeammateDialog"));
 
 const triggerClass =
-  "group flex items-center gap-2.5 w-full h-10 px-2 rounded-md text-start outline-none hover:bg-foreground/4 dark:hover:bg-white/4 active:bg-foreground/6 data-[state=open]:bg-foreground/5 dark:data-[state=open]:bg-white/6 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
+  "group flex items-center gap-2.5 w-full h-10 px-2 rounded-md text-start outline-none hover:bg-text-primary/4 active:bg-text-primary/6 data-[state=open]:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors duration-150";
 const compactTriggerClass =
-  "group flex items-center justify-center w-9 h-9 rounded-md outline-none hover:bg-foreground/4 dark:hover:bg-white/4 active:bg-foreground/6 data-[state=open]:bg-foreground/5 dark:data-[state=open]:bg-white/6 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
-const nameClass = "flex-1 min-w-0 truncate text-sm font-medium text-foreground";
+  "group flex items-center justify-center w-9 h-9 rounded-md outline-none hover:bg-text-primary/4 active:bg-text-primary/6 data-[state=open]:bg-text-primary/5 focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors duration-150";
+const nameClass = "flex-1 min-w-0 truncate text-sm font-medium text-primary";
 const itemClass = "gap-3 px-2 py-2 text-[13px] rounded-lg";
 const chevronClass =
-  "shrink-0 text-foreground/45 group-hover:text-foreground/70 transition-colors duration-150";
+  "shrink-0 text-primary/45 group-hover:text-primary/70 transition-colors duration-150";
 // Counting members fetches the whole roster, so each workspace's count is reused for a while.
 const MEMBER_COUNT_TTL_MS = 5 * 60_000;
 
@@ -61,11 +61,11 @@ function RetryMenuItem({
       disabled={loading}
       className="mx-1 mb-1.5 flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-xs leading-snug"
     >
-      <span className="text-muted-foreground">{message}</span>
+      <span className="text-secondary">{message}</span>
       {loading ? (
-        <Loader2 size={12} className="animate-spin text-muted-foreground" />
+        <Loader2 size={12} className="animate-spin text-secondary" />
       ) : (
-        <span className="font-medium text-primary">
+        <span className="font-medium text-brand-solid">
           {t("settingsPage.workspace.loadError.retry")}
         </span>
       )}
@@ -147,10 +147,8 @@ export default function WorkspaceSwitcher({
         className={cn("flex items-center gap-2.5 h-10 px-2", compact && "justify-center")}
         aria-hidden="true"
       >
-        <span className="w-7 h-7 rounded-full bg-foreground/6 dark:bg-white/8 animate-pulse" />
-        {!compact && (
-          <span className="h-2.5 w-20 rounded bg-foreground/6 dark:bg-white/8 animate-pulse" />
-        )}
+        <span className="w-7 h-7 rounded-full bg-text-primary/6 animate-pulse" />
+        {!compact && <span className="h-2.5 w-20 rounded bg-text-primary/6 animate-pulse" />}
       </div>
     );
   }
@@ -166,9 +164,9 @@ export default function WorkspaceSwitcher({
         className={cn(compactTriggerClass, "disabled:opacity-60")}
       >
         {loading ? (
-          <Loader2 size={14} className="animate-spin text-muted-foreground" />
+          <Loader2 size={14} className="animate-spin text-secondary" />
         ) : (
-          <UserCircle size={24} className="text-foreground/50" />
+          <UserCircle size={24} className="text-primary/50" />
         )}
       </button>
     );
@@ -184,13 +182,11 @@ export default function WorkspaceSwitcher({
       >
         {/* Stacked, so long translations wrap instead of truncating beside Retry. */}
         <span className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-xs leading-snug">
-          <span className="text-muted-foreground">
-            {t("settingsPage.workspace.loadError.title")}
-          </span>
+          <span className="text-secondary">{t("settingsPage.workspace.loadError.title")}</span>
           {loading ? (
-            <Loader2 size={12} className="animate-spin text-muted-foreground" />
+            <Loader2 size={12} className="animate-spin text-secondary" />
           ) : (
-            <span className="font-medium text-primary">
+            <span className="font-medium text-brand-solid">
               {t("settingsPage.workspace.loadError.retry")}
             </span>
           )}
@@ -212,7 +208,7 @@ export default function WorkspaceSwitcher({
           aria-label={compact ? privateLabel : undefined}
         >
           <span className="flex w-7 shrink-0 justify-center">
-            <Lock size={16} className="text-foreground/50" />
+            <Lock size={16} className="text-primary/50" />
           </span>
           {!compact && (
             <>
@@ -279,11 +275,11 @@ export default function WorkspaceSwitcher({
           <div className="flex items-center gap-3 px-2 pt-1.5 pb-2.5">
             <MemberAvatar name={current.name} email={null} />
             <div className="min-w-0">
-              <p dir="auto" className="truncate text-sm font-medium text-foreground">
+              <p dir="auto" className="truncate text-sm font-medium text-primary">
                 {current.name}
               </p>
               {currentMemberCount !== null && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-secondary">
                   {t("workspaces.join.memberCount", { count: currentMemberCount })}
                 </p>
               )}
@@ -300,7 +296,7 @@ export default function WorkspaceSwitcher({
           {state.canInvite && (
             <DropdownMenuItem
               onSelect={() => setInvite({ workspace: current, afterCreate: false })}
-              className="mx-1 mb-1.5 justify-center gap-1.5 rounded-lg py-2 text-[13px] text-foreground/80 bg-foreground/5 dark:bg-white/6 focus:bg-foreground/8 dark:focus:bg-white/10"
+              className="mx-1 mb-1.5 justify-center gap-1.5 rounded-lg py-2 text-[13px] text-primary/80 bg-text-primary/5 focus:bg-text-primary/8"
             >
               <UserPlus size={14} />
               {t("workspaces.switcher.invitePeople")}
@@ -317,12 +313,14 @@ export default function WorkspaceSwitcher({
               <span dir="auto" className="flex-1 min-w-0 truncate">
                 {workspace.name}
               </span>
-              {workspace.id === current.id && <Check size={16} className="shrink-0 text-primary" />}
+              {workspace.id === current.id && (
+                <Check size={16} className="shrink-0 text-brand-solid" />
+              )}
             </DropdownMenuItem>
           ))}
           <DropdownMenuItem
             onSelect={() => setCreateOpen(true)}
-            className={cn(itemClass, "text-muted-foreground focus:text-foreground")}
+            className={cn(itemClass, "text-secondary focus:text-primary")}
           >
             <span className="flex w-7 shrink-0 justify-center">
               <Plus size={16} />

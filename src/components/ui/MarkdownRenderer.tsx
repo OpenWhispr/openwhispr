@@ -44,7 +44,7 @@ function MarkdownLink({ node: _node, ...props }: ComponentProps<"a"> & ExtraProp
         }
         target={props.href?.startsWith("#") ? undefined : "_blank"}
         rel="noopener noreferrer"
-        className="text-link underline decoration-link/30 hover:decoration-link/60 transition-colors wrap-break-word"
+        className="text-brand underline decoration-brand-text/30 hover:decoration-brand-text/60 transition-colors wrap-break-word"
       />
     </InsideLinkContext>
   );
@@ -129,14 +129,14 @@ const markdownComponents: Components = {
   a: MarkdownLink,
   img: MarkdownImage,
   code: ({ children }): ReactElement => (
-    <code dir="ltr" className="bg-black/10 px-1 py-0.5 rounded text-xs font-mono">
+    <code dir="ltr" className="bg-text-primary/10 px-1 py-0.5 rounded text-xs font-mono">
       {children}
     </code>
   ),
   pre: function MarkdownCodeBlock({ children, node }): ReactElement {
     const actions = useContext(CodeBlockActionsContext);
     const block = (
-      <pre dir="ltr" className="bg-black/10 p-2 rounded overflow-x-auto text-xs mb-2">
+      <pre dir="ltr" className="bg-text-primary/10 p-2 rounded overflow-x-auto text-xs mb-2">
         {children}
       </pre>
     );

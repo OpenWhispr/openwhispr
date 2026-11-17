@@ -13,6 +13,6 @@ export function TeamGlyph({
   return emoji ? (
     <TileGlyph emoji={emoji} name={name} />
   ) : (
-    <Users className="size-3.5 text-muted-foreground" />
+    <Users className="size-3.5 text-secondary" />
   );
 }

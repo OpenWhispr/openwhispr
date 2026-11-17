@@ -37,15 +37,15 @@ export function LineNumberedTextarea({
     // beside its line; the gutter's extra bottom room matches a sideways scrollbar's.
     <div
       className={cn(
-        "flex h-56 overflow-hidden rounded-lg border border-border/70 bg-input transition-colors hover:border-border-hover focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 dark:border-border-subtle/60 dark:bg-surface-1 dark:focus-within:border-border-active dark:focus-within:ring-ring/10",
-        invalid && "border-destructive! ring-destructive/20 dark:ring-destructive/40",
+        "flex h-56 overflow-hidden rounded-lg border border-default/70 bg-surface-primary transition-colors hover:border-hover focus-within:border-brand-solid focus-within:ring-2 focus-within:ring-brand-solid/10 dark:border-default/60 dark:bg-surface-secondary dark:focus-within:border-focus dark:focus-within:ring-focus/10",
+        invalid && "border-red-solid! ring-red-solid/20 dark:ring-red-solid/40",
         className
       )}
     >
       <div
         ref={gutter}
         aria-hidden="true"
-        className="select-none overflow-hidden border-e border-border/60 dark:border-white/8 bg-foreground/3 dark:bg-white/3 pt-2 pb-3.5 ps-3 pe-2 text-end font-mono text-[11px] leading-5 text-muted-foreground/50 tabular-nums"
+        className="select-none overflow-hidden border-e border-default/60 bg-text-primary/3 pt-2 pb-3.5 ps-3 pe-2 text-end font-mono text-[11px] leading-5 text-secondary/50 tabular-nums"
       >
         {Array.from({ length: lineCount }, (_, index) => (
           <div key={index}>{index + 1}</div>
@@ -67,7 +67,7 @@ export function LineNumberedTextarea({
         aria-label={ariaLabel}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
-        className="input-inline block h-full min-w-0 flex-1 resize-none overflow-auto bg-transparent px-3 py-2 font-mono text-xs leading-5 text-foreground outline-none placeholder:text-muted-foreground/50 caret-primary"
+        className="input-inline block h-full min-w-0 flex-1 resize-none overflow-auto bg-transparent px-3 py-2 font-mono text-xs leading-5 text-primary outline-none placeholder:text-secondary/50 caret-brand-solid"
       />
     </div>
   );

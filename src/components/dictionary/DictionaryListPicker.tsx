@@ -41,7 +41,7 @@ function PickerButton({
       className={cn(
         "flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-xs",
         nested && "ps-4",
-        selected && "bg-muted",
+        selected && "bg-surface-secondary",
         entry.locked && !selected && "opacity-60"
       )}
     >
@@ -50,16 +50,16 @@ function PickerButton({
       </span>
       {entry.locked ? (
         <>
-          <Lock size={11} className="shrink-0 text-foreground/40" aria-hidden="true" />
+          <Lock size={11} className="shrink-0 text-primary/40" aria-hidden="true" />
           <span className="sr-only">{t("dictionary.shared.lockedEntry")}</span>
         </>
       ) : (
         entry.count !== null && (
-          <span className="shrink-0 tabular-nums text-foreground/40">{entry.count}</span>
+          <span className="shrink-0 tabular-nums text-primary/40">{entry.count}</span>
         )
       )}
       <span className="w-3 shrink-0">
-        {selected && <Check size={12} className="text-primary" aria-hidden="true" />}
+        {selected && <Check size={12} className="text-brand-solid" aria-hidden="true" />}
       </span>
     </DropdownMenuItem>
   );
@@ -90,12 +90,12 @@ export function DictionaryListPicker({
           <button
             type="button"
             aria-label={selectedLabel}
-            className="me-1 flex h-7 min-w-0 max-w-44 items-center gap-2 rounded-md border border-border/70 bg-card px-2 text-xs text-foreground transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 dark:border-white/10 dark:bg-surface-1"
+            className="me-1 flex h-7 min-w-0 max-w-44 items-center gap-2 rounded-md border border-default/70 bg-surface-primary px-2 text-xs text-primary transition-colors hover:border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20 dark:bg-surface-secondary"
           >
             <span dir="auto" className="min-w-0 truncate">
               {selectedLabel}
             </span>
-            <ChevronDown size={12} className="shrink-0 text-foreground/50" aria-hidden="true" />
+            <ChevronDown size={12} className="shrink-0 text-primary/50" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
       </Tooltip>
@@ -106,7 +106,7 @@ export function DictionaryListPicker({
         {inGroup("top").map(renderEntry)}
         {inGroup("shared").length > 0 && (
           <>
-            <p className="px-2 pt-2 pb-1 text-[11px] text-foreground/45">
+            <p className="px-2 pt-2 pb-1 text-[11px] text-primary/45">
               {t("dictionary.shared.group")}
             </p>
             {inGroup("shared").map(renderEntry)}

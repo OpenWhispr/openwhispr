@@ -128,8 +128,8 @@ export default function ApiKeysSection({
         <SettingsPanel>
           <SettingsPanelRow>
             <div className="flex flex-col items-center py-4 text-center">
-              <Key className="h-5 w-5 text-muted-foreground/70 mb-2" />
-              <p className="text-xs text-muted-foreground">{t("apiKeysSection.empty")}</p>
+              <Key className="h-5 w-5 text-secondary/70 mb-2" />
+              <p className="text-xs text-secondary">{t("apiKeysSection.empty")}</p>
             </div>
           </SettingsPanelRow>
         </SettingsPanel>
@@ -140,13 +140,10 @@ export default function ApiKeysSection({
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span dir="auto" className="text-xs font-medium text-foreground truncate">
+                    <span dir="auto" className="text-xs font-medium text-primary truncate">
                       {apiKey.name}
                     </span>
-                    <code
-                      dir="ltr"
-                      className="text-[10px] font-mono text-muted-foreground/70 shrink-0"
-                    >
+                    <code dir="ltr" className="text-[10px] font-mono text-secondary/70 shrink-0">
                       {apiKey.key_prefix}...
                     </code>
                   </div>
@@ -158,7 +155,7 @@ export default function ApiKeysSection({
                           {t(`apiKeysSection.scopes.${API_SCOPE_I18N_KEY[scope as ApiScope]}`)}
                         </Badge>
                       ))}
-                    <span className="text-[10px] text-muted-foreground/70 ms-1">
+                    <span className="text-[10px] text-secondary/70 ms-1">
                       {apiKey.last_used_at
                         ? t("apiKeysSection.lastUsed", {
                             time: formatRelativeTime(apiKey.last_used_at),
@@ -170,7 +167,7 @@ export default function ApiKeysSection({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-10 text-muted-foreground hover:text-destructive"
+                  className="h-8 w-10 text-secondary hover:text-red-solid"
                   onClick={() => setRevokeTarget(apiKey)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -181,7 +178,7 @@ export default function ApiKeysSection({
 
           {keys.length >= MAX_API_KEYS && (
             <SettingsPanelRow>
-              <p className="text-[10px] text-muted-foreground/70 text-center">
+              <p className="text-[10px] text-secondary/70 text-center">
                 {t("apiKeysSection.maxKeysReached", { max: MAX_API_KEYS })}
               </p>
             </SettingsPanelRow>
@@ -304,7 +301,7 @@ function CreateKeyDialog({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-success" />
+                <Shield className="h-4 w-4 text-green-solid" />
                 {t("apiKeysSection.created.title")}
               </DialogTitle>
               <DialogDescription className="sr-only">
@@ -313,10 +310,10 @@ function CreateKeyDialog({
             </DialogHeader>
 
             <div className="space-y-3">
-              <div className="rounded-lg border border-border/70 bg-muted/30 dark:bg-surface-raised/30 p-3">
+              <div className="rounded-lg border border-default/70 bg-surface-secondary/30 dark:bg-surface-tertiary/30 p-3">
                 <code
                   dir="ltr"
-                  className="text-xs font-mono text-foreground break-all select-all leading-relaxed"
+                  className="text-xs font-mono text-primary break-all select-all leading-relaxed"
                 >
                   {rawKey}
                 </code>
@@ -324,7 +321,7 @@ function CreateKeyDialog({
 
               <Button variant="outline" size="sm" className="w-full" onClick={handleCopy}>
                 {copied ? (
-                  <Check className="h-3.5 w-3.5 me-1.5 text-success" />
+                  <Check className="h-3.5 w-3.5 me-1.5 text-green-solid" />
                 ) : (
                   <Copy className="h-3.5 w-3.5 me-1.5" />
                 )}
@@ -333,9 +330,9 @@ function CreateKeyDialog({
                   : t("apiKeysSection.created.copyButton")}
               </Button>
 
-              <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/5 dark:bg-warning/10 px-3 py-2">
-                <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
+              <div className="flex items-start gap-2 rounded-lg border border-amber-solid/20 bg-amber-solid/5 dark:bg-amber-solid/10 px-3 py-2">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-solid shrink-0 mt-0.5" />
+                <p className="text-[11px] text-secondary leading-relaxed">
                   {t("apiKeysSection.created.warning")}
                 </p>
               </div>
@@ -358,7 +355,7 @@ function CreateKeyDialog({
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground">
+                <label className="text-xs font-medium text-primary">
                   {t("apiKeysSection.create.nameLabel")}
                 </label>
                 <Input
@@ -377,22 +374,22 @@ function CreateKeyDialog({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground">
+                <label className="text-xs font-medium text-primary">
                   {t("apiKeysSection.create.scopesLabel")}
                 </label>
                 <div className="space-y-1">
                   {API_SCOPES.map((scope) => (
                     <label
                       key={scope}
-                      className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 cursor-pointer hover:bg-muted/50 dark:hover:bg-surface-raised/30 transition-colors"
+                      className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 cursor-pointer hover:bg-surface-secondary/50 dark:hover:bg-surface-tertiary/30 transition-colors"
                     >
                       <input
                         type="checkbox"
                         checked={scopes.has(scope)}
                         onChange={() => toggleScope(scope)}
-                        className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                        className="h-3.5 w-3.5 rounded border-default accent-brand-solid cursor-pointer"
                       />
-                      <span className="text-xs text-foreground">
+                      <span className="text-xs text-primary">
                         {t(`apiKeysSection.scopes.${API_SCOPE_I18N_KEY[scope]}`)}
                       </span>
                     </label>
@@ -401,7 +398,7 @@ function CreateKeyDialog({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-foreground">
+                <label className="text-xs font-medium text-primary">
                   {t("apiKeysSection.create.expiryLabel")}
                 </label>
                 <Select value={expiry} onValueChange={setExpiry}>

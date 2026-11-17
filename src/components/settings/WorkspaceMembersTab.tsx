@@ -58,7 +58,7 @@ interface WorkspaceMembersTabProps {
 
 const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
 // A bigger target than the box, without moving it.
-const ROW_CHECKBOX = "-m-1 p-1 focus-visible:ring-primary/50";
+const ROW_CHECKBOX = "-m-1 p-1 focus-visible:ring-brand-solid/50";
 
 export default function WorkspaceMembersTab({
   workspace,
@@ -299,10 +299,10 @@ export default function WorkspaceMembersTab({
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       {canManage && joinRequests.length > 0 && (
         <div className="shrink-0">
-          <h4 className="text-xs font-semibold text-foreground mb-2">
+          <h4 className="text-xs font-semibold text-primary mb-2">
             {t("settingsPage.workspace.joinRequests.title")}
           </h4>
-          <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 divide-y divide-border/60 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
+          <div className="rounded-lg border border-default/70 divide-y divide-default/60 dark:divide-default/50 bg-surface-primary/50">
             {joinRequests.map((request) => (
               <div key={request.id} className="flex items-center gap-3 px-4 h-12">
                 <MemberAvatar
@@ -312,11 +312,11 @@ export default function WorkspaceMembersTab({
                   size="sm"
                 />
                 <div className="flex-1 min-w-0">
-                  <p dir="auto" className="text-xs text-foreground truncate">
+                  <p dir="auto" className="text-xs text-primary truncate">
                     {request.name ?? request.email}
                   </p>
                   {request.name && (
-                    <p className="text-[11px] text-muted-foreground truncate">
+                    <p className="text-[11px] text-secondary truncate">
                       <bdi dir="ltr">{request.email}</bdi>
                     </p>
                   )}
@@ -401,10 +401,10 @@ export default function WorkspaceMembersTab({
                 <tr className={ROW_DIVIDER}>
                   <td colSpan={columnCount} className="px-4 py-12">
                     <div role="status" className="flex flex-col items-center gap-1.5 text-center">
-                      <p className="text-lg font-medium leading-[1.4] text-foreground">
+                      <p className="text-lg font-medium leading-[1.4] text-primary">
                         {t("settingsPage.workspace.people.loading.title")}
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-secondary">
                         {t("settingsPage.workspace.people.loading.body")}
                       </p>
                     </div>
@@ -415,10 +415,10 @@ export default function WorkspaceMembersTab({
                 <tr className={ROW_DIVIDER}>
                   <td colSpan={columnCount} className="px-4 py-12">
                     <div className="flex flex-col items-center gap-1.5 text-center">
-                      <p className="text-lg font-medium leading-[1.4] text-foreground">
+                      <p className="text-lg font-medium leading-[1.4] text-primary">
                         {t("settingsPage.workspace.people.failed.title")}
                       </p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-secondary">
                         {t("settingsPage.workspace.people.failed.body")}
                       </p>
                       <button
@@ -436,7 +436,7 @@ export default function WorkspaceMembersTab({
                 <tr className={ROW_DIVIDER}>
                   <td colSpan={columnCount} className="px-4 py-10">
                     <div className="flex flex-col items-center gap-1.5 text-center">
-                      <p className="text-sm text-foreground">
+                      <p className="text-sm text-primary">
                         <BidiInterpolatedText
                           text={t("settingsPage.workspace.people.search.noResultsTitle", {
                             query: BIDI_VALUE_TOKEN,
@@ -445,13 +445,13 @@ export default function WorkspaceMembersTab({
                           dir="auto"
                         />
                       </p>
-                      <p className="text-sm text-muted-foreground/70">
+                      <p className="text-sm text-secondary/70">
                         {t("settingsPage.workspace.people.search.noResultsBody")}
                       </p>
                       <button
                         type="button"
                         onClick={onClearSearch}
-                        className="mt-1.5 inline-flex items-center gap-1.5 rounded-full ps-2.5 pe-3 py-2 text-xs font-medium text-link outline-none transition-colors hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/40"
+                        className="mt-1.5 inline-flex items-center gap-1.5 rounded-full ps-2.5 pe-3 py-2 text-xs font-medium text-brand outline-none transition-colors hover:bg-text-primary/5 focus-visible:ring-2 focus-visible:ring-focus/40"
                       >
                         <X className="size-3.5" aria-hidden="true" />
                         {t("settingsPage.workspace.people.search.clear")}
@@ -492,23 +492,20 @@ export default function WorkspaceMembersTab({
                           />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <p
-                                dir="auto"
-                                className="text-xs font-medium text-foreground truncate"
-                              >
+                              <p dir="auto" className="text-xs font-medium text-primary truncate">
                                 <HighlightMatch
                                   text={member.name || member.email}
                                   query={searchQuery}
                                 />
                               </p>
                               {isSelf && (
-                                <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-foreground/5 text-muted-foreground dark:bg-white/8">
+                                <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-medium bg-text-primary/5 text-secondary">
                                   {t("settingsPage.workspace.people.you")}
                                 </span>
                               )}
                             </div>
                             {member.name && (
-                              <p className="text-xs text-muted-foreground/70 truncate">
+                              <p className="text-xs text-secondary/70 truncate">
                                 <bdi dir="ltr">
                                   <HighlightMatch text={member.email} query={searchQuery} />
                                 </bdi>
@@ -544,7 +541,7 @@ export default function WorkspaceMembersTab({
 
       {/* The seat count is the workspace's, so a search that matches nobody keeps it. */}
       {canManage && (view.kind === "rows" || view.kind === "noResults") && (
-        <p className="shrink-0 text-end text-xs text-muted-foreground/80">
+        <p className="shrink-0 text-end text-xs text-secondary/80">
           {t("settingsPage.workspace.members.description", {
             // Pending invitations hold seats too, as the invite dialog counts them.
             count: workspace.seats_used ?? members.length,
@@ -644,11 +641,11 @@ function TeamCell({ teams }: { teams: WorkspaceMember["teams"] }): React.ReactEl
   return (
     <td className={cn(COLUMN_DIVIDER, "w-[170px] max-w-0 px-3")}>
       {list.length === 0 ? (
-        <span className="text-sm text-muted-foreground/70">
+        <span className="text-sm text-secondary/70">
           {t("settingsPage.workspace.people.teamsNone")}
         </span>
       ) : list.length === 1 ? (
-        <div className="flex min-w-0 items-center gap-1 px-1.5 text-sm text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1 px-1.5 text-sm text-secondary">
           <Users className="size-4 shrink-0" aria-hidden="true" />
           <span dir="auto" className="min-w-0 truncate">
             {list[0].name}
@@ -660,14 +657,14 @@ function TeamCell({ teams }: { teams: WorkspaceMember["teams"] }): React.ReactEl
             <span className="truncate">
               {t("settingsPage.workspace.people.teamsCount", { count: list.length })}
             </span>
-            <ChevronDown className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <ChevronDown className="size-3 shrink-0 text-secondary" aria-hidden="true" />
           </PopoverTrigger>
           <PopoverContent align="start" className="w-56 p-1.5">
             <ul className="flex flex-col">
               {list.map((team) => (
                 <li key={team.id} className="flex items-center gap-2 px-2 py-1.5">
-                  <Users className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <span dir="auto" className="min-w-0 truncate text-xs text-foreground">
+                  <Users className="size-3.5 shrink-0 text-secondary" aria-hidden="true" />
+                  <span dir="auto" className="min-w-0 truncate text-xs text-primary">
                     {team.name}
                   </span>
                 </li>

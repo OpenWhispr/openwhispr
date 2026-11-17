@@ -229,7 +229,7 @@ test("a narrow table keeps every email whole, with role and status under it", as
   assert.ok(classes.includes("@xl:truncate"));
   assert.match(
     markup,
-    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · <span title="settingsPage\.workspace\.people\.invitations\.pending#3">\s*settingsPage\.workspace\.people\.invitations\.statusPending<\/span><\/p>/
+    /<p class="[^"]*@xl:hidden[^"]*text-secondary[^"]*">settingsPage\.workspace\.role\.member · <span title="settingsPage\.workspace\.people\.invitations\.pending#3">\s*settingsPage\.workspace\.people\.invitations\.statusPending<\/span><\/p>/
   );
 });
 
@@ -265,11 +265,11 @@ test("expired keeps its colour in the wide column and reads muted under the emai
 
   assert.match(
     markup,
-    /<td class="[^"]*hidden @xl:table-cell[^"]*text-destructive[^"]*">settingsPage\.workspace\.people\.invitations\.expired<\/td>/
+    /<td class="[^"]*hidden @xl:table-cell[^"]*text-red[^"]*">settingsPage\.workspace\.people\.invitations\.expired<\/td>/
   );
   assert.match(
     markup,
-    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · <span class="text-destructive">settingsPage\.workspace\.people\.invitations\.expired<\/span><\/p>/
+    /<p class="[^"]*@xl:hidden[^"]*text-secondary[^"]*">settingsPage\.workspace\.role\.member · <span class="text-red">settingsPage\.workspace\.people\.invitations\.expired<\/span><\/p>/
   );
 });
 
@@ -288,10 +288,7 @@ test("expired shows Expired and still offers Resend", async (t) => {
 
   assert.match(markup, /settingsPage\.workspace\.people\.invitations\.expired/);
   assert.doesNotMatch(markup, /invitations\.pending/);
-  assert.match(
-    markup,
-    /text-destructive[^>]*>settingsPage\.workspace\.people\.invitations\.expired/
-  );
+  assert.match(markup, /text-red[^>]*>settingsPage\.workspace\.people\.invitations\.expired/);
   assert.match(markup, /settingsPage\.workspace\.people\.invitations\.resend/);
 });
 
@@ -354,7 +351,7 @@ test("row menu offers Resend invite and Cancel invite", async (t) => {
   );
   assert.match(
     markup,
-    /role="menuitem"[^>]*text-destructive[^>]*>(?:<svg[\s\S]*?<\/svg>)?settingsPage\.workspace\.people\.invitations\.cancel</
+    /role="menuitem"[^>]*text-red[^>]*>(?:<svg[\s\S]*?<\/svg>)?settingsPage\.workspace\.people\.invitations\.cancel</
   );
 });
 
@@ -702,7 +699,7 @@ test("selecting invitations shows Cancel invites and Resend invites", async (t) 
   assert.ok(barButton(container, "resendSelected"));
   assert.match(
     barButton(container, "cancelSelected").getAttribute("class"),
-    /text-destructive/,
+    /text-red/,
     "Cancel invites is destructive"
   );
 

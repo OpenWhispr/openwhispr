@@ -309,12 +309,12 @@ export default function TeamSpacesPanel({
         {staged.length > 0 ? (
           <div className="flex flex-col items-center gap-1 px-6 py-10 text-center">
             <StateTile />
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-sm font-medium text-primary">
               {t(`${COPY}.selectedTitle`, { count: staged.length })}
             </p>
             <p
               role={failureText ? "alert" : undefined}
-              className={cn("text-xs", failureText ? "text-destructive" : "text-muted-foreground")}
+              className={cn("text-xs", failureText ? "text-red" : "text-secondary")}
             >
               {failureText ??
                 t(`${COPY}.selectedBody`, {
@@ -330,7 +330,7 @@ export default function TeamSpacesPanel({
           <>
             {failureText && (
               // Every teamspace it named has left the choices, so nothing staged carries the line.
-              <p role="alert" className="text-xs text-destructive">
+              <p role="alert" className="text-xs text-red">
                 {failureText}
               </p>
             )}
@@ -364,7 +364,7 @@ function StateTile(): ReactElement {
   return (
     <span
       aria-hidden="true"
-      className="mb-2 flex size-8 items-center justify-center rounded-full bg-surface-3 text-primary"
+      className="mb-2 flex size-8 items-center justify-center rounded-full bg-surface-tertiary text-brand-solid"
     >
       <Office className="size-4" />
     </span>
@@ -392,8 +392,8 @@ function Message({
       className="flex flex-col items-center gap-1 px-6 py-10 text-center"
     >
       {icon ? <StateTile /> : null}
-      <p className="text-sm font-medium text-foreground">{title}</p>
-      <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">{body}</p>
+      <p className="text-sm font-medium text-primary">{title}</p>
+      <p className="max-w-xs text-xs leading-relaxed text-secondary">{body}</p>
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -408,7 +408,7 @@ function AssignedList({ spaces, label }: { spaces: SpaceRef[]; label: string }):
         tabIndex={0}
         role="region"
         aria-label={label}
-        className="max-h-64 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="max-h-64 overflow-y-auto outline-none focus-visible:ring-2 focus-visible:ring-focus/40"
       >
         <table className="w-full table-fixed border-collapse">
           <thead>
@@ -426,7 +426,7 @@ function AssignedList({ spaces, label }: { spaces: SpaceRef[]; label: string }):
                     <span aria-hidden="true" className={NAME_TILE}>
                       <TileGlyph emoji={space.emoji} name={space.name} />
                     </span>
-                    <span dir="auto" className="min-w-0 truncate text-sm text-foreground">
+                    <span dir="auto" className="min-w-0 truncate text-sm text-primary">
                       {space.name}
                     </span>
                   </div>
@@ -604,7 +604,7 @@ function TeamspacePicker({
                   onClick={() => onToggle(space.id)}
                   className={cn(
                     "flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-start",
-                    index === activeIndex && "bg-muted"
+                    index === activeIndex && "bg-surface-secondary"
                   )}
                 >
                   <span
@@ -612,8 +612,8 @@ function TeamspacePicker({
                     className={cn(
                       "flex size-4 shrink-0 items-center justify-center rounded-[4px] border",
                       checked
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border/80"
+                        ? "border-brand-solid bg-brand-solid text-on-solid"
+                        : "border-default/80"
                     )}
                   >
                     {checked && <Check className="size-3" />}
@@ -632,12 +632,12 @@ function TeamspacePicker({
             })}
           </div>
         ) : (
-          <p role="status" className="px-2.5 py-2 text-sm text-muted-foreground">
+          <p role="status" className="px-2.5 py-2 text-sm text-secondary">
             {t(`${COPY}.noMatches`)}
           </p>
         )}
         {canCreate && (
-          <div className="mt-1 border-t border-border/60 pt-1">
+          <div className="mt-1 border-t border-default/60 pt-1">
             <button
               type="button"
               id={`${listId}-${matches.length}`}
@@ -647,11 +647,11 @@ function TeamspacePicker({
                 onCreate();
               }}
               className={cn(
-                "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-start text-sm text-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-none",
-                createActive && "bg-muted"
+                "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-start text-sm text-primary hover:bg-surface-secondary focus-visible:bg-surface-secondary focus-visible:outline-none",
+                createActive && "bg-surface-secondary"
               )}
             >
-              <Plus className="size-3.5 text-muted-foreground" aria-hidden="true" />
+              <Plus className="size-3.5 text-secondary" aria-hidden="true" />
               {t(`${COPY}.createNew`)}
             </button>
           </div>

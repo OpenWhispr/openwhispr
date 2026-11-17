@@ -22,13 +22,13 @@ export function Breadcrumb({ label, items }: BreadcrumbProps): ReactElement {
         {items.map((item, index) => (
           <Fragment key={item.label}>
             {index > 0 && (
-              <li aria-hidden="true" className="text-muted-foreground/50">
+              <li aria-hidden="true" className="text-secondary/50">
                 <ChevronRight className="h-3 w-3 rtl:rotate-180" />
               </li>
             )}
             <li>
               {index === items.length - 1 ? (
-                <span aria-current="page" className="px-1 py-0.5 font-medium text-foreground">
+                <span aria-current="page" className="px-1 py-0.5 font-medium text-primary">
                   {item.label}
                 </span>
               ) : (
@@ -36,7 +36,7 @@ export function Breadcrumb({ label, items }: BreadcrumbProps): ReactElement {
                   type="button"
                   onClick={item.onSelect}
                   className={cn(
-                    "rounded-sm px-1 py-0.5 text-muted-foreground transition-colors hover:text-foreground outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
+                    "rounded-sm px-1 py-0.5 text-secondary transition-colors hover:text-primary outline-none focus-visible:ring-1 focus-visible:ring-brand-solid/30",
                     index === 0 && "-ms-1"
                   )}
                 >

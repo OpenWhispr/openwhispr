@@ -50,7 +50,7 @@ export default function ActionPicker({
           "gap-1.5 ps-3 pe-2.5 disabled:pointer-events-none disabled:opacity-40"
         )}
       >
-        <Icon size={14} className="shrink-0 text-primary" />
+        <Icon size={14} className="shrink-0 text-brand-solid" />
         <span dir="auto" className="max-w-40 truncate">
           {getActionCta(current, t)}
         </span>
@@ -63,7 +63,7 @@ export default function ActionPicker({
             aria-label={t("notes.actions.selectAction")}
             className={cn(SPLIT_BUTTON_SEGMENT_CLASS, "w-8 justify-center")}
           >
-            <ChevronDown size={13} className="text-foreground/60" />
+            <ChevronDown size={13} className="text-primary/60" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="top" sideOffset={8} className="min-w-48">

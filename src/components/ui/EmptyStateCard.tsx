@@ -24,26 +24,24 @@ export default function EmptyStateCard({
   return (
     <div
       className={cn(
-        "flex flex-col items-center rounded-2xl border border-border/70 bg-card/50 px-6 py-10 text-center dark:border-white/10 dark:bg-surface-2/60",
+        "flex flex-col items-center rounded-2xl border border-default/70 bg-surface-primary/50 px-6 py-10 text-center dark:bg-surface-primary/60",
         className
       )}
     >
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-3 text-foreground/70 dark:bg-surface-3">
+      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-surface-tertiary text-primary/70">
         <Icon size={20} />
       </span>
       {title && (
         <p
           role={headingLevel ? "heading" : undefined}
           aria-level={headingLevel}
-          className="mt-4 text-[15px] font-medium text-foreground"
+          className="mt-4 text-[15px] font-medium text-primary"
         >
           {title}
         </p>
       )}
       {description && (
-        <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-foreground/70">
-          {description}
-        </p>
+        <p className="mt-1 max-w-xs text-[13px] leading-relaxed text-primary/70">{description}</p>
       )}
       {children && <div className="mt-5 flex flex-col items-center gap-2">{children}</div>}
     </div>

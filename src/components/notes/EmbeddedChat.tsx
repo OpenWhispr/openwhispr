@@ -91,7 +91,7 @@ export default function EmbeddedChat({
         // Fills the gutter between the note and the chat.
         className="w-3"
       />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-border/60 bg-surface-1 dark:border-white/10 dark:bg-surface-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-default/60 bg-surface-secondary">
         <div className={cn("flex min-h-0 flex-1 flex-col", slashMenuOpen && "hidden")}>
           <div className="flex h-14 shrink-0 items-center px-5">
             <ConversationPicker
@@ -107,14 +107,14 @@ export default function EmbeddedChat({
             <div className="-me-2 flex items-center gap-3">
               <button
                 onClick={onNewChat}
-                className="flex size-8 items-center justify-center rounded-full text-foreground/65 transition-colors hover:bg-foreground/6 hover:text-foreground"
+                className="flex size-8 items-center justify-center rounded-full text-primary/65 transition-colors hover:bg-text-primary/6 hover:text-primary"
                 aria-label={t("embeddedChat.newChat")}
               >
                 <Plus size={16} />
               </button>
               <button
                 onClick={onClose}
-                className="flex size-8 items-center justify-center rounded-full text-foreground/45 transition-colors hover:bg-foreground/6 hover:text-foreground"
+                className="flex size-8 items-center justify-center rounded-full text-primary/45 transition-colors hover:bg-text-primary/6 hover:text-primary"
                 aria-label={t("embeddedChat.close")}
               >
                 <X size={16} />
@@ -128,7 +128,7 @@ export default function EmbeddedChat({
                 <div className="flex h-full min-h-40 select-none items-center justify-center">
                   <BrandMarkIcon
                     size={72}
-                    className="text-foreground/10 drop-shadow-sm dark:text-foreground/15"
+                    className="text-primary/10 drop-shadow-sm dark:text-primary/15"
                   />
                 </div>
               }
@@ -141,7 +141,7 @@ export default function EmbeddedChat({
         {/* One tray holds the chips and the composer. */}
         <div
           className={cn(
-            "mx-3 mb-3 rounded-[18px] border border-black/[0.06] bg-foreground/[0.04] p-0.5 dark:border-white/[0.06] dark:bg-white/[0.05]",
+            "mx-3 mb-3 rounded-[18px] border border-default bg-text-primary/[0.04] p-0.5",
             slashMenuOpen ? "mt-3 flex min-h-0 flex-1 flex-col" : "shrink-0"
           )}
         >

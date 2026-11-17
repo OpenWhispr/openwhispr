@@ -316,7 +316,7 @@ export default function ChatView({
       )}
       <SkillChatActionsContext.Provider value={skillChatActions}>
         <div className="flex h-full min-h-0">
-          <div className="w-56 min-w-50 shrink-0 border-e border-border dark:border-white/10">
+          <div className="w-56 min-w-50 shrink-0 border-e border-default">
             <ConversationList
               activeConversationId={activeConversationId}
               onSelectConversation={handleSelectConversation}
@@ -335,7 +335,7 @@ export default function ChatView({
                 <button
                   type="button"
                   onClick={() => void handleSelectConversation(forkOrigin.parentConversationId)}
-                  className="mx-auto flex max-w-full items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                  className="mx-auto flex max-w-full items-center gap-1.5 rounded-full border border-default/60 px-2.5 py-1 text-[11px] text-secondary hover:text-primary hover:bg-text-primary/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
                 >
                   <GitFork size={11} className="shrink-0" />
                   <span dir="auto" className="truncate">
@@ -345,7 +345,7 @@ export default function ChatView({
               </div>
             )}
             {session.error && (
-              <div role="alert" className="px-5 py-3 text-sm text-muted-foreground">
+              <div role="alert" className="px-5 py-3 text-sm text-secondary">
                 {session.error}
                 {!isNewChat && (
                   <button type="button" onClick={session.retryLoad} className="ms-2 underline">

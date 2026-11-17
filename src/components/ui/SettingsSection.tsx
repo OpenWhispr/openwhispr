@@ -19,9 +19,9 @@ export const SettingsSection: React.FC<SettingsSectionProps> = ({
   return (
     <div className={`space-y-3 ${className}`}>
       <div>
-        <h3 className="text-xs font-semibold text-foreground tracking-tight">{title}</h3>
+        <h3 className="text-xs font-semibold text-primary tracking-tight">{title}</h3>
         {description && (
-          <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
+          <p className="text-xs text-secondary/80 mt-0.5 leading-relaxed">{description}</p>
         )}
       </div>
       {children}
@@ -44,13 +44,14 @@ export const SettingsGroup: React.FC<SettingsGroupProps> = ({
 }) => {
   const baseClasses = "space-y-3 p-3 rounded-lg border";
   const variantClasses = {
-    default: "bg-card/50 dark:bg-surface-2/50 border-border/70 dark:border-border-subtle",
-    highlighted: "bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/30",
+    default: "bg-surface-primary/50 border-default/70 dark:border-default",
+    highlighted:
+      "bg-brand-solid/5 dark:bg-brand-solid/10 border-brand-solid/20 dark:border-brand-solid/30",
   };
 
   return (
     <div className={`${baseClasses} ${variantClasses[variant]} ${className}`}>
-      {title && <h4 className="text-xs font-medium text-foreground">{title}</h4>}
+      {title && <h4 className="text-xs font-medium text-primary">{title}</h4>}
       {children}
     </div>
   );
@@ -78,9 +79,9 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
       } ${className}`}
     >
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-foreground">{label}</p>
+        <p className="text-xs font-medium text-primary">{label}</p>
         {description && (
-          <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
+          <p className="text-xs text-secondary/80 mt-0.5 leading-relaxed">{description}</p>
         )}
       </div>
       <div className={isCompact ? "" : "shrink-0"}>{children}</div>
@@ -99,7 +100,7 @@ export function SettingsPanel({
   return (
     <div
       {...props}
-      className={`rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 divide-y divide-border/60 dark:divide-border-subtle/50 ${className}`}
+      className={`rounded-lg border border-default/70 dark:border-default/70 bg-surface-primary/50 dark:bg-surface-primary/50 divide-y divide-default/60 dark:divide-default/50 ${className}`}
     >
       {children}
     </div>
@@ -122,7 +123,7 @@ export function SettingsPanelRow({
 
 export function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 mb-2 ps-1">
+    <div className="text-[10px] font-medium uppercase tracking-wider text-secondary/70 mb-2 ps-1">
       {children}
     </div>
   );
@@ -131,9 +132,9 @@ export function SectionLabel({ children }: { children: React.ReactNode }) {
 export function SectionHeader({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-3">
-      <h3 className="text-xs font-semibold text-foreground tracking-tight">{title}</h3>
+      <h3 className="text-xs font-semibold text-primary tracking-tight">{title}</h3>
       {description && (
-        <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
+        <p className="text-xs text-secondary/80 mt-0.5 leading-relaxed">{description}</p>
       )}
     </div>
   );
@@ -170,9 +171,7 @@ export function InferenceModeSelector({
         return (
           <SettingsPanelRow
             key={mode.id}
-            className={`transition-colors ${
-              isDimmed ? "" : "hover:bg-foreground/3 dark:hover:bg-white/3"
-            }`}
+            className={`transition-colors ${isDimmed ? "" : "hover:bg-text-primary/3"}`}
           >
             <button
               onClick={() => onSelect(mode.id)}
@@ -183,47 +182,47 @@ export function InferenceModeSelector({
               <div
                 className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-colors ${
                   isActive
-                    ? "bg-primary/10 dark:bg-primary/15"
-                    : "bg-muted/60 dark:bg-surface-raised group-hover:bg-muted dark:group-hover:bg-surface-3"
+                    ? "bg-brand-solid/10 dark:bg-brand-solid/15"
+                    : "bg-surface-secondary/60 dark:bg-surface-tertiary group-hover:bg-surface-secondary dark:group-hover:bg-surface-tertiary"
                 }`}
               >
                 <div
-                  className={`transition-colors ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                  className={`transition-colors ${isActive ? "text-brand-solid" : "text-secondary"}`}
                 >
                   {mode.icon}
                 </div>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-foreground">{mode.label}</span>
+                  <span className="text-xs font-medium text-primary">{mode.label}</span>
                   {isActive && !isDisabled && (
-                    <span className="text-xs font-medium text-primary bg-primary/10 dark:bg-primary/15 px-1.5 py-px rounded-sm">
+                    <span className="text-xs font-medium text-brand-solid bg-brand-solid/10 dark:bg-brand-solid/15 px-1.5 py-px rounded-sm">
                       {t("common.active")}
                     </span>
                   )}
                   {mode.signInRequired && (
-                    <span className="text-xs font-medium text-primary bg-primary/10 dark:bg-primary/15 px-1.5 py-px rounded-sm group-hover:underline">
+                    <span className="text-xs font-medium text-brand-solid bg-brand-solid/10 dark:bg-brand-solid/15 px-1.5 py-px rounded-sm group-hover:underline">
                       {t("common.signInRequired")}
                     </span>
                   )}
                   {isDisabled && mode.badge && (
-                    <span className="text-xs font-medium text-muted-foreground bg-muted/80 dark:bg-surface-3 px-1.5 py-px rounded-sm">
+                    <span className="text-xs font-medium text-secondary bg-surface-secondary/80 dark:bg-surface-tertiary px-1.5 py-px rounded-sm">
                       {mode.badge}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground/80 mt-0.5">{mode.description}</p>
+                <p className="text-xs text-secondary/80 mt-0.5">{mode.description}</p>
               </div>
               <div
                 className={`w-4 h-4 rounded-full border-2 shrink-0 transition-colors ${
                   isActive
-                    ? "border-primary bg-primary"
-                    : "border-border-hover dark:border-border-subtle"
+                    ? "border-brand-solid bg-brand-solid"
+                    : "border-hover dark:border-default"
                 }`}
               >
                 {isActive && (
                   <div className="w-full h-full flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-text-on-solid" />
                   </div>
                 )}
               </div>

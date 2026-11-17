@@ -52,7 +52,7 @@ import {
 const KEY = "settingsPage.workspace.guests";
 const HEADER_CHECKED = { none: false, some: "mixed", all: true } as const;
 // A bigger target than the box, without moving it.
-const ROW_CHECKBOX = "-m-1 p-1 focus-visible:ring-primary/50";
+const ROW_CHECKBOX = "-m-1 p-1 focus-visible:ring-brand-solid/50";
 
 interface Props {
   workspace: Workspace;
@@ -321,10 +321,8 @@ function WorkspaceGuestsBody({
                 <td colSpan={columnCount} className="px-4 py-8 text-center">
                   {status === "failed" ? (
                     <div>
-                      <p className="text-xs font-medium text-foreground">
-                        {t(`${KEY}.failedTitle`)}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
+                      <p className="text-xs font-medium text-primary">{t(`${KEY}.failedTitle`)}</p>
+                      <p className="mt-0.5 text-xs text-secondary">
                         {error?.kind === "ssoRequired"
                           ? t("workspaces.ssoRequired", { workspace: isolate(workspace.name) })
                           : t(`${KEY}.failedBody`)}
@@ -342,12 +340,8 @@ function WorkspaceGuestsBody({
                     </div>
                   ) : (
                     <div role="status">
-                      <p className="text-xs font-medium text-foreground">
-                        {t(`${KEY}.loadingTitle`)}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {t(`${KEY}.loadingBody`)}
-                      </p>
+                      <p className="text-xs font-medium text-primary">{t(`${KEY}.loadingTitle`)}</p>
+                      <p className="mt-0.5 text-xs text-secondary">{t(`${KEY}.loadingBody`)}</p>
                     </div>
                   )}
                 </td>
@@ -400,10 +394,10 @@ function EmptyGuests({ ref }: { ref: React.Ref<HTMLDivElement> }): React.ReactEl
       className="flex flex-col items-center px-6 py-10 text-center outline-none"
     >
       <EmptyStateArt kind="guests" />
-      <p className="mt-2 text-lg font-medium leading-[1.4] text-foreground">
+      <p className="mt-2 text-lg font-medium leading-[1.4] text-primary">
         {t(`${KEY}.emptyTitle`)}
       </p>
-      <p className="mt-1.5 max-w-[339px] text-sm text-muted-foreground">{t(`${KEY}.emptyBody`)}</p>
+      <p className="mt-1.5 max-w-[339px] text-sm text-secondary">{t(`${KEY}.emptyBody`)}</p>
     </div>
   );
 }
@@ -453,15 +447,15 @@ function GuestRow({
           <div className="min-w-0">
             {hasName ? (
               <>
-                <p dir="auto" className="truncate text-xs font-medium text-foreground">
+                <p dir="auto" className="truncate text-xs font-medium text-primary">
                   {guestDisplayName(guest)}
                 </p>
-                <p className="truncate text-[11px] text-muted-foreground">
+                <p className="truncate text-[11px] text-secondary">
                   <bdi dir="ltr">{guest.email}</bdi>
                 </p>
               </>
             ) : (
-              <p className="truncate text-xs font-medium text-foreground">
+              <p className="truncate text-xs font-medium text-primary">
                 <bdi dir="ltr">{guest.email}</bdi>
               </p>
             )}
@@ -560,7 +554,7 @@ function AccessCell({
         })}
       >
         <span className="truncate">{label}</span>
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <ChevronDown className="size-4 shrink-0 text-secondary" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         ref={contentRef}
@@ -585,8 +579,8 @@ function AccessCell({
                 className="gap-2.5 text-xs"
                 onSelect={(event) => event.preventDefault()}
               >
-                <FileText aria-hidden="true" size={14} className="shrink-0 text-muted-foreground" />
-                <span dir="auto" className="min-w-0 flex-1 truncate text-foreground">
+                <FileText aria-hidden="true" size={14} className="shrink-0 text-secondary" />
+                <span dir="auto" className="min-w-0 flex-1 truncate text-primary">
                   {title}
                 </span>
               </DropdownMenuItem>
@@ -594,15 +588,15 @@ function AccessCell({
           }
           return (
             <div key={note.id} className="flex items-center gap-2.5 px-2 py-1.5">
-              <FileText aria-hidden="true" size={14} className="shrink-0 text-muted-foreground" />
-              <span dir="auto" className="min-w-0 flex-1 truncate text-xs text-foreground">
+              <FileText aria-hidden="true" size={14} className="shrink-0 text-secondary" />
+              <span dir="auto" className="min-w-0 flex-1 truncate text-xs text-primary">
                 {title}
               </span>
               <DropdownMenuItem
                 asChild
                 // On the item, not the button: asChild only concatenates the two class lists, so the
                 // item's padding would win over the button's size and leave the icon no width.
-                className="inline-flex size-5 shrink-0 cursor-default items-center justify-center rounded p-0 text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 aria-disabled:opacity-60"
+                className="inline-flex size-5 shrink-0 cursor-default items-center justify-center rounded p-0 text-secondary outline-none transition-colors hover:bg-text-primary/5 hover:text-primary focus-visible:ring-1 focus-visible:ring-brand-solid/30 aria-disabled:opacity-60"
                 onSelect={(event) => {
                   // Keep the menu open: the other notes are still listed.
                   event.preventDefault();
@@ -644,7 +638,7 @@ function RowMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={t(`${KEY}.menu.label`, { name: isolate(guestDisplayName(guest)) })}
-        className="inline-flex h-7 items-center justify-center rounded-md px-1.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:ring-1 focus-visible:ring-primary/30 data-[state=open]:bg-foreground/5"
+        className="inline-flex h-7 items-center justify-center rounded-md px-1.5 text-xs text-secondary outline-none transition-colors hover:bg-text-primary/5 hover:text-primary focus-visible:ring-1 focus-visible:ring-brand-solid/30 data-[state=open]:bg-text-primary/5"
       >
         <MoreHorizontal className="size-4" aria-hidden="true" />
       </DropdownMenuTrigger>
@@ -657,10 +651,7 @@ function RowMenu({
           <Copy className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t(`${KEY}.menu.copyEmail`)}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="text-xs text-destructive focus:text-destructive"
-          onSelect={onRemove}
-        >
+        <DropdownMenuItem className="text-xs text-red focus:text-red" onSelect={onRemove}>
           <UserMinus className="me-1.5 h-3.5 w-3.5" aria-hidden="true" />
           {t(`${KEY}.menu.remove`)}
         </DropdownMenuItem>

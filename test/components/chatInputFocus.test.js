@@ -167,12 +167,16 @@ test("the assistant send button reads as active only once there is a draft", asy
   await React.act(async () =>
     root.render(React.createElement(ChatInput, { ...props, draftText: "" }))
   );
-  assert.match(sendCircleClass(), /bg-muted/, "an empty draft leaves the send button muted");
+  assert.match(
+    sendCircleClass(),
+    /bg-surface-secondary/,
+    "an empty draft leaves the send button muted"
+  );
 
   await React.act(async () =>
     root.render(React.createElement(ChatInput, { ...props, draftText: "Summarize my week" }))
   );
-  assert.doesNotMatch(sendCircleClass(), /bg-muted/);
+  assert.doesNotMatch(sendCircleClass(), /bg-surface-secondary/);
   assert.match(sendCircleClass(), /gradient-brand-glass/, "a draft lights up the send button");
 });
 

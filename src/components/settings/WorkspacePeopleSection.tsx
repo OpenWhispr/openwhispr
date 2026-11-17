@@ -197,7 +197,7 @@ function PeopleBody({
           </p>
         </div>
         {showAdd && (
-          <div className={cn(SPLIT_PILL, "bg-surface-1 dark:bg-surface-2")}>
+          <div className={cn(SPLIT_PILL, "bg-surface-secondary dark:bg-surface-primary")}>
             <button
               type="button"
               // A tooltip rather than an aria-label, so the accessible name stays the visible "Add"
@@ -239,7 +239,7 @@ function PeopleBody({
       <div className="mt-8 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div
           role="tablist"
-          className="flex items-center gap-2 rounded-full bg-surface-1 p-1 dark:bg-surface-2"
+          className="flex items-center gap-2 rounded-full bg-surface-secondary p-1 dark:bg-surface-primary"
         >
           {visibleTabs.map((id) => {
             const Icon = TAB_ICONS[id];
@@ -251,10 +251,8 @@ function PeopleBody({
                 onClick={() => onSelectTab(id)}
                 className={cn(
                   "flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium leading-[1.5] outline-none transition-colors",
-                  "focus-visible:ring-2 focus-visible:ring-ring/40",
-                  tab === id
-                    ? cn(RAISED_PILL, "text-foreground")
-                    : "text-muted-foreground hover:text-foreground"
+                  "focus-visible:ring-2 focus-visible:ring-focus/40",
+                  tab === id ? cn(RAISED_PILL, "text-primary") : "text-secondary hover:text-primary"
                 )}
               >
                 <Icon className="size-3.5" aria-hidden="true" />
@@ -267,7 +265,7 @@ function PeopleBody({
           <div className="relative w-full sm:w-[240px]">
             <Search
               aria-hidden="true"
-              className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/70"
+              className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-secondary/70"
             />
             <Input
               ref={searchInputRef}
@@ -282,14 +280,14 @@ function PeopleBody({
               onKeyDown={handleSearchKeyDown}
               // Lets the Settings dialog hold its own Escape while there is a query to clear.
               {...{ [ESCAPE_CLEARS_ATTRIBUTE]: searchQuery ? "" : undefined }}
-              className="h-[34px] rounded-full border-border bg-surface-1 ps-9 pe-8 py-1.5 focus-visible:border-primary dark:border-border-subtle dark:bg-surface-2 dark:focus-visible:border-primary [&::-webkit-search-cancel-button]:appearance-none"
+              className="h-[34px] rounded-full border-default bg-surface-secondary ps-9 pe-8 py-1.5 focus-visible:border-brand-solid dark:border-default dark:bg-surface-primary dark:focus-visible:border-brand-solid [&::-webkit-search-cancel-button]:appearance-none"
             />
             {searchQuery && (
               <button
                 type="button"
                 aria-label={t("settingsPage.workspace.people.search.clear")}
                 onClick={clearSearch}
-                className="absolute end-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-link transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="absolute end-2 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full text-brand transition-colors hover:bg-text-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20"
               >
                 <X aria-hidden="true" className="size-3.5" />
               </button>

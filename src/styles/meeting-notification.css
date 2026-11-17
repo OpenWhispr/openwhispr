@@ -38,15 +38,15 @@
   margin: 12px 0 0 auto;
   padding: 6px;
   border-radius: 12px;
-  background: var(--color-card);
-  color: var(--color-foreground);
-  border: 1px solid var(--color-border);
+  background: var(--color-surface-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-default);
   box-shadow: 0 4px 12px #0002;
   font-size: 12px;
 }
 .meeting-folder-picker button:focus-visible,
 .meeting-folder-picker input:focus-visible {
-  outline: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--color-brand-solid) 55%, transparent);
   outline-offset: 1px;
 }
 .meeting-folder-picker button:disabled {
@@ -60,17 +60,17 @@
   margin: 3px;
   padding-block: 6px;
   padding-inline: 12px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-default);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-foreground) 4%, transparent);
-  color: var(--color-muted-foreground);
+  background: color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+  color: var(--color-text-secondary);
 }
 .dark .meeting-folder-search {
   border-color: #ffffff1a;
   background: #ffffff0d;
 }
 .meeting-folder-search:focus-within {
-  outline: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--color-brand-solid) 55%, transparent);
   outline-offset: 1px;
 }
 .meeting-folder-search input:focus-visible {
@@ -89,7 +89,7 @@
   padding-inline: 2px;
   outline: 0;
   background: transparent;
-  color: var(--color-foreground);
+  color: var(--color-text-primary);
   font-size: 12px;
 }
 .meeting-folder-results {
@@ -108,12 +108,12 @@
   margin-bottom: -16px;
   pointer-events: none;
   backdrop-filter: blur(3px);
-  background: color-mix(in srgb, var(--color-card) 25%, transparent);
+  background: color-mix(in srgb, var(--color-surface-primary) 25%, transparent);
   mask-image: linear-gradient(#000, transparent);
 }
 .meeting-folder-group {
   font-size: 10px;
-  color: var(--color-muted-foreground);
+  color: var(--color-text-secondary);
   font-weight: 500;
   padding: 10px 8px 5px;
 }
@@ -130,7 +130,7 @@
 .meeting-folder-option:hover,
 .meeting-folder-option.active,
 .meeting-folder-locations [role="menuitemradio"]:focus {
-  background: var(--color-muted);
+  background: var(--color-surface-secondary);
 }
 .meeting-folder-name {
   display: block;
@@ -147,18 +147,18 @@
   white-space: nowrap;
   font-size: 9px;
   line-height: 12px;
-  color: var(--color-muted-foreground);
+  color: var(--color-text-secondary);
 }
 .meeting-folder-new {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border-default);
   margin-top: 5px;
   padding: 9px 8px 7px;
   font-size: 11px;
-  color: var(--color-muted-foreground);
+  color: var(--color-text-secondary);
 }
 .meeting-folder-form {
   padding: 0 6px 6px;
@@ -179,7 +179,7 @@
   width: 48px;
   flex-shrink: 0;
   font-size: 10px;
-  color: var(--color-muted-foreground);
+  color: var(--color-text-secondary);
 }
 .meeting-folder-field input {
   min-width: 0;
@@ -188,8 +188,8 @@
   padding-block: 7px;
   padding-inline: 10px;
   border-radius: 6px;
-  border: 1px solid var(--color-border);
-  background: var(--color-background);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-surface-primary);
 }
 .meeting-folder-location {
   position: relative;
@@ -201,8 +201,8 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  border: 1px solid var(--color-border);
-  background: var(--color-background);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-surface-primary);
   font-size: 11px;
   border-radius: 6px;
   padding-block: 7px;
@@ -218,9 +218,9 @@
 .meeting-folder-locations {
   width: var(--radix-dropdown-menu-trigger-width);
   z-index: 5;
-  background: var(--color-card);
+  background: var(--color-surface-primary);
   padding: 4px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-default);
   border-radius: 8px;
   box-shadow: 0 3px 10px #0002;
   max-height: min(120px, var(--radix-dropdown-menu-content-available-height));
@@ -247,17 +247,17 @@
   font-size: 10px;
   padding: 6px 10px;
   border-radius: 999px;
-  color: var(--color-muted-foreground);
+  color: var(--color-text-secondary);
 }
 .meeting-folder-form-actions button[type="submit"] {
-  background: var(--color-primary);
-  color: var(--color-primary-foreground);
+  background: var(--color-brand-solid);
+  color: var(--color-text-on-solid);
 }
 .meeting-folder-error {
   padding: 5px 8px;
   font-size: 10px;
   line-height: 1.5;
-  color: var(--color-destructive);
+  color: var(--color-red-solid);
 }
 @media (prefers-reduced-motion: reduce) {
   .meeting-folder-trigger svg {

@@ -590,7 +590,7 @@ test("a failure keeps every detail and offers Try again", async (t) => {
   // A centered destructive line above the switches, in place of a toast that would vanish.
   const line = dialog().querySelector('[role="alert"]');
   assert.equal(text(line), "Couldn't create teamspace. Your details are saved. Try again.");
-  assert.match(line.className, /destructive/);
+  assert.match(line.className, /text-red/);
   assert.match(line.className, /text-center/);
   assert.ok(
     line.compareDocumentPosition(switches()[0]) & happyWindow.Node.DOCUMENT_POSITION_FOLLOWING,

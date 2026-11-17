@@ -160,7 +160,7 @@ export function EnterpriseAudioSettings() {
   return (
     <div className="space-y-3 rounded-lg border p-3">
       <h3 className="text-sm font-medium">{t("enterprise.audio.title")}</h3>
-      <p className="text-xs text-muted-foreground">{t("enterprise.audio.description")}</p>
+      <p className="text-xs text-secondary">{t("enterprise.audio.description")}</p>
       {records.length > 1 && (
         <Select
           disabled={busy}
@@ -235,9 +235,7 @@ export function EnterpriseAudioSettings() {
               setSecrets((previous) => ({ ...previous, [slot]: event.target.value }))
             }
           />
-          <p className="text-xs text-muted-foreground">
-            {t("enterprise.audio.proxyCredentialFormat")}
-          </p>
+          <p className="text-xs text-secondary">{t("enterprise.audio.proxyCredentialFormat")}</p>
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -263,7 +261,7 @@ export function EnterpriseAudioSettings() {
         config?.certificateBundles
           ?.filter((bundle) => bundle.id === current.config.network?.caBundleId)
           .map((bundle) => (
-            <p key={bundle.id} className="break-all text-xs text-muted-foreground">
+            <p key={bundle.id} className="break-all text-xs text-secondary">
               {bundle.name} · SHA-256 {bundle.fingerprint}
             </p>
           ))}
@@ -291,7 +289,7 @@ export function EnterpriseAudioSettings() {
         ))}
       </div>
       {message && (
-        <p role="status" className="text-xs text-muted-foreground">
+        <p role="status" className="text-xs text-secondary">
           {message}
         </p>
       )}

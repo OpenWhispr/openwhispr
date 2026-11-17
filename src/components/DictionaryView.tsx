@@ -614,7 +614,7 @@ function DictionaryPage({
       <>
         {sentences.join(" ")}
         {notes.length > 0 && (
-          <span className="mt-2 block text-xs text-foreground/45">{notes.join(" ")}</span>
+          <span className="mt-2 block text-xs text-primary/45">{notes.join(" ")}</span>
         )}
       </>
     );
@@ -733,8 +733,8 @@ function DictionaryPage({
   const emptyPersonalState = (
     <div className="flex min-h-64 items-start px-6 py-6">
       <div className="relative z-10 w-full min-w-0 md:w-3/5">
-        <h2 className="text-xl font-normal text-foreground">{t("dictionary.emptyTitle")}</h2>
-        <p className="mt-3 max-w-xl text-base leading-relaxed text-foreground/50 dark:text-foreground/65">
+        <h2 className="text-xl font-normal text-primary">{t("dictionary.emptyTitle")}</h2>
+        <p className="mt-3 max-w-xl text-base leading-relaxed text-primary/50 dark:text-primary/65">
           {t("dictionary.emptyDescription", { agentName })}
         </p>
         <Button className="mt-6 px-5 font-normal" onClick={() => addInputRef.current?.focus()}>
@@ -766,7 +766,7 @@ function DictionaryPage({
       <div
         className={cn(
           CARD_SURFACE_CLASS,
-          "relative overflow-hidden rounded-3xl shadow-sm dark:bg-surface-window"
+          "relative overflow-hidden rounded-3xl shadow-sm dark:bg-surface-secondary"
         )}
       >
         {emptyPersonalState}
@@ -780,8 +780,8 @@ function DictionaryPage({
         )}
         style={selectionActive ? { paddingBottom: selectionBarClearance } : undefined}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-dashed border-foreground/10 pb-2 dark:border-white/10">
-          <h3 dir="auto" className="truncate text-[11px] font-semibold text-foreground/45">
+        <div className="flex items-center justify-between gap-3 border-b border-dashed border-text-primary/10 pb-2">
+          <h3 dir="auto" className="truncate text-[11px] font-semibold text-primary/45">
             {openEntry?.label} · {headerDetail}
           </h3>
           <div className="flex shrink-0 items-center gap-3">
@@ -790,24 +790,24 @@ function DictionaryPage({
                 <button
                   onClick={() => setConfirmClear(true)}
                   aria-label={t("dictionary.clearAll")}
-                  className="text-[11px] text-foreground/45 transition-colors hover:text-destructive/70"
+                  className="text-[11px] text-primary/45 transition-colors hover:text-red/70"
                 >
                   {t("dictionary.clearAll")}
                 </button>
                 <button
                   onClick={() => void actions.exportPersonal()}
                   aria-label={t("dictionary.exportDictionary")}
-                  className="text-foreground/45 transition-colors hover:text-foreground/60"
+                  className="text-primary/45 transition-colors hover:text-primary/60"
                 >
                   <Download size={12} />
                 </button>
               </>
             )}
-            <span className="text-[10px] text-foreground/40">{t(SORT_LABEL_KEYS[sort])}</span>
+            <span className="text-[10px] text-primary/40">{t(SORT_LABEL_KEYS[sort])}</span>
           </div>
         </div>
         {rows.length === 0 ? (
-          <p dir="auto" className="py-6 text-center text-xs text-foreground/45">
+          <p dir="auto" className="py-6 text-center text-xs text-primary/45">
             {!listIsEmpty
               ? t("dictionary.shared.noMatches", { query: search.trim() })
               : openListHasEntries
@@ -983,7 +983,7 @@ function DictionaryPage({
                           <button
                             type="button"
                             aria-label={t("dictionary.importWords")}
-                            className="flex h-6 shrink-0 items-center gap-1 rounded-[5px] px-1 text-foreground/45 transition-colors hover:bg-foreground/5 hover:text-foreground/70"
+                            className="flex h-6 shrink-0 items-center gap-1 rounded-[5px] px-1 text-primary/45 transition-colors hover:bg-text-primary/5 hover:text-primary/70"
                           >
                             <Upload size={13} />
                             <ChevronDown size={11} />
@@ -997,7 +997,7 @@ function DictionaryPage({
 
                 {/* ─── Bulk import ─── */}
                 {showBulkImport && !readOnlyList && (
-                  <div className="rounded-md border border-primary/30 dark:border-primary/40 px-3 pt-2.5 pb-2">
+                  <div className="rounded-md border border-brand-solid/30 dark:border-brand-solid/40 px-3 pt-2.5 pb-2">
                     <Textarea
                       ref={bulkTextareaRef}
                       dir="auto"
@@ -1006,13 +1006,13 @@ function DictionaryPage({
                       onChange={(e) => setBulkText(e.target.value)}
                       placeholder={t("dictionary.importPlaceholder")}
                       rows={4}
-                      className="input-inline min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-foreground placeholder:text-foreground/45 hover:border-0 focus:border-0 focus:ring-0"
+                      className="input-inline min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-primary placeholder:text-primary/45 hover:border-0 focus:border-0 focus:ring-0"
                     />
                     <div className="flex items-center justify-between pt-1.5">
-                      <p className="text-xs text-foreground/45">
+                      <p className="text-xs text-primary/45">
                         {t("dictionary.separateWithCommas")}
                         {pendingImportCount > 0 && (
-                          <span className="text-success">
+                          <span className="text-green">
                             {" • "}
                             {t("dictionary.wordsReady", { count: pendingImportCount })}
                           </span>
@@ -1043,14 +1043,14 @@ function DictionaryPage({
 
                 {/* ─── Agent name (always recognized) ─── */}
                 {personalView && !listIsEmpty && (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/15 bg-primary/3 px-4 py-2.5 dark:border-primary/20 dark:bg-primary/6">
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-brand-solid/15 bg-brand-solid/3 px-4 py-2.5 dark:border-brand-solid/20 dark:bg-brand-solid/6">
                     <div className="flex items-center gap-2 min-w-0">
-                      <Sparkles size={11} className="text-primary/70 shrink-0" />
-                      <span dir="auto" className="text-xs font-medium text-primary truncate">
+                      <Sparkles size={11} className="text-brand-solid/70 shrink-0" />
+                      <span dir="auto" className="text-xs font-medium text-brand-solid truncate">
                         {agentName}
                       </span>
                     </div>
-                    <span className="text-xs text-foreground/45 shrink-0">
+                    <span className="text-xs text-primary/45 shrink-0">
                       {t("dictionary.agentDefault")}
                     </span>
                   </div>
@@ -1096,14 +1096,14 @@ function DictionaryPage({
 
             {/* ─── Provider notices ─── */}
             {dictionaryIgnored ? (
-              <p className="text-xs text-foreground/45 leading-relaxed">
+              <p className="text-xs text-primary/45 leading-relaxed">
                 {t("dictionary.openRouterIgnoredNotice")}
               </p>
             ) : localSherpaNotice ? (
-              <p className="text-xs text-foreground/45 leading-relaxed">{localSherpaNotice}</p>
+              <p className="text-xs text-primary/45 leading-relaxed">{localSherpaNotice}</p>
             ) : (
               promptChars > WHISPER_DECODER_PROMPT_CHARS && (
-                <p className="text-xs text-foreground/45 leading-relaxed">
+                <p className="text-xs text-primary/45 leading-relaxed">
                   {t("dictionary.promptLimitNotice", { chars: promptChars })}
                 </p>
               )

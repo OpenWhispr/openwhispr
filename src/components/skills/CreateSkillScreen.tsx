@@ -227,7 +227,7 @@ export function CreateSkillScreen({
 
   const fieldError = (field: Field) =>
     errors[field] && (
-      <p id={errorId(field)} className="text-xs text-destructive">
+      <p id={errorId(field)} className="text-xs text-red">
         {errors[field]}
       </p>
     );
@@ -283,7 +283,7 @@ export function CreateSkillScreen({
               aria-describedby={errors.description ? errorId("description") : hintId}
               aria-invalid={errors.description ? true : undefined}
             />
-            <p id={hintId} className="text-[11px] text-muted-foreground/70 leading-relaxed">
+            <p id={hintId} className="text-[11px] text-secondary/70 leading-relaxed">
               {t("skills.create.descriptionHint")}
             </p>
             {fieldError("description")}
@@ -306,9 +306,9 @@ export function CreateSkillScreen({
                 {draft.files.map((file, index) => (
                   <li
                     key={`${file.fileName}-${index}`}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border/70 bg-card ps-2.5 pe-1 text-xs text-foreground dark:border-white/10 dark:bg-surface-2"
+                    className="inline-flex h-7 items-center gap-1.5 rounded-full border border-default/70 bg-surface-primary ps-2.5 pe-1 text-xs text-primary"
                   >
-                    <FileText size={12} className="text-muted-foreground/70" />
+                    <FileText size={12} className="text-secondary/70" />
                     <span dir="ltr" className="font-mono text-[11px]">
                       {file.fileName}
                     </span>
@@ -316,7 +316,7 @@ export function CreateSkillScreen({
                       type="button"
                       onClick={() => removeFile(index)}
                       aria-label={t("skills.create.removeFile", { path: file.fileName })}
-                      className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-foreground/8 hover:text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-secondary/70 hover:bg-text-primary/8 hover:text-primary outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
                     >
                       <X size={11} />
                     </button>
@@ -328,7 +328,7 @@ export function CreateSkillScreen({
               variant="ghost"
               size="sm"
               onClick={() => fileInput.current?.click()}
-              className="h-7 px-2.5 -ms-1 mt-1.5 text-muted-foreground"
+              className="h-7 px-2.5 -ms-1 mt-1.5 text-secondary"
             >
               <Plus className="h-3.5 w-3.5" />
               {t("skills.create.addFile")}
@@ -347,14 +347,14 @@ export function CreateSkillScreen({
             {fieldError("instructions")}
           </div>
         </SettingsPanel>
-        <div className="sticky bottom-0 z-10 mt-4 bg-background border-t border-border/70 dark:border-white/10 py-3">
+        <div className="sticky bottom-0 z-10 mt-4 bg-surface-primary border-t border-default/70 py-3">
           {leaving && (
             <div
               role="alert"
-              className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-warning/30 bg-warning/5 dark:bg-warning/10 ps-3.5 pe-2 py-2"
+              className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-amber-solid/30 bg-amber-solid/5 dark:bg-amber-solid/10 ps-3.5 pe-2 py-2"
             >
-              <AlertTriangle size={15} className="shrink-0 text-warning" />
-              <p className="flex-1 min-w-0 text-xs text-foreground/85 leading-relaxed">
+              <AlertTriangle size={15} className="shrink-0 text-amber-solid" />
+              <p className="flex-1 min-w-0 text-xs text-primary/85 leading-relaxed">
                 {t("skills.create.unsaved")}
               </p>
               <Button variant="ghost" size="sm" onClick={keepEditing}>

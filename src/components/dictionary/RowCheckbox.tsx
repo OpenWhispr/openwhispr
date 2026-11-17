@@ -17,7 +17,7 @@ function CheckboxBox({ checked }: { checked: boolean | "mixed" }): ReactElement 
   if (checked) {
     return (
       <svg className="size-3.5 shrink-0" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <rect width="16" height="16" rx="4" className="fill-primary" />
+        <rect width="16" height="16" rx="4" className="fill-brand-solid" />
         <path
           d={checked === "mixed" ? "M4 8H12" : "M12 5L6.5 10.5L4 8"}
           stroke="white"
@@ -30,7 +30,7 @@ function CheckboxBox({ checked }: { checked: boolean | "mixed" }): ReactElement 
   }
   return (
     <span
-      className="size-3.5 shrink-0 rounded-[4px] border border-foreground/30 dark:border-white/35"
+      className="size-3.5 shrink-0 rounded-[4px] border border-text-primary/30"
       aria-hidden="true"
     />
   );
@@ -54,7 +54,7 @@ export function RowCheckbox({
       disabled={disabled}
       onClick={onToggle}
       className={cn(
-        "flex items-center rounded-[5px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-default",
+        "flex items-center rounded-[5px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20 disabled:cursor-default",
         className
       )}
     >

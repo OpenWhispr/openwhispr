@@ -11,7 +11,7 @@ export default function RoleBadge({
     <span
       className={cn(
         "text-[10px] font-medium px-2 py-0.5 rounded-md uppercase tracking-wide",
-        highlight ? "bg-primary/10 text-primary" : "bg-foreground/6 text-foreground/65"
+        highlight ? "bg-brand-solid/10 text-brand-solid" : "bg-text-primary/6 text-primary/65"
       )}
     >
       {label}

@@ -199,9 +199,7 @@ export function MeetingNotificationFolderPicker({
       {linked ? (
         <div className="p-2 text-xs leading-relaxed">
           <p className="font-medium">{linkedLocation}</p>
-          <p className="mt-2 text-muted-foreground">
-            {t(key("linked"), { destination: linkedLocation })}
-          </p>
+          <p className="mt-2 text-secondary">{t(key("linked"), { destination: linkedLocation })}</p>
           {errorView}
         </div>
       ) : mode === "form" ? (
@@ -317,7 +315,7 @@ export function MeetingNotificationFolderPicker({
           </div>
           {errorView}
           {!context ? (
-            <div className="p-3 text-xs text-muted-foreground">
+            <div className="p-3 text-xs text-secondary">
               <p>{t(key(error ? "unavailable" : "loading"))}</p>
               {error && <button onClick={onRetry}>{t(key("retry"))}</button>}
             </div>
@@ -374,7 +372,7 @@ export function MeetingNotificationFolderPicker({
                   </div>
                 ))}
                 {!visible.length && (
-                  <p className="p-4 text-center text-xs text-muted-foreground">{t(key("empty"))}</p>
+                  <p className="p-4 text-center text-xs text-secondary">{t(key("empty"))}</p>
                 )}
               </div>
               <button className="meeting-folder-new" disabled={busy} onClick={() => onMode("form")}>

@@ -34,12 +34,12 @@ function SkillFileRow({
   const Icon = file.script ? Code2 : FileText;
   return (
     <div className="flex items-center gap-2.5 px-3 py-2">
-      <Icon size={14} className="shrink-0 text-muted-foreground/70" />
-      <span dir="ltr" className="flex-1 min-w-0 truncate font-mono text-xs text-foreground">
+      <Icon size={14} className="shrink-0 text-secondary/70" />
+      <span dir="ltr" className="flex-1 min-w-0 truncate font-mono text-xs text-primary">
         {file.path}
       </span>
       {file.script && (
-        <span className="text-[10px] text-muted-foreground/70">{t("skills.detail.neverRun")}</span>
+        <span className="text-[10px] text-secondary/70">{t("skills.detail.neverRun")}</span>
       )}
       {file.text && (
         <button
@@ -48,10 +48,10 @@ function SkillFileRow({
           aria-label={
             copied ? t("common.copied") : t("skills.detail.copyFile", { path: file.path })
           }
-          className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/70 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
+          className="h-6 w-6 flex items-center justify-center rounded text-secondary/70 hover:text-secondary hover:bg-surface-secondary/50 active:scale-95 transition-all"
         >
           {copied ? (
-            <Check className="w-3.5 h-3.5 text-success" />
+            <Check className="w-3.5 h-3.5 text-green-solid" />
           ) : (
             <Copy className="w-3.5 h-3.5" />
           )}
@@ -222,7 +222,7 @@ export function SkillDetailDialog({
             <div className="flex flex-col space-y-1.5 text-start">
               <DialogTitle>
                 <span dir="auto">{skill.displayName}</span>{" "}
-                <span className="ms-1 align-middle text-xs font-normal tracking-normal text-muted-foreground">
+                <span className="ms-1 align-middle text-xs font-normal tracking-normal text-secondary">
                   {t("skills.detail.skillLabel")}
                 </span>
               </DialogTitle>
@@ -230,8 +230,8 @@ export function SkillDetailDialog({
             </div>
             <div className="min-h-0 overflow-y-auto space-y-4 -mx-1 px-1">
               {problem && (
-                <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/5 dark:bg-warning/10 px-3.5 py-2 text-xs text-foreground/85 leading-relaxed">
-                  <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" />
+                <div className="flex items-start gap-2 rounded-lg border border-amber-solid/30 bg-amber-solid/5 dark:bg-amber-solid/10 px-3.5 py-2 text-xs text-primary/85 leading-relaxed">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-solid" />
                   <p>
                     {t("skills.detail.problem", {
                       reason: t(problemKey(problem), problem.values),
@@ -241,11 +241,11 @@ export function SkillDetailDialog({
               )}
               {/* A read that found nothing, as for a skill whose files can't be read, has no box. */}
               {shown?.markdown && (
-                <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-background/60 dark:bg-surface-1/60 px-4 py-3">
+                <div className="rounded-lg border border-default/70 bg-surface-primary/60 dark:bg-surface-secondary/60 px-4 py-3">
                   <MarkdownRenderer
                     hideFrontmatter
                     content={shown.markdown}
-                    className="text-[13px] leading-relaxed text-foreground [&_p]:text-[13px] [&_li]:text-[13px]"
+                    className="text-[13px] leading-relaxed text-primary [&_p]:text-[13px] [&_li]:text-[13px]"
                   />
                 </div>
               )}
@@ -263,9 +263,9 @@ export function SkillDetailDialog({
             {confirming ? (
               <div
                 role="alert"
-                className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 dark:bg-destructive/10 ps-3.5 pe-2 py-2"
+                className="flex flex-wrap items-center gap-2 rounded-lg border border-red-solid/25 bg-red-solid/5 dark:bg-red-solid/10 ps-3.5 pe-2 py-2"
               >
-                <p className="flex-1 basis-56 min-w-0 text-xs text-foreground/85 leading-relaxed">
+                <p className="flex-1 basis-56 min-w-0 text-xs text-primary/85 leading-relaxed">
                   {t("skills.detail.uninstallConfirm", { name: skill.displayName })}
                 </p>
                 <Button
@@ -287,7 +287,7 @@ export function SkillDetailDialog({
                   variant="ghost"
                   size="sm"
                   onClick={() => setConfirmChoice(true)}
-                  className="-ms-2 text-destructive hover:bg-destructive/10 dark:text-destructive dark:hover:bg-destructive/10"
+                  className="-ms-2 text-red hover:bg-red-solid/10 dark:hover:bg-red-solid/10"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {t("skills.detail.uninstall")}

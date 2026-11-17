@@ -36,11 +36,11 @@ interface InsightsViewProps {
 const LeaderboardView = lazy(() => import("./LeaderboardView"));
 
 const ACTIVITY_INTENSITY_CLASSES = [
-  "bg-foreground/6 dark:bg-white/6",
-  "bg-primary/25",
-  "bg-primary/45",
-  "bg-primary/70",
-  "bg-primary",
+  "bg-text-primary/6",
+  "bg-brand-solid/25",
+  "bg-brand-solid/45",
+  "bg-brand-solid/70",
+  "bg-brand-solid",
 ] as const;
 
 function dateFromLocalKey(value: string) {
@@ -105,7 +105,7 @@ function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] | null }) {
     // silently discarded the per-day labels below it; the cells carry it now
     // and the group only names the chart.
     <div
-      className="overflow-x-auto rounded-sm pb-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
+      className="overflow-x-auto rounded-sm pb-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-solid/40"
       tabIndex={0}
       role="group"
       aria-label={t("insights.activityLabel")}
@@ -115,10 +115,7 @@ function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] | null }) {
           <div aria-hidden="true" />
           <div className="grid h-4 gap-2" style={columnStyle} aria-hidden="true">
             {calendar.monthLabels.map((label, index) => (
-              <span
-                key={index}
-                className="truncate text-[10px] font-medium text-muted-foreground/70"
-              >
+              <span key={index} className="truncate text-[10px] font-medium text-secondary/70">
                 {label}
               </span>
             ))}
@@ -126,7 +123,7 @@ function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] | null }) {
 
           <div className="grid grid-rows-7 gap-0.5" aria-hidden="true">
             {weekdayLabels.map((label) => (
-              <span key={label} className="flex items-center text-[10px] text-muted-foreground/70">
+              <span key={label} className="flex items-center text-[10px] text-secondary/70">
                 {label}
               </span>
             ))}
@@ -169,7 +166,7 @@ function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] | null }) {
                             "size-6 rounded-sm",
                             ACTIVITY_INTENSITY_CLASSES[intensity],
                             day.date === calendar.todayDate &&
-                              "ring-1 ring-primary ring-offset-1 ring-offset-card"
+                              "ring-1 ring-brand-solid ring-offset-1 ring-offset-surface-primary"
                           )}
                         />
                       </Tooltip>
@@ -181,7 +178,7 @@ function Heatmap({ daily }: { daily: AnalyticsDailyBucket[] | null }) {
           </div>
         </div>
 
-        <div className="mt-2 flex items-center text-[10px] text-muted-foreground">
+        <div className="mt-2 flex items-center text-[10px] text-secondary">
           <div className="flex items-center gap-2">
             <span>{t("insights.activityLess")}</span>
             <div className="flex items-center gap-1" aria-hidden="true">
@@ -212,14 +209,14 @@ function MetricCard({
   largeValue?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-border/70 dark:border-white/10 bg-card/70 p-4">
-      <div className="flex items-center gap-2 text-muted-foreground">
+    <div className="rounded-xl border border-default/70 bg-surface-primary/70 p-4">
+      <div className="flex items-center gap-2 text-secondary">
         <Icon size={14} />
         <span className="text-xs">{label}</span>
       </div>
       <p
         className={cn(
-          "mt-3 font-semibold tracking-tight text-foreground",
+          "mt-3 font-semibold tracking-tight text-primary",
           largeValue ? "text-3xl" : "text-2xl"
         )}
       >
@@ -227,7 +224,7 @@ function MetricCard({
           <Skeleton className={cn("inline-block w-20 align-middle", largeValue ? "h-7" : "h-6")} />
         )}
       </p>
-      <p className="mt-1 text-[11px] text-muted-foreground/70">
+      <p className="mt-1 text-[11px] text-secondary/70">
         {detail ?? <Skeleton className="inline-block h-2.5 w-24 align-middle" />}
       </p>
     </div>
@@ -283,8 +280,8 @@ function UsageDashboard({ summary }: { summary: AnalyticsSummary | null }) {
         />
       </div>
 
-      <div className="mt-5 rounded-2xl border border-border/70 bg-card/70 px-5 py-2.5 dark:border-white/10">
-        <h2 className="text-base font-medium text-foreground">{t("insights.activity")}</h2>
+      <div className="mt-5 rounded-2xl border border-default/70 bg-surface-primary/70 px-5 py-2.5">
+        <h2 className="text-base font-medium text-primary">{t("insights.activity")}</h2>
         <div className="mt-2">
           <Heatmap daily={summary?.daily ?? null} />
         </div>
@@ -348,7 +345,7 @@ function UsagePreview() {
           title={t("insights.emptyTitle")}
           description={t("insights.emptyBody")}
           headingLevel={2}
-          className="w-full max-w-sm bg-background/95 shadow-xl dark:bg-surface-1/95"
+          className="w-full max-w-sm bg-surface-primary/95 shadow-xl dark:bg-surface-secondary/95"
         >
           <DictationHotkeyHint hotkey={hotkey} className="text-[13px]" />
         </EmptyStateCard>
@@ -432,13 +429,13 @@ function YourUsage({
 
   if (loadFailed) {
     return (
-      <div className="rounded-lg border border-border bg-card/50 backdrop-blur-sm dark:bg-card/60">
+      <div className="rounded-lg border border-default bg-surface-primary/50 backdrop-blur-sm dark:bg-surface-primary/60">
         <div className="flex flex-col items-center justify-center gap-3 px-4 py-16 text-center">
-          <p className="max-w-sm text-sm text-muted-foreground">{t("insights.loadError")}</p>
+          <p className="max-w-sm text-sm text-secondary">{t("insights.loadError")}</p>
           <button
             type="button"
             onClick={() => void load()}
-            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
+            className="rounded-md border border-default px-3 py-1.5 text-xs font-medium text-primary hover:bg-state-hover"
           >
             {t("common.retry")}
           </button>
@@ -450,9 +447,9 @@ function YourUsage({
   return (
     <>
       {!dataRetentionEnabled && (
-        <div className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 px-3.5 py-2.5 flex items-center gap-2.5">
-          <span className="text-amber-600 dark:text-amber-400 shrink-0 text-sm">⊘</span>
-          <p className="text-xs text-amber-700 dark:text-amber-300/90 leading-relaxed">
+        <div className="mb-5 rounded-lg border border-amber bg-amber-surface px-3.5 py-2.5 flex items-center gap-2.5">
+          <span className="text-amber shrink-0 text-sm">⊘</span>
+          <p className="text-xs text-amber leading-relaxed">
             {t("insights.dataRetentionDisabled")}
           </p>
         </div>
@@ -518,7 +515,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
 
           {activeTab === "usage" ? (
             <div className="flex shrink-0 items-center gap-3">
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-2 text-[11px] text-secondary">
                 <Cloud size={13} />
                 {syncStatusLabel}
               </div>
@@ -541,7 +538,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
             participationReady &&
             participationError === null &&
             !participationEnabled && (
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-2 text-[11px] text-secondary">
                 <Trophy size={13} />
                 {t(
                   participationLeavePending
@@ -562,7 +559,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
             syncActive={syncActive}
           />
           {isLoaded && !syncActive && (
-            <p className="mt-auto pt-8 text-center text-[11px] text-muted-foreground/70">
+            <p className="mt-auto pt-8 text-center text-[11px] text-secondary/70">
               {t("insights.onDevicePrivacy")}
             </p>
           )}

@@ -43,7 +43,7 @@ interface NoteParticipantsProps {
 }
 
 const EVENT_ACTION_CLASS =
-  "flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 rounded-full border border-border/70 text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer";
+  "flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 rounded-full border border-default/70 text-xs text-primary/70 hover:bg-text-primary/5 transition-colors cursor-pointer";
 
 export default function NoteParticipants({
   noteId,
@@ -247,9 +247,9 @@ export default function NoteParticipants({
         >
           {dateLabel && (
             <>
-              <Calendar size={14} className="shrink-0 text-foreground/60" />
+              <Calendar size={14} className="shrink-0 text-primary/60" />
               <span>{dateLabel}</span>
-              <span aria-hidden="true" className="mx-0.5 h-3.5 w-px bg-border dark:bg-white/15" />
+              <span aria-hidden="true" className="mx-0.5 h-3.5 w-px bg-border-default" />
             </>
           )}
           {localParticipants.length > 0 ? (
@@ -260,22 +260,22 @@ export default function NoteParticipants({
                   email={p.email}
                   displayName={p.displayName}
                   size={18}
-                  className="ring-1 ring-surface-3 dark:ring-surface-2"
+                  className="ring-1 ring-surface-tertiary dark:ring-surface-primary"
                 />
               ))}
               {localParticipants.length > MAX_STACKED_AVATARS && (
-                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-background px-0.5 text-[9px] font-medium tabular-nums text-foreground/70 ring-1 ring-surface-3 dark:bg-surface-3 dark:ring-surface-2">
+                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-surface-primary px-0.5 text-[9px] font-medium tabular-nums text-primary/70 ring-1 ring-surface-tertiary dark:bg-surface-tertiary dark:ring-surface-primary">
                   +{localParticipants.length - MAX_STACKED_AVATARS}
                 </span>
               )}
             </span>
           ) : (
             <>
-              <Users size={14} className="shrink-0 text-foreground/60" />
+              <Users size={14} className="shrink-0 text-primary/60" />
               {chipLabel}
             </>
           )}
-          <ChevronDown size={14} className="shrink-0 text-foreground/50" />
+          <ChevronDown size={14} className="shrink-0 text-primary/50" />
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -302,38 +302,38 @@ export default function NoteParticipants({
         ) : (
           <>
             {(canEdit || localLinkedId) && (
-              <div className="p-1 border-b border-border/70">
+              <div className="p-1 border-b border-default/70">
                 <EventHeaderRow canEdit={canEdit} onOpenEvents={() => setView("events")}>
                   {resolvedEvent ? (
                     <>
                       <EventDot color={resolvedEvent.calendar_color ?? null} />
                       <span className="flex-1 min-w-0">
-                        <span dir="auto" className="block truncate text-foreground/80">
+                        <span dir="auto" className="block truncate text-primary/80">
                           {resolvedEvent.summary || t("upcoming.untitledEvent")}
                         </span>
-                        <span className="block truncate text-[11px] text-foreground/45">
+                        <span className="block truncate text-[11px] text-primary/45">
                           {formatEventWhen(resolvedEvent, locale, t("notes.eventLink.allDay"))}
                         </span>
                       </span>
                     </>
                   ) : localLinkedId ? (
                     <span className="flex-1 min-w-0">
-                      <span className="block truncate text-foreground/70">
+                      <span className="block truncate text-primary/70">
                         {t("notes.eventLink.linkedEvent")}
                       </span>
                       {linkLookupDone && (
-                        <span className="block text-[11px] text-foreground/45">
+                        <span className="block text-[11px] text-primary/45">
                           {t("notes.eventLink.unavailable")}
                         </span>
                       )}
                     </span>
                   ) : (
                     <span className="flex-1 min-w-0">
-                      <span className="block truncate text-foreground/80">
+                      <span className="block truncate text-primary/80">
                         {t("notes.eventLink.selectEvent")}
                       </span>
                       {dateTitle && (
-                        <span className="block truncate text-[11px] text-foreground/45">
+                        <span className="block truncate text-[11px] text-primary/45">
                           {dateTitle}
                         </span>
                       )}
@@ -370,26 +370,26 @@ export default function NoteParticipants({
               </div>
             )}
 
-            <div className="p-2 border-b border-border/70">
+            <div className="p-2 border-b border-default/70">
               <input
                 dir="auto"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={t("notes.participants.addPlaceholder", "Add attendees...")}
-                className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+                className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-primary placeholder:text-primary/45 outline-none border-none appearance-none"
                 autoFocus
               />
             </div>
 
             <div className="max-h-64 overflow-y-auto">
               {search && suggestions.length > 0 && (
-                <div className="p-1 border-b border-border/70">
+                <div className="p-1 border-b border-default/70">
                   {suggestions.slice(0, 5).map((contact) => (
                     <button
                       key={contact.email}
                       onClick={() => addParticipant(contact.email, contact.display_name)}
-                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+                      className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-primary/70 hover:bg-text-primary/5 transition-colors cursor-pointer"
                     >
                       <PersonAvatar email={contact.email} displayName={contact.display_name} />
                       <span dir="auto" className="truncate">
@@ -401,33 +401,27 @@ export default function NoteParticipants({
               )}
 
               {search && !search.includes("@") && suggestions.length === 0 && (
-                <div className="px-3 py-2 text-[11px] text-foreground/45">
+                <div className="px-3 py-2 text-[11px] text-primary/45">
                   {t("notes.participants.typeEmail", "Type an email to add...")}
                 </div>
               )}
 
               {grouped.map(([domain, members]) => (
                 <div key={domain} className="p-1">
-                  <div
-                    dir="ltr"
-                    className="px-2 py-1 text-[11px] font-medium text-muted-foreground"
-                  >
+                  <div dir="ltr" className="px-2 py-1 text-[11px] font-medium text-secondary">
                     {domain}
                   </div>
                   {members.map((p) => (
                     <div
                       key={p.email}
-                      className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-foreground/5 transition-colors"
+                      className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-text-primary/5 transition-colors"
                     >
                       <PersonAvatar email={p.email} displayName={p.displayName} />
 
-                      <span
-                        dir="auto"
-                        className="flex-1 min-w-0 truncate text-xs text-foreground/70"
-                      >
+                      <span dir="auto" className="flex-1 min-w-0 truncate text-xs text-primary/70">
                         {p.displayName || p.email.split("@")[0]}
                         {p.self && (
-                          <span className="ms-1 text-foreground/45">
+                          <span className="ms-1 text-primary/45">
                             {t("notes.participants.me", "(me)")}
                           </span>
                         )}
@@ -435,7 +429,7 @@ export default function NoteParticipants({
 
                       <button
                         onClick={() => removeParticipant(p.email)}
-                        className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-foreground/45 hover:text-foreground/60 transition-opacity cursor-pointer"
+                        className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded text-primary/45 hover:text-primary/60 transition-opacity cursor-pointer"
                       >
                         <X size={12} />
                       </button>
@@ -445,7 +439,7 @@ export default function NoteParticipants({
               ))}
 
               {localParticipants.length === 0 && !search && (
-                <div className="px-3 py-4 text-center text-[11px] text-foreground/45">
+                <div className="px-3 py-4 text-center text-[11px] text-primary/45">
                   {t("notes.participants.typeEmail", "Type an email to add...")}
                 </div>
               )}
@@ -472,10 +466,10 @@ function EventHeaderRow({
     <button
       type="button"
       onClick={onOpenEvents}
-      className={cn(className, "hover:bg-foreground/5 transition-colors cursor-pointer")}
+      className={cn(className, "hover:bg-text-primary/5 transition-colors cursor-pointer")}
     >
       {children}
-      <ChevronDown size={14} className="shrink-0 text-foreground/50" />
+      <ChevronDown size={14} className="shrink-0 text-primary/50" />
     </button>
   );
 }

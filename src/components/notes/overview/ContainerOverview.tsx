@@ -137,7 +137,7 @@ export function ContainerOverview({
 
   if (loadFailed || !isLoaded) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-sm text-muted-foreground">
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-sm text-secondary">
         <p>{t(loadFailed ? "common.error" : "common.loading")}</p>
         {loadFailed && (
           <button
@@ -151,7 +151,7 @@ export function ContainerOverview({
                 setReloadKey((value) => value + 1);
               }
             }}
-            className="text-primary hover:underline focus-visible:underline"
+            className="text-brand-solid hover:underline focus-visible:underline"
           >
             {t("common.retry")}
           </button>
@@ -184,25 +184,23 @@ export function ContainerOverview({
           <div className={cn(PAGE_HERO_ICON_TILE_CLASS, "mb-1")}>
             <ContainerIcon space={space} folder={folder} size={20} />
           </div>
-          <h1 className="text-xl font-semibold text-foreground tracking-tight">
+          <h1 className="text-xl font-semibold text-primary tracking-tight">
             {folder
               ? defaultFolderDisplayName(folder, t)
               : space.kind === "private"
                 ? t("meetingNotification.folders.private")
                 : space.name}
           </h1>
-          <p className="text-[13px] text-foreground/50 dark:text-foreground/45">
+          <p className="text-[13px] text-primary/50 dark:text-primary/45">
             {t(`notes.overview.subtitle.${space.kind === "team" ? "team" : "private"}`)}
           </p>
-          <p className="text-xs text-foreground/45 dark:text-foreground/45">
-            {metaParts.join(" · ")}
-          </p>
+          <p className="text-xs text-primary/45">{metaParts.join(" · ")}</p>
           <div className="mt-1 flex items-center gap-2">
             {/* The empty state keeps its own focal create CTA in the list. */}
             {notes.length > 0 && (
               <button
                 onClick={onNewNote}
-                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-border/70 dark:border-white/10 text-xs font-medium text-foreground/60 hover:text-foreground/85 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-default/70 text-xs font-medium text-primary/60 hover:text-primary/85 hover:border-default/70 hover:bg-text-primary/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               >
                 <Plus size={12} />
                 {t("notes.list.newNote")}
@@ -211,7 +209,7 @@ export function ContainerOverview({
             {canInvite && (
               <button
                 onClick={() => setShowInviteDialog(true)}
-                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-border/70 dark:border-white/10 text-xs font-medium text-foreground/60 hover:text-foreground/85 hover:border-border/70 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                className="inline-flex items-center gap-1.5 px-3 h-7 rounded-md border border-default/70 text-xs font-medium text-primary/60 hover:text-primary/85 hover:border-default/70 hover:bg-text-primary/3 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               >
                 <UserPlus size={12} />
                 {t("notes.overview.invite")}
@@ -224,7 +222,7 @@ export function ContainerOverview({
           <OverviewExplainerBanner kind={space.kind === "team" ? "team" : "private"} />
         )}
         {notes.length > 0 && askSection}
-        <div className={notes.length > 0 ? "border-t border-border/70 dark:border-white/10" : ""}>
+        <div className={notes.length > 0 ? "border-t border-default/70" : ""}>
           <OverviewNoteList
             notes={notes}
             space={space}

@@ -19,9 +19,7 @@ export default function ReauthenticationScreen({
     <OnboardingShell compact stepKey="reauthentication">
       <div className="min-h-full w-full">
         {requiredByDevice && (
-          <p className="px-6 pt-4 text-sm text-muted-foreground">
-            {t("common.deviceSignInRequired")}
-          </p>
+          <p className="px-6 pt-4 text-sm text-secondary">{t("common.deviceSignInRequired")}</p>
         )}
         <CompactAuthenticationFlow
           onContinueWithoutAccount={onContinueWithoutAccount}

@@ -84,7 +84,7 @@ test("the batch warning indicator combines both warnings into one label", async 
 
   const ariaLabel = markup.match(/aria-label="([^"]*)"/)?.[1];
   assert.equal(ariaLabel, "notes.upload.partialWarning notes.upload.diarizationWarning");
-  assert.match(markup, /text-warning/);
+  assert.match(markup, /text-amber/);
   // A non-widget span in the tab order is a dead stop: `title` tooltips do not
   // open on keyboard focus, so there is nothing to read once you land there.
   assert.doesNotMatch(markup, /tabindex/i);
@@ -129,8 +129,8 @@ test("the completed upload shows the diarization warning only when it is flagged
     })
   );
   assert.match(warned, /notes\.upload\.diarizationWarning/);
-  assert.match(warned, /text-warning/);
-  assert.doesNotMatch(warned, /amber/, "use the --color-warning token, not a hand-rolled amber");
+  assert.match(warned, /text-amber/);
+  assert.doesNotMatch(warned, /amber-\d/, "use the amber-solid token, not a hand-rolled amber");
 
   const quiet = renderToStaticMarkup(
     createElement(UploadCompleteWarnings, {

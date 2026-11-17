@@ -36,14 +36,14 @@ export function CliPane({ title, isPaid, onUpgrade }: CliPaneProps): ReactElemen
           <SettingsPanelRow className="space-y-2.5">
             <div>
               <div className="flex h-[18px] items-center gap-1.5">
-                <h3 className="text-xs font-semibold text-foreground">
+                <h3 className="text-xs font-semibold text-primary">
                   {t("integrations.cli.local.label")}
                 </h3>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
                   {t("integrations.cli.local.freeBadge")}
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
+              <p className="text-xs text-secondary/70 mt-0.5 leading-relaxed">
                 {t("integrations.cli.local.description")}
               </p>
             </div>
@@ -55,7 +55,7 @@ export function CliPane({ title, isPaid, onUpgrade }: CliPaneProps): ReactElemen
           <SettingsPanelRow className="space-y-2.5">
             <div>
               <div className="flex h-[18px] items-center gap-1.5">
-                <h3 className="text-xs font-semibold text-foreground">
+                <h3 className="text-xs font-semibold text-primary">
                   {t("integrations.cli.cloud.label")}
                 </h3>
                 {!isPaid && (
@@ -64,7 +64,7 @@ export function CliPane({ title, isPaid, onUpgrade }: CliPaneProps): ReactElemen
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
+              <p className="text-xs text-secondary/70 mt-0.5 leading-relaxed">
                 {isPaid
                   ? t("integrations.cli.cloud.description")
                   : t("integrations.cli.cloud.proRequired")}

@@ -46,7 +46,7 @@ import {
 import slackMark from "../../assets/icons/slack.svg";
 
 export const APPROVAL_CARD_CLASS =
-  "my-1.5 rounded-lg border border-border/70 bg-surface-2/60 p-3 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring";
+  "my-1.5 rounded-lg border border-default/70 bg-surface-primary/60 p-3 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-focus";
 
 /** The message body: edited in place while the card can still send it. */
 function BodyField({
@@ -75,7 +75,7 @@ function BodyField({
     />
   ) : (
     <p
-      className="whitespace-pre-wrap break-words leading-6 text-foreground agent:leading-snug"
+      className="whitespace-pre-wrap break-words leading-6 text-primary agent:leading-snug"
       dir="auto"
     >
       {value}
@@ -200,7 +200,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
   ) : slack ? (
     <>
       <HeaderRow label={t("connectors.approval.slack.channelLabel")}>
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-foreground" dir="auto">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-primary" dir="auto">
           <img
             src={slackMark}
             alt=""
@@ -222,20 +222,20 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
         </span>
       </HeaderRow>
       <HeaderRow label={t("connectors.approval.slack.asLabel")}>
-        <span className="min-w-0 flex-1 truncate font-medium text-foreground" dir="auto">
+        <span className="min-w-0 flex-1 truncate font-medium text-primary" dir="auto">
           {preview.accountLabel}
         </span>
       </HeaderRow>
     </>
   ) : (
     <>
-      <p className="font-medium text-foreground">
+      <p className="font-medium text-primary">
         {t(`connectors.approval.headers.${preview.verbKey}`, {
           destination,
           defaultValue: t("connectors.approval.headers.default", { destination }),
         })}
       </p>
-      <p className="text-xs text-muted-foreground agent:text-[13px]">
+      <p className="text-xs text-secondary agent:text-[13px]">
         {preview.workspaceLabel
           ? t("connectors.approval.identityWithWorkspace", {
               account: preview.accountLabel,
@@ -292,7 +292,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       onClick={() => void copyText(body).then((done) => done && confirmCopied(body))}
       className={PILL_BUTTON}
     >
-      {copied ? <Check size={14} className="text-success" /> : <CopyRounded size={14} />}
+      {copied ? <Check size={14} className="text-green-solid" /> : <CopyRounded size={14} />}
       {t(copied ? "common.copied" : "common.copy")}
     </button>
   );
@@ -300,7 +300,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
     <button
       type="button"
       onClick={() => openLink(entry.url as string)}
-      className="me-auto inline-flex items-center gap-1 rounded-sm text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 agent:text-[13px]"
+      className="me-auto inline-flex items-center gap-1 rounded-sm text-xs font-medium text-brand-solid hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40 agent:text-[13px]"
     >
       <ExternalLink size={12} />
       {openLabel}
@@ -314,10 +314,10 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       data-approval-card={entry.key}
       data-state={entry.state}
       onKeyDown={keepEscape}
-      className="my-1.5 flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-surface-1 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-ring agent:border-border agent:text-[15px]"
+      className="my-1.5 flex flex-col overflow-hidden rounded-2xl border border-default/60 bg-surface-secondary text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-focus agent:border-default agent:text-[15px]"
     >
       <div className="space-y-1 px-4 pt-3 pb-2.5 agent:space-y-0.5">{header}</div>
-      <div className="border-t border-border/50 agent:border-border" />
+      <div className="border-t border-default/50 agent:border-default" />
       {/* A long message scrolls here; who it goes to and the actions stay put. */}
       <div
         data-approval-body=""
@@ -329,10 +329,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
       <div className="px-4">
         {hasFieldLayout && editing && (
           <>
-            <p
-              id={problemsId}
-              className="pb-1 text-xs text-destructive empty:hidden agent:text-[13px]"
-            >
+            <p id={problemsId} className="pb-1 text-xs text-red empty:hidden agent:text-[13px]">
               {problemText}
             </p>
             {/* Always present while editable, so each new reason is heard. */}
@@ -347,11 +344,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
               !entry.outsideThread || note.key !== "connectors.approval.slack.notes.replyInThread"
           )
           .map((note) => (
-            <p
-              key={note.key}
-              className="pb-1 text-xs text-muted-foreground agent:text-[13px]"
-              dir="auto"
-            >
+            <p key={note.key} className="pb-1 text-xs text-secondary agent:text-[13px]" dir="auto">
               {/* Some note copy (issue.notes.droppedLabels) interpolates the
                 card's destination, which connectors don't themselves send in
                 note values — the note's own values win on conflict. */}
@@ -362,10 +355,10 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
             screen reader announces each change. */}
         <div role="status" aria-live="polite" className="text-xs agent:text-[13px]">
           {pending && entry.notice === "policy_retry" && (
-            <p className="pb-1 text-muted-foreground">{t("connectors.approval.policyRetry")}</p>
+            <p className="pb-1 text-secondary">{t("connectors.approval.policyRetry")}</p>
           )}
           {pending && entry.notice === "identity_changed" && (
-            <p className="pb-1 text-muted-foreground" dir="auto">
+            <p className="pb-1 text-secondary" dir="auto">
               {t("connectors.approval.identityChanged", { account: preview.accountLabel })}
             </p>
           )}
@@ -373,12 +366,12 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
             <p className="sr-only">{t("connectors.approval.sending")}</p>
           )}
           {entry.state === "sent" && (
-            <p className={entry.outsideThread ? "pb-1 text-foreground" : "sr-only"}>{sentText}</p>
+            <p className={entry.outsideThread ? "pb-1 text-primary" : "sr-only"}>{sentText}</p>
           )}
           {/* Translated copy only: entry.message is the connector's English,
               written for the model. */}
           {entry.state === "failed" && (
-            <p className="pb-1 text-destructive">
+            <p className="pb-1 text-red">
               {t("connectors.approval.failed", {
                 message: connectorErrorText(t, "approval", entry.connectorId, entry.errorCode, {
                   destination,
@@ -387,12 +380,12 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
               })}
             </p>
           )}
-          {entry.state === "unknown" && <p className="pb-1 text-foreground">{unknownText}</p>}
+          {entry.state === "unknown" && <p className="pb-1 text-primary">{unknownText}</p>}
           {entry.state === "cancelled" && (
-            <p className="pb-1 text-muted-foreground">{t("connectors.approval.cancelled")}</p>
+            <p className="pb-1 text-secondary">{t("connectors.approval.cancelled")}</p>
           )}
           {entry.state === "not_sent" && (
-            <p className="pb-1 text-muted-foreground">{t("connectors.approval.notSent")}</p>
+            <p className="pb-1 text-secondary">{t("connectors.approval.notSent")}</p>
           )}
         </div>
       </div>
@@ -418,7 +411,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
               <button
                 type="button"
                 onClick={() => focusCardAnd(() => cancelApproval(entry.key))}
-                className={cn(PILL_BUTTON, "text-muted-foreground")}
+                className={cn(PILL_BUTTON, "text-secondary")}
               >
                 {t("connectors.approval.cancel")}
               </button>
@@ -458,7 +451,7 @@ export function ApprovalCard({ entry }: { entry: ApprovalEntry }): ReactElement 
               </button>
             )}
             {entry.state === "sent" && (
-              <span className="inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-muted-foreground agent:text-[14px]">
+              <span className="inline-flex h-8 items-center gap-1.5 px-2 text-[13px] text-secondary agent:text-[14px]">
                 <Check size={14} />
                 {verb ? sentText : t("connectors.approval.sentLabel")}
               </span>

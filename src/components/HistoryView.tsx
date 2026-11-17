@@ -94,7 +94,7 @@ export default function HistoryView({
   const discardedToggle = (
     <button
       onClick={onToggleDiscarded}
-      className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/70 hover:!text-foreground hover:!bg-black/5 dark:hover:!bg-white/5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
+      className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-secondary/70 hover:!text-primary hover:!bg-text-primary/5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 transition-all duration-200"
     >
       <Archive size={11} />
       <span>
@@ -108,7 +108,7 @@ export default function HistoryView({
   return (
     <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 pt-4 pb-6")}>
       {/* Hidden until the first load settles, so a returning user isn't greeted as new. */}
-      <h2 className={cn("mb-4 text-xl text-foreground", isLoading && !hasHistory && "invisible")}>
+      <h2 className={cn("mb-4 text-xl text-primary", isLoading && !hasHistory && "invisible")}>
         {firstName ? (
           <BidiInterpolatedText
             text={t(
@@ -141,28 +141,26 @@ export default function HistoryView({
       />
       {/* The Tone & Style banner offers to turn cleanup on itself. */}
       {!useCleanupModel && !aiCTADismissed && !toneStylePrompt.showBanner && (
-        <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
+        <div className="mb-3 relative rounded-lg border border-brand-solid/20 bg-brand-solid/5 dark:bg-brand-solid/10 p-3">
           <button
             onClick={() => {
               localStorage.setItem("aiCTADismissed", "true");
               setAiCTADismissed(true);
             }}
             aria-label={t("common.close")}
-            className="absolute top-2 end-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            className="absolute top-2 end-2 p-1 rounded-sm text-secondary hover:text-primary hover:bg-state-hover transition-colors"
           >
             <X size={14} />
           </button>
           <div className="flex items-start gap-3 pe-6">
-            <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-              <Sparkles size={16} className="text-primary" />
+            <div className="shrink-0 w-8 h-8 rounded-md bg-brand-solid/10 dark:bg-brand-solid/20 flex items-center justify-center">
+              <Sparkles size={16} className="text-brand-solid" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-foreground mb-0.5">
+              <p className="text-xs font-medium text-primary mb-0.5">
                 {t("controlPanel.aiCta.title")}
               </p>
-              <p className="text-xs text-muted-foreground mb-2">
-                {t("controlPanel.aiCta.description")}
-              </p>
+              <p className="text-xs text-secondary mb-2">{t("controlPanel.aiCta.description")}</p>
               <Button
                 variant="default"
                 size="sm"
@@ -179,18 +177,18 @@ export default function HistoryView({
       <div className="flex gap-8">
         <div className="min-w-0 flex-1">
           {!dataRetentionEnabled && (
-            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 px-3.5 py-2.5 flex items-center gap-2.5">
-              <span className="text-amber-600 dark:text-amber-400 shrink-0 text-sm">⊘</span>
-              <p className="text-xs text-amber-700 dark:text-amber-300/90 leading-relaxed">
+            <div className="mb-3 rounded-lg border border-amber bg-amber-surface px-3.5 py-2.5 flex items-center gap-2.5">
+              <span className="text-amber shrink-0 text-sm">⊘</span>
+              <p className="text-xs text-amber leading-relaxed">
                 {t("controlPanel.history.dataRetentionDisabled")}
               </p>
             </div>
           )}
           {isLoading && history.length === 0 ? (
-            <div className="rounded-2xl border border-border/70 bg-card/50 dark:border-white/10 dark:bg-surface-2/60">
+            <div className="rounded-2xl border border-default/70 bg-surface-primary/50 dark:bg-surface-primary/60">
               <div className="flex items-center justify-center gap-2 py-10">
-                <Loader2 size={14} className="animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">{t("controlPanel.loading")}</span>
+                <Loader2 size={14} className="animate-spin text-brand-solid" />
+                <span className="text-sm text-secondary">{t("controlPanel.loading")}</span>
               </div>
             </div>
           ) : history.length === 0 ? (
@@ -202,10 +200,10 @@ export default function HistoryView({
                 height={102}
                 className="[mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]"
               />
-              <h2 className="mt-6 text-lg font-semibold text-foreground">
+              <h2 className="mt-6 text-lg font-semibold text-primary">
                 {t("controlPanel.history.empty")}
               </h2>
-              <p className="mt-2 max-w-md text-sm text-muted-foreground">
+              <p className="mt-2 max-w-md text-sm text-secondary">
                 {t("controlPanel.history.emptyDescription")}
               </p>
               <DictationHotkeyHint hotkey={hotkey} className="mt-2" />
@@ -214,14 +212,14 @@ export default function HistoryView({
             <div className="group">
               {groupedHistory.map((group, index) => (
                 <div key={group.label} className={index > 0 ? "mt-6" : ""}>
-                  <div className="sticky -top-1 z-10 -mx-6 px-6 pt-2 pb-2.5 bg-background flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">{group.label}</span>
+                  <div className="sticky -top-1 z-10 -mx-6 px-6 pt-2 pb-2.5 bg-surface-primary flex items-center justify-between">
+                    <span className="text-sm text-secondary">{group.label}</span>
                     {index === 0 && (
                       <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
                         {discardedToggle}
                         <button
                           onClick={clearAllTranscriptions}
-                          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/70 hover:!text-destructive hover:!bg-destructive/8 dark:hover:!bg-destructive/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
+                          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-secondary/70 hover:!text-red hover:!bg-red-solid/8 dark:hover:!bg-red-solid/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30 transition-all duration-200"
                         >
                           <Trash2 size={11} />
                           <span>{t("controlPanel.history.clearAll")}</span>
@@ -229,7 +227,7 @@ export default function HistoryView({
                       </div>
                     )}
                   </div>
-                  <div className="relative z-0 overflow-clip rounded-2xl border border-border/70 bg-card/50 divide-y divide-border/60 dark:border-white/10 dark:bg-surface-2/60">
+                  <div className="relative z-0 overflow-clip rounded-2xl border border-default/70 bg-surface-primary/50 divide-y divide-default/60 dark:bg-surface-primary/60">
                     {group.items.map((item) => (
                       <TranscriptionItem
                         key={item.id}

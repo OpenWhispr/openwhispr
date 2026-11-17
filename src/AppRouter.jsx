@@ -328,7 +328,7 @@ function LoadingFallback({ message, error = false, action }) {
   const fallbackMessage = message || t("common.loading");
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="min-h-screen bg-surface-primary flex items-center justify-center">
       <div className="flex flex-col items-center gap-4 animate-[scale-in_300ms_ease-out]">
         <svg
           viewBox="0 0 1024 1024"
@@ -342,10 +342,10 @@ function LoadingFallback({ message, error = false, action }) {
           <path d="M397 457V568" stroke="white" strokeWidth="74" strokeLinecap="round" />
         </svg>
         {!error && (
-          <div className="w-7 h-7 rounded-full border-[2.5px] border-transparent border-t-primary animate-[spinner-rotate_0.8s_cubic-bezier(0.4,0,0.2,1)_infinite] motion-reduce:animate-none motion-reduce:border-t-muted-foreground motion-reduce:opacity-50" />
+          <div className="w-7 h-7 rounded-full border-[2.5px] border-transparent border-t-brand-solid animate-[spinner-rotate_0.8s_cubic-bezier(0.4,0,0.2,1)_infinite] motion-reduce:animate-none motion-reduce:border-t-text-secondary motion-reduce:opacity-50" />
         )}
         {fallbackMessage && (
-          <p className="text-[13px] font-medium text-muted-foreground dark:text-foreground/60 tracking-[-0.01em]">
+          <p className="text-[13px] font-medium text-secondary dark:text-primary/60 tracking-[-0.01em]">
             {fallbackMessage}
           </p>
         )}

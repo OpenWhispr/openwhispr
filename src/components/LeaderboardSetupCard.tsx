@@ -20,15 +20,15 @@ export default function LeaderboardSetupCard({
     <section
       data-leaderboard-state="create"
       className={cn(
-        "flex min-h-64 flex-col items-center justify-center rounded-2xl border border-border/70 bg-card/70 px-6 py-10 text-center dark:border-white/10",
+        "flex min-h-64 flex-col items-center justify-center rounded-2xl border border-default/70 bg-surface-primary/70 px-6 py-10 text-center",
         className
       )}
     >
-      <div className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+      <div className="flex size-11 items-center justify-center rounded-full bg-brand-solid/10 text-brand-solid">
         <Users size={20} />
       </div>
       <h2 className="mt-4 text-base font-semibold">{t("insights.leaderboard.setupTitle")}</h2>
-      <p className="mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">
+      <p className="mt-2 max-w-md text-xs leading-relaxed text-secondary">
         {domain && colleagueCount > 0
           ? t("insights.leaderboard.setupDomainDescription", { count: colleagueCount, domain })
           : t("insights.leaderboard.setupDescription")}

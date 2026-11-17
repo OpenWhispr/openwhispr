@@ -131,7 +131,7 @@ export function DictionaryAddField({
   return (
     <div
       className={cn(
-        "flex h-9 items-center gap-2 rounded-lg border border-border/70 bg-card ps-3 pe-1.5 transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 dark:border-white/10 dark:bg-surface-1",
+        "flex h-9 items-center gap-2 rounded-lg border border-default/70 bg-surface-primary ps-3 pe-1.5 transition-colors focus-within:border-brand-solid focus-within:ring-2 focus-within:ring-brand-solid/10 dark:bg-surface-secondary",
         disabled && "opacity-60"
       )}
     >
@@ -148,7 +148,7 @@ export function DictionaryAddField({
         placeholder={t("dictionary.shared.add.placeholder")}
         aria-invalid={notice !== null || undefined}
         aria-describedby={notice !== null ? noticeId : undefined}
-        className="input-inline h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-xs shadow-none placeholder:text-foreground/45 hover:border-0 focus-visible:ring-0 dark:bg-transparent"
+        className="input-inline h-full min-w-0 flex-1 border-0 bg-transparent p-0 text-xs shadow-none placeholder:text-primary/45 hover:border-0 focus-visible:ring-0"
       />
       {notice !== null ? (
         <>
@@ -157,7 +157,7 @@ export function DictionaryAddField({
             title={notice}
             className={cn(
               "min-w-0 truncate text-[11px]",
-              notTermLike && !alreadyAdded ? "text-destructive" : "text-foreground/45"
+              notTermLike && !alreadyAdded ? "text-red" : "text-primary/45"
             )}
           >
             {notice}
@@ -168,7 +168,7 @@ export function DictionaryAddField({
               onClick={() => void unhide()}
               disabled={busy || disabled}
               aria-label={t("dictionary.shared.actions.unhideWord", { word: trimmed })}
-              className="shrink-0 text-[11px] text-primary transition-colors enabled:hover:text-primary/80"
+              className="shrink-0 text-[11px] text-brand-solid transition-colors enabled:hover:text-brand-solid/80"
             >
               {t("dictionary.shared.actions.unhide")}
             </button>
@@ -181,7 +181,7 @@ export function DictionaryAddField({
             onClick={() => void submit()}
             disabled={!canAdd}
             aria-label={t("dictionary.addWord")}
-            className="flex shrink-0 items-center gap-1 text-[11px] text-foreground/45 transition-colors enabled:hover:text-primary"
+            className="flex shrink-0 items-center gap-1 text-[11px] text-primary/45 transition-colors enabled:hover:text-brand-solid"
           >
             {t("dictionary.add")}
             <CornerDownLeft size={11} />
@@ -194,12 +194,12 @@ export function DictionaryAddField({
             type="button"
             disabled={disabled}
             aria-label={t("dictionary.shared.add.chooseList")}
-            className="flex h-6 max-w-48 shrink-0 items-center gap-1 rounded-[5px] border border-foreground/8 bg-foreground/3 px-2 text-[11px] text-foreground/80 transition-colors enabled:hover:bg-foreground/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 dark:border-white/8 dark:bg-white/4"
+            className="flex h-6 max-w-48 shrink-0 items-center gap-1 rounded-[5px] border border-text-primary/8 bg-text-primary/3 px-2 text-[11px] text-primary/80 transition-colors enabled:hover:bg-text-primary/6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-solid/20"
           >
             <span dir="auto" className="truncate">
               {t("dictionary.shared.add.to", { list: targetLabel })}
             </span>
-            <ChevronDown size={11} className="shrink-0 text-foreground/45" aria-hidden="true" />
+            <ChevronDown size={11} className="shrink-0 text-primary/45" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-44 rounded-lg p-1">
@@ -212,19 +212,19 @@ export function DictionaryAddField({
               <span dir="auto" className="flex-1 truncate">
                 {option.label}
               </span>
-              {option.target === target && <Check size={12} className="text-primary" />}
+              {option.target === target && <Check size={12} className="text-brand-solid" />}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="h-4 w-px bg-foreground/10 dark:bg-white/8" />
+      <div className="h-4 w-px bg-text-primary/10" />
       {importMenu ?? (
         <button
           type="button"
           onClick={onImport}
           disabled={disabled}
           aria-label={t("dictionary.importWords")}
-          className="grid size-6 shrink-0 place-items-center rounded-[5px] text-foreground/45 transition-colors enabled:hover:bg-foreground/5 enabled:hover:text-foreground/70"
+          className="grid size-6 shrink-0 place-items-center rounded-[5px] text-primary/45 transition-colors enabled:hover:bg-text-primary/5 enabled:hover:text-primary/70"
         >
           <Upload size={13} />
         </button>

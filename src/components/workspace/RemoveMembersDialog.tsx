@@ -297,16 +297,16 @@ export function RemoveMembersDialog({
       onDismiss={() => dispatch({ type: "dismiss" })}
     >
       {ownerKept ? (
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-secondary">
           {t("workspaces.removeMembers.cannotRemoveOwner")}
         </p>
       ) : null}
       {transferring ? (
         // The note, the label and the picker sit on one inset card, as the design draws them.
-        <div className="flex flex-col gap-3 rounded-xl bg-surface-1 p-3 ring-1 ring-inset ring-black/[0.06] dark:bg-surface-window dark:ring-0">
-          <p className="text-sm text-muted-foreground">{ownerNote}</p>
+        <div className="flex flex-col gap-3 rounded-xl bg-surface-secondary p-3 ring-1 ring-inset ring-border-default dark:ring-0">
+          <p className="text-sm text-secondary">{ownerNote}</p>
           <div className="flex flex-col gap-2">
-            <span id={pickerLabelId} className="text-sm font-medium text-muted-foreground">
+            <span id={pickerLabelId} className="text-sm font-medium text-secondary">
               {t("workspaces.removeMembers.transferLabel")}
             </span>
             <DropdownMenu>
@@ -316,7 +316,7 @@ export function RemoveMembersDialog({
                 disabled={busy || managedRefusal}
                 className={cn(
                   PICKER_TRIGGER,
-                  "bg-black/[0.04] dark:bg-surface-1 dark:hover:bg-surface-2"
+                  "bg-text-primary/4 dark:bg-surface-secondary dark:hover:bg-surface-primary"
                 )}
               >
                 {newOwner ? (
@@ -330,10 +330,7 @@ export function RemoveMembersDialog({
                 <span id={pickerValueId} className="min-w-0 flex-1 truncate text-start">
                   {newOwner ? ownerLabel(newOwner) : ""}
                 </span>
-                <ChevronsUpDown
-                  className="size-4 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
+                <ChevronsUpDown className="size-4 shrink-0 text-secondary" aria-hidden="true" />
               </DropdownMenuTrigger>
               {/* Opens upward, over the title, and never flips: below the picker sit the dialog's
                   buttons, so the second click of a double-click would land on Reassign and
@@ -361,7 +358,7 @@ export function RemoveMembersDialog({
                     <div className="min-w-0">
                       <p className="truncate text-sm">{ownerLabel(member)}</p>
                       {member.name ? (
-                        <p className="truncate text-xs text-muted-foreground">
+                        <p className="truncate text-xs text-secondary">
                           <bdi dir="ltr">{member.email}</bdi>
                         </p>
                       ) : null}
@@ -374,7 +371,7 @@ export function RemoveMembersDialog({
           {/* A member reaches only the teamspaces they belong to, which the design doesn't draw;
               it stays because some notes then stay where they are. */}
           {newOwner?.role === "member" ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-secondary">
               {t("workspaces.removeMembers.transferBodyLimited", {
                 name: isolate(memberName(newOwner)),
               })}
@@ -383,7 +380,7 @@ export function RemoveMembersDialog({
         </div>
       ) : null}
       {managedSubjects.length > 1 ? (
-        <ul className="max-h-24 overflow-y-auto text-xs text-muted-foreground">
+        <ul className="max-h-24 overflow-y-auto text-xs text-secondary">
           {managedSubjects.map((subject) => (
             <li key={subject.user_id} className="truncate">
               {isolate(memberName(subject))}

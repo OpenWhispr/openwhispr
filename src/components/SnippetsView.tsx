@@ -76,9 +76,7 @@ function EditSnippetDialog({
               placeholder={t("dictionary.snippets.triggerPlaceholder")}
               maxLength={80}
             />
-            {duplicate && (
-              <p className="text-xs text-destructive">{t("dictionary.snippets.duplicate")}</p>
-            )}
+            {duplicate && <p className="text-xs text-red">{t("dictionary.snippets.duplicate")}</p>}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="snippet-replacement" className="text-xs font-medium">
@@ -201,26 +199,24 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
             if (e.key === "Escape" && snippets.length === 0 && !panelOpen) setShowEmptyInput(false);
           }}
           maxLength={80}
-          className="h-10 w-full rounded-full! pe-16 text-sm placeholder:text-foreground/45"
+          className="h-10 w-full rounded-full! pe-16 text-sm placeholder:text-primary/45"
         />
         <button
           onClick={openPanel}
           disabled={!trimmedTrigger || duplicate}
           aria-label={t("dictionary.snippets.create")}
-          className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center gap-1 text-xs text-foreground/45 transition-colors enabled:hover:text-primary disabled:text-foreground/45"
+          className="absolute end-3 top-1/2 flex -translate-y-1/2 items-center gap-1 text-xs text-primary/45 transition-colors enabled:hover:text-brand-solid disabled:text-primary/45"
         >
           {t("dictionary.add")}
           <CornerDownLeft size={12} />
         </button>
       </div>
-      {duplicate && (
-        <p className="mt-1.5 text-xs text-destructive">{t("dictionary.snippets.duplicate")}</p>
-      )}
+      {duplicate && <p className="mt-1.5 text-xs text-red">{t("dictionary.snippets.duplicate")}</p>}
     </div>
   );
 
   const expansionPanel = (
-    <div className="rounded-xl border border-primary/30 px-3 pb-2 pt-2.5 dark:border-primary/40">
+    <div className="rounded-xl border border-brand-solid/30 px-3 pb-2 pt-2.5 dark:border-brand-solid/40">
       <Textarea
         dir="auto"
         autoFocus
@@ -232,14 +228,14 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
         }}
         placeholder={t("dictionary.snippets.replacementPlaceholder")}
         rows={4}
-        className="min-h-[72px] resize-none rounded-none border-0 bg-transparent text-xs text-foreground shadow-none placeholder:text-foreground/45 hover:border-0 focus:border-0 focus:ring-0"
+        className="min-h-[72px] resize-none rounded-none border-0 bg-transparent text-xs text-primary shadow-none placeholder:text-primary/45 hover:border-0 focus:border-0 focus:ring-0"
       />
       <div className="flex items-center justify-between pt-1.5">
         <div dir="ltr" className="flex items-center gap-0.5">
-          <kbd className="rounded border border-border/70 bg-muted/40 px-1 py-px font-mono text-[10px] leading-tight text-muted-foreground/70 dark:border-white/10">
+          <kbd className="rounded border border-default/70 bg-surface-secondary/40 px-1 py-px font-mono text-[10px] leading-tight text-secondary/70">
             {getCachedPlatform() === "darwin" ? "⌘" : "Ctrl"}
           </kbd>
-          <kbd className="rounded border border-border/70 bg-muted/40 px-1 py-px font-mono text-[10px] leading-tight text-muted-foreground/70 dark:border-white/10">
+          <kbd className="rounded border border-default/70 bg-surface-secondary/40 px-1 py-px font-mono text-[10px] leading-tight text-secondary/70">
             ⏎
           </kbd>
         </div>
@@ -279,25 +275,25 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
           "shadow-sm",
           snippets.length > 0
             ? "px-4 py-3"
-            : "relative overflow-hidden rounded-3xl dark:bg-surface-window"
+            : "relative overflow-hidden rounded-3xl dark:bg-surface-secondary"
         )}
       >
         {snippets.length > 0 && (
           <>
-            <h3 className="text-xs font-semibold text-foreground/45">
+            <h3 className="text-xs font-semibold text-primary/45">
               {t("dictionary.snippets.title")}
             </h3>
-            <div className="mt-2.5 border-t border-dashed border-foreground/10 dark:border-white/10" />
+            <div className="mt-2.5 border-t border-dashed border-text-primary/10" />
           </>
         )}
 
         {snippets.length === 0 ? (
           <div className="flex min-h-64 items-start px-6 py-6">
             <div className="relative z-10 w-full min-w-0 md:w-3/5">
-              <h2 className="text-xl font-normal leading-snug text-foreground">
+              <h2 className="text-xl font-normal leading-snug text-primary">
                 {t("dictionary.snippets.emptyTitle")} {t("dictionary.snippets.emptyTitleAccent")}
               </h2>
-              <p className="mt-3 max-w-xl text-base leading-relaxed text-foreground/50 dark:text-foreground/65">
+              <p className="mt-3 max-w-xl text-base leading-relaxed text-primary/50 dark:text-primary/65">
                 {t("dictionary.snippets.emptyDescription")}
               </p>
               {showEmptyInput ? (
@@ -315,7 +311,7 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
             <DictionaryEmptyIllustration variant="snippets" />
           </div>
         ) : visibleSnippets.length === 0 ? (
-          <p className="py-6 text-xs text-foreground/45 text-center">
+          <p className="py-6 text-xs text-primary/45 text-center">
             {t("dictionary.noMatches", { word: trimmedTrigger })}
           </p>
         ) : (
@@ -323,14 +319,14 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
             {visibleSnippets.map((snippet) => (
               <li
                 key={snippet.trigger}
-                className="group flex items-center gap-2 h-9 border-b border-foreground/4 dark:border-white/10 last:border-b-0"
+                className="group flex items-center gap-2 h-9 border-b border-text-primary/4 last:border-b-0"
               >
                 <div className="flex-1 min-w-0 flex items-center gap-2">
-                  <span dir="auto" className="text-xs text-foreground/60 shrink-0">
+                  <span dir="auto" className="text-xs text-primary/60 shrink-0">
                     {snippet.trigger}
                   </span>
-                  <span className="text-xs text-foreground/45 shrink-0">→</span>
-                  <span dir="auto" className="text-xs text-foreground/45 truncate">
+                  <span className="text-xs text-primary/45 shrink-0">→</span>
+                  <span dir="auto" className="text-xs text-primary/45 truncate">
                     {snippet.replacement}
                   </span>
                 </div>
@@ -338,14 +334,14 @@ function SnippetsEditor({ listsOwner }: { listsOwner: number }): React.ReactElem
                   <button
                     onClick={() => setEditing(snippet)}
                     aria-label={t("dictionary.snippets.edit", { trigger: snippet.trigger })}
-                    className="p-1 text-foreground/45 hover:text-foreground/60 transition-colors"
+                    className="p-1 text-primary/45 hover:text-primary/60 transition-colors"
                   >
                     <Pencil size={11} />
                   </button>
                   <button
                     onClick={() => handleRemove(snippet.trigger)}
                     aria-label={t("dictionary.snippets.remove", { trigger: snippet.trigger })}
-                    className="p-1 text-foreground/45 hover:text-destructive/70 transition-colors"
+                    className="p-1 text-primary/45 hover:text-red/70 transition-colors"
                   >
                     <X size={11} strokeWidth={2} />
                   </button>

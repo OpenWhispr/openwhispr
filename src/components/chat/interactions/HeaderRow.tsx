@@ -10,7 +10,7 @@ export function HeaderRow({
 }): ReactElement {
   return (
     <div className="flex min-h-6 items-center gap-2">
-      <span className="w-16 shrink-0 text-xs text-muted-foreground agent:w-auto agent:min-w-14 agent:text-[13px]">
+      <span className="w-16 shrink-0 text-xs text-secondary agent:w-auto agent:min-w-14 agent:text-[13px]">
         {label}
       </span>
       {children}

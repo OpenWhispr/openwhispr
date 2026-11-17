@@ -204,7 +204,7 @@ function LocalDeleteSpaceDialog({
     >
       {space && (
         <div className="space-y-1.5">
-          <label htmlFor="delete-space-name" className="text-xs font-medium text-foreground/50">
+          <label htmlFor="delete-space-name" className="text-xs font-medium text-primary/50">
             {t("notes.spaces.deleteTypeName", { space: space.name })}
           </label>
           <Input

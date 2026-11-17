@@ -853,8 +853,8 @@ export default function SpaceMembersPanel({
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 {peopleFailed ? (
-                  <div className="flex h-10 items-center justify-between gap-2 rounded border border-border/70 px-3 dark:border-border-subtle/60">
-                    <p className="truncate text-xs text-muted-foreground">
+                  <div className="flex h-10 items-center justify-between gap-2 rounded border border-default/70 px-3 dark:border-default/60">
+                    <p className="truncate text-xs text-secondary">
                       {rosterFailed
                         ? t("settingsPage.workspace.members.loadError")
                         : t("notes.spaces.teams.loadError")}
@@ -871,7 +871,7 @@ export default function SpaceMembersPanel({
                 ) : (
                   <div
                     aria-hidden="true"
-                    className="h-10 animate-pulse rounded-lg bg-foreground/5 dark:bg-white/5"
+                    className="h-10 animate-pulse rounded-lg bg-text-primary/5"
                   />
                 )}
               </div>
@@ -883,7 +883,7 @@ export default function SpaceMembersPanel({
               role={line.tone === "error" ? "alert" : "status"}
               className={cn(
                 "text-[11px] leading-snug",
-                line.tone === "error" ? "text-destructive" : "text-muted-foreground"
+                line.tone === "error" ? "text-red" : "text-secondary"
               )}
             >
               {line.text}

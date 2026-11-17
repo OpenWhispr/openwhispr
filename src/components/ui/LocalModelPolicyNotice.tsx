@@ -33,7 +33,7 @@ export function LocalModelPolicyNotice({
   if (!message) return null;
 
   return (
-    <p role="status" className="mt-2 text-xs text-muted-foreground">
+    <p role="status" className="mt-2 text-xs text-secondary">
       {t(message)}
     </p>
   );

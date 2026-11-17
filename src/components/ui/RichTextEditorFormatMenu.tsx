@@ -152,8 +152,8 @@ function ToolbarButton({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "h-7 w-7 rounded-md text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-        active && "bg-foreground/10 text-foreground"
+        "h-7 w-7 rounded-md text-secondary hover:bg-text-primary/5 hover:text-primary",
+        active && "bg-text-primary/10 text-primary"
       )}
     >
       {children}
@@ -161,7 +161,7 @@ function ToolbarButton({
   );
 }
 
-const Separator = () => <div className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />;
+const Separator = () => <div className="mx-0.5 h-4 w-px bg-border-default" aria-hidden="true" />;
 
 function FormatToolbar({
   editor,
@@ -202,7 +202,7 @@ function FormatToolbar({
     <div
       role="group"
       aria-label={label("toolbar")}
-      className="flex items-center gap-0.5 rounded-lg border border-border bg-popover p-1 shadow-lg"
+      className="flex items-center gap-0.5 rounded-lg border border-default bg-surface-primary p-1 shadow-lg"
       // Keep focus and the selection in the editor: the commands apply to it.
       onMouseDown={(event) => event.preventDefault()}
     >
@@ -215,8 +215,8 @@ function FormatToolbar({
             title={label("textStyle")}
             aria-label={label("textStyle")}
             className={cn(
-              "h-7 gap-0.5 rounded-md px-1.5 text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-              active.heading > 0 && "bg-foreground/10 text-foreground"
+              "h-7 gap-0.5 rounded-md px-1.5 text-secondary hover:bg-text-primary/5 hover:text-primary",
+              active.heading > 0 && "bg-text-primary/10 text-primary"
             )}
           >
             <Heading size={15} />

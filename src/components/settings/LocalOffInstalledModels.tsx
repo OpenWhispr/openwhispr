@@ -113,10 +113,8 @@ function InstalledModels({ scope }: { scope: PolicyScope }): React.JSX.Element {
     <div className={hasInstalled ? "mt-4 space-y-2" : undefined}>
       {hasInstalled && (
         <>
-          <h3 className="text-sm font-medium text-foreground">
-            {t("models.policy.installedTitle")}
-          </h3>
-          <p className="text-xs text-muted-foreground">
+          <h3 className="text-sm font-medium text-primary">{t("models.policy.installedTitle")}</h3>
+          <p className="text-xs text-secondary">
             {t(
               refusal.code === "POLICY_LOCAL_MODE_BLOCKED"
                 ? "models.policy.installedHint"

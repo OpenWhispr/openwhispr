@@ -34,10 +34,10 @@ test("one decorative SVG carries every state, so a change animates in place", as
 
 test("it uses the onboarding grey and the app's readable status colours", () => {
   const css = source(ICON_CSS);
-  assert.match(css, /var\(--onboarding-text-secondary, var\(--color-muted-foreground\)\)/);
-  assert.match(css, /color: var\(--color-success\);/);
-  assert.match(css, /color: var\(--color-destructive\);/);
-  assert.match(css, /\[data-state="unverified"\] \{\s*color: var\(--color-warning\);/);
+  assert.match(css, /var\(--onboarding-text-secondary, var\(--color-text-secondary\)\)/);
+  assert.match(css, /color: var\(--color-green-solid\);/);
+  assert.match(css, /color: var\(--color-red-solid\);/);
+  assert.match(css, /\[data-state="unverified"\] \{\s*color: var\(--color-amber-solid\);/);
   assert.doesNotMatch(css, /--onboarding-(success|danger)/);
   assert.match(css, /animation: spinner-rotate 0\.75s linear infinite/);
   assert.match(source("src/index.css"), /@keyframes spinner-rotate \{[\s\S]*?rotate\(360deg\)/);

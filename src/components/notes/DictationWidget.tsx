@@ -44,9 +44,9 @@ export default function DictationWidget({
         <div
           className={cn(
             "flex items-center gap-4 h-12 px-5 rounded-xl pointer-events-auto",
-            "bg-primary/6 dark:bg-primary/10",
+            "bg-brand-solid/6 dark:bg-brand-solid/10",
             "backdrop-blur-xl",
-            "border border-primary/20 dark:border-primary/25",
+            "border border-brand-solid/20 dark:border-brand-solid/25",
             "shadow-elevated"
           )}
           style={{
@@ -62,7 +62,7 @@ export default function DictationWidget({
             {Array.from({ length: BAR_COUNT }, (_, i) => (
               <div
                 key={i}
-                className="w-0.75 rounded-full bg-primary/60 dark:bg-primary/70 origin-bottom"
+                className="w-0.75 rounded-full bg-brand-solid/60 dark:bg-brand-solid/70 origin-bottom"
                 style={{
                   height: "100%",
                   animation: `waveform-bar ${0.6 + i * 0.08}s ease-in-out infinite`,
@@ -73,7 +73,7 @@ export default function DictationWidget({
           </div>
 
           <span
-            className="text-xs font-medium tabular-nums text-primary/60 dark:text-primary/70 min-w-9"
+            className="text-xs font-medium tabular-nums text-brand-solid/60 dark:text-brand-solid/70 min-w-9"
             style={{
               animation: "fade-in-content 0.3s ease-out 0.25s both",
             }}
@@ -85,8 +85,8 @@ export default function DictationWidget({
             onClick={onStop}
             className={cn(
               "flex items-center justify-center w-7 h-7 rounded-lg",
-              "bg-primary/10 hover:bg-primary/18 active:bg-primary/25",
-              "text-primary",
+              "bg-brand-solid/10 hover:bg-brand-solid/18 active:bg-brand-solid/25",
+              "text-brand-solid",
               "transition-colors duration-150"
             )}
             style={{
@@ -101,14 +101,14 @@ export default function DictationWidget({
         <div
           className={cn(
             "flex items-center gap-3 h-12 px-5 rounded-xl pointer-events-auto",
-            "bg-primary/6 dark:bg-primary/10",
+            "bg-brand-solid/6 dark:bg-brand-solid/10",
             "backdrop-blur-xl",
-            "border border-primary/15 dark:border-primary/20",
+            "border border-brand-solid/15 dark:border-brand-solid/20",
             "shadow-elevated"
           )}
         >
-          <Loader2 size={14} className="animate-spin text-primary/50" />
-          <span className="text-xs font-medium text-primary/50">
+          <Loader2 size={14} className="animate-spin text-brand-solid/50" />
+          <span className="text-xs font-medium text-brand-solid/50">
             {t("notes.editor.processing")}
           </span>
         </div>
@@ -118,13 +118,13 @@ export default function DictationWidget({
             onClick={onStart}
             className={cn(
               "flex items-center justify-center w-11 h-11 rounded-full",
-              "bg-primary/8 dark:bg-primary/12",
+              "bg-brand-solid/8 dark:bg-brand-solid/12",
               "backdrop-blur-xl",
-              "border border-primary/15 dark:border-primary/20",
+              "border border-brand-solid/15 dark:border-brand-solid/20",
               "shadow-sm hover:shadow-md",
-              "text-primary/60 hover:text-primary",
+              "text-brand-solid/60 hover:text-brand-solid",
               "transition-all duration-200",
-              "hover:bg-primary/14 dark:hover:bg-primary/20",
+              "hover:bg-brand-solid/14 dark:hover:bg-brand-solid/20",
               "hover:scale-105",
               "active:scale-[0.97]"
             )}

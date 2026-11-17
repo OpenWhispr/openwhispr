@@ -39,7 +39,7 @@ function SkeletonRows() {
       {[0, 1, 2, 3].map((i) => (
         <div key={i} className="space-y-1.5">
           <div
-            className="h-3 rounded bg-foreground/5"
+            className="h-3 rounded bg-text-primary/5"
             style={{
               width: `${60 + i * 10}%`,
               animation: `tool-status-sweep 1.5s ease-in-out ${i * 0.15}s infinite`,
@@ -48,7 +48,7 @@ function SkeletonRows() {
             }}
           />
           <div
-            className="h-2.5 rounded bg-foreground/3"
+            className="h-2.5 rounded bg-text-primary/3"
             style={{
               width: `${80 + (i % 2) * 10}%`,
               animation: `tool-status-sweep 1.5s ease-in-out ${i * 0.15 + 0.08}s infinite`,
@@ -233,7 +233,7 @@ export default function ConversationList({
     return (
       <div className="flex flex-col h-full">
         <div className="px-2 pt-2 pb-1 flex items-center gap-1.5">
-          <h2 className="text-xs font-medium text-foreground px-1 flex-1">{t("sidebar.chat")}</h2>
+          <h2 className="text-xs font-medium text-primary px-1 flex-1">{t("sidebar.chat")}</h2>
         </div>
         <SkeletonRows />
       </div>
@@ -244,7 +244,7 @@ export default function ConversationList({
     return (
       <div className="flex flex-col h-full">
         <div className="px-2 pt-2 pb-1 flex items-center gap-1.5">
-          <h2 className="text-xs font-medium text-foreground px-1 flex-1">{t("sidebar.chat")}</h2>
+          <h2 className="text-xs font-medium text-primary px-1 flex-1">{t("sidebar.chat")}</h2>
         </div>
       </div>
     );
@@ -257,9 +257,9 @@ export default function ConversationList({
           onClick={onNewChat}
           className={cn(
             "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm",
-            "text-foreground hover:bg-foreground/5",
+            "text-primary hover:bg-text-primary/5",
             "transition-colors duration-150",
-            "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+            "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
           )}
         >
           <Plus size={16} className="shrink-0" />
@@ -269,9 +269,9 @@ export default function ConversationList({
           onClick={onOpenSearch}
           className={cn(
             "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm",
-            "text-foreground hover:bg-foreground/5",
+            "text-primary hover:bg-text-primary/5",
             "transition-colors duration-150",
-            "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+            "focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
           )}
         >
           <Search size={16} className="shrink-0" />
@@ -282,10 +282,10 @@ export default function ConversationList({
             onClick={() => setShowArchived((v) => !v)}
             className={cn(
               "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs transition-colors duration-150",
-              "focus:outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
+              "focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-solid/30",
               showArchived
-                ? "bg-primary/8 text-primary"
-                : "text-muted-foreground/80 hover:text-foreground hover:bg-foreground/5"
+                ? "bg-brand-solid/8 text-brand-solid"
+                : "text-secondary/80 hover:text-primary hover:bg-text-primary/5"
             )}
           >
             <ArchiveIcon size={14} className="shrink-0" />

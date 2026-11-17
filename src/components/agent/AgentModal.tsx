@@ -18,11 +18,11 @@ import { useAgentWindowDrag } from "./useAgentWindowDrag";
 const CHAT_LIST_LIMIT = 50;
 
 const HEADER_BUTTON =
-  "flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40 disabled:opacity-40";
+  "flex size-7 items-center justify-center rounded-full text-secondary transition-colors hover:bg-text-primary/10 hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40 disabled:opacity-40";
 
 // The New chat and chat-switcher pair, set close together in one chip.
 const CHIP_BUTTON =
-  "flex h-full items-center rounded-full px-0.5 text-muted-foreground transition-colors hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/40";
+  "flex h-full items-center rounded-full px-0.5 text-secondary transition-colors hover:text-primary focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/40";
 
 /** The chats to switch to, forks marked; listed fresh each time it opens. */
 function ChatSwitcher({
@@ -84,13 +84,11 @@ function ChatSwitcher({
         align="start"
         className="agent-chat-scroll max-h-72 w-64 overflow-y-auto"
       >
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
+        <DropdownMenuLabel className="text-xs text-secondary">
           {t("agentWindow.chats.title")}
         </DropdownMenuLabel>
         {chats?.length === 0 && (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">
-            {t("agentWindow.chats.empty")}
-          </p>
+          <p className="px-2 py-1.5 text-xs text-secondary">{t("agentWindow.chats.empty")}</p>
         )}
         {chats?.map((chat) => (
           <DropdownMenuItem
@@ -103,7 +101,7 @@ function ChatSwitcher({
                 size={12}
                 role="img"
                 aria-label={t("agentWindow.chats.fork")}
-                className="shrink-0 text-muted-foreground"
+                className="shrink-0 text-secondary"
               />
             )}
             <span dir="auto" className="flex-1 truncate">
@@ -146,7 +144,7 @@ export function AgentModal({
   const { t } = useTranslation();
   const dragHandlers = useAgentWindowDrag();
   return (
-    <div className="agent-modal agent-panel relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border bg-surface-0 shadow-[var(--shadow-modal)]">
+    <div className="agent-modal agent-panel relative flex h-full w-full flex-col overflow-hidden rounded-3xl border border-default bg-surface-primary shadow-[var(--shadow-modal)]">
       <div
         data-glow={glow}
         className="agent-modal-glow pointer-events-none absolute inset-x-0 bottom-0 h-1/2"
@@ -155,7 +153,7 @@ export function AgentModal({
         className="relative grid h-14 shrink-0 cursor-grab grid-cols-[1fr_auto_1fr] items-center px-3 select-none active:cursor-grabbing"
         {...dragHandlers}
       >
-        <div className="flex h-7.5 items-center gap-0.5 justify-self-start rounded-full border border-border bg-surface-1 px-1">
+        <div className="flex h-7.5 items-center gap-0.5 justify-self-start rounded-full border border-default bg-surface-secondary px-1">
           <button
             type="button"
             onClick={onNewChat}
@@ -168,7 +166,7 @@ export function AgentModal({
           <ChatSwitcher activeConversationId={conversationId} onSelect={onSelectChat} />
         </div>
         {!bare && (
-          <div className="flex items-center gap-2 text-[15px] text-muted-foreground">
+          <div className="flex items-center gap-2 text-[15px] text-secondary">
             <BrandMarkIcon size={18} />
             {t("agentWindow.title")}
           </div>

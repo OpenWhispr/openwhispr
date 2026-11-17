@@ -84,8 +84,8 @@ export default function ConversationItem({
       onClick={onClick}
       className={cn(
         "group relative w-full text-start px-3 py-2 cursor-pointer transition-all duration-150",
-        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
-        isActive ? "bg-primary/8 dark:bg-primary/10" : "hover:bg-foreground/4 dark:hover:bg-white/4"
+        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-focus/30",
+        isActive ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4"
       )}
     >
       <div className="flex-1 min-w-0">
@@ -94,25 +94,25 @@ export default function ConversationItem({
             {conversation.is_fork && (
               <GitFork
                 size={11}
-                className="shrink-0 text-muted-foreground/70"
+                className="shrink-0 text-secondary/70"
                 role="img"
                 aria-label={t("chat.forked")}
               />
             )}
             <p
               dir="auto"
-              className={cn("text-xs truncate text-foreground", isActive && "font-medium")}
+              className={cn("text-xs truncate text-primary", isActive && "font-medium")}
             >
               {title}
             </p>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
-            <span className="text-[10px] text-muted-foreground/70 tabular-nums group-hover:opacity-0 transition-opacity">
+            <span className="text-[10px] text-secondary/70 tabular-nums group-hover:opacity-0 transition-opacity">
               {answering ? (
                 <span role="status" aria-label={t("chat.answering")}>
                   <Loader2
                     size={12}
-                    className="animate-spin text-muted-foreground/70"
+                    className="animate-spin text-secondary/70"
                     aria-hidden="true"
                   />
                 </span>
@@ -126,7 +126,7 @@ export default function ConversationItem({
                   size="icon"
                   variant="ghost"
                   onClick={(e) => e.stopPropagation()}
-                  className="h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute end-2 text-muted-foreground/70 dark:text-muted-foreground/70 hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8"
+                  className="h-5 w-5 rounded-sm opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity absolute end-2 text-secondary/70 dark:text-secondary/70 hover:text-primary/60 hover:bg-text-primary/5 active:bg-text-primary/8"
                 >
                   <MoreHorizontal size={12} />
                 </Button>
@@ -137,16 +137,16 @@ export default function ConversationItem({
                     e.stopPropagation();
                     (isArchived ? onUnarchive : onArchive)(conversation.id);
                   }}
-                  className="text-xs gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer focus:bg-foreground/5"
+                  className="text-xs gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer focus:bg-text-primary/5"
                 >
                   {isArchived ? (
                     <>
-                      <ArchiveRestore size={12} className="text-muted-foreground/80" />
+                      <ArchiveRestore size={12} className="text-secondary/80" />
                       {t("chat.unarchive")}
                     </>
                   ) : (
                     <>
-                      <Archive size={12} className="text-muted-foreground/80" />
+                      <Archive size={12} className="text-secondary/80" />
                       {t("chat.archive")}
                     </>
                   )}
@@ -157,7 +157,7 @@ export default function ConversationItem({
                     e.stopPropagation();
                     onDelete(conversation.id);
                   }}
-                  className="text-xs gap-2 rounded-lg px-2.5 py-1.5 text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                  className="text-xs gap-2 rounded-lg px-2.5 py-1.5 text-red focus:text-red focus:bg-red-solid/10 cursor-pointer"
                 >
                   <Trash2 size={12} />
                   {t("chat.delete")}
@@ -170,7 +170,7 @@ export default function ConversationItem({
           <p
             className={cn(
               "flex items-center gap-1 min-w-0 text-[11px] mt-0.5",
-              isActive && !sourceNote.deleted ? "text-primary" : "text-muted-foreground/70"
+              isActive && !sourceNote.deleted ? "text-brand-solid" : "text-secondary/70"
             )}
           >
             <FileText size={11} className="shrink-0" />
@@ -183,7 +183,7 @@ export default function ConversationItem({
           </p>
         ) : (
           conversation.preview && (
-            <p dir="auto" className="text-[11px] text-muted-foreground/70 line-clamp-1 mt-0.5">
+            <p dir="auto" className="text-[11px] text-secondary/70 line-clamp-1 mt-0.5">
               {conversation.preview}
             </p>
           )

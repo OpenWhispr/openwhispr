@@ -117,7 +117,7 @@
   height: var(--live-transcript-footer-height);
   right: 0;
   bottom: 0;
-  border-color: color-mix(in oklch, var(--color-border) 50%, transparent);
+  border-color: color-mix(in oklch, var(--color-border-default) 50%, transparent);
   border-radius: 24px;
 }
 
@@ -131,7 +131,7 @@
   height: 100%;
   right: 0;
   bottom: 0;
-  border-color: color-mix(in oklch, var(--color-border) 50%, transparent);
+  border-color: color-mix(in oklch, var(--color-border-default) 50%, transparent);
   border-radius: 24px;
 }
 
@@ -153,18 +153,18 @@
 }
 
 .voice-identity-icon[data-agent-mode="true"] .voice-identity-svg {
-  color: var(--color-agent-brand);
+  color: var(--color-accent-solid);
 }
 
 .voice-identity-final-agent {
-  color: var(--color-agent-brand);
+  color: var(--color-accent-solid);
 }
 
 .voice-pill-control[data-agent-beam-active="true"] {
   box-shadow:
     var(--shadow-card),
-    0 0 0 1px color-mix(in oklch, var(--color-agent-brand) 28%, transparent),
-    0 0 10px color-mix(in oklch, var(--color-agent-brand) 18%, transparent);
+    0 0 0 1px color-mix(in oklch, var(--color-accent-solid) 28%, transparent),
+    0 0 10px color-mix(in oklch, var(--color-accent-solid) 18%, transparent);
 }
 
 /* While the cancel button's liquid skin owns the fused surface, the pill goes
@@ -187,7 +187,7 @@
    pill's own 220ms so a state flip under the skin (recording → thinking)
    shades over instead of popping. */
 .liquid-cancel-skin path {
-  fill: var(--color-surface-1);
+  fill: var(--color-surface-secondary);
   stroke: var(--color-border-hover);
   transition:
     fill 220ms ease-out,
@@ -195,18 +195,18 @@
 }
 
 .liquid-cancel-skin[data-pill-state="hover"] path {
-  fill: var(--color-surface-3);
+  fill: var(--color-surface-tertiary);
 }
 
 .liquid-cancel-skin[data-pill-state="processing"] path,
 .liquid-cancel-skin[data-pill-state="thinking"] path,
 .liquid-cancel-skin[data-pill-state="unavailable"] path {
-  stroke: color-mix(in oklab, var(--color-border) 60%, transparent);
+  stroke: color-mix(in oklab, var(--color-border-default) 60%, transparent);
 }
 
-/* The idle pill's dark-theme border is softer (dark:border-border/50). */
+/* The idle pill's dark-theme border is softer (dark:border-default/50). */
 .dark .liquid-cancel-skin[data-pill-state="idle"] path {
-  stroke: color-mix(in oklab, var(--color-border) 50%, transparent);
+  stroke: color-mix(in oklab, var(--color-border-default) 50%, transparent);
 }
 
 /* Match the pill's shadow-card, which only exists in dark theme. */
@@ -250,7 +250,7 @@
 /* Agent Mode keeps the identical glow in its purple identity. */
 .processing-signal-glow[data-agent="true"] {
   --signal-bright: #a78bfa;
-  --signal-core: #8787ff;
+  --signal-core: var(--color-accent-solid);
   --signal-deep: #7c3aed;
   --signal-head: #f2edff;
 }
@@ -432,9 +432,9 @@
   color: transparent;
   background: linear-gradient(
     90deg,
-    color-mix(in oklch, var(--color-foreground) 62%, transparent) 0%,
-    var(--color-foreground) 42%,
-    color-mix(in oklch, var(--color-foreground) 62%, transparent) 76%
+    color-mix(in oklch, var(--color-text-primary) 62%, transparent) 0%,
+    var(--color-text-primary) 42%,
+    color-mix(in oklch, var(--color-text-primary) 62%, transparent) 76%
   );
   background-position: 160% 0;
   background-size: 220% 100%;
@@ -471,7 +471,7 @@
 
   .inline-response-shimmer {
     animation: none;
-    color: var(--color-foreground);
+    color: var(--color-text-primary);
     -webkit-text-fill-color: currentColor;
   }
 }

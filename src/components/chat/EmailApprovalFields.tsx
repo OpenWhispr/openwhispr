@@ -52,7 +52,7 @@ function ResolvedAddresses({ addresses }: { addresses: string[] }): ReactElement
   const { t } = useTranslation();
   if (addresses.length === 0) return null;
   return (
-    <p className="ps-18 text-xs text-muted-foreground agent:ps-16 agent:text-[13px]" dir="auto">
+    <p className="ps-18 text-xs text-secondary agent:ps-16 agent:text-[13px]" dir="auto">
       {t("connectors.approval.email.sendsTo", {
         addresses: addresses.map(recipientLabel).join(", "),
       })}
@@ -144,7 +144,7 @@ function EmailFieldsEditor({
 function EmailFieldsView({ fields, showCc }: { fields: EmailFields; showCc: boolean }) {
   const { t } = useTranslation();
   const value = (text: string, className = "") => (
-    <span className={`min-w-0 flex-1 break-words text-foreground ${className}`} dir="auto">
+    <span className={`min-w-0 flex-1 break-words text-primary ${className}`} dir="auto">
       {text}
     </span>
   );
@@ -180,7 +180,7 @@ export function EmailApprovalFields({
         <EmailFieldsView fields={props.fields} showCc={props.showCc} />
       )}
       <HeaderRow label={t("connectors.approval.email.fromLabel")}>
-        <span className="min-w-0 flex-1 truncate text-muted-foreground" dir="auto">
+        <span className="min-w-0 flex-1 truncate text-secondary" dir="auto">
           {accountLabel}
         </span>
       </HeaderRow>

@@ -30,12 +30,12 @@ const workspaceFirst = (scopes: SharedScope[]): SharedScope[] => [
   ...scopes.filter((scope) => scope.space_id !== null),
 ];
 
-const WORKSPACE_ICON = <Building2 className="h-4 w-4 text-primary/80" aria-hidden="true" />;
-const SPACE_ICON = <Users className="h-4 w-4 text-primary/80" aria-hidden="true" />;
+const WORKSPACE_ICON = <Building2 className="h-4 w-4 text-brand-solid/80" aria-hidden="true" />;
+const SPACE_ICON = <Users className="h-4 w-4 text-brand-solid/80" aria-hidden="true" />;
 
 // A sign-in or lost access isn't fixed by a plan: no lists, no button.
 const ACCESS_BLOCKED = new Set<LockedAccessState>(["ssoRequired", "noAccess"]);
-const LOCK_ICON = <Lock size={15} className="shrink-0 text-primary" aria-hidden="true" />;
+const LOCK_ICON = <Lock size={15} className="shrink-0 text-brand-solid" aria-hidden="true" />;
 
 /** The upsell for a Shared list the member can't use; a member can't buy, so gets no button. */
 export function SharedDictionaryUpsell({
@@ -127,22 +127,20 @@ export function SharedDictionaryLocked(props: SharedDictionaryUpsellProps): Reac
         {rows.map((row) => (
           <SettingsPanelRow key={row.key}>
             <div className="flex items-center gap-3 opacity-60">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/5 dark:bg-primary/10">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-solid/5 dark:bg-brand-solid/10">
                 {row.icon}
               </div>
               <div className="min-w-0 flex-1">
-                <p dir="auto" className="truncate text-xs font-semibold text-foreground">
+                <p dir="auto" className="truncate text-xs font-semibold text-primary">
                   {row.title}
                 </p>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground/70">
-                  {row.subtitle}
-                </p>
+                <p className="mt-0.5 text-xs leading-relaxed text-secondary/70">{row.subtitle}</p>
               </div>
               <Lock
                 size={14}
                 role="img"
                 aria-label={t("dictionary.shared.locked.lockLabel")}
-                className="shrink-0 text-muted-foreground"
+                className="shrink-0 text-secondary"
               />
             </div>
           </SettingsPanelRow>

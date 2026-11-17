@@ -214,7 +214,7 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
 const RETENTION_DAY_OPTIONS = [1, 7, 14, 30, 60, 90];
 
 const RETENTION_SELECT_CLASS =
-  "h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
+  "h-7 rounded border border-default/70 bg-surface-secondary/80 px-2.5 text-xs font-medium text-primary shadow-sm hover:border-hover hover:bg-surface-primary/70 focus:outline-none focus:ring-2 focus:ring-focus/30 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 transition-colors duration-200";
 
 const noop = () => {};
 
@@ -229,11 +229,11 @@ function SectionHeader({
 }) {
   return (
     <div className="mb-3">
-      <h3 className="text-xs font-semibold text-foreground tracking-tight">{title}</h3>
+      <h3 className="text-xs font-semibold text-primary tracking-tight">{title}</h3>
       {description && (
-        <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
+        <p className="text-xs text-secondary/80 mt-0.5 leading-relaxed">{description}</p>
       )}
-      {note && <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{note}</p>}
+      {note && <p className="text-xs text-secondary/80 mt-0.5 leading-relaxed">{note}</p>}
     </div>
   );
 }
@@ -425,7 +425,7 @@ function GranolaImportSection({
           {preview && (
             <div className="space-y-2">
               {preview.sampleTitles.length > 0 && (
-                <ul className="text-xs text-muted-foreground space-y-1">
+                <ul className="text-xs text-secondary space-y-1">
                   {preview.sampleTitles.map((title, index) => (
                     <li key={`${index}-${title}`} className="truncate">
                       {title}
@@ -434,7 +434,7 @@ function GranolaImportSection({
                 </ul>
               )}
               {preview.warningCount > 0 && (
-                <p className="text-xs text-muted-foreground/80">
+                <p className="text-xs text-secondary/80">
                   {t("settings.granolaImport.preview.warnings", {
                     warningCount: preview.warningCount,
                   })}
@@ -713,14 +713,14 @@ function TranscriptionSection({
   // the GPU selector below) instead of an early return that hides it.
   const errorCard =
     managed.kind === "error" ? (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3" role="alert">
+      <div className="rounded-lg border border-red-solid/30 bg-red-solid/5 p-3" role="alert">
         <div className="flex items-start gap-2">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-solid" />
           <div>
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-xs text-secondary">
               {managed.messageKey ? t(managed.messageKey) : managed.message}
             </p>
           </div>
@@ -730,26 +730,26 @@ function TranscriptionSection({
 
   const managedCard =
     managed.kind === "managed" ? (
-      <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/[0.03] p-3">
+      <div className="space-y-3 rounded-lg border border-brand-solid/20 bg-brand-solid/[0.03] p-3">
         <div className="flex items-start gap-2.5">
-          <div className="rounded-md bg-primary/10 p-1.5 text-primary">
+          <div className="rounded-md bg-brand-solid/10 p-1.5 text-brand-solid">
             <ShieldCheck className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
               {t("settingsPage.aiModels.managedEnterprise.title")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="mt-0.5 text-xs text-secondary">
               {enterpriseProviderName(managed.provider)} ·{" "}
               <span className="font-mono">{managed.model}</span>
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-xs text-secondary">
               {t("settingsPage.aiModels.managedEnterprise.description")}
             </p>
           </div>
         </div>
         {managed.mode !== "managed_required" && managed.allowManualSetup && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-3">
+          <div className="flex flex-wrap items-center gap-2 border-t border-default/70 pt-3">
             <Button
               type="button"
               variant="ghost"
@@ -771,12 +771,12 @@ function TranscriptionSection({
       {!errorCard && !managedCard && (
         <>
           {enterpriseTranscriptionSetupMode === "manual" && managedAvailable.kind === "managed" && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-surface-secondary/30 p-3">
               <div className="min-w-0">
                 <p className="text-sm font-medium">
                   {t("settingsPage.aiModels.managedEnterprise.availableTitle")}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-secondary">
                   {t("settingsPage.aiModels.managedEnterprise.availableDescription", {
                     provider: enterpriseProviderName(managedAvailable.provider),
                   })}
@@ -928,20 +928,20 @@ function useSubTab<T extends string>(storageKey: string, options: readonly T[], 
 
 function VADLabelWithInfo({ label, description }: { label: string; description: string }) {
   return (
-    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
       <span>{label}</span>
       <Popover>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center justify-center rounded-sm text-secondary hover:text-primary transition-colors"
             aria-label={label}
           >
             <Info className="h-3.5 w-3.5" />
           </button>
         </PopoverTrigger>
         <PopoverContent side="top" align="start" className="max-w-sm p-3">
-          <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+          <p className="text-xs leading-relaxed text-secondary">{description}</p>
         </PopoverContent>
       </Popover>
     </div>
@@ -1118,7 +1118,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
   if (!loaded || gpus.length < 2) return null;
 
   return (
-    <div className="border-t border-border/70 pt-4 mt-4">
+    <div className="border-t border-default/70 pt-4 mt-4">
       <SectionHeader
         title={t(`settingsPage.${purpose}.gpuDevice.title`)}
         description={t(`settingsPage.${purpose}.gpuDevice.description`)}
@@ -1133,7 +1133,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
                 setSelectedUuid(uuid);
                 await window.electronAPI?.setGpuDeviceIndex?.(purpose, uuid);
               }}
-              className="w-full appearance-none rounded-md border border-border bg-background px-3 pe-10 py-2 text-sm"
+              className="w-full appearance-none rounded-md border border-default bg-surface-primary px-3 pe-10 py-2 text-sm"
             >
               {gpus.map((gpu) => (
                 <option key={gpu.uuid} value={gpu.uuid}>
@@ -1142,7 +1142,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
               ))}
             </select>
             <svg
-              className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+              className="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary"
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
               fill="none"
@@ -2257,10 +2257,10 @@ export default function SettingsPage({
                     name={user.name || t("settingsPage.account.user")}
                   />
                   <div className="min-w-0">
-                    <p dir="auto" className="truncate text-[13px] font-semibold text-foreground">
+                    <p dir="auto" className="truncate text-[13px] font-semibold text-primary">
                       {user.name || t("settingsPage.account.user")}
                     </p>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="truncate text-xs text-secondary">
                       <bdi dir="ltr">{user.email}</bdi>
                     </p>
                   </div>
@@ -2291,7 +2291,7 @@ export default function SettingsPage({
                     variant="outline"
                     disabled={isSigningOut}
                     size="sm"
-                    className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                    className="text-red border-red-solid/30 hover:bg-red-solid/10 hover:border-red-solid/50"
                   >
                     <LogOut className="me-1.5 h-3.5 w-3.5" />
                     {isSigningOut
@@ -2311,7 +2311,7 @@ export default function SettingsPage({
                         variant="outline"
                         disabled={isDeletingAccount || isOfflineAccount}
                         size="sm"
-                        className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
+                        className="text-red border-red-solid/30 hover:bg-red-solid/10 hover:border-red-solid"
                       >
                         <Trash2 className="me-1.5 h-3.5 w-3.5" />
                         {isDeletingAccount
@@ -2336,17 +2336,17 @@ export default function SettingsPage({
                   </SettingsPanelRow>
                 </SettingsPanel>
 
-                <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/3 dark:bg-primary/6 p-4">
+                <div className="rounded-lg border border-brand-solid/20 dark:border-brand-solid/15 bg-brand-solid/3 dark:bg-brand-solid/6 p-4">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
-                      <Sparkles className="w-4 h-4 text-primary" />
+                    <div className="w-8 h-8 rounded-md bg-brand-solid/10 dark:bg-brand-solid/15 flex items-center justify-center shrink-0 mt-0.5">
+                      <Sparkles className="w-4 h-4 text-brand-solid" />
                     </div>
                     <div className="min-w-0 flex-1 space-y-2.5">
                       <div>
-                        <p className="text-xs font-medium text-foreground">
+                        <p className="text-xs font-medium text-primary">
                           {t("settingsPage.account.trialCta.title")}
                         </p>
-                        <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+                        <p className="text-xs text-secondary leading-relaxed mt-0.5">
                           {t("settingsPage.account.trialCta.description")}
                         </p>
                       </div>
@@ -2441,10 +2441,7 @@ export default function SettingsPage({
                       <SettingsPanel>
                         {usage.isPastDue && (
                           <SettingsPanelRow>
-                            <Alert
-                              variant="warning"
-                              className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
-                            >
+                            <Alert variant="warning">
                               <AlertTriangle className="h-4 w-4" />
                               <AlertTitle>{t("settingsPage.account.pastDue.title")}</AlertTitle>
                               <AlertDescription>
@@ -2527,19 +2524,19 @@ export default function SettingsPage({
                                 className={cn(
                                   "h-1.5",
                                   usage.isOverLimit
-                                    ? "[&>div]:bg-destructive"
+                                    ? "[&>div]:bg-red-solid"
                                     : usage.isApproachingLimit
-                                      ? "[&>div]:bg-warning"
-                                      : "[&>div]:bg-primary"
+                                      ? "[&>div]:bg-amber-solid"
+                                      : "[&>div]:bg-brand-solid"
                                 )}
                               />
-                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <div className="flex items-center justify-between text-xs text-secondary">
                                 <span className="tabular-nums">
                                   {usage.wordsUsed.toLocaleString(i18n.language)} /{" "}
                                   {usage.limit.toLocaleString(i18n.language)}
                                 </span>
                                 {usage.isApproachingLimit && (
-                                  <span className="text-warning">
+                                  <span className="text-amber">
                                     {t("settingsPage.account.wordsRemaining", {
                                       remaining: usage.wordsRemaining.toLocaleString(i18n.language),
                                     })}
@@ -2549,7 +2546,7 @@ export default function SettingsPage({
                                   <span>{t("settingsPage.account.rollingWeeklyLimit")}</span>
                                 )}
                               </div>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-xs text-secondary">
                                 {t("settingsPage.account.planDescriptions.byokUnlimited")}
                               </p>
                             </div>
@@ -2585,7 +2582,7 @@ export default function SettingsPage({
                                 : t("settingsPage.account.billing.manageInAppStore")}
                             </Button>
                           ) : accountPlan.action === "storeNote" ? (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-secondary">
                               {t("settingsPage.account.billing.managedInMobileStore")}
                             </p>
                           ) : accountPlan.action === "manageBilling" ? (
@@ -2644,18 +2641,18 @@ export default function SettingsPage({
                           !storeBilling &&
                           !usage?.isTrial &&
                           !isWorkspaceCovered
-                          ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
-                          : "border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                          ? "border-2 border-brand-solid/30 bg-brand-solid/3 dark:border-brand-solid/20 dark:bg-brand-solid/5"
+                          : "border border-default/70 dark:border-default/60 bg-surface-primary/30"
                       )}
                     >
-                      <p className="text-xs font-semibold text-foreground">
+                      <p className="text-xs font-semibold text-primary">
                         {t("settingsPage.account.pricing.free.name")}
                       </p>
                       <div className="flex items-baseline gap-0.5 mt-0.5">
-                        <span className="text-lg font-bold text-foreground">
+                        <span className="text-lg font-bold text-primary">
                           {t("settingsPage.account.pricing.free.price")}
                         </span>
-                        <span className="text-[9px] text-muted-foreground">
+                        <span className="text-[9px] text-secondary">
                           / {t("settingsPage.account.pricing.free.period")}
                         </span>
                       </div>
@@ -2668,16 +2665,16 @@ export default function SettingsPage({
                           feature.startsWith("## ") ? (
                             <li
                               key={i}
-                              className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/70 ${i > 0 ? "pt-1.5" : ""}`}
+                              className={`text-[8px] font-semibold uppercase tracking-wide text-secondary/70 ${i > 0 ? "pt-1.5" : ""}`}
                             >
                               {feature.slice(3)}
                             </li>
                           ) : (
                             <li
                               key={i}
-                              className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                              className="flex items-start gap-1 text-[10px] text-secondary leading-tight"
                             >
-                              <Check size={9} className="mt-[2px] text-primary/70 shrink-0" />
+                              <Check size={9} className="mt-[2px] text-brand-solid/70 shrink-0" />
                               {feature}
                             </li>
                           )
@@ -2706,7 +2703,7 @@ export default function SettingsPage({
                         </Button>
                       ) : planStateKnown && !isWorkspaceCovered && !storeBilling ? (
                         <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-primary/70">
+                          <span className="text-[9px] font-medium text-brand-solid/70">
                             {t("settingsPage.account.pricing.currentPlan")}
                           </span>
                         </div>
@@ -2718,11 +2715,11 @@ export default function SettingsPage({
                         "rounded-md border-2 p-2.5 flex flex-col",
                         (usage?.isPersonallySubscribed || (storeBilling && !isWorkspaceCovered)) &&
                           usage?.plan === "pro"
-                          ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
-                          : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
+                          ? "border-brand-solid/40 bg-brand-solid/5 dark:border-brand-solid/30 dark:bg-brand-solid/8"
+                          : "border-brand-solid/20 bg-brand-solid/2 dark:border-brand-solid/15 dark:bg-brand-solid/3"
                       )}
                     >
-                      <p className="text-xs font-semibold text-foreground">
+                      <p className="text-xs font-semibold text-primary">
                         {t("settingsPage.account.pricing.pro.name")}
                       </p>
                       <button
@@ -2732,27 +2729,27 @@ export default function SettingsPage({
                         className="flex items-center gap-1.5 mt-1"
                       >
                         <div
-                          className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-primary" : "bg-muted"}`}
+                          className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-brand-solid" : "bg-surface-secondary"}`}
                         >
                           <div
                             className={`absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3 rtl:-translate-x-3" : ""}`}
                           />
                         </div>
-                        <span className="text-[9px] text-muted-foreground">
+                        <span className="text-[9px] text-secondary">
                           {t("settingsPage.account.pricing.billedYearly")}
                         </span>
                       </button>
                       <div className="flex items-baseline gap-0.5 mt-1">
-                        <span className="text-lg font-bold text-foreground">
+                        <span className="text-lg font-bold text-primary">
                           {billingState.pro
                             ? t("settingsPage.account.pricing.pro.annualEquivalent")
                             : t("settingsPage.account.pricing.pro.monthlyPrice")}
                         </span>
-                        <span className="text-[9px] text-muted-foreground">
+                        <span className="text-[9px] text-secondary">
                           {t("settingsPage.account.pricing.pro.monthlyPeriod")}
                         </span>
                       </div>
-                      <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                      <p className="text-[9px] text-secondary/70 mt-1.5">
                         {t("settingsPage.account.pricing.pro.includesPrefix")}
                       </p>
                       <ul className="space-y-0.5 mt-1 flex-1">
@@ -2763,16 +2760,16 @@ export default function SettingsPage({
                         ).map((feature, i) => (
                           <li
                             key={i}
-                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                            className="flex items-start gap-1 text-[10px] text-secondary leading-tight"
                           >
-                            <Check size={9} className="mt-[2px] text-primary shrink-0" />
+                            <Check size={9} className="mt-[2px] text-brand-solid shrink-0" />
                             {feature}
                           </li>
                         ))}
                       </ul>
                       {proCardCta === "currentPlan" ? (
                         <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-primary">
+                          <span className="text-[9px] font-medium text-brand-solid">
                             {workspacePlans.size > 0
                               ? t("settingsPage.account.pricing.yourPersonalPlan")
                               : t("settingsPage.account.pricing.currentPlan")}
@@ -2804,7 +2801,7 @@ export default function SettingsPage({
                         </Button>
                       ) : proCardCta === "coveredByWorkspace" ? (
                         <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-primary">
+                          <span className="text-[9px] font-medium text-brand-solid">
                             {t("settingsPage.account.pricing.coveredByWorkspace")}
                           </span>
                         </div>
@@ -2830,14 +2827,14 @@ export default function SettingsPage({
                       className={cn(
                         "rounded-md border-2 p-2.5 flex flex-col relative",
                         workspacePlans.has("business")
-                          ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
-                          : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
+                          ? "border-brand-solid/40 bg-brand-solid/5 dark:border-brand-solid/30 dark:bg-brand-solid/8"
+                          : "border-brand-solid/20 bg-brand-solid/2 dark:border-brand-solid/15 dark:bg-brand-solid/3"
                       )}
                     >
-                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+                      <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-brand-solid text-on-solid text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
                         {t("settingsPage.account.pricing.business.badge")}
                       </span>
-                      <p className="text-xs font-semibold text-foreground">
+                      <p className="text-xs font-semibold text-primary">
                         {t("settingsPage.account.pricing.business.name")}
                       </p>
                       <button
@@ -2849,27 +2846,27 @@ export default function SettingsPage({
                         className="flex items-center gap-1.5 mt-1"
                       >
                         <div
-                          className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-primary" : "bg-muted"}`}
+                          className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-brand-solid" : "bg-surface-secondary"}`}
                         >
                           <div
                             className={`absolute top-0.5 start-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3 rtl:-translate-x-3" : ""}`}
                           />
                         </div>
-                        <span className="text-[9px] text-muted-foreground">
+                        <span className="text-[9px] text-secondary">
                           {t("settingsPage.account.pricing.billedYearly")}
                         </span>
                       </button>
                       <div className="flex items-baseline gap-0.5 mt-1">
-                        <span className="text-lg font-bold text-foreground">
+                        <span className="text-lg font-bold text-primary">
                           {billingState.business
                             ? t("settingsPage.account.pricing.business.annualEquivalent")
                             : t("settingsPage.account.pricing.business.monthlyPrice")}
                         </span>
-                        <span className="text-[9px] text-muted-foreground">
+                        <span className="text-[9px] text-secondary">
                           {t("settingsPage.account.pricing.business.monthlyPeriod")}
                         </span>
                       </div>
-                      <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                      <p className="text-[9px] text-secondary/70 mt-1.5">
                         {t("settingsPage.account.pricing.business.includesPrefix")}
                       </p>
                       <ul className="space-y-0.5 mt-1 flex-1">
@@ -2880,9 +2877,9 @@ export default function SettingsPage({
                         ).map((feature, i) => (
                           <li
                             key={i}
-                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                            className="flex items-start gap-1 text-[10px] text-secondary leading-tight"
                           >
-                            <Check size={9} className="mt-[2px] text-primary shrink-0" />
+                            <Check size={9} className="mt-[2px] text-brand-solid shrink-0" />
                             {feature}
                           </li>
                         ))}
@@ -2898,11 +2895,11 @@ export default function SettingsPage({
                       ) : (
                         <div className="mt-2 space-y-1 text-center">
                           {workspacePlans.has("business") ? (
-                            <span className="block text-[9px] font-medium text-primary">
+                            <span className="block text-[9px] font-medium text-brand-solid">
                               {t("settingsPage.account.pricing.yourWorkspacePlan")}
                             </span>
                           ) : !businessAction ? (
-                            <span className="block text-[9px] font-medium text-muted-foreground">
+                            <span className="block text-[9px] font-medium text-secondary">
                               {t("settingsPage.unifiedBilling.businessWorkspaceOnly")}
                             </span>
                           ) : null}
@@ -2925,22 +2922,22 @@ export default function SettingsPage({
                       className={cn(
                         "rounded-md p-2.5 flex flex-col",
                         workspacePlans.has("enterprise")
-                          ? "border-2 border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
-                          : "border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                          ? "border-2 border-brand-solid/40 bg-brand-solid/5 dark:border-brand-solid/30 dark:bg-brand-solid/8"
+                          : "border border-default/70 dark:border-default/60 bg-surface-primary/30"
                       )}
                     >
-                      <p className="text-xs font-semibold text-foreground">
+                      <p className="text-xs font-semibold text-primary">
                         {t("settingsPage.account.pricing.enterprise.name")}
                       </p>
-                      <p className="text-[9px] text-muted-foreground mt-1">
+                      <p className="text-[9px] text-secondary mt-1">
                         {t("settingsPage.account.pricing.enterprise.subtitle")}
                       </p>
                       <div className="flex items-baseline gap-0.5 mt-1">
-                        <span className="text-lg font-bold text-foreground">
+                        <span className="text-lg font-bold text-primary">
                           {t("settingsPage.account.pricing.enterprise.price")}
                         </span>
                       </div>
-                      <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                      <p className="text-[9px] text-secondary/70 mt-1.5">
                         {t("settingsPage.account.pricing.enterprise.includesPrefix")}
                       </p>
                       <ul className="space-y-0.5 mt-1 flex-1">
@@ -2951,19 +2948,16 @@ export default function SettingsPage({
                         ).map((feature, i) => (
                           <li
                             key={i}
-                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                            className="flex items-start gap-1 text-[10px] text-secondary leading-tight"
                           >
-                            <Check
-                              size={9}
-                              className="mt-[2px] text-purple-500 dark:text-purple-400 shrink-0"
-                            />
+                            <Check size={9} className="mt-[2px] text-accent-solid shrink-0" />
                             {feature}
                           </li>
                         ))}
                       </ul>
                       {isSignedIn && workspacePlans.has("enterprise") && (
                         <div className="mt-2 space-y-1 text-center">
-                          <span className="block text-[9px] font-medium text-primary">
+                          <span className="block text-[9px] font-medium text-brand-solid">
                             {t("settingsPage.account.pricing.yourWorkspacePlan")}
                           </span>
                           {enterpriseAction && (
@@ -2994,7 +2988,7 @@ export default function SettingsPage({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="w-full h-6 text-[10px] text-muted-foreground"
+                            className="w-full h-6 text-[10px] text-secondary"
                             onClick={() =>
                               window.electronAPI?.openExternal?.(
                                 "https://openwhispr.com/contact-sales"
@@ -3021,7 +3015,7 @@ export default function SettingsPage({
                             {t("settingsPage.account.pricing.enterprise.cta")}
                           </Button>
                           {enterpriseCta.action === "contactSales" && enterpriseCta.ownerName && (
-                            <p className="text-[10px] text-muted-foreground text-center">
+                            <p className="text-[10px] text-secondary text-center">
                               {t("settingsPage.account.pricing.enterprise.askOwner", {
                                 name: enterpriseCta.ownerName,
                               })}
@@ -3067,9 +3061,9 @@ export default function SettingsPage({
                         </DialogDescription>
                       </DialogHeader>
                       {switchPreview && (
-                        <div className="rounded-lg border border-border/70 dark:border-border-subtle/60 overflow-hidden">
-                          <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
-                            <span className="text-xs text-muted-foreground">
+                        <div className="rounded-lg border border-default/70 dark:border-default/60 overflow-hidden">
+                          <div className="flex justify-between items-center px-3 py-2.5 bg-surface-secondary/40 dark:bg-surface-primary/50">
+                            <span className="text-xs text-secondary">
                               {switchPreview.immediateAmount < 0
                                 ? t("settingsPage.account.pricing.confirmSwitch.accountCredit")
                                 : t("settingsPage.account.pricing.confirmSwitch.chargeToday")}
@@ -3077,9 +3071,7 @@ export default function SettingsPage({
                             <span
                               className={cn(
                                 "text-sm font-semibold",
-                                switchPreview.immediateAmount < 0
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : "text-foreground"
+                                switchPreview.immediateAmount < 0 ? "text-green" : "text-primary"
                               )}
                             >
                               {formatAmount(
@@ -3088,12 +3080,12 @@ export default function SettingsPage({
                               )}
                             </span>
                           </div>
-                          <div className="divide-y divide-border/60">
+                          <div className="divide-y divide-default/60">
                             <div className="flex justify-between items-center px-3 py-2">
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs text-secondary">
                                 {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
                               </span>
-                              <span className="text-xs font-medium text-foreground">
+                              <span className="text-xs font-medium text-primary">
                                 {formatAmount(switchPreview.newPriceAmount, switchPreview.currency)}
                                 /
                                 {switchPreview.newInterval === "year"
@@ -3103,10 +3095,10 @@ export default function SettingsPage({
                             </div>
                             {switchPreview.nextBillingDate && (
                               <div className="flex justify-between items-center px-3 py-2">
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-secondary">
                                   {t("settingsPage.account.pricing.confirmSwitch.nextBilling")}
                                 </span>
-                                <span className="text-xs font-medium text-foreground">
+                                <span className="text-xs font-medium text-primary">
                                   {new Date(switchPreview.nextBillingDate).toLocaleDateString()}
                                 </span>
                               </div>
@@ -3198,7 +3190,7 @@ export default function SettingsPage({
                     label={t("settingsPage.general.appearance.theme")}
                     description={t("settingsPage.general.appearance.themeDescription")}
                   >
-                    <div className="inline-flex items-center gap-px p-0.5 bg-muted/60 dark:bg-surface-2 rounded-md">
+                    <div className="inline-flex items-center gap-px p-0.5 bg-surface-secondary/60 dark:bg-surface-primary rounded-md">
                       {(
                         [
                           {
@@ -3229,12 +3221,12 @@ export default function SettingsPage({
                               transition-colors duration-100
                               ${
                                 isSelected
-                                  ? "bg-background dark:bg-surface-raised text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground"
+                                  ? "bg-surface-primary dark:bg-surface-tertiary text-primary shadow-sm"
+                                  : "text-secondary hover:text-primary"
                               }
                             `}
                           >
-                            <Icon className={`w-3 h-3 ${isSelected ? "text-primary" : ""}`} />
+                            <Icon className={`w-3 h-3 ${isSelected ? "text-brand-solid" : ""}`} />
                             {option.label}
                           </button>
                         );
@@ -3431,7 +3423,7 @@ export default function SettingsPage({
                           e.target.value as "bottom-right" | "center" | "bottom-left"
                         )
                       }
-                      className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
+                      className="h-7 rounded border border-default/70 bg-surface-secondary/80 px-2.5 text-xs font-medium text-primary shadow-sm hover:border-hover hover:bg-surface-primary/70 focus:outline-none focus:ring-2 focus:ring-focus/30 focus:ring-offset-1 transition-colors duration-200"
                     >
                       <option value="bottom-right">
                         {t("settingsPage.general.floatingIcon.bottomRight")}
@@ -3535,10 +3527,7 @@ export default function SettingsPage({
                 </SettingsPanelRow>
                 {autoStartNeedsApproval && (
                   <SettingsPanelRow>
-                    <Alert
-                      variant="warning"
-                      className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
-                    >
+                    <Alert variant="warning">
                       <AlertTriangle className="h-4 w-4" />
                       <AlertTitle>
                         {t("settingsPage.general.startup.needsApproval.title")}
@@ -3963,7 +3952,7 @@ EOF`,
                           <SettingsPanelRow>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <CircleCheck className="h-4 w-4 text-emerald-500" />
+                                <CircleCheck className="h-4 w-4 text-green-solid" />
                                 <span className="text-sm">
                                   {t("settingsPage.general.waylandPaste.allGoodDesc", {
                                     defaultValue: "Auto-paste is ready to go.",
@@ -3972,7 +3961,7 @@ EOF`,
                               </div>
                               <button
                                 onClick={refreshYdotoolStatus}
-                                className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                                className="shrink-0 text-secondary hover:text-primary transition-colors"
                               >
                                 <RotateCw className="w-3.5 h-3.5" />
                               </button>
@@ -3981,31 +3970,29 @@ EOF`,
                         </SettingsPanel>
                       ) : (
                         <>
-                          <div className="rounded-xl border border-border overflow-hidden">
-                            <div className="divide-y divide-border">
+                          <div className="rounded-xl border border-default overflow-hidden">
+                            <div className="divide-y divide-default">
                               {checks.map((item) => (
                                 <div key={item.key} className="px-4 py-3">
                                   <div className="flex items-center gap-2.5">
                                     {item.ok ? (
-                                      <CircleCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+                                      <CircleCheck className="h-4 w-4 shrink-0 text-green-solid" />
                                     ) : (
-                                      <CircleX className="h-4 w-4 shrink-0 text-red-500" />
+                                      <CircleX className="h-4 w-4 shrink-0 text-red-solid" />
                                     )}
                                     <div className="flex-1 min-w-0">
                                       <span className="text-sm font-medium">{item.label}</span>
-                                      <span className="text-xs text-muted-foreground ms-2">
+                                      <span className="text-xs text-secondary ms-2">
                                         {item.desc}
                                       </span>
                                       {item.note && (
-                                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
-                                          {item.note}
-                                        </p>
+                                        <p className="text-[11px] text-amber mt-0.5">{item.note}</p>
                                       )}
                                     </div>
                                     {!item.ok && (
                                       <button
                                         onClick={() => setYdotoolGuideKey(item.key)}
-                                        className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-muted transition-colors text-foreground"
+                                        className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-default hover:bg-surface-secondary transition-colors text-primary"
                                       >
                                         <BookOpen className="w-3 h-3" />
                                         {t("settingsPage.general.waylandPaste.guide.open", {
@@ -4020,7 +4007,7 @@ EOF`,
                           </div>
                           <button
                             onClick={refreshYdotoolStatus}
-                            className="flex items-center gap-1.5 mt-3 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            className="flex items-center gap-1.5 mt-3 text-xs text-secondary hover:text-primary transition-colors"
                           >
                             <RotateCw className="w-3 h-3" />
                             {t("settingsPage.general.waylandPaste.recheck", {
@@ -4049,13 +4036,13 @@ EOF`,
                                 {activeGuide.steps.map((step, i) => (
                                   <div key={i}>
                                     <div className="flex items-start gap-3">
-                                      <span className="shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
+                                      <span className="shrink-0 w-6 h-6 rounded-full bg-brand-solid text-on-solid flex items-center justify-center text-xs font-semibold">
                                         {i + 1}
                                       </span>
                                       <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium">{step.title}</p>
                                         {step.desc && (
-                                          <p className="text-xs text-muted-foreground mt-0.5">
+                                          <p className="text-xs text-secondary mt-0.5">
                                             {step.desc}
                                           </p>
                                         )}
@@ -4064,14 +4051,14 @@ EOF`,
                                             {step.cmds.map((c, j) => (
                                               <div key={j}>
                                                 {c.label && (
-                                                  <p className="text-[11px] text-muted-foreground mb-1">
+                                                  <p className="text-[11px] text-secondary mb-1">
                                                     {c.label}
                                                   </p>
                                                 )}
                                                 <div className="flex items-start gap-1.5">
                                                   <pre
                                                     dir="ltr"
-                                                    className="flex-1 text-[11px] bg-muted/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto"
+                                                    className="flex-1 text-[11px] bg-surface-secondary/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto"
                                                   >
                                                     {c.cmd}
                                                   </pre>
@@ -4079,7 +4066,7 @@ EOF`,
                                                     onClick={() =>
                                                       navigator.clipboard.writeText(c.cmd)
                                                     }
-                                                    className="shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                                                    className="shrink-0 p-1.5 rounded-md hover:bg-surface-secondary transition-colors text-secondary hover:text-primary"
                                                     title={t(
                                                       "settingsPage.general.waylandPaste.copy",
                                                       { defaultValue: "Copy" }
@@ -4151,7 +4138,7 @@ EOF`,
                         <button
                           onClick={() => registerHotkey(effectiveDefaultHotkey)}
                           disabled={isHotkeyRegistering}
-                          className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
+                          className="text-xs text-secondary/70 hover:text-primary transition-colors disabled:opacity-50"
                         >
                           <BidiInterpolatedText
                             text={t("settingsPage.general.hotkey.resetToDefault", {
@@ -4168,7 +4155,7 @@ EOF`,
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                   <SettingsPanelRow>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-muted-foreground/80">
+                      <span className="text-xs text-secondary/80">
                         {t("settingsPage.general.hotkey.activationMode")}
                       </span>
                       <ActivationModeSelector
@@ -4179,9 +4166,7 @@ EOF`,
                     </div>
                     {/* Denied input access gets the setup box below instead. */}
                     {pushToTalkUnavailableReason && !linuxInputAccessDenied && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {pushToTalkUnavailableReason}
-                      </p>
+                      <p className="mt-2 text-xs text-secondary">{pushToTalkUnavailableReason}</p>
                     )}
                     {getCachedPlatform() === "linux" &&
                       (activationMode === "push" || linuxInputAccessDenied) && (
@@ -4266,8 +4251,8 @@ EOF`,
                     maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
-                <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/70 dark:border-white/10">
-                  <span className="text-xs text-muted-foreground/80">
+                <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-default/70">
+                  <span className="text-xs text-secondary/80">
                     {t("settingsPage.general.meetingHotkey.layoutLabel")}
                   </span>
                   <Select
@@ -4345,12 +4330,12 @@ EOF`,
                       </SettingsRow>
                     </SettingsPanelRow>
                   </SettingsPanel>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-1 text-xs text-secondary">
                     {t("settingsPage.privacy.cloudBackupTeamCaveat")}
                   </p>
                   {migration && (
                     <div className="mt-2 space-y-1">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <div className="flex items-center justify-between text-xs text-secondary">
                         <span className="flex items-center gap-1.5">
                           <Loader2 className="h-3 w-3 animate-spin" />
                           {t("settingsPage.privacy.cloudNotesMigration", {
@@ -4360,9 +4345,9 @@ EOF`,
                         </span>
                         <span>{Math.round((migration.done / migration.total) * 100)}%</span>
                       </div>
-                      <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                      <div className="h-1 w-full rounded-full bg-surface-secondary overflow-hidden">
                         <div
-                          className="h-full bg-primary transition-all duration-300 ease-out"
+                          className="h-full bg-brand-solid transition-all duration-300 ease-out"
                           style={{ width: `${(migration.done / migration.total) * 100}%` }}
                         />
                       </div>
@@ -4392,7 +4377,7 @@ EOF`,
                           minute: "2-digit",
                         });
                       return (
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <p className="mt-1 text-xs text-secondary">
                           {t("settingsPage.privacy.lastSynced", { time: relative })}
                         </p>
                       );
@@ -4491,7 +4476,7 @@ EOF`,
             </div>
 
             {/* Audio Retention */}
-            <div className="border-t border-border/70 pt-6">
+            <div className="border-t border-default/70 pt-6">
               <SectionHeader
                 title={t("settingsPage.privacy.audioRetention")}
                 description={t("settingsPage.privacy.audioRetentionDescription")}
@@ -4560,7 +4545,7 @@ EOF`,
             </div>
 
             {/* Data Retention */}
-            <div className="border-t border-border/70 pt-6">
+            <div className="border-t border-default/70 pt-6">
               <SettingsPanel>
                 <SettingsPanelRow>
                   <SettingsRow
@@ -4616,7 +4601,7 @@ EOF`,
             </div>
 
             {/* Permissions */}
-            <div className="border-t border-border/70 pt-6">
+            <div className="border-t border-default/70 pt-6">
               <SectionHeader
                 title={t("settingsPage.permissions.title")}
                 description={t("settingsPage.permissions.description")}
@@ -4679,7 +4664,7 @@ EOF`,
 
               {platform === "darwin" && (
                 <div className="mt-5">
-                  <p className="text-xs font-medium text-foreground mb-3">
+                  <p className="text-xs font-medium text-primary mb-3">
                     {t("settingsPage.permissions.troubleshootingTitle")}
                   </p>
                   <SettingsPanel>
@@ -4694,7 +4679,7 @@ EOF`,
                           onClick={resetAccessibilityPermissions}
                           variant="ghost"
                           size="sm"
-                          className="text-foreground/70 hover:text-foreground"
+                          className="text-primary/70 hover:text-primary"
                         >
                           {t("settingsPage.permissions.troubleshoot")}
                         </Button>
@@ -4734,10 +4719,7 @@ EOF`,
                     }
                   >
                     <div className="flex items-center gap-2.5">
-                      <span
-                        dir="ltr"
-                        className="text-xs tabular-nums text-muted-foreground font-mono"
-                      >
+                      <span dir="ltr" className="text-xs tabular-nums text-secondary font-mono">
                         {currentVersion || t("settingsPage.general.updates.versionPlaceholder")}
                       </span>
                       {organizationManagesUpdates ? (
@@ -4827,9 +4809,9 @@ EOF`,
                           </Button>
 
                           {downloadingUpdate && (
-                            <div className="h-1 w-full overflow-hidden rounded-full bg-muted/50">
+                            <div className="h-1 w-full overflow-hidden rounded-full bg-surface-secondary/50">
                               <div
-                                className="h-full bg-success transition-[width] duration-200 rounded-full"
+                                className="h-full bg-green-solid transition-[width] duration-200 rounded-full"
                                 style={{
                                   width: `${Math.min(100, Math.max(0, updateDownloadProgress))}%`,
                                 }}
@@ -4888,8 +4870,8 @@ EOF`,
                     </div>
 
                     {updateInfo?.releaseNotes && (
-                      <div className="mt-4 pt-4 border-t border-border/70">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                      <div className="mt-4 pt-4 border-t border-default/70">
+                        <p className="text-xs font-medium text-secondary uppercase tracking-wider mb-2">
                           <BidiInterpolatedText
                             text={t("settingsPage.general.updates.whatsNew", {
                               version: BIDI_VALUE_TOKEN,
@@ -4898,7 +4880,7 @@ EOF`,
                           />
                         </p>
                         <div
-                          className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
+                          className="text-xs text-secondary [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-brand [&_a]:underline"
                           dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
                         />
                       </div>
@@ -4907,7 +4889,7 @@ EOF`,
                 )}
               </SettingsPanel>
               {organizationManagesUpdates && updateStatus.stagedUpdate && (
-                <p role="status" className="mt-3 text-xs text-warning">
+                <p role="status" className="mt-3 text-xs text-amber">
                   {t("settingsPage.general.updates.stagedBeforePolicy")}
                 </p>
               )}
@@ -4957,12 +4939,12 @@ EOF`,
             </div>
 
             {/* Developer Tools */}
-            <div className="border-t border-border/70 pt-6">
+            <div className="border-t border-default/70 pt-6">
               <DeveloperSection />
             </div>
 
             {/* Data Management */}
-            <div className="border-t border-border/70 pt-6">
+            <div className="border-t border-default/70 pt-6">
               <SectionHeader
                 title={t("settingsPage.developer.dataManagementTitle")}
                 description={t("settingsPage.developer.dataManagementDescription")}
@@ -5057,7 +5039,7 @@ EOF`,
                         }}
                         variant="outline"
                         size="sm"
-                        className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
+                        className="text-red border-red-solid/30 hover:bg-red-solid/10 hover:border-red-solid"
                       >
                         {t("common.reset")}
                       </Button>
@@ -5102,10 +5084,10 @@ EOF`,
         confirmText={t("settingsPage.account.deleteAccount.confirmText")}
         confirmDisabled={isDeletingAccount}
       >
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-default p-3">
           <input
             type="checkbox"
-            className="mt-1 h-4 w-4 rounded border-border accent-destructive"
+            className="mt-1 h-4 w-4 rounded border-default accent-red-solid"
             checked={eraseDeviceData}
             onChange={(event) => setEraseDeviceData(event.target.checked)}
           />
@@ -5113,11 +5095,11 @@ EOF`,
             <span className="block text-sm font-medium">
               {t("settingsPage.account.deleteAccount.eraseDeviceLabel")}
             </span>
-            <span className="block text-xs text-muted-foreground">
+            <span className="block text-xs text-secondary">
               {t("settingsPage.account.deleteAccount.eraseDeviceDescription")}
             </span>
             {eraseDeviceData && (
-              <span className="block text-xs font-medium text-destructive">
+              <span className="block text-xs font-medium text-red">
                 {t("settingsPage.account.deleteAccount.eraseDeviceWarning")}
               </span>
             )}
@@ -5212,7 +5194,7 @@ EOF`,
                   }}
                   toast={toast}
                 />
-                <div className="border-t border-border/70 pt-6">
+                <div className="border-t border-default/70 pt-6">
                   <SectionHeader
                     title={t("settingsPage.prompts.title")}
                     description={t("settingsPage.prompts.description")}

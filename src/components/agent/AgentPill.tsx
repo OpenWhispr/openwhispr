@@ -55,16 +55,18 @@ export function AgentPill({
   return (
     <div
       className={cn(
-        "flex h-10 max-w-full cursor-grab items-center rounded-full border border-border pe-1.25 select-none active:cursor-grabbing text-muted-foreground shadow-[var(--shadow-card)]",
+        "flex h-10 max-w-full cursor-grab items-center rounded-full border border-default pe-1.25 select-none active:cursor-grabbing text-secondary shadow-[var(--shadow-card)]",
         hasStatus ? "ps-2.5" : "ps-1.25",
-        inModal ? "bg-surface-1 dark:bg-surface-2" : "agent-panel bg-surface-0",
+        inModal
+          ? "bg-surface-secondary dark:bg-surface-tertiary"
+          : "agent-panel bg-surface-primary",
         className
       )}
       {...dragHandlers}
     >
       {notice ? (
         <span
-          className="ms-2.5 max-w-30 truncate text-xs text-foreground/80"
+          className="ms-2.5 max-w-30 truncate text-xs text-primary/80"
           title={noticeDetail ? `${notice}\n${noticeDetail}` : notice}
         >
           {notice}
@@ -72,7 +74,7 @@ export function AgentPill({
       ) : controls.waiting ? (
         // Truncates where a translation outgrows the window.
         <span
-          className="ms-2.5 min-w-0 truncate text-sm text-foreground/80 select-none"
+          className="ms-2.5 min-w-0 truncate text-sm text-primary/80 select-none"
           title={t("agentWindow.waitingForAnswer")}
         >
           {t("agentWindow.waitingForAnswer")}
@@ -85,11 +87,11 @@ export function AgentPill({
         <PillWaveform
           getLevel={readLevel}
           active={recording}
-          className="h-6 shrink-0 text-foreground"
+          className="h-6 shrink-0 text-primary"
         />
       ) : null}
       {hasStatus && !controls.thinking && (
-        <span className="mx-3 h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />
+        <span className="mx-3 h-3.5 w-px shrink-0 bg-border-default" aria-hidden="true" />
       )}
       <div className="flex items-center gap-0.5">
         {controls.buttons.map((button) => {

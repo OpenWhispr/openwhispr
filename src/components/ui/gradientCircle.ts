@@ -3,7 +3,7 @@
 // primary action wears this: the Button default variant, the mic/send circles, the onboarding
 // brand tile.
 export const BRAND_GLASS_SURFACE =
-  "bg-[image:var(--gradient-brand-glass)] shadow-(--shadow-brand-glass) text-white";
+  "bg-[image:var(--gradient-brand-glass)] shadow-(--shadow-brand-glass) text-on-solid";
 
 // transform-gpu keeps each circle on its own compositing layer from first paint — without it,
 // Chromium can flash a black first frame when one mounts over backdrop-blur.

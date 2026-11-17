@@ -208,8 +208,9 @@ export function LiquidCancelButton({
           onCancel();
         }}
         className={cn(
-          "absolute right-0 top-0 flex items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-          !fused && "border border-border/55 bg-surface-2 shadow-sm hover:bg-surface-3",
+          "absolute right-0 top-0 flex items-center justify-center rounded-full text-secondary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40",
+          !fused &&
+            "border border-default/55 bg-surface-primary shadow-sm hover:bg-surface-tertiary",
           !buttonInteractive && "pointer-events-none"
         )}
         style={{

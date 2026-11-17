@@ -53,13 +53,13 @@ export default function SelfHostedPanel({
 
   return (
     <div
-      className="border border-border rounded-lg p-3 space-y-2.5"
+      className="border border-default rounded-lg p-3 space-y-2.5"
       onFocus={editing.onFocus}
       onBlur={editing.onBlur}
     >
       <ConnectionCheckAnnouncer announcement={check.announcement} />
       <div className="space-y-1.5">
-        <label className="block text-xs font-medium text-foreground">
+        <label className="block text-xs font-medium text-primary">
           {t("settingsPage.selfHosted.serverUrl")}
         </label>
         <ProviderCheckField
@@ -75,7 +75,7 @@ export default function SelfHostedPanel({
       </div>
       {onModelChange && (
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-foreground">{t("common.model")}</label>
+          <label className="block text-xs font-medium text-primary">{t("common.model")}</label>
           <ProviderCheckField
             aria-label={t("common.model")}
             check={check}

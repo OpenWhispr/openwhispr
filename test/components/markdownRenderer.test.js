@@ -352,7 +352,7 @@ test(
 test("without codeBlockActions, code blocks render as before", async (t) => {
   const html = await renderWithActions(t, "```sh\nls -la\n```\n");
 
-  const pre = '<pre dir="ltr" class="bg-black/10 p-2 rounded overflow-x-auto text-xs mb-2">';
+  const pre = '<pre dir="ltr" class="bg-text-primary/10 p-2 rounded overflow-x-auto text-xs mb-2">';
   assert.ok(html.includes(pre), html);
   assert.match(html, /<code[^>]*>ls -la\n<\/code><\/pre><\/div>$/, "nothing follows the block");
 });

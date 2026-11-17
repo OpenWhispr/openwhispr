@@ -450,7 +450,10 @@ test("a team's access menu says what Admin means for the team", async (t) => {
   await mount(t);
 
   await openMenu(roleTrigger(rowFor("Sales")));
-  assert.match(text(menuItem("Everyone is a member")), /Everyone on the team can view and edit notes/);
+  assert.match(
+    text(menuItem("Everyone is a member")),
+    /Everyone on the team can view and edit notes/
+  );
   assert.match(text(menuItem("Team admins are admins")), /Everyone else on the team is a member/);
 });
 
@@ -751,7 +754,7 @@ test("an invalid address blocks Add members and says the rest are kept", async (
   assert.deepEqual(chipTexts(), ["Ethan", "alex@ · Workspace Member"]);
   assert.equal(lineText(), "Enter a valid email address. Your selected people are kept.");
   assert.equal(lineElement().getAttribute("role"), "alert");
-  assert.match(lineElement().className, /text-destructive/);
+  assert.match(lineElement().className, /text-red/);
   assert.equal(addButton().disabled, true);
 
   // Removing it brings the button back, with the others untouched.
@@ -955,7 +958,7 @@ test("a partial failure keeps only what failed", async (t) => {
     "Ethan was added. alex@example.com's invitation didn't send. Try again."
   );
   assert.equal(lineElement().getAttribute("role"), "alert");
-  assert.match(lineElement().className, /text-destructive/);
+  assert.match(lineElement().className, /text-red/);
   assert.equal(text(addButton()), "Try again");
   assert.equal(addButton().disabled, false);
   assert.ok(doc().activeElement === addButton(), "focus goes where the next press is");

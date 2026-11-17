@@ -424,7 +424,7 @@ export default function CreateSpaceDialog({
           className="max-h-[calc(100vh-32px)] w-[520px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-7 overflow-y-auto rounded-[28px] p-5 sm:max-w-[520px]"
         >
           <DialogHeader className="items-center gap-3 space-y-0 text-center sm:text-center">
-            <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-3 text-foreground">
+            <div className="flex size-[42px] items-center justify-center rounded-full bg-surface-tertiary text-primary">
               <Office className="size-3.5" aria-hidden="true" />
             </div>
             <div className="flex flex-col items-center gap-1.5">
@@ -438,12 +438,12 @@ export default function CreateSpaceDialog({
           </DialogHeader>
 
           {workspacesFailed ? (
-            <div className="rounded-lg border border-border/70 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 px-4 py-6 flex items-center justify-between gap-3">
+            <div className="rounded-lg border border-default/70 bg-surface-primary/50 px-4 py-6 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-medium text-foreground">
+                <p className="text-xs font-medium text-primary">
                   {t("settingsPage.workspace.loadError.title")}
                 </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-xs text-secondary mt-0.5">
                   {t("settingsPage.workspace.loadError.description")}
                 </p>
               </div>
@@ -493,7 +493,7 @@ export default function CreateSpaceDialog({
                   ) : (
                     <>
                       <p className={FIELD_LABEL}>{t("settingsPage.workspace.title")}</p>
-                      <p dir="auto" className="text-sm text-foreground truncate">
+                      <p dir="auto" className="text-sm text-primary truncate">
                         {workspace.name}
                       </p>
                     </>
@@ -519,7 +519,7 @@ export default function CreateSpaceDialog({
                   onEnter={() => void handleCreate()}
                 />
                 {takenName !== null && (
-                  <p id={nameErrorId} role="alert" className="text-xs text-destructive">
+                  <p id={nameErrorId} role="alert" className="text-xs text-red">
                     {t("settingsPage.workspace.teamspaces.form.nameTaken", {
                       name: isolate(takenName),
                     })}
@@ -550,10 +550,10 @@ export default function CreateSpaceDialog({
                     {t("settingsPage.workspace.teamspaces.form.people")}
                   </label>
                   {peopleLoading ? (
-                    <div className="h-[38px] rounded-xl bg-foreground/5 dark:bg-white/5 animate-pulse" />
+                    <div className="h-[38px] rounded-xl bg-text-primary/5 animate-pulse" />
                   ) : peopleFailed ? (
-                    <div className="rounded border border-border/70 dark:border-border-subtle/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">
+                    <div className="rounded border border-default/70 dark:border-default/60 px-3 py-2.5 flex items-center justify-between gap-2">
+                      <p className="text-xs text-secondary">
                         {rosterFailed
                           ? t("settingsPage.workspace.members.loadError")
                           : t("notes.spaces.teams.loadError")}
@@ -588,12 +588,12 @@ export default function CreateSpaceDialog({
               )}
 
               {failure?.kind === "general" && (
-                <p role="alert" className="text-center text-sm text-destructive">
+                <p role="alert" className="text-center text-sm text-red">
                   {t("settingsPage.workspace.teamspaces.form.failed")}
                 </p>
               )}
 
-              <div className="flex flex-col rounded-xl bg-surface-1 p-2">
+              <div className="flex flex-col rounded-xl bg-surface-secondary p-2">
                 <FlagRow
                   icon={UserPlus}
                   title={t("settingsPage.workspace.teamspaces.form.defaultTitle")}
@@ -664,13 +664,13 @@ function FlagRow({
   onChange,
 }: FlagRowProps): ReactElement {
   return (
-    <div className="flex items-center gap-3 rounded-[9px] px-3 py-3 [&:not(:first-child)]:relative [&:not(:first-child)]:before:absolute [&:not(:first-child)]:before:inset-x-3 [&:not(:first-child)]:before:-top-px [&:not(:first-child)]:before:h-px [&:not(:first-child)]:before:bg-border/60">
+    <div className="flex items-center gap-3 rounded-[9px] px-3 py-3 [&:not(:first-child)]:relative [&:not(:first-child)]:before:absolute [&:not(:first-child)]:before:inset-x-3 [&:not(:first-child)]:before:-top-px [&:not(:first-child)]:before:h-px [&:not(:first-child)]:before:bg-border-default/60">
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <p className="flex items-center gap-2 text-sm font-medium text-primary">
+          <Icon className="size-3.5 shrink-0 text-secondary" aria-hidden="true" />
           <span className="truncate">{title}</span>
         </p>
-        <p className="mt-0.5 ps-[22px] text-sm text-muted-foreground">{body}</p>
+        <p className="mt-0.5 ps-[22px] text-sm text-secondary">{body}</p>
       </div>
       <Toggle checked={checked} onChange={onChange} disabled={disabled} ariaLabel={title} />
     </div>

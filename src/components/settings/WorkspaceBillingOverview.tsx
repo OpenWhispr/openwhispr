@@ -35,8 +35,8 @@ export default function WorkspaceBillingOverview({
   if (!loaded && workspaces.length === 0) {
     return (
       <div className="space-y-2">
-        <div className="h-4 w-36 rounded bg-foreground/5 animate-pulse" />
-        <div className="h-36 rounded-lg bg-foreground/5 animate-pulse" />
+        <div className="h-4 w-36 rounded bg-text-primary/5 animate-pulse" />
+        <div className="h-36 rounded-lg bg-text-primary/5 animate-pulse" />
       </div>
     );
   }
@@ -45,10 +45,10 @@ export default function WorkspaceBillingOverview({
   return (
     <section className="space-y-3">
       <div>
-        <h3 className="text-xs font-semibold text-foreground">
+        <h3 className="text-xs font-semibold text-primary">
           {t("settingsPage.unifiedBilling.workspaceTitle")}
         </h3>
-        <p className="text-xs text-muted-foreground/80 mt-0.5">
+        <p className="text-xs text-secondary/80 mt-0.5">
           {t("settingsPage.unifiedBilling.workspaceDescription")}
         </p>
       </div>

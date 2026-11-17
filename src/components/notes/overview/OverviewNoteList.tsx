@@ -46,10 +46,8 @@ export function OverviewNoteList({
           height={117}
           className="[mask-image:linear-gradient(to_right,transparent,black_20%,black_80%,transparent)]"
         />
-        <h2 className="mt-6 text-lg font-semibold text-foreground">{t("notes.empty.title")}</h2>
-        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-          {t("notes.empty.description")}
-        </p>
+        <h2 className="mt-6 text-lg font-semibold text-primary">{t("notes.empty.title")}</h2>
+        <p className="mt-2 max-w-sm text-sm text-secondary">{t("notes.empty.description")}</p>
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
           <Button onClick={onNewNote} className="px-5 font-medium">
             <Plus size={11} />
@@ -69,7 +67,7 @@ export function OverviewNoteList({
     <div className="pb-6">
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="pt-4 pb-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider select-none">
+          <div className="pt-4 pb-1 text-[10px] font-semibold text-secondary/70 uppercase tracking-wider select-none">
             {group.label}
           </div>
           {group.items.map((note) => {
@@ -83,13 +81,10 @@ export function OverviewNoteList({
               <button
                 key={note.id}
                 onClick={() => onOpenNote(note.id)}
-                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-md text-start hover:bg-foreground/4 dark:hover:bg-white/4 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                className="w-full flex items-center gap-3 px-2 py-2 -mx-2 rounded-md text-start hover:bg-text-primary/4 transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
               >
-                <FileText
-                  size={14}
-                  className="text-foreground/45 dark:text-foreground/45 shrink-0"
-                />
-                <span className="text-[13px] text-foreground/85 truncate flex-1">
+                <FileText size={14} className="text-primary/45 shrink-0" />
+                <span className="text-[13px] text-primary/85 truncate flex-1">
                   {note.title || t("notes.list.untitled")}
                 </span>
                 {authorName && (
@@ -100,12 +95,12 @@ export function OverviewNoteList({
                       image={member?.image}
                       size="sm"
                     />
-                    <span className="text-[11px] text-foreground/45 max-w-28 truncate">
+                    <span className="text-[11px] text-primary/45 max-w-28 truncate">
                       {authorName}
                     </span>
                   </span>
                 )}
-                <span className="text-[11px] text-foreground/45 dark:text-foreground/45 shrink-0 tabular-nums">
+                <span className="text-[11px] text-primary/45 shrink-0 tabular-nums">
                   {formatRelativeTime(note.updated_at, t, locale)}
                 </span>
               </button>

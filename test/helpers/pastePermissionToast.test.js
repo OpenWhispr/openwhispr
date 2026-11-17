@@ -376,10 +376,10 @@ test("the real clipboard fallback card keeps Settings open and dismisses on Don'
   assert.equal(card.getAttribute("role"), "status");
   assert.equal(card.getAttribute("aria-live"), "polite");
   const errorIcon = (root) =>
-    findElement(root, (e) => /\btext-destructive\b/.test(e.getAttribute("class") ?? ""));
+    findElement(root, (e) => /\btext-red-solid\b/.test(e.getAttribute("class") ?? ""));
   assert.equal(errorIcon(card), null, "a notice carries no error icon");
   assert.ok(findElement(h.container, (e) => e.getAttribute("data-toast-stack") !== null));
-  assert.match(card.getAttribute("class"), /\bbg-surface-0\b/);
+  assert.match(card.getAttribute("class"), /\bbg-surface-primary\b/);
   assert.ok(h.container.textContent.includes("Copied, not pasted"));
   assert.ok(button(copy.openSettings));
   await React.act(async () => click(button(copy.openSettings)));

@@ -12,7 +12,7 @@ export function SubmitArrowButton({ label, disabled }: { label: string; disabled
       title={label}
       className={cn(
         ROUND_BUTTON,
-        !disabled && "bg-primary text-primary-foreground hover:bg-primary hover:brightness-110"
+        !disabled && "bg-brand-solid text-on-solid hover:bg-brand-solid hover:brightness-110"
       )}
     >
       <ArrowUp size={16} />

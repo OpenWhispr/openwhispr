@@ -152,7 +152,7 @@ export function RequiredModelDownloadStep({
                   {info?.name ?? modelId}
                 </span>
                 {failure ? (
-                  <span className="mt-0.5 block truncate text-xs text-destructive">
+                  <span className="mt-0.5 block truncate text-xs text-red-solid">
                     {failureText(modelId)}
                   </span>
                 ) : (

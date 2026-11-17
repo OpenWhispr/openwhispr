@@ -47,7 +47,7 @@ test("selection ring follows selectedSegmentIds", async () => {
     selectedSegmentIds: new Set(["s2"]),
     onToggleSelect: () => {},
   });
-  assert.equal(html.split("ring-2 ring-primary/60").length - 1, 1);
+  assert.equal(html.split("ring-2 ring-brand-solid/60").length - 1, 1);
 });
 
 test("a mapped profile without an email offers the add-contact affordance", async () => {
@@ -97,8 +97,9 @@ test("an in-person meeting draws numbered mic speakers on the other side", async
       { id: "p3", text: "not diarized", source: "mic", timestamp: 3 },
     ],
   });
-  const otherSide = html.split("bg-surface-2 border border-border/70 text-foreground").length - 1;
-  const selfSide = html.split("bg-primary/90 text-primary-foreground").length - 1;
+  const otherSide =
+    html.split("bg-surface-primary border border-default/70 text-primary").length - 1;
+  const selfSide = html.split("bg-brand-solid/90 text-on-solid").length - 1;
   assert.equal(otherSide, 2, "both numbered speakers sit on the other side");
   assert.equal(selfSide, 1, "a mic line without a speaker stays on the user's side");
   assert.ok(html.includes("Speaker 1") && html.includes("Speaker 2"));

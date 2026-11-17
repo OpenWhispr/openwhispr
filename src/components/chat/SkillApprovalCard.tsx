@@ -33,11 +33,11 @@ import type { SkillCardRecord } from "../../types/skills";
 import { foldUnchanged, lineDiff } from "../../utils/lineDiff";
 import { formatShortDate, normalizeDbDate } from "../../utils/dateFormatting";
 
-const FIELD_CLASS = "w-full rounded-md border border-border/70 bg-background px-2 py-1";
+const FIELD_CLASS = "w-full rounded-md border border-default/70 bg-surface-primary px-2 py-1";
 const INLINE_LINK_CLASS = "h-auto px-1.5 py-0";
 const EDITOR_CLASS = "h-56 font-mono text-[11px] leading-relaxed";
 const PREVIEW_CLASS =
-  "mt-1.5 max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-border/70 bg-background px-2.5 py-2 font-mono text-[11px] leading-relaxed text-foreground/85";
+  "mt-1.5 max-h-56 overflow-auto whitespace-pre-wrap rounded-md border border-default/70 bg-surface-primary px-2.5 py-2 font-mono text-[11px] leading-relaxed text-primary/85";
 
 function ExpandToggle({
   open,
@@ -53,7 +53,7 @@ function ExpandToggle({
       type="button"
       aria-expanded={open}
       onClick={onToggle}
-      className="inline-flex items-center gap-1 rounded-sm text-xs text-primary/80 outline-none hover:text-primary focus-visible:ring-1 focus-visible:ring-primary/30"
+      className="inline-flex items-center gap-1 rounded-sm text-xs text-brand-solid/80 outline-none hover:text-brand-solid focus-visible:ring-1 focus-visible:ring-brand-solid/30"
     >
       <ChevronDown
         className={cn("h-3 w-3 transition-transform duration-200", open && "rotate-180")}
@@ -87,8 +87,8 @@ function CreateSkillBody({
   const [showFull, setShowFull] = useState(false);
   return (
     <>
-      <p className="font-medium text-foreground">{t("skills.approval.createHeader")}</p>
-      <p className="text-xs text-muted-foreground">
+      <p className="font-medium text-primary">{t("skills.approval.createHeader")}</p>
+      <p className="text-xs text-secondary">
         {replaces
           ? t(
               existingOff
@@ -98,7 +98,7 @@ function CreateSkillBody({
           : t("skills.approval.newSkill")}
       </p>
       <div className="mt-2 flex items-start gap-2.5">
-        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/5 text-primary dark:bg-primary/10">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-solid/5 text-brand-solid dark:bg-brand-solid/10">
           <SkillIcon size={14} playKey={playKey} />
         </div>
         <div className="min-w-0">
@@ -149,7 +149,7 @@ function CreateSkillBody({
             </pre>
             {draft.files.map((file) => (
               <div key={file.path} className="mt-2">
-                <p dir="ltr" className="font-mono text-[11px] text-muted-foreground">
+                <p dir="ltr" className="font-mono text-[11px] text-secondary">
                   {file.path}
                 </p>
                 <pre dir="auto" className={PREVIEW_CLASS}>
@@ -217,14 +217,14 @@ function DiffPart({ part }: { part: ChangedPart }): ReactElement {
     <div
       data-diff-part={part.key}
       dir="ltr"
-      className="mt-1.5 max-h-72 overflow-auto rounded-md border border-border/70 bg-background font-mono text-[11px] leading-5"
+      className="mt-1.5 max-h-72 overflow-auto rounded-md border border-default/70 bg-surface-primary font-mono text-[11px] leading-5"
     >
-      <div className="sticky top-0 border-b border-border/60 bg-background px-2.5 py-1 text-muted-foreground/80">
+      <div className="sticky top-0 border-b border-default/60 bg-surface-primary px-2.5 py-1 text-secondary/80">
         {part.label}
       </div>
       {lines.map((line, index) =>
         line.kind === "fold" ? (
-          <div key={index} data-diff="fold" className="px-2.5 text-muted-foreground/70">
+          <div key={index} data-diff="fold" className="px-2.5 text-secondary/70">
             {t("skills.approval.unchangedLines", { count: line.count })}
           </div>
         ) : (
@@ -233,10 +233,9 @@ function DiffPart({ part }: { part: ChangedPart }): ReactElement {
             data-diff={line.kind}
             className={cn(
               "flex gap-2 px-2.5",
-              line.kind === "+" && "bg-success/10 text-success",
-              line.kind === "-" &&
-                "bg-destructive/10 text-destructive line-through decoration-destructive/40",
-              line.kind === " " && "text-muted-foreground"
+              line.kind === "+" && "bg-green-solid/10 text-green",
+              line.kind === "-" && "bg-red-solid/10 text-red line-through decoration-red-solid/40",
+              line.kind === " " && "text-secondary"
             )}
           >
             <span aria-hidden="true" className="w-2 shrink-0 select-none">
@@ -277,8 +276,8 @@ function UpdateSkillBody({
     });
   return (
     <>
-      <p className="font-medium text-foreground">{t("skills.approval.updateHeader")}</p>
-      <p className="text-xs text-muted-foreground" dir="auto">
+      <p className="font-medium text-primary">{t("skills.approval.updateHeader")}</p>
+      <p className="text-xs text-secondary" dir="auto">
         {entry.displayName}
       </p>
       <p className="mt-2 font-medium" dir="auto">
@@ -327,16 +326,16 @@ function UpdateSkillBody({
       )}
 
       {entry.removals.length > 0 && (
-        <div className="mt-2 flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-xs text-foreground/85 dark:bg-destructive/10">
-          <Trash2 size={12} className="mt-0.5 shrink-0 text-destructive/80" />
+        <div className="mt-2 flex items-start gap-2 rounded-md border border-red-solid/20 bg-red-solid/5 px-2.5 py-1.5 text-xs text-primary/85 dark:bg-red-solid/10">
+          <Trash2 size={12} className="mt-0.5 shrink-0 text-red-solid/80" />
           <p dir="auto">
-            <span className="font-medium text-destructive">{t("skills.approval.removes")}</span>{" "}
+            <span className="font-medium text-red">{t("skills.approval.removes")}</span>{" "}
             {entry.removals.join("; ")}
           </p>
         </div>
       )}
       {learnedFrom && (
-        <p className="mt-1.5 text-xs text-muted-foreground">
+        <p className="mt-1.5 text-xs text-secondary">
           {t("skills.approval.learnedFrom", { title: learnedFrom.title, date: learnedOn })}
         </p>
       )}
@@ -419,15 +418,15 @@ export function SkillApprovalCard({ entry }: { entry: SkillApprovalEntry }): Rea
           announces each change. */}
       <div role="status" aria-live="polite" className="text-xs">
         {entry.state === "pending" && entry.problems?.[0] && (
-          <p className="mt-2 text-warning">
+          <p className="mt-2 text-amber">
             {t(problemKey(entry.problems[0]), entry.problems[0].values)}
           </p>
         )}
         {entry.state === "saving" && (
-          <p className="mt-2 text-muted-foreground">{t("skills.approval.saving")}</p>
+          <p className="mt-2 text-secondary">{t("skills.approval.saving")}</p>
         )}
         {entry.state === "saved" && entry.versionId && (
-          <p className="mt-2 text-foreground">
+          <p className="mt-2 text-primary">
             {t("skills.approval.updated")} ·
             <Button
               size="sm"
@@ -444,33 +443,31 @@ export function SkillApprovalCard({ entry }: { entry: SkillApprovalEntry }): Rea
           </p>
         )}
         {entry.state === "saved" && entry.undoFailed && (
-          <p className="mt-1 text-destructive">{t("skills.approval.undoFailed")}</p>
+          <p className="mt-1 text-red">{t("skills.approval.undoFailed")}</p>
         )}
         {entry.state === "saved" && !entry.versionId && (
-          <p className="mt-2 text-foreground">
+          <p className="mt-2 text-primary">
             {t("skills.approval.saved")}
             <OpenSkillLink name={entry.name} />
           </p>
         )}
         {entry.state === "undone" && (
-          <p className="mt-2 text-muted-foreground">{t("skills.approval.undone")}</p>
+          <p className="mt-2 text-secondary">{t("skills.approval.undone")}</p>
         )}
         {entry.state === "changed_since" && (
-          <p className="mt-2 text-muted-foreground">{t("skills.approval.undoStale")}</p>
+          <p className="mt-2 text-secondary">{t("skills.approval.undoStale")}</p>
         )}
         {entry.state === "outdated" && (
-          <p className="mt-2 text-muted-foreground">{t("skills.approval.outdated")}</p>
+          <p className="mt-2 text-secondary">{t("skills.approval.outdated")}</p>
         )}
         {entry.state === "skipped" && (
-          <p className="mt-2 text-muted-foreground">
+          <p className="mt-2 text-secondary">
             {isUpdate ? t("skills.approval.skippedUpdate") : t("skills.approval.skippedCreate")}
           </p>
         )}
-        {entry.state === "failed" && (
-          <p className="mt-2 text-destructive">{t("skills.approval.failed")}</p>
-        )}
+        {entry.state === "failed" && <p className="mt-2 text-red">{t("skills.approval.failed")}</p>}
         {entry.state === "not_saved" && (
-          <p className="mt-2 text-muted-foreground">{t("skills.approval.notSaved")}</p>
+          <p className="mt-2 text-secondary">{t("skills.approval.notSaved")}</p>
         )}
       </div>
 
@@ -521,7 +518,7 @@ export function SkillCardSummary({ record }: { record: SkillCardRecord }): React
 
   return (
     <div data-skill-card-record={name} data-state={status} className={APPROVAL_CARD_CLASS}>
-      <p className="font-medium text-foreground">
+      <p className="font-medium text-primary">
         {t(isUpdate ? "skills.approval.updateHeader" : "skills.approval.createHeader")}
       </p>
       <p className="mt-1 font-medium" dir="auto">
@@ -529,7 +526,7 @@ export function SkillCardSummary({ record }: { record: SkillCardRecord }): React
       </p>
       <div role="status" aria-live="polite" className="text-xs">
         {canUndo && (
-          <p className="mt-2 text-foreground">
+          <p className="mt-2 text-primary">
             {t("skills.approval.updated")} ·
             <Button
               size="sm"
@@ -544,33 +541,29 @@ export function SkillCardSummary({ record }: { record: SkillCardRecord }): React
           </p>
         )}
         {canUndo && undo === "failed" && (
-          <p className="mt-1 text-destructive">{t("skills.approval.undoFailed")}</p>
+          <p className="mt-1 text-red">{t("skills.approval.undoFailed")}</p>
         )}
-        {undo === "undone" && (
-          <p className="mt-2 text-muted-foreground">{t("skills.approval.undone")}</p>
-        )}
+        {undo === "undone" && <p className="mt-2 text-secondary">{t("skills.approval.undone")}</p>}
         {undo === "changed_since" && (
-          <p className="mt-2 text-muted-foreground">{t("skills.approval.undoStale")}</p>
+          <p className="mt-2 text-secondary">{t("skills.approval.undoStale")}</p>
         )}
         {status === "saved" && !versionId && (
-          <p className="mt-2 text-foreground">
+          <p className="mt-2 text-primary">
             {t("skills.approval.saved")}
             <OpenSkillLink name={name} />
           </p>
         )}
         {status === "skipped" && (
-          <p className="mt-2 text-muted-foreground">
+          <p className="mt-2 text-secondary">
             {isUpdate ? t("skills.approval.skippedUpdate") : t("skills.approval.skippedCreate")}
           </p>
         )}
-        {status === "failed" && (
-          <p className="mt-2 text-destructive">{t("skills.approval.failed")}</p>
-        )}
+        {status === "failed" && <p className="mt-2 text-red">{t("skills.approval.failed")}</p>}
         {status === "changed" && (
-          <p className="mt-2 text-muted-foreground">{t("skills.approval.outdated")}</p>
+          <p className="mt-2 text-secondary">{t("skills.approval.outdated")}</p>
         )}
         {status === "not_saved" && (
-          <p className="mt-2 text-muted-foreground">{t("skills.approval.notSaved")}</p>
+          <p className="mt-2 text-secondary">{t("skills.approval.notSaved")}</p>
         )}
       </div>
     </div>

@@ -84,14 +84,14 @@ export default function DictationAgentSettings() {
   ];
 
   const voiceAgentSection = (
-    <div className="border-t border-border/70 pt-6 space-y-5">
+    <div className="border-t border-default/70 pt-6 space-y-5">
       <SectionHeader
         title={t("settingsPage.agentConfig.title")}
         description={t("settingsPage.agentConfig.description")}
       />
 
       <div>
-        <p className="text-xs font-medium text-foreground mb-3">
+        <p className="text-xs font-medium text-primary mb-3">
           {t("settingsPage.agentConfig.agentName")}
         </p>
         <SettingsPanel>
@@ -109,9 +109,7 @@ export default function DictationAgentSettings() {
                   {t("settingsPage.agentConfig.save")}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground/70">
-                {t("settingsPage.agentConfig.helper")}
-              </p>
+              <p className="text-xs text-secondary/70">{t("settingsPage.agentConfig.helper")}</p>
             </div>
           </SettingsPanelRow>
         </SettingsPanel>
@@ -121,7 +119,7 @@ export default function DictationAgentSettings() {
         <SectionHeader title={t("settingsPage.agentConfig.howItWorksTitle")} />
         <SettingsPanel>
           <SettingsPanelRow>
-            <p className="text-xs text-muted-foreground leading-relaxed">
+            <p className="text-xs text-secondary leading-relaxed">
               {t("settingsPage.agentConfig.howItWorksDescription", { agentName })}
             </p>
           </SettingsPanelRow>
@@ -135,10 +133,10 @@ export default function DictationAgentSettings() {
             <div className="space-y-2.5">
               {examples.map((input, i) => (
                 <div key={i} className="flex items-start gap-3">
-                  <span className="shrink-0 mt-0.5 text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded bg-primary/10 text-primary dark:bg-primary/15">
+                  <span className="shrink-0 mt-0.5 text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded bg-brand-solid/10 text-brand-solid dark:bg-brand-solid/15">
                     {instructionMode}
                   </span>
-                  <p className="text-xs text-muted-foreground leading-relaxed">"{input}"</p>
+                  <p className="text-xs text-secondary leading-relaxed">"{input}"</p>
                 </div>
               ))}
             </div>
@@ -175,7 +173,7 @@ export default function DictationAgentSettings() {
           blocks the agent, since enabling it would grant screen-capture
           permission for a route that can never run. */}
       {useDictationAgent && agentAllowed && (
-        <div className="border-t border-border/70 pt-6 space-y-3">
+        <div className="border-t border-default/70 pt-6 space-y-3">
           <SectionHeader
             title={t("dictationAgent.screenContext.title")}
             description={t("dictationAgent.screenContext.description")}
@@ -224,7 +222,7 @@ export default function DictationAgentSettings() {
             />
           )}
           {screenContextActive && isMacOS && screenNeedsRelaunch && (
-            <p className="text-[11px] text-warning/80 leading-snug">
+            <p className="text-[11px] text-amber/80 leading-snug">
               {t("dictationAgent.screenContext.relaunchHint")}
             </p>
           )}
@@ -237,7 +235,7 @@ export default function DictationAgentSettings() {
       {voiceAgentSection}
 
       {useDictationAgent && (
-        <div className="border-t border-border/70 pt-6">
+        <div className="border-t border-default/70 pt-6">
           <SectionHeader
             title={t("dictationAgent.prompt.title")}
             description={t("dictationAgent.prompt.description")}

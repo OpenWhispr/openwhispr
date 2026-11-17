@@ -88,12 +88,12 @@ export function OverviewAskSection({
                   disabled={agentState !== "idle"}
                   className={cn(
                     "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[11px]",
-                    "border border-border/70 bg-card text-foreground/55 shadow-sm dark:border-white/10",
-                    "hover:bg-surface-3 hover:text-foreground/80 disabled:pointer-events-none disabled:text-foreground/30",
-                    "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
+                    "border border-default/70 bg-surface-primary text-primary/55 shadow-sm",
+                    "hover:bg-surface-tertiary hover:text-primary/80 disabled:pointer-events-none disabled:text-primary/30",
+                    "transition-colors duration-150 focus:outline-none focus-visible:ring-1 focus-visible:ring-focus/30"
                   )}
                 >
-                  <Sparkles size={10} className="text-foreground/45 shrink-0" />
+                  <Sparkles size={10} className="text-primary/45 shrink-0" />
                   {t(key)}
                 </button>
               ))}

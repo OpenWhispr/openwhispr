@@ -103,12 +103,12 @@ export function useNoteDragAndDrop({
         ghost.style.cssText = `
           position: fixed; top: -200px; left: -200px;
           padding: 4px 12px;
-          background: color-mix(in oklch, var(--color-popover) 95%, transparent);
-          color: var(--color-popover-foreground);
+          background: color-mix(in oklch, var(--color-surface-primary) 95%, transparent);
+          color: var(--color-text-primary);
           font-size: 11px;
           font-weight: 500;
           border-radius: 6px;
-          border: 1px solid var(--color-border);
+          border: 1px solid var(--color-border-default);
           white-space: nowrap;
           pointer-events: none;
         `;

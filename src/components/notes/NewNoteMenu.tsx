@@ -19,10 +19,10 @@ import { cn } from "../lib/utils";
 // lifts on hover, under the same hairline. The note's Share control keeps its
 // own pill, so these apply to this instance of the shared split button rather
 // than to the definition both share.
-const SOFT_GROUP_CLASS = "bg-foreground/4 dark:bg-white/5";
+const SOFT_GROUP_CLASS = "bg-text-primary/4";
 const SOFT_SEGMENT_CLASS =
-  "hover:bg-foreground/6 focus-visible:bg-foreground/6 focus-visible:ring-1 focus-visible:ring-primary/30 dark:hover:bg-white/8 dark:focus-visible:bg-white/8";
-const SOFT_DIVIDER_CLASS = "bg-foreground/8";
+  "hover:bg-text-primary/6 focus-visible:bg-text-primary/6 focus-visible:ring-1 focus-visible:ring-brand-solid/30";
+const SOFT_DIVIDER_CLASS = "bg-text-primary/8";
 
 interface NewNoteMenuProps {
   onNewNote: () => void;

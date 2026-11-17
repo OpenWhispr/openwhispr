@@ -29,8 +29,8 @@ export function SkillTile({
       className={cn(
         "flex items-center justify-center shrink-0 transition-colors",
         on
-          ? "bg-primary/5 dark:bg-primary/10 text-primary/80"
-          : "bg-muted/60 dark:bg-surface-raised text-muted-foreground",
+          ? "bg-brand-solid/5 dark:bg-brand-solid/10 text-brand-solid/80"
+          : "bg-surface-secondary/60 dark:bg-surface-tertiary text-secondary",
         className
       )}
     >
@@ -43,7 +43,7 @@ export function SkillTile({
 export function NeedsFixLabel(): ReactElement {
   const { t } = useTranslation();
   return (
-    <span className="flex shrink-0 items-center gap-1 text-[11px] text-warning">
+    <span className="flex shrink-0 items-center gap-1 text-[11px] text-amber">
       <AlertTriangle size={12} />
       {t("skills.pane.needsFix")}
     </span>
@@ -69,27 +69,25 @@ export function InstalledSkillCard({ skill, onOpen, ref }: InstalledSkillCardPro
         state: t(`skills.pane.${state}`),
       })}
       className={cn(
-        "group flex w-full min-w-0 items-center gap-3 p-3 text-start transition-colors hover:bg-foreground/3 dark:hover:bg-white/4 outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+        "group flex w-full min-w-0 items-center gap-3 p-3 text-start transition-colors hover:bg-text-primary/3 outline-none focus-visible:ring-2 focus-visible:ring-focus/30",
         CARD_SURFACE_CLASS
       )}
     >
       <SkillTile name={skill.name} on={skill.enabled && skill.valid} />
       <div className="flex-1 min-w-0">
-        <p dir="auto" className="text-xs font-semibold text-foreground truncate">
+        <p dir="auto" className="text-xs font-semibold text-primary truncate">
           {skill.displayName}
         </p>
-        <p dir="auto" className="text-xs text-muted-foreground/70 mt-0.5 truncate">
+        <p dir="auto" className="text-xs text-secondary/70 mt-0.5 truncate">
           {skill.description}
         </p>
       </div>
       {!skill.valid ? (
         <NeedsFixLabel />
       ) : skill.enabled ? (
-        <Check size={14} className="shrink-0 text-muted-foreground/60" />
+        <Check size={14} className="shrink-0 text-secondary/60" />
       ) : (
-        <span className="shrink-0 text-[11px] text-muted-foreground/70">
-          {t("skills.pane.off")}
-        </span>
+        <span className="shrink-0 text-[11px] text-secondary/70">{t("skills.pane.off")}</span>
       )}
     </button>
   );
@@ -111,14 +109,10 @@ export function RecommendedSkillCard({
     <div className={cn("flex w-full min-w-0 items-center gap-3 p-3", CARD_SURFACE_CLASS)}>
       <SkillTile on={false} />
       <div className="flex-1 min-w-0">
-        <p dir="auto" className="text-xs font-semibold text-foreground truncate">
+        <p dir="auto" className="text-xs font-semibold text-primary truncate">
           {title}
         </p>
-        <p
-          dir="auto"
-          title={description}
-          className="text-xs text-muted-foreground/70 mt-0.5 truncate"
-        >
+        <p dir="auto" title={description} className="text-xs text-secondary/70 mt-0.5 truncate">
           {description}
         </p>
       </div>

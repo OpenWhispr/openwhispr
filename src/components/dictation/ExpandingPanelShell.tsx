@@ -151,7 +151,7 @@ export function ExpandingPanelShell({
       ref={shellRef}
       className={cn(
         "expanding-panel-surface absolute inset-x-3 bottom-3 flex h-fit max-h-[calc(100%-1.5rem)] flex-col overflow-hidden",
-        "rounded-3xl border border-border/50 bg-surface-0",
+        "rounded-3xl border border-default/50 bg-surface-primary",
         "shadow-[var(--shadow-modal)]",
         anchor === "bottom-left"
           ? "expanding-panel-anchor-bottom-left"

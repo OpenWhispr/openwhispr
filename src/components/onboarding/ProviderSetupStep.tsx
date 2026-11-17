@@ -159,7 +159,7 @@ const SELECT_PANEL_CLASS =
  * every other one. The panel's vertical inset absorbs that instead.
  *
  * The bg-transparent variants neutralise the base SelectItem's theme-bound fills
- * (`hover:bg-muted`, `dark:hover:bg-primary/8`), which resolve against the app
+ * (`hover:bg-surface-secondary`, `dark:hover:bg-brand-solid/8`), which resolve against the app
  * theme out here and would paint a square band behind the slab.
  */
 const SELECT_ITEM_CLASS =

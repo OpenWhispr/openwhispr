@@ -57,11 +57,11 @@ export function GithubDeviceCode({ connectorId }: { connectorId: string }): Reac
       <div aria-live="polite" className="space-y-1.5">
         {progress && (
           <>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-secondary">
               {t("connectors.github.deviceCode.instructions")}
             </p>
             <p
-              className="font-mono text-lg font-semibold tracking-[0.2em] text-foreground select-all"
+              className="font-mono text-lg font-semibold tracking-[0.2em] text-primary select-all"
               dir="ltr"
             >
               {progress.userCode}
@@ -81,12 +81,12 @@ export function GithubDeviceCode({ connectorId }: { connectorId: string }): Reac
         {/* Stops main's polling at once; the row then reads as before Connect. */}
         {cancel}
         {/* Mounted before the note arrives, so a screen reader announces it. */}
-        <span role="status" className="text-xs text-muted-foreground">
+        <span role="status" className="text-xs text-secondary">
           {progress && copiedCode === progress.userCode && t("connectors.github.deviceCode.copied")}
         </span>
       </div>
       {progress && (
-        <p className="text-xs text-muted-foreground/70">
+        <p className="text-xs text-secondary/70">
           {t("connectors.github.deviceCode.expires", {
             time: new Intl.DateTimeFormat(i18n.language, {
               hour: "numeric",

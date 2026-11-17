@@ -24,12 +24,12 @@ async function renderCard(t, props) {
 }
 
 test("a success or error toast carries its status icon in that colour", async (t) => {
-  assert.match(await renderCard(t, { tone: "success" }), /text-success/);
-  assert.match(await renderCard(t, { tone: "error" }), /text-destructive/);
+  assert.match(await renderCard(t, { tone: "success" }), /text-green-solid/);
+  assert.match(await renderCard(t, { tone: "error" }), /text-red-solid/);
 });
 
 test("a toast that is neither success nor failure has no status icon", async (t) => {
-  assert.doesNotMatch(await renderCard(t, {}), /text-success|text-destructive|<svg/);
+  assert.doesNotMatch(await renderCard(t, {}), /text-green-solid|text-red-solid|<svg/);
 });
 
 test("the close button shows on hover or keyboard focus, and only with a way to dismiss", async (t) => {

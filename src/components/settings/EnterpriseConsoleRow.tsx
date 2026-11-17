@@ -26,14 +26,14 @@ export default function EnterpriseConsoleRow({ workspace }: { workspace: Workspa
   }
 
   return (
-    <div className="rounded-md border border-border/70 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-3 flex items-center justify-between gap-3">
+    <div className="rounded-md border border-default/70 dark:border-default/60 bg-surface-primary/30 p-3 flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 min-w-0">
-        <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+        <ShieldCheck className="h-4 w-4 text-brand-solid shrink-0" />
         <div className="min-w-0">
-          <p className="text-xs font-medium text-foreground">
+          <p className="text-xs font-medium text-primary">
             {t("settingsPage.workspace.enterpriseConsole.title")}
           </p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[10px] text-secondary">
             {t("settingsPage.workspace.enterpriseConsole.description")}
           </p>
         </div>

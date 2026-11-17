@@ -12,11 +12,11 @@ import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNa
 export type { ControlPanelView };
 
 const rowIconClass =
-  "shrink-0 text-foreground/70 group-hover:text-foreground/90 dark:text-foreground/65 dark:group-hover:text-foreground/85 transition-colors duration-150";
+  "shrink-0 text-primary/70 group-hover:text-primary/90 dark:text-primary/65 dark:group-hover:text-primary/85 transition-colors duration-150";
 const rowLabelClass =
-  "text-[13px] text-foreground/90 group-hover:text-foreground dark:text-foreground/85 dark:group-hover:text-foreground transition-colors duration-150";
+  "text-[13px] text-primary/90 group-hover:text-primary dark:text-primary/85 dark:group-hover:text-primary transition-colors duration-150";
 const rowButtonClass =
-  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-start outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
+  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-start outline-none hover:bg-text-primary/4 focus-visible:ring-1 focus-visible:ring-brand-solid/30 transition-colors duration-150";
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
@@ -57,7 +57,7 @@ export default function ControlPanelSidebar({
   const navItems = useControlPanelNavItems();
 
   return (
-    <div className="w-48 h-full shrink-0 flex flex-col bg-surface-window">
+    <div className="w-48 h-full shrink-0 flex flex-col bg-surface-secondary">
       <div
         className="w-full h-10 shrink-0"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
@@ -74,10 +74,10 @@ export default function ControlPanelSidebar({
               onClick={() => onViewChange(item.id)}
               className={cn(
                 "group relative flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md outline-none transition-colors duration-150 text-start",
-                "focus-visible:ring-1 focus-visible:ring-primary/30",
+                "focus-visible:ring-1 focus-visible:ring-brand-solid/30",
                 isActive
-                  ? "bg-primary/8 dark:bg-primary/10"
-                  : "hover:bg-foreground/4 dark:hover:bg-white/4 active:bg-foreground/6"
+                  ? "bg-brand-solid/8 dark:bg-brand-solid/10"
+                  : "hover:bg-text-primary/4 active:bg-text-primary/6"
               )}
             >
               <Icon
@@ -85,16 +85,16 @@ export default function ControlPanelSidebar({
                 className={cn(
                   "shrink-0 transition-colors duration-150",
                   isActive
-                    ? "text-primary"
-                    : "text-foreground/70 group-hover:text-foreground/90 dark:text-foreground/65 dark:group-hover:text-foreground/85"
+                    ? "text-brand-solid"
+                    : "text-primary/70 group-hover:text-primary/90 dark:text-primary/65 dark:group-hover:text-primary/85"
                 )}
               />
               <span
                 className={cn(
                   "text-[13px] transition-colors duration-150",
                   isActive
-                    ? "text-foreground font-medium"
-                    : "text-foreground/90 group-hover:text-foreground dark:text-foreground/85 dark:group-hover:text-foreground"
+                    ? "text-primary font-medium"
+                    : "text-primary/90 group-hover:text-primary dark:text-primary/85 dark:group-hover:text-primary"
                 )}
               >
                 {item.label}
@@ -104,7 +104,7 @@ export default function ControlPanelSidebar({
                   role="status"
                   aria-label={t("agentWindow.waitingForAnswer")}
                   title={t("agentWindow.waitingForAnswer")}
-                  className="ms-auto size-1.5 shrink-0 rounded-full bg-primary"
+                  className="ms-auto size-1.5 shrink-0 rounded-full bg-brand-solid"
                 />
               )}
             </button>
@@ -116,13 +116,11 @@ export default function ControlPanelSidebar({
 
       {showLimitBanner && (
         <div className="px-2 pb-2">
-          <div className="rounded-lg border border-destructive/25 bg-destructive/5 dark:bg-destructive/10 p-3">
+          <div className="rounded-lg border border-red-solid/25 bg-red-solid/5 dark:bg-red-solid/10 p-3">
             <div className="flex flex-col items-center text-center">
               <img src={logoIcon} alt="" className="w-7 h-7 rounded-md mb-2" />
-              <p className="text-xs font-medium text-foreground mb-0.5">
-                {t("sidebar.limitReached")}
-              </p>
-              <p className="text-[11px] leading-snug text-muted-foreground mb-2.5">
+              <p className="text-xs font-medium text-primary mb-0.5">{t("sidebar.limitReached")}</p>
+              <p className="text-[11px] leading-snug text-secondary mb-2.5">
                 {t("sidebar.limitReachedDescription")}
               </p>
               <Button size="sm" onClick={onUpgrade} className="h-7 w-full text-xs">
@@ -135,22 +133,22 @@ export default function ControlPanelSidebar({
 
       {showUpgradeBanner && (
         <div className="px-2 pb-2">
-          <div className="relative rounded-xl border border-[#6c50e9]/25 dark:border-[#6c50e9]/40 bg-card bg-gradient-to-b from-[#6c50e9]/15 via-[#6c50e9]/5 to-transparent dark:from-[#6c50e9]/30 dark:via-[#6c50e9]/10 p-3">
+          <div className="relative rounded-xl border border-accent-solid/25 dark:border-accent-solid/40 bg-surface-primary bg-gradient-to-b from-accent-solid/15 via-accent-solid/5 to-transparent dark:from-accent-solid/30 dark:via-accent-solid/10 p-3">
             <button
               onClick={() => {
                 setUpgradeDismissed(true);
                 localStorage.setItem("upgradeProDismissed", "true");
               }}
               aria-label={t("common.dismiss")}
-              className="absolute top-2 end-2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="absolute top-2 end-2 p-0.5 rounded-sm text-secondary hover:text-primary hover:bg-state-hover transition-colors"
             >
               <X size={12} />
             </button>
             <img src={logoIcon} alt="" className="w-7 h-7 rounded-md mb-2.5" />
-            <p className="text-[13px] font-semibold text-foreground mb-0.5">
+            <p className="text-[13px] font-semibold text-primary mb-0.5">
               {t("sidebar.upgradeTitle")}
             </p>
-            <p className="text-xs leading-snug text-muted-foreground mb-2.5">
+            <p className="text-xs leading-snug text-secondary mb-2.5">
               {t("sidebar.upgradeDescription")}
             </p>
             <div className="space-y-1.5 mb-3">
@@ -162,8 +160,8 @@ export default function ControlPanelSidebar({
                 ] as const
               ).map(([Icon, label]) => (
                 <div key={label} className="flex items-start gap-1.5">
-                  <Icon size={12} className="shrink-0 mt-px text-foreground/60" />
-                  <span className="text-[11px] leading-snug text-foreground/80">{label}</span>
+                  <Icon size={12} className="shrink-0 mt-px text-primary/60" />
+                  <span className="text-[11px] leading-snug text-primary/80">{label}</span>
                 </div>
               ))}
             </div>

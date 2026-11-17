@@ -26,14 +26,14 @@ export default function LeaderboardWorkspaceNudge({
   return (
     <div
       data-leaderboard-state="workspace_nudge"
-      className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-primary/5 px-5 py-3"
+      className="flex flex-wrap items-center justify-between gap-3 border-b border-default/70 bg-brand-solid/5 px-5 py-3"
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-solid/10 text-brand-solid">
           <Building2 size={15} />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-foreground">
+          <p className="truncate text-xs font-medium text-primary">
             {t(
               acceptingInvitation
                 ? "insights.leaderboard.acceptInviteTitle"
@@ -42,7 +42,7 @@ export default function LeaderboardWorkspaceNudge({
             )}
           </p>
           {!acceptingInvitation && (
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{workspaceName}</p>
+            <p className="mt-0.5 truncate text-[11px] text-secondary">{workspaceName}</p>
           )}
         </div>
       </div>

@@ -152,7 +152,7 @@ export function InteractionCard({
       data-interaction-card={entry.key}
       data-kind={entry.payload.kind}
       onKeyDown={onKeyDown}
-      className="my-1.5 rounded-2xl bg-surface-1 p-3.5 text-[13px] outline-none agent:p-3 agent:text-[15px]"
+      className="my-1.5 rounded-2xl bg-surface-secondary p-3.5 text-[13px] outline-none agent:p-3 agent:text-[15px]"
     >
       <CardBody entry={entry} />
     </div>
@@ -185,13 +185,13 @@ export function InteractionOutcomeRow({
       data-interaction-outcome={entry.key}
       // Unset for a row that mounts without a card before it (the chat reopened): it doesn't grow in.
       style={fromHeight > 0 ? ({ "--card-height": `${fromHeight}px` } as CSSProperties) : undefined}
-      className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-muted-foreground transition-[height] duration-200 ease-out [interpolate-size:allow-keywords] starting:h-(--card-height) motion-reduce:transition-none agent:text-[13px]"
+      className="flex min-w-0 items-center gap-1.5 overflow-hidden text-xs text-secondary transition-[height] duration-200 ease-out [interpolate-size:allow-keywords] starting:h-(--card-height) motion-reduce:transition-none agent:text-[13px]"
     >
       {result &&
         DONE_STATUSES.has(result.status) &&
         // Back from Settings with it still not set up is no success.
         !(result.status === "done" && result.ready === false) && (
-          <Check size={13} className="shrink-0 text-success" />
+          <Check size={13} className="shrink-0 text-green-solid" />
         )}
       <span dir="auto" className="truncate">
         {[interactionOutcome(entry, t), ...answers].join(" · ")}

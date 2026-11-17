@@ -78,7 +78,7 @@ function ProviderTile({
       className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-[var(--onboarding-surface-secondary)] px-2 py-2 text-[var(--onboarding-text-primary)] transition-colors hover:bg-[var(--onboarding-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--onboarding-accent)_40%,transparent)] disabled:pointer-events-none disabled:opacity-100"
     >
       {loading ? (
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <Loader2 className="size-4 animate-spin text-secondary" />
       ) : (
         <Icon className="size-4" />
       )}
@@ -424,8 +424,8 @@ export default function AuthenticationStep({
       <CompactOnboardingFrame embedded={embedded}>
         <div className={`${frameInset("pt-48")} text-center`}>
           <h1 className={titleClass}>{t("auth.welcomeTitle")}</h1>
-          <p className="mt-3 text-base text-muted-foreground">{t("auth.welcomeSubtitle")}</p>
-          <div className="mt-8 rounded-xl border border-warning/20 bg-warning/5 p-3 text-sm text-warning">
+          <p className="mt-3 text-base text-secondary">{t("auth.welcomeSubtitle")}</p>
+          <div className="mt-8 rounded-xl border border-amber-solid/20 bg-amber-solid/5 p-3 text-sm text-amber-solid">
             {t("auth.cloudNotConfigured")}
           </div>
           {onContinueWithoutAccount && (
@@ -533,15 +533,15 @@ export default function AuthenticationStep({
           </button>
 
           {!oauthProtocolRegistered && (
-            <p className="mt-3 text-center text-xs leading-tight text-muted-foreground/80">
+            <p className="mt-3 text-center text-xs leading-tight text-secondary/80">
               {t("auth.social.protocolUnavailable")}
             </p>
           )}
 
           {error && (
-            <div className="mt-3 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-start">
-              <AlertCircle className="size-3.5 shrink-0 text-destructive" />
-              <p className="text-xs text-destructive">{error}</p>
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-red-solid/20 bg-red-solid/5 px-3 py-2 text-start">
+              <AlertCircle className="size-3.5 shrink-0 text-red-solid" />
+              <p className="text-xs text-red-solid">{error}</p>
             </div>
           )}
         </div>
@@ -556,20 +556,20 @@ export default function AuthenticationStep({
           <button
             type="button"
             onClick={handleBack}
-            className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="flex items-center gap-0.5 text-xs text-secondary transition-colors hover:text-primary"
           >
             <ArrowLeft className="h-3 w-3 rtl:rotate-180" />
             {t("auth.common.back")}
           </button>
 
           <div className="pb-1 text-center">
-            <p dir="ltr" className="mb-2 text-sm leading-tight text-muted-foreground/70">
+            <p dir="ltr" className="mb-2 text-sm leading-tight text-secondary/70">
               {email}
             </p>
-            <p className="text-lg font-semibold leading-tight tracking-tight text-foreground">
+            <p className="text-lg font-semibold leading-tight tracking-tight text-primary">
               {t("auth.sso.companySignInTitle")}
             </p>
-            <p className="mt-1 text-xs leading-snug text-muted-foreground">
+            <p className="mt-1 text-xs leading-snug text-secondary">
               <BidiInterpolatedText
                 text={t(
                   ssoDiscovery.required
@@ -603,7 +603,7 @@ export default function AuthenticationStep({
               type="button"
               variant="ghost"
               size="sm"
-              className="w-full font-normal text-muted-foreground"
+              className="w-full font-normal text-secondary"
               disabled={isSSOLoading}
               onClick={() => {
                 setSsoDiscovery(null);
@@ -615,9 +615,9 @@ export default function AuthenticationStep({
           )}
 
           {error && (
-            <div className="flex items-center gap-1.5 rounded border border-destructive/20 bg-destructive/5 px-2.5 py-1.5">
-              <AlertCircle className="h-3 w-3 shrink-0 text-destructive" />
-              <p className="text-xs leading-snug text-destructive">{error}</p>
+            <div className="flex items-center gap-1.5 rounded border border-red-solid/20 bg-red-solid/5 px-2.5 py-1.5">
+              <AlertCircle className="h-3 w-3 shrink-0 text-red-solid" />
+              <p className="text-xs leading-snug text-red-solid">{error}</p>
             </div>
           )}
         </div>
@@ -712,9 +712,9 @@ export default function AuthenticationStep({
             </label>
 
             {error && (
-              <div className="px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5">
-                <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
-                <p className="text-xs text-destructive leading-snug">{error}</p>
+              <div className="px-2.5 py-1.5 rounded bg-red-solid/5 border border-red-solid/20 flex items-center gap-1.5">
+                <AlertCircle className="w-3 h-3 text-red-solid shrink-0" />
+                <p className="text-xs text-red-solid leading-snug">{error}</p>
               </div>
             )}
 
@@ -856,15 +856,15 @@ export default function AuthenticationStep({
         </div>
 
         {!oauthProtocolRegistered && (
-          <p className="mt-2 text-center text-xs leading-tight text-muted-foreground/80">
+          <p className="mt-2 text-center text-xs leading-tight text-secondary/80">
             {t("auth.social.protocolUnavailable")}
           </p>
         )}
 
         {error && (
-          <div className="mt-2 flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-start">
-            <AlertCircle className="size-3.5 shrink-0 text-destructive" />
-            <p className="text-xs text-destructive">{error}</p>
+          <div className="mt-2 flex items-center gap-2 rounded-md border border-red-solid/20 bg-red-solid/5 px-3 py-2 text-start">
+            <AlertCircle className="size-3.5 shrink-0 text-red-solid" />
+            <p className="text-xs text-red-solid">{error}</p>
           </div>
         )}
 

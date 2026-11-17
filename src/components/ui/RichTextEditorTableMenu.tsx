@@ -74,7 +74,7 @@ function TableActions({ editor }: { editor: Editor }) {
     <DropdownMenuItem
       className={cn(
         "text-xs rounded-md px-2 py-1.5",
-        destructive && "text-destructive focus:bg-destructive/10 focus:text-destructive"
+        destructive && "text-red focus:bg-red-solid/10 focus:text-red"
       )}
       disabled={disabled}
       onSelect={onSelect}
@@ -137,7 +137,7 @@ export function RichTextEditorTableMenu({ editor }: { editor: Editor }) {
             size="icon"
             variant="ghost"
             aria-label={t("notes.editor.table.actions")}
-            className="h-6 w-6 rounded-md border border-border bg-popover text-muted-foreground shadow-sm hover:text-foreground hover:bg-foreground/5"
+            className="h-6 w-6 rounded-md border border-default bg-surface-primary text-secondary shadow-sm hover:text-primary hover:bg-text-primary/5"
           >
             <MoreHorizontal size={14} />
           </Button>

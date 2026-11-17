@@ -227,13 +227,13 @@ export default function EnterpriseCheckoutDialog({
             {isUpgrade ? (
               previewLoading ? (
                 <div className="flex justify-center py-4">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <Loader2 className="h-4 w-4 animate-spin text-secondary" />
                 </div>
               ) : upgradePreview ? (
                 <>
-                  <div className="rounded-lg border border-border/70 divide-y divide-border/60">
+                  <div className="rounded-lg border border-default/70 divide-y divide-default/60">
                     <div className="flex justify-between px-3 py-2 text-xs">
-                      <span className="text-muted-foreground">
+                      <span className="text-secondary">
                         {t("settingsPage.enterpriseCheckout.proratedCharge")}
                       </span>
                       <span className="font-medium">
@@ -241,14 +241,14 @@ export default function EnterpriseCheckoutDialog({
                       </span>
                     </div>
                     <div className="flex justify-between px-3 py-2 text-xs">
-                      <span className="text-muted-foreground">
+                      <span className="text-secondary">
                         {t("settingsPage.enterpriseCheckout.seatsLabel")}
                       </span>
                       <span className="font-medium">{upgradePreview.quantity}</span>
                     </div>
                     {upgradePreview.next_billing_date && (
                       <div className="flex justify-between px-3 py-2 text-xs">
-                        <span className="text-muted-foreground">
+                        <span className="text-secondary">
                           {t("settingsPage.workspace.billing.nextInvoice")}
                         </span>
                         <span className="font-medium">
@@ -257,16 +257,16 @@ export default function EnterpriseCheckoutDialog({
                       </div>
                     )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-secondary">
                     {t("settingsPage.enterpriseCheckout.prorationNote")}
                   </p>
                 </>
               ) : previewError ? (
-                <div className="space-y-2 rounded-lg border border-border/70 px-3 py-3">
+                <div className="space-y-2 rounded-lg border border-default/70 px-3 py-3">
                   <p className="text-xs font-medium">
                     {t("settingsPage.enterpriseCheckout.errors.previewFailed")}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">{previewError}</p>
+                  <p className="text-[11px] text-secondary">{previewError}</p>
                   <Button
                     type="button"
                     variant="outline"
@@ -292,7 +292,7 @@ export default function EnterpriseCheckoutDialog({
                     onChange={(e) => setSeats(Number(e.target.value))}
                     aria-invalid={!seatsValid}
                   />
-                  <p className="text-[11px] text-muted-foreground">
+                  <p className="text-[11px] text-secondary">
                     {t("settingsPage.enterpriseCheckout.seatsHint", { count: seatsInUse })}
                   </p>
                 </div>
@@ -316,7 +316,7 @@ export default function EnterpriseCheckoutDialog({
                   </div>
                 </div>
 
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-[11px] text-secondary">
                   {t("settingsPage.enterpriseCheckout.priceNote")}
                 </p>
               </>

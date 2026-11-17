@@ -76,7 +76,7 @@ const chip = (email, state = { status: "draft" }) => ({ email, state });
 const bars = (markup) =>
   [...markup.matchAll(/<div[^>]*role="alert"[^>]*class="([^"]*)"[^>]*>([\s\S]*?)<\/div>/g)].map(
     ([, className, body]) => ({
-      tone: className.includes("bg-warning") ? "warning" : "error",
+      tone: className.includes("bg-amber-solid") ? "warning" : "error",
       body,
       action: body.match(/<button[^>]*>([^<]*)<\/button>/)?.[1] ?? null,
     })
@@ -326,7 +326,7 @@ test("a clean run keeps the form with Send turned into its confirmation", async 
   });
 
   // The host closes the dialog after a moment; until then the button says what happened.
-  const [button] = markup.match(/<button[^>]*bg-success[^>]*>[\s\S]*?<\/button>/) ?? [""];
+  const [button] = markup.match(/<button[^>]*bg-green-solid[^>]*>[\s\S]*?<\/button>/) ?? [""];
   assert.match(button, /workspaces\.invite\.sentTitle\|\{&quot;count&quot;:2\}/);
   assert.match(button, /disabled=""/);
   assert.doesNotMatch(markup, /common\.cancel/);
@@ -676,8 +676,8 @@ test("when no email was delivered, Done doesn't read as a success", async (t) =>
 
   assert.match(markup, /workspaces\.invite\.createdTitle\|\{&quot;count&quot;:2\}/);
   assert.match(markup, /workspaces\.invite\.noEmail\|\{&quot;count&quot;:2\}/);
-  assert.doesNotMatch(markup, /sentTitle|sentMany|text-success/);
-  assert.match(markup, /text-warning/);
+  assert.doesNotMatch(markup, /sentTitle|sentMany|text-green/);
+  assert.match(markup, /text-amber/);
   // In the description, not again in a bar beside it.
   assert.deepEqual(bars(markup), []);
 });

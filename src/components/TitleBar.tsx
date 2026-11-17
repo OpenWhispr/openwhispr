@@ -24,7 +24,7 @@ export default function TitleBar({
       : "darwin";
 
   return (
-    <div className={`bg-background border-b border-border select-none ${className}`}>
+    <div className={`bg-surface-primary border-b border-default select-none ${className}`}>
       <div
         className="relative flex items-center justify-between h-12 px-4"
         style={{ WebkitAppRegion: "drag" }}
@@ -43,7 +43,7 @@ export default function TitleBar({
           ) : (
             <>
               {showTitle && title && (
-                <h1 className="text-sm font-semibold text-foreground">{title}</h1>
+                <h1 className="text-sm font-semibold text-primary">{title}</h1>
               )}
               {children}
             </>

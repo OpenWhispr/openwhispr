@@ -132,34 +132,34 @@ function folderRowNotes(
 }
 
 const FOLDER_INPUT_CLASS =
-  "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
+  "w-full h-6 bg-text-primary/5 rounded px-2 text-xs text-primary outline-none border border-brand-solid/30 focus:border-brand-solid/50";
 
 const ROW_BASE_CLASS =
   "group relative flex items-center gap-2 rounded-md cursor-pointer select-none " +
-  "transition-colors duration-150 outline-none focus-visible:ring-1 focus-visible:ring-ring/30";
+  "transition-colors duration-150 outline-none focus-visible:ring-1 focus-visible:ring-focus/30";
 
 // Button forces svg children to 16px; these 20px controls want the 12px icon they pass.
 const KEBAB_BUTTON_CLASS =
   "h-5 w-5 rounded-sm [&_svg]:size-3! opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 " +
-  "transition-opacity text-muted-foreground/70 dark:text-muted-foreground/70 " +
-  "hover:text-foreground/60 hover:bg-foreground/5 active:bg-foreground/8";
+  "transition-opacity text-secondary/70 " +
+  "hover:text-primary/60 hover:bg-text-primary/5 active:bg-text-primary/8";
 
 const KEBAB_TRIGGER_CLASS = cn(KEBAB_BUTTON_CLASS, "absolute end-1.5");
 
 const HOVER_REVEAL_BUTTON_CLASS =
   "h-5 w-5 rounded-sm [&_svg]:size-3! opacity-0 focus-visible:opacity-100 transition-opacity " +
-  "text-muted-foreground/70 dark:text-muted-foreground/70 hover:text-foreground/60 " +
-  "hover:bg-foreground/5 active:bg-foreground/8";
+  "text-secondary/70 dark:text-secondary/70 hover:text-primary/60 " +
+  "hover:bg-text-primary/5 active:bg-text-primary/8";
 
 const MENU_ITEM_CLASS = "text-xs gap-2 rounded-md px-2 py-1";
 
-const SUB_CONTENT_CLASS = "min-w-36 rounded-xl border border-border p-1";
+const SUB_CONTENT_CLASS = "min-w-36 rounded-xl border border-default p-1";
 
-const DROP_TARGET_CLASS = "bg-primary/12 dark:bg-primary/15 ring-1 ring-primary/25";
-const DROP_SUCCESS_CLASS = "bg-emerald-500/10 dark:bg-emerald-400/10 ring-1 ring-emerald-500/20";
+const DROP_TARGET_CLASS = "bg-brand-solid/12 dark:bg-brand-solid/15 ring-1 ring-brand-solid/25";
+const DROP_SUCCESS_CLASS = "bg-green-surface ring-1 ring-green-border";
 const SUB_TRIGGER_CLASS = cn(
   MENU_ITEM_CLASS,
-  "cursor-pointer focus:bg-foreground/5 data-[state=open]:bg-foreground/5"
+  "cursor-pointer focus:bg-text-primary/5 data-[state=open]:bg-text-primary/5"
 );
 
 type TFn = (key: string, options?: Record<string, unknown>) => string;
@@ -241,7 +241,7 @@ function SectionHeader({
 }) {
   // All-caps has no descenders, so its optical centre sits ~1px above the line box.
   const labelClassName =
-    "translate-y-px text-[11px] font-medium uppercase tracking-[0.08em] text-foreground/55 select-none";
+    "translate-y-px text-[11px] font-medium uppercase tracking-[0.08em] text-primary/55 select-none";
 
   return (
     <div
@@ -260,7 +260,7 @@ function SectionHeader({
           type="button"
           aria-expanded={expanded}
           onClick={onToggle}
-          className="flex h-full min-w-0 items-center gap-2 rounded-sm outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring/30"
+          className="flex h-full min-w-0 items-center gap-2 rounded-sm outline-none hover:text-primary focus-visible:ring-1 focus-visible:ring-focus/30"
         >
           <span
             aria-hidden="true"
@@ -274,7 +274,7 @@ function SectionHeader({
             <ChevronRight
               size={12}
               className={cn(
-                "text-foreground/60 transition-all duration-150",
+                "text-primary/60 transition-all duration-150",
                 expanded ? "rotate-90" : "rtl:rotate-180",
                 icon && "opacity-0 group-hover:opacity-100"
               )}
@@ -340,7 +340,7 @@ function RowToggle({
         e.stopPropagation();
         onToggle();
       }}
-      className="relative h-4 w-4 flex items-center justify-center shrink-0 rounded-sm text-foreground/50 hover:text-foreground/80 transition-colors duration-150"
+      className="relative h-4 w-4 flex items-center justify-center shrink-0 rounded-sm text-primary/50 hover:text-primary/80 transition-colors duration-150"
     >
       {icon && (
         <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover:opacity-0">
@@ -362,10 +362,7 @@ function RowToggle({
 function DropSuccessCheck({ isDropSuccess }: { isDropSuccess: boolean }) {
   if (!isDropSuccess) return null;
   return (
-    <Check
-      size={10}
-      className="text-emerald-500 dark:text-emerald-400 shrink-0 animate-[scale-in_200ms_ease-out]"
-    />
+    <Check size={10} className="text-green-solid shrink-0 animate-[scale-in_200ms_ease-out]" />
   );
 }
 
@@ -400,7 +397,7 @@ function SearchableMoveSubmenu({
             <div className="relative px-1.5 py-0.5">
               <Search
                 size={12}
-                className="absolute start-3 top-1/2 -translate-y-1/2 text-foreground/45 pointer-events-none"
+                className="absolute start-3 top-1/2 -translate-y-1/2 text-primary/45 pointer-events-none"
               />
               <input
                 dir="auto"
@@ -408,7 +405,7 @@ function SearchableMoveSubmenu({
                 onChange={(event) => onSearchChange(event.target.value)}
                 onKeyDown={(event) => event.stopPropagation()}
                 placeholder={searchPlaceholder}
-                className="input-inline w-full ps-8 pe-1 py-1 text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+                className="input-inline w-full ps-8 pe-1 py-1 text-xs text-primary placeholder:text-primary/45 outline-none border-none appearance-none"
               />
             </div>
             <DropdownMenuSeparator />
@@ -428,7 +425,7 @@ function SearchableMoveSubmenu({
 
 function SpaceMenuIcon({ space }: { space: SpaceItem }) {
   if (space.kind === "private") {
-    return <Lock size={11} className="text-muted-foreground/70 shrink-0" />;
+    return <Lock size={11} className="text-secondary/70 shrink-0" />;
   }
   if (space.emoji) {
     return (
@@ -437,7 +434,7 @@ function SpaceMenuIcon({ space }: { space: SpaceItem }) {
       </span>
     );
   }
-  return <Users size={11} className="text-muted-foreground/70 shrink-0" />;
+  return <Users size={11} className="text-secondary/70 shrink-0" />;
 }
 
 function SpaceRow({
@@ -492,9 +489,7 @@ function SpaceRow({
       className={cn(
         ROW_BASE_CLASS,
         "h-7 px-2",
-        isActive
-          ? "bg-primary/8 dark:bg-primary/10"
-          : "hover:bg-foreground/4 dark:hover:bg-white/4",
+        isActive ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4",
         isDragOver && DROP_TARGET_CLASS,
         isDropSuccess && DROP_SUCCESS_CLASS
       )}
@@ -508,7 +503,7 @@ function SpaceRow({
               size={14}
               className={cn(
                 "transition-colors duration-150",
-                isActive ? "text-primary" : "text-foreground/55 dark:text-foreground/45"
+                isActive ? "text-brand-solid" : "text-primary/55 dark:text-primary/45"
               )}
             />
           ) : space.emoji ? (
@@ -520,9 +515,7 @@ function SpaceRow({
               size={14}
               className={cn(
                 "transition-colors duration-150",
-                isDragOver || isActive
-                  ? "text-primary"
-                  : "text-foreground/55 dark:text-foreground/45"
+                isDragOver || isActive ? "text-brand-solid" : "text-primary/55 dark:text-primary/45"
               )}
             />
           )
@@ -532,7 +525,7 @@ function SpaceRow({
         dir="auto"
         className={cn(
           "text-[13px] truncate flex-1 transition-colors duration-150",
-          isDragOver || isActive ? "text-foreground font-medium" : "text-foreground/85"
+          isDragOver || isActive ? "text-primary font-medium" : "text-primary/85"
         )}
       >
         {displayName}
@@ -572,7 +565,7 @@ function SpaceRow({
                 }}
                 className={MENU_ITEM_CLASS}
               >
-                <Settings size={11} className="text-muted-foreground/70" />
+                <Settings size={11} className="text-secondary/70" />
                 {t("notes.spaces.settings")}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -663,9 +656,7 @@ function FolderRow({
         ROW_BASE_CLASS,
         "h-7 pe-2",
         level === 1 ? "ps-2" : "ps-[14px]",
-        isActive
-          ? "bg-primary/8 dark:bg-primary/10"
-          : "hover:bg-foreground/4 dark:hover:bg-white/4",
+        isActive ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4",
         isDragOver && DROP_TARGET_CLASS,
         isDropSuccess && DROP_SUCCESS_CLASS
       )}
@@ -678,7 +669,7 @@ function FolderRow({
             size={14}
             className={cn(
               "transition-colors duration-150",
-              isDragOver || isActive ? "text-primary" : "text-foreground/55 dark:text-foreground/45"
+              isDragOver || isActive ? "text-brand-solid" : "text-primary/55 dark:text-primary/45"
             )}
           />
         }
@@ -688,8 +679,8 @@ function FolderRow({
         className={cn(
           "text-[13px] truncate flex-1 transition-colors duration-150",
           isDragOver || isActive
-            ? "text-foreground font-medium"
-            : "text-foreground/85 group-hover:text-foreground"
+            ? "text-primary font-medium"
+            : "text-primary/85 group-hover:text-primary"
         )}
       >
         {displayName}
@@ -730,7 +721,7 @@ function FolderRow({
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  <ExternalLink size={11} className="text-muted-foreground/70" />
+                  <ExternalLink size={11} className="text-secondary/70" />
                   {t("notes.context.showInFileManager", { manager: fileManagerName })}
                 </DropdownMenuItem>
               )}
@@ -744,12 +735,12 @@ function FolderRow({
                     }}
                     className={MENU_ITEM_CLASS}
                   >
-                    <Pencil size={11} className="text-muted-foreground/70" />
+                    <Pencil size={11} className="text-secondary/70" />
                     {t("notes.context.rename")}
                   </DropdownMenuItem>
                   {canMoveToSpace && (
                     <SearchableMoveSubmenu
-                      icon={<Users size={11} className="text-muted-foreground/70" />}
+                      icon={<Users size={11} className="text-secondary/70" />}
                       label={t("notes.spaces.moveToSpace")}
                       itemCount={spaces.length}
                       search={spaceSearch}
@@ -772,12 +763,12 @@ function FolderRow({
                             <span dir="auto" className="truncate flex-1">
                               {spaceDisplayName(space, t)}
                             </span>
-                            {isCurrent && <Check size={9} className="text-primary shrink-0" />}
+                            {isCurrent && <Check size={9} className="text-brand-solid shrink-0" />}
                           </DropdownMenuItem>
                         );
                       })}
                       {spaceSearch && filteredSpaces.length === 0 && (
-                        <p className="text-xs text-foreground/50 text-center py-1.5">
+                        <p className="text-xs text-primary/50 text-center py-1.5">
                           {t("notes.spaces.noSpacesFound")}
                         </p>
                       )}
@@ -793,7 +784,7 @@ function FolderRow({
                         }}
                         className={cn(
                           MENU_ITEM_CLASS,
-                          "text-destructive focus:text-destructive focus:bg-destructive/10"
+                          "text-red focus:text-red focus:bg-red-solid/10"
                         )}
                       >
                         <Trash2 size={11} />
@@ -928,7 +919,7 @@ function NoteLeaf({
       <span dir="auto" className="truncate flex-1">
         {label}
       </span>
-      {option.isCurrent && <Check size={9} className="text-primary shrink-0" />}
+      {option.isCurrent && <Check size={9} className="text-brand-solid shrink-0" />}
     </DropdownMenuItem>
   );
 
@@ -954,9 +945,7 @@ function NoteLeaf({
         ROW_BASE_CLASS,
         "h-7 pe-2",
         indentClassName ?? (level === 3 ? "ps-10" : "ps-[14px]"),
-        isActive
-          ? "bg-primary/8 dark:bg-primary/10"
-          : "hover:bg-foreground/4 dark:hover:bg-white/4",
+        isActive ? "bg-brand-solid/8 dark:bg-brand-solid/10" : "hover:bg-text-primary/4",
         isDragging && "opacity-40"
       )}
     >
@@ -965,17 +954,15 @@ function NoteLeaf({
         className={cn(
           "shrink-0 transition-colors duration-150",
           isActive
-            ? "text-primary"
-            : "text-foreground/50 dark:text-foreground/45 group-hover:text-foreground/70 dark:group-hover:text-foreground/55"
+            ? "text-brand-solid"
+            : "text-primary/50 dark:text-primary/45 group-hover:text-primary/70 dark:group-hover:text-primary/55"
         )}
       />
       <span
         dir="auto"
         className={cn(
           "text-[13px] truncate flex-1 transition-colors duration-150",
-          isActive
-            ? "text-foreground font-medium"
-            : "text-foreground/85 group-hover:text-foreground"
+          isActive ? "text-primary font-medium" : "text-primary/85 group-hover:text-primary"
         )}
       >
         {title}
@@ -985,7 +972,7 @@ function NoteLeaf({
           size={11}
           role="img"
           aria-label={t("notes.list.shared")}
-          className="text-foreground/45 shrink-0 transition-opacity group-hover:opacity-0"
+          className="text-primary/45 shrink-0 transition-opacity group-hover:opacity-0"
         />
       )}
       {hasActions && (
@@ -1019,7 +1006,7 @@ function NoteLeaf({
                   }}
                   className={MENU_ITEM_CLASS}
                 >
-                  <ExternalLink size={11} className="text-muted-foreground/70" />
+                  <ExternalLink size={11} className="text-secondary/70" />
                   {t("notes.context.showInFileManager", { manager: fileManagerName })}
                 </DropdownMenuItem>
                 {(hasTransfers || canDelete) && <DropdownMenuSeparator />}
@@ -1027,7 +1014,7 @@ function NoteLeaf({
             )}
             {canMove && (
               <SearchableMoveSubmenu
-                icon={<FolderOpen size={11} className="text-muted-foreground/70" />}
+                icon={<FolderOpen size={11} className="text-secondary/70" />}
                 label={multiSpace ? t("notes.spaces.moveTo") : t("notes.context.moveToFolder")}
                 itemCount={moveOptions.length}
                 search={moveSearch}
@@ -1054,7 +1041,7 @@ function NoteLeaf({
                           }
                         }}
                         placeholder={t("notes.folders.folderName")}
-                        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
+                        className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-primary placeholder:text-primary/45 outline-none border-none appearance-none"
                       />
                     </div>
                   ) : (
@@ -1063,7 +1050,7 @@ function NoteLeaf({
                         e.preventDefault();
                         setIsCreating(true);
                       }}
-                      className={cn(MENU_ITEM_CLASS, "text-foreground/70")}
+                      className={cn(MENU_ITEM_CLASS, "text-primary/70")}
                     >
                       <Plus size={10} />
                       {t("notes.context.newFolder")}
@@ -1082,7 +1069,7 @@ function NoteLeaf({
                       )
                     )}
                     {filteredOptions.length === 0 && (
-                      <p className="text-xs text-foreground/50 text-center py-1.5">
+                      <p className="text-xs text-primary/50 text-center py-1.5">
                         {t("notes.context.noResults")}
                       </p>
                     )}
@@ -1131,7 +1118,7 @@ function NoteLeaf({
                 }}
                 className={MENU_ITEM_CLASS}
               >
-                <Lock size={11} className="text-muted-foreground/70" />
+                <Lock size={11} className="text-secondary/70" />
                 <span dir="auto" className="truncate flex-1">
                   {t("notes.spaces.moveToWorkspacePrivate", { workspace: workspace.name })}
                 </span>
@@ -1145,7 +1132,7 @@ function NoteLeaf({
                 }}
                 className={MENU_ITEM_CLASS}
               >
-                <Copy size={11} className="text-muted-foreground/70" />
+                <Copy size={11} className="text-secondary/70" />
                 {t("notes.spaces.copyToPrivate")}
               </DropdownMenuItem>
             )}
@@ -1157,10 +1144,7 @@ function NoteLeaf({
                     e.stopPropagation();
                     onDelete(note.id);
                   }}
-                  className={cn(
-                    MENU_ITEM_CLASS,
-                    "text-destructive focus:text-destructive focus:bg-destructive/10"
-                  )}
+                  className={cn(MENU_ITEM_CLASS, "text-red focus:text-red focus:bg-red-solid/10")}
                 >
                   <Trash2 size={11} />
                   {t("notes.context.delete")}
@@ -1179,12 +1163,7 @@ function SkeletonRows() {
     <div className="space-y-px" aria-hidden="true">
       {["w-3/5", "w-2/5", "w-1/2"].map((width) => (
         <div key={width} className="flex items-center h-7 ps-[18px] pe-2">
-          <div
-            className={cn(
-              "h-2.5 rounded-full bg-foreground/6 dark:bg-white/6 animate-pulse",
-              width
-            )}
-          />
+          <div className={cn("h-2.5 rounded-full bg-text-primary/6 animate-pulse", width)} />
         </div>
       ))}
     </div>
@@ -2265,7 +2244,7 @@ export default function SpacesTree({
               }}
               onBlur={confirmCreateFolder}
               placeholder={t("notes.folders.folderName")}
-              className={cn(FOLDER_INPUT_CLASS, "placeholder:text-foreground/45")}
+              className={cn(FOLDER_INPUT_CLASS, "placeholder:text-primary/45")}
             />
           </div>
         )}
@@ -2275,14 +2254,14 @@ export default function SpacesTree({
         {showSkeletons && <SkeletonRows />}
         {showEmptySpace && (
           <div className="ps-[18px] pe-2 py-1">
-            <p className="text-xs text-foreground/60 leading-relaxed mb-1.5">
+            <p className="text-xs text-primary/60 leading-relaxed mb-1.5">
               {t("notes.spaces.emptySpace", { space: space.name })}
             </p>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => onNewNote(space.id, null)}
-              className="h-6 px-2 text-xs gap-1 text-primary/70 hover:text-primary hover:bg-primary/8"
+              className="h-6 px-2 text-xs gap-1 text-brand-solid/70 hover:text-brand-solid hover:bg-brand-solid/8"
             >
               <Plus size={11} />
               {t("notes.list.newNote")}
@@ -2336,7 +2315,7 @@ export default function SpacesTree({
   if (isTreeLoading && spaces.length === 0) {
     return (
       <div className="flex-1 flex items-start justify-center py-8">
-        <Loader2 size={12} className="animate-spin text-foreground/45" />
+        <Loader2 size={12} className="animate-spin text-primary/45" />
       </div>
     );
   }
@@ -2351,7 +2330,7 @@ export default function SpacesTree({
         <div role="none" className="group/section">
           <SectionHeader
             label={t("notes.spaces.privateSpaces")}
-            icon={<Lock size={12} className="text-foreground/55" />}
+            icon={<Lock size={12} className="text-primary/55" />}
             expanded={privateSectionExpanded}
             onToggle={() => {
               if (privateSpace) toggleContainerExpanded(spaceContainerKey(privateSpace.id));
@@ -2434,18 +2413,16 @@ export default function SpacesTree({
                       width={134}
                       height={139}
                     />
-                    <p className="mt-1 text-sm font-semibold text-foreground">
+                    <p className="mt-1 text-sm font-semibold text-primary">
                       {t("notes.spaces.emptyTeamTitle")}
                     </p>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {t("notes.spaces.emptyTeamHint")}
-                    </p>
+                    <p className="mt-2 text-xs text-secondary">{t("notes.spaces.emptyTeamHint")}</p>
                     {canCreateTeamSpace && (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => openCreateSpace(activeWorkspace?.id ?? null)}
-                        className="mt-3 h-7 gap-1 text-xs text-primary"
+                        className="mt-3 h-7 gap-1 text-xs text-brand-solid"
                       >
                         <Plus size={11} />
                         {t("notes.spaces.newSpace")}

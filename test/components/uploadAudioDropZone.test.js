@@ -202,7 +202,7 @@ test("dragging over shows Drop to upload and the pulse, and leaving clears it", 
   assert.match(target.textContent, /notes\.upload\.dropToUpload/);
   assert.doesNotMatch(target.textContent, /notes\.upload\.supportedFormats/);
   assert.equal(target.style.animation, "drag-pulse 1.5s ease-in-out infinite");
-  assert.match(target.getAttribute("class"), /border-primary\/60/);
+  assert.match(target.getAttribute("class"), /border-brand-solid\/60/);
 
   await React.act(async () => dispatch(target, "dragleave"));
   assert.match(target.textContent, /notes\.upload\.dropOrBrowse/);

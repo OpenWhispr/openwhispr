@@ -30,8 +30,9 @@ import { PAGE_CONTENT_WIDTH_CLASS } from "../ui/pageWidth";
 import { PAGE_HERO_ICON_TILE_CLASS } from "../ui/surfaces";
 
 const CARD_CLASS = "rounded-2xl border transition-colors duration-200";
-const CARD_IDLE_CLASS = "border-border/70 bg-card/50 dark:border-white/10 dark:bg-surface-2/60";
-const CARD_DONE_CLASS = "border-success/20 bg-success/[0.03]";
+const CARD_IDLE_CLASS =
+  "border-default/70 bg-surface-primary/50 dark:border-white/10 dark:bg-surface-primary/60";
+const CARD_DONE_CLASS = "border-green-solid/20 bg-green-solid/[0.03]";
 
 interface NotesOnboardingProps {
   onComplete: () => void;
@@ -129,12 +130,12 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
       >
         <div className="flex flex-col items-center gap-2 pt-4 text-center">
           <div className={cn(PAGE_HERO_ICON_TILE_CLASS, "mb-1")}>
-            <Sparkles size={20} className="text-foreground/60" />
+            <Sparkles size={20} className="text-primary/60" />
           </div>
-          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+          <h2 className="text-xl font-semibold tracking-tight text-primary">
             {t("notes.onboarding.templates.title")}
           </h2>
-          <p className="max-w-xl text-[13px] leading-relaxed text-foreground/50 dark:text-foreground/45">
+          <p className="max-w-xl text-[13px] leading-relaxed text-primary/50 dark:text-primary/45">
             {t("notes.onboarding.templates.description")}
           </p>
         </div>
@@ -151,13 +152,13 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
               <div className="flex items-center gap-3">
                 <Zap
                   size={16}
-                  className={cn(isLLMConfigured ? "text-success/70" : "text-foreground/45")}
+                  className={cn(isLLMConfigured ? "text-green-solid/70" : "text-primary/45")}
                 />
-                <span className="text-sm font-medium text-foreground">
+                <span className="text-sm font-medium text-primary">
                   {t("notes.onboarding.llm.title")}
                 </span>
                 {isLLMConfigured && (
-                  <span className="text-xs font-medium text-success/70">
+                  <span className="text-xs font-medium text-green-solid/70">
                     {t("notes.onboarding.llm.configured")}
                   </span>
                 )}
@@ -165,7 +166,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
               <ChevronRight
                 size={14}
                 className={cn(
-                  "text-foreground/45 transition-transform duration-200",
+                  "text-primary/45 transition-transform duration-200",
                   llmExpanded ? "rotate-90" : "rtl:rotate-180"
                 )}
               />
@@ -173,7 +174,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
 
             {llmExpanded && (
               <div className="space-y-4 px-5 pb-5" style={{ animation: "float-up 0.2s ease-out" }}>
-                <p className="text-sm leading-relaxed text-muted-foreground">
+                <p className="text-sm leading-relaxed text-secondary">
                   {t("notes.onboarding.llm.description")}
                 </p>
 
@@ -202,20 +203,20 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                   size={16}
                   className={cn(
                     "shrink-0",
-                    systemAudioGranted ? "text-success/70" : "text-foreground/45"
+                    systemAudioGranted ? "text-green-solid/70" : "text-primary/45"
                   )}
                 />
                 <div>
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="text-sm font-medium text-primary">
                     {t("notes.onboarding.systemAudio.title")}
                   </span>
-                  <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-0.5 text-sm leading-relaxed text-secondary">
                     {t("notes.onboarding.systemAudio.description")}
                   </p>
                 </div>
               </div>
               {systemAudioGranted ? (
-                <span className="shrink-0 text-xs font-medium text-success/70">
+                <span className="shrink-0 text-xs font-medium text-green-solid/70">
                   {t("notes.onboarding.systemAudio.enabled")}
                 </span>
               ) : (
@@ -239,7 +240,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
 
         {/* Built-in action, plus any custom actions the user just created */}
         <div>
-          <p className="pb-2.5 text-sm text-muted-foreground">
+          <p className="pb-2.5 text-sm text-secondary">
             {t("notes.onboarding.templates.builtInLabel")}
           </p>
           {(builtInAction || customActions.length > 0) && (
@@ -247,36 +248,36 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
               className={cn(
                 CARD_CLASS,
                 CARD_IDLE_CLASS,
-                "divide-y divide-border/60 overflow-clip dark:divide-white/10"
+                "divide-y divide-default/60 overflow-clip dark:divide-white/10"
               )}
             >
               {builtInAction && (
                 <div className="flex items-center gap-3 px-5 py-3.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-accent/10 bg-accent/8 dark:border-accent/15 dark:bg-accent/12">
-                    <Sparkles size={14} className="text-accent/60" />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-accent-solid/10 bg-accent-solid/8 dark:border-accent-solid/15 dark:bg-accent-solid/12">
+                    <Sparkles size={14} className="text-accent-solid/60" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">
+                    <p className="truncate text-sm font-medium text-primary">
                       {getActionName(builtInAction, t)}
                     </p>
-                    <p className="truncate text-sm text-muted-foreground">
+                    <p className="truncate text-sm text-secondary">
                       {getActionDescription(builtInAction, t)}
                     </p>
                   </div>
-                  <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                  <span className="shrink-0 text-xs font-medium text-secondary">
                     {t("notes.actions.builtIn")}
                   </span>
                 </div>
               )}
               {customActions.map((action) => (
                 <div key={action.id} className="flex items-center gap-3 px-5 py-3.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-success/15 bg-success/8 dark:border-success/20">
-                    <Check size={14} className="text-success/70" />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-green-solid/15 bg-green-solid/8 dark:border-green-solid/20">
+                    <Check size={14} className="text-green-solid/70" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{action.name}</p>
+                    <p className="truncate text-sm font-medium text-primary">{action.name}</p>
                     {action.description && (
-                      <p className="truncate text-sm text-muted-foreground">{action.description}</p>
+                      <p className="truncate text-sm text-secondary">{action.description}</p>
                     )}
                   </div>
                 </div>
@@ -294,12 +295,12 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
             className="flex w-full items-center justify-between px-5 py-4 text-start"
           >
             <div className="flex items-center gap-3">
-              <Plus size={16} className="text-foreground/45" />
-              <span className="text-sm font-medium text-foreground">
+              <Plus size={16} className="text-primary/45" />
+              <span className="text-sm font-medium text-primary">
                 {t("notes.onboarding.templates.createTitle")}
               </span>
               {justCreated && (
-                <span className="text-xs font-medium text-success/70">
+                <span className="text-xs font-medium text-green-solid/70">
                   {t("notes.onboarding.templates.created")}
                 </span>
               )}
@@ -307,7 +308,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
             <ChevronRight
               size={14}
               className={cn(
-                "text-foreground/45 transition-transform duration-200",
+                "text-primary/45 transition-transform duration-200",
                 createExpanded ? "rotate-90" : "rtl:rotate-180"
               )}
             />
@@ -315,7 +316,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
 
           {createExpanded && (
             <div className="space-y-2.5 px-5 pb-5" style={{ animation: "float-up 0.2s ease-out" }}>
-              <p className="text-sm leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-relaxed text-secondary">
                 {t("notes.onboarding.templates.createDescription")}
               </p>
               <input

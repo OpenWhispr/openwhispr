@@ -86,10 +86,10 @@ function ToastCardAction({
         "inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-full",
         action.iconOnly ? "w-8" : "px-4",
         "text-sm font-medium transition-[background-color,color,transform] duration-150",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.98] disabled:cursor-wait",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 active:scale-[0.98] disabled:cursor-wait",
         primary
-          ? "bg-foreground text-background hover:bg-foreground/90"
-          : "bg-foreground/15 text-foreground hover:bg-foreground/20"
+          ? "bg-text-primary text-surface-primary hover:bg-text-primary/90"
+          : "bg-text-primary/15 text-primary hover:bg-text-primary/20"
       )}
     >
       {Icon && <Icon className="size-3.5 shrink-0" aria-hidden="true" />}
@@ -122,7 +122,7 @@ function ToastCardDescription({ text, hotkey }: { text: string; hotkey?: string 
             className="inline-flex items-center gap-1"
           >
             {index > 0 && <span className="text-xs">+</span>}
-            <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-border bg-surface-raised px-1 font-sans text-[11px] font-medium text-foreground shadow-sm">
+            <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-default bg-surface-tertiary px-1 font-sans text-[11px] font-medium text-primary shadow-sm">
               {key === "Cmd" ? "⌘" : key}
             </kbd>
           </span>
@@ -159,17 +159,17 @@ export function ToastCard({
         <StatusIcon
           className={cn(
             "ms-2 mt-1 size-4.5 shrink-0",
-            tone === "success" ? "text-success" : "text-destructive"
+            tone === "success" ? "text-green-solid" : "text-red-solid"
           )}
           aria-hidden="true"
         />
       )}
       <div className="min-w-0 flex-1 break-words px-2 py-1">
-        {title && <p className="text-sm font-normal leading-snug text-foreground">{title}</p>}
+        {title && <p className="text-sm font-normal leading-snug text-primary">{title}</p>}
         {description && (
           <p
             className={cn(
-              "whitespace-pre-wrap text-[13px] leading-snug text-muted-foreground",
+              "whitespace-pre-wrap text-[13px] leading-snug text-secondary",
               title && "mt-1"
             )}
           >
@@ -208,13 +208,13 @@ export function ToastCard({
         role={role}
         aria-live={role === "alert" ? "assertive" : "polite"}
         data-action-count={actions.length}
-        className="relative max-h-[calc(100vh-1.5rem)] w-full overflow-y-auto rounded-2xl border border-border/50 bg-surface-0 shadow-[var(--shadow-modal)]"
+        className="relative max-h-[calc(100vh-1.5rem)] w-full overflow-y-auto rounded-2xl border border-default/50 bg-surface-primary shadow-[var(--shadow-modal)]"
       >
         {progressDuration > 0 && (
           // Inset by the card's corner radius, so the timer runs along the straight edge only.
           <div className="pointer-events-none absolute inset-x-4 top-0 z-10" aria-hidden="true">
             <div
-              className="h-0.5 rounded-full bg-foreground"
+              className="h-0.5 rounded-full bg-text-primary"
               style={{
                 animation: `toast-progress ${progressDuration}ms linear forwards`,
                 animationPlayState: progressPaused ? "paused" : "running",
@@ -255,7 +255,7 @@ export function ToastCard({
           type="button"
           onClick={onDismiss}
           aria-label={t("common.close")}
-          className="absolute -end-2 -top-2 z-20 flex size-6 items-center justify-center rounded-full border border-border/60 bg-surface-0 text-muted-foreground opacity-0 shadow-sm transition-opacity duration-150 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover:opacity-100"
+          className="absolute -end-2 -top-2 z-20 flex size-6 items-center justify-center rounded-full border border-default/60 bg-surface-primary text-secondary opacity-0 shadow-sm transition-opacity duration-150 hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/40 group-hover:opacity-100"
         >
           <X className="size-3" aria-hidden="true" />
         </button>
