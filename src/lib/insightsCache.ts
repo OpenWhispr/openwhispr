@@ -128,7 +128,8 @@ export function clearCachedLeaderboards({
     current.leaderboards.clear();
     current.weekStarts.clear();
   }
-  // A refusal already chooses its recovery UI; external changes need a new read.
+  // A refusal, or a change the caller's view already shows, chooses its own UI;
+  // external changes need a new read.
   if (revalidate) invalidationListeners.forEach((listener) => listener("leaderboards"));
 }
 

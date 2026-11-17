@@ -478,7 +478,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       if (!current()) return;
       const toRelocate = await confirmedLost([...new Set([...lost, ...orphaned])]);
       if (!current()) return;
-      if (toRelocate.length > 0) await relocateLostWorkspaces(toRelocate, current);
+      if (toRelocate.length > 0) {
+        // A workspace lost elsewhere takes its leaderboard with it.
+        clearCachedLeaderboards();
+        await relocateLostWorkspaces(toRelocate, current);
+      }
     })().finally(() => {
       if (refreshPromise === request) refreshPromise = null;
     });
@@ -778,6 +782,8 @@ export function ensureDefaultWorkspace(
           .getState()
           .workspaces.some((w) => w.id === workspace.id && w.is_default === true);
       if (!listed) {
+        // A new default workspace is a new leaderboard scope.
+        clearCachedLeaderboards();
         listRead = true;
         await useWorkspaceStore.getState().refresh({ fresh: true });
       }

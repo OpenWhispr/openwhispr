@@ -645,7 +645,8 @@ export default function LeaderboardSection({
     setRequestingJoin(true);
     try {
       await WorkspacesService.requestJoin(target.id);
-      clearCachedLeaderboards();
+      clearCachedLeaderboards({ revalidate: false });
+      setCacheInvalidationRevision((revision) => revision + 1);
       setAccess((current) =>
         current?.joinableWorkspace
           ? {

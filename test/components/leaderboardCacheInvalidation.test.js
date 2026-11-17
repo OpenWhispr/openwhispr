@@ -226,13 +226,20 @@ for (const scenario of cases) {
         members: [{ ...member, name: "Current coworker" }],
         leaders: [{ ...member, name: "Current coworker" }],
       };
+      const reread = Promise.withResolvers();
+      state.currentAccess = reread.promise;
       const request = findElement(
         container,
         (node) => node.tagName === "BUTTON" && node.textContent === "Request to join"
       );
       assert.ok(request);
       await act(async () => request.dispatchEvent({ type: "click", bubbles: true }));
+      assert.ok(
+        container.textContent.includes("Request sent"),
+        "the sent request shows before the access re-read lands"
+      );
       await act(async () => {
+        reread.resolve(currentAccess);
         state.access.resolve(access);
         state.board.resolve(board);
       });

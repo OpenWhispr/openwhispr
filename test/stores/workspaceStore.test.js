@@ -412,7 +412,7 @@ test("the default workspace is listed first and chosen when nothing is saved", a
 });
 
 test("ensureDefaultWorkspace posts the localized name once and refreshes", async (t) => {
-  const { useWorkspaceStore, ensureDefaultWorkspace } = await loadPrivateNotesStore(t, {
+  const { useWorkspaceStore, ensureDefaultWorkspace, vite } = await loadPrivateNotesStore(t, {
     list: async () => [TEAM],
     ensureDefault: async () => {
       globalThis.__ws.list = async () => [TEAM, OWN];
@@ -429,6 +429,8 @@ test("ensureDefaultWorkspace posts the localized name once and refreshes", async
   const t9n = i18n.t.bind(i18n);
   await useWorkspaceStore.getState().refresh();
   assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, null);
+  const cache = await vite.ssrLoadModule("/lib/insightsCache.ts");
+  cache.cacheLeaderboardAccess("acct-1", { scopes: [] });
 
   await Promise.all([
     ensureDefaultWorkspace(defaultWorkspaceName("Ada", t9n)),
@@ -440,6 +442,7 @@ test("ensureDefaultWorkspace posts the localized name once and refreshes", async
   assert.equal(globalThis.__ws.listCalls, 2);
   assert.equal(useWorkspaceStore.getState().defaultWorkspaceId, "own");
   assert.equal(useWorkspaceStore.getState().workspaces[0].id, "own");
+  assert.equal(cache.readCachedLeaderboardAccess("acct-1"), null, "a new default is a new board");
 
   // Each account session asks once.
   useWorkspaceStore.getState().resetForAccountChange();
@@ -560,7 +563,7 @@ test("a list cached for another account relocates nothing", async (t) => {
 });
 
 test("a successful list missing a workspace relocates its Private to the default", async (t) => {
-  const { useWorkspaceStore, calls } = await loadPrivateNotesStore(t, {
+  const { useWorkspaceStore, calls, vite } = await loadPrivateNotesStore(t, {
     list: async () => [TEAM, OWN],
     storage: {
       activeWorkspaceId: "lost",
@@ -572,6 +575,8 @@ test("a successful list missing a workspace relocates its Private to the default
       }),
     },
   });
+  const cache = await vite.ssrLoadModule("/lib/insightsCache.ts");
+  cache.cacheLeaderboardAccess("acct-1", { scopes: [] });
 
   await useWorkspaceStore.getState().refresh();
 
@@ -586,6 +591,7 @@ test("a successful list missing a workspace relocates its Private to the default
     { activeWorkspaceId: "own", defaultWorkspaceId: "own", accountId: "acct-1" },
   ]);
   assert.equal(useWorkspaceStore.getState().activeWorkspaceId, "own");
+  assert.equal(cache.readCachedLeaderboardAccess("acct-1"), null, "the lost board is dropped");
 });
 
 for (const [windowName, search] of [

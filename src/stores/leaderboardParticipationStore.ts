@@ -161,7 +161,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     },
 
     join: async (context) => {
-      clearCachedLeaderboards();
+      clearCachedLeaderboards({ revalidate: false });
       const generation = readId;
       const currentWriteId = ++writeId;
       set({ updating: true });
@@ -191,7 +191,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     },
 
     leave: async (context) => {
-      clearCachedLeaderboards();
+      clearCachedLeaderboards({ revalidate: false });
       const generation = readId;
       const currentWriteId = ++writeId;
       set({ updating: true });
