@@ -97,7 +97,7 @@ class ModelManager {
     // other's model (and the assistant's prompt cache) on every alternation.
     // The second only starts when another model's server is running and both
     // fit the memory one server alone may use; otherwise this is the single
-    // swapping server it always was. servers[0] serves whenever only one runs.
+    // swapping server it always was. servers[0] is the one started when none runs.
     this.servers = [
       new LlamaServerManager(),
       new LlamaServerManager({ pidName: "llama-secondary" }),
@@ -148,7 +148,7 @@ class ModelManager {
   }
 
   // The server every caller that predates the pool reaches: GPU and binary
-  // housekeeping, status, and the only server off Apple Silicon.
+  // housekeeping, and the only server off Apple Silicon.
   get serverManager() {
     return this.servers[0];
   }
@@ -326,6 +326,7 @@ class ModelManager {
     };
     // A model priced before its file exists (still downloading) is priced again
     // once it does; downloads land under their final name only when complete.
+    // Its drafter lands after it, so a model priced in between keeps no drafter.
     if (profile.weightsBytes > 0) this._memoryProfiles.set(modelPath, profile);
     return profile;
   }
@@ -428,7 +429,6 @@ class ModelManager {
    * A swap that still leaves too little room frees the other server first.
    */
   async _serverFor(modelId, modelInfo, modelPath, { contextSize, busyWaitMs, signal } = {}) {
-    const window = contextSize || BASELINE_CONTEXT_SIZE;
     const chosen = await (async () => {
       const holding = this.servers.find((server) => this._holdsModel(server, modelId, modelPath));
       if (holding) return holding;
@@ -440,7 +440,7 @@ class ModelManager {
       }
 
       const free = this.servers.find((server) => !this._isOccupied(server));
-      if (free && (await this._fitsBeside(free, modelInfo, modelPath, window))) {
+      if (free && (await this._fitsBeside(free, modelInfo, modelPath, contextSize))) {
         debugLogger.info("Starting a second llama-server beside the running one", {
           model: modelId,
           running: occupied.map((server) => server.modelId),
@@ -450,7 +450,7 @@ class ModelManager {
 
       const target = [...occupied].sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0];
       if (
-        !(await this._fitsBeside(target, modelInfo, modelPath, window)) &&
+        !(await this._fitsBeside(target, modelInfo, modelPath, contextSize)) &&
         !(await this._releaseOtherServers(target, busyWaitMs, signal))
       ) {
         // Loading beside a server still answering would overrun the budget.
@@ -967,7 +967,7 @@ class ModelManager {
       throw new ModelNotFoundError(modelId);
     }
 
-    const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
+    const modelPath = this._modelPathFor(modelInfo);
     debugLogger.logReasoning("INFERENCE_MODEL_PATH", {
       modelPath,
       modelName: modelInfo.model.name,
@@ -1008,9 +1008,9 @@ class ModelManager {
 
     let ceiling = null;
     // Beside another server this model gets what that one leaves. A request
-    // needing more than that, but no more than the machine would give it
-    // alone, frees the other server once it is idle rather than being cut short.
-    const ceilingFor = async (needed = 0) => {
+    // needing more than that frees the other server once it is idle, whenever
+    // the machine would give this model more alone, rather than being cut short.
+    const ceilingFor = async (needed) => {
       const residentBytes = await this._otherServersBytes(server);
       ceiling = await this.contextCeiling(modelInfo, modelPath, { residentBytes });
       if (residentBytes > 0 && needed > ceiling.ceiling) {
@@ -1305,7 +1305,7 @@ class ModelManager {
     const modelInfo = this.findModelById(modelId);
     if (!modelInfo) return false;
 
-    const modelPath = path.join(this.modelsDir, modelInfo.model.fileName);
+    const modelPath = this._modelPathFor(modelInfo);
     if (!(await this.checkModelValid(modelPath))) return false;
 
     if (!this.serverManager.isAvailable()) return false;

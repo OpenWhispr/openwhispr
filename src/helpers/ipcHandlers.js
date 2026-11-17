@@ -7313,8 +7313,8 @@ class IPCHandlers {
       modelManager.setKeepResident(prefs.keepLocalModelLoaded === true);
 
       // A signed-in window whose workspace policy is still loading reports
-      // unclamped modes, so it neither pre-warms nor stops the shared
-      // llama-server; signed out, the policy never loads.
+      // unclamped modes, so it neither pre-warms nor stops a llama-server;
+      // signed out, the policy never loads.
       if (prefs.policySettled || !this._hasActiveAccountScope()) {
         const localServer = resolveLocalServerNeeds(prefs);
 

@@ -219,14 +219,14 @@ function resolveContextCeiling({
  */
 function residentServerBytes(
   { weightsBytes = 0, draftWeightsBytes = 0, kvBytesPerToken, hasRecurrentState = false },
-  contextSize = 0
+  contextSize
 ) {
   return (
     weightsBytes +
     draftWeightsBytes +
     COMPUTE_FIXED_BYTES +
     (hasRecurrentState ? RECURRENT_STATE_BYTES : 0) +
-    Math.max(contextSize || 0, BASELINE_CONTEXT_SIZE) * (kvBytesPerToken + COMPUTE_BYTES_PER_TOKEN)
+    Math.max(contextSize, BASELINE_CONTEXT_SIZE) * (kvBytesPerToken + COMPUTE_BYTES_PER_TOKEN)
   );
 }
 
