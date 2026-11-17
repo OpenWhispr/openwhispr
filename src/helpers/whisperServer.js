@@ -295,6 +295,33 @@ function shouldRetryAfterServerReplaced({
   return !!isConnectionError && !isRemote && !stopRequested && !!ready && !!sameModel;
 }
 
+const SRT_TIME = /(\d+):(\d{2}):(\d{2})[,.](\d{3})/;
+const srtSeconds = (value) => {
+  const [, h, m, s, ms] = SRT_TIME.exec(value);
+  return Number(h) * 3600 + Number(m) * 60 + Number(s) + Number(ms) / 1000;
+};
+
+// Turns whisper-server's srt output into the json shape with per-segment times
+// (seconds from the audio start). Silence comes back as an empty body.
+function parseSrtResponse(data) {
+  const segments = [];
+  for (const block of String(data)
+    .replace(/\r/g, "")
+    .split(/\n\s*\n/)) {
+    const lines = block.split("\n").filter((line) => line.trim());
+    const timing = lines.findIndex((line) => line.includes("-->"));
+    if (timing < 0) continue;
+    const [start, end] = lines[timing].split("-->");
+    if (!SRT_TIME.test(start) || !SRT_TIME.test(end)) continue;
+    segments.push({
+      start: srtSeconds(start),
+      end: srtSeconds(end),
+      text: lines.slice(timing + 1).join(" "),
+    });
+  }
+  return { text: segments.map((segment) => segment.text).join(""), segments };
+}
+
 class WhisperServerManager extends EventEmitter {
   constructor() {
     super();
@@ -950,7 +977,7 @@ class WhisperServerManager extends EventEmitter {
     });
 
     // signal is optional; only cancellable uploads pass one.
-    const { language, initialPrompt, signal, skipDecoderThresholds } = options;
+    const { language, initialPrompt, signal, skipDecoderThresholds, segments } = options;
     if (signal?.aborted) throw createAbortError("whisper-server transcription cancelled");
 
     // whisper.cpp wants 16 kHz mono PCM16; a renderer PCM tap delivers exactly that.
@@ -1009,7 +1036,11 @@ class WhisperServerManager extends EventEmitter {
     parts.push(
       `--${boundary}\r\n` +
         `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
-        `json\r\n`
+        // srt carries per-segment times for callers that place segments. Not
+        // verbose_json: a fresh server whose first auto-language request holds no
+        // speech crashes building its language field (SIGSEGV on CUDA, HTTP 500
+        // on CPU), and a crash costs the session its GPU backend.
+        `${segments ? "srt" : "json"}\r\n`
     );
     parts.push(`--${boundary}--\r\n`);
 
@@ -1026,7 +1057,7 @@ class WhisperServerManager extends EventEmitter {
     };
 
     try {
-      return await this._postInference(body, boundary, signal);
+      return await this._postInference(body, boundary, signal, segments ? parseSrtResponse : null);
     } catch (err) {
       // A cancel is not a server failure: rethrow before the retry/CPU-fallback
       // logic so it never triggers a server restart.
@@ -1043,7 +1074,7 @@ class WhisperServerManager extends EventEmitter {
     }
   }
 
-  _postInference(body, boundary, signal) {
+  _postInference(body, boundary, signal, parseResponse = null) {
     if (!this.isRemote) signal = localModelOperationSignal(this, signal);
     // Multipart boilerplate adds under a kilobyte, so body length tracks audio length.
     const timeoutMs = computeTranscriptionTimeoutMs(body.length / PCM16_MONO_16K_BYTES_PER_SECOND);
@@ -1088,7 +1119,7 @@ class WhisperServerManager extends EventEmitter {
             }
 
             try {
-              resolve(JSON.parse(data));
+              resolve(parseResponse ? parseResponse(data) : JSON.parse(data));
             } catch (e) {
               reject(new Error(`Failed to parse whisper-server response: ${e.message}`));
             }
@@ -1331,6 +1362,7 @@ class WhisperServerManager extends EventEmitter {
 }
 
 module.exports = WhisperServerManager;
+module.exports.parseSrtResponse = parseSrtResponse;
 module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
 module.exports.INFERENCE_DECODER_FIELDS = INFERENCE_DECODER_FIELDS;
 module.exports.parseVulkanDevices = parseVulkanDevices;

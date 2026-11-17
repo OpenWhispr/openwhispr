@@ -8,6 +8,7 @@ const {
   canAutoRelabelSpeaker,
   applyProvisionalSpeaker,
   applyConfirmedSpeaker,
+  applySpeakerName,
   applySuggestedSpeaker,
 } = require("../../src/helpers/speakerAssignmentPolicy");
 
@@ -63,4 +64,25 @@ test("locked segments preserve lock status on updates", () => {
 
   applySuggestedSpeaker(lockedSegment, { speaker: "Bob" });
   assert.equal(lockedSegment.speaker, "Alice");
+});
+
+test("applySpeakerName names a guessed line but keeps it provisional", () => {
+  const guessed = {
+    speaker: "speaker_1",
+    speakerIsPlaceholder: true,
+    speakerStatus: "provisional",
+  };
+  applySpeakerName(guessed, { speakerName: "Eva", speakerIsPlaceholder: false });
+  assert.equal(guessed.speakerName, "Eva");
+  assert.equal(guessed.speakerIsPlaceholder, true);
+  assert.equal(guessed.speakerStatus, SPEAKER_STATUS.PROVISIONAL);
+
+  const sure = { speaker: "speaker_1", speakerIsPlaceholder: false, speakerStatus: "confirmed" };
+  applySpeakerName(sure, { speakerName: "Eva", speakerIsPlaceholder: false });
+  assert.equal(sure.speakerName, "Eva");
+  assert.equal(sure.speakerStatus, SPEAKER_STATUS.CONFIRMED);
+
+  const locked = { speaker: "speaker_1", speakerName: "Ralf", speakerLocked: true };
+  applySpeakerName(locked, { speakerName: "Eva" });
+  assert.equal(locked.speakerName, "Ralf");
 });

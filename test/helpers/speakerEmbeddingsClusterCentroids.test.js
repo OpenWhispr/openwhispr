@@ -191,3 +191,28 @@ test("voices of different lengths are never similar", () => {
   assert.equal(speakerEmbeddings.cosineSimilarity(new Float32Array(512).fill(1), current), 0);
   assert.ok(Math.abs(speakerEmbeddings.cosineSimilarity(current, current) - 1) < 1e-6);
 });
+
+test("openWindowReader reads each line's own window, down to half a second", async () => {
+  const wav = writeWav([0.1, 0.2, 0.3]);
+  const seen = [];
+  const original = speakerEmbeddings._extractEmbeddingFromSamples;
+  speakerEmbeddings._extractEmbeddingFromSamples = async (samples) => {
+    seen.push({ length: samples.length, level: Math.round(samples[0] * 10) / 10 });
+    return new Float32Array([samples[0]]);
+  };
+  try {
+    const reader = speakerEmbeddings.openWindowReader(wav);
+    assert.ok(await reader.embed(12, 12.6));
+    assert.equal(await reader.embed(25, 25.4), null);
+    await reader.embed(20, 30);
+    reader.close();
+    assert.equal(await reader.embed(0, 2), null);
+    assert.deepEqual(seen, [
+      { length: 0.6 * SAMPLE_RATE, level: 0.2 },
+      // Long windows keep their last 8 s, as cluster voices do.
+      { length: 8 * SAMPLE_RATE, level: 0.3 },
+    ]);
+  } finally {
+    speakerEmbeddings._extractEmbeddingFromSamples = original;
+  }
+});

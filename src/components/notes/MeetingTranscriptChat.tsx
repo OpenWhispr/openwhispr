@@ -685,6 +685,7 @@ interface SegmentRowProps {
   isSelected: boolean;
   activeName?: string;
   isNameFromMapping: boolean;
+  showUncertainty: boolean;
   matchedProfile?: SpeakerProfileLite;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
@@ -723,6 +724,7 @@ const SegmentRow = memo(function SegmentRow({
   isSelected,
   activeName,
   isNameFromMapping,
+  showUncertainty,
   matchedProfile,
   speakerProfiles,
   participants,
@@ -734,6 +736,15 @@ const SegmentRow = memo(function SegmentRow({
   t,
 }: SegmentRowProps) {
   const hasSpeaker = !!segment.speaker;
+  // After the call, a line whose voice was a close call keeps its best guess but
+  // stays provisional. It shows its label even inside a run of the same speaker,
+  // so it can be checked and reassigned line by line.
+  const isUncertain =
+    showUncertainty &&
+    hasSpeaker &&
+    !!segment.speakerIsPlaceholder &&
+    segment.speakerStatus === "provisional" &&
+    !isTranscriptSpeakerLocked(segment);
   const isOriginallyYou = segment.speaker === "you";
   const isSystemSpeaker = hasSpeaker && !selfSide;
   // Only an in-person mic cluster may be the user: diarization can't tell which
@@ -769,6 +780,14 @@ const SegmentRow = memo(function SegmentRow({
         onDismiss={onDismissSuggestion}
         t={t}
       />
+      {isUncertain && (
+        <span
+          className="text-[10px] font-medium text-amber-600 dark:text-amber-400 mb-0.5"
+          title={t("notes.speaker.uncertainHint")}
+        >
+          {t("notes.speaker.uncertain")}
+        </span>
+      )}
       {canAddContact && matchedProfile && matchedProfile.id != null && (
         <AddContactButton
           profile={{ id: matchedProfile.id, display_name: matchedProfile.display_name }}
@@ -795,8 +814,8 @@ const SegmentRow = memo(function SegmentRow({
       )}
       style={isNewest ? { animation: "agent-message-in 200ms ease-out both" } : undefined}
     >
-      {labelElement && !sameSpeaker && labelElement}
-      {labelElement && sameSpeaker && (
+      {labelElement && (!sameSpeaker || isUncertain) && labelElement}
+      {labelElement && sameSpeaker && !isUncertain && (
         <div
           className={cn(
             "grid grid-rows-[0fr] opacity-0 pointer-events-none transition-[grid-template-rows,opacity] duration-150 ease-out",
@@ -1130,6 +1149,7 @@ export function MeetingTranscriptChat({
                     isSelected={selectedSegmentIds?.has(segment.id) ?? false}
                     activeName={activeName}
                     isNameFromMapping={isNameFromMapping}
+                    showUncertainty={!isRecording && !isDiarizing}
                     matchedProfile={activeName ? profilesByName.get(activeName) : undefined}
                     speakerProfiles={speakerProfiles}
                     participants={participants}
