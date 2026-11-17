@@ -6,6 +6,21 @@ import { localSetupItemKey } from "./localSetupDownloadState";
 
 const RELEASE_GRACE_MS = 4000;
 const claimedDownloads = new Map<string, number | null>();
+let handOffRunning = false;
+
+/** Proceed's queue is fetching the rows it took over, so the tray mustn't start them too. */
+export async function runLocalSetupHandOff(run: () => Promise<void>): Promise<void> {
+  handOffRunning = true;
+  try {
+    await run();
+  } finally {
+    handOffRunning = false;
+  }
+}
+
+export function isLocalSetupHandOffRunning(): boolean {
+  return handOffRunning;
+}
 
 export function claimLocalSetupDownload(item: Pick<LocalSetupDownload, "kind" | "id">): void {
   claimedDownloads.set(localSetupItemKey(item), null);

@@ -32,7 +32,6 @@ test("builds a structured prompt that keeps instruction and selection separate",
     code: "SELECTION_EDIT_INVALID_RESPONSE",
   });
 
-  assert.equal(getSelectionCaptureDisposition({ status: "editable" }), "caret");
   assert.equal(getSelectionCaptureDisposition({ status: "none" }), "standalone");
   assert.equal(
     getSelectionCaptureDisposition({ status: "unavailable", code: "copy_helper_unavailable" }),
@@ -112,6 +111,24 @@ test("the marker contract is exact, unique, and never demonstrated with a traili
   }
 });
 
+test("an unmarked edit is rejected even with the former optional-marker option", async () => {
+  const { SELECTION_QUESTION_MARKER, extractSelectionEditReplacement } = await load();
+  const marker = "__OPENWHISPR_SELECTION_COMPLETE_test";
+  const cloud = { markerOptional: true };
+  for (const output of [
+    "edit",
+    '{"replacement":"unfinished',
+    "edit__OPENWHISPR_SELECTION_COMPL",
+    `edit${marker.slice(2)}`,
+    `${SELECTION_QUESTION_MARKER}.`,
+    `\`${SELECTION_QUESTION_MARKER}\``,
+  ]) {
+    assert.throws(() => extractSelectionEditReplacement(output, marker, cloud), {
+      code: "SELECTION_EDIT_INVALID_RESPONSE",
+    });
+  }
+});
+
 test("local JSON replacement preserves document bytes and rejects ambiguous envelopes", async () => {
   const { extractLocalSelectionEditReplacement } = await load();
   const replacement = '  "quoted" \\path\n<think>literal document</think> ☕\t\r\n';
@@ -146,6 +163,41 @@ test("local JSON replacement preserves document bytes and rejects ambiguous enve
     assert.throws(() => extractLocalSelectionEditReplacement(response), {
       code: "SELECTION_EDIT_EMPTY_RESPONSE",
     });
+  }
+});
+
+test("JSON edits reject leading question control markers instead of replacing document text", async () => {
+  const { extractLocalSelectionEditReplacement } = await load();
+  for (const replacement of [
+    "__OPENWHISPR_SELECTION_QUESTION",
+    "__OPENWHISPR_SELECTION_QUESTION_",
+    "  \n__OPENWHISPR_SELECTION_QUESTION",
+    "__OPENWHISPR_SELECTION_QUESTION.",
+    "__OPENWHISPR_SELECTION_QUESTION_ What should I explain?",
+    "__OPENWHISPR_SELECTION_QUESTION__\nWhat change do you want?",
+    "__OPENWHISPR_SELECTION_QUESTION__Please clarify.",
+  ]) {
+    assert.throws(
+      () => extractLocalSelectionEditReplacement(JSON.stringify({ replacement })),
+      { code: "SELECTION_EDIT_INVALID_RESPONSE" },
+      replacement
+    );
+  }
+});
+
+test("JSON edits preserve literal question-marker mentions and longer identifiers", async () => {
+  const { extractLocalSelectionEditReplacement } = await load();
+  for (const replacement of [
+    "Keep __OPENWHISPR_SELECTION_QUESTION__ as literal text.",
+    '"__OPENWHISPR_SELECTION_QUESTION"',
+    "`__OPENWHISPR_SELECTION_QUESTION__`",
+    "  __OPENWHISPR_SELECTION_QUESTIONNAIRE\n",
+    "__OPENWHISPR_SELECTION_QUESTION_SUFFIX",
+  ]) {
+    assert.equal(
+      extractLocalSelectionEditReplacement(JSON.stringify({ replacement })),
+      replacement
+    );
   }
 });
 

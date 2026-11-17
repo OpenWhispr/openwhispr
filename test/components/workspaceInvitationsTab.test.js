@@ -229,7 +229,7 @@ test("a narrow table keeps every email whole, with role and status under it", as
   assert.ok(classes.includes("@xl:truncate"));
   assert.match(
     markup,
-    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · <span>settingsPage\.workspace\.people\.invitations\.pending#3<\/span><\/p>/
+    /<p class="[^"]*@xl:hidden[^"]*text-muted-foreground[^"]*">settingsPage\.workspace\.role\.member · <span title="settingsPage\.workspace\.people\.invitations\.pending#3">\s*settingsPage\.workspace\.people\.invitations\.statusPending<\/span><\/p>/
   );
 });
 
@@ -247,10 +247,12 @@ test("role and status show in one place at each width", async (t) => {
   );
   assert.match(
     markup,
-    /<td class="[^"]*hidden @xl:table-cell[^"]*">settingsPage\.workspace\.people\.invitations\.pending#3<\/td>/
+    /<td class="[^"]*hidden @xl:table-cell[^"]*" title="settingsPage\.workspace\.people\.invitations\.pending#3">settingsPage\.workspace\.people\.invitations\.statusPending<\/td>/
   );
-  // The column's copy and the second line's, and nothing else that could also be announced.
+  // The days left ride in the tooltips of the column and of the second line, and the visible
+  // word is the bare status in both.
   assert.equal(markup.match(/invitations\.pending#3/g)?.length, 2);
+  assert.equal(markup.match(/invitations\.statusPending/g)?.length, 2);
   assert.equal(markup.match(/workspace\.role\.member/g)?.length, 2);
   // Checkbox and Actions stay at every width.
   assert.equal(markup.match(/<th [^>]*class="(?![^"]*hidden)/g)?.length, 3);
@@ -348,7 +350,7 @@ test("row menu offers Resend invite and Cancel invite", async (t) => {
   assert.match(markup, /aria-label="common\.actions"/);
   assert.match(
     markup,
-    /role="menuitem"[^>]*>settingsPage\.workspace\.people\.invitations\.resend</
+    /role="menuitem"[^>]*>(?:<svg[\s\S]*?<\/svg>)?settingsPage\.workspace\.people\.invitations\.resend</
   );
   assert.match(
     markup,
@@ -643,9 +645,12 @@ test("narrow column headers don't wrap", async (t) => {
   const { Tab } = await loadTab(t);
   const markup = render(Tab, ready([invitation("i1", "ada@example.com", inDays(3))]));
 
+  // Actions is blank on screen: its name is for screen readers only.
   for (const column of ["role", "status", "actions"]) {
     const header = markup.match(
-      new RegExp(`<th[^>]*>settingsPage\\.workspace\\.people\\.columns\\.${column}</th>`)
+      new RegExp(
+        `<th[^>]*>(?:<span class="sr-only">)?settingsPage\\.workspace\\.people\\.columns\\.${column}(?:</span>)?</th>`
+      )
     );
     assert.ok(header, column);
     assert.match(header[0], /whitespace-nowrap/, column);

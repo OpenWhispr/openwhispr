@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
@@ -40,8 +41,8 @@ interface SetupChoiceStepProps {
   isSignedIn: boolean;
   agentAllowed: boolean;
   /**
-   * Free space the local setup needs, in whole GB: every recommended row on,
-   * with the room each download reserves to unpack.
+   * Free space the local setup needs at least, in whole GB: dictation alone (the
+   * optional rows turn off to fit), with the room its download reserves to unpack.
    */
   localSpaceGb?: number;
   onSelect: (mode: SetupMode, options?: { selfHosted?: boolean }) => void;
@@ -124,6 +125,7 @@ export default function SetupChoiceStep({
   onSelect,
   onRequestAuthentication,
 }: SetupChoiceStepProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
   // Unknown counts as supported, or a Parakeet-only policy would flash "unavailable"

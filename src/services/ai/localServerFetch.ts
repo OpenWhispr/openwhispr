@@ -1,17 +1,4 @@
 import { buildLocalInferenceError } from "../../utils/localInferenceError";
-import type { LocalInferenceError } from "../../utils/localInferenceError";
-
-interface LocalServerStartResult {
-  error?: string;
-  code?: string;
-}
-
-function localServerStartError(result: LocalServerStartResult): LocalInferenceError {
-  return buildLocalInferenceError({
-    error: result.error || "Failed to start local model server",
-    code: result.code,
-  });
-}
 
 /**
  * Asks main for the port serving `model`. Main can wait up to a minute for
@@ -37,7 +24,12 @@ export async function startLocalServer(
       window.electronAPI.llamaServerStart(model, requestId),
       cancelled,
     ]);
-    if (!server.success || !server.port) throw localServerStartError(server);
+    if (!server.success || !server.port) {
+      throw buildLocalInferenceError({
+        error: server.error || "Failed to start local model server",
+        code: server.code,
+      });
+    }
     return server.port;
   } finally {
     signal?.removeEventListener("abort", onAbort);

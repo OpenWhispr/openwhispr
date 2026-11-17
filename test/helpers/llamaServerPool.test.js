@@ -346,6 +346,17 @@ test("stopping the servers stops both, and only unneeded ones when asked", async
   await modelManager.stopServersNotNeeded((modelId) => modelId === ASSISTANT);
   assert.deepEqual(modelManager.loadedModelIds(), [CLEANUP]);
 
+  // An answer still streaming defers the stop; a sync needing the model again cancels it.
+  modelManager.servers[0]._slotsBusy = async () => true;
+  const deferred = modelManager.stopServersNotNeeded((modelId) => modelId === CLEANUP);
+  await modelManager.stopServersNotNeeded(() => false);
+  await deferred;
+  assert.deepEqual(
+    modelManager.loadedModelIds(),
+    [CLEANUP],
+    "a stop deferred by an earlier sync no longer applies"
+  );
+
   await assistantStream(modelManager);
   await modelManager.stopServer();
   assert.deepEqual(modelManager.loadedModelIds(), []);

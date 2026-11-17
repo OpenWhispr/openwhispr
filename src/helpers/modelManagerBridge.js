@@ -15,9 +15,10 @@ const {
   checkDiskSpace,
 } = require("./downloadUtils");
 
-const modelRegistryData = require("../models/modelRegistryData.json");
+const { registryData: modelRegistryData } = require("../models/registryData.js");
 const LlamaServerManager = require("./llamaServer");
 const debugLogger = require("./debugLogger");
+const { rememberInstalledModel, forgetInstalledModels } = require("./installedModels");
 const { readGgufMetadataFromFile } = require("./ggufMetadata");
 const {
   estimateTokens,
@@ -551,16 +552,21 @@ class ModelManager {
     for (const server of this.servers) server.setKeepResident(keepResident);
   }
 
-  // Stops each server whose model no scope needs any more (see shouldStop).
+  // Stops each server whose model no scope needs any more (see shouldStop) once
+  // it is idle, and cancels an earlier such stop for a model needed again.
   async stopServersNotNeeded(shouldStop) {
     await Promise.all(
       this.servers.map(async (server) => {
-        if (!this._isOccupied(server) || !shouldStop(server.modelId)) return;
+        if (!shouldStop(server.modelId)) {
+          server.cancelDeferredStop();
+          return;
+        }
+        if (!this._isOccupied(server)) return;
         debugLogger.debug("Stopping llama-server: no scope needs its model", {
           loadedModel: server.modelId,
         });
-        await server.stop();
-        server.modelId = null;
+        // A background chat answer may still be streaming from it.
+        if (await server.stopWhenIdle()) server.modelId = null;
       })
     );
   }
@@ -590,6 +596,7 @@ class ModelManager {
     const modelPath = path.join(this.modelsDir, model.fileName);
 
     if (await this.checkModelValid(modelPath)) {
+      rememberInstalledModel("localProviders", provider.id, modelId);
       return modelPath;
     }
 
@@ -653,6 +660,7 @@ class ModelManager {
       assertLocalModelOperation(this);
       await sharedDownloadFile(downloadUrl, modelPath, {
         signal,
+        expectedSha256: model.sha256,
         onProgress: hasDrafter
           ? (downloadedBytes) => emitCombined(downloadedBytes)
           : (downloadedBytes, totalBytes) => {
@@ -687,6 +695,7 @@ class ModelManager {
           assertLocalModelOperation(this);
           await sharedDownloadFile(this.getDraftDownloadUrl(provider, model), draftPath, {
             signal,
+            expectedSha256: model.draftSha256,
             onProgress: (downloadedBytes) => emitCombined(stats.size + downloadedBytes),
           });
           const draftStats = await fsPromises.stat(draftPath);
@@ -704,6 +713,7 @@ class ModelManager {
         }
       }
 
+      rememberInstalledModel("localProviders", provider.id, modelId);
       return modelPath;
     } catch (error) {
       if (error.isAbort) {
@@ -712,6 +722,11 @@ class ModelManager {
       if (error.isHttpError) {
         throw new ModelError(`Download failed with status ${error.statusCode}`, "DOWNLOAD_FAILED", {
           statusCode: error.statusCode,
+        });
+      }
+      if (error.code === "ERR_MODEL_INTEGRITY") {
+        throw new ModelError(`Download corrupted: ${error.message}`, "INTEGRITY_ERROR", {
+          error: error.message,
         });
       }
       if (!(error instanceof ModelError)) {
@@ -733,12 +748,12 @@ class ModelManager {
 
   getDownloadUrl(provider, model) {
     const baseUrl = provider.baseUrl || "https://huggingface.co";
-    return `${baseUrl}/${model.hfRepo}/resolve/main/${model.fileName}`;
+    return `${baseUrl}/${model.hfRepo}/resolve/${model.revision || "main"}/${model.fileName}`;
   }
 
   getDraftDownloadUrl(provider, model) {
     const baseUrl = provider.baseUrl || "https://huggingface.co";
-    return `${baseUrl}/${model.draftHfRepo}/resolve/main/${model.draftFileName}`;
+    return `${baseUrl}/${model.draftHfRepo}/resolve/${model.draftRevision || "main"}/${model.draftFileName}`;
   }
 
   modelHasDrafter(model) {
@@ -783,6 +798,7 @@ class ModelManager {
       const draftPath = path.join(this.modelsDir, modelInfo.model.draftFileName);
       await fsPromises.unlink(draftPath).catch(() => {});
     }
+    forgetInstalledModels("localProviders", modelInfo.provider.id, modelId);
   }
 
   async deleteAllModels() {
@@ -803,6 +819,7 @@ class ModelManager {
           }
         }
       }
+      forgetInstalledModels("localProviders");
     } catch (error) {
       throw new ModelError(
         `Failed to delete models directory: ${error.message}`,
@@ -844,6 +861,7 @@ class ModelManager {
     if ((estimatedTokens + reserveTokens) * PREFLIGHT_MEASURE_FACTOR <= running) return maxTokens;
 
     const usable = (await server.usableContextSize()) ?? running;
+    options.signal?.throwIfAborted();
     const exactTokens = await server.countPromptTokens(messages, {
       disableThinking: options.disableThinking,
     });
@@ -863,6 +881,7 @@ class ModelManager {
     if (neededTokens <= usable) return maxTokens;
 
     const { ceiling: maxContext } = await ceilingFor(neededTokens);
+    options.signal?.throwIfAborted();
     const grown = resolveContextSize({
       needed: neededTokens,
       floor: contextFloor,
@@ -870,6 +889,7 @@ class ModelManager {
     });
 
     if (grown > usable) await startServer(grown);
+    options.signal?.throwIfAborted();
 
     const nowUsable = (await server.usableContextSize()) ?? server.contextSize ?? grown;
     if (neededTokens <= nowUsable) return maxTokens;
@@ -939,6 +959,7 @@ class ModelManager {
   }
 
   async _runInferenceOnce(modelId, prompt, options = {}) {
+    options.signal?.throwIfAborted();
     this.ensureInitialized();
     const startTime = Date.now();
     debugLogger.logReasoning("INFERENCE_START", {
@@ -1051,16 +1072,16 @@ class ModelManager {
       // another model's window says nothing about this one.
       const restorableContextSize =
         server.ready && server.process && server.modelId === modelId ? server.contextSize : null;
-      const startAt = async (size) =>
-        server.start(
-          modelPath,
-          await this.serverStartOptions(modelInfo, {
-            contextSize: size,
-            cacheRamMiB,
-            busyWaitMs: options.busyWaitMs,
-            signal: options.signal,
-          })
-        );
+      const startAt = async (size) => {
+        const startOptions = await this.serverStartOptions(modelInfo, {
+          contextSize: size,
+          cacheRamMiB,
+          busyWaitMs: options.busyWaitMs,
+          signal: options.signal,
+        });
+        options.signal?.throwIfAborted();
+        return server.start(modelPath, startOptions);
+      };
       // llama.cpp's startup dump is the diagnostic, so it goes to the log here
       // and nowhere else: details crosses IPC to the renderer, which neither
       // reads it nor should carry a stderr blob and absolute model paths.
@@ -1094,6 +1115,7 @@ class ModelManager {
         if (isLocalModelPolicyRefusal(error) || SERVER_LEFT_ALONE_CODES.has(error.code)) {
           throw error;
         }
+        options.signal?.throwIfAborted();
         refuse(contextSize);
         // start() stops the running server before it spawns, so a grow that
         // dies has already taken a working window with it. Come back at the
@@ -1138,6 +1160,7 @@ class ModelManager {
       });
 
       await startServer(targetContextSize);
+      options.signal?.throwIfAborted();
 
       debugLogger.logReasoning("INFERENCE_SERVER_STARTED", {
         port: server.port,
@@ -1157,6 +1180,7 @@ class ModelManager {
       ceilingFor,
       startServer,
     });
+    options.signal?.throwIfAborted();
 
     // The preflight shrank the reply to make room for the prompt. A reply that
     // fills that allowance was cut short by the window, not by the caller's cap,
@@ -1231,10 +1255,10 @@ class ModelManager {
     );
   }
 
-  async stopServerWhenIdle() {
+  async stopServerWhenIdle(options) {
     await Promise.all(
       this.servers.map(async (server) => {
-        if (await server.stopWhenIdle()) server.modelId = null;
+        if (await server.stopWhenIdle(options)) server.modelId = null;
       })
     );
   }
@@ -1262,7 +1286,18 @@ class ModelManager {
         "llm",
         modelId,
         () => this._policyAllowedPrewarmServer(modelId),
-        { memoryOnly: true, onAbort: () => this.stopServer() }
+        {
+          memoryOnly: true,
+          // The pre-warm may be checking whether another model is answering, so
+          // only a server that is, or is becoming, this model is stopped.
+          onAbort: () => {
+            const modelInfo = this.findModelById(modelId);
+            if (!modelInfo) return;
+            return this.serverManager.stopIfServing(
+              path.join(this.modelsDir, modelInfo.model.fileName)
+            );
+          },
+        }
       );
     } catch (error) {
       if (error.code === "POLICY_UNRESOLVABLE") {

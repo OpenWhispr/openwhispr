@@ -43,7 +43,7 @@ test("the mount effect pre-caches the microphone device id when streaming is off
         onPrepareDictation: noopDispose,
         onCancelDictationPreparation: noopDispose,
         onStopDictation: noopDispose,
-        dictationLifecycleStateChanged: () => {},
+        dictationLifecycleStateChanged: async () => true,
       },
     },
   });

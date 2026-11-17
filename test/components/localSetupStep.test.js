@@ -223,6 +223,21 @@ async function mount(
     )
   );
 
+  const rerender = async (nextPlan) => {
+    await React.act(async () =>
+      root.render(
+        React.createElement(LocalSetupStep, {
+          plan: nextPlan,
+          onProceed: (handOff) => {
+            const taken = handOff();
+            handOffs.push(taken);
+            proceeded.push({ ready: taken.ready, pending: taken.pending });
+          },
+        })
+      )
+    );
+  };
+
   const flush = () =>
     React.act(async () => {
       for (let i = 0; i < 10; i++) await Promise.resolve();
@@ -275,6 +290,7 @@ async function mount(
   return {
     container,
     plan,
+    rerender,
     setup,
     claims,
     step,
@@ -371,17 +387,17 @@ test("rows keep one fixed height class from idle to finished", async (t) => {
   assert.deepEqual(heights(), fixed, "finished");
 });
 
-test("Windows 16 GB: the assistant reads as too slow, never short of memory, cleanup starts off", async (t) => {
+test("Windows 16 GB: the assistant reads as not enough memory, with no figures, cleanup starts off", async (t) => {
   const s = await mount(t, { profile: pc() });
   const assistant = s.row("assistant");
-  assert.ok(assistant.textContent.includes(`${K}unavailable.tooSlow`));
-  assert.ok(assistant.textContent.includes(`${K}unavailable.tooSlowLine`));
-  assert.ok(!assistant.textContent.includes(`${K}unavailable.notEnoughMemory`));
+  assert.ok(assistant.textContent.includes(`${K}unavailable.notEnoughMemory`));
+  assert.ok(assistant.textContent.includes(`${K}unavailable.exceedsMemory`), "no figures quoted");
+  assert.ok(!assistant.textContent.includes(`${K}unavailable.memoryComputer`));
   assert.ok(!assistant.textContent.includes(`${K}description.`));
   assert.ok(!assistant.textContent.includes("2.7 GB"), "an unavailable row shows no size");
   const leaf = (text) => (n) =>
     n.textContent === text && n.childNodes.every((child) => child.nodeType === 3);
-  const [heading] = elements(assistant, leaf(`${K}unavailable.tooSlow`));
+  const [heading] = elements(assistant, leaf(`${K}unavailable.notEnoughMemory`));
   const [badge] = elements(assistant, leaf(`${K}badge.cloud`));
   assert.ok(badge, "Cloud recommended");
   assert.equal(badge.parentNode, heading.parentNode, "the badge sits beside the heading");
@@ -534,7 +550,40 @@ test("a too-slow row recommends nothing the organization forbids", async (t) => 
     mapPlan: (p) => ({ ...p, cloudAllowed: false, rows: p.rows.map(assistantTooSlow) }),
   });
   assert.ok(!s.row("assistant").textContent.includes(`${K}badge.cloud`));
-  assert.ok(s.row("assistant").textContent.includes(`${K}unavailable.tooSlow`));
+  assert.ok(s.row("assistant").textContent.includes(`${K}unavailable.notEnoughMemory`));
+});
+
+test("dictation the organization's models can't run here locks the step and says why", async (t) => {
+  const s = await mount(t, {
+    mapPlan: (p) => ({
+      ...p,
+      rows: p.rows.map((row) =>
+        row.id !== "dictation"
+          ? row
+          : {
+              ...row,
+              label: "unavailable",
+              reason: "organization",
+              line: { key: "organizationModelsUnrunnable" },
+            }
+      ),
+    }),
+  });
+  const row = s.row("dictation");
+  assert.ok(row.textContent.includes(`${K}unavailable.organization`));
+  assert.ok(row.textContent.includes(`${K}line.organizationModelsUnrunnable`));
+  assert.ok(
+    !row.textContent.includes(`${K}badge.cloud`),
+    "the organization chose, not the computer"
+  );
+  assert.ok(isDisabled(s.button()));
+  assert.equal(s.foot(), `${K}foot.dictationUnavailable`);
+
+  await s.click(s.button());
+  assert.deepEqual(s.calls.parakeet, []);
+  assert.deepEqual(s.calls.whisper, []);
+  assert.deepEqual(s.calls.llm, []);
+  assert.equal(s.proceeded.length, 0);
 });
 
 test("a failed optional row says why, offers Retry, and stays off at Proceed", async (t) => {
@@ -768,13 +817,14 @@ test("memory that couldn't be read says so, never that there is too little", asy
   }
 });
 
-test("a 48 GB Mac's too-slow row never says it lacks memory", async (t) => {
+test("a 48 GB Mac's too-slow row reads as memory, with no figures to quote", async (t) => {
   const s = await mount(t, {
     profile: mac({ appleChip: { generation: 4, tier: "Pro" }, memoryGb: 48 }),
   });
   const text = s.row("assistant").textContent;
-  assert.ok(text.includes(`${K}unavailable.tooSlow`), text);
-  assert.ok(!text.includes(`${K}unavailable.notEnoughMemory`), text);
+  assert.ok(text.includes(`${K}unavailable.notEnoughMemory`), text);
+  assert.ok(text.includes(`${K}unavailable.exceedsMemory`), text);
+  assert.ok(!text.includes(`${K}unavailable.memoryMac`), text);
 });
 
 test("a PC with too little memory says so, with the figures, even where it's also too slow", async (t) => {
@@ -784,13 +834,13 @@ test("a PC with too little memory says so, with the figures, even where it's als
   assert.ok(text.includes(`${K}unavailable.memoryComputer`), text);
 });
 
-test("a cleanup too slow for this computer says so", async (t) => {
+test("a cleanup too slow for this computer reads as memory", async (t) => {
   const tooSlow = (row) =>
     row.id !== "cleanup" ? row : { ...row, label: "unavailable", reason: "tooSlow", line: null };
   const s = await mount(t, { mapPlan: (p) => ({ ...p, rows: p.rows.map(tooSlow) }) });
   const text = s.row("cleanup").textContent;
-  assert.ok(text.includes(`${K}unavailable.tooSlow`));
-  assert.ok(text.includes(`${K}unavailable.tooSlowLine`), text);
+  assert.ok(text.includes(`${K}unavailable.notEnoughMemory`));
+  assert.ok(text.includes(`${K}unavailable.exceedsMemory`), text);
   assert.equal(s.switchOf("cleanup"), undefined);
 });
 
@@ -915,3 +965,47 @@ test("header helpers name the computer and join the languages", async (t) => {
   assert.equal(step.localSetupLanguageLabel(["zh-Hant"], "en"), "Traditional Chinese");
   assert.equal(step.localSetupLanguageLabel(["zh-Hant"], "zh-TW"), "繁體中文");
 });
+
+for (const scenario of [
+  { name: "same retired model", modelId: DICTATION, reason: "catalog", canProceed: true },
+  {
+    name: "different retired model",
+    modelId: "orukeet-v0.1.0",
+    reason: "catalog",
+    canProceed: false,
+  },
+  { name: "policy-blocked model", modelId: DICTATION, reason: "organization", canProceed: false },
+]) {
+  test(`a completed transfer handles a plan update to ${scenario.name}`, async (t) => {
+    const s = await mount(t);
+    await s.click(s.button());
+    const updated = {
+      ...s.plan,
+      rows: s.plan.rows.map((row) =>
+        row.id !== "dictation"
+          ? row
+          : {
+              ...row,
+              modelId: scenario.modelId,
+              download: { ...row.download, id: scenario.modelId },
+              label: "unavailable",
+              reason: scenario.reason,
+              line: null,
+            }
+      ),
+    };
+    await s.rerender(updated);
+    assert.equal(isDisabled(s.button()), true);
+    await s.finish(DICTATION);
+    assert.equal(isDisabled(s.button()), !scenario.canProceed);
+    if (scenario.canProceed) {
+      assert.ok(s.button().textContent.includes(`${K}button.proceed`));
+      assert.equal(
+        s.row("dictation").textContent.includes("transcription.parakeet.unavailable"),
+        false
+      );
+      await s.click(s.button());
+      assert.equal(s.proceeded.length, 1);
+    }
+  });
+}

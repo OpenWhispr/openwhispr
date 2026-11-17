@@ -1,4 +1,8 @@
-const { runLocalModelOperation, assertLocalModelOperation } = require("./localModelPolicyGate");
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+} = require("./localModelPolicyGate");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -22,7 +26,6 @@ const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
-const BUSY_POLL_MS = 5000;
 // A restart waits this long for an answer in progress, unless the caller says otherwise.
 const DEFAULT_BUSY_WAIT_MS = 60000;
 const BUSY_WAIT_POLL_MS = 200;
@@ -33,6 +36,7 @@ const HANDOFF_GRACE_MS = 1000;
 const SLOTS_UNANSWERED = Symbol("slots-unanswered");
 const DEFAULT_CONTEXT_SIZE = 4096;
 const PREFLIGHT_TIMEOUT_MS = 10000;
+const SLOT_POLL_INTERVAL_MS = 1000;
 
 /**
  * llama-server reports a prompt that overflows the context as a 400 whose body
@@ -129,7 +133,11 @@ class LlamaServerManager {
     // What the in-flight startup was asked for, so start() can tell whether
     // joining it would serve another caller's request.
     this.startingRequest = null;
+    this.stopPromise = null;
+    this.deferredStop = null;
     this.handoffUntil = 0;
+    // Counts handoffs, so a /slots read can tell one happened while it was out.
+    this.handoffs = 0;
     this.healthCheckInterval = null;
     this.healthCheckFailures = 0;
     this.cachedServerBinaryPaths = null;
@@ -220,12 +228,32 @@ class LlamaServerManager {
       this,
       "llm",
       this.localModelIdForPath?.(modelPath),
-      () => this._policyAllowedStart(modelPath, options),
-      { onAbort: () => this.stop() }
+      // A revoked model ends its own wait through the lease's signal. The start
+      // may be waiting behind another model's answer, so the server is stopped
+      // only when it is, or is becoming, the revoked model.
+      () =>
+        this._policyAllowedStart(modelPath, {
+          ...options,
+          signal: localModelOperationSignal(this, options.signal),
+        }),
+      { onAbort: () => this.stopIfServing(modelPath) }
     );
   }
 
+  stopIfServing(modelPath) {
+    if (this.modelPath === modelPath || this.startingRequest?.modelPath === modelPath) {
+      return this.stop();
+    }
+  }
+
+  _handOff() {
+    this.handoffUntil = Date.now() + HANDOFF_GRACE_MS;
+    this.handoffs += 1;
+  }
+
   async _policyAllowedStart(modelPath, options = {}) {
+    if (this.stopPromise) await this.stopPromise;
+
     const request = {
       modelPath,
       // A change in drafter presence for the same model must still restart the
@@ -244,21 +272,22 @@ class LlamaServerManager {
       // this request. Callers record the model they asked for as loaded once
       // this resolves, so it must never resolve on a startup for another one.
       while (this.startupPromise) {
-        if (servesRequest(this.startingRequest, request)) return this.startupPromise;
+        if (servesRequest(this.startingRequest, request)) {
+          this.cancelDeferredStop();
+          return this.startupPromise;
+        }
         await this._waitFor(
           this.startupPromise.catch(() => {}),
-          {
-            deadline: busyDeadline,
-            signal,
-          }
+          { deadline: busyDeadline, signal }
         );
       }
 
       if (this.ready && servesRequest(this, request)) {
         // Streaming chat reaches the port directly and never goes through
         // inference(), so asking for the running server is its only activity.
+        this.cancelDeferredStop();
         this.resetIdleTimer();
-        this.handoffUntil = Date.now() + HANDOFF_GRACE_MS;
+        this._handOff();
         return;
       }
 
@@ -288,7 +317,7 @@ class LlamaServerManager {
         // The ladder may have stepped the context down to get a GPU rung to
         // start; record what loaded, not what was asked for.
         this.contextSize = this.activeContextSize ?? request.contextSize;
-        this.handoffUntil = Date.now() + HANDOFF_GRACE_MS;
+        this._handOff();
       } finally {
         this.startupPromise = null;
         this.startingRequest = null;
@@ -347,12 +376,15 @@ class LlamaServerManager {
   // one that goes unanswered is usually still evaluating a long prompt.
   async _isBusy(budgetMs) {
     if (this.activeRequest || Date.now() < this.handoffUntil) return true;
+    const handoffs = this.handoffs;
     const slots = await this._requestJson(
       "/slots",
       null,
       Math.min(PREFLIGHT_TIMEOUT_MS, Math.max(MIN_SLOTS_READ_MS, budgetMs)),
       SLOTS_UNANSWERED
     );
+    // Work handed out while the read was out is newer than its answer.
+    if (this.activeRequest || this.handoffs !== handoffs) return true;
     if (slots === SLOTS_UNANSWERED) return true;
     return Array.isArray(slots) && slots.some((slot) => slot.is_processing);
   }
@@ -615,7 +647,7 @@ class LlamaServerManager {
         debugLogger.debug("llama-server process exited", { code, signal });
         // A SIGKILLed server can exit after stop() moved on and the next one
         // spawned; losing that one's handle would orphan it.
-        if (this.process !== child) return;
+        if (this.process && this.process !== child) return;
         this.ready = false;
         this.process = null;
         this.stopHealthCheck();
@@ -782,9 +814,9 @@ class LlamaServerManager {
     const timer = setTimeout(async () => {
       // Streaming chat talks to the port directly, so only the server knows
       // whether an answer that outlived the timeout is still being generated.
-      const slots = await this._requestJson("/slots");
+      const busy = await this._slotsBusy();
       if (this.idleTimer !== timer) return;
-      if (Array.isArray(slots) && slots.some((slot) => slot.is_processing)) {
+      if (busy) {
         this.resetIdleTimer();
         return;
       }
@@ -799,21 +831,32 @@ class LlamaServerManager {
     this.idleTimer = timer;
   }
 
-  // Stops the running server once nothing is generating, so a binary that landed
-  // in the background takes over without cutting an answer short. True if it stopped.
-  async stopWhenIdle() {
+  async _slotsBusy() {
+    const slots = await this._requestJson("/slots");
+    return Array.isArray(slots) && slots.some((slot) => slot.is_processing);
+  }
+
+  /** Waits for active answers; settings-driven stops can be cancelled by reuse. */
+  async stopWhenIdle({ cancelOnReuse = true } = {}) {
+    const request = {};
+    if (cancelOnReuse) this.deferredStop = request;
     await this.startupPromise?.catch(() => {});
     const server = this.process;
-    while (server && this.process === server) {
-      const slots = await this._requestJson("/slots");
-      if (this.process !== server) return false;
-      if (!(Array.isArray(slots) && slots.some((slot) => slot.is_processing))) {
-        await this.stop();
-        return true;
-      }
-      await new Promise((resolve) => setTimeout(resolve, BUSY_POLL_MS).unref());
+    const isCurrent = () =>
+      this.process === server && (!cancelOnReuse || this.deferredStop === request);
+    while (server && isCurrent()) {
+      if (!(await this._slotsBusy())) break;
+      if (!isCurrent()) break;
+      await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_INTERVAL_MS).unref?.());
     }
-    return false;
+    if (!isCurrent()) return false;
+    if (cancelOnReuse) this.deferredStop = null;
+    await this.stop();
+    return true;
+  }
+
+  cancelDeferredStop() {
+    this.deferredStop = null;
   }
 
   clearIdleTimer() {
@@ -874,9 +917,8 @@ class LlamaServerManager {
   }
 
   /**
-   * The context window actually in force, which is not always what we asked
-   * for: a concurrent caller can join an in-flight start that used a smaller
-   * size. Returns null when it cannot be read.
+   * The context window actually in force, which the GPU startup ladder may
+   * reduce below the requested size. Returns null when it cannot be read.
    */
   async usableContextSize() {
     if (!this.ready || !this.process) return null;
@@ -1049,6 +1091,18 @@ class LlamaServerManager {
   }
 
   async stop() {
+    if (this.stopPromise) return this.stopPromise;
+    this.stopPromise = this._stop();
+    try {
+      await this.stopPromise;
+    } finally {
+      this.stopPromise = null;
+    }
+  }
+
+  async _stop() {
+    this.ready = false;
+    this.cancelDeferredStop();
     this.clearIdleTimer();
     this.stopHealthCheck();
 

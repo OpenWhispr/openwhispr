@@ -35,6 +35,7 @@ import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useRequiredLocalModels } from "../hooks/useRequiredLocalModels";
 import { useComputerProfile } from "../hooks/useComputerProfile";
+import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import { usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { isAgentAllowed, isScreenContextAllowed } from "../stores/policyRules";
@@ -88,7 +89,7 @@ import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 
 interface OnboardingFlowProps {
-  onComplete: (options?: { openSettings?: boolean }) => void;
+  onComplete: (options?: { openSettings?: boolean; setupMode?: OnboardingCompletionMode }) => void;
 }
 
 type OnboardingCompletionMode = Exclude<OnboardingSetupMode, null> | "managed";
@@ -113,9 +114,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const platform = getPlatform();
   // Read as onboarding opens, so it has long landed by the local setup step.
   const computerProfile = useComputerProfile();
+  const registryVersion = useRegistryVersion();
   const { isSignedIn } = useAuth();
   const agentAllowed = usePolicyStore(isAgentAllowed);
   const screenContextAllowed = usePolicyStore(isScreenContextAllowed);
+  const localOnly = usePolicyStore((state) => state.localOnly);
+  const requireSignIn = usePolicyStore((state) => state.requireSignIn);
   const settings = useSettings();
   const settingsStore = useSettingsStore();
   const {
@@ -130,6 +134,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setPermissionGuide,
     clearSession,
   } = useOnboardingSession();
+
+  useEffect(() => {
+    if (!localOnly || session.currentStepId !== "auth") return;
+    setAuthPath("guest");
+    goTo("permissions");
+  }, [localOnly, session.currentStepId, setAuthPath, goTo]);
 
   const handleLogout = useCallback(async () => {
     await signOut();
@@ -354,7 +364,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         spokenLanguages: settings.spokenLanguages,
         requiredModelIds: requiredModels.required,
       }),
-    [computerProfile, policy, requiredModels.required, session.authPath, settings.spokenLanguages]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the catalog changes in place; its version is the signal
+    [
+      computerProfile,
+      policy,
+      requiredModels.required,
+      session.authPath,
+      settings.spokenLanguages,
+      registryVersion,
+    ]
   );
   // A policy refresh that is loading or failed must not take a built plan away:
   // the step would unmount and cancel its downloads. The last plan stands until a
@@ -707,7 +725,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         localStorage.setItem("skipAuth", String(skippedAuth));
         clearSession();
         localStorage.setItem("onboardingCompleted", "true");
-        onComplete();
+        onComplete({ setupMode: mode });
       } catch (error) {
         logger.error("Failed to finish onboarding", { error }, "onboarding");
         showFatalError(t("common.unknownError"));
@@ -952,14 +970,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               onResumeStateChange={updateAuthResumeState}
               autoContinue={!returnedToAuth}
               onSignOut={() => void handleLogout()}
-              onContinueWithoutAccount={() => {
-                // Guests continue onto their route's permissions step — jumping
-                // straight to setup-choice would skip the permission grants and
-                // hotkey the guest route exists to guarantee (see flow.ts).
-                setReturnedToAuth(false);
-                setAuthPath("guest");
-                goTo("permissions");
-              }}
+              onContinueWithoutAccount={
+                requireSignIn
+                  ? undefined
+                  : () => {
+                      // Guests continue onto their route's permissions step — jumping
+                      // straight to setup-choice would skip the permission grants and
+                      // hotkey the guest route exists to guarantee (see flow.ts).
+                      setReturnedToAuth(false);
+                      setAuthPath("guest");
+                      goTo("permissions");
+                    }
+              }
               onAuthComplete={() => {
                 setReturnedToAuth(false);
                 setAuthPath("account");
@@ -1376,6 +1398,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             ? goBack
             : undefined
         }
+        // Back while Proceed finishes would leave a step that has already been
+        // committed (local setup's downloads cancel as it unmounts).
+        backDisabled={isFinishing}
         onContinue={showsContinue ? () => void continueFromCurrentStep() : undefined}
         // Demos are optional practice, and calendar connections on Notes are
         // optional setup. Both advance through the same persisted route.

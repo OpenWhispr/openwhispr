@@ -34,9 +34,11 @@ import {
   claimLocalSetupDownload,
   handOverLocalSetupDownload,
   releaseLocalSetupDownload,
+  runLocalSetupHandOff,
 } from "./localSetupDownloadClaims";
 import {
   forgetPendingGraphicsPack,
+  readLocalModelInventory,
   recordPendingGraphicsPackFailure,
   recordPendingLocalModelFailure,
 } from "./pendingLocalModels";
@@ -73,21 +75,16 @@ type ModelDownloader = Pick<
 type Downloaders = Record<Exclude<LocalSetupDownload["kind"], "llamaVulkan">, ModelDownloader>;
 
 /** Keys (localSetupItemKey) of every model, and the graphics pack, already on disk. */
-export async function readLocalSetupInventory(
-  api: Window["electronAPI"] | undefined,
-  packId: string | undefined
-): Promise<string[]> {
-  const [whisper, parakeet, llm, pack] = await Promise.all([
-    api?.listWhisperModels?.().catch(() => undefined),
-    api?.listParakeetModels?.().catch(() => undefined),
-    api?.modelGetAll?.().catch(() => undefined),
-    packId ? api?.getLlamaVulkanStatus?.().catch(() => undefined) : undefined,
+export async function readLocalSetupInventory(packId: string | undefined): Promise<string[]> {
+  const [{ whisper, parakeet, llm }, pack] = await Promise.all([
+    readLocalModelInventory(),
+    packId ? window.electronAPI?.getLlamaVulkanStatus?.().catch(() => undefined) : undefined,
   ]);
   const keys: string[] = [];
-  for (const model of whisper?.models ?? []) {
+  for (const model of whisper ?? []) {
     if (model.downloaded) keys.push(localSetupItemKey({ kind: "whisper", id: model.model }));
   }
-  for (const model of parakeet?.models ?? []) {
+  for (const model of parakeet ?? []) {
     if (model.downloaded) keys.push(localSetupItemKey({ kind: "parakeet", id: model.model }));
   }
   for (const model of llm ?? []) {
@@ -203,7 +200,7 @@ export function useLocalSetupDownloads(
   const [inventoryLoaded, setInventoryLoaded] = useState(false);
   useEffect(() => {
     let disposed = false;
-    void readLocalSetupInventory(window.electronAPI, packId).then((onDisk) => {
+    void readLocalSetupInventory(packId).then((onDisk) => {
       if (disposed) return;
       dispatch({ type: "inventory", onDisk });
       setInventoryLoaded(true);
@@ -330,9 +327,7 @@ export function useLocalSetupDownloads(
       return;
     }
     const key = localSetupItemKey(current);
-    void readLocalSetupInventory(window.electronAPI, undefined).then((onDisk) =>
-      finish(onDisk.includes(key))
-    );
+    void readLocalSetupInventory(undefined).then((onDisk) => finish(onDisk.includes(key)));
   }, [current, downloading, run, unsettledRun]);
 
   // The graphics pack reports through its own channel.
@@ -414,7 +409,7 @@ export function useLocalSetupDownloads(
           }
         }
       }
-      void finishInBackground(steps, onModelReady);
+      void runLocalSetupHandOff(() => finishInBackground(steps, onModelReady));
     };
 
     return { ready, pending, graphicsPackPending, continueInBackground };

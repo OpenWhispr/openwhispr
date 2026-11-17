@@ -1,9 +1,12 @@
-// Window creation tags the control panel with ?panel=true in both development
-// and packaged builds; the dictation panel is the plain URL.
-export const isControlPanelWindow = (): boolean => {
-  if (typeof window === "undefined") return false;
-  return new URLSearchParams(window.location.search).get("panel") === "true";
-};
+const hasRouteFlag = (name: string): boolean =>
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).get(name) === "true";
+
+// Window creation tags the control panel with ?panel=true and the agent window
+// with ?agent=true, in development and packaged builds alike; the dictation
+// panel is the plain URL.
+export const isControlPanelWindow = (): boolean => hasRouteFlag("panel");
+
+export const isAgentWindow = (): boolean => hasRouteFlag("agent");
 
 export const isDictationPanelWindow = (): boolean =>
-  typeof window !== "undefined" && !isControlPanelWindow();
+  typeof window !== "undefined" && !isControlPanelWindow() && !isAgentWindow();

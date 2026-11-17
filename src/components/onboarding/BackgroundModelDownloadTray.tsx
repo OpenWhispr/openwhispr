@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { usePolicyStore } from "../../stores/policyStore";
 import { getDownloadErrorMessage } from "../../hooks/useModelDownload";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
@@ -22,6 +23,7 @@ import {
   isPendingLocalModel,
   judgePendingLocalModel,
   MAX_AUTOMATIC_DOWNLOAD_ATTEMPTS,
+  readLocalModelInventory,
   readPendingLocalModels,
   type PendingLocalModelInventory,
   type PendingLocalModelKind,
@@ -37,7 +39,7 @@ import type {
 import { isTrayInstalling, mergeHydratedDownloads } from "./localDownloadState";
 import { AnimatedEllipsis } from "./AnimatedEllipsis";
 import { ONBOARDING_SESSION_KEY, isDownloadOwningOnboardingStepActive } from "./flow";
-import { isLocalSetupDownload } from "./localSetupDownloadClaims";
+import { isLocalSetupDownload, isLocalSetupHandOffRunning } from "./localSetupDownloadClaims";
 import { getPlatform } from "../../utils/platform";
 
 type DownloadKind = "whisper" | "parakeet" | "llm";
@@ -47,6 +49,7 @@ interface ActiveDownload {
   kind: DownloadKind;
   percentage: number;
   installing?: boolean;
+  verifying?: boolean;
   error?: string;
 }
 
@@ -78,15 +81,6 @@ function downloadDisplay(download: ActiveDownload) {
     name: localModel?.model.name ?? download.id,
     provider: localModel?.provider.id ?? "local",
   };
-}
-
-async function readLocalModelInventory(): Promise<PendingLocalModelInventory> {
-  const [whisper, parakeet, llm] = await Promise.all([
-    window.electronAPI?.listWhisperModels?.().catch(() => undefined),
-    window.electronAPI?.listParakeetModels?.().catch(() => undefined),
-    window.electronAPI?.modelGetAll?.().catch(() => undefined),
-  ]);
-  return { whisper: whisper?.models, parakeet: parakeet?.models, llm };
 }
 
 function activatePendingLocalModel(family: "speech" | "llm", modelId: string) {
@@ -160,6 +154,8 @@ function settlePendingDownloads(inventory: PendingLocalModelInventory): {
 
 // One at a time, as the setup step does; text models run better once the pack is here.
 async function resumeDownloads(modelIds: string[], graphicsPack: boolean): Promise<void> {
+  // Right after Proceed the step's own queue still runs in this window and fetches these.
+  if (isLocalSetupHandOffRunning()) return;
   if (graphicsPack) {
     const status = await window.electronAPI?.getLlamaVulkanStatus?.().catch(() => undefined);
     if (status?.downloaded) forgetPendingGraphicsPack();
@@ -200,6 +196,7 @@ export default function BackgroundModelDownloadTray({
 }: {
   placement?: "onboarding" | "control-panel";
 }) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const [downloads, setDownloads] = useState<Record<string, ActiveDownload>>({});
   const [hydrated, setHydrated] = useState(false);
@@ -337,7 +334,7 @@ export default function BackgroundModelDownloadTray({
     const applyProgress = (event: {
       kind: DownloadKind;
       id: string;
-      type: "progress" | "installing" | "complete" | "error";
+      type: "progress" | "verifying" | "installing" | "complete" | "error";
       percentage: number | undefined;
       error?: string;
       code?: string;
@@ -387,6 +384,7 @@ export default function BackgroundModelDownloadTray({
             kind: event.kind,
             percentage: clampPercentage(event.percentage),
             installing: event.type === "installing",
+            verifying: event.type === "verifying",
             error:
               event.type === "error"
                 ? getDownloadErrorMessage(t, event.error ?? "", event.code)
@@ -594,7 +592,9 @@ export default function BackgroundModelDownloadTray({
               <span className="shrink-0 font-medium tabular-nums text-muted-foreground">
                 {download.installing
                   ? t("onboarding.rehaul.local.installing")
-                  : `${Math.round(download.percentage)}%`}
+                  : download.verifying
+                    ? t("onboarding.rehaul.local.verifying")
+                    : `${Math.round(download.percentage)}%`}
               </span>
             </div>
             {download.error ? (

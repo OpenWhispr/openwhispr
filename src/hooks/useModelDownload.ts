@@ -302,7 +302,8 @@ export function useModelDownload({
         void handleTerminalDownload(data.model, data.type, data.error, data.code, data.sequence);
         return;
       }
-      if (data.type !== "progress" && data.type !== "installing") return;
+      if (data.type !== "progress" && data.type !== "verifying" && data.type !== "installing")
+        return;
 
       const isInstalling = data.type === "installing";
       if (!isInstalling) {
@@ -314,7 +315,7 @@ export function useModelDownload({
       updateDownload({
         modelType,
         modelId: data.model,
-        phase: isInstalling ? "installing" : "downloading",
+        phase: data.type === "progress" ? "downloading" : data.type,
         progress: isInstalling ? data.percentage || 100 : data.percentage || 0,
         downloadedBytes: isInstalling ? 0 : data.downloaded_bytes || 0,
         totalBytes: isInstalling ? 0 : data.total_bytes || 0,
@@ -593,6 +594,7 @@ export function useModelDownload({
     downloadError: errorMessages[errorMessages.length - 1] || null,
     isDownloading: downloadingModel !== null,
     isInstalling: activeDownload?.phase === "installing",
+    isVerifying: activeDownload?.phase === "verifying",
     isCancelling: downloadingModel ? cancellingModels.has(downloadingModel) : false,
     isDownloadingModel: (modelId: string) => !!downloads[modelId],
     isCancellingModel: (modelId: string) => cancellingModels.has(modelId),

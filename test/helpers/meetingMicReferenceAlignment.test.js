@@ -20,6 +20,10 @@ function harness() {
   let now = 1_000_000;
   const dispatched = [];
   const context = {
+    effectivePolicyManager: { getCurrent: () => ({ success: true, managed: false }) },
+    app: { getVersion: () => "1.11.1" },
+    productOperationAllowed: require("../../src/helpers/productPolicy").productOperationAllowed,
+    meetingConnectionOptions: null,
     Buffer,
     _audioFeaturePolicy: { activeFailure: () => null },
     Date: { now: () => now },

@@ -18,6 +18,7 @@ import type { PolicyDecisionSnapshot } from "../stores/policyRules";
 import { getASRModelOrganization } from "../helpers/localASROrganization";
 import { formatBytes, spaceSizeUnit } from "../utils/formatBytes";
 import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
+import { registryData } from "../models/registryData.js";
 import languageRegistry from "./languageRegistry.json" with { type: "json" };
 import localSetupTableData from "../models/localSetupTable.json" with { type: "json" };
 
@@ -39,6 +40,7 @@ export interface LocalSetupDownload {
 }
 export type LocalSetupLine =
   | { key: "requiredByOrganization" }
+  | { key: "organizationModelsUnrunnable" }
   | { key: "notEnoughMemory"; model: string; neededGb: number; haveGb: number }
   | { key: "memoryUnread"; model: string; neededGb: number };
 export interface LocalSetupRow {
@@ -48,8 +50,9 @@ export interface LocalSetupRow {
   providerIcon: string; // ProviderIcon id: "nvidia" | "oruk" | "openai" | "qwen"
   download: LocalSetupDownload;
   label: LocalSetupLabel | null; // null only for an organisation-required model
-  reason?: "tooSlow" | "memory" | "memoryUnread";
-  /** null: the row says what it does, or why it's too slow under a "Too slow" heading. */
+  /** organization: dictation only, when no model the allow-list approves runs on this computer. */
+  reason?: "tooSlow" | "memory" | "memoryUnread" | "organization" | "catalog";
+  /** null: the row says what it does, or (too slow) that it exceeds this computer's memory. */
   line: LocalSetupLine | null;
 }
 export interface LocalSetupPlan {
@@ -125,11 +128,15 @@ const parakeetModels = modelRegistryData.parakeetModels as unknown as Record<
   SpeechModelInfo
 >;
 const whisperModels = modelRegistryData.whisperModels as unknown as Record<string, SpeechModelInfo>;
-const textModels = new Map<string, { providerId: string; model: TextModelInfo }>();
-for (const provider of modelRegistryData.localProviders) {
-  for (const model of provider.models as TextModelInfo[]) {
-    textModels.set(model.id, { providerId: provider.id, model });
+function textModelInfo(
+  modelId: string,
+  providers = registryData.localProviders
+): { providerId: string; model: TextModelInfo } | undefined {
+  for (const provider of providers) {
+    const model = provider.models.find((entry) => entry.id === modelId);
+    if (model) return { providerId: provider.id, model };
   }
+  return undefined;
 }
 
 export function isAppleChipMac(profile: ComputerProfile): boolean {
@@ -208,17 +215,17 @@ const europeanLanguages = new Set(
 );
 
 function languageGroup(languages: string[]): LanguageGroup {
-  const known = languages.filter(
-    (code) => europeanLanguages.has(code) || code === "hi" || whisperLanguages.has(code)
-  );
-  // No language at all reads as English; one no local model knows goes to Whisper,
-  // which detects the language rather than forcing English onto it.
-  if (languages.length > 0 && known.length === 0) return "other";
-  if (known.every((code) => code === "en")) return "english";
-  if (known.includes("hi") && known.every((code) => code === "hi" || code === "en")) {
+  const known = (code: string): boolean =>
+    europeanLanguages.has(code) || code === "hi" || whisperLanguages.has(code);
+  // No language at all reads as English. One no local model knows goes to Whisper,
+  // which detects the language rather than forcing another model's onto it, even
+  // beside languages a narrower model covers (a guest on en-IN and bn-IN).
+  if (!languages.every(known)) return "other";
+  if (languages.every((code) => code === "en")) return "english";
+  if (languages.includes("hi") && languages.every((code) => code === "hi" || code === "en")) {
     return "hindi";
   }
-  if (known.every((code) => europeanLanguages.has(code))) return "european";
+  if (languages.every((code) => europeanLanguages.has(code))) return "european";
   return "other";
 }
 
@@ -232,15 +239,18 @@ export function pickDictationModel(
 }
 
 function speechInfo(modelId: string): SpeechModelInfo | undefined {
-  return parakeetModels[modelId] ?? whisperModels[modelId];
+  return registryData.parakeetModels[modelId] ?? registryData.whisperModels[modelId];
 }
 
 function speechDownload(modelId: string): { download: LocalSetupDownload; info: SpeechModelInfo } {
-  const info = speechInfo(modelId);
+  // Keep the benchmark row's label when a publication removes its model; the plan
+  // marks it unavailable instead of recommending an unmeasured replacement.
+  const info = speechInfo(modelId) ?? parakeetModels[modelId] ?? whisperModels[modelId];
   return {
     info,
     download: {
-      kind: parakeetModels[modelId] ? "parakeet" : "whisper",
+      kind:
+        registryData.parakeetModels[modelId] || parakeetModels[modelId] ? "parakeet" : "whisper",
       id: modelId,
       bytes: info.expectedSizeBytes ?? info.sizeMb * 1e6,
     },
@@ -285,7 +295,8 @@ function firstApprovedSpeechModel(
   languages: string[]
 ): string | undefined {
   const runnable = (allowedLocalModelIds(policy, "transcription") ?? []).filter(
-    (id) => speechInfo(id) && !(parakeetModels[id] && profile.parakeetSupported === false)
+    (id) =>
+      speechInfo(id) && !(registryData.parakeetModels[id] && profile.parakeetSupported === false)
   );
   const fitsLanguages = (id: string): boolean => {
     const supported = speechInfo(id)?.supportedLanguages;
@@ -300,7 +311,8 @@ function textRow(
   machine: MachineEntry
 ): LocalSetupRow {
   const modelId = table.models[id];
-  const { providerId, model } = textModels.get(modelId);
+  const { providerId, model } =
+    textModelInfo(modelId) ?? textModelInfo(modelId, modelRegistryData.localProviders);
   const entry = machine[id];
   const neededGb = table.memoryNeededGb[id][profile.platform === "darwin" ? "mac" : "pc"];
 
@@ -359,13 +371,22 @@ export function buildLocalSetupPlan(input: {
   const rows: LocalSetupRow[] = [];
   if (isModeAllowedByPolicy(policy, "transcription", "local")) {
     const { modelId } = pickDictationModel(languages, profile);
+    const tablePickApproved = isLocalModelAllowedByPolicy(policy, "transcription", modelId);
     // An allow-list that leaves out the table's pick decides dictation, as a required model does.
     const organizationModelId =
       requiredSpeechModelId ??
-      (isLocalModelAllowedByPolicy(policy, "transcription", modelId)
-        ? undefined
-        : firstApprovedSpeechModel(policy, profile, languages));
-    rows.push(dictationRow(profile, machine, languages, organizationModelId));
+      (tablePickApproved ? undefined : firstApprovedSpeechModel(policy, profile, languages));
+    rows.push(
+      organizationModelId || tablePickApproved
+        ? dictationRow(profile, machine, languages, organizationModelId)
+        : // Offering the table's pick would only end in the policy refusing its download.
+          {
+            ...speechRowBase(modelId),
+            label: "unavailable",
+            reason: "organization",
+            line: { key: "organizationModelsUnrunnable" },
+          }
+    );
   }
   const localTextAllowed = isModeAllowedByPolicy(policy, "llm", "local");
   const textModelApproved = (id: "cleanup" | "assistant"): boolean =>
@@ -393,7 +414,12 @@ export function buildLocalSetupPlan(input: {
     profile,
     languages,
     languageTags,
-    rows,
+    rows: rows.map((row): LocalSetupRow => {
+      const offered = row.id === "dictation" ? speechInfo(row.modelId) : textModelInfo(row.modelId);
+      return offered || row.label === "unavailable"
+        ? row
+        : { ...row, label: "unavailable", reason: "catalog", line: null };
+    }),
     graphicsPack,
     startingSwitches: { cleanup: machine.cleanup.startsOn !== false, assistant: true },
     organizationRunsText,
@@ -441,11 +467,17 @@ const TRIM_ORDER: Array<keyof LocalSetupSwitches> = ["assistant", "cleanup"];
 /**
  * The least free space Local can start with, in whole GB: dictation alone, since
  * the step turns the optional rows off to fit and Proceed only waits for dictation.
+ * Undefined when dictation won't download here, so the card keeps its default
+ * rather than claiming nothing is needed.
  */
-export function localSetupMinimumSpaceGb(plan: LocalSetupPlan, factors: LocalSetupFactors): number {
+export function localSetupMinimumSpaceGb(
+  plan: LocalSetupPlan,
+  factors: LocalSetupFactors
+): number | undefined {
   const items = enabledDownloads(plan, { cleanup: false, assistant: false }).flatMap(
     (row) => row.items
   );
+  if (items.length === 0) return undefined;
   return Math.ceil(localSetupRequiredBytes(items, factors) / 1e9);
 }
 
@@ -523,12 +555,12 @@ export function fitLocalSetupToSpace(
 }
 
 function registrySize(download: LocalSetupDownload): string {
-  if (download.kind === "llm") return textModels.get(download.id)?.model.size ?? "";
+  if (download.kind === "llm") return textModelInfo(download.id)?.model.size ?? "";
   return speechInfo(download.id)?.size ?? "";
 }
 
 /** The size Settings shows for the row's model, or the combined size with the pack folded in. */
 export function rowSizeLabel(row: LocalSetupRow, pack: LocalSetupDownload | null): string {
   if (pack) return formatBytes(row.download.bytes + pack.bytes, 1);
-  return spaceSizeUnit(registrySize(row.download));
+  return spaceSizeUnit(registrySize(row.download)) || formatBytes(row.download.bytes, 1);
 }

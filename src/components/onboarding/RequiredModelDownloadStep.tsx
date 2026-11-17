@@ -1,3 +1,4 @@
+import { useRegistryVersion } from "../../hooks/useRegistryVersion";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { AlertCircle, Check } from "../icons";
 import { useTranslation } from "react-i18next";
@@ -40,6 +41,7 @@ export function RequiredModelDownloadStep({
   onProceed,
   onRefusedChange,
 }: RequiredModelDownloadStepProps) {
+  useRegistryVersion();
   const { t } = useTranslation();
   const policy = usePolicySnapshot();
   const whisperCatalog = getWhisperModels();
@@ -171,7 +173,9 @@ export function RequiredModelDownloadStep({
                   <span className="relative whitespace-nowrap">
                     {download.isInstalling
                       ? t("onboarding.rehaul.local.installing")
-                      : t("onboarding.rehaul.local.downloadingShort")}
+                      : download.isVerifying
+                        ? t("onboarding.rehaul.local.verifying")
+                        : t("onboarding.rehaul.local.downloadingShort")}
                   </span>
                 </span>
               ) : failure && isRefused(modelId) ? null : failure ? (

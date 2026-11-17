@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -22,6 +23,8 @@ const modelManager = {
       if (shouldStop(modelId)) modelManager.stopped.push(modelId);
     }
   },
+  stopServerWhenIdle: async () => {},
+  serverManager: {},
   setKeepResident: (keepResident) => {
     modelManager.keepResident = keepResident;
   },
@@ -96,9 +99,11 @@ test.before(() => {
   };
   target._hasActiveAccountScope = () => target.signedIn;
   Ctor.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
   assert.ok(handlers.get("sync-startup-preferences"), "sync handler must be registered");
 });
@@ -172,4 +177,28 @@ test("Keep model loaded applies before the workspace policy settles", async () =
 
   await sync({ loaded: MODEL, signedIn: true, policySettled: false });
   assert.equal(modelManager.keepResident, false, "missing means off");
+});
+
+test("a downloaded GPU binary requests an idle stop that preferences cannot cancel", async (t) => {
+  const previousEnabled = process.env.LLAMA_VULKAN_ENABLED;
+  const previousBackend = process.env.LLAMA_GPU_BACKEND;
+  t.after(() => {
+    if (previousEnabled === undefined) delete process.env.LLAMA_VULKAN_ENABLED;
+    else process.env.LLAMA_VULKAN_ENABLED = previousEnabled;
+    if (previousBackend === undefined) delete process.env.LLAMA_GPU_BACKEND;
+    else process.env.LLAMA_GPU_BACKEND = previousBackend;
+    delete target._llamaVulkanManager;
+    delete target.environmentManager;
+  });
+  target._llamaVulkanManager = { download: async () => ({ success: true }) };
+  target.environmentManager = { saveAllKeysToEnvFile: async () => {} };
+  const stop = t.mock.method(modelManager, "stopServerWhenIdle", async () => {});
+
+  const result = await handlers.get("download-llama-vulkan-binary")({
+    sender: { isDestroyed: () => true },
+  });
+
+  assert.equal(result.success, true);
+  assert.equal(stop.mock.callCount(), 1);
+  assert.deepEqual(stop.mock.calls[0].arguments, [{ cancelOnReuse: false }]);
 });

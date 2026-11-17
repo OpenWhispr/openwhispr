@@ -196,6 +196,7 @@ const getMeetingTranscriptionOptions = () => {
       managedContext: managed.context,
       enterpriseIdentity,
       language: getBaseLanguageCode(getSettings().preferredLanguage),
+      spokenLanguages: getSettings().spokenLanguages,
     };
   const state = getSettings();
   const resolved = selectResolvedMeetingTranscription(state);
@@ -221,6 +222,7 @@ const getMeetingTranscriptionOptions = () => {
     ...(state.policyBlockedLocalScopes?.includes("meeting") ? { localModel: "" } : {}),
     enterpriseIdentity,
     enterpriseSetupMode: state.enterpriseTranscriptionSetupMode,
+    spokenLanguages: state.spokenLanguages,
   };
 };
 
@@ -945,8 +947,16 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
   const sessionId = createMeetingRecordingSessionId();
   let automaticStartSuppressed = false;
   let automaticStartCancelled = false;
+  let recordingDisabled = false;
   await meetingRecordingStartCoordinator.runStart(sessionId, async (startOperation) => {
     if (isRecordingFlag || isStartingFlag) return;
+    // Asked inside the start, so a stop during the lookup still cancels it.
+    if (await window.electronAPI?.isMeetingRecordingDisabled?.()) {
+      logger.warn("Meeting recording disabled by administrator", {}, "meeting");
+      reportMeetingError("policyRestricted");
+      recordingDisabled = true;
+      return;
+    }
 
     await meetingRecordingStopBarrier.waitForPendingStop();
     if (!startOperation.isCurrent()) {
@@ -1134,6 +1144,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         await teardownStart();
         return;
       }
+      // Resolved before any capture starts: a selection that cannot transcribe must fail
+      // here, not after the user has already shared a screen that would stay live.
+      const meetingTranscriptionOptions = getMeetingTranscriptionOptions();
       const { initialSystemAudioStrategy, initialDisplayCaptureStrategy, systemCapturePromise } =
         prepareMeetingSystemAudioCapture(initialSystemAudioAccess, beginCapture);
 
@@ -1260,7 +1273,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         }
         startOperation.markMainStartAttempted();
         return window.electronAPI?.meetingTranscriptionStart?.({
-          ...getMeetingTranscriptionOptions(),
+          ...meetingTranscriptionOptions,
           noteId: args.noteId ?? null,
           sessionId,
           autoEndEligible: args.autoEndEligible,
@@ -1810,6 +1823,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       await teardownStart();
     }
   });
+  if (recordingDisabled) return false;
   return automaticStartCancelled ? "cancelled" : !automaticStartSuppressed;
 }
 
@@ -2129,6 +2143,7 @@ if (typeof window !== "undefined") {
         fallbackTranscript: seed?.fallbackTranscript,
         segments: recordedSegments,
         removedSegments: data.removedSegments,
+        splitLiveSpeakers: data.splitLiveSpeakers,
       });
 
       // A later session seeded this session's rows, so move its boundary when
@@ -2167,6 +2182,7 @@ if (typeof window !== "undefined") {
           fallbackTranscript: seed.fallbackTranscript,
           segments: recordedSegments,
           removedSegments: data.removedSegments,
+          splitLiveSpeakers: data.splitLiveSpeakers,
         });
         sessionSeedLength -= merged.removedCount;
         segmentsRefValue = merged.segments;

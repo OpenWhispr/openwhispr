@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import type { ChatPersistence } from "./useChatPersistence";
 import type { ChatStreaming, SendToAIOptions } from "./useChatStreaming";
 import type { Message } from "./types";
+import { normalizeAgentSelectionContext } from "../../utils/agentSelectionContext";
 
 interface PersistedMessageContext {
   conversationId: number;
@@ -59,19 +60,36 @@ export function useChatMessageSender({
       let submitted = false;
       const accepted = await submissionLockRef.current!.run(async () => {
         onSendingChange?.(true);
+        let claimedId: number | null = null;
+        let streamStarted = false;
         try {
-          const convId = conversationId ?? (await createConversation(text));
+          const convId =
+            (conversationId === persistence.conversationId ? conversationId : null) ??
+            (await createConversation(text));
           if (!isCurrent()) return;
-          const previousMessages = persistence.messages;
+          const claim = await persistence.claimConversation?.(convId);
+          if (claim === false) return;
+          claimedId = convId;
+          if (!isCurrent()) return;
+          const previousMessages = claim?.messages ?? persistence.messages;
+          const context = normalizeAgentSelectionContext(options?.selectedContext);
+          const selectedContext = context?.text;
+          const selectedContextSource = context?.source === "external" ? "external" : undefined;
           const userMessage: Message = {
             id: crypto.randomUUID(),
             role: "user",
             content: text,
             isStreaming: false,
+            ...(selectedContext ? { selectedContext } : {}),
+            ...(selectedContextSource ? { selectedContextSource } : {}),
           };
 
           persistence.setMessages((messages) => [...messages, userMessage]);
-          await persistence.saveUserMessage(text);
+          await persistence.saveUserMessage(text, {
+            messageId: userMessage.id,
+            selectedContext,
+            ...(selectedContextSource ? { selectedContextSource } : {}),
+          });
           if (!isCurrent()) return;
           await onMessagePersisted?.({
             conversationId: convId,
@@ -80,15 +98,17 @@ export function useChatMessageSender({
           });
           if (!isCurrent()) return;
           submitted = true;
+          streamStarted = true;
           await streaming.sendToAI(text, [...previousMessages, userMessage], {
             ...options,
-            // A late result still belongs to this conversation after navigation or New chat.
-            persistAssistantMessage: (content, toolCalls) =>
-              persistence.saveAssistantMessage(content, toolCalls, convId),
+            conversationId: convId,
+            persistAssistantMessage: persistence.saveAssistantMessage,
           });
         } catch (error) {
           if (isCurrent()) throw error;
         } finally {
+          if (claimedId != null && !streamStarted)
+            await persistence.releaseConversation?.(claimedId);
           onSendingChange?.(false);
         }
       });

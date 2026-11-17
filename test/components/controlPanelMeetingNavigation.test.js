@@ -8,8 +8,8 @@ const {
   installHostDom,
 } = require("../lib/rendererTestHarness");
 
-// The real ControlPanel, so the wiring between main's pending navigation and the
-// recording request is what's under test; everything it renders around that is a stub.
+// The real ControlPanel, so its wiring (main's pending navigation to the recording
+// request, the New chat menu) is what's under test; everything it renders around that is a stub.
 const NULL_COMPONENT = "export default () => null;";
 const MOCKS = {
   "./notes/PersonalNotesView": `
@@ -61,11 +61,16 @@ const MOCKS = {
   "./PostMigrationOnboarding": NULL_COMPONENT,
   "./RequiredModelsBanner": "export const RequiredModelsBanner = () => null;",
   "./ControlPanelSidebar": NULL_COMPONENT,
-  "./ControlPanelTopBar": NULL_COMPONENT,
+  "./ControlPanelTopBar": "export default (props) => props.actions ?? null;",
   "./HistoryView": NULL_COMPONENT,
   "./MeetingRecordingMount": NULL_COMPONENT,
   "./notes/MeetingRecordingPill": NULL_COMPONENT,
-  "./notes/NewNoteMenu": NULL_COMPONENT,
+  "./notes/NewNoteMenu": `
+    export default function NewNoteMenu(props) {
+      globalThis.__newNoteMenu = props;
+      return null;
+    }`,
+  "./chat/ChatView": NULL_COMPONENT,
   "./ProfileMenu": NULL_COMPONENT,
   "./notes/BackgroundActionToastListener": NULL_COMPONENT,
   "./notes/AssistantNoteUndoListener": NULL_COMPONENT,
@@ -98,7 +103,7 @@ function electronApi(navigation, calls) {
   });
 }
 
-async function mount(t, navigation, transcriptionStart) {
+async function mount(t, navigation, transcriptionStart, features = {}) {
   let root;
   const unmount = async () => {
     const mounted = root;
@@ -110,8 +115,9 @@ async function mount(t, navigation, transcriptionStart) {
     delete globalThis.__notesProps;
     delete globalThis.__starts;
     delete globalThis.__createNoteCheck;
+    delete globalThis.__newNoteMenu;
   });
-  const calls = { noteOnly: [], restore: [], closed: [], unmount };
+  const calls = { noteOnly: [], restore: [], closed: [], unmount, vite: null };
   globalThis.__starts = [];
   installBrowserGlobals(t, {
     window: {
@@ -125,6 +131,7 @@ async function mount(t, navigation, transcriptionStart) {
     cachePrefix: "control-panel-meeting-navigation-",
     mockModules: MOCKS,
   });
+  calls.vite = vite;
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
   usePolicyStore.setState({
     status: "managed",
@@ -133,7 +140,7 @@ async function mount(t, navigation, transcriptionStart) {
       version: 1,
       transcription: { allowedModes: ["openwhispr", "local"], allowedByokProviders: [] },
       llm: { allowedModes: ["openwhispr"], allowedByokProviders: [] },
-      features: {},
+      features,
       meetings: { transcriptionStart },
       sharing: { externalLinkSharing: "allowed" },
       dataRetention: {
@@ -209,4 +216,12 @@ test("a navigation the panel unmounted before reading closes its session", async
   });
   await new Promise(setImmediate);
   assert.deepEqual(calls.closed, ["session"], "main already gave this navigation away");
+});
+
+test("New chat from the menu opens a new chat, not the conversation Chat had open", async (t) => {
+  const { vite } = await mount(t, null, "automatic", { agentEnabled: true });
+  const { useChatTurnStore, selectChat } = await vite.ssrLoadModule("/stores/chatTurnStore.ts");
+  selectChat({ kind: "conversation", conversationId: 7 });
+  await React.act(async () => globalThis.__newNoteMenu.onNewChat());
+  assert.deepEqual(useChatTurnStore.getState().selection, { kind: "new-chat" });
 });

@@ -6,12 +6,12 @@ const {
   firstEmojiPosition,
   groupEmoji,
   isRegionalFlag,
-  logicalArrowKey,
   moveEmojiPosition,
   pushRecentEmoji,
   searchEmoji,
   visibleEmoji,
 } = require("../../src/lib/emojiPicker.ts");
+const { logicalArrowKey } = require("../../src/lib/arrowKeys.ts");
 
 const entry = (emoji, label, group = 0, version = 1, tags) => ({
   emoji,

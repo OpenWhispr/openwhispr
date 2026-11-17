@@ -1,9 +1,6 @@
-import modelData from "../models/modelRegistryData.json";
+import { registryData as modelData } from "../models/registryData.js";
 
-const catalog = modelData.parakeetModels as Record<
-  string,
-  { organization?: { id: string }; modelType?: string }
->;
+const catalog = (): typeof modelData.parakeetModels => modelData.parakeetModels;
 // Oruk leads: it is the recommended local route, so it is the first tab everywhere.
 export const LOCAL_ASR_ORGANIZATIONS = [
   { id: "oruk", name: "Oruk" },
@@ -14,8 +11,8 @@ export const LOCAL_ASR_ORGANIZATIONS = [
 
 export function getASRModelOrganization(modelId: string): string {
   return (
-    catalog[modelId]?.organization?.id ||
-    (catalog[modelId]?.modelType === "cohere-transcribe" ? "cohere" : "nvidia")
+    catalog()[modelId]?.organization?.id ||
+    (catalog()[modelId]?.modelType === "cohere-transcribe" ? "cohere" : "nvidia")
   );
 }
 

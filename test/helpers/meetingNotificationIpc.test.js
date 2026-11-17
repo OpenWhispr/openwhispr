@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -9,7 +10,7 @@ const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 
 // Registers the real handler closures against a fake `this` (the scaffolding
-// from agentDictationPillIpc.test.js), with userData in a temporary directory.
+// from windowIpcSenders.test.js), with userData in a temporary directory.
 const handlers = new Map();
 const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
 
@@ -87,7 +88,7 @@ test.before(() => {
   IPCHandlersClass = IPCHandlers;
   const Ctor = IPCHandlers.default || IPCHandlers;
   fakeThis = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(fakeThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
 });
 
 test.after(() => {
