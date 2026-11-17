@@ -23,7 +23,7 @@ export function startModelDownload(id: Row['id']) {
 }
 
 /** "about 40 s" from how fast the bytes have come in so far. */
-function useTimeLeft(progress: number | undefined): number | undefined {
+export function useTimeLeft(progress: number | undefined): number | undefined {
   const start = useRef<{ at: number; fraction: number } | null>(null);
   if (progress === undefined) start.current = null;
   else if (!start.current) start.current = { at: Date.now(), fraction: progress };

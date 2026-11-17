@@ -5,6 +5,8 @@ import { useConfigStore } from '@/store/useConfigStore';
 import { applyHistoryRetention } from '@/android/pipeline';
 import { setInsightsSyncConsent } from '@/android/insights';
 import { ModelRow } from '../settings/ModelRow';
+import { ModelListRow } from '../settings/ModelListRow';
+import ModelScreen from '../settings/ModelScreen';
 import { MODEL_ROWS } from '../settings/modelCatalog';
 import HistoryScreen from '../settings/HistoryScreen';
 import AnalyticsScreen from '@/screens/PrivacyDataScreen.android';
@@ -19,6 +21,7 @@ jest.mock('expo-router', () => ({
     back: () => mockBack(),
     canGoBack: () => true,
   },
+  useLocalSearchParams: () => ({ kind: 'speech' }),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@/android/strings', () => ({
@@ -35,11 +38,17 @@ jest.mock('react-native-svg', () => {
 });
 jest.mock('expo-haptics', () => ({
   performAndroidHapticsAsync: jest.fn(async () => undefined),
-  AndroidHaptics: { Confirm: 'confirm' },
+  AndroidHaptics: { Confirm: 'confirm', Clock_Tick: 'clock-tick' },
 }));
 let mockReady = false;
+const mockRemoveModel = jest.fn(async (_id: string) => undefined);
 jest.mock('../models', () => ({
-  ANDROID_MODELS: { 'parakeet-v3': { title: 'Parakeet v3', bytes: 670478772 } },
+  ANDROID_MODELS: {
+    'parakeet-v3': { title: 'Parakeet v3', bytes: 670478772 },
+    'moonshine-small': { title: 'Moonshine Small', bytes: 142300974 },
+    'moonshine-tiny': { title: 'Moonshine Tiny', bytes: 45233659 },
+  },
+  removeAndroidModel: (id: string) => mockRemoveModel(id),
   modelReady: async () => mockReady,
   downloadAndroidModel: jest.fn(async () => undefined),
   cancelAndroidDownload: jest.fn(async () => undefined),
@@ -131,6 +140,88 @@ describe('V1 Ring model row', () => {
     expect(onSettled).toHaveBeenCalledWith(false);
     expect(Haptics.performAndroidHapticsAsync).not.toHaveBeenCalled();
     expect(screen.getByLabelText('downloadModel')).toBeTruthy();
+  });
+});
+
+describe('8.3 v2 model list', () => {
+  const parakeet = MODEL_ROWS[0];
+  const row = (state: 'absent' | 'downloading' | 'ready' | 'inUse', handlers = {}) => (
+    <ModelListRow
+      row={parakeet}
+      state={state}
+      progress={state === 'downloading' ? 0.38 : undefined}
+      dimmed={false}
+      reduceMotion
+      onDownload={jest.fn()}
+      onUse={jest.fn()}
+      onRemove={jest.fn()}
+      onSettled={jest.fn()}
+      {...handlers}
+    />
+  );
+
+  it('offers a download, with Recommended, while the model is not on the phone', () => {
+    const onDownload = jest.fn();
+    render(row('absent', { onDownload }));
+    expect(screen.getByText('recommended')).toBeTruthy();
+    expect(screen.queryByLabelText('removeModel')).toBeNull();
+    fireEvent.press(screen.getByLabelText('downloadModel'));
+    expect(onDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels from the ring while downloading', () => {
+    render(row('downloading'));
+    expect(screen.getByLabelText('cancelDownload')).toBeTruthy();
+    expect(screen.getByText(/sizeOf/)).toBeTruthy();
+  });
+
+  it('chooses a downloaded model with a tick, and offers its bin', () => {
+    const onUse = jest.fn();
+    const onRemove = jest.fn();
+    render(row('ready', { onUse, onRemove }));
+    expect(screen.queryByText('recommended')).toBeNull();
+    fireEvent.press(screen.getByRole('radio'));
+    expect(onUse).toHaveBeenCalledTimes(1);
+    expect(Haptics.performAndroidHapticsAsync).toHaveBeenCalledWith('clock-tick');
+    fireEvent.press(screen.getByLabelText('removeModel'));
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the model in use as checked and does nothing on tap', () => {
+    const onUse = jest.fn();
+    render(row('inUse', { onUse }));
+    expect(screen.getByRole('radio').props.accessibilityState.checked).toBe(true);
+    fireEvent.press(screen.getByRole('radio'));
+    expect(onUse).not.toHaveBeenCalled();
+  });
+
+  it('removes a model with Undo, deleting its files only when the snackbar closes', async () => {
+    mockReady = true;
+    useConfigStore.setState({ config: { androidSpeechModel: 'parakeet-v3' } as never });
+    render(<ModelScreen />);
+    await waitFor(() => expect(screen.getAllByLabelText('removeModel')).toHaveLength(3));
+    expect(screen.getByText('modelsOnPhone')).toBeTruthy();
+    // Moonshine Small is on the phone but not in use: no dialog.
+    fireEvent.press(screen.getAllByLabelText('removeModel')[1]);
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(useSettingsToast.getState().message).toBe('removedModel');
+    expect(mockRemoveModel).not.toHaveBeenCalled();
+    expect(screen.getAllByLabelText('downloadModel')).toHaveLength(1);
+    // Undo, as the snackbar's button does it.
+    act(() => {
+      useSettingsToast.getState().action!.onPress();
+      useSettingsToast.setState({ action: undefined });
+    });
+    expect(screen.queryByLabelText('downloadModel')).toBeNull();
+    // The model in use warns first; the files go once the snackbar closes.
+    fireEvent.press(screen.getAllByLabelText('removeModel')[0]);
+    expect(Alert.alert).toHaveBeenCalledWith('removeTitle', 'removeInUseBody', expect.any(Array));
+    const buttons = jest.mocked(Alert.alert).mock.calls.at(-1)![2]!;
+    act(() => buttons.find((button) => button.style === 'destructive')!.onPress!());
+    expect(screen.getAllByLabelText('downloadModel')).toHaveLength(1);
+    expect(mockRemoveModel).not.toHaveBeenCalled();
+    await act(async () => useSettingsToast.getState().action!.onClose());
+    expect(mockRemoveModel).toHaveBeenCalledWith('parakeet-v3');
   });
 });
 

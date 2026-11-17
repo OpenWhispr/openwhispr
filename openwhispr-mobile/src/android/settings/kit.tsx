@@ -527,19 +527,26 @@ export function SettingsSlider({
 }
 
 type ToastTone = 'success' | 'error' | 'neutral';
-export const useSettingsToast = create<{ message: string; tone: ToastTone; id: number }>(() => ({
-  message: '',
-  tone: 'neutral',
-  id: 0,
-}));
-/** Confirmations are a dark glass pill at the bottom of the screen. */
-export function showToast(message: string, tone: ToastTone = 'success') {
-  useSettingsToast.setState((state) => ({ message, tone, id: state.id + 1 }));
+/** A snackbar's action. `onClose` runs once it closes without the action: timed out or replaced. */
+type ToastAction = { label: string; onPress: () => void; onClose: () => void };
+export const useSettingsToast = create<{
+  message: string;
+  tone: ToastTone;
+  id: number;
+  action?: ToastAction;
+}>(() => ({ message: '', tone: 'neutral', id: 0 }));
+/**
+ * Confirmations are a dark glass pill at the bottom of the screen. With an action it is a 5 s
+ * snackbar (Undo); a newer toast closes the one showing.
+ */
+export function showToast(message: string, tone: ToastTone = 'success', action?: ToastAction) {
+  useSettingsToast.getState().action?.onClose();
+  useSettingsToast.setState((state) => ({ message, tone, action, id: state.id + 1 }));
 }
 
 /** Mounted once at the root, so a toast survives the screen that raised it going away. */
 export function SettingsToastHost() {
-  const { message, tone, id } = useSettingsToast();
+  const { message, tone, id, action } = useSettingsToast();
   const reduceMotion = useReduceMotion();
   const opacity = useRef(new Animated.Value(0)).current;
   const lift = useRef(new Animated.Value(16)).current;
@@ -554,42 +561,52 @@ export function SettingsToastHost() {
       Animated.timing(lift, { toValue: 0, duration, useNativeDriver: true }),
     ]).start();
     const timer = setTimeout(
-      () =>
+      () => {
         Animated.timing(opacity, {
           toValue: 0,
           duration: reduceMotion ? 0 : 180,
           useNativeDriver: true,
-        }).start(),
-      2400,
+        }).start();
+        if (useSettingsToast.getState().id !== id) return;
+        useSettingsToast.getState().action?.onClose();
+        useSettingsToast.setState({ action: undefined });
+      },
+      action ? 5000 : 2400,
     );
     return () => clearTimeout(timer);
+    // The action belongs to this id; a change of id is what restarts the timer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, message, reduceMotion, opacity, lift]);
   if (!id) return null;
   return (
     <SafeAreaView
       edges={['bottom']}
-      pointerEvents="none"
+      pointerEvents="box-none"
       style={{ position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' }}
     >
       <Animated.View
-        importantForAccessibility="no-hide-descendants"
-        style={{
-          marginBottom: 24,
-          marginHorizontal: 24,
-          opacity,
-          transform: [{ translateY: lift }],
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          paddingLeft: tone === 'neutral' ? 16 : 10,
-          paddingRight: 16,
-          paddingVertical: 10,
-          borderRadius: 999,
-          backgroundColor: 'rgba(28,27,25,0.92)',
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(255,255,255,0.14)',
-          boxShadow: home.floatingShadow,
-        }}
+        pointerEvents={action ? 'auto' : 'none'}
+        importantForAccessibility={action ? 'auto' : 'no-hide-descendants'}
+        style={[
+          {
+            marginBottom: 24,
+            marginHorizontal: action ? 16 : 24,
+            opacity,
+            transform: [{ translateY: lift }],
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingLeft: tone === 'neutral' ? 16 : 10,
+            paddingRight: action ? 4 : 16,
+            paddingVertical: action ? 4 : 10,
+            borderRadius: action ? 14 : 999,
+            backgroundColor: 'rgba(28,27,25,0.92)',
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(255,255,255,0.14)',
+            boxShadow: home.floatingShadow,
+          },
+          action && { alignSelf: 'stretch' },
+        ]}
       >
         {tone !== 'neutral' && (
           <View
@@ -623,10 +640,35 @@ export function SettingsToastHost() {
             lineHeight: 20,
             fontWeight: '500',
             flexShrink: 1,
+            flexGrow: action ? 1 : 0,
           }}
         >
           {message}
         </Text>
+        {action && (
+          <Pressable
+            cssInterop={false}
+            accessibilityRole="button"
+            accessibilityHint={message}
+            onPress={() => {
+              action.onPress();
+              useSettingsToast.setState({ action: undefined });
+              opacity.setValue(0);
+            }}
+            style={({ pressed }) => ({
+              minHeight: 48,
+              minWidth: 64,
+              paddingHorizontal: 12,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Text style={{ color: '#8FB2FF', fontSize: 15, lineHeight: 20, fontWeight: '600' }}>
+              {action.label}
+            </Text>
+          </Pressable>
+        )}
       </Animated.View>
     </SafeAreaView>
   );
