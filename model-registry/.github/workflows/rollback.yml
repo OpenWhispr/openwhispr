@@ -1,0 +1,46 @@
+name: Roll back the signed catalog
+# Republishes the data of an earlier v2 version under a new version number. Anything
+# retired or added since stays retired, so the result is still a valid publication.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published version whose data to restore
+        required: true
+        type: number
+permissions:
+  contents: read
+concurrency:
+  group: model-registry-publication
+  cancel-in-progress: false
+  queue: max
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: registry-publish
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: published
+          path: publication
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: source/.nvmrc
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - run: npm ci --ignore-scripts && npm test && npm run validate
+        working-directory: source
+      - name: Sign and publish the rollback
+        working-directory: source
+        run: node scripts/publish.cjs
+        env:
+          PUBLICATION_DIR: ../publication
+          REGISTRY_SIGNING_KEY: ${{ secrets.REGISTRY_SIGNING_KEY }}
+          ROLLBACK_TO: ${{ inputs.version }}

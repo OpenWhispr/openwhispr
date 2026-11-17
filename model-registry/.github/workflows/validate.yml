@@ -1,0 +1,31 @@
+name: Validate catalog
+on:
+  pull_request:
+    # labeled/unlabeled re-run the capability-change gate when a maintainer adds the label.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run validate
+      - name: Every released app reader accepts the catalog
+        run: node scripts/check-compat.cjs
+      - name: Compatible with the live publication; request-setting changes are labelled
+        run: node scripts/check-previous.cjs
+      - name: New and changed downloads match their real files
+        run: node scripts/check-artifacts.cjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
