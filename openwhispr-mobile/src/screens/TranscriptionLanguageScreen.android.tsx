@@ -15,13 +15,15 @@ import { MODEL_ROWS, modelName } from '@/android/settings/modelCatalog';
 import { useSettingsT } from '@/android/settings/strings';
 import { useNavigationBar } from '@/android/navigationBar';
 
+const Divider = () => <View style={{ height: 1, marginLeft: 16, backgroundColor: home.divider }} />;
+
 /** Settings → Language: one searchable list; a tap saves and goes straight back. */
 export default function LanguageScreen() {
   const t = useSettingsT();
   const config = useConfigStore((s) => s.config);
   const local = useProcessingModeStore((s) => s.activeMode === 'private');
   const [query, setQuery] = useState('');
-  // Under the gesture handle the list keeps scrolling; above a button bar it stops at the bar.
+  // The card stops 16 dp above the gesture handle or the button bar.
   const { buttons, inset } = useNavigationBar();
   const selected = config?.preferredLanguage ?? 'auto';
   const search = query.trim().toLowerCase();
@@ -100,43 +102,21 @@ export default function LanguageScreen() {
           style={{ flex: 1, minHeight: 44, fontSize: 17, color: home.text }}
         />
       </View>
-      <FlatList
-        data={languages}
-        keyExtractor={(item) => item.code}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 32 + (buttons ? 0 : inset) }}
-        style={{ flex: 1 }}
-        ListEmptyComponent={
-          <Text style={[settings.subtitle, { paddingHorizontal: 4 }]}>
-            {t('noLanguages', { query: query.trim() })}
-          </Text>
-        }
-        ListFooterComponent={
-          languages.length && !search ? (
-            <Text style={[settings.subtitle, { padding: 4, paddingTop: 12 }]}>
-              {t('languagesFooter', { count: registry.languages.length - 1 })}
+      {/* One card that fills the room left down to the handle or bar and scrolls inside, so the
+          list never runs off the bottom of the screen. */}
+      <View style={[cardStyle, { flexShrink: 1, boxShadow: undefined }]}>
+        <FlatList
+          data={languages}
+          keyExtractor={(item) => item.code}
+          keyboardShouldPersistTaps="handled"
+          style={{ flexGrow: 0 }}
+          ItemSeparatorComponent={Divider}
+          ListEmptyComponent={
+            <Text style={[settings.subtitle, { padding: 16 }]}>
+              {t('noLanguages', { query: query.trim() })}
             </Text>
-          ) : null
-        }
-        renderItem={({ item, index }) => (
-          <View
-            style={[
-              cardStyle,
-              {
-                borderRadius: 0,
-                borderTopWidth: index === 0 ? 1 : 0,
-                borderBottomWidth: index === languages.length - 1 ? 1 : 0,
-                borderTopLeftRadius: index === 0 ? 14 : 0,
-                borderTopRightRadius: index === 0 ? 14 : 0,
-                borderBottomLeftRadius: index === languages.length - 1 ? 14 : 0,
-                borderBottomRightRadius: index === languages.length - 1 ? 14 : 0,
-                boxShadow: undefined,
-              },
-            ]}
-          >
-            {index > 0 && (
-              <View style={{ height: 1, marginLeft: 16, backgroundColor: home.divider }} />
-            )}
+          }
+          renderItem={({ item }) => (
             <ListRow
               title={item.code === 'auto' ? t('autoDetect') : item.label}
               badge={
@@ -148,9 +128,17 @@ export default function LanguageScreen() {
               trailing={selected === item.code ? undefined : null}
               onPress={() => choose(item.code, item.label)}
             />
-          </View>
-        )}
-      />
+          )}
+        />
+      </View>
+      <Text
+        style={[
+          settings.subtitle,
+          { paddingHorizontal: 4, marginTop: -8, marginBottom: 16 + (buttons ? 0 : inset) },
+        ]}
+      >
+        {search ? '' : t('languagesFooter', { count: registry.languages.length - 1 })}
+      </Text>
     </SettingsPage>
   );
 }

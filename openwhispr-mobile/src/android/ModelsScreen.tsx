@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { useConfigStore } from '@/store/useConfigStore';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
-import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
+import { Toggle } from './settings/kit';
 import { setPrivateMode } from '@/lib/workflowModeSwitch.android';
 import {
   ANDROID_MODELS,
@@ -101,8 +101,8 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
       <Card>
         <View style={styles.row}>
           <Text style={[styles.heading, { flex: 1 }]}>{t('privateMode')}</Text>
-          <SettingsSwitch
-            accessibilityLabel={t('privateMode')}
+          <Toggle
+            label={t('privateMode')}
             value={requestedPrivateMode ?? privateMode}
             disabled={requestedPrivateMode !== null}
             onValueChange={(enabled) => {
@@ -115,8 +115,8 @@ export function ModelsContent({ onNavigate }: { onNavigate?: () => void } = {}) 
       <Card>
         <View style={styles.row}>
           <Text style={[styles.heading, { flex: 1 }]}>{t('cleanup')}</Text>
-          <SettingsSwitch
-            accessibilityLabel={t('cleanup')}
+          <Toggle
+            label={t('cleanup')}
             value={config?.cleanupEnabled !== false}
             disabled={saving}
             onValueChange={(cleanupEnabled) => {

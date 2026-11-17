@@ -14,7 +14,8 @@ import { Toast } from '@/components/ui/Toast';
 import { workflowSettingsPlatform } from './workflowSettingsPlatform';
 import { useToast } from '@/hooks/useToast';
 import { confirmDestructive } from '@/lib/alerts';
-import { SettingsSwitch } from '@/components/ui/SettingsSwitch';
+// The Android design's blue switch, not the iOS system-green one.
+import { Toggle } from '@/android/settings/kit';
 import { OnDeviceModelSection } from '@/components/settings/OnDeviceModelSection';
 import { useConfigToggle } from '@/hooks/useConfigToggle';
 import { useCustomPromptsStore } from '@/store/useCustomPromptsStore';
@@ -134,12 +135,7 @@ function WorkflowSwitchCard({
           description={description}
           {...workflowSettingsPlatform.disabledProps(disabled)}
           rightElement={
-            <SettingsSwitch
-              accessibilityLabel={label}
-              value={enabled}
-              {...workflowSettingsPlatform.disabledProps(disabled)}
-              onValueChange={onToggle}
-            />
+            <Toggle label={label} value={enabled} disabled={disabled} onValueChange={onToggle} />
           }
           showChevron={false}
         />
@@ -269,10 +265,8 @@ function NoteTitleSettings(): React.JSX.Element {
           'Use AI to generate a short title for notes after enhancement.',
         )}
         rightElement={
-          <SettingsSwitch
-            {...workflowSettingsPlatform.labelProps(
-              copy('workflowSettings.autoTitle', 'Auto-generate Note Titles'),
-            )}
+          <Toggle
+            label={copy('workflowSettings.autoTitle', 'Auto-generate Note Titles')}
             value={autoTitle}
             onValueChange={toggleAutoTitle}
           />
