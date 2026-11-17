@@ -19,6 +19,7 @@ const USER_DATA_ENTRIES = [
   "notes",
   "logs",
   ".env",
+  ".env.tmp",
   "secure-keys",
   "auth-token.bin",
   "account-scope-binding.json",
@@ -29,7 +30,10 @@ const USER_DATA_ENTRIES = [
   "globe-preference-state.json",
   ".system-audio-permission",
   "model-registry.json",
+  "model-registry.json.tmp",
   "model-registry.json.backup",
+  // A record cut short, never one of the models it lists.
+  "installed-models.json.tmp",
   "paid-key-checks.json",
   PRODUCT_EVENTS_FILE,
   "enterprise-audio-keys",

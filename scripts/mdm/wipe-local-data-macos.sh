@@ -24,7 +24,10 @@ homes=()
 for arg in "$@"; do
   case "$arg" in
     --include-models) include_models=true ;;
-    *) homes+=("$arg") ;;
+    *)
+      [[ -d "$arg" ]] || { echo "No such home: $arg" >&2; exit 1; }
+      homes+=("$arg")
+      ;;
   esac
 done
 if [[ ${#homes[@]} -eq 0 ]]; then

@@ -12,6 +12,7 @@
 
 param(
   [switch]$IncludeModels,
+  [ValidateScript({ Test-Path -LiteralPath $_ -PathType Container })]
   [string[]]$UserProfile
 )
 

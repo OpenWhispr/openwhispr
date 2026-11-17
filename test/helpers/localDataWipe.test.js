@@ -537,6 +537,11 @@ test(
         }
       );
 
+    // A home named by mistake fails the run rather than reporting it wiped.
+    assert.throws(
+      () => run(path.join(root, "no-such-home")),
+      (error) => error.status === 1 && error.stderr.includes("No such home")
+    );
     run(home);
     // From a version before the mirror kept its record: nothing to name, no failure.
     const older = path.join(root, "older-home");
