@@ -33,6 +33,7 @@ const MOCKS = {
     const state = {
       viewNoteId: 5,
       closeView: () => globalThis.__log.push(["closeView"]),
+      followView: async () => globalThis.__log.push(["followView"]),
       move: async (request, context) => {
         globalThis.__log.push(["move", request, context]);
         const moved = globalThis.__moveResult ?? { moved: [{ id: 5, space_id: 1, folder_id: null }] };
@@ -129,13 +130,14 @@ test("a move that lands after the view moved on only toasts", async (t) => {
   assert.ok(log.some((e) => e[0] === "toast" && e[1] === "notes.deviceNotes.moved"));
 });
 
-test("a note another window already moved is left to the list change, without an error", async (t) => {
+test("a note another window already moved is followed where it went, without an error", async (t) => {
   const { container, log } = await mount(t, async () => NOTE);
   globalThis.__moveResult = { moved: [] };
   await click(container.querySelectorAll("button")[0]);
   await React.act(async () => {});
-  // The store's device-notes-changed listener opens it where it went; closing here would
-  // leave the pane empty first.
+  // Closing here would leave the pane empty; the store opens the note where it went, or closes
+  // the view when this account can't see it.
+  assert.ok(log.some((e) => e[0] === "followView"));
   assert.ok(!log.some((e) => ["closeView", "openNote", "toast"].includes(e[0])));
 });
 

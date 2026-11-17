@@ -25,6 +25,11 @@ interface DeviceNotesState {
   load: () => Promise<void>;
   openView: (id: number) => void;
   closeView: () => void;
+  /**
+   * Once the viewed note has left the list, closes the view and opens the note where it went
+   * when this account can see it (moved or claimed into it), so the pane never sits empty.
+   */
+  followView: () => Promise<void>;
   move: (
     request: DeviceNotesMoveRequest,
     context: { workspaceId: string | null }
@@ -81,6 +86,15 @@ export const useDeviceNotesStore = create<DeviceNotesState>()((set, get) => ({
   },
   closeView: () => set({ viewNoteId: null }),
 
+  followView: async () => {
+    const id = get().viewNoteId;
+    if (id == null || (await noteStillListed(id))) return;
+    const note = await ownedNote(id);
+    if (get().viewNoteId !== id) return;
+    get().closeView();
+    if (note) openNote(note);
+  },
+
   move: async (request, { workspaceId }) => {
     let result;
     try {
@@ -111,17 +125,11 @@ export const useDeviceNotesStore = create<DeviceNotesState>()((set, get) => ({
       accountId = scope.accountId;
       void get().load();
     });
-    // A move or claim in any window can make folders and change counts in this one's tree. The
-    // viewed note, once moved or claimed into this account, opens where it went rather than
-    // leaving the pane empty; the folders are loaded first so the tree can reveal it.
+    // A move or claim in any window can make folders and change counts in this one's tree; the
+    // folders are loaded before the viewed note is followed, so the tree can reveal it.
     const followChange = async (): Promise<void> => {
       await Promise.allSettled([get().load(), loadFolders()]);
-      const id = get().viewNoteId;
-      if (id == null || (await noteStillListed(id))) return;
-      const note = await ownedNote(id);
-      if (get().viewNoteId !== id) return;
-      get().closeView();
-      if (note) openNote(note);
+      await get().followView();
     };
     const stopChanged = api?.onDeviceNotesChanged?.(() => void followChange());
     // Opening a note or a container replaces the view.

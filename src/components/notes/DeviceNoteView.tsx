@@ -83,8 +83,12 @@ export function DeviceNoteView({ id }: DeviceNoteViewProps) {
       return;
     }
     const [movedNote] = result.moved;
-    // Nothing moved: another window got there first, and its change opens the note where it went.
-    if (!movedNote) return;
+    // Nothing moved: the note left the list another way (another window's move, say), and the view
+    // follows it there; the move already reloaded the folders.
+    if (!movedNote) {
+      void useDeviceNotesStore.getState().followView();
+      return;
+    }
     // The user may have opened something else while the move ran.
     if (useDeviceNotesStore.getState().viewNoteId === id) {
       closeView();
