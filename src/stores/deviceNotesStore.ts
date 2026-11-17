@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import type { DeviceNoteFolder, DeviceNoteSummary, NoteItem } from "../types/electron";
-import { clearActiveContext, loadFolders, setActiveNoteId, subscribeNoteView } from "./noteStore";
+import {
+  clearActiveContext,
+  loadFolders,
+  openNote,
+  setActiveNoteId,
+  subscribeNoteView,
+} from "./noteStore";
 
 export type DeviceNotesMoveResult = { moved: NoteItem[] } | { error: string };
 
@@ -30,6 +36,17 @@ async function noteStillListed(id: number): Promise<boolean> {
     return (await window.electronAPI?.getDeviceNote?.(id)) != null;
   } catch {
     return false;
+  }
+}
+
+// The note as this account now sees it, once it has left the list (moved or claimed into the
+// account), or null.
+async function ownedNote(id: number): Promise<NoteItem | null> {
+  try {
+    const note = await window.electronAPI?.getNote?.(id);
+    return note && !note.deleted_at ? note : null;
+  } catch {
+    return null;
   }
 }
 
@@ -87,16 +104,19 @@ export const useDeviceNotesStore = create<DeviceNotesState>()((set, get) => ({
       accountId = scope.accountId;
       void get().load();
     });
-    // A move or claim in any window can make folders and change counts in this one's tree.
-    const stopChanged = api?.onDeviceNotesChanged?.(() => {
-      void get().load();
-      void loadFolders().catch(() => {});
+    // A move or claim in any window can make folders and change counts in this one's tree. The
+    // viewed note, once moved or claimed into this account, opens where it went rather than
+    // leaving the pane empty; the folders are loaded first so the tree can reveal it.
+    const followChange = async (): Promise<void> => {
+      await Promise.allSettled([get().load(), loadFolders()]);
       const id = get().viewNoteId;
-      if (id == null) return;
-      void noteStillListed(id).then((listed) => {
-        if (!listed && get().viewNoteId === id) get().closeView();
-      });
-    });
+      if (id == null || (await noteStillListed(id))) return;
+      const note = await ownedNote(id);
+      if (get().viewNoteId !== id) return;
+      get().closeView();
+      if (note) openNote(note);
+    };
+    const stopChanged = api?.onDeviceNotesChanged?.(() => void followChange());
     // Opening a note or a container replaces the view.
     const stopNoteView = subscribeNoteView((view, previous) => {
       if (view.activeNoteId != null || view.activeContext !== previous.activeContext) {

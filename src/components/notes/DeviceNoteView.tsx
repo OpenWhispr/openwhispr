@@ -83,13 +83,14 @@ export function DeviceNoteView({ id }: DeviceNoteViewProps) {
       return;
     }
     const [movedNote] = result.moved;
+    // Nothing moved: another window got there first, and its change opens the note where it went.
+    if (!movedNote) return;
     // The user may have opened something else while the move ran.
     if (useDeviceNotesStore.getState().viewNoteId === id) {
       closeView();
-      if (movedNote) openNote(movedNote);
+      openNote(movedNote);
     }
-    // Nothing moved: another window got there first, and the list refresh drops the row.
-    if (movedNote) toast({ title: t("notes.deviceNotes.moved") });
+    toast({ title: t("notes.deviceNotes.moved") });
   }, [move, id, workspaceId, closeView, toast, t]);
 
   if (!note) return null;

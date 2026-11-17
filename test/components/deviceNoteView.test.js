@@ -129,13 +129,14 @@ test("a move that lands after the view moved on only toasts", async (t) => {
   assert.ok(log.some((e) => e[0] === "toast" && e[1] === "notes.deviceNotes.moved"));
 });
 
-test("a note another window already moved closes without an error", async (t) => {
+test("a note another window already moved is left to the list change, without an error", async (t) => {
   const { container, log } = await mount(t, async () => NOTE);
   globalThis.__moveResult = { moved: [] };
   await click(container.querySelectorAll("button")[0]);
   await React.act(async () => {});
-  assert.ok(log.some((e) => e[0] === "closeView"));
-  assert.ok(!log.some((e) => e[0] === "openNote" || e[0] === "toast"));
+  // The store's device-notes-changed listener opens it where it went; closing here would
+  // leave the pane empty first.
+  assert.ok(!log.some((e) => ["closeView", "openNote", "toast"].includes(e[0])));
 });
 
 test("shows the transcript read-only, never naming the viewer as the speaker", async (t) => {

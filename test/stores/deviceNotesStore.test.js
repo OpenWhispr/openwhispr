@@ -32,6 +32,7 @@ async function fixture(
   {
     list = LIST,
     deviceNote = (id) => ({ id }),
+    ownedNote = () => null,
     moveResult = { success: true, moved: [{ id: 70, space_id: 1, folder_id: null }], skipped: 0 },
   } = {}
 ) {
@@ -63,6 +64,7 @@ async function fixture(
     },
     getFolderNoteCounts: async () => [],
     getNotes: async () => [],
+    getNote: async (id) => ownedNote(id),
   };
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-device-notes-store-",
@@ -154,6 +156,39 @@ test("device-notes-changed closes a view whose note is gone", async (t) => {
   listeners.changed();
   await settle();
   assert.equal(state().viewNoteId, null);
+});
+
+test("a viewed note moved or claimed into the account opens where it went", async (t) => {
+  let present = true;
+  const { state, notes, calls, listeners } = await listening(t, {
+    deviceNote: (id) => (present ? { id } : null),
+    ownedNote: (id) => ({ id, space_id: 1, folder_id: null, deleted_at: null }),
+  });
+  state().openView(70);
+  const foldersBefore = calls.folders;
+
+  present = false;
+  listeners.changed();
+  await settle();
+  await settle();
+  assert.equal(state().viewNoteId, null);
+  assert.equal(notes.getActiveNoteIdValue(), 70, "the moved note opens, so the pane isn't empty");
+  assert.equal(calls.folders, foldersBefore + 1, "its folder is loaded before it opens");
+});
+
+test("a viewed note that left the list for another account only closes", async (t) => {
+  let present = true;
+  const { state, notes, listeners } = await listening(t, {
+    deviceNote: (id) => (present ? { id } : null),
+  });
+  state().openView(70);
+
+  present = false;
+  listeners.changed();
+  await settle();
+  await settle();
+  assert.equal(state().viewNoteId, null);
+  assert.equal(notes.getActiveNoteIdValue(), null);
 });
 
 test("opening a normal note closes the view", async (t) => {
