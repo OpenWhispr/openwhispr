@@ -324,8 +324,8 @@ export default function LeaderboardSection({
   }, [canListSelectedInvites, pendingInviteRevision, selectedScope]);
 
   useEffect(() => {
-    if (isSignedIn && !loaded) void refresh();
-  }, [isSignedIn, loaded, refresh]);
+    if (isSignedIn && !accountOffline && !loaded) void refresh();
+  }, [isSignedIn, accountOffline, loaded, refresh]);
 
   useEffect(() => {
     void loadAccess();
