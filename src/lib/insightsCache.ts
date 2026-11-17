@@ -116,8 +116,8 @@ export function cachedLeaderboardWeekStarts(accountId: string) {
 
 /**
  * For Refresh, a refused board, and anything that can move a roster or the
- * boards the account sees: joining or leaving the leaderboard, creating,
- * joining, leaving or deleting a workspace, and a join request.
+ * boards the account sees, such as joining or leaving the leaderboard, a
+ * workspace or member change, or a join request.
  */
 export function clearCachedLeaderboards({
   revalidate = true,
