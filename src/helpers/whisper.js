@@ -566,6 +566,7 @@ class WhisperManager {
       vadConfig,
       signal: options.signal,
       skipDecoderThresholds: options.skipDecoderThresholds === true,
+      segments: options.segments === true,
     });
   }
 
@@ -656,6 +657,7 @@ class WhisperManager {
       initialPrompt,
       signal: options.signal,
       skipDecoderThresholds: options.skipDecoderThresholds,
+      segments: options.segments,
     });
     const elapsed = Date.now() - startTime;
 
@@ -754,6 +756,18 @@ class WhisperManager {
       const text = typeof result.text === "string" ? this.normalizeWhitespace(result.text) : "";
       if (!text || this.isBlankAudioMarker(text)) {
         return { success: false, message: "No audio detected" };
+      }
+      // A segments request (srt from whisper-server) adds per-segment times in
+      // seconds from the audio start.
+      if (Array.isArray(result.segments)) {
+        const segments = result.segments
+          .map((segment) => ({
+            start: Number(segment?.start),
+            end: Number(segment?.end),
+            text: this.normalizeWhitespace(String(segment?.text ?? "")),
+          }))
+          .filter((segment) => segment.text && !this.isBlankAudioMarker(segment.text));
+        return { success: true, text, segments };
       }
       return { success: true, text };
     }
