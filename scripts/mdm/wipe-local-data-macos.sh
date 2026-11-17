@@ -211,7 +211,7 @@ for home in "${homes[@]}"; do
 
   # The keychain item and the per-user temp folder are reachable only as the
   # signed-in user.
-  if [[ -n "$console_user" && "$console_user" != root && "$home" == "/Users/$console_user" ]]; then
+  if [[ -n "$console_user" && "$console_user" != root && "$owner_uid" == "$(id -u "$console_user")" ]]; then
     uid="$(id -u "$console_user")"
     launchctl asuser "$uid" sudo -u "$console_user" \
       security delete-generic-password -s OpenWhispr -a secrets-master-key >/dev/null 2>&1 || true

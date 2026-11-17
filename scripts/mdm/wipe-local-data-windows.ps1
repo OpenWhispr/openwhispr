@@ -113,8 +113,9 @@ if (-not $IncludeModels) {
 }
 
 # SYSTEM can't act as the user, so a profile whose user is signed in waits: they
-# could swap a folder for a junction mid-run and send the deletes elsewhere. The
-# app wipes itself at its next launch; run this again once they've signed out.
+# could swap a folder for a junction mid-run and send the deletes elsewhere. With
+# a WipeLocalDataOnLaunch token deployed, the app wipes itself at its next
+# launch; run this again once they've signed out.
 $signedIn = @(Get-CimInstance Win32_Process | ForEach-Object {
     (Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue).Sid
   })
@@ -147,7 +148,7 @@ foreach ($profilePath in $profilePaths) {
     Remove-Entry (Get-Item -LiteralPath $bridgeFile -Force)
   }
   Remove-TempFiles (Join-Path $profilePath "AppData\Local\Temp") $profilePath
-  if (-not $failed) { Write-Output "Removed OpenWhispr local data from $profilePath" }
+  if (-not $failed -and (Test-Path -LiteralPath $userData)) { Write-Output "Removed OpenWhispr local data from $profilePath" }
   $failed = $failed -or $failedBefore
 }
 
