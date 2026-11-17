@@ -1,5 +1,10 @@
-import { classifySpaceError, type SpaceActionError } from "../lib/workspaceErrors";
-import type { SpaceItem, TeamRole } from "../types/electron";
+import {
+  classifySpaceError,
+  classifyTeamError,
+  type SpaceActionError,
+  type TeamActionError,
+} from "../lib/workspaceErrors";
+import type { SpaceItem, Team, TeamRole } from "../types/electron";
 import { CloudApiError } from "./cloudApi";
 import type { MySpace, SpaceMemberRemoval, SpaceRecord, SpacesService } from "./SpacesService";
 
@@ -42,10 +47,33 @@ export interface SpaceDeleteHold {
   again: () => SpaceDeleteHold | null;
 }
 
+export interface TeamDeleteResult {
+  success: boolean;
+  error?: string;
+  failure?: TeamActionError;
+}
+
+/** A team delete waiting out its Undo window: the team is out of view and otherwise untouched. */
+export interface TeamDeleteHold {
+  /** Brings the team back as it was. False once the delete has gone ahead. */
+  undo: () => Promise<boolean>;
+  /** Sends the delete. Null when there's nothing to report: it was undone, or the account changed. */
+  commit: () => Promise<TeamDeleteResult | null>;
+  /** Holds it again for a retry, or null when the account that asked has gone. */
+  again: () => TeamDeleteHold | null;
+}
+
 export interface SpaceActionsDependencies {
   teams: {
+    list: (workspaceId: string) => Promise<Team[]>;
+    create: (workspaceId: string, input: { name: string; member_ids: string[] }) => Promise<Team>;
+    update: (teamId: string, updates: { name: string }) => Promise<Team>;
+    addMembers: (
+      teamId: string,
+      userIds: string[]
+    ) => Promise<{ added: string[]; already_members: string[] }>;
     remove: (teamId: string) => Promise<void>;
-    addMember: (teamId: string, userId: string, role?: TeamRole) => Promise<void>;
+    setMemberRole: (teamId: string, userId: string, role: TeamRole) => Promise<void>;
     removeMember: (teamId: string, userId: string) => Promise<void>;
   };
   spaces: {
@@ -86,6 +114,8 @@ export interface SpaceActionsDependencies {
   markSpacePurged: (cloudSpaceId: string, reason: "deleted") => Promise<void>;
   releasePurgedSpace: (cloudSpaceId: string) => Promise<void>;
   invalidateSpaceRoster: (cloudSpaceId?: string) => void;
+  /** Reads the workspace's people again; the Team column lists each person's teams. */
+  refreshWorkspaceRoster: (workspaceId: string) => Promise<void>;
   deleteHold: {
     /** Moves only when another account signs in, unlike the session's token. */
     accountGeneration: () => number;
@@ -93,6 +123,10 @@ export interface SpaceActionsDependencies {
     hide: (space: SpaceItem, cloudSpaceId: string) => (reopen: boolean) => Promise<void>;
     release: (space: SpaceItem, cloudSpaceId: string) => void;
     markDeleted: (space: SpaceItem) => void;
+  };
+  teamDeleteHold: {
+    hide: (teamId: string) => void;
+    release: (teamId: string) => void;
   };
 }
 
@@ -117,16 +151,17 @@ function isLostAnswer(err: unknown): boolean {
 }
 
 export function createSpaceActions(deps: SpaceActionsDependencies) {
-  const openHolds = new Set<SpaceDeleteHold>();
+  const openHolds = new Set<{ commit: () => Promise<unknown> }>();
 
   // Creates whose answer was lost and which the follow-up read couldn't settle, by when they were
   // tried and what they asked for. A dropped connection usually takes that read down too, so the
   // retry settles it instead.
   const unsettledCreates = new Map<string, { triedAt: number; request: string }>();
   const normalizedName = (name: string): string => name.trim().toLowerCase();
-  const createKey = (workspaceId: string, name: string): string =>
-    `${workspaceId}\0${normalizedName(name)}`;
-  // What a retry can change since the try it may repeat; the name is in the key.
+  // A team and a teamspace may share a name, so one's create never settles the other's.
+  const createKey = (kind: "space" | "team", workspaceId: string, name: string): string =>
+    `${kind}\0${workspaceId}\0${normalizedName(name)}`;
+  // What a teamspace retry can change since the try it may repeat; the name is in the key.
   const createRequest = (
     input: CreateSpaceInput,
     access: { memberIds: string[]; teamIds: string[] }
@@ -140,15 +175,50 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
       [...access.teamIds].sort(),
     ]);
 
-  // One failed add must not abort the rest; callers report the failures.
-  async function settleAddMembers(
-    userIds: string[],
-    add: (userId: string) => Promise<void>
-  ): Promise<unknown[]> {
-    const results = await Promise.allSettled(userIds.map(add));
-    return results
-      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
-      .map((result) => result.reason);
+  // Sends a create and, when its answer may have been lost, looks for what it made. A lost answer
+  // is no answer at all (see isLostAnswer); a taken name counts as one too while an earlier try of
+  // the same create is still unsettled, since that try is the likely owner of the name. `find`
+  // returns the caller's own match, null when there is none and undefined when it couldn't look.
+  async function createSettling<T>(
+    key: string,
+    attempt: {
+      send: () => Promise<T>;
+      isNameTaken: (err: unknown) => boolean;
+      find: (triedAt: number) => Promise<T | null | undefined>;
+      // What this try asked for. An unsettled earlier try that asked for something else is not
+      // adopted, since that would silently drop what this try changed; its answer stands. Omitted
+      // when the caller applies this try's request to whatever it recovers.
+      request?: string;
+    }
+  ): Promise<T> {
+    const triedAt = Date.now();
+    try {
+      const created = await attempt.send();
+      unsettledCreates.delete(key);
+      return created;
+    } catch (err) {
+      const lastTry = unsettledCreates.get(key);
+      const unsettled =
+        lastTry !== undefined && triedAt - lastTry.triedAt <= UNSETTLED_CREATE_TTL_MS
+          ? lastTry
+          : undefined;
+      const unsettledAt = unsettled?.triedAt;
+      const request = attempt.request ?? "";
+      const changed =
+        attempt.request !== undefined && unsettled !== undefined && unsettled.request !== request;
+      const mayBeOurs =
+        !changed && (isLostAnswer(err) || (unsettledAt !== undefined && attempt.isNameTaken(err)));
+      if (!mayBeOurs) {
+        unsettledCreates.delete(key);
+        throw err;
+      }
+      const found = await attempt.find(unsettledAt ?? triedAt);
+      if (found === undefined)
+        unsettledCreates.set(key, { triedAt: unsettledAt ?? triedAt, request });
+      else unsettledCreates.delete(key);
+      if (!found) throw err;
+      return found;
+    }
   }
 
   async function refreshSpaceMirror(): Promise<void> {
@@ -205,45 +275,17 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     input: CreateSpaceInput,
     access: { memberIds: string[]; teamIds: string[] }
   ): Promise<SpaceItem | null> {
-    const key = createKey(workspaceId, input.name);
-    const triedAt = Date.now();
-    let cloudSpace: MySpace;
-    try {
-      cloudSpace = await deps.spaces.create(workspaceId, {
-        ...input,
-        member_ids: access.memberIds,
-        team_ids: access.teamIds,
-      });
-    } catch (err) {
-      const lastTry = unsettledCreates.get(key);
-      const unsettled =
-        lastTry !== undefined && triedAt - lastTry.triedAt <= UNSETTLED_CREATE_TTL_MS
-          ? lastTry
-          : undefined;
-      const unsettledAt = unsettled?.triedAt;
-      const request = createRequest(input, access);
-      // Adopting the earlier teamspace would silently drop what this try changed, so its answer
-      // stands.
-      const changed = unsettled !== undefined && unsettled.request !== request;
-      // The name is taken by this user's own lost create, if an earlier try is still unsettled.
-      const mayBeOurs =
-        !changed &&
-        (isLostAnswer(err) ||
-          (unsettledAt !== undefined && classifySpaceError(err).kind === "nameTaken"));
-      if (!mayBeOurs) {
-        unsettledCreates.delete(key);
-        throw err;
-      }
-      const created = await findLostCreate(workspaceId, input.name, unsettledAt ?? triedAt);
-      if (created === undefined) {
-        unsettledCreates.set(key, { triedAt: unsettledAt ?? triedAt, request });
-      } else {
-        unsettledCreates.delete(key);
-      }
-      if (!created) throw err;
-      cloudSpace = created;
-    }
-    unsettledCreates.delete(key);
+    const cloudSpace = await createSettling(createKey("space", workspaceId, input.name), {
+      send: () =>
+        deps.spaces.create(workspaceId, {
+          ...input,
+          member_ids: access.memberIds,
+          team_ids: access.teamIds,
+        }),
+      isNameTaken: (err) => classifySpaceError(err).kind === "nameTaken",
+      find: (triedAt) => findLostCreate(workspaceId, input.name, triedAt),
+      request: createRequest(input, access),
+    });
     const space = await deps.local.upsertSpaceFromCloud(
       cloudSpace as unknown as Record<string, unknown>
     );
@@ -251,6 +293,87 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     await deps.local.loadSpaces();
     deps.sync.requestSyncAll("manual");
     return space;
+  }
+
+  // The same test for a team, read through the team list: a lost create is the caller's own when
+  // it is in this workspace under the name sent, the caller is its direct admin and it is new.
+  async function findLostTeamCreate(
+    workspaceId: string,
+    name: string,
+    triedAt: number
+  ): Promise<Team | null | undefined> {
+    const wanted = normalizedName(name);
+    try {
+      const teams = await deps.teams.list(workspaceId);
+      return (
+        teams.find(
+          (team) =>
+            team.workspace_id === workspaceId &&
+            normalizedName(team.name) === wanted &&
+            team.my_direct_role === "admin" &&
+            Math.abs(triedAt - Date.parse(team.created_at)) <= LOST_CREATE_WINDOW_MS
+        ) ?? null
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Members travel in the create body, so the server adds them with the team or not at all. A team
+  // found after a lost answer was made by an earlier try, with whoever that try sent; this try's
+  // people are added through the batch route, which never changes a role. Someone the person
+  // removed from the form between the tries stays on the team, since no call here takes them off.
+  async function createTeam(
+    workspaceId: string,
+    input: { name: string; memberIds: string[] }
+  ): Promise<Team> {
+    const key = createKey("team", workspaceId, input.name);
+    let sent = false;
+    // When the create this team came from was first tried; it is what the lookup measured from.
+    let originalTryAt: number | undefined;
+    const team = await createSettling(key, {
+      send: async () => {
+        const created = await deps.teams.create(workspaceId, {
+          name: input.name,
+          member_ids: input.memberIds,
+        });
+        sent = true;
+        return created;
+      },
+      isNameTaken: (err) => classifyTeamError(err).kind === "nameTaken",
+      find: (triedAt) => {
+        originalTryAt = triedAt;
+        return findLostTeamCreate(workspaceId, input.name, triedAt);
+      },
+    });
+    if (!sent && input.memberIds.length > 0) {
+      try {
+        await deps.teams.addMembers(team.id, input.memberIds);
+      } catch (err) {
+        // The team is still unreported, so the next try may recover it again. Marked with the
+        // original time: a later one would drift out of the lost-create window of the team's
+        // creation as retries pile up.
+        unsettledCreates.set(key, { triedAt: originalTryAt ?? Date.now(), request: "" });
+        throw err;
+      }
+    }
+    return team;
+  }
+
+  async function addPeopleToTeam(
+    teamId: string,
+    userIds: string[]
+  ): Promise<{ added: string[]; already_members: string[] }> {
+    const result = await deps.teams.addMembers(teamId, userIds);
+    await refreshMirrorAfterWrite();
+    return result;
+  }
+
+  // Spaces list their teams by name, so the mirror follows a rename.
+  async function renameTeam(teamId: string, name: string): Promise<Team> {
+    const team = await deps.teams.update(teamId, { name });
+    await refreshMirrorAfterWrite();
+    return team;
   }
 
   async function renameSpace(
@@ -395,9 +518,79 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     return hold;
   }
 
+  // Like holdSpaceDelete, without the mirror and purge work: a team has no local row, and the
+  // spaces that list it are refreshed once the server has dropped it.
+  function holdTeamDelete(team: Team): TeamDeleteHold {
+    return holdTeamForAccount(team, deps.deleteHold.accountGeneration());
+  }
+
+  function holdTeamForAccount(team: Team, accountGeneration: number): TeamDeleteHold {
+    const accountChanged = (): boolean => deps.deleteHold.accountGeneration() !== accountGeneration;
+    deps.teamDeleteHold.hide(team.id);
+    let settled = false;
+    const hold: TeamDeleteHold = {
+      async undo() {
+        if (settled) return false;
+        settled = true;
+        openHolds.delete(hold);
+        deps.teamDeleteHold.release(team.id);
+        return true;
+      },
+      async commit() {
+        if (settled) return null;
+        settled = true;
+        openHolds.delete(hold);
+        if (accountChanged()) return null;
+        try {
+          await deps.teams.remove(team.id);
+        } catch (err) {
+          // Someone else deleted it first, or an earlier delete went through and its answer was
+          // lost. Only the API's own "Team not found" proves that; a bare 404 proves nothing.
+          const failure = classifyTeamError(err);
+          if (failure.kind !== "gone") {
+            deps.teamDeleteHold.release(team.id);
+            return { success: false, error: errorMessage(err), failure };
+          }
+        }
+        await refreshMirrorAfterWrite();
+        // The People page lists the deleted team on each of its members until the roster is read
+        // again. The delete went through, so a failed read isn't its failure.
+        try {
+          await deps.refreshWorkspaceRoster(team.workspace_id);
+        } catch (err) {
+          console.error("Workspace roster refresh failed after a team delete:", err);
+        }
+        deps.sync.requestSyncAll("manual");
+        return { success: true };
+      },
+      again: () => (accountChanged() ? null : holdTeamForAccount(team, accountGeneration)),
+    };
+    openHolds.add(hold);
+    return hold;
+  }
+
   async function assignTeamToSpace(space: SpaceItem, teamId: string): Promise<void> {
     await deps.spaces.assignTeam(requireCloudSpaceId(space), teamId);
     await refreshMirrorAfterWrite();
+  }
+
+  // One request per teamspace, in order, every one tried: the POST is idempotent, so a retry can
+  // resend only what failed. No access is sent, so a teamspace the team is already in keeps its
+  // own. The mirror is read once, after all of them.
+  async function assignTeamToSpaces(
+    teamId: string,
+    spaceIds: string[]
+  ): Promise<{ failures: { spaceId: string; error: unknown }[] }> {
+    const failures: { spaceId: string; error: unknown }[] = [];
+    for (const spaceId of spaceIds) {
+      try {
+        await deps.spaces.assignTeam(spaceId, teamId);
+      } catch (error) {
+        failures.push({ spaceId, error });
+      }
+    }
+    await refreshMirrorAfterWrite();
+    return { failures };
   }
 
   async function setSpaceTeamAccess(
@@ -499,24 +692,13 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     deps.sync.requestSyncAll("manual");
   }
 
-  async function addTeamMembers(
-    teamId: string,
-    userIds: string[]
-  ): Promise<{ failures: unknown[] }> {
-    const failures = await settleAddMembers(userIds, (userId) =>
-      deps.teams.addMember(teamId, userId)
-    );
-    await refreshMirrorAfterWrite();
-    return { failures };
-  }
-
   async function removeTeamMember(teamId: string, userId: string): Promise<void> {
     await deps.teams.removeMember(teamId, userId);
     await refreshMirrorAfterWrite();
   }
 
   async function setTeamMemberRole(teamId: string, userId: string, role: TeamRole): Promise<void> {
-    await deps.teams.addMember(teamId, userId, role);
+    await deps.teams.setMemberRole(teamId, userId, role);
     await refreshMirrorAfterWrite();
   }
 
@@ -524,15 +706,18 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     try {
       await deps.teams.removeMember(teamId, userId);
     } catch (err) {
-      // Already out of the group, as after a leave that got partway: the mirror is what's left.
-      if (classifySpaceError(err).kind !== "gone") throw err;
+      const kind = classifyTeamError(err).kind;
+      // Already out of the team, as after a leave that got partway: that is leaving.
+      if (kind !== "memberGone") {
+        // Deleted since: the mirror catches up, and the caller says the team is gone rather
+        // than that the user left it.
+        if (kind === "gone") {
+          await refreshMirrorAfterWrite();
+          deps.sync.requestSyncAll("manual");
+        }
+        throw err;
+      }
     }
-    await refreshMirrorAfterWrite();
-    deps.sync.requestSyncAll("manual");
-  }
-
-  async function deleteTeam(teamId: string): Promise<void> {
-    await deps.teams.remove(teamId);
     await refreshMirrorAfterWrite();
     deps.sync.requestSyncAll("manual");
   }
@@ -543,7 +728,12 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     deleteSpace,
     holdSpaceDelete,
     commitHeldDeletes,
+    createTeam,
+    addPeopleToTeam,
+    renameTeam,
+    holdTeamDelete,
     assignTeamToSpace,
+    assignTeamToSpaces,
     setSpaceTeamAccess,
     unassignTeamFromSpace,
     joinSpace,
@@ -554,10 +744,8 @@ export function createSpaceActions(deps: SpaceActionsDependencies) {
     removeSpaceMember,
     leaveSpace,
     requestSpacesResync,
-    addTeamMembers,
     removeTeamMember,
     setTeamMemberRole,
     leaveTeam,
-    deleteTeam,
   };
 }

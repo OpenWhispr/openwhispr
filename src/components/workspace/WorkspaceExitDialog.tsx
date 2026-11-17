@@ -10,8 +10,10 @@ interface WorkspaceExitDialogProps {
   /** Bound by the caller to the active workspace and the signed-in user. */
   onConfirmLeave: () => Promise<void>;
   onConfirmDelete: () => Promise<void>;
-  /** Primary of the Left and Deleted outcomes. */
-  onChooseWorkspace: () => void;
+  /** Where the workspace's private notes move on this device: the default workspace's name. */
+  privateNotesWorkspace: string;
+  /** The workspace the user is in once the leave or delete is done. */
+  currentWorkspace: string;
 }
 
 export function WorkspaceExitDialog({
@@ -19,7 +21,8 @@ export function WorkspaceExitDialog({
   dispatch,
   onConfirmLeave,
   onConfirmDelete,
-  onChooseWorkspace,
+  privateNotesWorkspace,
+  currentWorkspace,
 }: WorkspaceExitDialogProps): ReactElement | null {
   const { t } = useTranslation();
 
@@ -38,18 +41,14 @@ export function WorkspaceExitDialog({
     }
   };
 
-  // Leaving the outcome dialogs by any route hands the user to the workspace
-  // picker, since the workspace they were in no longer exists for them.
-  const chooseWorkspace = (): void => {
-    onChooseWorkspace();
-    dismiss();
-  };
-
   const cancelLabel = t("common.cancel");
+  // The store has already moved the user off the workspace they left or deleted.
+  const nowIn = t("workspaces.exit.nowIn", { workspace: currentWorkspace });
   const common = { open: true, onDismiss: dismiss };
   const leaveCopy = {
     title: t("workspaces.exit.leave.title", { name }),
     body: t("workspaces.exit.leave.body"),
+    detail: t("workspaces.exit.leave.privateNotes", { workspace: privateNotesWorkspace }),
   };
 
   switch (state.kind) {
@@ -99,16 +98,11 @@ export function WorkspaceExitDialog({
     case "left":
       return (
         <WorkspaceActionDialog
-          open
-          onDismiss={chooseWorkspace}
+          {...common}
           icon="info"
           title={t("workspaces.exit.left.title", { name })}
-          body={t("workspaces.exit.chooseAnother")}
-          primary={{
-            label: t("workspaces.exit.chooseWorkspace"),
-            onClick: chooseWorkspace,
-            tone: "primary",
-          }}
+          body={nowIn}
+          primary={{ label: t("common.done"), onClick: dismiss, tone: "primary" }}
         />
       );
     case "confirmDelete":
@@ -118,6 +112,7 @@ export function WorkspaceExitDialog({
           icon="trash"
           title={t("workspaces.exit.delete.title", { name })}
           body={t("workspaces.exit.delete.body")}
+          detail={t("workspaces.exit.delete.privateNotes", { workspace: privateNotesWorkspace })}
           primary={{
             label: t("settingsPage.workspace.general.delete"),
             onClick: () => void run(onConfirmDelete),
@@ -159,16 +154,11 @@ export function WorkspaceExitDialog({
     case "deleted":
       return (
         <WorkspaceActionDialog
-          open
-          onDismiss={chooseWorkspace}
+          {...common}
           icon="info"
           title={t("workspaces.exit.deleted.title", { name })}
-          body={t("workspaces.exit.chooseAnother")}
-          primary={{
-            label: t("workspaces.exit.chooseWorkspace"),
-            onClick: chooseWorkspace,
-            tone: "primary",
-          }}
+          body={nowIn}
+          primary={{ label: t("common.done"), onClick: dismiss, tone: "primary" }}
         />
       );
   }

@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -87,7 +88,7 @@ test.before(() => {
   IPCHandlersClass = IPCHandlers;
   const Ctor = IPCHandlers.default || IPCHandlers;
   fakeThis = buildFakeThis();
-  Ctor.prototype.setupHandlers.call(fakeThis);
+  Ctor.prototype.setupHandlers.call(withDevicePolicy(fakeThis));
 });
 
 test.after(() => {

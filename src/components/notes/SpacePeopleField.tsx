@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import {
   addRecipients,
   emailRecipient,
-  groupRecipient,
+  teamRecipient,
   memberRecipient,
   pickerResults,
   recipientKey,
@@ -33,13 +33,13 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { Input } from "../ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "../ui/popover";
 import {
   CHIP_REMOVE_BUTTON,
   CHIP_TONE_DEFAULT,
   CHIP_TONE_ERROR,
 } from "../workspace/recipientChipStyles";
+import { FIELD_CONTROL } from "../workspace/dialogButtons";
 import { TileGlyph } from "./SpaceNameField";
 
 type InviteRole = "admin" | "member";
@@ -47,9 +47,9 @@ type InviteRole = "admin" | "member";
 export interface SpacePeopleFieldProps {
   id?: string;
   roster: WorkspaceMember[];
-  groups: Team[];
+  teams: Team[];
   accessUserIds?: ReadonlySet<string>;
-  accessGroupIds?: ReadonlySet<string>;
+  accessTeamIds?: ReadonlySet<string>;
   hiddenUserIds?: ReadonlySet<string>;
   /** Addresses with an invitation waiting, lowercased: shown as pending, never offered again. */
   pendingEmails?: ReadonlySet<string>;
@@ -62,16 +62,20 @@ export interface SpacePeopleFieldProps {
   placeholder: string;
   /** A control beside the input (Add members); the chips sit under both. */
   action?: ReactNode;
+  /** A line between the input and the chips, for a form whose people arrive already chosen. */
+  note?: ReactNode;
   /**
    * Each increase moves focus into the input with its list closed, to hand the field back after
    * a run: the list is for someone who came to pick, and would cover what the run just said.
    */
   focusRequest?: number;
+  /** Told what is typed but not yet staged as a chip, for a form that waits on it. */
+  onQueryChange?: (query: string) => void;
 }
 
 type PickerRow =
   | { kind: "member"; member: WorkspaceMember; hasAccess: boolean; picked: boolean }
-  | { kind: "group"; group: Team; hasAccess: boolean; picked: boolean }
+  | { kind: "team"; team: Team; hasAccess: boolean; picked: boolean }
   | { kind: "invite"; email: string }
   | { kind: "pending"; email: string };
 
@@ -102,7 +106,7 @@ function PersonAvatar({
 const TILE =
   "flex size-5 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-foreground/5 dark:bg-white/6";
 // The tile's glyph is an emoji sized for a larger tile in the table.
-const GROUP_TILE = cn(TILE, "[&>span]:text-xs");
+const TEAM_TILE = cn(TILE, "[&>span]:text-xs");
 const ACTION_PILL =
   "shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15";
 
@@ -112,9 +116,9 @@ const isPickable = (row: PickerRow): boolean =>
 export function SpacePeopleField({
   id,
   roster,
-  groups,
+  teams,
   accessUserIds = NO_IDS,
-  accessGroupIds = NO_IDS,
+  accessTeamIds = NO_IDS,
   hiddenUserIds,
   pendingEmails,
   canInvite,
@@ -124,12 +128,17 @@ export function SpacePeopleField({
   disabled = false,
   placeholder,
   action,
+  note,
   focusRequest = 0,
+  onQueryChange,
 }: SpacePeopleFieldProps): ReactElement {
   const { t } = useTranslation();
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
+  useEffect(() => {
+    onQueryChange?.(query);
+  }, [query, onQueryChange]);
   const [focused, setFocused] = useState(false);
   // Escape closes the list until the person types, arrows or clicks the field again.
   const [dismissed, setDismissed] = useState(false);
@@ -146,10 +155,10 @@ export function SpacePeopleField({
   const results = pickerResults({
     query,
     roster,
-    groups,
+    teams,
     picked,
     accessUserIds,
-    accessGroupIds,
+    accessTeamIds,
     hiddenUserIds,
     pendingEmails,
     canInvite,
@@ -161,9 +170,9 @@ export function SpacePeopleField({
       hasAccess,
       picked,
     })),
-    ...results.groups.map(({ group, hasAccess, picked }): PickerRow => ({
-      kind: "group",
-      group,
+    ...results.teams.map(({ team, hasAccess, picked }): PickerRow => ({
+      kind: "team",
+      team,
       hasAccess,
       picked,
     })),
@@ -216,7 +225,7 @@ export function SpacePeopleField({
     const stagedKeys = new Set(next.map(recipientKey));
     return parsed
       .filter((recipient) => !stagedKeys.has(recipientKey(recipient)))
-      .map((recipient) => (recipient.kind === "group" ? recipient.label : recipient.email))
+      .map((recipient) => (recipient.kind === "team" ? recipient.label : recipient.email))
       .join(", ");
   };
 
@@ -243,8 +252,8 @@ export function SpacePeopleField({
       const recipient = memberRecipient(row.member);
       if (row.picked) unstage(recipient);
       else stage([recipient]);
-    } else if (row.kind === "group") {
-      const recipient = groupRecipient(row.group);
+    } else if (row.kind === "team") {
+      const recipient = teamRecipient(row.team);
       if (row.picked) unstage(recipient);
       else stage([recipient]);
     } else {
@@ -328,7 +337,7 @@ export function SpacePeopleField({
     commitQuery();
   };
 
-  const emojiByTeam = new Map(groups.map((group) => [group.id, group.emoji ?? null]));
+  const emojiByTeam = new Map(teams.map((team) => [team.id, team.emoji ?? null]));
 
   return (
     <div
@@ -346,11 +355,12 @@ export function SpacePeopleField({
       >
         <PopoverAnchor asChild>
           <div ref={setFieldElement}>
-            <Input
+            <input
               ref={inputRef}
               id={id}
               dir="auto"
               type="text"
+              className={FIELD_CONTROL}
               autoComplete="off"
               spellCheck={false}
               role="combobox"
@@ -405,7 +415,7 @@ export function SpacePeopleField({
                     id={`${listId}-${index}`}
                     role="option"
                     // Who is picked; the row the arrow keys are on is aria-activedescendant.
-                    aria-selected={(row.kind === "member" || row.kind === "group") && row.picked}
+                    aria-selected={(row.kind === "member" || row.kind === "team") && row.picked}
                     aria-disabled={disabledRow || undefined}
                     onMouseEnter={() => {
                       if (!disabledRow) setHighlight({ index, byKeyboard: false });
@@ -444,6 +454,7 @@ export function SpacePeopleField({
         </PopoverContent>
       </Popover>
       {action}
+      {note ? <div className="col-span-2">{note}</div> : null}
 
       {picked.length > 0 ? (
         <ul className="col-span-2 flex flex-wrap gap-1.5">
@@ -451,9 +462,7 @@ export function SpacePeopleField({
             <RecipientChip
               key={recipientKey(recipient)}
               recipient={recipient}
-              emoji={
-                recipient.kind === "group" ? (emojiByTeam.get(recipient.teamId) ?? null) : null
-              }
+              emoji={recipient.kind === "team" ? (emojiByTeam.get(recipient.teamId) ?? null) : null}
               showRole={inviteRoleChoice}
               disabled={disabled}
               onRemove={() => unstage(recipient)}
@@ -467,7 +476,7 @@ export function SpacePeopleField({
 
 function rowKey(row: PickerRow): string {
   if (row.kind === "member") return `member:${row.member.user_id}`;
-  if (row.kind === "group") return `group:${row.group.id}`;
+  if (row.kind === "team") return `team:${row.team.id}`;
   return row.kind;
 }
 
@@ -513,20 +522,20 @@ function RowContent({
     );
   }
 
-  if (row.kind === "group") {
-    const { group, hasAccess } = row;
-    const count = group.member_count ?? 0;
+  if (row.kind === "team") {
+    const { team, hasAccess } = row;
+    const count = team.member_count ?? 0;
     return (
       <>
-        <span aria-hidden="true" className={GROUP_TILE}>
-          <TileGlyph emoji={group.emoji ?? null} name={group.name} />
+        <span aria-hidden="true" className={TEAM_TILE}>
+          <TileGlyph emoji={team.emoji ?? null} name={team.name} />
         </span>
         <RowText
-          primary={<span dir="auto">{group.name}</span>}
+          primary={<span dir="auto">{team.name}</span>}
           secondary={
             hasAccess
-              ? t("settingsPage.workspace.teamspaces.picker.groupHasAccess", { count })
-              : t("settingsPage.workspace.teamspaces.picker.groupPeople", { count })
+              ? t("settingsPage.workspace.teamspaces.picker.teamHasAccess", { count })
+              : t("settingsPage.workspace.teamspaces.picker.teamPeople", { count })
           }
         />
         {row.picked ? <PickedCheck /> : null}
@@ -696,15 +705,15 @@ function RecipientChip({
     leading = <PersonAvatar name={recipient.label} email={recipient.email} />;
     label = <span dir="auto">{recipient.label}</span>;
     removeName = recipient.label;
-  } else if (recipient.kind === "group") {
+  } else if (recipient.kind === "team") {
     leading = (
-      <span aria-hidden="true" className={GROUP_TILE}>
+      <span aria-hidden="true" className={TEAM_TILE}>
         <TileGlyph emoji={emoji} name={recipient.label} />
       </span>
     );
     label = (
       <span dir="auto">
-        {t("settingsPage.workspace.teamspaces.picker.groupChip", {
+        {t("settingsPage.workspace.teamspaces.picker.teamChip", {
           name: isolate(recipient.label),
           count: recipient.memberCount,
         })}
@@ -739,7 +748,7 @@ function RecipientChip({
         invalid ? t("workspaces.invite.errors.invalid", { email: isolate(removeName) }) : undefined
       }
       className={cn(
-        "inline-flex h-7 max-w-full items-center gap-1.5 rounded-full border ps-1 pe-0.5 text-xs",
+        "inline-flex h-[29px] max-w-full items-center gap-1.5 rounded-full ps-1 pe-0.5 text-xs",
         invalid ? CHIP_TONE_ERROR : CHIP_TONE_DEFAULT
       )}
     >

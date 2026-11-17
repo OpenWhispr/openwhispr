@@ -303,6 +303,8 @@ function withRecipients(state: InviteFlowState, recipients: InviteRecipient[]): 
 
 export function createInviteFlow(input: {
   initialEmail?: string;
+  /** Addresses to open as chips; invalid ones are dropped, since they came from the server. */
+  initialEmails?: string[];
   attachInvited?: boolean;
 }): InviteFlowState {
   const base: InviteFlowState = {
@@ -318,6 +320,12 @@ export function createInviteFlow(input: {
     seats: { purchasedLeft: null, ceilingLeft: null },
     rateLimit: null,
   };
+  if (input.initialEmails !== undefined) {
+    return addEmails(
+      base,
+      input.initialEmails.filter((email) => isValidEmail(normalize(email)))
+    );
+  }
   const initialEmail = input.initialEmail?.trim() ?? "";
   if (!initialEmail) return base;
   // A caller can pass a half-typed address (a roster search for "john@acme"); a chip could only
@@ -391,6 +399,17 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
     failed,
     noEmailCount: state.sent.filter((entry) => !entry.emailSent).length,
   };
+}
+
+/**
+ * A run that went out cleanly: every invitation was sent and delivered, and nothing was skipped or
+ * only added to an invitation that existed. Then there is nothing to read, so the dialog confirms
+ * with a toast and closes; any other ending keeps its screen, which says what needs attention.
+ */
+export function inviteConfirmed(state: InviteFlowState): boolean {
+  if (state.phase !== "done" || state.sent.length === 0 || state.attached.length > 0) return false;
+  const summary = inviteSummary(state);
+  return summary.noEmailCount === 0 && summary.skipped.length === 0;
 }
 
 export function inviteReducer(state: InviteFlowState, event: InviteFlowEvent): InviteFlowState {

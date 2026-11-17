@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
+import { readStoredAccountScopeUserId } from "../lib/authAccountScope";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { chooseDictionaryStartupAction } from "../helpers/dictionaryStartup";
 import logger from "../utils/logger";
@@ -56,6 +57,7 @@ import {
 } from "../models/modelLifecycle.js";
 import { getCloudModelProviders } from "../models/cloudModelCatalog";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
+import { OPENROUTER_DEFAULT_MODEL } from "../utils/openRouterModels";
 // Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
 // the switch store only zustand and a type, so neither reopens the ModelRegistry
 // cycle.
@@ -63,7 +65,9 @@ import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
 import { queueRetiredModelSwitch, recordRetiredModelSwitch } from "./retiredModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
+import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
 import {
+  acceptsUnlistedTranscriptionModel,
   getTranscriptionSelection,
   isLocalModelAllowedByPolicy,
   isPolicyActionAllowed,
@@ -93,6 +97,7 @@ import {
 import {
   EMPTY_SHARED_HINTS,
   isTermLikeSharedWord,
+  type ScopedSharedHintWords,
   type SharedHintWords,
 } from "../utils/sharedDictionaryHints";
 import {
@@ -166,10 +171,13 @@ function transcriptionProviderModels(
   providerId: string,
   context: TranscriptionPolicyContext
 ): Array<{ id: string; streaming?: boolean }> {
-  const models =
+  const models: Array<{ id: string; streaming?: boolean }> =
     modelRegistryData.transcriptionProviders.find((provider) => provider.id === providerId)
       ?.models ?? [];
-  return context === "meeting" ? models.filter((model) => model.streaming) : models;
+  if (context === "meeting") return models.filter((model) => model.streaming);
+  if (context === "dictation")
+    return models.filter((model) => !isUploadOnlyTranscriptionModel(providerId, model.id));
+  return models;
 }
 
 function defaultTranscriptionModel(
@@ -193,6 +201,10 @@ function transcriptionModelBelongsToProvider(
   context: TranscriptionPolicyContext
 ): boolean {
   if (providerId === "custom") return Boolean(modelId);
+  if (context !== "upload" && isUploadOnlyTranscriptionModel(providerId, modelId)) return false;
+  // A stored vendor-prefixed OpenRouter id outlives its registry entry rather
+  // than being reset on the next tab switch.
+  if (acceptsUnlistedTranscriptionModel(providerId, modelId)) return true;
   return transcriptionProviderModels(providerId, context).some((model) => model.id === modelId);
 }
 
@@ -225,6 +237,7 @@ export function reasoningModelBelongsToProvider(providerId: string, modelId: str
 }
 
 function defaultLlmModel(mode: InferenceMode, providerId: string, bedrockRegion: string): string {
+  if (providerId === "openrouter") return OPENROUTER_DEFAULT_MODEL;
   const providers =
     mode === "local"
       ? modelRegistryData.localProviders
@@ -296,33 +309,44 @@ function readStoredActiveWorkspaceId(): string | null {
 // workspace (or account) never apply, and a stale or hand-edited value never
 // breaks the dictionary prompt. Words are checked again, since a build with
 // looser rules may have written them.
-function parseSharedHints(raw: string | null, activeWorkspaceId: string | null): SharedHintWords {
-  if (raw === null) return EMPTY_SHARED_HINTS;
+function parseSharedHints(
+  raw: string | null,
+  activeWorkspaceId: string | null
+): ScopedSharedHintWords {
+  const currentAccountId = readStoredAccountScopeUserId();
+  const empty = currentAccountId
+    ? { ...EMPTY_SHARED_HINTS, accountId: currentAccountId }
+    : EMPTY_SHARED_HINTS;
+  if (raw === null) return empty;
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return EMPTY_SHARED_HINTS;
-    const { workspaceId, space, workspace, suppressedPersonal } = parsed as Record<string, unknown>;
-    if (workspaceId !== null && typeof workspaceId !== "string") return EMPTY_SHARED_HINTS;
-    if (workspaceId !== activeWorkspaceId) return EMPTY_SHARED_HINTS;
-    if (!Array.isArray(space) || !Array.isArray(workspace)) return EMPTY_SHARED_HINTS;
+    if (typeof parsed !== "object" || parsed === null) return empty;
+    const { accountId, workspaceId, space, workspace, suppressedPersonal } = parsed as Record<
+      string,
+      unknown
+    >;
+    if (workspaceId !== activeWorkspaceId) return empty;
+    if (!Array.isArray(space) || !Array.isArray(workspace)) return empty;
     const words = (value: unknown[]): string[] =>
       value.filter((w): w is string => typeof w === "string");
     const sharedWords = (value: unknown[]): string[] => words(value).filter(isTermLikeSharedWord);
     // Moved personal words, not teammates': they only ever remove words.
     const suppressed = Array.isArray(suppressedPersonal) ? words(suppressedPersonal) : [];
-    return suppressed.length > 0
-      ? {
-          space: sharedWords(space),
-          workspace: sharedWords(workspace),
-          suppressedPersonal: suppressed,
-        }
-      : { space: sharedWords(space), workspace: sharedWords(workspace) };
+    // Older caches predate the owner field and share the reconciled account's
+    // lifetime. Explicit null records that no owner was known when we wrote it.
+    const owner = accountId === undefined ? currentAccountId : accountId;
+    return {
+      space: sharedWords(space),
+      workspace: sharedWords(workspace),
+      ...(suppressed.length > 0 ? { suppressedPersonal: suppressed } : {}),
+      ...(typeof owner === "string" && owner ? { accountId: owner } : {}),
+    };
   } catch {
-    return EMPTY_SHARED_HINTS;
+    return empty;
   }
 }
 
-function readPersistedSharedHints(): SharedHintWords {
+function readPersistedSharedHints(): ScopedSharedHintWords {
   if (!isBrowser) return EMPTY_SHARED_HINTS;
   return parseSharedHints(localStorage.getItem(SHARED_HINTS_KEY), readStoredActiveWorkspaceId());
 }
@@ -330,7 +354,7 @@ function readPersistedSharedHints(): SharedHintWords {
 interface PromptDictionarySettings {
   customDictionary: string[];
   snippets: Snippet[];
-  sharedDictionaryHints: SharedHintWords;
+  sharedDictionaryHints: ScopedSharedHintWords;
   preferredLanguage: string;
   chineseScriptPreference: string;
 }
@@ -363,22 +387,80 @@ function sharedWordsReachingPrompt(settings: PromptDictionarySettings): SharedHi
 // The last list this window sent; every dictionary edit re-derives it, and
 // most change nothing in it.
 let lastSentSharedHints: string | null = null;
+// The signed-in account this window's dictionary and snippets were loaded
+// under, as main's database has it; undefined until first read. Main refuses a
+// personal-list edit from any other.
+let listsAccountId: string | null | undefined;
+// Whose lists this window shows (main's visible account, which a signed-out
+// sole account keeps), and a count of the times that changed once known. An
+// editor captures the count when it opens, so its save can't land in the list
+// of an account that took over meanwhile; a token rotation changes nothing.
+let listsVisibleAccountId: string | null | undefined;
+let listsOwnerRevision = 0;
+const listsOwnerListeners = new Set<() => void>();
 
-// Main keeps the hints in memory only, for auto-learn; a failed send just
-// leaves its previous copy in place.
+function noteListsVisibleAccount(next: string | null): void {
+  const previous = listsVisibleAccountId;
+  listsVisibleAccountId = next;
+  if (previous === undefined || previous === next) return;
+  listsOwnerRevision += 1;
+  for (const listener of listsOwnerListeners) listener();
+}
+
+export function getListsOwnerRevision(): number {
+  return listsOwnerRevision;
+}
+
+export function subscribeListsOwner(listener: () => void): () => void {
+  listsOwnerListeners.add(listener);
+  return () => {
+    listsOwnerListeners.delete(listener);
+  };
+}
+
+function listsOwnerChanged(listsOwner: number | undefined, list: string): boolean {
+  if (listsOwner === undefined || listsOwner === listsOwnerRevision) return false;
+  logger.info("Dropped a personal-list edit opened under another account", { list }, "settings");
+  return true;
+}
+
+// SQLite owns the list after a write or refusal. A read that outlives an
+// account change is dropped: that change's broadcast already brought the
+// lists, and adopting this one would put them under the wrong owner.
+async function adoptStoredDictionary(): Promise<void> {
+  const owner = listsAccountId;
+  const stored = await window.electronAPI?.getDictionary?.();
+  if (!stored || listsAccountId !== owner) return;
+  if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(stored));
+  useSettingsStore.setState({ customDictionary: stored });
+}
+
+async function adoptStoredSnippets(): Promise<void> {
+  const owner = listsAccountId;
+  const stored = await window.electronAPI?.getSnippets?.();
+  if (!stored || listsAccountId !== owner) return;
+  if (isBrowser) localStorage.setItem("snippets", JSON.stringify(stored));
+  useSettingsStore.setState({ snippets: stored });
+}
+
+// Auto-learn uses the prompt budget. Sherpa applies its own cap to the eligible
+// shared words and needs the hidden fallback keys to filter its SQLite words.
 function sendSharedHintsToMain(settings: PromptDictionarySettings): void {
-  const hints = sharedWordsReachingPrompt(settings);
-  const serialized = JSON.stringify(hints);
+  const promptHints = sharedWordsReachingPrompt(settings);
+  const hotwordHints = settings.sharedDictionaryHints;
+  const serialized = JSON.stringify([promptHints, hotwordHints]);
   if (serialized === lastSentSharedHints) return;
   lastSentSharedHints = serialized;
-  window.electronAPI?.setSharedDictionaryHints?.(hints)?.catch((err: unknown) => {
-    lastSentSharedHints = null;
-    logger.warn(
-      "Failed to send shared dictionary hints to main",
-      { error: (err as Error)?.message },
-      "settings"
-    );
-  });
+  window.electronAPI
+    ?.setSharedDictionaryHints?.(promptHints, hotwordHints)
+    ?.catch((err: unknown) => {
+      lastSentSharedHints = null;
+      logger.warn(
+        "Failed to send shared dictionary hints to main",
+        { error: (err as Error)?.message },
+        "settings"
+      );
+    });
 }
 
 function readStringArray(key: string, fallback: string[]): string[] {
@@ -1309,9 +1391,14 @@ export interface SettingsState
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
   setSharedDictionaryHints: (hints: SharedHintWords, workspaceId: string | null) => void;
-  updateCustomDictionary: (changes: { add?: string[]; remove?: string[] }) => void;
+  // `listsOwner`: the getListsOwnerRevision() an editor opened under; the edit
+  // is dropped if the lists have belonged to another account since.
+  updateCustomDictionary: (
+    changes: { add?: string[]; remove?: string[] },
+    listsOwner?: number
+  ) => void;
   applyCustomDictionaryFromExternal: (words: string[]) => void;
-  setSnippets: (snippets: Snippet[]) => void;
+  setSnippets: (snippets: Snippet[], listsOwner?: number) => void;
   applySnippetsFromExternal: (snippets: Snippet[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
@@ -2298,9 +2385,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),
 
-  // A derived cache of the shared dictionary for the prompt path; main owns the
-  // data, so nothing is written back. Main gets a copy (see the subscription
-  // below) so auto-learn never adds a word the workspace already applies.
+  // Derived from the active workspace's shared dictionary. The subscription
+  // sends main separate copies for auto-learn and local hotwords.
   // Cleared hints are EMPTY with no workspace.
   setSharedDictionaryHints: (hints: SharedHintWords, workspaceId: string | null) => {
     if (!isBrowser) {
@@ -2315,9 +2401,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       set({ sharedDictionaryHints: readPersistedSharedHints() });
       return;
     }
-    set({ sharedDictionaryHints: hints });
+    // Attach the source account once so a later prompt-only update cannot
+    // relabel these words after another account has reconciled.
+    const accountId = readStoredAccountScopeUserId();
+    const scopedHints = accountId ? { ...hints, accountId } : hints;
+    set({ sharedDictionaryHints: scopedHints });
     try {
-      localStorage.setItem(SHARED_HINTS_KEY, JSON.stringify({ workspaceId, ...hints }));
+      localStorage.setItem(SHARED_HINTS_KEY, JSON.stringify({ workspaceId, ...hints, accountId }));
     } catch (err) {
       // Quota: this window and main have the hints. Drop the stored copy so
       // other windows and the next launch don't apply outdated words.
@@ -2340,8 +2430,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
     set({ customDictionary: words });
     window.electronAPI
-      ?.setDictionary(words)
-      .then(() => syncAfterLocalWrite("syncDictionaryNow"))
+      ?.setDictionary(words, listsAccountId)
+      .then((result) =>
+        result?.stale ? adoptStoredDictionary() : syncAfterLocalWrite("syncDictionaryNow")
+      )
       .catch((err) => {
         logger.warn(
           "Failed to sync dictionary to SQLite",
@@ -2351,7 +2443,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       });
   },
 
-  updateCustomDictionary: ({ add = [], remove = [] }) => {
+  updateCustomDictionary: ({ add = [], remove = [] }, listsOwner) => {
+    if (listsOwnerChanged(listsOwner, "dictionary")) return;
+    const owner = listsAccountId;
     const removeLower = new Set(remove.map((w) => w.toLowerCase()));
     const addLower = new Set(add.map((w) => w.toLowerCase()));
     // Optimistic so the UI updates immediately; the stored list replaces it below.
@@ -2369,18 +2463,19 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (!api) return;
     // Older preloads have no delta channel; fall back rather than drop the edit.
     const written = api.applyDictionaryChanges
-      ? api.applyDictionaryChanges({ add, remove })
-      : api.setDictionary(optimistic);
+      ? api.applyDictionaryChanges({ add, remove }, owner)
+      : api.setDictionary(optimistic, owner);
 
     written
-      .then(async () => {
-        // SQLite owns ordering, casing and dedupe — adopt what it stored.
-        const stored = await api.getDictionary?.();
-        if (stored) {
-          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(stored));
-          set({ customDictionary: stored });
+      .then(async (result) => {
+        if (result?.stale) {
+          await adoptStoredDictionary();
+          return;
         }
-        syncAfterLocalWrite("syncDictionaryNow");
+        if (listsAccountId !== owner) return;
+        // SQLite owns ordering, casing and dedupe — adopt what it stored.
+        await adoptStoredDictionary();
+        if (listsAccountId === owner) syncAfterLocalWrite("syncDictionaryNow");
       })
       .catch((err) => {
         logger.warn(
@@ -2397,12 +2492,15 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ customDictionary: words });
   },
 
-  setSnippets: (snippets: Snippet[]) => {
+  setSnippets: (snippets: Snippet[], listsOwner?: number) => {
+    if (listsOwnerChanged(listsOwner, "snippets")) return;
     if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
     set({ snippets });
     window.electronAPI
-      ?.setSnippets?.(snippets)
-      .then(() => syncAfterLocalWrite("syncSnippetsNow"))
+      ?.setSnippets?.(snippets, listsAccountId)
+      .then((result) =>
+        result?.stale ? adoptStoredSnippets() : syncAfterLocalWrite("syncSnippetsNow")
+      )
       .catch((err) => {
         logger.warn(
           "Failed to sync snippets to SQLite",
@@ -4242,11 +4340,20 @@ export async function initializeSettings(): Promise<void> {
         const currentDictionary = useSettingsStore.getState().customDictionary;
         const dbWords = await window.electronAPI.getDictionary();
         const decision = chooseDictionaryStartupAction(dbWords, currentDictionary);
+        // A cache SQLite can't match may be another account's list, so main
+        // writes it only into a database that has never held a dictionary.
+        // SQLite is read again after the seed, as for snippets: whether this
+        // window's seed or another's landed, the cache takes what was stored.
         if (decision.action === "push-local-to-db") {
-          await window.electronAPI.setDictionary(decision.words);
-        } else if (decision.action === "pull-db-to-local") {
-          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(decision.words));
-          useSettingsStore.setState({ customDictionary: decision.words });
+          await window.electronAPI.seedDictionary?.(decision.words);
+        }
+        if (decision.action !== "noop") {
+          const storedWords =
+            decision.action === "push-local-to-db"
+              ? await window.electronAPI.getDictionary()
+              : dbWords;
+          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(storedWords));
+          useSettingsStore.setState({ customDictionary: storedWords });
         }
         dictionarySyncSucceeded = true;
       }
@@ -4264,7 +4371,8 @@ export async function initializeSettings(): Promise<void> {
         const currentSnippets = useSettingsStore.getState().snippets;
         const dbSnippets = await window.electronAPI.getSnippets();
         if (dbSnippets.length === 0 && currentSnippets.length > 0) {
-          await window.electronAPI.setSnippets?.(currentSnippets);
+          // As with the dictionary: only into a database that has never held any.
+          await window.electronAPI.seedSnippets?.(currentSnippets);
           const normalizedSnippets = await window.electronAPI.getSnippets();
           if (isBrowser) localStorage.setItem("snippets", JSON.stringify(normalizedSnippets));
           useSettingsStore.setState({ snippets: normalizedSnippets });
@@ -4492,6 +4600,24 @@ export async function initializeSettings(): Promise<void> {
     if (key === "uiLanguage" && typeof value === "string") {
       void i18n.changeLanguage(value);
     }
+  });
+
+  void window.electronAPI
+    ?.getDatabaseAccountScope?.()
+    .then((scope) => {
+      if (listsAccountId === undefined) listsAccountId = scope.accountId;
+      if (listsVisibleAccountId === undefined) listsVisibleAccountId = scope.visibleAccountId;
+    })
+    .catch((error) => {
+      logger.warn(
+        "Failed to read the lists' account scope",
+        { error: (error as Error).message },
+        "settings"
+      );
+    });
+  window.electronAPI?.onDatabaseAccountScopeChanged?.((scope) => {
+    listsAccountId = scope.accountId;
+    noteListsVisibleAccount(scope.visibleAccountId);
   });
 
   // Active hotkey updates from backend — display state, never persisted.

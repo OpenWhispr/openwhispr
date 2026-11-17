@@ -107,6 +107,68 @@ export function classifyRowActionError(error: unknown): RowActionError {
   return message ? { kind: "refused", message } : { kind: "failed" };
 }
 
+export type TeamActionError =
+  | { kind: "planRequired" }
+  | { kind: "nameTaken" }
+  | { kind: "lastAdmin" }
+  | { kind: "notWorkspaceMembers"; userIds: string[] }
+  // A role change for someone no longer on the team: the team itself is still there.
+  | { kind: "memberGone" }
+  | RowActionError;
+
+const TEAM_GONE_MESSAGE = /^team not found$/i;
+const MEMBER_GONE_MESSAGE = /^member not found$/i;
+
+/** Maps a failed team action; codes come first, then a missing team, then the row action kinds. */
+export function classifyTeamError(error: unknown): TeamActionError {
+  if (error instanceof CloudApiError) {
+    switch (error.code) {
+      case "team_plan_required":
+        return { kind: "planRequired" };
+      case "team_name_taken":
+        return { kind: "nameTaken" };
+      case "last_team_admin":
+        return { kind: "lastAdmin" };
+      case "not_workspace_members": {
+        const userIds = detailsRecord(error.details)?.user_ids;
+        return {
+          kind: "notWorkspaceMembers",
+          userIds: Array.isArray(userIds)
+            ? userIds.filter((id): id is string => typeof id === "string")
+            : [],
+        };
+      }
+    }
+    if (error.status === 404 && TEAM_GONE_MESSAGE.test(error.message)) return { kind: "gone" };
+    if (error.status === 404 && MEMBER_GONE_MESSAGE.test(error.message)) {
+      return { kind: "memberGone" };
+    }
+  }
+  return classifyRowActionError(error);
+}
+
+export type TeamAssignmentError = "teamGone" | "spaceGone" | "notAllowed" | "other";
+
+// POST /api/spaces/:id/teams answers 400 for a team that's gone (or moved out of the workspace),
+// 403 for someone who no longer administers the teamspace and 404 for a teamspace that's gone. A
+// 404 "Team not found" isn't among them: that is another route's answer.
+const TEAM_UNAVAILABLE_MESSAGE = /^team is not available in this workspace$/i;
+
+/** Which of the assignment's own refusals a failed request was. */
+export function classifyTeamAssignmentError(error: unknown): TeamAssignmentError {
+  if (
+    error instanceof CloudApiError &&
+    error.status === 400 &&
+    (error.code === "teams_not_available" || TEAM_UNAVAILABLE_MESSAGE.test(error.message))
+  ) {
+    return "teamGone";
+  }
+  const failure = classifySpaceError(error);
+  if (failure.kind === "gone") return "spaceGone";
+  if (failure.kind === "notAllowed") return "notAllowed";
+  return "other";
+}
+
 export type RemovalError =
   | { kind: "transferRequired"; owners: OwnedMemberContent[] }
   | { kind: "invalidTransferTarget" }
@@ -150,8 +212,8 @@ export type SpaceActionError =
   // 410: the space was archived, so it no longer takes joins or members.
   | { kind: "archived" }
   | { kind: "notWorkspaceMembers"; userIds: string[] }
-  // Groups a create named that were deleted or moved since the list loaded.
-  | { kind: "groupsUnavailable"; teamIds: string[] }
+  // Teams a create named that were deleted or moved since the list loaded.
+  | { kind: "teamsUnavailable"; teamIds: string[] }
   | RowActionError;
 
 /** Maps a failed space action; codes come first, then the row action kinds. */
@@ -180,7 +242,7 @@ export function classifySpaceError(error: unknown): SpaceActionError {
       case "teams_not_available": {
         const teamIds = detailsRecord(error.details)?.team_ids;
         return {
-          kind: "groupsUnavailable",
+          kind: "teamsUnavailable",
           teamIds: Array.isArray(teamIds)
             ? teamIds.filter((id): id is string => typeof id === "string")
             : [],
@@ -194,9 +256,11 @@ export function classifySpaceError(error: unknown): SpaceActionError {
 /**
  * The row-action kind a confirm dialog can show for a failed space action. The kinds only a space
  * has (a taken name, the last admin, a closed or archived space) have no screen of their own
- * there, so they read as a plain failure.
+ * there, so they read as a plain failure; a team's own kinds read the same way.
  */
-export function rowActionErrorOf(failure: SpaceActionError | undefined): RowActionError {
+export function rowActionErrorOf(
+  failure: SpaceActionError | TeamActionError | undefined
+): RowActionError {
   switch (failure?.kind) {
     case "gone":
     case "notAllowed":

@@ -130,7 +130,8 @@ test("the bar wraps inside a narrow pane and its labels never truncate", async (
 
   const bar = markup.match(/<div[^>]*role="region"[^>]*class="([^"]*)"/)?.[1] ?? "";
   const classes = bar.split(/\s+/);
-  for (const name of ["flex-wrap", "justify-center", "max-w-full"]) {
+  // Full width, as the design docks it: the count on one side, the actions on the other.
+  for (const name of ["flex-wrap", "justify-between"]) {
     assert.ok(classes.includes(name), `missing ${name} in "${bar}"`);
   }
   assert.doesNotMatch(markup, /truncate/);
@@ -167,5 +168,5 @@ test("without a trailing control the bar is just the count, Clear and the action
   );
 
   assert.equal(buttons(markup).length, 2);
-  assert.ok(markup.trimEnd().endsWith("</button></div></div>"));
+  assert.ok(markup.trimEnd().endsWith("</button></div></div></div>"));
 });

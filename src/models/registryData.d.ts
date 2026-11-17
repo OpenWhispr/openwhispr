@@ -17,6 +17,7 @@ export interface RetiredModel {
   replacement?: string;
 }
 export const registryData: ModelRegistryData;
+export const bundledRegistryData: ModelRegistryData;
 export function getRegistryData(): ModelRegistryData;
 export function getRegistryVersion(): number;
 export function getRegistrySnapshot(): RegistrySnapshot;
