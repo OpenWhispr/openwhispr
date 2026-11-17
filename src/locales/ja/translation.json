@@ -3488,6 +3488,24 @@
         "loadError": "チームを読み込めませんでした。"
       }
     },
+    "deviceNotes": {
+      "title": "このデバイス",
+      "info": "これらのノートはどのアカウントにも割り当てられていません。ノートを残して編集するには移動してください。",
+      "infoLabel": "このデバイス上のノートについて",
+      "moveNote": "自分のプライベートに移動",
+      "moveFolder": "フォルダーを自分のプライベートに移動",
+      "moveAll": "すべて自分のプライベートに移動",
+      "moveAllTo": "すべてフォルダに移動",
+      "moved": "プライベートに移動しました",
+      "movedCount_one": "{{count}} 件のノートをプライベートに移動しました",
+      "movedCount_other": "{{count}} 件のノートをプライベートに移動しました",
+      "moveFailed": "このノートを移動できませんでした",
+      "moveFolderFailed": "これらのノートを移動できませんでした",
+      "banner": "このノートはまだアカウントに割り当てられていません。",
+      "notesHeading": "ノート",
+      "summaryHeading": "AI要約",
+      "transcriptHeading": "文字起こし"
+    },
     "structureIntro": {
       "title": "ノートの保存場所",
       "description": "OpenWhispr は個人的な考えと共同作業を分け、適切な人だけがノートを見られるようにします。",

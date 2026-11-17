@@ -51,6 +51,9 @@ const MOCKS = {
   "/hooks/useSpaceRoster": `
     export const fetchSpaceRoster = async () => globalThis.__roster ?? [];
   `,
+  "/stores/deviceNotesStore": `
+    export const useDeviceNotesStore = (select) => select({ viewNoteId: null });
+  `,
   "/stores/noteStore": `
     const note = () => globalThis.__note;
     export const setActiveNoteId = () => {};

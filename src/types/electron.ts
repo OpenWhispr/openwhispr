@@ -468,6 +468,48 @@ export interface Leaderboard {
   refreshAfterSeconds: number;
 }
 
+export interface DeviceNoteFolder {
+  id: number;
+  name: string;
+  is_default: number;
+  noteCount: number;
+}
+
+export interface DeviceNoteSummary {
+  id: number;
+  title: string;
+  folder_id: number | null;
+  created_at: string;
+  updated_at: string;
+  note_type: NoteItem["note_type"];
+}
+
+export interface DeviceNotesList {
+  folders: DeviceNoteFolder[];
+  notes: DeviceNoteSummary[];
+}
+
+export type DeviceNote = Pick<
+  NoteItem,
+  | "id"
+  | "title"
+  | "content"
+  | "enhanced_content"
+  | "transcript"
+  | "participants"
+  | "note_type"
+  | "created_at"
+  | "updated_at"
+  | "audio_duration_seconds"
+  | "folder_id"
+>;
+
+export interface DeviceNotesFailure {
+  success: false;
+  code: string;
+  error: string;
+}
+
 export interface NoteItem {
   id: number;
   title: string;
@@ -618,7 +660,8 @@ export type ShareVisibility = "private" | "link" | "domain" | "invited";
 
 export type NotePermission = "owner" | "editor" | "viewer";
 
-export type NoteAccessPrincipalType = "user" | "email" | "team" | "folder" | "workspace";
+// "space" only appears as the implicit grant of a teamspace note's members.
+export type NoteAccessPrincipalType = "user" | "email" | "team" | "space" | "folder" | "workspace";
 
 export interface NoteAccessPrincipal {
   type: NoteAccessPrincipalType;
@@ -633,7 +676,7 @@ export interface NoteAccessGrant {
   id: string;
   principal: NoteAccessPrincipal;
   permission: Exclude<NotePermission, "owner">;
-  source: "direct" | "team" | "folder" | "workspace";
+  source: "direct" | "team" | "space" | "folder" | "workspace";
   inherited: boolean;
   pending: boolean;
   created_at: string;
@@ -2161,6 +2204,24 @@ declare global {
 
       // Folder operations
       getFolders: (spaceId?: number | null) => Promise<FolderItem[]>;
+      getDeviceNotes?: () => Promise<DeviceNotesList>;
+      getDeviceNote?: (id: number) => Promise<DeviceNote | null>;
+      moveDeviceNotes?: (request: {
+        noteIds?: number[];
+        folderId?: number;
+        workspaceId?: string | null;
+        /** One of the account's Private folders to file every note in. */
+        targetFolderId?: number;
+        accountId?: string | null;
+      }) => Promise<{ success: true; moved: NoteItem[]; skipped: number } | DeviceNotesFailure>;
+      getStandInOwnershipCandidates?: () => Promise<Array<{ id: number; cloud_id: string }>>;
+      resolveStandInOwnership?: (request: {
+        noteId: number;
+        cloudId: string;
+        owned: boolean;
+        accountId?: string | null;
+      }) => Promise<{ claimed: boolean } | DeviceNotesFailure>;
+      onDeviceNotesChanged?: (callback: () => void) => () => void;
       createFolder: (
         name: string,
         spaceId?: number | null,

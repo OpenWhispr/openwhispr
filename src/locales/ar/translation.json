@@ -3096,6 +3096,28 @@
         "loadError": "تعذر تحميل الفرق."
       }
     },
+    "deviceNotes": {
+      "title": "على هذا الجهاز",
+      "info": "هذه الملاحظات غير مخصّصة لأي حساب. انقل ملاحظة للاحتفاظ بها وتعديلها.",
+      "infoLabel": "حول الملاحظات على هذا الجهاز",
+      "moveNote": "نقل إلى خاص",
+      "moveFolder": "نقل المجلد إلى خاص",
+      "moveAll": "نقل الكل إلى خاص",
+      "moveAllTo": "نقل الكل إلى مجلد",
+      "moved": "تم النقل إلى خاص",
+      "movedCount_zero": "تم نقل {{count}} ملاحظات إلى خاص",
+      "movedCount_one": "تم نقل {{count}} ملاحظة إلى خاص",
+      "movedCount_two": "تم نقل {{count}} ملاحظتين إلى خاص",
+      "movedCount_few": "تم نقل {{count}} ملاحظات إلى خاص",
+      "movedCount_many": "تم نقل {{count}} ملاحظةً إلى خاص",
+      "movedCount_other": "تم نقل {{count}} ملاحظة إلى خاص",
+      "moveFailed": "تعذّر نقل هذه الملاحظة",
+      "moveFolderFailed": "تعذّر نقل هذه الملاحظات",
+      "banner": "هذه الملاحظة غير مخصّصة لأي حساب بعد.",
+      "notesHeading": "الملاحظات",
+      "summaryHeading": "الملخص بالذكاء الاصطناعي",
+      "transcriptHeading": "النص المفرَّغ"
+    },
     "structureIntro": {
       "title": "أين تُحفظ ملاحظاتك",
       "description": "يفصل OpenWhispr الأفكار الخاصة عن العمل المشترك حتى يرى الأشخاص المناسبون الملاحظات المناسبة.",

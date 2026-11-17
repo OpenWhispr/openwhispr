@@ -3560,6 +3560,24 @@
         "loadError": "Impossibile caricare i team."
       }
     },
+    "deviceNotes": {
+      "title": "Su questo dispositivo",
+      "info": "Queste note non sono assegnate a nessun account. Sposta una nota per conservarla e modificarla.",
+      "infoLabel": "Informazioni sulle note su questo dispositivo",
+      "moveNote": "Sposta nel mio Privato",
+      "moveFolder": "Sposta la cartella nel mio Privato",
+      "moveAll": "Sposta tutto nel mio Privato",
+      "moveAllTo": "Sposta tutto in una cartella",
+      "moved": "Spostata nel tuo Privato",
+      "movedCount_one": "{{count}} nota spostata nel tuo Privato",
+      "movedCount_other": "{{count}} note spostate nel tuo Privato",
+      "moveFailed": "Impossibile spostare questa nota",
+      "moveFolderFailed": "Impossibile spostare queste note",
+      "banner": "Questa nota non è ancora assegnata a un account.",
+      "notesHeading": "Note",
+      "summaryHeading": "Riepilogo AI",
+      "transcriptHeading": "Trascrizione"
+    },
     "structureIntro": {
       "title": "Dove si trovano le tue note",
       "description": "OpenWhispr separa i pensieri privati dal lavoro condiviso, così le note sono visibili alle persone giuste.",

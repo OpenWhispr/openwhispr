@@ -4119,6 +4119,24 @@
         "loadError": "Teams konnten nicht geladen werden."
       }
     },
+    "deviceNotes": {
+      "title": "Auf diesem Gerät",
+      "info": "Diese Notizen sind keinem Konto zugeordnet. Verschieben Sie eine Notiz, um sie zu behalten und zu bearbeiten.",
+      "infoLabel": "Über Notizen auf diesem Gerät",
+      "moveNote": "Nach Privat verschieben",
+      "moveFolder": "Ordner nach Privat verschieben",
+      "moveAll": "Alle nach Privat verschieben",
+      "moveAllTo": "Alle in Ordner verschieben",
+      "moved": "Nach „Privat“ verschoben",
+      "movedCount_one": "{{count}} Notiz nach „Privat“ verschoben",
+      "movedCount_other": "{{count}} Notizen nach „Privat“ verschoben",
+      "moveFailed": "Diese Notiz konnte nicht verschoben werden",
+      "moveFolderFailed": "Diese Notizen konnten nicht verschoben werden",
+      "banner": "Diese Notiz ist noch keinem Konto zugeordnet.",
+      "notesHeading": "Notizen",
+      "summaryHeading": "KI-Zusammenfassung",
+      "transcriptHeading": "Transkript"
+    },
     "structureIntro": {
       "title": "Wo Ihre Notizen gespeichert sind",
       "description": "OpenWhispr trennt private Gedanken von gemeinsamer Arbeit, damit nur die richtigen Personen Ihre Notizen sehen.",

@@ -302,6 +302,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Folder functions
   getFolders: (spaceId) => ipcRenderer.invoke("db-get-folders", spaceId),
+  getDeviceNotes: () => ipcRenderer.invoke("db-get-device-notes"),
+  getDeviceNote: (id) => ipcRenderer.invoke("db-get-device-note", id),
+  moveDeviceNotes: (request) => ipcRenderer.invoke("db-move-device-notes", request),
+  getStandInOwnershipCandidates: () => ipcRenderer.invoke("db-get-stand-in-ownership-candidates"),
+  resolveStandInOwnership: (request) =>
+    ipcRenderer.invoke("db-resolve-stand-in-ownership", request),
   createFolder: (name, spaceId, writeGuard) =>
     ipcRenderer.invoke("db-create-folder", name, spaceId, writeGuard),
   deleteFolder: (id) => ipcRenderer.invoke("db-delete-folder", id),
@@ -340,6 +346,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "database-account-scope-changed",
     (callback) => (_event, scope) => callback(scope)
   ),
+  onDeviceNotesChanged: registerListener("device-notes-changed", (callback) => () => callback()),
   onActiveAccountScopeChanged: registerListener(
     "active-account-scope-changed",
     (callback) => (_event, scope) => callback(scope)
