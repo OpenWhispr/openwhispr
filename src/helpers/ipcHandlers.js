@@ -1074,7 +1074,7 @@ class IPCHandlers {
         () => this.parakeetManager.serverManager.wsServer.modelName,
       ],
       // Dictation cleanup and the assistant can each have a llama-server.
-      ...(localLlmManager.servers ?? [localLlmManager.serverManager]).map((server) => [
+      ...localLlmManager.servers.map((server) => [
         "llm",
         server,
         () => server.localModelIdForPath?.(server.modelPath),
@@ -1141,7 +1141,7 @@ class IPCHandlers {
           model.fileName &&
           samePath(modelPath, path.join(localLlmManager.getModelsDir(), model.fileName))
       )?.[0];
-    for (const server of localLlmManager.servers ?? [localLlmManager.serverManager]) {
+    for (const server of localLlmManager.servers) {
       server.localModelIdForPath = llmModelIdForPath;
     }
   }

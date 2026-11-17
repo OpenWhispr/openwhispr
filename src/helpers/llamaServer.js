@@ -19,6 +19,9 @@ const { BASELINE_CONTEXT_SIZE } = require("./llamaContextPolicy");
 // Range kept clear of cliBridge (8200-8219) to avoid port-bind collisions.
 const PORT_RANGE_START = 8221;
 const PORT_RANGE_END = 8240;
+// The last port each server picked. A probe can't see a port another server
+// has picked but not bound yet, so two starting at once would share one.
+const claimedPorts = new Set();
 const STARTUP_TIMEOUT_MS = 120000;
 const VULKAN_STARTUP_TIMEOUT_MS = 120000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
@@ -217,8 +220,14 @@ class LlamaServerManager {
   }
 
   async findAvailablePort() {
+    claimedPorts.delete(this.port);
     for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
-      if (await isPortAvailable(port)) return port;
+      if (claimedPorts.has(port)) continue;
+      // Checked again after the probe: another server may have claimed it meanwhile.
+      if ((await isPortAvailable(port)) && !claimedPorts.has(port)) {
+        claimedPorts.add(port);
+        return port;
+      }
     }
     throw new Error(`No available ports in range ${PORT_RANGE_START}-${PORT_RANGE_END}`);
   }

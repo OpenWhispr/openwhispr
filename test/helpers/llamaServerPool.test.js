@@ -212,7 +212,7 @@ test("off Apple Silicon one server is kept, whatever the system memory", async (
   );
 });
 
-test("a second server that will not start falls back to one server for the session", async (t) => {
+test("a model whose second server will not start swaps on one, and only that model", async (t) => {
   const { modelManager, starts } = await setup(t);
   await cleanup(modelManager);
   modelManager.servers[1].failNextStart = true;
@@ -224,8 +224,8 @@ test("a second server that will not start falls back to one server for the sessi
   await cleanup(modelManager);
   assert.deepEqual(
     starts.map((start) => start.server),
-    [0, 0, 0],
-    "no second attempt at a second server"
+    [0, 0, 1],
+    "the cleanup model still gets a second server"
   );
 });
 
@@ -338,6 +338,18 @@ test("a cancel ends the wait to free the other server, leaving both alone", asyn
   );
 });
 
+test("a model priced before its file exists is priced again once it does", async (t) => {
+  const { modelManager } = await setup(t);
+  delete modelManager._memoryProfile;
+  const modelInfo = modelManager.findModelById(ASSISTANT);
+  const modelPath = path.join(modelManager.modelsDir, modelInfo.model.fileName);
+  await fs.rm(modelPath);
+
+  assert.equal((await modelManager._memoryProfile(modelInfo, modelPath)).weightsBytes, 0);
+  await fs.writeFile(modelPath, Buffer.alloc(1_000_001, 1));
+  assert.equal((await modelManager._memoryProfile(modelInfo, modelPath)).weightsBytes, 1_000_001);
+});
+
 test("stopping the servers stops both, and only unneeded ones when asked", async (t) => {
   const { modelManager } = await setup(t);
   await cleanup(modelManager);
@@ -376,4 +388,11 @@ test("each server records its own sidecar pid", async (t) => {
   const names = modelManager.servers.map((server) => server.pidName);
   assert.equal(new Set(names).size, names.length);
   assert.equal(names[0], "llama", "the first keeps the name older builds wrote");
+});
+
+test("a port one server picked is not handed to the other before it binds", async (t) => {
+  const { modelManager } = await setup(t);
+  const [first, second] = modelManager.servers;
+  const port = await first.findAvailablePort();
+  assert.notEqual(await second.findAvailablePort(), port);
 });
