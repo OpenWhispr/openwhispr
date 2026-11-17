@@ -66,6 +66,9 @@ const electronStub = {
 Module._load = function loadWithMocks(request, parent, isMain) {
   if (request === "electron") return electronStub;
   if (request === "electron-updater") return { autoUpdater };
+  if (parent?.filename.endsWith("/affiliateLinks.js") && request === "./tokenStore") {
+    return { getState: () => ({ ...tokenState }) };
+  }
   if (parent?.filename === handlersModulePath) {
     // Keep every cleanup target inside this harness's temporary userData.
     if (request === "os") return { ...os, homedir: () => userDataDirectory };
@@ -168,11 +171,20 @@ test.before(() => {
   };
 });
 
-test.after(() => {
-  fakeThis.metaActivation?.dispose?.();
-  fakeThis.productEvents?.dispose?.();
-  Module._load = originalLoad;
-  fs.rmSync(userDataDirectory, { recursive: true, force: true });
+test.after(async () => {
+  try {
+    await Promise.all([fakeThis.metaActivation?.running, fakeThis.productEvents?.running]);
+    assert.equal(
+      fakeThis._productRequests.size,
+      0,
+      "no foreground or background operation is left pending"
+    );
+  } finally {
+    fakeThis.metaActivation?.dispose?.();
+    fakeThis.productEvents?.dispose?.();
+    Module._load = originalLoad;
+    fs.rmSync(userDataDirectory, { recursive: true, force: true });
+  }
 });
 
 const getScope = () => handlers.get("get-active-account-scope")();
@@ -486,6 +498,7 @@ function restoreUpdaterState(t) {
     databaseManager: fakeThis.databaseManager,
     windowManager: fakeThis.windowManager,
     metaActivation: fakeThis.metaActivation,
+    productEvents: fakeThis.productEvents,
   };
   const previousTokenState = tokenState;
   t.after(() => {
@@ -578,8 +591,12 @@ async function signOutUpdater(t, generation) {
     webContents: { session: { cookies: { get: async () => [] } } },
   };
   fakeThis.windowManager = { controlPanelWindow: win, retireMeetingNotificationScope() {} };
+  // Setting the fixture's signed-in scope starts collectors and a policy read.
+  // Keep that setup work separate from the sign-out behavior under test.
+  fakeThis.metaActivation = { flush: async () => {}, close: async () => {} };
+  fakeThis.productEvents = { flush: async () => {} };
   await setScope("departing-account", generation);
-  fakeThis.metaActivation = { close: async () => {} };
+  await fakeThis.refreshEffectivePolicy();
   fakeThis.updateManager = createUpdater();
   fakeThis.updateManager.updatePolicy({
     success: true,
@@ -590,10 +607,11 @@ async function signOutUpdater(t, generation) {
 }
 
 test("local sign-out restores guest updater readiness without a server or renderer response", async (t) => {
+  useTestApi(t);
   const { manager } = await signOutUpdater(t, 100);
-  let requests = 0;
-  t.mock.method(electronStub.net, "fetch", async () => {
-    requests++;
+  const requests = [];
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    requests.push({ url, headers: init.headers, tokenState: { ...tokenState } });
     throw new Error("offline");
   });
   const result = await handlers.get("auth-clear-session")({ sender: {} });
@@ -604,8 +622,70 @@ test("local sign-out restores guest updater readiness without a server or render
   assert.equal(fakeThis.databaseManager.activeAccountId, null);
   assert.equal((await manager.getUpdateStatus()).policyReady, true);
   assert.equal((await manager.getUpdateStatus()).updateMode, "user_choice");
-  assert.equal(requests, 0);
+  assert.deepEqual(requests, []);
 });
+
+test(
+  "local sign-out retires both collectors after close settles and prevents later dispatch",
+  { timeout: 10_000 },
+  async (t) => {
+    const collectors = [
+      { request: fakeThis.metaActivation.request, path: "/api/activation/device" },
+      { request: fakeThis.productEvents.request, path: "/api/product-events/batch" },
+    ];
+    useTestApi(t);
+    const { manager } = await signOutUpdater(t, 110);
+    const uploaded = deferred();
+    const response = deferred();
+    const closing = deferred();
+    const close = deferred();
+    const requests = [];
+    fakeThis.metaActivation.close = async () => {
+      closing.resolve();
+      await close.promise;
+    };
+    t.mock.method(electronStub.net, "fetch", async (url, init) => {
+      requests.push({
+        path: new URL(url).pathname,
+        authorization: init.headers.Authorization,
+        generation: tokenState.generation,
+        signal: init.signal,
+      });
+      if (requests.length === collectors.length) uploaded.resolve();
+      return response.promise;
+    });
+    const options = { method: "POST", body: {}, expectedAuthGeneration: 110 };
+    const pending = collectors.map(({ request, path }) => request({ ...options, path }));
+    t.after(async () => {
+      close.resolve();
+      response.resolve(Response.json({ accepted: [] }));
+      await Promise.all(pending);
+    });
+    await uploaded.promise;
+    const signOut = handlers.get("auth-clear-session")({ sender: {} });
+    await closing.promise;
+    assert.equal(tokenState.token, "sign-out-token-110");
+    assert.deepEqual(
+      requests.map(({ path, authorization, generation }) => ({ path, authorization, generation })),
+      collectors.map(({ path }) => ({
+        path,
+        authorization: "Bearer sign-out-token-110",
+        generation: 110,
+      }))
+    );
+
+    close.resolve();
+    assert.equal((await signOut).success, true);
+    assert.deepEqual(tokenState, { token: null, generation: 111 });
+    assert.ok(requests.every(({ signal }) => signal.aborted));
+    assert.equal((await manager.getUpdateStatus()).policyReady, true);
+    response.resolve(Response.json({ accepted: [] }));
+    assert.ok((await Promise.all(pending)).every((result) => result.success === false));
+    for (const { request, path } of collectors)
+      assert.equal((await request({ ...options, path })).success, false);
+    assert.equal(requests.length, 2, "no collector dispatches after the bearer is cleared");
+  }
+);
 
 test("completed cookie sign-out discards a pending cookie-authorized updater policy", async (t) => {
   const { deferred } = require("./harness/deferred");
@@ -1192,6 +1272,7 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
       return { success: true };
     });
     await entered.promise;
+    lookup.resolve(allowed);
     lookup = deferred();
 
     tokenState = { token: "rotation-token-b", generation: 61 };
@@ -1542,6 +1623,8 @@ test("account deletion still deletes the note mirrors when the enterprise vault 
 });
 
 test("a repeated validated account scope keeps its settled policy while refreshing", async (t) => {
+  t.mock.method(fakeThis.metaActivation, "flush", async () => {});
+  t.mock.method(fakeThis.productEvents, "flush", async () => {});
   // A private-note claim that fails leaves the scope unapplied, so each repeat
   // runs in full and refreshes; a repeat of an applied scope changes nothing.
   const claim = fakeThis._claimSignedOutPrivateNotes;
@@ -2095,7 +2178,12 @@ for (const stage of ["admission", "streaming"]) {
       if (stage === "streaming")
         assert.ok(outputs.every((output) => output.cancelled === !permitted));
       assert.equal(sender.listenerCount("destroyed"), 0);
-      assert.equal(fakeThis._productRequests.size, 0);
+      assert.equal(
+        [...fakeThis._productRequests.values()].some(
+          (operation) => operation.channel === "cloud-agent-stream-start"
+        ),
+        false
+      );
       assert.equal(fakeThis._agentStreamRequests.requestsBySender.size, 0);
     });
   }
@@ -2120,7 +2208,12 @@ test("cloud agent admission preserves typed API failures and releases ownership"
   assert.equal(messages[0][0], "cloud-agent-stream-error");
   assert.equal(messages[0][1].code, "AUTH_EXPIRED");
   assert.equal(sender.listenerCount("destroyed"), 0);
-  assert.equal(fakeThis._productRequests.size, 0);
+  assert.equal(
+    [...fakeThis._productRequests.values()].some(
+      (operation) => operation.channel === "cloud-agent-stream-start"
+    ),
+    false
+  );
   assert.equal(fakeThis._agentStreamRequests.requestsBySender.size, 0);
 });
 
@@ -2809,6 +2902,124 @@ test("account deletion still clears audio and note mirrors when product-event er
   assert.deepEqual(credentials, ["deleted-account"]);
 });
 
+test("device backup restrictions stop the real background collectors without blocking usage or erasure", async (t) => {
+  useProductLifecycle(t);
+  const {
+    defaultDevicePolicy,
+    normalizeDeviceValues,
+  } = require("../../src/helpers/managedDevicePolicy");
+  const policy = defaultDevicePolicy();
+  policy.dataRetention.cloudBackupAllowed = false;
+  t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () =>
+    normalizeDeviceValues({ RequireSignIn: true, Policy: JSON.stringify(policy) })
+  );
+  const requests = [];
+  t.mock.method(electronStub.net, "fetch", async (url, init) => {
+    if (url.endsWith("/api/workspace-policy"))
+      return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+    requests.push({ path: new URL(url).pathname, method: init.method || "GET" });
+    return Response.json({
+      binding_id: "aa60c433-6827-40ea-887e-3015b53b7f82",
+      authenticated_at: new Date().toISOString(),
+      accepted: [],
+      deferred: [],
+      status: "awaiting_permission",
+    });
+  });
+  handleAuthTokenChange({ token: "backup-disabled", generation: tokenState.generation + 1 });
+  await setScope("backup-disabled", tokenState.generation);
+  await fakeThis.refreshEffectivePolicy();
+  assert.equal(
+    fakeThis.effectivePolicyManager.getCurrent().policy.dataRetention.cloudBackupAllowed,
+    false
+  );
+  await handlers.get("product-events-record-app-session")({}, await getScope());
+  await handlers.get("product-events-record-onboarding-completed")({}, { setupMode: "managed" });
+  await fakeThis.productEvents.flush();
+  await fakeThis.metaActivation.flush();
+  assert.deepEqual(requests, [], "neither collector may upload under the device restriction");
+
+  for (const request of [
+    { path: "/api/product-events/batch", method: "GET" },
+    { path: "/api/transcriptions/delete", method: "DELETE" },
+    { path: "/api/analytics/participation", method: "PATCH", body: { enabled: false } },
+  ]) {
+    const result = await handlers.get("cloud-api-request")(
+      {},
+      {
+        ...request,
+        expectedAuthGeneration: tokenState.generation,
+      }
+    );
+    assert.equal(result.success, true);
+  }
+  assert.equal((await handlers.get("cloud-usage")({ sender: {} })).success, true);
+  assert.equal(requests.length, 4);
+});
+
+for (const [collector, path] of [
+  ["productEvents", "/api/product-events/app-session"],
+  ["productEvents", "/api/product-events/batch"],
+  ["metaActivation", "/api/activation/device"],
+  ["metaActivation", "/api/activation/batch"],
+]) {
+  test(`${path} retires an in-flight background upload when device backup is revoked`, async (t) => {
+    useProductLifecycle(t);
+    const {
+      defaultDevicePolicy,
+      normalizeDeviceValues,
+    } = require("../../src/helpers/managedDevicePolicy");
+    const policy = defaultDevicePolicy();
+    let device = normalizeDeviceValues({ RequireSignIn: true, Policy: JSON.stringify(policy) });
+    t.mock.method(fakeThis.managedDevicePolicy, "getSnapshot", () => device);
+    t.mock.method(electronStub.net, "fetch", async () =>
+      Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } })
+    );
+    const accountId = `telemetry-${path}`;
+    handleAuthTokenChange({ token: accountId, generation: tokenState.generation + 1 });
+    await setScope(accountId, tokenState.generation);
+    await fakeThis.refreshEffectivePolicy();
+    await fakeThis.productEvents.flush();
+    await fakeThis.metaActivation.flush();
+    const entered = deferred();
+    const response = deferred();
+    let signal;
+    let sent = 0;
+    t.mock.method(electronStub.net, "fetch", async (url, init) => {
+      if (url.endsWith("/api/workspace-policy"))
+        return Response.json({ data: { managed: false, policy: null, policyUpdatedAt: null } });
+      assert.equal(new URL(url).pathname, path);
+      signal = init.signal;
+      sent += 1;
+      entered.resolve();
+      return response.promise;
+    });
+    const request = {
+      path,
+      method: "POST",
+      body: {},
+      expectedAuthGeneration: tokenState.generation,
+    };
+    const pending = fakeThis[collector].request(request);
+    t.after(() => response.resolve(Response.json({ accepted: [] })));
+    await entered.promise;
+    policy.dataRetention.cloudBackupAllowed = false;
+    device = normalizeDeviceValues({ RequireSignIn: true, Policy: JSON.stringify(policy) });
+    fakeThis.effectivePolicyManager.getCurrent();
+    assert.equal(signal.aborted, true, "the in-flight transport must be cancelled");
+    response.resolve(Response.json({ accepted: [] }));
+    assert.equal((await pending).success, false, "a late success cannot acknowledge retired work");
+    assert.equal((await fakeThis[collector].request(request)).success, false);
+    assert.equal(sent, 1, "revoked policy prevents the next upload too");
+
+    policy.dataRetention.cloudBackupAllowed = true;
+    device = normalizeDeviceValues({ RequireSignIn: true, Policy: JSON.stringify(policy) });
+    fakeThis.effectivePolicyManager.getCurrent();
+    assert.equal((await fakeThis[collector].request(request)).success, true);
+    assert.equal(sent, 2, "relaxing the policy permits telemetry again");
+  });
+}
+
 test("a late product event binding cannot recreate the queue for an erased account", async (t) => {
   const originalApiUrl = process.env.OPENWHISPR_API_URL;
   const originalTokenState = tokenState;
@@ -2894,4 +3105,61 @@ test("Reset App Data erases the product event store and interrupted writes", asy
   assert.equal(result.success, true);
   assert.equal(fs.existsSync(file), false);
   assert.equal(fs.existsSync(`${file}.111.tmp`), false);
+});
+
+test("a confirmed signed-out scope preserves a newly entered creator link through reauthentication", async (t) => {
+  const previousEnabled = process.env.OPENWHISPR_AFFILIATE_ENABLED;
+  const previousDomain = process.env.OPENWHISPR_AFFILIATE_DOMAIN;
+  process.env.OPENWHISPR_AFFILIATE_ENABLED = "true";
+  process.env.OPENWHISPR_AFFILIATE_DOMAIN = "try.openwhispr.com";
+  t.after(() => {
+    if (previousEnabled === undefined) delete process.env.OPENWHISPR_AFFILIATE_ENABLED;
+    else process.env.OPENWHISPR_AFFILIATE_ENABLED = previousEnabled;
+    if (previousDomain === undefined) delete process.env.OPENWHISPR_AFFILIATE_DOMAIN;
+    else process.env.OPENWHISPR_AFFILIATE_DOMAIN = previousDomain;
+  });
+  tokenState = { token: "expired-creator-account", generation: 9001 };
+  assert.equal((await setScope("creator-account", 9001)).success, true);
+  assert.equal((await setScope(null, 9001)).success, true);
+  const link = "https://try.openwhispr.com/creator";
+  handlers.get("affiliate-save-candidate")({}, { link, generation: 9001 });
+  tokenState = { token: "renewed-creator-account", generation: 9002 };
+  assert.equal((await setScope("creator-account", 9002)).success, true);
+  assert.equal(handlers.get("affiliate-get-candidate")().candidate.link, link);
+});
+
+test("Reset App Data removes guest creator links and interrupted candidate writes", async (t) => {
+  const previousEnabled = process.env.OPENWHISPR_AFFILIATE_ENABLED;
+  const previousDomain = process.env.OPENWHISPR_AFFILIATE_DOMAIN;
+  const previousRevoke = connectorManager.revokeAllStored;
+  const previousTokenState = tokenState;
+  process.env.OPENWHISPR_AFFILIATE_ENABLED = "true";
+  process.env.OPENWHISPR_AFFILIATE_DOMAIN = "try.openwhispr.com";
+  connectorManager.revokeAllStored = async () => {};
+  t.after(() => {
+    if (previousEnabled === undefined) delete process.env.OPENWHISPR_AFFILIATE_ENABLED;
+    else process.env.OPENWHISPR_AFFILIATE_ENABLED = previousEnabled;
+    if (previousDomain === undefined) delete process.env.OPENWHISPR_AFFILIATE_DOMAIN;
+    else process.env.OPENWHISPR_AFFILIATE_DOMAIN = previousDomain;
+    if (previousRevoke === undefined) delete connectorManager.revokeAllStored;
+    else connectorManager.revokeAllStored = previousRevoke;
+    tokenState = previousTokenState;
+  });
+  tokenState = { token: null, generation: 9010 };
+  await setScope(null, 9010);
+  const link = "https://try.openwhispr.com/creator";
+  handlers.get("affiliate-save-candidate")({}, { link, generation: 9010 });
+  const file = path.join(userDataDirectory, "affiliate-candidate.json");
+  fs.copyFileSync(file, `${file}.tmp`);
+  assert.equal(handlers.get("affiliate-get-candidate")().candidate.link, link);
+
+  const result = await handlers.get("cleanup-app")({ sender: {} });
+
+  assert.equal(result.success, true);
+  assert.equal(fs.existsSync(file), false);
+  assert.equal(fs.existsSync(`${file}.tmp`), false);
+  assert.equal(handlers.get("affiliate-get-candidate")().candidate, null);
+  tokenState = { token: "next-account-token", generation: 9012 };
+  assert.equal((await setScope("next-account", 9012)).success, true);
+  assert.equal(handlers.get("affiliate-get-candidate")().candidate, null);
 });

@@ -1732,6 +1732,10 @@ class WindowManager {
     return this._onboardingDemoKind !== null;
   }
 
+  isOnboardingActive() {
+    return this._onboardingActive;
+  }
+
   stopOnboardingDemoRecording() {
     if (!this._onboardingDemoKind) return false;
     this.sendStopDictation();

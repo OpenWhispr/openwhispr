@@ -3,12 +3,12 @@ import { normalizeDbDate } from "../../utils/dateFormatting";
 
 const SHOWN_NOTES = 5;
 
-export function sidebarFolderNotes(
-  notes: NoteItem[],
-  activeNote: NoteItem | null,
+export function sidebarFolderNotes<T extends Pick<NoteItem, "id" | "updated_at" | "folder_id">>(
+  notes: T[],
+  activeNote: T | null,
   folderId: number,
   total: number
-): { notes: NoteItem[]; hiddenCount: number } {
+): { notes: T[]; hiddenCount: number } {
   // The store keeps an edited note in its old slot, so order by updated_at here.
   const visible = [...notes]
     .sort(
