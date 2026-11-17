@@ -4125,6 +4125,8 @@
       "infoLabel": "About notes on this device",
       "moveNote": "Move to my Private",
       "moveFolder": "Move folder to my Private",
+      "moveAll": "Move all to my Private",
+      "moveAllTo": "Move all to folder",
       "moved": "Moved to your Private",
       "movedCount_one": "Moved {{count}} note to your Private",
       "movedCount_other": "Moved {{count}} notes to your Private",

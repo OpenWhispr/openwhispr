@@ -5088,6 +5088,67 @@ test("moveDeviceNotesToPrivate does nothing signed out or on a single-account Ma
   });
 });
 
+test("moveDeviceNotesToPrivate files every note in a chosen Private folder", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const ideas = seedFolder(db.db, standInId, { name: "Ideas" });
+  const inIdeas = seedNote(db.db, standInId, { title: "i", folderId: ideas });
+  const root = seedNote(db.db, standInId, { title: "r" });
+  signIn(db, "a", W1_ACTIVE);
+  const home = db.getDefaultPrivateSpaceId();
+  const archive = seedFolder(db.db, home, { name: "Archive", accountId: "a" });
+  const foldersBefore = db.db.prepare("SELECT COUNT(*) AS n FROM folders").get().n;
+
+  const { moved, skipped } = db.moveDeviceNotesToPrivate({
+    noteIds: [inIdeas, root],
+    targetFolderId: archive,
+  });
+
+  assert.equal(skipped, 0);
+  assert.deepEqual(
+    moved.map((note) => [note.id, note.space_id, note.folder_id, note.account_id]),
+    [
+      [inIdeas, home, archive, "a"],
+      [root, home, archive, "a"],
+    ]
+  );
+  assert.equal(
+    db.db.prepare("SELECT COUNT(*) AS n FROM folders").get().n,
+    foldersBefore,
+    "no folder named after the stand-in's is made"
+  );
+  assertEveryRowInItsFolderSpace(db.db);
+});
+
+test("moveDeviceNotesToPrivate moves nothing into a folder that isn't the account's live Private folder", (t) => {
+  const db = createSharedMacDb(t);
+  if (!db) return;
+  const standInId = db._standInPrivateSpaceId();
+  const id = seedNote(db.db, standInId, { title: "n" });
+  const standInFolder = seedFolder(db.db, standInId, { name: "Ideas" });
+  const othersFolder = seedFolder(db.db, db._insertPrivateSpace("b", "wb"), {
+    name: "B's",
+    accountId: "b",
+  });
+  signIn(db, "a", W1_ACTIVE);
+  const deleted = seedFolder(db.db, db.getDefaultPrivateSpaceId(), {
+    name: "Gone",
+    accountId: "a",
+    deletedAt: SEEDED_AT,
+  });
+  const before = noteRow(db.db, id);
+
+  for (const targetFolderId of [standInFolder, othersFolder, deleted, 99999]) {
+    assert.deepEqual(db.moveDeviceNotesToPrivate({ noteIds: [id], targetFolderId }), {
+      moved: [],
+      skipped: 1,
+      code: "folder_unavailable",
+    });
+  }
+  assert.deepEqual(noteRow(db.db, id), before);
+});
+
 test("on a shared Mac the sign-in claim takes only notes the cloud says are the account's", (t) => {
   const db = createSharedMacDb(t);
   if (!db) return;

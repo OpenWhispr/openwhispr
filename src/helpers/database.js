@@ -6830,10 +6830,13 @@ class DatabaseManager {
   }
 
   // Moves eligible device notes (the named ones, or those in the named
-  // folder) into the signed-in account's Private for the workspace. Cloud
+  // folder) into the signed-in account's Private: all into `targetFolderId`
+  // when given, which must be a live folder of one of the account's Private
+  // spaces (else `code: "folder_unavailable"` and nothing moves), otherwise
+  // each into its folder of the same name in the workspace's Private. Cloud
   // identity and sync state stay as they are, so each note is queued by the
   // sync it was already in.
-  moveDeviceNotesToPrivate({ noteIds, folderId, workspaceId = null } = {}) {
+  moveDeviceNotesToPrivate({ noteIds, folderId, workspaceId = null, targetFolderId = null } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const requested = noteIds ? new Set(noteIds) : null;
@@ -6842,31 +6845,51 @@ class DatabaseManager {
       const filters = [];
       const params = [];
       if (requested) {
-        filters.push(`n.id IN (${[...requested].map(() => "?").join(",")})`);
-        params.push(...requested);
+        filters.push("n.id IN (SELECT value FROM json_each(?))");
+        params.push(JSON.stringify([...requested]));
       }
       if (folderId != null) {
         filters.push("n.folder_id = ?");
         params.push(folderId);
       }
       const moved = this.db.transaction(() => {
+        const target =
+          targetFolderId == null
+            ? null
+            : this.db
+                .prepare(
+                  `SELECT f.id, f.space_id FROM folders f JOIN spaces s ON s.id = f.space_id
+                   WHERE f.id = ? AND f.deleted_at IS NULL AND s.deleted_at IS NULL
+                     AND s.kind = 'private' AND s.account_id = ?`
+                )
+                .get(targetFolderId, accountId);
+        if (targetFolderId != null && !target) return null;
         const ids = this.db
           .prepare(
             `SELECT n.id FROM notes n WHERE ${[this._deviceNoteEligibleSql("n"), ...filters].join(" AND ")} ORDER BY n.id`
           )
           .all(...params)
           .map((row) => row.id);
-        const targetSpaceId = this._forkPrivateSpaceId(workspaceId, accountId);
-        const joined = new Map();
-        for (const id of ids) this._placeStandInNote(id, targetSpaceId, accountId, joined);
-        return ids.length
-          ? this.db
-              .prepare(
-                `SELECT * FROM notes WHERE id IN (${ids.map(() => "?").join(",")}) ORDER BY id`
-              )
-              .all(...ids)
-          : [];
+        const idList = JSON.stringify(ids);
+        if (target) {
+          this.db
+            .prepare(
+              `UPDATE notes SET space_id = ?, folder_id = ?, account_id = ?
+               WHERE id IN (SELECT value FROM json_each(?))`
+            )
+            .run(target.space_id, target.id, accountId, idList);
+        } else {
+          const targetSpaceId = this._forkPrivateSpaceId(workspaceId, accountId);
+          const joined = new Map();
+          for (const id of ids) this._placeStandInNote(id, targetSpaceId, accountId, joined);
+        }
+        return this.db
+          .prepare("SELECT * FROM notes WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id")
+          .all(idList);
       })();
+      if (!moved) {
+        return { moved: [], skipped: requested?.size ?? 0, code: "folder_unavailable" };
+      }
       return { moved, skipped: requested ? requested.size - moved.length : 0 };
     } catch (error) {
       debugLogger.error("Error moving device notes", { error: error.message }, "notes");

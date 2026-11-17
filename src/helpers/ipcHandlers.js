@@ -3435,13 +3435,14 @@ class IPCHandlers {
     );
 
     ipcMain.handle("db-move-device-notes", async (_event, request) => {
-      const { noteIds, folderId, workspaceId = null, accountId } = request ?? {};
+      const { noteIds, folderId, workspaceId = null, targetFolderId, accountId } = request ?? {};
       const namesNotes = Array.isArray(noteIds) && noteIds.length > 0;
       // The database reads a request naming neither as "move everything".
       if (
         !(namesNotes || isRowIdArgument(folderId)) ||
         (noteIds !== undefined && !(namesNotes && noteIds.every(isRowIdArgument))) ||
         (folderId !== undefined && !isRowIdArgument(folderId)) ||
+        (targetFolderId !== undefined && !isRowIdArgument(targetFolderId)) ||
         !isWorkspaceIdArgument(workspaceId)
       ) {
         return INVALID_DEVICE_NOTES_REQUEST;
@@ -3449,11 +3450,13 @@ class IPCHandlers {
       if (isForOtherAccount(accountId, this.databaseManager.activeAccountId)) {
         return ACCOUNT_CHANGED_RESULT;
       }
-      const { moved, skipped } = this.databaseManager.moveDeviceNotesToPrivate({
+      const { moved, skipped, code } = this.databaseManager.moveDeviceNotesToPrivate({
         noteIds,
         folderId,
         workspaceId,
+        targetFolderId,
       });
+      if (code) return { success: false, code, error: "The folder is no longer available" };
       if (moved.length > 0) publishDeviceNoteChange(moved);
       return { success: true, moved, skipped };
     });

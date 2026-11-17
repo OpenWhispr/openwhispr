@@ -3572,6 +3572,8 @@
       "infoLabel": "Sobre as notas neste dispositivo",
       "moveNote": "Mover para meu Privado",
       "moveFolder": "Mover pasta para meu Privado",
+      "moveAll": "Mover tudo para meu Privado",
+      "moveAllTo": "Mover tudo para pasta",
       "moved": "Movida para seu Privado",
       "movedCount_one": "{{count}} nota movida para seu Privado",
       "movedCount_other": "{{count}} notas movidas para seu Privado",

@@ -10,6 +10,13 @@ import {
 
 export type DeviceNotesMoveResult = { moved: NoteItem[] } | { error: string };
 
+/** The notes to move (named, or a folder's), and where: a Private folder, or each into its folder of the same name. */
+export interface DeviceNotesMoveRequest {
+  noteIds?: number[];
+  folderId?: number;
+  targetFolderId?: number;
+}
+
 interface DeviceNotesState {
   folders: DeviceNoteFolder[];
   notes: DeviceNoteSummary[];
@@ -19,7 +26,7 @@ interface DeviceNotesState {
   openView: (id: number) => void;
   closeView: () => void;
   move: (
-    request: { noteIds?: number[]; folderId?: number },
+    request: DeviceNotesMoveRequest,
     context: { workspaceId: string | null }
   ) => Promise<DeviceNotesMoveResult>;
   /** Keeps the list and the view current; returns the way to stop. */

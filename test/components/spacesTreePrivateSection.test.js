@@ -260,3 +260,28 @@ test("the section's info button is always visible", async (t) => {
   assert.match(button, /opacity-100/);
   assert.doesNotMatch(button, /\bopacity-0\b/);
 });
+
+test("a device folder shows its five newest notes, then an N more row", async (t) => {
+  const notes = Array.from({ length: 7 }, (_, index) => ({
+    id: 80 + index,
+    title: `Old note ${index}`,
+    folder_id: 7,
+    updated_at: new Date(Date.UTC(2026, 7, 20) - index * 60000).toISOString(),
+  }));
+  const markup = await renderTree(t, {
+    folders: [{ id: 7, name: "Old plans", is_default: 0, noteCount: 7 }],
+    notes,
+    viewNoteId: null,
+  });
+  const rowTitles = [...markup.matchAll(/role="treeitem"[^>]*title="(Old note \d)"/g)].map(
+    (match) => match[1]
+  );
+  assert.deepEqual(rowTitles, [
+    "Old note 0",
+    "Old note 1",
+    "Old note 2",
+    "Old note 3",
+    "Old note 4",
+  ]);
+  assert.match(markup, /aria-label="notes\.folderMore\.more"/);
+});

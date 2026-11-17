@@ -159,6 +159,7 @@ test("db-move-device-notes refuses malformed ids", async () => {
     { noteIds: ["4"], accountId: "account-1" },
     { folderId: 0, accountId: "account-1" },
     { noteIds: [4], workspaceId: 7, accountId: "account-1" },
+    { noteIds: [4], targetFolderId: "9", accountId: "account-1" },
   ]) {
     assert.equal((await invoke("db-move-device-notes", request)).code, "invalid_request");
   }
@@ -174,7 +175,15 @@ test("db-move-device-notes broadcasts after a move", async () => {
   });
   assert.deepEqual(result, { success: true, moved: [MOVED_ROW], skipped: 1 });
   assert.deepEqual(calls.database, [
-    ["move", { noteIds: [4, 5], folderId: undefined, workspaceId: "workspace-1" }],
+    [
+      "move",
+      {
+        noteIds: [4, 5],
+        folderId: undefined,
+        workspaceId: "workspace-1",
+        targetFolderId: undefined,
+      },
+    ],
   ]);
   assert.deepEqual(sent, [
     ["note-updated", MOVED_ROW],
@@ -191,6 +200,20 @@ test("db-move-device-notes with nothing moved broadcasts nothing", async () => {
   assert.deepEqual(sent, []);
   assert.equal(calls.notesMoved, 0);
   assert.equal(calls.vectors, 0);
+});
+
+test("db-move-device-notes into a folder the account can't file in moves and broadcasts nothing", async () => {
+  moveResult = { moved: [], skipped: 1, code: "folder_unavailable" };
+  const result = await invoke("db-move-device-notes", {
+    noteIds: [4],
+    targetFolderId: 9,
+    accountId: "account-1",
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.code, "folder_unavailable");
+  assert.equal(calls.database[0][1].targetFolderId, 9);
+  assert.deepEqual(sent, []);
+  assert.equal(calls.notesMoved, 0);
 });
 
 test("db-resolve-stand-in-ownership broadcasts only when claimed", async () => {

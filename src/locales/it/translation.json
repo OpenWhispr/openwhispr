@@ -3566,6 +3566,8 @@
       "infoLabel": "Informazioni sulle note su questo dispositivo",
       "moveNote": "Sposta nel mio Privato",
       "moveFolder": "Sposta la cartella nel mio Privato",
+      "moveAll": "Sposta tutto nel mio Privato",
+      "moveAllTo": "Sposta tutto in una cartella",
       "moved": "Spostata nel tuo Privato",
       "movedCount_one": "{{count}} nota spostata nel tuo Privato",
       "movedCount_other": "{{count}} note spostate nel tuo Privato",

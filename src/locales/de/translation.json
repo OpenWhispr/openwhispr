@@ -4125,6 +4125,8 @@
       "infoLabel": "Über Notizen auf diesem Gerät",
       "moveNote": "Nach Privat verschieben",
       "moveFolder": "Ordner nach Privat verschieben",
+      "moveAll": "Alle nach Privat verschieben",
+      "moveAllTo": "Alle in Ordner verschieben",
       "moved": "Nach „Privat“ verschoben",
       "movedCount_one": "{{count}} Notiz nach „Privat“ verschoben",
       "movedCount_other": "{{count}} Notizen nach „Privat“ verschoben",

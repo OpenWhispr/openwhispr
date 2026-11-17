@@ -4131,6 +4131,8 @@
       "infoLabel": "À propos des notes sur cet appareil",
       "moveNote": "Déplacer vers mon Privé",
       "moveFolder": "Déplacer le dossier vers mon Privé",
+      "moveAll": "Tout déplacer vers mon Privé",
+      "moveAllTo": "Tout déplacer vers un dossier",
       "moved": "Déplacée vers votre Privé",
       "movedCount_one": "{{count}} note déplacée vers votre Privé",
       "movedCount_other": "{{count}} notes déplacées vers votre Privé",

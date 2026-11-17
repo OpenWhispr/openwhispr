@@ -3566,6 +3566,8 @@
       "infoLabel": "关于此设备上的笔记",
       "moveNote": "移动到我的私密",
       "moveFolder": "将文件夹移动到我的私密",
+      "moveAll": "全部移动到我的私密",
+      "moveAllTo": "全部移动到文件夹",
       "moved": "已移动到你的私密",
       "movedCount_one": "已将 {{count}} 条笔记移动到你的私密",
       "movedCount_other": "已将 {{count}} 条笔记移动到你的私密",

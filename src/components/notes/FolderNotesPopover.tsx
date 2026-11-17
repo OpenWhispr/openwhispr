@@ -11,10 +11,14 @@ import { cn } from "../lib/utils";
 import type { FolderItem, NoteItem } from "../../types/electron";
 import type { RowA11yProps } from "./SpacesTree";
 
+type PopoverNote = Pick<NoteItem, "id" | "title" | "updated_at">;
+
 interface Props {
-  folder: FolderItem;
+  folder: Pick<FolderItem, "id" | "name" | "is_default">;
   /** Every folder the row stands for, `folder` first (more than one in the Private section). */
   folderIds?: number[];
+  /** The folder's notes, newest first, when the caller already holds them; otherwise loaded on open. */
+  notes?: PopoverNote[];
   total: number;
   hiddenCount: number;
   activeNoteId: number | null;
@@ -22,13 +26,15 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   a11y: RowA11yProps;
-  onPick: (note: NoteItem, keyboard: boolean) => void;
-  onOpenFolder: () => void;
+  onPick: (note: PopoverNote, keyboard: boolean) => void;
+  /** Shows "Open folder" when the folder can be opened. */
+  onOpenFolder?: () => void;
 }
 
 export function FolderNotesPopover({
   folder,
   folderIds = [folder.id],
+  notes,
   total,
   hiddenCount,
   activeNoteId,
@@ -40,7 +46,7 @@ export function FolderNotesPopover({
   onOpenFolder,
 }: Props) {
   const { t, i18n } = useTranslation();
-  const [allNotes, setAllNotes] = useState<NoteItem[] | null>(null);
+  const [loadedNotes, setLoadedNotes] = useState<PopoverNote[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [reload, setReload] = useState(0);
@@ -51,13 +57,16 @@ export function FolderNotesPopover({
   const titleId = useId();
   const name = defaultFolderDisplayName(folder, t);
   const folderIdsKey = folderIds.join(",");
+  const heldNotes = notes !== undefined;
+  const allNotes = notes ?? loadedNotes;
 
   useEffect(() => {
     if (!open) return;
     pickedNoteRef.current = false;
     setQuery("");
+    if (heldNotes) return;
     let stale = false;
-    setAllNotes(null);
+    setLoadedNotes(null);
     setFailed(false);
     // SQLite LIMIT -1 removes the normal 50-note container cap.
     Promise.all(
@@ -74,7 +83,7 @@ export function FolderNotesPopover({
               normalizeDbDate(b.updated_at).getTime() - normalizeDbDate(a.updated_at).getTime()
           );
         }
-        setAllNotes(items);
+        setLoadedNotes(items);
       })
       .catch(() => {
         if (!stale) setFailed(true);
@@ -82,7 +91,7 @@ export function FolderNotesPopover({
     return () => {
       stale = true;
     };
-  }, [open, folderIdsKey, reload]);
+  }, [open, folderIdsKey, reload, heldNotes]);
 
   const filtered = (allNotes ?? []).filter((note) =>
     note.title
@@ -105,7 +114,7 @@ export function FolderNotesPopover({
       </>
     );
   };
-  const pick = (note: NoteItem, keyboard = true) => {
+  const pick = (note: PopoverNote, keyboard = true) => {
     pickedNoteRef.current = true;
     onPick(note, keyboard);
     onOpenChange(false);
@@ -282,18 +291,20 @@ export function FolderNotesPopover({
             ))
           )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-2 w-full rounded-full text-xs"
-          onClick={() => {
-            onOpenFolder();
-            onOpenChange(false);
-          }}
-        >
-          <FolderOpen size={13} aria-hidden="true" />
-          {t("notes.folderMore.openFolder")}
-        </Button>
+        {onOpenFolder && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 w-full rounded-full text-xs"
+            onClick={() => {
+              onOpenFolder();
+              onOpenChange(false);
+            }}
+          >
+            <FolderOpen size={13} aria-hidden="true" />
+            {t("notes.folderMore.openFolder")}
+          </Button>
+        )}
       </PopoverContent>
     </Popover>
   );

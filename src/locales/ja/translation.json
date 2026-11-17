@@ -3494,6 +3494,8 @@
       "infoLabel": "このデバイス上のノートについて",
       "moveNote": "自分のプライベートに移動",
       "moveFolder": "フォルダーを自分のプライベートに移動",
+      "moveAll": "すべて自分のプライベートに移動",
+      "moveAllTo": "すべてフォルダに移動",
       "moved": "プライベートに移動しました",
       "movedCount_one": "{{count}} 件のノートをプライベートに移動しました",
       "movedCount_other": "{{count}} 件のノートをプライベートに移動しました",

@@ -2210,6 +2210,8 @@ declare global {
         noteIds?: number[];
         folderId?: number;
         workspaceId?: string | null;
+        /** One of the account's Private folders to file every note in. */
+        targetFolderId?: number;
         accountId?: string | null;
       }) => Promise<{ success: true; moved: NoteItem[]; skipped: number } | DeviceNotesFailure>;
       getStandInOwnershipCandidates?: () => Promise<Array<{ id: number; cloud_id: string }>>;

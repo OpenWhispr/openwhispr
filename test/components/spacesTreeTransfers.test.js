@@ -121,6 +121,7 @@ async function mountTree(
     // What a device-note move answers next; empty means one moved note.
     deviceMoveResults: [],
     deviceNotes: structuredClone(deviceNotes),
+    createdFolders: [],
     spaces: structuredClone(spaces),
     folders: structuredClone(folders),
     notes: structuredClone(notes),
@@ -172,7 +173,10 @@ async function mountTree(
         export const toggleContainerExpanded = () => {};
         export const revealContainer = () => {};
         export const openNote = (note) => globalThis.__tree.opened.push(note);
-        export const createFolder = async () => ({ success: true });
+        export const createFolder = async (name, spaceId) => {
+          s().createdFolders.push([name, spaceId]);
+          return { success: true, folder: { id: 77, space_id: spaceId, name } };
+        };
         export const renameFolder = async () => ({ success: true });
         export const deleteFolder = async () => ({ success: true });
         export const moveFolderToSpace = async (folderId, spaceId) => {
@@ -625,4 +629,72 @@ test("a moved device note toasts like the tree's other moves", async (t) => {
     tree.state.toasts.map(({ title, variant }) => [title, variant]),
     [["Moved to your Private", undefined]]
   );
+});
+
+// The "On this device" header's menu: Move all, and Move all to a folder of the on-screen Private.
+const deviceMenuItem = (tree, label) => {
+  const header = [...tree.container.querySelectorAll("span")]
+    .find((element) => element.textContent === "On this device")
+    ?.closest('[role="none"]');
+  return [...(header?.querySelectorAll('[role="menuitem"]') ?? [])].find(
+    (item) => item.textContent.trim() === label
+  );
+};
+
+const chooseDeviceMenuItem = async (tree, label) => {
+  const item = deviceMenuItem(tree, label);
+  assert.ok(item, `the section offers ${label}`);
+  await React.act(async () =>
+    item.dispatchEvent(new globalThis.window.MouseEvent("click", { bubbles: true }))
+  );
+  await tree.settle();
+};
+
+test("Move all moves every listed note into the on-screen Private, each by its folder", async (t) => {
+  const tree = await mountTree(t, { deviceNotes: DEVICE_NOTES });
+  tree.state.deviceMoveResults.push({ moved: [{ id: 70 }, { id: 72 }] });
+
+  await chooseDeviceMenuItem(tree, "Move all to my Private");
+  assert.deepEqual(tree.state.deviceMoves, [{ noteIds: [70, 72] }]);
+  // The harness's t has no plural forms, so the count toast reads as its key.
+  assert.deepEqual(
+    tree.state.toasts.map(({ title }) => title),
+    ["notes.deviceNotes.movedCount"]
+  );
+});
+
+test("Move all to a folder files every listed note in the Private folder picked", async (t) => {
+  const tree = await mountTree(t, { deviceNotes: DEVICE_NOTES });
+
+  // Only the on-screen Private's folders are offered, never a teamspace's.
+  assert.equal(deviceMenuItem(tree, "Specs"), undefined);
+  await chooseDeviceMenuItem(tree, "Plans");
+  assert.deepEqual(tree.state.deviceMoves, [{ noteIds: [70, 72], targetFolderId: 10 }]);
+});
+
+test("Move all to a new folder makes it in the on-screen Private, then moves every note there", async (t) => {
+  const tree = await mountTree(t, { deviceNotes: DEVICE_NOTES });
+
+  await chooseDeviceMenuItem(tree, "New folder");
+  const header = [...tree.container.querySelectorAll("span")]
+    .find((element) => element.textContent === "On this device")
+    .closest('[role="none"]');
+  const input = header.querySelector("input");
+  assert.ok(input, "New folder asks for a name");
+  await React.act(async () => {
+    Object.getOwnPropertyDescriptor(globalThis.window.HTMLInputElement.prototype, "value").set.call(
+      input,
+      "Archive"
+    );
+    input.dispatchEvent(new globalThis.window.Event("input", { bubbles: true }));
+  });
+  await React.act(async () =>
+    input.dispatchEvent(
+      new globalThis.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+    )
+  );
+  await tree.settle();
+
+  assert.deepEqual(tree.state.createdFolders, [["Archive", 1]]);
+  assert.deepEqual(tree.state.deviceMoves, [{ noteIds: [70, 72], targetFolderId: 77 }]);
 });
