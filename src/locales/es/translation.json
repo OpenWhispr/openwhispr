@@ -410,7 +410,8 @@
           "providerStatus": "El proveedor devolvió el estado {{status}}.",
           "timeout": "La prueba de conexión agotó el tiempo de espera.",
           "network": "No se pudo contactar con el proveedor.",
-          "invalidHeaders": "Cabecera HTTP no válida. Revisa el nombre y el valor; Content-Type y las cabeceras de transporte no son personalizables."
+          "invalidHeaders": "Cabecera HTTP no válida. Revisa el nombre y el valor; Content-Type y las cabeceras de transporte no son personalizables.",
+          "redirected": "El servidor redirigió la solicitud. Escribe la dirección a la que redirige."
         }
       },
       "local": {
@@ -2543,11 +2544,18 @@
       "serverUrl": "URL del servidor",
       "apiKeyOptional": "API Key (opcional)",
       "headers": "Cabeceras HTTP",
-      "headersHelp": "Se comparten entre los servidores de transcripción autoalojados. La autenticación existente tiene prioridad. No se pueden personalizar Content-Type ni las cabeceras de transporte.",
+      "headersHelp": "Se envían con cada solicitud a este servidor, por ejemplo una clave de API que pida una pasarela.",
       "headerName": "Nombre de cabecera",
       "headerValue": "Valor de cabecera",
       "removeHeader": "Eliminar",
-      "addHeader": "Añadir cabecera"
+      "addHeader": "Añadir cabecera",
+      "unauthorized": "Tu servidor rechazó la solicitud (401/403). Revisa las cabeceras de abajo o la configuración de autenticación del servidor.",
+      "headerErrors": {
+        "missingName": "Escribe un nombre de cabecera.",
+        "invalidName": "Los nombres de cabecera no pueden contener espacios, dos puntos ni otros separadores.",
+        "reserved": "OpenWhispr ya establece esta cabecera.",
+        "invalidValue": "Este valor tiene un carácter que una cabecera no admite, como una comilla tipográfica."
+      }
     },
     "workspace": {
       "title": "Espacio de trabajo",
@@ -6279,7 +6287,9 @@
       "timeout": "Tu servidor tardó demasiado en responder.",
       "unreachable": "No se pudo conectar con tu servidor. Comprueba que esté en funcionamiento.",
       "noResponse": "No se recibió respuesta de tu servidor. Comprueba su clave de API y que esté en funcionamiento.",
-      "unknown": "Tu servidor devolvió un error inesperado."
+      "unknown": "Tu servidor devolvió un error inesperado.",
+      "invalidHeaders": "Una cabecera personalizada de tu servidor no es válida.",
+      "redirected": "Tu servidor redirigió la solicitud. Escribe la dirección a la que redirige."
     },
     "openSettings": "Abrir Ajustes",
     "copyDetails": "Copiar detalles",

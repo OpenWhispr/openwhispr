@@ -40,6 +40,8 @@ type ProviderCheckFieldProps = Omit<
      * field no failure can prove wrong, such as a server address.
      */
     invalidOn?: "credentialsRejected" | "modelNotFound";
+    /** What is wrong with the value without asking anyone, such as a header name no server takes. */
+    error?: string;
   };
 
 /**
@@ -53,6 +55,7 @@ export function ProviderCheckField({
   check,
   failureReason,
   invalidOn,
+  error,
   className,
   onFocus,
   onBlur,
@@ -93,9 +96,11 @@ export function ProviderCheckField({
           onBlur?.(event);
         }}
         aria-invalid={
-          !failureReason && invalidOn && failure?.errorCode === invalidOn ? true : undefined
+          error || (!failureReason && invalidOn && failure?.errorCode === invalidOn)
+            ? true
+            : undefined
         }
-        aria-describedby={check ? reasonId : undefined}
+        aria-describedby={check || error ? reasonId : undefined}
         className={cn(
           FIELD_CLASS,
           className,
@@ -130,7 +135,14 @@ export function ProviderCheckField({
       ) : (
         field
       )}
-      {check && (
+      {error && (
+        <p className="mt-1 px-1 text-xs leading-[1.4] text-destructive">
+          <span id={reasonId} role="alert">
+            {error}
+          </span>
+        </p>
+      )}
+      {check && !error && (
         <p
           className={
             failure

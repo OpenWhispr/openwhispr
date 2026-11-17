@@ -1,4 +1,5 @@
-const { mergeSelfHostedSttHeaders } = require("./selfHostedSttHeaders.js");
+const { selfHostedSttRequest } = require("./selfHostedSttHeaders.js");
+const { isRefusedRedirect } = require("./providerHttpErrors.js");
 const ENDPOINTS = {
   openai: "https://api.openai.com/v1/models",
   groq: "https://api.groq.com/openai/v1/models",
@@ -259,16 +260,11 @@ function resolveProviderRequest(config) {
   return {
     endpoint: endpoints[0],
     endpoints,
-    headers:
-      provider === "custom" && scope === "transcription"
-        ? mergeSelfHostedSttHeaders(config.headers, headers)
-        : headers,
-    redirect:
-      provider === "custom" &&
-      scope === "transcription" &&
-      config.headers?.some((row) => row.name || row.value)
-        ? "error"
-        : redirect,
+    // A speech server's address is the user's to correct, so its refused redirect is named;
+    // a hosted provider's stays no verdict.
+    ...(provider === "custom" && scope === "transcription"
+      ? { ...selfHostedSttRequest(config.headers, headers), namesRedirect: true }
+      : { headers, redirect }),
     transcriptionEndpoint,
     checksOpenRouterKey,
   };
@@ -279,9 +275,10 @@ function resolveProviderRequest(config) {
 // key or a missing model. No answer outranks a candidate without a model list, which may only
 // be an address the server doesn't use.
 const FAILURE_PRIORITY = {
-  credentialsRejected: 6,
-  providerStatus: 5,
-  modelNotFound: 4,
+  credentialsRejected: 7,
+  providerStatus: 6,
+  modelNotFound: 5,
+  redirected: 4,
   endpointNotFound: 0,
 };
 const UNVERIFIED_PRIORITY = { providerStatus: 3, timeout: 2, network: 1 };
@@ -335,6 +332,11 @@ const NETWORK_FAILURE = {
   errorCode: "network",
   error: "The provider could not be reached.",
   unverified: true,
+};
+// A speech server that redirects a request carrying custom headers is set up wrong.
+const REDIRECT_FAILURE = {
+  errorCode: "redirected",
+  error: "The server redirected the request to another address.",
 };
 
 // An empty or non-JSON body reads as undefined. A body that never arrives (the 12 s cap
@@ -424,7 +426,8 @@ async function probe(endpoint, request, fetchImpl, judge, init = { method: "GET"
     });
     return await judge(response);
   } catch (error) {
-    return error?.name === "AbortError" ? TIMEOUT_FAILURE : NETWORK_FAILURE;
+    if (error?.name === "AbortError") return TIMEOUT_FAILURE;
+    return request.namesRedirect && isRefusedRedirect(error) ? REDIRECT_FAILURE : NETWORK_FAILURE;
   } finally {
     clearTimeout(timeout);
   }

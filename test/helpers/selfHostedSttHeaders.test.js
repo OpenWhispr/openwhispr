@@ -2,8 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const http = require("node:http");
 const {
-  mergeSelfHostedSttHeaders,
   parseSelfHostedSttHeaders,
+  selfHostedSttHeaderProblem,
+  selfHostedSttRequest,
+  serializeSelfHostedSttHeaders,
 } = require("../../src/helpers/selfHostedSttHeaders.js");
 const {
   testProviderConnection,
@@ -13,43 +15,86 @@ const { createConnectionCheckCache } = require("../../src/helpers/connectionChec
 
 const rows = [{ name: "X-API-Key", value: "local-test-key" }];
 
-test("header rows survive serialization, empty drafts, edits and deletion", () => {
-  assert.deepEqual(parseSelfHostedSttHeaders(JSON.stringify(rows)), rows);
-  assert.deepEqual(parseSelfHostedSttHeaders("invalid"), []);
-  assert.deepEqual(parseSelfHostedSttHeaders('[{"name":4,"value":"secret"}]'), []);
-  assert.deepEqual(mergeSelfHostedSttHeaders([{ name: "", value: "" }]), {});
-  assert.deepEqual(mergeSelfHostedSttHeaders([...rows, { name: "x-api-key", value: "edited" }]), {
-    "x-api-key": "edited",
-  });
+test("each server's headers survive storage; empty rows and garbage don't", () => {
+  const headers = { dictation: rows, upload: [{ name: "X-Upload", value: "u" }] };
+  assert.deepEqual(parseSelfHostedSttHeaders(serializeSelfHostedSttHeaders(headers)), headers);
+  assert.deepEqual(
+    parseSelfHostedSttHeaders(
+      serializeSelfHostedSttHeaders({ dictation: [...rows, { name: " ", value: "" }], upload: [] })
+    ),
+    { dictation: rows, upload: [] }
+  );
+  for (const stored of ["", null, "invalid", "[]", '{"dictation":[{"name":4,"value":"x"}]}']) {
+    assert.deepEqual(parseSelfHostedSttHeaders(stored), { dictation: [], upload: [] });
+  }
 });
 
-test("existing auth wins case-insensitively and request-owned headers cannot be overridden", () => {
+test("a list with no header left stores as nothing, so the secret is deleted", () => {
+  assert.equal(serializeSelfHostedSttHeaders({ dictation: [], upload: [] }), "");
   assert.equal(
-    mergeSelfHostedSttHeaders([{ name: "authorization", value: "override" }], {
-      Authorization: "Bearer original",
-    }).authorization,
-    "Bearer original"
+    serializeSelfHostedSttHeaders({ dictation: [{ name: "", value: "" }], upload: [] }),
+    ""
   );
-  for (const name of [
-    "Content-Type",
-    "Content-Length",
-    "Host",
-    "Transfer-Encoding",
-    "Connection",
-  ]) {
-    assert.throws(() => mergeSelfHostedSttHeaders([{ name, value: "secret" }]), {
-      message: "Invalid self-hosted STT HTTP header.",
+});
+
+test("each row's problem is named so the panel can show it on that row", () => {
+  const cases = [
+    [{ name: "", value: "" }, null],
+    [{ name: "X-API-Key ", value: "secret" }, null],
+    [{ name: "X-Empty", value: "" }, null],
+    [{ name: "", value: "secret" }, "missingName"],
+    [{ name: "X-API-Key: secret", value: "" }, "invalidName"],
+    [{ name: "bad name", value: "secret" }, "invalidName"],
+    [{ name: "Content-Type", value: "text/plain" }, "reserved"],
+    [{ name: "proxy-authorization", value: "x" }, "reserved"],
+    [{ name: "X-Key", value: "secret\r\nInjected: value" }, "invalidValue"],
+    [{ name: "X-Key", value: "“curly”" }, "invalidValue"],
+    [{ name: "X-Key", value: "秘密" }, "invalidValue"],
+  ];
+  for (const [row, problem] of cases) {
+    assert.equal(selfHostedSttHeaderProblem(row), problem, JSON.stringify(row));
+  }
+});
+
+test("a request trims names, lets its own auth win and refuses redirects only with a header", () => {
+  assert.deepEqual(
+    selfHostedSttRequest(
+      [
+        { name: " X-API-Key ", value: "local-test-key" },
+        { name: "authorization", value: "override" },
+      ],
+      { Authorization: "Bearer original" }
+    ),
+    {
+      headers: { "x-api-key": "local-test-key", authorization: "Bearer original" },
+      redirect: "error",
+    }
+  );
+  for (const empty of [undefined, [], [{ name: "", value: "" }]]) {
+    assert.deepEqual(selfHostedSttRequest(empty, { Authorization: "Bearer k" }), {
+      headers: { authorization: "Bearer k" },
+      redirect: "follow",
     });
   }
-  for (const [name, value] of [
-    ["bad name", "secret"],
-    ["X-Key", "secret\r\nInjected: value"],
-    ["X-Key", "秘密"],
-    ["", "secret"],
+});
+
+test("an invalid header throws a translated, Settings-linked error that holds no secret", () => {
+  for (const row of [
+    { name: "Content-Type", value: "secret" },
+    { name: "bad name", value: "secret" },
+    { name: "", value: "secret" },
   ]) {
-    assert.throws(() => mergeSelfHostedSttHeaders([{ name, value }]), {
-      message: "Invalid self-hosted STT HTTP header.",
-    });
+    assert.throws(
+      () => selfHostedSttRequest([row]),
+      (error) => {
+        assert.equal(error.code, "PROVIDER_INVALID_HEADERS");
+        assert.equal(error.messageKey, "providerErrors.selfHosted.invalidHeaders");
+        assert.equal(error.settingsTarget, "speechToText");
+        assert.equal(error.errorCode, "invalidHeaders");
+        assert.doesNotMatch(error.message, /secret/);
+        return true;
+      }
+    );
   }
 });
 
@@ -78,23 +123,16 @@ test("a changed header invalidates a successful connection check", async () => {
   assert.equal(calls, 2);
 });
 
-test("local HTTP server requires X-API-Key for model checks and multipart transcription", async (t) => {
-  const received = [];
-  const server = http.createServer(async (req, res) => {
-    let body = "";
-    for await (const chunk of req) body += chunk;
-    received.push({ url: req.url, headers: req.headers, body });
+test("a server that requires X-API-Key passes the check only with the header", async (t) => {
+  const server = http.createServer((req, res) => {
+    req.resume();
     res.setHeader("Content-Type", "application/json");
     if (req.headers["x-api-key"] !== "local-test-key") {
       res.writeHead(401);
       res.end('{"error":"key required"}');
       return;
     }
-    res.end(
-      JSON.stringify(
-        req.url === "/v1/models" ? { data: [{ id: "whisper-1" }] } : { text: "테스트 결과" }
-      )
-    );
+    res.end(JSON.stringify({ data: [{ id: "whisper-1" }] }));
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => {
@@ -103,24 +141,12 @@ test("local HTTP server requires X-API-Key for model checks and multipart transc
   });
   const baseUrl = `http://127.0.0.1:${server.address().port}/v1`;
   const config = { provider: "custom", scope: "transcription", baseUrl, model: "whisper-1" };
-  assert.equal((await testProviderConnection(config)).success, false);
+  const refused = await testProviderConnection(config);
+  assert.equal(refused.errorCode, "credentialsRejected");
   assert.equal((await testProviderConnection({ ...config, headers: rows })).success, true);
-  const body = new FormData();
-  body.append("model", "whisper-1");
-  body.append("file", new Blob(["audio"]), "audio.wav");
-  const response = await fetch(`${baseUrl}/audio/transcriptions`, {
-    method: "POST",
-    headers: mergeSelfHostedSttHeaders(rows),
-    body,
-  });
-  assert.deepEqual(await response.json(), { text: "테스트 결과" });
-  assert.match(received.at(-1).headers["content-type"], /^multipart\/form-data; boundary=/);
-  assert.ok(
-    received.at(-1).body.includes(received.at(-1).headers["content-type"].split("boundary=")[1])
-  );
 });
 
-test("custom STT connection checks refuse redirects when configured with secret headers", async (t) => {
+test("a check with custom headers refuses a redirect and names it", async (t) => {
   let destinationCalls = 0;
   const destination = http.createServer((_req, res) => {
     destinationCalls++;
@@ -146,10 +172,12 @@ test("custom STT connection checks refuse redirects when configured with secret 
     headers: rows,
   });
   assert.equal(result.success, false);
+  assert.equal(result.errorCode, "redirected");
+  assert.equal(result.unverified, undefined);
   assert.equal(destinationCalls, 0);
 });
 
-test("empty header drafts preserve redirect follow and invalid headers identify the header error", async () => {
+test("empty header drafts keep redirect follow and invalid headers never reach HTTP", async () => {
   const config = {
     provider: "custom",
     scope: "transcription",

@@ -883,10 +883,13 @@ test("custom Orukeet excludes self-hosted headers; self-hosted mode includes the
   target.environmentManager = {
     getCustomTranscriptionKey: () => "test-key",
     getSelfHostedSttHeaders: () =>
-      JSON.stringify([
-        { name: "X-API-Key", value: "self-hosted-only" },
-        { name: "authorization", value: "must-not-override" },
-      ]),
+      JSON.stringify({
+        dictation: [
+          { name: "X-API-Key", value: "self-hosted-only" },
+          { name: "authorization", value: "must-not-override" },
+        ],
+        upload: [{ name: "X-Upload-Key", value: "upload-only" }],
+      }),
   };
   t.after(async () => {
     server.off("connection", capture);
@@ -907,10 +910,39 @@ test("custom Orukeet excludes self-hosted headers; self-hosted mode includes the
       request.headers["x-api-key"],
       transcriptionMode === "self-hosted" ? "self-hosted-only" : undefined
     );
+    assert.equal(request.headers["x-upload-key"], undefined);
     assert.equal(request.headers.authorization, "Bearer test-key");
     assert.equal(
       request.rawHeaders.filter((value) => value.toLowerCase() === "authorization").length,
       1
     );
   }
+});
+
+test("self-hosted Orukeet: a warm custom socket is not reused once headers apply", async (t) => {
+  const requests = [];
+  const capture = (_socket, request) => requests.push(request);
+  server.on("connection", capture);
+  target.environmentManager = {
+    getCustomTranscriptionKey: () => "test-key",
+    getSelfHostedSttHeaders: () =>
+      JSON.stringify({ dictation: [{ name: "X-API-Key", value: "self-hosted-only" }] }),
+  };
+  t.after(async () => {
+    server.off("connection", capture);
+    delete target.environmentManager;
+    await handlers.get("dictation-realtime-stop")();
+  });
+  await handlers.get("dictation-realtime-stop")();
+  const start = (transcriptionMode) =>
+    handlers.get("dictation-realtime-start")(event, {
+      ...managedOptions,
+      mode: "byok",
+      baseUrl: cloudSession.baseUrl,
+      transcriptionMode,
+    });
+  assert.equal((await start("providers")).success, true);
+  assert.equal((await start("self-hosted")).success, true);
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].headers["x-api-key"], "self-hosted-only");
 });

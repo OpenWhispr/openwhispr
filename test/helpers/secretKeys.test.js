@@ -91,10 +91,10 @@ test("preload BYOK_KEY_BRIDGES mirror the manifest exactly", () => {
 });
 
 test("self-hosted header JSON round-trips through the existing plaintext fallback without dotenv truncation", async () => {
-  const serialized = JSON.stringify([
-    { name: "X-API-Key", value: "secret#with'quotes\"and\\slashes" },
-    { name: "", value: "" },
-  ]);
+  const serialized = JSON.stringify({
+    dictation: [{ name: "X-API-Key", value: "secret#with'quotes\"and\\slashes" }],
+    upload: [{ name: "X-Upload", value: "a#b" }],
+  });
   const previous = process.env.SELF_HOSTED_STT_HEADERS;
   try {
     const env = new EnvironmentManager();

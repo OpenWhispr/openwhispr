@@ -1,5 +1,8 @@
-import { parseSelfHostedSttHeaders } from "../helpers/selfHostedSttHeaders.js";
 import "../models/registryBootstrap.js";
+import {
+  parseSelfHostedSttHeaders,
+  serializeSelfHostedSttHeaders,
+} from "../helpers/selfHostedSttHeaders.js";
 import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
@@ -1136,6 +1139,10 @@ function migrateRetiredCloudModels() {
 
 migrateRetiredCloudModels();
 
+export type SelfHostedSttHeader = { name: string; value: string };
+// Dictation and uploads post to different self-hosted servers (#2049).
+export type SelfHostedSttSurface = "dictation" | "upload";
+
 export interface SettingsState
   extends
     TranscriptionSettings,
@@ -1189,7 +1196,7 @@ export interface SettingsState
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   remoteTranscriptionModel: string;
-  selfHostedSttHeaders: { name: string; value: string }[];
+  selfHostedSttHeaders: Record<SelfHostedSttSurface, SelfHostedSttHeader[]>;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
   keepLocalModelLoaded: boolean;
@@ -1310,7 +1317,7 @@ export interface SettingsState
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
   setRemoteTranscriptionUrl: (url: string) => void;
   setRemoteTranscriptionModel: (model: string) => void;
-  setSelfHostedSttHeaders: (headers: { name: string; value: string }[]) => void;
+  setSelfHostedSttHeaders: (surface: SelfHostedSttSurface, headers: SelfHostedSttHeader[]) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
   setKeepLocalModelLoaded: (value: boolean) => void;
@@ -2002,7 +2009,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
   remoteTranscriptionModel: readString("remoteTranscriptionModel", ""),
-  selfHostedSttHeaders: [],
+  selfHostedSttHeaders: { dictation: [], upload: [] },
   cleanupMode: (() => {
     const v = readString("cleanupMode", "openwhispr");
     if (
@@ -2111,9 +2118,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ) => void,
   setRemoteTranscriptionUrl: createStringSetter("remoteTranscriptionUrl"),
   setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
-  setSelfHostedSttHeaders: (headers) => {
-    set({ selfHostedSttHeaders: headers });
-    debouncedSaveSecret("selfHostedSttHeaders", JSON.stringify(headers));
+  setSelfHostedSttHeaders: (surface, headers) => {
+    const next = { ...get().selfHostedSttHeaders, [surface]: headers };
+    set({ selfHostedSttHeaders: next });
+    debouncedSaveSecret("selfHostedSttHeaders", serializeSelfHostedSttHeaders(next));
   },
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),

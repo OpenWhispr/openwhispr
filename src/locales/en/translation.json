@@ -410,7 +410,8 @@
           "providerStatus": "The provider returned status {{status}}.",
           "timeout": "The connection test timed out.",
           "network": "The provider could not be reached.",
-          "invalidHeaders": "Invalid HTTP header. Check the name and value; Content-Type and transport headers cannot be customized."
+          "invalidHeaders": "Invalid HTTP header. Check the name and value; Content-Type and transport headers cannot be customized.",
+          "redirected": "The server redirected the request. Enter the address it redirects to."
         }
       },
       "local": {
@@ -3251,11 +3252,18 @@
       "serverUrl": "Server URL",
       "apiKeyOptional": "API Key (optional)",
       "headers": "HTTP headers",
-      "headersHelp": "Shared by self-hosted speech-to-text servers. Existing authentication takes priority. Content-Type and transport headers cannot be customized.",
+      "headersHelp": "Sent with every request to this server, such as an API key a gateway asks for.",
       "headerName": "Header name",
       "headerValue": "Header value",
       "removeHeader": "Remove",
-      "addHeader": "Add header"
+      "addHeader": "Add header",
+      "unauthorized": "Your server refused the request (401/403). Check the headers below or the server's auth settings.",
+      "headerErrors": {
+        "missingName": "Enter a header name.",
+        "invalidName": "Header names can't contain spaces, colons or other separators.",
+        "reserved": "OpenWhispr sets this header itself.",
+        "invalidValue": "This value has a character a header can't carry, such as a curly quote."
+      }
     },
     "enterpriseCheckout": {
       "title": "Upgrade to Enterprise",
@@ -6258,7 +6266,9 @@
       "timeout": "Your server took too long to respond.",
       "unreachable": "Couldn't reach your server. Check that it's running.",
       "noResponse": "Couldn't get a response from your server. Check its API key and that it's running.",
-      "unknown": "Your server returned an unexpected error."
+      "unknown": "Your server returned an unexpected error.",
+      "invalidHeaders": "A custom header for your server isn't valid.",
+      "redirected": "Your server redirected the request. Enter the address it redirects to."
     },
     "openSettings": "Open Settings",
     "copyDetails": "Copy details",

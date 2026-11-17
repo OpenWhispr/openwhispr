@@ -1,4 +1,4 @@
-import { mergeSelfHostedSttHeaders } from "./selfHostedSttHeaders.js";
+import { selfHostedSttRequest } from "./selfHostedSttHeaders.js";
 import i18n from "../i18n";
 import ReasoningService from "../services/ReasoningService";
 import {
@@ -4329,26 +4329,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         surface: "transcription",
       };
 
+      const request =
+        route.provider === "self-hosted"
+          ? selfHostedSttRequest(getSettings().selfHostedSttHeaders?.dictation, headers)
+          : { headers, redirect: "follow" };
       requestController = new AbortController();
       this._activeTranscriptionAbortController = requestController;
       let response;
       try {
         response = await fetch(endpoint, {
           method: "POST",
-          headers:
-            route.provider === "self-hosted"
-              ? mergeSelfHostedSttHeaders(getSettings().selfHostedSttHeaders, headers)
-              : headers,
+          headers: request.headers,
           body: formData,
-          redirect:
-            route.provider === "self-hosted" &&
-            getSettings().selfHostedSttHeaders?.some((row) => row.name || row.value)
-              ? "error"
-              : "follow",
+          // Chromium reports a refused redirect as a network failure; "manual" returns it as a
+          // response, so it can be named.
+          redirect: request.redirect === "error" ? "manual" : request.redirect,
           signal: requestController.signal,
         });
       } catch (err) {
         throw asProviderError(err, providerErrorContext);
+      }
+      if (response.type === "opaqueredirect") {
+        throw providerError(PROVIDER_ERROR_CODES.REDIRECTED, providerErrorContext);
       }
 
       const responseContentType = response.headers.get("content-type") || "";
