@@ -1612,15 +1612,48 @@ export class SyncService {
       },
       authGeneration
     );
-    await window.electronAPI.acknowledgeFolderCreate?.(
-      folder.id,
-      folder,
-      folder.cloud_id,
-      cloud.client_folder_id ?? folder.client_folder_id,
-      cloud.id,
-      cloud.updated_at,
-      authGeneration
-    );
+    await this.acknowledgeCreatedFolder(folder, cloud, authGeneration);
+  }
+
+  // Links a pushed folder to the cloud row its create returned. A Private
+  // create the account already has a folder of that name for returns that
+  // folder, under its client key. When a row this account can't see holds the
+  // key here (the signed-out stand-in's copy, another account's folder), the
+  // folder keeps its own key and is found by cloud id, as the pull adopts one;
+  // otherwise it would stay unlinked and hold back every note in it. A row the
+  // account can see holding the key stays unresolved, so no two of its folders
+  // stand for one cloud folder.
+  private async acknowledgeCreatedFolder(
+    folder: FolderItem,
+    cloud: { id: string; client_folder_id: string | null; updated_at: string },
+    authGeneration: number
+  ): Promise<void> {
+    const acknowledge = (clientFolderId: string) =>
+      window.electronAPI.acknowledgeFolderCreate?.(
+        folder.id,
+        folder,
+        folder.cloud_id,
+        clientFolderId,
+        cloud.id,
+        cloud.updated_at,
+        authGeneration
+      );
+    const responseKey = cloud.client_folder_id ?? folder.client_folder_id;
+    const result = await acknowledge(responseKey);
+    if (
+      !result ||
+      !("outcome" in result) ||
+      result.outcome !== "unresolved" ||
+      responseKey === folder.client_folder_id
+    ) {
+      return;
+    }
+    const [keyHolder, linked] = await Promise.all([
+      window.electronAPI.getFolderByClientId?.(responseKey),
+      window.electronAPI.getFolderByCloudId?.(cloud.id),
+    ]);
+    if (keyHolder || (linked && linked.id !== folder.id)) return;
+    await acknowledge(folder.client_folder_id);
   }
 
   // Full note payload for pushes, built on the tested #1290 guard (a
@@ -3042,16 +3075,7 @@ export class SyncService {
           return;
         }
         for (const [i, cloudFolder] of created.entries()) {
-          const local = accepted[i].folder;
-          await window.electronAPI.acknowledgeFolderCreate?.(
-            local.id,
-            local,
-            local.cloud_id,
-            cloudFolder.client_folder_id ?? local.client_folder_id,
-            cloudFolder.id,
-            cloudFolder.updated_at,
-            authGeneration
-          );
+          await this.acknowledgeCreatedFolder(accepted[i].folder, cloudFolder, authGeneration);
         }
       } catch (err) {
         if (isAuthContextError(err)) throw err;
